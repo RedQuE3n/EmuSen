@@ -1,20 +1,22 @@
-/* emusen_crystal.h - the frontend API, version 1.0. Owned by Crystal.
+/* emusen_crystal.h - the frontend API, version 2.0. Owned by Crystal.
  *
  * How every frontend drives the cores: the runtime (the systems, the engines, a file's route), the session's life (a
  * game or a console started empty, discs, reset, close), one frame call that performs the whole frame-end order and
  * hands over the picture and the sound, input, speed, rewind, states, settings, firmware, the save media's cards,
- * events, and the debugger: every function of the session service, emusen_session.h, has a twin here with the same
- * arguments after the runtime. The normative text is EmuSen_Backend.md in the EmuSen manual, section 3 for the design
- * and section 14 for version 1.0 as built; where the two disagree the page wins and this header is in error.
+ * events, and the debugger, which is the session service's table, emusen_session.h, handed out by
+ * emusen_crystal_session_service. The normative text is EmuSen_Backend.md in the EmuSen manual, section 3 for the
+ * design and section 14 for version 1.0 as built; 2.0 is EmuSen_RustPlatform.md section 47.23. Where the two disagree
+ * the page wins and this header is in error.
  *
  * Names: exports emusen_crystal_*, types emusen_crystal_*, constants EMUSEN_CRYSTAL_*. The statuses and the
  * enumerations the session service already names (EMUSEN_SVC_*, EMUSEN_SESSION_*) are this header's too, which is why
- * it includes that header: a twin passes its status through unchanged.
+ * it includes that header: the table's statuses are this API's too.
  *
  * Rules every function follows (EmuSen_Backend.md section 3.3, the core ABI's one layer up):
- *  - Version. emusen_crystal_abi_version() is (MAJOR << 16) | MINOR. The major is 1 and is expected never to change;
- *    a minor adds functions, appends fields to size-prefixed structs, adds values to open enumerations and keys to
- *    JSON. Nothing is removed. A caller checks the major before calling anything else.
+ *  - Version. emusen_crystal_abi_version() is (MAJOR << 16) | MINOR. The major is 2: 2.0 removed the session
+ *    service's twins, whose one surface is the table session_service hands out, and kept the rest of 1.13 unchanged.
+ *    A minor adds functions, appends fields to size-prefixed structs, adds values to open enumerations and keys to
+ *    JSON. Nothing is removed within a major. A caller checks the major before calling anything else.
  *  - Pull, never push. The runtime calls nothing of the client's: notifications are drained from a subscription,
  *    and a client that must wait blocks in emusen_crystal_wait or emusen_crystal_subscription_wait with a timeout.
  *  - Handles for what has a life (the runtime, a subscription); 32-bit ids for sessions, numbered from 1. Session 0
@@ -52,8 +54,8 @@
 extern "C" {
 #endif
 
-#define EMUSEN_CRYSTAL_MAJOR 1u
-#define EMUSEN_CRYSTAL_MINOR 13u
+#define EMUSEN_CRYSTAL_MAJOR 2u
+#define EMUSEN_CRYSTAL_MINOR 0u
 #define EMUSEN_CRYSTAL_VERSION ((EMUSEN_CRYSTAL_MAJOR << 16) | EMUSEN_CRYSTAL_MINOR)
 
 /* ---- Statuses (EmuSen_Backend.md section 3.2). The session service's keep their numbers and names; these follow. -- */
@@ -199,7 +201,7 @@ uint32_t emusen_crystal_abi_version(void);
 /* The implementation's words for itself: which one serves the API, and its build. */
 int64_t emusen_crystal_version_text(uint8_t *out, size_t len);
 
-/* The words for the last failing call on the calling thread; rt may be null. The session service's last_error twin. */
+/* The words for the last failing call on the calling thread; rt may be null. A session table's are its own last_error's. */
 int64_t emusen_crystal_last_error(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
 
 /* A runtime; null on failure, the words in last_error. A null config is the default. */
@@ -220,6 +222,10 @@ int32_t emusen_crystal_free(emusen_crystal_runtime *rt);
  * the one computed from the id, and a row only an engine names has the table's default "cover_aspect"
  * (EmuSen_RustPlatform.md section 28.12). */
 int64_t emusen_crystal_systems(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
+
+/* reads. [{"id","engine","current"}]: every session the runtime has open, "current" true for the one session 0 names.
+ * The runtime's listing, not a session table's sessions, which answers its own session only. */
+int64_t emusen_crystal_sessions(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
 
 /* reads, since 1.1. [{"name","label","system","esde_system","esde_full_name","core":{"display_name","console",
  * "extensions":[ext]}}] in release order: the library's shelves, one for each system a console's core runs, named for
@@ -415,7 +421,7 @@ int64_t emusen_crystal_rewind_picture(emusen_crystal_runtime *rt, uint32_t sessi
 /* changes. Back to the moment at frame, the history after it dropped. */
 int32_t emusen_crystal_rewind_to(emusen_crystal_runtime *rt, uint32_t session, uint64_t frame);
 
-/* ---- States (the twins state_save, state_load and state_default_path are below) ----------------------------- */
+/* ---- States (state_save, state_load and state_default_path by path are the session table's) ------------------ */
 
 /* reads. [{"slot","path","exists","saved_at"}] for slots 1 to 8 and the resume state, slot 0, in the player's state
  * folder. "saved_at" is the file's time as ISO 8601, null where none exists. */
@@ -552,120 +558,16 @@ int64_t emusen_crystal_record_stop(emusen_crystal_runtime *rt, uint32_t session,
 
 /* ---- The debugger: the session service ---------------------------------------------------------------------- */
 
-/* The session's emusen.session@1 table, for a host to hand to dianash_set_services: its functions are the twins
- * below, so a module and a frontend reach one implementation. It lives as long as the session.
+/* The session's emusen.session@1 table, for a host to hand to dianash_set_services and for a frontend's own calls of
+ * the debugger: the one surface of the session service, its words read with the table's last_error. It lives as long
+ * as the runtime; once its session is closed every call is EMUSEN_SVC_NO_SESSION.
  * Since 1.12, with EMUSEN_CRYSTAL_SERVICE_NO_GAME, session is 0 and the table is the runtime's with no game, living as
  * long as the runtime: the cheat ops that need no game (the database, a .cht file's parse, the cheat files) are
- * answered, run control's resume is raised as a run event for events_drain, sessions is an empty list, games is
+ * answered, run control's resume is raised as a run event for events_drain, since 2.0 log_switch sets the process's
+ * switch (refused where the table is read-only) and log_status reads it, sessions is an empty list, games is
  * EMUSEN_SVC_NOT_SUPPORTED, and every other call is EMUSEN_SVC_NO_SESSION with the words "No ROM loaded - this
  * command needs an active debug target." (EmuSen_Backend.md section 40.7). */
 const emusen_session_v1 *emusen_crystal_session_service(emusen_crystal_runtime *rt, uint32_t session, uint32_t flags);
-
-/* The twins of emusen_session.h, in its table's order, each with the same arguments after the runtime, the same
- * statuses and the same JSON; each reads or changes as its table entry says. last_error's twin is above. */
-int64_t emusen_crystal_sessions(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
-int64_t emusen_crystal_info(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int64_t emusen_crystal_summary(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int64_t emusen_crystal_run_control(emusen_crystal_runtime *rt, uint32_t session, uint32_t op, uint32_t processor, int64_t argument);
-int64_t emusen_crystal_halt_state(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, uint8_t *out, size_t len);
-int64_t emusen_crystal_spaces(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int64_t emusen_crystal_space_read(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *space, size_t space_len, uint32_t address,
-                                  uint8_t *out, size_t len);
-int32_t emusen_crystal_space_write(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *space, size_t space_len, uint32_t address,
-                                   const uint8_t *data, size_t len);
-int64_t emusen_crystal_resolve_physical(emusen_crystal_runtime *rt, uint32_t session, uint32_t address, uint8_t *out, size_t len);
-int64_t emusen_crystal_processors(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int64_t emusen_crystal_registers(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, uint8_t *out, size_t len);
-int32_t emusen_crystal_set_register(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, const uint8_t *name, size_t name_len,
-                                    uint64_t value);
-int64_t emusen_crystal_disassemble(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, const uint8_t *space, size_t space_len,
-                                   uint32_t address, uint32_t count, const uint8_t *hints, size_t hints_len, uint8_t *out, size_t len);
-int64_t emusen_crystal_bp_add(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, const uint8_t *spec, size_t spec_len);
-int64_t emusen_crystal_bp_add_data(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, const uint8_t *spec, size_t spec_len);
-int32_t emusen_crystal_bp_set_enabled(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, uint32_t id, uint32_t enabled);
-int32_t emusen_crystal_bp_remove(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, uint32_t id);
-int64_t emusen_crystal_bp_list(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, uint8_t *out, size_t len);
-int64_t emusen_crystal_bp_log(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, uint32_t count, uint8_t *out, size_t len);
-int32_t emusen_crystal_bp_log_clear(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor);
-int32_t emusen_crystal_bp_arm_condition(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, const uint8_t *name, size_t name_len,
-                                        uint32_t flags);
-int64_t emusen_crystal_bp_conditions(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, uint8_t *out, size_t len);
-int32_t emusen_crystal_bp_depth_guard(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, int32_t depth);
-int64_t emusen_crystal_bp_forbid_range(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, uint32_t address, uint32_t end);
-int32_t emusen_crystal_bp_uninitialized(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, const uint8_t *space, size_t space_len,
-                                        uint32_t size);
-int64_t emusen_crystal_watch_add(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *space, size_t space_len, uint32_t address,
-                                 uint32_t length, uint32_t kind);
-int32_t emusen_crystal_watch_remove(emusen_crystal_runtime *rt, uint32_t session, uint32_t id);
-int64_t emusen_crystal_watch_list(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int64_t emusen_crystal_watch_events(emusen_crystal_runtime *rt, uint32_t session, uint32_t id, uint32_t count, uint8_t *out, size_t len);
-int64_t emusen_crystal_watch_summary(emusen_crystal_runtime *rt, uint32_t session, uint32_t id, uint8_t *out, size_t len);
-int32_t emusen_crystal_watch_clear(emusen_crystal_runtime *rt, uint32_t session, uint32_t id);
-int64_t emusen_crystal_framelog_add(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *space, size_t space_len, uint32_t address,
-                                    uint32_t width);
-int32_t emusen_crystal_framelog_remove(emusen_crystal_runtime *rt, uint32_t session, uint32_t id);
-int64_t emusen_crystal_framelog_list(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int64_t emusen_crystal_framelog_samples(emusen_crystal_runtime *rt, uint32_t session, uint32_t id, uint32_t count, uint8_t *out, size_t len);
-int32_t emusen_crystal_framelog_clear(emusen_crystal_runtime *rt, uint32_t session, uint32_t id);
-int64_t emusen_crystal_coverage_op(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, uint32_t op, const uint8_t *args,
-                                   size_t args_len, uint8_t *out, size_t len);
-int64_t emusen_crystal_profile_op(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, uint32_t op, const uint8_t *args,
-                                  size_t args_len, uint8_t *out, size_t len);
-int64_t emusen_crystal_counters_op(emusen_crystal_runtime *rt, uint32_t session, uint32_t op, const uint8_t *args, size_t args_len,
-                                   uint8_t *out, size_t len);
-int64_t emusen_crystal_call_stack(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, uint32_t count, uint8_t *out, size_t len);
-int64_t emusen_crystal_freeze_add(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *space, size_t space_len, uint32_t address,
-                                  uint32_t value);
-int32_t emusen_crystal_freeze_remove(emusen_crystal_runtime *rt, uint32_t session, uint32_t id);
-int64_t emusen_crystal_freeze_list(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int32_t emusen_crystal_freeze_clear(emusen_crystal_runtime *rt, uint32_t session);
-int32_t emusen_crystal_label_add(emusen_crystal_runtime *rt, uint32_t session, uint32_t address, const uint8_t *name, size_t name_len,
-                                 const uint8_t *comment, size_t comment_len);
-int32_t emusen_crystal_label_remove(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *name, size_t name_len, uint32_t address);
-int64_t emusen_crystal_label_list(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int64_t emusen_crystal_label_at(emusen_crystal_runtime *rt, uint32_t session, uint32_t address, uint8_t *out, size_t len);
-int64_t emusen_crystal_label_load(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *text, size_t text_len, uint8_t *out, size_t len);
-int64_t emusen_crystal_label_save(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int32_t emusen_crystal_label_clear(emusen_crystal_runtime *rt, uint32_t session);
-int64_t emusen_crystal_dma_channels(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int64_t emusen_crystal_dma_log_op(emusen_crystal_runtime *rt, uint32_t session, uint32_t op, const uint8_t *args, size_t args_len,
-                                  uint8_t *out, size_t len);
-int64_t emusen_crystal_register_flow_op(emusen_crystal_runtime *rt, uint32_t session, uint32_t op, const uint8_t *args, size_t args_len,
-                                        uint8_t *out, size_t len);
-int64_t emusen_crystal_coprocessor_history(emusen_crystal_runtime *rt, uint32_t session, uint32_t count, uint8_t *out, size_t len);
-int64_t emusen_crystal_vectors(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int64_t emusen_crystal_tilemap_entry(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *space, size_t space_len, uint32_t address,
-                                     uint8_t *out, size_t len);
-int64_t emusen_crystal_tile_pixels(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *space, size_t space_len, uint32_t address,
-                                   uint32_t bpp, uint8_t *out, size_t len);
-int64_t emusen_crystal_sprites(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int64_t emusen_crystal_palettes(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int64_t emusen_crystal_audio_channels(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int32_t emusen_crystal_set_channel_muted(emusen_crystal_runtime *rt, uint32_t session, uint32_t channel, uint32_t muted);
-int64_t emusen_crystal_evaluate(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, const uint8_t *text, size_t text_len,
-                                uint8_t *out, size_t len);
-int64_t emusen_crystal_symbols(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, const uint8_t *filter, size_t filter_len,
-                               uint8_t *out, size_t len);
-int64_t emusen_crystal_cheat_op(emusen_crystal_runtime *rt, uint32_t session, uint32_t op, const uint8_t *args, size_t args_len,
-                                uint8_t *out, size_t len);
-int64_t emusen_crystal_cheat_codecs(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int32_t emusen_crystal_trace(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor, uint32_t count);
-int32_t emusen_crystal_trace_off(emusen_crystal_runtime *rt, uint32_t session, uint32_t processor);
-int64_t emusen_crystal_telemetry(emusen_crystal_runtime *rt, uint32_t session, uint32_t kind, uint8_t *out, size_t len);
-int64_t emusen_crystal_tile_sheet(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int64_t emusen_crystal_palette_swatch(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int64_t emusen_crystal_audio_peek(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int32_t emusen_crystal_state_save(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *path, size_t path_len);
-int32_t emusen_crystal_state_load(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *path, size_t path_len);
-int64_t emusen_crystal_state_default_path(emusen_crystal_runtime *rt, uint32_t session, uint8_t *out, size_t len);
-int32_t emusen_crystal_log_switch(emusen_crystal_runtime *rt, uint32_t on);
-int32_t emusen_crystal_log_status(emusen_crystal_runtime *rt);
-int64_t emusen_crystal_events_drain(emusen_crystal_runtime *rt, uint32_t session, uint32_t kinds, uint8_t *out, size_t len);
-/* Since 1.1, the twins of the service's 1.3; games' twin is emusen_crystal_systems above, of the same arguments and JSON. */
-int64_t emusen_crystal_open_game(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *path, size_t path_len,
-                                 const uint8_t *engine, size_t engine_len);
-int64_t emusen_crystal_open_console(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *console, size_t console_len,
-                                    const uint8_t *engine, size_t engine_len);
 
 #ifdef __cplusplus
 }

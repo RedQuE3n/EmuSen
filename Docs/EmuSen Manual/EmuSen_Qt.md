@@ -97,12 +97,15 @@ versioned theme package, both defined in §5).
 ### 1.1 The back end, through the frontend API
 
 The front end is a client in the sense of `EmuSen_Surfaces.md` §6.2 rule E: it holds the runtime through
-`emusen_crystal.h` (version 1.13 today; rule A) and the platform library through `emusen_platform.h` (interface 35; rule
-B), and never a runtime type. That the implementation behind both headers is Rust changes nothing: the header is the
-contract. Two client crates carry them: `emusen-crystal-client`, a safe Rust binding generated from `emusen_crystal.h`
+`emusen_crystal.h` (version 2.0 today; rule A) and the platform library through `emusen_platform.h` (interface 37; rule
+B), and never a runtime type. 2.0 removed the session service's twins (`EmuSen_RustPlatform.md` §47.23): the debugger,
+states by path, the log switch and the cheat ops are called through the `emusen_session_v1` table that
+`emusen_crystal_session_service` hands out, the one the shell is handed too. That the implementation behind both
+headers is Rust changes nothing: the header is the contract. Two client crates carry them: `emusen-crystal-client`, a safe Rust binding generated from `emusen_crystal.h`
 (bindgen at build time, the generated module committed and diffed so a header change is a reviewed line), with typed
-readers for the JSON shapes the header names (`systems`, `shelves`, `engines`, `cores`, `route`, `session_info`, the
-settings schema) and the per-frame calls left as thin wrappers over the size-prefixed structs; and
+readers for the JSON shapes the header names (`systems`, `sessions`, `shelves`, `engines`, `cores`, `route`,
+`session_info`, the settings schema), the per-frame calls left as thin wrappers over the size-prefixed structs, and the
+session's table wrapped once, its failures read with the table's own `last_error`; and
 `emusen-platform-client`, the same over `emusen_platform.h`, matched exactly to the library built from the same commit.
 Neither crate knows Qt. Everything the front end shows comes through these two: the library and its shelves, a game's
 route, sessions and frames, settings, firmware, cards, the pads (Endymion), sounds (Endymion's interface player), the
@@ -443,7 +446,7 @@ scene or painter change; the loader is done. The ranking is re-measured by the c
 | Surface | For whom | Rule | Stable from |
 |---|---|---|---|
 | Core ABI v1 (`emusen_core.h` 1.19) | core authors | A: additive minors, never removed | already (2026-10-03) |
-| Frontend API (`emusen_crystal.h` 1.13) | front ends and tools | A | already |
+| Frontend API (`emusen_crystal.h` 2.0) | front ends and tools | A | already (2.0 on 2026-11-07, the twins removed) |
 | libretro API | libretro core authors | libretro's own; EmuSen implements the host | theirs |
 | DianaSh command modules | tool authors | DianaSh's ABIs (`EmuSen_DianaSh.md`) | that page's |
 | `EmuSen.Theme` 1.x and `theme.json` | theme authors | **Q** + **T** (below) | **1.0**; before it, breaking changes allowed under the same rules and listed |

@@ -4212,3 +4212,52 @@ ran on their inline cases, which do.
   16 MiB, the bus is carved from the heap and cleared by hand, where an mmap'd one arrives zeroed. With
   `MALLOC_MMAP_THRESHOLD_=4194304` the same run took 8.4 s. The check now keeps one bus for every case, cleared by
   each run as `run_file`'s already was: 5.4 s.
+
+### 47.23 The session service has one surface: the frontend API's 2.0
+
+Every function of the session service, `emusen_session.h`'s `emusen_session_v1`, had a twin in `emusen_crystal.h`
+(`emusen_crystal_<name>(rt, session, …)`), so that a frontend and a shell reached one implementation by two surfaces
+(`EmuSen_Backend.md` §3.8, SR4). *Decided 2026-11-07 by the tester* (the cleanup's question 5): the table is the one
+surface, the twins go, and the frontend API goes to major 2. That is done this way:
+
+- **The 79 twins are deleted**, from the header and from the platform library: `platform/src/crystal_twins.rs` is
+  `session_table.rs`, the table's entries, the slots that hold them and `emusen_crystal_session_service` alone
+  (1,322 lines to 698). The table is unchanged: same entries, same statuses, same JSON.
+- **`emusen_crystal_sessions` stays, as the runtime's listing.** It sat among the twins as the table's `sessions`,
+  but it is `crystal.rs`'s `listing!`, beside `systems`, `shelves`, `engines` and `cores`, and answers every session
+  the runtime has open, where a session's table answers its own session alone and the table with no game `[]`. No
+  other surface lists a runtime's sessions, so it is not a second surface of one fact; the header now declares it
+  beside `systems` as a runtime listing. `systems` stays for the same reason (it was `games`' twin by another name).
+- **The table with no game sets the log switch.** The process's switch needs no game, and the twin set it with none
+  open, as Mistress's Settings does; the table with no game refused it. Since 2.0 that table's `log_switch` sets the
+  switch, refused with `EMUSEN_SVC_READ_ONLY` where the table is read-only, and `log_status` reads it, as it did.
+- **Words that named the version** ("service flags 0x4 are not known to 1.13") name the major too: "… to 2.0".
+- **The baseline starts again.** `Platform/crystal/abi/v2/baseline.txt` records every fact of 2.0 at `@2.0`, struct
+  sizes as 2.0 lays them out; `abi/v1/baseline.txt` is kept unchanged as the record of 1.0 to 1.13. The ABI test reads
+  the major's file, and the workflow's base comparison reads `abi/v2/`. A structure shorter than its 1.0 size is still
+  the only one refused, as the header says. The twin check is replaced by its converse: the header declares no
+  function of a table entry's name but the runtime's own `last_error` and `sessions`.
+
+**Hosts on the table.** The C# front end, while it still runs, calls the debugger, states by path, the log switch and
+the cheat ops through the table: `CrystalSession` asks its session's table once, while the runtime lives, and reads a
+failure's words with the table's `last_error` (`SessionTable`); `CrystalRuntime`'s cheat ops with no session and its
+log switch use the table with no game. The table's C# mirror, `EmuSenSessionV1`, lives in `EmuSen.DianaSh`, so
+`EmuSen.Crystal.Client` references `EmuSen.DianaSh`: a new C# reference, in the front end being retired, that adds
+nothing to any program (Mistress, Hotaru and WiseMan referenced both already). The probe's EmuSen backend reads the
+NES's spaces through the session's read-only table.
+
+**What changed for a caller.** A caller of a twin calls the table's entry of the same name, with `ctx` in place of the
+runtime. A failure's words are the table's `last_error`'s, not the frontend API's; the statuses are the same. A cheat
+op of a game asked of the table with no game is `EMUSEN_SVC_NO_SESSION`, as it was with session 0, with the table's
+words ("No ROM loaded - this command needs an active debug target.") in place of "cheat op N is a game's: name its
+session". The table lives as long as the runtime, as it always did; the header now says so, and a closed session's
+table answers `EMUSEN_SVC_NO_SESSION`.
+
+**Proof, measured on 2026-11-08.** The Platform workspace passes 594 tests (1 ignored), among them the ABI test's six
+and `platform/tests/session_table.rs`, which holds the table with no game's log switch, a read-only table's refusal and
+the runtime's listing. The C# classes that read the API (`EmuSen.WiseMan.Crystal`, `NoGameServiceTests`,
+`ShellOverSessionTests`, the Mistress classes whose cheat list, states and readouts call the session) pass 169, 2
+skipped. The probe's EmuSen backend builds against the 2.0 header. Three faults were seeded and caught: a twin declared
+again (the converse check, the export check and the baseline), the table with no game setting the switch where
+read-only (`session_table.rs`), and the C# session calling through its read-only table (eight tests of
+`MainWindowCheatListTests` and `MainWindowSaveStateThreadTests`).

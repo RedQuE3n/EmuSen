@@ -1,11 +1,12 @@
 using System.Text;
 using EmuSen.Crystal.Client.Contract;
+using EmuSen.DianaSh.DianaSh.Bin.Native;
 using EmuSen.Galaxia.Input;
 using static EmuSen.Crystal.Client.CrystalRuntime;
 
 namespace EmuSen.Crystal.Client
 {
-    // One open session: the frame call and its hand-over, input, speed, rewind, states, settings and the debugger's twins - see EmuSen_Backend.md §3.5 and §14.
+    // One open session: the frame call and its hand-over, input, speed, rewind, states, settings, and the debugger through the session's table - see EmuSen_Backend.md §3.5 and §14.
     public sealed unsafe class CrystalSession : IDisposable
     {
         internal CrystalSession(CrystalRuntime runtime, uint id)
@@ -120,11 +121,11 @@ namespace EmuSen.Crystal.Client
 
         public void RewindTo(ulong frame) => Check(Contract.Crystal.RewindTo(Rt, Id, frame));
 
-        public void SaveState(string? path = null) => WithText(path, (p, l) => Check(Contract.Crystal.StateSave(Rt, Id, (byte*)p, l)));
+        public void SaveState(string? path = null) => WithText(path, (p, l) => Table.Check(T->state_save(T->ctx, Id, (byte*)p, l)));
 
-        public void LoadState(string? path = null) => WithText(path, (p, l) => Check(Contract.Crystal.StateLoad(Rt, Id, (byte*)p, l)));
+        public void LoadState(string? path = null) => WithText(path, (p, l) => Table.Check(T->state_load(T->ctx, Id, (byte*)p, l)));
 
-        public string DefaultStatePath() => Text((o, n) => Contract.Crystal.StateDefaultPath(Rt, Id, o, n));
+        public string DefaultStatePath() => Table.Text((o, n) => T->state_default_path(T->ctx, Id, o, n));
 
         public string StateSlots() => Text((o, n) => Contract.Crystal.StateSlots(Rt, Id, o, n));
 
@@ -160,56 +161,64 @@ namespace EmuSen.Crystal.Client
 
         public string StopRecording() => Once((o, n) => Contract.Crystal.RecordStop(Rt, Id, o, n));
 
-        // The session's emusen_session_v1 table, for a shell's host to hand on: the twins' functions, alive as long as the session.
+        // The session's emusen_session_v1 table, for a shell's host to hand on and for the calls below: alive as long as the runtime.
         public nint ServiceTable(bool readOnly = false)
         {
             nint table = Contract.Crystal.SessionService(Rt, Id, readOnly ? CrystalAbi.ServiceReadOnly : 0);
-            return table == 0 ? throw Failure(CrystalSessionAbi.NoSession) : table;
+            return table == 0 ? throw Failure(Rt == 0 ? CrystalSessionAbi.Null : CrystalSessionAbi.NoSession) : table;
         }
 
-        public long Run(uint op, uint processor = 0, long argument = 0) => Check(Contract.Crystal.RunControl(Rt, Id, op, processor, argument));
+        private SessionTable? _table;
 
-        public string HaltState(uint processor = 0) => Text((o, n) => Contract.Crystal.HaltState(Rt, Id, processor, o, n));
+        // The full table, asked once while the runtime lives; a closed session's answers NO_SESSION in its own words.
+        private SessionTable Table => Rt != 0 && _table is { } made ? made : _table = new SessionTable(ServiceTable());
 
-        public string ServiceInfo() => Text((o, n) => Contract.Crystal.Info(Rt, Id, o, n));
+        private EmuSenSessionV1* T => Table.T;
 
-        public string Summary() => Text((o, n) => Contract.Crystal.Summary(Rt, Id, o, n));
+        public long Run(uint op, uint processor = 0, long argument = 0) => Table.Check(T->run_control(T->ctx, Id, op, processor, argument));
 
-        public string Telemetry(uint kind) => Text((o, n) => Contract.Crystal.Telemetry(Rt, Id, kind, o, n));
+        public string HaltState(uint processor = 0) => Table.Text((o, n) => T->halt_state(T->ctx, Id, processor, o, n));
 
-        public string Spaces() => Text((o, n) => Contract.Crystal.Spaces(Rt, Id, o, n));
+        public string ServiceInfo() => Table.Text((o, n) => T->info(T->ctx, Id, o, n));
+
+        public string Summary() => Table.Text((o, n) => T->summary(T->ctx, Id, o, n));
+
+        public string Telemetry(uint kind) => Table.Text((o, n) => T->telemetry(T->ctx, Id, kind, o, n));
+
+        public string Spaces() => Table.Text((o, n) => T->spaces(T->ctx, Id, o, n));
 
         // Bytes of a memory space from an address, read as the space reads any address.
         public void ReadSpace(string space, uint address, Span<byte> into)
         {
             byte[] name = Encoding.UTF8.GetBytes(space);
+            SessionTable t = Table;
             fixed (byte* s = name)
             fixed (byte* p = into)
-                Check(Contract.Crystal.SpaceRead(Rt, Id, s, (nuint)name.Length, address, p, (nuint)into.Length));
+                t.Check(t.T->space_read(t.T->ctx, Id, s, (nuint)name.Length, address, p, (nuint)into.Length));
         }
 
         public long WatchAdd(string space, uint address, uint length, uint kind) =>
-            WithText(space, (s, sl) => Check(Contract.Crystal.WatchAdd(Rt, Id, (byte*)s, sl, address, length, kind)));
+            WithText(space, (s, sl) => Table.Check(T->watch_add(T->ctx, Id, (byte*)s, sl, address, length, kind)));
 
-        public string WatchList() => Text((o, n) => Contract.Crystal.WatchList(Rt, Id, o, n));
+        public string WatchList() => Table.Text((o, n) => T->watch_list(T->ctx, Id, o, n));
 
-        public string Sprites() => Text((o, n) => Contract.Crystal.Sprites(Rt, Id, o, n));
+        public string Sprites() => Table.Text((o, n) => T->sprites(T->ctx, Id, o, n));
 
-        public byte[] TileSheet() => Bytes((o, n) => Contract.Crystal.TileSheet(Rt, Id, o, n));
+        public byte[] TileSheet() => Table.Bytes((o, n) => T->tile_sheet(T->ctx, Id, o, n));
 
-        public byte[] PaletteSwatch() => Bytes((o, n) => Contract.Crystal.PaletteSwatch(Rt, Id, o, n));
+        public byte[] PaletteSwatch() => Table.Bytes((o, n) => T->palette_swatch(T->ctx, Id, o, n));
 
-        public byte[] AudioPeek() => Bytes((o, n) => Contract.Crystal.AudioPeek(Rt, Id, o, n));
+        public byte[] AudioPeek() => Table.Bytes((o, n) => T->audio_peek(T->ctx, Id, o, n));
 
         // An op that answers a record, read with the copy-out protocol's two calls; a record-answering change is kept by the provider between them.
         public string CheatOp(uint op, string argsJson) =>
-            WithText(argsJson, (a, al) => Text((o, n) => Contract.Crystal.CheatOp(Rt, Id, op, (byte*)a, al, o, n)));
+            WithText(argsJson, (a, al) => Table.Text((o, n) => T->cheat_op(T->ctx, Id, op, (byte*)a, al, o, n)));
 
         // An op that changes the list and answers a value, not a record, called once, since two calls would make the change twice - see EmuSen_Backend.md §14.13.
         public long CheatChange(uint op, string argsJson) =>
-            WithText(argsJson, (a, al) => Check(Contract.Crystal.CheatOp(Rt, Id, op, (byte*)a, al, null, 0)));
+            WithText(argsJson, (a, al) => Table.Check(T->cheat_op(T->ctx, Id, op, (byte*)a, al, null, 0)));
 
-        public string CheatCodecs() => Text((o, n) => Contract.Crystal.CheatCodecs(Rt, Id, o, n));
+        public string CheatCodecs() => Table.Text((o, n) => T->cheat_codecs(T->ctx, Id, o, n));
 
         public void Close()
         {

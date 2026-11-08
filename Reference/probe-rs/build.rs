@@ -181,9 +181,9 @@ fn generate_emusen_bindings() {
     }
     // Only what the backend calls, so a library that lacks an unrelated export still loads.
     let bindings = builder
-        .allowlist_function("emusen_crystal_(abi_version|last_error|new|free|route|open|close|session_info|frame|picture_copy|input_button|spaces|space_read)")
+        .allowlist_function("emusen_crystal_(abi_version|last_error|new|free|route|open|close|session_info|frame|picture_copy|input_button|session_service)")
         .allowlist_function("emusen_galaxia_(init|set_override)")
-        .allowlist_var("EMUSEN_CRYSTAL_(MAJOR|OPEN_NO_BATTERY)|EMUSEN_GALAXIA_OVERRIDE_(CONFIG|DATA)")
+        .allowlist_var("EMUSEN_CRYSTAL_(MAJOR|OPEN_NO_BATTERY|SERVICE_READ_ONLY)|EMUSEN_GALAXIA_OVERRIDE_(CONFIG|DATA)")
         .allowlist_type("emusen_crystal_(config|open_params|frame_info)|emusen_control")
         .constified_enum_module("emusen_control")
         .dynamic_library_name("Platform")

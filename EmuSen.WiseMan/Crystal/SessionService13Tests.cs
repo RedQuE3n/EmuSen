@@ -62,15 +62,11 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal(1u, info.ran);
         }
 
-        // The twin answers as the table does; the runtime's own statuses and words come through it.
+        // The runtime's own statuses and words come through the table.
         [Fact]
-        public void The_twin_opens_as_the_table_does_and_passes_the_runtime_s_refusals_through()
+        public void The_table_passes_the_runtime_s_refusals_through()
         {
             using CrystalSession first = _f.Open();
-            long id = With(_f.Game("Twin.tst"), null, (p, pl, e, el) => global::EmuSen.Crystal.Client.Contract.Crystal.OpenGame(_f.Runtime.Handle, first.Id, (byte*)p, pl, (byte*)e, el));
-            Assert.True(id > first.Id, $"the twin answered {id}");
-            _f.Runtime.SessionOf((uint)id).Dispose();
-
             var t = (EmuSenSessionV1*)first.ServiceTable();
             Assert.Equal(CrystalAbi.Io, OpenGame(t, _f.Root + "/Missing.tst"));
             Assert.Contains("does not exist", LastError(t));

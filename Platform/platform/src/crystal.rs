@@ -92,7 +92,7 @@ pub unsafe extern "C" fn emusen_crystal_new(config: *const emusen_crystal_config
             }
             let flags = unsafe { (*config).flags };
             if flags & !abi::CONFIG_DEVELOPMENT != 0 {
-                return Err(fail(svc::NOT_SUPPORTED, format!("config flags 0x{flags:X} are not known to 1.{}", abi::MINOR)));
+                return Err(fail(svc::NOT_SUPPORTED, format!("config flags 0x{flags:X} are not known to {}.{}", abi::MAJOR, abi::MINOR)));
             }
             if flags & abi::CONFIG_DEVELOPMENT != 0 {
                 c.development = Some(true);
@@ -130,7 +130,7 @@ pub unsafe extern "C" fn emusen_crystal_free(rt: *mut emusen_crystal_runtime) ->
     if rt.is_null() {
         return fail(svc::NULL, "a null runtime");
     }
-    crate::crystal_twins::forget(rt);
+    crate::session_table::forget(rt);
     drop(unsafe { Box::from_raw(rt as *mut Runtime) });
     0
 }
@@ -323,7 +323,7 @@ pub unsafe extern "C" fn emusen_crystal_open(rt: *mut emusen_crystal_runtime, pa
         }
         let known = abi::OPEN_NO_BATTERY | abi::OPEN_SINGLE_ROWS | abi::OPEN_RING;
         if p.flags & !known != 0 {
-            return Err(fail(svc::NOT_SUPPORTED, format!("open flags 0x{:X} are not known to 1.{}", p.flags & !known, abi::MINOR)));
+            return Err(fail(svc::NOT_SUPPORTED, format!("open flags 0x{:X} are not known to {}.{}", p.flags & !known, abi::MAJOR, abi::MINOR)));
         }
         let asked = emusen_crystal::open::Asked {
             path: unsafe { text(p.path, p.path_len) }?,

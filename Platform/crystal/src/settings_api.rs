@@ -324,7 +324,7 @@ fn write_game_values(tree: &Tree, system: Option<&str>, game: &str, package: Opt
 impl Runtime {
     fn settings_target(&self, session: u32, scope: u32, console: Option<&str>) -> Result<(String, Option<std::sync::Arc<Session>>), Refused> {
         if scope != abi::SCOPE_CONSOLE && scope != abi::SCOPE_GAME {
-            return Err((svc::NOT_SUPPORTED, format!("no settings scope {scope} in 1.{}", abi::MINOR)));
+            return Err((svc::NOT_SUPPORTED, format!("no settings scope {scope} in {}.{}", abi::MAJOR, abi::MINOR)));
         }
         if session == 0 {
             if scope == abi::SCOPE_GAME {

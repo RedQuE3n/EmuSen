@@ -589,7 +589,7 @@ impl Session {
 
     pub fn button(&self, port: u32, control: u32, pressed: bool) -> Result<(), Refused> {
         if control as usize >= crate::info::BUTTONS.len() {
-            return Err((svc::NOT_SUPPORTED, format!("no control {control} in 1.{}", abi::MINOR)));
+            return Err((svc::NOT_SUPPORTED, format!("no control {control} in {}.{}", abi::MAJOR, abi::MINOR)));
         }
         crate::input::button(&self.routes, &self.latch, port, control as usize, pressed);
         Ok(())
@@ -597,7 +597,7 @@ impl Session {
 
     pub fn axis(&self, port: u32, axis: u32, value: f64) -> Result<(), Refused> {
         if axis as usize >= crate::info::AXES.len() {
-            return Err((svc::NOT_SUPPORTED, format!("no axis {axis} in 1.{}", abi::MINOR)));
+            return Err((svc::NOT_SUPPORTED, format!("no axis {axis} in {}.{}", abi::MAJOR, abi::MINOR)));
         }
         if value.is_nan() {
             return Err((svc::BAD_ARGUMENT, "an axis value that is not a number".to_string()));
@@ -612,7 +612,7 @@ impl Session {
 
     pub fn speed_set(&self, percent: u32, turbo: u32, slow: u32, flags: u32) -> Result<(), Refused> {
         if flags & !abi::SPEED_DRAW_NONE != 0 {
-            return Err((svc::NOT_SUPPORTED, format!("speed flags 0x{flags:X} are not known to 1.{}", abi::MINOR)));
+            return Err((svc::NOT_SUPPORTED, format!("speed flags 0x{flags:X} are not known to {}.{}", abi::MAJOR, abi::MINOR)));
         }
         self.change(|_, run| {
             run.base_percent = percent;
@@ -626,7 +626,7 @@ impl Session {
 
     pub fn speed_mode(&self, mode: u32) -> Result<(), Refused> {
         if mode > abi::SPEED_SLOW {
-            return Err((svc::NOT_SUPPORTED, format!("no speed mode {mode} in 1.{}", abi::MINOR)));
+            return Err((svc::NOT_SUPPORTED, format!("no speed mode {mode} in {}.{}", abi::MAJOR, abi::MINOR)));
         }
         self.change(|_, run| {
             run.mode = mode;

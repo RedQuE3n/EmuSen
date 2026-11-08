@@ -83,7 +83,7 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Equal("no session is open", Words());
             Assert.Equal(0, CrystalContract.SessionService(_runtime.Handle, 0, CrystalAbi.ServiceReadOnly));
             Assert.Equal(0, CrystalContract.SessionService(_runtime.Handle, 0, 4));
-            Assert.Equal($"service flags 0x4 are not known to 1.{CrystalAbi.Minor}", Words());
+            Assert.Equal($"service flags 0x4 are not known to {CrystalAbi.Major}.{CrystalAbi.Minor}", Words());
             Assert.Equal(0, CrystalContract.SessionService(_runtime.Handle, 3, CrystalAbi.ServiceNoGame));
             Assert.Equal("the table with no game names no session, and 3 was named", Words());
 

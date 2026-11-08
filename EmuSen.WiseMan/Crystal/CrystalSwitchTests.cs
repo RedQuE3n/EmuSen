@@ -11,7 +11,7 @@ namespace EmuSen.WiseMan.Crystal
     public class CrystalSwitchTests
     {
         [Fact]
-        public void The_suite_s_binding_is_the_platform_library_s() => Assert.Contains(", frontend API 1.", CrystalContract.Report);
+        public void The_suite_s_binding_is_the_platform_library_s() => Assert.Contains($", frontend API {EmuSen.Crystal.Client.Contract.CrystalAbi.Major}.", CrystalContract.Report);
 
         // The line goes to the host's sink and the error log, so it is read from the binding rather than from a program's output.
         [Theory]

@@ -17,6 +17,9 @@
     <ProjectReference Include="..\EmuSen\EmuSen.csproj" />
     <!-- The platform library's loader and the input vocabulary, PadButton and PadAxis. -->
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
+    <!-- The session service table's C# mirror, EmuSenSessionV1, through which the debugger is called since frontend API 2.0
+         (EmuSen_RustPlatform.md §47.23); every program that references this binding references the shell too. -->
+    <ProjectReference Include="..\EmuSen.DianaSh\EmuSen.DianaSh.csproj" />
   </ItemGroup>
 
   <ItemGroup>

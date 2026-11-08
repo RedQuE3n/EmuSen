@@ -217,13 +217,13 @@ jobs:
             export DIANASH_ABI_AGAINST="$RUNNER_TEMP/dianash-base-baseline.txt"
           fi
           cd Platform && cargo test --profile test-checked -p emusen-platform --test dianash_abi
-      # The frontend API, stable from its first commit: the header against the Rust types, against the session service's table
-      # (every function's twin, both ways), C99 and C++17, and its baseline against the base branch's (EmuSen_Backend.md §3.2, §14).
+      # The frontend API: the header against the Rust types, against the session service's table (no twin of its functions since
+      # 2.0), C99 and C++17, and the major's baseline against the base branch's (EmuSen_Backend.md §3.2, §14).
       - name: The frontend API's surface
         shell: bash
         run: |
           base="${{ github.event.pull_request.base.sha || github.event.before }}"
-          path=Platform/crystal/abi/v1/baseline.txt
+          path=Platform/crystal/abi/v2/baseline.txt
           if [ -n "$base" ] && git cat-file -e "$base:$path" 2>/dev/null; then
             git show "$base:$path" > "$RUNNER_TEMP/crystal-base-baseline.txt"
             export CRYSTAL_ABI_AGAINST="$RUNNER_TEMP/crystal-base-baseline.txt"

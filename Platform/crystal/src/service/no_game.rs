@@ -1,12 +1,12 @@
 //! The runtime's table with no game, `SERVICE_NO_GAME` since the frontend API's 1.12: what a shell with no game is
 //! handed, answering as the C# provider over no target did. The cheat database, a `.cht` file's parse and the cheat
-//! files are answered; `resume` is raised for the host's loop; every other call has no session (EmuSen_Backend.md
-//! §40.7).
+//! files are answered; `resume` is raised for the host's loop; since 2.0 the process's log switch is set; every other
+//! call has no session (EmuSen_Backend.md §40.7).
 
 use emusen_session_service::abi::{run, status};
 
 use super::args::Raw;
-use super::{Answer, cheats, refused};
+use super::{Answer, READ_ONLY_WORDS, cheats, machine, refused};
 use crate::runtime::Runtime;
 use crate::session::Refused;
 
@@ -53,4 +53,13 @@ pub fn cheat_op(rt: &Runtime, o: u32, raw: Raw, room: Option<usize>, read_only: 
         return Err(no_session());
     }
     cheats::cheat_op_without_game(rt, o, raw, room, read_only)
+}
+
+/// `log_switch`: the process's switch, which needs no game; a read-only table's change refused.
+pub fn log_switch(on: bool, read_only: bool) -> Answer<i64> {
+    if read_only {
+        return Err(refused(status::READ_ONLY, READ_ONLY_WORDS));
+    }
+    machine::set_log(on);
+    Ok(0)
 }

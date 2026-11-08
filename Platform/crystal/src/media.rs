@@ -435,7 +435,7 @@ pub fn cards_op(catalog: &crate::catalog::Catalog, tree: &Tree, op: u32, args: &
         a::CARDS_NEW => Ok(outcome_json(&manager.new_card(&text("path")?))),
         a::CARDS_DUPLICATE => Ok(outcome_json(&manager.duplicate(&text("from")?, &text("to")?))),
         a::CARDS_RENAME => done(manager.rename(&text("from")?, &text("to")?)),
-        _ => Err((emusen_session_service::abi::status::NOT_SUPPORTED, format!("no cards op {op} in 1.{}", crate::abi::MINOR))),
+        _ => Err((emusen_session_service::abi::status::NOT_SUPPORTED, format!("no cards op {op} in {}.{}", crate::abi::MAJOR, crate::abi::MINOR))),
     }
 }
 

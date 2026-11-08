@@ -61,6 +61,29 @@ pub unsafe extern "C" fn emusen_serenity_device_new(name: *const u8, len: usize,
     }
 }
 
+/// The same, with the extensions a host's own renderer needs enabled, Vulkan's names separated by spaces: `instance`
+/// on the instance and `device` on the device, so that the host can adopt both (EmuSen_Qt.md §1.8). Null when one is
+/// not offered, with words that name it.
+///
+/// # Safety
+/// `name`, `instance` and `device` valid for their lengths, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_serenity_device_new_for(name: *const u8, len: usize, validate: i32, instance: *const u8, instance_len: usize, device: *const u8, device_len: usize) -> *mut DeviceHandle {
+    let (Ok(name), Ok(instance), Ok(device)) = (unsafe { text(name, len) }, unsafe { text(instance, instance_len) }, unsafe { text(device, device_len) }) else { return std::ptr::null_mut() };
+    let names = |list: Option<&str>| list.unwrap_or_default().split_whitespace().filter_map(|n| std::ffi::CString::new(n).ok()).collect();
+    let host = emusen_serenity::vulkan::Host { instance: names(instance), device: names(device) };
+    match Device::create_for(name, validate != 0, &host) {
+        Ok(device) => {
+            let findings = device.findings();
+            Box::into_raw(Box::new(DeviceHandle { device: Mutex::new(Some(device)), findings, heard: Mutex::default(), marks: Mutex::default() }))
+        }
+        Err(report) => {
+            fail(status::DEVICE, report);
+            std::ptr::null_mut()
+        }
+    }
+}
+
 /// Lets go of the device, which is destroyed once no chain and no lent readback made on it is left; what its layer
 /// said, to the end, stays to be taken until the handle is freed.
 ///
@@ -115,9 +138,14 @@ pub unsafe extern "C" fn emusen_serenity_device_findings(h: *const DeviceHandle,
 
 pub const RAW_INSTANCE: u32 = 0;
 pub const RAW_DEVICE: u32 = 1;
+pub const RAW_PHYSICAL: u32 = 2;
+pub const RAW_QUEUE: u32 = 3;
+pub const RAW_QUEUE_FAMILY: u32 = 4;
 
-/// The `VkInstance` or the `VkDevice` itself, for a caller that makes a Vulkan call of its own on it; zero for a
-/// closed device or a kind there is none of. The device's queue is the library's.
+/// The `VkInstance`, the `VkDevice`, the `VkPhysicalDevice`, the graphics `VkQueue` (index 0) or its family, for a
+/// caller that makes a Vulkan call of its own on them; zero for a closed device or a kind there is none of. The queue
+/// is the library's, and a host that adopts the device submits to it only from the one thread that makes every chain
+/// call that submits (EmuSen_Qt.md §1.8).
 ///
 /// # Safety
 /// `h` live.
@@ -126,6 +154,9 @@ pub unsafe extern "C" fn emusen_serenity_device_raw(h: *const DeviceHandle, whic
     match (unsafe { device(h) }, which) {
         (Ok(device), RAW_INSTANCE) => device.raw_instance(),
         (Ok(device), RAW_DEVICE) => device.raw_device(),
+        (Ok(device), RAW_PHYSICAL) => device.raw_physical(),
+        (Ok(device), RAW_QUEUE) => device.raw_queue(),
+        (Ok(device), RAW_QUEUE_FAMILY) => device.family() as u64,
         _ => 0,
     }
 }
@@ -610,6 +641,41 @@ pub unsafe extern "C" fn emusen_serenity_chain_present(h: *const ChainHandle, ta
     let Some(target) = (unsafe { target.as_ref() }) else { return fail(status::NULL, "no target") };
     match chain.present(&target.shown, width, height, wait_free != 0) {
         Ok(()) => 0,
+        Err(words) => fail(status::DEVICE, words),
+    }
+}
+
+/// `emusen_serenity_drawn`: the image a draw left its picture in.
+#[repr(C)]
+pub struct Drawn {
+    pub size: u32,
+    pub width: u32,
+    pub height: u32,
+    pub format: u32,
+    pub layout: u32,
+    pub reserved: u32,
+    pub image: u64,
+    pub view: u64,
+}
+
+/// Every pass run for a view of `width` by `height` with no readback, no copy and no wait, the last pass's picture
+/// left in its own image for a host that adopted the device to sample, on the same queue after this submission
+/// (EmuSen_Qt.md §1.8). DEVICE when no frame has been given yet or a Vulkan call failed.
+///
+/// # Safety
+/// `h` live; `out` valid, its `size` set.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_serenity_chain_draw(h: *const ChainHandle, width: i32, height: i32, out: *mut Drawn) -> i32 {
+    let Some(out) = (unsafe { out.as_mut() }) else { return fail(status::NULL, "no out") };
+    if (out.size as usize) < std::mem::size_of::<Drawn>() {
+        return fail(status::BAD_ARGUMENT, "the drawn struct is too short");
+    }
+    let mut chain = chain!(h);
+    match chain.draw(width, height) {
+        Ok(d) => {
+            (out.width, out.height, out.format, out.layout, out.image, out.view) = (d.width, d.height, d.format, d.layout, d.image, d.view);
+            0
+        }
         Err(words) => fail(status::DEVICE, words),
     }
 }

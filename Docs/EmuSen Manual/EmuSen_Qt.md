@@ -254,8 +254,10 @@ disassembly, board name and view; `emusen_firmware_find` and `_locate`; the chea
 (`emusen_cheats_*`); the HTTP client (`emusen_net_download_*`); the medium locks; Endymion's resampler, rate control,
 router, player slots, `pad_resolve`, `pad_combine`, `pad_controls_for`, `pads_use`,
 `pads_rescan_due`, the simulated pads' texts read, holds and device calls, the game's audio player (`emusen_endymion_audio_*`),
-the interface player's `decode`, `decode_take` and `volume`; and all of Serenity (presets, sources, the compiler,
-reflection, the cache, the device, the lend, the chain, the ring and the built-in filters). Each is wrapped when a
+the interface player's `decode`, `decode_take` and `volume`; and the rest of Serenity (sources, the compiler,
+reflection, the cache, the lend, the ring, and the chain's other calls); since interface 42 its `serenity` module covers
+the device made for an adopting host, its raw handles, a built-in filter's preset, and a chain advanced and drawn in place
+(§1.8). Each is wrapped when a
 screen needs it: the router and slots with the Device screen, the audio player, rate control and Serenity with the
 game picture (§1.8), the library tool and the packages with their windows.
 
@@ -448,6 +450,115 @@ threaded render loop and `QSGRendererInterface::Vulkan` are forced on every plat
 handheld is why). Fallbacks: `QQuickRhiItem` with one copy where device adoption is refused; the readback path where
 there is no Vulkan. Its first open question, whether Qt's RHI tolerates a foreign submission on its queue between
 frames, is the first day of stage 1 (§7).
+
+#### 1.8.1 Day one: the protocol, and its answer **[M 2026-11-08]**
+
+**The answer is yes: Qt's RHI takes a foreign submission on its queue.** As built:
+- *The device.* Serenity's device is made with the extensions Qt's scene graph needs, `VK_KHR_surface`, the platform's
+  surface (`VK_KHR_wayland_surface` or `VK_KHR_xcb_surface`, by `QGuiApplication::platformName`) and
+  `VK_EXT_swapchain_colorspace` on the instance, `VK_KHR_swapchain` on the device (`emusen_serenity_device_new_for`,
+  platform interface 42, `EmuSen_RustPlatform.md` §49). The window is created hidden; before its first show a
+  `QVulkanInstance` adopts the instance (`setVkInstance`) and `QQuickGraphicsDevice::fromDeviceObjects` names the
+  physical device, the device and the graphics queue (family, index 0), all read through `emusen_serenity_device_raw`
+  (`EmuSen_Kit.md` §7.16). `QSG_RHI_BACKEND=vulkan` and `QSG_RENDER_LOOP=threaded` are set before the application.
+  Qt's log: "Using imported physical device", "Using imported device", "Using queue family index 0 and queue index 0".
+- *The picture.* `emusen_serenity_chain_draw` runs every pass for the item's size in pixels and leaves the last pass's own
+  image in `SHADER_READ_ONLY_OPTIMAL`; `GamePicture` wraps that `VkImage` with `QSGVulkanTexture::fromNative`. No copy.
+- *The order.* Every chain call that submits is made on Qt's render thread, so the queue has one submitter at a time, as
+  Vulkan requires; the chain submits at the item's sync, before Qt's frame submits at its end. The dependency is the
+  chain's render passes': their existing one from the colour writes to later shader reads, whose second scope takes in
+  Qt's later draw, and one added on 2026-11-08 from earlier vertex and fragment reads to the next colour writes, so that
+  Qt's read of the last picture finishes before the chain writes it again. That is the "one image barrier" of the
+  2026-11-01 plan, carried by the render pass instead of a separate command. A new size waits for the queue before the
+  outputs are remade, since Qt may still be reading them.
+- *Where it differs from the plan, and why.* The draw is made at the item's sync (`updatePaintNode`, on the render thread
+  with the GUI thread held) rather than in `beforeRendering`: the size the picture is drawn for and the image the node
+  must name are known there together, and a draw in `beforeRendering` would need a second call to learn the image after
+  the node was made. Both points are on the render thread before Qt's submission, so the order is the same. The fallback
+  (`QQuickRhiItem` with one copy) was not needed.
+
+**Evidence.** Measured on 2026-11-08 on the desktop (RX 6800, RADV, Mesa 26.2.4, Qt 6.11.2), in a real window of a
+compositor of its own (`kwin_wayland --virtual`, 1920 by 1200, Wayland), since the desk's session was locked and KWin sends
+a locked session's windows no frame callbacks (a window there drew one frame and stopped). The validation layer was
+loaded on Serenity's instance, which Qt adopted, so it saw Qt's calls as well as the chain's, with synchronisation
+validation and `VK_LAYER_SYNCVAL_SHADER_ACCESSES_HEURISTIC=1`. A moving test picture (256 by 224, one frame a swap) ran
+for **540 s: 32,389 swaps (59.97 a second), 32,267 frames drawn, no finding**. Two faults were seeded. Without the
+render pass's dependency from colour writes to shader reads, the layer reported `READ_AFTER_WRITE` at `vkQueueSubmit`,
+naming Qt's `vkCmdDrawIndexed` reading the image after the chain's layout transition: the layer does check across the two
+submitters. Without the added dependency (Qt's read before the next write) it reported nothing in 5 s, so that direction
+rests on the specification, not on the layer; the dependency stays. The first run's one finding, a swapchain colour space
+from an extension the instance lacked, is why `VK_EXT_swapchain_colorspace` is asked for.
+
+#### 1.8.2 `SessionModel` and the feed **[M 2026-11-08]**
+
+`emusen-qt-models` gains three parts, each with one job:
+- `picture.rs`, **`PictureFeed`**: the feed `GamePicture` names (`EmuSen_Kit.md` §7.16). A frame thread hands over its
+  newest frame by swapping buffers with the one waiting, so neither side copies or allocates per frame; at the item's
+  sync the render thread takes it, advances it into a chain of the built-in plain filter (`effect.None.nearest`), made on
+  the render thread at the first draw and used only there, and draws in place. Each swap's time is counted, and a frame
+  thread can wait for a swap or for its frame to be taken. It counts swaps, frames handed, drawn and dropped (replaced
+  before a draw), and swaps repeated (no new frame while running).
+- `session.rs`, **`Session`**: a game opened through the frontend API with the presenter's device lent
+  (`Open.device`, added to the crystal client), run on a frame thread until dropped: each frame's picture copied and
+  handed over, the sound drained, paused and resumed by a flag. Plain Rust, no Qt.
+- `session_model.rs`, **`SessionModel`** (`EmuSen.Models` 1.0): writable `platformLibrary`, `feed`, `cores` (a cores
+  folder in place of the runtime's default), `engine` (an engine by name in place of the settings' choice) and `game`
+  (naming one opens it once the library and the feed are named too, in whatever order QML sets them; none closes it);
+  read-only `running`, `paused`, `problem` and `firstPictureMs`; invokables `open`, `pause`, `resume` and `close`. The
+  frame thread's reports reach it only through `qt_thread().queue`. It reaches the picture the window adopted by the
+  feed's number *[own, because QML hands an element no Rust value, and the device must exist before the window does]*.
+
+The program is `Frontend/qt-play`, `emusen-qt-play`: it makes the device, adopts it, names the feed, the library, the
+cores folder and the game as the window's initial properties, and with `--seconds` counts and quits. Its window,
+`Play.qml`, is a `SessionModel` and a `Kit.GamePicture`, held to the QML rules and qmllint (`tests/qml.rs`).
+
+#### 1.8.3 Pacing by the display **[M 2026-11-08]**
+
+`DisplayClock` (in `session.rs`) smooths the display's period from the swaps' times. A game whose interval sits within
+1 % of it is locked to the display: after each hand-over the frame thread waits until a draw has taken the frame, so
+the next one is run a whole frame before the sync that shows it. The first version woke at each swap instead and raced
+the sync that follows a swap at once in the threaded loop: on a 10 s run of an NES game, after the first 2 s, 3 frames
+were dropped and 1 swap repeated; waiting for the take gave 0 and 0. A game off the display's rate runs on its own clock.
+*[own, because Serenity's pacer (`emusen-serenity::pace`, §1.9) is not built; the clock moves there with
+`FrameScheduler`'s port, and `GamePicture` already delivers the swaps' times it reads.]*
+
+#### 1.8.4 The gate, the tests, and what is owed **[M 2026-11-08]**
+
+**The picture at 60 frames a second for 60 s** (§9.3), the program in a debug build, the platform library in the
+`test-fast` profile, in the virtual compositor: Super Mario Bros. (copied read-only to the probe folder) on Moon from the
+published cores folder, 62 s, counted after the first 2 s:
+
+| Round | Swaps | Drawn | Dropped | Repeated | Play to the first picture |
+|---|---|---|---|---|---|
+| 1 | 3,602 | 3,601 | 0 | 0 | 165 ms |
+| 2 | 3,597 | 3,573 | 22 | 23 | 158 ms |
+| 3 | 3,601 | 3,600 | 0 | 0 | 172 ms |
+
+Round 2 ran while other builds loaded the machine (the run is at CPU weight 20); rounds 1 and 3 are clean. "Play to the
+first picture" is from the window's load, which names the game, to the first frame drawn.
+
+**Tests.** `emusen-qt-models`' `session` (the test core opened with the device lent, its first picture reported, the
+feed's draw made as the render thread makes it, at two sizes, in `SHADER_READ_ONLY_OPTIMAL`; 30 swaps; paused, nothing is
+handed over; resumed, frames come again; closed; no finding from the layer) and `DisplayClock`'s unit test;
+`emusen-platform-client`'s `serenity` (an extension not offered refused by name; the raw handles; a chain refuses to
+draw before a frame, draws in place, keeps its image at the same size and remakes it at another; no finding); the
+kit's layout test of the feed and its registry. Seeded and caught: the draw naming the wrong layout (`session`), a pause
+ignored (`session`), and the dependency from writes to reads removed (the layer, §1.8.1).
+
+**Owed**, each with its reason:
+- *The real desk, and the C# figures from the same script.* The desk's session was locked through the work; both need
+  the tester there. The C# front end counts no `frameSwapped`; which of its own counters stands for the same count is
+  settled when its figures are taken, and they are written next to these.
+- *Play to the first picture for a hosted core.* No libretro core is installed on the desktop; installing one is the
+  Cores window's job, in the player's tree.
+- *The pad driving the game.* `PadReader` puts presses on the interface; the game's buttons (`emusen_crystal_input_button`
+  from Endymion's PadButton) are a frame-thread poll of the same pads, which must not open them twice. Recommended: the
+  reader hands the game's buttons to the session as well as the interface's presses, one owner of the pads.
+- *A device core's picture.* The device is lent, but the chain still advances from `picture_copy`; the lend's and the
+  ring's pictures (`emusen_serenity_chain_advance_lent`, `_advance_ring`) go through the feed's draw on the render thread.
+- *The sound*, drained and dropped until Endymion's game player is wrapped; *the picture's content* read back under
+  `QQuickRenderControl` (§8.1, tier 2); and the chain dropped on the render thread when a session closes (it is now
+  dropped with the feed, after the window).
 
 ### 1.9 Homes for the front-end logic still in C#
 

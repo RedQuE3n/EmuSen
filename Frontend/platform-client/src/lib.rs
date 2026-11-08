@@ -15,6 +15,7 @@ pub mod pads;
 mod platform;
 mod raw;
 pub mod scrape;
+pub mod serenity;
 pub mod sounds;
 
 pub use error::{Error, Result, status_name};

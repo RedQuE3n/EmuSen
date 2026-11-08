@@ -17,7 +17,7 @@ pub const EMUSEN_SCRAPE_BUSY: i32 = -1164;
 pub const EMUSEN_SCRAPE_IO: i32 = -1165;
 pub const EMUSEN_SCRAPE_NO_LIBRARY: i32 = -1166;
 pub const EMUSEN_SCRAPE_STORE_IN_USE: i32 = -1167;
-pub const EMUSEN_PLATFORM_ABI_VERSION: u32 = 41;
+pub const EMUSEN_PLATFORM_ABI_VERSION: u32 = 42;
 pub const EMUSEN_PLATFORM_NULL: i32 = -1;
 pub const EMUSEN_PLATFORM_BAD_STRING: i32 = -5;
 pub const EMUSEN_PLATFORM_NOT_SUPPORTED: i32 = -256;
@@ -188,6 +188,9 @@ pub const EMUSEN_SERENITY_NUMBER_FLOAT: u32 = 0;
 pub const EMUSEN_SERENITY_NUMBER_INTEGER: u32 = 1;
 pub const EMUSEN_SERENITY_RAW_INSTANCE: u32 = 0;
 pub const EMUSEN_SERENITY_RAW_DEVICE: u32 = 1;
+pub const EMUSEN_SERENITY_RAW_PHYSICAL: u32 = 2;
+pub const EMUSEN_SERENITY_RAW_QUEUE: u32 = 3;
+pub const EMUSEN_SERENITY_RAW_QUEUE_FAMILY: u32 = 4;
 pub const EMUSEN_SERENITY_SHOWN_LINEAR: u32 = 1;
 pub const EMUSEN_SERENITY_MARK_PHASE: u32 = 0;
 pub const EMUSEN_SERENITY_MARK_GPU: u32 = 1;
@@ -578,6 +581,31 @@ impl Default for emusen_serenity_lent {
         }
     }
 }
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct emusen_serenity_drawn {
+    pub size: u32,
+    pub width: u32,
+    pub height: u32,
+    pub format: u32,
+    pub layout: u32,
+    pub reserved: u32,
+    pub image: u64,
+    pub view: u64,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of emusen_serenity_drawn"][::std::mem::size_of::<emusen_serenity_drawn>() - 40usize];
+    ["Alignment of emusen_serenity_drawn"][::std::mem::align_of::<emusen_serenity_drawn>() - 8usize];
+    ["Offset of field: emusen_serenity_drawn::size"][::std::mem::offset_of!(emusen_serenity_drawn, size) - 0usize];
+    ["Offset of field: emusen_serenity_drawn::width"][::std::mem::offset_of!(emusen_serenity_drawn, width) - 4usize];
+    ["Offset of field: emusen_serenity_drawn::height"][::std::mem::offset_of!(emusen_serenity_drawn, height) - 8usize];
+    ["Offset of field: emusen_serenity_drawn::format"][::std::mem::offset_of!(emusen_serenity_drawn, format) - 12usize];
+    ["Offset of field: emusen_serenity_drawn::layout"][::std::mem::offset_of!(emusen_serenity_drawn, layout) - 16usize];
+    ["Offset of field: emusen_serenity_drawn::reserved"][::std::mem::offset_of!(emusen_serenity_drawn, reserved) - 20usize];
+    ["Offset of field: emusen_serenity_drawn::image"][::std::mem::offset_of!(emusen_serenity_drawn, image) - 24usize];
+    ["Offset of field: emusen_serenity_drawn::view"][::std::mem::offset_of!(emusen_serenity_drawn, view) - 32usize];
+};
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct emusen_serenity_ring {
@@ -1189,6 +1217,15 @@ pub struct PlatformLibrary {
     pub emusen_serenity_device_close: unsafe extern "C" fn(device: *const emusen_serenity_device) -> i32,
     pub emusen_serenity_device_free: unsafe extern "C" fn(device: *mut emusen_serenity_device) -> i32,
     pub emusen_serenity_device_name: unsafe extern "C" fn(device: *const emusen_serenity_device, out: *mut u8, cap: usize) -> i64,
+    pub emusen_serenity_device_new_for: unsafe extern "C" fn(
+        name: *const u8,
+        name_len: usize,
+        validate: i32,
+        instance: *const u8,
+        instance_len: usize,
+        device: *const u8,
+        device_len: usize,
+    ) -> *mut emusen_serenity_device,
     pub emusen_serenity_device_findings: unsafe extern "C" fn(device: *const emusen_serenity_device, out: *mut u8, cap: usize) -> i64,
     pub emusen_serenity_device_raw: unsafe extern "C" fn(device: *const emusen_serenity_device, which: u32) -> u64,
     pub emusen_serenity_device_identity: unsafe extern "C" fn(device: *const emusen_serenity_device, uuid: *mut u8) -> i32,
@@ -1258,6 +1295,8 @@ pub struct PlatformLibrary {
         height: i32,
         wait_free: i32,
     ) -> i32,
+    pub emusen_serenity_chain_draw:
+        unsafe extern "C" fn(chain: *const emusen_serenity_chain, width: i32, height: i32, out: *mut emusen_serenity_drawn) -> i32,
     pub emusen_serenity_chain_advance_lent:
         unsafe extern "C" fn(chain: *const emusen_serenity_chain, lend: *const emusen_serenity_lend) -> i32,
     pub emusen_serenity_lent_release: unsafe extern "C" fn(slot: u64) -> i32,
@@ -1580,6 +1619,7 @@ impl PlatformLibrary {
         let emusen_serenity_device_close = unsafe { __library.get(b"emusen_serenity_device_close\0") }.map(|sym| *sym)?;
         let emusen_serenity_device_free = unsafe { __library.get(b"emusen_serenity_device_free\0") }.map(|sym| *sym)?;
         let emusen_serenity_device_name = unsafe { __library.get(b"emusen_serenity_device_name\0") }.map(|sym| *sym)?;
+        let emusen_serenity_device_new_for = unsafe { __library.get(b"emusen_serenity_device_new_for\0") }.map(|sym| *sym)?;
         let emusen_serenity_device_findings = unsafe { __library.get(b"emusen_serenity_device_findings\0") }.map(|sym| *sym)?;
         let emusen_serenity_device_raw = unsafe { __library.get(b"emusen_serenity_device_raw\0") }.map(|sym| *sym)?;
         let emusen_serenity_device_identity = unsafe { __library.get(b"emusen_serenity_device_identity\0") }.map(|sym| *sym)?;
@@ -1601,6 +1641,7 @@ impl PlatformLibrary {
         let emusen_serenity_chain_render = unsafe { __library.get(b"emusen_serenity_chain_render\0") }.map(|sym| *sym)?;
         let emusen_serenity_chain_render_lent = unsafe { __library.get(b"emusen_serenity_chain_render_lent\0") }.map(|sym| *sym)?;
         let emusen_serenity_chain_present = unsafe { __library.get(b"emusen_serenity_chain_present\0") }.map(|sym| *sym)?;
+        let emusen_serenity_chain_draw = unsafe { __library.get(b"emusen_serenity_chain_draw\0") }.map(|sym| *sym)?;
         let emusen_serenity_chain_advance_lent = unsafe { __library.get(b"emusen_serenity_chain_advance_lent\0") }.map(|sym| *sym)?;
         let emusen_serenity_lent_release = unsafe { __library.get(b"emusen_serenity_lent_release\0") }.map(|sym| *sym)?;
         let emusen_serenity_ring_new = unsafe { __library.get(b"emusen_serenity_ring_new\0") }.map(|sym| *sym)?;
@@ -1850,6 +1891,7 @@ impl PlatformLibrary {
             emusen_serenity_device_close,
             emusen_serenity_device_free,
             emusen_serenity_device_name,
+            emusen_serenity_device_new_for,
             emusen_serenity_device_findings,
             emusen_serenity_device_raw,
             emusen_serenity_device_identity,
@@ -1871,6 +1913,7 @@ impl PlatformLibrary {
             emusen_serenity_chain_render,
             emusen_serenity_chain_render_lent,
             emusen_serenity_chain_present,
+            emusen_serenity_chain_draw,
             emusen_serenity_chain_advance_lent,
             emusen_serenity_lent_release,
             emusen_serenity_ring_new,
@@ -3092,6 +3135,18 @@ impl PlatformLibrary {
     pub unsafe fn emusen_serenity_device_name(&self, device: *const emusen_serenity_device, out: *mut u8, cap: usize) -> i64 {
         unsafe { (self.emusen_serenity_device_name)(device, out, cap) }
     }
+    pub unsafe fn emusen_serenity_device_new_for(
+        &self,
+        name: *const u8,
+        name_len: usize,
+        validate: i32,
+        instance: *const u8,
+        instance_len: usize,
+        device: *const u8,
+        device_len: usize,
+    ) -> *mut emusen_serenity_device {
+        unsafe { (self.emusen_serenity_device_new_for)(name, name_len, validate, instance, instance_len, device, device_len) }
+    }
     pub unsafe fn emusen_serenity_device_findings(&self, device: *const emusen_serenity_device, out: *mut u8, cap: usize) -> i64 {
         unsafe { (self.emusen_serenity_device_findings)(device, out, cap) }
     }
@@ -3235,6 +3290,15 @@ impl PlatformLibrary {
         wait_free: i32,
     ) -> i32 {
         unsafe { (self.emusen_serenity_chain_present)(chain, shown, width, height, wait_free) }
+    }
+    pub unsafe fn emusen_serenity_chain_draw(
+        &self,
+        chain: *const emusen_serenity_chain,
+        width: i32,
+        height: i32,
+        out: *mut emusen_serenity_drawn,
+    ) -> i32 {
+        unsafe { (self.emusen_serenity_chain_draw)(chain, width, height, out) }
     }
     pub unsafe fn emusen_serenity_chain_advance_lent(&self, chain: *const emusen_serenity_chain, lend: *const emusen_serenity_lend) -> i32 {
         unsafe { (self.emusen_serenity_chain_advance_lent)(chain, lend) }

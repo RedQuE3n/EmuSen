@@ -17,6 +17,7 @@ pub mod glyph;
 pub mod kinds;
 pub mod moonrise;
 pub mod pad;
+pub mod picture;
 pub mod qt_keys;
 pub mod router;
 pub mod sky;

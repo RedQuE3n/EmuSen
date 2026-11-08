@@ -3891,3 +3891,35 @@ of `emusen-systems` build `serde_json::Value`s. The session service's `quoted`, 
 arguments with, the shell's JSON strings, the platform's package answer and the library tool's crop text are serde_json's
 or the standard library's. What still reads or writes emusen-dotnet's `json::Value` is Galaxia's models and manifests
 and the files and session answers read through them, which §47's config step replaces.
+
+### 47.15 Zips are read by the zip crate
+
+Every zip the platform reads, a game's, a package's, a core's download and the cheat database, is read by the zip crate
+(9.4, its default features off: deflate through `flate2` on zlib-rs, and Deflate64), through Galaxia's `archive::Zip`,
+opened over a file or over bytes in memory. `dotnet_zip.rs`, the .NET reader, is gone, and with it the second reader of
+the end record and the directory. The crate bounds an entry's bytes by the length the directory declares and checks
+their CRC-32; `Zip::copy` refuses an entry whose bytes fall short of that length. A damaged entry is reported with the
+crate's reason beside what the zip records (`Bad.sfc is damaged (Invalid checksum): the zip records 1000 bytes with
+CRC-32 1a2b3c4d`), which the library tool's `rom-check` shows the player. An entry's time is the NTFS field's,
+to the tick, else the extended timestamp's, to the second; the DOS time is not taken. A name is UTF-8 where it is valid
+UTF-8, else code page 437, as APPNOTE says (the .NET reader decoded it as UTF-8 with replacement).
+
+What the game reader takes changed in three ways, decided 2026-11-07:
+
+1. Zip64 archives and Deflate64 entries are read. An encrypted entry, or one of a method this build does not inflate
+   (bzip2, LZMA, Zstandard), is listed and refused when it is read, in the crate's words ("unsupported Zip archive:
+   Password required to decrypt file"); the archive is no longer refused whole for an entry nobody opens.
+2. A zip that names an entry twice is refused. Readers differ in which copy they take: the old game reader took the
+   first, the cheat installer wrote both so the last remained, and the crate keeps the last. That disagreement is how
+   one archive shows different files to two readers, so neither copy is taken. The corpus's `duplicates.zip` keeps its
+   old listing as the record, and its test names it as refused.
+3. A name holding a NUL is listed; the installers below and a package's unpacking refuse such a name, as before.
+
+The cheat installer no longer writes as .NET's `ExtractToFile` did. A `.cht` entry is written where the crate's
+`enclosed_name` puts it under the folder (`\` is a separator, a `..` that stays inside resolves, a name that would leave
+the folder is skipped), whole and only once its CRC-32 is checked, so a damaged entry is skipped and nothing half-written
+is left. Its time is the zip's own where the zip records one, else the time of the install; the Unix mode in the zip is
+not applied. An archive the reader refuses is refused in its words: `emusen_cheats_install` gives REFUSED with them as
+the last error, and no longer names a .NET exception or a `threw` member; its `libc` local-time code is gone. The core
+installer's check that a core's member is no link reads the crate's Unix mode. The corpus test reads every zip from
+its file and from memory, and the list of zips the game reader refused is gone.

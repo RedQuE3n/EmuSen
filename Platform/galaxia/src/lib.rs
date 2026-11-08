@@ -14,7 +14,6 @@ pub mod consoles;
 pub mod disc_set;
 pub mod dotnet_files;
 pub mod dotnet_path;
-pub mod dotnet_zip;
 pub mod game_folders;
 pub mod error_log;
 pub mod image_probe;

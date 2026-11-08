@@ -2281,7 +2281,8 @@ file unchanged), `GalaxiaParityTests`, `SystemTableParityTests` and `LeafAssembl
   failure after) and `CheatDatabaseInstaller.Install` (each entry written as `ExtractToFile` writes it: its Unix mode on
   a file it makes and not on one it overwrites, an existing file truncated only once locked, its time read as local
   time with the standard offset where the time falls twice or never, all measured on .NET 10.0.112 on 2026-10-17; no
-  CRC check, as .NET makes none).
+  CRC check, as .NET makes none). Since 2026-11-07 the zip crate reads the archive and these rules are gone
+  (`EmuSen_RustPlatform.md` §47.15).
 - **What stays C#.** The registry a session applies (`CheatRegistry`, B7) and so `CheatImport`, which reads a file with
   `ChtFile.Parse` and adds what it read; the download (§15.4). **The list files** (`cheats/<game>.json`) were Galaxia's
   in Rust already (`EmuSen_RustPlatform.md` §20), so nothing of theirs moved.

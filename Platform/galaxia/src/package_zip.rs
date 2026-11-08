@@ -4,7 +4,7 @@
 //! times kept so that a state's record still names its state; the zip itself is only read. See
 //! EmuSen_GamePackages.md §3.4 and §19, and EmuSen_Galaxia.md §3.13.
 
-use crate::archive::{self, ZipEntry, ZipWriter};
+use crate::archive::{self, ZipWriter};
 use crate::dotnet_files;
 use crate::dotnet_path::{self as path, Style};
 use emusen_dotnet::json::Value;
@@ -102,7 +102,8 @@ fn safe(name: &str, top: &str) -> bool {
 /// no package (a game's own zip) or that this reader does not take, which every other reader takes as before; a
 /// refusal for a package's zip this build will not unpack, with why.
 pub fn manifest_in(zip: &str) -> Result<Option<(String, Value)>, String> {
-    let Ok(entries) = archive::entries_of(zip) else { return Ok(None) };
+    let Ok(mut reader) = archive::Zip::open(zip) else { return Ok(None) };
+    let Ok(entries) = reader.entries() else { return Ok(None) };
     let tops: Vec<&str> = entries.iter().filter_map(|e| e.full_name.strip_suffix(package::FILE_NAME).and_then(|t| t.strip_suffix('/'))).filter(|t| !t.is_empty() && !t.contains('/')).collect();
     let [top] = tops.as_slice() else { return Ok(None) };
     let top = top.to_string();
@@ -111,7 +112,7 @@ pub fn manifest_in(zip: &str) -> Result<Option<(String, Value)>, String> {
     }
     let manifest = entries.iter().find(|e| e.full_name == format!("{top}/{}", package::FILE_NAME)).ok_or("no manifest")?;
     let mut bytes = Vec::new();
-    archive::copy_entry(zip, manifest, &mut bytes).map_err(|e| format!("{zip}: {e}"))?;
+    reader.copy(manifest, &mut bytes).map_err(|e| format!("{zip}: {e}"))?;
     let doc = package::parse(&crate::text_file::decode(&bytes)).map_err(|r| format!("{zip}: {}", r.words()))?;
     Ok(Some((top, doc)))
 }
@@ -125,19 +126,14 @@ pub fn target(packages: &str, zip: &str, top: &str) -> String {
     if crate::claims::within(&parent, &packages) { path::combine(STYLE, &parent, top) } else { path::combine(STYLE, &packages, top) }
 }
 
-fn put_time(at: &str, e: &ZipEntry) {
-    if let (Some(t), Ok(f)) = (e.modified, std::fs::File::options().write(true).open(at)) {
-        let _ = f.set_modified(t);
-    }
-}
-
 /// The zip unpacked into `target`, which must not be there: into a hidden folder beside it first, each entry checked
 /// against its CRC-32 and given its time, then renamed into place whole.
 pub fn unpack(zip: &str, top: &str, target: &str, stop: &dyn Fn() -> bool) -> Result<(), String> {
     if std::fs::symlink_metadata(target).is_ok() {
         return Err(format!("{target} is already there, so {zip} was not unpacked over it"));
     }
-    let entries = archive::entries_of(zip).map_err(|e| format!("{zip}: {e}"))?;
+    let mut reader = archive::Zip::open(zip).map_err(|e| format!("{zip}: {e}"))?;
+    let entries = reader.entries().map_err(|e| format!("{zip}: {e}"))?;
     let parent = path::directory_name(STYLE, target).unwrap_or_default();
     std::fs::create_dir_all(&parent).map_err(|e| format!("{parent}: {e}"))?;
     let partial = path::combine(STYLE, &parent, &format!(".{}.partial-{}", path::file_name(STYLE, target), std::process::id()));
@@ -163,10 +159,11 @@ pub fn unpack(zip: &str, top: &str, target: &str, stop: &dyn Fn() -> bool) -> Re
                 std::fs::create_dir_all(dir).map_err(|x| x.to_string())?;
             }
             let mut out = std::fs::File::create(&at).map_err(|x| format!("{at}: {x}"))?;
-            archive::copy_entry(zip, e, &mut out).map_err(|w| format!("{zip}: {w}"))?;
+            reader.copy(e, &mut out).map_err(|w| format!("{zip}: {w}"))?;
+            if let Some(t) = reader.modified(e) {
+                let _ = out.set_modified(t);
+            }
             out.sync_all().map_err(|x| format!("{at}: {x}"))?;
-            drop(out);
-            put_time(&at, e);
         }
         Ok(())
     })();
@@ -256,8 +253,8 @@ mod tests {
         assert_eq!(write(&folder, &zip, &|| false).unwrap().0, 6);
         assert!(write(&folder, &zip, &|| false).unwrap_err().contains("already there"));
         let entries = archive::entries_of(&zip).unwrap();
-        let method = |n: &str| entries.iter().find(|e| e.full_name == n).unwrap().method;
-        assert_eq!((method("Game.sfc/Game.sfc"), method("Game.sfc/disc.chd"), method("Game.sfc/media/covers/Game.png")), (8, 0, 0));
+        let stored = |n: &str| entries.iter().find(|e| e.full_name == n).unwrap().stored;
+        assert_eq!((stored("Game.sfc/Game.sfc"), stored("Game.sfc/disc.chd"), stored("Game.sfc/media/covers/Game.png")), (false, true, true));
         assert_eq!(entries[0].full_name, "Game.sfc/package.json");
         // Opened where its folder is: the folder itself, the zip only read.
         assert_eq!(opened(&t.join("Packages"), &zip).unwrap().as_deref(), Some(folder.as_str()));

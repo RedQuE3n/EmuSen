@@ -689,9 +689,8 @@ int64_t emusen_cheats_database_query(const emusen_cheats_database *db, const uin
 int64_t emusen_cheats_prune_plan(const emusen_cheats_database *db, const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
 /* A plan applied inside its folder: {"directory", "removing": [{system, path}]}. Out: {"removed", "failed": [...]}. */
 int64_t emusen_cheats_prune_apply(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
-/* A downloaded zip installed under `target`: out {"installed", "skipped"}. NOT_SUPPORTED, nothing written, for a form
- * the host reads itself (Zip64, spanned, encrypted, a method other than stored and deflate, a name holding a NUL, a
- * directory that is not one); IO, NOT_FOUND or ACCESS where the target could not be made. */
+/* A downloaded zip installed under `target`: out {"installed", "skipped"}. REFUSED, nothing written, for an archive the
+ * zip reader does not read, its words the last error; IO, NOT_FOUND or ACCESS where the target could not be made. */
 int64_t emusen_cheats_install(const uint8_t *zip, size_t zip_len, const uint8_t *target, size_t target_len, uint8_t *out, size_t len);
 
 /* ---- The HTTP client: emusen-net (EmuSen_Backend.md, section 16). Since interface 17. ---- */

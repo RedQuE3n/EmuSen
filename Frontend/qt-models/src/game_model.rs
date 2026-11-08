@@ -32,6 +32,8 @@ pub mod qobject {
         Title,
         Hue,
         Favourite,
+        Cover,
+        Facts,
     }
 
     extern "RustQt" {
@@ -40,6 +42,7 @@ pub mod qobject {
         #[qml_element]
         #[qproperty(QString, games)]
         #[qproperty(i32, count, READ, NOTIFY)]
+        #[qproperty(i32, revision, READ, NOTIFY)]
         type GameModel = super::GameModelRust;
     }
 
@@ -68,6 +71,16 @@ pub mod qobject {
         #[cxx_name = "pathAt"]
         fn path_at(self: &GameModel, row: i32) -> QString;
 
+        /// A game's cover as a URL by its row; empty where it has none.
+        #[qinvokable]
+        #[cxx_name = "coverAt"]
+        fn cover_at(self: &GameModel, row: i32) -> QString;
+
+        /// A game's facts by its row: its console and when it was last played.
+        #[qinvokable]
+        #[cxx_name = "factsAt"]
+        fn facts_at(self: &GameModel, row: i32) -> QString;
+
         /// A game's console's hue by its row; -1 where there is none.
         #[qinvokable]
         #[cxx_name = "hueAt"]
@@ -89,11 +102,22 @@ pub mod qobject {
 
 use qobject::GameRole;
 
+/// A cover's file as the URL an Image reads; empty for none.
+pub fn cover_url(file: &str) -> String {
+    if file.is_empty() {
+        String::new()
+    } else {
+        cxx_qt_lib::QUrl::from_local_file(&QString::from(file)).to_string()
+    }
+}
+
 /// The model's state: the games as given and as read.
 #[derive(Default)]
 pub struct GameModelRust {
     games: QString,
     count: i32,
+    /// Counts the reads, announced after each, so a binding on a row's words sees the new rows.
+    revision: i32,
     rows: Vec<GameRow>,
 }
 
@@ -115,6 +139,8 @@ impl qobject::GameModel {
             GameRole::Title => text(&row.title),
             GameRole::Hue => QVariant::from(&row.hue),
             GameRole::Favourite => QVariant::from(&row.favourite),
+            GameRole::Cover => text(&cover_url(&row.cover)),
+            GameRole::Facts => text(&row.facts),
             _ => QVariant::default(),
         }
     }
@@ -127,6 +153,8 @@ impl qobject::GameModel {
             (GameRole::Title, "title"),
             (GameRole::Hue, "hue"),
             (GameRole::Favourite, "favourite"),
+            (GameRole::Cover, "cover"),
+            (GameRole::Facts, "facts"),
         ];
         for (role, name) in names {
             roles.insert(role.repr, QByteArray::from(name));
@@ -150,6 +178,14 @@ impl qobject::GameModel {
         self.at(row).map_or_else(QString::default, |g| QString::from(g.path.as_str()))
     }
 
+    pub fn cover_at(&self, row: i32) -> QString {
+        self.at(row).map_or_else(QString::default, |g| QString::from(cover_url(&g.cover).as_str()))
+    }
+
+    pub fn facts_at(&self, row: i32) -> QString {
+        self.at(row).map_or_else(QString::default, |g| QString::from(g.facts.as_str()))
+    }
+
     pub fn hue_at(&self, row: i32) -> f64 {
         self.at(row).map_or(-1.0, |g| g.hue)
     }
@@ -163,7 +199,10 @@ impl qobject::GameModel {
         self.as_mut().end_reset_model();
         if self.count != count {
             self.as_mut().rust_mut().count = count;
-            self.count_changed();
+            self.as_mut().count_changed();
         }
+        let revision = self.revision.wrapping_add(1);
+        self.as_mut().rust_mut().revision = revision;
+        self.revision_changed();
     }
 }

@@ -35,8 +35,16 @@ pub const GAMES_PATH: &str = "GAMES ▸";
 /// Home's headings (§24.3).
 pub const CONTINUE_PLAYING: &str = "CONTINUE PLAYING";
 pub const RECENT: &str = "RECENT";
-/// Home's seven places, in order, as the Home canvas words them.
-pub const HOME_PLACES: [&str; 7] = ["GAMES", "SCRAPER", "PACKAGES", "LIBRARY", "CORES", "SETTINGS", "POWER"];
+/// Home's seven places, in order, as the accepted render words them (EmuSen_Qt.md §7.1).
+pub const HOME_PLACES: [&str; 7] = ["Games", "Scraper", "Packages", "Library", "Cores", "Settings", "Power"];
+/// The tools' keys among Home's places, in order, as a tool's summary names them.
+pub const HOME_TOOLS: [&str; 4] = ["scraper", "packages", "library", "cores"];
+/// What each tool does, said under its place until it has said its state.
+pub const HOME_TOOL_ABOUT: [&str; 4] = ["Art and facts", "Game packages", "Checks dumps", "The engines"];
+/// The Power place's line on the big screen.
+pub const POWER_LINE: &str = "Exit";
+/// What stands between the grid's two neighbours (§24.2).
+pub const BETWEEN: &str = "·";
 /// The engine line's tags (§24.6).
 pub const EMUSEN_TAG: &str = "EMUSEN";
 pub const LIBRETRO_TAG: &str = "LIBRETRO";
@@ -67,4 +75,70 @@ pub fn runs_on(name: &str, libretro: bool) -> String {
 pub fn facts(maker: &str, year: i32, games: usize, runs_on: &str) -> String {
     let year = if year > 0 { year.to_string() } else { String::new() };
     [maker, year.as_str(), self::games(games).as_str(), runs_on].iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join(" · ")
+}
+
+/// Now, in seconds since 1970.
+pub fn now() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
+}
+
+/// How long ago `at` was at `now`, both in seconds since 1970: "just now", "12 min ago", "3 h ago", "2 days ago".
+pub fn ago(at: i64, now: i64) -> String {
+    let minutes = (now - at).max(0) / 60;
+    match minutes {
+        0 => "just now".into(),
+        1..=59 => format!("{minutes} min ago"),
+        60..=1439 => format!("{} h ago", minutes / 60),
+        _ => counted((minutes / 1440) as usize, "day ago", "days ago"),
+    }
+}
+
+/// An ISO 8601 time in UTC, "2026-11-08T21:42:00Z" or with its fraction, as seconds since 1970; none for other text.
+pub fn parse_utc(text: &str) -> Option<i64> {
+    let b = text.as_bytes();
+    let num = |r: std::ops::Range<usize>| text.get(r)?.parse::<i64>().ok();
+    if b.len() < 19 || b[4] != b'-' || b[7] != b'-' || b[13] != b':' {
+        return None;
+    }
+    let (y, m, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
+    let (hh, mm, ss) = (num(11..13)?, num(14..16)?, num(17..19)?);
+    // Days from the civil date, Howard Hinnant's algorithm (http://howardhinnant.github.io/date_algorithms.html).
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let days = era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468;
+    Some(days * 86_400 + hh * 3_600 + mm * 60 + ss)
+}
+
+/// The Settings place's line: the look and the navigation sound, "Dark · 60% sound" (the C#'s SettingsLine).
+pub fn settings_line(dark: bool, settings: &serde_json::Value) -> String {
+    let sounds = settings.get("NavigationSounds").and_then(serde_json::Value::as_bool).unwrap_or(true);
+    let volume = settings.pointer("/BigPictureInterface/NavigationVolume").and_then(serde_json::Value::as_i64).unwrap_or(100).clamp(0, 100);
+    let sound = if sounds { format!("{volume}% sound") } else { "sound off".into() };
+    format!("{} · {sound}", if dark { "Dark" } else { "Light" })
+}
+
+/// Home's places' second lines, each with whether it needs the player: the games' count, each tool's brief from its
+/// summary (`{"scraper": {"brief": "41 no art", "attention": false}, ...}`) or what it does, the settings, and Exit.
+pub fn home_lines(games: usize, tools: &serde_json::Value, settings: &str) -> Vec<(String, bool)> {
+    let mut out = vec![(self::games(games), false)];
+    for (key, about) in HOME_TOOLS.iter().zip(HOME_TOOL_ABOUT) {
+        let summary = tools.get(*key);
+        let brief = summary.and_then(|s| s.get("brief")).and_then(serde_json::Value::as_str).filter(|b| !b.is_empty());
+        let attention = summary.and_then(|s| s.get("attention")).and_then(serde_json::Value::as_bool).unwrap_or(false);
+        out.push(brief.map_or_else(|| (about.to_owned(), false), |b| (b.to_owned(), attention)));
+    }
+    out.push((settings.to_owned(), false));
+    out.push((POWER_LINE.to_owned(), false));
+    out
+}
+
+/// Home's status line: the controllers connected, when there are any, and the time (the C#'s device line).
+pub fn status_line(controllers: usize, time: &str) -> String {
+    if controllers == 0 {
+        time.to_owned()
+    } else {
+        format!("{} · {time}", counted(controllers, "controller", "controllers"))
+    }
 }

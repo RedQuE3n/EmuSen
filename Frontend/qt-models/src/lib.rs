@@ -10,6 +10,8 @@ pub mod help_model;
 pub mod keyed;
 pub mod library;
 pub mod library_model;
+pub mod marks;
+pub mod marks_object;
 pub mod picture;
 pub mod screens;
 pub mod session;

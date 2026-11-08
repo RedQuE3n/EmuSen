@@ -13,13 +13,13 @@ FocusScope {
     // The row the grid opened, a tile of Choose a console.
     property var row
     readonly property string name: root.row ? root.row.name : ""
+    readonly property string heading: root.row ? root.row.heading : ""
     readonly property real hue: root.row ? root.row.hue : 0
     readonly property string world: root.row ? root.row.world : ""
     readonly property string countWords: root.row ? root.row.countWords : ""
     // The rows beside it on Choose a console, named by the shoulders.
     property var previousRow
     property var nextRow
-    readonly property real cellWidth: (root.width - 128 - 4 * 24) / 5
     signal closed()
     signal played(string path)
 
@@ -27,14 +27,16 @@ FocusScope {
         objectName: "gridSky"
         anchors.fill: parent
         glowHue: games.count > 0 && cells.currentIndex >= 0 ? games.hueAt(cells.currentIndex) : root.hue
-        glowX: cells.currentItem ? (cells.x + cells.currentItem.x + root.cellWidth / 2) / Math.max(1, root.width) : 0.5
-        glowY: 0.3
+        glowX: 0.5
+        glowY: 0.1
     }
     Kit.Frame {
         id: frame
         anchors.fill: parent
         surfaceDrawn: false
         padFamily: root.padFamily
+        helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        helpSpacing: 40
         focus: true
         controller.navigationShown: false
         help: HelpModel {
@@ -52,11 +54,12 @@ FocusScope {
             Row {
                 x: 64
                 y: 40.8
-                spacing: 12
+                spacing: 16
                 Text {
                     objectName: "gridPath"
                     y: 7.2
                     text: Words.gamesPath
+                    font.letterSpacing: 2
                     color: Kit.Tokens.muted
                     font.family: faces.regular
                     font.pixelSize: 20
@@ -73,10 +76,12 @@ FocusScope {
                 }
                 Text {
                     objectName: "gridTitle"
-                    text: root.name
+                    text: root.heading
                     color: Kit.Tokens.textStrong
                     font.family: faces.condensed
+                    font.weight: Font.Medium
                     font.pixelSize: 32
+                    font.letterSpacing: 3
                     font.capitalization: Font.AllUppercase
                     lineHeight: 38.4
                     lineHeightMode: Text.FixedHeight
@@ -115,6 +120,14 @@ FocusScope {
                     font.pixelSize: 18
                 }
                 Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root.previousRow !== null && root.nextRow !== null
+                    text: Words.between
+                    color: Kit.Tokens.muted
+                    font.family: faces.regular
+                    font.pixelSize: 18
+                }
+                Text {
                     objectName: "gridNext"
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.nextRow ? root.nextRow.name : ""
@@ -134,12 +147,15 @@ FocusScope {
             GridView {
                 id: cells
                 objectName: "gridCells"
-                x: 64
-                y: 116
-                width: root.width - 128 + 24
-                height: 3 * 174 - 28
-                cellWidth: root.cellWidth + 24
-                cellHeight: 174
+                // Sixteen units of margin about the gallery, so a lifted cover's ring is drawn whole.
+                x: 142 - 16
+                y: 108 - 16
+                width: 5 * 204 + 32
+                height: 2 * 264 - 24 + 32
+                leftMargin: 16
+                topMargin: 16
+                cellWidth: 204
+                cellHeight: 264
                 clip: true
                 focus: true
                 keyNavigationWraps: false
@@ -154,61 +170,55 @@ FocusScope {
                     required property int index
                     required property string path
                     required property string title
+                    required property string cover
                     required property real hue
+                    required property bool favourite
                     readonly property bool lit: cell.GridView.isCurrentItem && cells.activeFocus
                     controller: frame.controller
                     objectName: "gridCell." + cell.index
                     Accessible.name: cell.title
-                    width: root.cellWidth
-                    height: 146
+                    width: 180
+                    height: 240
+                    z: cell.lit ? 1 : 0
                     onActivated: root.played(cell.path)
                     onActiveFocusChanged: if (cell.activeFocus) cells.currentIndex = cell.index
-                    GameCard {
-                        objectName: "gridCard." + cell.index
-                        anchors.centerIn: parent
-                        anchors.verticalCenterOffset: cell.lit ? -6 : 0
-                        width: 208
-                        height: 146
+                    Cover {
+                        objectName: "gridCover." + cell.index
+                        anchors.fill: parent
+                        source: cell.cover
                         title: cell.title
                         hue: cell.hue
-                    }
-                    Rectangle {
-                        objectName: "gridRing." + cell.index
-                        visible: cell.lit
-                        anchors.centerIn: parent
-                        anchors.verticalCenterOffset: -6
-                        width: 214
-                        height: 152
-                        radius: Kit.Tokens.rowRadius + 3
-                        color: "transparent"
-                        border.color: Kit.Tokens.accent
-                        border.width: Kit.Tokens.ringThickness
+                        favourite: cell.favourite
+                        lit: cell.lit
                     }
                 }
             }
-            Row {
+            Text {
+                objectName: "gridFocusTitle"
                 x: 64
-                y: 640
-                spacing: 16
-                Text {
-                    objectName: "gridFocusTitle"
-                    text: games.count > 0 && cells.currentIndex >= 0 ? games.titleAt(cells.currentIndex) : ""
-                    color: Kit.Tokens.textStrong
-                    font.family: faces.condensed
-                    font.pixelSize: 32
-                    lineHeight: 38.4
-                    lineHeightMode: Text.FixedHeight
-                }
-                Text {
-                    objectName: "gridFocusFacts"
-                    y: 10
-                    text: root.name
-                    color: Kit.Tokens.muted
-                    font.family: faces.regular
-                    font.pixelSize: 22
-                    lineHeight: 26.4
-                    lineHeightMode: Text.FixedHeight
-                }
+                y: 628
+                width: root.width - 128
+                text: games.count > 0 && cells.currentIndex >= 0 ? games.titleAt(cells.currentIndex) : ""
+                elide: Text.ElideRight
+                color: Kit.Tokens.textStrong
+                font.family: faces.condensed
+                font.weight: Font.Medium
+                font.pixelSize: 32
+                lineHeight: 38.4
+                lineHeightMode: Text.FixedHeight
+            }
+            Text {
+                objectName: "gridFocusFacts"
+                x: 64
+                y: 670
+                width: root.width - 128
+                text: games.count > 0 && cells.currentIndex >= 0 ? games.factsAt(cells.currentIndex) : ""
+                elide: Text.ElideRight
+                color: Kit.Tokens.muted
+                font.family: faces.regular
+                font.pixelSize: 22
+                lineHeight: 26.4
+                lineHeightMode: Text.FixedHeight
             }
         }
     }

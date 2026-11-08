@@ -1123,6 +1123,60 @@ not the C#'s section. **Held to**: the test passes; seeded faults, each reverted
 the mockup at both sizes; a card's border in its hue failed the gate's palette; the help bar's padding restored failed
 the mockup at the first glyph.
 
+**Step 5, the screens brought to the accepted render** (measured on 2026-11-08). The canvases cannot be drawn here (their
+`support.js` is not kept and their faces are fetched online), so the oracle is Mistress's own look as the tester approved
+it, recorded at 1280 × 800 and 1920 × 1200 with the help bar on the foot (the `courts-built` grabs, and
+`EmuSen.WiseMan/Mistress/Specification/{Home,Consoles,Games}-*.spec` for their numbers). Decided 2026-11-08: where that
+render and a canvas disagree, the render stands, and each `.mockup.spec` entry it supersedes is rewritten with the reason
+in a `note` beside it (the grid's covers whole at their own shapes in 180 × 240 boxes, the tester's decision of
+2026-11-04, Interface §21; Home's Continue at 72 and 296 high, RECENT at 376, the places at 622, 150 wide every 167 and
+named in title case; the grid's focused words on two lines at 628 and 670).
+
+- **The library is the render's own.** `acceptance.rs` builds Mistress's own-look fixture: the eight Synthetic games on
+  the NES, the Super Nintendo and the Game Boy in one folder, their covers at their boxes' shapes in an ES-DE media
+  folder named by `EsdeMediaDirectory` (each drawn by Qt Quick as `SyntheticLibrary.Label` draws it: the game's colour,
+  a white rim, its console, title and size), each played three hours apart, two hearted, the installed engines as the
+  sidecars an installation carries (nothing is loaded from them), and the tools' summaries as Mistress's fixture
+  answers them. Home is held after Cobalt Harbor is started and the library read again, as the render's paused game.
+- **Covers through the models.** `ClientSource` opens the scraper as a handle for finding pictures alone
+  (`sources_alone`, the media store and the player's folders as Mistress gives them) and asks `emusen.scrape`'s `media`
+  for each game's cover; `GameRow` carries it, and `GameModel` gives `cover` (a file URL) and `facts` ("Super Nintendo ·
+  3 h ago", from games.db's `last_played`). `Cover.qml` draws a picture whole at its own shape on its box's foot with
+  the heart, and the gallery's lift (1.06 and 6 units up) and ring; a game with no art keeps the
+  generated card. The fan takes the canvas's last slots, so two covers stand at the right, turned 2 and 6 degrees.
+- **The rest of the picture.** The faces' weights are named (Barlow Condensed Medium, the wordmark Light), since both
+  files share a family and Qt chose the Light; the places' icons, the heart, the engine symbols, the sparkles, the
+  crescent and the warning mark are the canvases' own paths, kept as data in `marks.rs` and read through the `Marks`
+  singleton, since a QML file writes no words (`Glyph.qml`, `EngineMark.qml` with the project's pixel alien); an engine's name and tag are in its console's hue inside a `Kit.Scene` (`EmuSen_Kit.md` §7.19), its mark
+  `engine_mark` (a sky-named core's symbol, else its maker's glyph, libretro's badge); the consoles follow the
+  runtime's shelves; the grid's heading is a place's short name ("ALL") and its shoulders wrap; Home's places carry
+  their lines (`words::home_lines`: the games, each tool's brief or what it does, the look and the sound from the
+  settings, Exit; a tool's attention in amber with its mark; the tools' summaries come in through
+  `LibraryModel.toolSummaries`, which nothing fills until each tool's stage), and the status line counts Endymion's pads
+  (`Clock.controllers`, "1 controller · 21:42", the time alone with none). A generic pad's
+  glyphs are drawn as the Xbox pad's lettered ones, Mistress's rule for these screens; the help bars name the render's
+  entries, the shoulders as one.
+- **Fixed on the way:** Continue read its game through invokables, so a second read of the same count of games left the
+  old one shown; `GameModel.revision` now announces each read. Home's walk named the shelf's first cover by `itemAt`,
+  stale after a second read; the cover now names itself as it is made.
+
+**Differences that remain, each for the tester:** Continue shows the game's cover where the render shows the paused
+frame and "Paused just now": no session runs in the test, and the frame belongs to `SessionModel` and `GamePicture`,
+which Home does not read yet; the status line has no controller in the test, which reads no pad, and its time is the
+clock's; the covers' corners are square where the render rounds them a little (a mask through `MultiEffect` hid the
+pictures, so it was left out); the help bar's glyph stands 8 units from its word where the render has 10; the planets
+and the focused body are the kit's drawing at its sizes.
+
+**Held to** (measured on 2026-11-08): `acceptance.rs` passes, the mockups at 1280 × 800 and 1920 × 1200 and the gate at
+its five sizes with nothing logged, and now also holds every grid cover drawn from its picture, each engine named by its
+info less the port's mark with its own symbol, and Continue on the game played last after a second read; `program.rs`'s
+QML rules and `qmllint`; `qt-models` 15, `kit-qt` 38, `qt-test` 9, `kit-gallery` 4 (the gate), `kit-core` 88; clippy
+clean. The side-by-sides (the render left, the program right, nothing drawn over either) and their pixel differences
+are `~/.cache/emusen/tmp/qt-s1/compare/*-side.png` and `*-diff.png`. Seeded faults, each reverted and each caught by
+the acceptance test: the covers' lookup answering none (every cover read and drawn); Continue bound to the games' count
+in place of `revision` (Continue follows the games read again); a sky-named core given its maker's glyph (the engine's
+symbol).
+
 ---
 
 ## 8. Testing

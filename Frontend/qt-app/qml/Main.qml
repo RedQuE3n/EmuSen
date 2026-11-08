@@ -16,6 +16,9 @@ Window {
     property bool splash: true
     property bool reducedMotion: false
     readonly property bool splashShown: program.splash && !moonrise.done
+    // The own look's screens draw a generic pad's glyphs as the Xbox pad's lettered ones, as Mistress does.
+    readonly property int padFamily: pads.family === Kit.Families.Generic ? Kit.Families.Xbox : pads.family
+    readonly property int shownIndex: library.indexOf(screens.key)
     Screens {
         id: screens
         objectName: "screens"
@@ -43,7 +46,8 @@ Window {
             id: home
             anchors.fill: parent
             library: library
-            padFamily: pads.family
+            padFamily: program.padFamily
+            controllers: pads.connected
             visible: screens.shown === Screens.Home
             focus: !program.splashShown && visible
             onPlaceChosen: (index) => screens.place(index)
@@ -52,7 +56,7 @@ Window {
             id: consoles
             anchors.fill: parent
             library: library
-            padFamily: pads.family
+            padFamily: program.padFamily
             visible: screens.shown === Screens.Consoles
             focus: !program.splashShown && visible
             onClosed: screens.back()
@@ -63,13 +67,13 @@ Window {
             id: grid
             anchors.fill: parent
             library: library
-            padFamily: pads.family
+            padFamily: program.padFamily
             visible: screens.shown === Screens.Grid
             focus: !program.splashShown && visible
             key: screens.key
             row: consoles.tiles.count > 0 ? consoles.tiles.itemAt(library.indexOf(screens.key)) : null
-            previousRow: consoles.tiles.count > 0 && library.indexOf(screens.key) > library.places ? consoles.tiles.itemAt(library.indexOf(screens.key) - 1) : null
-            nextRow: consoles.tiles.count > 0 && library.indexOf(screens.key) >= library.places ? consoles.tiles.itemAt(library.indexOf(screens.key) + 1) : null
+            previousRow: consoles.tiles.count > 1 && program.shownIndex >= 0 ? consoles.tiles.itemAt((program.shownIndex + consoles.tiles.count - 1) % consoles.tiles.count) : null
+            nextRow: consoles.tiles.count > 1 && program.shownIndex >= 0 ? consoles.tiles.itemAt((program.shownIndex + 1) % consoles.tiles.count) : null
             onClosed: screens.back()
         }
     }

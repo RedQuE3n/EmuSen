@@ -1314,6 +1314,26 @@ bodies dividing four and three; the lines read with their buttons by name, a lin
 `tests/screens.rs` holds the rest through the harness (`EmuSen_Qt.md` §7.1). Seeded faults, each reverted: a tie going to
 the last failed the walk test; the passed key's mark dropped failed the program's screens test at B from the grid.
 
+### 7.19 A theme's own colours, the help bar's face, and paired glyphs (stage 1; 2026-11-08)
+
+Three extensions, each optional, found while the program's screens were brought to the accepted render (EmuSen_Qt.md
+§7.1, step 5). None changes what an existing screen draws.
+
+- **`Kit.Scene`**, a plain `Item` whose content is a theme's own drawing in its own colours: a console's hue on its
+  engine's name and tag, the crescent's ink beside the wordmark. The gate's palette reach treats it as it treats `Body`,
+  `Sky` and `Moonrise` (`emusen_qt_test::tree::SCENES`): its colours are the author's. Contrast still holds its words to
+  4.5:1. A theme that paints a hue outside `Scene` fails the palette, as before.
+- **`HelpBar.labelFont` and `entrySpacing`**, aliased by `Frame` as `helpFont` and `helpSpacing`, so a theme sets its
+  labels' face and the gap between entries (the reference theme: Barlow at 20, entries 40 apart, as the accepted render
+  has them). An entry's width is its content's: the style's button no longer pads a short entry ("Play") to its own
+  minimum, which pushed every later entry right.
+- **A paired entry.** An entry whose model gives a `pair` role draws a second glyph after its first: the shoulders, LB
+  and RB, as one entry ("Console"), as the accepted render draws them. A model without the role draws one glyph.
+  `HelpModel`'s `pair` comes from `help::pair_of`, which names the right shoulder beside the left and nothing else.
+- **The glyph's letter is drawn as a path** (`PathText`), as the cut letter already was, so the gate reads a pad glyph as
+  one picture. Drawn as a `Text`, the Xbox family's lettered rings, which the own look's screens show for a generic pad,
+  failed contrast at 1.00:1, the letter sampled over its own ring's ink.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

@@ -8,6 +8,7 @@ fn main() {
             "src/game_model.rs",
             "src/help_model.rs",
             "src/words_object.rs",
+            "src/marks_object.rs",
             "src/screens.rs",
             "src/clock.rs",
             "src/session_model.rs",

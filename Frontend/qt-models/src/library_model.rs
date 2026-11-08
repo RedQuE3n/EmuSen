@@ -47,6 +47,8 @@ pub mod qobject {
         EngineName,
         Libretro,
         CountWords,
+        EngineMark,
+        Heading,
     }
 
     extern "RustQt" {
@@ -64,6 +66,10 @@ pub mod qobject {
         #[qproperty(QString, summary, READ, NOTIFY)]
         #[qproperty(i32, places, READ, NOTIFY)]
         #[qproperty(QString, recent, READ, NOTIFY)]
+        #[qproperty(QString, cores)]
+        #[qproperty(QString, tool_summaries, cxx_name = "toolSummaries")]
+        #[qproperty(bool, dark)]
+        #[qproperty(QString, home_lines, cxx_name = "homeLines", READ, NOTIFY)]
         type LibraryModel = super::LibraryModelRust;
     }
 
@@ -132,6 +138,14 @@ pub struct LibraryModelRust {
     places: i32,
     /// The recently played games as GameModel reads them, the most recent first.
     recent: QString,
+    /// The cores directory the runtime scans; empty for the installation's own.
+    cores: QString,
+    /// The tools' summaries as Home shows them, `{"scraper": {"brief", "attention"}, ...}`; empty until a tool says.
+    tool_summaries: QString,
+    /// Whether the dark variant is shown, for the Settings place's line.
+    dark: bool,
+    /// Home's places' second lines as a JSON array of `{"status", "attention"}`.
+    home_lines: QString,
     view: LibraryView,
     source: Option<Arc<dyn LibrarySource>>,
 }
@@ -150,6 +164,10 @@ impl Default for LibraryModelRust {
             summary: QString::default(),
             places: 0,
             recent: QString::default(),
+            cores: QString::default(),
+            tool_summaries: QString::default(),
+            dark: true,
+            home_lines: QString::from("[]"),
             view: LibraryView::empty(),
             source: None,
         }
@@ -160,6 +178,8 @@ impl cxx_qt::Initialize for qobject::LibraryModel {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().publish();
         self.as_mut().on_platform_library_changed(|model| model.connect()).release();
+        self.as_mut().on_tool_summaries_changed(|model| model.publish()).release();
+        self.as_mut().on_dark_changed(|model| model.publish()).release();
     }
 }
 
@@ -186,6 +206,8 @@ impl qobject::LibraryModel {
             Role::EngineName => text(&row.engine_name),
             Role::Libretro => QVariant::from(&row.libretro),
             Role::CountWords => text(&crate::words::games(row.count)),
+            Role::EngineMark => text(&row.engine_mark),
+            Role::Heading => text(&row.heading),
             _ => QVariant::default(),
         }
     }
@@ -209,6 +231,8 @@ impl qobject::LibraryModel {
             (Role::EngineName, "engineName"),
             (Role::Libretro, "libretro"),
             (Role::CountWords, "countWords"),
+            (Role::EngineMark, "engineMark"),
+            (Role::Heading, "heading"),
         ];
         for (role, name) in names {
             roles.insert(role.repr, QByteArray::from(name));
@@ -253,10 +277,12 @@ impl qobject::LibraryModel {
             return;
         }
         self.as_mut().show_loading(true);
+        let cores = self.cores.to_string();
+        let config = emusen_crystal_client::Config { cores: (!cores.is_empty()).then(|| vec![cores]), ..Default::default() };
         let qt = self.qt_thread();
         std::thread::spawn(move || {
             let (source, refreshed): (Option<Arc<dyn LibrarySource>>, Refreshed) =
-                match ClientSource::open(&library, &emusen_crystal_client::Config::default()) {
+                match ClientSource::open(&library, &config) {
                     Ok(source) => {
                         let source: Arc<dyn LibrarySource> = Arc::new(source);
                         // The systems come before the scan, so Moonrise's planets do not wait for the games.
@@ -325,6 +351,17 @@ impl qobject::LibraryModel {
         if self.recent != recent {
             self.as_mut().rust_mut().recent = recent;
             self.as_mut().recent_changed();
+        }
+        let tools = serde_json::from_str(&self.tool_summaries.to_string()).unwrap_or(serde_json::Value::Null);
+        let settings = crate::words::settings_line(self.dark, &self.view.catalog.settings);
+        let lines: Vec<serde_json::Value> = crate::words::home_lines(self.view.catalog.games.len(), &tools, &settings)
+            .into_iter()
+            .map(|(status, attention)| serde_json::json!({ "status": status, "attention": attention }))
+            .collect();
+        let home_lines = QString::from(serde_json::Value::Array(lines).to_string().as_str());
+        if self.home_lines != home_lines {
+            self.as_mut().rust_mut().home_lines = home_lines;
+            self.as_mut().home_lines_changed();
         }
         if self.summary != summary {
             self.as_mut().rust_mut().summary = summary;

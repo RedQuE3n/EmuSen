@@ -21,6 +21,23 @@ pub trait LibrarySource: Send + Sync {
     /// The engine each system runs now, by system id: the player's stored choice, else the console's default
     /// (EmuSen_Interface.md §24.6). A system left out shows no engine.
     fn engines(&self, systems: &[SystemRow]) -> Result<Vec<(String, Engine)>, String>;
+    /// Each game's cover file, by path, as the media store finds it (EmuSen_Interface.md §21); a source with no store has none.
+    fn covers(&self, _systems: &[SystemRow], _games: &[GameFile]) -> Result<Vec<(String, String)>, String> {
+        Ok(Vec::new())
+    }
+    /// When each played game was last played, by path, in seconds since 1970.
+    fn played(&self, _games: &[GameFile]) -> Result<Vec<(String, i64)>, String> {
+        Ok(Vec::new())
+    }
+    /// The shelves' systems in the runtime's order, which Choose a console follows (EmuSen_Interface.md §24.1); none
+    /// leaves the systems' own order.
+    fn shelves(&self) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
+    }
+    /// The player's settings as Galaxia's model reads them; null where there are none.
+    fn settings(&self) -> Result<serde_json::Value, String> {
+        Ok(serde_json::Value::Null)
+    }
 }
 
 /// An engine as a tile shows it: its name from its own info, and whether it is a hosted libretro core.
@@ -65,6 +82,8 @@ pub struct LibraryRow {
     /// "all", "favourites", "recent", or the console's system id.
     pub key: String,
     pub name: String,
+    /// The grid's heading for the row: a place's short name, a console's name.
+    pub heading: String,
     pub count: usize,
     pub hue: f64,
     pub body: String,
@@ -80,6 +99,8 @@ pub struct LibraryRow {
     pub engine: String,
     pub engine_name: String,
     pub libretro: bool,
+    /// The mark before the engine's name: its astronomical symbol, its maker's glyph, or libretro's badge (§24.6).
+    pub engine_mark: String,
     /// The console's world as one line, from the systems table's look (EmuSen_Kit.md §7.17).
     pub world: String,
 }
@@ -93,6 +114,9 @@ impl Keyed for LibraryRow {
 /// The places, their keys and their names, in order (EmuSen_Interface.md §24).
 pub const PLACES: [(&str, &str); 3] = [("all", "All games"), (FAVOURITES, "Favourites"), (RECENT, "Recently played")];
 
+/// The places' headings on the grid, as the accepted render writes them (EmuSen_Interface.md §24.2).
+pub const PLACE_HEADINGS: [&str; 3] = ["All", "Favourites", "Recent"];
+
 /// The recently played games' key, which Home's shelf shows.
 pub const RECENT: &str = "recent";
 
@@ -105,9 +129,15 @@ pub struct Catalog {
     pub games: Vec<GameFile>,
     pub favourites: Vec<String>,
     pub recent: Vec<String>,
+    /// Each game's cover file, by path.
+    pub covers: Vec<(String, String)>,
+    /// When each played game was last played, by path, in seconds since 1970.
+    pub played: Vec<(String, i64)>,
+    /// The player's settings.
+    pub settings: serde_json::Value,
 }
 
-/// One game as the screens show it: its title from its file name, its console, its console's hue.
+/// One game as the screens show it: its title from its file name, its console, its console's hue, its cover and its facts.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GameRow {
     pub path: String,
@@ -115,6 +145,10 @@ pub struct GameRow {
     pub title: String,
     pub hue: f64,
     pub favourite: bool,
+    /// The cover's file; empty for a game with no art, which shows the generated card.
+    pub cover: String,
+    /// The console's name and when it was last played: "Super Nintendo · 3 h ago".
+    pub facts: String,
 }
 
 /// A game's title: its file name without the extension.
@@ -126,13 +160,22 @@ pub fn title_of(path: &str) -> String {
 /// The games a row of the navigation leads to: all of them by title, the favourites by title, the recently played the
 /// most recent first, or a console's by title.
 pub fn games_of(key: &str, systems: &[SystemRow], catalog: &Catalog) -> Vec<GameRow> {
-    let hue = |system: &str| systems.iter().find(|s| s.id == system).map_or(0.0, |s| s.look.hue);
+    games_of_at(key, systems, catalog, words::now())
+}
+
+/// As `games_of`, each game's facts said at `now`, in seconds since 1970.
+pub fn games_of_at(key: &str, systems: &[SystemRow], catalog: &Catalog, now: i64) -> Vec<GameRow> {
+    let of = |system: &str| systems.iter().find(|s| s.id == system);
     let row = |g: &GameFile| {
         let system = g.system.clone().unwrap_or_default();
+        let console = of(&system).map(|s| if s.display_name.is_empty() { s.name.clone() } else { s.display_name.clone() }).unwrap_or_default();
+        let when = catalog.played.iter().find(|(p, _)| p == &g.path).map(|(_, at)| words::ago(*at, now));
         GameRow {
             title: title_of(&g.path),
-            hue: hue(&system),
+            hue: of(&system).map_or(0.0, |s| s.look.hue),
             favourite: catalog.favourites.contains(&g.path),
+            cover: catalog.covers.iter().find(|(p, _)| p == &g.path).map(|(_, c)| c.clone()).unwrap_or_default(),
+            facts: [Some(console), when].into_iter().flatten().filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" · "),
             path: g.path.clone(),
             system,
         }
@@ -167,10 +210,12 @@ pub fn rows(systems: &[SystemRow], catalog: &Catalog, engines: &[(String, Engine
         .into_iter()
         .zip(counts)
         .zip(lines)
-        .map(|(((key, name), count), status)| LibraryRow {
+        .zip(PLACE_HEADINGS)
+        .map(|((((key, name), count), status), heading)| LibraryRow {
             kind: Some(Kind::Place),
             key: key.into(),
             name: name.into(),
+            heading: heading.into(),
             full_name: name.into(),
             facts: words::games(count),
             count,
@@ -184,11 +229,13 @@ pub fn rows(systems: &[SystemRow], catalog: &Catalog, engines: &[(String, Engine
             continue;
         }
         let engine = engines.iter().find(|(id, _)| id == &s.id).map(|(_, e)| e.clone()).unwrap_or_default();
+        let mark = if engine.name.is_empty() { String::new() } else { engine_mark(&engine.name, engine.libretro, &s.look.body) };
         let runs_on = if engine.name.is_empty() { String::new() } else { words::runs_on(&engine.name, engine.libretro) };
         out.push(LibraryRow {
             kind: Some(Kind::Console),
             key: s.id.clone(),
             name: if s.display_name.is_empty() { s.name.clone() } else { s.display_name.clone() },
+            heading: if s.display_name.is_empty() { s.name.clone() } else { s.display_name.clone() },
             full_name: s.name.clone(),
             status: words::games(count),
             facts: words::facts(&s.manufacturer, s.release_year, count, &runs_on),
@@ -199,11 +246,32 @@ pub fn rows(systems: &[SystemRow], catalog: &Catalog, engines: &[(String, Engine
             year: s.release_year,
             engine: engine.id,
             engine_name: engine.name,
+            engine_mark: mark,
             libretro: engine.libretro,
             world: world_line_of(s),
         });
     }
     out
+}
+
+/// The cores named after the Moon and the planets, whose engine line carries their astronomical symbol (§24.6).
+pub const SKY_NAMED: [&str; 4] = ["moon", "mercury", "venus", "mars"];
+
+/// The mark before an engine's name, a property of the engine (§24.6): "libretro" for a hosted core, a sky-named core's
+/// own symbol, else its maker's body glyph ("shard", "gem") or "planet".
+pub fn engine_mark(name: &str, libretro: bool, body: &str) -> String {
+    let lower = name.to_lowercase();
+    if libretro {
+        "libretro".into()
+    } else if SKY_NAMED.contains(&lower.as_str()) {
+        lower
+    } else if body.contains("shard") {
+        "shard".into()
+    } else if body.contains("gem") {
+        "gem".into()
+    } else {
+        "planet".into()
+    }
 }
 
 /// A console's body from the systems table's look, the one owner of which console is which body (EmuSen_Interface.md
@@ -250,8 +318,14 @@ pub fn refresh(source: &dyn LibrarySource) -> Refreshed {
     let favourites = source.favourites(&games)?;
     let recent = source.recent(&games)?;
     let engines = source.engines(&systems)?;
-    let catalog = Catalog { games, favourites, recent };
-    let rows = rows(&systems, &catalog, &engines);
+    let covers = source.covers(&systems, &games)?;
+    let played = source.played(&games)?;
+    let settings = source.settings()?;
+    let catalog = Catalog { games, favourites, recent, covers, played, settings };
+    let shelves = source.shelves()?;
+    let mut shelved: Vec<SystemRow> = systems.clone();
+    shelved.sort_by_key(|s| shelves.iter().position(|id| id == &s.id).unwrap_or(usize::MAX));
+    let rows = rows(&shelved, &catalog, &engines);
     Ok(Read { systems, catalog, rows })
 }
 

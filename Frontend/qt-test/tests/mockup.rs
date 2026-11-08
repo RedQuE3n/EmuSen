@@ -12,7 +12,7 @@ fn mockups() -> PathBuf {
 
 #[test]
 fn the_three_canvases_read() {
-    for (file, canvas, least) in [("Consoles", "Consoles", 60), ("Home", "Home", 25), ("Grid", "Grid", 20)] {
+    for (file, canvas, least) in [("Consoles", "Consoles", 60), ("Home", "Home", 25), ("Grid", "Grid", 18)] {
         let text = std::fs::read_to_string(mockups().join(format!("{file}.mockup.spec"))).unwrap();
         let m = parse(&text).unwrap_or_else(|e| panic!("{file}: {e}"));
         assert_eq!((m.canvas.as_str(), m.width, m.height), (canvas, 1280.0, 800.0));

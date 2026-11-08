@@ -21,7 +21,9 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
         Screen::Home => &[
             (UiButton::Accept, "Resume", None),
             (UiButton::Screensaver, "Game page", Some("gamePage")),
-            (UiButton::Menu, "Home card", Some("homeCard")),
+            (UiButton::Search, "Favourite", Some("favourite")),
+            (UiButton::Options, "Search", Some("search")),
+            (UiButton::Menu, "Home", Some("homeCard")),
         ],
         Screen::Consoles => &[
             (UiButton::Accept, "Open", None),
@@ -33,9 +35,17 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Accept, "Play", None),
             (UiButton::Screensaver, "Game page", Some("gamePage")),
             (UiButton::Search, "Favourite", Some("favourite")),
+            (UiButton::PageUp, "Console", Some("previous")),
+            (UiButton::Options, "List", Some("list")),
             (UiButton::Back, "Consoles", None),
+            (UiButton::Menu, "Home", Some("homeCard")),
         ],
     }
+}
+
+/// The second button an entry names: the shoulders are one entry, LB and RB, as the accepted render draws them.
+pub fn pair_of(button: UiButton) -> Option<UiButton> {
+    (button == UiButton::PageUp).then_some(UiButton::PageDown)
 }
 
 /// The screen's actions as the frame declares them: `key Button`, one a line (EmuSen_Kit.md §7.18).

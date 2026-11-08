@@ -97,7 +97,7 @@ fn one() -> f64 {
 }
 
 /// The kit's drawn world: its colours are hues by design, so palette reach treats it as a scene.
-pub const SCENES: [&str; 3] = ["Body", "Sky", "Moonrise"];
+pub const SCENES: [&str; 4] = ["Body", "Sky", "Moonrise", "Scene"];
 
 /// The kit's rows and Qt's.
 const ROWS: [&str; 4] = ["MenuRow", "WholeRow", "QQuickItemDelegate", "QQuickMenuItem"];

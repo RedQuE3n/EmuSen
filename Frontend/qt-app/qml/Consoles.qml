@@ -26,14 +26,16 @@ FocusScope {
         objectName: "consolesSky"
         anchors.fill: parent
         glowHue: root.focusedTile && root.focusedTile.planet ? root.focusedTile.hue : -1
-        glowX: root.focusedTile ? (root.focusedTile.x + root.focusedTile.width / 2) / Math.max(1, root.width) : 0.5
-        glowY: root.focusedTile ? (root.focusedTile.y + root.focusedTile.height / 3) / Math.max(1, root.height) : 0.3
+        glowX: 0.5
+        glowY: 0.77
     }
     Kit.Frame {
         id: frame
         anchors.fill: parent
         surfaceDrawn: false
         padFamily: root.padFamily
+        helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        helpSpacing: 40
         focus: true
         controller.navigationShown: false
         help: HelpModel {
@@ -58,6 +60,7 @@ FocusScope {
                 text: Words.games
                 color: Kit.Tokens.textStrong
                 font.family: faces.condensed
+                font.weight: Font.Medium
                 font.pixelSize: 32
                 lineHeight: 38.4
                 lineHeightMode: Text.FixedHeight
@@ -116,6 +119,8 @@ FocusScope {
                     required property string engineName
                     required property bool libretro
                     required property string countWords
+                    required property string engineMark
+                    required property string heading
                     readonly property bool planet: tile.index >= root.library.places
                     readonly property int n: tile.index - root.library.places
                     readonly property bool lit: tile.activeFocus
@@ -182,7 +187,20 @@ FocusScope {
                         width: 40
                         height: 40
                         radius: 20
-                        color: Kit.Tokens.textStrong
+                        color: "transparent"
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 20
+                            color: Kit.Tokens.textStrong
+                            opacity: 0.06
+                        }
+                        Glyph {
+                            anchors.centerIn: parent
+                            width: 22
+                            height: 22
+                            path: Marks.path(tile.key)
+                            ink: tile.lit ? Kit.Tokens.textStrong : Kit.Tokens.muted
+                        }
                     }
                     Text {
                         objectName: "placeName." + tile.index
@@ -194,6 +212,7 @@ FocusScope {
                         elide: Text.ElideRight
                         color: Kit.Tokens.textStrong
                         font.family: faces.condensed
+                        font.weight: Font.Medium
                         font.pixelSize: 24
                         font.capitalization: Font.AllUppercase
                         lineHeight: 28.8
@@ -224,6 +243,21 @@ FocusScope {
                         x: (parent.width - width) / 2
                         y: 52 - height / 2
                     }
+                    Repeater {
+                        // Each sparkle's side (-1 left of the body, 1 right), its top as a share of the body's height, and its size.
+                        model: tile.lit && tile.planet ? [[-1, 0.08, 13], [1, 0.43, 10], [-1, 0.88, 7]] : []
+                        Glyph {
+                            required property var modelData
+                            objectName: "consoleSparkle"
+                            x: modelData[0] < 0 ? body.x - width - 2 : body.x + body.width + 2
+                            y: body.y + modelData[1] * body.height
+                            width: modelData[2]
+                            height: modelData[2]
+                            path: Marks.sparkle
+                            filled: true
+                            ink: Kit.Tokens.textStrong
+                        }
+                    }
                     Text {
                         objectName: "consoleName." + tile.n
                         visible: tile.planet
@@ -235,6 +269,7 @@ FocusScope {
                         elide: Text.ElideRight
                         color: Kit.Tokens.textStrong
                         font.family: faces.condensed
+                        font.weight: Font.Medium
                         font.pixelSize: 22
                         font.capitalization: Font.AllUppercase
                         lineHeight: 26.4
@@ -253,38 +288,58 @@ FocusScope {
                         lineHeight: 20.4
                         lineHeightMode: Text.FixedHeight
                     }
-                    Row {
+                    Kit.Scene {
                         objectName: "consoleEngine." + tile.n
                         visible: tile.planet && tile.engineName.length > 0
+                        width: engineRow.width
+                        height: engineRow.height
                         anchors.horizontalCenter: parent.horizontalCenter
                         y: 158
-                        spacing: 6
-                        Text {
-                            objectName: "consoleEngineName." + tile.n
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: tile.engineName
-                            elide: Text.ElideRight
-                            width: Math.min(implicitWidth, tile.width - tag.width - 22)
-                            color: Kit.Tokens.muted
-                            font.family: faces.condensed
-                            font.pixelSize: 17
-                            font.capitalization: Font.AllUppercase
-                        }
-                        Rectangle {
-                            id: tag
-                            objectName: "consoleEngineTag." + tile.n
-                            width: tagWord.implicitWidth + 10
-                            height: 20
-                            radius: 4
-                            color: "transparent"
-                            border.color: Kit.Tokens.rule
+                        Row {
+                            id: engineRow
+                            spacing: 6
+                            readonly property color ink: tile.libretro ? "#C9C9D0" : Qt.hsla(tile.hue / 360, tile.lit ? 0.85 : 0.35, tile.lit ? 0.8 : 0.7, 1)
+                            EngineMark {
+                                objectName: "consoleEngineMark." + tile.n
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 15
+                                height: 15
+                                mark: tile.engineMark
+                                libretro: tile.libretro
+                                ink: engineRow.ink
+                            }
                             Text {
-                                id: tagWord
-                                anchors.centerIn: parent
-                                text: tile.libretro ? Words.libretroTag : Words.emusenTag
-                                color: Kit.Tokens.text
+                                objectName: "consoleEngineName." + tile.n
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: tile.engineName
+                                elide: Text.ElideRight
+                                width: Math.min(implicitWidth, tile.width - tag.width - 37)
+                                color: engineRow.ink
                                 font.family: faces.condensed
+                                font.weight: Font.Medium
                                 font.pixelSize: 17
+                                font.letterSpacing: 1.5
+                                font.capitalization: Font.AllUppercase
+                            }
+                            Rectangle {
+                                id: tag
+                                objectName: "consoleEngineTag." + tile.n
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: tagWord.implicitWidth + 10
+                                height: 22
+                                radius: 4
+                                color: tile.libretro ? "transparent" : Qt.hsla(tile.hue / 360, 0.6, 0.5, 0.14)
+                                border.color: tile.libretro ? "#6E6E78" : Qt.hsla(tile.hue / 360, 0.45, 0.52, 1)
+                                Text {
+                                    id: tagWord
+                                    anchors.centerIn: parent
+                                    text: tile.libretro ? Words.libretroTag : Words.emusenTag
+                                    color: tile.libretro ? "#A9A9B2" : Qt.hsla(tile.hue / 360, 0.7, 0.82, 1)
+                                    font.family: faces.condensed
+                                    font.weight: Font.Medium
+                                    font.pixelSize: 17
+                                    font.letterSpacing: 0.8
+                                }
                             }
                         }
                     }
@@ -300,6 +355,7 @@ FocusScope {
                 clip: true
                 color: Kit.Tokens.textStrong
                 font.family: faces.condensed
+                font.weight: Font.Medium
                 font.pixelSize: 44
                 font.capitalization: Font.AllUppercase
                 lineHeight: 44

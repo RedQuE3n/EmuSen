@@ -101,6 +101,8 @@ impl cxx_qt::Initialize for qobject::HelpModel {
 /// The roles: the button's number as PadRouter takes it, and the words.
 const BUTTON: i32 = 0;
 const LABEL: i32 = 1;
+/// The second button an entry names, the right shoulder beside the left; -1 for none.
+const PAIR: i32 = 2;
 
 impl qobject::HelpModel {
     pub fn listed(&self) -> Screen {
@@ -118,6 +120,7 @@ impl qobject::HelpModel {
         match role {
             BUTTON => QVariant::from(&(button.index() as i32)),
             LABEL => QVariant::from(&QString::from(*label)),
+            PAIR => QVariant::from(&crate::help::pair_of(*button).map_or(-1, |b| b.index() as i32)),
             _ => QVariant::default(),
         }
     }
@@ -126,6 +129,7 @@ impl qobject::HelpModel {
         let mut roles = QHash::<QHashPair_i32_QByteArray>::default();
         roles.insert(BUTTON, QByteArray::from("button"));
         roles.insert(LABEL, QByteArray::from("label"));
+        roles.insert(PAIR, QByteArray::from("pair"));
         roles
     }
 

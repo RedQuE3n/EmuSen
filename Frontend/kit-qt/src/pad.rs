@@ -1,4 +1,5 @@
 //! `PadRouter`: the kit's one pad entry, a singleton whose queue tests push `PadEvent`s into; the real reader arrives with the platform client (EmuSen_Kit.md §7.4).
+//! `clockRunning` lets a `Frame`'s timer pump on the wall clock; a test turns it off and pumps at stated times.
 
 use core::pin::Pin;
 
@@ -27,6 +28,7 @@ pub mod qobject {
         #[qml_singleton]
         #[qproperty(Tiers, tiers)]
         #[qproperty(bool, swap_accept_back)]
+        #[qproperty(bool, clock_running)]
         type PadRouter = super::PadRouterRust;
     }
 
@@ -62,13 +64,20 @@ pub mod qobject {
 pub struct PadRouterRust {
     tiers: Tiers,
     swap_accept_back: bool,
+    clock_running: bool,
     router: Router,
     started: Instant,
 }
 
 impl Default for PadRouterRust {
     fn default() -> Self {
-        PadRouterRust { tiers: Tiers::Own, swap_accept_back: false, router: Router::new(RepeatTiers::OWN), started: Instant::now() }
+        PadRouterRust {
+            tiers: Tiers::Own,
+            swap_accept_back: false,
+            clock_running: true,
+            router: Router::new(RepeatTiers::OWN),
+            started: Instant::now(),
+        }
     }
 }
 

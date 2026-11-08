@@ -6,11 +6,13 @@ Item {
     id: root
     required property FrameController controller
     signal activated()
+    readonly property alias hovered: hover.hovered
     activeFocusOnTab: true
     Accessible.focusable: true
     Keys.onReturnPressed: root.activated()
     Keys.onEnterPressed: root.activated()
     HoverHandler {
+        id: hover
         onHoveredChanged: root.controller.hover(root, hovered)
     }
     TapHandler {

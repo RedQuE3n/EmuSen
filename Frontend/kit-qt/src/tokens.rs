@@ -4,12 +4,12 @@ use core::pin::Pin;
 
 use cxx_qt::CxxQtType;
 
-use cxx_qt_lib::{QColor, QMarginsF};
+use cxx_qt_lib::QColor;
 use emusen_kit_core::motion::MotionToken as M;
 use emusen_kit_core::tokens::{self as core_tokens, ColourToken as C};
 
 use crate::column::Column;
-use crate::convert::{margins, qcolor};
+use crate::convert::qcolor;
 use crate::kinds::{self, Form, Variant};
 
 #[cxx_qt::bridge]
@@ -17,8 +17,6 @@ pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qcolor.h");
         type QColor = cxx_qt_lib::QColor;
-        include!("cxx-qt-lib/qmarginsf.h");
-        type QMarginsF = cxx_qt_lib::QMarginsF;
         include!("emusen-kit-qt/src/kinds.cxxqt.h");
         #[namespace = "Kit"]
         type Form = crate::kinds::ffi::Form;
@@ -74,7 +72,8 @@ pub mod qobject {
         #[qproperty(f64, tile_gap, READ, NOTIFY)]
         #[qproperty(f64, row_radius, READ, NOTIFY)]
         #[qproperty(f64, tile_radius, READ, NOTIFY)]
-        #[qproperty(QMarginsF, safe_area, READ, NOTIFY)]
+        #[qproperty(f64, safe_area_x, READ, NOTIFY)]
+        #[qproperty(f64, safe_area_y, READ, NOTIFY)]
         #[qproperty(f64, ring_thickness, READ, NOTIFY)]
         #[qproperty(f64, ring_offset, READ, NOTIFY)]
         #[qproperty(f64, bar_width, READ, NOTIFY)]
@@ -111,9 +110,12 @@ pub mod qobject {
 
     #[auto_cxx_name]
     unsafe extern "RustQt" {
-        /// The big screen's safe area for a screen of this size: 5% of each dimension.
+        /// The big screen's safe area at a screen's width: 5% of it, rounded to whole units.
         #[qinvokable]
-        fn safe_area_of(self: &Tokens, width: f64, height: f64) -> QMarginsF;
+        fn safe_area_of_width(self: &Tokens, width: f64) -> f64;
+        /// The same at a screen's height.
+        #[qinvokable]
+        fn safe_area_of_height(self: &Tokens, height: f64) -> f64;
     }
 
     impl cxx_qt::Initialize for Tokens {}
@@ -163,7 +165,8 @@ pub struct TokensRust {
     tile_gap: f64,
     row_radius: f64,
     tile_radius: f64,
-    safe_area: QMarginsF,
+    safe_area_x: f64,
+    safe_area_y: f64,
     ring_thickness: f64,
     ring_offset: f64,
     bar_width: f64,
@@ -243,7 +246,8 @@ impl Default for TokensRust {
             tile_gap: 0.0,
             row_radius: 0.0,
             tile_radius: 0.0,
-            safe_area: QMarginsF::default(),
+            safe_area_x: 0.0,
+            safe_area_y: 0.0,
             ring_thickness: 0.0,
             ring_offset: 0.0,
             bar_width: 0.0,
@@ -322,7 +326,8 @@ impl TokensRust {
         self.tile_gap = c.spacing.tile_gap;
         self.row_radius = c.spacing.row_radius;
         self.tile_radius = c.spacing.tile_radius;
-        self.safe_area = margins(c.spacing.safe_area);
+        self.safe_area_x = c.spacing.safe_area.left;
+        self.safe_area_y = c.spacing.safe_area.top;
         self.ring_thickness = c.focus.ring_thickness;
         self.ring_offset = c.focus.ring_offset;
         self.bar_width = c.focus.bar_width;
@@ -367,8 +372,12 @@ impl cxx_qt::Initialize for qobject::Tokens {
 }
 
 impl qobject::Tokens {
-    pub fn safe_area_of(&self, width: f64, height: f64) -> QMarginsF {
-        margins(core_tokens::safe_area_of(width, height))
+    pub fn safe_area_of_width(&self, width: f64) -> f64 {
+        core_tokens::safe_area_of(width, width).left
+    }
+
+    pub fn safe_area_of_height(&self, height: f64) -> f64 {
+        core_tokens::safe_area_of(height, height).top
     }
 
     fn refresh(mut self: Pin<&mut Self>) {
@@ -418,7 +427,8 @@ impl qobject::Tokens {
         self.as_mut().tile_gap_changed();
         self.as_mut().row_radius_changed();
         self.as_mut().tile_radius_changed();
-        self.as_mut().safe_area_changed();
+        self.as_mut().safe_area_x_changed();
+        self.as_mut().safe_area_y_changed();
         self.as_mut().ring_thickness_changed();
         self.as_mut().ring_offset_changed();
         self.as_mut().bar_width_changed();

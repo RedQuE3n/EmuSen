@@ -432,6 +432,73 @@ failed the skies test; a cache that rendered on every ask failed the render-once
 files against the built module (`Body.qml` and `Sky.qml` carry `pragma ComponentBehavior: Bound`, as their delegates
 read the outer model). No C++ was added: the count stays at 23 lines.
 
+### 7.8 The `EmuSen` style and the kit's controls (stage 0, step 8; 2026-11-07)
+
+**The style** is `EmuSen_Qt.md` §1.5's: a directory of control files, `Frontend/kit-qt/style`, each composing its
+`QtQuick.Templates` type and painting in `Tokens`, with Basic as the fallback for a control not written. It travels in
+the kit's binary as a resource module at `qrc:/qt/qml/QtQuick/Controls/EmuSen/` with a hand-written `qmldir`
+(`style/EmuSen.qrc`), which is the module Qt Quick Controls looks for when a program calls
+`QQuickStyle::setStyle("EmuSen")` before its engine loads; cxx-qt 0.10 registers one QML module per crate, so a second
+`QmlModule` for the style was not open, and a resource module is the plainer form anyway, since the style has no Rust
+type. Twenty-one controls are written: `Button`, `CheckBox`, `RadioButton`, `Switch`, `Slider`, `ComboBox`,
+`TextField`, `Label`, `ItemDelegate`, `ScrollBar`, `TabBar`, `TabButton`, `ProgressBar`, `ToolTip`, `Menu`,
+`MenuItem`, `MenuSeparator`, `Popup`, `Dialog`, `DialogButtonBox` (because `Dialog` instantiates it, and a Basic one
+would paint Basic's colours into a sweep) and `Pane`. The rules every file keeps, held by `tests/style.rs`: it imports
+`QtQuick.Templates as T` and `EmuSen.Kit`, it paints only `Tokens.*` (no `palette.*`, nothing from Basic), its sizes are
+the tokens' (`controlHeight`, `rowHeight`, `base`, `rowRadius`, `tileRadius`, `paneGutter`, the type scale), and the
+focus is marked as §5.4 says: the ring (`ringThickness` in the accent) on `activeFocus`, the hover border
+(`hoverBorder`), the focus bar (`barWidth`) at a row's left. **`activeFocus`, not `visualFocus`**: Qt shows the latter
+only for keyboard focus reasons, and a pad moves the focus with `forceActiveFocus`, which is "other"; the design makes
+every input an equal, so the ring follows the focus however it got there. The marks a reader would see drawn
+(a check, a radio dot, a chevron) are plain rectangles and discs for now; drawn glyphs are owed (§7.7). `IconLabel`,
+`CheckLabel` and `PlaceholderText` come from `QtQuick.Controls.impl`, as every Qt style's files do, so no text or icon
+layout is written here.
+
+**The kit's controls**, in `Frontend/kit-qt/qml`, each a `.qml` of layout and handler lines only:
+
+- `Frame`: a `FocusScope` with its own `FrameController` (exposed as `controller`, its `form` as `form`) and four
+  slots, `navigation`, `content` (the default), `detail` and `actions`, plus `help`, the help bar's model. The forms
+  are three arrangements of the same panes bound to `form`: the **desktop** has the navigation at the left
+  (`navigationWidth`), the content beside it, the detail beside the content when `detailBeside`, the actions row at the
+  foot and no help bar; the **big screen** keeps the safe area (`Tokens.safeAreaX/Y`), the navigation as a row of
+  `titleRow` at the top, the content under it, the detail as a page over the content when `detailOpen` (or beside), the
+  actions above the help bar, and the help bar flush on the foot (`EmuSen_Interface.md` §24.7); the **card** form puts
+  the scrim over everything and the content in a column of `cardWidth`. The pad reaches it through a `Connections` on
+  `PadRouter`, enabled while the frame holds the active focus, whose one line is `controller.offer(button)`; a `Timer`
+  pumps the router on the wall clock while `PadRouter.clockRunning` (a test turns it off and pumps at stated times);
+  and `Keys.onPressed` hands the keys its controls declined to `controller.key`, which decides and reports acceptance.
+  The desktop chrome (menu bar, status bar) is the desktop form's and not here (§7.7). *A name to know:* Qt Quick
+  Controls has a `Frame` too; a file importing both modules qualifies one (`import QtQuick.Controls as Controls`).
+- `HelpBar`: a row of entries from a model with `button` and `label` roles, each a flat `Button` whose press is
+  `controller.offer(button)`, so a pointer has every action the bar names (§1.7); a ring stands where the glyph will be.
+- `MenuRow` and `WholeRow`: `Walkable`s of `rowHeight`, so a click is A there and hovering focuses them; the row's
+  surface raises on focus or when `current`, the focus bar shows at the left, the hover border on hover
+  (`Walkable.hovered`). `MenuRow` has `label` and `value` words (`Accessible.name` is the label); `WholeRow` gives its
+  whole width to its content (a slider, a switch with its words).
+- `MenuPanel`: a raised panel with a `ListView` of `MenuRow`s (`model` with `label` and `value`, or a `delegate` of the
+  host's), the current row holding the focus so Up and Down are the view's own, Return the row's `activated`, the
+  wheel and a `ScrollBar` the view's; it raises `activated(index)`.
+- `Card`: a raised column of `cardWidth` with the tile radius, its content inside the pane gutter.
+- `Sheet`: a modal `Popup` that sets `controller.sheetOpen` while open, so the controller offers presses to it first:
+  B comes back as `sheetDismissed` and closes it, every other press as `sheetPressed(button)` and as the key the
+  sheet's focused control reads (`frame::sheet_route`, held by `tests/route.rs`). Its enter and exit are fades of
+  the tokens' durations and curves.
+- `Question`: a `Sheet` with `title`, `message` and `choices` (a list of words from the host) as `Button`s in a
+  horizontal `ListView`, so Left and Right are the view's own and A is the current button's; `chosen(index)`.
+- `Carousel`: a `PathView` on a straight path with `pathItemCount` from its width and `itemWidth`, snapping one item
+  at a time over `Tokens.reel`; a `WheelHandler` steps one item per notch, Left and Right step by key, and a swipe is
+  the view's own flick.
+
+Not here, as the step said and §7.7 lists: `Keyboard`, `RatingPicker`, `DatePicker`, `NormalizedCanvas`, the glyphs.
+
+**Held to** (`tests/style.rs`, three tests; `tests/route.rs` has the sheet rule): the qmldir lists every control file
+once with its version, the `.qrc` carries the qmldir and every file, every file composes a template in the tokens and
+reads no palette. `qmllint` passes the 34 kit and style files against the built module and the style directory, with
+the project's import paths. Measured on 2026-11-07 with four seeded faults, each reverted: a sheet that never dismissed
+failed the sheet-rule test; `Slider` dropped from the style's qmldir failed the qmldir test; `Frame.qml` dropped from
+the kit module failed rule Q's qmldir comparison; a misspelt token in `Button.qml` (`surfaceRaise`) was caught by
+`qmllint` as a missing property. Tests in the crate: 34. No C++ was added (23 lines).
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4
@@ -456,8 +523,8 @@ with every edit; a difference fails until it is reviewed, the minor bumped for a
 and the files copied. Until 1.0 the comparison is strict equality; the addition and removal distinction is a reviewer's
 step, not the test's.
 
-**Tests** (`Frontend/kit-qt/tests`, 30 with §7.5's, no Qt application needed; the bridges themselves are exercised by
-the harness of step 9): `kinds` (the mirrors pair by pair), `column` (every colour of both variants, the metrics by form and text
+**Tests** (`Frontend/kit-qt/tests`, 34 with §7.5's and §7.8's, no Qt application needed; the bridges themselves are
+exercised by the harness of step 9): `kinds` (the mirrors pair by pair), `column` (every colour of both variants, the metrics by form and text
 scale, motion in milliseconds and Qt's easing numbers, reduced motion zeroing movements and keeping fades at 120 ms),
 `qt_keys` (every declinable press has a Qt key both ways, Shift+Tab, Enter, the mouse's buttons), `route` (the sheet
 before the walk before the key), `router` (the queue applies at a pump only, the own tiers at 400 then 80 ms, the swap
@@ -476,3 +543,8 @@ it `send_key`. Budget: under 600 for the whole front end.
   §5.2 when the first screen needs them, the gallery included, and bundle the faces as §10.2 found necessary.
 - Owed by §7.5 to a later step: the cues played through Endymion's interface player and Moonrise's strikes paired with
   the chime, both with the platform client; the stars' per-tick cost measured on the handheld before stage 1 lands.
+- Owed by §7.8: `Keyboard` (the docked pad keyboard), `RatingPicker`, `DatePicker` and `NormalizedCanvas`; the drawn
+  glyphs (the pad's buttons for the help bar, a check, a radio dot, a chevron) in place of the rings, discs and
+  rectangles the style draws now; the desktop form's menu bar and status bar; the `Frame` name beside Qt Quick
+  Controls' `Frame`, which a file importing both qualifies. **[routine]** Recommended: keep the name `Frame`, as the
+  design has it, and let screens import `QtQuick.Controls as Controls`.

@@ -1,7 +1,7 @@
 // EmuSen_Qt.md §1.7, EmuSen_Kit.md §7.3: a press goes to the open sheet, then the walk, then the focused control as the key it becomes.
 
 use emusen_kit_core::input::{Key, UiButton, Walk, WalkForm};
-use emusen_kit_qt::frame::{route, Routed};
+use emusen_kit_qt::frame::{route, sheet_route, Routed, SheetRouted};
 
 #[test]
 fn qt_1_7_an_open_sheet_takes_every_press_before_the_walk() {
@@ -31,4 +31,12 @@ fn qt_1_7_a_declined_press_becomes_the_key_a_stock_control_reads() {
     assert_eq!(route(false, &mut walk, UiButton::Guide), Routed::Declined(None), "no key stands for the guide button");
     walk.set_detail(false, false);
     assert_eq!(route(false, &mut walk, UiButton::Accept), Routed::Declined(Some(Key::Return)), "no detail: A reaches the control");
+}
+
+#[test]
+fn kit_7_8_the_open_sheet_closes_on_b_and_passes_the_rest_as_keys() {
+    assert_eq!(sheet_route(UiButton::Back), SheetRouted::Dismiss);
+    assert_eq!(sheet_route(UiButton::Accept), SheetRouted::Pass(Some(Key::Return)), "A reaches the sheet's focused button");
+    assert_eq!(sheet_route(UiButton::Left), SheetRouted::Pass(Some(Key::Left)));
+    assert_eq!(sheet_route(UiButton::Guide), SheetRouted::Pass(None));
 }

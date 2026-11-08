@@ -30,6 +30,21 @@ pub fn route(sheet_open: bool, walk: &mut Walk, button: UiButton) -> Routed {
     }
 }
 
+/// What the open sheet does with a press: B dismisses it; anything else is announced and reaches its focused control as a key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SheetRouted {
+    Dismiss,
+    Pass(Option<Key>),
+}
+
+pub fn sheet_route(button: UiButton) -> SheetRouted {
+    if button == UiButton::Back {
+        SheetRouted::Dismiss
+    } else {
+        SheetRouted::Pass(button.key())
+    }
+}
+
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
@@ -89,9 +104,12 @@ pub mod qobject {
         fn page_closed(self: Pin<&mut FrameController>);
         #[qsignal]
         fn action_invoked(self: Pin<&mut FrameController>, key: QString);
-        /// A press while a sheet or question is open: theirs before the walk's.
+        /// A press while a sheet or question is open: theirs before the walk's, and the focused control's as a key.
         #[qsignal]
         fn sheet_pressed(self: Pin<&mut FrameController>, button: PadButton);
+        /// B while a sheet or question is open: it closes.
+        #[qsignal]
+        fn sheet_dismissed(self: Pin<&mut FrameController>);
         /// B at the top of the walk: the host's signal to close.
         #[qsignal]
         fn back_declined(self: Pin<&mut FrameController>);
@@ -234,7 +252,7 @@ impl qobject::FrameController {
         let routed = route(sheet_open, &mut self.as_mut().rust_mut().walk, ui);
         match routed {
             Routed::Sheet => {
-                self.as_mut().sheet_pressed(button);
+                self.as_mut().sheet_offer(ui);
                 true
             }
             Routed::Walk => {
@@ -250,6 +268,19 @@ impl qobject::FrameController {
                     qobject::send_key(code, 0);
                 }
                 false
+            }
+        }
+    }
+
+    /// The sheet's share of a press: B dismisses it; anything else is announced and reaches its focused control as a key.
+    fn sheet_offer(mut self: Pin<&mut Self>, button: UiButton) {
+        match sheet_route(button) {
+            SheetRouted::Dismiss => self.as_mut().sheet_dismissed(),
+            SheetRouted::Pass(key) => {
+                self.as_mut().sheet_pressed(kinds::pad_button(button));
+                if let Some(code) = key.and_then(qt_keys::qt_key) {
+                    qobject::send_key(code, 0);
+                }
             }
         }
     }
@@ -270,7 +301,7 @@ impl qobject::FrameController {
             Some(Intent::Walk(by)) => self.move_focus(by),
             Some(Intent::Press(button)) => {
                 if self.sheet_open {
-                    self.sheet_pressed(kinds::pad_button(button));
+                    self.sheet_offer(button);
                     true
                 } else {
                     self.press(kinds::pad_button(button))

@@ -1,9 +1,12 @@
 //! The library view's behaviour with a fake client and no Qt (EmuSen_Qt.md §8.2): what rows a source's answers make,
 //! that nothing per console is written by hand, and that a refresh keeps the selection.
 
-use emusen_crystal_client::shapes::{Look, SystemRow};
+use emusen_crystal_client::shapes::{CoreRow, LibretroCore, Look, SystemRow};
 use emusen_platform_client::library::GameFile;
-use emusen_qt_models::library::{refresh, Kind, LibrarySource, LibraryView};
+use emusen_qt_models::clients::engine_shown;
+use emusen_qt_models::games::{from_json, to_json};
+use emusen_qt_models::help::{entries, Screen};
+use emusen_qt_models::library::{games_of, refresh, title_of, without_port_mark, Engine, Kind, LibrarySource, LibraryView};
 use std::sync::Mutex;
 
 /// A source answering what a test sets; `fail` makes the next refresh fail with its words.
@@ -11,8 +14,9 @@ use std::sync::Mutex;
 struct Fake {
     systems: Vec<SystemRow>,
     games: Mutex<Vec<GameFile>>,
-    favourites: usize,
-    recent: usize,
+    favourites: Vec<String>,
+    recent: Vec<String>,
+    engines: Vec<(String, Engine)>,
     fail: Mutex<Option<String>>,
 }
 
@@ -26,11 +30,14 @@ impl LibrarySource for Fake {
             None => Ok(self.games.lock().unwrap().clone()),
         }
     }
-    fn favourites(&self, _: &[GameFile]) -> Result<usize, String> {
-        Ok(self.favourites)
+    fn favourites(&self, _: &[GameFile]) -> Result<Vec<String>, String> {
+        Ok(self.favourites.clone())
     }
-    fn recent(&self, _: &[GameFile]) -> Result<usize, String> {
-        Ok(self.recent)
+    fn recent(&self, _: &[GameFile]) -> Result<Vec<String>, String> {
+        Ok(self.recent.clone())
+    }
+    fn engines(&self, _: &[SystemRow]) -> Result<Vec<(String, Engine)>, String> {
+        Ok(self.engines.clone())
     }
 }
 
@@ -61,15 +68,19 @@ fn fake() -> Fake {
             system("gb", "Game Boy", 212.0, "Mercury"),
         ],
         games: Mutex::new(games(&[("nes", 3), ("gb", 2)])),
-        favourites: 1,
-        recent: 4,
+        favourites: vec!["/roms/gb/1".into()],
+        recent: vec!["/roms/nes/2".into(), "/roms/gb/0".into(), "/roms/nes/0".into(), "/roms/nes/1".into()],
+        engines: vec![
+            ("nes".into(), Engine { id: "Moon".into(), name: "Moon".into(), libretro: false }),
+            ("gb".into(), Engine { id: "sameboy".into(), name: "SameBoy".into(), libretro: true }),
+        ],
         ..Fake::default()
     }
 }
 
 #[test]
 fn the_places_come_first_then_each_console_with_games_in_the_table_s_order() {
-    let rows = refresh(&fake()).unwrap();
+    let rows = refresh(&fake()).unwrap().rows;
     let seen: Vec<(Option<Kind>, &str, &str, usize)> = rows.iter().map(|r| (r.kind, r.key.as_str(), r.name.as_str(), r.count)).collect();
     assert_eq!(
         seen,
@@ -83,7 +94,57 @@ fn the_places_come_first_then_each_console_with_games_in_the_table_s_order() {
         "the Super Nintendo has no games and is not shown"
     );
     let gb = &rows[4];
-    assert_eq!((gb.hue, gb.body.as_str(), gb.maker.as_str(), gb.year, gb.engine.as_str()), (212.0, "planet", "Maker", 1990, "Mercury"));
+    assert_eq!((gb.hue, gb.body.as_str(), gb.maker.as_str(), gb.year), (212.0, "planet", "Maker", 1990));
+    assert_eq!((gb.engine.as_str(), gb.engine_name.as_str(), gb.libretro), ("sameboy", "SameBoy", true), "the engine the source says runs it now");
+    assert_eq!((gb.full_name.as_str(), gb.status.as_str()), ("gb system", "2 games"));
+    assert_eq!(gb.facts, "Maker · 1990 · 2 games · runs on SameBoy, a libretro core");
+    assert_eq!(rows[3].facts, "Maker · 1990 · 3 games · runs on Moon, an EmuSen core");
+    let lines: Vec<&str> = rows[..3].iter().map(|r| r.status.as_str()).collect();
+    assert_eq!(lines, ["5 games", "Your hearts, every console", "Last: 2"], "the places' own words, the game played last by its file name");
+}
+
+#[test]
+fn a_row_leads_to_its_games_by_title_and_recent_by_when() {
+    let source = fake();
+    let read = refresh(&source).unwrap();
+    let titles = |key: &str| -> Vec<String> {
+        games_of(key, &read.systems, &read.catalog).iter().map(|g| format!("{}/{}", g.system, g.title)).collect()
+    };
+    assert_eq!(titles("nes"), ["nes/0", "nes/1", "nes/2"]);
+    assert_eq!(titles("recent"), ["nes/2", "gb/0", "nes/0", "nes/1"]);
+    assert_eq!(titles("favourites"), ["gb/1"]);
+    assert_eq!(titles("all").len(), 5);
+    let gb = games_of("gb", &read.systems, &read.catalog);
+    assert_eq!((gb[1].hue, gb[1].favourite, gb[0].favourite), (212.0, true, false));
+    assert_eq!(from_json(&to_json(&gb)), gb, "the plain data between the two models reads back whole");
+    assert_eq!(title_of("/roms/Aurora Drift (Synthetic).sfc"), "Aurora Drift (Synthetic)");
+    let mut view = LibraryView::empty();
+    view.apply(Ok(read));
+    assert_eq!(view.summary(), "2 consoles · 5 games");
+}
+
+#[test]
+fn an_engine_is_named_by_its_own_info_and_the_port_s_mark_is_dropped() {
+    assert_eq!((without_port_mark("VenusRT"), without_port_mark("PCSX2"), without_port_mark("RT")), ("Venus", "PCSX2", "RT"));
+    let own = CoreRow { engine: Some("Venus".into()), name: Some("VenusRT".into()), ..CoreRow::default() };
+    let hosted = CoreRow {
+        engine: Some("pcsx2".into()),
+        name: Some("pcsx2_libretro".into()),
+        libretro: Some(LibretroCore { corename: Some("PCSX2".into()), ..LibretroCore::default() }),
+        ..CoreRow::default()
+    };
+    let cores = [own, hosted];
+    assert_eq!(engine_shown("Venus", &cores), Engine { id: "Venus".into(), name: "Venus".into(), libretro: false });
+    assert_eq!(engine_shown("pcsx2", &cores), Engine { id: "pcsx2".into(), name: "PCSX2".into(), libretro: true });
+    assert_eq!(engine_shown("Moon", &cores).name, "Moon", "an engine the listing lacks keeps its stored name");
+}
+
+#[test]
+fn each_screen_s_help_bar_names_its_presses() {
+    let labels = |s| entries(s).iter().map(|(b, l)| format!("{b:?} {l}")).collect::<Vec<_>>();
+    assert_eq!(labels(Screen::Consoles), ["Accept Open", "Back Back", "Search Favourites", "Screensaver Random game"]);
+    assert_eq!(labels(Screen::Home)[0], "Accept Resume");
+    assert_eq!(labels(Screen::Grid)[0], "Accept Play");
 }
 
 #[test]
@@ -96,9 +157,9 @@ fn a_console_only_an_engine_declares_shows_by_its_declared_name_with_nothing_wri
         ..SystemRow::default()
     };
     let source = Fake { systems: vec![declared], games: Mutex::new(games(&[("test", 1)])), ..Fake::default() };
-    let rows = refresh(&source).unwrap();
+    let rows = refresh(&source).unwrap().rows;
     let test = rows.iter().find(|r| r.key == "test").expect("the declared console");
-    assert_eq!((test.name.as_str(), test.hue, test.engine.as_str(), test.count), ("Test system", 77.0, "V1TestCore", 1));
+    assert_eq!((test.name.as_str(), test.hue, test.count), ("Test system", 77.0, 1));
 }
 
 #[test]

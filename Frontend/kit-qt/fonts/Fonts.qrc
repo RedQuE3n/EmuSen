@@ -2,5 +2,7 @@
   <qresource prefix="/emusen/fonts">
     <file>BarlowCondensed-Light.ttf</file>
     <file>Barlow-Medium.ttf</file>
+    <file>BarlowCondensed-Medium.ttf</file>
+    <file>Barlow-Regular.ttf</file>
   </qresource>
 </RCC>

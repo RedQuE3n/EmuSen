@@ -885,6 +885,42 @@ the Grid's help bar written at the canvas's 702 failed the files' test. The canv
 `support.js` is not kept beside them), so the side-by-side pictures of step 4 draw each `.mockup.spec`'s boxes over the
 built screen's grab, beside the C# grab of the same state.
 
+**The screens' models, step 3's first part** (measured 2026-11-08). Everything Home, Choose a console and the grid show
+comes from a model's roles; nothing is written per console:
+
+- **The library view** (`library.rs`) reads, besides the systems and the games, which games are favourites and which
+  were played (paths, the most recent first; the source's `recent` answered a count before) and **the engine each
+  console runs now**, `LibrarySource::engines`: through the runtime's `Setting(console, "Engine")` with session 0 (the
+  player's stored choice, else the engine row's default), else the first engine the table lists, named from the cores
+  listing by `clients::engine_shown` (a libretro core by its corename, an EmuSen core by its info name less the port's
+  "RT", `without_port_mark`, the named exception of `EmuSen_Interface.md` §24.6). This replaces the table's first
+  engine, a difference from Mistress named at step 1. A row gained `fullName`, `status` (the count, "Your hearts, every
+  console", "Last: " and the game played last or "Nothing played yet"), `facts` ("Nintendo · 1983 · 2 games · runs on
+  Moon, an EmuSen core"), `engineName`, `libretro` and `countWords`; `LibraryModel` gained `summary` ("11 consoles ·
+  1,566 games"). The words are `words.rs`'s, as Mistress's `ConsolesScreen` words them.
+- **`GameModel`**: a list of games (roles `path`, `system`, `title`, `hue`, `favourite`) for the grid's cells, Home's
+  shelf and Choose a console's fan. It is set from `LibraryModel.gamesOf(key)`, the games a row leads to (all and a
+  console's by title, the favourites by title, the recently played the most recent first) as plain data, a JSON array
+  (`games.rs`), so the library is read once and neither model reaches into the other. A title is the file name without
+  its extension until scraped names are read.
+- **`HelpModel`**: a screen's help bar (`screen`: Home, Consoles, Grid) with the roles the kit's `HelpBar` reads, from
+  `help.rs`: Choose a console's Open (A), Back (B), Favourites (Y, `Search`), Random game (X, `Screensaver`); the grid's
+  Play, Game page, Favourite, Consoles; Home's Resume, Game page, Home card, as the mockups label them.
+- **`Words`** gained the screens' fixed words (GAMES, Choose a console, GAMES ▸, CONTINUE PLAYING, RECENT, Home's seven
+  places, the EMUSEN and LIBRETRO tags). The three list models declare `QAbstractListModel` once, in `library_model.rs`,
+  as kit-qt's `base.rs` does, since cxx-qt emits an upcast shim per declaration and a second one clashes at link time.
+- **The faces**: the mockups set names in Barlow Condensed Medium and words in Barlow; both are now in the kit's
+  `fonts/Fonts.qrc` beside Moonrise's two, the C#'s own files (SIL Open Font License 1.1, the licence already in
+  `licenses/`; SHA-256 of BarlowCondensed-Medium.ttf beginning `1da0b65f`, of Barlow-Regular.ttf `54786f6c`).
+
+**Held to** (`qt-models/tests/library.rs`, 8, and `clients.rs`, measured 2026-11-08): the rows' words, facts and engine
+from a fake source with an EmuSen and a libretro engine; the games of each row in order, read back whole through the
+plain data, and the summary; an engine named by its own info with the port's mark dropped only after a lower-case
+letter; each screen's help entries; and, over the real platform library, the NES's engine as the runtime's setting
+gives it with facts ending "an EmuSen core". Seeded faults, each reverted: the engine taken from the table's first in
+place of the source's answer failed the rows' test; the port's mark dropped from any name ending in "RT" failed the
+engine test; the recently played reversed failed the games' test.
+
 ---
 
 ## 8. Testing

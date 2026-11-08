@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 #[cxx_qt::bridge]
 pub mod qobject {
+    // Declared once in the crate, here: cxx-qt emits an upcast shim per declaration (EmuSen_Kit.md §7.6).
     unsafe extern "C++Qt" {
         include!(<QtCore/QAbstractListModel>);
         #[qobject]
@@ -40,6 +41,12 @@ pub mod qobject {
         Year,
         Engine,
         World,
+        FullName,
+        Status,
+        Facts,
+        EngineName,
+        Libretro,
+        CountWords,
     }
 
     extern "RustQt" {
@@ -54,6 +61,7 @@ pub mod qobject {
         #[qproperty(QString, splash_worlds, cxx_name = "splashWorlds", READ, NOTIFY)]
         #[qproperty(i32, splash_planets, cxx_name = "splashPlanets", READ, NOTIFY)]
         #[qproperty(QString, splash_caption, cxx_name = "splashCaption", READ, NOTIFY)]
+        #[qproperty(QString, summary, READ, NOTIFY)]
         type LibraryModel = super::LibraryModelRust;
     }
 
@@ -75,6 +83,11 @@ pub mod qobject {
         /// Reads the source again off the GUI thread; the selection is kept by its key.
         #[qinvokable]
         fn refresh(self: Pin<&mut LibraryModel>);
+
+        /// The games a row leads to, as GameModel reads them: a JSON array, one object a game.
+        #[qinvokable]
+        #[cxx_name = "gamesOf"]
+        fn games_of(self: &LibraryModel, key: &QString) -> QString;
 
         /// Selects a row; false where there is none.
         #[qinvokable]
@@ -107,6 +120,7 @@ pub struct LibraryModelRust {
     splash_worlds: QString,
     splash_planets: i32,
     splash_caption: QString,
+    summary: QString,
     view: LibraryView,
     source: Option<Arc<dyn LibrarySource>>,
 }
@@ -122,6 +136,7 @@ impl Default for LibraryModelRust {
             splash_worlds: QString::default(),
             splash_planets: 0,
             splash_caption: QString::default(),
+            summary: QString::default(),
             view: LibraryView::empty(),
             source: None,
         }
@@ -152,6 +167,12 @@ impl qobject::LibraryModel {
             Role::Year => QVariant::from(&row.year),
             Role::Engine => text(&row.engine),
             Role::World => text(&row.world),
+            Role::FullName => text(&row.full_name),
+            Role::Status => text(&row.status),
+            Role::Facts => text(&row.facts),
+            Role::EngineName => text(&row.engine_name),
+            Role::Libretro => QVariant::from(&row.libretro),
+            Role::CountWords => text(&crate::words::games(row.count)),
             _ => QVariant::default(),
         }
     }
@@ -169,6 +190,12 @@ impl qobject::LibraryModel {
             (Role::Year, "year"),
             (Role::Engine, "engine"),
             (Role::World, "world"),
+            (Role::FullName, "fullName"),
+            (Role::Status, "status"),
+            (Role::Facts, "facts"),
+            (Role::EngineName, "engineName"),
+            (Role::Libretro, "libretro"),
+            (Role::CountWords, "countWords"),
         ];
         for (role, name) in names {
             roles.insert(role.repr, QByteArray::from(name));
@@ -188,6 +215,11 @@ impl qobject::LibraryModel {
             let refreshed = refresh(source.as_ref());
             let _ = qt.queue(move |model| model.apply(None, refreshed));
         });
+    }
+
+    pub fn games_of(&self, key: &QString) -> QString {
+        let games = crate::library::games_of(&key.to_string(), &self.view.systems, &self.view.catalog);
+        QString::from(crate::games::to_json(&games).as_str())
     }
 
     pub fn select(mut self: Pin<&mut Self>, index: i32) -> bool {
@@ -265,6 +297,11 @@ impl qobject::LibraryModel {
         let index = self.view.rows.selected().map_or(-1, |i| i as i32);
         let key = QString::from(self.view.rows.selected_key().unwrap_or(""));
         let problem = QString::from(self.view.problem.as_str());
+        let summary = QString::from(self.view.summary().as_str());
+        if self.summary != summary {
+            self.as_mut().rust_mut().summary = summary;
+            self.as_mut().summary_changed();
+        }
         if self.selected_index != index {
             self.as_mut().rust_mut().selected_index = index;
             self.as_mut().selected_index_changed();

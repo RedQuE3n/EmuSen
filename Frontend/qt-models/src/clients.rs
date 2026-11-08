@@ -2,9 +2,9 @@
 //! from a scan of the library handle, whose roots are the player's ROM folder (AppSettings) and whose systems are the
 //! shelves' (emusen_library.h), and the records from games.db, where Galaxia names it.
 
-use crate::library::LibrarySource;
-use emusen_crystal_client::shapes::SystemRow;
-use emusen_crystal_client::Runtime;
+use crate::library::{without_port_mark, Engine, LibrarySource};
+use emusen_crystal_client::shapes::{CoreRow, SystemRow};
+use emusen_crystal_client::{Runtime, Scope};
 use emusen_platform_client::galaxia::consts::{DIR_COMPRESSED, DIR_PACKAGES, FILE_GAMES, FILE_SETTINGS, MODEL_APP_SETTINGS};
 use emusen_platform_client::library::{GameFile, Library, ScanRequest};
 use emusen_platform_client::Platform;
@@ -58,16 +58,41 @@ impl LibrarySource for ClientSource {
         Ok(self.library.games(None).map_err(words)?.games)
     }
 
-    fn favourites(&self, games: &[GameFile]) -> Result<usize, String> {
+    fn favourites(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
         let records = self.library.get(&json!({ "what": "records" })).map_err(words)?;
         let favourite = |g: &&GameFile| records.get(&g.path).and_then(|r| r.get("favourite")).and_then(Value::as_bool).unwrap_or(false);
-        Ok(games.iter().filter(favourite).count())
+        Ok(games.iter().filter(favourite).map(|g| g.path.clone()).collect())
     }
 
-    fn recent(&self, games: &[GameFile]) -> Result<usize, String> {
+    fn recent(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
         let paths: Vec<String> = games.iter().map(|g| g.path.clone()).collect();
-        Ok(self.library.recent(u32::MAX, &paths).map_err(words)?.len())
+        self.library.recent(u32::MAX, &paths).map_err(words)
     }
+
+    fn engines(&self, systems: &[SystemRow]) -> Result<Vec<(String, Engine)>, String> {
+        let cores = self.runtime.cores().map_err(words)?;
+        let mut out = Vec::new();
+        for s in systems {
+            // The runtime's Setting(console, "Engine"): the stored choice, else the engine row's default.
+            let chosen = self.runtime.settings_get(0, Scope::Console, Some(&s.id), "Engine").map_err(words)?;
+            let Some(id) = chosen.filter(|c| !c.is_empty()).or_else(|| s.engines.first().cloned()) else { continue };
+            out.push((s.id.clone(), engine_shown(&id, &cores)));
+        }
+        Ok(out)
+    }
+}
+
+/// An engine by the name a choice stores, named from the runtime's cores listing: a libretro core by its corename, an
+/// EmuSen core by its info name less the port's mark, and an engine the listing lacks by its stored name.
+pub fn engine_shown(id: &str, cores: &[CoreRow]) -> Engine {
+    let row = cores.iter().find(|c| c.engine.as_deref() == Some(id));
+    let libretro = row.and_then(|r| r.libretro.as_ref());
+    let name = match (row, libretro) {
+        (_, Some(l)) => l.corename.clone().or_else(|| row.and_then(|r| r.name.clone())).unwrap_or_else(|| id.to_owned()),
+        (Some(r), None) => without_port_mark(r.name.as_deref().unwrap_or(id)).to_owned(),
+        (None, None) => id.to_owned(),
+    };
+    Engine { id: id.to_owned(), name, libretro: libretro.is_some() }
 }
 
 impl ClientSource {

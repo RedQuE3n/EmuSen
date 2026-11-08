@@ -633,7 +633,10 @@ namespace EmuSen.WiseMan.Serenity
         {
             string header = File.ReadAllText(Path.Combine(EmuSen.Galaxia.ConfigRoot.Directory, "Platform", "include", "emusen_platform.h"));
             foreach (string export in SerenityNative.Exports) Assert.Contains(export + "(", header);
-            Assert.Equal(SerenityNative.Exports.Count(e => e.StartsWith("emusen_serenity_", StringComparison.Ordinal)), Regex.Matches(header, @"^\w+ \*?emusen_serenity_\w+\(", RegexOptions.Multiline).Count);
+            // Interface 42's two exports serve a host that adopts the device, which the C# half never is (EmuSen_RustPlatform.md §49).
+            string[] adoptingHostOnly = { "emusen_serenity_device_new_for", "emusen_serenity_chain_draw" };
+            foreach (string export in adoptingHostOnly) Assert.Contains(export + "(", header);
+            Assert.Equal(SerenityNative.Exports.Count(e => e.StartsWith("emusen_serenity_", StringComparison.Ordinal)) + adoptingHostOnly.Length, Regex.Matches(header, @"^\w+ \*?emusen_serenity_\w+\(", RegexOptions.Multiline).Count);
         }
     }
 }

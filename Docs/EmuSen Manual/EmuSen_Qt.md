@@ -1586,6 +1586,15 @@ closes the keyboard, then goes back. Each card is held at the gate's five sizes 
 - The rows reset on a stepped value: the program's cards test, where the gate's walk did not reach the List card's rows.
 - Start on the grid left where it was: the program's cards test.
 
+**A narrowed tile is the full grid's tile** (checked on 2026-11-08). The first GamesSearch side-by-side showed the found
+game as a generated card, smaller and lower than Mistress's cover. The cause was the fixture, not the search. The program
+test's sandbox had no media store, so every tile of its grid, narrowed or not, was a generated card, and it was set
+beside Mistress's render of a library with covers. The test now draws the covers of Mistress's own-look fixture into an
+ES-DE media folder (`common::draw_covers`, shared with `acceptance.rs`). It holds Granite Choir's tile in the search to the
+full grid's: the same picture heard by its title, the same box, and the same colours at 25 points inside it. A tile
+whose cover is dropped while searching fails that check (seeded and reverted). The re-made side-by-sides show the
+cover at Mistress's place and size; the keyboard's area stays empty until the kit's keyboard lands.
+
 **On Vulkan** (`acceptance.rs`, measured on 2026-11-08 in its own compositor on the RX 6800, 72 s). The program over
 Mistress's own-look fixture holds the List card over the grid of eight covers ("All · 8 games"), HomeCardPower and
 HomeCardQuit at the gate's five sizes with nothing logged, and checks the shadow over the band (`shadow_over_band`). The

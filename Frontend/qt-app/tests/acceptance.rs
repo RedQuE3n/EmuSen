@@ -7,7 +7,7 @@
 
 mod common;
 
-use common::{hold, sandbox, wait_for};
+use common::{draw_covers, hold, sandbox, wait_for};
 
 use emusen_client_fixture::{image, library};
 use emusen_crystal_client::{Api, Config, Runtime};
@@ -86,33 +86,6 @@ fn rom(world: &emusen_client_fixture::World, title: &str, ext: &str) -> PathBuf 
     world.dir("Roms").join(format!("{title} (Synthetic).{ext}"))
 }
 
-/// The covers as the fixture draws them, each a flat colour with a white rim and its words, grabbed from one Qt Quick
-/// window resized to each box's shape (SyntheticLibrary.Label's drawing). The window adopts the program's device, and
-/// is hidden once drawn: a second window's swapchain released only when the engine was dropped faulted in Qt's release.
-fn draw_covers(harness: &mut Harness, adoption: &Adoption, scratch: &Path, covers: &[(PathBuf, (u32, u32), usize, String)]) {
-    let qml = scratch.join("cover.qml");
-    std::fs::write(
-        &qml,
-        "import QtQuick\nWindow {\n  objectName: \"covers\"\n  Rectangle { objectName: \"fill\"; anchors.fill: parent\n\
-         Rectangle { x: 3; y: 3; width: parent.width - 6; height: parent.height - 6; color: \"transparent\"; border.color: \"white\"; border.width: 6 }\n\
-         Text { objectName: \"words\"; anchors.centerIn: parent; width: parent.width - 20; horizontalAlignment: Text.AlignHCenter; color: \"white\"; font.pixelSize: Math.max(12, Math.floor(parent.height / 12)) } } }\n",
-    )
-    .unwrap();
-    let mut scene = harness.load_prepared(&format!("file://{}", qml.display()), 64, 64, |window| unsafe { adoption.adopt(window.cast()) }.expect("Qt adopts the device"));
-    for (path, (w, h), index, words) in covers {
-        // Green is the covers folder's: 60 + 6 * 23 % 160, the name's length in SyntheticLibrary.Colour.
-        let (r, g, b) = (40 + 17 * index % 180, 198, 90 + 31 * index % 150);
-        scene.resize(*w as i32, *h as i32);
-        assert!(scene.set_property("fill", "color", &format!("#{r:02x}{g:02x}{b:02x}")));
-        assert!(scene.set_property("words", "text", words));
-        scene.wait(50);
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        assert!(scene.grab(&path.display().to_string()), "cover {}", path.display());
-    }
-    // Hidden while its scene graph still holds its instance, so its swapchain is released before the window goes.
-    assert!(scene.set_property("covers", "visible", "false"));
-    scene.wait(50);
-}
 
 /// The library: the eight games in one folder, their covers in an ES-DE media folder at their boxes' shapes, the engines'
 /// sidecars, each game played three hours apart with Aurora Drift the latest, and Brass Lantern and Fable of Tiles hearted.
@@ -129,7 +102,7 @@ fn canvas_library(harness: &mut Harness, adoption: &Adoption) -> (emusen_client_
     // Aurora Drift's screenshot, the hero art Home's top shows for it with no game suspended (HomeNothingLeft).
     let shot = media.join("snes").join("screenshots").join("Aurora Drift (Synthetic).png");
     covers.push((shot, (512, 448), 0, "snes screenshots\nAurora Drift\n512x448".into()));
-    draw_covers(harness, adoption, &world.root, &covers);
+    draw_covers(harness, &world.root, &covers, |window| unsafe { adoption.adopt(window.cast()) }.expect("Qt adopts the device"));
     let platform = Platform::load(library()).unwrap();
     let mut settings = platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
     settings["EsdeMediaDirectory"] = json!(media.to_str().unwrap());

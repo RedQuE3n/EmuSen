@@ -6,8 +6,10 @@
 
 mod common;
 
-use common::{hold, sandbox, wait_for};
+use common::{draw_covers, hold, sandbox, wait_for};
 use emusen_client_fixture::library;
+use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
+use emusen_platform_client::Platform;
 use emusen_kit_core::input::UiButton;
 use emusen_qt::MAIN_URL;
 use emusen_qt_test::{mockup, Scene};
@@ -82,14 +84,52 @@ fn titled(scene: &mut Scene<'_>, card: &str) -> (String, String) {
     (under("cardBreadcrumb"), under("cardTitle"))
 }
 
+/// A grid cell's cover as drawn: the name its picture is heard by (the game's title once drawn from its file, none for a
+/// generated card), its box, and the colours of a grid of points inside it, 12 pixels in from each side.
+fn cover_of(scene: &mut Scene<'_>, index: usize) -> (String, f64, f64, Vec<Option<emusen_kit_core::tokens::Colour>>) {
+    let tree = scene.tree();
+    let cell = tree.nodes.iter().find(|n| n.visible && n.name == format!("gridCell.{index}")).map(|n| n.id.clone()).unwrap_or_default();
+    let inside = |n: &emusen_qt_test::tree::Node| {
+        let mut at = Some(n);
+        while let Some(p) = at {
+            if p.id == cell {
+                return true;
+            }
+            at = tree.nodes.iter().find(|q| q.id == p.parent);
+        }
+        false
+    };
+    let picture = tree.nodes.iter().find(|n| n.visible && n.name == "coverPicture" && inside(n));
+    let Some(p) = picture else { return (String::new(), 0.0, 0.0, Vec::new()) };
+    let (heard, x, y, w, h) = (p.heard.clone(), p.x, p.y, p.w, p.h);
+    let points: Vec<(f64, f64)> = (0..5).flat_map(|i| (0..5).map(move |j| (x + 12.0 + (w - 24.0) * f64::from(i) / 4.0, y + 12.0 + (h - 24.0) * f64::from(j) / 4.0))).collect();
+    (heard, w, h, scene.colours_at(&points))
+}
+
 fn settle(scene: &mut Scene<'_>) {
     scene.wait(450);
 }
 
 #[test]
 fn the_home_card_and_the_list_card_are_mistresss() {
-    let _world = sandbox("qt-app-cards", &GAMES);
+    let world = sandbox("qt-app-cards", &GAMES);
     let mut harness = emusen_qt_test::Harness::new();
+    // Each game's cover in an ES-DE media folder, as Mistress's own-look fixture draws them, so the grid shows pictures.
+    let media = world.dir("Media");
+    let covers: Vec<_> = GAMES
+        .iter()
+        .enumerate()
+        .map(|(i, (folder, file))| {
+            let (system, w, h) = match *folder { "SNES" => ("snes", 560, 400), "NES" => ("nes", 420, 600), _ => ("gb", 540, 600) };
+            let title = file.rsplit_once('.').unwrap().0;
+            (media.join(system).join("covers").join(format!("{title}.png")), (w, h), i, format!("{system} covers\n{}\n{w}x{h}", title.trim_end_matches(" (Synthetic)")))
+        })
+        .collect();
+    draw_covers(&mut harness, &world.root, &covers, |_| {});
+    let platform = Platform::load(library()).unwrap();
+    let mut settings = platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
+    settings["EsdeMediaDirectory"] = serde_json::json!(media.to_str().unwrap());
+    platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
@@ -151,6 +191,10 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     scene.pad(UiButton::Accept);
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "gridCells", "count", "8", 3000);
+    // Granite Choir as the full grid draws it, seventh by name: its picture, drawn, at its painted size.
+    scene.wait(300);
+    let granite = cover_of(&mut scene, 6);
+    assert_eq!(granite.0, "Granite Choir (Synthetic)", "the full grid draws Granite Choir's cover from its file");
 
     // Select opens the List card over the grid (GamesListCard): the section and its count, Mistress's rows.
     scene.pad(UiButton::Options);
@@ -202,6 +246,9 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     assert!(scene.set_property("gridGames", "search", "gran"));
     wait_for(&mut scene, "gridGames", "countLine", "1 of 8 games", 2000);
     assert_eq!(scene.property("gridCells", "count"), "1");
+    // The narrowed grid draws the tile the full grid draws: the same picture, drawn, at the same size.
+    scene.wait(300);
+    assert_eq!(cover_of(&mut scene, 0), granite, "Granite Choir's tile in the search: its picture, box and colours as in the full grid");
     hold(&mut scene, "GamesSearch", &mockup::Mockup::default(), named, &mut report);
     assert_eq!(scene.property("GallerySearch", "text"), "gran", "the field shows the words");
     // B clears the search, B on the empty field closes the keyboard, and B again goes back to Choose a console.

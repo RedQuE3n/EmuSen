@@ -1165,6 +1165,66 @@ frame delays); the system view's gameselector picks (the host's); the grid's and
 the C#'s (`later:item-text`). A frame allocates its records each tick; the bridge's models change rows in place
 (design §4), and whether the scene's own allocation shows in a frame's cost is measured with the painter, not assumed.
 
+### 4.6 The library as an ES-DE theme sees it, and its screen **[M 2026-11-08]**
+
+The painter takes plain data from `LibraryModel` (stage 3's curated view is not built); `emusen-qt-models` writes it,
+`esde_shelves.rs`, and nothing of the painter reaches into the clients.
+
+**The texts.** One refresh, off the GUI thread as `lists_of` is, writes four texts, published as `LibraryModel`
+properties after the refresh that changed them and never on a step:
+
+| Property | Text | From |
+|---|---|---|
+| `themed` | `LibraryStyle` is `Theme` and `BigPictureTheme` names a folder | the player's settings (`clients::app_settings`) |
+| `esdeSettings` | `{"style", "theme", "choices", "interface", "collections", "show_hidden"}`; the choices stored under the theme folder's absolute path less a trailing separator, as Mistress's `ThemeSettingsWindow.Key` keys them | the same |
+| `esdeShelves` | `[{"system", "esde_system", "esde_full_name", "kind", "games"}]`, a shelf for each of the runtime's shelves with games, in their order; `kind` is `regular` (the collections are the gamelist rules'); the games in the library's order | the systems table's `esde_*` fields (the `shelves` call reads the same table) |
+| `esdeMedia` | `{system: {type: {name: path}}}` | `MediaIndex`, below |
+| `esdePresence` | `{system: [type]}`: the types some game of the shelf has, the theme's variant triggers | derived from the index |
+
+Each game carries every field Mistress's `SceneGame` carried: `file`, `name`, `sort_name`, `custom_sort_name`,
+`description`, `developer`, `publisher`, `genre`, `players`, `release_date` (the metadata's `yyyy-MM-dd`), `rating`
+(0–1 or null), `last_played` (seconds since 1970, 0 for never), `play_count`, `play_time` (seconds), `favourite`,
+`completed`, `kid_game`, `broken`, `hidden`, `not_counted`, `hide_metadata`, `controller`, `alt_emulator`, `emulator`
+(the alternative emulator's name), `manual` (the index has a manual), `folder`, `folder_path`, `folder_link`. The
+metadata is the scraper's `metadata` read (EmuSen_Backend.md §30.3), its edit else ScreenScraper's else the default,
+chosen there and not again here; the plays are games.db's `records`. While the own look is shown the three library
+texts are `[]`, `{}` and `{}` and no game's metadata is read, so the own look's refresh costs what it did.
+
+**`MediaIndex`.** One walk per refresh of each type folder, `<root>/<esde_system>/<folder>/<name>.<ext>`, ES-DE's own
+layout, under the media store and then `EsdeMediaDirectory`, the type folders taken from the scraper's `kinds` table; a
+key keeps the first file found, so the store wins as it does in the scraper's order. A game's cover is then set from
+the scraper's own `media` answer, which the library already reads for every game, so a cover the player placed, a
+package's, OpenEmu's or another game's chosen cover is the index's too. The index is kept in the client source with
+the scraper's `stamp` of each shelf and the two roots, and an unchanged tree is not walked again. Named differences
+from the scraper's `Locate`: a packaged game's own media of a type other than the cover is not indexed; where two
+files of one name differ in extension, the index keeps the first by name (`.jpg` before `.png`) where `Locate` tries
+`.png` first.
+
+**The screen.** `Screens` gains `Esde` and the property `themed`, which `emusen-qt` binds from `LibraryModel.themed`.
+`step_in(themed, shown, ask)` is the whole rule; with the own look it is `step` unchanged. With a theme:
+
+| Shown | Ask | Then |
+|---|---|---|
+| Home, Choose a console, the grid, its search | the look changed (`Restyled`), as Moonrise gives way | Esde |
+| Esde | the look changed back | Home |
+| Esde | Start (`home`) | the Home card at its first page |
+| Esde | Select (`list`) | the List card, ES-DE's options |
+| Esde | B | nothing: the view's own, going back from a gamelist (decided 2026-11-08) |
+| Esde, the List card, the Pause Card | play | the game |
+| the Home card, the List card | B, Start, or any action | Esde |
+| the game | the menu chord | the Pause Card |
+| the Pause Card | Back to Library | Esde |
+| the game, the Pause Card | the game closed | Esde |
+
+**Measured on 2026-11-08** (`tests/esde.rs`, debug build): the GUI thread's part of a refresh at 9,000 synthetic games
+with descriptions, a shelves text over 2 MB (comparing the texts, moving the read in, making the changed texts
+QStrings) took 0.65 and 0.67 ms, best of three each, under the 2 ms gate.
+
+**Owed.** `folder_path` is empty: the folder below the console folder is Galaxia's rule (`game_folders::of`), which no
+client surface answers; the library's scan answer gaining each game's folder is the proposed form. Until then a
+game's media is found by its stem alone. The metadata is one scraper read a game; its cost at a library's scale is
+measured with the real library.
+
 ---
 
 ## 5. The stable developer surface

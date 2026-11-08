@@ -5,6 +5,7 @@ pub mod card;
 pub mod card_model;
 pub mod clients;
 pub mod clock;
+pub mod esde_shelves;
 pub mod game_model;
 pub mod games;
 pub mod help;

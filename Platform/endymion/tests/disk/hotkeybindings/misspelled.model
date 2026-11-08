@@ -1,0 +1,12 @@
+{
+  "FastForward": "Tab",
+  "Rewind": "Back",
+  "SaveState": "F5",
+  "LoadState": "F8",
+  "TogglePause": "P",
+  "ToggleFullscreen": "F11",
+  "ExitToLibrary": "Escape",
+  "Screenshot": "F9",
+  "ToggleBigPicture": "F10",
+  "FrameAdvance": "OemPeriod"
+}

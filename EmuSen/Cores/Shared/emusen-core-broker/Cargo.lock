@@ -423,8 +423,13 @@ dependencies = [
 name = "emusen-endymion"
 version = "0.1.0"
 dependencies = [
+ "emusen-galaxia",
+ "emusen-suggest",
+ "indexmap",
  "libloading 0.9.0",
  "md-5",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

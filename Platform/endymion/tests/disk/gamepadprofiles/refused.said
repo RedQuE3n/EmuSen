@@ -1,0 +1,1 @@
+<config>/gamepadprofiles.json: The JSON value could not be converted to System.Int32. Path: $.SNES.Profiles.Mine.one | LineNumber: 0 | BytePositionInLine: 38. Falling back to defaults.

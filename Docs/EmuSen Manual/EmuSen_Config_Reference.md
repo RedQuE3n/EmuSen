@@ -263,6 +263,8 @@ This is deliberately a *directory setting* rather than a bundled asset. **EmuSen
 
 ### 3.6 `keybindings.json` / `gamepadbindings.json` — one map per console
 
+Since 2026-11-08 these files, `gamepadprofiles.json` and `hotkeybindings.json` are read and written by Rust Endymion through the platform library, not by `ConfigFile`; their shapes below are unchanged (`EmuSen_Input.md` §5.2).
+
 Both were flat `PadButton -> Key` (or `-> SDL.GamepadButton`) dictionaries, shared by every core. They are now nested one level, keyed by console name:
 
 ```json

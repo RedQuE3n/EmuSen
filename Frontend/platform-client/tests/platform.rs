@@ -1,10 +1,11 @@
 //! The client against the platform library built from this commit: the interface matched exactly, Galaxia's tree and
 //! models in a scratch tree, the library scanning a synthetic game, simulated pads, the firmware folders, the scrape
-//! service, and failures carrying the words their own last_error gave.
+//! service, Galaxia's files and Endymion's binding files, and failures carrying the words their own last_error gave.
 
 use emusen_client_fixture::{World, library, test_core};
 use emusen_platform_client::firmware::FoldersRequest;
-use emusen_platform_client::galaxia::consts::{DIR_CONFIG, MODEL_APP_SETTINGS};
+use emusen_platform_client::bindings::consts as bind;
+use emusen_platform_client::galaxia::consts::{DIR_CONFIG, DIR_LIBRARY, DIR_MEDIA, FILE_GAMES, FILE_MEDIA, FILE_SETTINGS, MODEL_APP_SETTINGS};
 use emusen_platform_client::library::{Library, ScanRequest};
 use emusen_platform_client::pads::{Pads, SimPad, SimSet, consts as pad};
 use emusen_platform_client::scrape::ScraperConfig;
@@ -37,6 +38,35 @@ fn galaxia_s_tree_and_models_are_the_scratch_tree_s() {
     let back = p.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
     assert_eq!(back["RomDirectory"], settings["RomDirectory"]);
     assert!(p.config_path(None, "appsettings.json").unwrap().is_file());
+}
+
+#[test]
+fn galaxia_names_its_files_and_endymion_reads_and_writes_the_binding_files() {
+    let world = World::new("bindings");
+    let p = Platform::load(library()).unwrap();
+    assert_eq!(p.file(FILE_SETTINGS).unwrap(), p.config_path(None, "appsettings.json").unwrap());
+    assert_eq!(p.file(FILE_GAMES).unwrap(), p.directory(DIR_LIBRARY).unwrap().unwrap().join("games.db"));
+    assert_eq!(p.file(FILE_MEDIA).unwrap(), p.directory(DIR_MEDIA).unwrap().unwrap().join("media.db"));
+    assert!(p.file(FILE_SETTINGS).unwrap().starts_with(&world.root));
+    assert!(matches!(p.file(99), Err(Error::Status { .. })));
+
+    let keys = p.bindings_load(bind::KEYS, &["NES", "SNES"]).unwrap();
+    assert_eq!(keys["SNES"], p.bindings_defaults(bind::KEYS).unwrap());
+    let mut gamepad = p.bindings_load(bind::GAMEPAD, &["SNES"]).unwrap();
+    gamepad["Players"]["SNES"]["2"] = json!({ "A": "west" });
+    p.bindings_save(bind::GAMEPAD, &gamepad).unwrap();
+    let written = std::fs::read_to_string(p.config_path(None, "gamepadbindings.json").unwrap()).unwrap();
+    assert!(written.contains("\"SNES Player 2\": {\n    \"A\": \"West\""), "{written}");
+    assert_eq!(p.bindings_load(bind::GAMEPAD, &["SNES"]).unwrap()["Players"]["SNES"]["2"]["A"], "West");
+
+    std::fs::write(p.config_path(None, "hotkeybindings.json").unwrap(), r#"{"FastFoward": "Tab"}"#).unwrap();
+    assert_eq!(p.bindings_load(bind::HOTKEYS, &[]).unwrap(), p.bindings_defaults(bind::HOTKEYS).unwrap());
+    let said = p.diagnostics().unwrap();
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(said[0].ends_with("hotkeybindings.json: 'FastFoward' is not a valid HotkeyAction. Did you mean 'FastForward'? Falling back to defaults."), "{said:?}");
+    assert!(matches!(p.bindings_defaults(bind::PROFILES), Err(Error::Status { .. })));
+    let Err(Error::Status { words, .. }) = p.bindings_save(bind::KEYS, &json!({ "NES": { "Up": "Upp" } })) else { panic!("a misspelled key is not saved") };
+    assert!(words.contains("'Upp' is not a valid Key. Did you mean 'Up'?"), "{words}");
 }
 
 #[test]

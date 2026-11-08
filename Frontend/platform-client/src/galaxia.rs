@@ -1,6 +1,6 @@
-//! Galaxia through the platform library: where the tree's directories are, a config file's path, and the config models
-//! (the player's settings) as the documents Galaxia binds. A model crosses as JSON and stays Galaxia's: its fields are
-//! not restated here, so a model has one owner.
+//! Galaxia through the platform library: where the tree's directories and Galaxia's files are, a config file's path,
+//! and the config models (the player's settings) as the documents Galaxia binds. A model crosses as JSON and stays
+//! Galaxia's: its fields are not restated here, so a model has one owner.
 
 use crate::error::Result;
 use crate::out::{json, string, text, to_json};
@@ -8,7 +8,7 @@ use crate::platform::Platform;
 use serde_json::Value;
 use std::path::PathBuf;
 
-/// The directories of the tree, EMUSEN_GALAXIA_DIR_*, and the models, EMUSEN_GALAXIA_MODEL_*.
+/// The directories of the tree, EMUSEN_GALAXIA_DIR_*, the files, EMUSEN_GALAXIA_FILE_*, and the models, EMUSEN_GALAXIA_MODEL_*.
 pub mod consts {
     pub use crate::raw::{
         EMUSEN_GALAXIA_DIR_ARTWORK as DIR_ARTWORK, EMUSEN_GALAXIA_DIR_CHEATS as DIR_CHEATS,
@@ -19,7 +19,9 @@ pub mod consts {
         EMUSEN_GALAXIA_DIR_SCREENSHOTS as DIR_SCREENSHOTS, EMUSEN_GALAXIA_DIR_SHADERS as DIR_SHADERS,
         EMUSEN_GALAXIA_DIR_THEMES as DIR_THEMES, EMUSEN_GALAXIA_MODEL_APP_SETTINGS as MODEL_APP_SETTINGS,
         EMUSEN_GALAXIA_MODEL_AUDIO_CONFIG as MODEL_AUDIO_CONFIG, EMUSEN_GALAXIA_MODEL_CHEAT_FILE as MODEL_CHEAT_FILE,
-        EMUSEN_GALAXIA_MODEL_GRAPHICS_CONFIG as MODEL_GRAPHICS_CONFIG,
+        EMUSEN_GALAXIA_MODEL_GRAPHICS_CONFIG as MODEL_GRAPHICS_CONFIG, EMUSEN_GALAXIA_FILE_GAMES as FILE_GAMES,
+        EMUSEN_GALAXIA_FILE_MEDIA as FILE_MEDIA, EMUSEN_GALAXIA_FILE_RECORDS as FILE_RECORDS, EMUSEN_GALAXIA_FILE_SETTINGS as FILE_SETTINGS,
+        EMUSEN_GALAXIA_FILE_STATES as FILE_STATES, EMUSEN_GALAXIA_FILE_THEMES as FILE_THEMES,
     };
 }
 
@@ -28,6 +30,12 @@ impl Platform {
     pub fn directory(&self, which: u32) -> Result<Option<PathBuf>> {
         let bytes = self.read(|o, l| unsafe { self.lib.emusen_galaxia_directory(which, o, l) })?;
         bytes.map(|b| string("directory", b).map(PathBuf::from)).transpose()
+    }
+
+    /// A file of Galaxia's, by its EMUSEN_GALAXIA_FILE_* number: the settings file or a store.
+    pub fn file(&self, which: u32) -> Result<PathBuf> {
+        let bytes = self.read(|o, l| unsafe { self.lib.emusen_galaxia_file(which, o, l) })?.unwrap_or_default();
+        string("file", bytes).map(PathBuf::from)
     }
 
     /// A config file's path: a category is a subdirectory of the config directory, none the directory itself.

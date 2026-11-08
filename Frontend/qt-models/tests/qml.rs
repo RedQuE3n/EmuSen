@@ -31,7 +31,6 @@ fn qml_reads_the_library_model_s_rows_through_its_roles() {
     let mut settings = platform.model_new(MODEL_APP_SETTINGS).unwrap();
     settings["RomDirectory"] = serde_json::json!(world.root.join("Roms").to_str().unwrap());
     platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
-    assert!(scene.set_property("scene", "gamesDatabase", world.root.join("games.db").to_str().unwrap()));
     assert!(scene.set_property("scene", "platformLibrary", library().to_str().unwrap()));
     let mut waited = 0;
     while scene.property("scene", "rows") != "4" && waited < 5000 {

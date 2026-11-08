@@ -1,0 +1,9 @@
+{
+  "SNES": { "A": "East" },
+  "SNES Player 2": { "A": "West" },
+  "SNES Player 1": { "A": "North" },
+  "SNES Player x": { "A": "South" },
+  "NES Player 3": { "B": "North" },
+  "snes Player 2": { "B": "West" },
+  "GBA Player 2": { "A": "Back" }
+}

@@ -1,0 +1,16 @@
+// Edited by hand: every rule a profile is read by.
+{
+  "SNES": {
+    "default": "  couch ",
+    "Profiles": {
+      " Couch ": { "1": { "A": "West" }, "2": { "A": "North" }, "9": { "A": "South" }, "0": { "B": "East" } },
+      "couch": { "1": { "A": "East" } },
+      "Default": { "1": { "A": "South" } },
+      "   ": { "1": { "A": "South" } },
+      "No player one": { "2": { "A": "South" } },
+      "Arcade": { "1": { "Y": "North", "X": "West" }, },
+    },
+    "Games": { "Super Metroid": "arcade", "Gone": "Nowhere", "": "Arcade", "Chrono Trigger": "default" },
+  },
+  "nes": { "Default": "Missing", "Profiles": { "Two": { "1": { "A": "East", "B": "South" } } } },
+}

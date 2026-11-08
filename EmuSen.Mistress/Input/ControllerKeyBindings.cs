@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
 using Avalonia.Input;
-using EmuSen.Galaxia;
+using EmuSen.Endymion.Input;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Mistress.Input
@@ -35,58 +34,20 @@ namespace EmuSen.Mistress.Input
             foreach (ControllerKeyMap map in _byConsole.Values) map.ResetToDefaults();
         }
 
-        private static readonly ConfigFile<Dictionary<string, Dictionary<PadControl, Key>>> File = new("keybindings.json");
-
-        // Only ever asks "is this the flat shape or the per-console one" - JsonElement
-        // accepts any value, so a bad enum still reaches the typed load below and is
-        // reported there exactly once - see EmuSen_Config_Reference.md §3.6.
-        private static readonly ConfigFile<Dictionary<string, JsonElement>> ShapeProbe = new("keybindings.json");
-
-        private static readonly ConfigFile<Dictionary<PadControl, Key>> LegacyFile = new("keybindings.json");
-
+        // keybindings.json is Endymion's in the platform library, its one reader and writer - see EmuSen_Input.md §5.2.
         public bool Save()
         {
-            var payload = new Dictionary<string, Dictionary<PadControl, Key>>(StringComparer.OrdinalIgnoreCase);
+            var payload = new Dictionary<string, Dictionary<PadControl, Key>>();
             foreach (var kv in _byConsole) payload[kv.Key] = kv.Value.ButtonToKey;
-            return File.Save(payload);
+            return BindingFiles.Save(BindingFile.Keys, payload);
         }
 
         public static ControllerKeyBindings Load(IEnumerable<string> consoles)
         {
             var bindings = new ControllerKeyBindings(consoles);
-            if (ShapeProbe.Load() is not { Count: > 0 } probe) return bindings;
-
-            // A flat file predates per-console bindings, so every console inherits it - that is what it used to mean.
-            if (IsLegacyFlat(probe))
-            {
-                if (LegacyFile.Load() is { Count: > 0 } shared)
-                {
-                    foreach (ControllerKeyMap map in bindings._byConsole.Values)
-                    {
-                        map.Replace(new Dictionary<PadControl, Key>(shared));
-                        map.AddDefaultsForNewControls();
-                    }
-                }
-                return bindings;
-            }
-
-            if (File.Load() is not { } loaded) return bindings;
-
-            foreach (var kv in loaded)
-            {
-                if (kv.Value is not { Count: > 0 }) continue;
-                ControllerKeyMap map = bindings.For(kv.Key);
-                map.Replace(kv.Value);
-                map.AddDefaultsForNewControls();
-            }
+            foreach (var (console, map) in BindingFiles.Load<Dictionary<string, Dictionary<PadControl, Key>>>(BindingFile.Keys, bindings._byConsole.Keys))
+                bindings.For(console).Replace(map);
             return bindings;
-        }
-
-        // The values are keys in the old shape and objects in the new one.
-        private static bool IsLegacyFlat(Dictionary<string, JsonElement> probe)
-        {
-            foreach (var kv in probe) return kv.Value.ValueKind != JsonValueKind.Object;
-            return false;
         }
     }
 }

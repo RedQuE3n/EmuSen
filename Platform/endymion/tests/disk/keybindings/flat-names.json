@@ -1,0 +1,2 @@
+// A file from before per-console bindings, edited to names.
+{ "Up": "W", "Down": "S", "Left": "A", "Right": "D", "B": "J", "A": "K", "Start": "Return", }

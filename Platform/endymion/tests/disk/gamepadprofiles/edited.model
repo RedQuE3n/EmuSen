@@ -1,0 +1,45 @@
+{
+  "SNES": {
+    "Default": null,
+    "Profiles": {
+      "Couch": {
+        "1": {
+          "A": "West",
+          "L3": "LeftStick",
+          "R3": "RightStick"
+        },
+        "2": {
+          "A": "North",
+          "L3": "LeftStick",
+          "R3": "RightStick"
+        }
+      },
+      "Arcade": {
+        "1": {
+          "Y": "North",
+          "X": "West",
+          "L3": "LeftStick",
+          "R3": "RightStick"
+        }
+      }
+    },
+    "Games": {
+      "Super Metroid": "Arcade",
+      "Chrono Trigger": "Default"
+    }
+  },
+  "nes": {
+    "Default": null,
+    "Profiles": {
+      "Two": {
+        "1": {
+          "A": "East",
+          "B": "South",
+          "L3": "LeftStick",
+          "R3": "RightStick"
+        }
+      }
+    },
+    "Games": null
+  }
+}

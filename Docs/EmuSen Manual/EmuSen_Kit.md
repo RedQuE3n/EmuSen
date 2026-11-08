@@ -1053,7 +1053,7 @@ Endymion reporting the family. kit-core stands without EmuSen and names no SDL n
 pads through the same platform library, could not have read kit-core's copy, so the C# table would have stayed a second
 owner. So Endymion owns it: `emusen_endymion::family` holds the table moved from Mistress's `PadFamilies.cs`, which is
 deleted, and `emusen_endymion_pads_get(…, EMUSEN_ENDYMION_PADS_FAMILY)` answers it, an extension of the existing call
-(platform interface 40, `EmuSen_RustPlatform.md` §48). Mistress's help bar and the Qt reader both read that one answer;
+(platform interface 41, `EmuSen_RustPlatform.md` §48). Mistress's help bar and the Qt reader both read that one answer;
 kit-core's `PadFamily` stays the kit's drawing of a family, and the reader pairs the header's four numbers with it by
 name (`reading::family_of`).
 

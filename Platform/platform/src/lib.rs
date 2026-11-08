@@ -11,6 +11,7 @@ pub mod dianash;
 pub mod disc;
 pub mod endymion;
 pub mod endymion_devices;
+pub mod endymion_bindings;
 pub mod cheats;
 // The frontend API's stable header, emusen_crystal.h, exported beside this interface as step B7 builds it (EmuSen_Backend.md §29).
 pub mod crystal;
@@ -39,7 +40,7 @@ pub mod systems;
 pub mod systems_debug;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 40;
+pub const ABI_VERSION: u32 = 41;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {
@@ -280,6 +281,7 @@ mod tests {
         exported.extend(exports_in(include_str!("galaxia_config.rs")));
         exported.extend(exports_in(include_str!("endymion.rs")));
         exported.extend(exports_in(include_str!("endymion_devices.rs")));
+        exported.extend(exports_in(include_str!("endymion_bindings.rs")));
         exported.extend(exports_in(include_str!("serenity.rs")));
         exported.extend(exports_in(include_str!("serenity_device.rs")));
         exported.extend(exports_in(include_str!("serenity_filters.rs")));

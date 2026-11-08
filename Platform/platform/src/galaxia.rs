@@ -64,6 +64,16 @@ pub unsafe extern "C" fn emusen_galaxia_directory(which: u32, out: *mut u8, len:
     answer(directory.and_then(|which| tree::tree().directory(which).map(|d| d.to_string_lossy().into_owned()).ok_or_else(absent)), out, len)
 }
 
+/// A file of Galaxia's by its `EMUSEN_GALAXIA_FILE_*` number: the settings file or a store, as a path in the process's tree.
+///
+/// # Safety
+/// `out` must be valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_file(which: u32, out: *mut u8, len: usize) -> i64 {
+    let file = emusen_galaxia::stores::File::from_u32(which).ok_or_else(|| fail(status::BAD_ARGUMENT, format!("no file {which}")));
+    answer(file.map(|file| file.path(&tree::tree()).to_string_lossy().into_owned()), out, len)
+}
+
 /// Moves one of the three redirects, or with a null path restores the real location.
 ///
 /// # Safety

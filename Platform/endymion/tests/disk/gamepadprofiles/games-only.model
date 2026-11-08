@@ -1,0 +1,9 @@
+{
+  "N64": {
+    "Default": null,
+    "Profiles": {},
+    "Games": {
+      "Mario": "Default"
+    }
+  }
+}

@@ -5,7 +5,8 @@
  * Serenity's shaders and device, the file services, the shell, and the frontend API (emusen_crystal.h), which a front
  * end calls for what both offer. This header is the components' own interface; since 38 the systems table, the cheat
  * codecs, a firmware install, the card manager and a cheat database's install are the frontend API's alone
- * (EmuSen_RustPlatform.md, section 47.24); since 39 scraping is the emusen.scrape service's table alone (47.25). The
+ * (EmuSen_RustPlatform.md, section 47.24); since 39 scraping is the emusen.scrape service's table alone (47.25); since
+ * 40 Endymion reads and writes the four binding files and Galaxia names its files (EmuSen_Input.md, section 5.2). The
  * rules are argued in EmuSen_RustPlatform.md, section 3, and are the core ABI's (emusen_core.h) one layer up:
  *
  *  - The host calls and the library returns. The library never calls the host: what the C# reports through a
@@ -41,7 +42,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 40u
+#define EMUSEN_PLATFORM_ABI_VERSION 41u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -119,6 +120,17 @@ int32_t emusen_galaxia_init(const uint8_t *base, size_t base_len, const uint8_t 
 
 /* A directory of the process's tree, by its EMUSEN_GALAXIA_DIR_* number. */
 int64_t emusen_galaxia_directory(uint32_t which, uint8_t *out, size_t len);
+
+/* Galaxia's files a front end opens, by number; since 40. Each is named here and nowhere else. */
+#define EMUSEN_GALAXIA_FILE_SETTINGS 0u /* AppSettings' file, appsettings.json, in the config directory itself */
+#define EMUSEN_GALAXIA_FILE_GAMES 1u    /* games.db, the library's games and records, in the library folder */
+#define EMUSEN_GALAXIA_FILE_STATES 2u   /* states.db, the runtime's record of each save state, in the library folder */
+#define EMUSEN_GALAXIA_FILE_RECORDS 3u  /* records.db, the C# front end's records, beside states.db */
+#define EMUSEN_GALAXIA_FILE_MEDIA 4u    /* media.db, the scraper's store, in the media folder */
+#define EMUSEN_GALAXIA_FILE_THEMES 5u   /* themes.db, the installed big-picture themes, in the themes folder */
+
+/* A file of Galaxia's, by its EMUSEN_GALAXIA_FILE_* number, as a path in the process's tree; whether it exists is not asked. */
+int64_t emusen_galaxia_file(uint32_t which, uint8_t *out, size_t len);
 
 /* Moves a redirect, by its EMUSEN_GALAXIA_OVERRIDE_* number; a null directory restores the real location. */
 int32_t emusen_galaxia_set_override(uint32_t which, const uint8_t *directory, size_t directory_len);
@@ -866,6 +878,40 @@ int32_t emusen_endymion_pad_resolve(uint32_t axis, double analog, uint32_t held,
 int32_t emusen_endymion_pad_combine(double analog, uint32_t negative, uint32_t positive, double *out);
 int64_t emusen_endymion_pad_controls_for(const uint32_t *buttons, size_t buttons_len, const uint32_t *axes, size_t axes_len, uint32_t *out, size_t cap);
 
+/* ---- Endymion: the binding files (EmuSen_Input.md, section 5.2); since 40 ---- */
+
+/* The four files, in the config directory, by number. */
+#define EMUSEN_ENDYMION_BINDINGS_KEYS 0u     /* keybindings.json: by console, a pad control to a keyboard key */
+#define EMUSEN_ENDYMION_BINDINGS_GAMEPAD 1u  /* gamepadbindings.json: by console, and by player past the first, a pad button to a gamepad's */
+#define EMUSEN_ENDYMION_BINDINGS_PROFILES 2u /* gamepadprofiles.json: by console, named sets of gamepad maps by player */
+#define EMUSEN_ENDYMION_BINDINGS_HOTKEYS 3u  /* hotkeybindings.json: an emulator action to a keyboard key */
+
+/*
+ * A model crosses as compact JSON. A map's members are words, written by name and read by name in any case or by number:
+ * PadControl, PadButton, SDL3's gamepad buttons as `SDL_GamepadButton` names them without its prefix (South, DPadUp),
+ * Avalonia's key names (Return, OemPeriod) and the actions (FastForward, Rewind, SaveState, LoadState, TogglePause,
+ * ToggleFullscreen, ExitToLibrary, Screenshot, ToggleBigPicture, FrameAdvance).
+ *   KEYS:     {"<console>": {"<control>": "<key>", ...}, ...}
+ *   GAMEPAD:  {"Consoles": {"<console>": {"<button>": "<gamepad button>", ...}}, "Players": {"<console>": {"<player>": {...}}}}
+ *   PROFILES: {"<console>": {"Default": "<profile>" or null, "Profiles": {"<name>": {"<player>": {...}}}, "Games": {"<game>": "<profile>"} or null}}
+ *   HOTKEYS:  {"<action>": "<key>", ...}
+ */
+
+/*
+ * A file's model as a program starts with it. consoles is the console names the program knows, each followed by a NUL,
+ * for KEYS and GAMEPAD: each is given its defaults, then the file's maps replace them, a file from before consoles giving
+ * its one map to each; a map read from a file written before a control existed gains that control's default where its
+ * key is free. A profile is kept only by the profiles' rules. A file that will not read gives what no file gives, with
+ * "<path>: <words> Falling back to defaults." queued as a diagnostic.
+ */
+int64_t emusen_endymion_bindings_load(uint32_t which, const uint8_t *consoles, size_t consoles_len, uint8_t *out, size_t len);
+
+/* Saves a model, any JSON it binds by the rules of reading a file, as its file in serde's spelling, through a temp file and a rename. 0, PARSE or IO. */
+int32_t emusen_endymion_bindings_save(uint32_t which, const uint8_t *document, size_t document_len);
+
+/* One map at its defaults: a console's keys, a console's gamepad buttons, or the hotkeys. BAD_ARGUMENT for PROFILES. */
+int64_t emusen_endymion_bindings_defaults(uint32_t which, uint8_t *out, size_t len);
+
 /* ---- Endymion: the device half (EmuSen_Audio_Sync.md, section 7; EmuSen_Input.md, sections 4 and 8) ---- */
 
 /*
@@ -1002,7 +1048,7 @@ int64_t emusen_endymion_pads_open(const emusen_endymion_pads *pads, uint64_t *ou
 #define EMUSEN_ENDYMION_PADS_ANY_PRESSED 8u  /* the first SDL button held on a pad the interface reads, -1 for none */
 #define EMUSEN_ENDYMION_PADS_LAST_RESCAN 9u  /* .NET ticks since the handle was made */
 #define EMUSEN_ENDYMION_PADS_VENDOR_PRODUCT 10u /* as SIM_PAD_VENDOR_PRODUCT; read while open, the last reading once closed; under Steam Input, the controller behind the virtual pad */
-#define EMUSEN_ENDYMION_PADS_FAMILY 11u /* since 40: the printing on the pad's buttons, EMUSEN_ENDYMION_FAMILY_*; SDL's type first, the pad's name where SDL does not know */
+#define EMUSEN_ENDYMION_PADS_FAMILY 11u /* since 41: the printing on the pad's buttons, EMUSEN_ENDYMION_FAMILY_*; SDL's type first, the pad's name where SDL does not know */
 
 #define EMUSEN_ENDYMION_FAMILY_GENERIC 0u     /* not known: a front end draws the buttons by position */
 #define EMUSEN_ENDYMION_FAMILY_XBOX 1u

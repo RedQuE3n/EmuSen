@@ -1,9 +1,10 @@
 //! The library view's source over the real clients, built from this commit, in a scratch tree: the scan's request is
-//! read from the player's settings and the shelves, and a refresh of a synthetic game makes the places and its console.
+//! read from the player's settings and the shelves, games.db is where Galaxia names it, and a refresh of a synthetic game
+//! makes the places and its console.
 
 use emusen_client_fixture::{library, World};
 use emusen_crystal_client::Config;
-use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
+use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS};
 use emusen_platform_client::Platform;
 use emusen_qt_models::clients::ClientSource;
 use emusen_qt_models::library::{refresh, Kind};
@@ -19,7 +20,7 @@ fn the_client_source_scans_the_player_s_folder_and_makes_the_rows() {
     platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
 
     let none = Config { development: false, cores: Some(Vec::new()), player_cores: Some(Vec::new()) };
-    let source = ClientSource::open(path, &none, world.root.join("games.db").to_str().unwrap()).unwrap();
+    let source = ClientSource::open(path, &none).unwrap();
     let request = source.scan_request().unwrap();
     assert_eq!(request.roots, [roms.to_str().unwrap()]);
     let shelves: Vec<String> = source.runtime.shelves().unwrap().into_iter().map(|s| s.system).collect();
@@ -43,7 +44,9 @@ fn the_client_source_scans_the_player_s_folder_and_makes_the_rows() {
     );
     let nes = source.runtime.systems().unwrap().into_iter().find(|s| s.id == "nes").unwrap();
     assert_eq!((rows[3].name.as_str(), rows[3].hue), (nes.display_name.as_str(), nes.look.hue), "the table's name and hue");
+    let games = platform.file(FILE_GAMES).unwrap();
+    assert!(games.starts_with(&world.root) && games.is_file(), "games.db where Galaxia names it: {games:?}");
 
-    let refused = ClientSource::open(world.root.join("libnot.so").to_str().unwrap(), &none, "games.db").err().expect("no library there");
+    let refused = ClientSource::open(world.root.join("libnot.so").to_str().unwrap(), &none).err().expect("no library there");
     assert!(refused.contains("libnot.so"), "{refused}");
 }

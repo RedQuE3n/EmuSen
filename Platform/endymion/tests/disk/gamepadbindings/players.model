@@ -1,0 +1,96 @@
+{
+  "NES": {
+    "Up": "DPadUp",
+    "Down": "DPadDown",
+    "Left": "DPadLeft",
+    "Right": "DPadRight",
+    "B": "South",
+    "A": "East",
+    "Y": "West",
+    "X": "North",
+    "L": "LeftShoulder",
+    "R": "RightShoulder",
+    "Start": "Start",
+    "Select": "Back",
+    "L3": "LeftStick",
+    "R3": "RightStick"
+  },
+  "SNES": {
+    "A": "East",
+    "L3": "LeftStick",
+    "R3": "RightStick"
+  },
+  "GB": {
+    "Up": "DPadUp",
+    "Down": "DPadDown",
+    "Left": "DPadLeft",
+    "Right": "DPadRight",
+    "B": "South",
+    "A": "East",
+    "Y": "West",
+    "X": "North",
+    "L": "LeftShoulder",
+    "R": "RightShoulder",
+    "Start": "Start",
+    "Select": "Back",
+    "L3": "LeftStick",
+    "R3": "RightStick"
+  },
+  "N64": {
+    "Up": "DPadUp",
+    "Down": "DPadDown",
+    "Left": "DPadLeft",
+    "Right": "DPadRight",
+    "B": "South",
+    "A": "East",
+    "Y": "West",
+    "X": "North",
+    "L": "LeftShoulder",
+    "R": "RightShoulder",
+    "Start": "Start",
+    "Select": "Back",
+    "L3": "LeftStick",
+    "R3": "RightStick"
+  },
+  "PS1": {
+    "Up": "DPadUp",
+    "Down": "DPadDown",
+    "Left": "DPadLeft",
+    "Right": "DPadRight",
+    "B": "South",
+    "A": "East",
+    "Y": "West",
+    "X": "North",
+    "L": "LeftShoulder",
+    "R": "RightShoulder",
+    "Start": "Start",
+    "Select": "Back",
+    "L3": "LeftStick",
+    "R3": "RightStick"
+  },
+  "SNES Player 1": {
+    "A": "North",
+    "L3": "LeftStick",
+    "R3": "RightStick"
+  },
+  "SNES Player x": {
+    "A": "South",
+    "L3": "LeftStick",
+    "R3": "RightStick"
+  },
+  "SNES Player 2": {
+    "B": "West",
+    "L3": "LeftStick",
+    "R3": "RightStick"
+  },
+  "NES Player 3": {
+    "B": "North",
+    "L3": "LeftStick",
+    "R3": "RightStick"
+  },
+  "GBA Player 2": {
+    "A": "Back",
+    "L3": "LeftStick",
+    "R3": "RightStick"
+  }
+}

@@ -31,9 +31,9 @@ pub fn parse<T: DeserializeOwned>(text: &str) -> Result<T, String> {
     jsonc_parser::parse_to_serde_value(text, &options()).map_err(|error| sentence(error.to_string()))
 }
 
-/// Words ended as a sentence, since a diagnostic follows them with one of its own.
+/// Words ended as a sentence, since a diagnostic follows them with one of its own; a question ends one too.
 fn sentence(mut words: String) -> String {
-    if !words.ends_with('.') {
+    if !words.ends_with(['.', '?']) {
         words.push('.');
     }
     words

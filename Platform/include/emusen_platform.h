@@ -42,7 +42,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 41u
+#define EMUSEN_PLATFORM_ABI_VERSION 42u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -1269,13 +1269,23 @@ int32_t emusen_serenity_device_close(const emusen_serenity_device *device);
 int32_t emusen_serenity_device_free(emusen_serenity_device *device);
 int64_t emusen_serenity_device_name(const emusen_serenity_device *device, uint8_t *out, size_t cap);
 
+/* The same device, with the extensions a host's own renderer needs enabled, Vulkan's names separated by spaces:
+ * `instance` on the instance and `device` on the device, so that the host can adopt both (EmuSen_Qt.md section 1.8).
+ * Null when one is not offered, with words that name it. Since interface 42. */
+emusen_serenity_device *emusen_serenity_device_new_for(const uint8_t *name, size_t name_len, int32_t validate, const uint8_t *instance, size_t instance_len, const uint8_t *device, size_t device_len);
+
 /* What the validation layer has said of the device's calls, on whatever thread: each finding followed by a NUL, removed once a buffer has taken them all. */
 int64_t emusen_serenity_device_findings(const emusen_serenity_device *device, uint8_t *out, size_t cap);
 
 #define EMUSEN_SERENITY_RAW_INSTANCE 0u /* the VkInstance */
 #define EMUSEN_SERENITY_RAW_DEVICE 1u   /* the VkDevice */
+#define EMUSEN_SERENITY_RAW_PHYSICAL 2u /* the VkPhysicalDevice, since interface 42 */
+#define EMUSEN_SERENITY_RAW_QUEUE 3u    /* the graphics VkQueue, index 0 of its family, since interface 42 */
+#define EMUSEN_SERENITY_RAW_QUEUE_FAMILY 4u /* that queue's family, since interface 42 */
 
-/* Vulkan's own handle, for a caller that makes a call of its own on it; zero for a closed device. The device's queue is the library's: nothing else submits to it. */
+/* Vulkan's own handle, for a caller that makes a call of its own on it; zero for a closed device. The device's queue is
+ * the library's: a host that adopted the device (emusen_serenity_device_new_for) submits to it too, only from the one
+ * thread that makes every chain call that submits, and nothing else does (EmuSen_Qt.md section 1.8). */
 uint64_t emusen_serenity_device_raw(const emusen_serenity_device *device, uint32_t which);
 
 /* The device's UUID into `uuid` (16 bytes); 1 when it can export images and semaphores as opaque file descriptors, 0 when it cannot (EmuSen_DevicePicture.md, sections 2 and 4). Since interface 11. */
@@ -1418,6 +1428,20 @@ int32_t emusen_serenity_chain_render_lent(const emusen_serenity_chain *chain, in
  * interface 11.
  */
 int32_t emusen_serenity_chain_present(const emusen_serenity_chain *chain, const emusen_serenity_shown *shown, int32_t width, int32_t height, int32_t wait_free);
+
+/* The image a draw left its picture in: Vulkan's VkImage and VkImageView as integers, VkFormat and VkImageLayout as
+ * numbers, valid until the chain's next call; `size` is set by the caller. Since interface 42. */
+typedef struct {
+    uint32_t size;
+    uint32_t width, height, format, layout, reserved;
+    uint64_t image, view;
+} emusen_serenity_drawn;
+
+/* Every pass run for a view of `width` by `height`, with no readback, no copy and no wait: the last pass's picture is
+ * left in its own image for a host that adopted the device to sample, on the same queue after this submission, which
+ * is the whole of the order between them (EmuSen_Qt.md section 1.8). DEVICE when no frame has been given yet or a
+ * Vulkan call failed. Since interface 42. */
+int32_t emusen_serenity_chain_draw(const emusen_serenity_chain *chain, int32_t width, int32_t height, emusen_serenity_drawn *out);
 
 /* The newest picture taken through `lend` as the chain's new frame, read on the device by its next render or present:
  * 1 when there was one newer than the last, 0 when not, a status otherwise. Since interface 11. */

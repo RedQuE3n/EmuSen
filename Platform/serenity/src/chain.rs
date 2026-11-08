@@ -16,7 +16,7 @@ use crate::source::{self, Parameter};
 use crate::text::parse_int;
 use crate::vulkan::{Buffer, Checked, Device, Image, Shown, point};
 use crate::{Error, format, parameters};
-use ash::vk;
+use ash::vk::{self, Handle};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -138,7 +138,15 @@ impl Pass {
             .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
             .dst_stage_mask(vk::PipelineStageFlags::VERTEX_SHADER | vk::PipelineStageFlags::FRAGMENT_SHADER)
             .dst_access_mask(vk::AccessFlags::SHADER_READ)];
-        let info = vk::RenderPassCreateInfo::default().attachments(&attachment).subpasses(&subpass).dependencies(&sampled);
+        // And every earlier read of the image finished before it is written again, a host's on the same queue included (EmuSen_Qt.md §1.8).
+        let reread = vk::SubpassDependency::default()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(vk::PipelineStageFlags::VERTEX_SHADER | vk::PipelineStageFlags::FRAGMENT_SHADER)
+            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE);
+        let dependencies = [sampled[0], reread];
+        let info = vk::RenderPassCreateInfo::default().attachments(&attachment).subpasses(&subpass).dependencies(&dependencies);
         self.render_pass = unsafe { self.device.vk().create_render_pass(&info, None) }.check("vkCreateRenderPass")?;
         Ok(())
     }
@@ -444,6 +452,17 @@ static LENT: Mutex<BTreeMap<u64, Arc<Slot>>> = Mutex::new(BTreeMap::new());
 
 /// Gives a lent readback back, from any thread: its chain may write it again, or, if its chain let go of it
 /// meanwhile, it is freed. False for a number that names no lent readback, which a second release of one is.
+/// The image a `draw` left its picture in, by Vulkan's handles and numbers, valid until the chain's next call.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Drawn {
+    pub image: u64,
+    pub view: u64,
+    pub width: u32,
+    pub height: u32,
+    pub format: u32,
+    pub layout: u32,
+}
+
 pub fn release(slot: u64) -> bool {
     let Some(slot) = locked(&LENT).remove(&slot) else { return false };
     let mut state = locked(&slot.state);
@@ -877,7 +896,7 @@ impl Chain {
             |commands| {
                 self.record_pending_upload(commands, upload);
                 for i in 0..count {
-                    self.draw(commands, i);
+                    self.draw_pass(commands, i);
                     device.mark(commands, i as i32);
                 }
                 let Some(last) = &self.passes[count - 1].output else { return };
@@ -892,13 +911,60 @@ impl Chain {
                 device.transition(commands, &last.image, READ, 0, None, None);
             },
             wait_free.then_some(target.free),
-            target.ready,
+            Some(target.ready),
             wait,
             None,
         )?;
         self.give_back_pending(upload)?;
         self.device.phase(point::RAN);
         Ok(())
+    }
+
+    /// Every pass run for a view of `view_width` by `view_height`, with no readback, no copy and no wait, the last
+    /// pass's output left to be sampled where it is by a host that adopted the device and submits after it on the
+    /// same queue (EmuSen_Qt.md §1.8). The render pass's two dependencies are the whole of it: the host's reads of the
+    /// last picture finish before it is written again, and the new one is visible to the host's later reads.
+    pub fn draw(&mut self, view_width: i32, view_height: i32) -> Result<Drawn, String> {
+        if self.original_width == 0 {
+            return Err("No frame has been given to the chain yet.".to_string());
+        }
+        let (vw, vh) = (view_width.max(1) as u32, view_height.max(1) as u32);
+        let count = self.passes.len();
+        // A new size remakes the outputs, which the host may still be reading: everything given to the queue finishes first.
+        if self.passes[count - 1].output.is_none() || (self.passes[count - 1].width, self.passes[count - 1].height) != (vw, vh) {
+            self.device.wait_idle();
+        }
+        self.device.settle()?;
+        self.device.phase(point::RENDER_BEGIN);
+        self.turn_feedback();
+        self.size_passes(vw, vh)?;
+        for i in 0..count {
+            self.bind(i, vw, vh)?;
+        }
+        self.device.phase(point::BOUND);
+        let upload = std::mem::take(&mut self.upload_pending);
+        self.take_pending(upload)?;
+        let wait = self.upload_wait(upload);
+        let device = &self.device;
+        let last = self.passes[count - 1].output.as_ref().map(|o| (o.image.handle, o.image.view));
+        let Some((image, view)) = last else { return Err("The last pass has no output.".to_string()) };
+        device.run_unwaited(
+            |commands| {
+                self.record_pending_upload(commands, upload);
+                for i in 0..count {
+                    self.draw_pass(commands, i);
+                    device.mark(commands, i as i32);
+                }
+            },
+            None,
+            None,
+            wait,
+            None,
+        )?;
+        self.give_back_pending(upload)?;
+        self.device.phase(point::RAN);
+        let format = self.passes[count - 1].format;
+        Ok(Drawn { image: image.as_raw(), view: view.as_raw(), width: vw, height: vh, format: format.as_raw() as u32, layout: READ.as_raw() as u32 })
     }
 
     /// Each feedback pass's two images turned round, once for the frame advanced since the last render or present.
@@ -964,7 +1030,7 @@ impl Chain {
         device.run_timed(|commands| {
             self.record_pending_upload(commands, upload);
             for i in 0..count {
-                self.draw(commands, i);
+                self.draw_pass(commands, i);
                 device.mark(commands, i as i32);
             }
             let Some(last) = &self.passes[count - 1].output else { return };
@@ -1118,7 +1184,7 @@ impl Chain {
         Ok(())
     }
 
-    fn draw(&self, commands: vk::CommandBuffer, index: usize) {
+    fn draw_pass(&self, commands: vk::CommandBuffer, index: usize) {
         let pass = &self.passes[index];
         let Some(output) = &pass.output else { return };
         let device = self.device.vk();

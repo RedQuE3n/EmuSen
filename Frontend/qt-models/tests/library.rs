@@ -200,10 +200,10 @@ fn each_screen_s_help_bar_names_its_presses() {
 
 #[test]
 fn each_screen_declares_its_own_actions_and_the_walk_reads_them() {
-    assert_eq!(action_lines(Screen::Consoles), "favourites Search\nrandom Screensaver\n");
+    assert_eq!(action_lines(Screen::Consoles), "favourites Search\nrandom Screensaver\nhome Menu\n", "Start goes Home, unnamed on the bar");
     for screen in [Screen::Home, Screen::HomeShelf, Screen::HomePlaces, Screen::Consoles, Screen::Grid] {
         let read = emusen_kit_core::input::WalkAction::from_lines(&action_lines(screen));
-        let named: Vec<_> = entries(screen).iter().filter(|e| e.2.is_some()).map(|e| (e.2.unwrap().to_owned(), Some(e.0))).collect();
+        let named: Vec<_> = entries(screen).iter().chain(emusen_qt_models::help::unnamed(screen)).filter(|e| e.2.is_some()).map(|e| (e.2.unwrap().to_owned(), Some(e.0))).collect();
         assert_eq!(read.into_iter().map(|a| (a.key, a.button)).collect::<Vec<_>>(), named, "{screen:?}");
     }
 }

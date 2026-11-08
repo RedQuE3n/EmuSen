@@ -33,9 +33,15 @@ FocusScope {
     // The shelf's first cover shown, found again after each read of the games, whose count alone may not change.
     readonly property bool shelfFocused: shelf.count > 0 && root.shelfRow >= 0 && root.shelfRow < shelf.count && shelf.itemAt(root.shelfRow)?.activeFocus === true
     readonly property Item firstShelf: shelved.revision >= 0 && shelf.count > 0 ? shelf.itemAt(0) : null
+    // Counts Start pressed on Home: each takes the focus back to where Home starts (EmuSen_BigPicture.md §51.2).
+    property int startAgain: 0
+    // The suspended game's console and pause in words, as the Home card's Continue says them.
+    readonly property string pausedWords: clock.paused
     signal placeChosen(int index)
     signal played(string path)
     signal resumed()
+    signal acted(string key)
+    onStartAgainChanged: (root.suspended ? continuePlaying : (root.firstShelf ?? places.itemAt(0))).forceActiveFocus()
     GameModel {
         id: recent
         games: root.library.recent
@@ -71,6 +77,10 @@ FocusScope {
         controller.navigationShown: false
         help: HelpModel {
             screen: continuePlaying.activeFocus ? HelpModel.Home : (root.shelfFocused ? HelpModel.HomeShelf : HelpModel.HomePlaces)
+        }
+        Connections {
+            target: frame.controller
+            function onActionInvoked(key) { root.acted(key) }
         }
         Item {
             x: -frame.safeX

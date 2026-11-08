@@ -34,6 +34,8 @@ pub mod qobject {
         HomePlaces,
         Pause,
         PausePage,
+        Card,
+        Search,
         PauseSlots,
         PauseReel,
     }
@@ -119,6 +121,8 @@ impl qobject::HelpModel {
             HelpScreen::HomePlaces => Screen::HomePlaces,
             HelpScreen::Pause => Screen::Pause,
             HelpScreen::PausePage => Screen::PausePage,
+            HelpScreen::Card => Screen::Card,
+            HelpScreen::Search => Screen::Search,
             HelpScreen::PauseSlots => Screen::PauseSlots,
             HelpScreen::PauseReel => Screen::PauseReel,
             _ => Screen::Home,
@@ -162,6 +166,8 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::PausePage => HelpScreen::PausePage,
         Screen::PauseSlots => HelpScreen::PauseSlots,
         Screen::PauseReel => HelpScreen::PauseReel,
+        Screen::Card => HelpScreen::Card,
+        Screen::Search => HelpScreen::Search,
     };
     shown.repr
 }

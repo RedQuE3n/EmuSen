@@ -1,0 +1,197 @@
+//! The Home card's pages (EmuSen_Interface.md §2.3; EmuSen_Qt.md §7.1, stage 2): Mistress's `HomeRows`, `ToolRows` and
+//! `PowerRows` in her words, made from the card's facts, and what each row does. On the big screen's own look the card
+//! opens at Power from Home's place (EmuSen_BigPicture.md §51.2); its first page and Tools are the card's over a theme
+//! and on the desktop, which emusen-qt draws from stage 3 and 6.
+
+use crate::card::{end_section_before, question, Choice, Page, Pages, Pane, Row};
+use serde_json::{json, Value};
+
+pub const CARD: &str = "home";
+
+pub const FIRST: &str = "home";
+pub const TOOLS: &str = "tools";
+pub const POWER: &str = "power";
+pub const QUIT: &str = "quit";
+
+/// The actions the host carries out, by key.
+pub const RESUME: &str = "resume";
+pub const GAME_PAGE: &str = "gamePage";
+pub const SEARCH: &str = "search";
+pub const SETTINGS: &str = "settings";
+pub const BIG_PICTURE: &str = "bigPicture";
+pub const QUIT_EMUSEN: &str = "quitEmuSen";
+
+const TITLE: &str = "Home";
+
+/// What the card's words are made from, as the host knows them when it opens.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Facts {
+    /// The suspended game's name; empty with none.
+    pub suspended: String,
+    /// Its console and how long ago it was paused, the pane's caption ("Super Nintendo · Paused just now").
+    pub paused: String,
+    /// The game under the selection, its name; empty with none.
+    pub in_hand: String,
+    /// Its console, its cover's URL, and whether it is a favourite.
+    pub in_hand_console: String,
+    pub in_hand_cover: String,
+    pub in_hand_favourite: bool,
+    /// Whether the view shown has a search.
+    pub search: bool,
+    /// Whether a console starts with no disc in it.
+    pub start_console: bool,
+    /// Steam's Game Mode, where Power holds Quit alone (Mistress's `_bigScreenForced`).
+    pub game_mode: bool,
+    /// The tools' summaries by key (`scraper`, `packages`, `library`, `cores`, `cheats`): `brief`, `sentence`, `attention`.
+    pub tools: Value,
+}
+
+impl Facts {
+    pub fn to_json(&self) -> String {
+        json!({
+            "suspended": self.suspended, "paused": self.paused, "inHand": self.in_hand, "inHandConsole": self.in_hand_console,
+            "inHandCover": self.in_hand_cover, "inHandFavourite": self.in_hand_favourite, "search": self.search,
+            "startConsole": self.start_console, "gameMode": self.game_mode, "tools": self.tools,
+        })
+        .to_string()
+    }
+
+    pub fn of(v: &Value) -> Facts {
+        let words = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or_default().to_owned();
+        let flag = |k: &str| v.get(k).and_then(Value::as_bool).unwrap_or(false);
+        Facts {
+            suspended: words("suspended"),
+            paused: words("paused"),
+            in_hand: words("inHand"),
+            in_hand_console: words("inHandConsole"),
+            in_hand_cover: words("inHandCover"),
+            in_hand_favourite: flag("inHandFavourite"),
+            search: flag("search"),
+            start_console: flag("startConsole"),
+            game_mode: flag("gameMode"),
+            tools: v.get("tools").cloned().unwrap_or(Value::Null),
+        }
+    }
+}
+
+/// The tools of the Tools page, each by its row's key, its name, the summary's key, and what it does until it has said
+/// its state (Mistress's `ToolRows`, `HomeScreen.About` and `Description`).
+const TOOL_ROWS: [(&str, &str, &str, &str); 5] = [
+    ("scraper", "Scraper", "Art and facts", "Fetches covers, screenshots, videos and facts for the library from ScreenScraper."),
+    ("packages", "Packages", "Game packages", "Makes, checks and zips game packages, and converts discs to CHD."),
+    ("library", "Library Manager", "Checks dumps", "Finds duplicate and damaged dumps; it reads every file when it checks."),
+    ("cores", "Cores", "The engines", "The engines each console runs on: EmuSen's own and libretro's."),
+    ("cheats", "Cheats", "Codes for games", "Codes for games, switched on game by game."),
+];
+
+/// The tools after the five with summaries: each opens its own window, said by what A and B do.
+const OTHER_TOOLS: [(&str, &str); 4] =
+    [("themes", "Themes"), ("collections", "Collections"), ("compressed", "Compressed Discs"), ("shell", "Shell")];
+
+/// The order the Tools row's value is taken in: the first tool whose line needs the player (`AttentionValue`).
+const ATTENTION_ORDER: [&str; 5] = ["cores", "library", "scraper", "packages", "cheats"];
+
+fn summary<'a>(tools: &'a Value, key: &str, field: &str) -> Option<&'a str> {
+    tools.get(key).and_then(|s| s.get(field)).and_then(Value::as_str).filter(|w| !w.is_empty())
+}
+
+fn needs_player(tools: &Value, key: &str) -> bool {
+    tools.get(key).and_then(|s| s.get("attention")).and_then(Value::as_bool).unwrap_or(false)
+}
+
+fn hint(name: &str) -> String {
+    format!("A opens {name}; B comes back here.")
+}
+
+/// The tools' lines as the Tools row's pane lists them: each name, and its line or what it does.
+fn tool_lines(tools: &Value) -> Pane {
+    let lines = TOOL_ROWS.iter().map(|(key, name, about, _)| (name.to_string(), summary(tools, key, "marked").or(summary(tools, key, "brief")).unwrap_or(about).to_owned()));
+    Pane { lines: lines.collect(), ..Pane::default() }
+}
+
+fn first_page(f: &Facts) -> Page {
+    let mut rows = Vec::new();
+    if !f.suspended.is_empty() {
+        rows.push(Row::new(RESUME, "Continue").value(&f.suspended).pane(Pane { caption: f.paused.clone(), ..Pane::default() }));
+    }
+    if !f.in_hand.is_empty() {
+        let console = if f.in_hand_favourite { format!("{} · Favourite", f.in_hand_console) } else { f.in_hand_console.clone() };
+        let pane = Pane {
+            lines: vec![(f.in_hand.clone(), console), (String::new(), "A opens its page: states, options, media and details.".to_owned())],
+            picture: f.in_hand_cover.clone(),
+            caption: String::new(),
+        };
+        rows.push(Row::new(GAME_PAGE, "Selected game").value(&f.in_hand).opens().pane(pane));
+    }
+    if f.search {
+        rows.push(Row::new(SEARCH, "Search"));
+    }
+    if f.start_console {
+        rows.push(Row::new("startConsole", "Start Console").opens());
+    }
+    let tools_at = rows.len();
+    let attention = ATTENTION_ORDER.iter().filter(|k| needs_player(&f.tools, k)).find_map(|k| summary(&f.tools, k, "markedBrief").or(summary(&f.tools, k, "brief")));
+    rows.push(Row::new(TOOLS, "Tools").value(attention.unwrap_or_default()).opens().pane(tool_lines(&f.tools)));
+    if tools_at > 0 {
+        end_section_before(&mut rows, tools_at);
+    }
+    rows.push(Row::new(SETTINGS, "Settings").opens());
+    let power_at = rows.len();
+    rows.push(Row::new(POWER, "Power").opens());
+    end_section_before(&mut rows, power_at);
+    Page { title: TITLE.to_owned(), breadcrumb: String::new(), rows }
+}
+
+fn tools_page(f: &Facts) -> Page {
+    let mut rows: Vec<Row> = TOOL_ROWS
+        .iter()
+        .map(|(key, name, _, sentence)| {
+            let said = summary(&f.tools, key, "sentence").unwrap_or(sentence);
+            Row::new(key, name).value(summary(&f.tools, key, "markedBrief").or(summary(&f.tools, key, "brief")).unwrap_or_default()).opens().pane(Pane {
+                lines: vec![(name.to_string(), said.to_owned()), (String::new(), hint(name))],
+                ..Pane::default()
+            })
+        })
+        .collect();
+    rows.extend(OTHER_TOOLS.iter().map(|(key, name)| Row::new(key, name).opens().pane(Pane::said(name, &hint(name)))));
+    Page { title: "Tools".to_owned(), breadcrumb: TITLE.to_owned(), rows }
+}
+
+fn power_page(f: &Facts) -> Page {
+    let mut rows = Vec::new();
+    if !f.game_mode {
+        rows.push(Row::new(BIG_PICTURE, "Exit Big Picture"));
+    }
+    rows.push(Row::new(QUIT, "Quit EmuSen..."));
+    Page { title: "Power".to_owned(), breadcrumb: TITLE.to_owned(), rows }
+}
+
+/// The card's pages.
+pub struct HomeCard;
+
+impl Pages for HomeCard {
+    fn first(&self) -> &'static str {
+        FIRST
+    }
+
+    fn page(&self, key: &str, facts: &Value) -> Page {
+        let f = Facts::of(facts);
+        match key {
+            TOOLS => tools_page(&f),
+            POWER => power_page(&f),
+            QUIT => question("Quit EmuSen?", if f.suspended.is_empty() { "EmuSen closes." } else { "The game closes, then EmuSen." }),
+            _ => first_page(&f),
+        }
+    }
+
+    fn choose(&self, page: &str, row: &str) -> Choice {
+        match (page, row) {
+            (QUIT, crate::card::YES) => Choice::Act(QUIT_EMUSEN.to_owned()),
+            (QUIT, _) => Choice::Back,
+            (_, TOOLS | POWER | QUIT) => Choice::Turn(row.to_owned()),
+            (_, RESUME | GAME_PAGE | SEARCH | SETTINGS | BIG_PICTURE) => Choice::Act(row.to_owned()),
+            (TOOLS, tool) => Choice::Act(tool.to_owned()),
+            _ => Choice::Owed,
+        }
+    }
+}

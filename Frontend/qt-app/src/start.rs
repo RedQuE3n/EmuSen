@@ -16,6 +16,8 @@ pub struct Start {
     pub splash: bool,
     /// AppSettings.ReducedMotion: "on" reduces it; "off" and the desktop's own preference ("system") do not yet (EmuSen_Qt.md §7.1).
     pub reduced_motion: bool,
+    /// Steam's Game Mode holds the session, so Power holds Quit alone (Mistress's `InGameModeSession`).
+    pub game_mode: bool,
 }
 
 /// The platform library: `--platform-library PATH`, else `EMUSEN_PLATFORM_LIBRARY`, else the file beside the program.
@@ -34,9 +36,20 @@ pub fn reduced_motion_from(settings: &Value) -> bool {
     settings.get("ReducedMotion").and_then(Value::as_str) == Some("on")
 }
 
+/// Steam's Game Mode from the environment, as Mistress reads it: gamescope among `XDG_CURRENT_DESKTOP`'s names, or,
+/// with no desktop named, `SteamDeck=1`.
+pub fn game_mode_from(desktop: Option<&str>, steam_deck: Option<&str>) -> bool {
+    match desktop.filter(|d| !d.is_empty()) {
+        Some(d) => d.split(':').any(|name| name.eq_ignore_ascii_case("gamescope")),
+        None => steam_deck == Some("1"),
+    }
+}
+
 /// The start read through the platform library at `library`; its settings unread (the defaults) when it cannot load.
 pub fn read(library: &Path) -> Start {
     let settings =
         Platform::load(library).ok().and_then(|platform| emusen_qt_models::clients::app_settings(&platform).ok()).unwrap_or(Value::Null);
-    Start { platform_library: library.to_string_lossy().into_owned(), splash: splash_from(&settings), reduced_motion: reduced_motion_from(&settings) }
+    Start { platform_library: library.to_string_lossy().into_owned(), splash: splash_from(&settings), reduced_motion: reduced_motion_from(&settings),
+        game_mode: game_mode_from(std::env::var("XDG_CURRENT_DESKTOP").ok().as_deref(), std::env::var("SteamDeck").ok().as_deref()),
+    }
 }

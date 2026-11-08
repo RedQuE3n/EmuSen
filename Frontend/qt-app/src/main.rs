@@ -39,6 +39,7 @@ fn main() {
         initial.insert(QString::from("platformLibrary"), QVariant::from(&QString::from(&start.platform_library)));
         initial.insert(QString::from("splash"), QVariant::from(&start.splash));
         initial.insert(QString::from("reducedMotion"), QVariant::from(&start.reduced_motion));
+        initial.insert(QString::from("gameMode"), QVariant::from(&start.game_mode));
         if let Some(host) = &host {
             initial.insert(QString::from("feed"), QVariant::from(&host.feed.address()));
         }

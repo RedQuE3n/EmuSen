@@ -7,12 +7,11 @@
 
 mod common;
 
-use common::{sandbox, wait_for};
+use common::{hold, sandbox, wait_for};
 
 use emusen_client_fixture::{image, library};
 use emusen_crystal_client::{Api, Config, Runtime};
-use emusen_kit_core::input::{UiButton, WalkForm};
-use emusen_kit_core::tokens::Variant;
+use emusen_kit_core::input::UiButton;
 use emusen_qt::MAIN_URL;
 use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS};
 use emusen_platform_client::library::Library;
@@ -22,8 +21,6 @@ use emusen_qt_play::host::{Adoption, Host};
 use emusen_qt_test::compositor::Compositor;
 use emusen_qt_test::virtual_pad::Sdl;
 use serde_json::json;
-use emusen_qt_test::harness::{edges, palette, Measures, SIZES};
-use emusen_qt_test::spec::{self, Header};
 use emusen_qt_test::{mockup, Harness, Scene};
 use std::path::{Path, PathBuf};
 
@@ -58,12 +55,6 @@ fn in_fan(tree: &emusen_qt_test::tree::Tree, n: &str) -> bool {
         at = tree.nodes.iter().find(|p| p.id == node.parent);
     }
     false
-}
-
-fn out() -> PathBuf {
-    let dir = std::env::var_os("EMUSEN_QT_COMPARE").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
 }
 
 /// The accepted render's library (Mistress's own-look fixture): eight games on three consoles, by title, each console's
@@ -181,56 +172,6 @@ fn named(scene: &mut Scene<'_>, name: &str) -> Option<u32> {
     scene.tree().find_named(name)
 }
 
-/// Holds one state: the mockup where the size is the canvas's or its 1.5 times, the gate at every size, the spec and the grab.
-fn hold(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, report: &mut Vec<String>) {
-    for (w, h) in SIZES {
-        scene.resize(w, h);
-        scene.wait(150);
-        let mut tree = scene.tree();
-        let focus = scene.focus(&tree);
-        let name = format!("{screen}-{w}x{h}");
-        let mut faults = Vec::new();
-        if f64::from(w) / f64::from(h) == 1.6 {
-            faults.extend(mockup::compare(m, &tree.nodes, f64::from(h) / 800.0, Variant::Dark).into_iter().map(|f| format!("mockup: {f}")));
-        }
-        assert!(scene.grab(&out().join(format!("{name}.png")).display().to_string()), "grab {name}");
-        scene.sample_behind(&mut tree, f64::from(w), f64::from(h));
-        let walk = scene.walk(&tree);
-        let walked = edges(&walk);
-        let declared = palette(Variant::Dark);
-        let header = Header {
-            state: &name,
-            case: screen,
-            kind: "menu",
-            width: w,
-            height: h,
-            measures: Measures::of(WalkForm::BigScreen, f64::from(h)),
-            palette: &declared,
-        };
-        std::fs::write(out().join(format!("{name}.spec")), spec::write(&tree, &tree.root, &header, focus, &walk)).unwrap();
-        faults.extend(
-            scene
-                .audit(&tree, WalkForm::BigScreen, Variant::Dark, focus, &walked, f64::from(w), f64::from(h))
-                .iter()
-                .map(|f| format!("gate: {f}")),
-        );
-        faults.retain(|f| !named_difference(f, &tree, (w, h)));
-        let notes = out().join(format!("{name}.faults.txt"));
-        if faults.is_empty() {
-            let _ = std::fs::remove_file(&notes);
-        } else {
-            std::fs::write(&notes, format!("{}\n-- items:\n{}\n", faults.join("\n"), tree.legend())).unwrap();
-            let who = |f: &str| -> String {
-                let ids = f.rsplit(": ").next().unwrap_or("").split(|c: char| !c.is_ascii_digit()).filter_map(|n| n.parse::<usize>().ok());
-                ids.filter_map(|i| tree.nodes.get(i)).map(|n| format!("{} {}", n.ty, n.name)).collect::<Vec<_>>().join(", ")
-            };
-            report.extend(faults.iter().map(|f| format!("{name}: {f} [{}]", who(f))));
-        }
-    }
-    scene.resize(1280, 800);
-    scene.wait(100);
-}
-
 /// The Pause Card's first page as Mistress's shows it over Cobalt Harbor: the title, the seven rows in her words, the help
 /// bar, Resume focused; then held at the gate's sizes and recorded for the C# reader (PauseCard-*.spec).
 fn pause_card(scene: &mut Scene<'_>, report: &mut Vec<String>) {
@@ -247,7 +188,17 @@ fn pause_card(scene: &mut Scene<'_>, report: &mut Vec<String>) {
     let focus = scene.focus(&tree).map(|i| tree.nodes[i as usize].heard.clone());
     assert_eq!(focus.as_deref(), Some("Resume"), "the card opens on Resume");
     assert!(tree.nodes.iter().any(|n| n.visible && n.name == "help-Screenshot"), "the help bar names X");
-    hold(scene, "PauseCard", &mockup::Mockup::default(), report);
+    hold(scene, "PauseCard", &mockup::Mockup::default(), named_difference, report);
+}
+
+/// The card's shadow beside its panel over the help band, as Mistress's falls (her render at 1280 x 800, 2026-11-02: 15 of
+/// Surface's 27 at the panel's edge, 25 at 16 pixels out, Surface again by 24): darker than Surface at the edge and back
+/// to it within 32 pixels.
+fn shadow_over_band(scene: &mut Scene<'_>) {
+    let at = scene.colours_at(&[(513.0, 760.0), (529.0, 760.0), (548.0, 760.0)]);
+    let level = |c: &Option<emusen_kit_core::tokens::Colour>| c.map_or(255, |c| c.r);
+    let (edge, mid, out) = (level(&at[0]), level(&at[1]), level(&at[2]));
+    assert!(edge < 22 && edge < mid && mid <= out && out >= 26, "the shadow over the band: {edge}, {mid}, {out} at 1, 17 and 36 pixels out");
 }
 
 /// Whether the first shown picture of that name is drawn: its centre in another colour than the pane's own surface,
@@ -266,10 +217,10 @@ fn pages(scene: &mut Scene<'_>, report: &mut Vec<String>, chord: &dyn Fn(&mut Sc
     // Half a second into the game the reel holds no picture yet, as in Mistress's render of the row.
     scene.pad(UiButton::Down);
     wait_for(scene, "PaneSentence", "text", "Under a second available. A opens the reel; Left and Right step through it.", 1000);
-    hold(scene, "PauseCardRewind", &mockup::Mockup::default(), report);
+    hold(scene, "PauseCardRewind", &mockup::Mockup::default(), named_difference, report);
     scene.pad(UiButton::Down);
     wait_for(scene, "PaneSentence", "text", "A saves to Slot 1.", 1000);
-    hold(scene, "PauseCardSave", &mockup::Mockup::default(), report);
+    hold(scene, "PauseCardSave", &mockup::Mockup::default(), named_difference, report);
 
     // A saves to slot 1 and closes the card; the game resumes once the state is written, and plays on for the reel.
     scene.pad(UiButton::Accept);
@@ -279,11 +230,11 @@ fn pages(scene: &mut Scene<'_>, report: &mut Vec<String>, chord: &dyn Fn(&mut Sc
     chord(scene);
     scene.pad(UiButton::Down);
     until(scene, "the reel's pictures served", |s| drawn(s, "PanePicture"));
-    hold(scene, "PauseCardRewindHeld", &mockup::Mockup::default(), report);
+    hold(scene, "PauseCardRewindHeld", &mockup::Mockup::default(), named_difference, report);
     scene.pad(UiButton::Down);
     wait_for(scene, "PaneSentence", "text", "A saves to Slot 1, replacing it.", 1000);
     until(scene, "the slot's picture beside its state", |s| drawn(s, "PanePicture"));
-    hold(scene, "PauseCardSaved", &mockup::Mockup::default(), report);
+    hold(scene, "PauseCardSaved", &mockup::Mockup::default(), named_difference, report);
     scene.pad(UiButton::Down);
     wait_for(scene, "PaneSentence", "text", "A loads Slot 1.", 1000);
     scene.pad(UiButton::Accept);
@@ -298,7 +249,7 @@ fn pages(scene: &mut Scene<'_>, report: &mut Vec<String>, chord: &dyn Fn(&mut Sc
     wait_for(scene, "pauseTitle", "text", "Rewind", 1000);
     assert_eq!(scene.property("PadCard", "slide"), "0", "a page turn moves nothing");
     until(scene, "the moment's picture", |s| drawn(s, "PaneMomentPicture"));
-    hold(scene, "PauseCardReel", &mockup::Mockup::default(), report);
+    hold(scene, "PauseCardReel", &mockup::Mockup::default(), named_difference, report);
     scene.pad(UiButton::Accept);
     until(scene, "the rewind resuming the game", |s| s.property("session", "paused") == "false" && s.property("screens", "shown") == "Game");
     assert_eq!(scene.property("session", "notice"), "Rewound");
@@ -387,7 +338,7 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     let colours = scene.colours_at(&[(65.0, 85.0), (73.0, 93.0)]);
     let (corner, inside) = (colours[0].expect("the corner"), colours[1].expect("inside"));
     assert!(corner.g < 120 && inside.g > 150, "the top's picture rounded at its corner: corner {corner:?}, inside {inside:?}");
-    hold(&mut scene, "HomeNothingLeft", &mockup::Mockup::default(), &mut report);
+    hold(&mut scene, "HomeNothingLeft", &mockup::Mockup::default(), named_difference, &mut report);
 
     // Choose a console as the accepted render shows it: the first console focused.
     let tree = scene.tree();
@@ -409,7 +360,7 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     }
     let mut consoles_mockup = mockup_of("Consoles");
     consoles_mockup.elements.retain(|e| !COUNTED.iter().any(|c| e.name.starts_with(c)));
-    hold(&mut scene, "Consoles", &consoles_mockup, &mut report);
+    hold(&mut scene, "Consoles", &consoles_mockup, named_difference, &mut report);
 
     // The grid on All games, its first cover focused.
     let all = named(&mut scene, "tile.0").expect("All games");
@@ -426,7 +377,17 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     drawn.sort_unstable();
     let titles: Vec<String> = GAMES.iter().map(|(t, _, _)| format!("{t} (Synthetic)")).collect();
     assert_eq!(drawn, titles, "every cover read and drawn");
-    hold(&mut scene, "Grid", &mockup_of("Grid"), &mut report);
+    hold(&mut scene, "Grid", &mockup_of("Grid"), named_difference, &mut report);
+
+    // Select: the List card over the grid, as Mistress's GamesListCard over the same eight games, its shadow falling over
+    // the help band beside the panel (EmuSen_Qt.md §7.1, stage 2).
+    scene.pad(UiButton::Options);
+    until(&mut scene, "the List card in place", |s| s.property("screens", "shown") == "List" && s.property("listCardCanvas", "slide") == "0");
+    shadow_over_band(&mut scene);
+    hold(&mut scene, "GamesListCard", &mockup::Mockup::default(), named_difference, &mut report);
+    scene.assert_still("the List card in place");
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "screens", "shown", "Grid", 1000);
 
     // Cobalt Harbor played on the test core (the sandbox has no Super Nintendo core, so its file becomes the test core's
     // image, which no shelf of the library holds), then the menu chord: the Pause Card over the paused game.
@@ -468,7 +429,7 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
         sdl.press(&pad, guide, true);
         until(scene, "the chord pausing the game under the Pause Card", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Pause");
         sdl.press(&pad, guide, false);
-        until(scene, "the card in place", |s| s.property("PadCard", "slide") == "0");
+        until(scene, "the card in place", |s| s.property("cardCanvas", "slide") == "0");
     };
     chord(&mut scene);
     pause_card(&mut scene, &mut report);
@@ -486,8 +447,8 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     }
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "pauseTitle", "text", "Leave", 1000);
-    assert_eq!(scene.property("PadCard", "slide"), "0", "a page turn moves nothing");
-    hold(&mut scene, "PauseCardLeave", &mockup::Mockup::default(), &mut report);
+    assert_eq!(scene.property("cardCanvas", "slide"), "0", "a page turn moves nothing");
+    hold(&mut scene, "PauseCardLeave", &mockup::Mockup::default(), named_difference, &mut report);
     scene.pad(UiButton::Accept);
     until(&mut scene, "Back to Library showing Home over the paused game", |s| s.property("screens", "shown") == "Home");
     assert_eq!(scene.property("session", "paused"), "true", "the game kept suspended");
@@ -496,7 +457,7 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     assert!(text_of(&mut scene, "continueFacts").is_some_and(|t| t == "Paused just now"), "Continue says when it was paused");
     assert!(shown(&mut scene, "continueFrame") && !shown(&mut scene, "continueArt"), "Continue shows the paused frame");
     assert!(shown(&mut scene, "continueHeading"));
-    hold(&mut scene, "Home", &mockup_of("Home"), &mut report);
+    hold(&mut scene, "Home", &mockup_of("Home"), named_difference, &mut report);
     scene.assert_still("Home over the suspended game");
 
     // Continue resumes the game; closed, Home has no Continue again and the shelf leads with it.
@@ -508,6 +469,24 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     assert!(scene.set_property("game", "game", ""));
     until(&mut scene, "the game closed and Home shown", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Home");
     until(&mut scene, "Continue gone", |s| !shown(s, "continueHeading"));
+
+    // Power: the Home card at its Power page, then Quit EmuSen...'s question, each held as Mistress's HomeCardPower and
+    // HomeCardQuit; B twice closes it.
+    let power = named(&mut scene, "place.6").expect("the Power place");
+    let tree = scene.tree();
+    scene.focus_item(&tree, power);
+    scene.pad(UiButton::Accept);
+    until(&mut scene, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
+    shadow_over_band(&mut scene);
+    hold(&mut scene, "HomeCardPower", &mockup::Mockup::default(), named_difference, &mut report);
+    scene.assert_still("the Home card in place");
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "homeCardModel", "page", "quit", 1000);
+    hold(&mut scene, "HomeCardQuit", &mockup::Mockup::default(), named_difference, &mut report);
+    scene.pad(UiButton::Back);
+    scene.pad(UiButton::Back);
+    until(&mut scene, "the Home card closed", |s| s.property("screens", "shown") == "Home");
 
     scene.assert_quiet();
     sdl.detach(pad);

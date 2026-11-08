@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Controls
 import EmuSen.Kit as Kit
 import EmuSen.Models
 
@@ -22,8 +23,14 @@ FocusScope {
     // The rows beside it on Choose a console, named by the shoulders.
     property var previousRow
     property var nextRow
+    // The List card over the grid, and the search with the keyboard docked (EmuSen_Interface.md §18.1).
+    property bool listOpen: false
+    property bool searching: false
+    readonly property alias games: games
     signal closed()
     signal played(string path)
+    signal acted(string key)
+    signal cardClosed()
 
     Kit.Sky {
         objectName: "gridSky"
@@ -40,14 +47,18 @@ FocusScope {
         helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
         helpSpacing: 40
         helpGlyphGap: 10
-        focus: true
+        focus: !root.listOpen
+        // Under the List card the grid is drawn dimmed and nothing on it is reached: a backdrop to the gate.
+        property bool backdrop: root.listOpen
+        enabled: !root.listOpen
         controller.navigationShown: false
         help: HelpModel {
-            screen: HelpModel.Grid
+            screen: root.searching ? HelpModel.Search : HelpModel.Grid
         }
         Connections {
             target: frame.controller
-            function onBackDeclined() { root.closed() }
+            function onBackDeclined() { games.back() }
+            function onActionInvoked(key) { root.acted(key) }
         }
         Item {
             x: -frame.safeX
@@ -92,7 +103,7 @@ FocusScope {
                 Text {
                     objectName: "gridCount"
                     y: 7.2
-                    text: root.countWords
+                    text: games.countLine.length > 0 ? games.countLine : root.countWords
                     color: Kit.Tokens.muted
                     font.family: faces.regular
                     font.pixelSize: 20
@@ -147,21 +158,50 @@ FocusScope {
                     button: Kit.Pad.PageDown
                 }
             }
+            // The search's field over the one row of covers; the docked keyboard beneath is piece of the kit to come, stood in for here by its place on the foot (EmuSen_Qt.md §7.1, stage 2).
+            TextField {
+                id: field
+                objectName: "GallerySearch"
+                x: 64
+                y: 100
+                width: 1152
+                height: 44
+                visible: root.searching
+                focus: root.searching
+                text: games.search
+                font.family: faces.regular
+                font.pixelSize: 22
+                Accessible.name: Words.search
+                onTextEdited: games.search = field.text
+            // The covers below are reached from the field by Down until the docked keyboard's shoulders move between them.
+            KeyNavigation.down: cells
+            }
+            Rectangle {
+                objectName: "GalleryKeyboard"
+                y: 398
+                width: root.width
+                height: 304
+                visible: root.searching
+                color: Kit.Tokens.surface
+                border.width: Kit.Tokens.hoverBorder
+                border.color: Kit.Tokens.border
+            }
             GridView {
                 id: cells
                 objectName: "gridCells"
                 // Sixteen units of margin about the gallery, so a lifted cover's ring is drawn whole.
                 x: 142 - 16
-                y: 108 - 16
+                y: (root.searching ? 156 : 108) - 16
                 width: 5 * 204 + 32
-                height: 2 * 264 - 24 + 32
+                height: (root.searching ? 1 : 2) * 264 - 24 + 32
                 leftMargin: 16
                 topMargin: 16
                 cellWidth: 204
                 cellHeight: 264
                 clip: true
-                focus: true
+                focus: !root.searching
                 keyNavigationWraps: false
+                KeyNavigation.up: root.searching ? field : null
                 currentIndex: games.count > 0 ? 0 : -1
                 highlightFollowsCurrentItem: false
                 // The two rows shown move only when the focus leaves them, a whole row at a time and at once, as Mistress's gallery moves.
@@ -172,7 +212,12 @@ FocusScope {
                 onFirstRowYChanged: cells.contentY = cells.firstRowY
                 model: GameModel {
                     id: games
+                    objectName: "gridGames"
                     games: root.library.loading ? "" : root.library.gamesOf(root.key)
+                    section: root.key
+                    sectionName: root.heading
+                    focused: cells.currentIndex
+                    onPassedBack: root.closed()
                 }
                 delegate: Kit.Walkable {
                     id: cell
@@ -231,6 +276,45 @@ FocusScope {
                 lineHeightMode: Text.FixedHeight
             }
         }
+    }
+    CardModel {
+        id: listCardModel
+        objectName: "listCardModel"
+        card: CardModel.List
+        shown: root.listOpen
+        facts: games.listFacts
+        onActed: (key) => cells.currentIndex = games.listAct(key)
+        onStayed: (key) => cells.currentIndex = games.listAct(key)
+        onClosed: root.cardClosed()
+    }
+    Connections {
+        target: listCardModel
+        function onActed(key) { root.acted(key) }
+    }
+    MenuCard {
+        id: listCard
+        objectName: "listCard"
+        anchors.fill: parent
+        visible: listCard.open || listCard.leaving
+        open: root.listOpen
+        focus: root.listOpen
+        padFamily: root.padFamily
+        rows: listCardModel
+        title: listCardModel.title
+        breadcrumb: listCardModel.breadcrumb
+        current: listCardModel.current
+        paneLines: listCardModel.paneLines
+        paneMuted: listCardModel.paneMuted
+        panePicture: listCardModel.panePicture
+        paneCaption: listCardModel.paneCaption
+        help: HelpModel {
+            screen: HelpModel.Card
+        }
+        onChosen: (index) => listCardModel.choose(index)
+        onStepped: (index, by, held) => listCardModel.step(index, by)
+        onFocused: (index) => listCardModel.select(index)
+        onBacked: listCardModel.back()
+        onActed: (key) => root.acted(key)
     }
     Faces {
         id: faces

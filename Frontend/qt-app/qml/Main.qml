@@ -19,6 +19,8 @@ Window {
     property double feed: 0
     property bool splash: true
     property bool reducedMotion: false
+    // Steam's Game Mode holds the session: Power holds Quit alone.
+    property bool gameMode: false
     // The pads the reader opens, by SDL id, where a test names its own; empty for every pad.
     property string onlyPads
     // The splash keeps the focus, and every press, until it has faded, so the press that skipped it is never a screen's.
@@ -40,6 +42,7 @@ Window {
         id: screens
         objectName: "screens"
         gameRunning: player.session.running
+        onQuit: Qt.quit()
     }
     Binding {
         target: Kit.Tokens
@@ -88,9 +91,14 @@ Window {
             session: player.session
             gamePicture: player.picture
             pixelScale: canvas.unit
-            visible: screens.shown === Screens.Home
-            focus: !program.splashShown && visible
+            visible: screens.shown === Screens.Home || screens.shown === Screens.HomeCard
+            focus: !program.splashShown && screens.shown === Screens.Home
+            startAgain: screens.homeAgain
+            // Under the Home card Home is drawn dimmed and nothing on it is reached: a backdrop to the gate.
+            property bool backdrop: screens.shown === Screens.HomeCard
+            enabled: !backdrop
             onPlaceChosen: (index) => screens.place(index)
+            onActed: (key) => screens.act(key)
             onPlayed: (path) => program.play(path)
             onResumed: {
                 player.session.resume()
@@ -115,14 +123,58 @@ Window {
             library: library
             padFamily: program.padFamily
             pixelScale: canvas.unit
-            visible: screens.shown === Screens.Grid
+            visible: screens.shown === Screens.Grid || screens.shown === Screens.List || screens.shown === Screens.Search
             focus: !program.splashShown && visible
+            listOpen: screens.shown === Screens.List
+            searching: screens.shown === Screens.Search
             key: screens.key
             row: consoles.tiles.count > 0 ? consoles.tiles.itemAt(library.indexOf(screens.key)) : null
             previousRow: consoles.tiles.count > 1 && program.shownIndex >= 0 ? consoles.tiles.itemAt((program.shownIndex + consoles.tiles.count - 1) % consoles.tiles.count) : null
             nextRow: consoles.tiles.count > 1 && program.shownIndex >= 0 ? consoles.tiles.itemAt((program.shownIndex + 1) % consoles.tiles.count) : null
             onClosed: screens.back()
             onPlayed: (path) => program.play(path)
+            onActed: (key) => screens.act(key)
+            onCardClosed: screens.close()
+        }
+    }
+    // The Home card over Home, opened at Power by its place (EmuSen_Interface.md §2.3; EmuSen_BigPicture.md §51.2).
+    Kit.NormalizedCanvas {
+        id: homeCardCanvas
+        objectName: "homeCardCanvas"
+        visible: homeCard.open || homeCard.leaving
+        CardModel {
+            id: homeCardModel
+            objectName: "homeCardModel"
+            card: CardModel.Home
+            start: screens.page
+            shown: screens.shown === Screens.HomeCard
+            facts: library.homeCardFacts(player.session.running ? player.session.game : "", home.pausedWords, program.gameMode)
+            onActed: (key) => screens.act(key)
+            onClosed: screens.close()
+        }
+        MenuCard {
+            id: homeCard
+            objectName: "homeCard"
+            anchors.fill: parent
+            open: screens.shown === Screens.HomeCard
+            focus: open
+            padFamily: program.padFamily
+            rows: homeCardModel
+            title: homeCardModel.title
+            breadcrumb: homeCardModel.breadcrumb
+            current: homeCardModel.current
+            paneLines: homeCardModel.paneLines
+            paneMuted: homeCardModel.paneMuted
+            panePicture: homeCardModel.panePicture
+            paneCaption: homeCardModel.paneCaption
+            help: HelpModel {
+                screen: HelpModel.Card
+            }
+            onChosen: (index) => homeCardModel.choose(index)
+            onStepped: (index, by, held) => homeCardModel.step(index, by)
+            onFocused: (index) => homeCardModel.select(index)
+            onBacked: homeCardModel.back()
+            onActed: (key) => screens.act(key)
         }
     }
     // The Pause Card, opened by the chord over the game; the game resumes once the card has slid away (EmuSen_Interface.md §20.6).

@@ -1,7 +1,9 @@
 //! `emusen.dev`: `dupes`, which runs PMD's CPD over the repository's tracked files and reports the duplicated blocks that
 //! overlap the lines a change added, and `hwcount`, which counts a program's host instructions, cycles and IPC per
-//! thread and by unit. See EmuSen_DianaSh.md, `man dupes` and `man hwcount`.
+//! thread and by unit; `qml-rules`, the Qt front end's QML check; and `esde-check`, the ES-DE theme corpus measure.
+//! See EmuSen_DianaSh.md, `man dupes`, `man hwcount`, `man qml-rules` and `man esde-check`.
 
+mod esde_check;
 mod finding;
 #[cfg(target_os = "linux")]
 mod hw;
@@ -22,6 +24,7 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
     ("dupes", false, "  dupes [--base <rev>] [--min-tokens N] [--warn-tokens N] [--lang cs|rust|all] [--repo <dir>]\n                                duplicated blocks that overlap the lines added since <rev> (the whole tree without --base)"),
     ("hwcount", false, "  hwcount --from TEXT [--to TEXT] [--per N] [--units FILE] [--functions N] [--period N] -- <program> [args]\n                                host instructions, cycles and IPC of a program's window, per thread and by unit"),
     ("qml-rules", false, "  qml-rules [--fixture] <path>...\n                                the Qt front end's rule that QML is layout only, over .qml files; one finding a line, then ok or N findings"),
+    ("esde-check", false, "  esde-check [--diagnostics | --properties] [--systems a,b,...] <folder>...\n                                ES-DE themes loaded for every variant and system, as TSV: a row a theme, its diagnostics, or its property map"),
 ];
 
 const USAGE: &str = "Usage: dupes [--base <rev>] [--min-tokens N] [--warn-tokens N] [--lang cs|rust|all] [--repo <dir>]\n  Exit 1 for a finding of --min-tokens (100) or more, 0 otherwise, 2 when it could not run. See man dupes.";
@@ -168,6 +171,10 @@ impl Module for DevCommands {
                 Err(words) => Answer { out: String::new(), err: words, status: 2 },
             },
             "qml-rules" => match qml_rules::run(&call.args(), |path| call.resolve(path)) {
+                Ok((out, status)) => Answer { out, err: String::new(), status },
+                Err(words) => Answer { out: String::new(), err: words, status: 2 },
+            },
+            "esde-check" => match esde_check::run(&call.args(), |path| call.resolve(path)) {
                 Ok((out, status)) => Answer { out, err: String::new(), status },
                 Err(words) => Answer { out: String::new(), err: words, status: 2 },
             },

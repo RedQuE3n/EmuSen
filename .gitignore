@@ -74,6 +74,7 @@ Platform/target/
 Frontend/kit-core/target/
 Frontend/target/
 Frontend/qml-rules/target/
+Frontend/esde/target/
 # The front end's client crates, their shared idioms and their test fixture, each built with cargo alone (EmuSen_Qt.md §1.1.1).
 Frontend/crystal-client/target/
 Frontend/platform-client/target/

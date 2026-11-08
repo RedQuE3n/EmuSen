@@ -61,7 +61,6 @@ pub mod qobject {
         #[qproperty(f64, stop2_at, READ, NOTIFY)]
         #[qproperty(QColor, stop2_ink, READ, NOTIFY)]
         #[qproperty(bool, glow_visible, READ, NOTIFY)]
-        #[qproperty(bool, glow_settled, READ, NOTIFY)]
         #[qproperty(f64, glow_center_x, READ, NOTIFY)]
         #[qproperty(f64, glow_center_y, READ, NOTIFY)]
         #[qproperty(f64, glow_radius_x, READ, NOTIFY)]
@@ -74,6 +73,7 @@ pub mod qobject {
         #[qproperty(QColor, glow_stop2_ink, READ, NOTIFY)]
         #[qproperty(f64, glow_stop3_at, READ, NOTIFY)]
         #[qproperty(QColor, glow_stop3_ink, READ, NOTIFY)]
+        #[qproperty(bool, glow_settled, READ, NOTIFY)]
         type StarField = super::StarFieldRust;
     }
 

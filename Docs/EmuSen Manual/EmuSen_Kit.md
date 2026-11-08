@@ -412,7 +412,7 @@ data, the framework drawing it. So the kit's own part is a model, not a renderer
   the sum of the animation's `frameTime`s, not its `elapsedTime`, because `elapsedTime` starts again from zero at each
   start (measured with Qt 6.11.2: frame 0 after a restart reads 0.016 s), which would put the clock before the glide it
   is easing. Moonrise's own `Sky` stays `animating: false` with the splash's time bound in, so its stars twinkle for the
-  splash's length and stop with it.
+  splash's length and stop with it. Rule Q's registry was reviewed and copied: one addition, `StarField.glowSettled`, declared last so no existing property's index moves.
 - **`MoonriseModel` and `Moonrise.qml`.** The model holds the splash's bodies (`addBody(name, hue, shape, craters,
   bands, cap, ring, moons)`, `clearBodies`), places `Splash` from `Timeline::MOONRISE` at the first tick after a change,
   and on `tick(seconds)` reads `Splash::frame` into read-only properties (the moon's centre, radius, halo, outline

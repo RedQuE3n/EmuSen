@@ -1929,7 +1929,7 @@ Module {
     }
     Component {
         file: "sky.cxxqt.h"
-        lineNumber: 286
+        lineNumber: 295
         name: "StarField"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -1939,7 +1939,7 @@ Module {
             name: "StarRole"
             isScoped: true
             type: "int"
-            lineNumber: 321
+            lineNumber: 331
             values: ["StarX", "StarY", "StarRadius", "StarOpacity"]
         }
         Property {
@@ -1949,7 +1949,7 @@ Module {
             write: "setSeed"
             notify: "seedChanged"
             index: 0
-            lineNumber: 291
+            lineNumber: 300
         }
         Property {
             name: "count"
@@ -1958,7 +1958,7 @@ Module {
             write: "setCount"
             notify: "countChanged"
             index: 1
-            lineNumber: 292
+            lineNumber: 301
         }
         Property {
             name: "moonriseSky"
@@ -1967,7 +1967,7 @@ Module {
             write: "setMoonriseSky"
             notify: "moonriseSkyChanged"
             index: 2
-            lineNumber: 293
+            lineNumber: 302
         }
         Property {
             name: "width"
@@ -1976,7 +1976,7 @@ Module {
             write: "setWidth"
             notify: "widthChanged"
             index: 3
-            lineNumber: 294
+            lineNumber: 303
         }
         Property {
             name: "height"
@@ -1985,7 +1985,7 @@ Module {
             write: "setHeight"
             notify: "heightChanged"
             index: 4
-            lineNumber: 295
+            lineNumber: 304
         }
         Property {
             name: "starsOpacity"
@@ -1994,7 +1994,7 @@ Module {
             write: "setStarsOpacity"
             notify: "starsOpacityChanged"
             index: 5
-            lineNumber: 296
+            lineNumber: 305
         }
         Property {
             name: "glowHue"
@@ -2003,7 +2003,7 @@ Module {
             write: "setGlowHue"
             notify: "glowHueChanged"
             index: 6
-            lineNumber: 297
+            lineNumber: 306
         }
         Property {
             name: "glowX"
@@ -2012,7 +2012,7 @@ Module {
             write: "setGlowX"
             notify: "glowXChanged"
             index: 7
-            lineNumber: 298
+            lineNumber: 307
         }
         Property {
             name: "glowY"
@@ -2021,7 +2021,7 @@ Module {
             write: "setGlowY"
             notify: "glowYChanged"
             index: 8
-            lineNumber: 299
+            lineNumber: 308
         }
         Property {
             name: "time"
@@ -2030,14 +2030,14 @@ Module {
             write: "setTime"
             notify: "timeChanged"
             index: 9
-            lineNumber: 300
+            lineNumber: 309
         }
         Property {
             name: "starInk"
             type: "QColor"
             read: "getStarInk"
             index: 10
-            lineNumber: 301
+            lineNumber: 310
             isReadonly: true
             isPropertyConstant: true
         }
@@ -2047,7 +2047,7 @@ Module {
             read: "getStop0At"
             notify: "stop0AtChanged"
             index: 11
-            lineNumber: 302
+            lineNumber: 311
             isReadonly: true
         }
         Property {
@@ -2056,7 +2056,7 @@ Module {
             read: "getStop0Ink"
             notify: "stop0InkChanged"
             index: 12
-            lineNumber: 303
+            lineNumber: 312
             isReadonly: true
         }
         Property {
@@ -2065,7 +2065,7 @@ Module {
             read: "getStop1At"
             notify: "stop1AtChanged"
             index: 13
-            lineNumber: 304
+            lineNumber: 313
             isReadonly: true
         }
         Property {
@@ -2074,7 +2074,7 @@ Module {
             read: "getStop1Ink"
             notify: "stop1InkChanged"
             index: 14
-            lineNumber: 305
+            lineNumber: 314
             isReadonly: true
         }
         Property {
@@ -2083,7 +2083,7 @@ Module {
             read: "getStop2At"
             notify: "stop2AtChanged"
             index: 15
-            lineNumber: 306
+            lineNumber: 315
             isReadonly: true
         }
         Property {
@@ -2092,7 +2092,7 @@ Module {
             read: "getStop2Ink"
             notify: "stop2InkChanged"
             index: 16
-            lineNumber: 307
+            lineNumber: 316
             isReadonly: true
         }
         Property {
@@ -2101,7 +2101,7 @@ Module {
             read: "getGlowVisible"
             notify: "glowVisibleChanged"
             index: 17
-            lineNumber: 308
+            lineNumber: 317
             isReadonly: true
         }
         Property {
@@ -2110,7 +2110,7 @@ Module {
             read: "getGlowCenterX"
             notify: "glowCenterXChanged"
             index: 18
-            lineNumber: 309
+            lineNumber: 318
             isReadonly: true
         }
         Property {
@@ -2119,7 +2119,7 @@ Module {
             read: "getGlowCenterY"
             notify: "glowCenterYChanged"
             index: 19
-            lineNumber: 310
+            lineNumber: 319
             isReadonly: true
         }
         Property {
@@ -2128,7 +2128,7 @@ Module {
             read: "getGlowRadiusX"
             notify: "glowRadiusXChanged"
             index: 20
-            lineNumber: 311
+            lineNumber: 320
             isReadonly: true
         }
         Property {
@@ -2137,7 +2137,7 @@ Module {
             read: "getGlowRadiusY"
             notify: "glowRadiusYChanged"
             index: 21
-            lineNumber: 312
+            lineNumber: 321
             isReadonly: true
         }
         Property {
@@ -2146,7 +2146,7 @@ Module {
             read: "getGlowStop0At"
             notify: "glowStop0AtChanged"
             index: 22
-            lineNumber: 313
+            lineNumber: 322
             isReadonly: true
         }
         Property {
@@ -2155,7 +2155,7 @@ Module {
             read: "getGlowStop0Ink"
             notify: "glowStop0InkChanged"
             index: 23
-            lineNumber: 314
+            lineNumber: 323
             isReadonly: true
         }
         Property {
@@ -2164,7 +2164,7 @@ Module {
             read: "getGlowStop1At"
             notify: "glowStop1AtChanged"
             index: 24
-            lineNumber: 315
+            lineNumber: 324
             isReadonly: true
         }
         Property {
@@ -2173,7 +2173,7 @@ Module {
             read: "getGlowStop1Ink"
             notify: "glowStop1InkChanged"
             index: 25
-            lineNumber: 316
+            lineNumber: 325
             isReadonly: true
         }
         Property {
@@ -2182,7 +2182,7 @@ Module {
             read: "getGlowStop2At"
             notify: "glowStop2AtChanged"
             index: 26
-            lineNumber: 317
+            lineNumber: 326
             isReadonly: true
         }
         Property {
@@ -2191,7 +2191,7 @@ Module {
             read: "getGlowStop2Ink"
             notify: "glowStop2InkChanged"
             index: 27
-            lineNumber: 318
+            lineNumber: 327
             isReadonly: true
         }
         Property {
@@ -2200,7 +2200,7 @@ Module {
             read: "getGlowStop3At"
             notify: "glowStop3AtChanged"
             index: 28
-            lineNumber: 319
+            lineNumber: 328
             isReadonly: true
         }
         Property {
@@ -2209,98 +2209,108 @@ Module {
             read: "getGlowStop3Ink"
             notify: "glowStop3InkChanged"
             index: 29
-            lineNumber: 320
+            lineNumber: 329
             isReadonly: true
         }
-        Signal { name: "seedChanged"; lineNumber: 372 }
-        Signal { name: "countChanged"; lineNumber: 373 }
-        Signal { name: "moonriseSkyChanged"; lineNumber: 374 }
-        Signal { name: "widthChanged"; lineNumber: 375 }
-        Signal { name: "heightChanged"; lineNumber: 376 }
-        Signal { name: "starsOpacityChanged"; lineNumber: 377 }
-        Signal { name: "glowHueChanged"; lineNumber: 378 }
-        Signal { name: "glowXChanged"; lineNumber: 379 }
-        Signal { name: "glowYChanged"; lineNumber: 380 }
-        Signal { name: "timeChanged"; lineNumber: 381 }
-        Signal { name: "stop0AtChanged"; lineNumber: 382 }
-        Signal { name: "stop0InkChanged"; lineNumber: 383 }
-        Signal { name: "stop1AtChanged"; lineNumber: 384 }
-        Signal { name: "stop1InkChanged"; lineNumber: 385 }
-        Signal { name: "stop2AtChanged"; lineNumber: 386 }
-        Signal { name: "stop2InkChanged"; lineNumber: 387 }
-        Signal { name: "glowVisibleChanged"; lineNumber: 388 }
-        Signal { name: "glowCenterXChanged"; lineNumber: 389 }
-        Signal { name: "glowCenterYChanged"; lineNumber: 390 }
-        Signal { name: "glowRadiusXChanged"; lineNumber: 391 }
-        Signal { name: "glowRadiusYChanged"; lineNumber: 392 }
-        Signal { name: "glowStop0AtChanged"; lineNumber: 393 }
-        Signal { name: "glowStop0InkChanged"; lineNumber: 394 }
-        Signal { name: "glowStop1AtChanged"; lineNumber: 395 }
-        Signal { name: "glowStop1InkChanged"; lineNumber: 396 }
-        Signal { name: "glowStop2AtChanged"; lineNumber: 397 }
-        Signal { name: "glowStop2InkChanged"; lineNumber: 398 }
-        Signal { name: "glowStop3AtChanged"; lineNumber: 399 }
-        Signal { name: "glowStop3InkChanged"; lineNumber: 400 }
+        Property {
+            name: "glowSettled"
+            type: "bool"
+            read: "getGlowSettled"
+            notify: "glowSettledChanged"
+            index: 30
+            lineNumber: 330
+            isReadonly: true
+        }
+        Signal { name: "seedChanged"; lineNumber: 383 }
+        Signal { name: "countChanged"; lineNumber: 384 }
+        Signal { name: "moonriseSkyChanged"; lineNumber: 385 }
+        Signal { name: "widthChanged"; lineNumber: 386 }
+        Signal { name: "heightChanged"; lineNumber: 387 }
+        Signal { name: "starsOpacityChanged"; lineNumber: 388 }
+        Signal { name: "glowHueChanged"; lineNumber: 389 }
+        Signal { name: "glowXChanged"; lineNumber: 390 }
+        Signal { name: "glowYChanged"; lineNumber: 391 }
+        Signal { name: "timeChanged"; lineNumber: 392 }
+        Signal { name: "stop0AtChanged"; lineNumber: 393 }
+        Signal { name: "stop0InkChanged"; lineNumber: 394 }
+        Signal { name: "stop1AtChanged"; lineNumber: 395 }
+        Signal { name: "stop1InkChanged"; lineNumber: 396 }
+        Signal { name: "stop2AtChanged"; lineNumber: 397 }
+        Signal { name: "stop2InkChanged"; lineNumber: 398 }
+        Signal { name: "glowVisibleChanged"; lineNumber: 399 }
+        Signal { name: "glowCenterXChanged"; lineNumber: 400 }
+        Signal { name: "glowCenterYChanged"; lineNumber: 401 }
+        Signal { name: "glowRadiusXChanged"; lineNumber: 402 }
+        Signal { name: "glowRadiusYChanged"; lineNumber: 403 }
+        Signal { name: "glowStop0AtChanged"; lineNumber: 404 }
+        Signal { name: "glowStop0InkChanged"; lineNumber: 405 }
+        Signal { name: "glowStop1AtChanged"; lineNumber: 406 }
+        Signal { name: "glowStop1InkChanged"; lineNumber: 407 }
+        Signal { name: "glowStop2AtChanged"; lineNumber: 408 }
+        Signal { name: "glowStop2InkChanged"; lineNumber: 409 }
+        Signal { name: "glowStop3AtChanged"; lineNumber: 410 }
+        Signal { name: "glowStop3InkChanged"; lineNumber: 411 }
+        Signal { name: "glowSettledChanged"; lineNumber: 412 }
         Method {
             name: "setSeed"
-            lineNumber: 333
+            lineNumber: 343
             Parameter { name: "value"; type: "int" }
         }
         Method {
             name: "setCount"
-            lineNumber: 335
+            lineNumber: 345
             Parameter { name: "value"; type: "int" }
         }
         Method {
             name: "setMoonriseSky"
-            lineNumber: 337
+            lineNumber: 347
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "setWidth"
-            lineNumber: 339
-            Parameter { name: "value"; type: "double" }
-        }
-        Method {
-            name: "setHeight"
-            lineNumber: 341
-            Parameter { name: "value"; type: "double" }
-        }
-        Method {
-            name: "setStarsOpacity"
-            lineNumber: 343
-            Parameter { name: "value"; type: "double" }
-        }
-        Method {
-            name: "setGlowHue"
-            lineNumber: 345
-            Parameter { name: "value"; type: "double" }
-        }
-        Method {
-            name: "setGlowX"
-            lineNumber: 347
-            Parameter { name: "value"; type: "double" }
-        }
-        Method {
-            name: "setGlowY"
             lineNumber: 349
             Parameter { name: "value"; type: "double" }
         }
         Method {
-            name: "setTime"
+            name: "setHeight"
             lineNumber: 351
             Parameter { name: "value"; type: "double" }
         }
         Method {
+            name: "setStarsOpacity"
+            lineNumber: 353
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setGlowHue"
+            lineNumber: 355
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setGlowX"
+            lineNumber: 357
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setGlowY"
+            lineNumber: 359
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setTime"
+            lineNumber: 361
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
             name: "tick"
-            lineNumber: 401
+            lineNumber: 413
             Parameter { name: "seconds"; type: "double" }
         }
         Method {
             name: "data"
             type: "QVariant"
             isMethodConstant: true
-            lineNumber: 402
+            lineNumber: 414
             Parameter { name: "index"; type: "QModelIndex" }
             Parameter { name: "role"; type: "int" }
         }
@@ -2308,13 +2318,13 @@ Module {
             name: "roleNames"
             type: "QHash_i32_QByteArray"
             isMethodConstant: true
-            lineNumber: 403
+            lineNumber: 415
         }
         Method {
             name: "rowCount"
             type: "int"
             isMethodConstant: true
-            lineNumber: 404
+            lineNumber: 416
             Parameter { name: "parent"; type: "QModelIndex" }
         }
     }

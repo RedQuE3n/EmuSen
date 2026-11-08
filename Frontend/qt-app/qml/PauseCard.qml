@@ -30,11 +30,13 @@ MenuCard {
     onFocused: (index) => pause.focusRow(index)
     onBacked: pause.back()
     onActed: (key) => pause.act(key)
+    onKeyed: (key) => pause.key(key)
     PauseModel {
         id: pause
         objectName: "pause"
         game: root.library.titleOf(root.session.game)
         facts: root.session.cardFacts
+        shelf: root.library.gamesOf(pause.system)
         onResumed: root.resumed()
         onLibrary: root.backToLibrary()
         onSlotChosen: (slot) => root.session.chooseSlot(slot)
@@ -46,6 +48,10 @@ MenuCard {
         onScreenshotAsked: root.session.screenshot()
         onQuitGameAsked: root.quitGame()
         onQuitAsked: root.quitAll()
+        onDiscAsked: (index) => root.session.changeDisc(index)
+        onInsertAsked: (path) => root.session.insertDisc(path)
+        onEjectAsked: root.session.ejectDisc()
+        onSwapAsked: root.session.swapPlayers()
     }
     GameModel {
         id: games

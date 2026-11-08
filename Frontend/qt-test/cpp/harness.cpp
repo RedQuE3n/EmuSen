@@ -19,6 +19,7 @@
 #include <QtQuick/QQuickItem>
 #include <QtQuick/QQuickWindow>
 #include <QtQuickTest/quicktest.h>
+#include <QtTest/QSignalSpy>
 #include <QtTest/QTest>
 #include <algorithm>
 #include <cmath>
@@ -436,6 +437,51 @@ bool harness_set_property(QObject& root, const QString& object_name, const QStri
 {
     QObject* object = root.objectName() == object_name ? &root : root.findChild<QObject*>(object_name);
     return object != nullptr && QQmlProperty(object, property, qmlContext(object)).write(QVariant(value));
+}
+
+namespace {
+
+QObject* named(QObject& root, const QString& object_name)
+{
+    return root.objectName() == object_name ? &root : root.findChild<QObject*>(object_name);
+}
+
+QString spyName(const QString& property) { return QStringLiteral("harness-notify:") + property; }
+
+// QSignalSpy is no QObject in Qt 6.9 on, so a child object holds one, to live and be found with the object it watches.
+class Watch : public QObject {
+public:
+    Watch(QObject* object, const QMetaMethod& signal) : spy(object, signal) {}
+    QSignalSpy spy;
+};
+
+}
+
+// A property's change signal counted from now: a QSignalSpy on its notify signal, a child of the object, so it lives as long as it does.
+bool harness_watch(QObject& root, const QString& object_name, const QString& property)
+{
+    QObject* object = named(root, object_name);
+    if (object == nullptr) {
+        return false;
+    }
+    const QMetaObject* meta = object->metaObject();
+    const QMetaProperty p = meta->property(meta->indexOfProperty(property.toUtf8().constData()));
+    if (!p.isValid() || !p.hasNotifySignal()) {
+        return false;
+    }
+    auto* watch = new Watch(object, p.notifySignal());
+    watch->setObjectName(spyName(property));
+    watch->setParent(object);
+    return watch->spy.isValid();
+}
+
+// How many times the watched property said it changed; -1 where it is not watched.
+int harness_notified(QObject& root, const QString& object_name, const QString& property)
+{
+    QObject* object = named(root, object_name);
+    QObject* child = object != nullptr ? object->findChild<QObject*>(spyName(property), Qt::FindDirectChildrenOnly) : nullptr;
+    const auto* watch = dynamic_cast<Watch*>(child);
+    return watch != nullptr ? static_cast<int>(watch->spy.count()) : -1;
 }
 
 // One grab, many samples: "x,y;x,y" in, "#AARRGGBB;#AARRGGBB" out.

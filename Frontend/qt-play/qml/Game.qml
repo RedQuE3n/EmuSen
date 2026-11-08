@@ -15,6 +15,8 @@ Item {
     property double pads: 0
     // Whether the game is in front: a host clears it while a screen of its own is over the game.
     property bool inFront: true
+    // Guide held with Up, Down or the right shoulder saves, loads or takes a screenshot over the game (EmuSen_Kit.md §7.26).
+    property bool guideChords: false
     readonly property alias session: session
     readonly property alias picture: picture
     readonly property bool ownsPad: session.running && !session.paused && root.inFront
@@ -26,10 +28,16 @@ Item {
         property: "chordOnly"
         value: root.ownsPad
     }
+    Binding {
+        target: Kit.PadRouter
+        property: "guideChords"
+        value: root.guideChords
+    }
     Connections {
         target: Kit.PadRouter
         enabled: root.inFront
         function onMenuChord() { root.menu() }
+        function onGuideChord(button) { session.guideChord(button) }
     }
     // The router's clock while the game is in front, where no frame of the kit's runs it.
     Timer {

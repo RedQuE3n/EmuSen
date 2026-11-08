@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -I
 """Polled grabs of a gate's own compositor through KWin's ScreenShot2 (CaptureWorkspace, raw pixels down a pipe), each
-kept as a small PNG and measured: the share of pixels that are not black, and the share in a colour box (the game's
-own, given as r0-r1,g0-g1,b0-b1). One line a grab to stdout: wall-clock time, the two shares, the PNG's name.
+kept as a small PNG (full size with FULL=1) and measured: the share of pixels that are not black, and the share in a
+colour box (the game's own, given as r0-r1,g0-g1,b0-b1). One line a grab to stdout: wall-clock time, the two shares, the PNG's name.
 See README.md.
 
 Usage: grab.py <out-dir> <seconds> <interval-ms> [<colour-box>]
@@ -51,7 +51,8 @@ while (now := time.time()) < end:
         continue
     lit, inside = shares(image)
     name = f"{n:04d}.png"
-    image.convert("RGB").resize((480, 300)).save(os.path.join(out, name), compress_level=1)
+    kept = image.convert("RGB") if os.environ.get("FULL") == "1" else image.convert("RGB").resize((480, 300))
+    kept.save(os.path.join(out, name), compress_level=1)
     print(f"{now:.3f} {lit:.3f} {inside:.3f} {name}", flush=True)
     n += 1
     time.sleep(max(0.0, interval - (time.time() - now)))

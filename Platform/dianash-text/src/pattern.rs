@@ -17,7 +17,7 @@ pub fn compile(pattern: &str, ignore_case: bool) -> Result<Regex, String> {
 /// kept pattern is the one compiling again would give. The cache is the call's per-shell slot (§6.3), and is emptied
 /// when it holds 64.
 pub fn cached(call: &dianash_module::Call, pattern: &str, ignore_case: bool) -> Result<Regex, String> {
-    let cache = call.slot(std::collections::HashMap::<(String, bool), Regex>::new);
+    let mut cache = call.slot(std::collections::HashMap::<(String, bool), Regex>::new);
     if let Some(regex) = cache.get(&(pattern.to_string(), ignore_case)) {
         return Ok(regex.clone());
     }

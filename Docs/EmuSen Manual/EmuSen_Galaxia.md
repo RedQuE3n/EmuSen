@@ -53,6 +53,7 @@ The shell is rooted here: to DianaSh, this directory **is** `/`, and the install
   Library/      Mistress's kept databases              EmuSen_Settings_Reference.md §4.32, §4.64
     games.db      the player's library: favourites, play time, collections, edits
     records.db    each save state's record and the shader pack's build
+    states.db     the runtime's record of each save state it wrote   stores::File::States
   Firmware/     coprocessor dumps the player supplies  EmuSen_Firmware.md §2
   Cheats/       the player's own .cht tree             `man cheat`
   Shaders/      shader packs downloaded on request     EmuSen_Settings_Reference.md §4.41
@@ -60,6 +61,13 @@ The shell is rooted here: to DianaSh, this directory **is** `/`, and the install
 ```
 
 `man hier` remains the user-facing description of this tree; this section is about who *owns* it.
+
+Each database's path is Galaxia's: `stores::File::path`, which the platform library answers by number as
+`emusen_galaxia_file` (`EmuSen_RustPlatform.md` §47.26). *2026-11-08:* the runtime's `states.db` was the last a
+component still joined itself (`crystal/src/runtime.rs`, the library folder joined with the file's name); it now
+opens `File::States`'s path. The two are the same expression, `<home>/Library/states.db`, so an existing install's
+file is the one opened; `runtime::tests::states_db_is_where_an_existing_install_keeps_it` holds it for a data
+override and for the default tree.
 
 ### 3.1 Two overrides, still separate
 

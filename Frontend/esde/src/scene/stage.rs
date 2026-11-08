@@ -1,0 +1,155 @@
+//! The system and gamelist views and the move between them, instant or a vertical pan as the theme's transition profile
+//! says; the help bar, clock and status stay still while the views pan beneath them (EmuSen_BigPicture.md §14.7).
+
+use crate::loader::Animation;
+
+use super::data::Data;
+use super::draw::{Drawn, Measures};
+use super::frame::{Frame, Row, Rows};
+use super::motion::{Glide, Time};
+use super::view::{ElementState, SceneView};
+
+/// One view on the screen at a time: its elements and its vertical shift in pixels.
+pub struct Layer {
+    pub view: String,
+    pub y: f64,
+    pub elements: Vec<ElementState>,
+}
+
+pub struct Stage {
+    pub current: SceneView,
+    leaving: Option<SceneView>,
+    slide: Glide,
+    direction: f64,
+    measures: Measures,
+}
+
+// The elements that stay on the screen while the views pan.
+fn overlay(kind: &str) -> bool {
+    matches!(kind, "helpsystem" | "clock" | "systemstatus")
+}
+
+impl Stage {
+    pub fn new(data: Data, view: &str, now: Time) -> Self {
+        Stage { current: SceneView::new(data, view, now), leaving: None, slide: Glide::at(0.0), direction: 0.0, measures: Measures::new() }
+    }
+
+    pub fn is_moving(&self) -> bool {
+        self.leaving.is_some() || self.current.is_moving()
+    }
+
+    /// Opens the other view with the current selection: the gamelist from the system view, or back.
+    pub fn switch(&mut self, now: Time) {
+        let to_gamelist = self.current.view == "system";
+        let profile = &self.current.data.system().theme.transitions;
+        let animation = if to_gamelist { profile.system_to_gamelist } else { profile.gamelist_to_system };
+        let data = self.current.data.clone();
+        let next = SceneView::new(data, if to_gamelist { "gamelist" } else { "system" }, now);
+        let previous = std::mem::replace(&mut self.current, next);
+        self.leaving = None;
+        if animation == Animation::Slide && previous.motion.view_slide > 0 {
+            self.direction = if to_gamelist { 1.0 } else { -1.0 };
+            self.slide = Glide::new(0.0, 1.0, now, previous.motion.view_slide, previous.motion.view_slide_easing);
+            self.leaving = Some(previous);
+        }
+        self.advance(now);
+    }
+
+    pub fn advance(&mut self, now: Time) {
+        self.current.advance(now);
+        if self.slide.is_settled_at(now) {
+            self.leaving = None;
+        }
+    }
+
+    /// What is on the screen now: the leaving view while a pan runs, then the current one, each with its shift.
+    pub fn layers(&self) -> Vec<Layer> {
+        let now = self.current.now();
+        let mut layers = vec![];
+        let h = self.current.data.height;
+        let p = self.slide.value_at(now);
+        let y = if self.leaving.is_some() { self.direction * (1.0 - p) * h } else { 0.0 };
+        if let Some(leaving) = &self.leaving {
+            let elements = leaving.frame().into_iter().filter(|e| !overlay(&e.kind)).collect();
+            layers.push(Layer { view: leaving.view.clone(), y: -self.direction * p * h, elements });
+        }
+        let mut elements = self.current.frame();
+        for e in elements.iter_mut().filter(|e| overlay(&e.kind)) {
+            e.rect.y -= y;
+        }
+        layers.push(Layer { view: self.current.view.clone(), y, elements });
+        layers
+    }
+
+    // The pan's progress and the two views' shifts: the leaving view's, then the current view's.
+    fn shifts(&self) -> (f64, f64) {
+        let h = self.current.data.height;
+        let p = self.slide.value_at(self.current.now());
+        if self.leaving.is_some() {
+            (-self.direction * p * h, self.direction * (1.0 - p) * h)
+        } else {
+            (0.0, 0.0)
+        }
+    }
+
+    fn drawn(&self, measures: &Measures) -> (Vec<Drawn>, Frame) {
+        let (leave_y, y) = self.shifts();
+        let mut frame = Frame::default();
+        let mut all = vec![];
+        if let Some(leaving) = &self.leaving {
+            let (drawn, primary) = leaving.draw(measures, true);
+            frame.leaving_primary = primary;
+            all.extend(drawn.into_iter().filter(|d| !overlay(&d.placed.kind)).map(|mut d| {
+                d.placed.y += leave_y;
+                d
+            }));
+        }
+        let (drawn, primary) = self.current.draw(measures, false);
+        frame.primary = primary;
+        all.extend(drawn.into_iter().map(|mut d| {
+            if !overlay(&d.placed.kind) {
+                d.placed.y += y;
+            }
+            d
+        }));
+        (all, frame)
+    }
+
+    /// Everything on the screen at the stage's time, in window pixels (EmuSen_Qt.md §4.5.5).
+    pub fn frame(&self) -> Frame {
+        let (drawn, mut frame) = self.drawn(&self.measures);
+        let waits: Vec<Time> = drawn.iter().filter_map(|d| d.wait).collect();
+        frame.moving = self.leaving.is_some() || self.current.is_animating() || waits.contains(&0);
+        let now = self.current.data.now;
+        let clock = drawn.iter().any(|d| d.placed.kind == "clock").then(|| {
+            let seconds = self.current.theme_view().of_kind("clock").any(|e| e.string("format").is_some_and(|f| f.contains("%S")));
+            if seconds {
+                1_000_000
+            } else {
+                (60 - now.second.min(59) as Time) * 1_000_000
+            }
+        });
+        frame.next_change_ms =
+            waits.iter().copied().filter(|w| *w > 0).chain(clock).min().map(|w| ((w + 999) / 1000).min(u32::MAX as Time) as u32);
+        frame.overlay = self.current.scroll_letters();
+        frame.elements = drawn.into_iter().map(|d| d.placed).collect();
+        frame
+    }
+
+    /// The painter's measurement of an element's content, kept while that content is shown; true when the frame changes (EmuSen_Qt.md §4.5.5).
+    pub fn measured(&mut self, id: u64, w: f64, h: f64) -> bool {
+        let (drawn, _) = self.drawn(&Measures::new());
+        let Some(content) = drawn.iter().find(|d| d.placed.id == id).map(|d| d.content) else { return false };
+        let entry = (content, w, h);
+        if self.measures.get(&id) == Some(&entry) {
+            return false;
+        }
+        self.measures.insert(id, entry);
+        true
+    }
+
+    /// The rows a primary element shown now lists.
+    pub fn rows(&self, rows: Rows) -> Option<Vec<Row>> {
+        std::iter::once(&self.current).chain(self.leaving.as_ref()).find(|v| v.rows_id() == rows).map(|v| v.rows_of())
+    }
+}

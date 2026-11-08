@@ -1496,7 +1496,7 @@ logged). Measured on 2026-11-08.
   check) or Attention (a triangle) and the words in Body TextStrong. It fades and slides in over Enter and out over Exit
   (nothing moves under reduced motion; the fades keep their 120 ms), and a `Timer` of `holdMs`, restarted on each
   `raised`, ends it. The big-screen and card forms have no status bar (`EmuSen_Qt.md` §1.7), so a status line there is a
-  notice. The shadow of §5.4 is drawn on the GPU (§7.26); the software backend cannot draw it (`MultiEffect` is an
+  notice. The shadow of §5.4 is drawn on the GPU (§7.27); the software backend cannot draw it (`MultiEffect` is an
   empty box there, `EmuSen_Qt.md` §7.1 step 6). *Not drawn yet*: the desktop's status-bar line, which is stage 6's.
 
 **Held to**: kit-core's `tests/notice.rs` (2); qt-test's `notice.rs` (the card at the top right; a second replacing the
@@ -1565,10 +1565,51 @@ frame's sheet rule (as `Sheet` does) is the fix; owed to stage 5, whose settings
   Mistress's (15, 17, 27) at 1920 × 1200. kit-core's palette reach now takes a declared opaque token at any alpha, since
   a token through a colour's alpha is the token as it is through an item's opacity (`tests/audit.rs`).
 
-### 7.26 A shoulder a screen declares; the pointer resting; the notice's shadow (stage 2, the loose ends; 2026-11-08)
+### 7.26 The Guide chords, the shoulders on a card, and a property's signal in the harness (stage 2; 2026-11-08)
+
+- **The Guide chords** (`EmuSen_BigPicture.md` §48.7, Mistress's `GuideChordReader`). kit-core's `GuideChords`
+  (`input/guide.rs`) reads the held buttons each tick: Guide held with Up, Down or the right shoulder going down is
+  `With(button)`, the first of `GuideChords::BUTTONS` to go down winning the tick; a button already down when Guide went
+  down is no chord; Guide let go with nothing chorded is `Alone`; `reset` forgets a Guide held across a menu. The kit
+  says only which button was chorded. What each means (save, load, a screenshot) is the program's, in
+  `emusen-qt-models`' `pause::guide_chord`.
+- **The router reads them while a game owns the pad.** With `set_guide_chords` on and `chord_only`, Guide alone opens the
+  menu as it is let go (`Pumped.menu_chord`), a chord is `Pumped.guide_chord` and opens nothing, and Options with Menu
+  open the menu at once only while Guide is up, as Mistress's `MainWindow.Pad` has it. Away from a game, or with the
+  chords off, the reader is reset each pump and Guide opens the menu as it goes down, as before.
+- **`PadRouter` gains `guideChords` and `guideChord(button)`**, reviewed under rule Q: an extension, both declared last
+  (property index 5 after `pending`; the signal after `isHeld`), so no existing index moves. The committed registry was
+  diffed before it was copied: 16 lines added, none changed beyond line numbers. `Game.qml` binds the property and
+  hands the signal to `SessionModel.guideChord`.
+- **`guideHeld`, and the game kept from the pad while Guide is held** (decided by the tester on 2026-11-08, as Mistress's
+  `_padQuiet` keeps it). `Router::guide_held` is true while Guide is held with the chords read over a game, and
+  `PadRouter.guideHeld` follows it after every pump and every change of `guideChords` or `chordOnly`: a read-only
+  property, the seventh, declared last under rule Q (the registry's diff again additions only). The program binds it to
+  `PadReader.gameMuted`, and the pads' hand-over (`GamePads::set_muted`) gives the game no button while it is on and,
+  after it, none until every button is let go, as after a menu. So Guide with Up saves the state the game was in, not
+  one with Up pressed.
+- **A card's shoulders and triggers reach its row.** `UiButton::key` gave no key for PageUp, PageDown, First and Last,
+  though `Key::button` mapped PageUp, PageDown, Home and End to them, so a press the walk declined on a card (whose
+  form has no sections to step) was dropped. They now become PageUp, PageDown, Home and End for the focused control,
+  as every other declined press becomes its key. On the big screen and the desktop the walk still takes the shoulders
+  for its sections first. `MenuCard` hands a key its row did not take to its host (`keyed`), and the Pause Card's
+  model strides the reel with it (`EmuSen_Qt.md` §7.5).
+- **The harness counts a property's change signal.** `Scene::watch(object, property)` puts a `QSignalSpy` on the
+  property's notify signal and `notified` reads how many times it fired since. Since Qt 6.9 `QSignalSpy` is no
+  QObject, so a child object of the watched one holds it, to live and be found with it. This answers the seeded fault
+  that no test caught in stage 2's Speed step (`EmuSen_Qt.md` §7.3): a property whose value is right but whose change is
+  never announced. *C++ part*: `harness_watch` and `harness_notified` in `qt-test/cpp/harness.cpp` [own, because QtTest's
+  spy is C++ and cxx-qt reaches no signal by its meta-method].
+- Held to by `kit-core/tests/input.rs` (Mistress's cases of the reader, and the four keys), `kit-qt/tests/router.rs`
+  (a chord, Guide alone on release, the two middle buttons, the chords off, `guide_held` while Guide is held and only
+  with the chords on), `qmltypes.rs`, and `emusen-qt-models`' `input` over the test core and a simulated pad (A held
+  while muted is not heard, nor after the mute until let go, and is heard pressed again). Seeded faults, each reverted:
+  the hand-over ignoring the mute (`input`); `guide_held` with the chords off (`router`).
+
+### 7.27 A shoulder a screen declares; the pointer resting; the notice's shadow (stage 2, the loose ends; 2026-11-08)
 
 - **The shoulders without sections.** The walk stepped its sections on LB and RB in every form but the card's, and
-  with no sections it declined them, so a screen could not declare a shoulder (`EmuSen_Qt.md` §7.5: the search's Move
+  with no sections it declined them, so a screen could not declare a shoulder (`EmuSen_Qt.md` §7.6: the search's Move
   to grid). Now a walk with no sections offers the shoulders to the declared actions like any other button; a walk
   with sections keeps them. An extension under rule Q: no surface changes, and a screen that declares no shoulder sees
   no difference. Held to kit-core's `tests/input.rs` (both shoulders reaching a declared `toGrid` with no sections; a
@@ -1577,12 +1618,12 @@ frame's sheet rule (as `Sheet` does) is the fix; owed to stage 5, whose settings
   and leaves it there, nothing pressed, so a test reaches what a hover does without a click's A. *C++ part*: one
   function in `cpp/harness.cpp` [own, because the harness's pointer is Qt Test's, which has no Rust binding]. Found by
   it on 2026-11-08: the pointer left where a click had been lands on a cover after a resize to 3840 × 2160, which took
-  the focus there (§7.5's search follows the focus).
+  the focus there (`EmuSen_Qt.md` §7.6's search follows the focus).
 - **The notice's shadow** (§7.23 left it undrawn): §5.4's one shadow, offset 0,8, blur 24, black at 50%
   (`shadowOpacity`, `shadowRadius`), cast by a copy of the card's shape through `MultiEffect`, as the cards cast theirs,
   fading and sliding with the card. The software backend still draws none. Mistress's own notice (LunaP's
   `NoticeLayer`, a pill on HudSurface) draws no shadow; the design's (`EmuSen_Interface.md` §18.6, "the shadow") is
-  kept (decided 2026-11-08 by the tester), a difference from Mistress named in `EmuSen_Qt.md` §7.5. Held to `qt-app`'s `acceptance.rs` on Vulkan.
+  kept (decided 2026-11-08 by the tester), a difference from Mistress named in `EmuSen_Qt.md` §7.6. Held to `qt-app`'s `acceptance.rs` on Vulkan.
 
 ### 7.6 Building, linking, the registry, and what it is held to
 

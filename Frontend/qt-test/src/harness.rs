@@ -380,6 +380,16 @@ impl Scene<'_> {
         ffi::harness_property(self.window(), &QString::from(object_name), &QString::from(property)).to_string()
     }
 
+    /// Counts the property's change signal from now, as a QSignalSpy does; false where it has none to count.
+    pub fn watch(&mut self, object_name: &str, property: &str) -> bool {
+        ffi::harness_watch(self.window(), &QString::from(object_name), &QString::from(property))
+    }
+
+    /// How many times a watched property said it changed since `watch`; none where it is not watched.
+    pub fn notified(&mut self, object_name: &str, property: &str) -> Option<usize> {
+        usize::try_from(ffi::harness_notified(self.window(), &QString::from(object_name), &QString::from(property))).ok()
+    }
+
     /// A pad press through the router's queue, down then up, on the harness's own clock; the router's wall clock is off.
     pub fn pad(&mut self, button: UiButton) {
         let (down, up) = {

@@ -32,6 +32,8 @@ pub mod ffi {
         unsafe fn harness_singleton(engine: Pin<&mut QQmlApplicationEngine>, module: &QString, name: &QString) -> *mut QObject;
         fn harness_roots(engine: Pin<&mut QQmlApplicationEngine>) -> i32;
         fn harness_set_property(root: Pin<&mut QObject>, object_name: &QString, property: &QString, value: &QString) -> bool;
+        fn harness_watch(root: Pin<&mut QObject>, object_name: &QString, property: &QString) -> bool;
+        fn harness_notified(root: Pin<&mut QObject>, object_name: &QString, property: &QString) -> i32;
         fn harness_colours_at(window: Pin<&mut QObject>, points: &QString) -> QString;
         fn harness_hide_words(window: Pin<&mut QObject>, hidden: bool);
         fn harness_frames(window: Pin<&mut QObject>) -> u64;

@@ -39,7 +39,7 @@ const KEY_G: i32 = 0x47;
 const KEY_R: i32 = 0x52;
 const KEY_A: i32 = 0x41;
 
-/// The search's difference named in EmuSen_Qt.md §7.5: the keys and the covers are reached from each other by the
+/// The search's difference named in EmuSen_Qt.md §7.6: the keys and the covers are reached from each other by the
 /// shoulders, which the gate's walk (the four directions) does not press; the test walks them below.
 fn named_in_search(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
     let node = |r: &str| r.trim().split(|c: char| !c.is_ascii_digit()).next().and_then(|n| n.parse::<usize>().ok()).and_then(|i| tree.nodes.get(i));

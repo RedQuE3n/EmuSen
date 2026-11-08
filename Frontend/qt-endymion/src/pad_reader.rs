@@ -36,6 +36,8 @@ pub mod qobject {
         #[qproperty(i32, connected, READ, NOTIFY)]
         #[qproperty(QString, problem, READ, NOTIFY)]
         #[qproperty(u64, game_pads, READ, CONSTANT)]
+        /// The game hears nothing while true (`PadRouter.guideHeld`), and after it, nothing until every button is let go.
+        #[qproperty(bool, game_muted)]
         type PadReader = super::PadReaderRust;
     }
 
@@ -60,6 +62,7 @@ pub struct PadReaderRust {
     connected: i32,
     problem: QString,
     game_pads: u64,
+    game_muted: bool,
     game: Arc<GamePads>,
     reader: Option<Reader>,
 }
@@ -69,6 +72,7 @@ impl Default for PadReaderRust {
         let game = Arc::new(GamePads::default());
         PadReaderRust {
             game_pads: GamePads::address(&game),
+            game_muted: false,
             game,
             platform_library: QString::default(),
             only_pads: QString::default(),
@@ -99,6 +103,7 @@ fn open_pads(path: &str) -> Result<Pads, String> {
 impl cxx_qt::Initialize for qobject::PadReader {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().on_platform_library_changed(|reader| reader.start()).release();
+        self.as_mut().on_game_muted_changed(|reader| reader.game.set_muted(reader.game_muted)).release();
         self.as_mut()
             .on_only_pads_changed(|reader| {
                 if let Some(running) = reader.reader.as_ref() {

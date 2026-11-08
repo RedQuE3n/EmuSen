@@ -34,6 +34,8 @@ pub enum Screen {
     Question,
     /// A question whose B goes back, the Resume question's (§18.3).
     QuestionBack,
+    /// The Pause Card's Change Disc (EmuSen_Interface.md §20.2): A puts the disc in, Start is not offered.
+    PauseDisc,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -120,6 +122,11 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Accept, "Go back", None),
             (UiButton::Back, "Back", None),
             (UiButton::Left, "Moment", None),
+            (UiButton::Screensaver, "Screenshot", Some(crate::pause::SCREENSHOT)),
+        ],
+        Screen::PauseDisc => &[
+            (UiButton::Accept, "Put in", None),
+            (UiButton::Back, "Back", None),
             (UiButton::Screensaver, "Screenshot", Some(crate::pause::SCREENSHOT)),
         ],
     }

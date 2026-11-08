@@ -23,6 +23,9 @@ pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("emusen-kit-qt/src/kinds.cxxqt.h");
+        #[namespace = "Pad"]
+        type PadButton = emusen_kit_qt::kinds::ffi::PadButton;
     }
 
     extern "RustQt" {
@@ -123,6 +126,31 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "answerResume"]
         fn answer_resume(self: Pin<&mut SessionModel>, index: i32);
+
+        /// The game's own disc of that index put in, off the GUI thread; a resume waits for it.
+        #[qinvokable]
+        #[cxx_name = "changeDisc"]
+        fn change_disc(self: Pin<&mut SessionModel>, index: u32);
+
+        /// A disc image by its file put in, off the GUI thread.
+        #[qinvokable]
+        #[cxx_name = "insertDisc"]
+        fn insert_disc(self: Pin<&mut SessionModel>, path: &QString);
+
+        /// The tray opened with no disc in, off the GUI thread.
+        #[qinvokable]
+        #[cxx_name = "ejectDisc"]
+        fn eject_disc(self: Pin<&mut SessionModel>);
+
+        /// Players 1 and 2 swap pads, said as a notice.
+        #[qinvokable]
+        #[cxx_name = "swapPlayers"]
+        fn swap_players(self: Pin<&mut SessionModel>);
+
+        /// Guide held with `button` over the running game (`PadRouter.guideChord`): pause.rs's `guide_chord` says what it asks.
+        #[qinvokable]
+        #[cxx_name = "guideChord"]
+        fn guide_chord(self: Pin<&mut SessionModel>, button: PadButton);
     }
 
     impl cxx_qt::Threading for SessionModel {}
@@ -450,6 +478,8 @@ impl qobject::SessionModel {
         self.as_mut().rust_mut().serial = serial;
         facts.slot = self.slot;
         facts.speed = self.speed;
+        // SAFETY: as in `game_input`.
+        facts.second_player = unsafe { GamePads::at(self.pads) }.is_some_and(|pads| pads.seated() & 0b10 != 0);
         facts.pictures = format!("image://{}/{serial}/", pictures::NAME);
         let platform = self.as_mut().platform().ok();
         let picture_of = |path: &str| {
@@ -607,6 +637,50 @@ impl qobject::SessionModel {
             Ok(()) => Ok("Rewound".to_string()),
             Err(_) => Err("Rewind: that moment is no longer held".to_string()),
         });
+    }
+
+    fn change_disc(self: Pin<&mut Self>, index: u32) {
+        self.job(move |runtime, session| match runtime.disc_change(session, index) {
+            Ok(()) => Ok(format!("Disc {} is in", index + 1)),
+            Err(e) => Err(format!("Change Disc failed: {e}")),
+        });
+    }
+
+    fn insert_disc(self: Pin<&mut Self>, path: &QString) {
+        let path = path.to_string();
+        let name = std::path::Path::new(&path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        self.job(move |runtime, session| match runtime.disc_insert(session, &path) {
+            Ok(()) => Ok(format!("{name} is in")),
+            Err(e) => Err(format!("Insert Disc failed: {e}")),
+        });
+    }
+
+    fn eject_disc(self: Pin<&mut Self>) {
+        self.job(|runtime, session| match runtime.disc_eject(session) {
+            Ok(()) => Ok("The disc is out".to_string()),
+            Err(e) => Err(format!("Eject Disc failed: {e}")),
+        });
+    }
+
+    fn swap_players(mut self: Pin<&mut Self>) {
+        // SAFETY: as in `game_input`.
+        let swapped = unsafe { GamePads::at(self.pads) }.is_some_and(|pads| pads.swap_players());
+        if swapped {
+            self.as_mut().rust_mut().notice_attention = false;
+            self.as_mut().notice_attention_changed();
+            self.as_mut().rust_mut().notice = QString::from(pause::SWAPPED);
+            self.as_mut().notice_changed();
+        }
+    }
+
+    fn guide_chord(self: Pin<&mut Self>, button: qobject::PadButton) {
+        let Some(button) = emusen_kit_qt::kinds::ui_button(button) else { return };
+        match pause::guide_chord(button, self.slot) {
+            pause::Outcome::Save(slot) => self.save_state(slot),
+            pause::Outcome::Load(slot) => self.load_state(slot),
+            pause::Outcome::Screenshot => self.screenshot(),
+            _ => {}
+        }
     }
 
     /// A change to the session made on a thread of its own, as Mistress makes it, its words brought back through the

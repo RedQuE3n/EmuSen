@@ -916,6 +916,255 @@ scene or painter change; the loader is done. The ranking is re-measured by the c
 - **Change detection.** The corpus TSV of each measurement is committed under `Testing/esde-corpus/<date>.tsv`; a row
   that worsens fails the landing until explained.
 
+### 4.5 `emusen-esde` as built: the loader, the scene and `esde-check` **[M 2026-11-08]**
+
+Stage 4's first half. The crate is `Frontend/esde`, outside the Frontend workspace with its own lock file, as
+`qml-rules` is, because the back end's development module links it; `tests/fence.rs` holds its tree to the crate,
+quick-xml and memchr, with no Qt, no cxx-qt and no other EmuSen crate. The QML painter is the second half and is not
+here.
+
+#### 4.5.1 The three modules
+
+| Module | Job | Files |
+|---|---|---|
+| `loader` | a theme folder to a `Theme` for one system and one set of choices: capabilities, selection, the parsing order, includes, variables, merging, typing, defaults, bindings, drawing order and every diagnostic with its code, file and line | `xml`, `diagnostics`, `values`, `catalog` (with `catalog.tsv`), `capabilities`, `choices`, `parse`, `view`, `resolved` |
+| `scene` | each element's rectangle, rotation, opacity, offset and text at a time on the host's clock, for a resolved view, the selection and ES-DE's measured motion; the move between views; the painter's `Frame` (§4.5.5) | `data`, `motion`, `words`, `grid`, `mapping` (with `mapping.tsv`), `view`, `stage`, `frame`, `paint`, `primary`, `help`, `draw` |
+| `marks` | the built-in icons a theme does not supply, as polylines in a unit box (§4.5.5) | `marks` |
+| `check` | a theme or a corpus loaded for every selectable variant and each system, measured as TSV | `check` |
+
+- **A translation, file by file.** `loader` follows the C# `BigPicture/Theme` one to one: `ThemeXml` → `xml`,
+  `ThemeValueParser` and `ThemeValues` → `values`, `ThemeCapabilities` → `capabilities`, `ThemeChoices` → `choices`,
+  `ThemeLoader`'s `ParseRun` → `parse`, `ThemeViewBuilder` → `view`, `ResolvedTheme` → `resolved`. Q47's and Q70/Q71's
+  readings (`EmuSen_BigPicture.md` §31, §35) are kept to the character: ES-DE's leading-number FLOAT, C-style
+  UNSIGNED_INTEGER and COLOR, the pair split at its first space, `selectable` false only on `0`, `f` or `n`, untrimmed
+  paths and includes, an unknown `imageType` hiding the element.
+- **The catalogue is data.** The 16 element types and 472 properties (468 until the re-check of §4.5.5) are `catalog.tsv`, one row a property (type,
+  literal default, same-as default, computed default, range, pair rule, shape, values, view limit, deferral), read once.
+  It was generated from the C# `ThemeCatalog` by a script outside the repository on 2026-11-08 and is checked by the
+  C# catalogue tests re-expressed (§4.5.3), the 39 hand-read entries among them.
+- **The XML reader.** quick-xml 0.38 (MIT), a streaming reader, with a small owned tree built over it. It was chosen
+  over a DOM parser because ES-DE's lenient reading needs a fragment read: when the strict reading fails, a bare `&`
+  is escaped, declarations are blanked, the first element is read whole and anything after it is ignored, as the C#
+  `ThemeXml` does through `XmlReader` in fragment mode. Whitespace-only text is dropped and line ends normalised, as
+  `XDocument` does; lines are counted from the reader's byte offsets.
+- **One addition to the C# model.** A diagnostic carries a `subject` (the tag, the element type, or `type.property`)
+  for the three unknown codes, so the property map does not parse messages.
+- **The scene's record.** `SceneView::frame()` gives one `ElementState` per element in drawing order: why it is
+  skipped (the C# `SceneBuilder.Skip` reasons, and "nothing to show" for a text with no words), the box in pixels from
+  `pos`, `size` and `origin`, `rotation` and `rotationOrigin`, the opacity (its own, times `scrollFadeIn`'s rise, times
+  the held list's metadata fade), the offset (a carousel's or list's position in items, a grid's first row), the time
+  since the selection, the `TextScroll` rule a self-scrolling text follows (LunaP's §102.3, with ES-DE's measured
+  rates), the grid's focus, and what a text, datetime or clock says in its letter case. `Stage::layers()` gives the two
+  views during a pan with their shifts, the help bar, clock and status held still. The clock is microseconds the host
+  passes in; nothing reads wall time. Text widths are the painter's: it reports them through `Stage::measured` and the
+  scene gives the offset (§4.5.5).
+- **What the C# scene did that this one leaves to the host or the painter.** Media lookup (the C# `ISceneMedia`; the
+  host fills `Game::media`), the system view's gameselector picks (`GameSelectors`; the system view's game is none
+  here), animation frame timing, and the rebuild-on-step lever of `EmuSen_BigPicture.md` §14.8, which has no meaning
+  where a frame is a function of state. Badges, help entries, device status and the quick-scroll letters moved into
+  the scene with the painter's contract (§4.5.5).
+- **What is drawn** is `scene/mapping.tsv`: every catalogue pair once, with its status (§4.5.5). Its `drawn` rows are
+  the C# `SceneMapping` as it stood on 2026-11-08, the pairs the painter must draw to match the C# one; `check` counts
+  a pair neither drawn nor accepted as unsupported. Each painter stage that draws more extends it.
+
+#### 4.5.2 `check` and `esde-check`
+
+`esde-check` is the fourth command of the `emusen.dev` module (`Platform/emusen-dev-module/src/esde_check.rs`, a
+cross-component dependency on `Frontend/esde`, the same shape as `qml-rules`'s), with its page at
+`Docs/man/emusen.dev/esde-check.1`. A theme is loaded once for each selectable variant (once when none is offered) and
+each of EmuSen's five systems, at 1280 × 800, as pass 3's survey loaded it. The default table is one row a theme
+(loads, systems themed, variants, runs, errors, warnings, pairs set, unknown, unsupported, drawn whole, kinds, undrawn
+kinds), ending in the three headline numbers; `--diagnostics` and `--properties` print the diagnostics and the property
+map. It exits 1 when a theme does not load, which is the landing check §4.4 asks for.
+
+#### 4.5.3 Proof: the C# fixtures, then the C# survey's own corpus
+
+**The fixtures.** Every loader fixture of `ThemeCapabilitiesTests`, `ThemeLoaderTests`, `ThemeErrorTests`,
+`ThemeCatalogTests`, `ThemeEsdeRulesTests` and `ThemeValueRulesTests` is re-expressed in `Frontend/esde/tests/` against
+the same synthetic themes (`tests/common` is `SyntheticTheme`), theory rows as loops over the same rows: 116 tests, all
+passing. Left out are the two install-gate cases, which test the C# downloader, not the loader. The scene's fixtures
+are those of `SceneMotionTests`, `GridSceneTests` and `SceneSemanticsTests` that assert state rather than a control's
+pixels, 22 tests over the same synthetic library and the same round-number motion. One translation defect was found
+by them: the grid's two focus levels were assigned one after the other, so the second read the first's new value; the
+C# assigns them as a pair. `A_step_while_moving_starts_from_the_items_current_focus` caught it.
+
+**The September corpus.** `esde-check` was run over the 66 themes' XML that pass 3 fetched on 2026-09-26
+(`~/.cache/emusen/bigpicture/theme-survey/xml`) and compared theme by theme with the C# survey's `survey.json` of
+2026-09-27. For all 66: the same systems themed, the same errors (0), the same runs, the same undrawn element kinds and
+the same count of unsupported pairs. Warnings differ in 22 themes by 1 or 2, each by the theme's own capabilities
+warnings, which the C# survey counted once more outside its loads (`ThemeSurveyTool.Analyse_the_fetched_themes`);
+checked on SimpleMenu (one bare `&`) and Razor (a bare `&` and `ar_SA`). 66 of 66 load, as in C#. The whole run takes
+2.7 s, against the C# survey's 3.6 s.
+
+**Seeded faults**, each applied alone and reverted:
+
+| Fault | Caught by |
+|---|---|
+| general `<view>`s parsed before `<variables>` | `errors::a_property_made_empty_by_its_variables_is_ignored_with_a_warning` and the parsing-order tests |
+| a bare `&` left raw in the lenient reading | `xml::a_bare_ampersand_and_text_outside_are_read_leniently`, `esde_rules::a_bare_ampersand_is_kept_as_text_and_references_are_decoded` |
+| the fast tier stepping one item, not four | `scene::a_list_wraps_on_a_tap_stops_at_its_end_when_held_and_jumps_at_the_fast_tier` |
+| the metadata fading at the press, not the first repeat | `scene::metadata_fades_out_while_the_list_scrolls_fast_and_back_in_when_it_stops`, `scene::a_held_grid_fades_the_metadata_out_from_the_first_repeat` |
+
+#### 4.5.4 The corpus measured on 2026-11-08
+
+ES-DE's `themes.json` was fetched from its list's repository on 2026-11-08: **71 themes** (the 66 of September and five
+new: Atelier, Hyperflix, NXE Menu, PSOne-ish, Unreleased), all on github.com but one on gitlab.com, and
+`latestStableRelease` 52. That field is the list's own release number, not a count of themes (it was 51 in September).
+Each theme's XML was fetched by a blobless, sparse, depth-one `git clone` from the address the list names, so that
+only `*.xml` blobs came down and no API allowance was spent: 25,548 files, 291 MB, every XML file rather than pass 3's
+five systems' (68.8 MB), since a file skipped by name could be one an include needs. Art Book Next, Artflix (Revisited)
+and CarAlt were fetched whole with their theme files (XML, images, fonts, sounds; no video): 219, 72 and 30 MB. Hooks,
+LFS filters and links were off, nothing fetched was run, and each folder keeps its commit in `.corpus-commit`. All of it
+is under `~/.cache/emusen/bigpicture/corpus/`, outside the repository.
+
+The measure is `Testing/esde-corpus/2026-11-08.tsv`, taken in 2.6 s:
+
+| | September (C#, 66 themes) | 2026-11-08 (Rust, 71 themes) |
+|---|---|---|
+| Load for all five systems | 66 | **70** |
+| Drawn whole | 0 | 0 |
+| Use no undrawn kind | 57 | 61 |
+
+- **Every one of the 66 still loads,** and against the Rust run over September's XML no row worsened; one improved
+  (X-Grid sets two fewer unsupported pairs, 9 to 7).
+- **NXE Menu does not load:** its carousels set `itemLinearScale` and `itemLinearSpacing`, which the catalogue lacks,
+  so each is an unknown property and unthemes every system. Both are documented in ES-DE's current `THEMES.md` (master,
+  read 2026-11-08, its "carousel" section: NORMALIZED_PAIR, the scale and the spacing of the items before and after the
+  centre); the catalogue was read from `THEMES.md` in September. The C# loader shares the catalogue and would refuse it
+  the same way. This is two catalogue rows to add, not a translation defect. Decided 2026-11-08: add them; with the
+  re-check of §4.5.5 NXE Menu loads, and all 71 do.
+- **The watched subset, fetched whole:** Art Book Next in all 100 runs with no error and no warning, 168 pairs set
+  and 5 unsupported (the video playback properties); Artflix (Revisited) and CarAlt load in every run, with 6 and 8
+  unsupported pairs, and both use a vertical wheel carousel, which the scene draws only in part. The pixel comparison against ES-DE's captures waits
+  for the painter.
+
+#### 4.5.5 The painter's contract: `Stage::frame`, `mapping.tsv`, `marks` and the catalogue re-check **[M 2026-11-08]**
+
+The scene's output for the QML painter, as the painter's design (§3 and §13 there) defines it. Everything is in window
+pixels at the scene's time, a pure function of (view, data, size, time, measurements); the painter binds it and
+animates nothing.
+
+**The records** (`scene/frame.rs`), produced by `Stage::frame()` (`scene/draw.rs` per view, `scene/stage.rs` for the
+two views of a pan):
+
+| Record | Holds | Built from |
+|---|---|---|
+| `Frame` | `elements: Vec<Placed>` in drawing order (the leaving view's then the current view's during a pan, the overlays unmoved), `primary`, `leaving_primary`, `moving`, `next_change_ms`, `overlay` | `Stage` |
+| `Placed` | `id` (FNV-1a of view, kind and name, stable across frames and steps), kind, name, `x y w h`, rotation, rotation origin (fractions), opacity (the element's × the metadata fade × `scrollFadeIn`), `paint` | `SceneView::frame()`'s `ElementState`, its box re-placed by origin once measured |
+| `Paint::Picture` | source, fit (Fill, Contain, Cover, Tile), crop position, tile size and alignment, tint (colour, gradient end, direction), saturation, corner radius px, nearest, GIF frame | `paint.rs`, the C# `ImageElements` translated: image, video's still, animation (GIF) |
+| `Paint::Text` | words in their case, font, px, colour, alignments, line spacing, wrap, ellipsis, background (grown outward by its padding), `Scroll` | `TextElements` and the clock |
+| `Scroll` | a horizontal offset and the distance to the following copy, or a vertical offset and opacity | `TextScroll::loop_offset` and `run_at`, once measured |
+| `Paint::Rating` | value, filled and unfilled (`Icon`: the theme's file or the star mark), tint, overlay | the box 5:1 when one axis is 0 |
+| `Paint::Badges` | each shown slot's cell, its icon (a file fills the cell, a mark a centred square), the controller and folder link overlays | `SceneBadges` and LunaP's `BadgeStrip.Cells` |
+| `Paint::Help` | entries (label in case, `PadButton`, pair, the theme's icon for the button), font, px, colours, background, spacings, scale, filled glyphs | `HelpPrompts`, `help.rs` |
+| `Paint::Info`, `Paint::Status` | marks and texts, styles | gamelistinfo's counts (§39 of `EmuSen_BigPicture.md`); the device's radios and battery |
+| `Primary` | the element's id, `Rows` (systems, or one system's games), selected, and `Carousel { slots }`, `TextList { first_row, row_h, content_y, selector, colours, marquee }` or `Grid { columns, pitch, margin, content_y, focus, styles }` | `primary.rs`: the C# `PrimaryElements` and `GridElements`, LunaP's `ImageCarousel` and `TextRowList` |
+| `Slot` | row, the item box before scale, scale and its origin, turn and its origin, opacity, dim, saturation, tint, reflection | `ImageCarousel.ItemRect`, `GrowthPoint`, `WheelTransform`, `WheelAlignShift`, farthest first |
+| `ScrollLetters` | letters, star, px, opacity | the C# `ShowScrollLetters` |
+
+- **A slot's matrix as two transforms.** LunaP placed a carousel item by one matrix: scale about the growth point, the
+  wheel's turn about its centre, then the vertical wheel's alignment shift (or, upright, a translation round the
+  wheel). A translation after a scale and a turn equals the same scale and turn about origins moved by it, so a slot
+  carries the box already moved and the two origins moved with it, which QML's `Scale` and `Rotation` take directly.
+- **`measured(id, w, h)`** is the painter's report of what only it can know: a picture's own size, a text's or an
+  indicator row's extent, a text list's selected name's width. The scene keeps it with a key of the content it measured
+  (FNV-1a of the paint before measurement), so a measurement of the last game's name or cover is never applied to the
+  next: after a step the scroll is none and the box is the unmeasured one until the painter reports again.
+  `Stage::measured` returns whether the frame changed. It sizes `maxSize` pictures (contained), pictures with one axis
+  0 (the other by aspect) or none (their own size), and texts and the help, status and info rows on the axes the theme
+  left at 0, placed by `origin`.
+- **`moving` and `next_change_ms`.** `moving` is a glide, a hold, a fade, a `scrollFadeIn`, a pan or a measured scroll
+  in motion. `SceneView::is_animating` is the first five; `is_moving` keeps its old meaning (any text that may scroll),
+  which the scene tests use. `next_change_ms` is the nearest of each measured scroll's wait (`TextScroll::loop_wait`,
+  `run_wait`: until the delay, the pause or the fade ends) and a shown clock's next minute, or next second when its
+  format shows seconds, from `Data::now`. At rest with no clock and nothing measured to scroll, the frame asks for
+  nothing: the condition for §6's zero frames at rest.
+- **Inputs added to `Data`, `System` and `Game`:** the device status and the indicators kept, ES-DE's controller type
+  (which picks a theme's help icons), the face-button swap, the help context, the quick-scroll setting; a system's
+  stars, favourites-first and counts; a game's media by type (the host's lookup), controller, manual, alternative
+  emulator, folder link and collection membership.
+- **`PadButton`, not the kit's `UiButton`.** The crate depends on nothing of EmuSen's (`tests/fence.rs`), so a help
+  entry names its button by place, as THEMES.md's entries do (a, b, x, y in Xbox positions, the pads, shoulders,
+  triggers, back, start, stick click); the bridge maps place to the kit's button. One owner each: the places are
+  ES-DE's, the kit's functions the kit's.
+
+**`scene/mapping.tsv`** is now one row per (element, property): all 472 catalogue pairs, each once, with a status. The
+test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted` holds it equal to the catalogue.
+
+| Status | Pairs | Meaning |
+|---|---|---|
+| `drawn` | 367 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it |
+| `accepted` | 9 | the help's eight `*Dimmed` properties (decided 2026-11-08; the design counted six, `THEMES.md` lists eight: `posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`), and `sound.path`, which the host plays |
+| `later:video` | 16 | the video family |
+| `later:gradients` | 22 | the `*ColorEnd` and `*GradientType` pairs the C# did not draw |
+| `later:item-text` | 19 | carousel and grid item text styles and scrolling, the collections' letter cases, name suffixes |
+| `later:picture` | 16 | interpolation, corner radius and brightness where not drawn, flips, mipmap, `scaleFactor`, `gameOverridePath`, `defaultFolderImage` |
+| `later:stationary` | 11 | `stationary`, `renderDuringTransitions`, `fadeAbovePrimary` |
+| `later:carousel-layout` | 6 | `itemStacking`, `selectedItemOffset`, `itemLinearScale`, `itemLinearSpacing`, `itemAxisRotation`, `itemDiagonalOffset` |
+| `later:textlist-selector` | 5 | the selector image, width and offset, the secondary selected background |
+| `later:help-layout` | 1 | `entryLayout` |
+
+`check` counts a pair as `set` when it is drawn or accepted, `unsupported` otherwise; nothing reads `catalog.tsv`'s
+`deferred` column for it any more.
+
+**`marks`** (`src/marks.rs`): 30 icons as `Mark { aspect, parts }`, each part rings of points in the unit box (the first
+the outline, the rest holes, filled even-odd) filled or stroked at a width in box heights, in the element's colour, the
+idiom of kit-core's `Shape`. They are LunaP's drawings translated: the list's star, folder and tick; gamelistinfo's
+gamepad, star, funnel and folder (an em high, the baseline 0.85 down); the status's Bluetooth, Wi-Fi, cellular and the
+battery at 0 to 4 bars; the nine badges and the folder link; the controllers (unknown, generic pad, NES, SNES, N64).
+Arcs are flattened (eight segments a corner, 32 a circle). One difference is named: the unknown controller's "?" was a
+font glyph in LunaP and is a stroked hook and dot here, since the crate sets no type.
+
+**The catalogue re-check.** ES-DE's `THEMES.md` (master, fetched from gitlab.com/es-de/emulationstation-de on
+2026-11-08) was read element by element against `catalog.tsv`: names, types, literal defaults, ranges and enumerated
+values. Six differences, all additions since September:
+
+| Element | Added | From `THEMES.md` |
+|---|---|---|
+| `carousel` | `itemLinearScale`, `itemLinearSpacing` | NORMALIZED_PAIR, −0.5 to 1 per axis, default `0 0`, horizontal and vertical types only |
+| `image`, `animation` | `scaleFactor` | FLOAT 0.1 to 1, default 1; SVG (image) and Lottie (animation) rasterisation scale |
+| `text` | `metadata` values `customCollectionNameGrouped`, `customCollectionNameGames` | the custom collection's name in the grouped system, and inside it |
+
+The two new `metadata` values are accepted by the loader and draw nothing yet (a text with nothing to say is skipped):
+the scene has no grouped custom collections, which belong to the shelves (the design's piece D2).
+
+**The corpus re-measured**, `Testing/esde-corpus/2026-11-08b.tsv`, the same 71 themes' XML as §4.5.4, in 2.75 s:
+
+| | 2026-11-08 (§4.5.4) | 2026-11-08b |
+|---|---|---|
+| Load for all five systems | 70 | **71** |
+| Drawn whole | 0 | 0 |
+| Use no undrawn kind | 61 | 61 |
+
+No row worsened but one, and that one by loading: NXE Menu loads in all five runs with no error (was 20 errors, 2 unknown properties; its unsupported
+pairs rise from 10 to 12, the two carousel rows now known and `later`). 30 themes set
+fewer unsupported pairs, each by its help's dimmed properties now accepted (CarAlt 8 to 2, Epic Noir Revisited 8 to 2,
+Razor 4 to 2). Atelier and Analogue 3D Menu warn less (6,795 to 6,585 and 2,575 to 2,540), each by the two
+`customCollectionName` values no longer refused. Nine themes now set at most two unsupported pairs; the pairs most often
+unsupported are the video family's (`video.delay` in 55 themes, `pillarboxes` 49), then `carousel.imageInterpolation`
+(20) and `image.stationary` (18), the order the painter's design ranks the families in.
+
+**Proof.** 14 tests in `tests/frame.rs` (the mapping and its accepted pairs through `check`, the marks in their box,
+the carousel at rest and mid-step, a wheel and a reflecting row, the text list's window and marquee through a
+measurement, a `maxSize` picture and a text sized by its words, the help's words, buttons and icons under the swap,
+badges, status and rating, the overlays through a pan, the quick-scroll letters, the clock's wake); the crate's 157
+tests pass. Seeded faults, each applied alone and reverted:
+
+| Fault | Caught by |
+|---|---|
+| carousel slots drawn nearest first | `a_carousel_s_selected_slot_grows…`, `a_carousel_mid_step…`, `a_wheel_turns…` |
+| a list's measurement kept after its name changes | `a_text_list_keeps_the_selection_mid_window_and_scrolls_its_name_once_measured` |
+| accepted pairs counted unsupported | `mapping_lists_every_catalogue_pair_once…`, `a_theme_setting_only_accepted_pairs_counts_none_unsupported` |
+| the swap moving the button but not its icon | `the_help_names_the_project_s_actions_on_the_buttons_and_icons_of_the_pad` |
+| overlays panned with the view | `the_overlays_hold_still_while_the_views_pan_and_both_primaries_are_drawn` |
+| the next change ignoring the scrolls | `a_text_list_keeps_the_selection_mid_window…` |
+| `maxSize` contained by the larger ratio | `a_picture_with_max_size_is_contained_once_its_own_size_is_known` |
+
+**Left for later, named:** a GIF's frame at the time (`Picture::frame` is none until the painter reports the file's
+frame delays); the system view's gameselector picks (the host's); the grid's and carousel's per-row text styles beyond
+the C#'s (`later:item-text`). A frame allocates its records each tick; the bridge's models change rows in place
+(design §4), and whether the scene's own allocation shows in a frame's cost is measured with the painter, not assumed.
+
 ---
 
 ## 5. The stable developer surface
@@ -1545,7 +1794,7 @@ Random game are steps through a few dozen letters or one number. The count reads
 clears a search, then the section's favourites, then goes back a screen (`passedBack`). Search docks the keyboard: the
 field at 64,100 1152 × 44 over one row of covers, the keyboard's place at 0,398 304 high, and the help bar's keyboard
 entries (Type, Delete, Space, Done, Move to grid, Home), as `GamesScreen.HintsFor` gives them. The kit's docked
-`Keyboard` stands in its place (§7.5).
+`Keyboard` stands in its place (§7.6).
 
 **Compared with Mistress** (measured on 2026-11-08). Every Qt recording (`~/.cache/emusen/tmp/qt-s2/compare/qt/`) was read
 by WiseMan's `SpecDocument.Parse` and written back byte for byte, and `InterfaceRules.All` found 0 faults in each.
@@ -1655,7 +1904,7 @@ glyph of both; an empty slot's outline is Qt Quick's dash (4, 2) where Mistress'
 yet ask before loading a state its record ties to another copy of the game (Mistress's `SameGameOrConfirmed`, which
 needs the question form of piece C); §2.8's "Load first drops one undo snapshot into rewind" is not done by Mistress
 either, and the runtime clears the history on a load; the shoulders and triggers on the reel are the model's and are
-not yet delivered by the card's QML; the words of `notice` wait for piece C's notices.
+not yet delivered by the card's QML (delivered since §7.5); the words of `notice` wait for piece C's notices.
 
 **Held to** (measured 2026-11-08): `qt-models`' `pause` 8 (the rows and words, the facts from a reel and a session, a
 choice, a step and B, the slots' pane and sentences, the Rewind row's pictures, the reel's page from its first stop to
@@ -1719,7 +1968,8 @@ interval a third at 300% and four times at 25%, within a microsecond of the runt
 turbo); `acceptance.rs` on Vulkan (Right giving the running game turbo, read back from the runtime into the card's facts,
 and Left the game's own speed again). Seeded faults, each reverted: the card not carrying the choice to the session
 (`pause_pages`); the speed's change not announced, which no test catches, since the harness reads a property's value
-and not its signal; the card's row reads the speed from the facts, which are read again either way.
+and not its signal; the card's row reads the speed from the facts, which are read again either way. (Caught since
+§7.5, whose harness counts a property's signal.)
 
 **The screenshot** (2026-11-08). X on any page of the card is its declared action `screenshot` (help.rs, every Pause
 screen): the card stays and `SessionModel.screenshot` writes the picture on show, its repeated rows written out, as a PNG
@@ -1745,10 +1995,86 @@ the **vertical walk** passing a field and a combo box (`KeyPass`); B offered to 
 side-by-sides, Mistress left and the kit right, are in `~/.cache/emusen/tmp/qt-s2/compare/`.
 
 **Named, for the tester:** the question's cover stops at the 58-unit help bar on the foot (742), where Mistress's Cores
-window, whose band is 98 high, stops it at 702, so the card is centred 20 units lower; the notice has no shadow on the software tier (it has on the GPU, §7.5); with a combo box's list open, the pad does not reach the frame until it closes (owed to stage 5). The Resume question is asked at a game's start since §7.5.
+window, whose band is 98 high, stops it at 702, so the card is centred 20 units lower; the notice has no shadow on the software tier (it has on the GPU, §7.6); with a combo box's list open, the pad does not reach the frame until it closes (owed to stage 5). The Resume question is asked at a game's start since §7.6.
 
 
-### 7.5 Stage 2, the loose ends: the search's keyboard, the Resume question, notices (2026-11-08)
+### 7.5 Stage 2, the Pause Card's remaining rows: Guide chords, Game Options, Change Disc, Swap Players, the reel's shoulders (2026-11-08)
+
+`EmuSen_Interface.md` §18.5, §20.2, §20.3 to §20.9; `EmuSen_BigPicture.md` §48.3, §48.7. The oracle is Mistress's
+`GameMenuRows`, `GameOptionsRows`, `ChangeDiscRows`, `PauseCardPane.ShowCover`, `GuideChordReader` and `MainWindow.Pad`,
+the recording `PauseCardGameOptions` and her render of it.
+
+**The Guide chords.** The reader and the router's part are the kit's (`EmuSen_Kit.md` §7.26); the program gives them
+meaning. `pause::guide_chord` says Guide with Up saves to the slot chosen, with Down loads it, with the right shoulder
+takes a screenshot; `SessionModel.guideChord` acts through the session's own `saveState`, `loadState` and `screenshot`,
+off the GUI thread, their notices as before. `start.rs` reads `AppSettings.GuideChords` as Mistress's `GuideChordsOn`
+does ("On", "Off", or Auto, the default, off under Steam's Game Mode), and `Main.qml` hands it to `Game.qml`, which
+binds `PadRouter.guideChords`. While Guide is held the game hears nothing (`PadRouter.guideHeld` bound to
+`PadReader.gameMuted`, `EmuSen_Kit.md` §7.26), so the state saved is the one the game was in before Up.
+Decided by the tester on 2026-11-08: the Controllers, Display, Sound and Memory Cards pages and the Cheats window wait
+for stage 5.
+
+**The first page's console rows** (§48.3). `Change Disc ▸` stands after Speed where the session's drive can change (the
+runtime's `discs.can_change`, Mistress's `DriveEngine`); `Swap Players 1 and 2` stands there instead where player 2 has
+a pad and no drive row takes the eighth place. The last of them ends Speed's section, so Game Options starts the next.
+The drive, the game's file and its system as the library keys it now cross in the card's facts, and whether player 2
+is seated is read from the pads' hand-over (`GamePads::seated`).
+
+**Change Disc** (§20.2): the game's own discs (`Basalt Run (Disc 1)` with `Inserted` on the one in, or the game's name
+for a single disc), then the console's other games in the library (`LibraryModel.gamesOf` of the facts' system, handed
+to `PauseModel.shelf`), then `Open the tray` while a disc is in. A on an own disc is `SessionModel.changeDisc` ("Disc 2
+is in"), on another game `insertDisc` ("Amber Coast is in"), on the tray `ejectDisc` ("The disc is out"), each off the
+GUI thread with the card closed, as Mistress's rows close it; A on the disc already in only closes the card. The help
+reads Put in, Back and Screenshot, Start not offered (`help::Screen::PauseDisc`). The pane is Mistress's `ShowCover`: the
+cover at 180 square, the generated card edged in Border where there is none, and beside it, 24 across and 48 down, the
+disc's name and the sentence in Muted at 22 ("A opens the tray, swaps the disc and closes it, as the console sees it.",
+or "In the console now. B goes back."); the tray's pane is its sentence alone. `Any file…` is the desktop form's
+(stage 6).
+
+**Swap Players 1 and 2** closes the card and swaps the first two players' pads in the hand-over from the next read, for
+as long as the program runs (`GamePads::swap_players`; the reader seats them swapped). Its notice reads "Players 1 and 2
+swapped".
+
+**Game Options** (§18.5): Cheats ▸, Controllers ▸, Display ▸, Sound ▸, and Memory Cards ▸ on a console with a drive,
+titled Game Options with the game as the way back, B returning to its row, the bar A Choose, B Back, X Screenshot,
+Start Resume, as `PauseCardGameOptions-1280x800.spec` has it. Cheats is drawn opening, as Mistress's `Opens` marks it
+and her render draws it (the recording's text omits the mark, which her row draws from `Opens`, not from the text).
+
+**The reel's shoulders.** `MenuCard` hands a key its row did not take to its host (`keyed`); `PauseModel.key` reads it
+as a press and `Card::shoulder` takes it as Mistress's reel does: the left shoulder five seconds further back, the
+right five nearer, the left trigger the oldest moment, the right the present. Seen in the test: a stride from 4.2 s
+went to 9.7 s, not 9.2 s, because 250/60 + 5 lies an ulp above 550/60. Mistress's `Stride` compares the same way, so
+the defect is hers too; `reel.rs` now takes two moments within a nanosecond as one time (`SAME_MOMENT`).
+
+**Differences from Mistress, for the tester:**
+- Controllers, Display, Sound, Memory Cards and Cheats are declared and do nothing yet. Their pages are pages of
+  Settings' one description (§20.3, §20.7 to §20.9) and Cheats is the cheats window; both are stage 5's.
+- Her render of Game Options is older than the recording: it shows a Volume row where §20.8 put Sound ▸. The Qt page
+  follows the recording. Over the test core, which claims a drive, the page also holds Memory Cards, and the first page
+  Change Disc, which Mistress's render (made over a core without one) has not.
+- No accepted render or recording of Change Disc exists; the page is held to her code's words and the pane to
+  `ShowCover`'s measures.
+- The generated card in the cover pane is drawn at hue 0, where Mistress's carries the console's hue.
+- Swap Players' notice does not name the pads, where Mistress's reads "Wireless pad: player 1 · …": the pads' names do
+  not reach the session's side of the hand-over.
+
+**Held to** (measured on 2026-11-08). kit-core's `input` (the reader), kit-qt's `router` 8, `route`, `qt_keys` and
+`qmltypes`; `qt-models`' `pause` 14 (Game Options' rows and way back, Change Disc's rows, outcomes, panes and way back,
+a single disc, Swap Players and its room, the chords' meaning, the shoulders and triggers); `qt-app`'s `pause_pages` on
+the software backend (the speed's change counted, the shoulders and triggers on the reel, Game Options, Change Disc's
+rows, bar and cover pane, Memory Cards) and `start` (the chords' setting); `acceptance.rs` on Vulkan over a real session
+(Change Disc over the test core's drive, held at the gate's five sizes as `PauseCardChangeDisc`; Game Options as
+`PauseCardGameOptions`; Guide with Up saving to slot 1 through the session with no menu, Guide going down opening
+nothing and let go alone opening the card). Clippy clean. Seeded faults, each reverted: Guide alone opening nothing
+(kit-qt's `router`); Up loading (`pause`); Swap Players beside the drive's row (`pause`); B on Change Disc to the first
+row (`pause`); the card's row passing no key (`pause_pages`, the shoulder); the speed's change unannounced
+(`pause_pages`, the count). The side-by-sides, Mistress left and Qt right, are
+`~/.cache/emusen/tmp/qt-s2/compare/PauseCard{,GameOptions}-{1280x800,1920x1080}-side.png`; the Change Disc page is
+`PauseCardChangeDisc-*.png` alone.
+
+*C++ parts:* none in the program; the harness's spy (`EmuSen_Kit.md` §7.26).
+
+### 7.6 Stage 2, the loose ends: the search's keyboard, the Resume question, notices (2026-11-08)
 
 **The merged tree on Vulkan.** WiseMan d4b23bf05 (stage 2's three branches merged) passed `acceptance.rs` in its own
 compositor on the RX 6800 before anything here was built on it: 1 test, 139 s, nothing logged.
@@ -1764,7 +2090,7 @@ B on the covers, which clears the search there, empties the keys' text too.
   `GamesBack` goes) and the help bar is the grid's, B reading **Clear search** while words are searched (`HelpModel`'s
   `GridSearched`, `GamesScreen.HintsFor`'s `searched`). The keyboard's close is the screen's Back (`Search` to `Grid`).
   The shoulders reach these declared actions through kit-core's walk, which now leaves the shoulders to a screen that
-  has no sections (`EmuSen_Kit.md` §7.26); the grid's shoulders are declared as `previous` and `next`.
+  has no sections (`EmuSen_Kit.md` §7.27); the grid's shoulders are declared as `previous` and `next`.
 - **No lift under the docked keyboard** (decided 2026-11-08 by the tester). Mistress's geometry (cells at 156, the field
   to 144, the keyboard from 398) leaves 242 units for a 240-unit cover, so the lit cover's lift (rise 6, scale 1.06)
   reached 1.2 units over the field's foot and its ring past the grid's clip (the gate's overlap, 2026-11-08). While the
@@ -1809,7 +2135,7 @@ Galaxia's `ResumeOnLaunch` (`Ask`, `Resume`, `Restart`) read through the platfor
 **Notices in the program and their shadow.** The session's words (`State saved to slot 1`, `Rewound`, `Screenshot
 saved`, what failed) now reach `Kit.NoticeModel` and a `NoticeLayer` over everything, fit for gameplay; a job's words
 are `Ok` or `Err`, the latter shown for attention (`noticeAttention`). The notice draws §5.4's shadow
-(`EmuSen_Kit.md` §7.26). **A named difference from Mistress** (decided 2026-11-08 by the tester: the design's shadow is
+(`EmuSen_Kit.md` §7.27). **A named difference from Mistress** (decided 2026-11-08 by the tester: the design's shadow is
 kept): Mistress's notice, LunaP's pill, has no shadow.
 
 **Home's Continue line and its count** (the Home side-by-side of stage 2). Qt read "Paused just now" where Mistress

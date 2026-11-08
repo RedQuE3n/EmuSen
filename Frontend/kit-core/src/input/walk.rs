@@ -279,7 +279,7 @@ impl Walk {
     pub fn press(&mut self, button: UiButton) -> bool {
         let button = button.swapped(self.swap_accept_back);
         match button {
-            // With no sections a shoulder is a screen's to declare (EmuSen_Kit.md §7.26).
+            // With no sections a shoulder is a screen's to declare (EmuSen_Kit.md §7.27).
             UiButton::PageUp if self.form != WalkForm::Card && !self.sections.is_empty() => return self.step_section(-1),
             UiButton::PageDown if self.form != WalkForm::Card && !self.sections.is_empty() => return self.step_section(1),
             UiButton::Accept

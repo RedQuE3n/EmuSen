@@ -41,6 +41,7 @@ pub mod qobject {
         Question,
         QuestionBack,
         GridSearched,
+        PauseDisc,
     }
 
     extern "RustQt" {
@@ -131,6 +132,7 @@ impl qobject::HelpModel {
             HelpScreen::Question => Screen::Question,
             HelpScreen::QuestionBack => Screen::QuestionBack,
             HelpScreen::GridSearched => Screen::GridSearched,
+            HelpScreen::PauseDisc => Screen::PauseDisc,
             _ => Screen::Home,
         }
     }
@@ -177,6 +179,7 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::Question => HelpScreen::Question,
         Screen::QuestionBack => HelpScreen::QuestionBack,
         Screen::GridSearched => HelpScreen::GridSearched,
+        Screen::PauseDisc => HelpScreen::PauseDisc,
     };
     shown.repr
 }

@@ -5,7 +5,7 @@
 use emusen_crystal_client::shapes::{Moment, Picture, RewindReel, SessionInfo};
 use emusen_kit_core::input::{UiButton, WalkAction};
 use emusen_qt_models::help::{action_lines, entries, Screen};
-use emusen_qt_models::pause::{facts_of, Card, Facts, Outcome, Page, PaneKind, SlotFact, Tile};
+use emusen_qt_models::pause::{facts_of, Card, DiscFacts, Facts, Outcome, Page, PaneKind, SlotFact, Tile};
 use emusen_qt_models::reel::{interval_for, marks_of, stops_of, Reel};
 
 fn card(facts: Facts) -> Card {
@@ -95,7 +95,8 @@ fn a_choice_a_step_and_b_answer_by_the_cards_rule() {
     assert_eq!((c.page, c.current), (Page::First, 6), "B on Leave goes back to its row");
     assert_eq!(c.back(), Outcome::Resume, "B on the first page resumes");
     assert_eq!(c.choose(at(&c, "Rewind")), Outcome::Nothing, "a reel with nothing in it does not open");
-    assert_eq!(c.choose(at(&c, "Game Options")), Outcome::Nothing, "a later step's");
+    assert_eq!(c.choose(at(&c, "Game Options")), Outcome::Shown, "Game Options turns to its page");
+    c.back();
     assert_eq!(c.act("resume"), Outcome::Resume, "Start's declared action resumes");
 
     let save = at(&c, "Save State");
@@ -234,4 +235,101 @@ fn leave_asks_each_end_first_on_the_card_forms_question_page() {
         assert_eq!(c.choose(1), yes);
         c.back();
     }
+}
+
+fn row(path: &str, title: &str, cover: &str) -> emusen_qt_models::library::GameRow {
+    emusen_qt_models::library::GameRow { path: path.into(), system: "tst".into(), title: title.into(), cover: cover.into(), ..Default::default() }
+}
+
+/// A game of two discs, the first in, with another game of its console in the library.
+fn two_discs() -> Card {
+    let discs = DiscFacts { count: 2, index: Some(0), can_change: true, lid_open: false };
+    let facts = Facts { path: "/g/Basalt Run.cue".into(), system: "tst".into(), discs, ..Facts::default() };
+    let shelf = vec![row("/g/Amber Coast.cue", "Amber Coast", "file:///c/amber.png"), row("/g/Basalt Run.cue", "Basalt Run", "file:///c/basalt.png")];
+    Card { facts, shelf, ..Card::default() }
+}
+
+#[test]
+fn game_options_holds_mistresss_rows_and_memory_cards_where_the_drive_changes() {
+    let mut c = card(Facts::default());
+    assert_eq!(c.choose(at(&c, "Game Options")), Outcome::Shown);
+    assert_eq!((c.page, c.title("G"), c.breadcrumb("G"), c.help()), (Page::Options, "Game Options".into(), "G".into(), Screen::PausePage));
+    let rows = |c: &Card| c.rows().into_iter().map(|r| format!("{}{}", r.label, if r.opens { " ▸" } else { "" })).collect::<Vec<_>>();
+    assert_eq!(rows(&c), ["Cheats ▸", "Controllers ▸", "Display ▸", "Sound ▸"], "PauseCardGameOptions' four rows, Cheats opening as Mistress's `Opens` marks it");
+    assert_eq!(c.back(), Outcome::Shown);
+    assert_eq!((c.page, c.current), (Page::First, 5), "B back to Game Options' row");
+    let mut disc = two_discs();
+    disc.choose(at(&disc, "Game Options"));
+    assert_eq!(rows(&disc).last().unwrap(), "Memory Cards ▸", "a console with a drive has its cards");
+}
+
+#[test]
+fn change_disc_lists_the_games_discs_the_consoles_others_and_the_tray() {
+    let mut c = two_discs();
+    let first: Vec<(String, bool)> = c.rows().into_iter().map(|r| (r.label, r.section_end)).collect();
+    assert_eq!(first[5], ("Change Disc".into(), true), "Change Disc after Speed, ending the section before Game Options");
+    assert!(!first[4].1);
+    assert_eq!(c.choose(at(&c, "Change Disc")), Outcome::Shown);
+    assert_eq!((c.page, c.title("Basalt Run"), c.help()), (Page::Disc, "Change Disc".into(), Screen::PauseDisc));
+    let rows: Vec<String> = c.rows().into_iter().map(|r| format!("{}|{}", r.label, r.value)).collect();
+    assert_eq!(rows, ["Basalt Run (Disc 1)|Inserted", "Basalt Run (Disc 2)|", "Amber Coast|", "Open the tray|"]);
+    let pane = c.pane();
+    assert_eq!((pane.kind, pane.big.as_str(), pane.title.as_str()), (PaneKind::Cover, "file:///c/basalt.png", "Basalt Run, Disc 1 of 2"));
+    assert_eq!(pane.sentence, "In the console now. B goes back.");
+    c.focus(1);
+    assert_eq!(c.pane().sentence, "A opens the tray, swaps the disc and closes it, as the console sees it.");
+    assert_eq!(c.choose(1), Outcome::ChangeDisc(1));
+    assert_eq!(c.choose(0), Outcome::Resume, "the disc already in changes nothing");
+    c.focus(2);
+    assert_eq!((c.pane().title.as_str(), c.pane().big.as_str()), ("Amber Coast", "file:///c/amber.png"));
+    assert_eq!(c.choose(2), Outcome::InsertDisc(0));
+    assert_eq!(c.others()[0].path, "/g/Amber Coast.cue");
+    c.focus(3);
+    assert_eq!(c.pane().kind, PaneKind::Sentence);
+    assert_eq!(c.choose(3), Outcome::Eject);
+    assert_eq!(c.back(), Outcome::Shown);
+    assert_eq!((c.page, c.current), (Page::First, 5), "B back to Change Disc's row");
+    let mut single = two_discs();
+    single.facts.discs = DiscFacts { count: 1, index: None, can_change: true, lid_open: true };
+    single.choose(at(&single, "Change Disc"));
+    let rows: Vec<String> = single.rows().into_iter().map(|r| format!("{}|{}", r.label, r.value)).collect();
+    assert_eq!(rows, ["Basalt Run|", "Amber Coast|"], "a single disc by the game's name, no tray with none in");
+    assert_eq!(Facts::from_json(&two_discs().facts.to_json()), two_discs().facts, "the drive crosses as plain data");
+}
+
+#[test]
+fn swap_players_is_offered_with_a_second_player_where_the_page_has_room() {
+    let two = Facts { second_player: true, ..Facts::default() };
+    let mut c = card(two.clone());
+    let labels: Vec<String> = c.rows().into_iter().map(|r| r.label).collect();
+    assert_eq!(labels[5], "Swap Players 1 and 2");
+    assert_eq!(c.choose(5), Outcome::SwapPlayers);
+    let mut disc = two_discs();
+    disc.facts.second_player = true;
+    assert!(!disc.rows().iter().any(|r| r.label.starts_with("Swap")), "eight rows at most: the drive's row leaves no room");
+    assert_eq!(Facts::from_json(&two.to_json()), two);
+}
+
+#[test]
+fn guide_chords_mean_save_load_and_a_screenshot_of_the_slot() {
+    use emusen_qt_models::pause::guide_chord;
+    assert_eq!(guide_chord(UiButton::Up, 3), Outcome::Save(3));
+    assert_eq!(guide_chord(UiButton::Down, 3), Outcome::Load(3));
+    assert_eq!(guide_chord(UiButton::PageDown, 3), Outcome::Screenshot);
+    assert_eq!(guide_chord(UiButton::Left, 3), Outcome::Nothing);
+}
+
+#[test]
+fn the_reels_shoulders_and_triggers_are_mistresss() {
+    let mut c = card(reeling(28));
+    assert_eq!(c.shoulder(UiButton::PageUp), Outcome::Nothing, "only the reel's page strides");
+    c.choose(at(&c, "Rewind"));
+    assert_eq!(c.shoulder(UiButton::PageUp), Outcome::Shown);
+    assert_eq!(c.rows()[1].value, "6.7 s ago", "the left shoulder five seconds further back");
+    c.shoulder(UiButton::PageDown);
+    assert_eq!(c.rows()[1].value, "1.7 s ago", "the right five seconds nearer");
+    c.shoulder(UiButton::First);
+    assert_eq!(c.rows()[1].value, "28 s ago", "the left trigger the oldest");
+    c.shoulder(UiButton::Last);
+    assert_eq!(c.rows()[0].label, "Stay at Now", "the right trigger the present");
 }

@@ -1023,6 +1023,48 @@ a folder import dropped (the screens test); a newer minor accepted (the API test
 fixture). The step that loads the screens offscreen and runs §8.1's audits is a Qt-side program of its own (C2), run by
 `theme-check` as a process.
 
+#### 3.7.2 The loaded step as built **[M 2026-11-08]**
+
+**`theme-audit`** (`Frontend/theme-check/audit`, the crate `emusen-theme-audit`, a member of the Frontend workspace) is the loaded
+step, a Qt program of its own that `theme-check` runs as a process on a package whose static step found nothing, reading its lines
+back as findings (decided 2026-11-08: the dev module links `theme-check`, whose fence forbids Qt). `theme-check` finds it through
+`EMUSEN_THEME_AUDIT` or `PATH`, and does not run without it unless `--static` is given; `--state DIR` passes through. Its parts, one
+job each: `world.rs`, the synthetic library read through the real clients; `crowd.rs`, a `LibrarySource` adding consoles to the
+clients' answers up to 120; `audit.rs`, placing, feeding and judging; `glue.rs` with `cpp/audit_glue.cpp`, the one C++ function
+(`QQmlEngine::singletonInstance` of the kit, which cxx-qt-lib does not bind). Its new dependencies are stated in its manifest: the
+host, `EmuSen.Theme`, the models, the harness and the clients' test world; the static crates gain none.
+
+**How a screen is judged.** Each screen the package lists is placed through `ThemeHost.place()` in a fresh engine, as `ThemeHost.qml`
+does, then its views are fed (`Library.show`, `Session.show`, `Device.show`) after placement, as the program reads its library after
+placing a theme's screens; the kit's `Tokens` of the theme's engine are set to the big screen form and reduced motion. The screen must
+be still at rest; then at the five sizes of §3.6 in both variants the harness's tree is walked by arrow keys and held to kit-core's
+`fit`, `pad_reach`, `pointer_reach` and `no_chrome`. Choose a console is placed once more over the same library grown to 120
+consoles (decided 2026-11-08, so a theme survives cores being added: 40 under one maker, ten under none), judged in the dark variant
+with every element held to the pointer and the pad's reach measured by a sweep that must hear each console's name on the focus,
+inside the window.
+Anything Qt logs while a screen is shown is a finding. The kinds, the sweep and the library are in `man theme-check`.
+
+**What it found on the way.** Two defects of the host, each proved and fixed at its source: the engine's empty plugin path, with which
+no theme could place the kit's `Frame` (`QtQuick.Controls`' plugin not found; fixed on WiseMan 62cd4a45a), and Qt's versioned
+`qmldir` probes for `EmuSen.Theme 1.0`, four a screen, refused and logged as though the theme had reached past the sandbox (§3.5.1,
+30a14261b). And one of kit-core's fit rule: a scroller or clip, which draws nothing itself, was never held to its panel, so a faded
+list ending at 844 in a 1280 × 800 window passed every rule while its last rows lay under the foot; the 120-console sweep, which
+counts a console only when its focused tile's centre is inside the window, found it, and `fit` now holds a scroller or clip to its
+limit as it holds a drawn item (4fd5d3e7c). A `Rows` fixture written as the kit's own walk scene is, with its focus bound to its current item, was unreachable past its
+second row until its current index followed the focus, and held no focus at all when its rows came after placement: both are faults a
+theme can have, and both are caught.
+
+**Proof, measured on 2026-11-08.** Fixtures under `theme-check/tests/themes`: `loaded` is `ok` through both steps (about 80 s, most of it
+the crowd); `cut-games` places its count in window pixels at y 730 and is past its panel at 1280 × 720 and fits at 800; `unreachable`
+has a tile no walk leads to, named at every size in both variants; `by-hand` lays its rows out as tall as they are and runs off every
+size with 120 consoles; `literal`, `multimedia` and `low-contrast` are each named by the static step and not loaded. `theme-check`'s
+reading of the program's lines, the note, and its refusal without the program are tested with a stand-in script, with no Qt.
+`emusen-theme-manifest`'s `API` and `CUES` are held to `EmuSen.Theme`'s committed registry by `tests/registry.rs` (rule Q).
+
+**Not yet.** The reference package (R) has not been through it; a theme's token overrides are not applied to the theme's engine by
+the host yet, so the loaded step judges the kit's own colours; the splash's still frame is judged as every screen is, under reduced
+motion, since the host gives a splash no `still` of its own yet.
+
 ---
 
 ## 4. ES-DE themes: the engine as a component

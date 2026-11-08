@@ -1,18 +1,22 @@
 NAME
     theme-check - hold an EmuSen theme package to its manifest's schema,
-    the QML rules and the kit's tokens
+    the QML rules and the kit's tokens, then load its screens and audit
+    their fit and reach
 
 SYNOPSIS
-    theme-check <folder>...
+    theme-check [--static] [--state DIR] <folder>...
+    theme-audit [--state DIR] <folder>
 
 DESCRIPTION
     The development tool of the emusen.dev module for EmuSen theme
     packages (EmuSen_Qt.md §3.4, §3.7): a folder holding theme.json,
     screens/Home.qml, Consoles.qml, Games.qml and optionally Splash.qml,
-    parts/ and assets/. This is the static step: nothing is loaded or
-    drawn. The step that loads each screen offscreen and runs the fit and
-    reach audits is a Qt program of its own, since this module is linked
-    into the standalone shell and its tree holds no Qt.
+    parts/ and assets/. It runs in two steps. The static step loads and
+    draws nothing. The loaded step, run only on a package whose static
+    step found nothing, is theme-audit, a Qt program of its own
+    (Frontend/theme-check/audit), which theme-check runs as a process and
+    whose lines it reads back: this module is linked into the
+    standalone shell and its tree holds no Qt (decided 2026-11-08).
 
     Findings print one a line:
 
@@ -66,12 +70,113 @@ DESCRIPTION
     measured, as a compositor paints it: the surface over black, any
     other back over that surface, the fore over its back.
 
+THE LOADED STEP
+    theme-audit places each screen the package lists through the theme
+    host (emusen-theme-host, EmuSen_Qt.md §3.5.1), the program's own
+    route: a window holding the host and one slot, the package's folder
+    given to the host, and the screen placed when the host is ready. A
+    fresh engine is made for each screen. The views of EmuSen.Theme are
+    then fed as the program's host feeds them, after the screen is
+    placed, since the program places a theme's screens before its
+    library is read; a theme must take the focus when its rows come.
+
+    The library is synthetic and read through the real clients
+    (emusen-client-fixture's world, the platform library built from the
+    same commit, or the one EMUSEN_PLATFORM_LIBRARY names): eight games
+    with made-up titles, two on each of four consoles, each played three
+    hours apart, two hearted; a game paused on the NES for 12 minutes;
+    one controller, 21:42, a battery at 64%. Choose a console is placed a
+    second time over the same library grown to 120 consoles, as a player
+    with many cores installed has it (decided 2026-11-08): the real ones
+    and synthetic ones copied from a real row under made-up names, 40
+    under one maker in all, ten under no maker, the rest under the
+    table's other makers.
+
+    The kit's Tokens of the theme's engine (each engine has its own
+    singletons) are set to the big screen form with reduced motion on,
+    so a resting motion stops and every state is at rest when read.
+    Each screen is first held to stillness at 1280 x 800: once its
+    animations stop, no frame may be swapped for 2 s. Then, in the dark
+    and the light variant, at 1280 x 800, 1920 x 1200, 1920 x 1080,
+    1280 x 720 and 3840 x 2160 (the gate's sizes, EmuSen_Interface.md
+    §24.7), the harness of emusen-qt-test reads the window's item tree
+    and walks it: from each operable element each of the four
+    directions is pressed as Qt's arrow keys, which the kit's Frame
+    answers as the pad's (EmuSen_Qt.md §1.7) and KeyNavigation answers
+    natively, and what moved is put back. kit-core's rules then judge
+    the state: fit (fit), pad reach from the focus along the walk's
+    edges (pad_reach), pointer reach of what the walk reaches
+    (pointer_reach) and no desktop chrome (no_chrome), with the measures
+    of the big screen form. The crowd's states are judged in the dark
+    variant alone, the pointer held to every element on the screen, and
+    the pad's reach by a sweep in place of the walk: Up and Left until
+    the focus stops, then along each row and back with Down between, as
+    a player looks for one console among many. A console counts as
+    reached when the name a reader hears for the focused element
+    (Accessible.name, else the first words under it) is its name and the
+    element's centre is inside the window, so a
+    theme that lays consoles out by hand, or names its tiles for no
+    reader, fails it.
+
+    The loaded step's kinds, each line naming the screen's file, line 1
+    (Qt keeps no line for an item), the size and the variant:
+
+        fit         a kit-core fit fault: past its panel or its clip,
+                    overlap, cut at an edge with no fade, an ellipsis,
+                    runs past its box, too small to read, and the rest
+                    of EmuSen_Kit.md §3's fit rules; the items are named
+                    by number, type, objectName or words, and box
+        reach       an operable element the pad does not reach from the
+                    focus; for the crowd, the consoles the sweep did not
+                    hear
+        pointer     a click at an element's centre hits another, or does
+                    not call what A calls; a list the wheel does not move
+        chrome      desktop chrome on the big screen
+        motion      a screen not still under reduced motion
+        load        the host could not place the screen: the engine's
+                    and the sandbox's words, a line each
+        warning     anything Qt logged while the screen was shown, the
+                    theme engine's warnings among them
+        audit       a state the harness could not read (a view still
+                    moving after 5 s), with its words
+
+    --state DIR writes each state's recording into DIR as
+    Screen-variant-WxH.spec and .png (EmuSen_InterfaceSpec.md's format),
+    the recordings a theme's side-by-sides are made from; with several
+    folders, each package's go into DIR/<its folder's name>.
+
+    theme-check finds theme-audit as EMUSEN_THEME_AUDIT names it, else on
+    PATH; without it the command does not run unless --static is given,
+    which stops after the static step. A package with static findings is
+    not loaded, and a note says so.
+
+    The audit's glue is one C++ function, a kit singleton found in the
+    engine an object lives in (QQmlEngine::singletonInstance, which
+    cxx-qt-lib does not bind). The screen's object is reached by its
+    number in the harness's tree, which is its QObject's address.
+
+    Proof, measured on 2026-11-08: the fixture packages under
+    Frontend/theme-check/tests/themes, loaded is ok; cut-games places
+    its count in window pixels at y 730 and is past its panel at
+    1280 x 720; unreachable has a tile no walk leads to; by-hand lays
+    its rows out as tall as they are, and with 120 consoles runs off
+    every size. A package takes about 80 s, most of it the crowd.
+
 EXIT STATUS
     0 for no finding, 1 for one or more, 2 when it could not run (no
-    folder given, a folder missing, an option unknown).
+    folder given, a folder missing, an option unknown, theme-audit not
+    found, or theme-audit unable to run).
+
+ENVIRONMENT
+    EMUSEN_THEME_AUDIT  the theme-audit program, where it is not on PATH
+    EMUSEN_PLATFORM_LIBRARY, EMUSEN_TEST_CORE
+                        a prebuilt platform library and test core for
+                        the synthetic library; else cargo builds them
 
 EXAMPLES
     theme-check Frontend/themes/emusen
+    theme-check --static Frontend/themes/emusen
+    theme-check --state /tmp/horizon Frontend/themes/horizon
     theme-check Frontend/theme-check/tests/themes/low-contrast
 
         .../low-contrast/theme.json:11 contrast accent on surface is

@@ -35,9 +35,12 @@ Item {
     property real fadeFalloff: 0
     // The decoded size over the drawn size, for a picture a transform will grow.
     property real sourceScale: 1
+    // Drawn upside down, as a reflection is; the ramp still starts at the top of what is drawn.
+    property bool flipped: false
     readonly property alias status: image.status
     readonly property alias ownWidth: image.implicitWidth
     readonly property alias ownHeight: image.implicitHeight
+    readonly property alias paintedHeight: image.paintedHeight
     readonly property bool tiled: root.fit === Picture.Fit.Tile
     readonly property real tileW: root.tileWidth > 0 ? root.tileWidth : Math.max(1, image.implicitWidth)
     readonly property real tileH: root.tileHeight > 0 ? root.tileHeight : Math.max(1, image.implicitHeight)
@@ -68,7 +71,7 @@ Item {
         readonly property real dim: root.dim
         readonly property real radius: root.radius
         readonly property size size: Qt.size(width, height)
-        readonly property rect uvRect: Qt.rect((1 - root.cropW) * root.cropX, (1 - root.cropH) * root.cropY, root.cropW, root.cropH)
+        readonly property rect uvRect: Qt.rect((1 - root.cropW) * root.cropX, (1 - root.cropH) * root.cropY + (root.flipped ? root.cropH : 0), root.cropW, root.flipped ? -root.cropH : root.cropH)
         readonly property size tiles: root.tiled ? Qt.size(width / root.tileW, height / root.tileH) : Qt.size(1, 1)
         readonly property point tileOrigin: root.tiled ? Qt.point(root.tileRight ? (width % root.tileW) / root.tileW : 0, root.tileBottom ? (height % root.tileH) / root.tileH : 0) : Qt.point(0, 0)
         readonly property real tiled: root.tiled ? 1 : 0

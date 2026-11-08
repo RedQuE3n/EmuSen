@@ -7,6 +7,336 @@ import QtQuick.tooling 1.2
 
 Module {
     Component {
+        file: "lists.cxxqt.h"
+        lineNumber: 101
+        name: "ElementModel"
+        accessSemantics: "reference"
+        prototype: "QAbstractListModel"
+        exports: ["EmuSen.Esde/ElementModel 1.0"]
+        exportMetaObjectRevisions: [256]
+        Enum {
+            name: "PaintKind"
+            isScoped: true
+            type: "int"
+            lineNumber: 108
+            values: [
+                "None",
+                "Picture",
+                "Text",
+                "Rating",
+                "Badges",
+                "Help",
+                "Info",
+                "Status",
+                "Carousel",
+                "TextList",
+                "Grid"
+            ]
+        }
+        Property {
+            name: "scene"
+            type: "EsdeModel"
+            isPointer: true
+            read: "getScene"
+            write: "setScene"
+            notify: "sceneChanged"
+            index: 0
+            lineNumber: 106
+        }
+        Property {
+            name: "revision"
+            type: "int"
+            read: "getRevision"
+            write: "setRevision"
+            notify: "revisionChanged"
+            index: 1
+            lineNumber: 107
+        }
+        Signal { name: "sceneChanged"; lineNumber: 130 }
+        Signal { name: "revisionChanged"; lineNumber: 131 }
+        Method {
+            name: "setScene"
+            lineNumber: 127
+            Parameter { name: "value"; type: "EsdeModel"; isPointer: true }
+        }
+        Method {
+            name: "setRevision"
+            lineNumber: 129
+            Parameter { name: "value"; type: "int" }
+        }
+    }
+    Component {
+        file: "model.cxxqt.h"
+        lineNumber: 213
+        name: "EsdeModel"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Esde/EsdeModel 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "settings"
+            type: "QString"
+            read: "getSettings"
+            write: "setSettings"
+            notify: "settingsChanged"
+            index: 0
+            lineNumber: 218
+        }
+        Property {
+            name: "shelves"
+            type: "QString"
+            read: "getShelves"
+            write: "setShelves"
+            notify: "shelvesChanged"
+            index: 1
+            lineNumber: 219
+        }
+        Property {
+            name: "media"
+            type: "QString"
+            read: "getMedia"
+            write: "setMedia"
+            notify: "mediaChanged"
+            index: 2
+            lineNumber: 220
+        }
+        Property {
+            name: "presence"
+            type: "QString"
+            read: "getPresence"
+            write: "setPresence"
+            notify: "presenceChanged"
+            index: 3
+            lineNumber: 221
+        }
+        Property {
+            name: "width"
+            type: "double"
+            read: "getWidth"
+            write: "setWidth"
+            notify: "widthChanged"
+            index: 4
+            lineNumber: 222
+        }
+        Property {
+            name: "height"
+            type: "double"
+            read: "getHeight"
+            write: "setHeight"
+            notify: "heightChanged"
+            index: 5
+            lineNumber: 223
+        }
+        Property {
+            name: "swap"
+            type: "bool"
+            read: "getSwap"
+            write: "setSwap"
+            notify: "swapChanged"
+            index: 6
+            lineNumber: 224
+        }
+        Property {
+            name: "themed"
+            type: "bool"
+            read: "getThemed"
+            notify: "themedChanged"
+            index: 7
+            lineNumber: 225
+            isReadonly: true
+        }
+        Property {
+            name: "problem"
+            type: "QString"
+            read: "getProblem"
+            notify: "problemChanged"
+            index: 8
+            lineNumber: 226
+            isReadonly: true
+        }
+        Property {
+            name: "view"
+            type: "QString"
+            read: "getView"
+            notify: "viewChanged"
+            index: 9
+            lineNumber: 227
+            isReadonly: true
+        }
+        Property {
+            name: "moving"
+            type: "bool"
+            read: "getMoving"
+            notify: "movingChanged"
+            index: 10
+            lineNumber: 228
+            isReadonly: true
+        }
+        Property {
+            name: "nextChangeMs"
+            type: "int"
+            read: "getNextChangeMs"
+            notify: "nextChangeMsChanged"
+            index: 11
+            lineNumber: 229
+            isReadonly: true
+        }
+        Property {
+            name: "revision"
+            type: "int"
+            read: "getRevision"
+            notify: "revisionChanged"
+            index: 12
+            lineNumber: 230
+            isReadonly: true
+        }
+        Property {
+            name: "letters"
+            type: "QString"
+            read: "getLetters"
+            notify: "lettersChanged"
+            index: 13
+            lineNumber: 231
+            isReadonly: true
+        }
+        Property {
+            name: "lettersMark"
+            type: "QString"
+            read: "getLettersMark"
+            notify: "lettersMarkChanged"
+            index: 14
+            lineNumber: 232
+            isReadonly: true
+        }
+        Property {
+            name: "lettersPx"
+            type: "double"
+            read: "getLettersPx"
+            notify: "lettersPxChanged"
+            index: 15
+            lineNumber: 233
+            isReadonly: true
+        }
+        Property {
+            name: "lettersOpacity"
+            type: "double"
+            read: "getLettersOpacity"
+            notify: "lettersOpacityChanged"
+            index: 16
+            lineNumber: 234
+            isReadonly: true
+        }
+        Signal { name: "settingsChanged"; lineNumber: 263 }
+        Signal { name: "shelvesChanged"; lineNumber: 264 }
+        Signal { name: "mediaChanged"; lineNumber: 265 }
+        Signal { name: "presenceChanged"; lineNumber: 266 }
+        Signal { name: "widthChanged"; lineNumber: 267 }
+        Signal { name: "heightChanged"; lineNumber: 268 }
+        Signal { name: "swapChanged"; lineNumber: 269 }
+        Signal { name: "themedChanged"; lineNumber: 270 }
+        Signal { name: "problemChanged"; lineNumber: 271 }
+        Signal { name: "viewChanged"; lineNumber: 272 }
+        Signal { name: "movingChanged"; lineNumber: 273 }
+        Signal { name: "nextChangeMsChanged"; lineNumber: 274 }
+        Signal { name: "revisionChanged"; lineNumber: 275 }
+        Signal { name: "lettersChanged"; lineNumber: 276 }
+        Signal { name: "lettersMarkChanged"; lineNumber: 277 }
+        Signal { name: "lettersPxChanged"; lineNumber: 278 }
+        Signal { name: "lettersOpacityChanged"; lineNumber: 279 }
+        Signal {
+            name: "played"
+            lineNumber: 288
+            Parameter { name: "path"; type: "QString" }
+        }
+        Signal {
+            name: "favourite"
+            lineNumber: 289
+            Parameter { name: "path"; type: "QString" }
+        }
+        Signal { name: "menu"; lineNumber: 290 }
+        Signal { name: "options"; lineNumber: 291 }
+        Signal {
+            name: "cued"
+            lineNumber: 292
+            Parameter { name: "name"; type: "QString" }
+        }
+        Method {
+            name: "setSettings"
+            lineNumber: 240
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setShelves"
+            lineNumber: 242
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setMedia"
+            lineNumber: 244
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setPresence"
+            lineNumber: 246
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setWidth"
+            lineNumber: 248
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setHeight"
+            lineNumber: 250
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setSwap"
+            lineNumber: 252
+            Parameter { name: "value"; type: "bool" }
+        }
+        Method {
+            name: "tick"
+            lineNumber: 280
+            Parameter { name: "ms"; type: "double" }
+        }
+        Method {
+            name: "pressed"
+            lineNumber: 281
+            Parameter { name: "button"; type: "int" }
+            Parameter { name: "repeat"; type: "bool" }
+            Parameter { name: "jump"; type: "int" }
+        }
+        Method {
+            name: "released"
+            lineNumber: 282
+            Parameter { name: "button"; type: "int" }
+        }
+        Method {
+            name: "hover"
+            lineNumber: 283
+            Parameter { name: "row"; type: "int" }
+        }
+        Method {
+            name: "tap"
+            lineNumber: 284
+            Parameter { name: "row"; type: "int" }
+        }
+        Method {
+            name: "wheel"
+            lineNumber: 285
+            Parameter { name: "notches"; type: "int" }
+        }
+        Method {
+            name: "measured"
+            lineNumber: 286
+            Parameter { name: "id"; type: "QString" }
+            Parameter { name: "w"; type: "double" }
+            Parameter { name: "h"; type: "double" }
+        }
+        Method { name: "reload"; lineNumber: 287 }
+    }
+    Component {
         file: "marks.cxxqt.h"
         lineNumber: 52
         name: "MarkShapes"
@@ -101,6 +431,171 @@ Module {
             isMethodConstant: true
             lineNumber: 86
             Parameter { name: "parent"; type: "QModelIndex" }
+        }
+    }
+    Component {
+        file: "lists.cxxqt.h"
+        lineNumber: 335
+        name: "PartsModel"
+        accessSemantics: "reference"
+        prototype: "QAbstractListModel"
+        exports: ["EmuSen.Esde/PartsModel 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "scene"
+            type: "EsdeModel"
+            isPointer: true
+            read: "getScene"
+            write: "setScene"
+            notify: "sceneChanged"
+            index: 0
+            lineNumber: 340
+        }
+        Property {
+            name: "revision"
+            type: "int"
+            read: "getRevision"
+            write: "setRevision"
+            notify: "revisionChanged"
+            index: 1
+            lineNumber: 341
+        }
+        Property {
+            name: "element"
+            type: "QString"
+            read: "getElement"
+            write: "setElement"
+            notify: "elementChanged"
+            index: 2
+            lineNumber: 342
+        }
+        Signal { name: "sceneChanged"; lineNumber: 353 }
+        Signal { name: "revisionChanged"; lineNumber: 354 }
+        Signal { name: "elementChanged"; lineNumber: 355 }
+        Method {
+            name: "setScene"
+            lineNumber: 348
+            Parameter { name: "value"; type: "EsdeModel"; isPointer: true }
+        }
+        Method {
+            name: "setRevision"
+            lineNumber: 350
+            Parameter { name: "value"; type: "int" }
+        }
+        Method {
+            name: "setElement"
+            lineNumber: 352
+            Parameter { name: "value"; type: "QString" }
+        }
+    }
+    Component {
+        file: "lists.cxxqt.h"
+        lineNumber: 262
+        name: "RowsModel"
+        accessSemantics: "reference"
+        prototype: "QAbstractListModel"
+        exports: ["EmuSen.Esde/RowsModel 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "scene"
+            type: "EsdeModel"
+            isPointer: true
+            read: "getScene"
+            write: "setScene"
+            notify: "sceneChanged"
+            index: 0
+            lineNumber: 267
+        }
+        Property {
+            name: "revision"
+            type: "int"
+            read: "getRevision"
+            write: "setRevision"
+            notify: "revisionChanged"
+            index: 1
+            lineNumber: 268
+        }
+        Property {
+            name: "leaving"
+            type: "bool"
+            read: "getLeaving"
+            write: "setLeaving"
+            notify: "leavingChanged"
+            index: 2
+            lineNumber: 269
+        }
+        Signal { name: "sceneChanged"; lineNumber: 280 }
+        Signal { name: "revisionChanged"; lineNumber: 281 }
+        Signal { name: "leavingChanged"; lineNumber: 282 }
+        Method {
+            name: "setScene"
+            lineNumber: 275
+            Parameter { name: "value"; type: "EsdeModel"; isPointer: true }
+        }
+        Method {
+            name: "setRevision"
+            lineNumber: 277
+            Parameter { name: "value"; type: "int" }
+        }
+        Method {
+            name: "setLeaving"
+            lineNumber: 279
+            Parameter { name: "value"; type: "bool" }
+        }
+    }
+    Component {
+        file: "lists.cxxqt.h"
+        lineNumber: 189
+        name: "SlotsModel"
+        accessSemantics: "reference"
+        prototype: "QAbstractListModel"
+        exports: ["EmuSen.Esde/SlotsModel 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "scene"
+            type: "EsdeModel"
+            isPointer: true
+            read: "getScene"
+            write: "setScene"
+            notify: "sceneChanged"
+            index: 0
+            lineNumber: 194
+        }
+        Property {
+            name: "revision"
+            type: "int"
+            read: "getRevision"
+            write: "setRevision"
+            notify: "revisionChanged"
+            index: 1
+            lineNumber: 195
+        }
+        Property {
+            name: "leaving"
+            type: "bool"
+            read: "getLeaving"
+            write: "setLeaving"
+            notify: "leavingChanged"
+            index: 2
+            lineNumber: 196
+        }
+        Signal { name: "sceneChanged"; lineNumber: 207 }
+        Signal { name: "revisionChanged"; lineNumber: 208 }
+        Signal { name: "leavingChanged"; lineNumber: 209 }
+        Method {
+            name: "setScene"
+            lineNumber: 202
+            Parameter { name: "value"; type: "EsdeModel"; isPointer: true }
+        }
+        Method {
+            name: "setRevision"
+            lineNumber: 204
+            Parameter { name: "value"; type: "int" }
+        }
+        Method {
+            name: "setLeaving"
+            lineNumber: 206
+            Parameter { name: "value"; type: "bool" }
         }
     }
 }

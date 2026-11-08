@@ -880,6 +880,92 @@ fails to load is reported in the Themes tab with the engine's warnings and the r
 Switching themes at run time destroys the engine and creates another; the spike shows the smaller case, one engine and
 a `Loader` whose `source` moves between theme files (§10.3).
 
+#### 3.5.1 The host as built **[M 2026-11-08]**
+
+**The crate.** `emusen-theme-host` (`Frontend/theme-host`), the QML module `EmuSen.ThemeHost 1.0` (the program's; a theme's engine
+never resolves it). Four parts, one job each: `policy.rs`, the sandbox's rules as plain data with no Qt; `package.rs`, `theme.json`
+read through `emusen-theme-manifest` (the schema's one owner, §3.7) into what the host loads, the name and the screens provided;
+`sandbox.rs`, the bridge to the C++ shells; `host.rs`, the `ThemeHost` type. Its dependencies are cxx, cxx-qt, cxx-qt-lib,
+`emusen-qml-rules` (for `THEME_IMPORTS` and its theme profile, the allow-list's one owner) and the manifest crate; no client, runtime
+or model crate (`tests/lint.rs` holds the list).
+
+**`ThemeHost`.** `folder` (a path, a `file:` URL or a `qrc:` folder; empty for none) and `coverStores` are written; `name`, `ready`,
+`failed`, `warnings` (one line per finding), `generation` and `liveEngines` are read. Writing `folder` destroys the engine before,
+drops `ready` (so every slot lets its screen go), reads `theme.json`, and makes the new engine; a manifest that breaks the schema or
+names a newer API is refused with the manifest's words (`theme.json:4 api written for EmuSen.Theme 2.0; this build has 1.0`) and
+no engine is made. `provides(role)` says whether the package lists the role (`ThemeHost.Home`, `Consoles`, `Games`, `Splash`, an
+enum, so no QML writes a role's name); `place(role, slot)` creates the role's screen in the theme's engine as a child of the slot,
+filling it, and returns false, setting `failed`, when it cannot.
+
+**The engine.** One `QQmlEngine` per theme, created and owned by the sandbox: its import paths are Qt's QML folder, `qrc:/qt/qml`
+and `qrc:/qt-project.org/imports` only (no application folder, no `QML_IMPORT_PATH`), no plugin path, the URL interceptor and the
+network factory installed, `offlineStoragePath` set empty, and its `warnings` signal gathered into the host's log. The sandbox
+deletes the screens it made, then the engine, then the shells the engine was handed, in that order; `liveEngines` counts the
+engines still alive through a `QPointer` each, so a leak is a number a test reads.
+
+**What a theme's engine may reach**, judged by `Policy::judge` for every URL the engine resolves (QML, script, qmldir, and every
+`url` property after resolution):
+
+1. A theme's own QML or script file has its imports held to `THEME_IMPORTS` (`QtQuick`, `QtQuick.Layouts`, `QtQuick.Effects`,
+   `QtQuick.Shapes`, `QtQuick.Controls`, `EmuSen.Theme`) and to relative folders, through qml-rules' theme profile; a script's
+   `.import` likewise. A file that names another module is refused before it compiles, with the file, the line and the list:
+   `screens/Home.qml:2 imports EmuSen.Models, which a theme may not import (allowed: …)`.
+2. Some modules never resolve, by any route: the program's own (`EmuSen.Models`, `.App`, `.Play`, `.Endymion`, `.Esde`,
+   `.ThemeHost`) and those that reach files, processes, media or the network (`QtMultimedia`, `QtNetwork`, `QtCore`,
+   `QtQml.XmlListModel`, `QtQuick.LocalStorage`, `QtQuick.Dialogs`, `QtWebEngine`, `Qt.labs`), refused at their `qmldir` under
+   every import root. This is what stops an inline component, `Qt.createQmlObject("import EmuSen.Models; …")`, which no file
+   check sees: measured on 2026-11-08 with the program's models registered in the process, the module's qmldir is looked for
+   under each of the three roots, each lookup is refused, and the object is not made. The allow-list of rule 1 is the narrower
+   rule; rule 2 exists because a module allowed by rule 1 (QtQuick, the kit through `EmuSen.Theme`) imports modules of its own,
+   which a theme must still be able to resolve transitively.
+3. `file:` URLs inside the theme's folder (symbolic links resolved, `..` taken out), pictures inside a cover store, and Qt's own
+   module files in its QML folder; nothing else on disk (`file:///etc/hostname is outside the theme's folder and the cover store`).
+4. `qrc:` URLs of Qt's own modules, `EmuSen.Theme`, the kit it re-exports, the EmuSen style's controls and the kit's fonts, and the
+   theme's folder when it is a resource (the reference package, R); never another resource of the program (`EmuSen.App`'s screens,
+   the ES-DE painter's shader).
+5. `data:` and `image:` (only the providers registered on the theme's engine, none yet); no other scheme, so no network:
+   `http://example.invalid/cover.png: a theme reaches no network …`.
+
+A refused URL is rewritten into `/emusen-refused/<scheme>/<host><path>`, a folder that never exists, so the engine reports the
+file missing synchronously (`QML Image: Cannot open: file:///emusen-refused/http/example.invalid/cover.png`) and the host's log has
+the reason. A first version rewrote to an unknown scheme left for the refusing network to decline; that sent qmldir lookups through
+the network asynchronously, and a synchronous `Qt.createQmlObject` waiting on them never returned (measured on 2026-11-08: the test
+hung past 180 s). The network factory stays as the second wall: every manager it makes refuses every request, logged, so a URL
+that reached it by a route the interceptor does not see still fails with a diagnostic.
+
+**The two C++ shells, and why.** `SandboxInterceptor` subclasses `QQmlAbstractUrlInterceptor` and `SandboxNetwork` subclasses
+`QQmlNetworkAccessManagerFactory` (its managers subclass `QNetworkAccessManager::createRequest`): cxx-qt declares no subclass of a Qt
+C++ interface with virtual functions, so these are the glue §1.4 allows. Each asks Rust: the interceptor calls `policy_reads` and
+`policy_judge` through the bridge and holds no rule of its own. Their log is guarded by a mutex, since the type loader and the
+picture readers call from their own threads; the policy is plain immutable data and is shared by reference, owned by the host and
+dropped after the sandbox. The sandbox (engine ownership and the screens' creation through `QQmlComponent`, which cxx-qt-lib does
+not bind) is the third piece of glue; `cpp/sandbox.h` and `cpp/sandbox.cpp` hold all three in 264 lines.
+
+**In the program.** `ThemeHost.qml` (`EmuSen.App`) holds the host and one `Loader` slot per role, each made while the theme provides
+the role and placing the screen when loaded; a slot's `themed` is true when its screen is in place and the theme has not failed.
+`Main.qml` draws it over the reference's screens, below every card, and hides the reference's Home, Choose a console or grid only
+where the theme's slot is `themed`; a role the theme omits, and every role once it fails, is the reference's, drawn as before. A
+theme's splash slot is made only while the splash is shown and is drawn in a layer over Moonrise, faded with it: Moonrise keeps the
+splash's clock, the skip and the fade (`EmuSen_Interface.md` §22), so a theme's splash cannot hold the start or take a press. Until
+`EmuSen.Theme`'s `Screen` gives a splash its `length`, Moonrise's length is the splash's, and Moonrise draws unseen under a theme's
+splash. The theme is chosen by `--theme DIR` or `EMUSEN_THEME`, empty for the reference; the cover stores are the media store and the
+settings' `ArtworkDirectory` and `EsdeMediaDirectory`. With no theme chosen the program is unchanged.
+
+**Proof.** `theme-host/tests/policy.rs` (5 tests, no Qt): the folder, the cover store and nothing else on disk; no network and no
+unknown scheme; Qt's modules resolve and the named ones never; a theme file held to the allow-list; a folder in the resources.
+`tests/sandbox.rs` (offscreen, the software backend, `EmuSen.Models` imported by the test scene so its types are registered as in
+the program): a stub theme's screen fills its slot and reads a picture from its folder, quietly; an `EmuSen.Models` import, a remote
+picture, a file outside, an inline component and a newer API each fail with the words above; switching stub → remote → stub leaves
+one engine, and no theme none. `tests/lint.rs`: the committed registry `Testing/qmltypes/EmuSen.ThemeHost-1.0.*` is the built one,
+the scene keeps the QML rules, the dependency list. `qt-app/tests/theme.rs`: a theme's splash over Moonrise and gone after it, its
+Home in place of the reference's and the omitted Choose a console the reference's, a failing theme reported and the reference
+shown, switching twice leaving one engine. The stub themes are plain QtQuick under `theme-host/tests/themes/` until `EmuSen.Theme`
+lands.
+
+**Not yet.** The `Screen` type and the splash's `length`, `still` and `finished` (T); the Themes tab and the setting that chooses a
+theme (S); a themed Games screen opens no List card until `Actions.openListCard` exists (T, R). What the sandbox does not do is
+§3.5's paragraph above, unchanged: a theme can still spin or allocate.
+
 ### 3.6 Console-style designs as themes: the test that the API is sufficient
 
 Four designs, each **inspired** by a console's shell (its arrangement and motion, never its logos, glyph sets, fonts or
@@ -1425,6 +1511,131 @@ The sheet is `~/.cache/emusen/tmp/qt-s4/compare/e1-slice-esde-csharp-qt-diff4.pn
 The watched states hold no desaturated and no rounded picture, since Art Book Next's dark scheme keeps saturation 1
 and its rounded cover is not in the variant measured, so those two are held to LunaP's arithmetic by the numbers
 above, not to a grab.
+
+#### 4.8.3 The painter without Qt: `shelves.rs` and `painter.rs` (E2, first part)
+
+What the bridge will put on Qt, written and tested as plain Rust first, so the behaviours below are held without a
+Qt application.
+
+- **`shelves.rs`** reads §4.6's texts. `settings` takes `esdeSettings`: the theme folder, the choices under Mistress's
+  keys (`Variant`, `ColorScheme`, `FontSize`, `AspectRatio`, `Language`, `Transitions`, as `BigPictureChoices` stores
+  them) and the interface's switches (`DisplayClock`, `DisplayHelp`, `ListScrollOverlay`, `QuickSystemSelect`,
+  `StartupView`); a text that does not read gives the defaults. `shelves` takes `esdeShelves` and `esdeMedia` into the
+  scene's `ThemeSystem` and `Game`s: a collection's entry, carried by its file alone, takes the row its console's shelf
+  carries, and its `source` is that console's system; a game's media is looked up by its folder and stem, then its
+  stem, under its own console (§4.6); `last_played` (seconds since 1970) becomes a civil date in UTC by Howard
+  Hinnant's days-to-civil; `release_date` reads the metadata's `yyyy-MM-dd`. `presence` takes `esdePresence`.
+- **`painter.rs`**: `ThemeCache` keeps a resolved theme per (folder, system, choices, media presence), as
+  `ThemedLibrary._themes` did, behind a mutex so the data thread fills it, with `forget` for a folder updated on disk;
+  `systems` is the data thread's work, shelves and their themes. `Painter` holds the `Stage`, its clock in
+  microseconds (`tick(ms)` adds), the latest `Frame`, and the pad's grammar on the view, the C# `ThemedLibrary.Command`'s:
+  a direction along the primary element's axis (a list's and a vertical carousel's vertical, a grid's both) presses
+  the scene; Left and Right across it change the system in a gamelist when the quick system select names them, as do
+  the shoulders or the triggers it names; otherwise the shoulders jump ten and the triggers to the first and last; A
+  opens the gamelist or plays the game; B goes back from a gamelist and does nothing at the system view (decided
+  2026-11-08); Y is the favourite; Start and Select are the host's menu and options. `install` keeps the view and the
+  selection across a refresh.
+- **The hold is the scene's.** The router's repeats are not passed on: the scene repeats a held direction on its own
+  clock, and only the scene knows the measured consequences of a hold (the metadata fading out from the first repeat,
+  the list's fast tier jumping four entries). The router gives the first press and the release.
+- **The pointer makes the pad's calls.** `hover(row)` steps to the row as the pad's step does, `tap(row)` is that and A,
+  and a wheel notch is one step, back for a notch up.
+
+**Proof**, `tests/painter.rs` (6, on a synthetic theme the test writes, no Qt application): the settings under
+Mistress's keys and a text that does not read; a collection's entry and the media by folder then stem, the two dates;
+the cache read on the second refresh while the file changed, and read again after `forget`; a carousel step moving at
+200 ms, settled after 401, and its frame equal to the static frame of the new state; the router's repeat not a second
+step, the scene's hold reaching the fourth game in 960 ms, and nothing moving after the release; hover, tap and the
+wheel making the same selection and the same `Played` as the pad, and B at the system view doing nothing. Seeded
+faults, each applied alone and reverted: the router's repeats passed on failed the hold test; hover one row off failed
+the pointer test; nothing cached failed the cache test.
+
+**Owed to the rest of E2** (the bridge, `View.qml`, the delegates, the GPU-tier proofs and the side-by-sides of the
+directions), recorded where the work stands: the description is not read yet (`LibraryModel.esdeDescription(file)`
+is a call the bridge makes for the selected game); the system view's random gameselector picks; the cue's sound files.
+
+#### 4.8.4 The bridge and `View.qml` (E2)
+
+**Five objects, one painter.** `EsdeModel` (`src/model.rs`) holds the `Painter` of §4.8.3 behind an `Rc<RefCell<…>>`
+on the GUI thread. The four list models (`src/lists.rs`) are given it in QML as a property, `scene: esde`, a
+`*mut EsdeModel` property of cxx-qt 0.10 (it compiles across bridges by naming the other bridge's type in an
+`extern "C++Qt"` block, without `#[qobject]`); on assignment a list takes its own share of the painter and keeps no
+pointer. Each list binds `revision: esde.revision` and refreshes on its change, so no `Connections` is needed.
+
+| Object | Holds | Changes |
+|---|---|---|
+| `EsdeModel` | writable `settings`, `shelves`, `media`, `presence` (the texts of §4.6), `width`, `height`, `swap`; read-only `themed`, `problem`, `view`, `moving`, `nextChangeMs`, `revision`, the quick-scroll `letters`, `lettersMark`, `lettersPx`, `lettersOpacity`; invokables `tick(ms)`, `pressed(button, repeat, jump)`, `released`, `hover(row)`, `tap(row)`, `wheel(notches)`, `measured(id, w, h)`, `reload()`; signals `played(path)`, `favourite(path)`, `menu`, `options`, `cued(name)` | a text or the size changing starts a load on a thread of its own (the texts read, `painter::systems` through the `ThemeCache`), handed back by `qt_thread().queue`; a load older than the last asked for is dropped |
+| `ElementModel` | one row per `Frame.elements`, roles flattened by `src/values.rs`, the `paint` role a `PaintKind` enum (`ElementModel.Picture` … `Grid`) the chooser reads, the primary's layout flattened onto its own row | a reset when the ids, paints or layouts change (a view switch, a system change); otherwise `dataChanged` for each row that differs |
+| `SlotsModel` | a carousel's slots (current or `leaving`) with their row's text and picture | a reset when the count or the rows change; `dataChanged` per moved slot |
+| `RowsModel` | a list's or grid's rows | replaced under a reset only when the `Rows` or the install changes; a step changes none |
+| `PartsModel` | one element's badges, help entries (`button`, `pair`, `label`, `icon`, as `Kit.HelpBar` reads them), info or status items | a reset when the count changes, else `dataChanged` over them |
+
+- **Ids are text.** An element's id is a 64-bit FNV value; QML numbers are doubles, so the `elementId` role and
+  `measured`'s first argument carry it as decimal text.
+- **Paths become URLs in Rust** (`QUrl::fromLocalFile`), since QML builds no strings (§1.3).
+- **A role never shadows an item's own property.** The box is `boxX`, `boxY`, `boxWidth`, `boxHeight`, `turn`,
+  `alpha` (qmllint refuses `left` and `top`, final members of `QQuickItem` in Qt 6.11); the help's scale is
+  `entryScale`.
+- **The help's buttons.** The scene names a help entry by its place (§4.5.5); the kit's `PadGlyph` draws
+  `UiButton::control(swap)`, so the bridge hands it the press of that place swapped, `help_buttons` in `painter.rs`,
+  from kit-core's own `PadControl::press` table. The crate now depends on `emusen-kit-core` (as the design's §1 lists),
+  and the painter's own copy of the button order is gone: it takes `UiButton::ALL`.
+- **The router's tiers are not bound** (decided 2026-11-08). The scene repeats a held direction on its own clock
+  (§4.8.3), so the router's repeat tiers would only produce repeats the painter ignores.
+- **The cue is a signal**, `cued(name)` with the scene's name (`navigate`, `select`, `back`, `quicksysselect`), since
+  two equal cues in a row must both sound; mapping a name to the theme's sound file is the host's (owed with H).
+
+**`View.qml`** is a plain `Item` filling its parent: an `EsdeModel` sized by it, an `ElementModel`, and a `Repeater`
+whose delegate is a `DelegateChooser` on `paint`. `DelegateChooser` is in `QtQml.Models` since Qt 6.9 (measured on the
+desktop's 6.11.2: `QtQml/Models/plugins.qmltypes` exports `QtQml.Models/DelegateChooser 6.9`), so `qml-rules` no longer
+refuses `import QtQml.Models` (decided 2026-11-08); a `ListModel` with rows is still a finding by the rows rule, and
+`role` joins the bindings that take a name. The delegates, one file each: `PictureElement`, `TextElement`,
+`RatingElement`, `BadgesElement`, `InfoElement`, `StatusElement`, `HelpElement` (the kit's `HelpBar`, fitted, unruled,
+in the theme's face and colours, filled glyphs; a press of an entry is `pressed(button)`), `CarouselElement`,
+`TextListView` and `GridElement`, over `ElementBox` (the box and its turn) and `Icon` (a theme file or a mark). The
+text list's file is not `TextListElement`: `qml-rules` reads any line containing `ListElement` as rows.
+
+- **The clock.** A `FrameAnimation` runs while `moving` and calls `tick(frameTime × 1000)`; a repeating `Timer` of
+  `nextChangeMs` runs while nothing moves and something will. At rest neither runs and the window swaps no frame.
+- **The pad and the keyboard.** `Connections` on `Kit.PadRouter` while the view has focus (`pressed`, `released`);
+  `Keys.onPressed` is `PadRouter.pushKey`.
+- **The pointer.** Each carousel slot, list row and grid cell carries a `HoverHandler` (`hover(row)` on entering) and a
+  `TapHandler` (`tap(row)`); a `WheelHandler` steps one item a notch; a right or back click is B.
+- **A carousel slot** is an item filling the element's box, scaled about the growth point and turned about the wheel's
+  centre (the scene's origins are in the element's box, so neither needs translating), its `Picture` at the slot's box.
+  A reflection is a second `Picture` drawn `flipped` (a new `Picture` property: the crop rectangle read upside down, so
+  the ramp of §4.8.1 still starts at the drawn top, the picture's bottom row) and placed under the painted picture.
+- **A grid cell's level** is the scene's `focus_of`, evaluated in a binding from `focusFrom`, `fromLevel`, `toLevel`
+  and `progress`; scale, opacity, dim and saturation follow from it.
+- **Measurement.** A picture reports its own size when it changes, a text each new extent, a list its selected name's.
+
+**Proof.** `tests/view.rs`, one test on the GPU tier (Vulkan on the RX 6800 in `kwin_wayland --virtual` at 3840 × 2160,
+the validation layer on, Qt's log required quiet), over a synthetic theme (a text carousel of three systems, a text
+list and the selected game's name) with 4,000 games on one shelf, measured on 2026-11-08: the theme loads with no
+problem; the system view at rest swaps no frame in 2 s and asks for no wake; a carousel step is moving at 150 ms,
+swaps frames while it glides, rests, and its last frame equals, pixel for pixel, the static frame a reload of the
+same state draws; A opens the gamelist; the list makes delegates for the rows that fit its box (within one), not for 4,000; a step selects
+the next game and its name in the same frame with nothing gliding; a hover selects row 3, a wheel notch down steps to
+row 4, a click selects row 3 again and a right click goes back to the system view. Repeater's delegates have no QObject
+parent, so the test reads them through the item tree (`Harness::tree`), never by `findChild`. In `tests/painter.rs`
+(8): the help's places under the swap, and 4,000 games: install and rows 3.7 ms, a step and a tick 0.11 ms (debug
+build). A first run found a defect the plain-Rust tests could not: a list held the painter borrowed while it signalled
+its rows, a text delegate measured itself in that signal, and the second borrow aborted; every list now copies what it
+needs and releases the painter before any signal, and `measured` publishes from the event loop.
+
+| Seeded fault, applied alone and reverted | Caught by |
+|---|---|
+| the `FrameAnimation` running always | `assert_still`: 119 frames in 2 s at rest |
+| `ElementModel` emitting no `dataChanged` | the metadata still "Game 0000" after the step |
+| a list row's hover one row off | the hover selecting row 4 |
+| the help's place not swapped | `a_help_entry_s_place_is_the_kit_button_that_draws_there_under_the_swap` |
+
+**Owed, named:** at the GPU tier, the held list's metadata fade and the quick-scroll letters (the harness presses and
+releases at once; holding needs a down-only press in `qt-test`), `scrollFadeIn`, the slide with the overlays held
+still, a wheel's logo centres (§36.3) and the `(default)` help and status places (§39.6): each is held in the scene's
+own tests (`Frontend/esde/tests/scene.rs`, `frame.rs`), and in the painter they are bindings of the same roles. The
+side-by-sides of Art Book Next beside piece B's grabs need the oracle's synthetic library and are left for piece C's
+rig. The scene allocates its `Frame` each tick and the lists copy what changed; the cost of both is measured with H.
 
 ---
 

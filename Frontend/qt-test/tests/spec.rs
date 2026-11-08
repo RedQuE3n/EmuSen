@@ -149,4 +149,5 @@ fn qt_kit_7_11_a_state_is_recorded_in_the_spec_format() {
     assert_eq!(recorded, walk.len(), "every press of the walk is an edge line");
     assert!(edges(&walk).len() >= 8, "the moves among them");
     assert!(text.ends_with('\n'));
+    scene.assert_quiet();
 }

@@ -847,9 +847,9 @@ target folder of its own with the compiler cache off, at a load average of 10.2 
 `pathItemCount` (as many as cover its width, plus two) seeded again failed the release gate with 192 `rests outside the
 carousel` faults, the first `big-Dark-menu-1280x800: … Card… at 1229,324 180x240`.
 
-Seen in every run since step 1, the debug and release gates alike and before any change of this section, and not part
-of it: when the question opens, Qt logs `RangeError: Maximum call stack size exceeded` twenty times from `Sheet.qml`
-and `Frame.qml`. The gate passes over it; it is owed to the sheet's focus handling (§7.7).
+Seen in every run since step 1, and not part of this defect: when the question opened, Qt logged `RangeError: Maximum
+call stack size exceeded` twenty times from `Sheet.qml` and `Frame.qml`, and the gate passed over it. §7.14 found and
+fixed it, and made every logged warning fail the tests.
 
 **Not written, and why.** `focus` (focusable): the dump has one fact, `operable`, and writing it twice would be an
 invention. `sideways`, `live`, `element`, `volatile`, `part`, `title`, `footer`, `walk` and `entered`: nothing in the
@@ -908,6 +908,35 @@ before). Three more seeded faults, each reverted: no put-back failed `spec.rs`'s
 failed `style.rs` (the tab and the choice at 1, not 0; the menu scene's list puts itself back when a row takes the focus,
 so `spec.rs` could not see it); the remembered focus not given back failed `style.rs` (the combo box's focus false).
 
+### 7.14 A test fails on any warning Qt logs; the sheet's key loop (2026-11-08)
+
+**Every warning fails.** The harness installs a Qt message handler when it starts (`qInstallMessageHandler`, which
+cxx-qt-lib does not bind and which takes a plain function with no context, so its list is the C++ file's own, read and
+cleared by `harness_messages`) that keeps every warning, critical and fatal message, QML's errors among them, and still
+prints them as before. `Harness::assert_quiet` fails on any message that is not one of `QT_INTERNAL`'s, each named with
+the reason it is Qt's own; the list is empty, since every message seen so far was ours. Every harness test (`menu`,
+`sheet`, `style`, `spec`) and the gate end with it.
+
+It found two at once, both ours:
+
+1. **The sheet's key loop.** With a question open, the frame's `Connections` offer each pad press to the sheet, which
+   announces it and sends the key it means to the focused control (§7.3). When the focused control was outside the
+   sheet and declined the key (the gate's walk focuses every operable item of the window, the rows behind the modal
+   question among them), the key propagated up to the `Frame`, whose `Keys.onPressed` gave it to
+   `FrameController::key`, which, the sheet being open, offered it to the sheet again, which sent the key again, to the
+   same control: a recursion that ended only when the JavaScript stack ran out, twenty times in a gate run. §7.3 already
+   stated the rule the code broke, that a key goes to the sheet or the walk "and never back out as a key, so a key cannot
+   loop"; the sheet's branch of `key` sent it back out. Now `sheet_take` dismisses or announces and returns the key, and
+   only the pad's path (`offer`) sends it; the keyboard's path never does. `sheet.rs` holds it: a question open, the
+   frame given the focus, Right pressed, and nothing logged.
+2. **An empty shadow.** Moonrise's `shadowOutline` began as an invalid `QVariant`, so its `PathPolyline` logged `path
+   of type 0 not supported` once at every start. It begins as an empty polygon.
+
+Measured on 2026-11-08 with two seeded faults, each reverted: the keyboard's path sending the key again failed the
+gate (`Qt logged 20 warnings or errors`, the `RangeError` from `Sheet.qml` and `Frame.qml`) and `sheet.rs` (2 of them);
+the shadow beginning invalid failed the gate (`PathPolyline: path of type 0 not supported`). With both fixed, the
+harness tests, the debug gate and the release gate pass with nothing logged.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4
@@ -948,7 +977,8 @@ harness 254), not the 264 first written here. Budget: under 600 for the whole fr
 `cpp/harness.cpp` is 420, `cpp/harness.h` 28, and the front end **471**; with the polish wait's include, 421 and **472**.
 The C++ of §7.11 is there because each piece is a Qt call cxx-qt-lib does not bind: `QAccessible::queryAccessibleInterface`,
 `QMetaProperty`'s declaring class, `QQuickItem::scopedFocusItem` and `setFocus`, a property by an item's address, and
-`QQuickTest::qWaitForPolish`.
+`QQuickTest::qWaitForPolish`. §7.14's message handler adds 29 (`qInstallMessageHandler` takes a C function pointer,
+which neither cxx nor cxx-qt-lib can supply): `cpp/harness.cpp` 448, `cpp/harness.h` 30, the front end **501**.
 
 ### 7.7 Open
 
@@ -966,9 +996,6 @@ The C++ of §7.11 is there because each piece is a Qt call cxx-qt-lib does not b
   do) is decided with the docked `Keyboard`. Until then a fixture declares its path with `KeyNavigation` on the control.
 - Decided 2026-11-08 by the tester: the approved draft is Moonrise's oracle, so its caption stays at the draft's 15
   units as the audit's named exception to the floor (§7.10).
-- Owed by §7.11: the question's opening logs `RangeError: Maximum call stack size exceeded` from `Sheet.qml` and
-  `Frame.qml` twenty times, in every gate run since 54f2dc43c; a recursion between the sheet's focus and the frame's,
-  read and fixed in the kit, not the gate.
 - Owed by §7.10 to stage 1: the frame raises `focusMoved` when the walk's focused role changes (B on the desktop's
   content gives the navigation the focus) but no item takes Qt's focus, so the walk's role and Qt's focus part there;
   the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The help

@@ -68,4 +68,5 @@ fn qt_8_1_a_menu_scene_passes_the_gate_and_every_way_in_reaches_its_rows() {
     let shown_before = tree.nodes[rows[7] as usize].visible;
     let shown_after = after.nodes[rows[7] as usize].visible;
     assert!(shown_after || before != scene.property("panel", "currentIndex") || !shown_before, "the wheel scrolled the panel");
+    scene.assert_quiet();
 }

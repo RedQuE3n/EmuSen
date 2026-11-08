@@ -18,6 +18,8 @@ pub mod ffi {
         fn harness_key(window: Pin<&mut QObject>, key: i32, modifiers: i32);
         fn harness_wheel(window: Pin<&mut QObject>, x: f64, y: f64, delta: i32);
         fn harness_wait(ms: i32);
+        fn harness_keep_messages();
+        fn harness_messages() -> QString;
         fn harness_focus(window: Pin<&mut QObject>) -> u64;
         fn harness_focus_item(window: Pin<&mut QObject>, id: u64) -> bool;
         fn harness_get(window: Pin<&mut QObject>, id: u64, property: &QString) -> f64;

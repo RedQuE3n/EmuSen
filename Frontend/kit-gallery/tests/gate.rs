@@ -276,6 +276,7 @@ fn qt_7_stage_0_gate_on_the_gallery() {
     assert_eq!(scene.property("question", "opened"), "false", "B closed it");
     states += 1;
 
+    scene.assert_quiet();
     assert!(report.is_empty(), "{} states; faults:\n{}", states, report.join("\n"));
     assert_eq!(states, 2 * 3 * 3 * 4 + 1);
 }

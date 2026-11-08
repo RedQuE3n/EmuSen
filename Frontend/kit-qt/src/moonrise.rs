@@ -314,7 +314,7 @@ impl Default for MoonriseModelRust {
             lit_focus_y: 0.0,
             lit_focus_radius: 0.0,
             lit_radius: 0.0,
-            shadow_outline: QVariant::default(),
+            shadow_outline: polygon(&[]),
             shadow_points: Vec::new(),
             sweep_visible: false,
             sweep_x: 0.0,

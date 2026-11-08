@@ -23,6 +23,9 @@ pub const SETTLE_MS: i32 = 5000;
 /// `PathView.StrictlyEnforceRange`: the current item held in the highlight range, so the offset follows the current index.
 const STRICTLY_ENFORCE_RANGE: f64 = 2.0;
 
+/// Messages Qt logs of its own accord that no code of ours causes, each with its reason (EmuSen_Kit.md §7.14).
+pub const QT_INTERNAL: [(&str, &str); 0] = [];
+
 /// The four sizes the gate runs at (EmuSen_Interface.md §24.7).
 pub const SIZES: [(i32, i32); 4] = [(1280, 800), (1920, 1080), (1280, 720), (3840, 2160)];
 
@@ -52,6 +55,7 @@ impl Harness {
         if std::env::var_os("QT_FORCE_STDERR_LOGGING").is_none() {
             std::env::set_var("QT_FORCE_STDERR_LOGGING", "1");
         }
+        ffi::harness_keep_messages();
         QQuickStyle::set_fallback_style(&QString::from("Basic"));
         QQuickStyle::set_style(&QString::from("EmuSen"));
         let app = QGuiApplication::new();
@@ -102,6 +106,18 @@ impl Harness {
     /// The kit's Tokens singleton, to switch the variant or the form under a scene.
     pub fn tokens(&mut self) -> Option<Pin<&mut Tokens>> {
         self.singleton::<Tokens>("Tokens")
+    }
+
+    /// Every warning and error Qt has logged since the last call, QML's own among them.
+    pub fn messages(&mut self) -> Vec<String> {
+        let all = ffi::harness_messages().to_string();
+        all.split('\u{1e}').filter(|m| !m.is_empty()).map(str::to_owned).collect()
+    }
+
+    /// Fails on any message Qt logged that is not one of `QT_INTERNAL`'s, each named with the reason it is Qt's (EmuSen_Kit.md §7.14).
+    pub fn assert_quiet(&mut self) {
+        let ours: Vec<String> = self.messages().into_iter().filter(|m| !QT_INTERNAL.iter().any(|(text, _)| m.contains(text))).collect();
+        assert!(ours.is_empty(), "Qt logged {} warnings or errors:\n{}", ours.len(), ours.join("\n"));
     }
 
     pub fn process_events(&self) {
@@ -166,6 +182,11 @@ impl Scene<'_> {
 
     pub fn wait(&mut self, ms: i32) {
         ffi::harness_wait(ms);
+    }
+
+    /// The harness's `assert_quiet`, for a test that holds a scene.
+    pub fn assert_quiet(&mut self) {
+        self.harness.assert_quiet();
     }
 
     /// The window's item tree, read into kit-core's audit items.

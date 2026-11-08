@@ -1,4 +1,4 @@
-// EmuSen_Qt.md §1.7, EmuSen_Kit.md §7.8: a question takes the pad first; B dismisses it, A chooses the current button.
+// EmuSen_Qt.md §1.7, EmuSen_Kit.md §7.8: a question takes the pad first; B dismisses it, A chooses the current button, and a key declined behind it does not loop (§7.14).
 
 use emusen_kit_core::input::UiButton;
 use emusen_qt_test::Harness;
@@ -28,4 +28,14 @@ fn qt_1_7_a_question_takes_b_as_dismiss_and_a_as_the_choice() {
     scene.pad(UiButton::Accept);
     scene.wait(300);
     assert_eq!(scene.property("scene", "chosen"), "0", "A chose the current button");
+
+    // A key the frame declines while a question is open reaches the sheet once and is never sent round again (EmuSen_Kit.md §7.14).
+    scene.key(KEY_F1, 0);
+    scene.wait(300);
+    assert_eq!(scene.property("question", "opened"), "true");
+    let tree = scene.tree();
+    let frame = tree.find_named("frame").expect("the frame");
+    assert!(scene.focus_item(&tree, frame));
+    scene.pad(UiButton::Right);
+    scene.assert_quiet();
 }

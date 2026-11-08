@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=EmuSen Kit Gallery
+Comment=The EmuSen interface kit's controls and drawn items
+Exec=kit-gallery
+Icon=kit-gallery
+Categories=Development;
+Terminal=false

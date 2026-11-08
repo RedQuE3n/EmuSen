@@ -8,6 +8,7 @@ import EmuSen.Kit as Kit
 Window {
     id: scene
     objectName: "scene"
+    visible: true
     width: 1280
     height: 800
     color: Kit.Tokens.voidFill

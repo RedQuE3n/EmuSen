@@ -649,6 +649,32 @@ On the distribution's Qt: Fedora 44's 6.11.2 (`qt6-qtbase-devel`, `qt6-qtdeclara
   floor (the desktop's `libQt6Quick` needs `GLIBC_2.43`, measured 2026-11-07), so the release AppImage is built in a
   container of an older base, not on the desktop. The spike's AppImage (§10.5) is the first test of the route, on the
   handheld, where both machines are at glibc 2.43 today so the floor does not bite.
+  **The kit's gallery as an AppImage** (stage 0; `EmuSen_Kit.md` §7.13) is built by `cargo xtask appimage --out DIR`,
+  with `PATCHELF` naming the distribution's patchelf. **The tools, pinned** (approved by the tester on 2026-11-08 to be
+  downloaded from their official GitHub releases and run on this desktop to package our build, nothing else). Each is
+  kept in `~/.cache/emusen/toolchains/appimage/` and checked against its sha256 before every run, from the one list
+  `xtask/appimage-tools.tsv`:
+
+  | File | Release | URL | sha256 |
+  |---|---|---|---|
+  | `linuxdeploy-x86_64.AppImage` | 1-alpha-20251107-1 | https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage | `c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d` |
+  | `linuxdeploy-plugin-qt-x86_64.AppImage` | 1-alpha-20250213-1 | https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-qt-x86_64.AppImage | `15106be885c1c48a021198e7e1e9a48ce9d02a86dd0a1848f00bdbf3c1c92724` |
+  | `appimagetool-x86_64.AppImage` | 1.9.1 | https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage | `ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0` |
+
+  The sizes matched the releases' (19,421,688, 12,317,424 and 15,092,216 bytes), and two of the hashes the digests
+  GitHub publishes for the assets; the Qt plugin's release of 2025-02-13 publishes none, so its hash is the one computed
+  on download (fetched 2026-11-08). The fourth pin is patchelf, below.
+
+  **linuxdeploy's own patchelf breaks Fedora 44's libraries** [M 2026-11-08]. linuxdeploy sets each bundled library's
+  RUNPATH to `$ORIGIN` with the patchelf it carries, 0.15.0, and that rewrite corrupts libraries whose relocations are
+  packed in a `.relr.dyn` section, as Fedora 44 builds them: the first bundle segfaulted before `main`, in a bundled
+  library's initializer. Under gdb the crash was in `libudev.so.1` (RUNPATH `$ORIGIN`, differing from the system's copy
+  from byte 57); with the system's unpatched copy put in its place the crash moved to the next patched library,
+  `libcbor.so.0.13`. linuxdeploy takes another patchelf from `$PATCHELF`, so the build uses the distribution's, 0.18.0
+  (Fedora's `patchelf-0.18.0-9.fc43.x86_64`, fetched with `dnf download` from the configured repositories, its signature
+  checked with `rpm -K` against the Fedora key on this machine, the binary's sha256 `d241dc20…63f3` pinned as the fourth
+  row), and the bundle runs. linuxdeploy's own `strip` is as old and refuses the same sections; Fedora's libraries come
+  stripped, so `NO_STRIP=1`.
 - **Flatpak.** A manifest on `org.kde.Platform//6.11` (freedesktop 25.08 base; Qt and its plugins from the runtime, the
   payload ours; `org.kde.Sdk//6.11` is 1.2 GB to download and 3.2 GB installed, the `rust-stable` 25.08 extension carries
   Rust 1.98.1, `org.flatpak.Builder` 138 MB [M 2026-11-07, Flathub]). Permissions, each named for its reason: `--device=dri`

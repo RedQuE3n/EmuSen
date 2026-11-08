@@ -1,5 +1,6 @@
 //! EmuSen's build host, run as `cargo xtask <command>` from the repository root. See EmuSen_RustPlatform.md §28.11.
 
+mod appimage;
 mod check;
 mod compile;
 mod files;
@@ -20,7 +21,11 @@ const USAGE: &str = "usage:
   cargo xtask check-sidecars FOLDER
       fail when a library beside a sidecar in FOLDER is missing or is not the one the sidecar describes
   cargo xtask prebuilt --rid RID --out DIR [--from DIR]
-      lay out the libraries CI built for RID, from FROM/RID/, for a publish for that platform";
+      lay out the libraries CI built for RID, from FROM/RID/, for a publish for that platform
+  PATCHELF=FILE cargo xtask appimage --out DIR [--tools DIR]
+      bundle the kit's gallery program as DIR/kit-gallery-x86_64.AppImage with the tools appimage-tools.tsv pins,
+      each checked against its sha256 first (tools from ~/.cache/emusen/toolchains/appimage unless named, and the
+      distribution's patchelf where PATCHELF points)";
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().to_path_buf()
@@ -83,6 +88,15 @@ fn run(args: &[String]) -> Result<bool, String> {
             let rid = o.get("rid").ok_or(USAGE)?;
             let out = PathBuf::from(o.get("out").ok_or(USAGE)?);
             prebuilt::run(&libraries::read(&repo)?, rid, o.get("from").filter(|f| !f.is_empty()).map(Path::new), &out)?;
+            Ok(true)
+        }
+        Some("appimage") => {
+            let (o, _) = options(&args[1..], &[])?;
+            let out = PathBuf::from(o.get("out").ok_or(USAGE)?);
+            let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+            let tools = o.get("tools").map(PathBuf::from).unwrap_or_else(|| home.join(".cache/emusen/toolchains/appimage"));
+            let image = appimage::run(&repo, &tools, &out)?;
+            say::note(&format!("wrote {}", image.display()));
             Ok(true)
         }
         _ => Err(USAGE.into()),

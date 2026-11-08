@@ -3210,6 +3210,7 @@ A hit copies the library with the timestamp it had when it was stored, which can
 | `stage --part platform ...` | builds `emusen-platform` and `dianash` with one cargo command into `R/emusen_platform/`, and lays out the library, `dianash/nano`, `dianash/nano.dianash.json` and chdman where the toolchain holds it | `Platform.targets`, `Platform.props` |
 | `check-sidecars FOLDER` | §28.10's check, the same three refusals in the same words | `CheckCoreSidecars.proj` |
 | `prebuilt --rid RID --from DIR --out DIR` | for a publish for another platform: the libraries CI built for it from `DIR/RID/`, their sidecars, a manifest of its own, and the list of the host's native file names the publish drops | `RustCoresPublish.targets` |
+| `appimage --out DIR [--tools DIR]` | bundles the Qt front end's kit gallery as an AppImage with linuxdeploy, its Qt plugin and appimagetool, each pinned with its sha256 in `xtask/appimage-tools.tsv` and checked before every run, the distribution's patchelf named by `PATCHELF` (`EmuSen_Qt.md` §9.2, `EmuSen_Kit.md` §7.13; added 2026-11-08) | nothing (new) |
 
 The staged files are hard links to cargo's output, so staging costs no copy. Each command is a plain function over the list; nothing in the crate knows MSBuild.
 

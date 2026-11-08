@@ -1,0 +1,6 @@
+# The tools `cargo xtask appimage` runs, each pinned to one release and checked against its sha256 before every run; see EmuSen_Qt.md §9.2.
+# Columns: the file in the tools folder (~/.cache/emusen/toolchains/appimage), or patchelf, which $PATCHELF names; the release it is; where it came from; its sha256.
+linuxdeploy-x86_64.AppImage	1-alpha-20251107-1	https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage	c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d
+linuxdeploy-plugin-qt-x86_64.AppImage	1-alpha-20250213-1	https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-qt-x86_64.AppImage	15106be885c1c48a021198e7e1e9a48ce9d02a86dd0a1848f00bdbf3c1c92724
+appimagetool-x86_64.AppImage	1.9.1	https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage	ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+patchelf	0.18.0-9.fc43	Fedora's package patchelf-0.18.0-9.fc43.x86_64, from the distribution's repositories (rpm -K checked); named by $PATCHELF, not kept in the tools folder	d241dc2042c704234a08f947134b953dc4103be055b3bb5a50205a6a7d7463f3

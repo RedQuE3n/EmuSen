@@ -969,6 +969,48 @@ setting means the same on both front ends; the router and the glyphs read the on
 test (Search and Screensaver trade, Menu stays) and `glyph` test (Search on West with the swap on). Seeded on
 2026-11-08: the new pair left out of `swapped` failed both.
 
+### 7.13 The gallery as an AppImage (stage 0, the rest, step 3; 2026-11-08)
+
+The gallery program is bundled by the route `EmuSen_Qt.md` §9.2 names: `linuxdeploy` with its Qt plugin lays out the
+AppDir, `appimagetool` packs it. **`cargo xtask appimage --out DIR`** is the build host's command for it (`xtask/src/
+appimage.rs`, beside the host's other commands of `EmuSen_RustPlatform.md` §28.11, as `EmuSen_Qt.md` §1.9 places the
+front end's build): it checks the four pins of `xtask/appimage-tools.tsv` (§9.2's table) against their sha256 and
+refuses to run on any difference, builds `kit-gallery` in release, runs linuxdeploy (`QMAKE` the system's `qmake6`,
+`QML_SOURCES_PATHS` the gallery's, the kit's and the style's QML so the Qt plugin's `qmlimportscanner` finds their
+imports, `EXTRA_PLATFORM_PLUGINS` adding `libqwayland.so` and `libqoffscreen.so` to `xcb`, `EXTRA_QT_MODULES=
+waylandcompositor`, which the plugin's README names for Wayland and which brings the client's shell, decoration and
+graphics plugins, `NO_STRIP=1` and `PATCHELF` as §9.2 explains), then appimagetool. *[own, because the steps are the
+tools' own and the command only orders them and checks the pins, as the host's other commands do]*
+
+**The program.** `kit-gallery` sets `QSG_RHI_BACKEND=vulkan` unless the environment names another backend (§9.2, §1.8),
+and its window is shown by its scene (`visible: true`). `--grab FILE` saves the window's first swapped frame and ends:
+`QQuickWindow::grabWindow`, its `frameSwapped` signal and `QCoreApplication::quit` are bound in Rust through cxx-qt's
+`extern "C++Qt"`, and `QImage::save` through a type of the crate's own over the same C++ `QImage` (`grab::Picture`),
+since cxx binds no method on another crate's type; no hand-written C++. On Qt's offscreen platform the scene graph has
+no Vulkan surface and draws with its software backend, so an offscreen grab is a software render, as the harness's
+are; the bundle's Vulkan path is the handheld's windowed run.
+
+**The bundle**, measured on 2026-11-08: 88,127,992 bytes; the AppDir 248 MB with 174 libraries, the `xcb`, `wayland` and
+`offscreen` platforms and Wayland's client plugins. The Qt plugin's scan bundles more QML than the program imports
+(Particles, Pdf, Scene3D, VirtualKeyboard, every Controls style), as its import scanner follows `QtQuick.Controls`;
+trimming it is owed to the release build (§9.2's container). It reports `Missing qml module: EmuSen.Kit`, which is
+expected: the kit's and the gallery's modules are compiled into the program's resources, not files the scanner can find.
+
+**Run from a clean copy.** The AppImage was copied alone into an empty folder and run with `env -i` (only `HOME`,
+`PATH=/usr/bin:/bin` and `TMPDIR` set), `QT_QPA_PLATFORM=offscreen` and `LD_DEBUG=libs`: it printed `grab …: saved` and
+exited 0. Of the libraries initialised, every Qt one (15) and every QML plugin's came from the bundle's mount, and none
+from `/usr/lib64`; ICU 77 came from the bundle; what came from the system was glibc, the GL dispatch libraries, X11,
+fontconfig, freetype, harfbuzz and the compression libraries, AppImage's exclusion list. Its frame against the same
+program run from the build tree on the system's Qt: **0 pixels differ** (ImageMagick `compare -metric AE`). Against the
+gate's own grab of the same state (`big-Dark-menu-1280x800.png`): 205 pixels differ exactly and none at a 10% fuzz, the
+stars, which twinkle on the clock. The bundle is not copied to the handheld here; that run is another's.
+
+**Held to**: the host's `appimage` test (the four pins read, a tool that is not its release refused with its URL, a
+missing one told where it comes from), and the run above. Measured on 2026-11-08 with three seeded faults, each
+reverted: the sha256 comparison skipped failed that test; a pin changed by one digit made `cargo xtask appimage` refuse
+before building (`appimagetool-x86_64.AppImage is not the pinned 1.9.1`); `PATCHELF` unset made it refuse (`PATCHELF
+names no patchelf`). The bundle built with linuxdeploy's own patchelf, before the fix, crashed at start, as §9.2 records.
+
 ### 7.14 A test fails on any warning Qt logs; the sheet's key loop (2026-11-08)
 
 **Every warning fails.** The harness installs a Qt message handler when it starts (`qInstallMessageHandler`, which

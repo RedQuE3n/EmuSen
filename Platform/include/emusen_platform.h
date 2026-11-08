@@ -41,7 +41,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 39u
+#define EMUSEN_PLATFORM_ABI_VERSION 40u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -1002,6 +1002,12 @@ int64_t emusen_endymion_pads_open(const emusen_endymion_pads *pads, uint64_t *ou
 #define EMUSEN_ENDYMION_PADS_ANY_PRESSED 8u  /* the first SDL button held on a pad the interface reads, -1 for none */
 #define EMUSEN_ENDYMION_PADS_LAST_RESCAN 9u  /* .NET ticks since the handle was made */
 #define EMUSEN_ENDYMION_PADS_VENDOR_PRODUCT 10u /* as SIM_PAD_VENDOR_PRODUCT; read while open, the last reading once closed; under Steam Input, the controller behind the virtual pad */
+#define EMUSEN_ENDYMION_PADS_FAMILY 11u /* since 40: the printing on the pad's buttons, EMUSEN_ENDYMION_FAMILY_*; SDL's type first, the pad's name where SDL does not know */
+
+#define EMUSEN_ENDYMION_FAMILY_GENERIC 0u     /* not known: a front end draws the buttons by position */
+#define EMUSEN_ENDYMION_FAMILY_XBOX 1u
+#define EMUSEN_ENDYMION_FAMILY_PLAYSTATION 2u
+#define EMUSEN_ENDYMION_FAMILY_NINTENDO 3u
 
 int64_t emusen_endymion_pads_get(const emusen_endymion_pads *pads, uint64_t key, uint32_t which, int32_t arg);
 

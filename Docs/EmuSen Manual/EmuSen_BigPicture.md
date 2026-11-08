@@ -2344,7 +2344,7 @@ drawn inside the window; no window is opened.
   (§44).*
 - `Views/MainWindow.BigPicture.cs` puts it in the library's place, feeds it the library's shelves, records and covers,
   routes the pad and runs the render loop.
-- `Input/PadFamilies.cs` gives a pad's family from SDL's type, then its name. `BigPicture/DeviceStatusReader.cs` reads
+- `Input/PadFamilies.cs` gave a pad's family from SDL's type, then its name; since 2026-11-08 Endymion answers it (`EmuSen_RustPlatform.md` §48). `BigPicture/DeviceStatusReader.cs` reads
   the battery and radios from sysfs.
 - The scene gained `SceneView.Jump`, `Stepped`, `SetFamily` and `NextChange`, `SceneStage.Replace` and a `Switch` that
   takes new data, and `SceneData.Family` and `ShowClock`.
@@ -2407,6 +2407,8 @@ comes back the same way. East in the system view, with a game suspended, resumes
   window of its own: 0 pixels differ at 1280×800.
 
 ### 15.5 The pad's family
+
+*Since 2026-11-08 the table below is Endymion's (`emusen_endymion::family`, `EMUSEN_ENDYMION_PADS_FAMILY`, `EmuSen_RustPlatform.md` §48), read by Mistress and the Qt front end alike; `PadFamilies.cs` is deleted.*
 
 `PadFamilies.Of(type, name)` takes SDL's `SDL_GetGamepadType`, which SDL derives from the pad's vendor and product ids:
 its two Xbox types give Xbox, its three PlayStation types PlayStation, its Switch Pro and three Joy-Con types

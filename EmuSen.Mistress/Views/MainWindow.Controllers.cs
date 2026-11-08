@@ -82,7 +82,7 @@ namespace EmuSen.Mistress.Views
         internal PadFamily HelpFamily =>
             Enum.TryParse(_appSettings.ControllerType, out PadFamily chosen)
                 ? chosen
-                : HelpPad is { } pad ? PadFamilies.Of(pad.Type, pad.Name) : PadFamily.Generic;
+                : HelpPad is { } pad ? (PadFamily)pad.Family : PadFamily.Generic;
 
         // The text hints name the buttons by an Xbox pad's letters, swapped with the functions when the swap is on.
         private void ApplyPadHints()

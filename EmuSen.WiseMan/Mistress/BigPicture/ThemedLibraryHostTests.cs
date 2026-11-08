@@ -148,32 +148,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(new[] { "System", "Select", "Menu" }, system.Select(e => e.Label));
         }
 
-        [Fact]
-        public void SDL_s_pad_types_and_names_give_the_families()
-        {
-            var expected = new Dictionary<string, PadFamily>
-            {
-                ["Unknown"] = PadFamily.Generic, ["Standard"] = PadFamily.Generic, ["Xbox360"] = PadFamily.Xbox, ["XboxOne"] = PadFamily.Xbox,
-                ["PS3"] = PadFamily.PlayStation, ["PS4"] = PadFamily.PlayStation, ["PS5"] = PadFamily.PlayStation,
-                ["NintendoSwitchPro"] = PadFamily.Nintendo, ["NintendoSwitchJoyconLeft"] = PadFamily.Nintendo, ["NintendoSwitchJoyconRight"] = PadFamily.Nintendo,
-                ["NintendoSwitchJoyconPair"] = PadFamily.Nintendo, ["GameCube"] = PadFamily.Nintendo,
-            };
-            foreach (SDL.GamepadType type in Enum.GetValues<SDL.GamepadType>().Where(t => t.ToString() != "Count"))
-            {
-                Assert.True(expected.ContainsKey(type.ToString()), $"SDL has a pad type {type} this test does not classify");
-                Assert.Equal(expected[type.ToString()], PadFamilies.Of(type, "Some pad"));
-            }
-
-            Assert.Equal(PadFamily.Xbox, PadFamilies.Of(SDL.GamepadType.Standard, "Lenovo Legion Go S"));
-            Assert.Equal(PadFamily.Xbox, PadFamilies.Of(SDL.GamepadType.Unknown, "Steam Deck"));
-            Assert.Equal(PadFamily.PlayStation, PadFamilies.Of(SDL.GamepadType.Unknown, "Sony DualSense Wireless Controller"));
-            Assert.Equal(PadFamily.Nintendo, PadFamilies.Of(SDL.GamepadType.Standard, "Nintendo Switch Pro Controller"));
-            Assert.Equal(PadFamily.Generic, PadFamilies.Of(SDL.GamepadType.Standard, "8BitDo Zero 2"));
-            Assert.Equal(PadFamily.Generic, PadFamilies.Of(SDL.GamepadType.Unknown, null));
-            // SDL's type wins over a name that says otherwise.
-            Assert.Equal(PadFamily.PlayStation, PadFamilies.Of(Enum.Parse<SDL.GamepadType>("PS4"), "Xbox-style adapter"));
-        }
-
         // P43: another family redraws the help bar and nothing else.
         [Fact]
         public Task The_help_bar_follows_the_connected_pad_s_family_and_nothing_else_changes() => Session.Dispatch(() =>

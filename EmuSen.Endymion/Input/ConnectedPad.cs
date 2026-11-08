@@ -53,6 +53,9 @@ namespace EmuSen.Endymion.Input
         // SDL's own reading of what the pad is, from its vendor and product - see EmuSen_Settings_Reference.md §4.52.
         public SDL.GamepadType Type => (SDL.GamepadType)Get(DeviceNative.PadsKind);
 
+        // The printing on its buttons as Endymion reads it, EMUSEN_ENDYMION_FAMILY_*: 0 not known, 1 Xbox, 2 PlayStation, 3 Nintendo - see EmuSen_RustPlatform.md §48.
+        public int Family => (int)Get(DeviceNative.PadsFamily);
+
         // Any button held, or a trigger past half its travel: what claims a player and lights a row - see EmuSen_Input.md §8.13.
         public bool AnyPressed()
         {

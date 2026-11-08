@@ -579,6 +579,7 @@ pub const PADS_STARTED: u32 = 7;
 pub const PADS_ANY_PRESSED: u32 = 8;
 pub const PADS_LAST_RESCAN: u32 = 9;
 pub const PADS_VENDOR_PRODUCT: u32 = 10;
+pub const PADS_FAMILY: u32 = 11;
 
 /// A number about a pad (`key`, with `arg` its button or axis) or about them all: the label is 0 for none, and the
 /// button held first is -1 for none.
@@ -601,6 +602,7 @@ pub unsafe extern "C" fn emusen_endymion_pads_get(h: *const PadsHandle, key: u64
         PADS_ANY_PRESSED => pads.any_pressed().unwrap_or(-1) as i64,
         PADS_LAST_RESCAN => pads.last_rescan(),
         PADS_VENDOR_PRODUCT => pads.vendor_product(key).map_or(fail(status::ABSENT, "no such pad") as i64, |both| both as i64),
+        PADS_FAMILY => pads.family(key) as i64,
         _ => fail(status::BAD_ARGUMENT, "no such number") as i64,
     }
 }

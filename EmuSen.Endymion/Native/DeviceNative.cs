@@ -27,7 +27,7 @@ namespace EmuSen.Endymion.Native
         internal const uint DeviceName = 0, DeviceGuid = 1, DevicePath = 2;
         internal const uint DevicesSdl = 0, DevicesSimulated = 1;
         internal const uint PadsId = 0, PadsIsOpen = 1, PadsKind = 2, PadsRawPressed = 3, PadsAxisValue = 4, PadsLabel = 5, PadsFrontendCount = 6, PadsStarted = 7,
-            PadsAnyPressed = 8, PadsLastRescan = 9, PadsVendorProduct = 10;
+            PadsAnyPressed = 8, PadsLastRescan = 9, PadsVendorProduct = 10, PadsFamily = 11;
         internal const uint PadsGuid = 0, PadsPath = 1, PadsName = 2, AxisRaw = 0, AxisPad = 1;
         internal const uint SettingFirstOnly = 0, SettingStickAsDpad = 1, SettingStickDeadzone = 2, SettingLeftStickAnalog = 3, SettingAnalogDeadzone = 4;
         internal const uint AudioQueuedFrames = 0, AudioAvailable = 1, AudioSampleRate = 2, UiPlay = 0, UiPreload = 1, UiIsOpen = 0, UiQueued = 1;

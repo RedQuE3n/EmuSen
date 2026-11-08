@@ -4394,3 +4394,20 @@ classes over the binding (the Scraping namespace, `CoverChoiceTests`, `GameMetad
 `OnlineCoverTests`, `LibraryRecordsParityTests`, `GalaxiaParityTests`, `GalaxiaScopeTests`) pass 322 (4 tools skipped),
 and the packaged library's fit audit 16. Seeded and caught: a close that ignores its serial and an open that does not
 name games.db to `emusen.games` (`scraping.rs`), and the shortened wait (`two_connections.rs`).
+
+## 48. Interface 40, 2026-11-08: the printing on a pad's buttons
+
+One number for an existing call, for the Qt front end's help bar (`EmuSen_Kit.md` §7.15, where the choice of owner is
+argued): `emusen_endymion_pads_get(pads, key, EMUSEN_ENDYMION_PADS_FAMILY, 0)` answers which printing a pad's buttons
+carry, `EMUSEN_ENDYMION_FAMILY_GENERIC` (0, not known: a front end draws the buttons by position), `_XBOX` (1),
+`_PLAYSTATION` (2) or `_NINTENDO` (3), from SDL's `SDL_GamepadType` first and the pad's name where SDL says Standard or
+Unknown; like the type and the name it is kept once the pad closes. The table is Mistress's `PadFamilies.cs` moved into
+Endymion as `emusen_endymion::family`, and the C# file is deleted: `ConnectedPad.Family` reads the number, and
+Mistress's help bar casts it to LunaP's `PadFamily`, whose order is the header's. Endymion owns pads, so the fact has
+one owner for both front ends. A new number, as §45's was (rule B): it moved in `emusen_platform.h`, `lib.rs` and
+`PlatformLibrary.InterfaceVersion` together, and `Frontend/platform-client`'s binding was regenerated.
+
+The C# test of the table (`ThemedLibraryHostTests.SDL_s_pad_types_and_names_give_the_families`) became Endymion's unit
+tests, case for case. Measured on 2026-11-08: Endymion's `family` tests (3) and the platform client's 12 pass, its
+simulated-pads test reading the family by type, by name and after the pad closes; a library answering the type for the
+family failed it.

@@ -1,0 +1,84 @@
+NAME
+    theme-check - hold an EmuSen theme package to its manifest's schema,
+    the QML rules and the kit's tokens
+
+SYNOPSIS
+    theme-check <folder>...
+
+DESCRIPTION
+    The development tool of the emusen.dev module for EmuSen theme
+    packages (EmuSen_Qt.md §3.4, §3.7): a folder holding theme.json,
+    screens/Home.qml, Consoles.qml, Games.qml and optionally Splash.qml,
+    parts/ and assets/. This is the static step: nothing is loaded or
+    drawn. The step that loads each screen offscreen and runs the fit and
+    reach audits is a Qt program of its own, since this module is linked
+    into the standalone shell and its tree holds no Qt.
+
+    Findings print one a line:
+
+        file:line kind words
+
+    the manifest's in line order, then each .qml file's in path order,
+    and the last line is 'ok' or 'N findings'. The kinds:
+
+        schema      theme.json is missing, is not JSON, lacks a required
+                    key (schema, api, name, author, licence, variants,
+                    screens) or has one of the wrong shape; a text scale
+                    in fontSizes outside the kit's 1 to 1.3
+        api         a schema number above 1, or an api newer than this
+                    build's EmuSen.Theme 1.0 (a newer major, or a newer
+                    minor of the same major); the words name both
+        path        a file the manifest names (a cue, a preview) that
+                    leaves the package or is missing; a quoted folder
+                    import in QML that leaves the package or is not one
+                    of its folders
+        screen      a screen listed whose file is missing, or a screen
+                    file present but not listed (it would never load)
+        token       an override naming no token of the kit, or a value
+                    not of the token's type
+        contrast    a contrast pair of the kit under its floor once the
+                    overrides are applied, in the variant that sets them
+        note        a key schema 1 does not know: ignored, and not
+                    counted (EmuSen_Qt.md §5.2)
+
+    and the kinds of qml-rules(1) for each .qml file (function,
+    callLater, literal, words, onCompleted, rows, import), under its
+    theme profile: §1.3's rules as a view's, with the imports limited to
+    the sandboxed engine's allow-list, matched whole: QtQuick,
+    QtQuick.Layouts, QtQuick.Effects, QtQuick.Shapes, QtQuick.Controls
+    and EmuSen.Theme, and quoted relative folders of the package. So
+    EmuSen.Models, EmuSen.Kit, QtQml, QtQuick.Templates, QtMultimedia
+    and Qt.labs are each a finding.
+
+    Where each rule's facts come from. The schema is the crate
+    emusen-theme-manifest (Frontend/theme-check/manifest), its one owner,
+    which the theme host reads too. The QML rules and THEME_IMPORTS are
+    qml-rules'. A token is a read-only property of the kit's Tokens
+    singleton in the committed registry,
+    Testing/qmltypes/EmuSen.Kit-1.0.qmltypes, with the type it declares
+    there: QColor a colour written #RRGGBB or #AARRGGBB, double a number,
+    int a whole number, bool true or false. The contrast pairs, their
+    floors (4.5:1 for words, 3:1 for graphics; WCAG 2.1 1.4.3 and
+    1.4.11) and the ratio are emusen-kit-core's (contrast_pairs,
+    Colour::contrast). A pair is measured only when the theme overrides
+    one of its two tokens, since the kit's own pairs are held by the
+    kit's tests. A translucent override is composited before it is
+    measured, as a compositor paints it: the surface over black, any
+    other back over that surface, the fore over its back.
+
+EXIT STATUS
+    0 for no finding, 1 for one or more, 2 when it could not run (no
+    folder given, a folder missing, an option unknown).
+
+EXAMPLES
+    theme-check Frontend/themes/emusen
+    theme-check Frontend/theme-check/tests/themes/low-contrast
+
+        .../low-contrast/theme.json:11 contrast accent on surface is
+            2.13:1, under the 3:1 floor (dark)
+        ...
+        4 findings
+
+SEE ALSO
+    qml-rules(1), esde-check(1); EmuSen_Qt.md §3.4, §3.5, §3.7 and §5.2;
+    EmuSen_Kit.md §1.

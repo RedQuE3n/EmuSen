@@ -1,0 +1,20 @@
+[package]
+name = "emusen-theme-check"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+# theme-check of EmuSen_Qt.md §3.7, its static step: a theme package's manifest, QML and token overrides held to their rules without
+# loading anything. A library the emusen.dev command module exposes as `theme-check`, so it stays outside the Frontend workspace with
+# its own lock file, and tests/fence.rs holds its tree to no Qt: the step that loads a theme offscreen is a Qt-side program of its own.
+[lib]
+name = "emusen_theme_check"
+
+[dependencies]
+# The schema of theme.json, its one owner.
+emusen-theme-manifest = { path = "manifest" }
+# §1.3's rules and the theme's import allow-list, never copied.
+emusen-qml-rules = { path = "../qml-rules" }
+# The token tables, the contrast pairs and their floors, and WCAG 2.1 contrast.
+emusen-kit-core = { path = "../kit-core" }

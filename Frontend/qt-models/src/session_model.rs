@@ -7,6 +7,7 @@ use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use crate::input::GameInput;
+use crate::pause::{self, Facts};
 use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_platform_client::audio::{GameSound, SoundSettings};
 use emusen_platform_client::pace::DisplayClock;
@@ -36,6 +37,8 @@ pub mod qobject {
         #[qproperty(bool, sounding, READ, NOTIFY)]
         #[qproperty(QString, problem, READ, NOTIFY)]
         #[qproperty(f64, first_picture_ms, cxx_name = "firstPictureMs", READ, NOTIFY)]
+        /// What the Pause Card's words are made from, read as the game pauses (pause.rs's facts as plain data).
+        #[qproperty(QString, card_facts, cxx_name = "cardFacts", READ, NOTIFY)]
         type SessionModel = super::SessionModelRust;
 
         #[cxx_name = "setPlatformLibrary"]
@@ -58,7 +61,7 @@ pub mod qobject {
         #[qinvokable]
         fn resume(self: Pin<&mut SessionModel>);
 
-        /// Paused if running, else resumed: the program's answer to the menu chord until the Pause Card opens there.
+        /// Paused if running, else resumed: emusen-qt-play's own window's answer to the menu chord, which has no Pause Card.
         #[qinvokable]
         #[cxx_name = "togglePause"]
         fn toggle_pause(self: Pin<&mut SessionModel>);
@@ -83,6 +86,9 @@ pub struct SessionModelRust {
     sounding: bool,
     problem: QString,
     first_picture_ms: f64,
+    card_facts: QString,
+    /// The open session's number, once the frame thread has opened it.
+    opened: Option<u32>,
     runtime: Option<Runtime>,
     platform: Option<Arc<Platform>>,
     session: Option<Session>,
@@ -245,6 +251,26 @@ impl qobject::SessionModel {
         if let Some(session) = &self.session {
             session.set_paused(true);
             self.as_mut().set_paused(true);
+            self.read_card_facts();
+        }
+    }
+
+    /// The Pause Card's facts read from the runtime, whose reads answer on any thread (emusen_crystal.h). The slot and
+    /// the speed are the defaults until the card steps them (owed, EmuSen_Qt.md §7.1 step 7).
+    fn read_card_facts(mut self: Pin<&mut Self>) {
+        let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
+        let facts = Facts::default();
+        let facts = match runtime.session_info(session) {
+            Ok(info) => {
+                let slots = runtime.state_slots(session).unwrap_or_default();
+                pause::facts_of(&info, runtime.rewind_reel(session).ok().as_ref(), &slots, facts.slot, facts.speed)
+            }
+            Err(_) => facts,
+        };
+        let text = QString::from(facts.to_json().as_str());
+        if self.card_facts != text {
+            self.as_mut().rust_mut().card_facts = text;
+            self.card_facts_changed();
         }
     }
 
@@ -265,6 +291,7 @@ impl qobject::SessionModel {
 
     fn close(mut self: Pin<&mut Self>) {
         drop(self.as_mut().rust_mut().session.take());
+        self.as_mut().rust_mut().opened = None;
         self.as_mut().set_running(false);
         self.as_mut().set_paused(false);
         self.as_mut().set_sounding(false);
@@ -272,7 +299,10 @@ impl qobject::SessionModel {
 
     fn reported(mut self: Pin<&mut Self>, report: Report) {
         match report {
-            Report::Opened { .. } => self.as_mut().set_running(true),
+            Report::Opened { session } => {
+                self.as_mut().rust_mut().opened = Some(session);
+                self.as_mut().set_running(true);
+            }
             Report::FirstPicture { after } => self.as_mut().set_first_picture_ms(after.as_secs_f64() * 1000.0),
             Report::Failed(words) => {
                 self.as_mut().set_problem(QString::from(&words));

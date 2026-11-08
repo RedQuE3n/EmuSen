@@ -5,7 +5,7 @@ import EmuSen.Models
 import EmuSen.Endymion
 import EmuSen.Play as Play
 
-// emusen-qt's window: the screens on the big screen's canvas, the game under them, Moonrise over them at the start until it ends and the library is read, the pads through Endymion (EmuSen_Qt.md §7, EmuSen_Interface.md §22).
+// emusen-qt's window: the screens on the big screen's canvas, the game under them and the Pause Card over it, Moonrise over them at the start until it ends and the library is read, the pads through Endymion (EmuSen_Qt.md §7, EmuSen_Interface.md §22).
 Window {
     id: program
     objectName: "program"
@@ -27,6 +27,7 @@ Window {
     readonly property int padFamily: pads.family === Kit.Families.Generic ? Kit.Families.Xbox : pads.family
     readonly property int shownIndex: library.indexOf(screens.key)
     readonly property bool gameShown: screens.shown === Screens.Game
+    readonly property bool pauseShown: screens.shown === Screens.Pause
     // A game chosen: recorded as started, opened (resumed where it is the one suspended) and shown.
     signal play(string path)
     onPlay: (path) => {
@@ -57,12 +58,12 @@ Window {
         onlyPads: program.onlyPads
         onButton: (button, down) => Kit.PadRouter.push(button, down)
     }
-    // The game, under the screens: in front on its own screen, and behind Home while it is suspended there, where Continue draws its picture.
+    // The game, under the screens: in front on its own screen, paused under the Pause Card, and behind Home while it is suspended there, where Continue draws its picture.
     Play.Game {
         id: player
         objectName: "game"
         anchors.fill: parent
-        visible: program.gameShown || (screens.shown === Screens.Home && player.session.running)
+        visible: program.gameShown || program.pauseShown || (screens.shown === Screens.Home && player.session.running)
         inFront: program.gameShown
         focus: program.gameShown
         feed: program.feed
@@ -120,6 +121,24 @@ Window {
             nextRow: consoles.tiles.count > 1 && program.shownIndex >= 0 ? consoles.tiles.itemAt((program.shownIndex + 1) % consoles.tiles.count) : null
             onClosed: screens.back()
             onPlayed: (path) => program.play(path)
+        }
+    }
+    // The Pause Card, opened by the chord over the game; the game resumes once the card has slid away (EmuSen_Interface.md §20.6).
+    Kit.NormalizedCanvas {
+        id: cardCanvas
+        objectName: "cardCanvas"
+        visible: card.open || card.leaving
+        PauseCard {
+            id: card
+            anchors.fill: parent
+            library: library
+            session: player.session
+            padFamily: program.padFamily
+            open: program.pauseShown
+            focus: program.pauseShown
+            onResumed: screens.play()
+            onBackToLibrary: screens.library()
+            onGone: if (program.gameShown) player.session.resume()
         }
     }
     Kit.Moonrise {

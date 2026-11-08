@@ -14,9 +14,12 @@ Rectangle {
     property font labelFont: Qt.font({ pixelSize: Kit.Tokens.fontBody })
     property real entrySpacing: Kit.Tokens.paneGap
     property real glyphGap: Kit.Tokens.base * 2
+    // The rule along its top; a host that draws the band itself turns it off.
+    property bool ruled: true
     implicitHeight: Kit.Tokens.helpBar
     color: Kit.Tokens.surface
     Rectangle {
+        visible: root.ruled
         anchors.top: parent.top
         width: parent.width
         height: Kit.Tokens.hoverBorder

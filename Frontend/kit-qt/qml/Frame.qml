@@ -18,6 +18,8 @@ FocusScope {
     property alias helpGlyphGap: helpBar.glyphGap
     property real navigationWidth: Kit.Tokens.tileWidth + Kit.Tokens.tileGap * 2
     property bool surfaceDrawn: true
+    // The frame's own help bar on the foot; off where a screen draws the help model's bar itself, as the Pause Card's band does.
+    property bool helpShown: true
     readonly property bool desktop: frameController.form === Kit.Forms.Desktop
     readonly property bool card: frameController.form === Kit.Forms.Card
     readonly property bool bigScreen: !desktop && !card
@@ -84,7 +86,7 @@ FocusScope {
         id: helpBar
         objectName: "helpBar"
         controller: root.controller
-        visible: !root.desktop
+        visible: !root.desktop && root.helpShown
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom

@@ -14,6 +14,8 @@ pub enum Shown {
     Grid,
     /// The game, its picture filling the window.
     Game,
+    /// The Pause Card over the paused game.
+    Pause,
 }
 
 /// What asked for a change.
@@ -27,10 +29,12 @@ pub enum Ask {
     Back,
     /// A screen's declared action (crate::help); the favourites' action opens their grid, the others are a later stage's.
     Act(String),
-    /// A game chosen on Home's shelf or the grid, or Continue chosen: the game is shown.
+    /// A game chosen on Home's shelf or the grid, Continue chosen, or the Pause Card resuming: the game is shown.
     Play,
-    /// The menu chord over the game: Home, the game suspended behind it (Mistress's library over the game).
+    /// The menu chord over the game: the Pause Card, as Mistress's `OpenPadMenu` opens it over a game.
     Menu,
+    /// The Pause Card's Back to Library: Home, the game suspended behind it.
+    Library,
     /// The game closed: Home.
     Closed,
 }
@@ -43,8 +47,10 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Consoles, Ask::Act(key)) if key == crate::library::FAVOURITES => Some((Shown::Grid, Some(key.clone()))),
         (Shown::Consoles, Ask::Back) => Some((Shown::Home, None)),
         (Shown::Grid, Ask::Back) => Some((Shown::Consoles, None)),
-        (Shown::Home | Shown::Grid, Ask::Play) => Some((Shown::Game, None)),
-        (Shown::Game, Ask::Menu | Ask::Closed) => Some((Shown::Home, None)),
+        (Shown::Home | Shown::Grid | Shown::Pause, Ask::Play) => Some((Shown::Game, None)),
+        (Shown::Game, Ask::Menu) => Some((Shown::Pause, None)),
+        (Shown::Pause, Ask::Library) => Some((Shown::Home, None)),
+        (Shown::Game | Shown::Pause, Ask::Closed) => Some((Shown::Home, None)),
         _ => None,
     }
 }
@@ -63,6 +69,7 @@ pub mod qobject {
         Consoles,
         Grid,
         Game,
+        Pause,
     }
 
     extern "RustQt" {
@@ -90,9 +97,12 @@ pub mod qobject {
         /// A game chosen, or Continue: the game's screen.
         #[qinvokable]
         fn play(self: Pin<&mut Screens>);
-        /// The menu chord over the game: Home.
+        /// The menu chord over the game: the Pause Card.
         #[qinvokable]
         fn menu(self: Pin<&mut Screens>);
+        /// The Pause Card's Back to Library: Home over the suspended game.
+        #[qinvokable]
+        fn library(self: Pin<&mut Screens>);
     }
 
     impl cxx_qt::Threading for Screens {}
@@ -129,6 +139,7 @@ fn shown_of(screen: Screen) -> Shown {
         Screen::Consoles => Shown::Consoles,
         Screen::Grid => Shown::Grid,
         Screen::Game => Shown::Game,
+        Screen::Pause => Shown::Pause,
         _ => Shown::Home,
     }
 }
@@ -139,6 +150,7 @@ fn screen_of(shown: Shown) -> Screen {
         Shown::Consoles => Screen::Consoles,
         Shown::Grid => Screen::Grid,
         Shown::Game => Screen::Game,
+        Shown::Pause => Screen::Pause,
     }
 }
 
@@ -165,6 +177,10 @@ impl qobject::Screens {
 
     pub fn menu(self: Pin<&mut Self>) {
         self.ask(Ask::Menu);
+    }
+
+    pub fn library(self: Pin<&mut Self>) {
+        self.ask(Ask::Library);
     }
 
     fn ask(self: Pin<&mut Self>, ask: Ask) {

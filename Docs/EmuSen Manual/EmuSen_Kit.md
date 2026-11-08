@@ -1380,6 +1380,28 @@ Three extensions, each optional, found while the program's screens were brought 
   one picture. Drawn as a `Text`, the Xbox family's lettered rings, which the own look's screens show for a generic pad,
   failed contrast at 1.00:1, the letter sampled over its own ring's ink.
 
+### 7.21 A menu row's marks and rules, and a help bar a screen draws itself (stage 1, the Pause Card; 2026-11-08)
+
+Three extensions, each optional and off by default, found while the Pause Card was brought to Mistress's render
+(`EmuSen_Qt.md` §7.1, step 7). Each is an extension of an existing control rather than a type of the program's own, since
+LunaP's `MenuPanel` drew all three for every card, and the Home card and the List card of stage 2 draw the same rows.
+None changes what an existing screen draws: the gallery's gate passes unchanged.
+
+- **`MenuRow.steps`, `opens`, `ruled`, `sectionEnd`, `inset` and `labelFont`.** A stepped value stands between ◂ and ▸
+  (Save State's slot, the speed), a row that turns to a page of its own ends in ▸ (Game Options, Leave), each mark a
+  `Shape` triangle 7 × 10 units in Muted, 12 units from the value, as Mistress's render measures them. `ruled` draws a
+  one-unit rule in `Rule` along the row's foot, and `sectionEnd` draws it in `Border`, the lighter rule before a new
+  section (Mistress's `SectionRule` is `#707076`, six levels from `Border` in blue: the token is the one owner, and the
+  difference is named in `EmuSen_Qt.md` §7.1). `inset` is the words' distance from the row's edges (the kit's default
+  stays 16; the card sets 24) and `labelFont` the face of the label and the value.
+- **`HelpBar.ruled`**: the rule along the bar's top, on by default; off where the host draws the band itself.
+- **`Frame.helpShown`**: the frame's own help bar on the foot, on by default. The Pause Card's band is 98 units high, lies
+  under the panel and its shadow, and slides down on its own, so the card draws a `HelpBar` of its own over the frame's
+  controller and help model while the frame keeps the model for its declared actions (§7.19).
+
+**Held to**: the gallery's gate (4) and the kit's 39 tests pass unchanged; `qt-app/tests/pause.rs` reads the marks' rows
+through the card. No C++ was added.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

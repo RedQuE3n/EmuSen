@@ -288,7 +288,12 @@ fn the_screens_switch_by_what_was_asked() {
     assert_eq!(step(Shown::Home, &Ask::Play), Some((Shown::Game, None)), "a shelf game or Continue shows the game");
     assert_eq!(step(Shown::Grid, &Ask::Play), Some((Shown::Game, None)));
     assert_eq!(step(Shown::Consoles, &Ask::Play), None, "Choose a console plays nothing");
-    assert_eq!(step(Shown::Game, &Ask::Menu), Some((Shown::Home, None)), "the chord over the game is Home, the game suspended");
+    assert_eq!(step(Shown::Game, &Ask::Menu), Some((Shown::Pause, None)), "the chord over the game is the Pause Card");
     assert_eq!(step(Shown::Game, &Ask::Back), None, "B is the game's");
     assert_eq!(step(Shown::Game, &Ask::Closed), Some((Shown::Home, None)));
+    assert_eq!(step(Shown::Pause, &Ask::Play), Some((Shown::Game, None)), "the card resuming shows the game");
+    assert_eq!(step(Shown::Pause, &Ask::Library), Some((Shown::Home, None)), "Back to Library: Home, the game suspended");
+    assert_eq!(step(Shown::Pause, &Ask::Closed), Some((Shown::Home, None)), "a game that stops under the card");
+    assert_eq!(step(Shown::Pause, &Ask::Menu), None, "the card's own Start is its action, not the chord");
+    assert_eq!(step(Shown::Game, &Ask::Library), None);
 }

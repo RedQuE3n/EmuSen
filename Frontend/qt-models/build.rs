@@ -12,6 +12,7 @@ fn main() {
             "src/screens.rs",
             "src/clock.rs",
             "src/session_model.rs",
+            "src/pause_model.rs",
         ])
         .qt_module("Qml")
         .build()

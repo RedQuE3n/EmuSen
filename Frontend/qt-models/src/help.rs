@@ -16,6 +16,10 @@ pub enum Screen {
     HomePlaces,
     Consoles,
     Grid,
+    /// The Pause Card's first page.
+    Pause,
+    /// A page of the Pause Card past the first.
+    PausePage,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -57,6 +61,19 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Options, "List", Some("list")),
             (UiButton::Back, "Consoles", None),
             (UiButton::Menu, "Home", Some("homeCard")),
+        ],
+        // Mistress's ShowCard and SetCardActions: B resumes on the first page and goes back on the others; Start resumes.
+        Screen::Pause => &[
+            (UiButton::Accept, "Select", None),
+            (UiButton::Back, "Resume", None),
+            (UiButton::Screensaver, "Screenshot", Some("screenshot")),
+            (UiButton::Menu, "Resume", Some(crate::pause::RESUME)),
+        ],
+        Screen::PausePage => &[
+            (UiButton::Accept, "Choose", None),
+            (UiButton::Back, "Back", None),
+            (UiButton::Screensaver, "Screenshot", Some("screenshot")),
+            (UiButton::Menu, "Resume", Some(crate::pause::RESUME)),
         ],
     }
 }

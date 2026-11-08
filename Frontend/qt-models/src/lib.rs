@@ -13,6 +13,8 @@ pub mod library;
 pub mod library_model;
 pub mod marks;
 pub mod marks_object;
+pub mod pause;
+pub mod pause_model;
 pub mod picture;
 pub mod screens;
 pub mod session;

@@ -869,7 +869,8 @@ example.
 
 "EmuSen", the accepted look, is the package `Frontend/themes/emusen/`: `theme.json` (the schema's worked example: name,
 author, licence, `api` 1.0, the dark and light variants, `fontSizes` 1 and 1.3, the screens `home`, `consoles` and
-`games`, no token override, no cue file), `screens/Home.qml`, `Consoles.qml` and `Games.qml`, and `parts/` (`Faces`, the
+`games`, no token override, no cue file, and three previews, `assets/previews/`, the package's own screens over the
+synthetic library at 640 × 400), `screens/Home.qml`, `Consoles.qml` and `Games.qml`, and `parts/` (`Faces`, the
 three Barlow faces from the kit's fonts; `Glyph`, a mark of `Marks` drawn in one ink; `EngineMark`; `CoverFan`). It is
 written against `EmuSen.Theme` alone, every shown word from `Words`, `Help` or a row, and is compiled into the program's
 resources by `qt-app/themes.qrc` at `qrc:/emusen/themes/emusen/` (`emusen_qt::REFERENCE_THEME`, read in QML as
@@ -901,6 +902,24 @@ Repeaters' own `itemAdded`, never by an item kept from before. Delegates' data i
    clock said them every 15 s: the words count minutes from the pause, so they can lag the old ones by under a minute.
 3. The grid reports its focused game to the program (`Actions.focus`) and draws the focus the program holds
    (`Browse.focusRow`), so the List card's jumps move it as before.
+
+**Proof, measured 2026-11-08.** The acceptance test (Vulkan on the RX 6800 in its own compositor, the virtual pad, the
+canvas's library) passed on WiseMan d5edac3e5 with the old screens and on the package, and its 90 grabs, 18 states
+(Home, Home with nothing left, Choose a console, the grid, the List card, the Home card's two pages, the Pause Card's
+pages, the Resume question) at the five sizes, were compared pixel by pixel within 2 pixels and 24 levels either way
+round: 75 grabs differ by no pixel, and the other 15 (Home, Home with nothing left and the Pause Card's Saved page)
+differ only in the clock's minute, the two runs having started four minutes apart (`17:03` and `17:07` on Home's status
+line, `17:04` and `17:06` in the slot's date; at most 233 pixels, at 3840 × 2160). The recordings' trees differ by the
+host's slot above each screen, as they must; their mockup comparisons and the gate hold. The grabs and the comparison
+are kept in `~/.cache/emusen/tmp/qt-s3/compare/emusen/`. Offscreen, every test of `qt-app` (with `cards.rs`, Home and the
+grid under their cards, the search and the List card), `theme-qt`, `theme-host`, `kit-qt`, `qt-models` and `qt-test`
+passes; `qt-app/tests/program.rs` holds the package to `qml-rules`' theme profile and `qmllint`; `theme-check` reads it
+`ok`; `idle.rs` holds the still screens at no redraw. Five faults were seeded and caught, each reverted: Choose a
+console's focus reported as a game's (`screens.rs`, Down left the selection at 0); Start's return of Home's focus
+dropped (`cards.rs`, the focus stayed on Power); the slot under the Home card not a backdrop (`cards.rs`' gate, 706
+faults); an empty picture URL refused by the sandbox (`theme_feed.rs`, 22 refusals logged); the fan made of the whole
+row (`scale.rs`, 9,000 covers for 4). The stage 1 start-up gates of §9.3.1 (Home shown ≤ 0.35 s, the first press
+≤ 0.95 s on the real library) were not re-run: their driver is no longer kept.
 
 ### 3.5 Loading and the sandbox
 

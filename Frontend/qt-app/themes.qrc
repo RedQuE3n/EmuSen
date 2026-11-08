@@ -1,6 +1,9 @@
 <!-- The reference theme "EmuSen" as a package in the resources, which the theme host loads as it loads any theme (EmuSen_Qt.md §3.4). -->
 <RCC>
     <qresource prefix="/emusen/themes/emusen">
+        <file alias="assets/previews/consoles.png">../themes/emusen/assets/previews/consoles.png</file>
+        <file alias="assets/previews/games.png">../themes/emusen/assets/previews/games.png</file>
+        <file alias="assets/previews/home.png">../themes/emusen/assets/previews/home.png</file>
         <file alias="parts/CoverFan.qml">../themes/emusen/parts/CoverFan.qml</file>
         <file alias="parts/EngineMark.qml">../themes/emusen/parts/EngineMark.qml</file>
         <file alias="parts/Faces.qml">../themes/emusen/parts/Faces.qml</file>

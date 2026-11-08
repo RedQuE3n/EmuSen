@@ -213,6 +213,22 @@ impl Scene<'_> {
         }
     }
 
+    /// The pixels of the window's grab with no match in a reference picture within `reach` pixels and `tolerance` levels,
+    /// either way round, or a loose box's own levels inside it, marked into `marks` when it is not empty; None when the
+    /// picture cannot be read or its size differs.
+    pub fn difference(&mut self, reference: &str, tolerance: i32, reach: i32, loose: &[([i32; 4], i32)], marks: &str) -> Option<usize> {
+        let boxes: Vec<String> = loose.iter().map(|([x, y, w, h], levels)| format!("{x},{y},{w},{h},{levels}")).collect();
+        let n = ffi::harness_difference(
+            self.window(),
+            &QString::from(reference),
+            tolerance,
+            reach,
+            &QString::from(boxes.join(";").as_str()),
+            &QString::from(marks),
+        );
+        usize::try_from(n).ok()
+    }
+
     /// A property of the object with this objectName (or the root's), as text.
     pub fn property(&mut self, object_name: &str, property: &str) -> String {
         ffi::harness_property(self.window(), &QString::from(object_name), &QString::from(property)).to_string()

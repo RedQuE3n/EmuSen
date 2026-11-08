@@ -203,7 +203,7 @@ Window {
         anchors.fill: parent
         visible: scene.page === 2
         title: "EMUSEN"
-        caption: "11 CONSOLES"
-        hues: [330, 38, 352, 212, 190, 220, 0, 190, 230, 250, 25]
+        caption: "13 CONSOLES"
+        hues: [8, 280, 140, 95, 320, 205, 220, 0, 190, 30, 230, 250, 25]
     }
 }

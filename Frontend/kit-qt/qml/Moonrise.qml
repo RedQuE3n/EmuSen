@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 
-// Moonrise: the splash laid out from kit-core's frame, drawn in the draft's order: the halo's glow, the moon's outline, its face and the shadow inside it, the row of worlds, the sweep, the line and the words (EmuSen_Kit.md §7.5, §7.10).
+// Moonrise: the splash laid out from kit-core's frame, drawn in the draft's order: the halo's glow, the moon's outline, its face and the shadow inside it, the row of worlds (the draft's lit disc for a plain one, a host's world as a Body), the sweep, the line and the words (EmuSen_Kit.md §7.5, §7.10).
 Item {
     id: root
     property alias title: splash.title
@@ -12,6 +12,14 @@ Item {
     property bool running: true
     readonly property alias finished: splash.finished
     readonly property alias starsShown: sky.starsShown
+    FontLoader {
+        id: condensed
+        source: "qrc:/emusen/fonts/BarlowCondensed-Light.ttf"
+    }
+    FontLoader {
+        id: barlow
+        source: "qrc:/emusen/fonts/Barlow-Medium.ttf"
+    }
     Kit.MoonriseModel {
         id: splash
         width: root.width
@@ -25,11 +33,12 @@ Item {
     Kit.Sky {
         id: sky
         anchors.fill: parent
+        time: splash.draftTime
         seed: splash.seed
         count: splash.starCount
         moonriseSky: true
         starsOpacity: splash.starsOpacity
-        animating: root.running
+        animating: false
     }
     Shape {
         id: halo
@@ -65,6 +74,7 @@ Item {
     }
     Shape {
         id: outline
+        objectName: "moonOutline"
         x: splash.moonX - splash.moonRadius
         y: splash.moonY - splash.moonRadius
         width: 2 * splash.moonRadius
@@ -148,6 +158,12 @@ Item {
             required property real boxY
             required property real boxWidth
             required property real boxHeight
+            required property bool plain
+            required property color lightInk
+            required property color rimInk
+            required property real focusX
+            required property real focusY
+            required property real focusRadius
             required property int bodyKind
             required property real hue
             required property real craters
@@ -164,13 +180,44 @@ Item {
                 radius: world.glowRadius
                 color: world.glowInk
             }
+            Shape {
+                visible: world.plain
+                x: world.planetX - world.planetRadius
+                y: world.planetY - world.planetRadius
+                width: 2 * world.planetRadius
+                height: 2 * world.planetRadius
+                preferredRendererType: Shape.CurveRenderer
+                ShapePath {
+                    strokeWidth: -1
+                    fillGradient: RadialGradient {
+                        centerX: world.planetRadius
+                        centerY: world.planetRadius
+                        centerRadius: world.planetRadius
+                        focalX: world.focusX
+                        focalY: world.focusY
+                        focalRadius: world.focusRadius
+                        GradientStop { position: 0; color: world.lightInk }
+                        GradientStop { position: 1; color: world.rimInk }
+                    }
+                    PathAngleArc {
+                        centerX: world.planetRadius
+                        centerY: world.planetRadius
+                        radiusX: world.planetRadius
+                        radiusY: world.planetRadius
+                        startAngle: 0
+                        sweepAngle: 360
+                    }
+                }
+            }
             Kit.Body {
+                visible: !world.plain
                 x: world.boxX
                 y: world.boxY
                 width: world.boxWidth
                 height: world.boxHeight
                 shape: world.bodyKind
                 hue: world.hue
+                focused: true
                 craters: world.craters
                 bands: world.bands
                 cap: world.cap
@@ -190,6 +237,7 @@ Item {
     }
     Rectangle {
         id: sweep
+        z: 1
         visible: splash.sweepVisible
         x: splash.sweepX
         y: splash.sweepY
@@ -202,15 +250,29 @@ Item {
             GradientStop { position: 1; color: "transparent" }
         }
     }
-    Rectangle {
+    Shape {
         id: line
+        readonly property bool backdrop: true
+        z: 1
         visible: splash.lineVisible
         x: splash.lineFromX
-        y: splash.lineY
+        y: splash.lineY - splash.lineWidth / 2
         width: splash.lineToX - splash.lineFromX
-        height: 1
-        color: splash.lineInk
+        height: splash.lineWidth
         opacity: splash.lineOpacity
+        preferredRendererType: Shape.CurveRenderer
+        ShapePath {
+            strokeColor: splash.lineInk
+            strokeWidth: splash.lineWidth
+            capStyle: ShapePath.FlatCap
+            fillColor: "transparent"
+            startX: 0
+            startY: splash.lineWidth / 2
+            PathLine {
+                x: splash.lineToX - splash.lineFromX
+                y: splash.lineWidth / 2
+            }
+        }
     }
     Text {
         id: titleWords
@@ -219,6 +281,8 @@ Item {
         text: splash.title
         color: splash.titleInk
         opacity: splash.wordsOpacity
+        font.family: condensed.font.family
+        font.weight: Font.Light
         font.pixelSize: splash.titleSize
         font.letterSpacing: splash.titleSpacing
         anchors.horizontalCenter: parent.horizontalCenter
@@ -231,6 +295,8 @@ Item {
         text: splash.caption
         color: splash.captionInk
         opacity: splash.wordsOpacity
+        font.family: barlow.font.family
+        font.weight: Font.Medium
         font.pixelSize: splash.captionSize
         font.letterSpacing: splash.captionSpacing
         anchors.horizontalCenter: parent.horizontalCenter

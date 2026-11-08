@@ -91,6 +91,8 @@ pub struct SplashBody {
 
 /// The draft's unit: positions are in units of the height over 720.
 pub const UNIT: f64 = 720.0;
+/// The splash's star: its radius in units of the height over 720 (LunaSplash draws them at 1.4).
+pub const SPLASH_STAR_SIZE: f64 = 1.4;
 pub const MOON_Y: f64 = 0.36;
 pub const MOON_RADIUS: f64 = 92.0;
 pub const ROW_Y: f64 = 0.66;
@@ -99,7 +101,7 @@ pub const ROW_MOST: f64 = 980.0;
 pub const TITLE_Y: f64 = 0.85;
 pub const TITLE_SIZE: f64 = 78.0;
 pub const CAPTION_Y: f64 = 0.91;
-pub const CAPTION_SIZE: f64 = 18.0;
+pub const CAPTION_SIZE: f64 = 15.0;
 
 pub const HALO: Colour = Colour::rgba(201, 214, 255, 71);
 /// The halo's outer edge: its colour at no alpha.
@@ -199,6 +201,13 @@ pub struct PlanetFrame {
     pub flare_colour: Colour,
     /// The box the body is drawn in about its centre: a disc of the radius, shards and a gem 2.5 radii tall.
     pub body_box: Box2,
+    /// No world was given: the draft's planet, a disc lit by a two-circle gradient from `light` at a tenth of the radius
+    /// about `focus`, 0.4 radii up and left, to `rim` at the radius about the centre.
+    pub plain: bool,
+    pub light: Colour,
+    pub rim: Colour,
+    pub focus: Point,
+    pub focus_radius: f64,
 }
 
 /// The light sweeping along the row: its centre and the band drawn round it.
@@ -213,7 +222,9 @@ pub struct Sweep {
 pub struct Line {
     pub from_x: f64,
     pub to_x: f64,
+    /// The line's centre, a stroke of `width` (one unit) about it.
     pub y: f64,
+    pub width: f64,
     pub opacity: f64,
 }
 
@@ -370,6 +381,11 @@ impl Splash {
                     flare_opacity: 0.55 * hit,
                     flare_colour: Colour::hsl(hue, 0.9, 0.86, 1.0),
                     body_box: body_box(shape, centre, r),
+                    plain: self.bodies[i].body.is_none(),
+                    light: Colour::hsl(hue, 0.7, 0.78, 1.0),
+                    rim: Colour::hsl(hue, 0.55, 0.38, 1.0),
+                    focus: [centre[0] - r * 0.4, centre[1] - r * 0.4],
+                    focus_radius: r * 0.1,
                 })
             })
             .collect();
@@ -386,6 +402,7 @@ impl Splash {
                 from_x: w / 2.0 - row_w / 2.0 * line,
                 to_x: w / 2.0 + row_w / 2.0 * line,
                 y: row_y,
+                width: unit,
                 opacity: line,
             }),
             words: (word > 0.0).then(|| Words {

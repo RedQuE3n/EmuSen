@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 
-// The night sky: kit-core's gradient, its stars as rounded rectangles on the scene graph, and the one soft glow, a backdrop clipped to its box (EmuSen_Kit.md §7.5, §7.10).
+// The night sky: kit-core's gradient, its stars as antialiased discs, as the draft's canvas draws them, and the one soft glow, a backdrop clipped to its box (EmuSen_Kit.md §7.5, §7.10).
 Item {
     id: root
     property alias seed: field.seed
@@ -15,6 +15,7 @@ Item {
     property alias glowY: field.glowY
     property bool animating: true
     readonly property alias starsShown: stars.count
+    property alias time: field.time
     Kit.StarField {
         id: field
         width: root.width
@@ -70,7 +71,7 @@ Item {
         Repeater {
             id: stars
             model: field
-            Rectangle {
+            Shape {
                 id: star
                 required property real starX
                 required property real starY
@@ -80,10 +81,20 @@ Item {
                 y: star.starY - star.starRadius
                 width: 2 * star.starRadius
                 height: 2 * star.starRadius
-                radius: star.starRadius
-                antialiasing: true
-                color: field.starInk
                 opacity: star.starOpacity
+                preferredRendererType: Shape.CurveRenderer
+                ShapePath {
+                    strokeWidth: -1
+                    fillColor: field.starInk
+                    PathAngleArc {
+                        centerX: star.starRadius
+                        centerY: star.starRadius
+                        radiusX: star.starRadius
+                        radiusY: star.starRadius
+                        startAngle: 0
+                        sweepAngle: 360
+                    }
+                }
             }
         }
     }

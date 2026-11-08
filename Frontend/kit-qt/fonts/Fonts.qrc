@@ -1,0 +1,6 @@
+<RCC>
+  <qresource prefix="/emusen/fonts">
+    <file>BarlowCondensed-Light.ttf</file>
+    <file>Barlow-Medium.ttf</file>
+  </qresource>
+</RCC>

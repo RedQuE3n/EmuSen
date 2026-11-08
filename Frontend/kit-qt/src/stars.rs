@@ -41,10 +41,12 @@ impl SkyState {
         }
     }
 
-    /// The stars at a time for a screen size, into the buffer; the unit is the height over the design height.
+    /// The stars at a time for a screen size, into the buffer: a screen's at its height over 800, the splash's as LunaSplash
+    /// draws them, at its height over 720 and its own size.
     pub fn tick(&mut self, time: f64, size: Point, opacity: f64) {
-        let unit = size[1] / world::DESIGN_HEIGHT;
-        world::star_points(&self.stars, size, unit, STAR_SIZE, opacity, time, &mut self.points);
+        let (unit, scale) =
+            if self.moonrise { (size[1] / world::UNIT, world::SPLASH_STAR_SIZE) } else { (size[1] / world::DESIGN_HEIGHT, STAR_SIZE) };
+        world::star_points(&self.stars, size, unit, scale, opacity, time, &mut self.points);
     }
 
     pub fn set_glow_hue(&mut self, hue: Option<f64>, now: Duration) {

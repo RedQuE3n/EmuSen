@@ -52,7 +52,7 @@ pub mod qobject {
         #[qproperty(f64, glow_hue)]
         #[qproperty(f64, glow_x)]
         #[qproperty(f64, glow_y)]
-        #[qproperty(f64, time, READ, NOTIFY)]
+        #[qproperty(f64, time)]
         #[qproperty(QColor, star_ink, READ, CONSTANT)]
         #[qproperty(f64, stop0_at, READ, NOTIFY)]
         #[qproperty(QColor, stop0_ink, READ, NOTIFY)]
@@ -232,6 +232,7 @@ impl cxx_qt::Initialize for qobject::StarField {
         self.as_mut().on_width_changed(|this| this.redraw()).release();
         self.as_mut().on_height_changed(|this| this.redraw()).release();
         self.as_mut().on_stars_opacity_changed(|this| this.redraw()).release();
+        self.as_mut().on_time_changed(|this| this.redraw()).release();
         self.as_mut()
             .on_glow_hue_changed(|mut this| {
                 let (hue, now) = (this.glow_hue, this.now());
@@ -246,9 +247,7 @@ impl cxx_qt::Initialize for qobject::StarField {
 
 impl qobject::StarField {
     pub fn tick(mut self: Pin<&mut Self>, seconds: f64) {
-        self.as_mut().rust_mut().time = seconds;
-        self.as_mut().time_changed();
-        self.redraw();
+        self.as_mut().set_time(seconds);
     }
 
     fn replace_stars(mut self: Pin<&mut Self>) {

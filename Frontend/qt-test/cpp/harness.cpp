@@ -18,6 +18,7 @@
 #include <QtQuick/QQuickWindow>
 #include <QtTest/QTest>
 #include <algorithm>
+#include <cstdlib>
 
 namespace {
 
@@ -189,6 +190,59 @@ void hideWords(QQuickItem* item, bool hidden)
 }
 
 } // namespace
+
+// The window's grab against a reference picture: a pixel differs when the other picture has no pixel within `reach` pixels
+// and `tolerance` levels on every channel, either way round, so an edge antialiased under a pixel apart passes and a thing
+// moved or recoloured does not; inside a `loose` box ("x,y,w,h,levels;...") its own levels hold. The differing pixels are
+// marked in `marks` when it is named; -1 when the picture cannot be read or the sizes differ.
+int harness_difference(QObject& window, const QString& reference, int tolerance, int reach, const QString& loose, const QString& marks)
+{
+    QList<QPair<QRect, int>> boxes;
+    for (const QString& box : loose.split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
+        const QStringList n = box.split(QLatin1Char(','));
+        boxes.append({QRect(n.value(0).toInt(), n.value(1).toInt(), n.value(2).toInt(), n.value(3).toInt()), n.value(4).toInt()});
+    }
+    QQuickWindow* w = quick(window);
+    const QImage ref = QImage(reference).convertToFormat(QImage::Format_RGB32);
+    if (w == nullptr || ref.isNull()) {
+        return -1;
+    }
+    const QImage shot = w->grabWindow().convertToFormat(QImage::Format_RGB32);
+    if (shot.size() != ref.size()) {
+        return -1;
+    }
+    const auto near = [&](const QImage& a, const QImage& b, int x, int y, int levels) {
+        const QRgb p = a.pixel(x, y);
+        for (int by = std::max(0, y - reach); by <= std::min(b.height() - 1, y + reach); ++by) {
+            for (int bx = std::max(0, x - reach); bx <= std::min(b.width() - 1, x + reach); ++bx) {
+                const QRgb q = b.pixel(bx, by);
+                if (std::abs(qRed(p) - qRed(q)) <= levels && std::abs(qGreen(p) - qGreen(q)) <= levels && std::abs(qBlue(p) - qBlue(q)) <= levels) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+    QImage marked(shot.size(), QImage::Format_RGB32);
+    marked.fill(Qt::white);
+    int differing = 0;
+    for (int y = 0; y < shot.height(); ++y) {
+        for (int x = 0; x < shot.width(); ++x) {
+            int levels = tolerance;
+            for (const auto& [box, own] : boxes) {
+                levels = box.contains(x, y) ? own : levels;
+            }
+            if (!near(shot, ref, x, y, levels) || !near(ref, shot, x, y, levels)) {
+                ++differing;
+                marked.setPixel(x, y, qRgb(220, 30, 60));
+            }
+        }
+    }
+    if (!marks.isEmpty()) {
+        marked.save(marks);
+    }
+    return differing;
+}
 
 void harness_hide_words(QObject& window, bool hidden)
 {

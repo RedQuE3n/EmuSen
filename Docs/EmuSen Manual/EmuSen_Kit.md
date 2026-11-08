@@ -223,8 +223,8 @@ Qt item measures them. The chime is not part of the `Timeline` (the C# record ca
 pairs `strike_times` with it. `WorldPaint` drew the ring's back as a whole ellipse under the disc; the geometry does the
 same, so a scene graph may draw it as one closed stroke. The draft's `6.28` for a turn is kept as `DRAFT_TURN` rather
 than tau, so the frames stay comparable with the seeded copy of the draft page LunaP §219.5 measured against. Since
-2026-11-08 the caption is 18 units, not the draft's 15, so that it meets the big screen's floor (§7.10), and a frame
-with no size has no flare.
+2026-11-08 a frame with no size has no flare, a planet carries the draft's inks and focus, and the row's line its width
+(§7.10).
 
 ### 4.1 What it is held to
 
@@ -633,8 +633,9 @@ as WCAG exempts an inactive component's.
    `strike_times` already gives no times; `tests/world.rs` holds a 0 × 0 frame.
 2. kit-core: the Moonrise caption at the draft's 15 units fell under the big screen's floor (§3: the capitals of 16
    design pixels of the desktop face, 11.64) at every size: in the system face its capitals measured 0.68 of its size
-   (7.14 pixels at 10.5), so 10.2 pixels at 1280 × 720. It is now 18 units, the type scale's caption (20 design pixels at 800 lines) at any size. This changes
-   what the player sees, so it is put to the tester (§7.7).
+   (7.14 pixels at 10.5), so 10.2 pixels at 1280 × 720. It was raised to 18 units, then set back the same day: the
+   draft is the splash's oracle (decided 2026-11-08 by the tester), so the caption is the draft's 15 units and the
+   audit names it, `SMALL_TEXT_EXCEPTIONS` in `audit/fit.rs`, the one exception to the floor, with its reason.
 3. kit-qt: a finished `Moonrise` did not follow a resize, since its frame was read only on the clock's tick, which
    stops when the splash finishes. The model now lays the frame out again at the shown time when its size changes.
 4. kit-qt: `Carousel` spaced its items by the path's length over `pathItemCount` (132 units for items 204 units wide,
@@ -668,8 +669,37 @@ as WCAG exempts an inactive component's.
     in the draft's order, the outline before the face. `MoonriseModel`'s `shadowX`, `shadowY` and `shadowRadius` gave
     way to `shadowOutline`; rule Q's registry was reviewed and copied (before 1.0 the comparison is strict equality).
     The comparison is in `~/.cache/emusen/tmp/kit-gallery/compare/`: the draft, the C#, and Qt on the GPU and on the
-    software backend at 1280 × 720, the draft's 13 hues and words. What still differs is the title's face: the draft and
-    the C# set it in Barlow Condensed Light, which the Qt kit does not bundle yet (§7.7).
+    software backend at 1280 × 720, the draft's 13 hues and words.
+
+**Moonrise against the C# reference**, measured on 2026-11-08. The C# `LunaSplash` render of the finished frame
+(`Testing/moonrise/LunaSplash-1280x720.png`, 1280 × 720, the draft's 13 consoles and words) is the draft's picture
+star for star (258 pixels of 921,600 differ by more than 2%, all glyph and circle edges). Five more differences made
+Qt's frame match it:
+
+- **The stars.** The splash's sky drew its stars as the screens' do (a radius of 0.7 at the height over 800) on its own
+  clock. They now follow `LunaSplash`: 1.4 at the height over 720 (`SPLASH_STAR_SIZE`), twinkling on the draft's time,
+  which the splash hands its sky (`MoonriseModel.draftTime` to `Sky.time`), so the finished frame holds still as the
+  C#'s does. Placement was already the same seeded draws. A star is an antialiased disc (a `Shape`), as the canvas draws
+  it: the software backend snapped a sub-pixel rounded `Rectangle` to whole pixels.
+- **The faces.** The title is Barlow Condensed Light and the caption Barlow Medium, the C#'s own files (SIL Open Font
+  License 1.1, `kit-qt/fonts/`, the licence `licenses/Barlow-OFL-1.1.txt` as for the C#, SHA-256 of the title's face beginning `2c37e1e6`, as LunaP §206.3
+  records), loaded from the kit's resource `fonts/Fonts.qrc` by `FontLoader`.
+- **The planets.** A plain planet (no world from the host) is the draft's disc: a two-circle gradient from
+  hsl(hue, 70%, 78%) at a tenth of the radius about a focus 0.4 radii up and left, to hsl(hue, 55%, 38%) at the radius
+  (`PlanetFrame`'s `plain`, `light`, `rim`, `focus`, `focus_radius`); a host's world is still a `Body`.
+- **The row's line** is a stroke one unit wide centred on the row (`Line.width`), drawn over the planets as the draft
+  draws it; it was a 1-pixel rectangle with its top on the row, below them.
+- **The caption** is back at the draft's 15 units (above).
+
+The gate checks it: at 1280 × 720, the big screen, dark, Qt's finished Moonrise is compared with the reference pixel by
+pixel (`Scene::difference`). A pixel matches when the other picture has a pixel within 2 pixels and 24 levels on every
+channel, either way round; inside the boxes of the title, the caption and the moon (4 pixels out), 128 levels. Up to 4
+pixels may differ. The tolerance is antialiasing's: the reference was drawn by Skia with subpixel (LCD) text, colour
+fringes no grayscale renderer reproduces, and its own coverage of a stroke's edge; Qt's software backend draws the same
+edges under a pixel apart, and a glyph or the moon out of place still differs by far more than 128 levels. Measured:
+0 pixels differ. The differing pixels are marked in `moonrise-difference.png` beside the grabs; the comparison
+pictures, with the difference magnified eight times, are in `~/.cache/emusen/tmp/kit-gallery/compare/`. What it cannot
+see: a star dimmer than 24 levels over the sky.
 
 **What the harness read wrongly**, fixed in the harness. Each is a translation of Qt's tree; the rules are unchanged.
 
@@ -735,7 +765,8 @@ two) failed the gate with cards resting outside it; the star model not reset fai
 stars; the shadow drawn as its whole disc failed kit-core's test that the shadow stays inside the moon. Kit-core's
 `tests/audit.rs` holds the contrast rule itself: 4.5:1 and the large type's 3:1 at 24 px and 18.66 px bold, the ink
 composited over what is behind it, the spare tenth, and no ink nothing to judge. The gallery's menu panel fixed at five rows again
-failed the gate with a list cut short in every form, variant and size.
+failed the gate with a list cut short in every form, variant and size. The first star moved 12.8 pixels to the right
+failed the gate's comparison with the reference at 7 pixels, against 4 spare and 0 when clean.
 
 ### 7.6 Building, linking, the registry, and what it is held to
 
@@ -771,8 +802,8 @@ each reverted: `pad_button` off by one failed the kinds pairs; a declined press 
 CubicOut curve numbered as InCubic failed the easing test; the swap applied inverted failed two router tests.
 
 **Hand-written C++** (`EmuSen_Qt.md` §1.4's tracked count, the lines of the files as `wc -l` counts them): 23 in the
-kit (`cpp/kit_glue.h` and `cpp/kit_glue.cpp`, all of it `send_key`) and 334 in the harness (`cpp/harness.cpp` 311,
-`cpp/harness.h` 23; §7.9, §7.10), **357 in all** on 2026-11-08 with the contrast sampling. Counted the same way, step 9's figure was 277 (the
+kit (`cpp/kit_glue.h` and `cpp/kit_glue.cpp`, all of it `send_key`) and 389 in the harness (`cpp/harness.cpp` 365,
+`cpp/harness.h` 24; §7.9, §7.10), **412 in all** on 2026-11-08 with the contrast sampling and the picture difference. Counted the same way, step 9's figure was 277 (the
 harness 254), not the 264 first written here. Budget: under 600 for the whole front end.
 
 ### 7.7 Open
@@ -789,10 +820,10 @@ harness 254), not the 264 first written here. Budget: under 600 for the whole fr
 - Owed by §7.9 to stage 1: a row whose control takes Up and Down itself (a `TextField`, a `ComboBox`) cannot be passed
   by a vertical walk; the rule (the row walks first, the control takes the keys once chosen, as a console's settings
   do) is decided with the docked `Keyboard`. Until then a fixture declares its path with `KeyNavigation` on the control.
-- Decided 2026-11-08 by the tester: the Moonrise caption is 18 draft units (§7.10), not the approved draft's 15, so
-  that it meets the big screen's floor at every size.
+- Decided 2026-11-08 by the tester: the approved draft is Moonrise's oracle, so its caption stays at the draft's 15
+  units as the audit's named exception to the floor (§7.10).
 - Owed by §7.10 to stage 1: the frame raises `focusMoved` when the walk's focused role changes (B on the desktop's
   content gives the navigation the focus) but no item takes Qt's focus, so the walk's role and Qt's focus part there;
   the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The help
-  bar's glyphs are empty circles until the pad's button glyphs are drawn (above). The Moonrise title is set in the
-  system face until Barlow Condensed Light is bundled.
+  bar's glyphs are empty circles until the pad's button glyphs are drawn (above). The other screens' faces (§5.2) are
+  bundled when the first screen needs them; Moonrise's two are.

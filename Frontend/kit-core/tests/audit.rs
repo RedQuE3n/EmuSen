@@ -175,6 +175,12 @@ fn settings_4_83_2_words_cut_with_an_ellipsis_past_their_box_at_the_foot_or_too_
     assert!(faults.contains(&Fault::TooSmall { item: id(21), capitals: 11.0 }));
     assert_eq!(faults.len(), 4, "{faults:?}");
 
+    let mut excepted = clean();
+    excepted.children[2].children[0].name = "moonriseCaption".to_owned();
+    excepted.children[2].children[0].text = Some(Text { cap_height: 11.0, width: 100.0, height: 20.0, ellipsis: false });
+    let faults = fit_faults(&excepted);
+    assert!(faults.is_empty(), "Moonrise's caption is a named exception to the floor: {faults:?}");
+
     let mut at_the_floor = clean();
     at_the_floor.children[2].children[0].text = Some(text(11.61, 150.0, 26.0));
     assert_eq!(fit_faults(&at_the_floor), vec![], "11.61 is inside the slack of 0.036 under 11.64");

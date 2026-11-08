@@ -1,6 +1,6 @@
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 
-// The kit's own components (EmuSen_Qt.md §1.4); the EmuSen style travels as a resource module, style/EmuSen.qrc (§1.5).
+// The kit's own components (EmuSen_Qt.md §1.4); the EmuSen style travels as a resource module, style/EmuSen.qrc (§1.5), and the splash's two faces as fonts/Fonts.qrc (EmuSen_Kit.md §7.10).
 const KIT_FILES: [&str; 14] = [
     "qml/Walkable.qml",
     "qml/Body.qml",
@@ -23,6 +23,7 @@ fn main() {
         QmlModule::new("EmuSen.Kit").version(1, 0).qml_files(KIT_FILES).depend("QtQuick").depend("QtQuick.Shapes"),
     )
     .qrc("style/EmuSen.qrc")
+    .qrc("fonts/Fonts.qrc")
     .files([
         "src/base.rs",
         "src/kinds.rs",

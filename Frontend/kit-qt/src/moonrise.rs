@@ -63,6 +63,12 @@ pub mod qobject {
         Cap,
         RingKind,
         Moons,
+        Plain,
+        LightInk,
+        RimInk,
+        FocusX,
+        FocusY,
+        FocusRadius,
     }
 
     #[auto_cxx_name]
@@ -79,6 +85,7 @@ pub mod qobject {
         #[qproperty(i32, star_count, READ, CONSTANT)]
         #[qproperty(f64, length, READ, CONSTANT)]
         #[qproperty(f64, time, READ, NOTIFY)]
+        #[qproperty(f64, draft_time, READ, NOTIFY)]
         #[qproperty(f64, unit, READ, NOTIFY)]
         #[qproperty(bool, finished, READ, NOTIFY)]
         #[qproperty(f64, stars_opacity, READ, NOTIFY)]
@@ -105,6 +112,7 @@ pub mod qobject {
         #[qproperty(f64, line_from_x, READ, NOTIFY)]
         #[qproperty(f64, line_to_x, READ, NOTIFY)]
         #[qproperty(f64, line_y, READ, NOTIFY)]
+        #[qproperty(f64, line_width, READ, NOTIFY)]
         #[qproperty(f64, line_opacity, READ, NOTIFY)]
         #[qproperty(bool, words_visible, READ, NOTIFY)]
         #[qproperty(f64, words_opacity, READ, NOTIFY)]
@@ -183,7 +191,7 @@ pub mod qobject {
 
 use qobject::PlanetRole;
 
-pub const ROLE_NAMES: [(PlanetRole, &str); 20] = [
+pub const ROLE_NAMES: [(PlanetRole, &str); 26] = [
     (PlanetRole::PlanetX, "planetX"),
     (PlanetRole::PlanetY, "planetY"),
     (PlanetRole::PlanetRadius, "planetRadius"),
@@ -204,6 +212,12 @@ pub const ROLE_NAMES: [(PlanetRole, &str); 20] = [
     (PlanetRole::Cap, "cap"),
     (PlanetRole::RingKind, "ringKind"),
     (PlanetRole::Moons, "moons"),
+    (PlanetRole::Plain, "plain"),
+    (PlanetRole::LightInk, "lightInk"),
+    (PlanetRole::RimInk, "rimInk"),
+    (PlanetRole::FocusX, "focusX"),
+    (PlanetRole::FocusY, "focusY"),
+    (PlanetRole::FocusRadius, "focusRadius"),
 ];
 
 pub struct MoonriseModelRust {
@@ -216,6 +230,7 @@ pub struct MoonriseModelRust {
     star_count: i32,
     length: f64,
     time: f64,
+    draft_time: f64,
     unit: f64,
     finished: bool,
     stars_opacity: f64,
@@ -244,6 +259,7 @@ pub struct MoonriseModelRust {
     line_from_x: f64,
     line_to_x: f64,
     line_y: f64,
+    line_width: f64,
     line_opacity: f64,
     words_visible: bool,
     words_opacity: f64,
@@ -281,6 +297,7 @@ impl Default for MoonriseModelRust {
             star_count: timeline.star_count as i32,
             length: timeline.length,
             time: 0.0,
+            draft_time: 0.0,
             unit: 0.0,
             finished: false,
             stars_opacity: 0.0,
@@ -308,6 +325,7 @@ impl Default for MoonriseModelRust {
             line_from_x: 0.0,
             line_to_x: 0.0,
             line_y: 0.0,
+            line_width: 0.0,
             line_opacity: 0.0,
             words_visible: false,
             words_opacity: 0.0,
@@ -347,6 +365,7 @@ impl MoonriseModelRust {
     /// Reads a frame into the properties; the planets' rows are the caller's.
     fn read(&mut self, frame: &Frame) {
         self.unit = frame.unit;
+        self.draft_time = frame.draft_time;
         self.finished = frame.finished;
         self.stars_opacity = frame.stars_opacity;
         let moon = &frame.moon;
@@ -369,6 +388,7 @@ impl MoonriseModelRust {
         self.line_visible = frame.line.is_some();
         if let Some(line) = &frame.line {
             (self.line_from_x, self.line_to_x, self.line_y, self.line_opacity) = (line.from_x, line.to_x, line.y, line.opacity);
+            self.line_width = line.width;
         }
         self.words_visible = frame.words.is_some();
         if let Some(words) = &frame.words {
@@ -462,6 +482,7 @@ impl qobject::MoonriseModel {
 
     fn announce(mut self: Pin<&mut Self>) {
         self.as_mut().time_changed();
+        self.as_mut().draft_time_changed();
         self.as_mut().unit_changed();
         self.as_mut().finished_changed();
         self.as_mut().stars_opacity_changed();
@@ -488,6 +509,7 @@ impl qobject::MoonriseModel {
         self.as_mut().line_from_x_changed();
         self.as_mut().line_to_x_changed();
         self.as_mut().line_y_changed();
+        self.as_mut().line_width_changed();
         self.as_mut().line_opacity_changed();
         self.as_mut().words_visible_changed();
         self.as_mut().words_opacity_changed();
@@ -525,6 +547,12 @@ impl qobject::MoonriseModel {
             PlanetRole::Cap => QVariant::from(&body.cap),
             PlanetRole::RingKind => QVariant::from(&kinds::ring_of(body.ring).repr),
             PlanetRole::Moons => QVariant::from(&i32::from(body.moons)),
+            PlanetRole::Plain => QVariant::from(&planet.plain),
+            PlanetRole::LightInk => QVariant::from(&qcolor(planet.light)),
+            PlanetRole::RimInk => QVariant::from(&qcolor(planet.rim)),
+            PlanetRole::FocusX => QVariant::from(&(planet.focus[0] - planet.centre[0] + planet.radius)),
+            PlanetRole::FocusY => QVariant::from(&(planet.focus[1] - planet.centre[1] + planet.radius)),
+            PlanetRole::FocusRadius => QVariant::from(&planet.focus_radius),
             _ => QVariant::default(),
         }
     }

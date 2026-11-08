@@ -13,6 +13,10 @@ pub const CAPS_SLACK: f64 = 0.05 * DESKTOP_CAPS;
 /// A scrolling area must show two rows of 42 design pixels.
 pub const TWO_ROWS: f64 = 84.0;
 
+/// Words the capitals' floor does not hold, each by its item's name with the reason (EmuSen_Kit.md §7.10).
+pub const SMALL_TEXT_EXCEPTIONS: [(&str, &str); 1] =
+    [("moonriseCaption", "Moonrise's caption at the approved draft's 15 units: the draft is the splash's oracle, decided 2026-11-08")];
+
 /// The floor on a big screen: the capitals Inter draws at 16 design pixels, 11.64.
 pub fn smallest_capitals() -> f64 {
     SMALLEST_TEXT * DESKTOP_CAPS
@@ -109,7 +113,8 @@ fn words(item: &Item, ancestors: &[&Item], slack: f64, smallest: f64, faults: &m
     if text.height > item.rect.h + slack {
         faults.push(Fault::CutAtFoot { item: item.id });
     }
-    if smallest > 0.0 && text.cap_height < smallest - CAPS_SLACK {
+    let excepted = SMALL_TEXT_EXCEPTIONS.iter().any(|(name, _)| item.name == *name);
+    if smallest > 0.0 && text.cap_height < smallest - CAPS_SLACK && !excepted {
         faults.push(Fault::TooSmall { item: item.id, capitals: text.cap_height });
     }
 }

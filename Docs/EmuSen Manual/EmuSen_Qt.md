@@ -980,8 +980,11 @@ engines still alive through a `QPointer` each, so a leak is a number a test read
    module files in its QML folder; nothing else on disk (`file:///etc/hostname is outside the theme's folder and the cover store`).
 4. `qrc:` URLs of Qt's own modules, `EmuSen.Theme`, the kit it re-exports, the EmuSen style's controls and the kit's fonts, and the
    theme's folder when it is a resource (the reference package, R); never another resource of the program (`EmuSen.App`'s screens,
-   the ES-DE painter's shader).
-5. `data:` and `image:` (only the providers registered on the theme's engine, none yet); no other scheme, so no network:
+   the ES-DE painter's shader). A `qmldir` is judged by the module it is looked for: Qt's probes for `import EmuSen.Theme 1.0`
+   (`EmuSen/Theme.1.0/qmldir`, `EmuSen.1.0/Theme/qmldir`, `EmuSen/Theme.1/qmldir`, `EmuSen.1/Theme/qmldir`, four a screen, measured
+   on 2026-11-08) pass and are simply not found, nothing logged; a probe for a module not on the list is still refused and logged.
+5. `data:` and `image:` (only the providers registered on the theme's engine, none yet), and an empty URL (an unset `source`); no
+   other scheme, so no network:
    `http://example.invalid/cover.png: a theme reaches no network …`.
 
 A refused URL is rewritten into `/emusen-refused/<scheme>/<host><path>`, a folder that never exists, so the engine reports the

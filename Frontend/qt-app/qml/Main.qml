@@ -23,6 +23,9 @@ Window {
     property bool gameMode: false
     // AppSettings.GuideChords as the start read it: On, or Auto away from Steam's Game Mode.
     property bool guideChords: false
+    // The EmuSen theme's folder, empty for the reference, and the folders its pictures may come from (EmuSen_Qt.md §3.5).
+    property string theme
+    property list<string> coverStores
     // The pads the reader opens, by SDL id, where a test names its own; empty for every pad.
     property string onlyPads
     // The splash keeps the focus, and every press, until it has faded, so the press that skipped it is never a screen's.
@@ -97,8 +100,8 @@ Window {
             session: player.session
             gamePicture: player.picture
             pixelScale: canvas.unit
-            visible: screens.shown === Screens.Home || screens.shown === Screens.HomeCard
-            focus: !program.splashShown && screens.shown === Screens.Home
+            visible: (screens.shown === Screens.Home || screens.shown === Screens.HomeCard) && !themeHost.home
+            focus: !program.splashShown && screens.shown === Screens.Home && !themeHost.home
             startAgain: screens.homeAgain
             // Under the Home card Home is drawn dimmed and nothing on it is reached: a backdrop to the gate.
             property bool backdrop: screens.shown === Screens.HomeCard
@@ -117,7 +120,7 @@ Window {
             library: library
             padFamily: program.padFamily
             pixelScale: canvas.unit
-            visible: screens.shown === Screens.Consoles
+            visible: screens.shown === Screens.Consoles && !themeHost.consoles
             focus: !program.splashShown && visible
             onClosed: screens.back()
             onOpened: (key) => screens.open(key)
@@ -129,7 +132,7 @@ Window {
             library: library
             padFamily: program.padFamily
             pixelScale: canvas.unit
-            visible: screens.shown === Screens.Grid || screens.shown === Screens.List || grid.searching
+            visible: (screens.shown === Screens.Grid || screens.shown === Screens.List || grid.searching) && !themeHost.games
             focus: !program.splashShown && visible
             listOpen: screens.shown === Screens.List
             searching: screens.shown === Screens.Search || screens.shown === Screens.SearchGrid
@@ -145,6 +148,21 @@ Window {
             onSearchClosed: screens.back()
             onFocusMoved: (keys) => screens.keysFocused(keys)
         }
+    }
+    // The chosen EmuSen theme's screens over the reference's, each where the theme provides it and has not failed (EmuSen_Qt.md §3.5).
+    ThemeHost {
+        id: themeHost
+        objectName: "theme"
+        anchors.fill: parent
+        visible: !program.gameShown
+        folder: program.theme
+        coverStores: program.coverStores
+        inputs: !program.splashShown
+        homeShown: screens.shown === Screens.Home || screens.shown === Screens.HomeCard
+        consolesShown: screens.shown === Screens.Consoles
+        gamesShown: screens.shown === Screens.Grid || screens.shown === Screens.List || screens.shown === Screens.Search || screens.shown === Screens.SearchGrid
+        splashShown: program.splashShown
+        splashLayer: splashLayer
     }
     // The Home card over Home, opened at Power by its place (EmuSen_Interface.md §2.3; EmuSen_BigPicture.md §51.2).
     Kit.NormalizedCanvas {
@@ -310,5 +328,13 @@ Window {
             running: moonrise.activeFocus && Kit.PadRouter.clockRunning && Kit.PadRouter.pending
             onTriggered: Kit.PadRouter.pump()
         }
+    }
+    // A theme's own splash, over Moonrise and faded with it; Moonrise keeps the clock, the skip and the fade (EmuSen_Interface.md §22).
+    Item {
+        id: splashLayer
+        objectName: "splashLayer"
+        anchors.fill: parent
+        visible: themeHost.splash && program.splash && moonrise.opacity > 0
+        opacity: moonrise.opacity
     }
 }

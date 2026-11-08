@@ -1,0 +1,30 @@
+[package]
+name = "emusen-theme-host"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+links = "emusen-theme-host"
+
+# The sandboxed host of an EmuSen theme (EmuSen_Qt.md §3.5): one QQmlEngine per theme, its imports, URLs and network held to
+# the theme's allow-list, and the screens it provides created into the program's scene. The QML module EmuSen.ThemeHost 1.0 is the
+# program's, never a theme's.
+[lib]
+name = "emusen_theme_host"
+
+[dependencies]
+cxx.workspace = true
+cxx-qt.workspace = true
+cxx-qt-lib.workspace = true
+# The theme import allow-list, THEME_IMPORTS, and its check of a theme's file: qml-rules is its one owner.
+emusen-qml-rules.workspace = true
+# theme.json's schema and the API version, the manifest's one owner (EmuSen_Qt.md §3.4).
+emusen-theme-manifest = { path = "../theme-check/manifest" }
+
+[build-dependencies]
+cxx-qt-build.workspace = true
+
+[dev-dependencies]
+emusen-qt-test.workspace = true
+# The program's models, imported by the test scene so their types are registered in the process as they are in the program.
+emusen-qt-models = { path = "../qt-models" }

@@ -21,6 +21,8 @@ Window {
     property bool reducedMotion: false
     // Steam's Game Mode holds the session: Power holds Quit alone.
     property bool gameMode: false
+    // AppSettings.GuideChords as the start read it: On, or Auto away from Steam's Game Mode.
+    property bool guideChords: false
     // The pads the reader opens, by SDL id, where a test names its own; empty for every pad.
     property string onlyPads
     // The splash keeps the focus, and every press, until it has faded, so the press that skipped it is never a screen's.
@@ -68,6 +70,7 @@ Window {
         anchors.fill: parent
         visible: program.gameShown || program.pauseShown || (screens.shown === Screens.Home && player.session.running)
         inFront: program.gameShown
+        guideChords: program.guideChords
         focus: program.gameShown
         feed: program.feed
         platformLibrary: program.platformLibrary

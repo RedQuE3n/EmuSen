@@ -44,6 +44,9 @@ pub mod qobject {
         #[qproperty(QString, sentence, READ, NOTIFY)]
         /// What a tile without a picture says inside its outline.
         #[qproperty(QString, blank, READ, NOTIFY)]
+        /// A disc's cover beside its name (`title`) and the sentence; a cover-less disc draws the generated card.
+        #[qproperty(bool, cover, READ, NOTIFY)]
+        #[qproperty(QString, title, READ, NOTIFY)]
         type PaneModel = super::PaneModelRust;
     }
 
@@ -86,6 +89,8 @@ pub struct PaneModelRust {
     big: QString,
     sentence: QString,
     blank: QString,
+    cover: bool,
+    title: QString,
     tiles: Vec<[String; 3]>,
     ringed: Vec<bool>,
 }
@@ -140,6 +145,7 @@ impl qobject::PaneModel {
         let (kind, big, sentence) = (QString::from(&words(&v["kind"])), QString::from(&words(&v["big"])), QString::from(&words(&v["sentence"])));
         let (shown, moment) = (!kind.is_empty() && kind != QString::from("none"), kind == QString::from("moment"));
         let slots = kind == QString::from("slots");
+        let cover = kind == QString::from("cover");
         if self.slots != slots {
             self.as_mut().rust_mut().slots = slots;
             self.as_mut().slots_changed();
@@ -163,6 +169,15 @@ impl qobject::PaneModel {
         if self.sentence != sentence {
             self.as_mut().rust_mut().sentence = sentence;
             self.as_mut().sentence_changed();
+        }
+        if self.cover != cover {
+            self.as_mut().rust_mut().cover = cover;
+            self.as_mut().cover_changed();
+        }
+        let title = QString::from(&words(&v["title"]));
+        if self.title != title {
+            self.as_mut().rust_mut().title = title;
+            self.as_mut().title_changed();
         }
         let blank = QString::from(&words(&v["blank"]));
         if self.blank != blank {

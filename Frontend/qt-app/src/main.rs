@@ -40,6 +40,7 @@ fn main() {
         initial.insert(QString::from("splash"), QVariant::from(&start.splash));
         initial.insert(QString::from("reducedMotion"), QVariant::from(&start.reduced_motion));
         initial.insert(QString::from("gameMode"), QVariant::from(&start.game_mode));
+        initial.insert(QString::from("guideChords"), QVariant::from(&start.guide_chords));
         if let Some(host) = &host {
             initial.insert(QString::from("feed"), QVariant::from(&host.feed.address()));
         }

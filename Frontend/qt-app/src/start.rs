@@ -18,6 +18,8 @@ pub struct Start {
     pub reduced_motion: bool,
     /// Steam's Game Mode holds the session, so Power holds Quit alone (Mistress's `InGameModeSession`).
     pub game_mode: bool,
+    /// Guide held with Up, Down or the right shoulder over a game (AppSettings.GuideChords, EmuSen_BigPicture.md §48.7).
+    pub guide_chords: bool,
 }
 
 /// The platform library: `--platform-library PATH`, else `EMUSEN_PLATFORM_LIBRARY`, else the file beside the program.
@@ -36,6 +38,16 @@ pub fn reduced_motion_from(settings: &Value) -> bool {
     settings.get("ReducedMotion").and_then(Value::as_str) == Some("on")
 }
 
+/// The Guide chords from the settings, as Mistress's `GuideChordsOn` reads them: "On", "Off", or Auto (the default),
+/// off under Steam's Game Mode, where Steam holds Guide's chords.
+pub fn guide_chords_from(settings: &Value, game_mode: bool) -> bool {
+    match settings.get("GuideChords").and_then(Value::as_str) {
+        Some("On") => true,
+        Some("Off") => false,
+        _ => !game_mode,
+    }
+}
+
 /// Steam's Game Mode from the environment, as Mistress reads it: gamescope among `XDG_CURRENT_DESKTOP`'s names, or,
 /// with no desktop named, `SteamDeck=1`.
 pub fn game_mode_from(desktop: Option<&str>, steam_deck: Option<&str>) -> bool {
@@ -49,7 +61,8 @@ pub fn game_mode_from(desktop: Option<&str>, steam_deck: Option<&str>) -> bool {
 pub fn read(library: &Path) -> Start {
     let settings =
         Platform::load(library).ok().and_then(|platform| emusen_qt_models::clients::app_settings(&platform).ok()).unwrap_or(Value::Null);
+    let game_mode = game_mode_from(std::env::var("XDG_CURRENT_DESKTOP").ok().as_deref(), std::env::var("SteamDeck").ok().as_deref());
     Start { platform_library: library.to_string_lossy().into_owned(), splash: splash_from(&settings), reduced_motion: reduced_motion_from(&settings),
-        game_mode: game_mode_from(std::env::var("XDG_CURRENT_DESKTOP").ok().as_deref(), std::env::var("SteamDeck").ok().as_deref()),
+        game_mode, guide_chords: guide_chords_from(&settings, game_mode),
     }
 }

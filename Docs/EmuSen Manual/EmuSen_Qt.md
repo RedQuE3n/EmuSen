@@ -1658,7 +1658,7 @@ glyph of both; an empty slot's outline is Qt Quick's dash (4, 2) where Mistress'
 yet ask before loading a state its record ties to another copy of the game (Mistress's `SameGameOrConfirmed`, which
 needs the question form of piece C); §2.8's "Load first drops one undo snapshot into rewind" is not done by Mistress
 either, and the runtime clears the history on a load; the shoulders and triggers on the reel are the model's and are
-not yet delivered by the card's QML; the words of `notice` wait for piece C's notices.
+not yet delivered by the card's QML (delivered since §7.5); the words of `notice` wait for piece C's notices.
 
 **Held to** (measured 2026-11-08): `qt-models`' `pause` 8 (the rows and words, the facts from a reel and a session, a
 choice, a step and B, the slots' pane and sentences, the Rewind row's pictures, the reel's page from its first stop to
@@ -1722,7 +1722,8 @@ interval a third at 300% and four times at 25%, within a microsecond of the runt
 turbo); `acceptance.rs` on Vulkan (Right giving the running game turbo, read back from the runtime into the card's facts,
 and Left the game's own speed again). Seeded faults, each reverted: the card not carrying the choice to the session
 (`pause_pages`); the speed's change not announced, which no test catches, since the harness reads a property's value
-and not its signal; the card's row reads the speed from the facts, which are read again either way.
+and not its signal; the card's row reads the speed from the facts, which are read again either way. (Caught since
+§7.5, whose harness counts a property's signal.)
 
 **The screenshot** (2026-11-08). X on any page of the card is its declared action `screenshot` (help.rs, every Pause
 screen): the card stays and `SessionModel.screenshot` writes the picture on show, its repeated rows written out, as a PNG
@@ -1752,6 +1753,81 @@ window, whose band is 98 high, stops it at 702, so the card is centred 20 units 
 software tier; with a combo box's list open, the pad does not reach the frame until it closes (owed to stage 5). The
 Resume question is built as words and form; asking it at a game's start needs the runtime's "where you left off" state
 through the clients, which they do not wrap yet.
+
+### 7.5 Stage 2, the Pause Card's remaining rows: Guide chords, Game Options, Change Disc, Swap Players, the reel's shoulders (2026-11-08)
+
+`EmuSen_Interface.md` §18.5, §20.2, §20.3 to §20.9; `EmuSen_BigPicture.md` §48.3, §48.7. The oracle is Mistress's
+`GameMenuRows`, `GameOptionsRows`, `ChangeDiscRows`, `PauseCardPane.ShowCover`, `GuideChordReader` and `MainWindow.Pad`,
+the recording `PauseCardGameOptions` and her render of it.
+
+**The Guide chords.** The reader and the router's part are the kit's (`EmuSen_Kit.md` §7.26); the program gives them
+meaning. `pause::guide_chord` says Guide with Up saves to the slot chosen, with Down loads it, with the right shoulder
+takes a screenshot; `SessionModel.guideChord` acts through the session's own `saveState`, `loadState` and `screenshot`,
+off the GUI thread, their notices as before. `start.rs` reads `AppSettings.GuideChords` as Mistress's `GuideChordsOn`
+does ("On", "Off", or Auto, the default, off under Steam's Game Mode), and `Main.qml` hands it to `Game.qml`, which
+binds `PadRouter.guideChords`.
+
+**The first page's console rows** (§48.3). `Change Disc ▸` stands after Speed where the session's drive can change (the
+runtime's `discs.can_change`, Mistress's `DriveEngine`); `Swap Players 1 and 2` stands there instead where player 2 has
+a pad and no drive row takes the eighth place. The last of them ends Speed's section, so Game Options starts the next.
+The drive, the game's file and its system as the library keys it now cross in the card's facts, and whether player 2
+is seated is read from the pads' hand-over (`GamePads::seated`).
+
+**Change Disc** (§20.2): the game's own discs (`Basalt Run (Disc 1)` with `Inserted` on the one in, or the game's name
+for a single disc), then the console's other games in the library (`LibraryModel.gamesOf` of the facts' system, handed
+to `PauseModel.shelf`), then `Open the tray` while a disc is in. A on an own disc is `SessionModel.changeDisc` ("Disc 2
+is in"), on another game `insertDisc` ("Amber Coast is in"), on the tray `ejectDisc` ("The disc is out"), each off the
+GUI thread with the card closed, as Mistress's rows close it; A on the disc already in only closes the card. The help
+reads Put in, Back and Screenshot, Start not offered (`help::Screen::PauseDisc`). The pane is Mistress's `ShowCover`: the
+cover at 180 square, the generated card edged in Border where there is none, and beside it, 24 across and 48 down, the
+disc's name and the sentence in Muted at 22 ("A opens the tray, swaps the disc and closes it, as the console sees it.",
+or "In the console now. B goes back."); the tray's pane is its sentence alone. `Any file…` is the desktop form's
+(stage 6).
+
+**Swap Players 1 and 2** closes the card and swaps the first two players' pads in the hand-over from the next read, for
+as long as the program runs (`GamePads::swap_players`; the reader seats them swapped). Its notice reads "Players 1 and 2
+swapped".
+
+**Game Options** (§18.5): Cheats ▸, Controllers ▸, Display ▸, Sound ▸, and Memory Cards ▸ on a console with a drive,
+titled Game Options with the game as the way back, B returning to its row, the bar A Choose, B Back, X Screenshot,
+Start Resume, as `PauseCardGameOptions-1280x800.spec` has it. Cheats is drawn opening, as Mistress's `Opens` marks it
+and her render draws it (the recording's text omits the mark, which her row draws from `Opens`, not from the text).
+
+**The reel's shoulders.** `MenuCard` hands a key its row did not take to its host (`keyed`); `PauseModel.key` reads it
+as a press and `Card::shoulder` takes it as Mistress's reel does: the left shoulder five seconds further back, the
+right five nearer, the left trigger the oldest moment, the right the present. Seen in the test: a stride from 4.2 s
+went to 9.7 s, not 9.2 s, because 250/60 + 5 lies an ulp above 550/60. Mistress's `Stride` compares the same way, so
+the defect is hers too; `reel.rs` now takes two moments within a nanosecond as one time (`SAME_MOMENT`).
+
+**Differences from Mistress, for the tester:**
+- Controllers, Display, Sound, Memory Cards and Cheats are declared and do nothing yet. Their pages are pages of
+  Settings' one description (§20.3, §20.7 to §20.9) and Cheats is the cheats window; both are stage 5's.
+- Her render of Game Options is older than the recording: it shows a Volume row where §20.8 put Sound ▸. The Qt page
+  follows the recording. Over the test core, which claims a drive, the page also holds Memory Cards, and the first page
+  Change Disc, which Mistress's render (made over a core without one) has not.
+- No accepted render or recording of Change Disc exists; the page is held to her code's words and the pane to
+  `ShowCover`'s measures.
+- The generated card in the cover pane is drawn at hue 0, where Mistress's carries the console's hue.
+- Swap Players' notice does not name the pads, where Mistress's reads "Wireless pad: player 1 · …": the pads' names do
+  not reach the session's side of the hand-over.
+- With the chords on, the game still hears Up or Down while Guide is held, where Mistress keeps the pad from the game
+  from the moment Guide goes down (`_padQuiet`). The router knows Guide is held; the game's hand-over does not.
+
+**Held to** (measured on 2026-11-08). kit-core's `input` (the reader), kit-qt's `router` 8, `route`, `qt_keys` and
+`qmltypes`; `qt-models`' `pause` 14 (Game Options' rows and way back, Change Disc's rows, outcomes, panes and way back,
+a single disc, Swap Players and its room, the chords' meaning, the shoulders and triggers); `qt-app`'s `pause_pages` on
+the software backend (the speed's change counted, the shoulders and triggers on the reel, Game Options, Change Disc's
+rows, bar and cover pane, Memory Cards) and `start` (the chords' setting); `acceptance.rs` on Vulkan over a real session
+(Change Disc over the test core's drive, held at the gate's five sizes as `PauseCardChangeDisc`; Game Options as
+`PauseCardGameOptions`; Guide with Up saving to slot 1 through the session with no menu, Guide going down opening
+nothing and let go alone opening the card). Clippy clean. Seeded faults, each reverted: Guide alone opening nothing
+(kit-qt's `router`); Up loading (`pause`); Swap Players beside the drive's row (`pause`); B on Change Disc to the first
+row (`pause`); the card's row passing no key (`pause_pages`, the shoulder); the speed's change unannounced
+(`pause_pages`, the count). The side-by-sides, Mistress left and Qt right, are
+`~/.cache/emusen/tmp/qt-s2/compare/PauseCard{,GameOptions}-{1280x800,1920x1080}-side.png`; the Change Disc page is
+`PauseCardChangeDisc-*.png` alone.
+
+*C++ parts:* none in the program; the harness's spy (`EmuSen_Kit.md` §7.26).
 
 ---
 

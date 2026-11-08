@@ -5,7 +5,7 @@
 extern crate emusen_qt;
 
 use emusen_kit_core::input::UiButton;
-use emusen_qt_models::pause::{Facts, SlotFact};
+use emusen_qt_models::pause::{DiscFacts, Facts, SlotFact};
 
 const SCENE: &str = r#"import QtQuick
 import EmuSen.Kit as Kit
@@ -99,6 +99,7 @@ fn the_pane_follows_the_row_and_the_reel_turns_in_place() {
     let mut scene = harness.load(&format!("file://{}", qml.display()), 1280, 800);
     assert!(scene.set_property("card", "open", "true"));
     assert!(scene.set_property("pause", "facts", &facts()));
+    assert!(scene.watch("session", "speed"), "the speed says when it changes");
     scene.wait(400);
     assert_eq!(scene.property("AdaptiveCardPane", "visible"), "false", "Resume shows no pane");
 
@@ -125,10 +126,12 @@ fn the_pane_follows_the_row_and_the_reel_turns_in_place() {
     scene.pad(UiButton::Right);
     scene.wait(20);
     assert_eq!(scene.property("session", "speed"), "300", "Right on Speed chooses turbo through the session");
+    assert_eq!(scene.notified("session", "speed"), Some(1), "and announces it, so the card's facts are read again");
     scene.pad(UiButton::Left);
     scene.pad(UiButton::Left);
     scene.wait(20);
     assert_eq!(scene.property("session", "speed"), "25", "Left twice slow motion");
+    assert_eq!(scene.notified("session", "speed"), Some(2), "once to 25: the card steps from the facts, which this scene does not read again");
 
     // Rewind's reel: a page turned in place, on the stop nearest 1.5 s back, the strip of six with it ringed.
     scene.pad(UiButton::Up);
@@ -146,10 +149,78 @@ fn the_pane_follows_the_row_and_the_reel_turns_in_place() {
     scene.wait(20);
     assert_eq!(rows(&mut scene)[1], "Moment | 4.2 s ago", "Right goes to the next stop back");
     assert_eq!(scene.property("PaneSentence", "text"), "4.2 s ago. A goes back there; the moments after it are kept until you play on.");
+    // The shoulders stride five seconds and the triggers go to either end, as Mistress's reel takes them.
+    scene.pad(UiButton::PageUp);
+    scene.wait(20);
+    assert_eq!(rows(&mut scene)[1], "Moment | 9.2 s ago", "the left shoulder five seconds further back");
+    scene.pad(UiButton::PageDown);
+    scene.wait(20);
+    assert_eq!(rows(&mut scene)[1], "Moment | 4.2 s ago", "the right five seconds nearer");
+    scene.pad(UiButton::First);
+    scene.wait(20);
+    assert_eq!(rows(&mut scene)[1], "Moment | 28 s ago", "the left trigger the oldest");
+    scene.pad(UiButton::Last);
+    scene.wait(20);
+    assert_eq!(rows(&mut scene)[0], "Stay at Now | ", "the right trigger the present");
     scene.pad(UiButton::Back);
     scene.wait(20);
     assert_eq!(rows(&mut scene).len(), 7);
     assert_eq!(scene.property("PadMenuList", "currentIndex"), "1", "B goes back to Rewind's row");
     assert_eq!(scene.property("window", "resumed"), "0");
+    options_and_discs(&mut scene);
     scene.assert_quiet();
+}
+
+/// A game of two discs, the first in, beside another game of its console in the library.
+fn disc_facts() -> String {
+    let discs = DiscFacts { count: 2, index: Some(0), can_change: true, lid_open: false };
+    Facts { path: "/games/Cobalt Harbor (Synthetic).tst".into(), system: "tst".into(), discs, ..Facts::default() }.to_json()
+}
+
+const SHELF: &str = r#"[{"path":"/games/Amber Coast.tst","system":"tst","title":"Amber Coast","cover":""},
+    {"path":"/games/Cobalt Harbor (Synthetic).tst","system":"tst","title":"Cobalt Harbor (Synthetic)","cover":""}]"#;
+
+/// From Rewind's row: Game Options' page and its way back, then a game of two discs and its Change Disc page.
+fn options_and_discs(scene: &mut emusen_qt_test::Scene<'_>) {
+    for _ in 0..4 {
+        scene.pad(UiButton::Down);
+    }
+    scene.pad(UiButton::Accept);
+    scene.wait(20);
+    assert_eq!((scene.property("cardTitle", "text"), scene.property("cardBreadcrumb", "text")), ("Game Options".into(), "Cobalt Harbor (Synthetic)".into()));
+    assert_eq!(rows(scene), ["Cheats | ", "Controllers | ", "Display | ", "Sound | "], "PauseCardGameOptions' rows");
+    assert_eq!(help(scene), ["Choose", "Back", "Screenshot", "Resume"], "as the recording's bar");
+    scene.pad(UiButton::Back);
+    scene.wait(20);
+    assert_eq!(scene.property("PadMenuList", "currentIndex"), "5", "B back to Game Options' row");
+
+    // A game whose drive can change: Change Disc after Speed, its page the game's two discs, the console's other game and the tray.
+    assert!(scene.set_property("pause", "facts", &disc_facts()));
+    assert!(scene.set_property("pause", "shelf", SHELF));
+    scene.wait(20);
+    assert_eq!(rows(scene)[5..], ["Change Disc | ", "Game Options | ", "Leave | "]);
+    scene.pad(UiButton::Accept);
+    scene.wait(20);
+    assert_eq!(scene.property("cardTitle", "text"), "Change Disc");
+    assert_eq!(
+        rows(scene),
+        ["Cobalt Harbor (Synthetic) (Disc 1) | Inserted", "Cobalt Harbor (Synthetic) (Disc 2) | ", "Amber Coast | ", "Open the tray | "]
+    );
+    assert_eq!(help(scene), ["Put in", "Back", "Screenshot"], "A puts the disc in; Start is not offered");
+    assert_eq!(scene.property("PaneTitle", "text"), "Cobalt Harbor (Synthetic), Disc 1 of 2");
+    assert_eq!(scene.property("PaneHint", "text"), "In the console now. B goes back.");
+    assert_eq!(scene.property("PaneCover", "drawn"), "false", "no cover: the generated card");
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Down);
+    scene.wait(20);
+    assert_eq!(scene.property("PaneTitle", "text"), "Amber Coast");
+    assert_eq!(scene.property("PaneHint", "text"), "A opens the tray, swaps the disc and closes it, as the console sees it.");
+    scene.pad(UiButton::Back);
+    scene.wait(20);
+    assert_eq!(scene.property("PadMenuList", "currentIndex"), "5", "B back to Change Disc's row");
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Accept);
+    scene.wait(20);
+    assert_eq!(rows(scene).last().unwrap(), "Memory Cards | ", "a console with a drive has its cards");
+    assert_eq!(scene.property("window", "resumed"), "0");
 }

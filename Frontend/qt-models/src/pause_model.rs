@@ -36,6 +36,8 @@ pub mod qobject {
         Leave,
         Reel,
         Ask,
+        Options,
+        Disc,
     }
 
     extern "RustQt" {
@@ -47,6 +49,10 @@ pub mod qobject {
         #[qproperty(QString, game)]
         /// The session's facts as plain data (`SessionModel.cardFacts`).
         #[qproperty(QString, facts)]
+        /// The game's system as the library keys it, from the facts, for `shelf`.
+        #[qproperty(QString, system, READ, NOTIFY)]
+        /// The console's games in the library (`LibraryModel.gamesOf(system)`), for Change Disc.
+        #[qproperty(QString, shelf)]
         #[qproperty(QString, title, READ, NOTIFY)]
         #[qproperty(QString, breadcrumb, READ, NOTIFY)]
         /// The row focused; a page opens on its own.
@@ -94,9 +100,9 @@ pub mod qobject {
         #[qinvokable]
         fn step(self: Pin<&mut PauseModel>, index: i32, by: i32, held: bool);
 
-        /// A shoulder (+1 further back, -1 nearer) or, with `end`, a trigger.
+        /// A key the focused row did not take: the shoulders and triggers, as their Qt keys, stride the reel.
         #[qinvokable]
-        fn stride(self: Pin<&mut PauseModel>, back: i32, end: bool);
+        fn key(self: Pin<&mut PauseModel>, key: i32);
 
         /// B on the page.
         #[qinvokable]
@@ -154,6 +160,26 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "quitAsked"]
         fn quit_asked(self: Pin<&mut PauseModel>);
+
+        /// The game's own disc of that index to put in; the card closes.
+        #[qsignal]
+        #[cxx_name = "discAsked"]
+        fn disc_asked(self: Pin<&mut PauseModel>, index: u32);
+
+        /// Another game's disc to put in, by its file; the card closes.
+        #[qsignal]
+        #[cxx_name = "insertAsked"]
+        fn insert_asked(self: Pin<&mut PauseModel>, path: QString);
+
+        /// The tray to open with no disc in; the card closes.
+        #[qsignal]
+        #[cxx_name = "ejectAsked"]
+        fn eject_asked(self: Pin<&mut PauseModel>);
+
+        /// Players 1 and 2 to swap; the card closes.
+        #[qsignal]
+        #[cxx_name = "swapAsked"]
+        fn swap_asked(self: Pin<&mut PauseModel>);
     }
 
     unsafe extern "RustQt" {
@@ -183,6 +209,8 @@ pub struct PauseModelRust {
     page: PausePage,
     game: QString,
     facts: QString,
+    system: QString,
+    shelf: QString,
     title: QString,
     breadcrumb: QString,
     current: i32,
@@ -200,6 +228,8 @@ impl Default for PauseModelRust {
             page: PausePage::First,
             game: QString::default(),
             facts: QString::default(),
+            system: QString::default(),
+            shelf: QString::default(),
             title: QString::default(),
             breadcrumb: QString::default(),
             current: 0,
@@ -214,9 +244,21 @@ impl Default for PauseModelRust {
 impl cxx_qt::Initialize for qobject::PauseModel {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().on_game_changed(|model| model.shown()).release();
-        self.on_facts_changed(|mut model| {
+        self.as_mut().on_facts_changed(|mut model| {
             let facts = Facts::from_json(&model.facts.to_string());
+            let system = QString::from(&facts.system);
             model.as_mut().rust_mut().card.facts = facts;
+            if model.system != system {
+                model.as_mut().rust_mut().system = system;
+                model.as_mut().system_changed();
+            }
+            model.shown();
+        })
+        .release();
+        self.on_shelf_changed(|mut model| {
+            let mut shelf = crate::games::from_json(&model.shelf.to_string());
+            shelf.iter_mut().for_each(|g| g.cover = crate::game_model::cover_url(&g.cover));
+            model.as_mut().rust_mut().card.shelf = shelf;
             model.shown();
         })
         .release();
@@ -229,6 +271,8 @@ fn shown_page(page: Page) -> PausePage {
         Page::Leave => PausePage::Leave,
         Page::Reel => PausePage::Reel,
         Page::Ask(_) => PausePage::Ask,
+        Page::Options => PausePage::Options,
+        Page::Disc => PausePage::Disc,
     }
 }
 
@@ -283,8 +327,9 @@ impl qobject::PauseModel {
         self.answer(outcome);
     }
 
-    pub fn stride(mut self: Pin<&mut Self>, back: i32, end: bool) {
-        let outcome = self.as_mut().rust_mut().card.stride(back, end);
+    pub fn key(mut self: Pin<&mut Self>, key: i32) {
+        let Some(button) = emusen_kit_qt::qt_keys::press_of(key, 0) else { return };
+        let outcome = self.as_mut().rust_mut().card.shoulder(button);
         self.answer(outcome);
     }
 
@@ -326,6 +371,23 @@ impl qobject::PauseModel {
             Outcome::QuitGame => self.as_mut().quit_game_asked(),
             Outcome::QuitEmuSen => self.as_mut().quit_asked(),
             Outcome::Screenshot => self.as_mut().screenshot_asked(),
+            Outcome::ChangeDisc(index) => {
+                self.as_mut().disc_asked(index);
+                self.as_mut().resumed();
+            }
+            Outcome::InsertDisc(at) => {
+                let path = self.card.others().get(at).map(|g| QString::from(&g.path)).unwrap_or_default();
+                self.as_mut().insert_asked(path);
+                self.as_mut().resumed();
+            }
+            Outcome::Eject => {
+                self.as_mut().eject_asked();
+                self.as_mut().resumed();
+            }
+            Outcome::SwapPlayers => {
+                self.as_mut().swap_asked();
+                self.as_mut().resumed();
+            }
         }
     }
 

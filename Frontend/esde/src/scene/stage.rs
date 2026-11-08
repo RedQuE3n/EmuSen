@@ -4,6 +4,8 @@
 use crate::loader::Animation;
 
 use super::data::Data;
+use super::draw::{Drawn, Measures};
+use super::frame::{Frame, Row, Rows};
 use super::motion::{Glide, Time};
 use super::view::{ElementState, SceneView};
 
@@ -19,6 +21,7 @@ pub struct Stage {
     leaving: Option<SceneView>,
     slide: Glide,
     direction: f64,
+    measures: Measures,
 }
 
 // The elements that stay on the screen while the views pan.
@@ -28,7 +31,7 @@ fn overlay(kind: &str) -> bool {
 
 impl Stage {
     pub fn new(data: Data, view: &str, now: Time) -> Self {
-        Stage { current: SceneView::new(data, view, now), leaving: None, slide: Glide::at(0.0), direction: 0.0 }
+        Stage { current: SceneView::new(data, view, now), leaving: None, slide: Glide::at(0.0), direction: 0.0, measures: Measures::new() }
     }
 
     pub fn is_moving(&self) -> bool {
@@ -76,5 +79,77 @@ impl Stage {
         }
         layers.push(Layer { view: self.current.view.clone(), y, elements });
         layers
+    }
+
+    // The pan's progress and the two views' shifts: the leaving view's, then the current view's.
+    fn shifts(&self) -> (f64, f64) {
+        let h = self.current.data.height;
+        let p = self.slide.value_at(self.current.now());
+        if self.leaving.is_some() {
+            (-self.direction * p * h, self.direction * (1.0 - p) * h)
+        } else {
+            (0.0, 0.0)
+        }
+    }
+
+    fn drawn(&self, measures: &Measures) -> (Vec<Drawn>, Frame) {
+        let (leave_y, y) = self.shifts();
+        let mut frame = Frame::default();
+        let mut all = vec![];
+        if let Some(leaving) = &self.leaving {
+            let (drawn, primary) = leaving.draw(measures, true);
+            frame.leaving_primary = primary;
+            all.extend(drawn.into_iter().filter(|d| !overlay(&d.placed.kind)).map(|mut d| {
+                d.placed.y += leave_y;
+                d
+            }));
+        }
+        let (drawn, primary) = self.current.draw(measures, false);
+        frame.primary = primary;
+        all.extend(drawn.into_iter().map(|mut d| {
+            if !overlay(&d.placed.kind) {
+                d.placed.y += y;
+            }
+            d
+        }));
+        (all, frame)
+    }
+
+    /// Everything on the screen at the stage's time, in window pixels (EmuSen_Qt.md §4.5.5).
+    pub fn frame(&self) -> Frame {
+        let (drawn, mut frame) = self.drawn(&self.measures);
+        let waits: Vec<Time> = drawn.iter().filter_map(|d| d.wait).collect();
+        frame.moving = self.leaving.is_some() || self.current.is_animating() || waits.contains(&0);
+        let now = self.current.data.now;
+        let clock = drawn.iter().any(|d| d.placed.kind == "clock").then(|| {
+            let seconds = self.current.theme_view().of_kind("clock").any(|e| e.string("format").is_some_and(|f| f.contains("%S")));
+            if seconds {
+                1_000_000
+            } else {
+                (60 - now.second.min(59) as Time) * 1_000_000
+            }
+        });
+        frame.next_change_ms =
+            waits.iter().copied().filter(|w| *w > 0).chain(clock).min().map(|w| ((w + 999) / 1000).min(u32::MAX as Time) as u32);
+        frame.overlay = self.current.scroll_letters();
+        frame.elements = drawn.into_iter().map(|d| d.placed).collect();
+        frame
+    }
+
+    /// The painter's measurement of an element's content, kept while that content is shown; true when the frame changes (EmuSen_Qt.md §4.5.5).
+    pub fn measured(&mut self, id: u64, w: f64, h: f64) -> bool {
+        let (drawn, _) = self.drawn(&Measures::new());
+        let Some(content) = drawn.iter().find(|d| d.placed.id == id).map(|d| d.content) else { return false };
+        let entry = (content, w, h);
+        if self.measures.get(&id) == Some(&entry) {
+            return false;
+        }
+        self.measures.insert(id, entry);
+        true
+    }
+
+    /// The rows a primary element shown now lists.
+    pub fn rows(&self, rows: Rows) -> Option<Vec<Row>> {
+        std::iter::once(&self.current).chain(self.leaving.as_ref()).find(|v| v.rows_id() == rows).map(|v| v.rows_of())
     }
 }

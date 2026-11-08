@@ -317,6 +317,11 @@ impl SceneView {
 
     /// Whether anything still moves, so a host can stop asking for frames; a text that may scroll counts, since its loop never ends.
     pub fn is_moving(&self) -> bool {
+        self.is_animating() || self.frame().iter().any(|s| s.skipped.is_none() && s.scroll.is_some_and(|r| r.speed > 0.0))
+    }
+
+    /// Whether a glide, a hold, a fade or a scrollFadeIn runs; a self-scrolling text is the frame's to judge, once measured.
+    pub fn is_animating(&self) -> bool {
         let now = self.now;
         let view = self.theme_view();
         !self.position.is_settled_at(now)
@@ -324,8 +329,16 @@ impl SceneView {
             || !self.focus.is_settled_at(now)
             || self.repeat.held()
             || !self.metadata.is_settled_at(now)
-            || (now < self.selected_at + self.motion.scroll_fade_in && view.elements.iter().any(|e| self.fades_in(e)))
-            || self.frame().iter().any(|s| s.skipped.is_none() && s.scroll.is_some_and(|r| r.speed > 0.0))
+            || (self.changed && now < self.selected_at + self.motion.scroll_fade_in && view.elements.iter().any(|e| self.fades_in(e)))
+    }
+
+    pub fn selected_at(&self) -> Time {
+        self.selected_at
+    }
+
+    /// ES-DE's quick-scroll overlay is up: a direction is held and its repeats have faded the metadata out.
+    pub fn quick_scrolling(&self) -> bool {
+        self.repeat.held() && self.metadata.to <= 0.0
     }
 
     // A game's metadata and media, which ES-DE fades out while the list scrolls fast.

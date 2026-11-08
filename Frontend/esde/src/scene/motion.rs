@@ -223,6 +223,52 @@ impl TextScroll {
         }
         (self.step(travel.min((into - delay) * self.speed)), 1.0)
     }
+
+    /// How long until a line `width` pixels wide next moves, 0 while it moves; None when it never does.
+    pub fn loop_wait(&self, elapsed: Time, width: f64) -> Option<Time> {
+        let period = width + self.gap.max(0.0);
+        if self.speed <= 0.0 || period <= 0.0 {
+            return None;
+        }
+        if elapsed <= self.delay {
+            return Some(self.delay - elapsed);
+        }
+        let (delay, cycle) = (seconds(self.delay), seconds(self.delay) + period / self.speed);
+        let into = seconds(elapsed) % cycle;
+        Some(if into <= delay { micros(delay - into) } else { 0 })
+    }
+
+    /// How long until a column that travels `travel` pixels next moves or fades, 0 while it does; None when it never does.
+    pub fn run_wait(&self, elapsed: Time, travel: f64) -> Option<Time> {
+        if self.speed <= 0.0 || travel <= 0.0 {
+            return None;
+        }
+        if elapsed <= self.delay {
+            return Some(self.delay - elapsed);
+        }
+        let (delay, fade, pause) = (seconds(self.delay), seconds(self.fade_in).max(0.0), seconds(self.end_pause).max(0.0));
+        let moving = travel / self.speed;
+        let t = seconds(elapsed);
+        let first = delay + moving + pause;
+        if t < delay + moving {
+            return Some(0);
+        }
+        if t < first {
+            return Some(micros(first - t));
+        }
+        let into = (t - first) % (fade + delay + moving + pause);
+        Some(if into < fade || (into >= fade + delay && into < fade + delay + moving) {
+            0
+        } else if into < fade + delay {
+            micros(fade + delay - into)
+        } else {
+            micros(fade + delay + moving + pause - into)
+        })
+    }
+}
+
+fn micros(seconds: f64) -> Time {
+    (seconds * 1_000_000.0).ceil().max(1.0) as Time
 }
 
 /// Every duration, curve and rate the scene moves by.

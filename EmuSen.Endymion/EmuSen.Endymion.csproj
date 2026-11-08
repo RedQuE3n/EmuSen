@@ -36,8 +36,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- PadButton and ConfigFile, which GamepadBindingMap is keyed by and
-         persists through. The only reference, and Galaxia is itself
+    <!-- PadButton, which GamepadBindingMap is keyed by, and the platform
+         library and ConfigJson the binding files cross through. The only reference, and Galaxia is itself
          core-free, so nothing arrives transitively - see EmuSen_Input.md §4. -->
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
   </ItemGroup>

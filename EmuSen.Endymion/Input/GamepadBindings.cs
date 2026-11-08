@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using SDL3;
-using EmuSen.Galaxia;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Endymion.Input
@@ -30,35 +28,34 @@ namespace EmuSen.Endymion.Input
             return map;
         }
 
-        // Players 2 on, by their file key; a player missing here plays with player 1's map - see EmuSen_Input.md §8.4.
-        private readonly Dictionary<string, GamepadBindingMap> _byPlayer = new(StringComparer.OrdinalIgnoreCase);
+        // Players 2 on, by console then player; a player missing here plays with player 1's map - see EmuSen_Input.md §8.4.
+        private readonly Dictionary<string, Dictionary<int, GamepadBindingMap>> _byPlayer = new(StringComparer.OrdinalIgnoreCase);
 
-        private const string PlayerWord = " Player ";
-
-        // The file key of a player's map beside the console's own, so a build that predates players keeps it as an unknown console.
-        public static string PlayerKey(string console, int player) => $"{console}{PlayerWord}{player}";
+        private Dictionary<int, GamepadBindingMap> PlayersOf(string console)
+        {
+            if (!_byPlayer.TryGetValue(console, out Dictionary<int, GamepadBindingMap>? players)) _byPlayer[console] = players = new();
+            return players;
+        }
 
         public GamepadBindingMap For(string console, int player) =>
-            player > 1 && _byPlayer.TryGetValue(PlayerKey(console, player), out GamepadBindingMap? own) ? own : For(console);
+            player > 1 && _byPlayer.TryGetValue(console, out var players) && players.TryGetValue(player, out GamepadBindingMap? own) ? own : For(console);
 
-        public bool HasOwn(string console, int player) => player > 1 && _byPlayer.ContainsKey(PlayerKey(console, player));
+        public bool HasOwn(string console, int player) => player > 1 && _byPlayer.TryGetValue(console, out var players) && players.ContainsKey(player);
 
         // The player's own map, begun as a copy of player 1's the first time it is changed.
         public GamepadBindingMap Own(string console, int player)
         {
             if (player <= 1) return For(console);
-            string key = PlayerKey(console, player);
-            if (!_byPlayer.TryGetValue(key, out GamepadBindingMap? own))
-            {
-                own = new GamepadBindingMap();
-                own.Replace(new Dictionary<PadButton, SDL.GamepadButton>(For(console).ButtonToPad));
-                _byPlayer[key] = own;
-            }
+            Dictionary<int, GamepadBindingMap> players = PlayersOf(console);
+            if (!players.TryGetValue(player, out GamepadBindingMap? own)) players[player] = own = Copy(For(console));
             return own;
         }
 
         // Back to player 1's map.
-        public void Forget(string console, int player) => _byPlayer.Remove(PlayerKey(console, player));
+        public void Forget(string console, int player)
+        {
+            if (_byPlayer.TryGetValue(console, out var players)) players.Remove(player);
+        }
 
         // Default's maps back to the defaults; the named profiles are the player's and stay.
         public void ResetToDefaults()
@@ -66,17 +63,6 @@ namespace EmuSen.Endymion.Input
             foreach (GamepadBindingMap map in _byConsole.Values) map.ResetToDefaults();
             _byPlayer.Clear();
         }
-
-        private static readonly ConfigFile<Dictionary<string, Dictionary<PadButton, SDL.GamepadButton>>> File =
-            new("gamepadbindings.json");
-
-        // Only ever asks "is this the flat shape or the per-console one" - JsonElement
-        // accepts any value, so a bad enum still reaches the typed load below and is
-        // reported there exactly once - see EmuSen_Config_Reference.md §3.6.
-        private static readonly ConfigFile<Dictionary<string, JsonElement>> ShapeProbe = new("gamepadbindings.json");
-
-        private static readonly ConfigFile<Dictionary<PadButton, SDL.GamepadButton>> LegacyFile =
-            new("gamepadbindings.json");
 
         // --- Profiles, store 1.1: named sets beside Default, which is the console's maps above - see EmuSen_Input.md §10. ---
 
@@ -221,7 +207,14 @@ namespace EmuSen.Endymion.Input
             else if (player > 1) named.Maps.Remove(player);
         }
 
-        // gamepadprofiles.json: by console, the chosen default and each named profile's maps by player; Default stays in gamepadbindings.json.
+        // gamepadbindings.json as the platform library hands it over: each console's map, then each player's who has one.
+        internal sealed class PadFile
+        {
+            public Dictionary<string, Dictionary<PadButton, SDL.GamepadButton>> Consoles { get; set; } = new();
+            public Dictionary<string, Dictionary<int, Dictionary<PadButton, SDL.GamepadButton>>> Players { get; set; } = new();
+        }
+
+        // gamepadprofiles.json likewise: by console, the chosen default and each named profile's maps by player; Default stays in gamepadbindings.json.
         internal sealed class ProfileFile
         {
             public string? Default { get; set; }
@@ -229,97 +222,50 @@ namespace EmuSen.Endymion.Input
             public Dictionary<string, string>? Games { get; set; }
         }
 
-        private static readonly ConfigFile<Dictionary<string, ProfileFile>> ProfilesFile = new("gamepadprofiles.json");
-
-        public bool Save()
+        private static GamepadBindingMap MapOf(Dictionary<PadButton, SDL.GamepadButton> buttons)
         {
-            var payload = new Dictionary<string, Dictionary<PadButton, SDL.GamepadButton>>(StringComparer.OrdinalIgnoreCase);
-            foreach (var kv in _byConsole) payload[kv.Key] = kv.Value.ButtonToPad;
-            foreach (var kv in _byPlayer) payload[kv.Key] = kv.Value.ButtonToPad;
-            var profiles = new Dictionary<string, ProfileFile>(StringComparer.OrdinalIgnoreCase);
-            foreach (var (console, all) in _profiles)
-            {
-                if (all.Named.Count == 0 && all.Games.Count == 0) continue;
-                profiles[console] = new ProfileFile
-                {
-                    Default = all.Chosen,
-                    Profiles = all.Named.ToDictionary(p => p.Name, p => p.Maps.ToDictionary(m => m.Key, m => m.Value.ButtonToPad)),
-                    Games = all.Games.Count > 0 ? new Dictionary<string, string>(all.Games) : null,
-                };
-            }
-            return File.Save(payload) & ProfilesFile.Save(profiles);
+            var map = new GamepadBindingMap();
+            map.Replace(buttons);
+            return map;
         }
 
-        private void LoadProfiles()
+        // Both files are Endymion's in the platform library, their one reader and writer - see EmuSen_Input.md §5.2.
+        public bool Save()
         {
-            if (ProfilesFile.Load() is not { } loaded) return;
-            foreach (var (console, file) in loaded)
+            var pads = new PadFile
             {
-                ConsoleProfiles all = ProfilesOf(console);
-                foreach (var (name, maps) in file.Profiles ?? new())
-                {
-                    string trimmed = name.Trim();
-                    if (trimmed.Length == 0 || IsDefault(trimmed) || Named(console, trimmed) is not null || !maps.ContainsKey(1)) continue;
-                    var profile = new Profile(trimmed);
-                    foreach (var (player, buttons) in maps)
-                    {
-                        if (player < 1 || player > PlayerSlots.MaxPlayers || buttons is null) continue;
-                        var map = new GamepadBindingMap();
-                        map.Replace(buttons);
-                        map.AddDefaultsForNewButtons();
-                        profile.Maps[player] = map;
-                    }
-                    all.Named.Add(profile);
-                }
-                all.Chosen = file.Default is { } chosen && Named(console, chosen) is { } named ? named.Name : null;
-                foreach (var (game, name) in file.Games ?? new())
-                    if (game.Length > 0 && name is not null && (IsDefault(name) ? DefaultProfile : Named(console, name)?.Name) is { } kept) all.Games[game] = kept;
-            }
+                Consoles = _byConsole.ToDictionary(kv => kv.Key, kv => kv.Value.ButtonToPad),
+                Players = _byPlayer.ToDictionary(kv => kv.Key, kv => kv.Value.ToDictionary(p => p.Key, p => p.Value.ButtonToPad)),
+            };
+            var profiles = _profiles.ToDictionary(kv => kv.Key, kv => new ProfileFile
+            {
+                Default = kv.Value.Chosen,
+                Profiles = kv.Value.Named.ToDictionary(p => p.Name, p => p.Maps.ToDictionary(m => m.Key, m => m.Value.ButtonToPad)),
+                Games = kv.Value.Games.Count > 0 ? new Dictionary<string, string>(kv.Value.Games) : null,
+            });
+            return BindingFiles.Save(BindingFile.Gamepad, pads) & BindingFiles.Save(BindingFile.Profiles, profiles);
         }
 
         public static GamepadBindings Load(IEnumerable<string> consoles)
         {
             var bindings = new GamepadBindings(consoles);
-            bindings.LoadProfiles();
-            if (ShapeProbe.Load() is not { Count: > 0 } probe) return bindings;
-
-            // A flat file predates per-console bindings, so every console inherits it - that is what it used to mean.
-            if (IsLegacyFlat(probe))
+            PadFile pads = BindingFiles.Load<PadFile>(BindingFile.Gamepad, bindings._byConsole.Keys);
+            foreach (var (console, map) in pads.Consoles) bindings.For(console).Replace(map);
+            foreach (var (console, players) in pads.Players)
+                foreach (var (player, map) in players) bindings.PlayersOf(console)[player] = MapOf(map);
+            foreach (var (console, file) in BindingFiles.Load<Dictionary<string, ProfileFile>>(BindingFile.Profiles, []))
             {
-                if (LegacyFile.Load() is { Count: > 0 } shared)
+                ConsoleProfiles all = bindings.ProfilesOf(console);
+                foreach (var (name, maps) in file.Profiles)
                 {
-                    foreach (GamepadBindingMap map in bindings._byConsole.Values)
-                    {
-                        map.Replace(new Dictionary<PadButton, SDL.GamepadButton>(shared));
-                        map.AddDefaultsForNewButtons();
-                    }
+                    var profile = new Profile(name);
+                    foreach (var (player, map) in maps) profile.Maps[player] = MapOf(map);
+                    all.Named.Add(profile);
                 }
-                return bindings;
-            }
-
-            if (File.Load() is not { } loaded) return bindings;
-
-            foreach (var kv in loaded)
-            {
-                if (kv.Value is not { Count: > 0 }) continue;
-                GamepadBindingMap map = IsPlayerKey(kv.Key) ? bindings._byPlayer[kv.Key] = new GamepadBindingMap() : bindings.For(kv.Key);
-                map.Replace(kv.Value);
-                map.AddDefaultsForNewButtons();
+                all.Chosen = file.Default;
+                foreach (var (game, name) in file.Games ?? new()) all.Games[game] = name;
             }
             return bindings;
-        }
-
-        private static bool IsPlayerKey(string key)
-        {
-            int at = key.LastIndexOf(PlayerWord, StringComparison.Ordinal);
-            return at > 0 && int.TryParse(key.AsSpan(at + PlayerWord.Length), System.Globalization.NumberStyles.None, null, out int player) && player > 1;
-        }
-
-        // The values are pad buttons in the old shape and objects in the new one.
-        private static bool IsLegacyFlat(Dictionary<string, JsonElement> probe)
-        {
-            foreach (var kv in probe) return kv.Value.ValueKind != JsonValueKind.Object;
-            return false;
         }
     }
 }

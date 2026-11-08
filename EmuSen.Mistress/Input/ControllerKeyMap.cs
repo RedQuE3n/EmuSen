@@ -53,18 +53,5 @@ namespace EmuSen.Mistress.Input
             ButtonToKey = bindings;
             RebuildReverseLookup();
         }
-
-        // A file written before a control existed cannot mention it, so it takes its default key if that key is free - see EmuSen_Config_Reference.md §3.6.
-        public void AddDefaultsForNewControls()
-        {
-            foreach (KeyValuePair<PadControl, Key> binding in DefaultPadKeyMap.Bindings())
-            {
-                if (binding.Key < DefaultPadKeyMap.FirstAddedControl || ButtonToKey.ContainsKey(binding.Key)) continue;
-                if (_keyToButton.ContainsKey(binding.Value)) continue;
-
-                ButtonToKey[binding.Key] = binding.Value;
-                RebuildReverseLookup();
-            }
-        }
     }
 }

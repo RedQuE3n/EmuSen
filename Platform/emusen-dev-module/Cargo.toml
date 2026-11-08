@@ -8,7 +8,8 @@ publish.workspace = true
 # emusen.dev, the project's own development tools as a command module (EmuSen_DianaSh.md §13.16): `dupes`, which runs
 # PMD's CPD and reports the duplication a change adds, `hwcount`, which reads the host's hardware counters, `qml-rules`,
 # the Qt front end's check that QML is layout only (EmuSen_Qt.md §1.3), over the library at Frontend/qml-rules, and
-# `esde-check`, the ES-DE theme corpus measure (EmuSen_Qt.md §4.4), over the library at Frontend/esde. A developer's
+# `esde-check`, the ES-DE theme corpus measure (EmuSen_Qt.md §4.4), over the library at Frontend/esde, and `theme-check`, an EmuSen
+# theme package's static check (EmuSen_Qt.md §3.7), over the library at Frontend/theme-check. A developer's
 # tool: linked into the standalone dianash program, never into the platform library, and PMD is never shipped.
 [lib]
 name = "emusen_dev_module"
@@ -17,6 +18,7 @@ name = "emusen_dev_module"
 dianash-module = { path = "../dianash-module" }
 emusen-qml-rules = { path = "../../Frontend/qml-rules" }
 emusen-esde = { path = "../../Frontend/esde" }
+emusen-theme-check = { path = "../../Frontend/theme-check" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"

@@ -1,4 +1,4 @@
-//! `appimage`: the kit's gallery program bundled as an AppImage by linuxdeploy, its Qt plugin and appimagetool, each
+//! `appimage`: the kit's gallery program bundled as an AppImage by linuxdeploy, its Qt plugin and appimagetool (with its pinned runtime), each
 //! pinned in appimage-tools.tsv and checked against its sha256 before it runs; see EmuSen_Qt.md §9.2.
 
 use std::fs;
@@ -96,7 +96,14 @@ pub fn run(repo: &Path, tools_dir: &Path, out: &Path) -> Result<PathBuf, String>
     )?;
     let image = out.join("kit-gallery-x86_64.AppImage");
     run_command(
-        command(tools_dir.join("appimagetool-x86_64.AppImage")).current_dir(out).arg("--no-appstream").arg(&appdir).arg(&image),
+        command(tools_dir.join("appimagetool-x86_64.AppImage"))
+            .current_dir(out)
+            .arg("--no-appstream")
+            // The pinned runtime, so appimagetool downloads nothing (EmuSen_Qt.md §9.2).
+            .arg("--runtime-file")
+            .arg(tools_dir.join("runtime-x86_64"))
+            .arg(&appdir)
+            .arg(&image),
         "appimagetool",
     )?;
     Ok(image)
@@ -107,7 +114,7 @@ mod tests {
     #[test]
     fn the_pins_read_and_a_changed_tool_is_refused() {
         let tools = super::tools(&crate::repo()).unwrap();
-        assert_eq!(tools.len(), 4);
+        assert_eq!(tools.len(), 5);
         assert!(tools.iter().all(|t| t.sha256.len() == 64 && t.sha256.bytes().all(|b| b.is_ascii_hexdigit())));
         let dir = std::env::temp_dir().join(format!("xtask-appimage-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();

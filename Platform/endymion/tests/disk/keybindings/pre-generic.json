@@ -1,0 +1,4 @@
+{
+  "NES": { "Up": "Up", "Down": "Down", "Left": "Left", "Right": "Right", "B": "Z", "A": "X", "Y": "A", "X": "S", "L": "Q", "R": "W", "Start": "Return", "Select": "RightShift" },
+  "SNES": { "Up": "Up", "Down": "Down", "Left": "Left", "Right": "Right", "B": "E", "A": "X", "Start": "Return", "Select": "RightShift" }
+}

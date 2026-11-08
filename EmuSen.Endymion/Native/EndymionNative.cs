@@ -102,6 +102,9 @@ namespace EmuSen.Endymion.Native
         internal static delegate* unmanaged[Cdecl]<uint, double, uint, double*, int> PadResolve;
         internal static delegate* unmanaged[Cdecl]<double, uint, uint, double*, int> PadCombine;
         internal static delegate* unmanaged[Cdecl]<uint*, nuint, uint*, nuint, uint*, nuint, long> PadControlsFor;
+        internal static delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, long> BindingsLoad;
+        internal static delegate* unmanaged[Cdecl]<uint, byte*, nuint, int> BindingsSave;
+        internal static delegate* unmanaged[Cdecl]<uint, byte*, nuint, long> BindingsDefaults;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, long> LastError;
 
         // The logic half's exports, in the order Attach takes them.
@@ -113,7 +116,7 @@ namespace EmuSen.Endymion.Native
             "emusen_endymion_router_set", "emusen_endymion_router_reset", "emusen_endymion_router_resize", "emusen_endymion_router_poll", "emusen_endymion_router_send",
             "emusen_endymion_router_take", "emusen_endymion_router_pad_held", "emusen_endymion_router_connected", "emusen_endymion_slots_seat", "emusen_endymion_slots_move",
             "emusen_endymion_slots_forget", "emusen_endymion_slots_highest", "emusen_endymion_pad_resolve", "emusen_endymion_pad_combine", "emusen_endymion_pad_controls_for",
-            "emusen_platform_last_error",
+            "emusen_endymion_bindings_load", "emusen_endymion_bindings_save", "emusen_endymion_bindings_defaults", "emusen_platform_last_error",
         };
 
         // Every export Endymion calls, both halves; a name the library lacks refuses it - see EmuSen_RustPlatform.md §3.1.
@@ -160,6 +163,9 @@ namespace EmuSen.Endymion.Native
             PadResolve = (delegate* unmanaged[Cdecl]<uint, double, uint, double*, int>)found[next++];
             PadCombine = (delegate* unmanaged[Cdecl]<double, uint, uint, double*, int>)found[next++];
             PadControlsFor = (delegate* unmanaged[Cdecl]<uint*, nuint, uint*, nuint, uint*, nuint, long>)found[next++];
+            BindingsLoad = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, long>)found[next++];
+            BindingsSave = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, int>)found[next++];
+            BindingsDefaults = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, long>)found[next++];
             LastError = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)found[next++];
             DeviceNative.Assign(found.AsSpan(next));
             return null;

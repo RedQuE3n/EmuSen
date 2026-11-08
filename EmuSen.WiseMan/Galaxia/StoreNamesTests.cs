@@ -1,6 +1,8 @@
 using System.IO;
 using System.Text.RegularExpressions;
+using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
+using EmuSen.Galaxia.Native;
 using EmuSen.Mistress.BigPicture;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Scraping;
@@ -27,6 +29,15 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Equal(Owned("stores.rs", "MEDIA_DB"), MediaStore.FileName);
             Assert.Equal(Owned("stores.rs", "THEMES_DB"), ThemeRecords.FileName);
             Assert.Equal(Owned("models.rs", "APP_SETTINGS_FILE"), AppSettings.FileName);
+        }
+
+        // The library names each file where the C# front end opens it.
+        [Fact]
+        public void Every_file_is_where_the_library_names_it()
+        {
+            Assert.Equal(GameRecords.DefaultPath, GalaxiaNative.StorePath(GalaxiaFile.Games));
+            Assert.Equal(Path.Combine(MediaStore.DefaultRoot, MediaStore.FileName), GalaxiaNative.StorePath(GalaxiaFile.Media));
+            Assert.Equal(ConfigStore.For(AppSettings.FileName), GalaxiaNative.StorePath(GalaxiaFile.Settings));
         }
     }
 }

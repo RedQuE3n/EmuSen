@@ -1,0 +1,15 @@
+{
+  "GB": {
+    "Default": null,
+    "Profiles": {
+      "Mine": {
+        "1": {
+          "A": "West",
+          "L3": "LeftStick",
+          "R3": "RightStick"
+        }
+      }
+    },
+    "Games": null
+  }
+}

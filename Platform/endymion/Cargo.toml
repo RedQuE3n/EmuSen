@@ -14,3 +14,10 @@ name = "emusen_endymion"
 libloading = "0.9"
 # A simulated pad's GUID, the MD5 of its name, as the C# makes it.
 md-5 = "0.11"
+# The binding files: read and written by Galaxia's rules for a hand-edited config file, in its config directory (bindings.rs).
+emusen-galaxia = { path = "../galaxia" }
+serde.workspace = true
+serde_json.workspace = true
+indexmap.workspace = true
+# "Did you mean …?" for a word of a binding file that matched nothing (vocabulary.rs).
+emusen-suggest = { path = "../suggest" }

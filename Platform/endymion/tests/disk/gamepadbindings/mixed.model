@@ -1,0 +1,47 @@
+{
+  "NES": {
+    "Up": "DPadUp",
+    "Down": "DPadDown",
+    "B": "South",
+    "A": "East",
+    "Select": "Back",
+    "L3": "LeftStick",
+    "R3": "RightStick"
+  },
+  "SNES": {
+    "Up": "DPadUp",
+    "Down": "DPadDown",
+    "B": "South",
+    "A": "East",
+    "Select": "Back",
+    "L3": "LeftStick",
+    "R3": "RightStick"
+  },
+  "GB": {
+    "Up": "DPadUp",
+    "Down": "DPadDown",
+    "B": "South",
+    "A": "East",
+    "Select": "Back",
+    "L3": "LeftStick",
+    "R3": "RightStick"
+  },
+  "N64": {
+    "Up": "DPadUp",
+    "Down": "DPadDown",
+    "B": "South",
+    "A": "East",
+    "Select": "Back",
+    "L3": "LeftStick",
+    "R3": "RightStick"
+  },
+  "PS1": {
+    "Up": "DPadUp",
+    "Down": "DPadDown",
+    "B": "South",
+    "A": "East",
+    "Select": "Back",
+    "L3": "LeftStick",
+    "R3": "RightStick"
+  }
+}

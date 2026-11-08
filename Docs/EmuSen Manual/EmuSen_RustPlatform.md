@@ -3747,6 +3747,7 @@ what it reads to, recorded once and never re-recorded to make a change pass. Eac
 | The library | `last-played.tsv` | the instant in ticks since 1970; a time without a zone is local and stays with the owner's tests |
 | The scraper | the member file, made-up accounts only | user, password and the instant it was verified |
 | `emusen-core-host` | two sidecars as built, one marked in development, one naming a file outside its folder, one of version 2 | the listing: library, hash, version, capabilities, the info |
+| Endymion (since 2026-11-08) | the four binding files: the tester's two and the sandbox's one as found, one of each kind as the C# wrote it, 24 edited by hand (`EmuSen_Input.md` §5.2) | the file the C# classes wrote back after loading it, compared member by member in order, and whether they reported a diagnostic; a read, written and read again gives the same model |
 
 The Deflate64 zip is refused by the game reader at this point; the cheat database's reader takes it. The test names
 that one refusal, so that a reader that starts taking it says so.
@@ -4393,3 +4394,13 @@ classes over the binding (the Scraping namespace, `CoverChoiceTests`, `GameMetad
 `OnlineCoverTests`, `LibraryRecordsParityTests`, `GalaxiaParityTests`, `GalaxiaScopeTests`) pass 322 (4 tools skipped),
 and the packaged library's fit audit 16. Seeded and caught: a close that ignores its serial and an open that does not
 name games.db to `emusen.games` (`scraping.rs`), and the shortened wait (`two_connections.rs`).
+
+### 47.26 Interface 40: the binding files are Endymion's, and Galaxia names its files
+
+*2026-11-08*, for the Qt front end's stage 0 (`EmuSen_Qt.md` §1.9, row 3, and §1.2.1). Endymion reads and writes
+`keybindings.json`, `gamepadbindings.json`, `gamepadprofiles.json` and `hotkeybindings.json` by §47.19's rules and the
+rules each file had in the C# (`EmuSen_Input.md` §5.2), through three exports, `emusen_endymion_bindings_load`, `_save`
+and `_defaults`; the C# classes that read and wrote them bind what crosses and nothing more. `emusen_galaxia_file` names
+the settings file and the five stores by number (`stores::File`), so a front end copies neither `appsettings.json` nor
+`games.db`; the games service opens games.db through it. Endymion gains its first dependency on Galaxia (the config
+directory and `config_json`) and one on `emusen-suggest`. Platform interface 40; the C# twin's number with it.

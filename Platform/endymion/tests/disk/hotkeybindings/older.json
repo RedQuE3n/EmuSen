@@ -1,0 +1,2 @@
+// A file from before Big Picture and Frame Advance had keys; F10 was moved to Screenshot by hand.
+{ "FastForward": "Tab", "Rewind": "Back", "SaveState": "F5", "LoadState": "F8", "TogglePause": "P", "ToggleFullscreen": "F11", "ExitToLibrary": "Escape", "Screenshot": "F10" }

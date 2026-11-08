@@ -10,7 +10,6 @@ Window {
     property alias selectedIndex: library.selectedIndex
     property alias rows: rows.count
     property alias platformLibrary: library.platformLibrary
-    property alias gamesDatabase: library.gamesDatabase
     property alias loading: library.loading
     property string fourthKey: rows.count > 3 ? rows.itemAt(3).key : ""
     property string firstName: rows.count > 2 ? rows.itemAt(0).name : ""

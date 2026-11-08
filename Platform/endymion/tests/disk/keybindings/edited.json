@@ -1,0 +1,6 @@
+// Edited by hand: comments, trailing commas, names in any case, a key by its number and by its number as text.
+{
+  "nes": { "up": "UP", "Down": 26, "A": "x", "B": "z", "Start": "Enter", },
+  "SNES": { "Select": "117", "l2": "q" }, /* L2 takes Q, which L held */
+  "Arcade": { "A": "Space" },
+}

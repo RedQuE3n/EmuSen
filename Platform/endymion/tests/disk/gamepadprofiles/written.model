@@ -1,0 +1,100 @@
+{
+  "SNES": {
+    "Default": "Couch",
+    "Profiles": {
+      "Couch": {
+        "1": {
+          "Up": "DPadUp",
+          "Down": "DPadDown",
+          "Left": "DPadLeft",
+          "Right": "DPadRight",
+          "B": "South",
+          "A": "East",
+          "Y": "West",
+          "X": "North",
+          "L": "LeftShoulder",
+          "R": "RightShoulder",
+          "Start": "Start",
+          "Select": "Back",
+          "L3": "LeftStick",
+          "R3": "RightStick"
+        },
+        "2": {
+          "Up": "DPadUp",
+          "Down": "DPadDown",
+          "Left": "DPadLeft",
+          "Right": "DPadRight",
+          "B": "South",
+          "A": "North",
+          "Y": "West",
+          "L": "LeftShoulder",
+          "R": "RightShoulder",
+          "Start": "Start",
+          "Select": "Back",
+          "L3": "LeftStick",
+          "R3": "RightStick"
+        }
+      },
+      "Arcade": {
+        "1": {
+          "Up": "DPadUp",
+          "Down": "DPadDown",
+          "Left": "DPadLeft",
+          "Right": "DPadRight",
+          "B": "South",
+          "A": "East",
+          "Y": "West",
+          "X": "North",
+          "L": "LeftShoulder",
+          "R": "RightShoulder",
+          "Start": "Start",
+          "Select": "Back",
+          "L3": "LeftStick",
+          "R3": "RightStick"
+        },
+        "2": {
+          "Up": "DPadUp",
+          "Down": "DPadDown",
+          "Left": "DPadLeft",
+          "Right": "DPadRight",
+          "B": "South",
+          "A": "North",
+          "Y": "West",
+          "L": "LeftShoulder",
+          "R": "RightShoulder",
+          "Start": "Start",
+          "Select": "Back",
+          "L3": "LeftStick",
+          "R3": "RightStick"
+        }
+      }
+    },
+    "Games": {
+      "Super Metroid": "Arcade"
+    }
+  },
+  "NES": {
+    "Default": null,
+    "Profiles": {
+      "Solo": {
+        "1": {
+          "Up": "DPadUp",
+          "Down": "DPadDown",
+          "Left": "DPadLeft",
+          "Right": "DPadRight",
+          "B": "South",
+          "A": "East",
+          "Y": "West",
+          "X": "North",
+          "L": "LeftShoulder",
+          "R": "RightShoulder",
+          "Start": "Start",
+          "Select": "Back",
+          "L3": "LeftStick",
+          "R3": "RightStick"
+        }
+      }
+    },
+    "Games": null
+  }
+}

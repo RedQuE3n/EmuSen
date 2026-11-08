@@ -297,3 +297,22 @@ fn the_screens_switch_by_what_was_asked() {
     assert_eq!(step(Shown::Pause, &Ask::Menu), None, "the card's own Start is its action, not the chord");
     assert_eq!(step(Shown::Game, &Ask::Library), None);
 }
+
+#[test]
+fn every_row_s_games_and_its_fan_are_written_once_a_refresh_at_a_library_s_scale() {
+    let mut source = fake();
+    *source.games.lock().unwrap() = games(&[("nes", 6000), ("gb", 3000)]);
+    source.favourites = (0..3000).step_by(7).map(|i| format!("/roms/gb/{i}")).collect();
+    let read = refresh(&source).unwrap();
+    assert_eq!(read.rows.len(), 5);
+    for row in &read.rows {
+        let games = games_of(&row.key, &read.systems, &read.catalog);
+        assert_eq!(from_json(&read.lists[&row.key]), games, "{}'s games as gamesOf answered them", row.key);
+        assert_eq!(from_json(&row.fan), games[..games.len().min(4)], "{}'s fan, its first four", row.key);
+    }
+    assert_eq!(from_json(&read.lists["all"]).len(), 9000);
+    let mut view = LibraryView::empty();
+    view.apply(Ok(read));
+    assert_eq!(view.games_text("nowhere"), "[]", "a key that is no row leads to no games");
+    assert_eq!(from_json(view.games_text("recent")).len(), 4);
+}

@@ -49,6 +49,7 @@ pub mod qobject {
         CountWords,
         EngineMark,
         Heading,
+        Fan,
     }
 
     extern "RustQt" {
@@ -101,7 +102,7 @@ pub mod qobject {
         #[qinvokable]
         fn started(self: Pin<&mut LibraryModel>, path: &QString);
 
-        /// The games a row leads to, as GameModel reads them: a JSON array, one object a game.
+        /// The games a row leads to, as GameModel reads them: a JSON array, one object a game, written at the refresh.
         #[qinvokable]
         #[cxx_name = "gamesOf"]
         fn games_of(self: &LibraryModel, key: &QString) -> QString;
@@ -217,6 +218,7 @@ impl qobject::LibraryModel {
             Role::CountWords => text(&crate::words::games(row.count)),
             Role::EngineMark => text(&row.engine_mark),
             Role::Heading => text(&row.heading),
+            Role::Fan => text(&row.fan),
             _ => QVariant::default(),
         }
     }
@@ -242,6 +244,7 @@ impl qobject::LibraryModel {
             (Role::CountWords, "countWords"),
             (Role::EngineMark, "engineMark"),
             (Role::Heading, "heading"),
+            (Role::Fan, "fan"),
         ];
         for (role, name) in names {
             roles.insert(role.repr, QByteArray::from(name));
@@ -278,8 +281,7 @@ impl qobject::LibraryModel {
     }
 
     pub fn games_of(&self, key: &QString) -> QString {
-        let games = crate::library::games_of(&key.to_string(), &self.view.systems, &self.view.catalog);
-        QString::from(crate::games::to_json(&games).as_str())
+        QString::from(self.view.games_text(&key.to_string()))
     }
 
     pub fn index_of(&self, key: &QString) -> i32 {
@@ -370,7 +372,7 @@ impl qobject::LibraryModel {
             self.as_mut().rust_mut().places = places;
             self.as_mut().places_changed();
         }
-        let recent = self.games_of(&QString::from(crate::library::RECENT));
+        let recent = QString::from(self.view.games_text(crate::library::RECENT));
         if self.recent != recent {
             self.as_mut().rust_mut().recent = recent;
             self.as_mut().recent_changed();

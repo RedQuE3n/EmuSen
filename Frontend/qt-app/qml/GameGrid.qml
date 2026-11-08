@@ -10,6 +10,8 @@ FocusScope {
     required property LibraryModel library
     property int padFamily: Kit.Families.Generic
     property string key
+    // Canvas units to pixels, for the covers' decoded size.
+    property real pixelScale: 1
     // The row the grid opened, a tile of Choose a console.
     property var row
     readonly property string name: root.row ? root.row.name : ""
@@ -162,6 +164,12 @@ FocusScope {
                 keyNavigationWraps: false
                 currentIndex: games.count > 0 ? 0 : -1
                 highlightFollowsCurrentItem: false
+                // The two rows shown move only when the focus leaves them, a whole row at a time and at once, as Mistress's gallery moves.
+                property int firstRow: 0
+                readonly property int focusRow: Math.floor(Math.max(0, cells.currentIndex) / 5)
+                readonly property real firstRowY: cells.originY - cells.topMargin + cells.cellHeight * cells.firstRow
+                onFocusRowChanged: cells.firstRow = Math.max(0, Math.min(cells.firstRow, cells.focusRow), cells.focusRow - 1)
+                onFirstRowYChanged: cells.contentY = cells.firstRowY
                 model: GameModel {
                     id: games
                     games: root.library.loading ? "" : root.library.gamesOf(root.key)
@@ -191,6 +199,7 @@ FocusScope {
                         hue: cell.hue
                         favourite: cell.favourite
                         lit: cell.lit
+                        pixelScale: root.pixelScale
                     }
                 }
             }

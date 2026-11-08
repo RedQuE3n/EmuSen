@@ -397,6 +397,14 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
         s.property("session", "running") == "true"
     });
     until(&mut scene, "the first picture", |s| s.property("session", "firstPictureMs").parse::<f64>().is_ok_and(|ms| ms > 0.0));
+    // The picture at the session's display shape, centred in the 16:10 window with bars, as Mistress letterboxes it.
+    until(&mut scene, "the picture's shape", |s| s.property("session", "pictureAspect").parse::<f64>().is_ok_and(|a| a > 0.0));
+    let aspect: f64 = scene.property("session", "pictureAspect").parse().unwrap();
+    let tree = scene.tree();
+    let placed = tree.nodes.iter().find(|n| n.name == "picture" && n.visible).map(|n| (n.x, n.y, n.w, n.h)).unwrap();
+    let fitted = if aspect < 1.6 { ((1280.0 - 800.0 * aspect) / 2.0, 0.0, 800.0 * aspect, 800.0) } else { (0.0, (800.0 - 1280.0 / aspect) / 2.0, 1280.0, 1280.0 / aspect) };
+    let near = |a: f64, b: f64| (a - b).abs() < 0.5;
+    assert!(near(placed.0, fitted.0) && near(placed.1, fitted.1) && near(placed.2, fitted.2) && near(placed.3, fitted.3), "the picture at {placed:?}, its shape {aspect} fits at {fitted:?}");
     let guide = emusen_qt_endymion::reading::sdl_button(emusen_kit_core::input::PadControl::Guide).unwrap();
     let chord = |scene: &mut Scene<'_>| {
         assert!(scene.pad_chord_only(), "the game owns the pad");

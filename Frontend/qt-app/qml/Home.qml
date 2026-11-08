@@ -168,6 +168,7 @@ FocusScope {
                         source: root.topPicture
                         radius: Kit.Tokens.tileRadius
                         crop: true
+                        pixelScale: root.pixelScale
                     }
                     // The game's own picture drawn into a texture at the window's resolution, cut to the box's shape at its centre as Mistress's poster slot cuts the paused frame, so its corners round as a cover's.
                     ShaderEffectSource {
@@ -299,6 +300,7 @@ FocusScope {
                             hue: cover.hue
                             favourite: cover.favourite
                             lit: cover.activeFocus
+                            pixelScale: root.pixelScale
                         }
                     }
                 }

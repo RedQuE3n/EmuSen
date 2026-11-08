@@ -9,6 +9,8 @@ FocusScope {
     objectName: "consoles"
     required property LibraryModel library
     property int padFamily: Kit.Families.Generic
+    // Canvas units to pixels, for the covers' decoded size.
+    property real pixelScale: 1
     readonly property alias tiles: tiles
     readonly property var focusedTile: tiles.count > root.library.selectedIndex ? tiles.itemAt(root.library.selectedIndex) : null
     signal opened(string key)
@@ -122,6 +124,7 @@ FocusScope {
                     required property string countWords
                     required property string engineMark
                     required property string heading
+                    required property string fan
                     readonly property bool planet: tile.index >= root.library.places
                     readonly property int n: tile.index - root.library.places
                     readonly property bool lit: tile.activeFocus
@@ -351,7 +354,7 @@ FocusScope {
                 x: 64
                 y: 633.6
                 height: 44
-                width: root.width - 128 - fan.width
+                width: root.width - 128 - coverFan.width
                 text: root.focusedTile ? root.focusedTile.fullName : ""
                 clip: true
                 color: Kit.Tokens.textStrong
@@ -366,7 +369,7 @@ FocusScope {
                 objectName: "consoleDetailFacts"
                 x: 64
                 y: 683.6
-                width: root.width - 128 - fan.width
+                width: root.width - 128 - coverFan.width
                 text: root.focusedTile ? root.focusedTile.facts : ""
                 elide: Text.ElideRight
                 color: Kit.Tokens.muted
@@ -376,14 +379,15 @@ FocusScope {
                 lineHeightMode: Text.FixedHeight
             }
             CoverFan {
-                id: fan
+                id: coverFan
                 objectName: "coverFan"
+                pixelScale: root.pixelScale
                 x: root.width - 64 - width
                 y: 612
                 width: 420
                 height: 104
                 games: GameModel {
-                    games: root.library.loading || !root.focusedTile ? "" : root.library.gamesOf(root.focusedTile.key)
+                    games: root.focusedTile ? root.focusedTile.fan : ""
                 }
             }
         }

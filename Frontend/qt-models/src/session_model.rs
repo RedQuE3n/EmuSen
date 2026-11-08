@@ -37,6 +37,8 @@ pub mod qobject {
         #[qproperty(bool, sounding, READ, NOTIFY)]
         #[qproperty(QString, problem, READ, NOTIFY)]
         #[qproperty(f64, first_picture_ms, cxx_name = "firstPictureMs", READ, NOTIFY)]
+        /// The picture's width over its height as shown; 0 before the first picture, where it fills its item.
+        #[qproperty(f64, picture_aspect, cxx_name = "pictureAspect", READ, NOTIFY)]
         /// What the Pause Card's words are made from, read as the game pauses (pause.rs's facts as plain data).
         #[qproperty(QString, card_facts, cxx_name = "cardFacts", READ, NOTIFY)]
         type SessionModel = super::SessionModelRust;
@@ -86,6 +88,7 @@ pub struct SessionModelRust {
     sounding: bool,
     problem: QString,
     first_picture_ms: f64,
+    picture_aspect: f64,
     card_facts: QString,
     /// The open session's number, once the frame thread has opened it.
     opened: Option<u32>,
@@ -304,6 +307,10 @@ impl qobject::SessionModel {
                 self.as_mut().set_running(true);
             }
             Report::FirstPicture { after } => self.as_mut().set_first_picture_ms(after.as_secs_f64() * 1000.0),
+            Report::Shape { aspect } => {
+                self.as_mut().rust_mut().picture_aspect = aspect;
+                self.picture_aspect_changed();
+            }
             Report::Failed(words) => {
                 self.as_mut().set_problem(QString::from(&words));
                 self.as_mut().set_running(false);

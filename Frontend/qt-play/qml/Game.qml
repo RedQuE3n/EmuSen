@@ -2,7 +2,7 @@ import QtQuick
 import EmuSen.Kit as Kit
 import EmuSen.Models
 
-// A game on screen: its session, its picture filling the item, and the pad given to the game while it runs unpaused with nothing over it; the menu chord is the host's to answer (EmuSen_Qt.md §1.8.5, §7.1).
+// A game on screen: its session, its picture at its display shape, and the pad given to the game while it runs unpaused with nothing over it; the menu chord is the host's to answer (EmuSen_Qt.md §1.8.5, §7.1).
 Item {
     id: root
     property double feed: 0
@@ -49,10 +49,14 @@ Item {
         game: root.game
     }
 
+    // The picture at its display shape, the session's, centred with bars where the window's shape differs, as Mistress letterboxes it.
     Kit.GamePicture {
         id: picture
         objectName: "picture"
-        anchors.fill: parent
+        readonly property real shape: session.pictureAspect > 0 ? session.pictureAspect : root.width / Math.max(1, root.height)
+        anchors.centerIn: parent
+        width: Math.min(root.width, root.height * picture.shape)
+        height: Math.min(root.height, root.width / picture.shape)
         feed: root.feed
         live: root.feed !== 0
     }

@@ -10,7 +10,7 @@ use emusen_platform_client::audio::{GameSound, SoundSettings};
 use emusen_platform_client::pace::DisplayClock;
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt_models::picture::PictureFeed;
-use emusen_qt_models::session::{GameIo, Report, Session};
+use emusen_qt_models::session::{shown_aspect, GameIo, Report, Session};
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -128,4 +128,17 @@ fn a_game_s_pictures_are_drawn_in_place_paced_and_paused() {
     assert!(told.try_iter().any(|r| r == Report::Closed));
     drop(picture);
     assert_eq!(device.findings().unwrap(), Vec::<String>::new());
+}
+
+#[test]
+fn the_picture_s_shape_is_the_runtime_s_display_aspect_else_the_frame_s_own() {
+    let mut info = emusen_crystal_client::frame_info();
+    assert_eq!(shown_aspect(&info), 0.0, "no picture, no shape: the picture fills its item");
+    (info.width, info.height, info.row_repeat) = (256, 224, 1);
+    info.display_aspect = 4.0 / 3.0;
+    assert_eq!(shown_aspect(&info), 4.0 / 3.0, "the console's screen, not the frame's 256 by 224");
+    info.display_aspect = 0.0;
+    assert_eq!(shown_aspect(&info), 256.0 / 224.0, "with none declared, the frame's own shape");
+    (info.width, info.height, info.row_repeat) = (512, 224, 2);
+    assert_eq!(shown_aspect(&info), 512.0 / 448.0, "each line drawn twice where the frame repeats its rows");
 }

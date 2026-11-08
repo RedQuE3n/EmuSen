@@ -6,6 +6,8 @@ import EmuSen.Models
 Item {
     id: root
     required property GameModel games
+    // Canvas units to pixels, for the covers' decoded size.
+    property real pixelScale: 1
     readonly property int shown: Math.min(4, root.games.count)
     Repeater {
         model: root.games
@@ -31,6 +33,7 @@ Item {
                 title: card.title
                 hue: card.hue
                 alignRight: true
+                pixelScale: root.pixelScale
             }
         }
     }

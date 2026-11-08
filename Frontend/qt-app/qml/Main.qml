@@ -102,6 +102,7 @@ Window {
             anchors.fill: parent
             library: library
             padFamily: program.padFamily
+            pixelScale: canvas.unit
             visible: screens.shown === Screens.Consoles
             focus: !program.splashShown && visible
             onClosed: screens.back()
@@ -113,6 +114,7 @@ Window {
             anchors.fill: parent
             library: library
             padFamily: program.padFamily
+            pixelScale: canvas.unit
             visible: screens.shown === Screens.Grid
             focus: !program.splashShown && visible
             key: screens.key
@@ -148,7 +150,8 @@ Window {
         anchors.fill: parent
         visible: program.splash && moonrise.opacity > 0
         opacity: moonrise.done ? 0 : 1
-        running: program.splash && library.splashPlanets > 0
+        // The clock runs from the window's first frame; the worlds, read in milliseconds, are in place long before the row appears.
+        running: program.splash
         focus: program.splashShown
         title: Words.title
         caption: library.splashCaption

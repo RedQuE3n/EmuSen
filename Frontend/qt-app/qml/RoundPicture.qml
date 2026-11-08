@@ -9,6 +9,8 @@ Item {
     property alias horizontalAlignment: picture.horizontalAlignment
     property alias verticalAlignment: picture.verticalAlignment
     property real radius
+    // Canvas units to pixels, so the picture is decoded at the size it is drawn.
+    property real pixelScale: 1
     // Whether the picture fills the box, cut at its centre, rather than standing whole in it.
     property bool crop: false
     readonly property alias status: picture.status
@@ -29,6 +31,7 @@ Item {
         clip: root.crop
         fillMode: root.crop ? Image.PreserveAspectCrop : Image.PreserveAspectFit
         asynchronous: false
+        sourceSize: Qt.size(Math.ceil(root.width * root.pixelScale * Screen.devicePixelRatio), Math.ceil(root.height * root.pixelScale * Screen.devicePixelRatio))
         smooth: true
         mipmap: true
     }

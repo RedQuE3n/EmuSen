@@ -81,16 +81,16 @@ pub fn play(scene: &mut Scene<'_>, feed: &PictureFeed, game: &Path) {
 /// A pixel the window shows otherwise than the core made it: (x, y, shown, made).
 pub type Difference = (u32, u32, [u8; 4], [u8; 4]);
 
-/// The window's picture read back where 48 of the painted picture's pixels fall, the picture stretched over the window
-/// at the size the compositor gave it,
-/// against the core's own picture of the frame drawn last; the pixels that differ by more than one level, as
-/// (x, y, shown, made).
+/// The window's picture read back where 48 of the painted picture's pixels fall, the picture stretched over its item at
+/// its display shape, against the core's own picture of the frame drawn last; the pixels that differ by more than one
+/// level, as (x, y, shown, made).
 pub fn painted_differences(scene: &mut Scene<'_>, feed: &PictureFeed) -> (u64, Vec<Difference>) {
     let (w, h) = PAINTED_SIZE;
     let points: Vec<(u32, u32)> = (0..8u32).flat_map(|i| (0..6u32).map(move |j| (i * 41 + 3, j * 39 + 7))).collect();
-    let size = |s: &mut Scene<'_>, what: &str| s.property("play", what).parse::<f64>().expect("the window's size");
-    let (ww, wh) = (size(scene, "width"), size(scene, "height"));
-    let window: Vec<(f64, f64)> = points.iter().map(|&(x, y)| ((x as f64 + 0.5) * ww / w as f64, (y as f64 + 0.5) * wh / h as f64)).collect();
+    let tree = scene.tree();
+    let (px, py, pw, ph) = tree.nodes.iter().find(|n| n.name == "picture").map(|n| (n.x, n.y, n.w, n.h)).expect("the picture's item");
+    let window: Vec<(f64, f64)> =
+        points.iter().map(|&(x, y)| (px + (x as f64 + 0.5) * pw / w as f64, py + (y as f64 + 0.5) * ph / h as f64)).collect();
     let colours = scene.colours_at(&window);
     let serial = feed.counts().shown_serial.load(Ordering::Relaxed);
     let mut differ = Vec::new();

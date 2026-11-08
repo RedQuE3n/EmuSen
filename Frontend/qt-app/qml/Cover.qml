@@ -11,6 +11,8 @@ Item {
     property real hue
     property bool favourite
     property bool lit
+    // Canvas units to pixels, for the picture's decoded size.
+    property real pixelScale: 1
     // How far a lit cover grows, about its centre, and rises, as the gallery lifts it.
     property real litScale: 1.06
     property real litRise: 6
@@ -38,6 +40,7 @@ Item {
             visible: root.source.length > 0
             source: root.source
             radius: Kit.Tokens.tileRadius
+            pixelScale: root.pixelScale
             verticalAlignment: Image.AlignBottom
             horizontalAlignment: root.alignRight ? Image.AlignRight : Image.AlignHCenter
         }

@@ -3,6 +3,7 @@
 //! the library declare, with nothing per console written here. A source answers; the rows are made from its answers.
 
 use crate::keyed::{Keyed, KeyedRows};
+use std::collections::{HashMap, HashSet};
 use crate::words;
 use emusen_crystal_client::shapes::SystemRow;
 use emusen_kit_core::world::{hex, shape_of, world_line, WorldBody, WorldRing};
@@ -109,6 +110,8 @@ pub struct LibraryRow {
     pub engine_mark: String,
     /// The console's world as one line, from the systems table's look (EmuSen_Kit.md §7.18).
     pub world: String,
+    /// The row's first games as GameModel reads them, the covers Choose a console fans; empty until a refresh.
+    pub fan: String,
 }
 
 impl Keyed for LibraryRow {
@@ -184,38 +187,88 @@ pub fn games_of(key: &str, systems: &[SystemRow], catalog: &Catalog) -> Vec<Game
 
 /// As `games_of`, each game's facts said at `now`, in seconds since 1970.
 pub fn games_of_at(key: &str, systems: &[SystemRow], catalog: &Catalog, now: i64) -> Vec<GameRow> {
-    let of = |system: &str| systems.iter().find(|s| s.id == system);
-    let row = |g: &GameFile| {
-        let system = g.system.clone().unwrap_or_default();
-        let console = of(&system).map(|s| if s.display_name.is_empty() { s.name.clone() } else { s.display_name.clone() }).unwrap_or_default();
-        let when = catalog.played.iter().find(|(p, _)| p == &g.path).map(|(_, at)| words::ago(*at, now));
-        GameRow {
-            title: title_of(&g.path),
-            hue: of(&system).map_or(0.0, |s| s.look.hue),
-            favourite: catalog.favourites.contains(&g.path),
-            cover: catalog.covers.iter().find(|(p, _)| p == &g.path).map(|(_, c)| c.clone()).unwrap_or_default(),
-            hero: catalog.heroes.iter().find(|(p, _)| p == &g.path).map(|(_, c)| c.clone()).unwrap_or_default(),
-            facts: [Some(console.clone()), when].into_iter().flatten().filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" · "),
-            path: g.path.clone(),
-            system,
-            console,
-        }
-    };
+    let all = game_rows(systems, catalog, now);
     if key == RECENT {
-        return catalog.recent.iter().filter_map(|p| catalog.games.iter().find(|g| &g.path == p)).map(row).collect();
+        return recent_of(&all, catalog);
     }
-    let mut out: Vec<GameRow> = catalog
-        .games
-        .iter()
-        .map(row)
+    let mut out: Vec<GameRow> = all
+        .into_iter()
         .filter(|g| match key {
             "all" => true,
             FAVOURITES => g.favourite,
             system => g.system == system,
         })
         .collect();
-    out.sort_by_key(|g| g.title.to_lowercase());
+    out.sort_by_cached_key(|g| g.title.to_lowercase());
     out
+}
+
+/// Every game as a row, in the catalog's order: one pass, each fact found by its path in a map.
+fn game_rows(systems: &[SystemRow], catalog: &Catalog, now: i64) -> Vec<GameRow> {
+    let by_path = |pairs: &[(String, String)]| -> HashMap<String, String> { pairs.iter().cloned().collect() };
+    let (covers, heroes) = (by_path(&catalog.covers), by_path(&catalog.heroes));
+    let played: HashMap<&str, i64> = catalog.played.iter().map(|(p, at)| (p.as_str(), *at)).collect();
+    let favourites: HashSet<&str> = catalog.favourites.iter().map(String::as_str).collect();
+    let consoles: HashMap<&str, &SystemRow> = systems.iter().map(|s| (s.id.as_str(), s)).collect();
+    catalog
+        .games
+        .iter()
+        .map(|g| {
+            let system = g.system.clone().unwrap_or_default();
+            let of = consoles.get(system.as_str());
+            let console = of.map(|s| if s.display_name.is_empty() { s.name.clone() } else { s.display_name.clone() }).unwrap_or_default();
+            let when = played.get(g.path.as_str()).map(|at| words::ago(*at, now));
+            GameRow {
+                title: title_of(&g.path),
+                hue: of.map_or(0.0, |s| s.look.hue),
+                favourite: favourites.contains(g.path.as_str()),
+                cover: covers.get(&g.path).cloned().unwrap_or_default(),
+                hero: heroes.get(&g.path).cloned().unwrap_or_default(),
+                facts: [Some(console.clone()), when].into_iter().flatten().filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" · "),
+                path: g.path.clone(),
+                system,
+                console,
+            }
+        })
+        .collect()
+}
+
+/// The recently played of `all`, the most recent first.
+fn recent_of(all: &[GameRow], catalog: &Catalog) -> Vec<GameRow> {
+    let at: HashMap<&str, &GameRow> = all.iter().map(|g| (g.path.as_str(), g)).collect();
+    catalog.recent.iter().filter_map(|p| at.get(p.as_str()).map(|g| (*g).clone())).collect()
+}
+
+/// How many covers Choose a console fans for the focused row (EmuSen_Interface.md §24.1).
+pub const FAN: usize = 4;
+
+/// Each row's games as GameModel reads them, by the row's key, and the rows given their fans: worked out once a
+/// refresh, off the GUI thread, so a screen's step or a grid's opening never walks the library (EmuSen_Qt.md §7.1).
+pub fn lists_of(rows: &mut [LibraryRow], systems: &[SystemRow], catalog: &Catalog, now: i64) -> HashMap<String, String> {
+    let all = game_rows(systems, catalog, now);
+    let mut sorted: Vec<&GameRow> = all.iter().collect();
+    sorted.sort_by_cached_key(|g| g.title.to_lowercase());
+    let mut lists = HashMap::new();
+    let recent = recent_of(&all, catalog);
+    for row in rows.iter_mut() {
+        let games: Vec<GameRow> = if row.key == RECENT {
+            recent.clone()
+        } else {
+            sorted
+                .iter()
+                .filter(|g| match row.key.as_str() {
+                    "all" => true,
+                    FAVOURITES => g.favourite,
+                    system => g.system == system,
+                })
+                .map(|g| (*g).clone())
+                .collect()
+        };
+        row.fan = crate::games::to_json(&games[..games.len().min(FAN)]);
+        lists.insert(row.key.clone(), crate::games::to_json(&games));
+    }
+    lists.entry(RECENT.to_owned()).or_insert_with(|| crate::games::to_json(&recent));
+    lists
 }
 
 /// The rows for what a source answered: the places with their counts, then each system that has games.
@@ -270,6 +323,7 @@ pub fn rows(systems: &[SystemRow], catalog: &Catalog, engines: &[(String, Engine
             engine_mark: mark,
             libretro: engine.libretro,
             world: world_line_of(s),
+            fan: String::new(),
         });
     }
     out
@@ -327,6 +381,8 @@ pub struct Read {
     pub systems: Vec<SystemRow>,
     pub catalog: Catalog,
     pub rows: Vec<LibraryRow>,
+    /// Each row's games as GameModel reads them, by the row's key (`lists_of`).
+    pub lists: HashMap<String, String>,
 }
 
 /// One refresh's answer, or the words for why it could not.
@@ -348,8 +404,9 @@ pub fn refresh(source: &dyn LibrarySource) -> Refreshed {
     let shelves = source.shelves()?;
     let mut shelved: Vec<SystemRow> = systems.clone();
     shelved.sort_by_key(|s| shelves.iter().position(|id| id == &s.id).unwrap_or(usize::MAX));
-    let rows = rows(&shelved, &catalog, &engines);
-    Ok(Read { systems, catalog, rows })
+    let mut rows = rows(&shelved, &catalog, &engines);
+    let lists = lists_of(&mut rows, &systems, &catalog, words::now());
+    Ok(Read { systems, catalog, rows, lists })
 }
 
 /// The view's state: the rows with the selection kept across refreshes, and the last refresh's problem.
@@ -358,6 +415,7 @@ pub struct LibraryView {
     pub rows: KeyedRows<LibraryRow>,
     pub systems: Vec<SystemRow>,
     pub catalog: Catalog,
+    pub lists: HashMap<String, String>,
     pub problem: String,
 }
 
@@ -366,6 +424,11 @@ impl LibraryView {
     pub fn summary(&self) -> String {
         let consoles = self.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).count();
         words::summary(consoles, self.catalog.games.len())
+    }
+
+    /// A row's games as GameModel reads them, from the last refresh; none for a key that is no row.
+    pub fn games_text(&self, key: &str) -> &str {
+        self.lists.get(key).map_or("[]", String::as_str)
     }
 
     /// A view with the places alone, before anything is read.
@@ -382,6 +445,7 @@ impl LibraryView {
                 self.rows.replace(read.rows);
                 self.systems = read.systems;
                 self.catalog = read.catalog;
+                self.lists = read.lists;
                 self.problem.clear();
             }
             Err(words) => self.problem = words,

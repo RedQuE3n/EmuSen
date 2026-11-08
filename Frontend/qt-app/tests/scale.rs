@@ -1,0 +1,107 @@
+//! The program at a library's scale (EmuSen_Qt.md §9.3.1): 9,000 synthetic games, hard links to one image. A step on
+//! Choose a console builds the fan's four covers and nothing per game of the row, and returns at once; the grid of every
+//! game follows the focus, the focused cover always inside the view.
+
+mod common;
+
+use common::{large_sandbox, wait_for};
+use emusen_client_fixture::library;
+use emusen_kit_core::input::UiButton;
+use emusen_qt::MAIN_URL;
+use std::time::{Duration, Instant};
+
+/// The longest a step may hold the GUI thread, far above a step's own cost and far below a walk of thousands of games.
+const STEP: Duration = Duration::from_millis(400);
+
+fn focused(scene: &mut emusen_qt_test::Scene<'_>) -> String {
+    let tree = scene.tree();
+    scene.focus(&tree).map(|i| tree.nodes[i as usize].name.clone()).unwrap_or_default()
+}
+
+/// The fan's covers, made and shown or not, and every item of the scene.
+fn counts(scene: &mut emusen_qt_test::Scene<'_>) -> (usize, usize) {
+    let tree = scene.tree();
+    (tree.nodes.iter().filter(|n| n.name.starts_with("fanCover.")).count(), tree.nodes.len())
+}
+
+#[test]
+fn a_step_builds_nothing_per_game_and_the_grid_follows_the_focus() {
+    let _world = large_sandbox("qt-app-scale", &[("NES", "nes", 6000), ("GB", "gb", 3000)]);
+    let mut harness = emusen_qt_test::Harness::new();
+    let mut scene = harness.load(MAIN_URL, 1280, 800);
+    assert!(scene.set_property("program", "splash", "false"));
+    assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
+    wait_for(&mut scene, "library", "loading", "false", 120000);
+    assert_eq!(scene.property("library", "summary"), "2 consoles · 9,000 games");
+    for _ in 0..40 {
+        if focused(&mut scene) == "place.0" {
+            break;
+        }
+        scene.wait(50);
+    }
+    scene.pad(UiButton::Accept);
+    assert_eq!(scene.property("screens", "shown"), "Consoles");
+    scene.wait(100);
+
+    // All games (9,000), the NES (6,000), the Game Boy (3,000), the favourites (none) and back: each step answered at once.
+    let (fan, items) = counts(&mut scene);
+    assert_eq!(fan, 4, "All games fans four covers");
+    let mut planet = None;
+    let walk = [(UiButton::Down, "nes", 4), (UiButton::Right, "gb", 4), (UiButton::Left, "nes", 4), (UiButton::Up, "favourites", 0), (UiButton::Left, "all", 4)];
+    for (button, key, fanned) in walk {
+        let started = Instant::now();
+        scene.pad(button);
+        let took = started.elapsed();
+        assert_eq!(scene.property("library", "selectedKey"), key);
+        assert!(took < STEP, "the step onto {key} held the GUI thread {took:?}");
+        scene.wait(100);
+        let (fan, now) = counts(&mut scene);
+        assert_eq!(fan, fanned, "{key} fans its first covers");
+        if fanned == 0 {
+            continue;
+        }
+        // A place's tile and a lit planet's differ by their own marks alone; a row's games add nothing.
+        let alike = if key == "all" { items } else { *planet.get_or_insert(now) };
+        assert_eq!(now, alike, "the scene on {key} holds as many items as on a row of another size");
+    }
+
+    // The grid of every game: read off the GUI thread, then Down held through its rows, the focus always in view.
+    scene.pad(UiButton::Accept);
+    assert_eq!(scene.property("screens", "shown"), "Grid");
+    wait_for(&mut scene, "gridCells", "count", "9000", 10000);
+    let view = |scene: &mut emusen_qt_test::Scene<'_>| {
+        let tree = scene.tree();
+        let cells = tree.nodes.iter().find(|n| n.name == "gridCells").map(|n| (n.y, n.h)).unwrap();
+        (tree, cells)
+    };
+    let rows = {
+        let tree = scene.tree();
+        let y = |i: usize| tree.nodes.iter().find(|n| n.name == format!("gridCell.{i}")).map(|n| n.y).unwrap();
+        (y(0), y(5))
+    };
+    for step in 1..=30 {
+        scene.pad(UiButton::Down);
+        let index: usize = scene.property("gridCells", "currentIndex").parse().unwrap();
+        assert_eq!(index, 5 * step, "Down moves a row");
+        let (tree, (top, height)) = view(&mut scene);
+        let cell = tree.nodes.iter().find(|n| n.name == format!("gridCell.{index}") && n.visible);
+        let cell = cell.unwrap_or_else(|| panic!("the focused cover {index} is made"));
+        assert!(cell.y >= top && cell.y + cell.h <= top + height, "cover {index} at {}..{} outside the view {top}..{}", cell.y, cell.y + cell.h, top + height);
+        // Whole rows: the focused cover stands where the first two rows stood, on the second once the view has moved.
+        let second = rows.1;
+        assert!((cell.y - second).abs() < 0.5, "step {step}: cover {index} at {}, the second row's place {second}", cell.y);
+    }
+    assert_eq!(scene.property("gridFocusTitle", "text"), "Game 00075");
+
+    // Another row's grid opens at its first row.
+    scene.pad(UiButton::Back);
+    scene.pad(UiButton::Down);
+    assert_eq!(scene.property("library", "selectedKey"), "nes");
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "gridCells", "count", "6000", 10000);
+    scene.wait(50);
+    let tree = scene.tree();
+    let first = tree.nodes.iter().find(|n| n.name == "gridCell.0" && n.visible).map(|n| n.y);
+    assert_eq!(first, Some(rows.0), "the NES's first cover where the first row stands");
+    scene.assert_quiet();
+}

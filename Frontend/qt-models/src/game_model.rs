@@ -1,9 +1,10 @@
 //! `GameModel`, a list of games as a QAbstractListModel (EmuSen_Qt.md §7.1): the grid's cells, Home's shelf and Choose a
-//! console's fan, each set from LibraryModel's `gamesOf` as plain data.
+//! console's fan, each set from LibraryModel's `gamesOf` as plain data, read off the GUI thread and taken back through
+//! qt_thread().queue, so a list of thousands never stops the screens.
 
 use crate::library::GameRow;
 use core::pin::Pin;
-use cxx_qt::CxxQtType;
+use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
 
 #[cxx_qt::bridge]
@@ -114,6 +115,7 @@ pub mod qobject {
     }
 
     impl cxx_qt::Initialize for GameModel {}
+    impl cxx_qt::Threading for GameModel {}
 }
 
 use qobject::GameRole;
@@ -137,6 +139,8 @@ pub struct GameModelRust {
     /// Counts the reads, announced after each, so a binding on a row's words sees the new rows.
     revision: i32,
     rows: Vec<GameRow>,
+    /// Counts the reads asked for, so only the newest read's rows are taken.
+    asked: u64,
 }
 
 impl cxx_qt::Initialize for qobject::GameModel {
@@ -223,10 +227,22 @@ impl qobject::GameModel {
         self.at(row).map_or(-1.0, |g| g.hue)
     }
 
-    /// The games text read into rows, the model reset once.
+    /// The games text read into rows off the GUI thread; the newest read's rows are taken, the model reset once.
     fn read(mut self: Pin<&mut Self>) {
-        let leave_out = self.leave_out.to_string();
-        let rows = crate::games::without(crate::games::from_json(&self.games.to_string()), &leave_out);
+        let (text, leave_out) = (self.games.to_string(), self.leave_out.to_string());
+        let asked = self.asked.wrapping_add(1);
+        self.as_mut().rust_mut().asked = asked;
+        let qt = self.qt_thread();
+        std::thread::spawn(move || {
+            let rows = crate::games::without(crate::games::from_json(&text), &leave_out);
+            let _ = qt.queue(move |model| model.take(asked, rows));
+        });
+    }
+
+    fn take(mut self: Pin<&mut Self>, asked: u64, rows: Vec<GameRow>) {
+        if self.asked != asked {
+            return;
+        }
         let count = rows.len() as i32;
         self.as_mut().begin_reset_model();
         self.as_mut().rust_mut().rows = rows;

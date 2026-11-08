@@ -19,6 +19,12 @@ fn moonrise_plays_over_home_and_a_press_skips_it() {
     assert_eq!(scene.property("moonrise", "visible"), "true", "Moonrise covers the window from the start");
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
     wait_for(&mut scene, "moonrise", "running", "true", 5000);
+    for _ in 0..100 {
+        if !scene.property("moonrise", "caption").is_empty() {
+            break;
+        }
+        scene.wait(50);
+    }
     let caption = scene.property("moonrise", "caption");
     assert!(caption.ends_with("CONSOLES") && caption != "0 CONSOLES", "the caption counts the systems with an engine: {caption}");
     assert_eq!(scene.property("program", "splashShown"), "true");

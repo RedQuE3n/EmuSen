@@ -1072,8 +1072,10 @@ over them. It has no menu bar and no status bar: the big-screen and card forms h
 
 **Moonrise at the start** (`EmuSen_Interface.md` §22, as the C# front end does it): its planets are one per system the
 systems table lists with an engine, in the table's order (`library::splash_hues`), read by `LibraryModel` from the
-systems before the scan of the games and published as `splashHues` and `splashCaption` ("N CONSOLES", `words.rs`); the
-splash runs once they arrive, so the scan runs beneath it. It ends at the later of its own end and the library read
+systems before the scan of the games and published as `splashHues` and `splashCaption` ("N CONSOLES", `words.rs`), so
+the scan runs beneath the splash. Since 2026-11-08 (§9.3.1, the real path) the splash's clock runs from the window's first
+frame and does not wait for the systems: they are read in 2 to 15 ms, and the row of worlds is not due until 1.78 s
+(the draft's 1.15 s at the pace of 1.55). It ends at the later of its own end and the library read
 (`!loading`), then fades over the Fade token. A pad press, a key or a click skips it to its finished frame, and the
 press is the splash's alone: while it shows it holds the focus, so the frame's `Connections` on the router are off.
 With the setting off it is never shown. **Words**: `Words`, a QML singleton over `words.rs`, holds the screens' fixed
@@ -1162,7 +1164,12 @@ comes from a model's roles; nothing is written per console:
   shelf and Choose a console's fan. It is set from `LibraryModel.gamesOf(key)`, the games a row leads to (all and a
   console's by title, the favourites by title, the recently played the most recent first) as plain data, a JSON array
   (`games.rs`), so the library is read once and neither model reaches into the other. A title is the file name without
-  its extension until scraped names are read.
+  its extension until scraped names are read. Since 2026-11-08 (§9.3.1, finding 1) every row's list is written once a
+  refresh, off the GUI thread (`library::lists_of`, each game's cover, hero, record and console found by its path in a
+  map), and `gamesOf` hands the written text back; each row also carries its first four games as the role `fan`, the
+  covers Choose a console fans; and `GameModel` parses the text it is given on a thread of its own, taking the rows back
+  through `qt_thread().queue` (the newest read wins). What the GUI thread still does in proportion to a list is copy its
+  text twice as a grid opens (`QString` to and from UTF-8), about a millisecond for 9,000 games.
 - **`HelpModel`**: a screen's help bar (`screen`: Home, Consoles, Grid) with the roles the kit's `HelpBar` reads, from
   `help.rs`: Choose a console's Open (A), Back (B), Favourites (Y, `Search`), Random game (X, `Screensaver`); the grid's
   Play, Game page, Favourite, Consoles; Home's Resume, Game page, Home card, as the mockups label them.
@@ -1190,8 +1197,11 @@ corner inside a `Kit.Frame` with the navigation hidden, under its own `Kit.Sky`,
 - **What a screen shows is a model's.** Choose a console is one `Repeater` over `LibraryModel`: the places first
   (`LibraryModel.places` counts them), then each console with games as its body; the tiles' boxes and the walk between
   rows are `Kit.PlanetLayout`'s (`EmuSen_Kit.md` §7.19), the body's size `Body.tileWidth`/`tileHeight`, the focused
-  console's words its row's `fullName` and `facts`, the fan `GameModel` over `gamesOf` of the selected row. The grid's
-  cells are a `GridView` over `GameModel`, its heading the row it opened. Home's Continue and shelf are
+  console's words its row's `fullName` and `facts`, the fan `GameModel` over the selected row's `fan` (four games). The
+  grid's cells are a `GridView` over `GameModel`, its heading the row it opened; the two rows shown move only when the
+  focus leaves them, a whole row at a time and at once, as LunaP's `GalleryLayout` keeps its rows (`KeepRowShown`), the
+  view's `contentY` set from the first row shown (§9.3.1, finding 2). A cover is decoded at the size it is drawn
+  (`RoundPicture`'s `sourceSize`, the canvas unit and the screen's pixel ratio), and released with its delegate. Home's Continue and shelf are
   `LibraryModel.recent` (the recently played as plain data, kept current by the model), its places `Words.homePlaces`,
   its status line `Clock.time` (`clock.rs`, `QTime`'s, ticked by a `Timer` every 15 s). An empty `games` text is no
   games, so a screen never writes a fallback list.
@@ -1671,6 +1681,57 @@ owed with Rewind's page); Mistress's status line counted "0 controllers" while i
 
 **Not measured:** the hosted core's Play to the first picture, which waits on the tester's approval of one core download
 (§1.8.4).
+
+**The defects' mechanisms and fixes** **[M 2026-11-08]**, by the findings they answer:
+
+- *Finding 1, the stops on Choose a console, at the start and at Play,* were the fan. `CoverFan`'s `Repeater` took the focused row's
+   whole `GameModel` and hid all but four delegates, so a row of 4,185 games made 4,185 `Cover`s (each a `Shape`, an
+   `Image` and a generated card) on the GUI thread, and All games, selected at the start, made 9,007 while the program
+   started; `gamesOf` also found each game's cover, hero art and record by a linear search, quadratic in the library.
+   Proved by `qt-app/tests/scale.rs` on the build before the fix: All games fanned 9,000 delegates for 4. Fixed: every
+   row's games are written once a refresh off the GUI thread and each row carries its first four as `fan` (§7.1);
+   `GameModel` parses off the GUI thread. The longest stop of the frames in the 3 s after the step onto the NES:
+   2,345 ms before, 67 ms after, the compositor's own gaps (`runs/focus-qt`, `runs/fix-focus-qt`). Play's presentation is
+   steady 0.40 and 0.61 s after Play, where it was 3.4 to 6.1 s.
+- *Finding 2: the grid* now moves its two rows when the focus leaves them, a whole row and at once (§7.1); the grab after 300
+   steps shows the focused "Cosmic Spacehead (E) [h1]" on the second row (`runs/fix-r1-scroll-qt/03-end.png`).
+- *Finding 3: memory* was the same delegates: offscreen on the software backend over the same sandbox, 1,028 MiB before the fix
+   and 181 MiB after; in the gate's run 201 MiB idle (82 anonymous, where 871 were). Covers are decoded at their drawn
+   size and released with their delegates; the sandbox has no media store, so that change is not in these figures.
+- *Finding 6: the picture's shape.* The session reports the runtime's display aspect (the systems table's shape, else the core's
+   declaration), else the frame's own shape with its repeated rows, as `pictureAspect`, and `Game.qml` centres the
+   picture at that shape, as Mistress's `ComputeLetterboxRect` does; ActRaiser is drawn 1,600 × 1,200 between black
+   bars on the 1,920 × 1,200 screen (`runs/fix-r1-play-qt/04-playing.png`), as Mistress draws it.
+- *Finding 1, the first press:* the first attempts fell in the start's stop of finding 1 and were taken late; the driver's rule presses
+   only when the window has been still for 0.1 s, and Home now presents frames continuously (its sky's
+   `FrameAnimation`, present before the fix from 2.5 s on), so the rule waits its full 5 s. Two runs pressing as Home
+   stood measured the answer from the focus log instead: pressed at 0.325 and 0.353 s, the focus on the next place at
+   0.345 and 0.369 s.
+- *The real path's bare sky on Moonrise* was the start's stop of finding 1 (no frame for 2 s from 0.66 s) after a clock held until the
+   systems arrived. The clock now runs from the first frame (§7.1); the systems arrive within 2 to 15 ms (timed over the
+   real library), long before the row of worlds at 1.78 s. Grabs at 0.62, 1.17, 2.23, 3.30 and 5.37 s after the start
+   show the draft's stars, the moon's outline, the worlds' row, the halo and the sweep in turn (`runs/fix-moonrise-qt/`).
+
+**Re-measured** (`runs/fix-r1-*`, `runs/fix-r2-*`, the same script and sandbox, Mistress's figures of the morning kept):
+
+| Gate | emusen-qt after the fixes | Mistress | |
+|---|---|---|---|
+| Start to Home shown | 0.25–0.30 s, 0.30–0.34 s | 0.77–0.81 s | Qt better |
+| Start to the first press answered (pressed as Home stood, focus log) | 0.345, 0.369 s | ≤ 0.95 s | Qt better |
+| RSS, the library idle 10 s | 201, 201 MiB | 305, 307 MiB | Qt better |
+| RSS at the Pause Card over a game | 249, 249 MiB | 370, 382, 379 MiB | Qt better |
+| The grid, Down held 24.4 s, scrolling | 1,335, 1,331 frames; median 16.6, 17.0 ms; worst 82.6, 70.0 ms | 1,266, 1,262 frames; median 16.7 ms; worst 96.8, 96.9 ms | Qt better |
+| 60 s of play, frames presented 2–60 s after Play | 3,169, 3,171; over 25 ms 127, 125 | 3,167, 3,166, 3,175; over 25 ms 117, 112, 121 | equal |
+
+**Held to** (measured 2026-11-08): `qt-app/tests/scale.rs` (9,000 synthetic games as hard links to one image: each step
+on Choose a console fans four covers, holds the scene at the same number of items on rows of 9,000, 6,000 and 3,000
+games and returns within 400 ms; the grid of 9,000 read, Down 30 times with the focused cover inside the view on the
+second row's place, and another row's grid opening at its first row), `qt-app/tests/first_frame.rs` (the clock running
+at the first frame, the worlds in before the row is due), `qt-models/tests/library.rs`'s list test (each row's text and
+fan equal to `games_of` at 9,000 games), `qt-models/tests/session.rs`'s shape test, the acceptance test's letterbox at
+1,280 × 800, and `qt-play`'s read-back over the picture's own item. Seeded faults, each reverted: the fan over the whole
+row failed the scale test (9,000 fanned); the view's move dropped failed it (cover 10 below the view); the declared
+aspect ignored failed the shape test (1.143 for 1.333); the clock held for the systems failed the first-frame test.
 
 ---
 

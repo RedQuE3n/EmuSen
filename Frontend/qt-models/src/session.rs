@@ -23,6 +23,8 @@ const SWAP_BOUND: Duration = Duration::from_millis(100);
 pub enum Report {
     Opened { session: u32 },
     FirstPicture { after: Duration },
+    /// The picture's display shape changed: its width over its height as shown (`shown_aspect`).
+    Shape { aspect: f64 },
     Failed(String),
     Closed,
 }
@@ -130,6 +132,7 @@ fn run(
     let mut seen = handoff.swaps();
     let mut taken = handoff.taken();
     let mut first = true;
+    let mut shape = 0.0;
     let mut next = Instant::now();
     handoff.set_running(true);
     let failed = Mutex::new(None);
@@ -170,6 +173,11 @@ fn run(
             handed = true;
             if std::mem::take(&mut first) {
                 report(Report::FirstPicture { after: started.elapsed() });
+            }
+            let aspect = shown_aspect(&info);
+            if aspect != shape {
+                shape = aspect;
+                report(Report::Shape { aspect });
             }
             // A picture on the device is drawn before the machine runs again, so a frame never waits on a ring slot
             // nobody takes and no lend or ring is remade under a picture still to be drawn (§1.8.7).
@@ -215,6 +223,18 @@ fn run(
     match failed.into_inner().unwrap_or_else(PoisonError::into_inner) {
         Some(words) => report(Report::Failed(words)),
         None => report(Report::Closed),
+    }
+}
+
+/// The picture's shape as shown, width over height: the runtime's display aspect, which the systems table's shape and
+/// the core's own declaration give (EmuSen_Serenity.md §2.9), else the frame's own shape, as Mistress letterboxes it.
+pub fn shown_aspect(info: &FrameInfo) -> f64 {
+    if info.display_aspect > 0.0 {
+        info.display_aspect
+    } else if info.width > 0 && info.height > 0 {
+        info.width as f64 / (info.height as f64 * info.row_repeat.max(1) as f64)
+    } else {
+        0.0
     }
 }
 

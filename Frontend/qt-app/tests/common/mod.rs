@@ -32,6 +32,24 @@ pub fn sandbox(name: &str, games: &[(&str, &str)]) -> World {
     world
 }
 
+/// A scratch tree like `sandbox` at a library's scale: `count` games in each (folder, extension), each a hard link to one
+/// synthetic image, so thousands of games take one file's room.
+#[allow(dead_code)]
+pub fn large_sandbox(name: &str, shelves: &[(&str, &str, usize)]) -> World {
+    let world = sandbox(name, &[]);
+    for (folder, ext, count) in shelves {
+        let roms = world.dir(&format!("Roms/{folder}"));
+        let first = roms.join(format!("Game 00000.{ext}"));
+        let mut image = b"NES\x1a\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00".to_vec();
+        image.resize(16 + 16384, 0);
+        std::fs::write(&first, image).unwrap();
+        for n in 1..*count {
+            std::fs::hard_link(&first, roms.join(format!("Game {n:05}.{ext}"))).unwrap();
+        }
+    }
+    world
+}
+
 /// The courts canvas's consoles, as Mistress's picture states them (MoonrisePictureTool.Consoles).
 pub const CONSOLES: [&str; 11] = ["nes", "snes", "n64", "gb", "gbc", "sms", "md", "mcd", "psx", "ps2", "dreamcast"];
 

@@ -213,7 +213,7 @@ fn unpack(stem: &str, zip: &Path, core: &Path, index_crc32: u32, note: &mut dyn 
         return Err(format!("the zip records {want}'s CRC-32 as {:08x}, and the index the plan was made from says {index_crc32:08x}: the build changed since cores fetch, or the bytes did; cores fetch reads the index again", entry.crc32));
     }
     note(Note::Checked("crc32"));
-    if entry.platform == 3 && (entry.external >> 16) & 0o170000 == 0o120000 {
+    if entry.link {
         return Err(format!("the zip's {want} is a link, not a file"));
     }
     note(Note::Checked("shape"));

@@ -5,7 +5,7 @@
 use crate::Scraper;
 use crate::consoles::{self, Core};
 use crate::kinds;
-use emusen_galaxia::dotnet_files::file_exists;
+use emusen_galaxia::files::file_exists;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use std::collections::HashSet;
 
@@ -76,14 +76,14 @@ fn package_stamp(roots: &[&str]) -> String {
         .iter()
         .map(|r| {
             let dir = path::combine(STYLE, r, emusen_galaxia::package::MEDIA_FOLDER);
-            if !emusen_galaxia::dotnet_files::directory_exists(&dir) {
+            if !emusen_galaxia::files::directory_exists(&dir) {
                 return "0".to_string();
             }
             let mut subs: Vec<String> = std::fs::read_dir(&dir)
-                .map(|entries| entries.flatten().filter(|e| emusen_galaxia::dotnet_files::listed_as_directory(e)).map(|e| emusen_galaxia::dotnet_files::join(&dir, &e.file_name().to_string_lossy())).collect())
+                .map(|entries| entries.flatten().filter(|e| emusen_galaxia::files::listed_as_directory(e)).map(|e| emusen_galaxia::files::join(&dir, &e.file_name().to_string_lossy())).collect())
                 .unwrap_or_default();
             subs.sort();
-            std::iter::once(dir).chain(subs).filter_map(|d| std::fs::metadata(&d).ok().map(|m| emusen_galaxia::dotnet_files::write_ticks(&m).to_string())).collect::<Vec<_>>().join(";")
+            std::iter::once(dir).chain(subs).filter_map(|d| std::fs::metadata(&d).ok().map(|m| emusen_galaxia::files::write_ticks(&m).to_string())).collect::<Vec<_>>().join(";")
         })
         .collect::<Vec<_>>()
         .join(",")
@@ -185,7 +185,7 @@ fn present_in(root: &str, system: &str, games: &[(String, String, bool)]) -> Vec
     let mut names: Option<HashSet<String>> = None;
     for kind in kinds::ALL_FOLDER_ORDER {
         let dir = path::combine_all(STYLE, &[root, system, kind.folder]);
-        if !emusen_galaxia::dotnet_files::directory_exists(&dir) {
+        if !emusen_galaxia::files::directory_exists(&dir) {
             continue;
         }
         let names = names.get_or_insert_with(|| games.iter().flat_map(|(file, folder_path, folder)| names_of(file, folder_path, *folder)).collect());
@@ -200,11 +200,11 @@ fn present_in(root: &str, system: &str, games: &[(String, String, bool)]) -> Vec
             }
         };
         if nested {
-            let _ = emusen_galaxia::dotnet_files::visit_files(&dir, |f, _| look(f));
+            let _ = emusen_galaxia::files::visit_files(&dir, |f, _| look(f));
         } else if let Ok(entries) = std::fs::read_dir(&dir) {
             for e in entries.flatten() {
-                if !emusen_galaxia::dotnet_files::listed_as_directory(&e) {
-                    look(&emusen_galaxia::dotnet_files::join(&dir, &e.file_name().to_string_lossy()));
+                if !emusen_galaxia::files::listed_as_directory(&e) {
+                    look(&emusen_galaxia::files::join(&dir, &e.file_name().to_string_lossy()));
                 }
             }
         }
@@ -225,19 +225,19 @@ fn stamp_in(root: &str, system: &str) -> String {
         .iter()
         .map(|kind| {
             let dir = path::combine_all(STYLE, &[root, system, kind.folder]);
-            if !emusen_galaxia::dotnet_files::directory_exists(&dir) {
+            if !emusen_galaxia::files::directory_exists(&dir) {
                 return "0".to_string();
             }
             let mut stamps = Vec::new();
             let mut queue = std::collections::VecDeque::from([dir]);
             while let Some(d) = queue.pop_front() {
                 if let Ok(m) = std::fs::metadata(&d) {
-                    stamps.push(emusen_galaxia::dotnet_files::write_ticks(&m).to_string());
+                    stamps.push(emusen_galaxia::files::write_ticks(&m).to_string());
                 }
                 if let Ok(entries) = std::fs::read_dir(&d) {
                     for e in entries.flatten() {
-                        if emusen_galaxia::dotnet_files::listed_as_directory(&e) {
-                            queue.push_back(emusen_galaxia::dotnet_files::join(&d, &e.file_name().to_string_lossy()));
+                        if emusen_galaxia::files::listed_as_directory(&e) {
+                            queue.push_back(emusen_galaxia::files::join(&d, &e.file_name().to_string_lossy()));
                         }
                     }
                 }
@@ -284,13 +284,13 @@ impl Scraper {
     pub fn stamp(&self, system: &str, choice: &str) -> String {
         let settings = self.settings();
         let openemu = self.openemu_root();
-        let openemu_stamp = if settings.openemu && emusen_galaxia::dotnet_files::directory_exists(&openemu) {
+        let openemu_stamp = if settings.openemu && emusen_galaxia::files::directory_exists(&openemu) {
             std::fs::read_dir(&openemu)
                 .map(|entries| {
                     entries
                         .flatten()
-                        .filter(|e| emusen_galaxia::dotnet_files::listed_as_directory(e))
-                        .filter_map(|e| std::fs::metadata(e.path()).ok().map(|m| emusen_galaxia::dotnet_files::write_ticks(&m).to_string()))
+                        .filter(|e| emusen_galaxia::files::listed_as_directory(e))
+                        .filter_map(|e| std::fs::metadata(e.path()).ok().map(|m| emusen_galaxia::files::write_ticks(&m).to_string()))
                         .collect::<Vec<_>>()
                         .join(",")
                 })

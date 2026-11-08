@@ -188,7 +188,7 @@ fn copy_from_records(db: &Connection, records: &str) -> Result<(), Refused> {
         return Ok(());
     }
     let at = emusen_galaxia::clock::utc_now();
-    if emusen_galaxia::dotnet_files::file_exists(records) {
+    if emusen_galaxia::files::file_exists(records) {
         run(db, "ATTACH DATABASE $file AS records", &[("$file", Bound::Text(records))])?;
         let copied = transaction(db, |db| {
             if scalar(db, "SELECT COUNT(*) FROM records.sqlite_master WHERE type = 'table' AND name = 'state_record'", &[])?.unwrap_or(0) > 0 {
@@ -242,7 +242,7 @@ pub fn read_packaged(record_at: &str, state_path: &str) -> Option<StateRecord> {
 /// A state's record wherever it is kept: a packaged state's in its package, read first, then states.db's.
 pub fn read(records: Option<&StateRecords>, state_path: &str) -> Result<Option<StateRecord>, Refused> {
     if let Some(at) = emusen_galaxia::saves::package_record_path(state_path)
-        && emusen_galaxia::dotnet_files::file_exists(&at)
+        && emusen_galaxia::files::file_exists(&at)
     {
         return Ok(read_packaged(&at, state_path));
     }
@@ -276,7 +276,7 @@ pub fn kept_record(sqlite: Arc<Sqlite>, library_folder: &str, state_path: &str) 
     let (bytes, modified) = stat(&key)?;
     for file in [FILE_NAME, RECORDS_FILE_NAME] {
         let at = path::combine(Style::HOST, library_folder, file);
-        if !emusen_galaxia::dotnet_files::file_exists(&at) {
+        if !emusen_galaxia::files::file_exists(&at) {
             continue;
         }
         let Ok(db) = Connection::open_read_only(sqlite.clone(), &at) else { continue };

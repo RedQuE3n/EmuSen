@@ -7,7 +7,7 @@
 use crate::convert::{obj, Outcome};
 use crate::Context;
 use emusen_galaxia::claims::{self, Index, Roots};
-use emusen_galaxia::dotnet_files::{self, Options};
+use emusen_galaxia::files::{self, Options};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_dotnet::json::Value;
 use emusen_galaxia::rom_hash::{self, Hashes};
@@ -54,9 +54,9 @@ pub fn games(library: &str, given: &[String]) -> (Vec<Game>, Vec<String>) {
             }
         };
         let at = claims::under(library, &rel);
-        if dotnet_files::directory_exists(&at) {
-            let _ = dotnet_files::visit_files_with(&at, Options { skip_hidden: true, ignore_inaccessible: true }, |f, _| files.push(f.to_string()));
-        } else if dotnet_files::file_exists(&at) {
+        if files::directory_exists(&at) {
+            let _ = files::visit_files_with(&at, Options { skip_hidden: true, ignore_inaccessible: true }, |f, _| files.push(f.to_string()));
+        } else if files::file_exists(&at) {
             direct.push(at.clone());
             files.push(at);
         } else {
@@ -147,8 +147,8 @@ pub fn make(ctx: &Context, index: &mut Index, game: &Game, how: Making, stop: &d
         return further(ctx, index, &folder, how, "already", stop);
     }
     let (folder, folder_rel) = place(ctx, game);
-    let manifest = dotnet_files::join(&folder, package::FILE_NAME);
-    if dotnet_files::file_exists(&manifest) {
+    let manifest = files::join(&folder, package::FILE_NAME);
+    if files::file_exists(&manifest) {
         return Outcome::said("failed", format!("Packages/{folder_rel} already holds a package for another file, so none was made")).with("package", text(&folder_rel));
     }
     let library = places.library.clone().unwrap_or_default();
@@ -423,7 +423,7 @@ fn contain(ctx: &Context, folder: &str, doc: &mut Value, stop: &dyn Fn() -> bool
     claims::set(doc, "game", game_entry);
     claims::set(doc, "companions", Value::Array(moved_in));
     claims::set(doc, "sources", Value::Array(sources));
-    let manifest = dotnet_files::join(folder, package::FILE_NAME);
+    let manifest = files::join(folder, package::FILE_NAME);
     match package::write(&manifest, doc) {
         Ok(Ok(())) => Ok(names),
         Ok(Err(words)) => Err(words),
@@ -459,7 +459,7 @@ pub fn named(ctx: &Context, given: &[String]) -> (Vec<String>, Vec<String>) {
 
 /// Whether a path a job was handed is a package's zip rather than its folder.
 pub fn is_zip(at: &str) -> bool {
-    emusen_galaxia::archive::is_archive(at) && dotnet_files::file_exists(at)
+    emusen_galaxia::archive::is_archive(at) && files::file_exists(at)
 }
 
 /// `named`, and where `zips` allows it, a package's zip named by its path, relative to `Packages` or full (§19).
@@ -508,7 +508,7 @@ static SCRATCH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize:
 /// saves a patched game keeps are named by its patch list, not by this (§16), so nothing else changes. `set`,
 /// `already`, or `failed` for `patched` on a package with no soft patches.
 pub fn identity(folder: &str, want: &str) -> Outcome {
-    let manifest = dotnet_files::join(folder, package::FILE_NAME);
+    let manifest = files::join(folder, package::FILE_NAME);
     let mut doc = match read(folder) {
         Ok(d) => d,
         Err(words) => return Outcome::said("refused", words),
@@ -542,7 +542,7 @@ pub fn of_console(ctx: &Context, console: &str) -> Vec<String> {
 }
 
 pub(crate) fn read(folder: &str) -> Result<Value, String> {
-    let manifest = dotnet_files::join(folder, package::FILE_NAME);
+    let manifest = files::join(folder, package::FILE_NAME);
     match package::read(&manifest) {
         Ok(Ok(doc)) => Ok(doc),
         Ok(Err(refusal)) => Err(refusal.words().to_string()),
@@ -617,7 +617,7 @@ pub fn list(ctx: &Context, library: &str, folder: &str, systems: &emusen_library
 /// The bytes a folder's files hold, hidden ones included and links counted as links.
 fn folder_bytes(folder: &str) -> u64 {
     let mut total = 0;
-    let _ = dotnet_files::visit_files_with(folder, Options { skip_hidden: false, ignore_inaccessible: true }, |f, _| total += std::fs::symlink_metadata(f).map_or(0, |m| m.len()));
+    let _ = files::visit_files_with(folder, Options { skip_hidden: false, ignore_inaccessible: true }, |f, _| total += std::fs::symlink_metadata(f).map_or(0, |m| m.len()));
     total
 }
 
@@ -679,7 +679,7 @@ fn listed(ctx: &Context, folder: &str) -> Outcome {
 
 fn companions_gone(roots: &Roots, folder: &str, doc: &Value) -> Vec<String> {
     match doc.get("companions") {
-        Some(Value::Array(items)) => items.iter().filter_map(|c| claims::place(roots, folder, c)).filter(|at| !dotnet_files::file_exists(at)).map(|at| shown(roots, &at)).collect(),
+        Some(Value::Array(items)) => items.iter().filter_map(|c| claims::place(roots, folder, c)).filter(|at| !files::file_exists(at)).map(|at| shown(roots, &at)).collect(),
         _ => Vec::new(),
     }
 }
@@ -690,7 +690,7 @@ fn companions_gone(roots: &Roots, folder: &str, doc: &Value) -> Vec<String> {
 pub fn check(ctx: &Context, folder: &str, stop: &dyn Fn() -> bool) -> Outcome {
     let places = ctx.places();
     let roots = places.roots();
-    let manifest = dotnet_files::join(folder, package::FILE_NAME);
+    let manifest = files::join(folder, package::FILE_NAME);
     let mut doc = match read(folder) {
         Ok(d) => d,
         Err(words) => return Outcome::said("refused", words),
@@ -801,7 +801,7 @@ fn files_in(folder: &str, keep: impl Fn(&str) -> bool) -> Vec<String> {
         .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .filter(|n| keep(n))
-        .map(|n| dotnet_files::join(folder, &n))
+        .map(|n| files::join(folder, &n))
         .collect();
     found.sort();
     found
@@ -861,12 +861,12 @@ pub fn migrate(ctx: &Context, folder: &str) -> Outcome {
         from.push((to, art));
     }
     let lists = [cheats::game_list(Style::HOST, Some(console), game.as_deref().or(Some(rel))), cheats::game_list(Style::HOST, None, game.as_deref().or(Some(rel)))];
-    if let Some(list) = lists.iter().flatten().map(|l| path::combine_all(Style::HOST, &[&ctx.tree.config(), &l.category, &l.file_name()])).find(|p| dotnet_files::file_exists(p)) {
-        from.push((dotnet_files::join(folder, package::CHEATS_FILE), list));
+    if let Some(list) = lists.iter().flatten().map(|l| path::combine_all(Style::HOST, &[&ctx.tree.config(), &l.category, &l.file_name()])).find(|p| files::file_exists(p)) {
+        from.push((files::join(folder, package::CHEATS_FILE), list));
     }
     let (mut copied, mut kept, mut failed) = (Vec::new(), 0u64, Vec::new());
     for (to, source) in from {
-        if dotnet_files::file_exists(&to) || copied.iter().any(|(t, _): &(String, String)| *t == to) {
+        if files::file_exists(&to) || copied.iter().any(|(t, _): &(String, String)| *t == to) {
             kept += 1;
             continue;
         }
@@ -915,7 +915,7 @@ fn records_into(ctx: &Context, states: &[(String, String)], failed: &mut Vec<Str
     let mut copied = 0;
     for (to, source) in states {
         let Some(at) = emusen_galaxia::saves::package_record_path(to) else { continue };
-        if dotnet_files::file_exists(&at) || !dotnet_files::file_exists(to) || std::fs::read(to).ok() != std::fs::read(source).ok() {
+        if files::file_exists(&at) || !files::file_exists(to) || std::fs::read(to).ok() != std::fs::read(source).ok() {
             continue;
         }
         let Some(record) = emusen_crystal::states::kept_record(sqlite.clone(), &library, source) else { continue };
@@ -934,9 +934,9 @@ fn settings_into(ctx: &Context, system: &str, folder: &str, game: &str) -> Resul
     let plain = emusen_crystal::settings::game_settings_path(&ctx.tree, system, game);
     let target = emusen_crystal::settings::package_settings_path(folder);
     let crop = crop_of(ctx, game).map(|c| [c.left, c.right, c.top, c.bottom].iter().map(|v| v.to_string()).collect::<Vec<_>>().join(" "));
-    let has_plain = dotnet_files::file_exists(&plain);
+    let has_plain = files::file_exists(&plain);
     let has_crop = |values: &[(String, String)]| values.iter().any(|(k, _)| k == CROP_KEY);
-    if dotnet_files::file_exists(&target) {
+    if files::file_exists(&target) {
         let mut values = emusen_crystal::settings::values_at(&target);
         let Some(crop) = crop.filter(|_| !has_crop(&values)) else { return if has_plain { Err(None) } else { Ok(None) } };
         values.push((CROP_KEY.into(), crop));
@@ -963,7 +963,7 @@ fn crop_of(ctx: &Context, game: &str) -> Option<emusen_library::records::Crop> {
     let sqlite = ctx.sqlite.clone()?;
     let library = ctx.tree.directory(emusen_galaxia::tree::Directory::Library).unwrap_or_default();
     let at = path::combine(Style::HOST, &library, emusen_galaxia::stores::GAMES_DB);
-    if !dotnet_files::file_exists(&at) {
+    if !files::file_exists(&at) {
         return None;
     }
     let db = emusen_sqlite::Connection::open_read_only(sqlite, &at).ok()?;

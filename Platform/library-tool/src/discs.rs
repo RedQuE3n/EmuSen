@@ -4,7 +4,7 @@
 
 use emusen_disc::cue::{FileKind, Mode, Sheet};
 use emusen_disc::Kind;
-use emusen_galaxia::dotnet_files::{self, Options};
+use emusen_galaxia::files::{self, Options};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::tree::Tree;
 use emusen_galaxia::{archive, disc_set, image_sets};
@@ -59,9 +59,9 @@ pub fn items(library: &str, given: &[String]) -> (Vec<Item>, Vec<String>) {
             }
         };
         let at = full(library, &rel);
-        if dotnet_files::directory_exists(&at) {
-            let _ = dotnet_files::visit_files_with(&at, Options { skip_hidden: true, ignore_inaccessible: true }, |f, _| files.push(f.to_string()));
-        } else if dotnet_files::file_exists(&at) {
+        if files::directory_exists(&at) {
+            let _ = files::visit_files_with(&at, Options { skip_hidden: true, ignore_inaccessible: true }, |f, _| files.push(f.to_string()));
+        } else if files::file_exists(&at) {
             files.push(at);
         } else {
             refused.push(format!("{g}: no such file or folder in the library"));
@@ -205,7 +205,7 @@ pub fn prepare(tree: &Tree, item: &Item, scratch: &str) -> Result<Prepared, Stri
             return Err("the sheet names a WAVE file, whose header a CHD does not keep: not converted by this step".into());
         }
         let files = image_sets::companions(&image)?;
-        if let Some(gone) = files.iter().find(|f| !dotnet_files::file_exists(f)) {
+        if let Some(gone) = files.iter().find(|f| !files::file_exists(f)) {
             return Err(format!("the sheet names {gone}, which is not there"));
         }
         // A sheet is a compact disc's, as every core opens one (§4.2a).

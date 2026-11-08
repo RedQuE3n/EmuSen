@@ -435,7 +435,7 @@ fn a_converted_disc_made_self_contained_holds_its_chd_and_its_zip_stores_it() {
     let claimant = index.claimant(&compressed.to_string_lossy()).map(|p| p.folder.clone());
     assert_eq!(claimant.as_deref(), Some(package.to_string_lossy().as_ref()), "the CHD in Compressed is the package's source");
     let entries = emusen_galaxia::archive::entries_of(&temp.at("home/Packages/PlayStation/Two/Two.chd.zip").to_string_lossy()).unwrap();
-    assert_eq!(entries.iter().find(|e| e.full_name == "Two.chd/Two.chd").map(|e| e.method), Some(0), "a CHD is stored, never compressed again");
+    assert_eq!(entries.iter().find(|e| e.full_name == "Two.chd/Two.chd").map(|e| e.stored), Some(true), "a CHD is stored, never compressed again");
     assert_eq!(state_of(&run(&ctx, r#"{"op": "ls", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "converted");
     assert_eq!(state_of(&run(&ctx, r#"{"op": "check", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "verified");
     assert_eq!(state_of(&run(&ctx, r#"{"op": "convert", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "already");

@@ -2,7 +2,7 @@
 //! zips, each beside the model it reads to. Every change to how a file is read is held to it. See
 //! EmuSen_RustPlatform.md §47.
 
-use emusen_galaxia::{archive, config, disc_set, dotnet_zip, model, models, package, package_zip};
+use emusen_galaxia::{archive, config, disc_set, model, models, package, package_zip};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
@@ -122,21 +122,20 @@ fn an_unpacked_folder_keeps_its_name() {
 }
 
 fn crc32(bytes: &[u8]) -> u32 {
-    let mut crc = flate2::Crc::new();
-    crc.update(bytes);
-    crc.sum()
+    let mut crc = emusen_galaxia::rom_hash::Crc32::default();
+    crc.append(bytes);
+    crc.value()
 }
 
-/// A zip as one line per entry, `name<TAB>length<TAB>CRC-32`, by the game reader; with `times`, each entry's own time in nanoseconds since 1970.
-fn game_reader_listing(zip: &Path, times: bool) -> Result<String, String> {
-    let at = zip.to_str().unwrap();
+/// A zip as one line per entry, `name<TAB>length<TAB>CRC-32`; with `times`, each entry's own time in nanoseconds since 1970.
+fn listing<R: std::io::Read + std::io::Seek>(mut zip: archive::Zip<R>, times: bool) -> Result<String, String> {
     let mut out = String::new();
-    for e in archive::entries_of(at)? {
+    for e in zip.entries()? {
         let mut bytes = Vec::new();
-        archive::copy_entry(at, &e, &mut bytes)?;
+        zip.copy(&e, &mut bytes)?;
         out.push_str(&format!("{}\t{}\t{:08x}", e.full_name, bytes.len(), crc32(&bytes)));
         if times {
-            let nanos = e.modified.map_or(-1, |t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as i128);
+            let nanos = zip.modified(&e).map_or(-1, |t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as i128);
             out.push_str(&format!("\t{nanos}"));
         }
         out.push('\n');
@@ -144,33 +143,24 @@ fn game_reader_listing(zip: &Path, times: bool) -> Result<String, String> {
     Ok(out.trim_end().to_string())
 }
 
-/// The same listing by the cheat database's reader.
-fn cheat_reader_listing(zip: &Path) -> Result<String, String> {
-    let bytes = std::fs::read(zip).unwrap();
-    let archive = dotnet_zip::open(&bytes)?;
-    let mut out = String::new();
-    for e in &archive.entries {
-        let data = archive.read(e)?;
-        out.push_str(&format!("{}\t{}\t{:08x}\n", e.full_name, data.len(), crc32(&data)));
-    }
-    Ok(out.trim_end().to_string())
-}
+/// Zips refused since the zip crate reads them (§47.15), each recorded as it was read before: a name written twice.
+const REFUSED: &[&str] = &["duplicates.zip"];
 
-/// Zips the game reader does not take, each refused rather than misread.
-const GAME_READER_REFUSES: &[&str] = &["deflate64.zip"];
-
+/// Every zip lists its entries the same read from its file, as a game's is, and from memory, as the cheat database's is.
 #[test]
-fn every_zip_lists_its_recorded_entries_through_both_readers() {
+fn every_zip_lists_its_recorded_entries_from_a_file_and_from_memory() {
     for zip in files("zip", "zip") {
         let want = expected(&zip, "entries");
         let name = zip.file_name().unwrap().to_str().unwrap();
-        let plain: String = want.lines().map(|l| l.splitn(4, '\t').take(3).collect::<Vec<_>>().join("\t")).collect::<Vec<_>>().join("\n");
-        assert_eq!(cheat_reader_listing(&zip).as_deref(), Ok(plain.as_str()), "{name}, the cheat reader");
-        match game_reader_listing(&zip, name == "package.zip") {
-            _ if GAME_READER_REFUSES.contains(&name) => assert!(game_reader_listing(&zip, false).is_err(), "{name}"),
-            Ok(listing) => assert_eq!(listing, want, "{name}, the game reader"),
-            Err(words) => panic!("{name}: {words}"),
+        if REFUSED.contains(&name) {
+            assert!(archive::Zip::open(zip.to_str().unwrap()).is_err(), "{name}");
+            continue;
         }
+        let plain: String = want.lines().map(|l| l.splitn(4, '\t').take(3).collect::<Vec<_>>().join("\t")).collect::<Vec<_>>().join("\n");
+        let bytes = std::fs::read(&zip).unwrap();
+        assert_eq!(listing(archive::Zip::over(std::io::Cursor::new(bytes.as_slice())).unwrap(), false).as_deref(), Ok(plain.as_str()), "{name}, from memory");
+        let times = name == "package.zip";
+        assert_eq!(listing(archive::Zip::open(zip.to_str().unwrap()).unwrap(), times).as_deref(), Ok(if times { want.as_str() } else { plain.as_str() }), "{name}, from its file");
     }
 }
 

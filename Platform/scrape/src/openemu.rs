@@ -5,7 +5,7 @@
 
 use crate::client::{TIMEOUT, Wire};
 use crate::consoles::Core;
-use emusen_galaxia::dotnet_files::file_exists;
+use emusen_galaxia::files::file_exists;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_sqlite::{Bound, Connection, Sqlite};
 use std::sync::Arc;

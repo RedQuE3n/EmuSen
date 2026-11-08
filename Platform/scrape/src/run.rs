@@ -15,7 +15,7 @@ use crate::runlog::{self, Lane, Log, Tally};
 use crate::store::{Key, Priority, Queued, Record, State, Stored};
 use crate::{Error, Scraper, layout};
 use emusen_dotnet::date::TICKS_PER_SECOND;
-use emusen_galaxia::dotnet_files::{file_exists, file_info};
+use emusen_galaxia::files::{file_exists, file_info};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -1268,7 +1268,7 @@ fn package_of(rom: &str) -> Option<String> {
 /// The patched image's hashes where `rom` opens as a package whose identity is `patched`, as the runtime resolves it.
 fn patched_first(rom: &str) -> Option<Hashes> {
     let folder = package_of(rom)?;
-    let doc = emusen_galaxia::package::read(&emusen_galaxia::dotnet_files::join(&folder, emusen_galaxia::package::FILE_NAME)).ok()?.ok()?;
+    let doc = emusen_galaxia::package::read(&emusen_galaxia::files::join(&folder, emusen_galaxia::package::FILE_NAME)).ok()?.ok()?;
     scraped_first(&doc)
 }
 

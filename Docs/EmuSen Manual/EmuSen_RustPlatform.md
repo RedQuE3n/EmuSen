@@ -3891,3 +3891,81 @@ of `emusen-systems` build `serde_json::Value`s. The session service's `quoted`, 
 arguments with, the shell's JSON strings, the platform's package answer and the library tool's crop text are serde_json's
 or the standard library's. What still reads or writes emusen-dotnet's `json::Value` is Galaxia's models and manifests
 and the files and session answers read through them, which §47's config step replaces.
+
+### 47.15 Zips are read by the zip crate
+
+Every zip the platform reads, a game's, a package's, a core's download and the cheat database, is read by the zip crate
+(9.4, its default features off: deflate through `flate2` on zlib-rs, and Deflate64), through Galaxia's `archive::Zip`,
+opened over a file or over bytes in memory. `dotnet_zip.rs`, the .NET reader, is gone, and with it the second reader of
+the end record and the directory. The crate bounds an entry's bytes by the length the directory declares and checks
+their CRC-32; `Zip::copy` refuses an entry whose bytes fall short of that length. A damaged entry is reported with the
+crate's reason beside what the zip records (`Bad.sfc is damaged (Invalid checksum): the zip records 1000 bytes with
+CRC-32 1a2b3c4d`), which the library tool's `rom-check` shows the player. An entry's time is the NTFS field's,
+to the tick, else the extended timestamp's, to the second; the DOS time is not taken. A name is UTF-8 where it is valid
+UTF-8, else code page 437, as APPNOTE says (the .NET reader decoded it as UTF-8 with replacement).
+
+What the game reader takes changed in three ways, decided 2026-11-07:
+
+1. Zip64 archives and Deflate64 entries are read. An encrypted entry, or one of a method this build does not inflate
+   (bzip2, LZMA, Zstandard), is listed and refused when it is read, in the crate's words ("unsupported Zip archive:
+   Password required to decrypt file"); the archive is no longer refused whole for an entry nobody opens.
+2. A zip that names an entry twice is refused. Readers differ in which copy they take: the old game reader took the
+   first, the cheat installer wrote both so the last remained, and the crate keeps the last. That disagreement is how
+   one archive shows different files to two readers, so neither copy is taken. The corpus's `duplicates.zip` keeps its
+   old listing as the record, and its test names it as refused.
+3. A name holding a NUL is listed; the installers below and a package's unpacking refuse such a name, as before.
+
+The cheat installer no longer writes as .NET's `ExtractToFile` did. A `.cht` entry is written where the crate's
+`enclosed_name` puts it under the folder (`\` is a separator, a `..` that stays inside resolves, a name that would leave
+the folder is skipped), whole and only once its CRC-32 is checked, so a damaged entry is skipped and nothing half-written
+is left. Its time is the zip's own where the zip records one, else the time of the install; the Unix mode in the zip is
+not applied. An archive the reader refuses is refused in its words: `emusen_cheats_install` gives REFUSED with them as
+the last error, and no longer names a .NET exception or a `threw` member; its `libc` local-time code is gone. The core
+installer's check that a core's member is no link reads the crate's Unix mode. The corpus test reads every zip from
+its file and from memory, and the list of zips the game reader refused is gone.
+
+### 47.16 Zips are written by the zip crate
+
+A package's zip (`package_zip::write`, through Galaxia's `archive::ZipWriter`) and the recorder's archive of frame
+pictures are written by the zip crate; the two hand-written writers are gone, and with them Galaxia's last use of
+`flate2`. Approved 2026-11-07 as a change on disk: a new zip's bytes differ from the old writer's, and every reader
+takes both.
+
+- **The times.** A package's entry keeps its time three ways, as before: the DOS fields in local time, the extended
+  timestamp (0x5455, Unix seconds) and the NTFS field (0x000A, the FILETIME to the 100 ns tick, which a state's record
+  is stamped with). The crate writes an extra field's body as it is given (`add_extra_field`); the two bodies, 5 and 32
+  bytes laid out as Info-ZIP's `extrafld.txt` and APPNOTE 4.5.5 state them, are built in `archive.rs` and checked by the
+  crate's own parser before the entry starts (`validate_extra_fields`). The crate reads the NTFS field without its
+  `nt-time` feature, so none is enabled. The recorder's entries carry the DOS time alone, as before.
+- **Stored or deflated.** An entry is stored where its extension says it is already compressed (a CHD, a zip, a
+  picture, a video) and deflated otherwise; the old rule that also stored a file deflate would not shrink, which read
+  the whole file into memory to find out, is gone, so a file is now streamed from the disk a MiB at a time.
+- **Zip64.** An entry past 4 GiB, or an archive whose directory lies past it, is written as Zip64, which the reader
+  takes since §47.15; the writer no longer refuses a package that large.
+- **Checked elsewhere.** On 2026-11-07 a zip from the new writer read without error in Info-ZIP's `unzip -t` and
+  `zipinfo` (which showed the DOS time, the UT field's time and Unix mode 100644) and in Python's `zipfile`.
+
+The proof: `package_zip`'s test writes a package with a time of an odd 100 ns and reads it back to the tick; the corpus's
+`package.zip`, written by the old writer, still unpacks to the tick; the recorder's new test reads its archive back with
+the crate, each picture's bytes and local DOS time.
+
+### 47.17 A tree is walked by walkdir
+
+Galaxia's `dotnet_files` is now `files`, and its walk (`visit_files_with`, which the library's scan, the cheat database,
+the artwork index, the scraper's media and the library tool's disc, package and conversion lists share) is walkdir's,
+with links followed. What a walk hands over is as before: every file under the folder, a link to a folder followed into,
+a link whose target cannot be read handed over as a file, a hidden entry (a name beginning with a period) skipped where
+asked, a folder that refuses to be read passed over where asked, and any other error ending the walk after what was
+handed over before it. Two things changed:
+
+1. **The order.** The walk is depth first, each folder's entries in the system's order; the .NET enumeration handed over
+   a folder's files before any of its subfolders' (breadth first). Every caller that keeps a list sorts it or keys it,
+   except the artwork index, whose ties between two pictures of one name in two folders of one console now follow the
+   walk's order: the system's order was already deciding them within a folder.
+2. **A link that loops** back to a folder it lies in is passed over. The .NET walk followed it until the path grew too
+   long and the walk ended in an error, losing what lay after it.
+
+The tick (100 ns since the year 1, in UTC) that `file_info` and `write_ticks` give is unchanged, since `games.db`,
+`media.db` and the unpacked folder's name store it; the corpus's `unpacked.tsv` holds it. `files.rs`'s new test walks a
+tree holding a link to a folder, a dangling link, a hidden dangling link, a link back to the root and a folder that
+cannot be read.

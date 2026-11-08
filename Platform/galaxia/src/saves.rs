@@ -93,7 +93,7 @@ pub fn package_record_path(state_path: &str) -> Option<String> {
         return None;
     }
     let root = path::directory_name(STYLE, &folder)?;
-    crate::dotnet_files::file_exists(&path::combine(STYLE, &root, crate::package::FILE_NAME)).then(|| path::change_extension(STYLE, &full, ".json"))
+    crate::files::file_exists(&path::combine(STYLE, &root, crate::package::FILE_NAME)).then(|| path::change_extension(STYLE, &full, ".json"))
 }
 
 #[cfg(all(test, unix))]

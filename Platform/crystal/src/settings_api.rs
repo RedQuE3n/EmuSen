@@ -510,7 +510,7 @@ impl Runtime {
         let config = tree.directory(Directory::Config).unwrap_or_default();
         let games_db = path::combine(Style::HOST, &library, emusen_galaxia::stores::GAMES_DB);
         let marker = path::combine_all(Style::HOST, &[&config, "games", ".engine-choices-copied"]);
-        if !emusen_galaxia::dotnet_files::file_exists(&games_db) || emusen_galaxia::dotnet_files::file_exists(&marker) {
+        if !emusen_galaxia::files::file_exists(&games_db) || emusen_galaxia::files::file_exists(&marker) {
             return 0;
         }
         let mut choices: Vec<(String, String)> = Vec::new();

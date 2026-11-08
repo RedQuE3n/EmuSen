@@ -444,7 +444,7 @@ pub fn install(tree: &Tree, request: &str, source: &str, say: &dyn Fn(String)) -
         Some(emusen_dotnet::json::Value::Array(items)) => items.iter().map(|v| v.as_str().unwrap_or("").to_string()).collect(),
         _ => Vec::new(),
     };
-    if !emusen_galaxia::dotnet_files::file_exists(source) {
+    if !emusen_galaxia::files::file_exists(source) {
         return Err((crate::abi::status::IO, format!("{source} does not exist")));
     }
     let length = std::fs::metadata(source).map(|m| m.len() as i64).unwrap_or(0);

@@ -201,7 +201,7 @@ fn free_bytes(_: &str) -> Option<u64> {
 /// Partial files and scratch folders under `Compressed` that a stopped process left more than an hour ago, removed.
 pub fn sweep(ctx: &Context) {
     let mut found = Vec::new();
-    let _ = emusen_galaxia::dotnet_files::visit_files_with(&ctx.compressed(), emusen_galaxia::dotnet_files::Options { skip_hidden: false, ignore_inaccessible: true }, |f, name| {
+    let _ = emusen_galaxia::files::visit_files_with(&ctx.compressed(), emusen_galaxia::files::Options { skip_hidden: false, ignore_inaccessible: true }, |f, name| {
         if name.contains(".partial-") {
             found.push(f.to_string());
         }

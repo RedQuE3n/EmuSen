@@ -26,7 +26,7 @@ pub unsafe extern "C" fn emusen_patch_package_image(folder: *const u8, folder_le
         Ok(b) => b,
         Err(code) => return code,
     };
-    let manifest = emusen_galaxia::dotnet_files::join(folder, emusen_galaxia::package::FILE_NAME);
+    let manifest = emusen_galaxia::files::join(folder, emusen_galaxia::package::FILE_NAME);
     let doc = match emusen_galaxia::package::read(&manifest) {
         Ok(Ok(doc)) => doc,
         Ok(Err(refusal)) => return fail(status::IO, refusal.words()),

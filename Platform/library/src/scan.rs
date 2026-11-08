@@ -6,7 +6,7 @@
 use crate::{Error, Progress};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::image_probe::{self, ImageProbe, head_of};
-use emusen_galaxia::{archive, claims, dotnet_files, image_sets, package_zip};
+use emusen_galaxia::{archive, claims, files, image_sets, package_zip};
 use emusen_systems::probe::{self, Candidate, Recognition};
 use std::sync::atomic::Ordering;
 
@@ -152,18 +152,18 @@ pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &P
     if given.is_empty() {
         return Ok(scan);
     }
-    let options = dotnet_files::Options { skip_hidden: true, ignore_inaccessible: true };
+    let options = files::Options { skip_hidden: true, ignore_inaccessible: true };
     let mut missing = false;
     let mut found: Vec<String> = Vec::new();
     progress.phase.store(1, Ordering::Relaxed);
     for root in &given {
-        if !dotnet_files::directory_exists(root) {
+        if !files::directory_exists(root) {
             missing = true;
             continue;
         }
         let mut files = Vec::new();
         let mut stopped = false;
-        let walked = dotnet_files::visit_files_with(root, options, |at, _| {
+        let walked = files::visit_files_with(root, options, |at, _| {
             if stopped || progress.cancelled() {
                 stopped = true;
                 return;
@@ -181,11 +181,11 @@ pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &P
             Err(_) => missing = true,
         }
     }
-    let index = beside.packages.as_deref().filter(|p| dotnet_files::directory_exists(p)).map(|packages| {
+    let index = beside.packages.as_deref().filter(|p| files::directory_exists(p)).map(|packages| {
         let compressed = beside.compressed.clone().unwrap_or_default();
-        for folder in [packages, compressed.as_str()].into_iter().filter(|f| dotnet_files::directory_exists(f)) {
+        for folder in [packages, compressed.as_str()].into_iter().filter(|f| files::directory_exists(f)) {
             let mut files = Vec::new();
-            let _ = dotnet_files::visit_files_with(folder, options, |at, _| {
+            let _ = files::visit_files_with(folder, options, |at, _| {
                 if extensions.iter().any(|e| e.eq_ignore_ascii_case(&path::extension(Style::HOST, at))) {
                     files.push(at.to_string());
                 }
@@ -215,7 +215,7 @@ pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &P
         progress.games.fetch_add(1, Ordering::Relaxed);
         scan.games.push(Game { path: at, system, package: None });
     }
-    for p in index.iter().flat_map(|i| i.packages.iter()).filter(|p| dotnet_files::file_exists(&p.game)) {
+    for p in index.iter().flat_map(|i| i.packages.iter()).filter(|p| files::file_exists(&p.game)) {
         let system = system_named(&p.system, &systems).or_else(|| route(&p.game, &systems));
         progress.games.fetch_add(1, Ordering::Relaxed);
         scan.games.push(Game { path: p.game.clone(), system, package: Some(p.folder.clone()) });

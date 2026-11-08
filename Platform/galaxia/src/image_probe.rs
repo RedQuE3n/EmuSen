@@ -3,7 +3,7 @@
 //! a file through it, so the two route one way (EmuSen_Backend.md §28.7, §29.2).
 
 use crate::dotnet_path::{self as path, Style};
-use crate::{archive, dotnet_files, image_sets};
+use crate::{archive, files, image_sets};
 use std::io::Read;
 
 /// A file's first bytes, at most `length`, as `MappedFile.Head` reads them.
@@ -34,7 +34,7 @@ impl ImageProbe {
         }
         if image_sets::is_playlist(at) {
             return match image_sets::discs(at)?.into_iter().next() {
-                Some(disc) if dotnet_files::file_exists(&disc) => ImageProbe::of(&disc, takes),
+                Some(disc) if files::file_exists(&disc) => ImageProbe::of(&disc, takes),
                 _ => Ok(ImageProbe::Empty),
             };
         }
@@ -50,7 +50,7 @@ impl ImageProbe {
             ImageProbe::Empty => Ok(Vec::new()),
             ImageProbe::File(file) => head_of(file, length),
             ImageProbe::Sheet(sheet) => match image_sets::companions(sheet)?.into_iter().next() {
-                Some(track) if dotnet_files::file_exists(&track) => head_of(&track, length),
+                Some(track) if files::file_exists(&track) => head_of(&track, length),
                 _ => Ok(Vec::new()),
             },
             ImageProbe::Entry(zip, entry) => archive::read_entry(zip, entry, length),

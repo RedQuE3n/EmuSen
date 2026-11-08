@@ -3,7 +3,7 @@
 //! EmuSen_Settings_Reference.md §4.33 and EmuSen_Backend.md §30.6.
 
 use crate::consoles::Core;
-use emusen_galaxia::dotnet_files::{self, Options};
+use emusen_galaxia::files::{self, Options};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use std::collections::HashMap;
 
@@ -47,7 +47,7 @@ pub fn untagged(name: &str) -> String {
 impl Index {
     pub fn scan(directory: Option<&str>, cores: &[Core]) -> Index {
         let mut index = Index::default();
-        let Some(dir) = directory.filter(|d| !d.trim().is_empty() && dotnet_files::directory_exists(d)) else { return index };
+        let Some(dir) = directory.filter(|d| !d.trim().is_empty() && files::directory_exists(d)) else { return index };
         let mut console_by_folder: Vec<(String, String)> = Vec::new();
         let mut set = |name: &str, console: &str| match console_by_folder.iter_mut().find(|(n, _)| n.eq_ignore_ascii_case(&name)) {
             Some(entry) => entry.1 = console.to_string(),
@@ -60,7 +60,7 @@ impl Index {
             }
         }
         let style = Style::HOST;
-        let _ = dotnet_files::visit_files_with(dir, Options { skip_hidden: true, ignore_inaccessible: true }, |file, _| {
+        let _ = files::visit_files_with(dir, Options { skip_hidden: true, ignore_inaccessible: true }, |file, _| {
             let ext = path::extension(style, file);
             if !IMAGE_EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(&ext)) {
                 return;

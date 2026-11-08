@@ -261,13 +261,10 @@ fn update_json(cc: &Cheats) -> Answer<Vec<u8>> {
     let directory = database_folder(&galaxia_tree::tree());
     let fetch = cc.rt.fetch.as_ref().ok_or_else(|| refused(status::FAULT, "this runtime downloads nothing"))?;
     let zip = fetch(LIBRETRO_CHEATS_URL).map_err(|w| refused(status::FAULT, w))?;
-    let (installed, threw) = emusen_cheats::install::install(&zip, &directory).map_err(|r| match r {
-        emusen_cheats::install::Refusal::Thrown(t) => refused(status::FAULT, t.words),
+    let installed = emusen_cheats::install::install(&zip, &directory).map_err(|r| match r {
+        emusen_cheats::install::Refusal::Unreadable(words) => refused(status::FAULT, words),
         emusen_cheats::install::Refusal::Io(e) => refused(status::FAULT, e.to_string()),
     })?;
-    if let Some(t) = threw {
-        return Err(refused(status::FAULT, t.words));
-    }
     let mut j = Json::new();
     j.begin_object().int("installed", installed.installed as i64).str("directory", &directory).str("attribution", ATTRIBUTION).end_object();
     Ok(j.finish().into_bytes())

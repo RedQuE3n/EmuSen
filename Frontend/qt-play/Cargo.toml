@@ -34,3 +34,7 @@ cxx-qt-build.workspace = true
 [dev-dependencies]
 # The QML rules and qmllint over the program's window (EmuSen_Qt.md §1.3).
 emusen-qt-test.workspace = true
+# The window's pads, played by SDL's virtual pads on the test core (tests/pads.rs).
+emusen-client-fixture = { path = "../client-fixture" }
+emusen-crystal-client = { path = "../crystal-client" }
+emusen-kit-core.workspace = true

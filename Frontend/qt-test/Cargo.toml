@@ -19,6 +19,8 @@ emusen-kit-qt.workspace = true
 emusen-qml-rules.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# SDL's virtual joysticks, attached and pressed as SdlVirtualPadsTests does (virtual_pad.rs).
+libloading = "0.8"
 
 [build-dependencies]
 cxx-qt-build.workspace = true

@@ -576,7 +576,18 @@ game's read crosses to the frame thread by a hand-over (`GamePads`) and is route
 The new dependency, `emusen-qt-models` on `emusen-qt-endymion`, is stated: the session must reach the one reader's
 hand-over, and a third crate for one struct would add a boundary with nothing behind it. Owed: the seats the player
 arranges and keeps, rumble to the players' pads, the keyboard as a player, a core's ports changing while it runs
-(Mistress's `Resize`), and the C# front end calling interface 43 in place of its own copy of the binding rule.
+(Mistress's `Resize`). The C# front end now asks interface 43's `_choose` (decided 2026-11-08,
+`EmuSen_RustPlatform.md` §50), so the binding rule has one owner.
+
+**Proof in the window, measured 2026-11-08** (`qt-play/tests/pads.rs`): `Play.qml` loaded by the harness in a compositor
+of the test's own (`emusen_qt_test::compositor`, `kwin_wayland --virtual`), Qt adopting Serenity's device on the RX 6800
+before the window is shown (`Harness::load_prepared`), the test core installed in the player's cores folder and approved
+as a player would, and an SDL virtual pad named to the reader alone. Before a game the router gives everything; while the
+game runs it gives the chord alone; A (East, Endymion's default) held half a second is heard on port 0, read afterwards
+from the battery file the test core counts it in; the guide button pauses the game and gives the walk the pad, and again
+resumes it; the reader and session say no failure and the validation layer's findings are none. 1.5 s. Seeded and
+caught: the window not naming the reader's hand-over (no battery file: the game heard nothing), `chordOnly` never set
+(the router gave everything during the game), and the chord not reaching the session (no pause in 10 s).
 
 ### 1.9 Homes for the front-end logic still in C#
 

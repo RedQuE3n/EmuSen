@@ -523,6 +523,12 @@ loads a scene whose root is a `Window`, taking the root from the engine's `objec
 at the size, and gives a `Scene` with the verbs: `tree`, `click`, `right_click`, `key`, `wheel`, `focus`, `focus_item`,
 `grab`, `property` and `pad`, plus `record_edges` and `audit`.
 
+Added 2026-11-08 for scenes drawn with Vulkan (`EmuSen_Qt.md` §1.8.5): `load_prepared` hands the made window to the test
+before it is shown, as a host that adopts a device prepares it (§7.16); `compositor::Compositor` starts `kwin_wayland
+--virtual` on a socket of the test's own and points Qt's Wayland platform at it, so such a window is real and drawn yet
+nothing appears on the desk; `virtual_pad` holds SDL's virtual joysticks, moved from the gallery's `pads` test so the
+gallery and the program's window share one copy; `pad_chord_only` reads whether the router gives the chord alone.
+
 - **The item tree becomes kit-core's.** `harness_tree` (C++) walks the window's items once and writes one JSON object
   per item: its type (Qt names a QML component's meta-object after it, `MenuRow_QMLTYPE_3`, so the type is the class
   name before `_QMLTYPE_`), its scene rectangle, visibility with the effective opacity, clip, whether it is hit-testable

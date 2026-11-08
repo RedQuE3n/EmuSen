@@ -45,6 +45,7 @@ Window {
 
     SessionModel {
         id: session
+        objectName: "session"
         platformLibrary: root.platformLibrary
         feed: root.feed
         cores: root.cores

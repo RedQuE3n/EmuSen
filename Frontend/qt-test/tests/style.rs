@@ -16,7 +16,14 @@ fn qt_1_5_the_styled_controls_paint_the_tokens_and_pass_the_gate() {
     scene.focus_item(&tree, play);
     let tree = scene.tree();
     let focus = scene.focus(&tree);
+    let moved = [("tabs", "currentIndex"), ("slider", "value"), ("combo", "currentIndex"), ("combo", "focus")];
+    let before: Vec<String> = moved.iter().map(|(name, property)| scene.property(name, property)).collect();
     let edges = scene.record_edges(&tree);
+    let after: Vec<String> = moved.iter().map(|(name, property)| scene.property(name, property)).collect();
+    assert_eq!(
+        after, before,
+        "the walk puts back the tab, the value, the choice and the row's remembered focus its presses moved (EmuSen_Kit.md §7.11)"
+    );
     let faults = scene.audit(&tree, WalkForm::BigScreen, Variant::Dark, focus, &edges, 1280.0, 800.0);
     let lines: Vec<String> = faults.iter().map(|f| f.to_string()).collect();
     let walked: Vec<String> = edges.iter().map(|e| format!("{} -{:?}-> {}", e.from.0, e.button, e.to.0)).collect();

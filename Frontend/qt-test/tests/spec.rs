@@ -67,6 +67,13 @@ fn qt_kit_7_11_a_state_is_recorded_in_the_spec_format() {
         palette: &declared,
     };
     let text = spec::write(&tree, &tree.root, &header, focus, &walk);
+
+    // The walk puts back what each press moved (the list's scroll and current row), so a second walk records the same state.
+    scene.focus_item(&tree, rows[0]);
+    let again = scene.tree();
+    let focus_again = scene.focus(&again);
+    let walk_again = scene.walk(&again);
+    assert_eq!(spec::write(&again, &again.root, &header, focus_again, &walk_again), text, "a second walk records the same state");
     let out = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".cache/emusen/tmp/qt-test");
     std::fs::create_dir_all(&out).expect("the output folder");
     std::fs::write(out.join("MenuScene-1280x800.spec"), &text).expect("the recording written");

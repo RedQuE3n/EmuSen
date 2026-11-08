@@ -151,10 +151,21 @@ impl Scene<'_> {
         self.wait(20);
     }
 
-    /// The walkable element holding the active focus, by its number in a tree, if any.
+    /// The walkable element holding the active focus, by its number in a tree, if any; a focus on an item made since the
+    /// tree was read (a carousel's card scrolled in) is found by its nearest ancestor the tree holds.
     pub fn focus(&mut self, tree: &Tree) -> Option<u32> {
         let id = ffi::harness_focus(self.window());
-        tree.index_of(id).map(|index| tree.walkable_of(index))
+        if let Some(index) = tree.index_of(id) {
+            return Some(tree.walkable_of(index));
+        }
+        let now = self.tree();
+        let mut at = now.index_of(id)? as usize;
+        loop {
+            if let Some(index) = now.nodes[at].id.parse().ok().and_then(|held| tree.index_of(held)) {
+                return Some(tree.walkable_of(index));
+            }
+            at = now.nodes.iter().position(|n| n.id == now.nodes[at].parent)?;
+        }
     }
 
     pub fn focus_item(&mut self, tree: &Tree, index: u32) -> bool {
@@ -251,7 +262,8 @@ impl Scene<'_> {
         self.wait(5);
     }
 
-    /// Where a press of each direction from each operable element lands, kept whatever the outcome, as a recording keeps it.
+    /// Where a press of each direction from each operable element lands, kept whatever the outcome, as a recording keeps it;
+    /// what each press moved (a list's selection, a tab, a value, a scroll) is put back before the next, as InterfaceSpec §3's walk does.
     pub fn walk(&mut self, tree: &Tree) -> Vec<Step> {
         let mut steps = Vec::new();
         for from in tree.operable() {
@@ -266,9 +278,42 @@ impl Scene<'_> {
                     None => Landing::Lost,
                 };
                 steps.push(Step { from, button, to });
+                self.put_back(tree);
             }
         }
         steps
+    }
+
+    /// Writes back every selection, value, scroll and focus scope's remembered item that differs from the tree's, and waits
+    /// up to a second for a view's own motion to end; a path's offset is not written, since it follows its current index by
+    /// the view's own animation.
+    fn put_back(&mut self, before: &Tree) {
+        for node in before.nodes.iter().filter(|n| !n.scoped.is_empty()) {
+            let want: u64 = node.scoped.parse().unwrap_or(0);
+            if ffi::harness_scoped(self.window(), node.id.parse().unwrap_or(0)) != want {
+                ffi::harness_give_focus(self.window(), want);
+            }
+        }
+        for _ in 0..100 {
+            let mut settled = true;
+            for node in &before.nodes {
+                let id: u64 = node.id.parse().unwrap_or(0);
+                for (property, value) in &node.kept {
+                    let name = QString::from(property.as_str());
+                    let now = ffi::harness_get(self.window(), id, &name);
+                    if now.is_finite() && value.is_finite() && (now - value).abs() > 1e-6 {
+                        settled = false;
+                        if property != "offset" {
+                            ffi::harness_put(self.window(), id, &name, *value);
+                        }
+                    }
+                }
+            }
+            if settled {
+                return;
+            }
+            self.wait(10);
+        }
     }
 
     /// The edges pad reach is judged by: the presses that moved the focus.

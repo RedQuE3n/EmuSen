@@ -80,6 +80,12 @@ pub struct Node {
     pub role: i32,
     #[serde(default)]
     pub colors: Vec<String>,
+    /// What a press may move: Qt Quick's own selection, value and scroll properties, by name (EmuSen_Kit.md §7.11).
+    #[serde(default)]
+    pub kept: std::collections::BTreeMap<String, f64>,
+    /// A focus scope's remembered item, by its id, empty for none: what a press may move too.
+    #[serde(default)]
+    pub scoped: String,
 }
 
 fn yes() -> bool {

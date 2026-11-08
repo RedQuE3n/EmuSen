@@ -64,7 +64,7 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert_eq!((scene.property("scene", "secondPlace").as_str(), scene.property("scene", "secondAttention").as_str()), ("Scraper", "true"));
     {
         let library = host::library(within(window)).unwrap();
-        for (list, roles) in [("consoles", 11), ("places", 6), ("shelves", 4), ("recent", 18), ("shelf", 18), ("favourites", 18), ("collections", 3)] {
+        for (list, roles) in [("consoles", 12), ("places", 6), ("shelves", 4), ("recent", 18), ("shelf", 18), ("favourites", 18), ("collections", 3)] {
             assert_eq!(library.list(list).map(|l| l.roles().len()), Some(roles), "{list}'s roles");
         }
     }

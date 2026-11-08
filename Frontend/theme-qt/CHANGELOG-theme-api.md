@@ -45,7 +45,12 @@ addition, appended after the members it joins so that no index in the registry m
 - **`Session.key`, `console`, `hue`**: the suspended game's file (so a shelf can leave it out and Continue can play it),
   its console's name as its facts begin (`Words.pausedFacts` takes it), and its console's hue, -1 where the library does
   not hold the game.
-- **`Library.shelf`**: `recent` less the suspended game, which Continue holds: Home's shelf.
+- **`Library.shelf`**: `recent` less the suspended game, which Continue holds: Home's shelf. **`Library.firstOf(key,
+  count)`**: the first games of `gamesOf(key)`, so a fan of four covers makes four delegates and not one a game.
+- **Console rows gain `libretro`**: whether the console runs on a libretro core, which a theme cannot tell from
+  `engineKind` without writing the word.
+- **Lists change in place**: a list fed the same rows by key changes their cells (`dataChanged`) and keeps its delegates,
+  so a theme's focus and its items stay when a line or a count changes; other rows replace it whole.
 - **Game rows gain `facts`**: the console's name and when the game was last played, "Super Nintendo · 3 h ago". `cover`
   and `hero` are now file URLs, as an `Image` reads them; they were bare paths, which QML resolved against the theme's
   own folder.
@@ -56,7 +61,7 @@ addition, appended after the members it joins so that no index in the registry m
 - **`Browse`** (added): the section a Games screen shows as the program holds it, because the List card and the search
   are EmuSen's and sort, narrow and move it: `section`, `heading`, `world`, `hue`, `countLine`, `previous` and `next`
   (the shoulders' neighbours), `focusRow` (where the program holds the focus; the List card's jumps move it),
-  `searching`, `typing`, `listOpen`, and `games`, the rows in the order shown.
+  `searching`, `typing`, `listOpen`, `searched` (the search's words narrow it), and `games`, the rows in the order shown.
 - **`Marks`** (added): the drawn marks, `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien` and `path(name)`
   for a shelf's icon or an engine's mark, each an SVG path.
 - **The kit's types by name**: `CoverTile` (a cover whole at its own shape on its box's foot, the generated card

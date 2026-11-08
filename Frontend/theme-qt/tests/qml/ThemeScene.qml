@@ -21,6 +21,7 @@ Window {
         required property string engineName
         required property string engineKind
         required property string engineMark
+        required property bool libretro
     }
     component PlaceRow: Item {
         required property string key

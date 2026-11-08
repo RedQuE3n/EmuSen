@@ -78,7 +78,7 @@ Module {
     }
     Component {
         file: "browse.cxxqt.h"
-        lineNumber: 113
+        lineNumber: 122
         name: "ThemeBrowse"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -92,7 +92,7 @@ Module {
             read: "getSection"
             notify: "sectionChanged"
             index: 0
-            lineNumber: 119
+            lineNumber: 128
             isReadonly: true
         }
         Property {
@@ -101,7 +101,7 @@ Module {
             read: "getHeading"
             notify: "headingChanged"
             index: 1
-            lineNumber: 120
+            lineNumber: 129
             isReadonly: true
         }
         Property {
@@ -110,7 +110,7 @@ Module {
             read: "getWorld"
             notify: "worldChanged"
             index: 2
-            lineNumber: 121
+            lineNumber: 130
             isReadonly: true
         }
         Property {
@@ -119,7 +119,7 @@ Module {
             read: "getHue"
             notify: "hueChanged"
             index: 3
-            lineNumber: 122
+            lineNumber: 131
             isReadonly: true
         }
         Property {
@@ -128,7 +128,7 @@ Module {
             read: "getCountLine"
             notify: "countLineChanged"
             index: 4
-            lineNumber: 123
+            lineNumber: 132
             isReadonly: true
         }
         Property {
@@ -137,7 +137,7 @@ Module {
             read: "getPrevious"
             notify: "previousChanged"
             index: 5
-            lineNumber: 124
+            lineNumber: 133
             isReadonly: true
         }
         Property {
@@ -146,7 +146,7 @@ Module {
             read: "getNext"
             notify: "nextChanged"
             index: 6
-            lineNumber: 125
+            lineNumber: 134
             isReadonly: true
         }
         Property {
@@ -155,7 +155,7 @@ Module {
             read: "getFocusRow"
             notify: "focusRowChanged"
             index: 7
-            lineNumber: 126
+            lineNumber: 135
             isReadonly: true
         }
         Property {
@@ -164,7 +164,7 @@ Module {
             read: "getSearching"
             notify: "searchingChanged"
             index: 8
-            lineNumber: 127
+            lineNumber: 136
             isReadonly: true
         }
         Property {
@@ -173,7 +173,7 @@ Module {
             read: "getTyping"
             notify: "typingChanged"
             index: 9
-            lineNumber: 128
+            lineNumber: 137
             isReadonly: true
         }
         Property {
@@ -182,7 +182,7 @@ Module {
             read: "getListOpen"
             notify: "listOpenChanged"
             index: 10
-            lineNumber: 129
+            lineNumber: 138
             isReadonly: true
         }
         Property {
@@ -191,21 +191,31 @@ Module {
             isPointer: true
             read: "getGames"
             index: 11
-            lineNumber: 130
+            lineNumber: 139
             isReadonly: true
             isPropertyConstant: true
         }
-        Signal { name: "sectionChanged"; lineNumber: 147 }
-        Signal { name: "headingChanged"; lineNumber: 148 }
-        Signal { name: "worldChanged"; lineNumber: 149 }
-        Signal { name: "hueChanged"; lineNumber: 150 }
-        Signal { name: "countLineChanged"; lineNumber: 151 }
-        Signal { name: "previousChanged"; lineNumber: 152 }
-        Signal { name: "nextChanged"; lineNumber: 153 }
-        Signal { name: "focusRowChanged"; lineNumber: 154 }
-        Signal { name: "searchingChanged"; lineNumber: 155 }
-        Signal { name: "typingChanged"; lineNumber: 156 }
-        Signal { name: "listOpenChanged"; lineNumber: 157 }
+        Property {
+            name: "searched"
+            type: "bool"
+            read: "getSearched"
+            notify: "searchedChanged"
+            index: 12
+            lineNumber: 140
+            isReadonly: true
+        }
+        Signal { name: "sectionChanged"; lineNumber: 158 }
+        Signal { name: "headingChanged"; lineNumber: 159 }
+        Signal { name: "worldChanged"; lineNumber: 160 }
+        Signal { name: "hueChanged"; lineNumber: 161 }
+        Signal { name: "countLineChanged"; lineNumber: 162 }
+        Signal { name: "previousChanged"; lineNumber: 163 }
+        Signal { name: "nextChanged"; lineNumber: 164 }
+        Signal { name: "focusRowChanged"; lineNumber: 165 }
+        Signal { name: "searchingChanged"; lineNumber: 166 }
+        Signal { name: "typingChanged"; lineNumber: 167 }
+        Signal { name: "listOpenChanged"; lineNumber: 168 }
+        Signal { name: "searchedChanged"; lineNumber: 169 }
     }
     Component {
         file: "cues.cxxqt.h"
@@ -484,6 +494,14 @@ Module {
             lineNumber: 40
             Parameter { name: "words"; type: "QString" }
         }
+        Method {
+            name: "firstOf"
+            type: "ThemeRows"
+            isPointer: true
+            lineNumber: 41
+            Parameter { name: "id"; type: "QString" }
+            Parameter { name: "count"; type: "int" }
+        }
     }
     Component {
         file: "marks.cxxqt.h"
@@ -559,7 +577,7 @@ Module {
     }
     Component {
         file: "rows.cxxqt.h"
-        lineNumber: 23
+        lineNumber: 32
         name: "ThemeRows"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -572,15 +590,15 @@ Module {
             read: "getCount"
             notify: "countChanged"
             index: 0
-            lineNumber: 29
+            lineNumber: 38
             isReadonly: true
         }
-        Signal { name: "countChanged"; lineNumber: 35 }
+        Signal { name: "countChanged"; lineNumber: 44 }
         Method {
             name: "data"
             type: "QVariant"
             isMethodConstant: true
-            lineNumber: 36
+            lineNumber: 45
             Parameter { name: "index"; type: "QModelIndex" }
             Parameter { name: "role"; type: "int" }
         }
@@ -588,13 +606,13 @@ Module {
             name: "roleNames"
             type: "QHash_i32_QByteArray"
             isMethodConstant: true
-            lineNumber: 37
+            lineNumber: 46
         }
         Method {
             name: "rowCount"
             type: "int"
             isMethodConstant: true
-            lineNumber: 38
+            lineNumber: 47
             Parameter { name: "parent"; type: "QModelIndex" }
         }
     }

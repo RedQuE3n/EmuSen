@@ -44,6 +44,10 @@ pub mod qobject {
         /// Every game whose title holds the words, one list that each search refills.
         #[qinvokable]
         fn search(self: Pin<&mut ThemeLibrary>, words: &QString) -> *mut ThemeRows;
+        /// The first `count` games of `gamesOf(id)`, the same list each time it is asked: a fan or a preview of a section.
+        #[qinvokable]
+        #[cxx_name = "firstOf"]
+        fn first_of(self: Pin<&mut ThemeLibrary>, id: &QString, count: i32) -> *mut ThemeRows;
     }
 
     impl cxx_qt::Initialize for ThemeLibrary {}
@@ -61,6 +65,7 @@ pub struct ThemeLibraryRust {
     favourites: *mut ThemeRows,
     collections: *mut ThemeRows,
     games: HashMap<String, *mut ThemeRows>,
+    firsts: HashMap<(String, usize), *mut ThemeRows>,
     found: *mut ThemeRows,
     words: String,
     view: LibraryView,
@@ -79,6 +84,7 @@ impl Default for ThemeLibraryRust {
             favourites: none,
             collections: none,
             games: HashMap::new(),
+            firsts: HashMap::new(),
             found: none,
             words: String::new(),
             view: LibraryView::empty(),
@@ -143,6 +149,9 @@ impl qobject::ThemeLibrary {
         for (id, list) in &self.games {
             fill(*list, view::games_of(view, id, now));
         }
+        for ((id, count), list) in &self.firsts {
+            fill(*list, view::first_of(view, id, *count, now));
+        }
         fill(self.found, view::search(view, &self.words, now));
         self.as_mut().rust_mut().view = view.clone();
     }
@@ -163,6 +172,17 @@ impl qobject::ThemeLibrary {
         let list = self.as_mut().made(&view::GAME_ROLES);
         fill(list, view::games_of(&self.view, &id, words::now()));
         self.as_mut().rust_mut().games.insert(id, list);
+        list
+    }
+
+    pub fn first_of(mut self: Pin<&mut Self>, id: &QString, count: i32) -> *mut ThemeRows {
+        let key = (id.to_string(), count.max(0) as usize);
+        if let Some(list) = self.firsts.get(&key) {
+            return *list;
+        }
+        let list = self.as_mut().made(&view::GAME_ROLES);
+        fill(list, view::first_of(&self.view, &key.0, key.1, words::now()));
+        self.as_mut().rust_mut().firsts.insert(key, list);
         list
     }
 

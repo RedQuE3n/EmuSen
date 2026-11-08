@@ -74,7 +74,7 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
 fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     let rows = ["data", "roleNames", "rowCount"];
     let api: [(&str, &[&str], &[&str]); 11] = [
-        ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections"], &["gamesOf", "search"]),
+        ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections"], &["gamesOf", "search", "firstOf"]),
         ("Session", &["hasGame", "key", "title", "consoleId", "console", "hue", "pausedSince", "played", "frame"], &[]),
         ("Device", &["controllers", "family", "clock", "battery", "charging", "network", "bigScreen", "form"], &[]),
         (
@@ -117,7 +117,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
         ("Help", &[], &["entries"]),
         (
             "Browse",
-            &["section", "heading", "world", "hue", "countLine", "previous", "next", "focusRow", "searching", "typing", "listOpen", "games"],
+            &["section", "heading", "world", "hue", "countLine", "previous", "next", "focusRow", "searching", "typing", "listOpen", "games", "searched"],
             &[],
         ),
         ("Marks", &["heart", "sparkle", "crescent", "attention", "badge", "alien"], &["path"]),

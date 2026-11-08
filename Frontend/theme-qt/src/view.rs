@@ -21,8 +21,8 @@ pub enum Cell {
 pub type Row = Vec<Cell>;
 
 /// `Library.consoles`: each console with games, in the shelves' order.
-pub const CONSOLE_ROLES: [&str; 11] =
-    ["key", "name", "displayName", "maker", "year", "count", "hue", "body", "engineName", "engineKind", "engineMark"];
+pub const CONSOLE_ROLES: [&str; 12] =
+    ["key", "name", "displayName", "maker", "year", "count", "hue", "body", "engineName", "engineKind", "engineMark", "libretro"];
 /// `Library.places`: Home's destinations in Home's order.
 pub const PLACE_ROLES: [&str; 6] = ["key", "name", "kind", "line", "attention", "count"];
 /// `Library.shelves`: the library's three places, All, Favourites and Recent, which `gamesOf` also takes.
@@ -91,6 +91,7 @@ pub fn consoles(view: &LibraryView) -> Vec<Row> {
                 text(&r.engine_name),
                 text(if r.engine_name.is_empty() { "" } else { engine_kind(r.libretro) }),
                 text(&r.engine_mark),
+                Cell::Flag(!r.engine_name.is_empty() && r.libretro),
             ]
         })
         .collect()
@@ -177,6 +178,13 @@ pub fn games(view: &LibraryView, list: &[GameRow], now: i64) -> Vec<Row> {
 /// The games a console or a place leads to (`all`, `favourites`, `recent`); none for an id that is neither.
 pub fn games_of(view: &LibraryView, id: &str, now: i64) -> Vec<Row> {
     games(view, &library::games_of_at(id, &view.systems, &view.catalog, now), now)
+}
+
+/// The first `count` games a console or a place leads to, in `games_of`'s order.
+pub fn first_of(view: &LibraryView, id: &str, count: usize, now: i64) -> Vec<Row> {
+    let mut list = library::games_of_at(id, &view.systems, &view.catalog, now);
+    list.truncate(count);
+    games(view, &list, now)
 }
 
 /// Home's shelf: the games played, latest first, less the suspended game, which Continue holds.

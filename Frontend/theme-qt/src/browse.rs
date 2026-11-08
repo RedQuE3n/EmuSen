@@ -35,6 +35,7 @@ pub mod qobject {
         #[qproperty(bool, typing, READ, NOTIFY)]
         #[qproperty(bool, list_open, cxx_name = "listOpen", READ, NOTIFY)]
         #[qproperty(*mut ThemeRows, games, READ, CONSTANT)]
+        #[qproperty(bool, searched, READ, NOTIFY)]
         type ThemeBrowse = super::ThemeBrowseRust;
     }
 
@@ -59,6 +60,8 @@ pub struct BrowseFacts {
     pub searching: bool,
     pub typing: bool,
     pub list_open: bool,
+    /// Whether the search's words narrow the section, kept after its keyboard closes.
+    pub searched: bool,
 }
 
 pub struct ThemeBrowseRust {
@@ -74,6 +77,7 @@ pub struct ThemeBrowseRust {
     typing: bool,
     list_open: bool,
     games: *mut ThemeRows,
+    searched: bool,
 }
 
 impl Default for ThemeBrowseRust {
@@ -91,6 +95,7 @@ impl Default for ThemeBrowseRust {
             typing: false,
             list_open: false,
             games: std::ptr::null_mut(),
+            searched: false,
         }
     }
 }
@@ -141,6 +146,7 @@ impl qobject::ThemeBrowse {
         plain!(self, searching, searching_changed, facts.searching);
         plain!(self, typing, typing_changed, facts.typing);
         plain!(self, list_open, list_open_changed, facts.list_open);
+        plain!(self, searched, searched_changed, facts.searched);
     }
 
     /// The host's feed of the section's games as shown, replaced whole.

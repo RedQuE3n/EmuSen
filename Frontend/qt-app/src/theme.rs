@@ -45,6 +45,15 @@ pub mod qobject {
         type ThemeFeed = super::ThemeFeedRust;
     }
 
+    extern "RustQt" {
+        #[qobject]
+        #[qml_element]
+        #[qml_singleton]
+        /// Where the reference theme's package lives: the program's resources.
+        #[qproperty(QString, folder, READ, CONSTANT)]
+        type ReferenceTheme = super::ReferenceThemeRust;
+    }
+
     unsafe extern "RustQt" {
         /// The library's view and Home's lines, after each read of the library: the window's `LibraryModel`.
         #[qinvokable]
@@ -92,9 +101,23 @@ pub mod qobject {
         /// The game the theme's focus is on, by its file.
         #[qsignal]
         fn focused(self: Pin<&mut ThemeFeed>, game: QString);
+        /// The row of Choose a console the theme's focus is on, by its index in the library's rows.
+        #[qsignal]
+        fn selected(self: Pin<&mut ThemeFeed>, index: i32);
     }
 
     impl cxx_qt::Initialize for ThemeFeed {}
+}
+
+/// The reference theme's place, `crate::REFERENCE_THEME`.
+pub struct ReferenceThemeRust {
+    folder: QString,
+}
+
+impl Default for ReferenceThemeRust {
+    fn default() -> Self {
+        ReferenceThemeRust { folder: QString::from(crate::REFERENCE_THEME) }
+    }
 }
 
 /// The suspended game as the window last showed it.
@@ -167,7 +190,7 @@ fn game_row(view: &LibraryView, path: &str) -> Option<GameRow> {
 
 /// The section's facts as Choose a console's row for its key holds them; the shoulders' neighbours are the rows either
 /// side, and the count is the search's while one narrows the section.
-pub fn browse_facts(view: &LibraryView, section: &str, count_line: &str, focus_row: i32, open: (bool, bool, bool)) -> BrowseFacts {
+pub fn browse_facts(view: &LibraryView, section: &str, count_line: &str, focus_row: i32, open: (bool, bool, bool), searched: bool) -> BrowseFacts {
     let rows = view.rows.rows();
     let at = rows.iter().position(|r| r.key == section);
     let row = at.map(|i| &rows[i]);
@@ -184,6 +207,7 @@ pub fn browse_facts(view: &LibraryView, section: &str, count_line: &str, focus_r
         searching: open.0,
         typing: open.1,
         list_open: open.2,
+        searched,
     }
 }
 
@@ -197,11 +221,12 @@ pub enum Carried {
     Backed,
     Acted(String),
     Focused(String),
+    Selected(i32),
 }
 
-/// The signal an action becomes, `suspended` being the game a session holds; none for one the program has no answer
-/// to yet (the Home card opened by a theme), which is declined.
-pub fn carried(action: &Action, suspended: Option<&str>) -> Option<Carried> {
+/// The signal an action becomes, `suspended` being the game a session holds and `rows` the library's rows' keys; none
+/// for one the program has no answer to yet (the Home card opened by a theme), which is declined.
+pub fn carried(action: &Action, suspended: Option<&str>, rows: &[&str]) -> Option<Carried> {
     Some(match action {
         Action::Play(key) if suspended == Some(key.as_str()) => Carried::Resumed,
         Action::Play(key) => Carried::Played(key.clone()),
@@ -220,7 +245,10 @@ pub fn carried(action: &Action, suspended: Option<&str>) -> Option<Carried> {
         Action::OpenListCard => Carried::Acted(screens::LIST.into()),
         Action::Search => Carried::Acted(screens::SEARCH.into()),
         Action::Act(key) => Carried::Acted(key.clone()),
-        Action::Focus(game) => Carried::Focused(game.clone()),
+        Action::Focus(key) => match rows.iter().position(|r| r == key) {
+            Some(i) => Carried::Selected(i as i32),
+            None => Carried::Focused(key.clone()),
+        },
     })
 }
 
@@ -233,7 +261,9 @@ impl ActionSink for Sink {
         let Some(feed) = (unsafe { self.0.get().as_mut() }) else { return false };
         let mut feed = unsafe { Pin::new_unchecked(feed) };
         let suspended = feed.session.as_ref().filter(|s| s.running).map(|s| s.game.clone());
-        let Some(carried) = carried(action, suspended.as_deref()) else { return false };
+        let rows: Vec<String> = feed.library().map(|l| l.view().rows.rows().iter().map(|r| r.key.clone()).collect()).unwrap_or_default();
+        let keys: Vec<&str> = rows.iter().map(String::as_str).collect();
+        let Some(carried) = carried(action, suspended.as_deref(), &keys) else { return false };
         match carried {
             Carried::Played(game) => feed.as_mut().played(QString::from(game.as_str())),
             Carried::Resumed => feed.as_mut().resumed(),
@@ -242,6 +272,7 @@ impl ActionSink for Sink {
             Carried::Backed => feed.as_mut().backed(),
             Carried::Acted(key) => feed.as_mut().acted(QString::from(key.as_str())),
             Carried::Focused(game) => feed.as_mut().focused(QString::from(game.as_str())),
+            Carried::Selected(index) => feed.as_mut().selected(index),
         }
         true
     }
@@ -335,7 +366,8 @@ impl qobject::ThemeFeed {
         // Safety: the grid's model is the window's, alive as long as the feed.
         let (Some(games), Some(library)) = (unsafe { section.games.as_ref() }, self.library()) else { return };
         let open = (section.searching, section.typing, section.list_open);
-        let facts = browse_facts(library.view(), &section.key, &games.count_line().to_string(), *games.focused(), open);
+        let searched = !games.search().is_empty();
+        let facts = browse_facts(library.view(), &section.key, &games.count_line().to_string(), *games.focused(), open, searched);
         let rows = view::games(library.view(), games.rows(), words::now());
         let Some(engine) = self.engine() else { return };
         if let Some(mut browse) = host::browse(engine) {

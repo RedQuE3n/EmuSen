@@ -21,7 +21,7 @@ fn whole(rows: &[Row]) -> bool {
 fn qt_3_2_each_list_has_the_api_s_roles_and_no_other() {
     assert_eq!(
         view::CONSOLE_ROLES,
-        ["key", "name", "displayName", "maker", "year", "count", "hue", "body", "engineName", "engineKind", "engineMark"]
+        ["key", "name", "displayName", "maker", "year", "count", "hue", "body", "engineName", "engineKind", "engineMark", "libretro"]
     );
     assert_eq!(view::PLACE_ROLES, ["key", "name", "kind", "line", "attention", "count"]);
     assert_eq!(view::SHELF_ROLES, ["key", "name", "line", "count"]);

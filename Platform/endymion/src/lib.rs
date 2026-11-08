@@ -9,6 +9,7 @@
 pub mod audio;
 pub mod bindings;
 pub mod devices;
+pub mod family;
 pub mod pad;
 pub mod pads;
 pub mod rate_control;

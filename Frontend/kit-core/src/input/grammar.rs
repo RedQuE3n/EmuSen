@@ -52,6 +52,9 @@ pub struct Press {
 /// The stick's travel, 0 to 1, past which it is a held direction.
 pub const STICK_THRESHOLD: f64 = 0.55;
 
+/// A trigger's travel, 0 to 1, past which it is held, as the C# front end read it.
+pub const TRIGGER_THRESHOLD: f64 = 0.5;
+
 /// A stick axis as a direction: -1, 0 or 1.
 pub fn stick_direction(value: f64) -> i8 {
     if value >= STICK_THRESHOLD {

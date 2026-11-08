@@ -273,6 +273,13 @@ impl Pads {
         if handle == 0 { self.known.get(&key).map_or(0, |pad| pad.closed_kind) } else { self.devices.kind(handle) }
     }
 
+    /// The printing on the pad's buttons, from SDL's type and the pad's name; kept once it closes, as both are.
+    pub fn family(&mut self, key: u64) -> crate::family::Family {
+        let kind = self.kind(key);
+        let name = self.name(key);
+        crate::family::of(kind, &name)
+    }
+
     pub fn raw_pressed(&mut self, key: u64, button: i32) -> bool {
         let handle = self.handle(key);
         handle != 0 && self.devices.button(handle, button)

@@ -252,7 +252,9 @@ impl qobject::FrameController {
         let routed = route(sheet_open, &mut self.as_mut().rust_mut().walk, ui);
         match routed {
             Routed::Sheet => {
-                self.as_mut().sheet_offer(ui);
+                if let Some(code) = self.as_mut().sheet_take(ui).and_then(qt_keys::qt_key) {
+                    qobject::send_key(code, 0);
+                }
                 true
             }
             Routed::Walk => {
@@ -272,15 +274,18 @@ impl qobject::FrameController {
         }
     }
 
-    /// The sheet's share of a press: B dismisses it; anything else is announced and reaches its focused control as a key.
-    fn sheet_offer(mut self: Pin<&mut Self>, button: UiButton) {
+    /// The sheet's share of a press: B dismisses it; anything else is announced, and the key it means is returned for the
+    /// pad's path to send to the focused control. The keyboard's path never sends it, since a key that reached the frame was
+    /// already declined, and sending it again recursed without end (EmuSen_Kit.md §7.14).
+    fn sheet_take(mut self: Pin<&mut Self>, button: UiButton) -> Option<Key> {
         match sheet_route(button) {
-            SheetRouted::Dismiss => self.as_mut().sheet_dismissed(),
+            SheetRouted::Dismiss => {
+                self.as_mut().sheet_dismissed();
+                None
+            }
             SheetRouted::Pass(key) => {
                 self.as_mut().sheet_pressed(kinds::pad_button(button));
-                if let Some(code) = key.and_then(qt_keys::qt_key) {
-                    qobject::send_key(code, 0);
-                }
+                key
             }
         }
     }
@@ -301,7 +306,7 @@ impl qobject::FrameController {
             Some(Intent::Walk(by)) => self.move_focus(by),
             Some(Intent::Press(button)) => {
                 if self.sheet_open {
-                    self.sheet_offer(button);
+                    self.sheet_take(button);
                     true
                 } else {
                     self.press(kinds::pad_button(button))

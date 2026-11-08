@@ -99,7 +99,8 @@ no screen interprets a device.
 `UiButton` is `PadNavigator`'s: what a pad asks of the interface, named by what it does (Up, Down, Left, Right, Accept,
 Back, Menu, Options, PageUp, PageDown, First, Last, Guide, Search, Random, Screensaver). The physical pad is not here:
 which bit is which button is Endymion's, and the pad family's map onto these roles is `PadRouter`'s in `emusen-kit-qt`.
-The grammar keeps the player's A/B swap (`UiButton::swapped`) and the key a declined press becomes for a stock control
+The grammar keeps the player's swap (`UiButton::swapped`: Accept and Back trade places, and since 2026-11-08 Search and
+Screensaver, the North and West buttons, as the C# front end and ES-DE trade them) and the key a declined press becomes for a stock control
 (`UiButton::key`: directions to arrows, Accept to Return, Back to Escape, Menu to Menu, Options to Select).
 
 `Grammar` is `PadNavigator` and `SceneRepeat` as one: `feed(held, now)` gives the presses of a tick, one as a button goes
@@ -341,7 +342,7 @@ ways in:
 - **The pad.** `offer(button)` is §1.7's order, as the pure function `frame::route` states it and `tests/route.rs`
   holds it: an open sheet or question first (`sheetOpen`, and the press comes back as `sheetPressed` for the sheet's
   own handler), then the walk, then, declined, the focused control as the key `UiButton::key` names (`send_key`, the one
-  C++ function of this step, 16 lines: a `QKeyEvent` press and release sent to `QGuiApplication::focusWindow()`, which
+  C++ function of this step: a `QKeyEvent` press and release sent to `QGuiApplication::focusWindow()`, which
   Qt Quick delivers to the active focus item). B declined at the top also raises `backDeclined`, the host's signal to
   close. The player's A/B swap is applied once, in `PadRouter` (§7.4); the walk's own `set_swap_accept_back` stays off,
   so the fact has one owner.
@@ -359,7 +360,7 @@ ways in:
 
 ### 7.4 `PadRouter`
 
-A QML singleton whose queue tests push `PadEvent`s into, as the real reader will from the platform client later: `push
+A QML singleton whose queue tests push `PadEvent`s into, as Endymion's reader does (§7.15): `push
 (button, down)` queues, `pump()` applies the queue on the router's own clock (an `Instant` from construction; no
 static) and `pumpAt(ms)` on a stated one, so a test writes the exact times kit-core's tests write. Each pump runs
 `router::Router`: the queue sets the held buttons, `Grammar::menu_chord` is checked (once, and then `forget`, so the
@@ -374,7 +375,7 @@ A `Frame` consumes presses through a `Connections` on the singleton, enabled whi
 should be the scene graph's, a `QSGGeometryNode` or a `ShaderEffect`. Both were weighed against §8.1's harness, which
 runs on the software backend: that backend draws no custom geometry node and no shader effect, so a gallery grabbed
 under it would show no bodies at all, and a geometry node also means hand-written C++ for the node, its material and its
-vertex layout against §1.4's budget. Qt Quick Shapes is the scene graph's own vector item: on a GPU its geometry
+vertex layout. Qt Quick Shapes is the scene graph's own vector item: on a GPU its geometry
 renderer builds exactly those geometry nodes, and under the software backend its own renderer paints the same paths, so
 one `.qml` draws the same picture on both. kit-core's `Shape` (an outline, closed or open, a solid or radial fill, a
 stroke, an opacity) maps onto `ShapePath` with a `PathPolyline` one to one, which is the design's intent: the world as
@@ -416,8 +417,8 @@ data, the framework drawing it. So the kit's own part is a model, not a renderer
   owns no words), placed by their baselines. A `FrameAnimation` ticks until `finished`.
 - **`Bells`.** A QObject over `BellCache`: `prepare(cue)` renders a cue through kit-core the first time and keeps it,
   `prepareAll`, `durationMs`, `peak`, `quickSelectFrames`; `renders` counts renders so a test sees the cache hold,
-  `rate` is 48 000. Playback through Endymion's interface player and the pairing of Moonrise's `strike_times` with the
-  chime come with the platform client (§7.7).
+  `rate` is 48 000. Playback through Endymion's interface player is `BellPlayer`'s (§7.15); the pairing of Moonrise's
+  `strike_times` with the chime is owed (§7.7).
 
 **Two cxx-qt facts found here.** A `#[qenum]` named `Roles` in three bridges clashes: cxx-qt emits `using Roles =
 enum class X::Roles` at namespace scope in each header and the module's type registration includes them all, so each
@@ -541,7 +542,7 @@ at the size, and gives a `Scene` with the verbs: `tree`, `click`, `right_click`,
 - **The pad goes in where a pad goes in.** `pad(button)` pushes a down and an up into the router's queue and pumps at
   stated times; the router is reached as the engine's singleton, downcast to the kit's `PadRouter` by cxx-qt's `Upcast`.
 - **C++**: `cpp/harness.cpp` and `harness.h`, the tree dump and QTest's verbs (`mouseClick`, `keyClick`, a wheel event,
-  `qWait`, `qWaitForWindowExposed`, `grabWindow`, a property read, the singleton), 241 lines. QTest's mouse, keyboard and
+  `qWait`, `qWaitForWindowExposed`, `grabWindow`, a property read, the singleton). QTest's mouse, keyboard and
   window helpers are declared only under `QT_GUI_LIB`, which CMake defines and cc-rs does not, so the file defines it.
 
 **What the harness found in the kit** on 2026-11-07, each fixed in the kit, not the test: a help-bar button took the
@@ -603,8 +604,9 @@ The gallery's words, rows and lists are a fixture's (`qml-rules --fixture`). Not
 render and cache are held by `tests/bells.rs`), and the parts owed by §7.8.
 
 **The gate** is `tests/gate.rs`, one test of about 40 s on the desktop. It runs `qml-rules` and `qmllint` over the
-gallery, then visits 72 states: both variants, three forms, three sections, and the four sizes of the harness's
-`SIZES` (1280 × 800, 1920 × 1080, 1280 × 720, 3840 × 2160). In each state it focuses the first operable element, reads
+gallery, then visits 90 states: both variants, three forms, three sections, and the five sizes of the harness's
+`SIZES` (1280 × 800, 1920 × 1200, 1920 × 1080, 1280 × 720, 3840 × 2160; the second, the handheld's own panel, added
+2026-11-08, §7.13). In each state it focuses the first operable element, reads
 the tree, sweeps the style (Controls), grabs, records the edges, and gives kit-core's `audit::check` the tree the edges
 were recorded on: the fit audit, pad reach, pointer reach, no chrome, names, palette reach and contrast. A 73rd state is the
 question open at 1280 × 800, audited alone as a player sees a sheet. The style sweep samples one grab at each styled
@@ -847,9 +849,9 @@ target folder of its own with the compiler cache off, at a load average of 10.2 
 `pathItemCount` (as many as cover its width, plus two) seeded again failed the release gate with 192 `rests outside the
 carousel` faults, the first `big-Dark-menu-1280x800: … Card… at 1229,324 180x240`.
 
-Seen in every run since step 1, the debug and release gates alike and before any change of this section, and not part
-of it: when the question opens, Qt logs `RangeError: Maximum call stack size exceeded` twenty times from `Sheet.qml`
-and `Frame.qml`. The gate passes over it; it is owed to the sheet's focus handling (§7.7).
+Seen in every run since step 1, and not part of this defect: when the question opened, Qt logged `RangeError: Maximum
+call stack size exceeded` twenty times from `Sheet.qml` and `Frame.qml`, and the gate passed over it. §7.14 found and
+fixed it, and made every logged warning fail the tests.
 
 **Not written, and why.** `focus` (focusable): the dump has one fact, `operable`, and writing it twice would be an
 invention. `sideways`, `live`, `element`, `volatile`, `part`, `title`, `footer`, `walk` and `entered`: nothing in the
@@ -862,7 +864,7 @@ the Qt slack is kit-core's 1.5 above a unit of 1, where the C# recordings at 192
 are scene pixels, where the C# writes the control's own. None changes a comparison (`InterfaceSpec.Compare` reads names,
 roles, words, rectangles and the focus graph), and each is the toolkit's fact rather than one bent to match.
 
-**The C++** grows by 59 lines (`harness.cpp` 420, `harness.h` 28): four facts in the dump (enabled, the item's scale in
+**The C++** of this step: four facts in the dump (enabled, the item's scale in
 the scene, the face, a flickable's content height); the role read from Qt's accessibility instead of the attached
 `Accessible.role`, which only items that declare one carry (every `Text` read `none` through it); and the put-back's
 reads and writes (what a press may move, a focus scope's remembered item, an item found by its id, a number read and
@@ -908,6 +910,276 @@ before). Three more seeded faults, each reverted: no put-back failed `spec.rs`'s
 failed `style.rs` (the tab and the choice at 1, not 0; the menu scene's list puts itself back when a row takes the focus,
 so `spec.rs` could not see it); the remembered focus not given back failed `style.rs` (the combo box's focus false).
 
+### 7.12 The pad's glyphs (stage 0, the rest, step 2; 2026-11-08)
+
+The help bar's circles were empty until this step. Each entry now draws the glyph of the control that gives its press,
+in the pad's family, following the design's word: **drawn shapes and a letter from the interface's type**, not a font
+of symbols (LunaP.md §103.1, whose outlined set this is; `EmuSen_Interface.md` §5.2 sets the letters' size, Pad glyph,
+22 design units on the big screen and 13 pixels on the desktop, the token `fontGlyph`). Every shape is plain geometry
+and none is a vendor's artwork or colour.
+
+**kit-core** owns the decisions, in two places.
+
+- `input::PadControl` names a pad's controls by place, as SDL does (South is the bottom face button), and
+  `UiButton::control(swap)` says which control gives each press: Accept on South and Back on East, traded by the
+  player's swap through `swapped`, the router's one rule; Menu on Start, Options on Select, the pages on the shoulders,
+  First and Last on the triggers, Search on North, Screensaver on West, Random on a stick's click, the table of the C#
+  front end (`MainWindow.Controllers.cs`). The pad bridge (step 4) reads the same table the other way.
+- `glyph` draws a control of a family as marks in a unit box (a polyline, filled or stroked at a share of the box) and
+  the letter the family prints, with the name a reader hears. `PadFamily` is `Generic`, `Xbox`, `PlayStation` or
+  `Nintendo`; `Generic`, the pad whose printing is not known, is the RetroPad's face by position: four dots in a
+  diamond with the meant one filled, the shoulder's own half filled, a pill with a play mark for Start and a square for
+  Select. The lettered families differ at a glance: a ring round the letter (Xbox), the letter cut out of a disc
+  (Nintendo).
+
+**kit-qt** draws them: `PadGlyphMarks`, a list model of the marks in pixels at the glyph's size, and `PadGlyph.qml`,
+one `Shape` a mark, the letter a `Text` centred on its ink (`TextMetrics`' tight box and `FontMetrics`' ascent), or,
+where a mark is `cut`, a `PathText` in that mark's own path with the odd-even fill, so the letter is a hole showing
+what lies behind, as Qt Quick Shapes draws it, with no paint of ours. `Families` mirrors `PadFamily` (§7.1).
+`HelpBar` takes `family` (the frame passes `padFamily`), the glyph takes the router's `swapAcceptBack`, and each
+glyph sits inside its entry's button, so a click on it is the entry's press (§1.7).
+
+**The help bar on a pad of each family**, at 1280 × 800, big screen, dark: the generic face (dots, the pill with a play
+mark), Xbox (A and B in rings, the three-line ring), PlayStation (a cross and a circle in rings, the three-line pill) and
+Nintendo (B and A cut out of discs, the plus ring), Choose on South and Back on East in each, as the table gives them.
+The gate writes the four as `helpbar-<family>.png` beside its grabs, and `emusen-qt-test`'s `glyphs` test writes every
+press in every family, sixteen by four, to `~/.cache/emusen/tmp/qt-test/glyphs.png`; both were looked at on
+2026-11-08.
+
+**No glyph is empty.** `Scene::ink_inside` samples one grab on a grid within 0.35 of a glyph's size from its centre and
+counts the points that differ by more than 24 levels from the colour most of them show: an empty ring, filled or not,
+shows one colour there, and every glyph of the set covers at least two points *[own, because the check is the
+harness's own pixel reading, as §7.10's sweep is]*. The gate holds every help-bar glyph shown in every state to two
+points or more, three glyphs where the bar is shown and none where it is not, and the four families' bars the same way.
+
+**Held to**: kit-core's `tests/glyph.rs` (3: every control of every family draws a mark inside its box, closed where
+filled, one cut mark at most and never without a letter, and a name; the face letters and names by position, the
+generic dot at its own place; every press its own control, the swap trading Accept and Back only); kit-qt's `kinds`
+(the families pair by pair); `emusen-qt-test`'s `glyphs` (64 glyphs, each named, Accept's name on each family's South,
+none empty, nothing logged) and `menu` (a click on the Open entry's glyph is that entry's press); the gate. Rule Q's
+registry gained `Families` and `PadGlyphMarks` and the qmldir `PadGlyph`; reviewed and copied, additions only.
+Measured on 2026-11-08 with three seeded faults, each reverted: the model giving no marks failed the gate
+(`help-bar glyph glyph-Choose draws nothing inside its ring (0 points)`); the cut letter never given failed `glyphs`
+(Nintendo's B, A, X and Y, 0 points each: a disc with nothing cut shows one colour); the swap not applied failed
+kit-core's `each_press_has_its_control_and_the_swap_…` (Accept on South with the swap on).
+
+**The swap trades North and West too** (decided 2026-11-08 by the tester). The C# table traded North and West with the
+swap as well as South and East, as ES-DE's does, while kit-core's `UiButton::swapped` traded Accept and Back only, so
+with the swap on Search stayed on North. `swapped` now trades Search and Screensaver as well, so the player's existing
+setting means the same on both front ends; the router and the glyphs read the one rule. Held by kit-core's `input`
+test (Search and Screensaver trade, Menu stays) and `glyph` test (Search on West with the swap on). Seeded on
+2026-11-08: the new pair left out of `swapped` failed both.
+
+### 7.13 The gallery as an AppImage (stage 0, the rest, step 3; 2026-11-08)
+
+The gallery program is bundled by the route `EmuSen_Qt.md` §9.2 names: `linuxdeploy` with its Qt plugin lays out the
+AppDir, `appimagetool` packs it. **`cargo xtask appimage --out DIR`** is the build host's command for it (`xtask/src/
+appimage.rs`, beside the host's other commands of `EmuSen_RustPlatform.md` §28.11, as `EmuSen_Qt.md` §1.9 places the
+front end's build): it checks the four pins of `xtask/appimage-tools.tsv` (§9.2's table) against their sha256 and
+refuses to run on any difference, builds `kit-gallery` in release, runs linuxdeploy (`QMAKE` the system's `qmake6`,
+`QML_SOURCES_PATHS` the gallery's, the kit's and the style's QML so the Qt plugin's `qmlimportscanner` finds their
+imports, `EXTRA_PLATFORM_PLUGINS` adding `libqwayland.so` and `libqoffscreen.so` to `xcb`, `EXTRA_QT_MODULES=
+waylandcompositor`, which the plugin's README names for Wayland and which brings the client's shell, decoration and
+graphics plugins, `NO_STRIP=1` and `PATCHELF` as §9.2 explains), then appimagetool. *[own, because the steps are the
+tools' own and the command only orders them and checks the pins, as the host's other commands do]*
+
+**The program.** `kit-gallery` sets `QSG_RHI_BACKEND=vulkan` unless the environment names another backend (§9.2, §1.8),
+and its window is shown by its scene (`visible: true`). `--grab FILE` saves the window's first swapped frame of the
+window's own size and ends (below, *The handheld's panel*):
+`QQuickWindow::grabWindow`, its `frameSwapped` signal and `QCoreApplication::quit` are bound in Rust through cxx-qt's
+`extern "C++Qt"`, and `QImage::save` through a type of the crate's own over the same C++ `QImage` (`grab::Picture`),
+since cxx binds no method on another crate's type; no hand-written C++. On Qt's offscreen platform the scene graph has
+no Vulkan surface and draws with its software backend, so an offscreen grab is a software render, as the harness's
+are; the bundle's Vulkan path is the handheld's windowed run.
+
+**The bundle**, measured on 2026-11-08: 88,127,992 bytes; the AppDir 248 MB with 174 libraries, the `xcb`, `wayland` and
+`offscreen` platforms and Wayland's client plugins. The Qt plugin's scan bundles more QML than the program imports
+(Particles, Pdf, Scene3D, VirtualKeyboard, every Controls style), as its import scanner follows `QtQuick.Controls`;
+trimming it is owed to the release build (§9.2's container). It reports `Missing qml module: EmuSen.Kit`, which is
+expected: the kit's and the gallery's modules are compiled into the program's resources, not files the scanner can find.
+
+**Run from a clean copy.** The AppImage was copied alone into an empty folder and run with `env -i` (only `HOME`,
+`PATH=/usr/bin:/bin` and `TMPDIR` set), `QT_QPA_PLATFORM=offscreen` and `LD_DEBUG=libs`: it printed `grab …: saved` and
+exited 0. Of the libraries initialised, every Qt one (15) and every QML plugin's came from the bundle's mount, and none
+from `/usr/lib64`; ICU 77 came from the bundle; what came from the system was glibc, the GL dispatch libraries, X11,
+fontconfig, freetype, harfbuzz and the compression libraries, AppImage's exclusion list. Its frame against the same
+program run from the build tree on the system's Qt: **0 pixels differ** (ImageMagick `compare -metric AE`). Against the
+gate's own grab of the same state (`big-Dark-menu-1280x800.png`): 205 pixels differ exactly and none at a 10% fuzz, the
+stars, which twinkle on the clock. The bundle is not copied to the handheld here; that run is another's.
+
+**Held to**: the host's `appimage` test (the four pins read, a tool that is not its release refused with its URL, a
+missing one told where it comes from), and the run above. Measured on 2026-11-08 with three seeded faults, each
+reverted: the sha256 comparison skipped failed that test; a pin changed by one digit made `cargo xtask appimage` refuse
+before building (`appimagetool-x86_64.AppImage is not the pinned 1.9.1`); `PATCHELF` unset made it refuse (`PATCHELF
+names no patchelf`). The bundle built with linuxdeploy's own patchelf, before the fix, crashed at start, as §9.2 records.
+
+**The handheld's panel, and the grab's timing** (2026-11-08). The handheld is a Lenovo Legion Go S; its panel is a BOE
+NS080WUM-LX1, 8 inches, 1920 × 1200 (`gamescopectl info` and `xdpyinfo` agree). 1280 × 800, the gallery's own size and
+the gate's first, is a Steam Deck–class size, kept as a fit size, as every window fits at 1280 × 800 and 1920 × 1200;
+the gate runs at 1920 × 1200 too since this date. On the handheld under gamescope (Vulkan, `DISPLAY=:0`, on the
+charger) the program's X window was 1920 × 1200 (`xwininfo`), and `--grab` saved a 1920 × 1200 frame whose content was
+laid out at 1280 × 800 in the top-left corner, the void (black) over the rest.
+
+What was ruled out on the desktop, 2026-11-08:
+- *The layout.* `tests/fill.rs` shows the gallery at its own 1280 × 800, then gives it 1920 × 1200 through the platform
+  (on the offscreen platform `QWindow::resize` reaches Qt through `QWindowSystemInterface::handleGeometryChange`, the
+  call a platform makes for a window manager's resize) and samples six points near the edges and corners: none shows
+  the void. Seeded: the canvas's scale read once (`unit: 1`) failed it, at the bottom-right corner. The test also found
+  the same gap in the harness: about one run in four saw the void, since the offscreen platform delivers the new
+  geometry as a queued event and `Scene::resize` waited for polish before the size had arrived. `harness_resize` now
+  waits (`QTest::qWaitFor`, two seconds at most) until the content item has the size, then for polish; eight runs in
+  eight then filled. The gate, at its five sizes, visits 91 states and passes (53 s).
+- *The ratio, the Vulkan path and a resize before the first frame.* The program on this desktop's Xwayland under KWin,
+  with Vulkan: at the session's ratio of 1.25 (a 1600 × 1000 frame) and at 1.875 (`QT_SCALE_FACTOR=1.5`, a window
+  KWin clamped to 2400 × 1348 before its first frame), each grab filled to within four pixels of its edges; the
+  software backend offscreen at a ratio of 1.5 filled 1920 × 1200 likewise.
+
+**The mechanism, as its picture states it.** A frame of 1920 × 1200 pixels drawn at 1280 × 800 is a frame whose size
+is not the window's size at its ratio as Qt knew it. Qt's Vulkan swapchain takes its size from the surface, which is
+the X window gamescope had made 1920 × 1200, while Qt Quick drew at the size Qt last heard, 1280 × 800 at a ratio of 1:
+gamescope's resize had not yet reached Qt, and `--grab` took the first frame swapped, inside that gap. **So `--grab`
+now takes the first frame of the window's own size** (`grab::settled`: the frame's pixels are the window's size at its
+ratio, within a pixel), asks for another frame (`QQuickWindow::update`) while a frame of another size comes, saves what
+it has after 300 frames, and prints both sizes: `grab FILE: saved, frame 1600x1000, window 1280x800 at ratio 1.25,
+after 0 frames of another size` on this desktop's Xwayland, `frame 1280x800, window 1280x800 at ratio 1` offscreen.
+Held by the `grab` unit test (the window's own size at ratios 1, 1.5 and 1.25 as Qt rounds them; the swapchain's size
+before Qt is told, and a frame from before a resize, refused). Seeded: the ratio left out of `settled` failed it.
+
+Predictions for the handheld's next run, to be measured there: (1) the line names one frame or more of another size,
+then a 1920 × 1200 frame of a 1920 × 1200 window, and the picture fills it: the defect was the grab's timing, and a
+window on the panel was never wrong for longer than gamescope's resize took to arrive; (2) the line names 300 frames
+and a 1280 × 800 window: Qt never hears gamescope's size, a fault between gamescope and Qt's `xcb` platform, and the
+fix becomes the program's (the big-screen form asks for the screen's size) — not built until measured.
+
+### 7.14 A test fails on any warning Qt logs; the sheet's key loop (2026-11-08)
+
+**Every warning fails.** The harness installs a Qt message handler when it starts (`qInstallMessageHandler`, which
+cxx-qt-lib does not bind and which takes a plain function with no context, so its list is the C++ file's own, read and
+cleared by `harness_messages`) that keeps every warning, critical and fatal message, QML's errors among them, and still
+prints them as before. `Harness::assert_quiet` fails on any message that is not one of `QT_INTERNAL`'s, each named with
+the reason it is Qt's own; the list is empty, since every message seen so far was ours. Every harness test (`menu`,
+`sheet`, `style`, `spec`) and the gate end with it.
+
+It found two at once, both ours:
+
+1. **The sheet's key loop.** With a question open, the frame's `Connections` offer each pad press to the sheet, which
+   announces it and sends the key it means to the focused control (§7.3). When the focused control was outside the
+   sheet and declined the key (the gate's walk focuses every operable item of the window, the rows behind the modal
+   question among them), the key propagated up to the `Frame`, whose `Keys.onPressed` gave it to
+   `FrameController::key`, which, the sheet being open, offered it to the sheet again, which sent the key again, to the
+   same control: a recursion that ended only when the JavaScript stack ran out, twenty times in a gate run. §7.3 already
+   stated the rule the code broke, that a key goes to the sheet or the walk "and never back out as a key, so a key cannot
+   loop"; the sheet's branch of `key` sent it back out. Now `sheet_take` dismisses or announces and returns the key, and
+   only the pad's path (`offer`) sends it; the keyboard's path never does. `sheet.rs` holds it: a question open, the
+   frame given the focus, Right pressed, and nothing logged.
+2. **An empty shadow.** Moonrise's `shadowOutline` began as an invalid `QVariant`, so its `PathPolyline` logged `path
+   of type 0 not supported` once at every start. It begins as an empty polygon.
+
+Measured on 2026-11-08 with two seeded faults, each reverted: the keyboard's path sending the key again failed the
+gate (`Qt logged 20 warnings or errors`, the `RangeError` from `Sheet.qml` and `Frame.qml`) and `sheet.rs` (2 of them);
+the shadow beginning invalid failed the gate (`PathPolyline: path of type 0 not supported`). With both fixed, the
+harness tests, the debug gate and the release gate pass with nothing logged.
+
+### 7.15 Endymion's pads and the bells: `emusen-qt-endymion` (stage 0, the rest, step 4; 2026-11-08)
+
+`EmuSen_Qt.md` §1.7 as built. Qt 6 has no gamepad module, so the pad is Endymion's, read through the platform client
+(`EmuSen_Qt.md` §1.1.2) on a thread of its own and put on the GUI thread through `qt_thread().queue`, into the
+`PadRouter` of §7.4; the bells of §7.5 play through Endymion's interface player.
+
+**Where the pad's family lives** (decided 2026-11-08). Which printing a pad carries is a fact about the pad, read from
+SDL's `SDL_GamepadType` and, where SDL says Standard or Unknown, the pad's name (the Legion Go S and a Steam Deck print an
+Xbox layout). Two homes were weighed: kit-core reading what Endymion reports (the SDL type's number and the name), or
+Endymion reporting the family. kit-core stands without EmuSen and names no SDL number, and the C# front end, which reads
+pads through the same platform library, could not have read kit-core's copy, so the C# table would have stayed a second
+owner. So Endymion owns it: `emusen_endymion::family` holds the table moved from Mistress's `PadFamilies.cs`, which is
+deleted, and `emusen_endymion_pads_get(…, EMUSEN_ENDYMION_PADS_FAMILY)` answers it, an extension of the existing call
+(platform interface 41, `EmuSen_RustPlatform.md` §48). Mistress's help bar and the Qt reader both read that one answer;
+kit-core's `PadFamily` stays the kit's drawing of a family, and the reader pairs the header's four numbers with it by
+name (`reading::family_of`).
+
+**The crate.** `Frontend/qt-endymion`, `emusen-qt-endymion`, the QML module `EmuSen.Endymion` 1.0, a member of the Qt
+workspace. Its dependencies are the workspace's cxx-qt crates, kit-core and kit-qt (the presses, controls, thresholds,
+cues and the enumerations Qt has them as) and the platform client by path; kit-qt still names no client, so the kit
+stands alone and only this crate joins it to Endymion. Four parts, one job each:
+
+- `reading.rs`, **one poll as the interface reads it**, plain Rust over the client's `Pads`: the devices polled, the
+  changes taken, the devices brought up to date (`update`, SDL's events pumped, every tick as the C# poll ends), then
+  every pad the interface reads (`FRONTEND_COUNT`) read control by control. A control's press is kit-core's
+  `PadControl::press`, `UiButton::control` read the other way (either stick's click is Random, as the C# read them),
+  added to kit-core for this step; the player's swap is not applied here, since the router applies it once (§7.3). The
+  left stick is the d-pad through kit-core's `stick_direction` (0.55), and a trigger is held past
+  `TRIGGER_THRESHOLD` (0.5, the C#'s), now kit-core's beside the stick's. The pads read are merged (a button is held
+  while any pad holds it, so a second pad's press and release of a held direction changes nothing), and a tick gives
+  the buttons that went down or up since the last, in the kit's order. The pad that went from holding nothing to
+  holding something is the last used; the help bar's family is its family while it is read, else the first pad's, else
+  the generic face. A pad pulled out lets go of what it held. *[own, because Qt has no gamepad reading and Endymion
+  answers raw controls, which the interface's grammar must read; `sdl_button` names SDL's button numbers, which
+  Endymion's calls take, once.]*
+- `reader.rs`, **the thread**: `Reader::spawn(open, only, deliver)` opens the pads on the thread, then reads every 16 ms
+  (Mistress's pad timer, `EmuSen_Input.md` §8.12) and hands each non-empty tick to the sink whole; a failure is said
+  once until a poll succeeds; dropping the reader stops and joins the thread, and a sink that refuses stops it too.
+  **Coalescing per axis** is the poll itself: an axis is read once a tick and only its direction's crossing leaves the
+  thread, so however many events SDL saw between two ticks, the GUI thread receives at most one change per direction
+  and one closure per tick, and none when nothing changed.
+- `pad_reader.rs`, **`PadReader`**: writable `platformLibrary` (the path, as `LibraryModel` takes it: a QML element
+  cannot be handed a Rust value, §1.2.1 of `EmuSen_Qt.md`) and `onlyPads`; read-only `family` (kit-qt's `Families`),
+  `connected` and `problem`; one signal, `button(PadButton, down)`. Naming the library lends SDL (`libSDL3.so.0`, once
+  a process) and starts the reader, whose ticks come back only through `qt_thread().queue`, where each press is emitted
+  in order and the properties published. `onlyPads` is SDL's pad ids, separated by spaces, read alone, as
+  `emusen_endymion_pads_show_only` is a test's: it keeps a test's virtual pads from opening a pad on the desk.
+- `bell_player.rs`, **`BellPlayer`**: writable `platformLibrary` and `volume` (kit-core's `DEFAULT_VOLUME` until set),
+  read-only `ready` and `problem`, and `play(cue)`. The player is made off the GUI thread once the library is named,
+  every cue rendered by kit-core once and remembered by Endymion's interface player under its name (48 kHz stereo
+  32-bit floats, little-endian, as the player keeps them), and comes back through the queue; `play` replaces the cue
+  still playing, as the player does. kit-qt's `Bells` stays the render cache a test inspects.
+
+**Into the router.** A host declares the reader in its scene and joins its signal to the router in one line, so the
+real pad's presses enter the same queue tests push into (§7.4), and binds the help bar's family to the reader's:
+
+    PadReader { id: pads; onButton: (button, down) => Kit.PadRouter.push(button, down) }
+    property int padFamily: pads.family
+
+The gallery does this (`Gallery.qml`, with `platformLibrary`, `onlyPads` and `padsConnected` on its root for the
+host). The gallery program names no platform library yet, so a human look reads no pad until a host does (§7.7).
+
+**Held to.** No C++ was added. Measured on 2026-11-08 on the desktop, against the platform library built from the same
+commit:
+- Endymion's `family` (3 unit tests): every SDL 3.4 type, Unknown to GameCube, as the C# table classified them, SDL's
+  type before a name that says otherwise, a newer type read by its name; the names of the C# test (Legion Go S, Steam
+  Deck, Steam's virtual pad, DualSense, Switch Pro, an 8BitDo pad, none); the header's numbers.
+- The platform client's simulated-pads test: a pad of no known type or name is generic, SDL's PS5 type PlayStation, a
+  Standard pad named "Nintendo Switch Pro Controller" Nintendo, and the family kept once the pad closes.
+- kit-core's `glyph` test: every press's control, swapped or not, read back by `press` and the router's swap gives the
+  press again; either stick's click is Random.
+- `reading` (3 tests, 3.1 s, Endymion's simulated pads): each of SDL's fifteen buttons and the six axes gives its
+  press and lets go, the stick and the triggers short of their thresholds give none, two presses come in the kit's
+  order; two pads merged, the family following the pad last used, the last used pulled out while holding Accept
+  (Accept up, the family back to the first pad, one pad read), one plugged in while reading and used, and none left
+  (the generic face); the thread hands on the first tick, a press and its release, sends nothing after it drops, and
+  says a failed opening once.
+- `bells` (3.1 s, SDL's dummy audio driver, nothing reaches the speakers): each of the nine cues played under its name
+  queues its samples on the player's stream. `qml`: `BellPlayer` made through the queue in a harness scene, every cue
+  played with no failure said, nothing logged, and the scene keeps the QML rules.
+- The gallery, `kit-gallery`'s `pads` (11.9 s): an SDL virtual pad (SDL's own virtual joystick, attached in-process
+  with an Xbox 360's vendor and product, as WiseMan's `SdlVirtualPadsTests` attaches them; `onlyPads` names it alone)
+  read by the gallery's `PadReader` puts the Xbox face on the help bar, then walks the gallery, every operable element
+  in four directions with what each press moved put back, each press held until the router holds it and let go until
+  it lets go; the landings equal the same walk made through the router's queue, as the gate makes it. A second pad
+  (a DualShock 4's vendor and product) plugged in while the gallery runs is read and leaves the family on the pad last
+  used until a click of its stick, when the PlayStation face shows; pulled out, the family returns to the Xbox pad, and
+  with both gone, to the generic face. Nothing logged. The harness's walk takes its press as a parameter for this
+  (`walk_by`), and `pad_held` and `run_pad_clock` read and restart the router's clock. *[own, because SDL's virtual
+  joysticks are SDL's test interface and no SDL binding crate is in the tree: the test declares
+  `SDL_VirtualJoystickDesc` and five calls from SDL_joystick.h itself.]*
+
+Four seeded faults, each reverted: the family taken from the first pad read, ignoring the pad last used, failed
+`reading`'s merge test (no change of family to the Nintendo pad); the stick's vertical read inverted failed the
+controls test (Down for the stick pushed up); the platform library answering the SDL type for the family failed the
+platform client's test (6 for PlayStation's 2); the player remembering eight of the nine cues failed `bells` (Refused
+queued nothing). The last was first seeded against the harness test alone and passed it, since the interface player
+takes a name it was not given as a path and answers success: the play's proof is the queued bytes, read through the
+client's `InterfacePlayer::queued`, added for it.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4
@@ -941,14 +1213,14 @@ once, the chord once with forget, a change of tiers) and `qmltypes`. Measured on
 each reverted: `pad_button` off by one failed the kinds pairs; a declined press losing its key failed the route test; the
 CubicOut curve numbered as InCubic failed the easing test; the swap applied inverted failed two router tests.
 
-**Hand-written C++** (`EmuSen_Qt.md` §1.4's tracked count, the lines of the files as `wc -l` counts them): 23 in the
-kit (`cpp/kit_glue.h` and `cpp/kit_glue.cpp`, all of it `send_key`) and 389 in the harness (`cpp/harness.cpp` 365,
-`cpp/harness.h` 24; §7.9, §7.10), **412 in all** on 2026-11-08 with the contrast sampling and the picture difference. Counted the same way, step 9's figure was 277 (the
-harness 254), not the 264 first written here. Budget: under 600 for the whole front end. With §7.11's 59 lines,
-`cpp/harness.cpp` is 420, `cpp/harness.h` 28, and the front end **471**; with the polish wait's include, 421 and **472**.
-The C++ of §7.11 is there because each piece is a Qt call cxx-qt-lib does not bind: `QAccessible::queryAccessibleInterface`,
-`QMetaProperty`'s declaring class, `QQuickItem::scopedFocusItem` and `setFocus`, a property by an item's address, and
-`QQuickTest::qWaitForPolish`.
+**Hand-written C++**, each part with its reason (decided 2026-11-08: cxx-qt is the binding; C++ glue is written where
+cxx-qt-lib does not reach, each part with its reason, `EmuSen_Qt.md` §1.4). The kit's `cpp/kit_glue.cpp` is `send_key`,
+a key event sent to the focus window (§7.3). The harness's `cpp/harness.cpp` holds the tree dump and QTest's verbs, which
+cxx-qt-lib does not bind (§7.9); the contrast sampling and the picture difference, pixel loops over one grab (§7.10);
+the Qt calls of §7.11 that cxx-qt-lib does not bind (`QAccessible::queryAccessibleInterface`, `QMetaProperty`'s
+declaring class, `QQuickItem::scopedFocusItem` and `setFocus`, a property by an item's address,
+`QQuickTest::qWaitForPolish`); and §7.14's message handler, since `qInstallMessageHandler` takes a C function pointer,
+which neither cxx nor cxx-qt-lib can supply.
 
 ### 7.7 Open
 
@@ -956,21 +1228,22 @@ The C++ of §7.11 is there because each piece is a Qt call cxx-qt-lib does not b
 - **[routine]** The interface's typeface is not a token in kit-core (§1.3), so `Tokens` has no font family. Recommended:
   add `fontDisplayFamily` and `fontBodyFamily` to kit-core's tokens with their values read from `EmuSen_Interface.md`
   §5.2 when the first screen needs them, the gallery included, and bundle the faces as §10.2 found necessary.
-- Owed by §7.5 to a later step: the cues played through Endymion's interface player and Moonrise's strikes paired with
-  the chime, both with the platform client; the stars' per-tick cost measured on the handheld before stage 1 lands.
+- Owed by §7.5 to a later step: Moonrise's strikes paired with the chime (the cues play through Endymion's interface
+  player since §7.15); the stars' per-tick cost measured on the handheld before stage 1 lands.
+- Owed by §7.15: which of the interface's events rings which cue (a move, a section, a choice, back) is a screen's,
+  decided with stage 1's first screen; the gallery program names no platform library, so a human look at it reads no
+  pad until a host passes one **[routine]**; a uinput pad (a kernel device, seen by every program on the desk, as
+  WiseMan's `UinputHotplugTests` makes under `EMUSEN_UINPUT_PADS=1`) is not used, since SDL's virtual pads prove the
+  same path without one.
 - Owed by §7.8: `Keyboard` (the docked pad keyboard), `RatingPicker` and `DatePicker`; the drawn
-  glyphs (the pad's buttons for the help bar, a check, a radio dot, a chevron) in place of the rings, discs and
-  rectangles the style draws now; the desktop form's menu bar and status bar.
+  glyphs of the style (a check, a radio dot, a chevron) in place of the rings, discs and rectangles it draws now (the
+  pad's buttons are drawn since §7.12); the desktop form's menu bar and status bar.
 - Owed by §7.9 to stage 1: a row whose control takes Up and Down itself (a `TextField`, a `ComboBox`) cannot be passed
   by a vertical walk; the rule (the row walks first, the control takes the keys once chosen, as a console's settings
   do) is decided with the docked `Keyboard`. Until then a fixture declares its path with `KeyNavigation` on the control.
 - Decided 2026-11-08 by the tester: the approved draft is Moonrise's oracle, so its caption stays at the draft's 15
   units as the audit's named exception to the floor (§7.10).
-- Owed by §7.11: the question's opening logs `RangeError: Maximum call stack size exceeded` from `Sheet.qml` and
-  `Frame.qml` twenty times, in every gate run since 54f2dc43c; a recursion between the sheet's focus and the frame's,
-  read and fixed in the kit, not the gate.
 - Owed by §7.10 to stage 1: the frame raises `focusMoved` when the walk's focused role changes (B on the desktop's
   content gives the navigation the focus) but no item takes Qt's focus, so the walk's role and Qt's focus part there;
-  the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The help
-  bar's glyphs are empty circles until the pad's button glyphs are drawn (above). The other screens' faces (§5.2) are
+  the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The other screens' faces (§5.2) are
   bundled when the first screen needs them; Moonrise's two are.

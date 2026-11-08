@@ -1,4 +1,4 @@
-//! `Bells`: the cues rendered through kit-core and kept; playing them through Endymion's interface player comes with the platform client (EmuSen_Kit.md §7.5).
+//! `Bells`: the cues rendered through kit-core and kept; `BellPlayer` in emusen-qt-endymion plays them through Endymion's interface player (EmuSen_Kit.md §7.5, §7.15).
 
 use core::pin::Pin;
 

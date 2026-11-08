@@ -1,0 +1,33 @@
+[package]
+name = "emusen-qt-endymion"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+links = "emusen-qt-endymion"
+
+# Endymion for the interface (EmuSen_Qt.md §1.7, EmuSen_Kit.md §7.15): its pads read on a thread of their own into the
+# kit's PadRouter, the help bar's family from the pad last used, and the kit's bells through its interface player; the
+# module EmuSen.Endymion 1.0. The reading is plain Rust tested on Endymion's simulated pads; the bridges put it on Qt.
+[lib]
+name = "emusen_qt_endymion"
+
+[dependencies]
+cxx.workspace = true
+cxx-qt.workspace = true
+cxx-qt-lib.workspace = true
+# The interface's presses, the pad's controls and families, the thresholds and the cues: every decision is the kit's.
+emusen-kit-core.workspace = true
+# The kit's enumerations as Qt has them, so a press reaches PadRouter.push and a family the HelpBar with no number between.
+emusen-kit-qt.workspace = true
+# Endymion's pads and interface player, the only way to them (EmuSen_Qt.md §1.1.2).
+emusen-platform-client = { path = "../platform-client" }
+
+[build-dependencies]
+cxx-qt-build.workspace = true
+
+[dev-dependencies]
+# One harness test plays a cue through the bridge (EmuSen_Qt.md §8.1).
+emusen-qt-test.workspace = true
+# The platform library built from this commit, for the reading's tests on simulated pads.
+emusen-client-fixture = { path = "../client-fixture" }

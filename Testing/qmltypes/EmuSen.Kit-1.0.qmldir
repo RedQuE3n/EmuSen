@@ -19,3 +19,4 @@ MenuRow 1.0 qml/MenuRow.qml
 WholeRow 1.0 qml/WholeRow.qml
 Carousel 1.0 qml/Carousel.qml
 NormalizedCanvas 1.0 qml/NormalizedCanvas.qml
+PadGlyph 1.0 qml/PadGlyph.qml

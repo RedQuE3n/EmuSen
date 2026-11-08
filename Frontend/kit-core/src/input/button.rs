@@ -78,11 +78,14 @@ impl UiButton {
         matches!(self, UiButton::Up | UiButton::Down | UiButton::Left | UiButton::Right)
     }
 
-    /// The button with the player's A/B swap applied: Accept and Back trade places, nothing else moves.
+    /// The button with the player's swap applied: Accept and Back trade places, and so do Search and Screensaver, the
+    /// North and West buttons, as the C# front end and ES-DE trade them (decided 2026-11-08); nothing else moves.
     pub const fn swapped(self, swap: bool) -> UiButton {
         match (swap, self) {
             (true, UiButton::Accept) => UiButton::Back,
             (true, UiButton::Back) => UiButton::Accept,
+            (true, UiButton::Search) => UiButton::Screensaver,
+            (true, UiButton::Screensaver) => UiButton::Search,
             _ => self,
         }
     }

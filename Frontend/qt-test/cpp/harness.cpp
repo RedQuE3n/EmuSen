@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <utility>
 
 namespace {
 
@@ -73,6 +74,28 @@ QJsonArray coloursOf(QQuickItem* item)
         }
     }
     return colours;
+}
+
+// Every warning Qt logs, kept for the test to read and shown as before; Qt's handler has no context, so the list is the file's (EmuSen_Kit.md §7.14).
+struct Kept {
+    QStringList messages;
+    QtMessageHandler shown = nullptr;
+};
+
+Kept& kept()
+{
+    static Kept log;
+    return log;
+}
+
+void keep(QtMsgType type, const QMessageLogContext& context, const QString& message)
+{
+    if (type != QtDebugMsg && type != QtInfoMsg) {
+        kept().messages.append(message);
+    }
+    if (kept().shown != nullptr) {
+        kept().shown(type, context, message);
+    }
 }
 
 // What a press may move and the walk puts back after each: a selection, a value or a scroll, as Qt Quick's own classes declare them (EmuSen_Kit.md §7.11).
@@ -297,6 +320,7 @@ void harness_resize(QObject& window, int width, int height)
 {
     if (QQuickWindow* w = quick(window)) {
         w->resize(width, height);
+        QTest::qWaitFor([w, width, height] { return w->contentItem()->width() == width && w->contentItem()->height() == height; }, 2000); // the platform's geometry event delivered, as a window manager's arrives
         QQuickTest::qWaitForPolish(w); // what Qt declares: no item still to lay out
     }
 }
@@ -334,6 +358,10 @@ void harness_wheel(QObject& window, double x, double y, int delta)
 }
 
 void harness_wait(int ms) { QTest::qWait(ms); }
+
+void harness_keep_messages() { kept().shown = qInstallMessageHandler(keep); }
+
+QString harness_messages() { return std::exchange(kept().messages, {}).join(QChar(0x1e)); }
 
 std::uint64_t harness_focus(QObject& window)
 {

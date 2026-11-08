@@ -20,15 +20,19 @@ pub struct PadEvent {
 /// The pads' numbers: what `get`, `text` and `axis` read, and the settings.
 pub mod consts {
     pub use crate::raw::{
-        EMUSEN_ENDYMION_AXIS_PAD as AXIS_PAD, EMUSEN_ENDYMION_AXIS_RAW as AXIS_RAW, EMUSEN_ENDYMION_PADS_ANY_PRESSED as ANY_PRESSED,
-        EMUSEN_ENDYMION_PADS_AXIS_VALUE as AXIS_VALUE, EMUSEN_ENDYMION_PADS_FRONTEND_COUNT as FRONTEND_COUNT,
-        EMUSEN_ENDYMION_PADS_GUID as GUID, EMUSEN_ENDYMION_PADS_ID as ID, EMUSEN_ENDYMION_PADS_IS_OPEN as IS_OPEN,
-        EMUSEN_ENDYMION_PADS_KIND as KIND, EMUSEN_ENDYMION_PADS_LABEL as LABEL, EMUSEN_ENDYMION_PADS_NAME as NAME,
-        EMUSEN_ENDYMION_PADS_PATH as PATH, EMUSEN_ENDYMION_PADS_RAW_PRESSED as RAW_PRESSED, EMUSEN_ENDYMION_PADS_STARTED as STARTED,
-        EMUSEN_ENDYMION_PADS_VENDOR_PRODUCT as VENDOR_PRODUCT, EMUSEN_ENDYMION_SETTING_ANALOG_DEADZONE as SETTING_ANALOG_DEADZONE,
+        EMUSEN_ENDYMION_AXIS_PAD as AXIS_PAD, EMUSEN_ENDYMION_AXIS_RAW as AXIS_RAW, EMUSEN_ENDYMION_FAMILY_GENERIC as FAMILY_GENERIC,
+        EMUSEN_ENDYMION_FAMILY_NINTENDO as FAMILY_NINTENDO, EMUSEN_ENDYMION_FAMILY_PLAYSTATION as FAMILY_PLAYSTATION,
+        EMUSEN_ENDYMION_FAMILY_XBOX as FAMILY_XBOX, EMUSEN_ENDYMION_PADS_ANY_PRESSED as ANY_PRESSED,
+        EMUSEN_ENDYMION_PADS_AXIS_VALUE as AXIS_VALUE, EMUSEN_ENDYMION_PADS_FAMILY as FAMILY,
+        EMUSEN_ENDYMION_PADS_FRONTEND_COUNT as FRONTEND_COUNT, EMUSEN_ENDYMION_PADS_GUID as GUID, EMUSEN_ENDYMION_PADS_ID as ID,
+        EMUSEN_ENDYMION_PADS_IS_OPEN as IS_OPEN, EMUSEN_ENDYMION_PADS_KIND as KIND, EMUSEN_ENDYMION_PADS_LABEL as LABEL,
+        EMUSEN_ENDYMION_PADS_NAME as NAME, EMUSEN_ENDYMION_PADS_PATH as PATH, EMUSEN_ENDYMION_PADS_RAW_PRESSED as RAW_PRESSED,
+        EMUSEN_ENDYMION_PADS_STARTED as STARTED, EMUSEN_ENDYMION_PADS_VENDOR_PRODUCT as VENDOR_PRODUCT,
+        EMUSEN_ENDYMION_SETTING_ANALOG_DEADZONE as SETTING_ANALOG_DEADZONE,
         EMUSEN_ENDYMION_SETTING_FIRST_CONTROLLER_ONLY as SETTING_FIRST_CONTROLLER_ONLY,
         EMUSEN_ENDYMION_SETTING_LEFT_STICK_IS_ANALOG as SETTING_LEFT_STICK_IS_ANALOG,
         EMUSEN_ENDYMION_SETTING_STICK_AS_DPAD as SETTING_STICK_AS_DPAD, EMUSEN_ENDYMION_SETTING_STICK_DEADZONE as SETTING_STICK_DEADZONE,
+        EMUSEN_ENDYMION_SIM_PAD_KIND as SIM_PAD_KIND, EMUSEN_ENDYMION_SIM_PAD_NAME as SIM_PAD_NAME,
         EMUSEN_ENDYMION_SIM_PAD_RUMBLE as SIM_PAD_RUMBLE,
     };
 }
@@ -83,6 +87,13 @@ impl Pads {
             Err(e) if crate::error::absent(&e) => Ok(Vec::new()),
             other => other,
         }
+    }
+
+    /// SDL's pads of these ids alone from the next start or poll, or every pad for none: a test's, so that it opens SDL's
+    /// virtual pads and none on the desk.
+    pub fn show_only(&self, only: Option<&[u32]>) -> Result<()> {
+        let (p, n) = only.map_or((std::ptr::null(), 0), |ids| (ids.as_ptr(), ids.len()));
+        self.platform.status(unsafe { self.platform.lib.emusen_endymion_pads_show_only(self.pads.as_ptr(), p, n) }.into()).map(drop)
     }
 
     /// The events a start or poll had no room for.
@@ -201,6 +212,17 @@ impl SimPad {
     /// An SDL_GamepadAxis set, -1 to 1 for a stick, 0 to 1 for a trigger.
     pub fn set_axis(&self, axis: i32, value: f64) -> Result<()> {
         self.platform.status(unsafe { self.platform.lib.emusen_endymion_sim_pad_set_axis(self.pad.as_ptr(), axis, value) }.into()).map(drop)
+    }
+
+    /// A number of the pad's set, EMUSEN_ENDYMION_SIM_PAD_* (its SDL type, its vendor and product, its player light).
+    pub fn set(&self, which: u32, value: i32) -> Result<()> {
+        self.platform.status(unsafe { self.platform.lib.emusen_endymion_sim_pad_set(self.pad.as_ptr(), which, value) }.into()).map(drop)
+    }
+
+    /// A text of the pad's set, EMUSEN_ENDYMION_SIM_PAD_NAME, _GUID or _PATH.
+    pub fn set_text(&self, which: u32, value: &str) -> Result<()> {
+        let n = unsafe { self.platform.lib.emusen_endymion_sim_pad_set_text(self.pad.as_ptr(), which, value.as_ptr(), value.len()) };
+        self.platform.status(n.into()).map(drop)
     }
 
     /// A number of the pad's, EMUSEN_ENDYMION_SIM_PAD_*.

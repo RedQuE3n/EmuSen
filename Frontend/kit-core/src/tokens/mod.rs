@@ -16,7 +16,7 @@ pub use palette::{ColourToken, ContrastPair, GRAPHIC_FLOOR, TEXT_FLOOR, colour, 
 pub enum Form {
     /// A desktop window, in device pixels at 1x.
     Desktop,
-    /// The big screen and the handheld, in design units: a pixel at 1280x800, scaled with the screen's height.
+    /// The big screen and the handheld, in design units: a pixel of a screen 800 high (1280 × 800), scaled with the screen's height.
     BigScreen,
 }
 

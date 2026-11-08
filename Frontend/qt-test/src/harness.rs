@@ -23,8 +23,12 @@ pub const SETTLE_MS: i32 = 5000;
 /// `PathView.StrictlyEnforceRange`: the current item held in the highlight range, so the offset follows the current index.
 const STRICTLY_ENFORCE_RANGE: f64 = 2.0;
 
-/// The four sizes the gate runs at (EmuSen_Interface.md §24.7).
-pub const SIZES: [(i32, i32); 4] = [(1280, 800), (1920, 1080), (1280, 720), (3840, 2160)];
+/// Messages Qt logs of its own accord that no code of ours causes, each with its reason (EmuSen_Kit.md §7.14).
+pub const QT_INTERNAL: [(&str, &str); 0] = [];
+
+/// The sizes the gate runs at (EmuSen_Interface.md §24.7): 1280 × 800, a Steam Deck–class size kept as a fit size; the
+/// handheld's own 1920 × 1200 (a Legion Go S, decided 2026-11-08); 1920 × 1080, 1280 × 720 and 3840 × 2160.
+pub const SIZES: [(i32, i32); 5] = [(1280, 800), (1920, 1200), (1920, 1080), (1280, 720), (3840, 2160)];
 
 /// The engine is declared first so it drops before the application, as Qt requires.
 pub struct Harness {
@@ -52,6 +56,7 @@ impl Harness {
         if std::env::var_os("QT_FORCE_STDERR_LOGGING").is_none() {
             std::env::set_var("QT_FORCE_STDERR_LOGGING", "1");
         }
+        ffi::harness_keep_messages();
         QQuickStyle::set_fallback_style(&QString::from("Basic"));
         QQuickStyle::set_style(&QString::from("EmuSen"));
         let app = QGuiApplication::new();
@@ -102,6 +107,18 @@ impl Harness {
     /// The kit's Tokens singleton, to switch the variant or the form under a scene.
     pub fn tokens(&mut self) -> Option<Pin<&mut Tokens>> {
         self.singleton::<Tokens>("Tokens")
+    }
+
+    /// Every warning and error Qt has logged since the last call, QML's own among them.
+    pub fn messages(&mut self) -> Vec<String> {
+        let all = ffi::harness_messages().to_string();
+        all.split('\u{1e}').filter(|m| !m.is_empty()).map(str::to_owned).collect()
+    }
+
+    /// Fails on any message Qt logged that is not one of `QT_INTERNAL`'s, each named with the reason it is Qt's (EmuSen_Kit.md §7.14).
+    pub fn assert_quiet(&mut self) {
+        let ours: Vec<String> = self.messages().into_iter().filter(|m| !QT_INTERNAL.iter().any(|(text, _)| m.contains(text))).collect();
+        assert!(ours.is_empty(), "Qt logged {} warnings or errors:\n{}", ours.len(), ours.join("\n"));
     }
 
     pub fn process_events(&self) {
@@ -166,6 +183,11 @@ impl Scene<'_> {
 
     pub fn wait(&mut self, ms: i32) {
         ffi::harness_wait(ms);
+    }
+
+    /// The harness's `assert_quiet`, for a test that holds a scene.
+    pub fn assert_quiet(&mut self) {
+        self.harness.assert_quiet();
     }
 
     /// The window's item tree, read into kit-core's audit items.
@@ -252,6 +274,38 @@ impl Scene<'_> {
         text.split(';').map(crate::tree::colour).collect()
     }
 
+    /// How many points of a grid within 0.35 of each item's size from its centre differ by more than 24 levels from the
+    /// colour most of them show, from one grab: an empty ring, filled or not, shows one colour there (EmuSen_Kit.md §7.12).
+    pub fn ink_inside(&mut self, tree: &Tree, items: &[u32]) -> Vec<(u32, usize)> {
+        let mut spans = Vec::new();
+        let mut points = Vec::new();
+        for &i in items {
+            let n = &tree.nodes[i as usize];
+            let (cx, cy, r) = (n.x + n.w / 2.0, n.y + n.h / 2.0, 0.35 * n.w.min(n.h));
+            let start = points.len();
+            for row in -4..=4 {
+                for column in -4..=4 {
+                    let (dx, dy) = (r * f64::from(column) / 4.0, r * f64::from(row) / 4.0);
+                    if dx * dx + dy * dy <= r * r {
+                        points.push((cx + dx, cy + dy));
+                    }
+                }
+            }
+            spans.push((i, start..points.len()));
+        }
+        let colours = self.colours_at(&points);
+        let near =
+            |a: &Colour, b: &Colour| [(a.r, b.r), (a.g, b.g), (a.b, b.b)].iter().all(|(x, y)| (i32::from(*x) - i32::from(*y)).abs() <= 24);
+        spans
+            .into_iter()
+            .map(|(i, span)| {
+                let seen: Vec<Colour> = colours[span].iter().flatten().copied().collect();
+                let most = seen.iter().max_by_key(|c| seen.iter().filter(|o| near(c, o)).count()).copied();
+                (i, most.map_or(0, |m| seen.iter().filter(|c| !near(c, &m)).count()))
+            })
+            .collect()
+    }
+
     /// What is behind every visible text, from one grab with no words drawn, given to the tree for the contrast rule (EmuSen_Kit.md §7.10).
     pub fn sample_behind(&mut self, tree: &mut Tree, width: f64, height: f64) {
         let wanted = tree.behind_points(width, height);
@@ -305,16 +359,33 @@ impl Scene<'_> {
         self.wait(5);
     }
 
+    /// Whether the router holds a button, as its last pump left it.
+    pub fn pad_held(&mut self, button: UiButton) -> bool {
+        self.harness.router().is_some_and(|router| router.is_held(kinds::pad_button(button)))
+    }
+
+    /// The router pumped by the frame's timer on the wall clock again, as a real pad needs it; `pad` turns it off.
+    pub fn run_pad_clock(&mut self) {
+        if let Some(router) = self.harness.router() {
+            router.set_clock_running(true);
+        }
+    }
+
     /// Where a press of each direction from each operable element lands, kept whatever the outcome, as a recording keeps it;
     /// what each press moved (a list's selection, a tab, a value, a scroll) is put back before the next, as InterfaceSpec §3's walk does.
     pub fn walk(&mut self, tree: &Tree) -> Vec<Step> {
+        self.walk_by(tree, |scene, button| scene.pad(button))
+    }
+
+    /// The walk with each press made by `press`: a real pad's, where `walk` pushes into the router's queue.
+    pub fn walk_by(&mut self, tree: &Tree, mut press: impl FnMut(&mut Self, UiButton)) -> Vec<Step> {
         let mut steps = Vec::new();
         for from in tree.operable() {
             for button in [UiButton::Up, UiButton::Down, UiButton::Left, UiButton::Right] {
                 if !self.focus_item(tree, from) {
                     continue;
                 }
-                self.pad(button);
+                press(self, button);
                 let to = match self.focus(tree) {
                     Some(to) if to == from => Landing::Same,
                     Some(to) => Landing::At(to),

@@ -121,6 +121,12 @@ fn simulated_pads_are_opened_read_driven_and_let_go() {
     let key = opened[0].key;
     assert_eq!(pads.open().unwrap(), [key]);
     assert_eq!(pads.text(key, pad::NAME).unwrap().as_deref(), Some("Simulated pad"));
+    assert_eq!(pads.get(key, pad::FAMILY, 0).unwrap(), pad::FAMILY_GENERIC as i64, "a pad of no known type or name");
+    one.set(pad::SIM_PAD_KIND, 6).unwrap();
+    assert_eq!(pads.get(key, pad::FAMILY, 0).unwrap(), pad::FAMILY_PLAYSTATION as i64, "SDL's PS5 type");
+    one.set(pad::SIM_PAD_KIND, 1).unwrap();
+    one.set_text(pad::SIM_PAD_NAME, "Nintendo Switch Pro Controller").unwrap();
+    assert_eq!(pads.get(key, pad::FAMILY, 0).unwrap(), pad::FAMILY_NINTENDO as i64, "a standard pad by its name");
 
     one.press(0, true).unwrap();
     pads.update().unwrap();
@@ -133,6 +139,7 @@ fn simulated_pads_are_opened_read_driven_and_let_go() {
     set.disconnect(&one).unwrap();
     let closed = pads.poll().unwrap();
     assert!(closed.iter().any(|e| !e.opened && e.key == key), "{closed:?}");
+    assert_eq!(pads.get(key, pad::FAMILY, 0).unwrap(), pad::FAMILY_NINTENDO as i64, "kept once it closes");
 }
 
 #[test]

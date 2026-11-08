@@ -1,4 +1,4 @@
-// EmuSen_Qt.md §7's stage 0 gate: the fit audit, pad reach, pointer reach, no chrome, names, palette reach and the style sweep, green on the gallery at the four sizes, in every form and variant; the grabs saved for a human look, each with its state recorded in the spec format beside it.
+// EmuSen_Qt.md §7's stage 0 gate: the fit audit, pad reach, pointer reach, no chrome, names, palette reach and the style sweep, green on the gallery at the five sizes, in every form and variant; the grabs saved for a human look, each with its state recorded in the spec format beside it.
 
 use std::path::PathBuf;
 
@@ -15,6 +15,12 @@ const FORMS: [(WalkForm, &str, &str); 3] =
 const SECTIONS: [&str; 3] = ["Menu", "Controls", "Moonrise"];
 const SWEPT: [&str; 6] = ["play", "primary", "field", "combo", "progress", "tabs"];
 const KEY_F1: i32 = 0x0100_0030;
+/// The gallery's help bar: Choose, Back and Menu.
+const HELP_ENTRIES: usize = 3;
+/// Points inside a glyph's ring that must differ from its ground: the least a drawn mark covers (EmuSen_Kit.md §7.12).
+const GLYPH_INK: usize = 2;
+/// The pad families the help bar is drawn in for a look, by `Kit.Families`' numbers.
+const FAMILIES: [(&str, &str); 4] = [("generic", "0"), ("xbox", "1"), ("playstation", "2"), ("nintendo", "3")];
 /// The audit's slack at a scale above one: a pixel and a half.
 const SLACK: f64 = 1.5;
 
@@ -159,6 +165,27 @@ fn list_cut_short(tree: &emusen_qt_test::tree::Tree, room: f64) -> Vec<String> {
     faults
 }
 
+/// Every help-bar glyph shown draws something inside its ring, and the bar shows its three when it is shown (EmuSen_Kit.md §7.12).
+fn glyphs_drawn(scene: &mut Scene<'_>, tree: &emusen_qt_test::tree::Tree, shown: bool) -> Vec<String> {
+    let glyphs: Vec<u32> = (0..tree.nodes.len() as u32)
+        .filter(|&i| {
+            let n = &tree.nodes[i as usize];
+            n.visible && n.name.starts_with("glyph-")
+        })
+        .collect();
+    let mut faults: Vec<String> = scene
+        .ink_inside(tree, &glyphs)
+        .into_iter()
+        .filter(|(_, inked)| *inked < GLYPH_INK)
+        .map(|(i, inked)| format!("help-bar glyph {} draws nothing inside its ring ({inked} points)", tree.nodes[i as usize].name))
+        .collect();
+    let expected = if shown { HELP_ENTRIES } else { 0 };
+    if glyphs.len() != expected {
+        faults.push(format!("{} help-bar glyphs shown, {expected} expected", glyphs.len()));
+    }
+    faults
+}
+
 /// The style sweep: the colour inside each styled control's background, near its right end, is a token of the variant.
 fn sweep(scene: &mut Scene<'_>, tree: &emusen_qt_test::tree::Tree, variant: Variant) -> Vec<String> {
     let tokens = palette(variant);
@@ -227,6 +254,7 @@ fn qt_7_stage_0_gate_on_the_gallery() {
                         }
                         _ => Vec::new(),
                     };
+                    faults.extend(glyphs_drawn(&mut scene, &tree, page != 2 && form != WalkForm::Desktop));
                     assert!(scene.grab(&grabs.join(format!("{name}.png")).display().to_string()), "grab {name}");
                     scene.sample_behind(&mut tree, f64::from(w), f64::from(h));
                     let walk = scene.walk(&tree);
@@ -274,8 +302,18 @@ fn qt_7_stage_0_gate_on_the_gallery() {
     scene.pad(UiButton::Back);
     scene.wait(400);
     assert_eq!(scene.property("question", "opened"), "false", "B closed it");
+
+    // The help bar in each pad family, at 1280 x 800 on the big screen, dark: every glyph drawn, a grab of each for a look.
+    for (family, number) in FAMILIES {
+        assert!(scene.set_property("scene", "padFamily", number));
+        let tree = scene.tree();
+        report.extend(glyphs_drawn(&mut scene, &tree, true).iter().map(|f| format!("help bar, {family}: {f}")));
+        assert!(scene.grab(&grabs.join(format!("helpbar-{family}.png")).display().to_string()));
+    }
+    assert!(scene.set_property("scene", "padFamily", "0"));
     states += 1;
 
+    scene.assert_quiet();
     assert!(report.is_empty(), "{} states; faults:\n{}", states, report.join("\n"));
-    assert_eq!(states, 2 * 3 * 3 * 4 + 1);
+    assert_eq!(states, 2 * 3 * 3 * SIZES.len() + 1);
 }

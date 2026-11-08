@@ -4,7 +4,7 @@ use core::pin::Pin;
 use std::time::Duration;
 
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QByteArray, QColor, QHash, QHashPair_i32_QByteArray, QModelIndex, QVariant, QVector};
+use cxx_qt_lib::{QColor, QHash, QHashPair_i32_QByteArray, QModelIndex, QVariant, QVector};
 use emusen_kit_core::world::{Timeline, STAR_COLOUR};
 
 use crate::convert::qcolor;
@@ -335,16 +335,15 @@ impl qobject::StarField {
     }
 
     pub fn role_names(&self) -> QHash<QHashPair_i32_QByteArray> {
-        let mut roles = QHash::default();
-        for (role, name) in [
-            (StarRole::StarX, "starX"),
-            (StarRole::StarY, "starY"),
-            (StarRole::StarRadius, "starRadius"),
-            (StarRole::StarOpacity, "starOpacity"),
-        ] {
-            roles.insert(role.repr, QByteArray::from(name));
-        }
-        roles
+        crate::convert::role_names(
+            [
+                (StarRole::StarX, "starX"),
+                (StarRole::StarY, "starY"),
+                (StarRole::StarRadius, "starRadius"),
+                (StarRole::StarOpacity, "starOpacity"),
+            ]
+            .map(|(role, name)| (role.repr, name)),
+        )
     }
 
     pub fn row_count(&self, _parent: &QModelIndex) -> i32 {

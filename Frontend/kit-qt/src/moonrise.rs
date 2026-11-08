@@ -3,7 +3,7 @@
 use core::pin::Pin;
 
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QByteArray, QColor, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QVariant, QVector};
+use cxx_qt_lib::{QColor, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QVariant, QVector};
 use emusen_kit_core::world::{self, Frame, PlanetFrame, Splash, SplashBody, Timeline, WorldBody, WorldShape};
 
 use crate::convert::{polygon, qcolor};
@@ -314,7 +314,7 @@ impl Default for MoonriseModelRust {
             lit_focus_y: 0.0,
             lit_focus_radius: 0.0,
             lit_radius: 0.0,
-            shadow_outline: QVariant::default(),
+            shadow_outline: polygon(&[]),
             shadow_points: Vec::new(),
             sweep_visible: false,
             sweep_x: 0.0,
@@ -558,11 +558,7 @@ impl qobject::MoonriseModel {
     }
 
     pub fn role_names(&self) -> QHash<QHashPair_i32_QByteArray> {
-        let mut roles = QHash::default();
-        for (role, name) in ROLE_NAMES {
-            roles.insert(role.repr, QByteArray::from(name));
-        }
-        roles
+        crate::convert::role_names(ROLE_NAMES.map(|(role, name)| (role.repr, name)))
     }
 
     pub fn row_count(&self, _parent: &QModelIndex) -> i32 {

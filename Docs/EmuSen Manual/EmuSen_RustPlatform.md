@@ -3210,6 +3210,7 @@ A hit copies the library with the timestamp it had when it was stored, which can
 | `stage --part platform ...` | builds `emusen-platform` and `dianash` with one cargo command into `R/emusen_platform/`, and lays out the library, `dianash/nano`, `dianash/nano.dianash.json` and chdman where the toolchain holds it | `Platform.targets`, `Platform.props` |
 | `check-sidecars FOLDER` | §28.10's check, the same three refusals in the same words | `CheckCoreSidecars.proj` |
 | `prebuilt --rid RID --from DIR --out DIR` | for a publish for another platform: the libraries CI built for it from `DIR/RID/`, their sidecars, a manifest of its own, and the list of the host's native file names the publish drops | `RustCoresPublish.targets` |
+| `appimage --out DIR [--tools DIR]` | bundles the Qt front end's kit gallery as an AppImage with linuxdeploy, its Qt plugin and appimagetool, each pinned with its sha256 in `xtask/appimage-tools.tsv` and checked before every run, the distribution's patchelf named by `PATCHELF` (`EmuSen_Qt.md` §9.2, `EmuSen_Kit.md` §7.13; added 2026-11-08) | nothing (new) |
 
 The staged files are hard links to cargo's output, so staging costs no copy. Each command is a plain function over the list; nothing in the crate knows MSBuild.
 
@@ -4404,3 +4405,20 @@ and `_defaults`; the C# classes that read and wrote them bind what crosses and n
 the settings file and the five stores by number (`stores::File`), so a front end copies neither `appsettings.json` nor
 `games.db`; the games service opens games.db through it. Endymion gains its first dependency on Galaxia (the config
 directory and `config_json`) and one on `emusen-suggest`. Platform interface 40; the C# twin's number with it.
+
+## 48. Interface 41, 2026-11-08: the printing on a pad's buttons
+
+One number for an existing call, for the Qt front end's help bar (`EmuSen_Kit.md` §7.15, where the choice of owner is
+argued): `emusen_endymion_pads_get(pads, key, EMUSEN_ENDYMION_PADS_FAMILY, 0)` answers which printing a pad's buttons
+carry, `EMUSEN_ENDYMION_FAMILY_GENERIC` (0, not known: a front end draws the buttons by position), `_XBOX` (1),
+`_PLAYSTATION` (2) or `_NINTENDO` (3), from SDL's `SDL_GamepadType` first and the pad's name where SDL says Standard or
+Unknown; like the type and the name it is kept once the pad closes. The table is Mistress's `PadFamilies.cs` moved into
+Endymion as `emusen_endymion::family`, and the C# file is deleted: `ConnectedPad.Family` reads the number, and
+Mistress's help bar casts it to LunaP's `PadFamily`, whose order is the header's. Endymion owns pads, so the fact has
+one owner for both front ends. A new number on top of §47.26's 40, as §45's was (rule B): it moved in `emusen_platform.h`, `lib.rs` and
+`PlatformLibrary.InterfaceVersion` together, and `Frontend/platform-client`'s binding was regenerated.
+
+The C# test of the table (`ThemedLibraryHostTests.SDL_s_pad_types_and_names_give_the_families`) became Endymion's unit
+tests, case for case. Measured on 2026-11-08: Endymion's `family` tests (3) and the platform client's 12 pass, its
+simulated-pads test reading the family by type, by name and after the pad closes; a library answering the type for the
+family failed it.

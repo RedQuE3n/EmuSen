@@ -31,4 +31,5 @@ fn qt_1_5_the_styled_controls_paint_the_tokens_and_pass_the_gate() {
     let path = std::env::temp_dir().join("emusen-qt-test-controls.png");
     assert!(scene.grab(&path.display().to_string()), "the grab saved");
     assert!(path.metadata().map(|m| m.len() > 1000).unwrap_or(false), "a picture was written");
+    scene.assert_quiet();
 }

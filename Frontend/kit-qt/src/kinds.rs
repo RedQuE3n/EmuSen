@@ -1,5 +1,6 @@
 //! The kit's enumerations for QML, each a mirror of a kit-core type in a namespace of its own, so QML says `Kit.Pad.Accept` or `Kit.Forms.BigScreen` (EmuSen_Kit.md §7.1).
 
+use emusen_kit_core::glyph::PadFamily;
 use emusen_kit_core::input::{RepeatTiers, Role as WalkRole, UiButton, WalkForm};
 use emusen_kit_core::sound::Cue as SoundCue;
 use emusen_kit_core::tokens::{Form as TokenForm, Variant as TokenVariant};
@@ -108,6 +109,19 @@ pub mod ffi {
     }
 
     #[qml_element]
+    qnamespace!("Families");
+
+    /// What a pad prints on its buttons: kit-core's `PadFamily`, in its order.
+    #[qenum]
+    #[namespace = "Families"]
+    enum Family {
+        Generic,
+        Xbox,
+        PlayStation,
+        Nintendo,
+    }
+
+    #[qml_element]
     qnamespace!("Cues");
 
     /// The interface's nine cues: kit-core's `Cue`.
@@ -126,7 +140,7 @@ pub mod ffi {
     }
 }
 
-pub use ffi::{BodyShape, Cue, Form, PadButton, Ring, Role, Tiers, Variant};
+pub use ffi::{BodyShape, Cue, Family, Form, PadButton, Ring, Role, Tiers, Variant};
 
 pub fn world_shape(shape: BodyShape) -> WorldShape {
     match shape {
@@ -174,6 +188,15 @@ pub fn pad_button(button: UiButton) -> PadButton {
 
 pub fn ui_button(button: PadButton) -> Option<UiButton> {
     usize::try_from(button.repr).ok().and_then(|i| UiButton::ALL.get(i).copied())
+}
+
+/// A family by its number, the generic face for one out of range.
+pub fn pad_family(family: Family) -> PadFamily {
+    usize::try_from(family.repr).ok().and_then(|i| PadFamily::ALL.get(i).copied()).unwrap_or(PadFamily::Generic)
+}
+
+pub fn family_of(family: PadFamily) -> Family {
+    Family { repr: PadFamily::ALL.iter().position(|f| *f == family).map_or(0, |i| i as i32) }
 }
 
 pub fn walk_form(form: Form) -> WalkForm {

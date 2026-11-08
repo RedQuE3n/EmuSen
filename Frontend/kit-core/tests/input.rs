@@ -150,6 +150,9 @@ fn mainwindow_pad_the_stick_is_a_direction_past_0_55() {
 fn qt_1_7_the_swap_trades_accept_and_back_and_the_declined_press_becomes_a_key() {
     assert_eq!(UiButton::Accept.swapped(true), UiButton::Back);
     assert_eq!(UiButton::Back.swapped(true), UiButton::Accept);
+    assert_eq!(UiButton::Search.swapped(true), UiButton::Screensaver);
+    assert_eq!(UiButton::Screensaver.swapped(true), UiButton::Search);
+    assert_eq!(UiButton::Search.swapped(false), UiButton::Search);
     assert_eq!(UiButton::Menu.swapped(true), UiButton::Menu);
     assert_eq!(UiButton::Accept.swapped(false), UiButton::Accept);
     assert_eq!(UiButton::Up.key(), Some(Key::Up));

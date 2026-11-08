@@ -225,12 +225,14 @@ built from the same commit (`Error::Refused`); only then is every symbol resolve
   a front end keeps its own handle, as that header says.
 - *Endymion's pads:* SDL's pads or a simulated set's, started, polled and taken as events (opened or closed, announced
   or not, by key), the open keys, a pad's numbers, texts and axes, the PadButton as the game hears it, the player light,
-  the motors and the five settings; simulated pads and sets, pressed and plugged as tests do.
+  the motors and the five settings; simulated pads and sets, pressed and plugged as tests do. Since 2026-11-08 (the pad
+  bridge, `EmuSen_Kit.md` §7.15): the family a pad's buttons print (`FAMILY`, interface 41), `show_only` for a test's
+  virtual pads, and a simulated pad's numbers and texts set (its SDL type, its name).
 - *Endymion's binding files* (since 40): each of the four loaded for the consoles a program knows, saved, and a map's
   defaults, as JSON that stays Endymion's (`EmuSen_Input.md` §5.2); a file that would not read leaves its diagnostic
   in `diagnostics`. `DeviceModel` and `SettingsModel` read and write the bindings through these.
 - *Endymion's interface player:* made once SDL is lent (refused with words before), samples remembered and played, the
-  device by name and the volume.
+  device by name and the volume; since 2026-11-08 the bytes still queued, which prove a play.
 - *The rule for SQLite* **[D 2026-11-08]**: the Qt front end lends the system's `libsqlite3.so.0` to every call that
   takes one (the library handle, the scraper and, once wrapped, the runtime's states), so the process holds one copy of
   SQLite, as `EmuSen_RustPlatform.md` §47.25's argument requires.
@@ -250,8 +252,8 @@ tracks, packages, mapped files, migration, `config_read`, `config_write` and `co
 (`emusen_disc_*`); emusen-systems' libretro cores, save media formats, code, recognition, route, OpenVGDB, header,
 disassembly, board name and view; `emusen_firmware_find` and `_locate`; the cheat files and database
 (`emusen_cheats_*`); the HTTP client (`emusen_net_download_*`); the medium locks; Endymion's resampler, rate control,
-router, player slots, `pad_resolve`, `pad_combine`, `pad_controls_for`, `pads_use`, `pads_show_only`,
-`pads_rescan_due`, the simulated pads' texts, holds and device calls, the game's audio player (`emusen_endymion_audio_*`),
+router, player slots, `pad_resolve`, `pad_combine`, `pad_controls_for`, `pads_use`,
+`pads_rescan_due`, the simulated pads' texts read, holds and device calls, the game's audio player (`emusen_endymion_audio_*`),
 the interface player's `decode`, `decode_take` and `volume`; and all of Serenity (presets, sources, the compiler,
 reflection, the cache, the device, the lend, the chain, the ring and the built-in filters). Each is wrapped when a
 screen needs it: the router and slots with the Device screen, the audio player, rate control and Serenity with the
@@ -390,10 +392,10 @@ The module's surface is `import EmuSen.Kit 1.0` and its `.qmltypes` (rule Q). It
 runtime: the bodies draw any host's worlds, the frame walks any host's roles. `cargo deny`-style test: the kit's
 dependency tree names no runtime or client crate.
 
-Attached properties (`EmuSen.Pad.button`, `EmuSen.Focus.group`, `EmuSen.Fit.exempt`) need a `QML_ATTACHED` C++ shell of
-about thirty lines each, since cxx-qt does not declare attached types and QML cannot; this is the trivial glue the
-decisions allow, and §10.4 records the same kind of glue the spike needed for a brush. The count of hand-written C++ is a
-tracked number: under 600 lines for the whole front end, or the design is wrong.
+Attached properties (`EmuSen.Pad.button`, `EmuSen.Focus.group`, `EmuSen.Fit.exempt`) need a `QML_ATTACHED` C++ shell
+each, since cxx-qt does not declare attached types and QML cannot; this is the trivial glue the decisions allow, and
+§10.4 records the same kind of glue the spike needed for a brush. Decided 2026-11-08: cxx-qt is the binding; C++ glue is
+written where cxx-qt-lib does not reach, each part with its reason.
 
 ### 1.5 The style: tokens as a Qt Quick Controls style named `EmuSen`
 
@@ -418,7 +420,10 @@ thread with `qt_thread().queue`, coalesced per axis. `PadRouter` (kit) applies t
 in `EmuSen_BigPicture.md` §14 and the player's A/B swap, then offers each press in order to the active sheet or question,
 the focused `Frame`'s walk, and, if declined, the window's focus item as a `QKeyEvent` (directions → arrows, A → Return,
 B → Escape, Start → Menu, Select → Select), so stock controls and `ListView` answer a pad with no code of their own. Tests
-push `PadEvent`s into the same queue a real pad uses.
+push `PadEvent`s into the same queue a real pad uses. As built on 2026-11-08 (`EmuSen_Kit.md` §7.15): `PadReader` in
+`emusen-qt-endymion` (module `EmuSen.Endymion`) reads the pads, a scene joins its `button` signal to `PadRouter.push`,
+and the help bar's family is the family Endymion reports for the pad last used (`EMUSEN_ENDYMION_PADS_FAMILY`, since
+Endymion owns pads); `BellPlayer` plays the kit's cues through Endymion's interface player.
 
 **The pointer and the keyboard are equals of the pad (§0.2), not a fallback.** Qt Quick delivers both already: stock
 controls, `ListView`, `GridView` and `PathView` take clicks, the wheel, flicks and keys with no code of ours. The kit adds
@@ -581,7 +586,7 @@ would be too narrow; none does. **[A]**
 | **Switch-like** | a horizontal strip of game tiles at mid-height, round places beneath (favourites, recent, search, settings), a light or dark variant; a cue on every move | `gamesOf(All)`, `places`, `Cues`, `Tokens.variant` | `Carousel` horizontal with equal tiles, `WholeRow` for the round places, `HelpBar`; `Cues.scroll` on move, `select` on A |
 
 Each of the four is also a fit-audit and pad-reach case (§8): a theme passes when every operable item is reached from
-the first focus and nothing is cut at 1280 × 800, 1920 × 1080, 1280 × 720 and 3840 × 2160. The two or three the tester
+the first focus and nothing is cut at 1280 × 800, 1920 × 1200 (the handheld's panel), 1920 × 1080, 1280 × 720 and 3840 × 2160. The two or three the tester
 picks are built in stage 3 (§7) as the first third-party-shaped themes, and they stay in the repository as the API's
 regression tests.
 
@@ -875,6 +880,36 @@ On the distribution's Qt: Fedora 44's 6.11.2 (`qt6-qtbase-devel`, `qt6-qtdeclara
   floor (the desktop's `libQt6Quick` needs `GLIBC_2.43`, measured 2026-11-07), so the release AppImage is built in a
   container of an older base, not on the desktop. The spike's AppImage (§10.5) is the first test of the route, on the
   handheld, where both machines are at glibc 2.43 today so the floor does not bite.
+  **The kit's gallery as an AppImage** (stage 0; `EmuSen_Kit.md` §7.13) is built by `cargo xtask appimage --out DIR`,
+  with `PATCHELF` naming the distribution's patchelf. **The tools, pinned** (approved by the tester on 2026-11-08 to be
+  downloaded from their official GitHub releases and run on this desktop to package our build, nothing else). Each is
+  kept in `~/.cache/emusen/toolchains/appimage/` and checked against its sha256 before every run, from the one list
+  `xtask/appimage-tools.tsv`:
+
+  | File | Release | URL | sha256 |
+  |---|---|---|---|
+  | `linuxdeploy-x86_64.AppImage` | 1-alpha-20251107-1 | https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage | `c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d` |
+  | `linuxdeploy-plugin-qt-x86_64.AppImage` | 1-alpha-20250213-1 | https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-qt-x86_64.AppImage | `15106be885c1c48a021198e7e1e9a48ce9d02a86dd0a1848f00bdbf3c1c92724` |
+  | `appimagetool-x86_64.AppImage` | 1.9.1 | https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage | `ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0` |
+  | `runtime-x86_64` | 20251108 | https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64 | `2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d` |
+
+  The sizes matched the releases' (19,421,688, 12,317,424 and 15,092,216 bytes), and two of the hashes the digests
+  GitHub publishes for the assets; the Qt plugin's release of 2025-02-13 publishes none, so its hash is the one computed
+  on download (fetched 2026-11-08). The runtime is the type2 runtime appimagetool would otherwise download at every build, unpinned, from the
+  moving `continuous` release (it failed with HTTP 504 on 2026-11-08); the xtask passes it with `--runtime-file`, so
+  packing needs no network, and its 944,632 bytes and sha256 match the digest GitHub publishes for the asset (fetched
+  2026-11-08 through the release-asset API, the download URL answering 504). The fifth pin is patchelf, below.
+
+  **linuxdeploy's own patchelf breaks Fedora 44's libraries** [M 2026-11-08]. linuxdeploy sets each bundled library's
+  RUNPATH to `$ORIGIN` with the patchelf it carries, 0.15.0, and that rewrite corrupts libraries whose relocations are
+  packed in a `.relr.dyn` section, as Fedora 44 builds them: the first bundle segfaulted before `main`, in a bundled
+  library's initializer. Under gdb the crash was in `libudev.so.1` (RUNPATH `$ORIGIN`, differing from the system's copy
+  from byte 57); with the system's unpatched copy put in its place the crash moved to the next patched library,
+  `libcbor.so.0.13`. linuxdeploy takes another patchelf from `$PATCHELF`, so the build uses the distribution's, 0.18.0
+  (Fedora's `patchelf-0.18.0-9.fc43.x86_64`, fetched with `dnf download` from the configured repositories, its signature
+  checked with `rpm -K` against the Fedora key on this machine, the binary's sha256 `d241dc20…63f3` pinned as the fourth
+  row), and the bundle runs. linuxdeploy's own `strip` is as old and refuses the same sections; Fedora's libraries come
+  stripped, so `NO_STRIP=1`.
 - **Flatpak.** A manifest on `org.kde.Platform//6.11` (freedesktop 25.08 base; Qt and its plugins from the runtime, the
   payload ours; `org.kde.Sdk//6.11` is 1.2 GB to download and 3.2 GB installed, the `rust-stable` 25.08 extension carries
   Rust 1.98.1, `org.flatpak.Builder` 138 MB [M 2026-11-07, Flathub]). Permissions, each named for its reason: `--device=dri`
@@ -1034,6 +1069,13 @@ and without one the program takes the first file of the themes folder in name or
 theme. The lesson is the design's own rule for the real program: a default is a stated choice (the reference theme by
 name, stored in Settings), never the order of a folder listing.
 
+**Game Mode shows only what Steam started** (measured 2026-11-08). The kit's gallery as an AppImage, started over ssh
+with `DISPLAY=:0` while the handheld was in Game Mode, rendered (its `--grab` saved), but gamescope kept it behind
+Steam's interface: `gamescopectl`'s screenshot showed Steam's game page. An on-screen check in Game Mode therefore needs
+the program added to Steam as a non-Steam shortcut and started from Steam. The handheld is a Lenovo Legion Go S; its
+panel is 1920 × 1200 (a BOE NS080WUM-LX1, 8 inches), not the Steam Deck's 1280 × 800, and that grab is what
+`EmuSen_Kit.md` §7.13 reads the grab's timing from.
+
 ---
 
 ## 11. Risks and open questions
@@ -1041,8 +1083,7 @@ name, stored in Settings), never the order of a folder listing.
 **Risks**, largest first: (1) the one-queue protocol between Serenity's submissions and Qt's RHI (stage 1's first day); (2)
 the ES-DE engine's video and Lottie families, where the licence and the decoder are undecided (Q5, Q6); (3) the theme
 sandbox is an engine-level boundary, not a process one (§3.5); (4) cxx-qt's gaps (no scene-graph or painted-item bindings
-in its library, no attached properties) are each filled with glue, and the glue count is the measure of whether the
-binding was the right call: over 600 lines of C++ says reconsider; (5) a QML-layout-only rule erodes without the checker
+in its library, no attached properties) are each filled with glue, each part with its reason; (5) a QML-layout-only rule erodes without the checker
 from day one; (6) Qt's open-source LTS access is short, so a security fix may mean the next minor mid-way; (7) the
 estimate carries two unknowns (the picture protocol, the ES-DE painter's effects stack).
 

@@ -12,6 +12,7 @@ FocusScope {
     property alias detail: detailPane.data
     property alias actions: actionsRow.data
     property alias help: helpBar.model
+    property alias padFamily: helpBar.family
     property real navigationWidth: Kit.Tokens.tileWidth + Kit.Tokens.tileGap * 2
     readonly property bool desktop: frameController.form === Kit.Forms.Desktop
     readonly property bool card: frameController.form === Kit.Forms.Card

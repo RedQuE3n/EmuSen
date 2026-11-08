@@ -34,6 +34,7 @@ pub mod qobject {
         First,
         Leave,
         Reel,
+        Ask,
     }
 
     extern "RustQt" {
@@ -132,6 +133,21 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "rewindAsked"]
         fn rewind_asked(self: Pin<&mut PauseModel>, frame: u64);
+
+        /// Restart Game answered Yes: the game starts again; the card closes.
+        #[qsignal]
+        #[cxx_name = "restartAsked"]
+        fn restart_asked(self: Pin<&mut PauseModel>);
+
+        /// Quit Game answered Yes: the game closes and the library comes back.
+        #[qsignal]
+        #[cxx_name = "quitGameAsked"]
+        fn quit_game_asked(self: Pin<&mut PauseModel>);
+
+        /// Quit EmuSen answered Yes: the game closes, then the program.
+        #[qsignal]
+        #[cxx_name = "quitAsked"]
+        fn quit_asked(self: Pin<&mut PauseModel>);
     }
 
     unsafe extern "RustQt" {
@@ -214,6 +230,7 @@ fn shown_page(page: Page) -> PausePage {
         Page::First => PausePage::First,
         Page::Leave => PausePage::Leave,
         Page::Reel => PausePage::Reel,
+        Page::Ask(_) => PausePage::Ask,
     }
 }
 
@@ -310,6 +327,12 @@ impl qobject::PauseModel {
                 self.as_mut().rewind_asked(frame);
                 self.as_mut().resumed();
             }
+            Outcome::Restart => {
+                self.as_mut().restart_asked();
+                self.as_mut().resumed();
+            }
+            Outcome::QuitGame => self.as_mut().quit_game_asked(),
+            Outcome::QuitEmuSen => self.as_mut().quit_asked(),
         }
     }
 

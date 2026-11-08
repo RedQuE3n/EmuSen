@@ -210,3 +210,28 @@ fn the_help_bar_and_the_declared_actions_are_mistresss() {
     let keys: Vec<(&str, Option<UiButton>)> = declared.iter().map(|a| (a.key.as_str(), a.button)).collect();
     assert_eq!(keys, [("screenshot", Some(UiButton::Screensaver)), ("resume", Some(UiButton::Menu))]);
 }
+
+#[test]
+fn leave_asks_each_end_first_on_the_card_forms_question_page() {
+    let mut c = card(Facts::default());
+    c.choose(at(&c, "Leave"));
+    let labels: Vec<String> = c.rows().into_iter().map(|r| r.label).collect();
+    assert_eq!(labels, ["Back to Library", "Restart Game...", "Quit Game...", "Quit EmuSen..."], "Mistress's LeaveRows");
+    for (row, title, sentence, yes) in [
+        (1, "Restart Game?", "The game starts again from the beginning. Progress since your last save is lost.", Outcome::Restart),
+        (2, "Quit Game?", "The game closes and the library comes back.", Outcome::QuitGame),
+        (3, "Quit EmuSen?", "The game closes, then EmuSen.", Outcome::QuitEmuSen),
+    ] {
+        assert_eq!(c.choose(row), Outcome::Shown);
+        assert_eq!((c.title("G"), c.breadcrumb("G"), c.current), (title.to_string(), sentence.to_string(), 0), "No first");
+        assert_eq!(c.rows().into_iter().map(|r| r.label).collect::<Vec<_>>(), ["No", "Yes"]);
+        assert_eq!(c.choose(0), Outcome::Shown, "No goes back");
+        assert_eq!((c.page, c.current), (Page::Leave, row), "on the row that asked");
+        c.choose(row);
+        assert_eq!(c.back(), Outcome::Shown, "B goes back too");
+        assert_eq!((c.page, c.current), (Page::Leave, row));
+        c.choose(row);
+        assert_eq!(c.choose(1), yes);
+        c.back();
+    }
+}

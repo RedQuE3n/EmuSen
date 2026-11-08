@@ -23,6 +23,8 @@ FocusScope {
     property string paneCaption
     // The pane's own drawing, for a card whose pane holds more than lines or a picture (the rewind reel, the slots): the host's items, declared inside the card, are laid in the pane's box.
     default property alias paneContent: paneArea.data
+    // Whether the host's own pane drawing has anything to show; the pane's box shows with it.
+    property bool paneDrawn: false
     property HelpModel help
     property int padFamily: Kit.Families.Generic
     // Whether the card is on screen; it slides in as this turns on and out as it turns off.
@@ -32,7 +34,7 @@ FocusScope {
     // 1 out of place, 0 in place: the panel moves left by its right edge and 40 units, the band down by its height, the pane fades (LunaP §218).
     property real slide: 1
     readonly property bool leaving: !root.open && root.slide < 1
-    readonly property bool paneShown: (root.paneLines?.length ?? 0) > 0 || root.panePicture.length > 0 || root.paneCaption.length > 0 || paneArea.children.length > 0
+    readonly property bool paneShown: (root.paneLines?.length ?? 0) > 0 || root.panePicture.length > 0 || root.paneCaption.length > 0 || root.paneDrawn
     readonly property alias controller: frame.controller
     signal chosen(int index)
     // Left (-1) or Right (+1) on a row; `held` while the press repeats.

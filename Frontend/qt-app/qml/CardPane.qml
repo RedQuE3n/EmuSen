@@ -4,18 +4,13 @@ import QtQuick.Shapes
 import EmuSen.Kit as Kit
 import EmuSen.Models
 
-// A card's context pane in canvas units, as Mistress's PauseCardPane draws it: the slots or the reel's newest pictures in a row of three, or the reel's focused moment over its strip of six, and a sentence; an empty pane hides with its surface (EmuSen_Qt.md §7.2).
-Rectangle {
+// A card's context pane in canvas units, laid in the card form's pane box, as Mistress's PauseCardPane draws it: the slots or the reel's newest pictures in a row of three, or the reel's focused moment over its strip of six, and a sentence; an empty pane hides, and the card form's box with it (EmuSen_Qt.md §7.2).
+Item {
     id: root
-    objectName: "AdaptiveCardPane"
+    objectName: "PauseCardPaneArea"
     // The pane as plain data, a page model's `pane`.
     property alias pane: paneModel.pane
     readonly property alias model: paneModel
-    width: 640
-    height: 530
-    radius: Kit.Tokens.tileRadius
-    color: Kit.Tokens.surfaceRaised
-    visible: paneModel.shown
     PaneModel {
         id: paneModel
     }

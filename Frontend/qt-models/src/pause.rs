@@ -3,6 +3,7 @@
 //! choice, a step, B or a shoulder does. No Qt here; `PauseModel` puts it on Qt. The rows and words are Mistress's
 //! (`GameMenuRows`, `LeaveRows`, `ReelRows`, `PauseCardPane`), so the two front ends say the same.
 
+use crate::card;
 use crate::help::Screen;
 use crate::reel::{self, Reel};
 use emusen_crystal_client::shapes::{RewindReel, SessionInfo};
@@ -15,6 +16,36 @@ pub enum Page {
     Leave,
     /// Rewind's reel (§20.1).
     Reel,
+    /// One of Leave's questions, on the card form's question page (`card::question`).
+    Ask(Ask),
+}
+
+/// Leave's questions, each asked before an end (Mistress's `LeaveRows`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ask {
+    Restart,
+    QuitGame,
+    QuitEmuSen,
+}
+
+impl Ask {
+    /// The row on Leave that asks it.
+    fn key(self) -> &'static str {
+        match self {
+            Ask::Restart => RESTART,
+            Ask::QuitGame => QUIT_GAME,
+            Ask::QuitEmuSen => QUIT_EMUSEN,
+        }
+    }
+
+    /// The question as the card form's question page: its title, its sentence, No then Yes.
+    fn page(self) -> card::Page {
+        match self {
+            Ask::Restart => card::question("Restart Game?", "The game starts again from the beginning. Progress since your last save is lost."),
+            Ask::QuitGame => card::question("Quit Game?", "The game closes and the library comes back."),
+            Ask::QuitEmuSen => card::question("Quit EmuSen?", "The game closes, then EmuSen."),
+        }
+    }
 }
 
 /// The slots Save and Load step through.
@@ -184,6 +215,9 @@ pub const LOAD: &str = "load";
 pub const SPEED: &str = "speed";
 pub const LEAVE: &str = "leave";
 pub const LIBRARY: &str = "library";
+pub const RESTART: &str = "restart";
+pub const QUIT_GAME: &str = "quitGame";
+pub const QUIT_EMUSEN: &str = "quitEmuSen";
 pub const GO_BACK: &str = "goBack";
 pub const MOMENT: &str = "moment";
 pub const HOLD: &str = "hold";
@@ -228,6 +262,12 @@ pub enum Outcome {
     Load(u32),
     /// The game returned to the moment at that frame, and the card closed.
     RewindTo(u64),
+    /// The game started again from the beginning, and the card closed.
+    Restart,
+    /// The game closed and the library shown.
+    QuitGame,
+    /// The game closed, then the program.
+    QuitEmuSen,
 }
 
 /// The context pane's kind.
@@ -333,7 +373,18 @@ impl Card {
                     Row { opens: true, ..row(LEAVE, "Leave", String::new()) },
                 ]
             }
-            Page::Leave => vec![row(LIBRARY, "Back to Library", String::new())],
+            Page::Leave => vec![
+                row(LIBRARY, "Back to Library", String::new()),
+                row(RESTART, "Restart Game...", String::new()),
+                row(QUIT_GAME, "Quit Game...", String::new()),
+                row(QUIT_EMUSEN, "Quit EmuSen...", String::new()),
+            ],
+            Page::Ask(ask) => ask
+                .page()
+                .rows
+                .iter()
+                .map(|r| row(if r.key == card::YES { card::YES } else { card::NO }, &r.label, String::new()))
+                .collect(),
             Page::Reel => {
                 let reel = self.reel.as_ref();
                 let label = reel.and_then(Reel::focused).map(reel::Mark::label).unwrap_or_default();
@@ -352,6 +403,7 @@ impl Card {
             Page::First => game.to_string(),
             Page::Leave => "Leave".to_string(),
             Page::Reel => "Rewind".to_string(),
+            Page::Ask(ask) => ask.page().title,
         }
     }
 
@@ -359,6 +411,7 @@ impl Card {
     pub fn breadcrumb(&self, game: &str) -> String {
         match self.page {
             Page::First => String::new(),
+            Page::Ask(ask) => ask.page().breadcrumb,
             _ => game.to_string(),
         }
     }
@@ -398,6 +451,22 @@ impl Card {
                 Outcome::Shown
             }
             LIBRARY => Outcome::Library,
+            RESTART | QUIT_GAME | QUIT_EMUSEN if self.page == Page::Leave => {
+                let ask = match key {
+                    RESTART => Ask::Restart,
+                    QUIT_GAME => Ask::QuitGame,
+                    _ => Ask::QuitEmuSen,
+                };
+                self.turn(Page::Ask(ask), 0);
+                Outcome::Shown
+            }
+            card::YES => match self.page {
+                Page::Ask(Ask::Restart) => Outcome::Restart,
+                Page::Ask(Ask::QuitGame) => Outcome::QuitGame,
+                Page::Ask(Ask::QuitEmuSen) => Outcome::QuitEmuSen,
+                _ => Outcome::Nothing,
+            },
+            card::NO => self.back(),
             GO_BACK => match self.reel.as_ref().and_then(Reel::focused) {
                 Some(m) if !m.now => Outcome::RewindTo(m.frame),
                 _ => Outcome::Resume,
@@ -454,12 +523,13 @@ impl Card {
 
     /// B: back to the first page on the row that opened the page, or, on the first page, the game resumed.
     pub fn back(&mut self) -> Outcome {
-        let from = match self.page {
+        let (to, from) = match self.page {
             Page::First => return Outcome::Resume,
-            Page::Leave => LEAVE,
-            Page::Reel => REWIND,
+            Page::Leave => (Page::First, LEAVE),
+            Page::Reel => (Page::First, REWIND),
+            Page::Ask(ask) => (Page::Leave, ask.key()),
         };
-        self.turn(Page::First, 0);
+        self.turn(to, 0);
         self.current = self.rows().iter().position(|r| r.key == from).unwrap_or(0);
         Outcome::Shown
     }

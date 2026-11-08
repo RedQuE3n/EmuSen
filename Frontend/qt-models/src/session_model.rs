@@ -92,6 +92,10 @@ pub mod qobject {
         #[cxx_name = "loadState"]
         fn load_state(self: Pin<&mut SessionModel>, slot: u32);
 
+        /// The game started again from the beginning, off the GUI thread; a resume waits for it.
+        #[qinvokable]
+        fn restart(self: Pin<&mut SessionModel>);
+
         /// The game returned to the reel's moment at `frame`, off the GUI thread; a resume waits for it.
         #[qinvokable]
         #[cxx_name = "rewindTo"]
@@ -445,6 +449,13 @@ impl qobject::SessionModel {
             Ok(true) => format!("State loaded from slot {slot}"),
             Ok(false) => format!("Load State: slot {slot} is empty"),
             Err(e) => format!("Load State failed: {e}"),
+        });
+    }
+
+    fn restart(self: Pin<&mut Self>) {
+        self.job(|runtime, session| match runtime.reset(session) {
+            Ok(()) => "Restarted".to_string(),
+            Err(e) => format!("Restart failed: {e}"),
         });
     }
 

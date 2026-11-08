@@ -131,7 +131,7 @@ fn the_pane_follows_the_row_and_the_reel_turns_in_place() {
     scene.wait(20);
     assert_eq!(scene.property("card", "slide"), "0", "a page turn moves nothing");
     assert_eq!(rows(&mut scene), ["Go back to 1.7 s ago | ", "Moment | 1.7 s ago", "Hold ◂ to scrub | "]);
-    assert_eq!((scene.property("pauseTitle", "text"), scene.property("pauseBreadcrumb", "text")), ("Rewind".into(), "Cobalt Harbor (Synthetic)".into()));
+    assert_eq!((scene.property("cardTitle", "text"), scene.property("cardBreadcrumb", "text")), ("Rewind".into(), "Cobalt Harbor (Synthetic)".into()));
     assert_eq!(tiles(&mut scene), ["Now", "1.7 s", "4.2 s", "8.2 s", "12 s", "28 s"]);
     assert_eq!(help(&mut scene), ["Go back", "Back", "Moment", "Screenshot"]);
     scene.pad(UiButton::Down);

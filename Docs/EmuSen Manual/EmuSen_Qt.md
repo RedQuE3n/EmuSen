@@ -1540,6 +1540,40 @@ Galaxia test (a slot's state and picture named in the scratch tree's Save States
 reverted: the slots not wrapping (`pause`, Left from slot 1), a snapshot a second in place of two
 (`pictures`), the pane not following the row (`pause_pages`).
 
+**On Vulkan, over a real session** (measured 2026-11-08; `acceptance.rs`, the RX 6800 in a compositor of the test's own):
+the Rewind row half a second into the game, where the reel holds no picture yet and the pane says "Under a second
+available", as Mistress's render of the row does; Save State on Slot 1 (Empty); A saving and the game resuming once the
+state is written ("State saved to slot 1"); after 2.5 s of play the reel's three newest pictures drawn through the
+provider, and the slot's own picture from beside its state; A on Load State ("State loaded from slot 1"); the reel's
+page with its moment drawn large, and A returning the game ("Rewound"). Each page is held at the gate's five sizes with
+nothing logged (`PauseCardRewind`, `PauseCardSave`, `PauseCardRewindHeld`, `PauseCardSaved`, `PauseCardReel`). The
+side-by-sides with Mistress's renders, nothing drawn over either, are `~/.cache/emusen/tmp/qt-s2/compare/
+PauseCard{Rewind,Save,Leave}-{1280x800,1920x1080}-side.png` with `-diff.png` beside: the rows, the title, the pane's box,
+the three slots, their words and the sentence stand where Mistress's do. **Differences that remain, for the tester:**
+the paused frame is the test core's red picture where the render's is black; at 1920 × 1080 the Rewind pane's sentence
+wraps to a second line where Mistress's fits one.
+
+**Leave's rows and the card form** (2026-11-08). Piece B's card form (`MenuCard.qml`, `card.rs`) landed beside this piece,
+and the Pause Card is now drawn on it: `PauseCard.qml` is a `MenuCard` whose rows, title, breadcrumb, cover, current row
+and help screen are `PauseModel`'s, whose signals each call one of its invokables, and whose pane box holds `CardPane`
+(the form's `paneDrawn`, added for this, shows the box while the host's own drawing has something to show; counting the
+box's children showed it on every row, and counting its visible children never showed it, the children being inside the
+hidden box). Leave holds Mistress's four rows (`LeaveRows`): Back to Library, Restart Game..., Quit Game..., Quit
+EmuSen.... Each end is asked first on the card form's question page (`card::question`: the question as the title, the
+sentence above it, No then Yes, so A straight through changes nothing), in Mistress's words; No and B go back to the row
+that asked. Yes on Restart resets the game through the session (`SessionModel.restart`, `emusen_crystal_reset`, made off
+the GUI thread as a save is, the resume waiting for it) and closes the card; on Quit Game the session closes and the
+screens' rule shows Home; on Quit EmuSen the program's `Screens.quit` ends it, as the Home card's Quit EmuSen does.
+
+**Held to:** `qt-models`' `pause` 9 (Leave's rows, each question's title, sentence and No first, No and B back to the row
+that asked, each Yes's outcome); `qt-app`'s `pause` (the four rows, Restart Game's question, No back to its row, Quit
+Game's question, B back, Yes quitting the game), `pause_pages` and `cards` (piece B's, unchanged by the form's addition);
+`acceptance.rs` on Vulkan, which now also holds Quit Game's question at the gate's five sizes (`PauseCardQuitGame`): its
+rows at 64,156 and 64,210, the sentence at 58 and the title at 82, and the help bar's Choose, Back, Screenshot and Resume
+are those of Mistress's `PauseCardQuitGame-1280x800.spec` (no accepted render of that page exists to set beside it).
+Seeded faults, each reverted: Quit Game's Yes quitting EmuSen (`pause`), B on a question going to the first page
+(`qt-app`'s `pause`), the card not carrying Quit Game's Yes to the window (`qt-app`'s `pause`).
+
 ---
 
 ## 8. Testing

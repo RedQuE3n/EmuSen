@@ -17,6 +17,7 @@
 #include <QtQuick/QQuickItem>
 #include <QtQuick/QQuickWindow>
 #include <QtTest/QTest>
+#include <algorithm>
 
 namespace {
 
@@ -69,6 +70,19 @@ QJsonArray coloursOf(QQuickItem* item)
     return colours;
 }
 
+// Where the words are laid out: inside the paddings, the text's own size placed by its alignment, in the scene.
+QRectF glyphBox(QQuickItem* item)
+{
+    const auto number = [item](const char* name) { return item->property(name).toDouble(); };
+    const double left = number("leftPadding"), top = number("topPadding");
+    const double w = item->width() - left - number("rightPadding"), h = item->height() - top - number("bottomPadding");
+    const double tw = std::min(number("contentWidth"), w), th = std::min(number("contentHeight"), h);
+    const int across = item->property("effectiveHorizontalAlignment").toInt(), down = item->property("verticalAlignment").toInt();
+    const double x = left + ((across & Qt::AlignRight) ? w - tw : (across & Qt::AlignHCenter) ? (w - tw) / 2 : 0);
+    const double y = top + ((down & Qt::AlignBottom) ? h - th : (down & Qt::AlignVCenter) ? (h - th) / 2 : 0);
+    return item->mapRectToScene(QRectF(x, y, tw, th));
+}
+
 void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArray& out)
 {
     const QRectF rect = item->mapRectToScene(QRectF(0, 0, item->width(), item->height()));
@@ -105,7 +119,15 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
         node["elided"] = item->property("truncated").toBool();
         node["tw"] = item->property("contentWidth").toDouble() * unit.width();
         node["th"] = item->property("contentHeight").toDouble() * unit.height();
-        node["cap"] = QFontMetricsF(item->property("font").value<QFont>()).capHeight() * unit.height();
+        const QFont font = item->property("font").value<QFont>();
+        node["cap"] = QFontMetricsF(font).capHeight() * unit.height();
+        QColor ink = item->property("color").value<QColor>();
+        ink.setAlphaF(ink.alphaF() * opacity);
+        node["ink"] = item->isEnabled() ? ink.name(QColor::HexArgb) : QString(); // words of a disabled control are exempt (WCAG 2.1, 1.4.3)
+        node["size"] = font.pixelSize() > 0 ? font.pixelSize() : font.pointSizeF() * 4.0 / 3.0;
+        node["bold"] = font.weight() >= QFont::Bold;
+        const QRectF glyphs = glyphBox(item);
+        node["glyphs"] = QJsonArray{glyphs.x(), glyphs.y(), glyphs.width(), glyphs.height()};
     }
     if (item->inherits("QQuickFlickable")) {
         const int direction = item->property("flickableDirection").toInt();
@@ -149,7 +171,31 @@ QQuickItem* find(QQuickItem* item, std::uint64_t id)
     return nullptr;
 }
 
+// Every text at no opacity, or back at the opacity it had, so a grab shows what is behind the words.
+void hideWords(QQuickItem* item, bool hidden)
+{
+    if (item->inherits("QQuickText") || item->inherits("QQuickTextInput")) {
+        if (hidden) {
+            item->setProperty("harnessOpacity", item->opacity());
+            item->setOpacity(0.0);
+        } else if (item->property("harnessOpacity").isValid()) {
+            item->setOpacity(item->property("harnessOpacity").toDouble());
+            item->setProperty("harnessOpacity", QVariant());
+        }
+    }
+    for (QQuickItem* child : item->childItems()) {
+        hideWords(child, hidden);
+    }
+}
+
 } // namespace
+
+void harness_hide_words(QObject& window, bool hidden)
+{
+    if (QQuickWindow* w = quick(window)) {
+        hideWords(w->contentItem(), hidden);
+    }
+}
 
 bool harness_show(QObject& window, int width, int height)
 {

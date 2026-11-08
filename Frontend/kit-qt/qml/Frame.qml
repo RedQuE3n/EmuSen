@@ -36,6 +36,16 @@ FocusScope {
         width: root.desktop ? root.navigationWidth : root.width - 2 * root.safeX
         height: root.desktop ? actionsRow.y - y : Kit.Tokens.titleRow
     }
+    Rectangle {
+        objectName: "cardSurface"
+        visible: root.card
+        x: contentArea.x - Kit.Tokens.paneGutter
+        y: contentArea.y - Kit.Tokens.paneGutter
+        width: contentArea.width + 2 * Kit.Tokens.paneGutter
+        height: contentArea.height + 2 * Kit.Tokens.paneGutter
+        radius: Kit.Tokens.tileRadius
+        color: Kit.Tokens.surfaceRaised
+    }
     Item {
         id: contentArea
         objectName: "content"

@@ -6,7 +6,10 @@ use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QByteArray, QColor, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QVariant, QVector};
 use emusen_kit_core::world::{self, Frame, PlanetFrame, Splash, SplashBody, Timeline, WorldBody, WorldShape};
 
-use crate::convert::qcolor;
+use crate::convert::{polygon, qcolor};
+
+/// Points along each of the shadow's two arcs: under a tenth of a pixel from the circle at a 4K moon.
+const SHADOW_STEPS: usize = 64;
 use crate::kinds::{self, BodyShape, Ring};
 
 #[cxx_qt::bridge]
@@ -83,12 +86,16 @@ pub mod qobject {
         #[qproperty(f64, moon_y, READ, NOTIFY)]
         #[qproperty(f64, moon_radius, READ, NOTIFY)]
         #[qproperty(f64, halo_opacity, READ, NOTIFY)]
+        #[qproperty(f64, halo_inner_radius, READ, NOTIFY)]
         #[qproperty(f64, halo_radius, READ, NOTIFY)]
         #[qproperty(f64, outline_drawn, READ, NOTIFY)]
+        #[qproperty(f64, outline_width, READ, NOTIFY)]
         #[qproperty(f64, fill, READ, NOTIFY)]
-        #[qproperty(f64, shadow_x, READ, NOTIFY)]
-        #[qproperty(f64, shadow_y, READ, NOTIFY)]
-        #[qproperty(f64, shadow_radius, READ, NOTIFY)]
+        #[qproperty(f64, lit_focus_x, READ, NOTIFY)]
+        #[qproperty(f64, lit_focus_y, READ, NOTIFY)]
+        #[qproperty(f64, lit_focus_radius, READ, NOTIFY)]
+        #[qproperty(f64, lit_radius, READ, NOTIFY)]
+        #[qproperty(QVariant, shadow_outline, READ, NOTIFY)]
         #[qproperty(bool, sweep_visible, READ, NOTIFY)]
         #[qproperty(f64, sweep_x, READ, NOTIFY)]
         #[qproperty(f64, sweep_y, READ, NOTIFY)]
@@ -108,6 +115,7 @@ pub mod qobject {
         #[qproperty(f64, caption_spacing, READ, NOTIFY)]
         #[qproperty(f64, caption_baseline_y, READ, NOTIFY)]
         #[qproperty(QColor, halo_ink, READ, CONSTANT)]
+        #[qproperty(QColor, halo_edge_ink, READ, CONSTANT)]
         #[qproperty(QColor, outline_ink, READ, CONSTANT)]
         #[qproperty(QColor, lit_inner_ink, READ, CONSTANT)]
         #[qproperty(QColor, lit_outer_ink, READ, CONSTANT)]
@@ -215,12 +223,18 @@ pub struct MoonriseModelRust {
     moon_y: f64,
     moon_radius: f64,
     halo_opacity: f64,
+    halo_inner_radius: f64,
     halo_radius: f64,
     outline_drawn: f64,
+    outline_width: f64,
     fill: f64,
-    shadow_x: f64,
-    shadow_y: f64,
-    shadow_radius: f64,
+    lit_focus_x: f64,
+    lit_focus_y: f64,
+    lit_focus_radius: f64,
+    lit_radius: f64,
+    /// The shadow clipped to the moon, in the moon's box (from its top left corner).
+    shadow_outline: QVariant,
+    shadow_points: Vec<world::Point>,
     sweep_visible: bool,
     sweep_x: f64,
     sweep_y: f64,
@@ -240,6 +254,7 @@ pub struct MoonriseModelRust {
     caption_spacing: f64,
     caption_baseline_y: f64,
     halo_ink: QColor,
+    halo_edge_ink: QColor,
     outline_ink: QColor,
     lit_inner_ink: QColor,
     lit_outer_ink: QColor,
@@ -273,12 +288,17 @@ impl Default for MoonriseModelRust {
             moon_y: 0.0,
             moon_radius: 0.0,
             halo_opacity: 0.0,
+            halo_inner_radius: 0.0,
             halo_radius: 0.0,
             outline_drawn: 0.0,
+            outline_width: 0.0,
             fill: 0.0,
-            shadow_x: 0.0,
-            shadow_y: 0.0,
-            shadow_radius: 0.0,
+            lit_focus_x: 0.0,
+            lit_focus_y: 0.0,
+            lit_focus_radius: 0.0,
+            lit_radius: 0.0,
+            shadow_outline: QVariant::default(),
+            shadow_points: Vec::new(),
             sweep_visible: false,
             sweep_x: 0.0,
             sweep_y: 0.0,
@@ -298,6 +318,7 @@ impl Default for MoonriseModelRust {
             caption_spacing: 0.0,
             caption_baseline_y: 0.0,
             halo_ink: qcolor(world::HALO),
+            halo_edge_ink: qcolor(world::HALO_EDGE),
             outline_ink: qcolor(world::OUTLINE),
             lit_inner_ink: qcolor(world::LIT_INNER),
             lit_outer_ink: qcolor(world::LIT_OUTER),
@@ -330,9 +351,16 @@ impl MoonriseModelRust {
         self.stars_opacity = frame.stars_opacity;
         let moon = &frame.moon;
         (self.moon_x, self.moon_y, self.moon_radius) = (moon.centre[0], moon.centre[1], moon.radius);
-        (self.halo_opacity, self.halo_radius) = (moon.halo_opacity, moon.halo_radius);
-        (self.outline_drawn, self.fill) = (moon.outline_drawn, moon.fill);
-        (self.shadow_x, self.shadow_y, self.shadow_radius) = (moon.shadow_centre[0], moon.shadow_centre[1], moon.shadow_radius);
+        (self.halo_opacity, self.halo_inner_radius, self.halo_radius) = (moon.halo_opacity, moon.halo_inner_radius, moon.halo_radius);
+        (self.outline_drawn, self.outline_width, self.fill) = (moon.outline_drawn, moon.outline_width, moon.fill);
+        let (left, top) = (moon.centre[0] - moon.radius, moon.centre[1] - moon.radius);
+        (self.lit_focus_x, self.lit_focus_y) = (moon.lit_focus[0] - left, moon.lit_focus[1] - top);
+        (self.lit_focus_radius, self.lit_radius) = (moon.lit_focus_radius, moon.lit_radius);
+        moon.shadow_outline(SHADOW_STEPS, &mut self.shadow_points);
+        for p in &mut self.shadow_points {
+            *p = [p[0] - left, p[1] - top];
+        }
+        self.shadow_outline = polygon(&self.shadow_points);
         self.sweep_visible = frame.sweep.is_some();
         if let Some(sweep) = &frame.sweep {
             (self.sweep_x, self.sweep_y, self.sweep_width, self.sweep_height) =
@@ -441,12 +469,16 @@ impl qobject::MoonriseModel {
         self.as_mut().moon_y_changed();
         self.as_mut().moon_radius_changed();
         self.as_mut().halo_opacity_changed();
+        self.as_mut().halo_inner_radius_changed();
         self.as_mut().halo_radius_changed();
         self.as_mut().outline_drawn_changed();
+        self.as_mut().outline_width_changed();
         self.as_mut().fill_changed();
-        self.as_mut().shadow_x_changed();
-        self.as_mut().shadow_y_changed();
-        self.as_mut().shadow_radius_changed();
+        self.as_mut().lit_focus_x_changed();
+        self.as_mut().lit_focus_y_changed();
+        self.as_mut().lit_focus_radius_changed();
+        self.as_mut().lit_radius_changed();
+        self.as_mut().shadow_outline_changed();
         self.as_mut().sweep_visible_changed();
         self.as_mut().sweep_x_changed();
         self.as_mut().sweep_y_changed();

@@ -26,5 +26,6 @@ pub mod ffi {
         fn harness_roots(engine: Pin<&mut QQmlApplicationEngine>) -> i32;
         fn harness_set_property(root: Pin<&mut QObject>, object_name: &QString, property: &QString, value: &QString) -> bool;
         fn harness_colours_at(window: Pin<&mut QObject>, points: &QString) -> QString;
+        fn harness_hide_words(window: Pin<&mut QObject>, hidden: bool);
     }
 }

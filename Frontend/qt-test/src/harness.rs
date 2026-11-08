@@ -198,6 +198,21 @@ impl Scene<'_> {
         text.split(';').map(crate::tree::colour).collect()
     }
 
+    /// What is behind every visible text, from one grab with no words drawn, given to the tree for the contrast rule (EmuSen_Kit.md §7.10).
+    pub fn sample_behind(&mut self, tree: &mut Tree, width: f64, height: f64) {
+        let wanted = tree.behind_points(width, height);
+        let points: Vec<(f64, f64)> = wanted.iter().flat_map(|(_, points)| points.iter().copied()).collect();
+        ffi::harness_hide_words(self.window(), true);
+        let colours = self.colours_at(&points);
+        ffi::harness_hide_words(self.window(), false);
+        let mut at = 0;
+        for (index, points) in wanted {
+            let behind = colours[at..at + points.len()].iter().flatten().copied().collect();
+            at += points.len();
+            tree.set_behind(index, behind);
+        }
+    }
+
     /// A property of the object with this objectName (or the root's), as text.
     pub fn property(&mut self, object_name: &str, property: &str) -> String {
         ffi::harness_property(self.window(), &QString::from(object_name), &QString::from(property)).to_string()

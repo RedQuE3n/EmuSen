@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 
-// Moonrise: the splash laid out from kit-core's frame, the moon, the row of worlds, the sweep, the line and the words (EmuSen_Kit.md §7.5).
+// Moonrise: the splash laid out from kit-core's frame, drawn in the draft's order: the halo's glow, the moon's outline, its face and the shadow inside it, the row of worlds, the sweep, the line and the words (EmuSen_Kit.md §7.5, §7.10).
 Item {
     id: root
     property alias title: splash.title
@@ -11,6 +11,7 @@ Item {
     property alias model: splash
     property bool running: true
     readonly property alias finished: splash.finished
+    readonly property alias starsShown: sky.starsShown
     Kit.MoonriseModel {
         id: splash
         width: root.width
@@ -22,6 +23,7 @@ Item {
         value: root.hues
     }
     Kit.Sky {
+        id: sky
         anchors.fill: parent
         seed: splash.seed
         count: splash.starCount
@@ -29,15 +31,60 @@ Item {
         starsOpacity: splash.starsOpacity
         animating: root.running
     }
-    Rectangle {
+    Shape {
         id: halo
+        readonly property bool backdrop: true
         x: splash.moonX - splash.haloRadius
         y: splash.moonY - splash.haloRadius
         width: 2 * splash.haloRadius
         height: 2 * splash.haloRadius
-        radius: splash.haloRadius
-        color: splash.haloInk
+        visible: splash.haloOpacity > 0
         opacity: splash.haloOpacity
+        preferredRendererType: Shape.CurveRenderer
+        ShapePath {
+            strokeWidth: -1
+            fillGradient: RadialGradient {
+                centerX: splash.haloRadius
+                centerY: splash.haloRadius
+                centerRadius: splash.haloRadius
+                focalX: splash.haloRadius
+                focalY: splash.haloRadius
+                focalRadius: splash.haloInnerRadius
+                GradientStop { position: 0; color: splash.haloInk }
+                GradientStop { position: 1; color: splash.haloEdgeInk }
+            }
+            PathAngleArc {
+                centerX: splash.haloRadius
+                centerY: splash.haloRadius
+                radiusX: splash.haloRadius
+                radiusY: splash.haloRadius
+                startAngle: 0
+                sweepAngle: 360
+            }
+        }
+    }
+    Shape {
+        id: outline
+        x: splash.moonX - splash.moonRadius
+        y: splash.moonY - splash.moonRadius
+        width: 2 * splash.moonRadius
+        height: 2 * splash.moonRadius
+        visible: splash.outlineDrawn > 0
+        preferredRendererType: Shape.CurveRenderer
+        ShapePath {
+            fillColor: "transparent"
+            strokeColor: splash.outlineInk
+            strokeWidth: splash.outlineWidth
+            capStyle: ShapePath.RoundCap
+            PathAngleArc {
+                centerX: splash.moonRadius
+                centerY: splash.moonRadius
+                radiusX: splash.moonRadius
+                radiusY: splash.moonRadius
+                startAngle: -90
+                sweepAngle: 360 * splash.outlineDrawn
+            }
+        }
     }
     Shape {
         id: lit
@@ -45,6 +92,7 @@ Item {
         y: splash.moonY - splash.moonRadius
         width: 2 * splash.moonRadius
         height: 2 * splash.moonRadius
+        visible: splash.fill > 0
         opacity: splash.fill
         preferredRendererType: Shape.CurveRenderer
         ShapePath {
@@ -52,9 +100,10 @@ Item {
             fillGradient: RadialGradient {
                 centerX: splash.moonRadius
                 centerY: splash.moonRadius
-                centerRadius: splash.moonRadius
-                focalX: splash.moonRadius * 0.7
-                focalY: splash.moonRadius * 0.7
+                centerRadius: splash.litRadius
+                focalX: splash.litFocusX
+                focalY: splash.litFocusY
+                focalRadius: splash.litFocusRadius
                 GradientStop { position: 0; color: splash.litInnerInk }
                 GradientStop { position: 1; color: splash.litOuterInk }
             }
@@ -68,37 +117,18 @@ Item {
             }
         }
     }
-    Rectangle {
-        id: shadow
-        x: splash.shadowX - splash.shadowRadius
-        y: splash.shadowY - splash.shadowRadius
-        width: 2 * splash.shadowRadius
-        height: 2 * splash.shadowRadius
-        radius: splash.shadowRadius
-        color: splash.shadowInk
-        opacity: splash.fill
-    }
     Shape {
-        id: outline
+        id: shadow
         x: splash.moonX - splash.moonRadius
         y: splash.moonY - splash.moonRadius
         width: 2 * splash.moonRadius
         height: 2 * splash.moonRadius
-        visible: splash.outlineDrawn > 0
+        visible: splash.fill > 0
         preferredRendererType: Shape.CurveRenderer
         ShapePath {
-            fillColor: "transparent"
-            strokeColor: splash.outlineInk
-            strokeWidth: 2 * splash.unit
-            capStyle: ShapePath.RoundCap
-            PathAngleArc {
-                centerX: splash.moonRadius
-                centerY: splash.moonRadius
-                radiusX: splash.moonRadius
-                radiusY: splash.moonRadius
-                startAngle: -90
-                sweepAngle: 360 * splash.outlineDrawn
-            }
+            strokeWidth: -1
+            fillColor: splash.shadowInk
+            PathPolyline { path: splash.shadowOutline }
         }
     }
     Repeater {

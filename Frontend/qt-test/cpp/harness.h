@@ -20,3 +20,4 @@ QObject* harness_singleton(QQmlApplicationEngine& engine, const QString& module,
 int harness_roots(QQmlApplicationEngine& engine);
 bool harness_set_property(QObject& root, const QString& object_name, const QString& property, const QString& value);
 QString harness_colours_at(QObject& window, const QString& points);
+void harness_hide_words(QObject& window, bool hidden);

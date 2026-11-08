@@ -172,6 +172,7 @@ it). The Qt harness of §8.1 will fill such a tree from `objectName`, `mapToScen
 | No chrome: in the big-screen and card forms no menu bar or status bar is visible | `no_chrome` | §8.1 |
 | Names a reader hears: every operable element has a non-blank one | `named` | InterfaceSpec §4.3 |
 | Palette reach: every painted colour is declared; a theme's scene and everything under it exempt | `palette_reach` | InterfaceSpec §4.4 |
+| Contrast: words drawn over what is behind them reach 4.5:1, or 3:1 for large type (24 px, or 18.66 px bold), over all but a spare tenth of what is behind them (since 2026-11-08, §7.10) | `contrast` | WCAG 2.1, 1.4.3 |
 
 `check(root, &State)` runs them all for one recorded state: its panel, form, focus, edges, declared colours, slack (a
 pixel, or a pixel and a half at a scale above one) and the capitals' floor.
@@ -605,12 +606,23 @@ render and cache are held by `tests/bells.rs`), and the parts owed by §7.8.
 gallery, then visits 72 states: both variants, three forms, three sections, and the four sizes of the harness's
 `SIZES` (1280 × 800, 1920 × 1080, 1280 × 720, 3840 × 2160). In each state it focuses the first operable element, reads
 the tree, sweeps the style (Controls), grabs, records the edges, and gives kit-core's `audit::check` the tree the edges
-were recorded on: the fit audit, pad reach, pointer reach, no chrome, names and palette reach. A 73rd state is the
+were recorded on: the fit audit, pad reach, pointer reach, no chrome, names, palette reach and contrast. A 73rd state is the
 question open at 1280 × 800, audited alone as a player sees a sheet. The style sweep samples one grab at each styled
 control's right end, inside its background, and requires a token of the variant *[own, because `EmuSen_Qt.md` §8.3's
 `TestCase` is JavaScript, which §1.3 keeps out of QML, and the harness already holds the grab]*. A state with faults
-writes `<state>.faults.txt` beside its grab: the faults, the tree's legend and the recorded edges. **Measured on
-2026-11-08: 73 states, no fault.** The grabs are written to `~/.cache/emusen/tmp/kit-gallery/` for a human look.
+writes `<state>.faults.txt` beside its grab: the faults, the tree's legend and the recorded edges. Two checks of the
+kit's own promises run beside the rules: in the Menu section nothing under the carousel rests outside its box (within
+the audit's slack of a pixel and a half), and the finished splash shows all 220 of its stars. **Measured on 2026-11-08:
+73 states, no fault, 41.0 s and 41.7 s.** The grabs are written to `~/.cache/emusen/tmp/kit-gallery/` for a human look.
+
+**Contrast, measured.** For every visible, enabled text the dump gives its colour with its opacity folded into the
+alpha, its size and weight, and where its words are laid out: inside the paddings, the text's own width and height
+placed by its alignment (an item's `boundingRect` ignores the paddings, so a check box's label box took in the
+indicator). The harness then hides every text (opacity 0, given back afterwards, which keeps QML's bindings), grabs
+once and samples each text's box on a grid a few pixels apart, up to 16 by 6 points: what is behind the words as drawn.
+Kit-core composites the ink over each sample and computes WCAG 2.1's ratio; the tenth of samples that may fall short
+lets a star or a rule's edge pass and catches words half over their own colour. A disabled control's words are exempt,
+as WCAG exempts an inactive component's.
 
 **What the gate found in the kit**, each fixed where it lived and no rule loosened:
 
@@ -633,6 +645,23 @@ writes `<state>.faults.txt` beside its grab: the faults, the tree's legend and t
    one clipped item that declares `backdrop`.
 7. `NormalizedCanvas`: at the first layout, before the window had a height, a unit of 0 made the section bar's
    `contentX` NaN for good. The unit is 1 until the parent has a height.
+8. kit-qt: the card form had no surface: its content stood on the Scrim over whatever was behind, and "A label in the
+   tokens" in the light variant was dark grey on black. The frame now draws the card's raised surface (`surfaceRaised`,
+   the tile radius) a pane gutter outside the content area, which is `EmuSen_Qt.md`'s card over the theme.
+9. kit-qt: Moonrise showed no stars. Kit-core draws no stars at no opacity, so the star model's rows went from 0 to 220
+   with only `dataChanged`, and the view never made them; the splash begins at no opacity, the screens' sky at 1, which
+   is why only the splash lost them. The model now resets when the stars appear or vanish.
+10. kit-qt and kit-core: the Moonrise shadow was a whole disc drawn over the halo, and the halo a flat translucent disc.
+    Compared with the approved draft (`~/.cache/emusen/tmp/moonrise/reference-8s.html`, its finished frame) and the C#
+    `LunaSplash` side by side, both clip the shadow to the moon and draw the halo as a radial gradient, flat out to 0.6
+    radii and clear at 3.2. Kit-core's `Moon` now gives the shadow as it is drawn (`shadow_outline`, the outline of the
+    two discs' overlap, into the host's buffer), the halo's inner radius, the face's two-circle gradient (from a tenth of
+    a radius at 0.35 and 0.3 radii up and left, to 1.1 radii) and the outline's width (2.2 units); Moonrise draws them
+    in the draft's order, the outline before the face. `MoonriseModel`'s `shadowX`, `shadowY` and `shadowRadius` gave
+    way to `shadowOutline`; rule Q's registry was reviewed and copied (before 1.0 the comparison is strict equality).
+    The comparison is in `~/.cache/emusen/tmp/kit-gallery/compare/`: the draft, the C#, and Qt on the GPU and on the
+    software backend at 1280 × 720, the draft's 13 hues and words. What still differs is the title's face: the draft and
+    the C# set it in Barlow Condensed Light, which the Qt kit does not bundle yet (§7.7).
 
 **What the harness read wrongly**, fixed in the harness. Each is a translation of Qt's tree; the rules are unchanged.
 
@@ -655,10 +684,23 @@ writes `<state>.faults.txt` beside its grab: the faults, the tree's legend and t
   (one grab sampled at many points), `audit_item` (one item's subtree, as an open sheet), `set_variant` and
   `set_token_form` (the `Tokens` singleton, reached as the router is).
 
-**A limit of the software backend**, measured on 2026-11-08 with a probe: a Qt Quick Shapes item ignores a clipping
-parent under `QT_QUICK_BACKEND=software`. A red `Shape` at x = 150 inside a clipping `Item` 100 wide was red at (175,
-145) in the grab. So the menu grabs show a carousel's world past the carousel's box, over the panel's rows, which the
-GPU's scene graph clips. The audit is not affected, since the tree does not show those items; the grabs are.
+**The GPU against the software backend**, measured on 2026-11-08: the harness's own `Harness` run with
+`QT_QUICK_BACKEND=rhi` and `QSG_RHI_BACKEND=opengl` on the offscreen platform renders on the RX 6800 (radeonsi, Mesa
+26.2.4) through GLX, with no window on the desktop. Two differences showed:
+
+- The software backend ignores a clip for Qt Quick Shapes (a red `Shape` at x = 150 inside a clipping `Item` 100 wide
+  was red at (175, 145)); the GPU clips. So the carousel's worlds past its box, hidden on the GPU, were drawn over the
+  menu's rows in the gate's grabs. The kit no longer depends on the clip: the carousel shows as many whole items as fit,
+  an odd number about the centre (`pathItemCount`), so none rests outside its box on either renderer; the clip stays
+  for the half items passing its edges during a step. The gate holds the promise (above).
+- The stars, rounded rectangles under a pixel across, were drawn by the software rasterizer and nearly all lost on the
+  GPU, so the grabs showed a sky the player did not see. They are now antialiased, which draws a sub-pixel star as a
+  faint dot on both, as the draft's canvas does.
+
+Compared over the whole frame at 12% tolerance, the two backends then differ only in the edges of glyphs and the help
+bar's circles (0.14% of the pixels at 1280 × 800). The probe's offscreen GLX surface keeps the size it was created
+with, so a state is grabbed in a window made at its own size; the gate stays on the software backend, which needs no
+GPU.
 
 **qml-rules' fence.** The back end's `emusen.dev` module depends on `Frontend/qml-rules`, so qml-rules has left the
 Frontend workspace and keeps its own lock file, as kit-core does. `qml-rules/tests/fence.rs` holds its tree to no
@@ -678,6 +720,13 @@ its clip, cut at an edge with no fade); the dump's cap height in the item's unit
 1920 × 1080); a path dependency in qml-rules' manifest failed both fence tests; the flare without the size guard failed
 the 0 × 0 frame. That last test first asked at 1280 × 0, where the planets stand apart from the sweep and the division
 gives an infinity, not a NaN, so the fault went unseen; it asks at 0 × 0 now, the size the gallery met.
+
+Measured on 2026-11-08 with four more seeded faults, each reverted: the card form's surface not drawn failed the gate on
+contrast in the light card form at all four sizes; the carousel's old `pathItemCount` (as many as cover its width, plus
+two) failed the gate with cards resting outside it; the star model not reset failed the gate's count of the splash's
+stars; the shadow drawn as its whole disc failed kit-core's test that the shadow stays inside the moon. Kit-core's
+`tests/audit.rs` holds the contrast rule itself: 4.5:1 and the large type's 3:1 at 24 px and 18.66 px bold, the ink
+composited over what is behind it, the spare tenth, and no ink nothing to judge.
 
 ### 7.6 Building, linking, the registry, and what it is held to
 
@@ -713,8 +762,8 @@ each reverted: `pad_button` off by one failed the kinds pairs; a declined press 
 CubicOut curve numbered as InCubic failed the easing test; the swap applied inverted failed two router tests.
 
 **Hand-written C++** (`EmuSen_Qt.md` §1.4's tracked count, the lines of the files as `wc -l` counts them): 23 in the
-kit (`cpp/kit_glue.h` and `cpp/kit_glue.cpp`, all of it `send_key`) and 287 in the harness (`cpp/harness.cpp` 265,
-`cpp/harness.h` 22; §7.9, §7.10), **310 in all** on 2026-11-08. Counted the same way, step 9's figure was 277 (the
+kit (`cpp/kit_glue.h` and `cpp/kit_glue.cpp`, all of it `send_key`) and 334 in the harness (`cpp/harness.cpp` 311,
+`cpp/harness.h` 23; §7.9, §7.10), **357 in all** on 2026-11-08 with the contrast sampling. Counted the same way, step 9's figure was 277 (the
 harness 254), not the 264 first written here. Budget: under 600 for the whole front end.
 
 ### 7.7 Open
@@ -731,12 +780,10 @@ harness 254), not the 264 first written here. Budget: under 600 for the whole fr
 - Owed by §7.9 to stage 1: a row whose control takes Up and Down itself (a `TextField`, a `ComboBox`) cannot be passed
   by a vertical walk; the rule (the row walks first, the control takes the keys once chosen, as a console's settings
   do) is decided with the docked `Keyboard`. Until then a fixture declares its path with `KeyNavigation` on the control.
-- **[decision]** The Moonrise caption is 18 draft units (§7.10), not the approved draft's 15, so that it meets the big
-  screen's floor at every size. Recommended: keep 18, the type scale's caption; the other way is a floor exemption for
-  the splash, which the rules do not have.
+- Decided 2026-11-08 by the tester: the Moonrise caption is 18 draft units (§7.10), not the approved draft's 15, so
+  that it meets the big screen's floor at every size.
 - Owed by §7.10 to stage 1: the frame raises `focusMoved` when the walk's focused role changes (B on the desktop's
   content gives the navigation the focus) but no item takes Qt's focus, so the walk's role and Qt's focus part there;
-  the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. A carousel's
-  off-box worlds show in the software grabs (§7.10's limit); the picture tier of `EmuSen_Qt.md` §8.1 is where a
-  clipped carousel is seen. The splash's halo is a flat translucent disc (§7.5) and reads as a grey disc in the grabs:
-  to be compared with the approved draft before stage 1 lands.
+  the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The help
+  bar's glyphs are empty circles until the pad's button glyphs are drawn (above). The Moonrise title is set in the
+  system face until Barlow Condensed Light is bundled.

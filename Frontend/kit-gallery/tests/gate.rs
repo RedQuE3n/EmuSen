@@ -14,6 +14,8 @@ const FORMS: [(WalkForm, &str, &str); 3] =
 const SECTIONS: [&str; 3] = ["Menu", "Controls", "Moonrise"];
 const SWEPT: [&str; 6] = ["play", "primary", "field", "combo", "progress", "tabs"];
 const KEY_F1: i32 = 0x0100_0030;
+/// The audit's slack at a scale above one: a pixel and a half.
+const SLACK: f64 = 1.5;
 
 fn grabs() -> PathBuf {
     let dir = PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".cache").join("emusen").join("tmp").join("kit-gallery");
@@ -30,6 +32,33 @@ fn finish_moonrise(scene: &mut Scene<'_>) {
         scene.wait(100);
     }
     panic!("the splash did not finish in 12 s");
+}
+
+/// The finished splash shows every star of the draft's sky.
+fn moonrise_stars(scene: &mut Scene<'_>) {
+    assert_eq!(scene.property("moonrise", "starsShown"), "220", "the splash's stars, which begin at no opacity");
+}
+
+/// The carousel's promise: nothing under it rests outside its box, so no renderer, clipping or not, draws a world over its neighbours.
+fn inside_carousel(tree: &emusen_qt_test::tree::Tree) -> Vec<String> {
+    let Some(at) = tree.find_named("carousel") else { return Vec::new() };
+    let carousel = &tree.nodes[at as usize];
+    let mut under = std::collections::HashSet::from([carousel.id.as_str()]);
+    let mut faults = Vec::new();
+    for (i, n) in tree.nodes.iter().enumerate() {
+        if !under.contains(n.parent.as_str()) {
+            continue;
+        }
+        under.insert(n.id.as_str());
+        let outside = n.x < carousel.x - SLACK
+            || n.y < carousel.y - SLACK
+            || n.x + n.w > carousel.x + carousel.w + SLACK
+            || n.y + n.h > carousel.y + carousel.h + SLACK;
+        if n.visible && n.w > 0.0 && n.h > 0.0 && outside {
+            faults.push(format!("rests outside the carousel {at}: {i}, {} at {:.0},{:.0} {:.0}x{:.0}", n.cls, n.x, n.y, n.w, n.h));
+        }
+    }
+    faults
 }
 
 /// The style sweep: the colour inside each styled control's background, near its right end, is a token of the variant.
@@ -82,16 +111,22 @@ fn qt_7_stage_0_gate_on_the_gallery() {
                     scene.wait(60);
                     if page == 2 {
                         finish_moonrise(&mut scene);
+                        moonrise_stars(&mut scene);
                     }
                     let tree = scene.tree();
                     if let Some(first) = tree.operable().first().copied() {
                         scene.focus_item(&tree, first);
                     }
-                    let tree = scene.tree();
+                    let mut tree = scene.tree();
                     let focus = scene.focus(&tree);
                     let name = format!("{form_name}-{variant:?}-{}-{w}x{h}", section.to_lowercase());
-                    let mut faults: Vec<String> = if page == 1 { sweep(&mut scene, &tree, variant) } else { Vec::new() };
+                    let mut faults: Vec<String> = match page {
+                        0 => inside_carousel(&tree),
+                        1 => sweep(&mut scene, &tree, variant),
+                        _ => Vec::new(),
+                    };
                     assert!(scene.grab(&grabs.join(format!("{name}.png")).display().to_string()), "grab {name}");
+                    scene.sample_behind(&mut tree, f64::from(w), f64::from(h));
                     let edges = scene.record_edges(&tree);
                     faults.extend(
                         scene.audit(&tree, form, variant, focus, &edges, f64::from(w), f64::from(h)).iter().map(ToString::to_string),
@@ -121,7 +156,8 @@ fn qt_7_stage_0_gate_on_the_gallery() {
     scene.key(KEY_F1, 0);
     scene.wait(400);
     assert_eq!(scene.property("question", "opened"), "true", "F1 opened the question");
-    let tree = scene.tree();
+    let mut tree = scene.tree();
+    scene.sample_behind(&mut tree, 1280.0, 800.0);
     let popup = tree.nodes.iter().position(|n| n.popup && n.visible).expect("the question's popup item") as u32;
     let sheet = tree.root.find(emusen_kit_core::input::ElementId(popup)).expect("the popup in the tree").clone();
     let focus = scene.focus(&tree);

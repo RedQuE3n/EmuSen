@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use emusen_kit_core::audit::{Axes, Edges, Item, Kind, Rect, Text};
+use emusen_kit_core::audit::{Axes, Edges, Item, Kind, Legibility, Rect, Text};
 use emusen_kit_core::tokens::Colour;
 use serde::Deserialize;
 
@@ -30,6 +30,16 @@ pub struct Node {
     pub picture: bool,
     #[serde(default)]
     pub backdrop: bool,
+    /// The words' colour with the item's opacity in its alpha, empty for a disabled control's.
+    #[serde(default)]
+    pub ink: Option<String>,
+    #[serde(default)]
+    pub size: f64,
+    #[serde(default)]
+    pub bold: bool,
+    /// Where the words are drawn: x, y, width, height in the scene.
+    #[serde(default)]
+    pub glyphs: Option<[f64; 4]>,
     #[serde(default)]
     pub text: Option<String>,
     #[serde(default)]
@@ -154,7 +164,53 @@ pub struct Tree {
     pub nodes: Vec<Node>,
 }
 
+/// Points spread over a box, a few pixels apart, for sampling what is behind words.
+fn spread(glyphs: [f64; 4], width: f64, height: f64) -> Vec<(f64, f64)> {
+    let [x, y, w, h] = glyphs;
+    let (columns, rows) = ((w / 4.0).clamp(2.0, 16.0) as usize, (h / 4.0).clamp(2.0, 6.0) as usize);
+    let mut points = Vec::with_capacity(columns * rows);
+    for row in 0..rows {
+        for column in 0..columns {
+            let px = x + w * (column as f64 + 0.5) / columns as f64;
+            let py = y + h * (row as f64 + 0.5) / rows as f64;
+            if px >= 0.0 && py >= 0.0 && px < width && py < height {
+                points.push((px, py));
+            }
+        }
+    }
+    points
+}
+
+/// The item of this number under an item, to be changed.
+fn find_mut(item: &mut Item, id: u32) -> Option<&mut Item> {
+    if item.id.0 == id {
+        return Some(item);
+    }
+    item.children.iter_mut().find_map(|child| find_mut(child, id))
+}
+
 impl Tree {
+    /// Where to sample behind each visible text that has an ink: its number and its points.
+    pub fn behind_points(&self, width: f64, height: f64) -> Vec<(u32, Vec<(f64, f64)>)> {
+        self.nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| n.visible && n.ink.as_deref().is_some_and(|ink| !ink.is_empty()))
+            .filter_map(|(i, n)| n.glyphs.map(|g| (i as u32, spread(g, width, height))))
+            .filter(|(_, points)| !points.is_empty())
+            .collect()
+    }
+
+    /// Gives each sampled text its legibility: its ink, its type and what was found behind it.
+    pub fn set_behind(&mut self, index: u32, behind: Vec<Colour>) {
+        let node = &self.nodes[index as usize];
+        let Some(ink) = node.ink.as_deref().and_then(colour) else { return };
+        let legibility = Legibility { ink, size: node.size, bold: node.bold, behind };
+        if let Some(item) = find_mut(&mut self.root, index) {
+            item.legibility = Some(legibility);
+        }
+    }
+
     pub fn from_json(json: &str) -> Result<Tree, String> {
         let nodes: Vec<Node> = serde_json::from_str(json).map_err(|e| format!("the tree's JSON: {e}"))?;
         let mut children: HashMap<&str, Vec<usize>> = HashMap::new();

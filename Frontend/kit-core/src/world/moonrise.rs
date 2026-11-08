@@ -102,6 +102,8 @@ pub const CAPTION_Y: f64 = 0.91;
 pub const CAPTION_SIZE: f64 = 18.0;
 
 pub const HALO: Colour = Colour::rgba(201, 214, 255, 71);
+/// The halo's outer edge: its colour at no alpha.
+pub const HALO_EDGE: Colour = Colour::rgba(201, 214, 255, 0);
 pub const OUTLINE: Colour = Colour::rgba(243, 239, 226, 242);
 pub const LIT_INNER: Colour = Colour::hex("#FAF7EC");
 pub const LIT_OUTER: Colour = Colour::hex("#D6D2C4");
@@ -138,11 +140,48 @@ pub struct Moon {
     pub centre: Point,
     pub radius: f64,
     pub halo_opacity: f64,
+    /// The halo is HALO out to `halo_inner_radius` and fades to nothing at `halo_radius`, the draft's gradient from 0.6 to 3.2 radii.
+    pub halo_inner_radius: f64,
     pub halo_radius: f64,
     pub outline_drawn: f64,
+    pub outline_width: f64,
     pub fill: f64,
+    /// The lit face's two-circle gradient: LIT_INNER from a small circle up and to the left, LIT_OUTER at 1.1 radii about the centre.
+    pub lit_focus: Point,
+    pub lit_focus_radius: f64,
+    pub lit_radius: f64,
     pub shadow_centre: Point,
     pub shadow_radius: f64,
+}
+
+impl Moon {
+    /// The shadow as it is drawn, clipped to the moon: the outline of the two discs' overlap, `steps` points along each arc, into `out`.
+    pub fn shadow_outline(&self, steps: usize, out: &mut Vec<Point>) {
+        out.clear();
+        let ([ax, ay], ar) = (self.centre, self.radius);
+        let ([bx, by], br) = (self.shadow_centre, self.shadow_radius);
+        let d = (bx - ax).hypot(by - ay);
+        let arc = |out: &mut Vec<Point>, [cx, cy]: Point, r: f64, from: f64, to: f64| {
+            for i in 0..=steps {
+                let a = from + (to - from) * i as f64 / steps as f64;
+                out.push([cx + r * a.cos(), cy + r * a.sin()]);
+            }
+        };
+        if ar <= 0.0 || br <= 0.0 || d >= ar + br {
+            return;
+        }
+        if d <= (ar - br).abs() {
+            let (centre, r) = if br < ar { (self.shadow_centre, br) } else { (self.centre, ar) };
+            arc(out, centre, r, 0.0, std::f64::consts::TAU);
+            return;
+        }
+        let towards = (by - ay).atan2(bx - ax);
+        let on_moon = ((d * d + ar * ar - br * br) / (2.0 * d * ar)).clamp(-1.0, 1.0).acos();
+        let on_shadow = ((d * d + br * br - ar * ar) / (2.0 * d * br)).clamp(-1.0, 1.0).acos();
+        arc(out, self.centre, ar, towards - on_moon, towards + on_moon);
+        let back = towards + std::f64::consts::PI;
+        arc(out, self.shadow_centre, br, back - on_shadow, back + on_shadow);
+    }
 }
 
 /// One planet at a time: where it is, how large, how far it has appeared, its glow, and its flare as the sweep passes.
@@ -292,9 +331,14 @@ impl Splash {
             centre: [mx, my],
             radius: mr,
             halo_opacity: ease(tl.halo.at(t)),
+            halo_inner_radius: mr * 0.6,
             halo_radius: mr * 3.2,
             outline_drawn: ease(tl.stroke.at(t)),
+            outline_width: 2.2 * unit,
             fill,
+            lit_focus: [mx - mr * 0.35, my - mr * 0.3],
+            lit_focus_radius: mr * 0.1,
+            lit_radius: mr * 1.1,
             shadow_centre: [mx + mr * (0.42 + (1.0 - fill) * 0.7), my - mr * 0.12],
             shadow_radius: mr * 0.96,
         };

@@ -14,6 +14,7 @@ Item {
     property alias glowX: field.glowX
     property alias glowY: field.glowY
     property bool animating: true
+    readonly property alias starsShown: stars.count
     Kit.StarField {
         id: field
         width: root.width
@@ -67,6 +68,7 @@ Item {
             }
         }
         Repeater {
+            id: stars
             model: field
             Rectangle {
                 id: star
@@ -79,6 +81,7 @@ Item {
                 width: 2 * star.starRadius
                 height: 2 * star.starRadius
                 radius: star.starRadius
+                antialiasing: true
                 color: field.starInk
                 opacity: star.starOpacity
             }

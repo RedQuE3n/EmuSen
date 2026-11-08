@@ -333,3 +333,34 @@ fn lunap_102_1_a_glide_reads_on_the_hosts_clock_and_never_from_wall_time() {
     assert_eq!(again.from, 6.0, "a fresh glide starts from where the last one is now");
     assert_eq!(again.value_at(ms(250), false), 6.0 * (1.0 - 0.75));
 }
+
+#[test]
+fn lunap_219_the_shadow_is_drawn_inside_the_moon_and_the_halo_and_face_are_the_drafts_gradients() {
+    let splash = thirteen();
+    let distance = |p: [f64; 2], c: [f64; 2]| (p[0] - c[0]).hypot(p[1] - c[1]);
+    let mut outline = Vec::new();
+    for seconds in [2.0, 2.6, 8.0] {
+        let moon = splash.frame(seconds, 1280.0, 720.0).moon;
+        moon.shadow_outline(48, &mut outline);
+        assert_eq!(outline.len(), 98, "two arcs at {seconds} s");
+        for &p in &outline {
+            assert!(distance(p, moon.centre) <= moon.radius + 1e-9, "inside the moon at {seconds} s: {p:?}");
+            assert!(distance(p, moon.shadow_centre) <= moon.shadow_radius + 1e-9, "inside the shadow's disc at {seconds} s");
+        }
+        assert!(
+            outline.iter().filter(|&&p| (distance(p, moon.centre) - moon.radius).abs() < 1e-9).count() >= 49,
+            "half the outline is the moon's edge"
+        );
+    }
+    let moon = splash.frame(8.0, 1280.0, 720.0).moon;
+    assert_eq!((moon.halo_inner_radius, moon.halo_radius), (92.0 * 0.6, 92.0 * 3.2));
+    assert_eq!(moon.outline_width, 2.2);
+    assert_eq!(
+        (moon.lit_focus, moon.lit_focus_radius, moon.lit_radius),
+        ([640.0 - 92.0 * 0.35, 259.2 - 92.0 * 0.3], 92.0 * 0.1, 92.0 * 1.1)
+    );
+    let mut far = moon;
+    far.shadow_centre = [moon.centre[0] + 300.0, moon.centre[1]];
+    far.shadow_outline(48, &mut outline);
+    assert!(outline.is_empty(), "discs apart: no shadow");
+}

@@ -1,8 +1,8 @@
 // The audit rules held to EmuSen_InterfaceSpec.md §4, EmuSen_Settings_Reference.md §4.83.2 and §4.83.7, and EmuSen_Qt.md §8.1, on hand-built trees.
 
 use emusen_kit_core::audit::{
-    Axes, DESKTOP_CAPS, Edge, Edges, Fault, Item, Kind, Rect, Side, State, TWO_ROWS, Text, check, fit, named, no_chrome, pad_reach,
-    palette_reach, pointer_reach, reached, smallest_capitals,
+    Axes, DESKTOP_CAPS, Edge, Edges, Fault, Item, Kind, Legibility, Rect, Side, State, TWO_ROWS, Text, check, contrast, fit, named,
+    no_chrome, pad_reach, palette_reach, pointer_reach, reached, smallest_capitals,
 };
 use emusen_kit_core::input::{ElementId, UiButton, WalkForm};
 use emusen_kit_core::tokens::{Colour, ColourToken, Variant, colour};
@@ -277,6 +277,51 @@ fn interface_spec_4_4_every_painted_colour_is_declared_and_a_scene_is_exempt() {
             .child(Item::new(91, Kind::Picture, Rect::new(0.0, 0.0, 100.0, 100.0)).paints(&[stray])),
     );
     assert_eq!(palette_reach(&themed, &declared), vec![]);
+}
+
+fn words_over(ink: Colour, size: f64, bold: bool, behind: &[Colour]) -> Item {
+    let words =
+        Item::new(2, Kind::Words, Rect::new(10.0, 10.0, 200.0, 30.0)).legible(Legibility { ink, size, bold, behind: behind.to_vec() });
+    Item::new(1, Kind::Panel, PANEL).child(words)
+}
+
+fn ratio_of(faults: &[Fault]) -> Option<f64> {
+    faults.iter().find_map(|f| match f {
+        Fault::LowContrast { ratio, .. } => Some(*ratio),
+        _ => None,
+    })
+}
+
+#[test]
+fn kit_7_10_words_reach_4_5_to_1_or_3_to_1_when_large_against_what_is_behind_them() {
+    let grey = Colour::hex("#767676");
+    let white = Colour::hex("#FFFFFF");
+    assert!(contrast(&words_over(grey, 16.0, false, &[white])).is_empty(), "#767676 on white is 4.54:1");
+    let faint = Colour::hex("#949494");
+    let faults = contrast(&words_over(faint, 16.0, false, &[white]));
+    assert_eq!(faults.len(), 1);
+    assert!((ratio_of(&faults).unwrap() - 3.03).abs() < 0.02, "{faults:?}");
+    assert!(contrast(&words_over(faint, 24.0, false, &[white])).is_empty(), "24 px is large: 3:1");
+    assert!(contrast(&words_over(faint, 19.0, true, &[white])).is_empty(), "18.66 px bold is large");
+    assert_eq!(contrast(&words_over(faint, 19.0, false, &[white])).len(), 1, "19 px regular is not");
+}
+
+#[test]
+fn kit_7_10_the_ink_is_composited_and_a_spare_tenth_of_the_backdrop_may_fall_short() {
+    let black = Colour::hex("#000000");
+    let white = Colour::hex("#FFFFFF");
+    let half_white = Colour::rgba(255, 255, 255, 128);
+    let faults = contrast(&words_over(half_white, 16.0, false, &[black]));
+    assert!(faults.is_empty(), "white at half over black is #808080, 5.3:1: {faults:?}");
+    let quarter_white = Colour::rgba(255, 255, 255, 64);
+    assert_eq!(contrast(&words_over(quarter_white, 16.0, false, &[black])).len(), 1, "at a quarter it is 2.1:1");
+    let mut sky = vec![black; 19];
+    sky.push(white);
+    assert!(contrast(&words_over(white, 16.0, false, &sky)).is_empty(), "one star in twenty behind white words is spare");
+    let mut half = vec![black; 10];
+    half.extend(vec![white; 10]);
+    assert_eq!(contrast(&words_over(white, 16.0, false, &half)).len(), 1, "words half over their own colour fail");
+    assert!(contrast(&words_over(Colour::rgba(0, 0, 0, 0), 16.0, false, &[black])).is_empty(), "no ink, nothing drawn");
 }
 
 #[test]

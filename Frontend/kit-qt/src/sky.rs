@@ -279,13 +279,20 @@ impl qobject::StarField {
 
     /// The stars' points for the time, size and opacity, then every row's roles and the glow announced.
     fn redraw(mut self: Pin<&mut Self>) {
+        // No stars are drawn at no opacity, so the rows come and go with it, and the view is told the model is new (EmuSen_Kit.md §7.10).
+        let resets = self.count > 0 && (self.stars_opacity > 0.0) == self.state.points.is_empty();
+        if resets {
+            self.as_mut().begin_reset_model();
+        }
         let count = {
             let mut rust = self.as_mut().rust_mut();
             let (time, width, height, opacity) = (rust.time, rust.width, rust.height, rust.stars_opacity);
             rust.state.tick(time, [width, height], opacity);
             rust.state.points.len() as i32
         };
-        if count > 0 {
+        if resets {
+            self.as_mut().end_reset_model();
+        } else if count > 0 {
             let (first, last) = (self.index(0, 0, &QModelIndex::default()), self.index(count - 1, 0, &QModelIndex::default()));
             self.as_mut().data_changed(&first, &last, &QVector::<i32>::default());
         }

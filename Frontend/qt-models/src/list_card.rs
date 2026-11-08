@@ -39,8 +39,11 @@ fn words<'a>(facts: &'a Value, key: &str) -> &'a str {
     facts.get(key).and_then(Value::as_str).unwrap_or_default()
 }
 
-/// What the Sort row's pane says the list shows now.
-fn sort_sentence(sort: &str) -> &'static str {
+/// What the Sort row's pane says the list shows now; an ES-DE order is said by its own words.
+fn sort_sentence(sort: &str) -> String {
+    if let Some((key, order)) = sort.split_once(", ") {
+        return format!("Sorted by {}, {order}.", key.to_lowercase());
+    }
     match sort {
         "Last played" => "Sorted by when each was last played, newest first.",
         "Most played" => "Sorted by how often each was played, most first.",
@@ -48,12 +51,18 @@ fn sort_sentence(sort: &str) -> &'static str {
         "Rating" => "Sorted by rating, highest first.",
         _ => "Sorted by name, A to Z.",
     }
+    .to_owned()
 }
 
 fn first_page(f: &Value) -> Page {
     let sort = words(f, "sort");
     let filter = words(f, "filter");
-    let others: Vec<&str> = SORTS.iter().copied().filter(|s| *s != sort).collect();
+    // A theme's gamelist names its own orders (gamelists.rs); the grid's are SORTS.
+    let offered: Vec<&str> = match f.get("sorts").and_then(Value::as_array) {
+        Some(sorts) => sorts.iter().filter_map(Value::as_str).collect(),
+        None => SORTS.to_vec(),
+    };
+    let others: Vec<&str> = offered.into_iter().filter(|s| *s != sort).collect();
     let shows = match filter {
         "" => "Shows every game in the section.".to_owned(),
         "Favourites" => "Shows the section's favourites.".to_owned(),
@@ -61,7 +70,7 @@ fn first_page(f: &Value) -> Page {
     };
     let mut rows = vec![
         Row::new(SEARCH, "Search").opens().pane(Pane::said("Type part of a name; the covers narrow as you type.", "The keyboard docks at the foot of the screen.")),
-        Row::new(SORT, "Sort").value(sort).steps().pane(Pane::said(sort_sentence(sort), &format!("Also: {}", others.join(" · ")))),
+        Row::new(SORT, "Sort").value(sort).steps().pane(Pane::said(&sort_sentence(sort), &format!("Also: {}", others.join(" · ")))),
         Row::new(FILTER, "Filter").value(filter).opens().pane(Pane::said(&shows, "Choose Favourites to narrow it, or a collection to show it in the strip's place.")),
         Row::new(JUMP, "Jump to").value(words(f, "letter")).steps().pane(Pane::said("Moves to the first game under the letter.", words(f, "letters"))),
         Row::new(RANDOM, "Random game").pane(Pane::said("Moves to a game chosen at random.", "A plays it.")),
@@ -81,6 +90,21 @@ fn filter_page(f: &Value) -> Page {
         rows.push(Row::new(FAVOURITES_ONLY, "Favourites"));
     }
     Page { title: "Filter".to_owned(), breadcrumb: "List".to_owned(), rows, footer: String::new() }
+}
+
+/// The List card's facts for a theme's gamelist, from what its last listing summed up, the entry at `focused` selected.
+pub fn esde_facts(s: &crate::esde_shelves::Summary, focused: usize) -> Value {
+    let sorts: Vec<String> = crate::gamelists::GameSort::all(s.collection).into_iter().map(|o| o.label()).collect();
+    serde_json::json!({
+        "section": s.full_name,
+        "count": crate::listing::count_line(s.counts.games, s.counts.shown, s.counts.filtered),
+        "sort": s.sort,
+        "sorts": sorts,
+        "filter": if s.favourites_only { "Favourites" } else { "" },
+        "letter": s.entry_letters.get(focused).cloned().unwrap_or_default(),
+        "letters": s.letters.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>().join(" · "),
+        "favouritesSection": s.favourites_shelf,
+    })
 }
 
 pub struct ListCard;

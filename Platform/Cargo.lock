@@ -559,6 +559,7 @@ dependencies = [
  "emusen-galaxia",
  "emusen-sqlite",
  "emusen-systems",
+ "serde",
  "serde_json",
 ]
 

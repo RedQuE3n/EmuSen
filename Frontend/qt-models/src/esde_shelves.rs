@@ -1,16 +1,16 @@
 //! The library as an ES-DE theme sees it (EmuSen_Qt.md §4.6): each shelf under its ES-DE names with every field a theme
 //! can show of its games, the media found for them as an index, and the ES-DE settings, each written as one text once a
 //! refresh, off the GUI thread, so a painter parses it on its own thread and nothing on the GUI thread grows with the
-//! library. Sorting, filters, folders and collections are the gamelist rules' (gamelists.rs, after this).
+//! library. Sorting, filters, folders and collections are the gamelist rules' (gamelists.rs), applied here.
 
+use crate::gamelists::{listing_json, Collection, Counts, Gamelists, Settings, Shelf};
 use crate::library::{title_of, Catalog, LibrarySource};
 use emusen_crystal_client::shapes::SystemRow;
+use emusen_platform_client::library::GameFile;
 use serde_json::{json, Map, Value};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::Path;
-
-/// A shelf's kind as the painter reads it: a console's own games; the collections (gamelists.rs) add the others.
-pub const REGULAR: &str = "regular";
+use std::sync::Arc;
 
 /// A game's plays as games.db records them.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -140,11 +140,11 @@ pub fn names_of(file: &str, folder_path: &str) -> Vec<String> {
 /// The ES-DE view's three texts: the shelves, the media index and each shelf's media presence.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Esde {
-    /// `[{"system", "esde_system", "esde_full_name", "kind", "games": [{...}]}]`.
+    /// Each shelf as listed now (`gamelists::listing_json`), in the carousel's order.
     pub shelves: String,
     /// `MediaIndex::to_json`.
     pub media: String,
-    /// `{esde_system: [type]}`.
+    /// `{shelf name: [type]}`.
     pub presence: String,
 }
 
@@ -154,65 +154,228 @@ impl Default for Esde {
     }
 }
 
-/// The ES-DE view's texts for a refresh: each shelf of `shelved` with games, in that order, its games in the library's
-/// order, each with the scraper's metadata, games.db's plays and the media index's manual.
-pub fn read(source: &dyn LibrarySource, shelved: &[SystemRow], catalog: &Catalog) -> Result<Esde, String> {
+/// One game, or a folder entry, as the painter reads it: every field Mistress's `SceneGame` carried.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct EsdeGame {
+    pub name: String,
+    pub file: String,
+    /// The game's own console by its ES-DE names, which a collection lists beside others.
+    pub esde_system: String,
+    pub esde_full_name: String,
+    pub sort_name: Option<String>,
+    pub custom_sort_name: Option<String>,
+    pub description: Option<String>,
+    pub developer: Option<String>,
+    pub publisher: Option<String>,
+    pub genre: Option<String>,
+    pub players: Option<String>,
+    /// The metadata's `yyyy-MM-dd`.
+    pub release_date: Option<String>,
+    /// 0 to 1.
+    pub rating: Option<f64>,
+    /// Seconds since 1970; 0 for never.
+    pub last_played: i64,
+    pub play_count: i64,
+    /// Seconds.
+    pub play_time: i64,
+    pub favourite: bool,
+    pub completed: bool,
+    pub kid_game: bool,
+    pub broken: bool,
+    pub hidden: bool,
+    pub not_counted: bool,
+    pub hide_metadata: bool,
+    pub controller: Option<String>,
+    /// The alternative emulator's name, where the player chose one.
+    pub emulator: Option<String>,
+    pub manual: bool,
+    pub folder: bool,
+    /// The folders between the console folder and the file, or a folder entry's own path; '/'-separated.
+    pub folder_path: String,
+    /// A folder's ES-DE folder link: the file A launches in place of entering it.
+    pub folder_link: Option<String>,
+    /// A grouped custom collection listed as a folder.
+    pub is_collection: bool,
+    /// For a collection's folder entry, the game whose media it shows.
+    pub face: Option<String>,
+}
+
+impl EsdeGame {
+    /// The row as the shelves' text carries it: every field but the description, which `description_of` gives on demand.
+    pub fn to_json(&self) -> Value {
+        let mut row = self.to_json_whole();
+        if let Some(fields) = row.as_object_mut() {
+            fields.remove("description");
+        }
+        row
+    }
+
+    /// The row with its description, as a collection's folder entry carries its own.
+    pub fn to_json_whole(&self) -> Value {
+        json!({
+            "file": self.file, "name": self.name, "esde_system": self.esde_system, "esde_full_name": self.esde_full_name,
+            "sort_name": self.sort_name, "custom_sort_name": self.custom_sort_name, "description": self.description,
+            "developer": self.developer, "publisher": self.publisher, "genre": self.genre, "players": self.players,
+            "release_date": self.release_date, "rating": self.rating, "last_played": self.last_played,
+            "play_count": self.play_count, "play_time": self.play_time, "favourite": self.favourite,
+            "completed": self.completed, "kid_game": self.kid_game, "broken": self.broken, "hidden": self.hidden,
+            "not_counted": self.not_counted, "hide_metadata": self.hide_metadata, "controller": self.controller,
+            "alt_emulator": self.emulator.is_some(), "emulator": self.emulator, "manual": self.manual, "folder": self.folder,
+            "folder_path": self.folder_path, "folder_link": self.folder_link, "is_collection": self.is_collection, "face": self.face,
+        })
+    }
+
+    /// An entry read back from its text, as the painter hands one in to be entered.
+    pub fn from_json(v: &Value) -> EsdeGame {
+        let text = |key: &str| v.get(key).and_then(Value::as_str).unwrap_or("").to_owned();
+        let flag = |key: &str| v.get(key).and_then(Value::as_bool).unwrap_or(false);
+        EsdeGame { name: text("name"), file: text("file"), folder: flag("folder"), folder_path: text("folder_path"), is_collection: flag("is_collection"), ..EsdeGame::default() }
+    }
+}
+
+/// What a refresh read for the ES-DE view, before the gamelist rules list it: the consoles' shelves in the systems
+/// sorting's order, the player's collections, the recently played, the folder links, the settings and the media.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Base {
+    pub regular: Vec<Shelf>,
+    pub custom: Vec<Collection>,
+    pub recent: Vec<String>,
+    /// Each folder link by the folder's path on disk, to the game's file.
+    pub links: HashMap<String, String>,
+    pub settings: Settings,
+    pub media: MediaIndex,
+}
+
+/// What the List card reads of a list without listing it again: its counts, letters, sort and filter.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Summary {
+    pub key: String,
+    pub full_name: String,
+    pub collection: bool,
+    pub favourites_shelf: bool,
+    pub counts: Counts,
+    pub letters: Vec<(String, usize)>,
+    /// Each entry's quick-selector letter, so a jump starts from the focused entry's.
+    pub entry_letters: Vec<String>,
+    pub sort: String,
+    pub favourites_only: bool,
+}
+
+/// The ES-DE view's state after a write: what was read, the shelves the rules built from it, each list's summary.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct EsdeState {
+    pub base: Arc<Base>,
+    pub shelves: Vec<Shelf>,
+    pub summaries: HashMap<String, Summary>,
+}
+
+impl EsdeState {
+    pub fn shelf(&self, name: &str) -> Option<&Shelf> {
+        self.shelves.iter().find(|s| s.name == name)
+    }
+
+    /// A game's description by its file, from its console's shelf.
+    pub fn description_of(&self, file: &str) -> Option<&str> {
+        self.base.regular.iter().flat_map(|s| s.games.iter()).find(|g| g.file == file).and_then(|g| g.description.as_deref())
+    }
+}
+
+/// The ES-DE view's reads for a refresh: each shelf of `shelved` with games, its games the library's less the hidden
+/// unless the player shows them, each with the scraper's metadata, games.db's plays and its folder.
+pub fn read(source: &dyn LibrarySource, shelved: &[SystemRow], catalog: &Catalog, settings: &Value) -> Result<Base, String> {
+    let show_hidden = settings.get("ShowHiddenGames").and_then(Value::as_bool).unwrap_or(false);
+    let collections = Settings::from_json(settings.get("BigPictureCollections").unwrap_or(&Value::Null));
     let metadata: HashMap<String, Value> = source.metadata(&catalog.games)?.into_iter().collect();
     let plays: HashMap<String, Plays> = source.plays(&catalog.games)?.into_iter().collect();
     let systems: Vec<String> = shelved.iter().map(|s| s.esde_system.clone()).filter(|s| !s.is_empty()).collect();
     let mut media = source.media_index(&systems)?;
     let by_id: HashMap<&str, &SystemRow> = shelved.iter().map(|s| (s.id.as_str(), s)).collect();
-    let system_of: HashMap<&str, &str> = catalog.games.iter().filter_map(|g| Some((g.path.as_str(), g.system.as_deref()?))).collect();
+    let game_of: HashMap<&str, &GameFile> = catalog.games.iter().map(|g| (g.path.as_str(), g)).collect();
     for (path, cover) in &catalog.covers {
-        let Some(s) = system_of.get(path.as_str()).and_then(|id| by_id.get(id)) else { continue };
-        media.set(&s.esde_system, COVER_TYPE, &names_of(path, "")[0], cover);
+        let Some(g) = game_of.get(path.as_str()) else { continue };
+        let Some(s) = g.system.as_deref().and_then(|id| by_id.get(id)) else { continue };
+        media.set(&s.esde_system, COVER_TYPE, &names_of(path, &g.folder)[0], cover);
     }
-    Ok(texts(shelved, catalog, &metadata, &plays, &media))
-}
-
-/// ES-DE's type for a cover, the library's `COVER`.
-const COVER_TYPE: &str = crate::library::COVER;
-
-/// The texts from what was read: pure, so a test gives the parts itself.
-pub fn texts(shelved: &[SystemRow], catalog: &Catalog, metadata: &HashMap<String, Value>, plays: &HashMap<String, Plays>, media: &MediaIndex) -> Esde {
     let favourites: HashSet<&str> = catalog.favourites.iter().map(String::as_str).collect();
     let played: HashMap<&str, i64> = catalog.played.iter().map(|(p, at)| (p.as_str(), *at)).collect();
-    let mut by_system: HashMap<&str, Vec<&emusen_platform_client::library::GameFile>> = HashMap::new();
+    let mut by_system: HashMap<&str, Vec<&GameFile>> = HashMap::new();
     for g in &catalog.games {
         if let Some(s) = g.system.as_deref() {
             by_system.entry(s).or_default().push(g);
         }
     }
-    let (mut shelves, mut presence) = (Vec::new(), Map::new());
+    let mut regular = Vec::new();
     for s in shelved {
-        let Some(games) = by_system.get(s.id.as_str()) else { continue };
-        let mut names = HashSet::new();
-        let rows: Vec<Value> = games
+        let Some(files) = by_system.get(s.id.as_str()) else { continue };
+        let games: Vec<EsdeGame> = files
             .iter()
             .map(|g| {
-                let own = names_of(&g.path, "");
-                let manual = media.find(&s.esde_system, "manual", &own).is_some();
-                names.extend(own);
                 let facts = Facts {
                     metadata: metadata.get(&g.path),
                     plays: plays.get(&g.path).copied().unwrap_or_default(),
                     last_played: played.get(g.path.as_str()).copied().unwrap_or(0),
                     favourite: favourites.contains(g.path.as_str()),
-                    manual,
+                    manual: media.find(&s.esde_system, "manual", &names_of(&g.path, &g.folder)).is_some(),
                 };
-                game_json(&g.path, &facts)
+                game_of_file(g, s, &facts)
             })
+            .filter(|g| show_hidden || !g.hidden)
             .collect();
-        presence.insert(s.esde_system.clone(), json!(media.present(&s.esde_system, &names)));
-        shelves.push(json!({
-            "system": s.id,
-            "esde_system": s.esde_system,
-            "esde_full_name": s.esde_full_name,
-            "kind": REGULAR,
-            "games": rows,
-        }));
+        if games.is_empty() {
+            continue;
+        }
+        let flatten = collections.flattened.iter().any(|f| *f == s.esde_system);
+        regular.push(Shelf { flatten, ..Shelf::regular(&s.id, &s.esde_system, &s.esde_full_name, games) });
     }
-    Esde { shelves: Value::Array(shelves).to_string(), media: media.to_json(), presence: Value::Object(presence).to_string() }
+    let years: HashMap<String, i32> = shelved.iter().rev().map(|s| (s.esde_system.clone(), s.release_year)).filter(|(_, y)| *y > 0).collect();
+    let sorting = settings.get("BigPictureInterface").and_then(|i| i.get("SystemsSorting")).and_then(Value::as_str).unwrap_or("release");
+    crate::gamelists::systems_order(&mut regular, sorting, &years);
+    let listed: HashSet<&str> = catalog.games.iter().map(|g| g.path.as_str()).collect();
+    let links = source.folder_links()?.into_iter().filter(|(_, file)| listed.contains(file.as_str())).collect();
+    Ok(Base { regular, custom: source.collections()?, recent: catalog.recent.clone(), links, settings: collections, media })
+}
+
+/// ES-DE's type for a cover, the library's `COVER`.
+const COVER_TYPE: &str = crate::library::COVER;
+
+/// The shelves the rules build from what was read, each listed as `gamelists` chose, as the texts and the state the
+/// List card reads; pure, so a test gives the parts itself.
+pub fn build(base: Arc<Base>, gamelists: &Gamelists) -> (Esde, EsdeState) {
+    let themed = |name: &str| gamelists.theme_folders.iter().any(|t| t == name);
+    let shelves: Vec<Shelf> = crate::gamelists::with_collections(base.regular.clone(), &base.custom, &base.settings, &themed, &base.recent)
+        .into_iter()
+        .filter(|s| !s.games.is_empty() || s.folders.as_ref().is_some_and(|f| !f.is_empty()))
+        .collect();
+    let (mut texts, mut presence, mut summaries) = (Vec::new(), Map::new(), HashMap::new());
+    for shelf in &shelves {
+        let listing = gamelists.listing(shelf, &base.links, &base.settings);
+        texts.push(listing_json(shelf, &listing));
+        presence.insert(shelf.name.clone(), json!(present(&base.media, &shelf.games)));
+        let summary = Summary {
+            key: listing.key.clone(),
+            full_name: shelf.full_name.clone(),
+            collection: shelf.is_collection(),
+            favourites_shelf: shelf.name == crate::gamelists::FAVORITES && shelf.kind == crate::gamelists::Kind::Auto,
+            counts: listing.counts,
+            entry_letters: listing.entries.iter().map(|g| crate::gamelists::first_letter(crate::gamelists::sort_key(g))).collect(),
+            letters: listing.letters,
+            sort: listing.sort.label(),
+            favourites_only: gamelists.is_favourites_only(shelf),
+        };
+        summaries.insert(shelf.name.clone(), summary);
+    }
+    let esde = Esde { shelves: Value::Array(texts).to_string(), media: base.media.to_json(), presence: Value::Object(presence).to_string() };
+    (esde, EsdeState { base, shelves, summaries })
+}
+
+/// The media types some of the games have, each looked up under its own console: the variant triggers.
+fn present(media: &MediaIndex, games: &[EsdeGame]) -> Vec<String> {
+    let mut names: HashMap<&str, HashSet<String>> = HashMap::new();
+    for g in games {
+        names.entry(g.esde_system.as_str()).or_default().extend(names_of(&g.file, &g.folder_path));
+    }
+    let found: BTreeSet<String> = names.iter().flat_map(|(system, names)| media.present(system, names)).collect();
+    found.into_iter().collect()
 }
 
 /// What a game's row is made from besides its file.
@@ -224,41 +387,40 @@ struct Facts<'a> {
     manual: bool,
 }
 
-/// One game as the painter reads it: every field Mistress's `SceneGame` carried, the metadata by the scraper's keys
-/// (EmuSen_Backend.md §30.3, `metadata`), its edit else ScreenScraper's else the default already chosen there.
-fn game_json(path: &str, f: &Facts) -> Value {
+/// One game: the metadata by the scraper's keys (EmuSen_Backend.md §30.3, `metadata`), its edit else ScreenScraper's
+/// else the default already chosen there.
+fn game_of_file(g: &GameFile, s: &SystemRow, f: &Facts) -> EsdeGame {
     let value = |key: &str| f.metadata.and_then(|m| m.get(key)).and_then(|v| v.get("value")).and_then(Value::as_str).filter(|v| !v.is_empty());
-    let text = |key: &str| value(key).map_or(Value::Null, |v| json!(v));
+    let text = |key: &str| value(key).map(str::to_owned);
     let flag = |key: &str| value(key) == Some("1");
-    let rating = value("rating").and_then(|r| r.parse::<f64>().ok()).map_or(Value::Null, |r| json!(r.clamp(0.0, 1.0)));
-    json!({
-        "file": path,
-        "name": value("name").map_or_else(|| title_of(path), str::to_owned),
-        "sort_name": text("sortname"),
-        "custom_sort_name": text("collectionsortname"),
-        "description": text("description"),
-        "developer": text("developer"),
-        "publisher": text("publisher"),
-        "genre": text("genre"),
-        "players": text("players"),
-        "release_date": text("releasedate"),
-        "rating": rating,
-        "last_played": f.last_played,
-        "play_count": f.plays.count,
-        "play_time": f.plays.seconds,
-        "favourite": f.favourite,
-        "completed": flag("completed"),
-        "kid_game": flag("kidgame"),
-        "broken": flag("broken"),
-        "hidden": flag("hidden"),
-        "not_counted": flag("nogamecount"),
-        "hide_metadata": flag("hidemetadata"),
-        "controller": text("controller"),
-        "alt_emulator": value("altemulator").is_some(),
-        "emulator": text("altemulator"),
-        "manual": f.manual,
-        "folder": false,
-        "folder_path": "",
-        "folder_link": Value::Null,
-    })
+    EsdeGame {
+        name: value("name").map_or_else(|| title_of(&g.path), str::to_owned),
+        file: g.path.clone(),
+        esde_system: s.esde_system.clone(),
+        esde_full_name: s.esde_full_name.clone(),
+        sort_name: text("sortname"),
+        custom_sort_name: text("collectionsortname"),
+        description: text("description"),
+        developer: text("developer"),
+        publisher: text("publisher"),
+        genre: text("genre"),
+        players: text("players"),
+        release_date: text("releasedate"),
+        rating: value("rating").and_then(|r| r.parse::<f64>().ok()).map(|r| r.clamp(0.0, 1.0)),
+        last_played: f.last_played,
+        play_count: f.plays.count,
+        play_time: f.plays.seconds,
+        favourite: f.favourite,
+        completed: flag("completed"),
+        kid_game: flag("kidgame"),
+        broken: flag("broken"),
+        hidden: flag("hidden"),
+        not_counted: flag("nogamecount"),
+        hide_metadata: flag("hidemetadata"),
+        controller: text("controller"),
+        emulator: text("altemulator"),
+        manual: f.manual,
+        folder_path: g.folder.clone(),
+        ..EsdeGame::default()
+    }
 }

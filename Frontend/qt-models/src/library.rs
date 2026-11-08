@@ -4,7 +4,9 @@
 
 use crate::keyed::{Keyed, KeyedRows};
 use std::collections::{HashMap, HashSet};
-use crate::esde_shelves::{Esde, EsdeSettings, MediaIndex, Plays};
+use crate::esde_shelves::{Esde, EsdeSettings, EsdeState, MediaIndex, Plays};
+use crate::gamelists::{Collection, Gamelists};
+use std::sync::Arc;
 use crate::words;
 use emusen_crystal_client::shapes::SystemRow;
 use emusen_kit_core::world::{hex, shape_of, world_line, WorldBody, WorldRing};
@@ -59,6 +61,14 @@ pub trait LibrarySource: Send + Sync {
     /// store's first (esde_shelves::MediaIndex); a source with neither has none.
     fn media_index(&self, _systems: &[String]) -> Result<MediaIndex, String> {
         Ok(MediaIndex::default())
+    }
+    /// The player's collections and their members, from games.db.
+    fn collections(&self) -> Result<Vec<Collection>, String> {
+        Ok(Vec::new())
+    }
+    /// Each ES-DE folder link the player set, by the folder's path on disk, to the linked game's file.
+    fn folder_links(&self) -> Result<Vec<(String, String)>, String> {
+        Ok(Vec::new())
     }
 }
 
@@ -406,13 +416,20 @@ pub struct Read {
     /// The ES-DE view's settings, and its texts while a theme is the library's look (esde_shelves).
     pub esde_settings: EsdeSettings,
     pub esde: Esde,
+    /// What the gamelist rules were given and built, so a choice of the List card lists again without reading.
+    pub esde_state: EsdeState,
 }
 
 /// One refresh's answer, or the words for why it could not.
 pub type Refreshed = Result<Read, String>;
 
-/// One refresh of a source, run off the GUI thread.
+/// One refresh of a source, run off the GUI thread, every gamelist as it first lists.
 pub fn refresh(source: &dyn LibrarySource) -> Refreshed {
+    refresh_with(source, &Gamelists::default())
+}
+
+/// One refresh, each gamelist listed with the choices the player made of it.
+pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists) -> Refreshed {
     let systems = source.systems()?;
     let games = source.games()?;
     let favourites = source.favourites(&games)?;
@@ -430,13 +447,14 @@ pub fn refresh(source: &dyn LibrarySource) -> Refreshed {
     let mut rows = rows(&shelved, &catalog, &engines);
     let lists = lists_of(&mut rows, &systems, &catalog, words::now());
     let esde_settings = crate::esde_shelves::settings_of(&catalog.settings);
-    let esde = if esde_settings.themed {
+    let (esde, esde_state) = if esde_settings.themed {
         let on_shelves: Vec<SystemRow> = shelved.iter().filter(|s| shelves.is_empty() || shelves.contains(&s.id)).cloned().collect();
-        crate::esde_shelves::read(source, &on_shelves, &catalog)?
+        let base = crate::esde_shelves::read(source, &on_shelves, &catalog, &catalog.settings)?;
+        crate::esde_shelves::build(Arc::new(base), gamelists)
     } else {
-        Esde::default()
+        (Esde::default(), EsdeState::default())
     };
-    Ok(Read { systems, catalog, rows, lists, esde_settings, esde })
+    Ok(Read { systems, catalog, rows, lists, esde_settings, esde, esde_state })
 }
 
 /// The view's state: the rows with the selection kept across refreshes, and the last refresh's problem.
@@ -448,6 +466,9 @@ pub struct LibraryView {
     pub lists: HashMap<String, String>,
     pub esde_settings: EsdeSettings,
     pub esde: Esde,
+    pub esde_state: EsdeState,
+    /// The player's choices of each gamelist, kept across refreshes.
+    pub gamelists: Gamelists,
     pub problem: String,
 }
 
@@ -486,6 +507,7 @@ impl LibraryView {
                 self.lists = read.lists;
                 self.esde_settings = read.esde_settings;
                 self.esde = read.esde;
+                self.esde_state = read.esde_state;
                 self.problem.clear();
             }
             Err(words) => self.problem = words,

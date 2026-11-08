@@ -2,7 +2,7 @@
 //! Qt. A refresh runs off the GUI thread and comes back through qt_thread().queue, the one way in.
 
 use crate::clients::ClientSource;
-use crate::library::{refresh, splash_worlds, LibrarySource, LibraryView, Refreshed};
+use crate::library::{refresh, refresh_with, splash_worlds, LibrarySource, LibraryView, Refreshed};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
@@ -81,6 +81,9 @@ pub mod qobject {
         #[qproperty(QString, esde_shelves, cxx_name = "esdeShelves", READ, NOTIFY)]
         #[qproperty(QString, esde_media, cxx_name = "esdeMedia", READ, NOTIFY)]
         #[qproperty(QString, esde_presence, cxx_name = "esdePresence", READ, NOTIFY)]
+        /// The theme's system folders, one a line, which the painter sets once the theme is read: a custom collection
+        /// the theme styles is then a system of its own.
+        #[qproperty(QString, esde_theme_folders, cxx_name = "esdeThemeFolders")]
         type LibraryModel = super::LibraryModelRust;
     }
 
@@ -131,6 +134,36 @@ pub mod qobject {
         /// Selects a row; false where there is none.
         #[qinvokable]
         fn select(self: Pin<&mut LibraryModel>, index: i32) -> bool;
+
+        /// Into a folder entry of a shelf's gamelist, the entry as the shelves' text gives it; false for any other.
+        #[qinvokable]
+        #[cxx_name = "esdeEnter"]
+        fn esde_enter(self: Pin<&mut LibraryModel>, shelf: &QString, entry: &QString) -> bool;
+
+        /// Up a level of a shelf's gamelist; false at its top, where B is the view's.
+        #[qinvokable]
+        #[cxx_name = "esdeLeave"]
+        fn esde_leave(self: Pin<&mut LibraryModel>, shelf: &QString) -> bool;
+
+        /// The List card's facts for a shelf's gamelist, the entry at `focused` selected (list_card.rs).
+        #[qinvokable]
+        #[cxx_name = "esdeListFacts"]
+        fn esde_list_facts(self: &LibraryModel, shelf: &QString, focused: i32) -> QString;
+
+        /// One of the List card's actions on a shelf's gamelist; the entry to select after it.
+        #[qinvokable]
+        #[cxx_name = "esdeListAct"]
+        fn esde_list_act(self: Pin<&mut LibraryModel>, shelf: &QString, action: &QString, focused: i32) -> i32;
+
+        /// A game's description by its file, which the shelves' text leaves out; empty for none.
+        #[qinvokable]
+        #[cxx_name = "esdeDescription"]
+        fn esde_description(self: &LibraryModel, file: &QString) -> QString;
+
+        /// The search's words over every gamelist.
+        #[qinvokable]
+        #[cxx_name = "esdeSearch"]
+        fn esde_search(self: Pin<&mut LibraryModel>, words: &QString);
     }
 
     unsafe extern "RustQt" {
@@ -178,6 +211,7 @@ pub struct LibraryModelRust {
     esde_shelves: QString,
     esde_media: QString,
     esde_presence: QString,
+    esde_theme_folders: QString,
     view: LibraryView,
     source: Option<Arc<dyn LibrarySource>>,
 }
@@ -206,6 +240,7 @@ impl Default for LibraryModelRust {
             esde_shelves: QString::from("[]"),
             esde_media: QString::from("{}"),
             esde_presence: QString::from("{}"),
+            esde_theme_folders: QString::default(),
             view: LibraryView::empty(),
             source: None,
         }
@@ -218,6 +253,13 @@ impl cxx_qt::Initialize for qobject::LibraryModel {
         self.as_mut().on_platform_library_changed(|model| model.connect()).release();
         self.as_mut().on_tool_summaries_changed(|model| model.publish()).release();
         self.as_mut().on_dark_changed(|model| model.publish()).release();
+        self.as_mut()
+            .on_esde_theme_folders_changed(|mut model| {
+                let folders = model.esde_theme_folders.to_string().lines().map(str::to_owned).filter(|l| !l.is_empty()).collect();
+                model.as_mut().rust_mut().view.gamelists.theme_folders = folders;
+                model.rewrite();
+            })
+            .release();
     }
 }
 
@@ -287,9 +329,9 @@ impl qobject::LibraryModel {
     pub fn refresh(mut self: Pin<&mut Self>) {
         let Some(source) = self.source.clone() else { return };
         self.as_mut().show_loading(true);
-        let qt = self.qt_thread();
+        let (qt, gamelists) = (self.qt_thread(), self.view.gamelists.clone());
         std::thread::spawn(move || {
-            let refreshed = refresh(source.as_ref());
+            let refreshed = refresh_with(source.as_ref(), &gamelists);
             let _ = qt.queue(move |model| model.apply(None, refreshed));
         });
     }
@@ -314,9 +356,9 @@ impl qobject::LibraryModel {
     pub fn started(mut self: Pin<&mut Self>, path: &QString) {
         let Some(source) = self.source.clone() else { return };
         self.as_mut().show_loading(true);
-        let (qt, path) = (self.qt_thread(), path.to_string());
+        let (qt, path, gamelists) = (self.qt_thread(), path.to_string(), self.view.gamelists.clone());
         std::thread::spawn(move || {
-            let refreshed = source.started(&path).and_then(|()| refresh(source.as_ref()));
+            let refreshed = source.started(&path).and_then(|()| refresh_with(source.as_ref(), &gamelists));
             let _ = qt.queue(move |model| model.apply(None, refreshed));
         });
     }
@@ -334,6 +376,91 @@ impl qobject::LibraryModel {
         let taken = index >= 0 && self.as_mut().rust_mut().view.rows.select(index as usize);
         self.publish();
         taken
+    }
+
+    pub fn esde_enter(mut self: Pin<&mut Self>, shelf: &QString, entry: &QString) -> bool {
+        let Ok(entry) = serde_json::from_str::<serde_json::Value>(&entry.to_string()) else { return false };
+        let entry = crate::esde_shelves::EsdeGame::from_json(&entry);
+        let Some(found) = self.view.esde_state.shelf(&shelf.to_string()).cloned() else { return false };
+        let entered = self.as_mut().rust_mut().view.gamelists.enter(&found, &entry);
+        if entered {
+            self.rewrite();
+        }
+        entered
+    }
+
+    pub fn esde_leave(mut self: Pin<&mut Self>, shelf: &QString) -> bool {
+        let Some(found) = self.view.esde_state.shelf(&shelf.to_string()).cloned() else { return false };
+        let left = self.as_mut().rust_mut().view.gamelists.leave(&found);
+        if left {
+            self.rewrite();
+        }
+        left
+    }
+
+    pub fn esde_list_facts(&self, shelf: &QString, focused: i32) -> QString {
+        let facts = self.view.esde_state.summaries.get(&shelf.to_string()).map(|s| crate::list_card::esde_facts(s, focused.max(0) as usize));
+        QString::from(facts.unwrap_or(serde_json::Value::Null).to_string().as_str())
+    }
+
+    pub fn esde_list_act(mut self: Pin<&mut Self>, shelf: &QString, action: &QString, focused: i32) -> i32 {
+        use crate::list_card::{action_of, EVERY_GAME, FAVOURITES_ONLY, JUMP, RANDOM, SORT};
+        let name = shelf.to_string();
+        let (Some(found), Some(summary)) = (self.view.esde_state.shelf(&name).cloned(), self.view.esde_state.summaries.get(&name).cloned()) else { return focused };
+        let at = focused.max(0) as usize;
+        let settings = self.view.esde_state.base.settings.clone();
+        match action_of(&action.to_string()) {
+            (SORT, by) => {
+                self.as_mut().rust_mut().view.gamelists.step_sort(&found, &settings, by);
+                self.rewrite();
+                0
+            }
+            (FAVOURITES_ONLY | EVERY_GAME, _) => {
+                let on = action.to_string() == FAVOURITES_ONLY;
+                self.as_mut().rust_mut().view.gamelists.favourites_only(&found, on);
+                self.rewrite();
+                0
+            }
+            (JUMP, by) => {
+                let here = summary.entry_letters.get(at).cloned().unwrap_or_default();
+                crate::listing::jump_letter(&summary.letters, &here, by).map_or(focused, |row| row as i32)
+            }
+            (RANDOM, _) => {
+                let draw = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos() as u64);
+                crate::gamelists::random_index(summary.entry_letters.len(), at, draw) as i32
+            }
+            _ => focused,
+        }
+    }
+
+    pub fn esde_description(&self, file: &QString) -> QString {
+        QString::from(self.view.esde_state.description_of(&file.to_string()).unwrap_or(""))
+    }
+
+    pub fn esde_search(mut self: Pin<&mut Self>, words: &QString) {
+        self.as_mut().rust_mut().view.gamelists.search = words.to_string();
+        self.rewrite();
+    }
+
+    /// The ES-DE texts written again from what the last refresh read, off the GUI thread, after a choice of a gamelist.
+    fn rewrite(self: Pin<&mut Self>) {
+        if !self.view.esde_settings.themed {
+            return;
+        }
+        let (qt, base, gamelists) = (self.qt_thread(), self.view.esde_state.base.clone(), self.view.gamelists.clone());
+        std::thread::spawn(move || {
+            let (esde, state) = crate::esde_shelves::build(base, &gamelists);
+            let _ = qt.queue(move |model| model.apply_esde(esde, state));
+        });
+    }
+
+    /// A rewrite's texts applied on the GUI thread, each announced when it changed.
+    fn apply_esde(mut self: Pin<&mut Self>, esde: crate::esde_shelves::Esde, state: crate::esde_shelves::EsdeState) {
+        let old = &self.view.esde;
+        let changed = [false, old.shelves != esde.shelves, old.media != esde.media, old.presence != esde.presence];
+        self.as_mut().rust_mut().view.esde = esde;
+        self.as_mut().rust_mut().view.esde_state = state;
+        self.publish_esde(changed);
     }
 
     /// Opens the clients once the platform library is named, then refreshes, off the GUI thread.

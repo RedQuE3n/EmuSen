@@ -71,7 +71,8 @@ fn system(id: &str, esde: &str, full: &str) -> SystemRow {
 }
 
 fn game(path: &str, system: &str) -> GameFile {
-    GameFile { path: path.into(), system: Some(system.into()), package: None }
+    let folder = path.strip_prefix(&format!("/roms/{system}/")).and_then(|rest| rest.rsplit_once('/')).map_or("", |(f, _)| f).to_owned();
+    GameFile { path: path.into(), system: Some(system.into()), package: None, folder }
 }
 
 /// The scraper's `metadata` answer for the fields given, each as an edit.
@@ -142,34 +143,46 @@ fn shelves(text: &str) -> Vec<Value> {
 fn each_shelf_carries_its_es_de_names_and_its_games_every_field() {
     let read = refresh(&fake()).unwrap();
     let shelves = shelves(&read.esde.shelves);
-    let seen: Vec<(&str, &str, &str, &str, usize)> = shelves
+    let seen: Vec<(&str, &str, &str, &str, &str)> = shelves
         .iter()
-        .map(|s| (s["system"].as_str().unwrap(), s["esde_system"].as_str().unwrap(), s["esde_full_name"].as_str().unwrap(), s["kind"].as_str().unwrap(), s["games"].as_array().unwrap().len()))
+        .map(|s| (s["name"].as_str().unwrap(), s["system"].as_str().unwrap(), s["full_name"].as_str().unwrap(), s["kind"].as_str().unwrap(), s["theme"].as_str().unwrap()))
         .collect();
     assert_eq!(
         seen,
-        [("snes", "snes", "Super Nintendo Entertainment System", "regular", 3), ("nes", "nes", "Nintendo Entertainment System", "regular", 1)],
-        "the shelves' order, the Game Boy left out with no games"
+        [
+            ("snes", "snes", "Super Nintendo Entertainment System", "regular", "snes"),
+            ("nes", "nes", "Nintendo Entertainment System", "regular", "nes"),
+            ("all", "", "all games", "auto", "auto-allgames"),
+            ("favorites", "", "favorites", "auto", "auto-favorites"),
+            ("recent", "", "last played", "auto", "auto-lastplayed"),
+        ],
+        "the shelves' order, the Game Boy left out with no games, then the automatic collections"
     );
-    let aurora = &shelves[0]["games"][0];
+    let names = |s: &Value| s["games"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap().to_owned()).collect::<Vec<_>>();
+    assert_eq!(names(&shelves[0]), ["Tower Set", "Aurora Drift", "Brass Lantern (Synthetic)"], "the folder on top, then the favourite, then by name");
+    let aurora = &shelves[0]["games"][1];
     let expected = json!({
-        "file": "/roms/snes/Aurora Drift (Synthetic).sfc", "name": "Aurora Drift", "sort_name": "Drift, Aurora", "custom_sort_name": null,
-        "description": "A game invented for EmuSen's tests.", "developer": "Studio A", "publisher": null, "genre": null, "players": null,
+        "file": "/roms/snes/Aurora Drift (Synthetic).sfc", "name": "Aurora Drift", "esde_system": "snes", "esde_full_name": "Super Nintendo Entertainment System",
+        "sort_name": "Drift, Aurora", "custom_sort_name": null,
+        "developer": "Studio A", "publisher": null, "genre": null, "players": null,
         "release_date": "1990-01-01", "rating": 0.7, "last_played": 1_790_000_000, "play_count": 3, "play_time": 5400, "favourite": true,
         "completed": true, "kid_game": false, "broken": false, "hidden": false, "not_counted": false, "hide_metadata": true,
         "controller": "gamepad_nintendo_snes", "alt_emulator": true, "emulator": "snes9x", "manual": true, "folder": false,
-        "folder_path": "", "folder_link": null,
+        "folder_path": "", "folder_link": null, "is_collection": false, "face": null,
     });
-    assert_eq!(aurora, &expected);
-    let never = &shelves[0]["games"][1];
+    assert_eq!(aurora, &expected, "every field but the description, given on demand");
+    assert_eq!(read.esde_state.description_of("/roms/snes/Aurora Drift (Synthetic).sfc"), Some("A game invented for EmuSen's tests."));
+    let never = &shelves[0]["games"][2];
     assert_eq!(
         (never["name"].as_str(), never["last_played"].as_i64(), never["play_count"].as_i64(), never["favourite"].as_bool(), never["rating"].is_null(), never["manual"].as_bool()),
         (Some("Brass Lantern (Synthetic)"), Some(0), Some(0), Some(false), true, Some(false)),
         "a game with no metadata is named by its file, never played and no favourite"
     );
-    let quartz = &shelves[0]["games"][2];
-    assert_eq!(quartz["name"], "Quartz Spire (Synthetic)", "the game in a folder is listed in the library's order");
-    assert_eq!((quartz["manual"].as_bool(), quartz["favourite"].as_bool()), (Some(true), Some(false)), "a manual, no favourite");
+    let refs: Vec<&str> = shelves[2]["games"].as_array().unwrap().iter().map(|g| g["file"].as_str().unwrap()).collect();
+    assert_eq!(refs.len(), 4, "a collection lists its games by file, each row once in its console's shelf");
+    assert!(shelves[2]["games"][0].get("name").is_none());
+    let quartz = read.esde_state.shelf("snes").unwrap().games.iter().find(|g| g.name == "Quartz Spire (Synthetic)").unwrap();
+    assert_eq!((quartz.folder_path.as_str(), quartz.manual, quartz.favourite), ("Tower Set", true, false), "a folder, a manual, no favourite");
 }
 
 #[test]
@@ -179,7 +192,9 @@ fn the_media_index_and_presence_are_written_beside_the_shelves_with_the_scraper_
     assert_eq!(media["nes"]["cover"]["Cobalt Harbor (Synthetic)"], "/art/nes/Cobalt Harbor.png", "the cover the scraper's order chose");
     assert_eq!(media["snes"]["screenshot"]["Brass Lantern (Synthetic)"], "/media/snes/screenshots/Brass Lantern (Synthetic).png");
     let presence: Value = serde_json::from_str(&read.esde.presence).unwrap();
-    assert_eq!(presence, json!({ "snes": ["manual", "marquee", "screenshot"], "nes": ["cover"] }), "the variant triggers per shelf");
+    assert_eq!(presence["snes"], json!(["manual", "marquee", "screenshot"]), "the variant triggers per shelf");
+    assert_eq!(presence["nes"], json!(["cover"]));
+    assert_eq!(presence["all"], json!(["cover", "manual", "marquee", "screenshot"]), "a collection's, each game under its own console");
 }
 
 #[test]

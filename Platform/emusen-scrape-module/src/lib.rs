@@ -849,7 +849,7 @@ fn wait(call: &Call, backend: &dyn Backend, jobs: &mut Jobs) -> Answer {
     Answer::with(String::new(), follow_or_detach(call, backend, jobs))
 }
 
-fn jobs_of<'a>(call: &'a Call) -> &'a mut Jobs {
+fn jobs_of<'a>(call: &'a Call) -> std::sync::MutexGuard<'a, Jobs> {
     call.slot(Jobs::default)
 }
 
@@ -874,7 +874,7 @@ impl Module for ScrapeCommands {
         let Some(backend) = backend_of(call) else { return call.answer(Answer::fail("scrape: needs emusen.scrape and emusen.games, which this program does not provide")) };
         let args = call.args();
         if args.get(1).map(String::as_str) == Some("wait") {
-            return call.answer(wait(call, &backend, jobs_of(call)));
+            return call.answer(wait(call, &backend, &mut jobs_of(call)));
         }
         let line = match parse_line(&args) {
             Ok(l) => l,
@@ -888,7 +888,7 @@ impl Module for ScrapeCommands {
                 call.err(&said);
                 0
             }),
-            "run" => run(call, &backend, jobs_of(call), &line),
+            "run" => run(call, &backend, &mut jobs_of(call), &line),
             _ => status(call, &backend),
         };
         match done {
@@ -899,7 +899,7 @@ impl Module for ScrapeCommands {
 
     fn jobs(&self, call: &Call) {
         let Some(backend) = backend_of(call) else { return };
-        let jobs = jobs_of(call);
+        let mut jobs = jobs_of(call);
         let Some(r) = jobs.running.as_mut() else { return };
         let p = backend.progress(ALL_SEEN).ok().and_then(|a| parse(&a).ok());
         let state = p.as_ref().map(|p| text(p, "state").to_string()).unwrap_or_default();
@@ -914,7 +914,7 @@ impl Module for ScrapeCommands {
     fn kill(&self, call: &Call, id: &str) -> Option<i32> {
         let n = id.strip_prefix("scrape")?.parse::<u32>().ok()?;
         let backend = backend_of(call)?;
-        let jobs = jobs_of(call);
+        let mut jobs = jobs_of(call);
         match jobs.running.as_mut().filter(|r| r.id == n) {
             Some(r) => {
                 backend.cancel();

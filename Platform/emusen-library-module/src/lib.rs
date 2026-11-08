@@ -466,21 +466,6 @@ pub enum Next {
     Failed(String),
 }
 
-/// The next event of a job of the service, waiting up to `wait_ms`, `buffer` grown to hold it; shared with
-/// `emusen.cores`, whose jobs the same service runs (EmuSen_Cores.md §6).
-pub fn next_event(table: &LibraryToolV1, job: *mut c_void, wait_ms: u32, buffer: &mut Vec<u8>) -> Next {
-    loop {
-        let n = unsafe { (table.next)(job, wait_ms, buffer.as_mut_ptr(), buffer.len()) };
-        match n {
-            0 => return Next::Ended,
-            ABSENT => return Next::Absent,
-            n if n < 0 => return Next::Failed(last_error(table)),
-            n if n as usize > buffer.len() => buffer.resize(n as usize, 0),
-            n => return Next::Event(String::from_utf8_lossy(&buffer[..n as usize]).into_owned()),
-        }
-    }
-}
-
 /// One job of the service a module follows: started through the shell's service table, its events read, stopped, and
 /// freed when it is dropped. Shared by `emusen.library` and `emusen.cores`, which follow jobs of the same service
 /// (EmuSen_Cores.md §6), so that the start, the reads and the freeing are written once.
@@ -505,9 +490,19 @@ impl ServiceJob {
         Ok(ServiceJob { job, table })
     }
 
-    /// The next event, waiting up to `wait_ms`.
+    /// The next event by the length-query idiom, waiting up to `wait_ms`, `buffer` grown to hold it.
     pub fn next(&self, wait_ms: u32, buffer: &mut Vec<u8>) -> Next {
-        next_event(unsafe { &*self.table }, self.job, wait_ms, buffer)
+        let table = unsafe { &*self.table };
+        loop {
+            let n = unsafe { (table.next)(self.job, wait_ms, buffer.as_mut_ptr(), buffer.len()) };
+            match n {
+                0 => return Next::Ended,
+                ABSENT => return Next::Absent,
+                n if n < 0 => return Next::Failed(last_error(table)),
+                n if n as usize > buffer.len() => buffer.resize(n as usize, 0),
+                n => return Next::Event(String::from_utf8_lossy(&buffer[..n as usize]).into_owned()),
+            }
+        }
     }
 
     /// Whether the last event has been taken, without taking one.
@@ -687,7 +682,7 @@ fn wait(call: &Call, jobs: &mut Jobs, prefix: &'static str) -> Answer {
     }
 }
 
-fn jobs_of<'a>(call: &'a Call) -> &'a mut Jobs {
+fn jobs_of<'a>(call: &'a Call) -> std::sync::MutexGuard<'a, Jobs> {
     call.slot(Jobs::default)
 }
 
@@ -699,18 +694,18 @@ impl Module for LibraryCommands {
 
     fn run(&self, call: &Call) -> i32 {
         call.answer(match call.command().as_str() {
-            "chd" if call.args().get(1).map(String::as_str) == Some("wait") => wait(call, jobs_of(call), "chd"),
-            "chd" => start(call, jobs_of(call), "chd"),
-            "pkg" if call.args().get(1).map(String::as_str) == Some("wait") => wait(call, jobs_of(call), "pkg"),
-            "pkg" => start(call, jobs_of(call), "pkg"),
-            "rom" if call.args().get(1).map(String::as_str) == Some("wait") => wait(call, jobs_of(call), "rom"),
-            "rom" => start(call, jobs_of(call), "rom"),
+            "chd" if call.args().get(1).map(String::as_str) == Some("wait") => wait(call, &mut jobs_of(call), "chd"),
+            "chd" => start(call, &mut jobs_of(call), "chd"),
+            "pkg" if call.args().get(1).map(String::as_str) == Some("wait") => wait(call, &mut jobs_of(call), "pkg"),
+            "pkg" => start(call, &mut jobs_of(call), "pkg"),
+            "rom" if call.args().get(1).map(String::as_str) == Some("wait") => wait(call, &mut jobs_of(call), "rom"),
+            "rom" => start(call, &mut jobs_of(call), "rom"),
             other => Answer::fault(format!("emusen.library has no command '{other}'")),
         })
     }
 
     fn jobs(&self, call: &Call) {
-        let jobs = jobs_of(call);
+        let mut jobs = jobs_of(call);
         for r in jobs.running.iter_mut() {
             let ended = drain(r);
             let unit = match r.prefix {
@@ -727,7 +722,7 @@ impl Module for LibraryCommands {
     fn kill(&self, call: &Call, id: &str) -> Option<i32> {
         let prefix = ["chd", "pkg", "rom"].into_iter().find(|p| id.starts_with(p))?;
         let n = id.strip_prefix(prefix)?.parse::<u32>().ok()?;
-        let jobs = jobs_of(call);
+        let mut jobs = jobs_of(call);
         let Some(r) = jobs.running.iter_mut().find(|r| r.id == n && r.prefix == prefix) else {
             call.err(&format!("kill: no {prefix} job {prefix}{n} found.\n"));
             return Some(1);

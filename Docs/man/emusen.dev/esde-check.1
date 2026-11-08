@@ -27,7 +27,8 @@ DESCRIPTION
         runs         the loads made: variants times systems
         errors       errors over all the runs (each unthemes a system)
         warnings     warnings over all the runs
-        set          the type.property pairs the theme sets, in any run
+        set          the type.property pairs the theme sets, in any run,
+                     drawn or accepted
         unknown      those the loader does not know (an error)
         unsupported  those the scene and its painter do not draw
         whole        yes when it loads with nothing unknown or
@@ -45,13 +46,14 @@ DESCRIPTION
     (EmuSen_BigPicture.md §12.3).
 
     --properties prints the property map instead, a row a pair: theme,
-    type.property and its state, one of set (drawn), unsupported or
-    unknown. What is drawn is the scene's table,
-    Frontend/esde/src/scene/mapping.tsv, which holds what the C# scene
-    drew on 2026-11-08; the painter's stages extend it.
+    type.property and its state, one of set (drawn or accepted),
+    unsupported or unknown. The scene's table,
+    Frontend/esde/src/scene/mapping.tsv, lists every pair once as drawn,
+    accepted (no visible effect in EmuSen, such as the help bar's dimmed
+    set) or later:<family>; the painter's stages move pairs to drawn.
 
     Nothing is fetched: the corpus is fetched beforehand, outside the
-    repository (EmuSen_Qt.md §4.5.5), and the command only reads it.
+    repository (EmuSen_Qt.md §4.5.4), and the command only reads it.
 
 EXIT STATUS
     0 when every theme loads, 1 when one or more does not, 2 when it

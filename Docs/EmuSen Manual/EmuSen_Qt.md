@@ -593,6 +593,14 @@ resumes it; the reader and session say no failure and the validation layer's fin
 caught: the window not naming the reader's hand-over (no battery file: the game heard nothing), `chordOnly` never set
 (the router gave everything during the game), and the chord not reaching the session (no pause in 10 s).
 
+**The bars are black** (the tester, 2026-11-08: a game never shows white around its picture). On the desk the 4:3
+picture stood between two white bars: `Play.qml`'s window set no colour and Qt's default is white, and `emusen-qt`'s
+window paints `voidFill`, which the light variant makes light. The bars belong to the game, not the theme, so `Game.qml`
+fills its whole box with plain black (`#000000`, no token) behind the picture, for every host and every variant, and
+`Play.qml`'s window is black for the moment before the first frame. **Held to:** qt-play's `device.rs`, once the core's
+frame is read back, samples the window beside the picture (a fifth of the way from each edge, at the picture's top,
+middle and foot) in the dark and the light variant and requires black.
+
 #### 1.8.6 The game's sound **[M 2026-11-08]**
 
 The sound takes the C# front end's path through the platform library, so it has one owner: Endymion's game player

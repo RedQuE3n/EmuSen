@@ -9,6 +9,8 @@ Window {
     width: 1280
     height: 800
     visible: false
+    // Black before the first frame, as the game's bars are.
+    color: "#000000"
     property double feed: 0
     property string platformLibrary
     property string game

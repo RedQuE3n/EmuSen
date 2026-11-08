@@ -6,7 +6,8 @@
 
 mod common;
 
-use common::{approve, assert_qt_grab_only, device_and_feed, painted_differences, play, play_window, until, vulkan_qt};
+use emusen_kit_core::tokens::Variant;
+use common::{approve, assert_qt_grab_only, bar_pixels_not_black, device_and_feed, painted_differences, play, play_window, until, vulkan_qt};
 use emusen_client_fixture::cores::{device_core, PAINTED};
 use emusen_client_fixture::World;
 use emusen_kit_core::input::PadControl;
@@ -47,6 +48,14 @@ fn a_lent_device_s_pictures_are_drawn_in_the_window_as_the_core_made_them() {
     let (serial, differ) = painted_differences(&mut scene, &feed);
     assert!(serial >= 60, "the frame drawn last is the core's frame {serial}");
     assert!(differ.is_empty(), "the window shows frame {serial} otherwise than the core made it, (x, y, shown, made): {differ:?}");
+    // The bars are black in both variants: the game's own colour, never the theme's (a light theme's void is light).
+    for variant in [Variant::Dark, Variant::Light] {
+        scene.set_variant(variant);
+        scene.wait(100);
+        let bars = bar_pixels_not_black(&mut scene);
+        assert!(bars.is_empty(), "the bars beside the picture are black in {variant:?}, (x, y, shown): {bars:?}");
+    }
+    scene.set_variant(Variant::Dark);
 
     scene.wait(100);
     assert_qt_grab_only(&device.findings().unwrap());

@@ -70,6 +70,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
 
 [[package]]
+name = "emusen-c-calls"
+version = "0.1.0"
+dependencies = [
+ "libloading",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "emusen-client-fixture"
 version = "0.1.0"
 dependencies = [
@@ -81,6 +91,7 @@ name = "emusen-crystal-client"
 version = "0.1.0"
 dependencies = [
  "bindgen",
+ "emusen-c-calls",
  "emusen-client-fixture",
  "libloading",
  "serde",

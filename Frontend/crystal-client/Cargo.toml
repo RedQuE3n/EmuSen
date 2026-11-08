@@ -11,6 +11,8 @@ publish = false
 name = "emusen_crystal_client"
 
 [dependencies]
+# How a client calls an EmuSen C header: loading, text, copy-out, statuses as errors; shared with the platform client.
+emusen-c-calls = { path = "../c-calls" }
 # The library loaded by its path, as bindgen's generated loader does it (src/raw.rs).
 libloading = "0.8"
 # The JSON shapes the header names, read into typed records.

@@ -2,7 +2,7 @@
 //! major checked, each entry checked against the table's size before it is read, and every failure's words read with
 //! the table's own last_error. The entries a front end calls are here; the debugger's are owed (EmuSen_Qt.md §1.1.1).
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::events::Event;
 use crate::out::{check, copy_out, json, string, text, to_json};
 use crate::raw;
@@ -20,10 +20,8 @@ macro_rules! entry {
         match if size >= end { unsafe { std::ptr::addr_of!((*t).$f).read() } } else { None } {
             Some(f) => f,
             None => {
-                return Err(Error::Status {
-                    status: raw::EMUSEN_SVC_NOT_SUPPORTED,
-                    words: format!("The session service's table has no {}.", stringify!($f)),
-                });
+                let words = format!("The session service's table has no {}.", stringify!($f));
+                return Err(crate::error::status(raw::EMUSEN_SVC_NOT_SUPPORTED, words));
             }
         }
     }};
@@ -50,18 +48,16 @@ impl Runtime {
     pub fn session_service(&self, session: SessionId, flags: u32) -> Result<SessionService> {
         let table = unsafe { self.lib().emusen_crystal_session_service(self.rt(), session, flags) };
         let table = NonNull::new(table as *mut raw::emusen_session_v1)
-            .ok_or_else(|| Error::Status { status: raw::EMUSEN_SVC_NO_SESSION, words: self.words() })?;
+            .ok_or_else(|| crate::error::status(raw::EMUSEN_SVC_NO_SESSION, self.words()))?;
         let (version, ctx) = unsafe { ((*table.as_ptr()).version, (*table.as_ptr()).ctx) };
         if version >> 16 != raw::EMUSEN_SESSION_MAJOR {
-            return Err(Error::Status {
-                status: raw::EMUSEN_SVC_NOT_SUPPORTED,
-                words: format!(
-                    "The session service is version {}.{}; this program needs {}.x.",
-                    version >> 16,
-                    version & 0xffff,
-                    raw::EMUSEN_SESSION_MAJOR
-                ),
-            });
+            let words = format!(
+                "The session service is version {}.{}; this program needs {}.x.",
+                version >> 16,
+                version & 0xffff,
+                raw::EMUSEN_SESSION_MAJOR
+            );
+            return Err(crate::error::status(raw::EMUSEN_SVC_NOT_SUPPORTED, words));
         }
         Ok(SessionService { rt: self.clone(), table, ctx })
     }

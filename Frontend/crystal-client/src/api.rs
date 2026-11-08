@@ -18,13 +18,10 @@ impl Api {
     /// Loads the library at `path` (the platform library, libemusen_platform.so) and checks its version.
     pub fn load(path: impl AsRef<Path>) -> Result<Arc<Api>> {
         let path = path.as_ref().to_path_buf();
-        let shown = path.display().to_string();
-        let load = |e: libloading::Error| Error::Load { path: shown.clone(), words: e.to_string() };
-        let lib = unsafe { libloading::Library::new(&path) }.map_err(load)?;
-        let version = unsafe { lib.get::<unsafe extern "C" fn() -> u32>(b"emusen_crystal_abi_version\0") }.map_err(load)?;
-        let version = unsafe { version() };
-        check_version(&shown, version)?;
-        let lib = unsafe { raw::CrystalLibrary::from_library(lib) }.map_err(load)?;
+        let (lib, version) = emusen_c_calls::open(&path, b"emusen_crystal_abi_version\0")?;
+        check_version(&path.display().to_string(), version)?;
+        let lib = unsafe { raw::CrystalLibrary::from_library(lib) }
+            .map_err(|e| Error::Load { path: path.display().to_string(), words: e.to_string() })?;
         Ok(Arc::new(Api { lib, path, version }))
     }
 
@@ -46,17 +43,7 @@ impl Api {
 
     /// The words for the last failing call on this thread.
     pub(crate) fn last_error(&self, rt: *mut raw::emusen_crystal_runtime) -> String {
-        let mut buf = [0u8; 1024];
-        let n = unsafe { self.lib.emusen_crystal_last_error(rt, buf.as_mut_ptr(), buf.len()) };
-        if n <= 0 {
-            return String::new();
-        }
-        if n as usize <= buf.len() {
-            return String::from_utf8_lossy(&buf[..n as usize]).into_owned();
-        }
-        let mut big = vec![0u8; n as usize];
-        let m = unsafe { self.lib.emusen_crystal_last_error(rt, big.as_mut_ptr(), big.len()) }.clamp(0, n) as usize;
-        String::from_utf8_lossy(&big[..m]).into_owned()
+        emusen_c_calls::words(|o, l| unsafe { self.lib.emusen_crystal_last_error(rt, o, l) })
     }
 }
 
@@ -65,13 +52,11 @@ impl Api {
 fn check_version(path: &str, version: u32) -> Result<()> {
     let (major, minor) = (version >> 16, version & 0xffff);
     if major != raw::EMUSEN_CRYSTAL_MAJOR || minor < raw::EMUSEN_CRYSTAL_MINOR {
-        return Err(Error::Version {
-            path: path.into(),
-            major,
-            minor,
-            want_major: raw::EMUSEN_CRYSTAL_MAJOR,
-            want_minor: raw::EMUSEN_CRYSTAL_MINOR,
-        });
+        let (want_major, want_minor) = (raw::EMUSEN_CRYSTAL_MAJOR, raw::EMUSEN_CRYSTAL_MINOR);
+        let words = format!(
+            "The frontend API's library at {path} is version {major}.{minor}; this program needs {want_major}.{want_minor} or a later minor of {want_major}."
+        );
+        return Err(Error::Refused { path: path.into(), words });
     }
     Ok(())
 }

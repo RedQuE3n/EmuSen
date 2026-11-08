@@ -1,0 +1,28 @@
+[package]
+name = "emusen-platform-client"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+# A safe Rust binding over the platform library's C interface, emusen_platform.h, matched exactly to the library built
+# from the same commit, with emusen_library.h and the scrape service's table it serves; no Qt. See EmuSen_Qt.md §1.1.2.
+[lib]
+name = "emusen_platform_client"
+
+[dependencies]
+# How a client calls an EmuSen C header: loading, text, copy-out, statuses as errors; shared with the frontend API's client.
+emusen-c-calls = { path = "../c-calls" }
+# The library loaded by its path, as bindgen's generated loader does it (src/raw.rs); SDL3 lent the same way.
+libloading = "0.8"
+# The JSON shapes the headers name, read into typed records.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# The error type's words.
+thiserror = "2"
+
+[dev-dependencies]
+# The generated module regenerated from the headers and compared (tests/binding.rs).
+bindgen = "0.72"
+# The platform library built from this commit, and a scratch tree.
+emusen-client-fixture = { path = "../client-fixture" }

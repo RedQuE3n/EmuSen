@@ -85,7 +85,7 @@ impl Runtime {
         let rt = unsafe { api.lib.emusen_crystal_new(&raw_config) };
         match NonNull::new(rt) {
             Some(rt) => Ok(Runtime(Arc::new(Inner { api: api.clone(), rt }))),
-            None => Err(Error::Status { status: raw::EMUSEN_SVC_FAULT, words: api.last_error(std::ptr::null_mut()) }),
+            None => Err(crate::error::status(raw::EMUSEN_SVC_FAULT, api.last_error(std::ptr::null_mut()))),
         }
     }
 
@@ -439,7 +439,7 @@ impl Runtime {
 fn absent_as_false(r: Result<i64>) -> Result<bool> {
     match r {
         Ok(_) => Ok(true),
-        Err(e) if e.is_absent() => Ok(false),
+        Err(e) if crate::error::absent(&e) => Ok(false),
         Err(e) => Err(e),
     }
 }

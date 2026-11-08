@@ -120,9 +120,9 @@ and both front ends interchangeable while both ship.
 #### 1.1.1 `emusen-crystal-client` as built **[M 2026-11-08]**
 
 `Frontend/crystal-client`, a crate outside the Qt workspace with its own lock file, as `emusen-kit-core` is, so that its
-fence test reads what its tree names (no Qt crate; no `emusen-*` crate but itself and its test fixture; no path
-dependency outside `[dev-dependencies]`). Its dependencies are `libloading` 0.8, `serde` 1, `serde_json` 1 and
-`thiserror` 2; `bindgen` 0.72 and `emusen-client-fixture` (§1.1.3) are dev-dependencies. It names no runtime crate: the
+fence test reads what its tree names (no Qt crate; no `emusen-*` crate but itself, the shared idioms and its test
+fixture; no other path dependency). Its dependencies are `libloading` 0.8, `serde` 1, `serde_json` 1, `thiserror` 2 and
+`emusen-c-calls` (below); `bindgen` 0.72 and `emusen-client-fixture` (§1.1.3) are dev-dependencies. It names no runtime crate: the
 platform library is reached at run time, by its path, as any front end reaches it.
 
 **The raw layer** is `src/raw.rs`, bindgen 0.72.1's output for `emusen_crystal.h` and the `emusen_session.h` it includes
@@ -136,13 +136,16 @@ header change reaches the client as a reviewed diff of `raw.rs`. rustfmt formats
 
 **Loading** (`Api::load`). The library is opened, `emusen_crystal_abi_version` alone is resolved and called, and a major
 other than 2, or a minor below the header's, is refused with words that name the path and both versions, before any
-other symbol is read (`Error::Version`); a later minor is taken, since a minor only adds. Then every symbol is resolved.
+other symbol is read (`Error::Refused`); a later minor is taken, since a minor only adds. Then every symbol is resolved.
 
-**One owner for each idiom** (`src/out.rs`) *[own, because the header's length-query idiom is its own and no crate
-speaks it]*: text in as a pointer and a length, none being the absent string; the copy-out, which asks the length,
-copies, and asks again when the answer grew between the two calls; a negative return made an `Error::Status` with the
-words read at once on the same thread; `EMUSEN_SVC_ABSENT` read as `None` (an answer, as the header says); and an answer
-read into its record, a refusal of serde's being `Error::Shape` with the call's name.
+**One owner for each idiom.** How a client calls an EmuSen C header is `emusen-c-calls`'s (`Frontend/c-calls`), shared
+by both client crates *[own, because the headers' calling conventions are theirs and no crate speaks them]*: the
+library opened by its path with its version symbol read before any other; text in as a pointer and a length, none
+being the absent string; the copy-out, which asks the length, copies, and asks again when the answer grew between the
+two calls (its own four tests); a negative return made an `Error::Status` carrying the header's name for it and the
+words read at once on the same thread, with the header's ABSENT read as `None` where a call may answer it; and an
+answer read into its record, a refusal of serde's being `Error::Shape` with the call's name. The error type is that
+crate's, so both clients fail alike; each client gives it only its header's status names.
 
 **Typed readers** (`src/shapes.rs`, serde) for `systems` (`SystemRow`: the table's 24 keys, then `engines`,
 `starts_empty`, `core` and `controllers`; a system only an engine names reads with the table's keys at their defaults),
@@ -180,8 +183,8 @@ answers a read on any thread and makes a change from another thread wait for the
 
 **A finding, measured 2026-11-08.** `firmware_status`'s `"need"` is written as a string naming the need (`"file:boot.rom"`
 for the test core's boot ROM; `Platform/crystal/src/firmware.rs`), where the header's comment says it is the index of
-the first file meeting the same need. The reader follows the library (`need: String`); the header's comment is in error
-and is left for its owner to correct.
+the first file meeting the same need. The reader follows the library (`need: String`), and the header's comment was
+corrected to say what the library writes, a comment only: the ABI test strips comments, so its baseline is unchanged.
 
 **Proof, measured 2026-11-08** against the platform library built from the same commit (§1.1.3): 9 tests pass, the
 binding's regeneration, the fence's two, the version check's unit test, and five against the library: the listings read
@@ -195,6 +198,72 @@ opens is `NO_ENGINE` with the runtime's words; a cheat op asked of the table wit
 table's "No ROM loaded"). Four faults were seeded and caught: the table's failures read through the runtime's
 `last_error` (`a_failure_carries_its_own_words`), a constant edited by hand in `raw.rs` (`binding.rs`), any major
 accepted (the unit test), and `need` read as the header's index (the session test).
+
+#### 1.1.2 `emusen-platform-client` as built **[M 2026-11-08]**
+
+`Frontend/platform-client`, beside the crystal client and held to the same fence, with the same dependencies
+(`libloading`, `serde`, `serde_json`, `thiserror`, `emusen-c-calls`; dev: `bindgen`, `emusen-client-fixture`). Its raw
+layer is bindgen's output for `emusen_platform.h` (with `emusen_scrape_service.h`, which it includes), `emusen_library.h`
+and `emusen_games_service.h`, all served by the one library, generated, committed and regenerated by `tests/binding.rs`
+as §1.1.1 describes: 264 functions, every one resolved at load.
+
+**Matched exactly** (rule B). `Platform::load` reads `emusen_platform_abi_version` alone first and refuses any number but
+the one the binding was generated for, older or newer, with words that name the path, both numbers and that the two are
+built from the same commit (`Error::Refused`); only then is every symbol resolved.
+
+**Covered, for stage 1** (56 of the 264):
+- *The platform's own:* the interface number, `last_error`, the thread's diagnostics, and the lending of a host's
+  library. SDL3 and SQLite are the host's, lent by their loader's handle for the process's life; `Lent::open` loads one
+  by path or name (`libSDL3.so.0`, `libsqlite3.so.0`) and never closes it, since the platform library holds it.
+- *Galaxia:* a directory of the tree, a config file's path, and the config models (`AppSettings`, `AudioConfig`,
+  `GraphicsConfig`) loaded, saved and made new as the documents Galaxia binds. A model crosses as `serde_json::Value`
+  and its fields are not restated, so Galaxia stays the one owner of each model.
+- *The library* (`emusen_library.h` 1.2): a handle on games.db over the SQLite lent; scan, progress, cancel, the last
+  scan's games (typed), `get` and `change` as the header's JSON, with typed reads for a game's record, the collections
+  and the recently played. The `emusen.games` service speaks for the same file to a shell and has no front-end entry:
+  a front end keeps its own handle, as that header says.
+- *Endymion's pads:* SDL's pads or a simulated set's, started, polled and taken as events (opened or closed, announced
+  or not, by key), the open keys, a pad's numbers, texts and axes, the PadButton as the game hears it, the player light,
+  the motors and the five settings; simulated pads and sets, pressed and plugged as tests do.
+- *Endymion's interface player:* made once SDL is lent (refused with words before), samples remembered and played, the
+  device by name and the volume.
+- *The firmware folders* for a setting. What a game or a system needs, and whether the library holds it, is the
+  frontend API's (`firmware_needed`, `firmware_status`), as are the systems table and the cheat codecs since interface
+  38 (`EmuSen_RustPlatform.md` §47.24).
+- *Scraping:* the process's one scraper opened (closing any before it) and closed by its serial, the `emusen.scrape`
+  2.0 table wrapped once (each entry read only where the table's size reaches it, its failures read with the table's
+  own `last_error`), and the scrape command as data. Requests and answers stay `serde_json::Value` until the Scraper
+  screen types them; the theme loader the open may name is not passed yet.
+
+**Owed, by name**, the rest of the header: Galaxia's `init`, `set_override` and `thread_scope` (a test's; the fixture
+calls the one it needs), the legacy and bundle paths, `save_path`, `file_read`, `file_write`, the ROM hashes and
+tracks, packages, mapped files, migration, `config_read`, `config_write` and `config_delete`, `model_bind`,
+`model_format`, `model_load_from`, `model_save_to`, the cheat names and lists, the error log, `suggest`; the library's
+`identity` and `abi_version`; the library tool's jobs (`emusen_tool_job_*`); `emusen_patch_package_image`; the disc sets
+(`emusen_disc_*`); emusen-systems' libretro cores, save media formats, code, recognition, route, OpenVGDB, header,
+disassembly, board name and view; `emusen_firmware_find` and `_locate`; the cheat files and database
+(`emusen_cheats_*`); the HTTP client (`emusen_net_download_*`); the medium locks; Endymion's resampler, rate control,
+router, player slots, `pad_resolve`, `pad_combine`, `pad_controls_for`, `pads_use`, `pads_show_only`,
+`pads_rescan_due`, the simulated pads' texts, holds and device calls, the game's audio player (`emusen_endymion_audio_*`),
+the interface player's `decode`, `decode_take` and `volume`; and all of Serenity (presets, sources, the compiler,
+reflection, the cache, the device, the lend, the chain, the ring and the built-in filters). Each is wrapped when a
+screen needs it: the router and slots with the Device screen, the audio player, rate control and Serenity with the
+game picture (§1.8), the library tool and the packages with their windows.
+
+**Proof, measured 2026-11-08** against the library built from the same commit: 12 tests pass, the binding's
+regeneration, the fence's two, the interface check's unit test, seven against the library and one in a binary of its
+own. The library matched exactly, and a file that is no library and a library without the interface refused with the
+loader's words; Galaxia's config directory inside the scratch tree, `AppSettings` made new, its `RomDirectory` saved and
+loaded back; a synthetic NES image (an iNES header and 16 KiB of zeros) scanned as the one `nes` game, a favourite
+toggled, a collection made with the game in it, the game started and listed as recently played, and an unknown read
+refused with the library's own words; a simulated pad opened unannounced at start, its south button read as held, its
+motors driven to 1000 and 2000, a setting set and read, and its unplugging polled as closed; the interface player
+refused before SDL is lent; the firmware folders `Unset` with the store among them; the scraper opened on the system
+SQLite, read, an unknown read refused as `BAD_REQUEST` with the table's own words, and closed once by its serial; and,
+alone in its binary, SDL3 lent on its dummy audio driver (no sound reaches the speakers) and a remembered tenth of a
+second of silence played. The scraper with no SQLite lent looks for the C# program's `libe_sqlite3.so`; the Qt front
+end lends the system's. Three faults were seeded and caught: a newer interface taken (the unit test), the library's
+failures read with the platform's `last_error` (the library test) and pads' opened and closed swapped (the pads test).
 
 #### 1.1.3 The clients' test world: `emusen-client-fixture` **[M 2026-11-08]**
 

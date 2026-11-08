@@ -3,38 +3,20 @@
 
 use crate::raw;
 
-/// What a call of this crate can fail with.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum Error {
-    #[error("The frontend API's library at {path} could not be loaded: {words}")]
-    Load { path: String, words: String },
-    #[error(
-        "The frontend API's library at {path} is version {major}.{minor}; this program needs {want_major}.{want_minor} or a later minor of {want_major}."
-    )]
-    Version { path: String, major: u32, minor: u32, want_major: u32, want_minor: u32 },
-    #[error("{words} ({})", status_name(*status))]
-    Status { status: i32, words: String },
-    #[error("{call} answered JSON this program cannot read: {words}")]
-    Shape { call: &'static str, words: String },
-}
-
-impl Error {
-    /// The status, for a failure the API returned.
-    pub fn status(&self) -> Option<i32> {
-        match self {
-            Error::Status { status, .. } => Some(*status),
-            _ => None,
-        }
-    }
-
-    /// True for EMUSEN_SVC_ABSENT, an answer rather than a failure.
-    pub fn is_absent(&self) -> bool {
-        self.status() == Some(raw::EMUSEN_SVC_ABSENT)
-    }
-}
+pub use emusen_c_calls::Error;
 
 /// This crate's result.
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// A failure the API returned, named.
+pub(crate) fn status(status: i32, words: String) -> Error {
+    Error::Status { status, name: status_name(status), words }
+}
+
+/// True for EMUSEN_SVC_ABSENT, an answer rather than a failure.
+pub(crate) fn absent(e: &Error) -> bool {
+    e.status() == Some(raw::EMUSEN_SVC_ABSENT)
+}
 
 /// A status's name as the headers spell it.
 pub fn status_name(status: i32) -> &'static str {

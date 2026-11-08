@@ -1,6 +1,6 @@
 //! Events, pulled: a subscription drained on the client's timer or waited on with a timeout, never a callback.
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::out::json;
 use crate::raw;
 use crate::runtime::Runtime;
@@ -95,7 +95,7 @@ impl Runtime {
         let sub = unsafe { self.lib().emusen_crystal_subscribe(self.rt(), session, kinds) };
         NonNull::new(sub)
             .map(|sub| Subscription { rt: self.clone(), sub })
-            .ok_or_else(|| Error::Status { status: raw::EMUSEN_SVC_FAULT, words: self.words() })
+            .ok_or_else(|| crate::error::status(raw::EMUSEN_SVC_FAULT, self.words()))
     }
 }
 

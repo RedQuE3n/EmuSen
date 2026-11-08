@@ -503,8 +503,8 @@ int64_t emusen_crystal_firmware_overview(emusen_crystal_runtime *rt, uint8_t *ou
  * it required or it has no open replacement; "status" "present" where the firmware folders hold it by name or content
  * as firmware_overview finds it, else "missing" where it is required and "not_needed" where it is not. An empty list
  * for a system that needs none; ABSENT for a system neither the table nor an engine names (EmuSen_Cores.md 3.11).
- * Since 1.11 "need" is the index in the list of the first file that meets the same need: files that are alternatives, as a console's
- * regional BIOSes, share it (EmuSen_Cores.md 3.13). */
+ * Since 1.11 "need" names the need the file meets, the declaration's need or "file:" and the file's name where it states none:
+ * files that are alternatives, as a console's regional BIOSes, share it (EmuSen_Cores.md 3.13). */
 int64_t emusen_crystal_firmware_status(emusen_crystal_runtime *rt, const uint8_t *system, size_t system_len, uint8_t *out,
                                        size_t len);
 

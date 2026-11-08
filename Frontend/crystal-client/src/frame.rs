@@ -60,7 +60,7 @@ impl Runtime {
     pub fn raw_copy(&self, session: SessionId, info: &mut RawInfo, out: &mut [u8]) -> Result<Option<usize>> {
         match self.status(unsafe { self.lib().emusen_crystal_raw_copy(self.rt(), session, info, out.as_mut_ptr(), out.len()) }) {
             Ok(n) => Ok(Some(n as usize)),
-            Err(e) if e.is_absent() => Ok(None),
+            Err(e) if crate::error::absent(&e) => Ok(None),
             Err(e) => Err(e),
         }
     }

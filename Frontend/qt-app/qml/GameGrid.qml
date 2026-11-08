@@ -16,6 +16,9 @@ FocusScope {
     readonly property real hue: root.row ? root.row.hue : 0
     readonly property string world: root.row ? root.row.world : ""
     readonly property string countWords: root.row ? root.row.countWords : ""
+    // The rows beside it on Choose a console, named by the shoulders.
+    property var previousRow
+    property var nextRow
     readonly property real cellWidth: (root.width - 128 - 4 * 24) / 5
     signal closed()
     signal played(string path)
@@ -89,6 +92,45 @@ FocusScope {
                     lineHeightMode: Text.FixedHeight
                 }
             }
+            Row {
+                objectName: "gridNeighbours"
+                x: root.width - 64 - width
+                y: 34
+                height: 52
+                spacing: 12
+                Kit.PadGlyph {
+                    objectName: "gridPreviousShoulder"
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 30
+                    height: 30
+                    family: root.padFamily
+                    button: Kit.Pad.PageUp
+                }
+                Text {
+                    objectName: "gridPrevious"
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.previousRow ? root.previousRow.name : ""
+                    color: Kit.Tokens.muted
+                    font.family: faces.regular
+                    font.pixelSize: 18
+                }
+                Text {
+                    objectName: "gridNext"
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: root.nextRow ? root.nextRow.name : ""
+                    color: Kit.Tokens.muted
+                    font.family: faces.regular
+                    font.pixelSize: 18
+                }
+                Kit.PadGlyph {
+                    objectName: "gridNextShoulder"
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 30
+                    height: 30
+                    family: root.padFamily
+                    button: Kit.Pad.PageDown
+                }
+            }
             GridView {
                 id: cells
                 objectName: "gridCells"
@@ -101,6 +143,7 @@ FocusScope {
                 clip: true
                 focus: true
                 keyNavigationWraps: false
+                currentIndex: games.count > 0 ? 0 : -1
                 highlightFollowsCurrentItem: false
                 model: GameModel {
                     id: games
@@ -149,7 +192,7 @@ FocusScope {
                 spacing: 16
                 Text {
                     objectName: "gridFocusTitle"
-                    text: cells.currentItem ? games.titleAt(cells.currentIndex) : ""
+                    text: games.count > 0 && cells.currentIndex >= 0 ? games.titleAt(cells.currentIndex) : ""
                     color: Kit.Tokens.textStrong
                     font.family: faces.condensed
                     font.pixelSize: 32

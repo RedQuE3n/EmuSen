@@ -265,7 +265,7 @@ FocusScope {
                             text: tile.engineName
                             elide: Text.ElideRight
                             width: Math.min(implicitWidth, tile.width - tag.width - 22)
-                            color: tile.libretro ? Kit.Tokens.muted : Qt.hsla(tile.hue / 360, 0.75, 0.8, 1)
+                            color: Kit.Tokens.muted
                             font.family: faces.condensed
                             font.pixelSize: 17
                             font.capitalization: Font.AllUppercase
@@ -276,13 +276,13 @@ FocusScope {
                             width: tagWord.implicitWidth + 10
                             height: 20
                             radius: 4
-                            color: tile.libretro ? Qt.rgba(1, 1, 1, 0.08) : Qt.hsla(tile.hue / 360, 0.6, 0.5, 0.14)
-                            border.color: tile.libretro ? Kit.Tokens.muted : Qt.hsla(tile.hue / 360, 0.45, 0.52, 1)
+                            color: "transparent"
+                            border.color: Kit.Tokens.rule
                             Text {
                                 id: tagWord
                                 anchors.centerIn: parent
                                 text: tile.libretro ? Words.libretroTag : Words.emusenTag
-                                color: tile.libretro ? Kit.Tokens.text : Qt.hsla(tile.hue / 360, 0.7, 0.82, 1)
+                                color: Kit.Tokens.text
                                 font.family: faces.condensed
                                 font.pixelSize: 17
                             }
@@ -294,9 +294,10 @@ FocusScope {
                 objectName: "consoleDetailName"
                 x: 64
                 y: 633.6
+                height: 44
                 width: root.width - 128 - fan.width
                 text: root.focusedTile ? root.focusedTile.fullName : ""
-                elide: Text.ElideRight
+                clip: true
                 color: Kit.Tokens.textStrong
                 font.family: faces.condensed
                 font.pixelSize: 44

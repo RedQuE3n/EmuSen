@@ -30,6 +30,8 @@ Rectangle {
                 required property string label
                 objectName: "help-" + entry.label
                 flat: true
+                leftPadding: 0
+                rightPadding: 0
                 focusPolicy: Qt.NoFocus
                 text: entry.label
                 onClicked: root.controller.offer(entry.button)

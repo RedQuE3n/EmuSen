@@ -11,7 +11,7 @@ Rectangle {
         GradientStop { position: 0; color: Qt.hsla(root.hue / 360, 0.45, 0.32, 1) }
         GradientStop { position: 1; color: Qt.hsla(root.hue / 360, 0.5, 0.16, 1) }
     }
-    border.color: Qt.hsla(root.hue / 360, 0.4, 0.5, 0.6)
+    border.color: Kit.Tokens.rule
     Text {
         anchors.fill: parent
         anchors.margins: 6
@@ -20,6 +20,6 @@ Rectangle {
         elide: Text.ElideRight
         verticalAlignment: Text.AlignBottom
         color: Kit.Tokens.textStrong
-        font.pixelSize: Math.max(11, root.height / 9)
+        font.pixelSize: Kit.Tokens.fontBody
     }
 }

@@ -68,6 +68,8 @@ Window {
             focus: !program.splashShown && visible
             key: screens.key
             row: consoles.tiles.count > 0 ? consoles.tiles.itemAt(library.indexOf(screens.key)) : null
+            previousRow: consoles.tiles.count > 0 && library.indexOf(screens.key) > library.places ? consoles.tiles.itemAt(library.indexOf(screens.key) - 1) : null
+            nextRow: consoles.tiles.count > 0 && library.indexOf(screens.key) >= library.places ? consoles.tiles.itemAt(library.indexOf(screens.key) + 1) : null
             onClosed: screens.back()
         }
     }

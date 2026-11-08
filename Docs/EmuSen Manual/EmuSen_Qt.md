@@ -1082,6 +1082,47 @@ declared actions read back by the walk's parser. Seeded faults, each reverted: t
 screens test at B from the grid; the favourites' action key misspelt failed it at Y. The kit's two are in `EmuSen_Kit.md`
 §7.18.
 
+**Step 4, acceptance** (measured 2026-11-08; `qt-app/tests/acceptance.rs`). The program over a sandbox of the canvas's
+eleven consoles, one synthetic image each under its own folder with its first extension and ten on the Super Nintendo,
+three played and one a favourite through the library's own changes. The fixture's engines shelve five of them (the NES,
+the Super Nintendo, the Game Boy, the Game Boy Color and the Nintendo 64); the others have no engine beside the test's
+platform library, or no image a scan routes without a real disc. Each screen is shown in the canvas's own focus
+(Continue; the last console, standing for PlayStation 2; the Super Nintendo's first cover) and held at the gate's five
+sizes: its `.mockup.spec` at 1280 × 800 and 1920 × 1200 (two units, token colours exact), the kit's gate audit (fit, pad
+and pointer reach, no chrome, contrast, the palette, the floor) at every size, and nothing logged. Each state is recorded
+as a spec and grabbed; `EMUSEN_QT_COMPARE` names the folder. Choose a console's boxes that follow from eleven consoles
+(the console tiles, bodies, names, counts, ring and the second orbit) are held by kit-core's layout test against the
+canvas's own numbers (`EmuSen_Kit.md` §7.18), not by this state of five.
+
+Fixed on the way, each found by the comparison or the gate: Home's Continue read its game through an invokable, so the
+binding never saw the games arrive (it now reads the count first); the grid opened with no current cover; the help bar's
+entries carried the style's padding, so the first glyph stood at 80 where the canvases put it at 64 (`HelpBar` now sets
+none); a generated card's border and an engine's name and tag were coloured from the console's hue, outside the palette
+and under 4.5:1 at 1920 wide (they are now `rule`, `muted` and `text`); the grid's neighbours (the shoulders and the rows
+beside it) were not built.
+
+**Named differences from the mockups**, each with its reason, which the test lists in `named_difference` and nowhere else:
+the help bar paints Surface opaque where the courts canvas had it at 92% (`HelpBar` is the kit's, one surface for every
+screen); the orbit line keeps the canvas's own ink `#8C96DC`, outside the palette; at 1280 × 720 alone the canvas's 17-
+and 18-unit words (a place's status, a console's count and engine) fall under the floor, as the canvas scales them by
+the height; the focused console's name keeps the canvas's line box of 1 (44 units) where Barlow's is 53, which the gate
+reads as cut at the foot though the capitals are whole; an engine's name longer than its tile is elided (the fixture's
+cores call themselves "MoonRT (Rust)"); the fan's covers overlap, as a fan does.
+
+**Compared with Mistress's recordings** (`EmuSen.WiseMan/Mistress/Specification/{Home,Consoles,Games}-*.spec`, and their
+grabs beside the Qt grabs with the mockup's boxes drawn over them, in `~/.cache/emusen/tmp/qt-s1/compare/*-side.png`).
+Where the C# and the mockup part, the program follows the mockup, so these differences are the approved design's: Home's
+Continue panel at 80 and 304 high (C# 72 and 296) and its places at 632, 152.57 wide (C# 622, 150); the grid's covers as
+208 × 146 cards in five columns from 64 (C# 180 × 240 cover cards in a 996-wide grid from 142); each help bar's entries as
+its canvas labels them (the C#'s Home adds Favourite, Search and Home; its grid adds Console, List and Home). What the
+program does not draw yet, named: the status line's controller count (the time alone); the crescent beside the wordmark
+(a plain body); Continue's console and facts line; the places' status lines on Home and their icons on Choose a console
+(plain discs); the engines' mark glyphs and hued tags; covers and favourite hearts (generated cards, until covers are
+read); scraped titles (file names, sorted as text, so "Game 10" before "Game 2"); and the grid's heading names its row,
+not the C#'s section. **Held to**: the test passes; seeded faults, each reverted: Continue's heading 4 units low failed
+the mockup at both sizes; a card's border in its hue failed the gate's palette; the help bar's padding restored failed
+the mockup at the first glyph.
+
 ---
 
 ## 8. Testing

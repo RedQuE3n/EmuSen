@@ -115,8 +115,8 @@ FocusScope {
                     width: 373
                     height: 280
                     visible: root.hasLast
-                    title: recent.titleAt(0)
-                    hue: recent.hueAt(0)
+                    title: root.hasLast ? recent.titleAt(0) : ""
+                    hue: root.hasLast ? recent.hueAt(0) : 0
                 }
                 Text {
                     objectName: "continueHeading"
@@ -134,7 +134,7 @@ FocusScope {
                     x: 417
                     y: 54
                     width: parent.width - 429
-                    text: recent.titleAt(0)
+                    text: root.hasLast ? recent.titleAt(0) : ""
                     elide: Text.ElideRight
                     color: Kit.Tokens.textStrong
                     font.family: faces.condensed

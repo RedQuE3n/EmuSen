@@ -982,6 +982,61 @@ its consoles); Down no longer stepping the rail (the sweep over `one-console` mi
 the splash at 1, 3 and 5 s (the audit records its finished frame only), the grid's rows for a tall and a square console
 (the synthetic library's consoles are all wide), and the bells, which no striker rings yet.
 
+#### 3.4.6 Orrery as built **[M 2026-11-09]**
+
+"Orrery" (`Frontend/themes/orrery/`, resources at `qrc:/emusen/themes/orrery/`) is the design of `qt-s3/final/orrery.md`:
+the paused game under the moon, the recent games on one wide orbit with the focus at its apex, and a dial of small
+wheels along the foot; Choose a console is Wheelwork, one maker's wheel turned under a fixed top. Written against
+`EmuSen.Theme` alone. Its parts, one job each: `Backdrop` (the kit's night `Sky`, or the Atlas paper with the glow as a
+warm wash), `Moon`, `Orbit` and `OrbitCover` (a list laid on an ellipse), `DialWheel` (a 44-unit wheel with its teeth),
+`WheelNode` (a node of Wheelwork's walk), `Chip`, `Track`, `Faces`, `Glyph`, `EngineMark`.
+
+**The orbits.** The directions name Qt's `PathView` on a `PathArc`. A `PathView` spreads its items over the whole path
+when the model holds fewer than `pathItemCount`, and wraps a long list round, so the last games would stand left of the
+first; the canvas spaces covers by angle, 18° (Home) or 24° (Games), and never wraps. The orbit is a horizontal
+`ListView` instead (`Orbit`), which keeps only the covers about the current one made (9,000 games make a handful) and does
+not wrap; its `turning`, the current index followed over Reel, places each cover through the kit's `OrbitSlot`
+(`EmuSen_Kit.md` §7.33) at θ = 90° − step × d about the orbit's centre, tilted by the ellipse's normal and scaled by
+distance, so a turn carries every visible cover along the arc together. The fourth cover from the apex exists at opacity
+0 and fades in. The covers of one orbit are a stack the kit declares: a neighbour may lie under the apex, as the spec has
+it (Games' d = ±1 by 19 units), but no caption's glyphs and no focused cover may.
+
+**Wheelwork lays out from data** through the kit's `WheelLayout` (`EmuSen_Kit.md` §7.32): the dial's stops, its
+clamped camera, the slots by distance from the focus, the dots, each maker's games (`totals`) and the walk, which a
+`WheelNode` reads as `KeyNavigation`. The walk's lists change only with the rows, so the graph holds still while the
+wheel turns. A world's angle is 90° − 45° × d, followed over Reel, so the worlds travel the rim; those past three steps
+fade as they set behind it. 1 to 120 consoles of any makers, interleaved or not, need no sorting in QML.
+
+**Named differences from the spec**, each decided or measured on 2026-11-09:
+1. Small words are 19 units where the spec has 17 (the capitals floor at 1280 × 720, decided 2026-11-08); the dial's
+   names take the stop's whole pitch (136) so "Recently played" is not cut.
+2. Right past a wheel's last world goes on to the next maker's first (and Left past the first back), and a shelf's Up
+   goes to the first world, where the canvas stops: theme-audit's sweep reaches every console only so.
+3. "Played 9 h 40 min" under Continue is not drawn: `Words` has no word for the time played.
+4. The moon is the canvas's crescent at 26 units (its `crescent` class), not the 64-unit box the table names; the key's
+   moon stands at 102, two above the table, so it clears the name's line box.
+5. The splash's worlds set out min(300, 2900 / n) ms apart so 120 settle by six seconds, and past three makers the
+   orbits share the span from 208 to 496.
+6. Consoles → Games over Pan with the orbit inking from the wheel's ring is the host's transition, not drawn by the theme.
+7. The pressed states (a cover dropping its lift, a world settling to 72) are not drawn: no pressed state reaches a theme.
+8. The covers' soft shadows are not drawn; by day the glow is a radial wash on the Atlas paper, as the renders show it.
+9. Worlds off the wheel, or past three steps, wait below the rim at opacity 0 rather than unmade, so the walk's targets
+   exist; the wheel's layer clips them.
+10. While a shelf dims the wheel to 30%, the maker's words under the hub are not drawn (as the canvas already drops the
+    worlds' labels then): words at 30% read under the contrast floor.
+
+**Proof, measured 2026-11-09** (offscreen, the software backend). `theme-check` reads the package in both steps at the
+five sizes in dark and light, Choose a console also over the audit's 120 consoles, the sweep hearing all 120. The
+orbit scales its covers, so `OrbitCover` sets the kit's `CoverTile.drawnScale` to the slot's scale: a generated card's
+title on a d = ±2 cover at 0.8 had read 11.31 against the floor's 11.64 at 1280 × 720. `theme-check` reads `ok` with the contrast rule
+in every loaded state (WiseMan 4c58991fb with the turned sampling of `EmuSen_Kit.md` §7.33).
+The three `Testing/themes/orrery-*.mockup.spec`, written by hand from the spec's tables and the canvases, hold the
+recordings at 1280 × 800 and 1920 × 1200, dark and light, within two units. Side-by-sides with the spec's renders are kept in
+`~/.cache/emusen/tmp/qt-s3/compare/orrery/`. Three faults were seeded and caught, each reverted: a light accent of
+#E0A070 (the static step's contrast, 2.23:1); the motes resting on battery and under reduced motion (the stillness rule, 125 frames swapped in 2 s); Right
+along the wheel walking Left (the 120 consoles' sweep heard 2). Not proved offscreen: the splash at 1, 3 and 5 s (the audit records its finished
+frame only), the bells, which no striker rings yet, and the canvases' catalogues beyond the audit's own crowd.
+
 ### 3.5 Loading and the sandbox
 
 Each theme runs in a `QQmlEngine` of its own, created by Rust with: an import path list holding only Qt's modules on an

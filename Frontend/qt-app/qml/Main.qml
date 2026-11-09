@@ -55,10 +55,23 @@ Window {
         found: games.count > 0
         onQuit: Qt.quit()
     }
+    // Reduced motion as the start read it until Settings has read the settings, then as they say; the text size, which
+    // the kit's tokens scale by, and the variant as they say (EmuSen_Qt.md §7.7).
     Binding {
         target: Kit.Tokens
         property: "reducedMotion"
-        value: program.reducedMotion
+        value: settingsModel.ready ? settingsModel.reducedMotion : program.reducedMotion
+    }
+    Binding {
+        target: Kit.Tokens
+        property: "textSize"
+        value: settingsModel.textSize
+    }
+    Binding {
+        target: Kit.Tokens
+        property: "variant"
+        value: settingsModel.light ? Kit.Variants.Light : Kit.Variants.Dark
+        when: settingsModel.ready
     }
     LibraryModel {
         id: library
@@ -315,8 +328,27 @@ Window {
             onActed: (key) => screens.act(key)
         }
     }
-    // The Themes tab, reached from the Home card's Settings row until Settings is built (EmuSen_Qt.md §3.8): Use stores a
-    // theme's id and the chosen theme's host switches at once.
+    // Settings, from Home's Settings place and the Home card's Settings row (EmuSen_Qt.md §7.7); its Library ▸ Themes opens
+    // the Themes tab.
+    SettingsModel {
+        id: settingsModel
+        objectName: "settingsModel"
+        platformLibrary: program.platformLibrary
+        open: screens.shown === Screens.Settings
+        facts: library.loading ? "" : library.settingsFacts(player.session.running ? player.session.game : "")
+        onDoor: (name) => screens.act(name)
+    }
+    Settings {
+        objectName: "settings"
+        visible: screens.shown === Screens.Settings
+        settings: settingsModel
+        padFamily: program.padFamily
+        inputs: visible && !program.splashShown
+        onBacked: screens.back()
+        onActed: (key) => screens.act(key)
+    }
+    // The Themes tab, under Settings ▸ Library ▸ Themes (EmuSen_Qt.md §3.8): Use stores a theme's id and the chosen
+    // theme's host switches at once.
     ThemesModel {
         id: themesModel
         objectName: "themesModel"

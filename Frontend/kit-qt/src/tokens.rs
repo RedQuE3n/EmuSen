@@ -4,7 +4,7 @@ use core::pin::Pin;
 
 use cxx_qt::CxxQtType;
 
-use cxx_qt_lib::QColor;
+use cxx_qt_lib::{QColor, QString};
 use emusen_kit_core::motion::MotionToken as M;
 use emusen_kit_core::tokens::{self as core_tokens, ColourToken as C};
 
@@ -17,6 +17,8 @@ pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qcolor.h");
         type QColor = cxx_qt_lib::QColor;
+        include!("cxx-qt-lib/qstring.h");
+        type QString = cxx_qt_lib::QString;
         include!("emusen-kit-qt/src/kinds.cxxqt.h");
         #[namespace = "Forms"]
         type Form = crate::kinds::ffi::Form;
@@ -32,6 +34,8 @@ pub mod qobject {
         #[qproperty(Form, form)]
         #[qproperty(Variant, variant)]
         #[qproperty(f64, text_scale)]
+        /// A text size by the word the setting stores; setting it sets `textScale` to that size's scale (EmuSen_Kit.md §7.47).
+        #[qproperty(QString, text_size)]
         #[qproperty(bool, reduced_motion)]
         #[qproperty(QColor, surface, READ, NOTIFY)]
         #[qproperty(QColor, surface_raised, READ, NOTIFY)]
@@ -125,6 +129,7 @@ pub struct TokensRust {
     form: Form,
     variant: Variant,
     text_scale: f64,
+    text_size: QString,
     reduced_motion: bool,
     surface: QColor,
     surface_raised: QColor,
@@ -208,6 +213,7 @@ impl Default for TokensRust {
             form: Form::BigScreen,
             variant: Variant::Dark,
             text_scale: 1.0,
+            text_size: QString::default(),
             reduced_motion: false,
             surface: QColor::default(),
             surface_raised: QColor::default(),
@@ -370,6 +376,12 @@ impl cxx_qt::Initialize for qobject::Tokens {
         self.as_mut().on_form_changed(|this| this.refresh()).release();
         self.as_mut().on_variant_changed(|this| this.refresh()).release();
         self.as_mut().on_text_scale_changed(|this| this.refresh()).release();
+        self.as_mut()
+            .on_text_size_changed(|this| {
+                let scale = core_tokens::text_scale_of(&this.text_size().to_string());
+                this.set_text_scale(scale);
+            })
+            .release();
         self.as_mut().on_reduced_motion_changed(|this| this.refresh()).release();
     }
 }

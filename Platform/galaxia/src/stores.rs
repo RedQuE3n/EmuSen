@@ -21,21 +21,24 @@ pub enum File {
     Records,
     Media,
     Themes,
+    /// GraphicsConfig's file, since interface 46.
+    Graphics,
 }
 
 impl File {
-    pub const ALL: [File; 6] = [File::Settings, File::Games, File::States, File::Records, File::Media, File::Themes];
+    pub const ALL: [File; 7] = [File::Settings, File::Games, File::States, File::Records, File::Media, File::Themes, File::Graphics];
 
     pub fn from_u32(which: u32) -> Option<File> {
         File::ALL.get(which as usize).copied()
     }
 
-    /// The file's path in `tree`: the settings in the config directory, games.db, states.db and records.db in the library
+    /// The file's path in `tree`: the settings and graphics.json in the config directory, games.db, states.db and records.db in the library
     /// folder, media.db in the media folder and themes.db in the themes folder.
     pub fn path(self, tree: &crate::tree::Tree) -> std::path::PathBuf {
         use crate::tree::Directory;
         let (folder, name) = match self {
             File::Settings => return tree.config_path(None, crate::models::APP_SETTINGS_FILE),
+            File::Graphics => return tree.config_path(None, crate::models::GRAPHICS_FILE),
             File::Games => (Directory::Library, GAMES_DB),
             File::States => (Directory::Library, STATES_DB),
             File::Records => (Directory::Library, RECORDS_DB),

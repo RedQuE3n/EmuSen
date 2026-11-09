@@ -28,8 +28,10 @@ pub enum Shown {
     /// The ES-DE theme's view in place of Home, Choose a console and the grid, its system and gamelist views one screen
     /// whose model says which (EmuSen_Qt.md §4.6).
     Esde,
-    /// The Themes tab, from the Home card's Settings row until Settings is built (EmuSen_Qt.md §3.8).
+    /// The Themes tab, under Settings ▸ Library ▸ Themes (EmuSen_Qt.md §3.8, §7.7).
     Themes,
+    /// Settings, from Home's Settings place and the Home card's Settings row (EmuSen_Qt.md §7.7).
+    Settings,
 }
 
 /// What asked for a change.
@@ -68,25 +70,29 @@ pub const LIST: &str = "list";
 pub const SEARCH: &str = "search";
 /// A shoulder on the keyboard: the focus to the covers, while there are any.
 pub const TO_GRID: &str = "toGrid";
+/// Settings' door to the Themes tab, by its name in the screen's description.
+pub const THEMES: &str = "themes";
 
 /// The screen shown after an ask, and the grid's row (the page a card opens at, for a card); `None` leaves both as they
 /// were.
 pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
     match (shown, ask) {
         (Shown::Home, Ask::Place(0)) => Some((Shown::Consoles, None)),
-        // Settings is the Themes tab until Settings is built, from Home's place and the Home card's row alike.
-        (Shown::Home, Ask::Place(SETTINGS_PLACE)) => Some((Shown::Themes, None)),
+        (Shown::Home, Ask::Place(SETTINGS_PLACE)) => Some((Shown::Settings, None)),
         (Shown::Home, Ask::Place(POWER_PLACE)) => Some((Shown::HomeCard, Some(crate::home_card::POWER.to_owned()))),
         (Shown::Home, Ask::Act(key)) if key == SEARCH => Some((Shown::Search, Some(crate::library::ALL.to_owned()))),
         // Start on Home stays on Home, which takes the focus back to where it starts.
         (Shown::Home, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
         (Shown::Consoles | Shown::Grid | Shown::Search | Shown::SearchGrid, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
         (Shown::HomeCard, Ask::Back | Ask::Close) => Some((Shown::Home, None)),
-        (Shown::HomeCard, Ask::Act(key)) if key == crate::home_card::SETTINGS => Some((Shown::Themes, None)),
+        (Shown::HomeCard, Ask::Act(key)) if key == crate::home_card::SETTINGS => Some((Shown::Settings, None)),
         // The card closes on its rows' actions; those of a later stage (Exit Big Picture, the tools) do nothing more yet.
         (Shown::HomeCard, Ask::Act(_)) => Some((Shown::Home, None)),
-        (Shown::Themes, Ask::Back) => Some((Shown::Home, None)),
-        (Shown::Themes, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
+        (Shown::Settings, Ask::Back) => Some((Shown::Home, None)),
+        (Shown::Settings | Shown::Themes, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
+        (Shown::Settings, Ask::Act(key)) if key == THEMES => Some((Shown::Themes, None)),
+        // The Themes tab is a page of Settings: B goes back to it.
+        (Shown::Themes, Ask::Back) => Some((Shown::Settings, None)),
         (Shown::Grid, Ask::Act(key)) if key == LIST => Some((Shown::List, None)),
         (Shown::List, Ask::Back | Ask::Close) => Some((Shown::Grid, None)),
         (Shown::List, Ask::Act(key)) if key == SEARCH => Some((Shown::Search, None)),
@@ -137,6 +143,11 @@ pub fn step_in(themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<S
         (true, Shown::Esde, Ask::Act(key)) if key == HOME => Some((Shown::HomeCard, Some(crate::home_card::FIRST.to_owned()))),
         (true, Shown::Esde, Ask::Act(key)) if key == LIST => Some((Shown::List, None)),
         (true, Shown::Esde | Shown::List | Shown::Pause, Ask::Play) => Some((Shown::Game, None)),
+        (true, Shown::HomeCard, Ask::Act(key)) if key == crate::home_card::SETTINGS => Some((Shown::Settings, None)),
+        (true, Shown::Settings, Ask::Back) => Some((Shown::Esde, None)),
+        (true, Shown::Settings | Shown::Themes, Ask::Act(key)) if key == HOME => Some((Shown::Esde, None)),
+        (true, Shown::Settings, Ask::Act(key)) if key == THEMES => Some((Shown::Themes, None)),
+        (true, Shown::Themes, Ask::Back) => Some((Shown::Settings, None)),
         // The cards close to the theme's view on B, Start or any of their actions, which the host carries out.
         (true, Shown::HomeCard | Shown::List, Ask::Back | Ask::Close | Ask::Act(_)) => Some((Shown::Esde, None)),
         (true, Shown::Game, Ask::Menu) => Some((Shown::Pause, None)),
@@ -167,6 +178,7 @@ pub mod qobject {
         SearchGrid,
         Esde,
         Themes,
+        Settings,
     }
 
     extern "RustQt" {
@@ -267,6 +279,7 @@ fn shown_of(screen: Screen) -> Shown {
         Screen::SearchGrid => Shown::SearchGrid,
         Screen::Esde => Shown::Esde,
         Screen::Themes => Shown::Themes,
+        Screen::Settings => Shown::Settings,
         _ => Shown::Home,
     }
 }
@@ -284,6 +297,7 @@ fn screen_of(shown: Shown) -> Screen {
         Shown::SearchGrid => Screen::SearchGrid,
         Shown::Esde => Screen::Esde,
         Shown::Themes => Screen::Themes,
+        Shown::Settings => Screen::Settings,
     }
 }
 

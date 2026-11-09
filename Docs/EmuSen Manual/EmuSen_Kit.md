@@ -2597,6 +2597,31 @@ unchanged.
 - **[routine]** A stepped action's ◂ ▸ and its stepping (Resume's slots) are piece G's.
 - **[routine]** The cover's raised shadow waits for a shadow token (§5.4).
 
+### 7.46 A long value on a `MenuRow` (stage 5, piece D; 2026-11-09)
+
+Found by Settings' Library section in the program (`EmuSen_Qt.md` §7.7): a row's value was laid out at its own width,
+so a folder's path of 70 characters (the test's scratch tree) took the whole row and squeezed the label to a negative
+width, which the gate read as the label cut, past its box and past its clip. The value is now at most half the row and
+cut at its start (`Text.ElideLeft`), so the label keeps the other half and the end of a path, the folder's own name,
+shows, as a file manager's narrow column shows one. A value that fits is drawn as before; nothing of the surface
+changed. The cut is still a finding of the gate's ("cut with an ellipsis"). Settings names it for a folder's value alone, on the
+condition that focusing the row gives the whole path in the pane (`EmuSen_Qt.md` §7.7); any other value cut on a row
+stays a finding. Held to by `qt-app/tests/settings.rs`; seeded, the cap taken out failed it again (the label cut and past its
+box, the value past its row's clip).
+
+### 7.47 The text sizes' scales (stage 5, piece D; 2026-11-09)
+
+Decided 2026-11-09: the kit owns each text size's scale, since its style applies the text size to every screen.
+kit-core's `TEXT_SIZES` holds the three sizes by the word the setting stores (`AppSettings.TextSize`) and the scale each
+asks: `default` 1, `large` 1.15, `larger` 1.3 (`MAX_TEXT_SCALE`, the most the kit lays out; the figures are LunaP's
+§214, the mockup's Larger of about 1.4 having been measured too large for the grid on 2026-11-03). `text_scale_of`
+reads one, a word it does not know being 1. `Tokens` gained `textSize`, a word: setting it sets `textScale` to that
+size's scale, so a host binds the setting's word and never a number. Settings' pane reads the same function for its
+three sample lines (`EmuSen_Qt.md` §7.7). Rule Q: `textSize` is an addition to `Tokens` in the registry; nothing was
+removed or changed. Held to by kit-core's `kit_7_47_each_text_size_word_has_its_scale_and_larger_is_the_most` and the
+program's Settings test (the kit's `textScale` at `text_scale_of("large")` once Large is chosen); seeded, Large's scale
+as 1.1 failed the first.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

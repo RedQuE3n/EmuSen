@@ -30,6 +30,8 @@ pub enum Shown {
     Esde,
     /// The Themes tab, from the Home card's Settings row until Settings is built (EmuSen_Qt.md §3.8).
     Themes,
+    /// Cores on the tool screen, from Home's place (EmuSen_Interface.md §15.8).
+    Cores,
 }
 
 /// What asked for a change.
@@ -62,6 +64,7 @@ pub enum Ask {
 /// Home's Settings and Power places, by their index in `words::HOME_PLACES`.
 pub const SETTINGS_PLACE: usize = 5;
 pub const POWER_PLACE: usize = 6;
+pub const CORES_PLACE: usize = 4;
 
 /// The grid's List card and the search, by the actions that open them.
 pub const LIST: &str = "list";
@@ -110,6 +113,8 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Game, Ask::Menu) => Some((Shown::Pause, None)),
         (Shown::Pause, Ask::Library) => Some((Shown::Home, None)),
         (Shown::Game | Shown::Pause, Ask::Closed) => Some((Shown::Home, None)),
+        (Shown::Home, Ask::Place(CORES_PLACE)) => Some((Shown::Cores, None)),
+        (Shown::Cores, Ask::Back) => Some((Shown::Home, None)),
         _ => None,
     }
 }
@@ -167,6 +172,7 @@ pub mod qobject {
         SearchGrid,
         Esde,
         Themes,
+        Cores,
     }
 
     extern "RustQt" {
@@ -267,6 +273,7 @@ fn shown_of(screen: Screen) -> Shown {
         Screen::SearchGrid => Shown::SearchGrid,
         Screen::Esde => Shown::Esde,
         Screen::Themes => Shown::Themes,
+        Screen::Cores => Shown::Cores,
         _ => Shown::Home,
     }
 }
@@ -284,6 +291,7 @@ fn screen_of(shown: Shown) -> Screen {
         Shown::SearchGrid => Screen::SearchGrid,
         Shown::Esde => Screen::Esde,
         Shown::Themes => Screen::Themes,
+        Shown::Cores => Screen::Cores,
     }
 }
 

@@ -417,6 +417,7 @@ dependencies = [
  "emusen-qt-test",
  "emusen-theme-check",
  "emusen-theme-manifest",
+ "libc",
  "serde_json",
 ]
 

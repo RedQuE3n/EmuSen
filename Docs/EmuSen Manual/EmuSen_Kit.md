@@ -2597,6 +2597,18 @@ unchanged.
 - **[routine]** A stepped action's ◂ ▸ and its stepping (Resume's slots) are piece G's.
 - **[routine]** The cover's raised shadow waits for a shadow token (§5.4).
 
+**Found by Cores, the first screen on it** (stage 5, piece F; 2026-11-09; `EmuSen_Qt.md` §7.7.F). Three defects the
+gallery's still models could not show, each fixed in `ToolScreen.qml` with no change to the registry:
+- The list and the pane faded their edges in the `EdgeFade` around them but did not say so where the audit reads it, on
+  the scroller itself (as `MenuPanel` does), so a pane longer than its box failed the fit audit as cut with no fade
+  (LRPS2's five sentences at 1280 × 800). Both scrollers now declare `fadeTop` and `fadeBottom`.
+- A row's cells anchored to their parent, which is null while a model reset destroys the row: 111 warnings in one walk.
+  The anchor reads `parent?.verticalCenter`, and the columns' reader and its connections take `null` until a host names
+  its rows.
+- The screen's words were the platform's sans serif with no way for a host to name its faces, so the header's facts in
+  Mistress's longest case (no catalogue: 914 units in Barlow) took 1,066 and left the title 54 units for `CORES`.
+  `titleFont`, `captionFont` and `bodyFont` join `cellFont`, the tokens' sizes in the platform's face by default.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

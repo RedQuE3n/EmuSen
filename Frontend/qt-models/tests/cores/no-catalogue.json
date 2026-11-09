@@ -1,0 +1,168 @@
+{
+ "note": "As world.json, before libretro's catalogue was ever read: the listing holds no libretro core, and the fetch is refused offline.",
+ "systems": [
+  {
+   "id": "snes",
+   "console": "SNES",
+   "display_name": "Super Nintendo",
+   "manufacturer": "Nintendo",
+   "release_year": 1990,
+   "engines": [
+    "VenusRT"
+   ]
+  },
+  {
+   "id": "psx",
+   "console": "PlayStation",
+   "display_name": "PlayStation",
+   "manufacturer": "Sony",
+   "release_year": 1994,
+   "engines": [
+    "Diamond"
+   ]
+  },
+  {
+   "id": "ps2",
+   "console": "PlayStation 2",
+   "display_name": "PlayStation 2",
+   "manufacturer": "Sony",
+   "release_year": 2000,
+   "engines": [
+    "PCEE2",
+    "Sapphire",
+    "ExtraPS2"
+   ]
+  }
+ ],
+ "cores": [
+  {
+   "library": "/opt/emusen/libsapphire.so",
+   "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+   "engine": "Sapphire",
+   "directory": "installation",
+   "trust": "manifest",
+   "name": "Sapphire",
+   "authors": [
+    "EmuSen"
+   ],
+   "license": "GPL-3.0-or-later",
+   "systems": [
+    "ps2"
+   ]
+  },
+  {
+   "library": "/opt/emusen/libdiamond.so",
+   "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+   "engine": "Diamond",
+   "directory": "installation",
+   "trust": "manifest",
+   "name": "Diamond",
+   "authors": [
+    "EmuSen"
+   ],
+   "license": "GPL-3.0-or-later",
+   "systems": [
+    "psx"
+   ]
+  },
+  {
+   "library": "/opt/emusen/libvenusrt.so",
+   "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+   "engine": "VenusRT",
+   "directory": "installation",
+   "trust": "manifest",
+   "name": "VenusRT",
+   "authors": [
+    "EmuSen"
+   ],
+   "license": "GPL-3.0-or-later",
+   "systems": [
+    "snes"
+   ]
+  },
+  {
+   "library": "/home/player/Cores/libextraps2.so",
+   "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+   "engine": "ExtraPS2",
+   "directory": "player",
+   "trust": "needs_approval",
+   "name": "Extra PS2 Core",
+   "authors": [
+    "Someone Else"
+   ],
+   "license": "MIT",
+   "systems": [
+    "ps2"
+   ]
+  },
+  {
+   "library": "/home/player/Cores/libretro/pcee2/pcee2_libretro.so",
+   "sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+   "engine": "PCEE2",
+   "directory": "player",
+   "trust": "approved",
+   "name": "PCEE2",
+   "authors": [
+    "PCSX2 Team"
+   ],
+   "license": "GPLv3",
+   "systems": [
+    "ps2"
+   ],
+   "libretro": {
+    "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+   }
+  }
+ ],
+ "space": [
+  440234147840,
+  1099511627776
+ ],
+ "jobs": {
+  "core-ls": {
+   "events": [
+    {
+     "event": "done",
+     "op": "core-ls",
+     "counts": {},
+     "catalogue": null
+    }
+   ],
+   "ends": true
+  },
+  "core-fetch": {
+   "events": [
+    {
+     "event": "refused",
+     "reason": "buildbot.libretro.com could not be reached"
+    },
+    {
+     "event": "done",
+     "op": "core-fetch",
+     "counts": {},
+     "catalogue": null
+    }
+   ],
+   "ends": true
+  },
+  "*": {
+   "events": [
+    {
+     "event": "plan",
+     "stem": "pcsx2",
+     "from": "https://buildbot.libretro.com/nightly/linux/x86_64/latest/pcsx2_libretro.so.zip",
+     "build": "2026-10-31",
+     "crc32": "3a224a58"
+    },
+    {
+     "event": "progress",
+     "stem": "pcsx2",
+     "step": "download",
+     "bytes": 18874368,
+     "total": 43000000
+    }
+   ],
+   "ends": false
+  }
+ }
+}

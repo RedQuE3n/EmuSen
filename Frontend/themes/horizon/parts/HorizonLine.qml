@@ -1,7 +1,7 @@
 import QtQuick
 import EmuSen.Theme
 
-// The horizon line at 440: a line clear at its ends, or the strip's position track from 64 to W - 64 when the row is longer than it (EmuSen_Qt.md §3.4.2).
+// The horizon line at 440: a line clear at its ends, or the strip's position track from 64 to W - 64 when the row is longer than it (EmuSen_Qt.md §3.4.3).
 Item {
     id: root
     // The row's length, the camera's offset and the room it is shown in, in canvas units.

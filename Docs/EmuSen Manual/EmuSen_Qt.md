@@ -939,7 +939,7 @@ faults); an empty picture URL refused by the sandbox (`theme_feed.rs`, 22 refusa
 row (`scale.rs`, 9,000 covers for 4). The stage 1 start-up gates of §9.3.1 (Home shown ≤ 0.35 s, the first press
 ≤ 0.95 s on the real library) were not re-run: their driver is no longer kept.
 
-#### 3.4.2 Horizon as built **[M 2026-11-08]**
+#### 3.4.3 Horizon as built **[M 2026-11-08]**
 
 Horizon is the package `Frontend/themes/horizon/`, the design of `horizon.md` (2026-11-08) with Games as Rise: the
 horizon line high at y 440, the focused game or console risen over it at the right as a world in a 300 disc, its words in
@@ -952,7 +952,7 @@ the sky at the left, and the things browsed standing on the land on one foot lin
 the line, so stars stand above the line only; Dawn's gradient by day; the glow at the world's centre; the drift),
 `World` (a game's picture in the disc, a console's `Body` at 300, a place's glass disc, the corona, the rise of 24 over
 `Enter`), `HorizonLine` (the line, and the track while the row is longer than W − 128), `Strip` (a `Flickable` of
-margins 64 whose `contentX` is bound to the camera while it is not dragged), `FadeMask`, `Lift`, `StripItem` (the walk
+margins 64 whose `contentX` is bound to the camera while it is not dragged, inside the kit's `EdgeFade`), `Lift`, `StripItem` (the walk
 on one axis, LB and RB jumping a group), `Cover`, `PlaceDisc`, `Faces`, `Glyph`, `EngineMark`. Home and Choose a console
 place their items freely in a `Strip` by slot (Choose a console: the places, then each maker's consoles from
 `groupStart`); Games is a horizontal `ListView` with `highlightRangeMode: ApplyRange` and the preferred range at the
@@ -985,11 +985,12 @@ side-by-sides of 2026-11-09 and named: the help bar's glyphs are the kit's gener
 controller with a face; a game with no hero shows the generated card's hue soft at 40% in the world, where the canvases
 draw a placeholder; Choose a console shows three places at the first console's focus (off 32), where the canvas focuses
 the second; a catalogue's consoles without a look of their own share the first shelved console's body; the splash's
-caption is 19 units (the floor above). **One defect, not yet fixed: the strip's edge fade.** `MultiEffect`'s mask is
-binary on Qt 6.11 with Vulkan (measured 2026-11-09 in a probe: a 100-unit linear alpha ramp cut wholly at the threshold,
-whatever `maskSpreadAtMin` is), so at its default threshold the mask shows everything and an item at the right edge is
-cut by the window, not faded (Home's last cover at 1280 × 800). A fade needs a shader the kit owns; a theme cannot
-ship one.
+caption is 19 units (the floor above). **The strips' edge fade.** The strips of Home and Choose a console and Games' row
+stand inside the kit's `EdgeFade` (`EmuSen_Kit.md` §7.35, landed 2026-11-09) and fade to transparency over their outer 40
+units on both backends, so an item at an edge is faded, never cut. Until then a theme part, `FadeMask`, fed a `MultiEffect`
+mask, which is binary on Qt 6.11 with Vulkan (measured 2026-11-09 in a probe: a 100-unit linear alpha ramp cut wholly at
+the threshold, whatever `maskSpreadAtMin` is) and draws nothing on the software backend, so an item at the right edge
+was cut by the window, not faded (Home's last cover at 1280 × 800); `FadeMask` is gone.
 
 **Proof, measured 2026-11-08 and 2026-11-09.** On the GPU (`theme-audit --gpu`: Vulkan on the RX 6800 in a nested
 KWin of the run's own, every picture its state's size): no finding on the four screens at the five sizes in both

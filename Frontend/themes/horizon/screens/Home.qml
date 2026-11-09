@@ -5,7 +5,7 @@ import QtQuick.Shapes
 import EmuSen.Theme
 import "../parts"
 
-// Horizon's Home, Rise: the focused game's world risen on the horizon at the right, its words in the sky, Continue, the recent covers and the places on the land's foot line under the clamped camera (EmuSen_Qt.md §3.4.2).
+// Horizon's Home, Rise: the focused game's world risen on the horizon at the right, its words in the sky, Continue, the recent covers and the places on the land's foot line under the clamped camera (EmuSen_Qt.md §3.4.3).
 ThemeScreen {
     id: screen
     objectName: "horizonHome"

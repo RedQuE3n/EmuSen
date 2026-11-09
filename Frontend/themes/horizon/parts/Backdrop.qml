@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Theme
 
-// The sky and the land: the kit's night sky with its stars above the line only, or Dawn by day; the glow in a hue at the world's centre; the stars' drift, the one resting motion (EmuSen_Qt.md §3.4.2).
+// The sky and the land: the kit's night sky with its stars above the line only, or Dawn by day; the glow in a hue at the world's centre; the stars' drift, the one resting motion (EmuSen_Qt.md §3.4.3).
 Item {
     id: root
     // The glow's hue, -1 for none, and its centre in canvas units.

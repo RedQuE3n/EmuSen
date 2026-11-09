@@ -1,7 +1,7 @@
 import QtQuick
 import EmuSen.Theme
 
-// One item of a free strip: what the world and the words show of it, where it stands in the strip, and its walk on one axis, the shoulders jumping a group (EmuSen_Qt.md §3.4.2).
+// One item of a free strip: what the world and the words show of it, where it stands in the strip, and its walk on one axis, the shoulders jumping a group (EmuSen_Qt.md §3.4.3).
 Walkable {
     id: item
     property int kind: 0

@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Theme
 
-// The world risen on the horizon at the right: a game's hero in a 300 disc, a console's body at 300, or a place's glass disc with its mark; the corona in the hue; the new one rising 24 as it fades in (EmuSen_Qt.md §3.4.2).
+// The world risen on the horizon at the right: a game's hero in a 300 disc, a console's body at 300, or a place's glass disc with its mark; the corona in the hue; the new one rising 24 as it fades in (EmuSen_Qt.md §3.4.3).
 Item {
     id: root
     // What the world shows, and the key whose change raises it anew.

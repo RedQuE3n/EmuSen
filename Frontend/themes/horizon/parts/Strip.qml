@@ -1,7 +1,7 @@
 import QtQuick
 import EmuSen.Theme
 
-// The land's strip for a free arrangement: items placed in its content from x 0 on the foot line 700, drawn at 64 - off under the clamped camera, faded over the outer 40 units at each edge (EmuSen_Qt.md §3.4.2).
+// The land's strip for a free arrangement: items placed in its content from x 0 on the foot line 700, drawn at 64 - off under the clamped camera, faded over the outer 40 units at each edge (EmuSen_Qt.md §3.4.3).
 Item {
     id: root
     // The focused item's place and width, and the row's length, in content units.

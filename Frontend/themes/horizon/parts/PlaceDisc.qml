@@ -1,7 +1,7 @@
 import QtQuick
 import EmuSen.Theme
 
-// A place in the strip: a glass disc of 56 with its mark at 24, and the attention mark at its top right when the place asks for the player (EmuSen_Qt.md §3.4.2).
+// A place in the strip: a glass disc of 56 with its mark at 24, and the attention mark at its top right when the place asks for the player (EmuSen_Qt.md §3.4.3).
 Item {
     id: root
     property string mark

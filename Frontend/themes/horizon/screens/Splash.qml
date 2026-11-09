@@ -3,7 +3,7 @@ import QtQuick
 import EmuSen.Theme
 import "../parts"
 
-// Horizon's splash, Horizon rise, six seconds: the stars fade in, the horizon draws across, each console's body rises over it and rings its bell, then EMUSEN settles with its caption; under reduced motion the finished frame (EmuSen_Qt.md §3.4.2).
+// Horizon's splash, Horizon rise, six seconds: the stars fade in, the horizon draws across, each console's body rises over it and rings its bell, then EMUSEN settles with its caption; under reduced motion the finished frame (EmuSen_Qt.md §3.4.3).
 ThemeScreen {
     id: screen
     objectName: "horizonSplash"

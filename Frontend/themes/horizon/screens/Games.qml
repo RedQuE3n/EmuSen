@@ -3,7 +3,7 @@ import QtQuick
 import EmuSen.Theme
 import "../parts"
 
-// Horizon's Games, Rise: the focused game's hero risen as a world, its title, facts and description in the sky, the section's covers on the land under the clamped camera; while searching the covers rise to a line under the host's field (EmuSen_Qt.md §3.4.2).
+// Horizon's Games, Rise: the focused game's hero risen as a world, its title, facts and description in the sky, the section's covers on the land under the clamped camera; while searching the covers rise to a line under the host's field (EmuSen_Qt.md §3.4.3).
 ThemeScreen {
     id: screen
     objectName: "horizonGames"

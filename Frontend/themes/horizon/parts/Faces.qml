@@ -1,6 +1,6 @@
 import QtQuick
 
-// Horizon's faces from EmuSen's fonts: Barlow Condensed Medium for names, Barlow for words, Barlow Medium for the splash's caption, Barlow Condensed Light for the wordmark (EmuSen_Qt.md §3.4.2).
+// Horizon's faces from EmuSen's fonts: Barlow Condensed Medium for names, Barlow for words, Barlow Medium for the splash's caption, Barlow Condensed Light for the wordmark (EmuSen_Qt.md §3.4.3).
 Item {
     readonly property string condensed: condensedFace.font.family
     readonly property string regular: regularFace.font.family

@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Effects
 import EmuSen.Theme
 
-// A cover on the land: the kit's CoverTile whole at its shape, its shadow (0 10 24 at 45%) and a 1-unit white 14% edge; the ring and the lift are the strip item's (EmuSen_Qt.md §3.4.2).
+// A cover on the land: the kit's CoverTile whole at its shape, its shadow (0 10 24 at 45%) and a 1-unit white 14% edge; the ring and the lift are the strip item's (EmuSen_Qt.md §3.4.3).
 Item {
     id: root
     property alias source: tile.source

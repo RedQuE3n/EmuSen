@@ -1,7 +1,7 @@
 import QtQuick
 import EmuSen.Theme
 
-// A strip item's look: lifted 12 and scaled 1.12 about its foot while focused, at rest while pressed, its content at 38% while the host would decline it, the ring 4 outside and 3 thick, breathing once still (EmuSen_Qt.md §3.4.2).
+// A strip item's look: lifted 12 and scaled 1.12 about its foot while focused, at rest while pressed, its content at 38% while the host would decline it, the ring 4 outside and 3 thick, breathing once still (EmuSen_Qt.md §3.4.3).
 Item {
     id: root
     property bool lit: false

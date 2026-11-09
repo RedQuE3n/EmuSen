@@ -3,7 +3,7 @@ import QtQuick
 import EmuSen.Theme
 import "../parts"
 
-// Horizon's Choose a console: the focused console risen as a world at its body's size, its words, engine line and three covers in the sky; the three places, then every console grouped by maker on the land under the clamped camera (EmuSen_Qt.md §3.4.2).
+// Horizon's Choose a console: the focused console risen as a world at its body's size, its words, engine line and three covers in the sky; the three places, then every console grouped by maker on the land under the clamped camera (EmuSen_Qt.md §3.4.3).
 ThemeScreen {
     id: screen
     objectName: "horizonConsoles"

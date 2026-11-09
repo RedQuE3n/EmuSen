@@ -5,6 +5,8 @@
 
 use crate::rows::qobject::ThemeRows;
 use crate::view::Row;
+use emusen_qt_models::library::LibraryView;
+use emusen_qt_models::words;
 use core::pin::Pin;
 use cxx_qt::casting::Upcast;
 use cxx_qt::CxxQtType;
@@ -155,5 +157,28 @@ impl qobject::ThemeBrowse {
         if let Some(list) = unsafe { self.games.as_mut() } {
             unsafe { Pin::new_unchecked(list) }.replace(rows);
         }
+    }
+}
+
+/// The section's facts as Choose a console's row for its key holds them; the shoulders' neighbours are the rows either
+/// side, and the count is the search's while one narrows the section.
+pub fn facts_of(view: &LibraryView, section: &str, count_line: &str, focus_row: i32, open: (bool, bool, bool), searched: bool) -> BrowseFacts {
+    let rows = view.rows.rows();
+    let at = rows.iter().position(|r| r.key == section);
+    let row = at.map(|i| &rows[i]);
+    let beside = |by: usize| at.filter(|_| rows.len() > 1).map(|i| rows[(i + by) % rows.len()].name.clone()).unwrap_or_default();
+    BrowseFacts {
+        section: section.to_owned(),
+        heading: row.map(|r| r.heading.clone()).unwrap_or_default(),
+        world: row.map(|r| r.world.clone()).unwrap_or_default(),
+        hue: row.map_or(0.0, |r| r.hue),
+        count_line: if count_line.is_empty() { row.map(|r| words::games(r.count)).unwrap_or_default() } else { count_line.to_owned() },
+        previous: beside(rows.len().saturating_sub(1)),
+        next: beside(1),
+        focus_row,
+        searching: open.0,
+        typing: open.1,
+        list_open: open.2,
+        searched,
     }
 }

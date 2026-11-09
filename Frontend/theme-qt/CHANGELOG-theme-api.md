@@ -111,3 +111,8 @@ and the console screens' maker groups are added, each after the members it joins
   Constellation's Choose a console is a shelf packer over its makers, justified rows, a compact tier and a walk to the
   nearest body of the next line; QML may hold no function and the rows give no list of groups, so a theme could not lay
   it out without one. Additions only, in both registries.
+- **`Help.entries(kind, {accept})` and an `enabled` role on the help's rows** (the same day): `accept: false` gives the
+  kind's list with A's entry not `enabled`, which the kit's `HelpBar` draws at 38% and does not press; every other entry,
+  and every list asked for without the flag, is enabled. A theme draws the disabled look of a place the host would
+  decline (`available` false) with its bar's A dimmed, and could not mark one entry of a list it may not build. Each kind
+  now has eight lists, made once. A delegate reads the role as `model.enabled`. Found by Horizon's disabled state.

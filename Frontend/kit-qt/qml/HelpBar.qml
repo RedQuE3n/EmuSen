@@ -73,12 +73,16 @@ Item {
                 readonly property int pair: entry.model.pair ?? -1
                 // A theme's own picture for the button, drawn in the glyph's place.
                 readonly property string picture: entry.model.icon ?? ""
+                // An entry whose action the host would decline: drawn at 38% and not pressed (EmuSen_Kit.md §7.28).
+                readonly property bool live: entry.model.enabled ?? true
                 objectName: "help-" + entry.label
                 flat: true
                 leftPadding: 0
                 rightPadding: 0
                 implicitWidth: entry.implicitContentWidth
                 focusPolicy: Qt.NoFocus
+                enabled: entry.live
+                opacity: entry.live ? 1 : 0.38
                 text: entry.label
                 // In a fitted box an entry is as high as its content, as it is as wide; on the band the style's height stands.
                 Binding on implicitHeight {

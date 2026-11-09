@@ -70,8 +70,9 @@ Window {
                 scene.pressedCount += 1
             }
             model: ListModel {
-                ListElement { button: 4; label: "Play"; icon: "" }
-                ListElement { button: 6; label: "Menu"; icon: "qrc:/scenes/button-picture.svg" }
+                ListElement { button: 4; label: "Play"; icon: ""; enabled: true }
+                ListElement { button: 6; label: "Menu"; icon: "qrc:/scenes/button-picture.svg"; enabled: true }
+                ListElement { button: 5; label: "Back"; icon: ""; enabled: false }
             }
         }
     }

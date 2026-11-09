@@ -32,6 +32,7 @@ fn main() {
     .qrc("fonts/Fonts.qrc")
     .files([
         "src/base.rs",
+        "src/item_model.rs",
         "src/kinds.rs",
         "src/tokens.rs",
         "src/frame.rs",

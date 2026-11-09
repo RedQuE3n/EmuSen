@@ -185,7 +185,11 @@ constants, and a words item carries its capitals' height already measured, since
 job. The pointer rules are new: the C# front end had none, which is why its big-screen Home took no mouse (§0.2 of
 `EmuSen_Qt.md`). A scroller excuses what lies beyond it along either axis it scrolls, where `FitAudit.Check` excused only up and
 down, since a pad never scrolled sideways there (decided 2026-11-08: the Qt themes' strips scroll sideways under the pad,
-Horizon's first). What crosses a scroller's edge is still held by the edge rule, which accepts only a faded edge.
+Horizon's first). What crosses a scroller's edge is still held by the edge rule, which accepts only a faded edge. A
+flickable is a scroller along an axis when its content and its margins together are longer than it, since Qt scrolls over
+the margins too; the harness counted the content alone until 2026-11-08, when Horizon's strip (1,220 of content, margins
+of 64, 1,280 wide) was read as not scrolling and its last console, resting 4 units past the window under the faded
+edge, was called past its panel.
 
 ### 3.1 What it is held to
 

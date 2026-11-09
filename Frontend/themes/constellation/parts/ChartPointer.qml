@@ -15,21 +15,25 @@ ChartNode {
     objectName: "pointer." + pointer.index
     Accessible.name: pointer.name
     Accessible.description: pointer.line
-    x: pointer.cx - 90
-    y: pointer.cy - (pointer.index === 0 ? 43 : 16)
+    // All games' name stands above its star, or beside it where the chart's top would cut it (the compact tier's first row).
+    readonly property bool above: pointer.index === 0 && pointer.cy - 43 >= 0
+    readonly property bool beside: pointer.index === 0 && !pointer.above
+    x: pointer.beside ? pointer.cx - 16 : pointer.cx - 90
+    y: pointer.cy - (pointer.above ? 43 : 16)
     width: 180
-    height: 66
+    height: pointer.beside ? 32 : 66
     Star {
         visible: pointer.inView
-        x: (pointer.width - width) / 2
-        y: pointer.index === 0 ? 27 : 0
+        x: pointer.beside ? 0 : (pointer.width - width) / 2
+        y: pointer.above ? 27 : 0
         lit: pointer.activeFocus
     }
     Text {
         objectName: "pointerName." + pointer.index
-        y: pointer.index === 0 ? 0 : 36
-        width: pointer.width
-        horizontalAlignment: Text.AlignHCenter
+        x: pointer.beside ? 40 : 0
+        y: pointer.above ? 0 : (pointer.beside ? 1.6 : 36)
+        width: pointer.beside ? pointer.width - 40 : pointer.width
+        horizontalAlignment: pointer.beside ? Text.AlignLeft : Text.AlignHCenter
         text: pointer.name
         elide: Text.ElideRight
         color: Tokens.textStrong

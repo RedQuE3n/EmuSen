@@ -194,12 +194,12 @@ ThemeScreen {
                                     ChartLine {
                                         id: walkEdge
                                         required property int index
-                                        readonly property var to: root.focused ? (walkEdge.index === 0 ? root.focused.leftItem : (walkEdge.index === 1 ? root.focused.rightItem : (walkEdge.index === 2 ? root.focused.upItem : root.focused.downItem))) : null
-                                        readonly property bool drawn: walkEdge.to !== null && (root.focused.isPointer ? !walkEdge.to.isPointer : walkEdge.to.figure !== root.focused.figure)
+                                        readonly property var to: root?.focused ? (walkEdge.index === 0 ? root.focused.leftItem : (walkEdge.index === 1 ? root.focused.rightItem : (walkEdge.index === 2 ? root.focused.upItem : root.focused.downItem))) : null
+                                        readonly property bool drawn: !!walkEdge.to && (root?.focused?.isPointer ? !walkEdge.to.isPointer : walkEdge.to.figure !== root?.focused?.figure)
                                         visible: walkEdge.drawn
                                         dashed: true
-                                        x1: root.focused ? root.focused.cx : 0
-                                        y1: root.focused ? root.focused.cy : 0
+                                        x1: root?.focused ? root.focused.cx : 0
+                                        y1: root?.focused ? root.focused.cy : 0
                                         x2: walkEdge.to ? walkEdge.to.cx : 0
                                         y2: walkEdge.to ? walkEdge.to.cy : 0
                                         ink: root.litInk

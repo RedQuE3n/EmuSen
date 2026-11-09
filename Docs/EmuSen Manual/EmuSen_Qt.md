@@ -1141,8 +1141,10 @@ recordings at 1280 × 800 and 1920 × 1200, dark and light, within two units. Si
 along the wheel walking Left (the 120 consoles' sweep heard 2). Not proved offscreen: the splash at 1, 3 and 5 s (the audit records its finished
 frame only) and the bells, which no striker rings yet. Of the canvases' catalogues, `one-console`, `empty`, `long`,
 `eleven` and `n30` read clean; `n120` and `maker40` were not run to the end, the audit's own crowd (120 consoles, 40
-under one maker) passing in their place. The dial's edges fade through the kit's `EdgeFade`: faded by opacity, a stop's
-name at the edge read 2.08:1 in `n30`.
+under one maker) passing in their place. The dial stands inside the kit's `EdgeFade` (`EmuSen_Kit.md` §7.35) and fades
+40 units to transparency at an edge it runs past, the sky showing through, on both backends. Its first form ramped the sky's
+colour over the dial, and a stop's name at the edge read 2.08:1 in `n30`; the kit's rule no longer holds words crossing a
+faded edge, and `n30` and every state offscreen read clean of it (measured 2026-11-09).
 
 ### 3.5 Loading and the sandbox
 

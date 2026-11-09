@@ -436,194 +436,193 @@ ThemeScreen {
                         height: 1
                         color: root.lineInk
                     }
-                    // The dial: the three shelves as glass discs, then a wheel per maker with a tooth per console, under a clamped camera when longer than the safe width.
-                    Flickable {
-                        id: dial
-                        objectName: "dial"
+                    // The dial's edges fade 40 to transparency where it runs on past them, the sky showing through.
+                    EdgeFade {
                         x: 64
                         y: 548
                         width: root.width - 128
                         height: 84
-                        clip: true
-                        contentWidth: Math.max(dial.width, layout.dialWidth)
-                        contentHeight: 84
-                        flickableDirection: Flickable.HorizontalFlick
-                        boundsBehavior: Flickable.StopAtBounds
-                        readonly property bool fadeLeft: dial.contentX > 0.5
-                        readonly property bool fadeRight: dial.contentX + dial.width < dial.contentWidth - 0.5
-                        Behavior on contentX {
-                            NumberAnimation {
-                                duration: Tokens.reel
-                                easing.type: Tokens.reelCurve
-                            }
-                        }
-                        // The camera centres the lit stop; the wheel may move the dial between turns.
-                        readonly property real camera: layout.camera
-                        onCameraChanged: dial.contentX = dial.camera
-                        Repeater {
-                            id: shelves
-                            model: Library.shelves
-                            onItemAdded: root.made = worlds.count + shelves.count + makers.count
-                            WheelNode {
-                                id: shelf
-                                required property int index
-                                required property string key
-                                required property string name
-                                required property string line
-                                required property int count
-                                readonly property int kind: 1
-                                readonly property real centre: (layout.dialXs[shelf.index] ?? 0) - 64
-                                objectName: "stop.shelf." + shelf.index
-                                controller: frame.controller
-                                layout: layout
-                                worlds: worlds
-                                shelves: shelves
-                                makers: makers
-                                made: root.made
-                                nodeIndex: root.count + shelf.index
-                                Accessible.name: shelf.name
-                                focus: Browse.section.length > 0 ? shelf.key === Browse.section : root.count === 0 && shelf.index === 0
-                                x: shelf.centre - 68
-                                y: 8
-                                width: 136
-                                height: 76
-                                onActivated: Actions.openPlace(shelf.key)
-                                onActiveFocusChanged: if (shelf.activeFocus) root.focused = shelf
-                                Rectangle {
-                                    x: 46
-                                    y: 0
-                                    width: 44
-                                    height: 44
-                                    radius: 22
-                                    color: root.light ? Qt.rgba(1, 1, 1, 0.5) : Qt.rgba(38 / 255, 38 / 255, 43 / 255, 0.5)
-                                    border.width: 1
-                                    border.color: root.lineInk
-                                    Glyph {
-                                        x: 11
-                                        y: 11
-                                        width: 22
-                                        height: 22
-                                        path: Marks.path(shelf.key)
-                                        ink: shelf.activeFocus ? Tokens.textStrong : Tokens.muted
-                                    }
-                                }
-                                Text {
-                                    objectName: "stopName.shelf." + shelf.index
-                                    x: 0
-                                    y: 50
-                                    width: 136
-                                    horizontalAlignment: Text.AlignHCenter
-                                    text: shelf.name
-                                    elide: Text.ElideRight
-                                    color: shelf.activeFocus ? Tokens.textStrong : Tokens.muted
-                                    font.family: faces.condensed
-                                    font.weight: Font.Medium
-                                    font.pixelSize: 19
-                                    font.letterSpacing: 1.2
-                                    font.capitalization: Font.AllUppercase
-                                    lineHeight: 22.8
-                                    lineHeightMode: Text.FixedHeight
-                                }
-                                Rectangle {
-                                    visible: shelf.activeFocus
-                                    x: 68 - 29
-                                    y: -7
-                                    width: 58
-                                    height: 58
-                                    radius: 29
-                                    color: "transparent"
-                                    border.width: Tokens.ringThickness
-                                    border.color: Tokens.accent
-                                }
-                            }
-                        }
-                        Repeater {
-                            id: makers
-                            model: Library.consoles
-                            onItemAdded: root.made = worlds.count + shelves.count + makers.count
-                            WheelNode {
-                                id: stop
-                                required property string maker
-                                required property int group
-                                required property int groupIndex
-                                required property int groupSize
-                                readonly property int kind: 2
-                                readonly property bool lit: layout.lit === root.count + 3 + stop.group
-                                readonly property real centre: (layout.dialXs[3 + stop.group] ?? 0) - 64
-                                objectName: "stop.maker." + stop.group
-                                controller: frame.controller
-                                layout: layout
-                                worlds: worlds
-                                shelves: shelves
-                                makers: makers
-                                made: root.made
-                                nodeIndex: root.count + 3 + stop.group
-                                Accessible.name: stop.maker
-                                visible: stop.groupIndex === 0
-                                activeFocusOnTab: stop.groupIndex === 0
-                                x: stop.centre - 68
-                                y: 8
-                                width: 136
-                                height: 76
-                                onActivated: if (stop.upItem) stop.upItem.forceActiveFocus()
-                                onActiveFocusChanged: if (stop.activeFocus) root.focused = stop
-                                DialWheel {
-                                    objectName: "makerWheel." + stop.group
-                                    x: 46
-                                    y: 0
-                                    teeth: stop.groupSize
-                                    inner: 17
-                                    outer: 22
-                                    toothWidth: 1.5
-                                    ring: false
-                                    hub: true
-                                    ink: stop.lit ? Tokens.textStrong : Tokens.muted
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        radius: 22
-                                        color: "transparent"
-                                        border.width: 1
-                                        border.color: stop.activeFocus ? Tokens.accent : root.lineInk
-                                    }
-                                }
-                                Text {
-                                    objectName: "stopName.maker." + stop.group
-                                    x: 0
-                                    y: 50
-                                    width: 136
-                                    horizontalAlignment: Text.AlignHCenter
-                                    text: stop.maker
-                                    elide: Text.ElideRight
-                                    color: stop.lit ? Tokens.textStrong : Tokens.muted
-                                    font.family: faces.condensed
-                                    font.weight: Font.Medium
-                                    font.pixelSize: 19
-                                    font.letterSpacing: 1.2
-                                    font.capitalization: Font.AllUppercase
-                                    lineHeight: 22.8
-                                    lineHeightMode: Text.FixedHeight
-                                }
-                                Rectangle {
-                                    visible: stop.activeFocus
-                                    x: 68 - 29
-                                    y: -7
-                                    width: 58
-                                    height: 58
-                                    radius: 29
-                                    color: "transparent"
-                                    border.width: Tokens.ringThickness
-                                    border.color: Tokens.accent
-                                }
-                            }
-                        }
-                    }
-                    // The dial's edges fade 40 into the sky where it runs on past them.
-                    EdgeFade {
-                        source: dial
                         fadeLeft: dial.fadeLeft
                         fadeRight: dial.fadeRight
                         length: 40
-                        backdrop: root.light ? "#F0E6D4" : "#10163A"
+                        // The dial: the three shelves as glass discs, then a wheel per maker with a tooth per console, under a clamped camera when longer than the safe width.
+                        Flickable {
+                            id: dial
+                            objectName: "dial"
+                            anchors.fill: parent
+                            clip: true
+                            contentWidth: Math.max(dial.width, layout.dialWidth)
+                            contentHeight: 84
+                            flickableDirection: Flickable.HorizontalFlick
+                            boundsBehavior: Flickable.StopAtBounds
+                            readonly property bool fadeLeft: dial.contentX > 0.5
+                            readonly property bool fadeRight: dial.contentX + dial.width < dial.contentWidth - 0.5
+                            Behavior on contentX {
+                                NumberAnimation {
+                                    duration: Tokens.reel
+                                    easing.type: Tokens.reelCurve
+                                }
+                            }
+                            // The camera centres the lit stop; the wheel may move the dial between turns.
+                            readonly property real camera: layout.camera
+                            onCameraChanged: dial.contentX = dial.camera
+                            Repeater {
+                                id: shelves
+                                model: Library.shelves
+                                onItemAdded: root.made = worlds.count + shelves.count + makers.count
+                                WheelNode {
+                                    id: shelf
+                                    required property int index
+                                    required property string key
+                                    required property string name
+                                    required property string line
+                                    required property int count
+                                    readonly property int kind: 1
+                                    readonly property real centre: (layout.dialXs[shelf.index] ?? 0) - 64
+                                    objectName: "stop.shelf." + shelf.index
+                                    controller: frame.controller
+                                    layout: layout
+                                    worlds: worlds
+                                    shelves: shelves
+                                    makers: makers
+                                    made: root.made
+                                    nodeIndex: root.count + shelf.index
+                                    Accessible.name: shelf.name
+                                    focus: Browse.section.length > 0 ? shelf.key === Browse.section : root.count === 0 && shelf.index === 0
+                                    x: shelf.centre - 68
+                                    y: 8
+                                    width: 136
+                                    height: 76
+                                    onActivated: Actions.openPlace(shelf.key)
+                                    onActiveFocusChanged: if (shelf.activeFocus) root.focused = shelf
+                                    Rectangle {
+                                        x: 46
+                                        y: 0
+                                        width: 44
+                                        height: 44
+                                        radius: 22
+                                        color: root.light ? Qt.rgba(1, 1, 1, 0.5) : Qt.rgba(38 / 255, 38 / 255, 43 / 255, 0.5)
+                                        border.width: 1
+                                        border.color: root.lineInk
+                                        Glyph {
+                                            x: 11
+                                            y: 11
+                                            width: 22
+                                            height: 22
+                                            path: Marks.path(shelf.key)
+                                            ink: shelf.activeFocus ? Tokens.textStrong : Tokens.muted
+                                        }
+                                    }
+                                    Text {
+                                        objectName: "stopName.shelf." + shelf.index
+                                        x: 0
+                                        y: 50
+                                        width: 136
+                                        horizontalAlignment: Text.AlignHCenter
+                                        text: shelf.name
+                                        elide: Text.ElideRight
+                                        color: shelf.activeFocus ? Tokens.textStrong : Tokens.muted
+                                        font.family: faces.condensed
+                                        font.weight: Font.Medium
+                                        font.pixelSize: 19
+                                        font.letterSpacing: 1.2
+                                        font.capitalization: Font.AllUppercase
+                                        lineHeight: 22.8
+                                        lineHeightMode: Text.FixedHeight
+                                    }
+                                    Rectangle {
+                                        visible: shelf.activeFocus
+                                        x: 68 - 29
+                                        y: -7
+                                        width: 58
+                                        height: 58
+                                        radius: 29
+                                        color: "transparent"
+                                        border.width: Tokens.ringThickness
+                                        border.color: Tokens.accent
+                                    }
+                                }
+                            }
+                            Repeater {
+                                id: makers
+                                model: Library.consoles
+                                onItemAdded: root.made = worlds.count + shelves.count + makers.count
+                                WheelNode {
+                                    id: stop
+                                    required property string maker
+                                    required property int group
+                                    required property int groupIndex
+                                    required property int groupSize
+                                    readonly property int kind: 2
+                                    readonly property bool lit: layout.lit === root.count + 3 + stop.group
+                                    readonly property real centre: (layout.dialXs[3 + stop.group] ?? 0) - 64
+                                    objectName: "stop.maker." + stop.group
+                                    controller: frame.controller
+                                    layout: layout
+                                    worlds: worlds
+                                    shelves: shelves
+                                    makers: makers
+                                    made: root.made
+                                    nodeIndex: root.count + 3 + stop.group
+                                    Accessible.name: stop.maker
+                                    visible: stop.groupIndex === 0
+                                    activeFocusOnTab: stop.groupIndex === 0
+                                    x: stop.centre - 68
+                                    y: 8
+                                    width: 136
+                                    height: 76
+                                    onActivated: if (stop.upItem) stop.upItem.forceActiveFocus()
+                                    onActiveFocusChanged: if (stop.activeFocus) root.focused = stop
+                                    DialWheel {
+                                        objectName: "makerWheel." + stop.group
+                                        x: 46
+                                        y: 0
+                                        teeth: stop.groupSize
+                                        inner: 17
+                                        outer: 22
+                                        toothWidth: 1.5
+                                        ring: false
+                                        hub: true
+                                        ink: stop.lit ? Tokens.textStrong : Tokens.muted
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: 22
+                                            color: "transparent"
+                                            border.width: 1
+                                            border.color: stop.activeFocus ? Tokens.accent : root.lineInk
+                                        }
+                                    }
+                                    Text {
+                                        objectName: "stopName.maker." + stop.group
+                                        x: 0
+                                        y: 50
+                                        width: 136
+                                        horizontalAlignment: Text.AlignHCenter
+                                        text: stop.maker
+                                        elide: Text.ElideRight
+                                        color: stop.lit ? Tokens.textStrong : Tokens.muted
+                                        font.family: faces.condensed
+                                        font.weight: Font.Medium
+                                        font.pixelSize: 19
+                                        font.letterSpacing: 1.2
+                                        font.capitalization: Font.AllUppercase
+                                        lineHeight: 22.8
+                                        lineHeightMode: Text.FixedHeight
+                                    }
+                                    Rectangle {
+                                        visible: stop.activeFocus
+                                        x: 68 - 29
+                                        y: -7
+                                        width: 58
+                                        height: 58
+                                        radius: 29
+                                        color: "transparent"
+                                        border.width: Tokens.ringThickness
+                                        border.color: Tokens.accent
+                                    }
+                                }
+                            }
+                        }
                     }
                     Track {
                         objectName: "dialTrack"

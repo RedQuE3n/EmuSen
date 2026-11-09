@@ -272,6 +272,26 @@ impl Tree {
         }
     }
 
+    /// Leaves a text out of the contrast rule, its legibility forgotten: words a state does not judge, as a reason names.
+    pub fn not_judged(&mut self, index: u32) {
+        if let Some(item) = find_mut(&mut self.root, index) {
+            item.legibility = None;
+        }
+    }
+
+    /// The numbers of an item and every item under it.
+    pub fn under(&self, index: u32) -> Vec<u32> {
+        let mut ids = vec![self.nodes[index as usize].id.as_str()];
+        let mut found = vec![index];
+        for (i, node) in self.nodes.iter().enumerate().skip(index as usize + 1) {
+            if ids.contains(&node.parent.as_str()) {
+                ids.push(node.id.as_str());
+                found.push(i as u32);
+            }
+        }
+        found
+    }
+
     pub fn from_json(json: &str) -> Result<Tree, String> {
         let nodes: Vec<Node> = serde_json::from_str(json).map_err(|e| format!("the tree's JSON: {e}"))?;
         let mut children: HashMap<&str, Vec<usize>> = HashMap::new();

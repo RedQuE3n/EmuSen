@@ -165,7 +165,26 @@ THE LOADED STEP
                     title is drawn only beside its cover
         contrast    words under 4.5:1 (3:1 large) against what the
                     grab shows behind them, in that state's variant
-                    and size; the line gives the ratio and the text
+                    and size; the line gives the ratio and the text.
+                    One kind of words is not judged. A place the
+                    host declines (available false), found by the
+                    name a reader hears, is an inactive component,
+                    whose words WCAG 2.2's 1.4.3 exempts ("Text or
+                    images of text that are part of an inactive user
+                    interface component ... have no contrast
+                    requirement"; https://www.w3.org/TR/WCAG22/,
+                    read 2026-11-09), but only while it is drawn
+                    apart from its offered look: the place is read
+                    declined, then offered (Library.show_declined,
+                    the focus on it both times), on a grid of points
+                    a design unit apart or less, and some point must
+                    change by 3:1, the ratio 2.4.13 asks between the
+                    same pixels of two states; else the line reads
+                    "a declined place drawn as if offered" and its
+                    words stay judged. 2.4.13's area (a perimeter 2
+                    CSS pixels thick) is not asked: words dimmed to
+                    38% in a 480 x 56 row change about 2% of it, the
+                    ring 7.9%. No other dim words are exempt.
         motion      a screen not still under reduced motion
         load        the host could not place the screen: the engine's
                     and the sandbox's words, a line each
@@ -296,7 +315,9 @@ STATES
                 answers as A, while the state is judged and recorded
     disabled    Home with the Scraper declined by the host (its row's
                 available false) and the focus walked to it by the
-                pad along the walk's own presses
+                pad along the walk's own presses; its words are held
+                to contrast only if it is drawn as if offered
+                (contrast, above)
     splash-1s   the splash with motion allowed and every animation's
                 clock held 1 s after it is placed
     splash-3s   the same at 3 s

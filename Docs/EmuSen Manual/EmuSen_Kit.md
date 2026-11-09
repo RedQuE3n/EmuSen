@@ -2171,3 +2171,27 @@ theme-audit records a theme's splash at a stated time and a screen with A held (
 Proof, measured 2026-11-09: theme-audit's `state-splash` fixture, a wordmark past the right edge from 2.5 s to 3.5 s, is
 found at 3 s alone and its pictures at 1 s and 5 s are equal and differ from 3 s's (`qt_3_7_a_splash_is_held_at_1_3_and_5_s_and_judged_at_each`);
 `state-pressed`'s row grown by a held Return overlaps its neighbour in the pressed state alone.
+
+### 7.38 A declined place under the contrast rule (theme-audit; 2026-11-09)
+
+**A declined place.** The harness has exempted a disabled control's words since §7.10 (`enabled` false), as WCAG 2.2's
+1.4.3 exempts "text or images of text that are part of an inactive user interface component" (https://www.w3.org/TR/WCAG22/,
+read 2026-11-09). A place the host declines is not disabled in Qt's sense: the pad still walks to it, so a theme draws it
+dim (every theme at 38%) with `enabled` true, and theme-audit's `disabled` state held its words to 4.5:1 (S6's survey:
+Meridian, Constellation and Orrery 20 lines each, the Scraper's name and line at 1.8 to 3.2:1). Decided 2026-11-09: such a
+place is exempt, and nothing else is. theme-audit finds the declined places by the name a reader hears (`place_name`, the
+state's keys), and exempts the words under each only when it is drawn apart from its offered look: the place's box is read
+on a grid (`grid`, about 10,000 points, a design unit apart or less), declined and then offered through the theme's own
+surface (`Library.show_declined`, which changes the rows in place, so the delegates and the focus on the place stay), and
+some point must change by 3:1 (kit-core's `STATE_CHANGE`, `changed_share`), the ratio WCAG 2.2's 2.4.13 asks "between
+the same pixels in the focused and unfocused states". A place drawn as if offered keeps the rule and is a finding of its
+own. 2.4.13's area, "a 2 CSS pixel thick perimeter of the unfocused component", is not asked, and why: words dimmed to 38%
+change about 2% of a 480 × 56 row, where the ring is 7.9%, so the area would name every theme's dim look as no look; it is
+written for a focus indicator, which must be found, not for a state that is read on the place itself. Any changed point
+is weak against a design that changes one dot; the grid's spacing and the two pictures differing in nothing else (the
+same focus, the views at rest) keep stray pixels out.
+
+Held to by theme-audit's test over a fixture, with its seeded faults reverted. `state-declined`: Home's places
+as rows, the declined row's words at 38% and the last row's (Power, offered) at 38%; in the default and the `disabled`
+state, at every size and variant, Power alone is found. The declined picture compared with itself (nothing changes)
+failed it (the Scraper drawn as if offered and found low); every text exempted failed it (Power no longer found).

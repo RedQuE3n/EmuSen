@@ -259,6 +259,22 @@ fn qt_3_7_a_splash_is_held_at_1_3_and_5_s_and_judged_at_each() {
 }
 
 #[test]
+fn qt_3_7_a_declined_place_drawn_apart_is_exempt_and_a_dim_offered_one_is_not() {
+    let (out, status) = audit_states("state-declined", "default,disabled", None);
+    assert_eq!(status, 1, "{out}");
+    // Power, offered with its words at 38%, is low in both states; the Scraper, declined at 38% and so told apart, never is.
+    assert!(out.lines().all(|l| l.contains("state-declined/screens/Home.qml:1 contrast ") && l.contains("\"Power\"")), "{out}");
+    for state in ["", ", disabled"] {
+        for size in ["1280x800", "1920x1200", "1920x1080", "1280x720", "3840x2160"] {
+            for variant in ["dark", "light"] {
+                let want = format!("contrast {size} {variant}{state}: low contrast");
+                assert!(out.lines().any(|l| l.contains(&want)), "{want}\n{out}");
+            }
+        }
+    }
+}
+
+#[test]
 fn qt_3_7_states_list_and_an_unknown_one_is_refused() {
     let out = Command::new(PROGRAM).arg("--list-states").output().expect("theme-audit runs");
     let listed = String::from_utf8_lossy(&out.stdout).into_owned();

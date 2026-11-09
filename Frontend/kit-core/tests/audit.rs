@@ -2,7 +2,7 @@
 
 use emusen_kit_core::audit::{
     Axes, DESKTOP_CAPS, Edge, Edges, Fault, Item, Kind, Legibility, Rect, Side, State, TWO_ROWS, Text, check, contrast, fit, named,
-    no_chrome, pad_reach, palette_reach, pointer_reach, reached, smallest_capitals,
+    no_chrome, pad_reach, palette_reach, pointer_reach, reached, smallest_capitals, STATE_CHANGE, changed_share,
 };
 use emusen_kit_core::input::{ElementId, UiButton, WalkForm};
 use emusen_kit_core::tokens::{Colour, ColourToken, Variant, colour};
@@ -392,4 +392,20 @@ fn a_fault_reads_as_one_line() {
         Fault::OutsidePalette { item: id(20), colour: Colour::hex("#007ACC") }.to_string(),
         "a colour outside the palette on 20: #007ACC"
     );
+}
+
+#[test]
+fn kit_7_38_a_declined_place_is_told_apart_by_3_to_1_between_the_same_points() {
+    let (light, dim) = (Colour::rgb(0xD4, 0xD4, 0xD4), Colour::rgb(0x61, 0x61, 0x62));
+    let back = Colour::rgb(0x1B, 0x1B, 0x1E);
+    assert!(light.contrast(dim) >= STATE_CHANGE && Colour::rgb(0x8D, 0x8D, 0x91).contrast(dim) < STATE_CHANGE);
+    // Ten points, two of them words that dim from light to 38%; one read in only one picture is left out.
+    let mut enabled = vec![Some(back); 10];
+    let mut declined = vec![Some(back); 10];
+    (enabled[3], declined[3], enabled[4], declined[4]) = (Some(light), Some(dim), Some(light), Some(dim));
+    assert_eq!(changed_share(&enabled, &declined), 0.2);
+    declined[9] = None;
+    assert_eq!(changed_share(&enabled, &declined), 2.0 / 9.0);
+    assert_eq!(changed_share(&enabled, &enabled), 0.0, "the same picture is not told apart");
+    assert_eq!(changed_share(&[], &[]), 0.0);
 }

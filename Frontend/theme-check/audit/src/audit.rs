@@ -209,11 +209,13 @@ struct Pass<'a> {
     press: bool,
     /// The animation clock is held, so nothing moves and the picture is taken without waiting for rest.
     held: bool,
+    /// The places the host declines, by key and by the name a reader hears: exempt from the words' contrast when drawn apart.
+    declined: &'a [(&'a str, String)],
 }
 
 impl<'a> Pass<'a> {
     fn plain(variants: &'a [Variant], label: &'a str, consoles: Option<&'a [String]>) -> Pass<'a> {
-        Pass { variants, label, consoles, focus: None, press: false, held: false }
+        Pass { variants, label, consoles, focus: None, press: false, held: false, declined: &[] }
     }
 }
 
@@ -245,7 +247,7 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
                 scene.key_hold(RETURN, true);
             }
             // Reach and pointer are the walk's tree's, whose numbers the walk's edges name; the rest are judged on what is shown.
-            let held_tree = (pass.focus.is_some() || pass.press).then(|| {
+            let mut held_tree = (pass.focus.is_some() || pass.press).then(|| {
                 if !pass.held {
                     scene.rest();
                 }
@@ -254,6 +256,13 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
                 scene.sample_behind(&mut shown, f64::from(w), f64::from(h));
                 shown
             });
+            let measures = Measures::of(WalkForm::BigScreen, f64::from(h));
+            if !pass.declined.is_empty() {
+                let judged = held_tree.as_mut().unwrap_or(&mut tree);
+                for words in declined_places(scene, id, judged, pass.declined, (f64::from(w), f64::from(h))) {
+                    lines.add(screen, "contrast", &format!("{w}x{h} {name}: {words}"));
+                }
+            }
             let seen = held_tree.as_ref().unwrap_or(&tree);
             let shown = scene.focus(seen).map(ElementId);
             // The splash is watched, not operated: nothing on it is clicked, whatever stands at its centre.
@@ -264,7 +273,6 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             } else {
                 reached(focus, &walked)
             };
-            let measures = Measures::of(WalkForm::BigScreen, f64::from(h));
             let panel = Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
             let smallest = measures.floor * audit::DESKTOP_CAPS * measures.unit;
             let reach = if pass.consoles.is_some() { Vec::new() } else { pad_reach(&tree.root, focus, &walked) };
@@ -523,7 +531,8 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Vec<String>,
                 Some(ms) => held(&mut scene, &real, screen, (&library, &view, &session), ms, &label, (state, section, &overrides), &mut lines),
                 None => {
                     let fed = Fed { session: &session, declined: asked_state.declined, reduced: true };
-                    let pass = Pass { focus: focus.as_deref(), press: asked_state.press, ..Pass::plain(&both, &label, None) };
+                    let declined: Vec<(&str, String)> = asked_state.declined.iter().filter_map(|&key| place_name(&view, key).map(|name| (key, name))).collect();
+                    let pass = Pass { focus: focus.as_deref(), press: asked_state.press, declined: &declined, ..Pass::plain(&both, &label, None) };
                     match placed(&mut scene, &real, screen, |id| feed(id, &library, &view, &fed, &overrides, section)) {
                         Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
                         Ok(id) => lines.guarded(screen, |lines| {
@@ -594,6 +603,65 @@ fn held(
         }
         scene.hold_clock(None);
     }
+}
+
+/// Each declined place on the screen, by the name a reader hears, drawn apart from its offered look: its words are left out
+/// of the contrast rule, as WCAG's 1.4.3 exempts an inactive component's. Apart is a point of its box whose colour changes by
+/// 3:1 between the place declined and the place offered, the focus on it in both (man theme-check). A place drawn as if
+/// offered keeps the rule and is a finding, in words, a line each.
+fn declined_places(scene: &mut Scene<'_>, screen: u64, tree: &mut Tree, declined: &[(&str, String)], size: (f64, f64)) -> Vec<String> {
+    let places: Vec<u32> = tree.operable().into_iter().filter(|&i| declined.iter().any(|(_, name)| *name == spoken(tree, i))).collect();
+    if places.is_empty() {
+        return Vec::new();
+    }
+    let grids: Vec<Vec<(f64, f64)>> = places.iter().map(|&i| grid(&tree.nodes[i as usize], size)).collect();
+    let points: Vec<(f64, f64)> = grids.concat();
+    let was = scene.colours_at(&points);
+    let offered = |keys: &[String]| host::library(object(screen)).map(|mut library| library.as_mut().show_declined(keys));
+    if offered(&[]).is_none() {
+        return vec!["EmuSen.Theme's Library is not in the theme's engine".to_owned()];
+    }
+    scene.rest();
+    let enabled = scene.colours_at(&points);
+    offered(&declined.iter().map(|(key, _)| (*key).to_owned()).collect::<Vec<_>>());
+    scene.rest();
+    let mut words = Vec::new();
+    let mut at = 0;
+    for (&place, points) in places.iter().zip(&grids) {
+        let span = at..at + points.len();
+        at = span.end;
+        if audit::changed_share(&was[span.clone()], &enabled[span]) > 0.0 {
+            for index in tree.under(place) {
+                tree.not_judged(index);
+            }
+        } else {
+            let place = described(tree, ElementId(place));
+            words.push(format!("a declined place drawn as if offered: no point of it changes by {}:1 from its offered look ({place})", audit::STATE_CHANGE));
+        }
+    }
+    words
+}
+
+/// Points over an item's box inside the window, about ten thousand at most and at least a pixel apart: a design unit apart
+/// or less at the five sizes for a place up to 480 by 56, finer than a word's stroke.
+fn grid(node: &emusen_qt_test::tree::Node, (width, height): (f64, f64)) -> Vec<(f64, f64)> {
+    let (x0, y0) = (node.x.max(0.0), node.y.max(0.0));
+    let (x1, y1) = ((node.x + node.w).min(width), (node.y + node.h).min(height));
+    if x1 <= x0 || y1 <= y0 {
+        return Vec::new();
+    }
+    let step = ((x1 - x0) * (y1 - y0) / 10_000.0).sqrt().max(1.0);
+    let mut points = Vec::new();
+    let mut y = y0 + step / 2.0;
+    while y < y1 {
+        let mut x = x0 + step / 2.0;
+        while x < x1 {
+            points.push((x, y));
+            x += step;
+        }
+        y += step;
+    }
+    points
 }
 
 #[cfg(test)]

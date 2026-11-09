@@ -15,6 +15,8 @@ void harness_wheel(QObject& window, double x, double y, int delta);
 void harness_wait(int ms);
 void harness_keep_messages();
 QString harness_messages();
+void harness_watch_dirty(bool on);
+QString harness_dirty();
 std::uint64_t harness_focus(QObject& window);
 bool harness_focus_item(QObject& window, std::uint64_t id);
 double harness_get(QObject& window, std::uint64_t id, const QString& property);

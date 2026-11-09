@@ -21,6 +21,10 @@ pub mod ffi {
         fn harness_wait(ms: i32);
         fn harness_keep_messages();
         fn harness_messages() -> QString;
+        /// Keeps Qt's account of each frame's dirty items (its `qt.quick.dirty` log) from now, or stops; either clears it.
+        fn harness_watch_dirty(on: bool);
+        /// The kept account, one line a frame's start and one an item, emptied as read.
+        fn harness_dirty() -> QString;
         fn harness_focus(window: Pin<&mut QObject>) -> u64;
         fn harness_focus_item(window: Pin<&mut QObject>, id: u64) -> bool;
         fn harness_get(window: Pin<&mut QObject>, id: u64, property: &QString) -> f64;

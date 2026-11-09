@@ -20,6 +20,22 @@ use crate::tree::Tree;
 /// How long a view may take to come to rest before a state is refused: over twelve of the longest motion token's steps (Reel, 400 ms).
 pub const SETTLE_MS: i32 = 5000;
 
+/// Qt's `qt.quick.dirty` account of a span, one entry a synced frame: the items it found dirty and why, or none.
+fn dirty_items(log: &str) -> String {
+    let mut frames: Vec<Vec<&str>> = Vec::new();
+    for line in log.lines() {
+        match line.strip_prefix("QSGNode: ") {
+            Some(item) => frames.last_mut().map_or((), |f| f.push(item)),
+            None => frames.push(Vec::new()),
+        }
+    }
+    let each: Vec<String> = frames.iter().map(|f| if f.is_empty() { "[no item]".to_owned() } else { format!("[{}]", f.join(", ")) }).collect();
+    if each.is_empty() { "no frame synced".to_owned() } else { each.join(" ") }
+}
+
+/// The scene's clock, where it has one: the object and property whose new minute `assert_still` reads as a change.
+pub const CLOCK: (&str, &str) = ("clock", "time");
+
 /// `PathView.StrictlyEnforceRange`: the current item held in the highlight range, so the offset follows the current index.
 const STRICTLY_ENFORCE_RANGE: f64 = 2.0;
 
@@ -263,19 +279,33 @@ impl Scene<'_> {
         ffi::harness_running(self.window()).to_string().lines().map(str::to_owned).collect()
     }
 
-    /// Once every animation has stopped (within `SETTLE_MS`), the window swaps no frame for two seconds (EmuSen_Qt.md §9.3.2).
+    /// Once every animation has stopped (within `SETTLE_MS`), the window swaps no frame for two seconds; a span in which the
+    /// scene's clock read a new minute is measured once more, since that minute is a change (EmuSen_Qt.md §9.3.2).
     pub fn assert_still(&mut self, what: &str) {
-        let mut waited = 0;
-        while !self.running().is_empty() && waited < SETTLE_MS {
-            self.wait(50);
-            waited += 50;
+        for again in [false, true] {
+            let mut waited = 0;
+            while !self.running().is_empty() && waited < SETTLE_MS {
+                self.wait(50);
+                waited += 50;
+            }
+            let minute = self.property(CLOCK.0, CLOCK.1);
+            self.wait(100);
+            ffi::harness_watch_dirty(true);
+            let before = self.frames();
+            self.wait(2000);
+            let swapped = self.frames() - before;
+            let dirty = dirty_items(&ffi::harness_dirty().to_string());
+            ffi::harness_watch_dirty(false);
+            let running = self.running();
+            if swapped == 0 && running.is_empty() {
+                return;
+            }
+            let ticked = self.property(CLOCK.0, CLOCK.1) != minute;
+            assert!(
+                ticked && !again,
+                "{what}: {swapped} frames swapped in 2 s with nothing changing; running: {running:?}; dirty, as Qt synced them: {dirty}"
+            );
         }
-        self.wait(100);
-        let before = self.frames();
-        self.wait(2000);
-        let swapped = self.frames() - before;
-        let running = self.running();
-        assert!(swapped == 0 && running.is_empty(), "{what}: {swapped} frames swapped in 2 s with nothing changing; running: {running:?}");
     }
 
     pub fn grab(&mut self, path: &str) -> bool {

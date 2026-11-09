@@ -1122,8 +1122,8 @@ step, a Qt program of its own that `theme-check` runs as a process on a package 
 back as findings (decided 2026-11-08: the dev module links `theme-check`, whose fence forbids Qt). `theme-check` finds it through
 `EMUSEN_THEME_AUDIT` or `PATH`, and does not run without it unless `--static` is given; `--state DIR` passes through. Its parts, one
 job each: `world.rs`, the synthetic library read through the real clients; `crowd.rs`, a `LibrarySource` adding consoles to the
-clients' answers up to 120; `audit.rs`, placing, feeding and judging; `glue.rs` with `cpp/audit_glue.cpp`, the one C++ function
-(`QQmlEngine::singletonInstance` of the kit, which cxx-qt-lib does not bind). Its new dependencies are stated in its manifest: the
+clients' answers up to 120; `audit.rs`, placing, feeding and judging. It has no C++ of its own: the kit's `Tokens` of a theme's engine is found
+through `emusen-theme-qt`'s `host::kit_tokens`, the one owner of that lookup. Its new dependencies are stated in its manifest: the
 host, `EmuSen.Theme`, the models, the harness and the clients' test world; the static crates gain none.
 
 **How a screen is judged.** Each screen the package lists is placed through `ThemeHost.place()` in a fresh engine, as `ThemeHost.qml`
@@ -3209,6 +3209,29 @@ at the Pause Card).
 `Timer` pumping the pad router while it had the focus, waking the GUI thread 125 times a second at an idle screen. It drew
 nothing, but it woke the thread for nothing; the timers now run only while `PadRouter.pending` (an event waiting or a
 button held), `EmuSen_Kit.md` §7.25.
+
+**A new minute is a change (measured on 2026-11-08).** A landing's acceptance run failed once with "the List card in
+place: 1 frames swapped in 2 s with nothing changing; running: []". Offscreen, under the List card, setting the
+reference theme's feed clock (`feed.reference`'s `clock`, which reaches `Device.clock`) swapped one frame each of four
+times, and grabs before and after the span were identical to the pixel: Home's status line, hidden under the grid, took
+the new time, and Qt renders a frame for any item marked dirty, visible or not. The program's `Clock` ticks every 15 s and
+changes `time` only at a new minute, so about one span in 30 holds such a frame (2 s of every 60), and the acceptance's
+four spans about one run in eight; the C# Home's `clock.line` read the same clock. It is a real change, one frame a
+minute, so the rule accounts for it rather than the screens hiding it: `Scene::assert_still` reads the scene's clock
+(`harness::CLOCK`, the object `clock` and its `time`; a scene without one reads empty and is unaffected) before the settle
+and after the span, and a span that swapped while the clock read a new minute is measured once more, and only once.
+`qt-test/tests/still.rs` holds the rule over a fixture: a change without a new minute fails, one with a new minute
+passes, and a second change in the second span fails though the first had a new minute. A probe of 32 spans under the
+List card across 18:49 to 18:50 passed every span.
+
+A failed span now says what drew. While a span is measured the harness turns on Qt's own `qt.quick.dirty` log, which
+names each item the scene graph synced and why, and keeps those lines from the output; the failure lists them, one
+bracket a synced frame, `[no item]` where a frame was drawn with nothing dirty (a frame finishing late, or an expose).
+Under the List card the clock's frame reads `[QQuickText(name="homeStatus", ...) Size|Content]`, Home's status line.
+On Vulkan in the test's own compositor (RX 6800, 2026-11-08) the acceptance passed whole, and a probe of 34 spans of Home
+over the suspended game across 19:09 to 19:10, in which Continue's words went from "Paused just now" to "Paused 1 minute
+ago", passed every span: the reference theme says the paused game's words again only when `Device.clock` reads a new
+minute, so that change is the clock's.
 
 #### 9.3.3 Play to the first picture on a hosted core **[M 2026-11-08]**
 

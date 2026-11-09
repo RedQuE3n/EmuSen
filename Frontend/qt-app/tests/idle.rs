@@ -32,8 +32,9 @@ fn the_screens_render_nothing_once_the_focus_settles() {
     scene.pad(UiButton::Accept);
     assert_eq!(scene.property("screens", "shown"), "Consoles");
     scene.assert_still("Choose a console");
-    moves_then_stills(&mut scene, UiButton::Down, "Choose a console, Down to the first planet");
-    moves_then_stills(&mut scene, UiButton::Right, "Choose a console, Right along the row");
+    moves_then_stills(&mut scene, UiButton::Up, "Choose a console, Up to the nearest place");
+    moves_then_stills(&mut scene, UiButton::Down, "Choose a console, Down to the nearest console");
+    moves_then_stills(&mut scene, UiButton::Right, "Choose a console, Right along the orbit");
 
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "screens", "shown", "Grid", 1000);

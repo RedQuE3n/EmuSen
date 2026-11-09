@@ -22,13 +22,10 @@ const STATES: [(&str, &str); 2] = [("system", "system"), ("gamelist", "gamelist-
 
 /// Boxes off the C#'s, measured on 2026-11-09 and named in EmuSen_Qt.md §4.8.6: (theme, state, the spec's key), at both
 /// sizes. An entry no longer seen fails, so the list cannot outlive its findings.
-const NAMED_BOXES: [(&str, &str, &str); 22] = [
+const NAMED_BOXES: [(&str, &str, &str); 18] = [
     ("art-book-next-es-de", "system", "clock_clock"),
     ("art-book-next-es-de", "system", "systemstatus_system-status"),
     ("art-book-next-es-de", "system", "helpsystem_help-system-view"),
-    ("art-book-next-es-de", "gamelist-1", "datetime_releasedate"),
-    ("art-book-next-es-de", "gamelist-1", "text_players"),
-    ("art-book-next-es-de", "gamelist-1", "text_play-time"),
     ("art-book-next-es-de", "gamelist-1", "systemstatus_system-status"),
     ("art-book-next-es-de", "gamelist-1", "helpsystem_help-gamelist-view"),
     ("artflix-revisited-es-de", "system", "systemstatus_(default)"),
@@ -42,21 +39,16 @@ const NAMED_BOXES: [(&str, &str, &str); 22] = [
     ("caralt-es-de", "system", "helpsystem_help"),
     ("caralt-es-de", "system", "systemstatus_menustatus"),
     ("caralt-es-de", "gamelist-1", "image_marquee"),
-    ("caralt-es-de", "gamelist-1", "text_player2"),
     ("caralt-es-de", "gamelist-1", "helpsystem_help"),
     ("caralt-es-de", "gamelist-1", "systemstatus_menustatus"),
 ];
 
 /// States whose MAE is above the C# painter's, measured on 2026-11-09 and named in EmuSen_Qt.md §4.8.6: (theme, state,
 /// width, the measured figure as a ceiling). A state above its ceiling fails, and one back under the C#'s fails too.
-const NAMED_MAE: [(&str, &str, i32, f64); 7] = [
-    ("art-book-next-es-de", "system", 1280, 2.16),
-    ("art-book-next-es-de", "system", 1920, 1.61),
-    ("art-book-next-es-de", "gamelist-1", 1280, 3.82),
-    ("art-book-next-es-de", "gamelist-1", 1920, 3.53),
-    ("artflix-revisited-es-de", "system", 1280, 7.49),
-    ("artflix-revisited-es-de", "system", 1920, 7.63),
-    ("caralt-es-de", "system", 1280, 26.64),
+const NAMED_MAE: [(&str, &str, i32, f64); 3] = [
+    ("artflix-revisited-es-de", "system", 1280, 7.42),
+    ("artflix-revisited-es-de", "system", 1920, 7.36),
+    ("caralt-es-de", "system", 1280, 26.40),
 ];
 
 fn repo() -> PathBuf {
@@ -271,6 +263,7 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
                 let qt = qt_boxes(&tree.nodes, unit);
                 let (off, noted) = rects(&spec, &qt);
                 for (key, what) in &off {
+                    eprintln!("{at}: off: {key} {what}");
                     match NAMED_BOXES.iter().position(|(t, s, k)| *t == theme && *s == state && k == key) {
                         Some(i) => boxes_seen[i] = true,
                         None => failures.push(format!("{at}: {key} {what}")),

@@ -36,6 +36,12 @@ Item {
     property real repeatAt: 0
     property real scrollY: 0
     property real scrollOpacity: 1
+    // A fixed line's pitch, and the lines' height at it (one for no words): Qt's contentHeight adds a descent to a fixed height.
+    readonly property real pitch: root.lineSpacing > 0 ? root.px * root.lineSpacing : 0
+    readonly property real laidHeight: root.pitch > 0 ? Math.max(1, label.lineCount) * root.pitch : label.contentHeight
+    // Each fixed line holds the face's own line centred, as ES-DE draws it (EmuSen_Qt.md §4.8.6).
+    readonly property real halfLeading: root.pitch > 0 ? (root.pitch - metrics.height) / 2 : 0
+    readonly property real alignedY: root.pitch <= 0 || root.scrollVertical || root.vAlign === TextBlock.Align.Start ? 0 : Math.max(0, root.vAlign === TextBlock.Align.End ? root.height - root.laidHeight : (root.height - root.laidHeight) / 2)
     readonly property alias contentWidth: label.contentWidth
     readonly property alias contentHeight: label.contentHeight
     readonly property string family: label.font.family
@@ -43,6 +49,10 @@ Item {
     // The words' laid-out extent, once per change of it, for the scene's measured().
     signal measured(real width, real height)
 
+    FontMetrics {
+        id: metrics
+        font: label.font
+    }
     FontLoader {
         id: face
         source: root.fontSource
@@ -71,21 +81,21 @@ Item {
         Text {
             id: label
             x: -root.scrollX
-            y: -root.scrollY
+            y: root.alignedY + root.halfLeading - root.scrollY
             width: root.width
             height: root.scrollVertical ? undefined : root.height
             text: root.text
             color: root.color
             font.family: face.status === FontLoader.Ready ? face.font.family : body.font.family
             font.styleName: face.status === FontLoader.Ready ? face.font.styleName : body.font.styleName
-            font.pixelSize: Math.max(1, root.px)
+            font.pixelSize: Math.max(1, Math.round(root.px))
             lineHeightMode: root.lineSpacing > 0 ? Text.FixedHeight : Text.ProportionalHeight
             lineHeight: root.lineSpacing > 0 ? root.px * root.lineSpacing : 1
             wrapMode: root.wrap ? Text.WordWrap : Text.NoWrap
             elide: root.ellipsis && !root.scrolling ? Text.ElideRight : Text.ElideNone
             horizontalAlignment: root.scrolling && !root.scrollVertical ? Text.AlignLeft : root.hAlign === TextBlock.Align.End ? Text.AlignRight : root.hAlign === TextBlock.Align.Center ? Text.AlignHCenter : Text.AlignLeft
-            verticalAlignment: root.vAlign === TextBlock.Align.End ? Text.AlignBottom : root.vAlign === TextBlock.Align.Start ? Text.AlignTop : Text.AlignVCenter
-            onContentSizeChanged: root.measured(label.contentWidth, label.contentHeight)
+            verticalAlignment: root.pitch > 0 || root.vAlign === TextBlock.Align.Start ? Text.AlignTop : root.vAlign === TextBlock.Align.End ? Text.AlignBottom : Text.AlignVCenter
+            onContentSizeChanged: root.measured(label.contentWidth, root.laidHeight)
         }
         Text {
             visible: root.repeatAt > 0

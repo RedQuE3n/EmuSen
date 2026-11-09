@@ -2230,6 +2230,37 @@ definition.
 | a picture's saturation halved (`values.rs`) | six states' MAE above their ceilings or the C#'s (Art Book Next's gamelist 3.77 → 8.80), and eight corpus columns up |
 | `image.color` marked `later:` in `mapping.tsv` | 70 corpus rows: unsupported up by one |
 
+**The findings closed, 2026-11-09.** Decided 2026-11-09: the switch waits on every one of the seven states above the
+C# painter, not a chosen few, and the zIndex tie keeps first definition (no new evidence). Each finding below was
+proved on the captures before it was changed, in the painter and the scene rather than the theme; the figures are the
+oracle's after each step, measured on 2026-11-09 on lavapipe (Mesa's Vulkan on the CPU, which agreed with the RX 6800
+within 0.01 on all twelve grabs); the final figures are the RX 6800's.
+
+1. **Art Book Next: the logo, the rows and the metadata.**
+   - *The logo* was not 3 px narrower in its box: `Picture.qml` asked no decode size of a picture drawn nearest, and
+     THEMES.md's `interpolation` defaults to nearest, so the SVG was rasterised at its own 264 × 65 and scaled 2.7 times
+     (blocks of 3 px along its edges at 4× zoom; Qt's `sourceSize` read 0 × 0 in a probe of the run). THEMES.md:
+     interpolation "has limited effect on scalable vector graphics (SVG) images unless rotation is applied", so a vector
+     picture is decoded at its box whatever the interpolation, which only samples it. The width asked is the box's
+     rounded, not its ceiling: 704.00002 asked 705, decoded 705 × 174 and drew it resampled into 704 × 173.3. The
+     logo's own box went from 5.08 to 2.76 (C# 3.85).
+   - *The rows* sat 7 px low: THEMES.md's selector bar "is expanded downwards" from its row, and the name is centred in
+     that band, so the band starts at the row's top rather than being centred in the pitch (`TextListView.qml`). ES-DE's
+     selected band measured rows 266–311 for the row starting at 266.67, Qt's 273–318; the first name's ink is now
+     221–242 against ES-DE's 220–241 and the C#'s 221–242.
+   - *The metadata texts* were 28.3 high where the C# held 23.3: Qt's `contentHeight` of a `Text.FixedHeight` line adds
+     the face's descent to the fixed height (23.33 measured 28.33 in a `qml` probe of Mulish at 23 px). A fixed line's
+     height is now its pitch, `px × lineSpacing` a line (one for no words), and each line holds the face's own
+     (ascent + descent) centred, the rule the C# `FontLayout` draws by (`TextBlock.qml`). The description's first line
+     moved from rows 566 to 572 (ES-DE 572), the release date's from 628 to 627 (ES-DE 626). A carousel's words wrap,
+     as the C# painter's did: on one line, `mapping.rs` found carousel `lineSpacing` 1 and 2.5 painting the same pixels.
+   - *A text's pixel size* is rounded: QML's `font.pixelSize` is an integer and truncated 23.9 to 23, which drew CarAlt's
+     second players' text 2.6 units narrower than ES-DE's ink (57 against 60 px at 1280 × 800).
+   - Art Book Next after this step: system 0.95 and 0.34 (C# 1.06, 0.34), gamelist 2.46 and 1.97 (C# 2.61, 2.00), all
+     four unnamed; the release date, players and play time boxes and CarAlt's second players' text are within two units.
+   - Seeded fault: a vector picture drawn nearest left at its own size again; caught as Art Book Next's system state at
+     2.11 and 1.56, above the C#'s, at both sizes.
+
 ---
 
 ## 5. The stable developer surface

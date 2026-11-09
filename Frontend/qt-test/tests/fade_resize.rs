@@ -8,15 +8,19 @@ use emusen_qt_test::Harness;
 
 const SCENE: &str = "qrc:/qt/qml/EmuSen/Scenes/qml/FadeResizeScene.qml";
 
+#[cfg(target_env = "gnu")]
 extern "C" {
     fn mallopt(param: i32, value: i32) -> i32;
 }
 
 // glibc's M_PERTURB: freed memory filled with a byte, so a call into a deleted listener faults on every run, not only some.
+#[cfg(target_env = "gnu")]
 const M_PERTURB: i32 = -6;
 
 #[test]
 fn qt_kit_7_35_an_edge_fade_survives_its_edge_turning_off_in_a_resize() {
+    // Elsewhere the test still runs, catching the fault only when freed memory happens to be reused.
+    #[cfg(target_env = "gnu")]
     assert_eq!(unsafe { mallopt(M_PERTURB, 0xA5) }, 1);
     let gpu = std::env::var_os("EMUSEN_QT_GPU").is_some();
     let _kwin = gpu.then(|| {

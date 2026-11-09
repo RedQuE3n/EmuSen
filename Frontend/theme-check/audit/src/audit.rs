@@ -183,6 +183,9 @@ fn still(scene: &mut Scene<'_>) -> Option<String> {
         .then(|| format!("not still under reduced motion: {swapped} frames swapped in 2 s, running {}", running.join(", ")))
 }
 
+/// How long a recording waits after the walk before its picture: past the kit's longest focus transition, Pan's 320 ms.
+const RESTED_MS: i32 = 400;
+
 /// One pass of states: the library it was fed, named in each line when it is the crowd, whose consoles the pad must sweep.
 struct Pass<'a> {
     variants: &'a [Variant],
@@ -238,6 +241,8 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
                 let header =
                     Header { state: &file, case: title(screen), kind: "menu", width: w, height: h, measures, palette: &declared };
                 let _ = std::fs::write(dir.join(format!("{file}.spec")), spec::write(&tree, &tree.root, &header, focus.map(|f| f.0), &walk));
+                // The walk's last put-back moved the focus home, so what that starts (a 200 ms rise, a 320 ms pan) ends first.
+                scene.wait(RESTED_MS);
                 scene.grab(&dir.join(format!("{file}.png")).display().to_string());
             }
             if let Some(missed) = pass.consoles.and_then(|all| swept(scene, all, (f64::from(w), f64::from(h)))) {

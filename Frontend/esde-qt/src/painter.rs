@@ -99,6 +99,8 @@ impl Painter {
         data.system_index = system.min(data.systems.len() - 1);
         data.game_index = game;
         data.now = now;
+        // The gameselectors' random picks start from the install's time, so a pinned time pins them too.
+        data.selection_seed = now.seconds() as u64;
         data.show_clock = self.settings.show_clock;
         data.show_help = self.settings.show_help;
         data.scroll_overlay = self.settings.scroll_overlay;

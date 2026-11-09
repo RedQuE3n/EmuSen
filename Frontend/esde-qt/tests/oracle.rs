@@ -22,7 +22,7 @@ const STATES: [(&str, &str); 2] = [("system", "system"), ("gamelist", "gamelist-
 
 /// Boxes off the C#'s, measured on 2026-11-09 and named in EmuSen_Qt.md §4.8.6: (theme, state, the spec's key), at both
 /// sizes. An entry no longer seen fails, so the list cannot outlive its findings.
-const NAMED_BOXES: [(&str, &str, &str); 14] = [
+const NAMED_BOXES: [(&str, &str, &str); 11] = [
     ("art-book-next-es-de", "system", "clock_clock"),
     ("art-book-next-es-de", "system", "systemstatus_system-status"),
     ("art-book-next-es-de", "system", "helpsystem_help-system-view"),
@@ -31,9 +31,6 @@ const NAMED_BOXES: [(&str, &str, &str); 14] = [
     ("artflix-revisited-es-de", "system", "helpsystem_help"),
     ("artflix-revisited-es-de", "gamelist-1", "gamelistinfo_gamelistInfo"),
     ("artflix-revisited-es-de", "gamelist-1", "helpsystem_help"),
-    ("caralt-es-de", "system", "image_cover1"),
-    ("caralt-es-de", "system", "image_cover2"),
-    ("caralt-es-de", "system", "image_cover3"),
     ("caralt-es-de", "system", "helpsystem_help"),
     ("caralt-es-de", "gamelist-1", "image_marquee"),
     ("caralt-es-de", "gamelist-1", "helpsystem_help"),
@@ -41,8 +38,7 @@ const NAMED_BOXES: [(&str, &str, &str); 14] = [
 
 /// States whose MAE is above the C# painter's, measured on 2026-11-09 and named in EmuSen_Qt.md §4.8.6: (theme, state,
 /// width, the measured figure as a ceiling). A state above its ceiling fails, and one back under the C#'s fails too.
-const NAMED_MAE: [(&str, &str, i32, f64); 1] = [
-    ("caralt-es-de", "system", 1280, 26.06),
+const NAMED_MAE: [(&str, &str, i32, f64); 0] = [
 ];
 
 fn repo() -> PathBuf {

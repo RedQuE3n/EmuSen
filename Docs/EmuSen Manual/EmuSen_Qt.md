@@ -2305,6 +2305,51 @@ within 0.01 on all twelve grabs); the final figures are the RX 6800's.
    With the clocks in, CarAlt's system view measures 26.01 at 1280 × 800 (C# 24.72), its ceiling now 26.06.
    - Seeded fault: the pinned time ignored for the wall clock (09:36 on the day); caught as Art Book Next's system view at
      1920 × 1200 at 0.41, above the C#'s 0.38.
+5. **CarAlt: the gameselector**, built from THEMES.md's `gameselector`, done last because its random picks start from
+   the time the oracle now pins. `selector.rs` has one job: a selector picks from the shown system's games, never a
+   folder or a game excluded from the counter: the `lastplayed` newest first, the `mostplayed` by play count (those
+   played), or a shuffle (`random`, the default) from the scene's seed, `allowDuplicates` filling a short shuffle with
+   repeats. An element of the system view takes its named `gameselector`, else the selector whose name sorts first (as
+   ES-DE 3.4.1 was measured to choose, EmuSen_BigPicture.md §36), and its `gameselectorEntry` clamped to the selector's
+   `gameCount`; one that shows a game's media or metadata and whose entry has no game is not rendered, as THEMES.md
+   says. Each element's game reaches the paint through `ElementState::game`, the gamelist's selection or the selector's
+   pick. The seed is `Data::selection_seed`, which the painter sets from the install's time, and each move of the
+   view's selection draws again ("refreshed every time the view is navigated"). The 13 pairs move from
+   `later:gameselector` to `drawn` (347 → 360). A game's media is cropped by `cropSize` and never tiled, so CarAlt's
+   three screenshots fill their bands as ES-DE's do. The picks themselves are random and are not ES-DE's (its capture
+   shows Lumen Garden, Juniper Vault and Ember Circuit, Qt's seed Fable of Tiles, Lumen Garden and Cobalt Harbor), so
+   the bands' colours differ by game; the figure is held as measured. `frame.rs`'s
+   `a_gameselector_gives_the_system_view_its_games_by_entry` holds each rule.
+   - CarAlt's system view after this step: 17.94 and 16.56 (C# 24.72, 24.69), unnamed, and its three covers drawn.
+   - Seeded fault: the selector's game withheld from the system view; caught as the three covers not drawn at both sizes
+     and CarAlt's system view at 26.01, above the C#'s 24.72.
+
+**The watched states after the five steps** (MAE with the clocks in and the strip left out; boxes off the C#'s; the
+RX 6800, 2026-11-09):
+
+| Theme | State | Qt 1280 | C# 1280 | Qt 1920 | C# 1920 | Qt before (1280, 1920; clocks out) | boxes off (1280, 1920) |
+|---|---|---|---|---|---|---|---|
+| Art Book Next | system | 0.99 | 1.12 | 0.37 | 0.38 | 2.11, 1.56 | 3, 3 |
+| Art Book Next | gamelist | 2.46 | 2.61 | 1.97 | 2.00 | 3.77, 3.48 | 2, 2 |
+| Artflix | system | 6.50 | 6.56 | 6.40 | 6.47 | 7.44, 7.58 | 1, 1 |
+| Artflix | gamelist | 8.30 | 9.29 | 8.27 | 9.14 | 9.06, 9.00 | 2, 2 |
+| CarAlt | system | 17.94 | 24.72 | 16.49 | 24.69 | 26.59, 24.75 | 1, 1 |
+| CarAlt | gamelist | 6.00 | 16.30 | 5.63 | 16.08 | 6.38, 5.90 | 2, 2 |
+
+Every state is at or under the C# painter's, so the picture criterion of §4.4 is met on the watched subset; `NAMED_MAE`
+is empty. Eleven boxes stay named, each explained:
+
+| Where | Element | Why it stays off the C#'s box, and the evidence |
+|---|---|---|
+| Art Book Next system | `clock_clock` | the C#'s box is the background with its paddings (84.4 × 50 at 26.7, 25); Qt's is the element, 60 × 23.3 at the theme's `pos` 38.3, 38.3, as THEMES.md says the paddings "will not have any effect on the pos and origin". ES-DE's drawn background spans 26.7–110 × 25–75: Qt's box with the paddings, and the same pixels in all three grabs |
+| Art Book Next both | `systemstatus_system-status` | the C#'s box is the paddings about an empty row (23.3 × 16.7); Qt's is the empty element at its place (1246.7, 50, 0 × 0). ES-DE draws nothing there |
+| every watched theme | `helpsystem_*` (seven) | the C#'s box holds its paddings (Art Book Next's 54.1 high) and its own entries (Artflix's gamelist 1032 wide, CarAlt's 443); Qt's is the element as above, with ES-DE's entries. Its sizes against ES-DE's are in step 3 |
+| Artflix gamelist | `gamelistinfo_gamelistInfo` | 79 units wide where the C#'s box is 86 and ES-DE's ink spans 83 (1152–1235): the counts' marks are the kit's |
+| CarAlt gamelist | `image_marquee` | Qt's box is the picture fitted to `maxSize`, 320 × 120 at y 52; ES-DE's drawn marquee spans the same 830–1170 × 52–172, where the C# held the whole 320 × 160 at y 32 |
+
+**The corpus**: the measure of the RX 6800 run is committed as `Testing/esde-corpus/2026-11-09.tsv` (a re-measure of the
+day): 71 of 71 load, none drawn whole, and 61 use no undrawn kind (45 before: the 22 themes counting `gameselector`
+undrawn no longer do); no row worsened.
 
 ---
 

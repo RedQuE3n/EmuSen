@@ -35,8 +35,8 @@ fn qt_3_5_the_theme_s_screens_replace_the_reference_s_and_a_failed_theme_shows_t
     // The theme's Home stands in for the reference's; Choose a console, which it omits, stays the reference's.
     assert_eq!(scene.property("theme", "home"), "true");
     assert_eq!(scene.property("splashHome", "visible"), "true");
-    assert_eq!(scene.property("home", "visible"), "false", "the reference's Home is hidden under a theme's");
-    assert_eq!(scene.property("theme", "consoles"), "false", "a screen the theme omits is the reference's");
+    assert_eq!(scene.property("reference", "home"), "false", "the reference's Home gives way to a theme's");
+    assert_eq!((scene.property("theme", "consoles").as_str(), scene.property("reference", "consoles").as_str()), ("false", "true"), "a screen the theme omits is the reference's");
 
     // A theme that fails to load is reported with the engine's words, and the reference is shown.
     choose(&mut scene, "models");
@@ -50,9 +50,9 @@ fn qt_3_5_the_theme_s_screens_replace_the_reference_s_and_a_failed_theme_shows_t
     assert_eq!(scene.property("stubHome", "visible"), "true");
     choose(&mut scene, "splash");
     choose(&mut scene, "stub");
-    assert_eq!(scene.property("themeHost", "liveEngines"), "1", "switching twice leaks no engine");
+    assert_eq!(scene.property("host.theme", "liveEngines"), "1", "switching twice leaks no engine");
     assert_eq!(scene.property("theme", "home"), "true");
     choose(&mut scene, "");
-    assert_eq!(scene.property("themeHost", "liveEngines"), "0");
+    assert_eq!(scene.property("host.theme", "liveEngines"), "0");
     assert_eq!(scene.property("home", "visible"), "true");
 }

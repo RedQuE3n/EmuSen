@@ -95,7 +95,18 @@ pub fn make() -> Result<Synthetic, String> {
         .into_iter()
         .map(|(status, attention)| json!({ "status": status, "attention": attention }))
         .collect();
-    let session = SessionFacts { has_game: true, title: "Fable of Tiles".into(), console_id: "nes".into(), paused_since: now - 720, played: 5400 };
+    let key = rom(&world, "Fable of Tiles", "nes").to_string_lossy().into_owned();
+    let found = view.game(&key).ok_or("the suspended game: not in the library")?;
+    let session = SessionFacts {
+        has_game: true,
+        title: found.title.clone(),
+        console_id: found.system.clone(),
+        console: found.console.clone(),
+        hue: found.hue,
+        key,
+        paused_since: now - 720,
+        played: 5400,
+    };
     let device = DeviceFacts { controllers: 1, clock: "21:42".into(), battery: 64, ..DeviceFacts::default() };
     Ok(Synthetic { world, view, crowd, crowd_names, home_lines: serde_json::Value::Array(lines).to_string(), session, device })
 }

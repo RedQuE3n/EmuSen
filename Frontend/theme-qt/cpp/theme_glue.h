@@ -10,3 +10,4 @@ class ThemeHelpEntries;
 ThemeRows* themeNewRows(QObject& parent);
 ThemeHelpEntries* themeNewHelpEntries(QObject& parent);
 QObject* themeSingleton(QObject& within, const QString& name);
+QObject* themeKitSingleton(QObject& within, const QString& name);

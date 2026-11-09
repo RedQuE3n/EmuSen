@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
-import EmuSen.Models
+import EmuSen.Theme
 
 // The mark before an engine's name (EmuSen_Interface.md §24.6): a sky-named core's symbol or its maker's glyph in the console's ink, or libretro's square badge with the project's own pixel alien.
 Item {

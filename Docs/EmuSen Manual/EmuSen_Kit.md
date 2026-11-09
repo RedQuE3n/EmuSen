@@ -1707,6 +1707,26 @@ four seeded faults, each reverted: a release raised without its press failed `ro
 the key's press swapped failed `router` (Return as Back); the holes not drawn failed `glyphs` (18 filled glyphs with
 nothing cut out); the frame's bar not offering its press failed `menu` (the help bar's Open reached no row).
 
+### 7.29 A cover tile and a rounded picture (stage 3, the reference theme as a package; 2026-11-08)
+
+The reference theme drew a game's cover with its own `Cover.qml`, `RoundPicture.qml` and `GameCard.qml`. A theme may not
+reach the program's files, and every theme that draws covers needs the same three rules, so they moved into the kit as
+two types, added last to the registry's qmldir (rule Q, additions only), and `EmuSen.Theme` re-exports them by name.
+
+- **`RoundPicture`**: a picture fitted whole (`Image.PreserveAspectFit`, aligned as asked) or cut to fill its box
+  (`crop`), drawn as a `Shape` whose path is a rounded rectangle filled with the `Image`'s own texture; on the software
+  backend, which has no texture fills, the `Image` itself with plain corners. It is decoded at the size it is drawn
+  (`pixelScale`, canvas units to pixels, times the screen's ratio).
+- **`CoverTile`**: a game's cover whole at its own shape on its box's foot (or its right, `alignRight`), the generated
+  card in the console's hue with the title where there is no picture or it fails to read, the favourite's mark at the
+  picture's top right in the accent, the ring at 7 units about the painted picture, and the lift of a lit tile (1.06
+  about its centre, 6 units up) unless `lifts` is off. The kit owns no mark: `mark` is the favourite's path in a 24-unit
+  box, given by the host (`Marks.heart` of `EmuSen.Models`) or the theme (`Marks.heart` of `EmuSen.Theme`), both the
+  models' `marks::HEART`.
+
+Proof: the program's card pane and every cover of the reference package are these types, so the stage 1 and stage 2
+recordings (`qt-app/tests/cards.rs`, the acceptance test) hold them to the accepted renders unchanged.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

@@ -31,7 +31,7 @@ Item {
             color: "transparent"
             border.width: paneCover.drawn ? 0 : 1
             border.color: Kit.Tokens.border
-            Cover {
+            Kit.CoverTile {
                 id: paneCover
                 objectName: "PaneCover"
                 anchors.fill: parent

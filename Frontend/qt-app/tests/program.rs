@@ -48,3 +48,17 @@ fn the_program_s_scenes_keep_the_qml_rules() {
     let complaints = emusen_qt_test::lint::qmllint(&[&qml]);
     assert!(complaints.is_empty(), "{}", complaints.join("\n"));
 }
+
+#[test]
+fn qt_3_4_the_reference_theme_keeps_the_theme_rules() {
+    // The package as any theme is held: its imports to the theme's list and §1.3's rules (EmuSen_Qt.md §3.5, §3.7).
+    let package = emusen_qt_test::lint::frontend().join("themes").join("emusen");
+    let mut found = Vec::new();
+    for file in emusen_qml_rules::qml_files(&package) {
+        let text = std::fs::read_to_string(&file).unwrap();
+        found.extend(emusen_qml_rules::check_theme(&file.to_string_lossy(), &text).iter().map(ToString::to_string));
+    }
+    assert!(found.is_empty(), "{}", found.join("\n"));
+    let complaints = emusen_qt_test::lint::qmllint(&[&package]);
+    assert!(complaints.is_empty(), "{}", complaints.join("\n"));
+}

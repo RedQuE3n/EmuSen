@@ -1,6 +1,6 @@
 use cxx_qt_build::CxxQtBuilder;
 
-// theme-audit's one piece of glue: a kit singleton found in the engine an object lives in (cpp/audit_glue.cpp).
+// theme-audit has no glue of its own: the kit's singletons are found through the theme host's (emusen-theme-qt).
 fn main() {
-    CxxQtBuilder::new().files(["src/glue.rs"]).include_dir("cpp").cpp_files(["cpp/audit_glue.cpp"]).qt_module("Qml").build();
+    CxxQtBuilder::new().qt_module("Qml").build();
 }

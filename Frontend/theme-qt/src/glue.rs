@@ -25,5 +25,9 @@ pub mod ffi {
         /// The module's singleton `name` in `within`'s engine, or `within` itself where it is the engine; null where there is none.
         #[cxx_name = "themeSingleton"]
         fn singleton(within: Pin<&mut QObject>, name: &QString) -> *mut QObject;
+
+        /// The kit's singleton `name` in `within`'s engine: each engine has its own, which the host keeps in step.
+        #[cxx_name = "themeKitSingleton"]
+        fn kit_singleton(within: Pin<&mut QObject>, name: &QString) -> *mut QObject;
     }
 }

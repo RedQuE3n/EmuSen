@@ -8,6 +8,8 @@
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
+#include <QtCore/QLoggingCategory>
+#include <QtCore/QMutex>
 #include <QtCore/QMetaProperty>
 #include <QtGui/QAccessible>
 #include <QtGui/QColor>
@@ -81,6 +83,10 @@ QJsonArray coloursOf(QQuickItem* item)
 struct Kept {
     QStringList messages;
     QtMessageHandler shown = nullptr;
+    // Qt's own account of each frame's dirty items while a still span is watched (qt.quick.dirty), kept from the log.
+    bool dirty = false;
+    QStringList frames;
+    QMutex lock;
 };
 
 Kept& kept()
@@ -91,6 +97,13 @@ Kept& kept()
 
 void keep(QtMsgType type, const QMessageLogContext& context, const QString& message)
 {
+    if (context.category != nullptr && qstrcmp(context.category, "qt.quick.dirty") == 0) {
+        QMutexLocker locked(&kept().lock); // the threaded render loop syncs, and so logs, on its own thread
+        if (kept().dirty) {
+            kept().frames.append(message.trimmed());
+        }
+        return;
+    }
     if (type != QtDebugMsg && type != QtInfoMsg) {
         kept().messages.append(message);
     }
@@ -371,6 +384,22 @@ void harness_keep_messages() { kept().shown = qInstallMessageHandler(keep); }
 
 QString harness_messages() { return std::exchange(kept().messages, {}).join(QChar(0x1e)); }
 
+void harness_watch_dirty(bool on)
+{
+    {
+        QMutexLocker locked(&kept().lock);
+        kept().dirty = on;
+        kept().frames.clear();
+    }
+    QLoggingCategory::setFilterRules(on ? QStringLiteral("qt.quick.dirty.debug=true") : QString());
+}
+
+QString harness_dirty()
+{
+    QMutexLocker locked(&kept().lock);
+    return std::exchange(kept().frames, {}).join(QChar('\n'));
+}
+
 std::uint64_t harness_focus(QObject& window)
 {
     QQuickWindow* w = quick(window);
@@ -429,6 +458,13 @@ QString harness_property(QObject& root, const QString& object_name, const QStrin
 QObject* harness_singleton(QQmlApplicationEngine& engine, const QString& module, const QString& name)
 {
     return engine.singletonInstance<QObject*>(module, name);
+}
+
+QObject* harness_focused_singleton(QObject& window, const QString& module, const QString& name)
+{
+    QQuickWindow* w = quick(window);
+    QQmlEngine* engine = w != nullptr && w->activeFocusItem() != nullptr ? qmlEngine(w->activeFocusItem()) : nullptr;
+    return engine != nullptr ? engine->singletonInstance<QObject*>(module, name) : nullptr;
 }
 
 int harness_roots(QQmlApplicationEngine& engine) { return static_cast<int>(engine.rootObjects().size()); }

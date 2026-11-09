@@ -14,6 +14,7 @@ use emusen_theme_qt::cues::{Cue, CuePlayer};
 use emusen_theme_qt::device::DeviceFacts;
 use emusen_theme_qt::help::KINDS;
 use emusen_theme_qt::host;
+use emusen_theme_qt::browse::BrowseFacts;
 use emusen_theme_qt::session::SessionFacts;
 use std::sync::{Arc, Mutex};
 
@@ -63,15 +64,19 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert_eq!((scene.property("scene", "secondPlace").as_str(), scene.property("scene", "secondAttention").as_str()), ("Scraper", "true"));
     {
         let library = host::library(within(window)).unwrap();
-        for (list, roles) in [("consoles", 11), ("places", 6), ("shelves", 4), ("recent", 17), ("favourites", 17), ("collections", 3)] {
+        for (list, roles) in [("consoles", 12), ("places", 6), ("shelves", 4), ("recent", 18), ("shelf", 18), ("favourites", 18), ("collections", 3)] {
             assert_eq!(library.list(list).map(|l| l.roles().len()), Some(roles), "{list}'s roles");
         }
     }
 
+    let shelved = scene.property("scene", "shelf");
     host::session(within(window)).unwrap().show(&SessionFacts {
         has_game: true,
+        key: "/roms/Synthetic.nes".into(),
         title: "Synthetic".into(),
         console_id: "nes".into(),
+        console: "Nintendo Entertainment System".into(),
+        hue: 0.0,
         paused_since: 1,
         played: 60,
     });
@@ -79,6 +84,19 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     scene.wait(20);
     assert_eq!((scene.property("scene", "sessionTitle").as_str(), scene.property("scene", "hasGame").as_str()), ("Synthetic", "true"));
     assert_eq!(scene.property("scene", "status"), "2 controllers · 21:42");
+    assert_eq!((scene.property("scene", "sessionKey").as_str(), scene.property("scene", "sessionConsole").as_str()), ("/roms/Synthetic.nes", "Nintendo Entertainment System"));
+    assert_eq!(scene.property("scene", "shelf"), shelved, "the shelf is fed by the library, the suspended game by the host");
+    assert_eq!(scene.property("scene", "summary"), "2 consoles · 3 games");
+    assert_eq!(scene.property("scene", "marked"), "true", "the marks are the models' paths");
+    assert_eq!(scene.property("scene", "pageUp"), "8", "the pad's buttons in the kit's numbers");
+    {
+        let mut browse = host::browse(within(window)).unwrap();
+        browse.as_mut().show(&BrowseFacts { heading: "NES".into(), next: "Game Boy".into(), focus_row: 3, ..BrowseFacts::default() });
+        browse.as_mut().show_games(Vec::new());
+    }
+    scene.wait(20);
+    assert_eq!((scene.property("scene", "browseHeading").as_str(), scene.property("scene", "browseNext").as_str()), ("NES", "Game Boy"));
+    assert_eq!((scene.property("scene", "browseGames").as_str(), scene.property("scene", "focusRow").as_str()), ("0", "3"));
     assert_eq!((scene.property("scene", "wordmark").as_str(), scene.property("scene", "counted").as_str()), ("EMUSEN", "2 games"));
     assert_eq!(scene.property("scene", "accent"), scene.property("scene", "kitAccent"), "the theme's Tokens are the kit's");
     assert_eq!(scene.property("scene", "dark"), "0");
@@ -101,7 +119,12 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert!(actions.as_mut().play(&game), "Play taken");
     assert!(!actions.as_mut().back(), "Back declined");
     assert!(!actions.as_mut().step_section(1));
-    assert_eq!(*asked.lock().unwrap(), [Action::Play("/roms/Synthetic.nes".into()), Action::Back, Action::StepSection(1)]);
+    assert!(!actions.as_mut().act(&QString::from("list")));
+    assert!(!actions.as_mut().focus(&game));
+    assert_eq!(
+        *asked.lock().unwrap(),
+        [Action::Play("/roms/Synthetic.nes".into()), Action::Back, Action::StepSection(1), Action::Act("list".into()), Action::Focus("/roms/Synthetic.nes".into())]
+    );
 
     let rung = Arc::new(Mutex::new(Vec::new()));
     let mut cues = host::cues(within(window)).unwrap();

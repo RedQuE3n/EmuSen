@@ -21,6 +21,10 @@ pub mod ffi {
         fn harness_wait(ms: i32);
         fn harness_keep_messages();
         fn harness_messages() -> QString;
+        /// Keeps Qt's account of each frame's dirty items (its `qt.quick.dirty` log) from now, or stops; either clears it.
+        fn harness_watch_dirty(on: bool);
+        /// The kept account, one line a frame's start and one an item, emptied as read.
+        fn harness_dirty() -> QString;
         fn harness_focus(window: Pin<&mut QObject>) -> u64;
         fn harness_focus_item(window: Pin<&mut QObject>, id: u64) -> bool;
         fn harness_get(window: Pin<&mut QObject>, id: u64, property: &QString) -> f64;
@@ -30,6 +34,8 @@ pub mod ffi {
         fn harness_grab(window: Pin<&mut QObject>, path: &QString) -> bool;
         fn harness_property(root: Pin<&mut QObject>, object_name: &QString, property: &QString) -> QString;
         unsafe fn harness_singleton(engine: Pin<&mut QQmlApplicationEngine>, module: &QString, name: &QString) -> *mut QObject;
+        /// The singleton of the engine that made the window's focused item, as a hosted theme's engine has its own; null for none.
+        fn harness_focused_singleton(window: Pin<&mut QObject>, module: &QString, name: &QString) -> *mut QObject;
         fn harness_roots(engine: Pin<&mut QQmlApplicationEngine>) -> i32;
         fn harness_set_property(root: Pin<&mut QObject>, object_name: &QString, property: &QString, value: &QString) -> bool;
         fn harness_watch(root: Pin<&mut QObject>, object_name: &QString, property: &QString) -> bool;

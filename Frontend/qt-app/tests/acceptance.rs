@@ -325,6 +325,8 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     assert!(scene.set_property("program", "feed", &host.feed.address().to_string()));
     assert!(scene.set_property("library", "cores", cores.to_str().unwrap()));
     assert!(scene.set_property("library", "toolSummaries", TOOLS));
+    // The folder the theme's covers may come from, as the program's start reads it from the settings.
+    assert!(scene.set_property("program", "coverStores", world.dir("Media").to_str().unwrap()));
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
     wait_for(&mut scene, "library", "loading", "false", 20000);
     assert_eq!(scene.property("library", "places"), "3");

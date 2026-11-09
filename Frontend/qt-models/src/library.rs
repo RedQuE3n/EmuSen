@@ -214,6 +214,11 @@ pub fn games_of(key: &str, systems: &[SystemRow], catalog: &Catalog) -> Vec<Game
     games_of_at(key, systems, catalog, words::now())
 }
 
+/// A console's name as a game's facts begin: its display name, else the table's name.
+pub fn console_name(s: &SystemRow) -> String {
+    if s.display_name.is_empty() { s.name.clone() } else { s.display_name.clone() }
+}
+
 /// As `games_of`, each game's facts said at `now`, in seconds since 1970.
 pub fn games_of_at(key: &str, systems: &[SystemRow], catalog: &Catalog, now: i64) -> Vec<GameRow> {
     let all = game_rows(systems, catalog, now);
@@ -245,7 +250,7 @@ fn game_rows(systems: &[SystemRow], catalog: &Catalog, now: i64) -> Vec<GameRow>
         .map(|g| {
             let system = g.system.clone().unwrap_or_default();
             let of = consoles.get(system.as_str());
-            let console = of.map(|s| if s.display_name.is_empty() { s.name.clone() } else { s.display_name.clone() }).unwrap_or_default();
+            let console = of.map(|s| console_name(s)).unwrap_or_default();
             let when = played.get(g.path.as_str()).map(|at| words::ago(*at, now));
             GameRow {
                 title: title_of(&g.path),
@@ -473,6 +478,18 @@ pub struct LibraryView {
 }
 
 impl LibraryView {
+    /// A game's console's name, as its facts begin (`GameRow::console`); empty for a game the library does not hold.
+    pub fn console_of(&self, path: &str) -> String {
+        let system = self.catalog.games.iter().find(|g| g.path == path).and_then(|g| g.system.as_deref());
+        let of = system.and_then(|id| self.systems.iter().find(|s| s.id == id));
+        of.map(console_name).unwrap_or_default()
+    }
+
+    /// A game's row as every game's list holds it, by its file; none for a game the library does not hold.
+    pub fn game(&self, path: &str) -> Option<GameRow> {
+        games_of_at(ALL, &self.systems, &self.catalog, words::now()).into_iter().find(|g| g.path == path)
+    }
+
     /// Whether a console of the systems table starts with nothing in it, where the List card and the Home card offer
     /// Start Console (Mistress's `ConsolesThatStartEmpty`).
     pub fn starts_empty(&self) -> bool {

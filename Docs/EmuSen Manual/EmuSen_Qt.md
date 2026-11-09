@@ -767,15 +767,17 @@ with the fields a theme may read and nothing more. The table is the module as bu
 
 | Name | Kind | What it holds |
 |---|---|---|
-| `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `collections` (`key`, `name`, `count`); `gamesOf(key)` for a console's or a shelf's key and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords` |
-| `Session` | singleton | `hasGame`, `title`, `consoleId`, `pausedSince`, `played` (seconds), `frame` (the item the game's picture is drawn in, for a `ShaderEffectSource`) |
+| `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`, `libretro`); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `shelf`, `recent` less the suspended game; `collections` (`key`, `name`, `count`); `gamesOf(key)` for a console's or a shelf's key, `firstOf(key, count)` its first games, and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords`, `facts` (cover and hero as file URLs) |
+| `Session` | singleton | `hasGame`, `title`, `consoleId`, `pausedSince`, `played` (seconds), `frame` (the item the game's picture is drawn in, for a `ShaderEffectSource`), `key` (the game's file), `console` (its console's name), `hue` (-1 for none) |
 | `Device` | singleton | `controllers`, `family` (the glyphs' family, as `Frame.padFamily` takes it), `clock`, `battery` (-1 none), `charging`, `network`, `bigScreen`, `form` |
-| `Actions` | singleton | `play(key)`, `openPage(key)`, `favourite(key)`, `random(console)`, `openConsole(key)`, `openPlace(key)`, `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`; each returns whether it was taken |
+| `Actions` | singleton | `play(key)`, `openPage(key)`, `favourite(key)`, `random(console)`, `openConsole(key)`, `openPlace(key)`, `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`, `act(key)` (a help bar's declared action), `focus(key)` (the game or row the focus is on); each returns whether it was taken |
 | `Cues` | singleton | `scroll()`, `systembrowse()`, `select()`, `back()`, `favorite()`, `launch()`, `quicksysselect()`: the seven names of `EmuSen_Interface.md` §23, rung by the host through Endymion at the player's volume |
-| `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`: the curated face of `words.rs` |
-| `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; the curated face of `help.rs` |
+| `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`, `summary(consoles, games)`: the curated face of `words.rs` |
+| `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, `SectionSearched`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; the curated face of `help.rs` |
 | `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only; `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
-| `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable` |
+| `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown) |
+| `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` |
+| `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable` |
 | `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()` |
 
 A theme provides `screens/Home.qml`, `screens/Consoles.qml` and `screens/Games.qml`, each a `ThemeScreen`, and may provide
@@ -811,7 +813,7 @@ The C++ class names carry `Theme` (`ThemeLibrary`, `ThemeWords`, ...), registere
 **What the views do not hold yet.** The own look's library view reads no scraper facts and no collections (the ES-DE
 view does), so `players`, `year`, `genre`, `rating`, `description` and `video` are empty or 0 and `collections` is
 empty; the roles stand so a theme written now reads them when the view does. `hero` falls back to the cover. Not yet in
-the module: `CoverTile` (moved into the kit with the reference theme's package), `VideoTile` (stage 4) and `Bells` with
+the module: `VideoTile` (stage 4) and `Bells` with
 `ladder(count)` and `strike(i)`, which the kit's `Bells` does not offer; each is added by name when the kit has it.
 
 **What the host does.** The host (§3.5) makes the theme's engine, then feeds `Library.show(view, homeLines)` after each
@@ -862,6 +864,62 @@ Token overrides are values only (`"tokens": {"dark": {"accent": "#4C9AE8", "radi
 type and the contrast floors by `theme-check` (§3.7); a theme cannot add a token or change what a token is for. The
 reference theme is the same package shape, compiled into the resources, and its `theme.json` is the schema's worked
 example.
+
+#### 3.4.1 The reference theme as a package **[M 2026-11-08]**
+
+"EmuSen", the accepted look, is the package `Frontend/themes/emusen/`: `theme.json` (the schema's worked example: name,
+author, licence, `api` 1.0, the dark and light variants, `fontSizes` 1 and 1.3, the screens `home`, `consoles` and
+`games`, no token override, no cue file, and three previews, `assets/previews/`, the package's own screens over the
+synthetic library at 640 × 400), `screens/Home.qml`, `Consoles.qml` and `Games.qml`, and `parts/` (`Faces`, the
+three Barlow faces from the kit's fonts; `Glyph`, a mark of `Marks` drawn in one ink; `EngineMark`; `CoverFan`). It is
+written against `EmuSen.Theme` alone, every shown word from `Words`, `Help` or a row, and is compiled into the program's
+resources by `qt-app/themes.qrc` at `qrc:/emusen/themes/emusen/` (`emusen_qt::REFERENCE_THEME`, read in QML as
+`ReferenceTheme.folder`); the host loads it as it loads any theme. A file added to the package is added to that list.
+
+**What moved and what stayed.** The three screens and their parts left `EmuSen.App` (`Home.qml`, `Consoles.qml`,
+`GameGrid.qml`, `Cover.qml`, `CoverFan.qml`, `Glyph.qml`, `EngineMark.qml`, `GameCard.qml`, `RoundPicture.qml`); the cover
+and the rounded picture became the kit's `CoverTile` and `RoundPicture` (`EmuSen_Kit.md` §7.29). What a theme never draws
+stayed with the program, in `Main.qml`: the List card, and the grid's search (its words, the field and the docked
+keyboard with its help bar), drawn over the theme's Games screen; and the grid's games themselves, the program's
+`GameModel`, which the List card and the search sort, narrow and move, and which a theme reads through `Browse`. The
+program's clock (Home's status line, the paused game's words, the Home card's facts) is the window's own.
+
+**Decided 2026-11-08: no splash in the package.** The reference theme's splash is Moonrise, which the program already
+draws, keeps the clock of, and fades (§3.5.1); a `screens/Splash.qml` placing the kit's `Moonrise` would draw a second
+Moonrise over the first, started later, in a second engine. The package omits the role, so the fallback, Moonrise, is
+the reference's splash unchanged.
+
+**Free arrangement where the reference had it.** Home and Choose a console walk by `KeyNavigation` as they did; Home's
+`ThemeScreen.focusItems` names where its focus starts (Continue, else the shelf's first game, else Games), which the
+host gives the focus again when Start is pressed on Home (`Screens.homeAgain`). A list read anew is followed by the
+Repeaters' own `itemAdded`, never by an item kept from before. Delegates' data is read through `var` properties, as
+`qmllint` cannot follow a cast to an inline component across the theme's own files.
+
+**Named differences from the screens it replaced**, each without a pixel of difference in the recordings:
+1. Choose a console's tiles are two lists (the shelves, then the consoles), so the invisible half of each tile the old
+   single list made (a planet's parts on a shelf's tile, a shelf's on a planet's) is not made; nothing of either was drawn.
+2. The paused game's words ("Paused 3 minutes ago") are said again when the clock's minute turns, where the old Home's
+   clock said them every 15 s: the words count minutes from the pause, so they can lag the old ones by under a minute.
+3. The grid reports its focused game to the program (`Actions.focus`) and draws the focus the program holds
+   (`Browse.focusRow`), so the List card's jumps move it as before.
+
+**Proof, measured 2026-11-08.** The acceptance test (Vulkan on the RX 6800 in its own compositor, the virtual pad, the
+canvas's library) passed on WiseMan d5edac3e5 with the old screens and on the package, and its 90 grabs, 18 states
+(Home, Home with nothing left, Choose a console, the grid, the List card, the Home card's two pages, the Pause Card's
+pages, the Resume question) at the five sizes, were compared pixel by pixel within 2 pixels and 24 levels either way
+round: 75 grabs differ by no pixel, and the other 15 (Home, Home with nothing left and the Pause Card's Saved page)
+differ only in the clock's minute, the two runs having started four minutes apart (`17:03` and `17:07` on Home's status
+line, `17:04` and `17:06` in the slot's date; at most 233 pixels, at 3840 × 2160). The recordings' trees differ by the
+host's slot above each screen, as they must; their mockup comparisons and the gate hold. The grabs and the comparison
+are kept in `~/.cache/emusen/tmp/qt-s3/compare/emusen/`. Offscreen, every test of `qt-app` (with `cards.rs`, Home and the
+grid under their cards, the search and the List card), `theme-qt`, `theme-host`, `kit-qt`, `qt-models` and `qt-test`
+passes; `qt-app/tests/program.rs` holds the package to `qml-rules`' theme profile and `qmllint`; `theme-check` reads it
+`ok`; `idle.rs` holds the still screens at no redraw. Five faults were seeded and caught, each reverted: Choose a
+console's focus reported as a game's (`screens.rs`, Down left the selection at 0); Start's return of Home's focus
+dropped (`cards.rs`, the focus stayed on Power); the slot under the Home card not a backdrop (`cards.rs`' gate, 706
+faults); an empty picture URL refused by the sandbox (`theme_feed.rs`, 22 refusals logged); the fan made of the whole
+row (`scale.rs`, 9,000 covers for 4). The stage 1 start-up gates of §9.3.1 (Home shown ≤ 0.35 s, the first press
+≤ 0.95 s on the real library) were not re-run: their driver is no longer kept.
 
 ### 3.5 Loading and the sandbox
 
@@ -969,6 +1027,40 @@ lands.
 theme (S); a themed Games screen opens no List card until `Actions.openListCard` exists (T, R). What the sandbox does not do is
 §3.5's paragraph above, unchanged: a theme can still spin or allocate.
 
+#### 3.5.2 The feed, and two hosts **[M 2026-11-08]**
+
+**`ThemeFeed`** (`qt-app/src/theme.rs`) is the program's side of a theme's engine, one per host; the dependency
+`emusen-qt -> emusen-theme-qt` is its only new reference (decided 2026-11-08). It reaches the engine through
+`ThemeHost::engine()` and the singletons through `emusen_theme_qt::host`, and holds what it last showed, so a new engine
+(the host's `generation`) is fed it all in `attach()`:
+
+- `showLibrary(library)` hands `Library.show` the library model's view (`LibraryModel::view()`) and Home's lines after
+  each read; `showSession(game, running, pausedAt, picture)` the suspended game, its file, title, console's name and hue
+  found in the view, and the shelf without it (`Library.show_suspended`); `showBrowse(games, key, searching, typing,
+  listOpen)` the grid's section from the program's `GameModel` (`GameModel::rows()`) and Choose a console's row for its
+  key, its neighbours either side for the shoulders; `controllers`, `family`, `clock` and `reducedMotion` are properties,
+  fed as they change.
+- Each engine has its own kit singletons, so the feed keeps them in step: reduced motion on the engine's `Tokens`, and
+  `push(button, down)` on its `PadRouter`. The window sends a pad's press to the engine whose screen holds the focus
+  (`ThemeHost.holdsFocus`), else to its own router, so a press is never queued where no frame pumps it; the harness's
+  `Scene::pad` presses through the router of the engine that made the focused item, as the window does.
+- The theme's `Actions` come back as the feed's signals, each the window's existing call: `played`, `resumed` (the
+  suspended game chosen), `placeChosen` (one of Home's places), `opened` (a console or a shelf), `backed`, `acted` (a
+  help bar's key, `Screens.act`), `focused` (a game, the grid's model's focus) and `selected` (a row of Choose a console,
+  `LibraryModel.select`). `Actions.openHomeCard` is declined: Power opens the Home card, as before.
+
+**Two hosts.** `ThemeHost.qml` is one theme: its host, its slots, its feed and the program's models it is fed from. The
+window holds two: the reference (`ReferenceTheme.folder`) and the chosen theme (`--theme`, `EMUSEN_THEME`). The
+reference's slot for a role is made only where the chosen theme does not draw it (`homeWanted` and the others), so a
+role the chosen theme omits, and every role once it fails, is the reference's, as §3.5.1 had it with the old screens. A
+slot under a card (Home under the Home card, the grid under the List card) is disabled and declares `backdrop`, as the
+rules read a backdrop; the grid's slot gives up the keys while the search's keyboard or the List card holds them. Object
+names carry the host's: `host.theme`, `home.reference`.
+
+**Where covers come from.** A theme reads pictures only inside its folder and the cover stores (§3.5.1); the reference
+is held to that too, so the window's `coverStores` (the start's media store, `ArtworkDirectory` and
+`EsdeMediaDirectory`) must name every folder a cover is read from, and the tests that draw covers name theirs.
+
 ### 3.6 Console-style designs as themes: the test that the API is sufficient
 
 Four designs, each **inspired** by a console's shell (its arrangement and motion, never its logos, glyph sets, fonts or
@@ -1030,8 +1122,8 @@ step, a Qt program of its own that `theme-check` runs as a process on a package 
 back as findings (decided 2026-11-08: the dev module links `theme-check`, whose fence forbids Qt). `theme-check` finds it through
 `EMUSEN_THEME_AUDIT` or `PATH`, and does not run without it unless `--static` is given; `--state DIR` passes through. Its parts, one
 job each: `world.rs`, the synthetic library read through the real clients; `crowd.rs`, a `LibrarySource` adding consoles to the
-clients' answers up to 120; `audit.rs`, placing, feeding and judging; `glue.rs` with `cpp/audit_glue.cpp`, the one C++ function
-(`QQmlEngine::singletonInstance` of the kit, which cxx-qt-lib does not bind). Its new dependencies are stated in its manifest: the
+clients' answers up to 120; `audit.rs`, placing, feeding and judging. It has no C++ of its own: the kit's `Tokens` of a theme's engine is found
+through `emusen-theme-qt`'s `host::kit_tokens`, the one owner of that lookup. Its new dependencies are stated in its manifest: the
 host, `EmuSen.Theme`, the models, the harness and the clients' test world; the static crates gain none.
 
 **How a screen is judged.** Each screen the package lists is placed through `ThemeHost.place()` in a fresh engine, as `ThemeHost.qml`
@@ -3117,6 +3209,29 @@ at the Pause Card).
 `Timer` pumping the pad router while it had the focus, waking the GUI thread 125 times a second at an idle screen. It drew
 nothing, but it woke the thread for nothing; the timers now run only while `PadRouter.pending` (an event waiting or a
 button held), `EmuSen_Kit.md` §7.25.
+
+**A new minute is a change (measured on 2026-11-08).** A landing's acceptance run failed once with "the List card in
+place: 1 frames swapped in 2 s with nothing changing; running: []". Offscreen, under the List card, setting the
+reference theme's feed clock (`feed.reference`'s `clock`, which reaches `Device.clock`) swapped one frame each of four
+times, and grabs before and after the span were identical to the pixel: Home's status line, hidden under the grid, took
+the new time, and Qt renders a frame for any item marked dirty, visible or not. The program's `Clock` ticks every 15 s and
+changes `time` only at a new minute, so about one span in 30 holds such a frame (2 s of every 60), and the acceptance's
+four spans about one run in eight; the C# Home's `clock.line` read the same clock. It is a real change, one frame a
+minute, so the rule accounts for it rather than the screens hiding it: `Scene::assert_still` reads the scene's clock
+(`harness::CLOCK`, the object `clock` and its `time`; a scene without one reads empty and is unaffected) before the settle
+and after the span, and a span that swapped while the clock read a new minute is measured once more, and only once.
+`qt-test/tests/still.rs` holds the rule over a fixture: a change without a new minute fails, one with a new minute
+passes, and a second change in the second span fails though the first had a new minute. A probe of 32 spans under the
+List card across 18:49 to 18:50 passed every span.
+
+A failed span now says what drew. While a span is measured the harness turns on Qt's own `qt.quick.dirty` log, which
+names each item the scene graph synced and why, and keeps those lines from the output; the failure lists them, one
+bracket a synced frame, `[no item]` where a frame was drawn with nothing dirty (a frame finishing late, or an expose).
+Under the List card the clock's frame reads `[QQuickText(name="homeStatus", ...) Size|Content]`, Home's status line.
+On Vulkan in the test's own compositor (RX 6800, 2026-11-08) the acceptance passed whole, and a probe of 34 spans of Home
+over the suspended game across 19:09 to 19:10, in which Continue's words went from "Paused just now" to "Paused 1 minute
+ago", passed every span: the reference theme says the paused game's words again only when `Device.clock` reads a new
+minute, so that change is the clock's.
 
 #### 9.3.3 Play to the first picture on a hosted core **[M 2026-11-08]**
 

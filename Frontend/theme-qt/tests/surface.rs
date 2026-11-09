@@ -73,9 +73,9 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
 #[test]
 fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     let rows = ["data", "roleNames", "rowCount"];
-    let api: [(&str, &[&str], &[&str]); 9] = [
-        ("Library", &["consoles", "places", "shelves", "recent", "favourites", "collections"], &["gamesOf", "search"]),
-        ("Session", &["hasGame", "title", "consoleId", "pausedSince", "played", "frame"], &[]),
+    let api: [(&str, &[&str], &[&str]); 11] = [
+        ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections"], &["gamesOf", "search", "firstOf"]),
+        ("Session", &["hasGame", "key", "title", "consoleId", "console", "hue", "pausedSince", "played", "frame"], &[]),
         ("Device", &["controllers", "family", "clock", "battery", "charging", "network", "bigScreen", "form"], &[]),
         (
             "Actions",
@@ -93,6 +93,8 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "openHomeCard",
                 "openListCard",
                 "search",
+                "act",
+                "focus",
             ],
         ),
         ("Cues", &[], &["scroll", "systembrowse", "select", "back", "favorite", "launch", "quicksysselect"]),
@@ -110,9 +112,15 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "emusenTag",
                 "libretroTag",
             ],
-            &["games", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "splashCaption"],
+            &["games", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption"],
         ),
         ("Help", &[], &["entries"]),
+        (
+            "Browse",
+            &["section", "heading", "world", "hue", "countLine", "previous", "next", "focusRow", "searching", "typing", "listOpen", "games", "searched"],
+            &[],
+        ),
+        ("Marks", &["heart", "sparkle", "crescent", "attention", "badge", "alien"], &["path"]),
         ("Rows", &["count"], &rows),
         ("HelpEntries", &["actionLines"], &rows),
     ];
@@ -131,7 +139,23 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     files.sort_unstable();
     assert_eq!(
         files,
-        ["Body", "Carousel", "Frame", "HelpBar", "Moonrise", "NormalizedCanvas", "Scene", "Sky", "ThemeScreen", "Tokens", "Walkable"],
+        [
+            "Body",
+            "Carousel",
+            "CoverTile",
+            "Frame",
+            "HelpBar",
+            "Moonrise",
+            "NormalizedCanvas",
+            "PadGlyph",
+            "PlanetLayout",
+            "RoundPicture",
+            "Scene",
+            "Sky",
+            "ThemeScreen",
+            "Tokens",
+            "Walkable"
+        ],
         "the kit's types by name, the screen and the tokens; never the whole kit"
     );
     assert!(COMMITTED_QMLDIR.contains("singleton Tokens 1.0"), "Tokens is a singleton");
@@ -166,6 +190,8 @@ fn qt_3_2_the_tokens_and_the_screen_s_enums_are_the_kit_s() {
     assert_eq!(declared(&screen, "Walk"), values(KIT_TYPES, "Role").trim_end_matches(",NoRole"), "the walk's roles in the kit's order");
     assert_eq!(declared(&tokens, "Variant"), values(KIT_TYPES, "Variant"));
     assert_eq!(declared(&tokens, "Form"), values(KIT_TYPES, "Form"));
+    let glyph = std::fs::read_to_string(frontend().join("theme-qt/qml/PadGlyph.qml")).unwrap();
+    assert_eq!(declared(&glyph, "Button"), values(KIT_TYPES, "PadButton"), "the pad's buttons in the kit's order");
 }
 
 #[test]

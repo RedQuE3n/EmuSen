@@ -21,6 +21,7 @@ Window {
         required property string engineName
         required property string engineKind
         required property string engineMark
+        required property bool libretro
     }
     component PlaceRow: Item {
         required property string key
@@ -48,6 +49,7 @@ Window {
         required property string video
         required property string hero
         required property string lastPlayedWords
+        required property string facts
     }
     readonly property int consoles: Library.consoles.count
     readonly property int places: Library.places.count
@@ -59,6 +61,16 @@ Window {
     readonly property string counted: Words.games(2)
     readonly property string status: Words.statusLine(Device.controllers, Device.clock)
     readonly property string sessionTitle: Session.title
+    readonly property string sessionKey: Session.key
+    readonly property string sessionConsole: Session.console
+    readonly property int shelf: Library.shelf.count
+    readonly property string summary: Words.summary(2, 3)
+    readonly property string browseHeading: Browse.heading
+    readonly property string browseNext: Browse.next
+    readonly property int browseGames: Browse.games.count
+    readonly property int focusRow: Browse.focusRow
+    readonly property bool marked: Marks.heart.length > 0 && Marks.path(Library.shelves.count > 0 ? "all" : "").length > 0
+    readonly property int pageUp: PadGlyph.PageUp
     readonly property bool hasGame: Session.hasGame
     readonly property int gameHelp: gameHelpList.count
     readonly property string gameActions: Help.entries(Help.Section).actionLines
@@ -103,6 +115,10 @@ Window {
     Repeater {
         id: gameList
         model: Library.gamesOf(scene.consoleKey)
+        delegate: GameRow {}
+    }
+    Repeater {
+        model: Browse.games
         delegate: GameRow {}
     }
     Repeater {
@@ -158,6 +174,28 @@ Window {
             objectName: "canvas"
             width: 320
             height: 200
+        }
+        CoverTile {
+            objectName: "coverTile"
+            width: 120
+            height: 160
+            title: Session.title
+            mark: Marks.heart
+        }
+        RoundPicture {
+            objectName: "roundPicture"
+            width: 40
+            height: 40
+        }
+        PadGlyph {
+            objectName: "padGlyph"
+            button: PadGlyph.PageUp
+        }
+        PlanetLayout {
+            objectName: "planets"
+            width: 1280
+            leading: 3
+            bodies: 2
         }
         HelpBar {
             objectName: "helpBar"

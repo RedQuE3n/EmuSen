@@ -3,11 +3,13 @@
 //! asks for changes through `Actions`. The kit's types are re-exported by name from `qml/`, never the whole kit.
 
 pub mod actions;
+pub mod browse;
 pub mod cues;
 pub mod device;
 pub mod glue;
 pub mod help;
 pub mod library;
+pub mod marks;
 pub mod rows;
 pub mod session;
 pub mod view;
@@ -17,6 +19,7 @@ pub mod words;
 /// singleton to feed, made by the engine on the first ask.
 pub mod host {
     use crate::actions::qobject::ThemeActions;
+    use crate::browse::qobject::ThemeBrowse;
     use crate::cues::qobject::ThemeCues;
     use crate::device::qobject::ThemeDevice;
     use crate::glue::ffi;
@@ -30,7 +33,10 @@ pub mod host {
     use cxx_qt_lib::QString;
 
     fn find<'a, T: Upcast<QObject>>(within: Pin<&'a mut QObject>, name: &str) -> Option<Pin<&'a mut T>> {
-        let object = ffi::singleton(within, &QString::from(name));
+        typed(ffi::singleton(within, &QString::from(name)))
+    }
+
+    fn typed<'a, T: Upcast<QObject>>(object: *mut QObject) -> Option<Pin<&'a mut T>> {
         if object.is_null() {
             return None;
         }
@@ -65,5 +71,19 @@ pub mod host {
 
     pub fn help(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeHelp>> {
         find(within, "Help")
+    }
+
+    pub fn browse(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeBrowse>> {
+        find(within, "Browse")
+    }
+
+    /// The kit's tokens in the theme's engine, which the host keeps in step with the program's (reduced motion).
+    pub fn kit_tokens(within: Pin<&mut QObject>) -> Option<Pin<&mut emusen_kit_qt::tokens::qobject::Tokens>> {
+        typed(ffi::kit_singleton(within, &QString::from("Tokens")))
+    }
+
+    /// The kit's pad router in the theme's engine, which the host hands the pad's presses while a theme's screen holds the focus.
+    pub fn pad_router(within: Pin<&mut QObject>) -> Option<Pin<&mut emusen_kit_qt::pad::qobject::PadRouter>> {
+        typed(ffi::kit_singleton(within, &QString::from("PadRouter")))
     }
 }

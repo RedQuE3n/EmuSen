@@ -54,6 +54,9 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "splashCaption"]
         fn splash_caption(self: &ThemeWords, consoles: i32) -> QString;
+        /// Choose a console's summary: "11 consoles · 1,566 games".
+        #[qinvokable]
+        fn summary(self: &ThemeWords, consoles: i32, games: i32) -> QString;
     }
 }
 
@@ -118,6 +121,10 @@ impl qobject::ThemeWords {
 
     pub fn status_line(&self, controllers: i32, clock: &QString) -> QString {
         said(words::status_line(controllers.max(0) as usize, &clock.to_string()))
+    }
+
+    pub fn summary(&self, consoles: i32, games: i32) -> QString {
+        said(words::summary(consoles.max(0) as usize, games.max(0) as usize))
     }
 
     pub fn splash_caption(&self, consoles: i32) -> QString {

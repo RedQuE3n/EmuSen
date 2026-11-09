@@ -16,6 +16,12 @@ template <typename T> T* owned(T* object)
     return object;
 }
 
+QQmlEngine* engineOf(QObject& within)
+{
+    QQmlEngine* engine = qobject_cast<QQmlEngine*>(&within);
+    return engine != nullptr ? engine : qmlEngine(&within);
+}
+
 }
 
 ThemeRows* themeNewRows(QObject& parent) { return owned(new ThemeRows(&parent)); }
@@ -24,8 +30,12 @@ ThemeHelpEntries* themeNewHelpEntries(QObject& parent) { return owned(new ThemeH
 
 QObject* themeSingleton(QObject& within, const QString& name)
 {
-    QQmlEngine* engine = qobject_cast<QQmlEngine*>(&within);
-    if (engine == nullptr)
-        engine = qmlEngine(&within);
+    QQmlEngine* engine = engineOf(within);
     return engine != nullptr ? engine->singletonInstance<QObject*>(QStringLiteral("EmuSen.Theme"), name) : nullptr;
+}
+
+QObject* themeKitSingleton(QObject& within, const QString& name)
+{
+    QQmlEngine* engine = engineOf(within);
+    return engine != nullptr ? engine->singletonInstance<QObject*>(QStringLiteral("EmuSen.Kit"), name) : nullptr;
 }

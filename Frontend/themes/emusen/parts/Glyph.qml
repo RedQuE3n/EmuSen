@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 
-// One of the design's drawn marks, a path in a 24-unit box from the models' Marks, stroked or filled in one ink (EmuSen_Interface.md §24.1, §24.6).
+// One of the design's drawn marks, a path in a 24-unit box from Marks, stroked or filled in one ink (EmuSen_Interface.md §24.1, §24.6).
 Item {
     id: root
     property string path

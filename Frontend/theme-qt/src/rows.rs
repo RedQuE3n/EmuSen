@@ -18,6 +18,8 @@ pub mod qobject {
         type QVariant = cxx_qt_lib::QVariant;
         include!("cxx-qt-lib/qmodelindex.h");
         type QModelIndex = cxx_qt_lib::QModelIndex;
+        include!("cxx-qt-lib/qvector.h");
+        type QVector_i32 = cxx_qt_lib::QVector<i32>;
     }
 
     extern "RustQt" {
@@ -53,6 +55,14 @@ pub mod qobject {
         #[inherit]
         #[cxx_name = "endResetModel"]
         fn end_reset_model(self: Pin<&mut ThemeRows>);
+
+        #[inherit]
+        fn index(self: &ThemeRows, row: i32, column: i32, parent: &QModelIndex) -> QModelIndex;
+
+        #[inherit]
+        #[qsignal]
+        #[cxx_name = "dataChanged"]
+        fn data_changed(self: Pin<&mut ThemeRows>, top_left: &QModelIndex, bottom_right: &QModelIndex, roles: &QVector_i32);
     }
 }
 
@@ -104,9 +114,21 @@ impl qobject::ThemeRows {
         self.as_mut().rust_mut().roles = roles;
     }
 
-    /// The rows replaced whole, as the library view replaces its own (EmuSen_Qt.md §1.2.1).
+    /// The rows replaced: the same rows by key keep their delegates and change their cells in place, so a theme's focus
+    /// and its items stay; other rows replace the list whole, as the library view replaces its own (EmuSen_Qt.md §1.2.1).
     pub fn replace(mut self: Pin<&mut Self>, rows: Vec<Row>) {
         debug_assert!(rows.iter().all(|r| r.len() == self.roles.len()), "a row with a cell for each role");
+        if rows == self.rows {
+            return;
+        }
+        let same = !rows.is_empty() && rows.len() == self.rows.len() && rows.iter().zip(&self.rows).all(|(a, b)| a.first() == b.first());
+        if same {
+            let last = rows.len() as i32 - 1;
+            self.as_mut().rust_mut().rows = rows;
+            let (first, last) = (self.index(0, 0, &QModelIndex::default()), self.index(last, 0, &QModelIndex::default()));
+            self.as_mut().data_changed(&first, &last, &cxx_qt_lib::QVector::<i32>::default());
+            return;
+        }
         self.as_mut().begin_reset_model();
         let count = rows.len() as i32;
         self.as_mut().rust_mut().rows = rows;

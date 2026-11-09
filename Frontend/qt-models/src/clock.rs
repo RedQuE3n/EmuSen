@@ -28,6 +28,11 @@ pub mod qobject {
         /// Reads the time again; the property changes only when the minute does.
         #[qinvokable]
         fn tick(self: Pin<&mut Clock>);
+
+        /// When the game was paused, in seconds since 1970; 0 while none is.
+        #[qinvokable]
+        #[cxx_name = "pausedAt"]
+        fn paused_at(self: &Clock) -> f64;
     }
 
     impl cxx_qt::Initialize for Clock {}
@@ -60,6 +65,10 @@ impl cxx_qt::Initialize for qobject::Clock {
 }
 
 impl qobject::Clock {
+    pub fn paused_at(&self) -> f64 {
+        if self.game_paused { self.paused_at as f64 } else { 0.0 }
+    }
+
     pub fn tick(mut self: Pin<&mut Self>) {
         let time = QTime::current_time().format(&QString::from("hh:mm"));
         if self.time != time {

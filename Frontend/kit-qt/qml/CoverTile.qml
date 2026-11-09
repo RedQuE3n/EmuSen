@@ -1,9 +1,9 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Shapes
 import EmuSen.Kit as Kit
-import EmuSen.Models
 
-// A game's cover drawn whole at its own shape in a box, on the box's foot, with the favourite's heart; a game with no art shows the generated card (EmuSen_Interface.md §21, §24.2).
+// A game's cover drawn whole at its own shape in a box, on the box's foot, with the favourite's mark; a game with no art shows the generated card in its console's hue (EmuSen_Interface.md §21, §24.2; EmuSen_Kit.md §7.29).
 Item {
     id: root
     property string source
@@ -11,6 +11,8 @@ Item {
     property real hue
     property bool favourite
     property bool lit
+    // The favourite's mark as an SVG path in a 24-unit box, the host's or the theme's (Marks.heart).
+    property string mark
     // Canvas units to pixels, for the picture's decoded size.
     property real pixelScale: 1
     // How far a lit cover grows, about its centre, and rises, as the gallery lifts it.
@@ -33,7 +35,7 @@ Item {
         y: root.lit && root.lifts ? -root.litRise : 0
         scale: root.lit && root.lifts ? root.litScale : 1
         transformOrigin: Item.Center
-        RoundPicture {
+        Kit.RoundPicture {
             id: picture
             objectName: "coverPicture"
             Accessible.role: Accessible.Graphic
@@ -46,25 +48,52 @@ Item {
             verticalAlignment: Image.AlignBottom
             horizontalAlignment: root.alignRight ? Image.AlignRight : Image.AlignHCenter
         }
-        GameCard {
+        // The generated card: the title on the console's hue, as Mistress draws a game it has no art for.
+        Rectangle {
             id: card
             visible: root.source.length === 0 || picture.status === Image.Error
             width: root.width
             height: Math.min(root.height, root.width)
             y: root.height - height
-            title: root.title
-            hue: root.hue
+            radius: Kit.Tokens.rowRadius
+            gradient: Gradient {
+                GradientStop { position: 0; color: Qt.hsla(root.hue / 360, 0.45, 0.32, 1) }
+                GradientStop { position: 1; color: Qt.hsla(root.hue / 360, 0.5, 0.16, 1) }
+            }
+            border.color: Kit.Tokens.rule
+            Text {
+                anchors.fill: parent
+                anchors.margins: 6
+                text: root.title
+                wrapMode: Text.Wrap
+                elide: Text.ElideRight
+                verticalAlignment: Text.AlignBottom
+                color: Kit.Tokens.textStrong
+                font.pixelSize: Kit.Tokens.fontBody
+            }
         }
-        Glyph {
+        Item {
             objectName: "coverHeart"
+            Accessible.role: Accessible.Graphic
             visible: root.favourite
             x: root.paintedX + root.paintedWidth - 8 - width
             y: root.paintedY + 8
             width: 24
             height: 24
-            path: Marks.heart
-            filled: true
-            ink: Kit.Tokens.accent
+            Shape {
+                width: 24
+                height: 24
+                preferredRendererType: Shape.CurveRenderer
+                ShapePath {
+                    fillColor: Kit.Tokens.accent
+                    strokeColor: "transparent"
+                    strokeWidth: -1
+                    fillRule: ShapePath.OddEvenFill
+                    capStyle: ShapePath.RoundCap
+                    joinStyle: ShapePath.RoundJoin
+                    PathSvg { path: root.mark }
+                }
+            }
         }
         Rectangle {
             objectName: "coverRing"

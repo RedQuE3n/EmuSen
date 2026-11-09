@@ -6,9 +6,7 @@ use core::pin::Pin;
 use std::collections::HashSet;
 use std::path::Path;
 
-use cxx_qt::casting::Upcast;
 use cxx_qt::QObject;
-use cxx_qt_lib::QString;
 use emusen_kit_core::audit::{self, fit, no_chrome, pad_reach, pointer_reach, reached, Fault, Rect};
 use emusen_kit_core::input::{ElementId, UiButton, WalkForm};
 use emusen_kit_core::tokens::Variant;
@@ -23,7 +21,6 @@ use emusen_theme_manifest::Screen;
 use emusen_qt_models::library::LibraryView;
 use emusen_theme_qt::host;
 
-use crate::glue::ffi::kit_singleton;
 use crate::world::Synthetic;
 
 /// The scene, written beside the synthetic library and loaded from there.
@@ -66,13 +63,7 @@ fn object(id: u64) -> Pin<&'static mut QObject> {
 
 /// The kit's `Tokens` of the theme's engine, which is not the harness's: each engine has its own singletons.
 fn tokens(screen: u64) -> Option<Pin<&'static mut Tokens>> {
-    let found = kit_singleton(object(screen), &QString::from("Tokens"));
-    if found.is_null() {
-        return None;
-    }
-    // Safety: the kit registers Tokens as this type, and the engine keeps it alive as long as itself.
-    let typed = unsafe { Tokens::from_base_ptr(found as *const QObject) } as *mut Tokens;
-    unsafe { typed.as_mut() }.map(|t| unsafe { Pin::new_unchecked(t) })
+    host::kit_tokens(object(screen))
 }
 
 /// The items a fault names, so its line can say what they are.

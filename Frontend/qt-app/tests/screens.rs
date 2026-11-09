@@ -48,7 +48,7 @@ fn the_screens_switch_by_the_pad_and_the_walk_follows_the_rows() {
     scene.pad(UiButton::Accept);
     assert_eq!(scene.property("screens", "shown"), GRID);
     assert_eq!(scene.property("screens", "key"), key);
-    assert!(!scene.property("grid", "name").is_empty(), "the grid's heading names the console it opened");
+    assert!(!scene.property("gridTitle", "text").is_empty(), "the grid's heading names the console it opened");
     wait_for(&mut scene, "gridCells", "count", "2", 2000);
 
     scene.pad(UiButton::Back);

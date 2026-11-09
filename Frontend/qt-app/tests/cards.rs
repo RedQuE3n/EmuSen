@@ -145,6 +145,8 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
+    // The folder the theme's covers may come from, as the program's start reads it from the settings.
+    assert!(scene.set_property("program", "coverStores", media.to_str().unwrap()));
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
     wait_for(&mut scene, "library", "loading", "false", 10000);
     for _ in 0..20 {
@@ -213,7 +215,7 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     scene.pad(UiButton::Options);
     settle(&mut scene);
     assert_eq!(scene.property("screens", "shown"), "List");
-    assert_eq!(titled(&mut scene, "grid"), ("List".into(), "All · 8 games".into()));
+    assert_eq!(titled(&mut scene, "listCardCanvas"), ("List".into(), "All · 8 games".into()));
     assert_eq!(rows(&mut scene), ["Search", "Sort | Name", "Filter", "Jump to | A", "Random game", "Collections"]);
     assert!(scene.tree().nodes.iter().any(|n| n.visible && n.text.as_deref() == Some("Type part of a name; the covers narrow as you type.")), "the pane says what Search does");
     hold(&mut scene, "GamesListCard", &mockup::Mockup::default(), named, &mut report);
@@ -238,7 +240,7 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     scene.pad(UiButton::Up);
     scene.pad(UiButton::Accept);
     scene.wait(50);
-    assert_eq!(titled(&mut scene, "grid").1, "Filter");
+    assert_eq!(titled(&mut scene, "listCardCanvas").1, "Filter");
     assert_eq!(rows(&mut scene), ["Every game", "Favourites"]);
     scene.pad(UiButton::Down);
     scene.pad(UiButton::Accept);

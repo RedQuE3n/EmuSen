@@ -374,11 +374,13 @@ dependencies = [
  "emusen-kit-core",
  "emusen-kit-qt",
  "emusen-platform-client",
+ "emusen-qml-rules",
  "emusen-qt-endymion",
  "emusen-qt-models",
  "emusen-qt-play",
  "emusen-qt-test",
  "emusen-theme-host",
+ "emusen-theme-qt",
  "serde_json",
 ]
 

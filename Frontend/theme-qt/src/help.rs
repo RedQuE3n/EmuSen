@@ -33,6 +33,7 @@ pub mod qobject {
         Place,
         Section,
         Search,
+        SectionSearched,
     }
 
     extern "RustQt" {
@@ -74,8 +75,15 @@ pub mod qobject {
 pub use qobject::HelpKind;
 
 /// Every kind, in the enum's order.
-pub const KINDS: [HelpKind; 6] =
-    [HelpKind::Continue, HelpKind::Game, HelpKind::Console, HelpKind::Place, HelpKind::Section, HelpKind::Search];
+pub const KINDS: [HelpKind; 7] = [
+    HelpKind::Continue,
+    HelpKind::Game,
+    HelpKind::Console,
+    HelpKind::Place,
+    HelpKind::Section,
+    HelpKind::Search,
+    HelpKind::SectionSearched,
+];
 
 /// The help bar a kind shows: Home's three, Choose a console's, the grid's and the search's.
 pub fn screen_of(kind: HelpKind) -> Screen {
@@ -85,18 +93,19 @@ pub fn screen_of(kind: HelpKind) -> Screen {
         HelpKind::Place => Screen::HomePlaces,
         HelpKind::Section => Screen::Grid,
         HelpKind::Search => Screen::Search,
+        HelpKind::SectionSearched => Screen::GridSearched,
         _ => Screen::Home,
     }
 }
 
 /// One list for each kind, the singleton's children.
 pub struct ThemeHelpRust {
-    lists: [*mut qobject::ThemeHelpEntries; 6],
+    lists: [*mut qobject::ThemeHelpEntries; 7],
 }
 
 impl Default for ThemeHelpRust {
     fn default() -> Self {
-        ThemeHelpRust { lists: [std::ptr::null_mut(); 6] }
+        ThemeHelpRust { lists: [std::ptr::null_mut(); 7] }
     }
 }
 

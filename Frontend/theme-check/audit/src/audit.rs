@@ -330,7 +330,7 @@ pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(
         logged();
         let label = format!(", {name}");
         let pass = Pass { variants: &[Variant::Dark, Variant::Light], label: &label, consoles: Some(names) };
-        match place(&mut scene, &real.display().to_string(), screen).and_then(|id| feed(id, &library, view).map(|_| id)) {
+        match place(&mut scene, &real.display().to_string(), screen).and_then(|id| feed(id, &library, view, &package.colour_overrides()).map(|_| id)) {
             Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
             Ok(id) => {
                 let done = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| states(&mut scene, screen, id, &pass, state, &mut lines)));

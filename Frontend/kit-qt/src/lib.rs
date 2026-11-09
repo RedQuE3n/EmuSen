@@ -21,6 +21,7 @@ pub mod keypass;
 pub mod kinds;
 pub mod moonrise;
 pub mod notices;
+pub mod orbits;
 pub mod pad;
 pub mod picture;
 pub mod planets;

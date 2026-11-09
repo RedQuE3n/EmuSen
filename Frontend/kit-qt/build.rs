@@ -43,6 +43,7 @@ fn main() {
         "src/bells.rs",
         "src/glyph.rs",
         "src/planets.rs",
+        "src/orbits.rs",
         "src/figures.rs",
         "src/picture.rs",
         "src/keyboard.rs",

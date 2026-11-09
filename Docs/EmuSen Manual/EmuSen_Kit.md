@@ -1757,6 +1757,80 @@ two types, added last to the registry's qmldir (rule Q, additions only), and `Em
 Proof: the program's card pane and every cover of the reference package are these types, so the stage 1 and stage 2
 recordings (`qt-app/tests/cards.rs`, the acceptance test) hold them to the accepted renders unchanged.
 
+### 7.30 Orbits: groups of bodies on nested half-ellipses (stage 3, the reference theme's Choose a console; 2026-11-08)
+
+**Decided 2026-11-08: an extension of the kit, a new type beside `PlanetLayout`.** The reference theme's Choose a console
+became the orbits (`EmuSen_Qt.md` §3.4.2). Its layout depends on the whole catalogue: the makers sorted by how many consoles
+each has, which three are shown, how far each long orbit has turned, and where Up goes. A theme cannot work that out:
+§1.3 allows no loop in QML, and `EmuSen.Theme` gives no model of one maker's consoles. Writing it as bindings would have
+put about 300 lines of loop-free arithmetic in a screen. The form weighed was an extension, since laying bodies out is
+the kit's job (§7.19) and needs no knowledge of consoles: the kit is given a group key for each row and nothing else.
+
+**`kit-core`'s `orbits::orbit_layout(width, groups, leading, focus, kept, geometry)`** is pure Rust.
+- **Groups.** It groups the bodies by key, ordering the groups by first appearance and keeping each group's members in
+  the list's order, so an interleaved table works as a sorted one. It sorts the groups by size, ascending and stable.
+- **Slots.** Slot s is the half-ellipse about (W/2, 0) with radii 260 + 180 s by 220 + 150 s. The window on it is the
+  angles where a body's centre stays below y 178 and at least 100 inside each side; L is the window's arc length at the
+  mean radius. Capacity is ⌊L / 150⌋ + 1.
+- **Which groups are shown.** One group takes slot 1, or slot 2 when slot 1 cannot hold it whole. Two groups take slots 1
+  and 2. Three or more take three consecutive slots from a base. The first base centres the focused group where it can;
+  later the previous base (`kept`) holds until the focus leaves the shown groups, and then moves by the least that shows
+  it again.
+- **A group longer than its window turns.** With off = clamp(s_focus − L/2, 0, (n − 1) · 150 − L), world i sits at
+  angle θmax − (150 i − off) / r. A group that fits is centred on π/2.
+- **Labels and ellipses.** A group's label is right-aligned at the point 60 units inward from its window's end, never
+  further right than W − 64 and never above y 152. Ellipses sit half a pitch past each end that has more bodies beyond
+  it, wherever the arc there is below y 150.
+- **The walk.** It runs over the leading items, then the bodies. Left and Right move along a group. Up and Down go to the
+  shown body nearest in x on the adjacent group, else that group's first body. Up from the innermost goes to the nearest
+  leading item, and Down from a leading item to the nearest shown body. Each orbit's `reach` is where a jump to it lands:
+  its shown body nearest the focus in x.
+
+`OrbitGeometry::REFERENCE` holds the canvas's measures. The function names no console.
+
+**`kit-qt`'s `OrbitLayout`** reads its input from any list model: `model`, `role` (the group key, read as text) and
+`labelRole` (each orbit's label, taken from its first row). It reads again when its `read()` is called, which a screen
+does on the model's `modelReset` and `dataChanged`. A screen also sets `width`, `leading` and `current` (the walk's index
+of the focus), and passes each leading item's centre through `lead(i, x)`.
+
+It hands back lists that bind by index:
+- per body: `angles`, `orbitOf`, `shown`;
+- per orbit: `radiiX`, `radiiY`, `orbitShown`, `sizes`, `turning`, `labels`, `labelRights`, `labelTops`, and `beforeXs`,
+  `beforeYs`, `afterXs`, `afterYs` (NaN where no ellipsis is drawn);
+- `centre`, `orbitCount`, `focusedOrbit`, and `sections` and `section` for the frame's shoulders.
+
+A screen draws a body at (centre + rx cos θ, ry sin θ), with θ and the radii animated by the screen's own `Behavior`s. The
+body therefore travels along its arc when an orbit turns, and its radii change when the orbits scroll.
+
+The walk is steps, not neighbour lists. `stepLeft()`, `stepRight()`, `stepUp()` and `stepDown()`, and `jump(key)` for a
+section the frame's shoulder chose, each do three things in order: make the target the current focus, lay out again so
+the target is shown, and only then emit `jumped(index)`. The screen gives that index the focus. KeyNavigation could not
+do this:
+1. A target may be waiting on an orbit off screen, invisible until laid out, and Qt's KeyNavigation passes over an
+   invisible item.
+2. A binding to `Repeater.itemAt` is not evaluated again when the Repeater makes its items. Measured on 2026-11-08: a
+   place's `KeyNavigation.down` was still null once its index had arrived, so Down from a place did nothing.
+
+The model is read through `QAbstractItemModel`'s own `rowCount`, `index`, `data` and `roleNames`, with no C++ of its
+own. They are declared once, in `kit-qt/src/item_model.rs`, for every layout that reads a model (`OrbitLayout`,
+`FigureLayout`). The two layouts' own declarations each emitted the type's upcast shim and would not link side by side
+(§7.6).
+
+**Proof** (measured 2026-11-08). `kit-core/tests/orbits.rs`, eight tests:
+- the slots' windows and capacities at 1280 (3, 6, 9) and at 1422.2 (the outer slot holds 10);
+- the canvas's eleven consoles at the canvas's points, within 0.01;
+- the labels at (753.72, 152), (971.26, 152) and (1125.76, 219.84);
+- the walk, ties going to the first;
+- one console at the middle apex, seven on the outer slot, none at all;
+- 120 consoles turning, with 18 shown and the outer orbit's ellipses at (1215.30, 193.87);
+- forty under one maker: the twenty-first of them at the outer apex, with ellipses at both ends;
+- the base kept and moved;
+- an interleaved table;
+- the jump targets.
+
+`kit-qt/tests/qmltypes.rs` holds the registry, which only gained the type. `theme-qt`'s scene reads a group count from
+the fed library.
+
 ### 7.31 Groups as figures on a chart (stage 3, Constellation; 2026-11-08)
 
 Constellation's Choose a console draws each maker as a figure of stars, laid out by count. The layout is a shelf packer

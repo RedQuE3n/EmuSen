@@ -279,7 +279,8 @@ fn check_as(file: &str, text: &str, options: Options, theme: bool) -> Vec<Findin
         if !options.fixture {
             for (s, binding) in strings_in(t) {
                 let binding = binding.unwrap_or_default();
-                let named = NAMED_BINDINGS.iter().any(|b| binding == *b || binding.ends_with(&format!(".{b}")));
+                // A binding ending in Role names a model's role, as ComboBox's textRole and valueRole do.
+                let named = binding.ends_with("Role") || NAMED_BINDINGS.iter().any(|b| binding == *b || binding.ends_with(&format!(".{b}")));
                 if !named && !s.is_empty() && !is_colour(&s) {
                     push(n, Rule::Words, &format!("\"{s}\""));
                 }

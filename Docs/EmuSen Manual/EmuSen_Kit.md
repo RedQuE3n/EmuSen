@@ -2597,6 +2597,25 @@ unchanged.
 - **[routine]** A stepped action's ◂ ▸ and its stepping (Resume's slots) are piece G's.
 - **[routine]** The cover's raised shadow waits for a shadow token (§5.4).
 
+**Found by Cores, the first screen on it** (stage 5, piece F; 2026-11-09; `EmuSen_Qt.md` §7.7.F). Three defects the
+gallery's still models could not show, each fixed in `ToolScreen.qml` with no change to the registry:
+- The list and the pane faded their edges in the `EdgeFade` around them but did not say so where the audit reads it, on
+  the scroller itself (as `MenuPanel` does), so a pane longer than its box failed the fit audit as cut with no fade
+  (LRPS2's five sentences at 1280 × 800). Both scrollers now declare `fadeTop` and `fadeBottom`.
+- A row's cells anchored to their parent, which is null while a model reset destroys the row: 111 warnings in one walk.
+  The anchor reads `parent?.verticalCenter`, and the columns' reader and its connections take `null` until a host names
+  its rows.
+- The screen's words were the platform's sans serif with no way for a host to name its faces, so the header's facts in
+  Mistress's longest case (no catalogue: 914 units in Barlow) took 1,066 and left the title 54 units for `CORES`.
+  `titleFont`, `captionFont` and `bodyFont` join `cellFont`, the tokens' sizes in the platform's face by default.
+- Not the kit's but its harness's: a row scrolled out of a clipping list by all but a rounding's sliver was read as
+  shown, so the overlap rule counted it; `qt-test`'s tree takes less than half a pixel inside a clip as outside
+  (`tests/culled.rs`).
+- A tool's search types on the docked keyboard (`Keyboard`, §7.6), whose band covered the list's foot, the apply bar and
+  the pane, words the gate counted as overlapped. `keysTop` (design units, below zero for none) is where a docked band
+  begins: the list keeps its whole rows above it, and the bar and the pane are not drawn while one is docked. An
+  addition to a QML file's properties; the registry is unchanged.
+
 ### 7.46 A long value on a `MenuRow` (stage 5, piece D; 2026-11-09)
 
 Found by Settings' Library section in the program (`EmuSen_Qt.md` §7.7): a row's value was laid out at its own width,

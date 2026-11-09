@@ -44,6 +44,8 @@ pub enum Screen {
     Settings,
     /// Settings on a page under a section: the shoulders are the page's.
     SettingsPage,
+    /// A tool's search with the keyboard docked: Type, Delete, Space and Done (EmuSen_Interface.md §15.2).
+    ToolSearch,
     /// A game's page (EmuSen_Qt.md §7.8), by what is focused: Play, Resume (with its slots where it steps them),
     /// Favourite; a state, a picture, a stepped row, a door, a row of Details, or nothing A acts on.
     GamePage,
@@ -175,6 +177,12 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Left, "Value", None),
             (UiButton::Back, "Back", None),
             (UiButton::Menu, "Home", Some(HOME)),
+        ],
+        Screen::ToolSearch => &[
+            (UiButton::Accept, "Type", None),
+            (UiButton::Back, "Delete", None),
+            (UiButton::Search, "Space", Some("space")),
+            (UiButton::Screensaver, "Done", Some("done")),
         ],
         // Mistress's GamePage.Hints: A's word for what is focused, Left and Right where they step, Y the heart, the
         // shoulders the sections, B and Start.

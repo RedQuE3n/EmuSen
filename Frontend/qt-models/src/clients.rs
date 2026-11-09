@@ -282,3 +282,17 @@ fn lexical(path: &std::path::Path) -> String {
     }
     out.to_string_lossy().into_owned()
 }
+
+/// The runtime's configuration a program's models share: the cores folder a test or a build names, with the player's
+/// own from Galaxia beside it; the runtime's defaults with none named.
+pub fn runtime_config(platform: &Platform, cores: &str) -> Result<emusen_crystal_client::Config, String> {
+    if cores.is_empty() {
+        return Ok(emusen_crystal_client::Config::default());
+    }
+    let player = platform.directory(emusen_platform_client::galaxia::consts::DIR_CORES).map_err(words)?;
+    Ok(emusen_crystal_client::Config {
+        cores: Some(vec![cores.to_owned()]),
+        player_cores: Some(player.into_iter().map(|p| p.to_string_lossy().into_owned()).collect()),
+        ..emusen_crystal_client::Config::default()
+    })
+}

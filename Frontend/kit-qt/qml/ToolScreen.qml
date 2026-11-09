@@ -26,11 +26,18 @@ Kit.Frame {
     property int summaryTone: Kit.Tones.Text
     // Below zero no job runs; from 0 to 1, the running job's share done.
     property real progress: -1
+    // Where a docked keyboard's band begins, in design units; below zero none is docked. While one is, the list keeps the whole rows above it and the bar and the pane are not drawn, so nothing lies under the band.
+    property real keysTop: -1
+    readonly property bool keysDocked: root.keysTop >= 0
     property string applyLabel
     property bool applyEnabled: false
     property real meter: 0
     property string meterWords
     property font cellFont: Qt.font({ pixelSize: Kit.Tokens.fontRow })
+    // The screen's faces for its title, its facts and meter, and its pane's and bar's words; the platform's sans serif at the tokens' sizes by default.
+    property font titleFont: Qt.font({ pixelSize: Kit.Tokens.fontTitle })
+    property font captionFont: Qt.font({ pixelSize: Kit.Tokens.fontCaption })
+    property font bodyFont: Qt.font({ pixelSize: Kit.Tokens.fontBody })
     readonly property alias list: list
     signal activated(int index)
     signal applied()
@@ -43,12 +50,12 @@ Kit.Frame {
     Kit.ColumnFit {
         id: fit
         width: places.list.width
-        rows: root.rows
+        rows: root.rows ?? null
         columns: root.columns
         font: root.cellFont
     }
     Connections {
-        target: root.rows
+        target: root.rows ?? null
         ignoreUnknownSignals: true
         function onDataChanged() { fit.measure() }
         function onModelReset() { fit.measure() }
@@ -69,8 +76,7 @@ Kit.Frame {
             verticalAlignment: Text.AlignVCenter
             text: root.title
             color: Kit.Tokens.text
-            font.pixelSize: Kit.Tokens.fontTitle
-            font.capitalization: Font.AllUppercase
+            font: Qt.font({ family: root.titleFont.family, pixelSize: root.titleFont.pixelSize, capitalization: Font.AllUppercase })
             y: places.header.y
         }
         Row {
@@ -100,7 +106,7 @@ Kit.Frame {
                     Kit.ToneText {
                         text: fact.words
                         tone: fact.tone
-                        font.pixelSize: Kit.Tokens.fontCaption
+                        font: root.captionFont
                     }
                 }
             }
@@ -128,7 +134,7 @@ Kit.Frame {
             x: places.list.x
             y: places.list.y
             width: places.list.width
-            height: places.list.height
+            height: root.keysDocked ? Math.min(places.list.height, Math.floor((root.keysTop - places.list.y) / Kit.Tokens.rowHeight) * Kit.Tokens.rowHeight) : places.list.height
             color: Kit.Tokens.inputSurface
             Kit.EdgeFade {
                 anchors.fill: parent
@@ -148,6 +154,9 @@ Kit.Frame {
                     KeyNavigation.down: apply
                     KeyNavigation.right: apply
                     onCountChanged: fit.measure()
+                    // The edges the audit reads as faded, as the EdgeFade around the list draws them.
+                    property bool fadeTop: !list.atYBeginning
+                    property bool fadeBottom: !list.atYEnd
                     delegate: Kit.Walkable {
                         id: row
                         required property var model
@@ -189,7 +198,7 @@ Kit.Frame {
                                 required property int index
                                 x: fit.xs[cell.index] ?? 0
                                 width: fit.widths[cell.index] ?? 0
-                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.verticalCenter: parent?.verticalCenter
                                 text: row.model[cell.key] ?? ""
                                 tone: cell.toneKey.length > 0 ? (row.model[cell.toneKey] ?? Kit.Tones.Text) : Kit.Tones.Text
                                 font: root.cellFont
@@ -203,6 +212,7 @@ Kit.Frame {
         }
         Item {
             objectName: "toolBar"
+            visible: !root.keysDocked
             x: places.bar.x
             y: places.bar.y
             width: places.bar.width
@@ -213,7 +223,7 @@ Kit.Frame {
                 width: parent.width
                 text: root.summary
                 tone: root.summaryTone
-                font.pixelSize: Kit.Tokens.fontBody
+                font: root.bodyFont
                 elide: Text.ElideRight
             }
             ProgressBar {
@@ -252,12 +262,13 @@ Kit.Frame {
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.meterWords
                     color: Kit.Tokens.text
-                    font.pixelSize: Kit.Tokens.fontCaption
+                    font: root.captionFont
                 }
             }
         }
         Rectangle {
             objectName: "toolPane"
+            visible: !root.keysDocked
             x: places.pane.x
             y: places.pane.y
             width: places.pane.width
@@ -277,6 +288,8 @@ Kit.Frame {
                     boundsBehavior: Flickable.StopAtBounds
                     contentWidth: width
                     contentHeight: paneColumn.implicitHeight
+                    property bool fadeTop: !pane.atYBeginning
+                    property bool fadeBottom: !pane.atYEnd
                     Column {
                         id: paneColumn
                         width: pane.width
@@ -285,7 +298,7 @@ Kit.Frame {
                             width: parent.width
                             text: root.paneTitle
                             color: Kit.Tokens.textStrong
-                            font.pixelSize: Kit.Tokens.fontTitle
+                            font: root.titleFont
                             wrapMode: Text.Wrap
                         }
                         Text {
@@ -293,7 +306,7 @@ Kit.Frame {
                             width: parent.width
                             text: root.paneCaption
                             color: Kit.Tokens.muted
-                            font.pixelSize: Kit.Tokens.fontBody
+                            font: root.bodyFont
                             wrapMode: Text.Wrap
                         }
                         Repeater {
@@ -304,7 +317,7 @@ Kit.Frame {
                                 required tone
                                 width: paneColumn.width
                                 text: sentence.words
-                                font.pixelSize: Kit.Tokens.fontBody
+                                font: root.bodyFont
                                 wrapMode: Text.Wrap
                             }
                         }

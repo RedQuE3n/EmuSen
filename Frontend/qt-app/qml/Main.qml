@@ -30,6 +30,8 @@ Window {
     property list<string> coverStores
     // The pads the reader opens, by SDL id, where a test names its own; empty for every pad.
     property string onlyPads
+    // A file holding Cores' world in place of the back end's, as the recordings script theirs; empty for the back end.
+    property string coresWorld
     // The splash keeps the focus, and every press, until it has faded, so the press that skipped it is never a screen's.
     readonly property bool splashShown: program.splash && (!moonrise.done || moonrise.opacity > 0)
     // The own look's screens draw a generic pad's glyphs as the Xbox pad's lettered ones, as Mistress does.
@@ -42,13 +44,22 @@ Window {
     property string themeWords
     // The game in hand, whose page X opens: the one the theme's focus is on, else the grid's focused game.
     property string inHand
-    // A game chosen: recorded as started, opened (resumed where it is the one suspended) and shown.
+    // A game chosen: asked about where its core waits for approval or its firmware is missing, then recorded as started,
+    // opened (resumed where it is the one suspended) and shown.
     signal play(string path)
-    onPlay: (path) => {
-        library.started(path)
-        player.game = path
-        player.session.resume()
-        screens.play()
+    onPlay: (path) => launch.prepare(path)
+    LaunchModel {
+        id: launch
+        objectName: "launch"
+        platformLibrary: program.platformLibrary
+        cores: library.cores
+        onReady: (path) => {
+            library.started(path)
+            player.game = path
+            player.session.resume()
+            screens.play()
+        }
+        onNoticeChanged: if (launch.notice.length > 0) notices.raise(launch.notice, false, true)
     }
     Screens {
         id: screens
@@ -377,6 +388,24 @@ Window {
         onBacked: screens.back()
         onActed: (key) => screens.act(key)
     }
+    // Cores on the tool screen, from Home's place (EmuSen_Interface.md §15; EmuSen_Qt.md §7.7).
+    ToolModel {
+        id: coresModel
+        objectName: "coresModel"
+        tool: ToolModel.Cores
+        platformLibrary: program.platformLibrary
+        cores: library.cores
+        world: program.coresWorld
+        open: screens.shown === Screens.Cores
+    }
+    Cores {
+        objectName: "cores"
+        visible: screens.shown === Screens.Cores
+        tool: coresModel
+        padFamily: program.padFamily
+        inputs: visible && !program.splashShown
+        onBacked: screens.back()
+    }
     // A game's page, from X on Home and the grid, a theme's openPage and the Home card's Selected game (EmuSen_Qt.md §7.8);
     // its doors open later pieces' pages.
     GamePageModel {
@@ -502,6 +531,44 @@ Window {
         }
         Faces {
             id: resumeFaces
+        }
+    }
+    // The questions before a game opens: its core's approval, then the firmware it needs (EmuSen_Qt.md §7.7).
+    Kit.NormalizedCanvas {
+        id: launchCanvas
+        objectName: "launchCanvas"
+        visible: launch.asking
+        Kit.Frame {
+            id: launchFrame
+            anchors.fill: parent
+            form: Kit.Forms.BigScreen
+            surfaceDrawn: false
+            helpShown: false
+            focus: launch.asking
+            controller.navigationShown: false
+            Kit.Question {
+                id: launchQuestion
+                objectName: "launchQuestion"
+                controller: launchFrame.controller
+                title: launch.title
+                sentences: launch.sentences
+                caption: launch.caption
+                choices: launch.choices
+                backIndex: launch.backIndex
+                padFamily: program.padFamily
+                titleFont: Qt.font({ family: resumeFaces.condensedRegular, pixelSize: Kit.Tokens.fontTitle })
+                bodyFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontBody })
+                captionFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontCaption })
+                rowFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontRow })
+                helpFont: Qt.font({ family: resumeFaces.regular, pixelSize: 20 })
+                help: HelpModel {
+                    screen: launch.help
+                }
+                onChosen: (index) => launch.answer(index)
+            }
+            Binding {
+                launchQuestion.visible: launch.asking
+            }
         }
     }
     // The session's notices (saved, loaded, the screenshot, what failed), at the top right over everything; over running

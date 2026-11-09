@@ -22,7 +22,9 @@ protected:
     void geometryChange(const QRectF& now, const QRectF& was) override;
 
 private:
+    void schedule();
     void measure();
 
     bool m_inside = true;
+    bool m_pending = false;
 };

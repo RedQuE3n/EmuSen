@@ -20,16 +20,10 @@ pub mod qobject {
         type QHash_i32_QByteArray = cxx_qt_lib::QHash<cxx_qt_lib::QHashPair_i32_QByteArray>;
     }
 
-    unsafe extern "C++Qt" {
+    unsafe extern "C++" {
+        // The model is declared once, in item_model.rs: cxx-qt emits an upcast shim per declaration (EmuSen_Kit.md §7.6).
         include!(<QtCore/QAbstractItemModel>);
-        #[qobject]
-        type QAbstractItemModel;
-        #[cxx_name = "rowCount"]
-        fn row_count(self: &QAbstractItemModel, parent: &QModelIndex) -> i32;
-        fn index(self: &QAbstractItemModel, row: i32, column: i32, parent: &QModelIndex) -> QModelIndex;
-        fn data(self: &QAbstractItemModel, index: &QModelIndex, role: i32) -> QVariant;
-        #[cxx_name = "roleNames"]
-        fn role_names(self: &QAbstractItemModel) -> QHash_i32_QByteArray;
+        type QAbstractItemModel = crate::item_model::ffi::QAbstractItemModel;
     }
 
     #[auto_cxx_name]

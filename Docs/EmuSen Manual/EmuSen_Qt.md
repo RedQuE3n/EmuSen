@@ -246,20 +246,54 @@ built from the same commit (`Error::Refused`); only then is every symbol resolve
 
 **Owed, by name**, the rest of the header: Galaxia's `init`, `set_override` and `thread_scope` (a test's; the fixture
 calls the one it needs), the legacy and bundle paths, `save_path`, `file_read`, `file_write`, the ROM hashes and
-tracks, packages, mapped files, migration, `config_read`, `config_write` and `config_delete`, `model_bind`,
-`model_format`, `model_load_from`, `model_save_to`, the cheat names and lists, the error log, `suggest`; the library's
-`identity` and `abi_version`; the library tool's jobs (`emusen_tool_job_*`); `emusen_patch_package_image`; the disc sets
-(`emusen_disc_*`); emusen-systems' libretro cores, save media formats, code, recognition, route, OpenVGDB, header,
-disassembly, board name and view; `emusen_firmware_find` and `_locate`; the cheat files and database
-(`emusen_cheats_*`); the HTTP client (`emusen_net_download_*`); the medium locks; Endymion's resampler, rate control,
-router, player slots, `pad_resolve`, `pad_combine`, `pad_controls_for`, `pads_use`,
-`pads_rescan_due`, the simulated pads' texts read, holds and device calls, the game's audio player (`emusen_endymion_audio_*`),
+tracks, mapped files, migration, `config_read`, `config_write` and `config_delete`, `model_bind`,
+`model_format`, `model_load_from`, `model_save_to`, the cheat lists' contents, the error log, `suggest`; the library's
+`identity` and `abi_version`; `emusen_patch_package_image`; the disc sets
+(`emusen_disc_*`); emusen-systems' libretro cores, save media formats, code, recognition, route, header,
+disassembly, board name and view; `emusen_firmware_find` and `_locate`; the cheat files' codecs
+(`emusen_cheats_parse`, `_write`); the HTTP client (`emusen_net_download_*`); the medium locks; Endymion's resampler, rate control,
+`pad_resolve`, `pad_combine`, `pad_controls_for`, `pads_use`,
+`pads_rescan_due`, the simulated pads' texts read, holds and device calls, the game player's resampler and rate calls not named in §1.8.6,
 the interface player's `decode`, `decode_take` and `volume`; and the rest of Serenity (sources, the compiler,
 reflection, the cache, the lend, the ring, and the chain's other calls); since interface 42 its `serenity` module covers
 the device made for an adopting host, its raw handles, a built-in filter's preset, and a chain advanced and drawn in place
-(§1.8). Each is wrapped when a
-screen needs it: the router and slots with the Device screen, the audio player, rate control and Serenity with the
-game picture (§1.8), the library tool and the packages with their windows.
+(§1.8). Each is wrapped when a screen needs it; stage 5's are below.
+
+**Stage 5's wrappers, measured 2026-11-09** (interface 44, no header change). Each module is one part of the header:
+- `tools`: a library-tool or core-tool job (`emusen_tool_job_*`) started from its request, pulled with `next(wait)` as
+  an event, *waiting* or *ended*, drained with `drain` on a timer, stopped, and freed when dropped. Requests and events
+  stay `serde_json::Value`, so the tools stay the owners of their fields: `core-ls`, `core-fetch`, `core-verify`,
+  `pkg-ls`, `rom-check`, `rom-dups` and the disc batch (`ls`, `convert`, `check`) are requests, not calls.
+- `cheats`: the database (`emusen_cheats_database_*`) opened, its entries, the three questions and the prune's plan;
+  the plan applied (`emusen_cheats_prune_apply`). Galaxia's saved lists by name, a name checked, and a game's own list
+  (`emusen_galaxia_cheat_*`) are in `galaxia`.
+- `packages`: a manifest read, written and laid out as its text, so every member stays in place, those this build does
+  not know included (the client's `serde_json` keeps no order); the claim index and a resolve as JSON.
+- `seats`: the eight seats as the host holds them (`emusen_endymion_seat`) and Endymion's four rules over them: the
+  seat a pad takes, a move, a kept seat let go, the highest player.
+- `audio`: SDL's devices by name and the game player moved to one (`emusen_endymion_audio_device_list`, `_set`); a name
+  no device has plays the default and answers false, as the interface player's `set_device` does.
+- `systems`: the bytes OpenVGDB hashed for a system's file (`emusen_systems_openvgdb`), none where they are its own.
+- `serenity`: a `.slangp` read (`emusen_serenity_preset_load`), a failed read being a document with `fail`, and the
+  passes' parameters merged (`_parameters_merge`).
+
+*Actions are asked once.* The length-query idiom calls twice, which is harmless for a read and wrong for a call that
+changes something: `emusen_cheats_prune_apply` called twice removes the folders, then fails on each because it is gone,
+and `emusen_galaxia_package_resolve` rewrites a moved game's manifest on the first call and answers `moved: false` on
+the second (both measured 2026-11-09). These two are asked once, into 64 KiB (two paths of PATH_MAX with every byte
+escaped) and, for a prune, room for each folder's words; an answer longer than that fails with words saying the change
+was made. A job's `next` needs no such care: the header copies and takes an event only when the buffer holds it.
+
+*Proof.* `tests/stage5.rs`, six tests over the fixture, never the network: the disc batch, `pkg-ls`, `rom-check` and
+`rom-dups` (two copies of one dump found as one) pulled from start to end in a scratch library, an unknown op refused
+with the tool's words and a stopped job still ending; `core-ls` before any fetch, `core-verify`, and `core-fetch`
+aimed by its request's test seam at a closed loopback port and refused with words; a database of two systems asked,
+planned, pruned to one and the folder gone, the saved lists and a game's list named; a manifest written, read back
+member for member, indexed, resolved, and found again by size and CRC-32 after the game moved; a pad taking its kept
+seat and a move trading seats; an iNES dump's bytes without the header and a preset read and merged. `tests/sound.rs`
+adds the devices on SDL's dummy driver. Four faults were seeded and caught: a resolve asked by the length query (moved
+read false), a job's end read as waiting (the two job tests time out), a kept seat described as connected, and a game's
+list name and category swapped.
 
 **Proof, measured 2026-11-08** against the library built from the same commit: 12 tests pass (13 at interface 40, below), the binding's
 regeneration, the fence's two, the interface check's unit test, seven against the library and one in a binary of its

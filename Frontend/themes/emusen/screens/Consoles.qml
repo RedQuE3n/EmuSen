@@ -1,259 +1,259 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Shapes
 import EmuSen.Theme
 import "../parts"
 
-// Choose a console under the night sky, the courts canvas in canvas units: the shelves, then each console with games as its body in rows, the focused one's words and covers beneath (EmuSen_Interface.md §24.1, §24.6; EmuSen_Qt.md §7.1).
+// Choose a console as the orbits: the library's shelves in a row, then each maker's consoles on a half-ellipse, the fewest innermost, three shown and scrolled past; the focused one's words and covers beneath (EmuSen_Qt.md §3.4.2).
 ThemeScreen {
     id: screen
     objectName: "consolesScreen"
     role: ThemeScreen.Consoles
-    // One tile of the rows, a shelf or a console, at its place in the layout; its neighbours are the layout's, across both lists.
-    component Tile: Walkable {
-        id: tile
+    // A shelf in the row under the head: a glass disc with its mark and its name, the walk's first items.
+    component Place: Walkable {
+        id: place
         required property int index
         required property string key
         required property string name
+        required property string line
         required property int count
-        // The console's hue; a shelf has none (-1).
-        required property real hue
-        // The engine a console runs on, its mark and whether it is a libretro core; a shelf has none.
-        required property string engineName
-        required property string engineMark
-        required property bool libretro
-        property int tileIndex
-        property bool planet
-        property string fullName
-        property string status
-        property string facts
-        property string world
-        readonly property int n: tile.tileIndex - shelfTiles.count
-        readonly property bool lit: tile.activeFocus
-        readonly property int leftIndex: layout.left[tile.tileIndex] ?? -1
-        readonly property int rightIndex: layout.right[tile.tileIndex] ?? -1
-        readonly property int upIndex: layout.up[tile.tileIndex] ?? -1
-        readonly property int downIndex: layout.down[tile.tileIndex] ?? -1
+        readonly property int tileIndex: place.index
+        readonly property bool lit: place.activeFocus
+        // The disc's centre across, which the orbits' walk goes up to and down from.
+        readonly property real centreX: places.x + place.x + 20
+        readonly property string fullName: place.name
+        readonly property string facts: place.line
+        readonly property bool planet: false
         controller: frame.controller
-        objectName: "tile." + tile.tileIndex
-        Accessible.name: tile.name
-        Accessible.description: tile.status
-        // The section last opened has the focus, else the first shelf.
-        focus: Browse.section.length > 0 ? tile.key === Browse.section : tile.tileIndex === 0
-        x: layout.xs[tile.tileIndex] ?? 0
-        y: (layout.ys[tile.tileIndex] ?? 0) - (tile.lit && tile.planet ? layout.lift : 0)
-        width: layout.widths[tile.tileIndex] ?? 0
-        height: layout.heights[tile.tileIndex] ?? 0
+        objectName: "tile." + place.index
+        Accessible.name: place.name
+        Accessible.description: place.line
+        // The section last opened has the focus, else the first console, else the first shelf.
+        focus: Browse.section.length > 0 ? place.key === Browse.section : Library.consoles.count === 0 && place.index === 0
+        width: 52 + placeName.implicitWidth
+        height: 40
+        onCentreXChanged: layout.lead(place.index, place.centreX)
         onActiveFocusChanged: {
-            if (!tile.activeFocus)
+            if (!place.activeFocus)
                 return
-            root.focusedTile = tile
-            Actions.focus(tile.key)
+            root.focusedTile = place
+            layout.current = place.tileIndex
+            Actions.focus(place.key)
         }
-        KeyNavigation.left: tile.leftIndex < shelfTiles.count ? shelfTiles.itemAt(tile.leftIndex) : consoleTiles.itemAt(tile.leftIndex - shelfTiles.count)
-        KeyNavigation.right: tile.rightIndex < shelfTiles.count ? shelfTiles.itemAt(tile.rightIndex) : consoleTiles.itemAt(tile.rightIndex - shelfTiles.count)
-        KeyNavigation.up: tile.upIndex < shelfTiles.count ? shelfTiles.itemAt(tile.upIndex) : consoleTiles.itemAt(tile.upIndex - shelfTiles.count)
-        KeyNavigation.down: tile.downIndex < shelfTiles.count ? shelfTiles.itemAt(tile.downIndex) : consoleTiles.itemAt(tile.downIndex - shelfTiles.count)
+        onActivated: Actions.openPlace(place.key)
+        Keys.onLeftPressed: layout.stepLeft()
+        Keys.onRightPressed: layout.stepRight()
+        Keys.onDownPressed: layout.stepDown()
         Rectangle {
-            objectName: "placeTile." + tile.tileIndex
-            anchors.fill: parent
-            visible: !tile.planet
-            radius: Tokens.tileRadius
-            color: Tokens.surfaceRaised
-            opacity: 0.55
-        }
-        Rectangle {
-            objectName: "consoleTile." + tile.n
-            anchors.fill: parent
-            visible: tile.planet
-            radius: Tokens.tileRadius
-            color: tile.lit ? Tokens.surfaceRaised : "transparent"
-            opacity: 0.88
-        }
-        Rectangle {
-            objectName: "placeRing." + tile.tileIndex
-            visible: tile.lit && !tile.planet
-            x: -3
-            y: -3
-            width: parent.width + 6
-            height: parent.height + 6
-            radius: Tokens.tileRadius + 3
-            color: "transparent"
-            border.color: Tokens.accent
-            border.width: Tokens.ringThickness
-        }
-        Rectangle {
-            objectName: "consoleRing." + tile.n
-            visible: tile.lit && tile.planet
-            x: -3
-            y: -3
-            width: parent.width + 6
-            height: parent.height + 6
-            radius: Tokens.tileRadius + 3
-            color: "transparent"
-            border.color: Tokens.accent
-            border.width: Tokens.ringThickness
-        }
-        Rectangle {
-            objectName: "placeIcon." + tile.tileIndex
-            visible: !tile.planet
-            x: 20
-            y: 16
+            objectName: "placeDisc." + place.index
             width: 40
             height: 40
             radius: 20
-            color: "transparent"
-            Rectangle {
-                anchors.fill: parent
-                radius: 20
-                color: Tokens.textStrong
-                opacity: 0.06
-            }
+            color: root.day ? Qt.rgba(1, 1, 1, 0.6) : Qt.rgba(38 / 255, 38 / 255, 43 / 255, 0.5)
+            border.width: 1
+            border.color: root.day ? Qt.rgba(31 / 255, 42 / 255, 68 / 255, 0.14) : Qt.rgba(140 / 255, 150 / 255, 220 / 255, 0.18)
             Glyph {
                 anchors.centerIn: parent
                 width: 22
                 height: 22
-                path: Marks.path(tile.key)
-                ink: tile.lit ? Tokens.textStrong : Tokens.muted
+                path: Marks.path(place.key)
+                ink: Tokens.textStrong
             }
         }
+        Rectangle {
+            objectName: "placeRing." + place.index
+            visible: place.lit
+            x: -7
+            y: -7
+            width: 54
+            height: 54
+            radius: 27
+            color: "transparent"
+            border.color: Tokens.accent
+            border.width: Tokens.ringThickness
+        }
         Text {
-            objectName: "placeName." + tile.tileIndex
-            visible: !tile.planet
-            x: 76
-            y: 9.8
-            width: parent.width - 96
-            text: tile.name
-            elide: Text.ElideRight
+            id: placeName
+            objectName: "placeName." + place.index
+            x: 52
+            height: 40
+            verticalAlignment: Text.AlignVCenter
+            text: place.name
             color: Tokens.textStrong
             font.family: faces.condensed
             font.weight: Font.Medium
             font.pixelSize: 24
+            font.letterSpacing: 1.5
             font.capitalization: Font.AllUppercase
-            lineHeight: 28.8
-            lineHeightMode: Text.FixedHeight
         }
-        Text {
-            objectName: "placeStatus." + tile.tileIndex
-            visible: !tile.planet
-            x: 76
-            y: 40.6
-            width: parent.width - 96
-            text: tile.status
-            elide: Text.ElideRight
-            color: Tokens.muted
-            font.family: faces.regular
-            font.pixelSize: 18
-            lineHeight: 21.6
-            lineHeightMode: Text.FixedHeight
+    }
+    // A console on its maker's orbit: its body (what the pad and the pointer reach), name and count with the engine's mark, at its angle on the orbit's ellipse; the orbit turns and scrolls under it.
+    component World: FocusScope {
+        id: node
+        required property int index
+        required property string key
+        required property string name
+        required property string displayName
+        required property string maker
+        required property int year
+        required property int count
+        required property real hue
+        required property string body
+        required property string engineName
+        required property string engineKind
+        required property string engineMark
+        required property bool libretro
+        readonly property int tileIndex: node.index + shelfTiles.count
+        readonly property bool lit: hit.activeFocus
+        readonly property bool planet: true
+        readonly property string fullName: node.displayName
+        readonly property string facts: Words.facts(node.maker, node.year, node.count, Words.runsOn(node.engineName, node.engineKind))
+        // Its orbit, and the orbit's radii, which move when the orbits scroll.
+        readonly property int orbit: layout.orbitOf[node.index] ?? -1
+        property real rx: layout.radiiX[node.orbit] ?? 0
+        property real ry: layout.radiiY[node.orbit] ?? 0
+        readonly property bool shown: layout.shown[node.index] ?? false
+        // Where it sits on the orbit, in radians as y grows downward; moved along the arc when the orbit turns.
+        property real angle: layout.angles[node.index] ?? Math.PI / 2
+        readonly property real cx: layout.centre + node.rx * Math.cos(node.angle)
+        readonly property real cy: node.ry * Math.sin(node.angle)
+        // The body's height: 96 focused, 72 at rest and while pressed.
+        property real size: node.lit && !press.active ? 96 : 72
+        objectName: "world." + node.index
+        focus: Browse.section.length > 0 ? node.key === Browse.section : node.index === 0
+        visible: node.shown || node.opacity > 0
+        opacity: node.shown ? 1 : 0
+        z: node.lit ? 2 : 1
+        // As wide as what it draws, so neighbours on a steep stretch of an orbit do not cover one another.
+        // From the top of what it draws (the ring, when focused) to its centre.
+        readonly property real above: node.size / 2 + (node.lit ? 7 : 0)
+        x: node.cx - width / 2
+        y: node.cy - node.above
+        width: Math.max(node.size + 14, worldName.width, countRow.width)
+        height: node.above + node.size / 2 + 52.4
+        Behavior on angle {
+            NumberAnimation { duration: Tokens.reel; easing.type: Easing.OutQuad }
         }
-        Body {
-            id: body
-            objectName: "consoleBody." + tile.n
-            visible: tile.planet
-            world: tile.world
-            focused: tile.lit
-            width: body.tileWidth
-            height: body.tileHeight
-            x: (parent.width - width) / 2
-            y: 52 - height / 2
+        Behavior on rx {
+            NumberAnimation { duration: Tokens.pan; easing.type: Easing.OutCubic }
         }
-        Repeater {
-            // Each sparkle's side (-1 left of the body, 1 right), its top as a share of the body's height, and its size.
-            model: tile.lit && tile.planet ? [[-1, 0.08, 13], [1, 0.43, 10], [-1, 0.88, 7]] : []
-            Glyph {
-                required property var modelData
-                objectName: "consoleSparkle"
-                x: modelData[0] < 0 ? body.x - width - 2 : body.x + body.width + 2
-                y: body.y + modelData[1] * body.height
-                width: modelData[2]
-                height: modelData[2]
-                path: Marks.sparkle
-                filled: true
-                ink: Tokens.textStrong
+        Behavior on ry {
+            NumberAnimation { duration: Tokens.pan; easing.type: Easing.OutCubic }
+        }
+        Behavior on size {
+            NumberAnimation { duration: Tokens.quick; easing.type: Easing.OutQuad }
+        }
+        Behavior on opacity {
+            NumberAnimation { duration: Tokens.fade }
+        }
+        Walkable {
+            id: hit
+            controller: frame.controller
+            objectName: "tile." + node.tileIndex
+            Accessible.name: node.name
+            Accessible.description: Words.games(node.count)
+            focus: true
+            // The body's box, and the ring's when focused.
+            readonly property real margin: node.lit ? 7 : 0
+            x: (node.width - width) / 2
+            y: node.above - height / 2
+            width: node.size + 2 * hit.margin
+            height: node.size + 2 * hit.margin
+            onActiveFocusChanged: {
+                if (!hit.activeFocus)
+                    return
+                root.focusedTile = node
+                layout.current = node.tileIndex
+                Actions.focus(node.key)
+            }
+            onActivated: Actions.openConsole(node.key)
+            Keys.onLeftPressed: layout.stepLeft()
+            Keys.onRightPressed: layout.stepRight()
+            Keys.onUpPressed: layout.stepUp()
+            Keys.onDownPressed: layout.stepDown()
+            PointHandler {
+                id: press
+                acceptedButtons: Qt.LeftButton
+            }
+            Body {
+                id: drawn
+                objectName: "consoleBody." + node.index
+                world: node.body
+                focused: node.lit
+                height: node.size
+                width: node.size * drawn.tileWidth / Math.max(1, drawn.tileHeight)
+                x: (hit.width - width) / 2
+                y: hit.margin
+            }
+            Rectangle {
+                objectName: "consoleRing." + node.index
+                visible: node.lit
+                anchors.fill: parent
+                radius: width / 2
+                color: "transparent"
+                border.color: Tokens.accent
+                border.width: Tokens.ringThickness
+            }
+            Repeater {
+                // Each sparkle's side (-1 left of the body, 1 right), its top as a share of the body's height, and its size.
+                model: node.lit ? [[-1, 0.08, 13], [1, 0.43, 10], [-1, 0.88, 7]] : []
+                Glyph {
+                    required property var modelData
+                    objectName: "consoleSparkle"
+                    x: modelData[0] < 0 ? hit.margin - 4 - width : hit.width - hit.margin
+                    y: hit.margin + modelData[1] * node.size
+                    width: modelData[2]
+                    height: modelData[2]
+                    path: Marks.sparkle
+                    filled: true
+                    ink: Tokens.textStrong
+                }
             }
         }
         Text {
-            objectName: "consoleName." + tile.n
-            visible: tile.planet
-            y: 105
-            width: parent.width - 16
-            x: 8
-            horizontalAlignment: Text.AlignHCenter
-            text: tile.name
+            id: worldName
+            objectName: "consoleName." + node.index
+            x: (node.width - width) / 2
+            y: node.above + node.size / 2 + 8
+            width: Math.min(implicitWidth, 140)
+            text: node.name
             elide: Text.ElideRight
             color: Tokens.textStrong
             font.family: faces.condensed
             font.weight: Font.Medium
-            font.pixelSize: 22
+            font.pixelSize: 20
+            font.letterSpacing: 1.2
             font.capitalization: Font.AllUppercase
-            lineHeight: 26.4
+            lineHeight: 24
             lineHeightMode: Text.FixedHeight
         }
-        Text {
-            objectName: "consoleCount." + tile.n
-            visible: tile.planet
-            y: 132.4
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            text: tile.status
-            color: Tokens.muted
-            font.family: faces.regular
-            font.pixelSize: 17
-            lineHeight: 20.4
-            lineHeightMode: Text.FixedHeight
-        }
-        Scene {
-            objectName: "consoleEngine." + tile.n
-            visible: tile.planet && tile.engineName.length > 0
-            width: engineRow.width
-            height: engineRow.height
-            anchors.horizontalCenter: parent.horizontalCenter
-            y: 158
-            Row {
-                id: engineRow
-                spacing: 6
-                readonly property color ink: tile.libretro ? "#C9C9D0" : Qt.hsla(tile.hue / 360, tile.lit ? 0.85 : 0.35, tile.lit ? 0.8 : 0.7, 1)
+        Row {
+            id: countRow
+            x: (node.width - width) / 2
+            y: node.above + node.size / 2 + 32
+            height: 20.4
+            spacing: 6
+            Text {
+                objectName: "consoleCount." + node.index
+                anchors.verticalCenter: parent.verticalCenter
+                text: Words.games(node.count)
+                color: Tokens.muted
+                font.family: faces.regular
+                font.pixelSize: 17
+                lineHeight: 20.4
+                lineHeightMode: Text.FixedHeight
+            }
+            // The engine's mark in the console's hue, a Scene as the world's body is (EmuSen_Qt.md §3.4.2).
+            Scene {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 13
+                height: 13
                 EngineMark {
-                    objectName: "consoleEngineMark." + tile.n
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 15
-                    height: 15
-                    mark: tile.engineMark
-                    libretro: tile.libretro
-                    ink: engineRow.ink
-                }
-                Text {
-                    objectName: "consoleEngineName." + tile.n
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: tile.engineName
-                    elide: Text.ElideRight
-                    width: Math.min(implicitWidth, tile.width - tag.width - 37)
-                    color: engineRow.ink
-                    font.family: faces.condensed
-                    font.weight: Font.Medium
-                    font.pixelSize: 17
-                    font.letterSpacing: 1.5
-                    font.capitalization: Font.AllUppercase
-                }
-                Rectangle {
-                    id: tag
-                    objectName: "consoleEngineTag." + tile.n
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: tagWord.implicitWidth + 10
-                    height: 22
-                    radius: 4
-                    color: tile.libretro ? "transparent" : Qt.hsla(tile.hue / 360, 0.6, 0.5, 0.14)
-                    border.color: tile.libretro ? "#6E6E78" : Qt.hsla(tile.hue / 360, 0.45, 0.52, 1)
-                    Text {
-                        id: tagWord
-                        anchors.centerIn: parent
-                        text: tile.libretro ? Words.libretroTag : Words.emusenTag
-                        color: tile.libretro ? "#A9A9B2" : Qt.hsla(tile.hue / 360, 0.7, 0.82, 1)
-                        font.family: faces.condensed
-                        font.weight: Font.Medium
-                        font.pixelSize: 17
-                        font.letterSpacing: 0.8
-                    }
+                    objectName: "consoleEngineMark." + node.index
+                    anchors.fill: parent
+                    mark: node.engineMark
+                    libretro: node.libretro
+                    ink: node.libretro ? (root.day ? "#5F5F5F" : "#A9A9B2") : Qt.hsla(node.hue / 360, root.day ? 0.6 : 0.5, root.day ? 0.3 : 0.72, 1)
                 }
             }
         }
@@ -268,22 +268,42 @@ ThemeScreen {
             focus: true
             // Canvas units to pixels, for the covers' decoded size.
             readonly property real pixelScale: canvas.unit
-            // The focused tile, a shelf or a console, and the first shelf (All games), whose count is every game.
+            // Day: no sky and no glow, the paper's surface (EmuSen_Interface.md §24.4).
+            readonly property bool day: Tokens.variant === Tokens.Light
+            // The focused item, a shelf or a console, and the first shelf (All games), whose count is every game.
             property var focusedTile: null
             property var allGames: null
-            PlanetLayout {
+            OrbitLayout {
                 id: layout
                 width: root.width
                 leading: Library.shelves.count
-                bodies: Library.consoles.count
+                model: Library.consoles
+                role: "group"
+                labelRole: "maker"
+            }
+            Connections {
+                target: Library.consoles
+                function onModelReset() { layout.read() }
+                function onDataChanged() { layout.read() }
+            }
+            Connections {
+                target: layout
+                function onJumped(index) { (index < shelfTiles.count ? shelfTiles.itemAt(index) : consoleTiles.itemAt(index - shelfTiles.count)).forceActiveFocus() }
+            }
+            Rectangle {
+                objectName: "consolesPaper"
+                anchors.fill: parent
+                visible: root.day
+                color: Tokens.surface
             }
             Sky {
                 id: sky
                 objectName: "consolesSky"
                 anchors.fill: parent
+                visible: !root.day
                 glowHue: root.focusedTile && root.focusedTile.planet ? root.focusedTile.hue : -1
-                glowX: 0.5
-                glowY: 0.77
+                glowX: root.focusedTile && root.focusedTile.planet ? root.focusedTile.cx / root.width : 0.5
+                glowY: root.focusedTile && root.focusedTile.planet ? root.focusedTile.cy / root.height : 0.5
             }
             Frame {
                 id: frame
@@ -295,11 +315,14 @@ ThemeScreen {
                 helpGlyphGap: 10
                 focus: true
                 controller.navigationShown: false
-                help: Help.entries(Help.Console)
+                controller.sections: layout.sections
+                controller.selectedSection: layout.section
+                help: Help.entries(Help.Console, {group: true})
                 Connections {
                     target: frame.controller
                     function onBackDeclined() { Actions.back() }
                     function onActionInvoked(key) { Actions.act(key) }
+                    function onSectionChosen(key) { layout.jump(key) }
                 }
                 Item {
                     x: -frame.safeX
@@ -316,6 +339,7 @@ ThemeScreen {
                         font.family: faces.condensed
                         font.weight: Font.Medium
                         font.pixelSize: 32
+                        font.letterSpacing: 3
                         lineHeight: 38.4
                         lineHeightMode: Text.FixedHeight
                     }
@@ -341,71 +365,188 @@ ThemeScreen {
                         lineHeight: 24
                         lineHeightMode: Text.FixedHeight
                     }
-                    Repeater {
-                        model: layout.orbits
-                        Rectangle {
-                            id: orbit
-                            required property int index
-                            required property real modelData
-                            objectName: "orbit." + orbit.index
-                            x: 0
-                            y: orbit.modelData
-                            width: root.width
-                            height: 1
-                            color: "#8C96DC"
-                            opacity: 0.25
+                    Item {
+                        // The orbits drawn from 160° to 20° and cut at y 584, above the foot's words.
+                        objectName: "orbitLines"
+                        width: root.width
+                        height: 584
+                        clip: true
+                        // The lines are drawn behind the worlds, as the sky is, not beside them.
+                        readonly property bool backdrop: true
+                        Repeater {
+                            model: layout.orbitCount
+                            Shape {
+                                id: line
+                                required property int index
+                                property real rx: layout.radiiX[line.index] ?? 0
+                                property real ry: layout.radiiY[line.index] ?? 0
+                                objectName: "orbit." + line.index
+                                width: root.width
+                                height: 584
+                                visible: line.opacity > 0
+                                opacity: (layout.orbitShown[line.index] ?? false) ? (layout.focusedOrbit === line.index ? 1 : 0.6) : 0
+                                preferredRendererType: Shape.CurveRenderer
+                                Behavior on rx {
+                                    NumberAnimation { duration: Tokens.pan; easing.type: Easing.OutCubic }
+                                }
+                                Behavior on ry {
+                                    NumberAnimation { duration: Tokens.pan; easing.type: Easing.OutCubic }
+                                }
+                                Behavior on opacity {
+                                    NumberAnimation { duration: Tokens.quick }
+                                }
+                                ShapePath {
+                                    fillColor: "transparent"
+                                    strokeColor: root.day ? Qt.rgba(31 / 255, 42 / 255, 68 / 255, 0.28) : Qt.rgba(140 / 255, 150 / 255, 220 / 255, 0.32)
+                                    strokeWidth: 1
+                                    PathAngleArc {
+                                        centerX: layout.centre
+                                        centerY: 0
+                                        radiusX: line.rx
+                                        radiusY: line.ry
+                                        startAngle: 20
+                                        sweepAngle: 140
+                                    }
+                                }
+                            }
                         }
                     }
                     Repeater {
-                        id: shelfTiles
-                        model: Library.shelves
-                        onItemAdded: (index, item) => root.allGames = index === 0 ? item : root.allGames
-                        Tile {
-                            id: shelf
-                            required property string line
-                            hue: -1
-                            engineName: ""
-                            engineMark: ""
-                            libretro: false
-                            tileIndex: shelf.index
-                            planet: false
-                            fullName: shelf.name
-                            status: shelf.line
-                            facts: Words.games(shelf.count)
-                            onActivated: Actions.openPlace(shelf.key)
+                        // Each shown orbit's maker, right-aligned inside its window's end, with the count when the orbit turns.
+                        model: layout.orbitCount
+                        Row {
+                            id: label
+                            required property int index
+                            readonly property bool turning: layout.turning[label.index] ?? false
+                            objectName: "makerLabel." + label.index
+                            visible: layout.orbitShown[label.index] ?? false
+                            opacity: layout.focusedOrbit === label.index ? 1 : 0.7
+                            x: (layout.labelRights[label.index] ?? 0) - width
+                            y: layout.labelTops[label.index] ?? 0
+                            height: 20
+                            spacing: 5
+                            Text {
+                                text: layout.labels[label.index] ?? ""
+                                color: Tokens.muted
+                                font.family: faces.condensed
+                                font.weight: Font.Medium
+                                font.pixelSize: 17
+                                font.letterSpacing: 2
+                                font.capitalization: Font.AllUppercase
+                                lineHeight: 20
+                                lineHeightMode: Text.FixedHeight
+                            }
+                            Text {
+                                visible: label.turning
+                                text: Words.between
+                                color: Tokens.muted
+                                font.family: faces.condensed
+                                font.weight: Font.Medium
+                                font.pixelSize: 17
+                                lineHeight: 20
+                                lineHeightMode: Text.FixedHeight
+                            }
+                            Text {
+                                visible: label.turning
+                                text: layout.sizes[label.index] ?? 0
+                                color: Tokens.muted
+                                font.family: faces.condensed
+                                font.weight: Font.Medium
+                                font.pixelSize: 17
+                                font.letterSpacing: 2
+                                lineHeight: 20
+                                lineHeightMode: Text.FixedHeight
+                            }
+                        }
+                    }
+                    Repeater {
+                        // Three dots past a turning orbit's window's left end, where earlier worlds wait.
+                        model: layout.orbitCount
+                        Row {
+                            id: before
+                            required property int index
+                            objectName: "moreBefore." + before.index
+                            visible: !isNaN(layout.beforeXs[before.index] ?? NaN) && (layout.orbitShown[before.index] ?? false)
+                            x: (layout.beforeXs[before.index] ?? 0) - 10
+                            y: (layout.beforeYs[before.index] ?? 0) - 2
+                            spacing: 4
+                            Repeater {
+                                model: 3
+                                Rectangle {
+                                    width: 3
+                                    height: 3
+                                    radius: 1.5
+                                    color: Tokens.muted
+                                }
+                            }
+                        }
+                    }
+                    Repeater {
+                        // And past its right end, where later worlds wait.
+                        model: layout.orbitCount
+                        Row {
+                            id: after
+                            required property int index
+                            objectName: "moreAfter." + after.index
+                            visible: !isNaN(layout.afterXs[after.index] ?? NaN) && (layout.orbitShown[after.index] ?? false)
+                            x: (layout.afterXs[after.index] ?? 0) - 10
+                            y: (layout.afterYs[after.index] ?? 0) - 2
+                            spacing: 4
+                            Repeater {
+                                model: 3
+                                Rectangle {
+                                    width: 3
+                                    height: 3
+                                    radius: 1.5
+                                    color: Tokens.muted
+                                }
+                            }
+                        }
+                    }
+                    Row {
+                        id: places
+                        objectName: "places"
+                        x: (root.width - width) / 2
+                        y: 100
+                        spacing: 48
+                        Repeater {
+                            id: shelfTiles
+                            model: Library.shelves
+                            onItemAdded: (index, item) => root.allGames = index === 0 ? item : root.allGames
+                            Place {}
                         }
                     }
                     Repeater {
                         id: consoleTiles
                         model: Library.consoles
-                        Tile {
-                            id: consoleTile
-                            required property string displayName
-                            required property string maker
-                            required property int year
-                            required property string body
-                            required property string engineKind
-                            tileIndex: consoleTile.index + shelfTiles.count
-                            planet: true
-                            fullName: consoleTile.displayName
-                            status: Words.games(consoleTile.count)
-                            facts: Words.facts(consoleTile.maker, consoleTile.year, consoleTile.count, Words.runsOn(consoleTile.engineName, consoleTile.engineKind))
-                            world: consoleTile.body
-                            onActivated: Actions.openConsole(consoleTile.key)
-                        }
+                        World {}
+                    }
+                    Text {
+                        objectName: "noConsoles"
+                        visible: Library.consoles.count === 0
+                        y: 358
+                        width: root.width
+                        horizontalAlignment: Text.AlignHCenter
+                        text: Words.noConsoles
+                        color: Tokens.muted
+                        font.family: faces.regular
+                        font.pixelSize: 22
+                        lineHeight: 26.4
+                        lineHeightMode: Text.FixedHeight
                     }
                     Text {
                         objectName: "consoleDetailName"
                         x: 64
-                        y: 633.6
+                        y: 612
+                        width: coverRow.x - 96
                         height: 44
-                        width: root.width - 128 - coverFan.width
                         text: root.focusedTile ? root.focusedTile.fullName : ""
-                        clip: true
+                        elide: Text.ElideRight
                         color: Tokens.textStrong
                         font.family: faces.condensed
                         font.weight: Font.Medium
                         font.pixelSize: 44
+                        font.letterSpacing: 2
                         font.capitalization: Font.AllUppercase
                         lineHeight: 44
                         lineHeightMode: Text.FixedHeight
@@ -413,8 +554,8 @@ ThemeScreen {
                     Text {
                         objectName: "consoleDetailFacts"
                         x: 64
-                        y: 683.6
-                        width: root.width - 128 - coverFan.width
+                        y: 664
+                        width: coverRow.x - 96
                         text: root.focusedTile ? root.focusedTile.facts : ""
                         elide: Text.ElideRight
                         color: Tokens.muted
@@ -423,15 +564,26 @@ ThemeScreen {
                         lineHeight: 26.4
                         lineHeightMode: Text.FixedHeight
                     }
-                    CoverFan {
-                        id: coverFan
-                        objectName: "coverFan"
+                    EngineLine {
+                        objectName: "consoleDetailEngine"
+                        x: 64
+                        y: 696
+                        height: 20
+                        visible: root.focusedTile ? root.focusedTile.planet : false
+                        name: root.focusedTile && root.focusedTile.planet ? root.focusedTile.engineName : ""
+                        mark: root.focusedTile && root.focusedTile.planet ? root.focusedTile.engineMark : ""
+                        libretro: root.focusedTile && root.focusedTile.planet ? root.focusedTile.libretro : false
+                        hue: root.focusedTile && root.focusedTile.planet ? root.focusedTile.hue : 0
+                        family: faces.condensed
+                    }
+                    CoverRow {
+                        id: coverRow
+                        objectName: "coverRow"
                         pixelScale: root.pixelScale
                         x: root.width - 64 - width
-                        y: 612
-                        width: 420
-                        height: 104
-                        games: Library.firstOf(root.focusedTile ? root.focusedTile.key : "", 4)
+                        y: 616
+                        height: 100
+                        games: Library.firstOf(root.focusedTile ? root.focusedTile.key : "", 3)
                     }
                 }
             }

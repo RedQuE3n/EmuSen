@@ -1,5 +1,5 @@
 //! The program's screens through the harness (EmuSen_Qt.md §7.1): Home's Games place opens Choose a console, the walk
-//! goes by the planet rows, A opens a console's grid, Y the favourites', and B goes back a screen at a time.
+//! goes along the orbits, A opens a console's grid, Y the favourites', and B goes back a screen at a time.
 
 mod common;
 
@@ -37,13 +37,15 @@ fn the_screens_switch_by_the_pad_and_the_walk_follows_the_rows() {
     scene.pad(UiButton::Accept);
     assert_eq!(scene.property("screens", "shown"), CONSOLES, "the Games place opens Choose a console");
     let places: usize = scene.property("library", "places").parse().unwrap();
-    assert_eq!(focused(&mut scene), "tile.0", "the selected row has the focus");
-
-    scene.pad(UiButton::Down);
-    assert_eq!(scene.property("library", "selectedIndex"), places.to_string(), "Down goes to the first planet");
+    assert_eq!(focused(&mut scene), format!("tile.{places}"), "the first console has the focus");
+    assert_eq!(scene.property("library", "selectedIndex"), places.to_string());
     let key = scene.property("library", "selectedKey");
+    scene.pad(UiButton::Up);
+    assert!(scene.property("library", "selectedIndex").parse::<usize>().unwrap() < places, "Up from the innermost orbit reaches a place");
+    scene.pad(UiButton::Down);
+    assert_eq!(scene.property("library", "selectedIndex"), places.to_string(), "Down comes back to the nearest console");
     scene.pad(UiButton::Right);
-    assert_eq!(scene.property("library", "selectedIndex"), (places + 1).to_string(), "Right walks along the row");
+    assert_eq!(scene.property("library", "selectedIndex"), (places + 1).to_string(), "Right walks along the orbit");
     scene.pad(UiButton::Left);
     scene.pad(UiButton::Accept);
     assert_eq!(scene.property("screens", "shown"), GRID);

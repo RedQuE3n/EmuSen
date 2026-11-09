@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Theme
 
-// The mark before an engine's name (EmuSen_Interface.md §24.6): a sky-named core's symbol or its maker's glyph in the console's ink, or libretro's square badge with the project's own pixel alien.
+// The mark before an engine's name (EmuSen_Interface.md §24.6): a sky-named core's symbol or its maker's glyph in the console's ink, or libretro's square badge in the same ink with the project's own pixel alien cut through it.
 Item {
     id: root
     property string mark
@@ -26,12 +26,12 @@ Item {
         scale: Math.min(root.width, root.height) / 11
         transformOrigin: Item.TopLeft
         ShapePath {
-            fillColor: "#C9C9D0"
+            fillColor: root.ink
             strokeColor: "transparent"
             PathSvg { path: Marks.badge }
         }
         ShapePath {
-            fillColor: "#26262B"
+            fillColor: Tokens.surfaceRaised
             strokeColor: "transparent"
             PathSvg { path: Marks.alien }
         }

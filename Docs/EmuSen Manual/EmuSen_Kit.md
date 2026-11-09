@@ -1710,6 +1710,12 @@ four seeded faults, each reverted: a release raised without its press failed `ro
 the key's press swapped failed `router` (Return as Back); the holes not drawn failed `glyphs` (18 filled glyphs with
 nothing cut out); the frame's bar not offering its press failed `menu` (the help bar's Open reached no row).
 
+**A declined entry (2026-11-08, for Horizon's disabled look).** An entry whose model carries `enabled: false` is drawn at
+38% and is not pressed; an entry without the role is enabled, so every bar already drawn is unchanged. The role is read
+as `model.enabled`, never as a delegate's required property, which would override `Item.enabled`. `EmuSen.Theme`'s
+`Help.entries(kind, {accept: false})` gives A's entry so (`EmuSen_Qt.md` §3.2). Proof: `helpbar` (Back at 0.38, Play
+whole, a click on Back raising nothing).
+
 ### 7.29 A cover tile and a rounded picture (stage 3, the reference theme as a package; 2026-11-08)
 
 The reference theme drew a game's cover with its own `Cover.qml`, `RoundPicture.qml` and `GameCard.qml`. A theme may not

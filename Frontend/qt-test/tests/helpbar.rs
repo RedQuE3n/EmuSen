@@ -1,5 +1,6 @@
 // EmuSen_Kit.md §7.28: the help bar outside a frame raises its presses itself, draws the filled set in a theme's colours, hugs
-// its entries in a box, and draws a theme's own picture in a glyph's place; the grab is saved for the side-by-side.
+// its entries in a box, draws a theme's own picture in a glyph's place and a declined entry at 38%; the grab is saved for the
+// side-by-side.
 
 use emusen_qt_test::Harness;
 
@@ -14,6 +15,12 @@ fn kit_7_28_a_help_bar_outside_a_frame_in_the_filled_set() {
     let play = node("help-Play");
     scene.click(play.x + play.w / 2.0, play.y + play.h / 2.0);
     assert_eq!((scene.property("scene", "pressedButton"), scene.property("scene", "pressedCount")), ("4".into(), "1".into()));
+
+    // An entry the host would decline is drawn at 38% and raises nothing when clicked; its neighbours are whole.
+    let back = node("help-Back");
+    assert!((back.opacity - 0.38).abs() < 0.01 && (play.opacity - 1.0).abs() < 0.01, "{} and {}", back.opacity, play.opacity);
+    scene.click(back.x + back.w / 2.0, back.y + back.h / 2.0);
+    assert_eq!(scene.property("scene", "pressedCount"), "1", "a declined entry is not pressed");
 
     // The box hugs its entries: the tallest of them and the paddings.
     let (bar, glyph) = (node("ownHelp"), node("glyph-Play"));

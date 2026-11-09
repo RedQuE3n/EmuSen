@@ -92,11 +92,17 @@ Window {
     readonly property bool secondEnabled: (scene.consoleKey.length >= 0 && placeList.count > 1 ? placeList.itemAt(1) as PlaceRow : null)?.available ?? false
     readonly property int placeHelp: placeHelpList.count
     readonly property string placeGroup: (placeHelpList.count > 2 ? placeHelpList.itemAt(2) as HelpRow : null)?.label ?? ""
+    // A's entry dimmed where the host would decline it; the group's entry after it unchanged.
+    readonly property string declinedHelp: declinedHelpList.count > 2 ? [(declinedHelpList.itemAt(0) as DeclinedRow).on, (declinedHelpList.itemAt(2) as DeclinedRow).on, gameHelpList.count].join("|") : ""
     readonly property string emptyWords: [Words.noGames, Words.noRecent, Words.noConsoles, Words.addFolder, Words.places, Words.continueEntry, Words.recentEntry].join("|")
     readonly property string paused: Words.pausedAgo(Session.pausedSince)
     property bool listEnabled: Actions.enabled("list")
     readonly property int rungs: Bells.ladder(3)
     readonly property string firstTitle: (gameList.count > 0 ? gameList.itemAt(0) as GameRow : null)?.title ?? ""
+    component DeclinedRow: Item {
+        required property var model
+        readonly property bool on: model.enabled
+    }
     component HelpRow: Item {
         required property int button
         required property string label
@@ -106,6 +112,11 @@ Window {
         id: placeHelpList
         model: Help.entries(Help.Place, {group: true, back: true})
         delegate: HelpRow {}
+    }
+    Repeater {
+        id: declinedHelpList
+        model: Help.entries(Help.Place, {group: true, accept: false})
+        delegate: DeclinedRow {}
     }
     Repeater {
         id: gameHelpList

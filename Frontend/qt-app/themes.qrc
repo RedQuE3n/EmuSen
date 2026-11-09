@@ -14,4 +14,20 @@
         <file alias="screens/Home.qml">../themes/emusen/screens/Home.qml</file>
         <file alias="theme.json">../themes/emusen/theme.json</file>
     </qresource>
+    <qresource prefix="/emusen/themes/meridian">
+        <file alias="parts/Backdrop.qml">../themes/meridian/parts/Backdrop.qml</file>
+        <file alias="parts/Chip.qml">../themes/meridian/parts/Chip.qml</file>
+        <file alias="parts/EngineMark.qml">../themes/meridian/parts/EngineMark.qml</file>
+        <file alias="parts/Faces.qml">../themes/meridian/parts/Faces.qml</file>
+        <file alias="parts/Glass.qml">../themes/meridian/parts/Glass.qml</file>
+        <file alias="parts/Glyph.qml">../themes/meridian/parts/Glyph.qml</file>
+        <file alias="parts/RailEntry.qml">../themes/meridian/parts/RailEntry.qml</file>
+        <file alias="parts/RailFade.qml">../themes/meridian/parts/RailFade.qml</file>
+        <file alias="parts/Track.qml">../themes/meridian/parts/Track.qml</file>
+        <file alias="screens/Consoles.qml">../themes/meridian/screens/Consoles.qml</file>
+        <file alias="screens/Games.qml">../themes/meridian/screens/Games.qml</file>
+        <file alias="screens/Home.qml">../themes/meridian/screens/Home.qml</file>
+        <file alias="screens/Splash.qml">../themes/meridian/screens/Splash.qml</file>
+        <file alias="theme.json">../themes/meridian/theme.json</file>
+    </qresource>
 </RCC>

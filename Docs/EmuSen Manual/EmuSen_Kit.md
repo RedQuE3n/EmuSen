@@ -863,7 +863,10 @@ Right on the tab bar (changing the tab) and Right from the combo box (leaving it
 every later state began there; it showed at one size only because that state is visited first. Found the same day: Qt Quick's
 `RectangularShadow` declares a writable `offset` too, a vector, and was taken for a path view whose `moving` reads as
 nothing, so the settle never ended on a screen with a shadowed cover; the properties are kept only when Qt types them as
-numbers.
+numbers. A recording rests before its picture (`Scene::rest`): every
+running animation loops without end, a design's resting motion, which the harness's list of running animations marks
+`looping` when the animation or a group it runs in repeats forever; with nothing running, no frame swaps for 100 ms. It
+fails past 5 s, naming what still runs.
 
 **A state is read only when its views are at rest, as Qt declares it** (`Scene::settle`). Every flickable and path
 view in the tree must be neither `moving` nor `flicking`, and a path view that holds its current item in its highlight

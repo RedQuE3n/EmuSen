@@ -103,6 +103,8 @@ fn qt_7_7_e_a_hosted_cores_options_are_a_page_with_its_categories_as_headings() 
     std::fs::write(&game, RING_GAME).unwrap();
     let session = rt.open(&Open { path: Some(game.to_str().unwrap().into()), ..Open::default() }).unwrap();
     let info = rt.session_info(session).unwrap();
+    // The console's picture on, as Mistress's hosted audit sets it: the host then holds the core's deinterlacing.
+    rt.settings_set(session, Scope::Console, None, "console_picture", Some("true")).unwrap();
     let rows = rt.settings_schema(session, None, None).unwrap();
     rt.close(session).unwrap();
 
@@ -121,6 +123,9 @@ fn qt_7_7_e_a_hosted_cores_options_are_a_page_with_its_categories_as_headings() 
         let row = shown.iter().find(|r| r.id == key).unwrap_or_else(|| panic!("{key} in {shown:?}"));
         assert_eq!(row.kind, RowKind::Steps, "{key}");
     }
+    let held = shown.iter().position(|r| r.id == "tc_deinterlace").expect("the held option is a row");
+    assert!(shown[held].held, "a row the host holds is drawn held, as Mistress's Locked");
+    assert!(view.pane(held).sentence.contains("while the CRT filter is on"), "and its note says why: {}", view.pane(held).sentence);
     let format = shown.iter().position(|r| r.id == "tc_format").unwrap();
     assert_eq!(view.pane(format).sentence, "The format the picture is drawn in.", "the option's information is its sentence");
 }

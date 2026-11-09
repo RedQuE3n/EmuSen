@@ -457,7 +457,9 @@ int32_t emusen_crystal_resume_load(emusen_crystal_runtime *rt, uint32_t session)
  * "group"}]: the console's settings, the engine's choice among them as key "Engine", for the named engine or the one
  * the console runs; an absent console is the session's. Since 1.1 a row whose core words the value chosen has "note",
  * that sentence as the console's stored values stand or null when it says nothing, and every row has "shown_with",
- * {"key","value"} where the row means something only while another key holds that value, else null (section 14.13). */
+ * {"key","value"} where the row means something only while another key holds that value, else null (section 14.13). Every
+ * row has "locked", true where the running engine holds the row's value, its note saying why (written since 2.0, named
+ * here). */
 int64_t emusen_crystal_settings_schema(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *console,
                                        size_t console_len, const uint8_t *engine, size_t engine_len, uint8_t *out, size_t len);
 

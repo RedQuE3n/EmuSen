@@ -19,7 +19,8 @@ pub fn rows(schema: &[SettingRow], value: &dyn Fn(&str, &Option<String>) -> Stri
         .enumerate()
         .map(|(at, s)| {
             let now = value(&s.key, &s.default);
-            let steps = matches!(s.kind.as_str(), "switch" | "count" | "choice");
+            // A row the running engine holds takes no step; its note says why.
+            let steps = !s.locked && matches!(s.kind.as_str(), "switch" | "count" | "choice");
             let lines = [s.hint.clone(), s.note.clone()].into_iter().flatten().filter(|l| !l.is_empty()).map(|l| (l, String::new())).collect();
             let section_end = shown_rows.get(at + 1).is_some_and(|next| next.group != s.group);
             Row {

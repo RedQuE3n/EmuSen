@@ -621,7 +621,7 @@ impl SettingsView {
         if let Some(key) = entry["schema"].as_str() {
             let r = console.row(key)?;
             let label = entry["label"].as_str().map_or_else(|| r.label.clone(), str::to_owned);
-            return row(label, self.schema_value(console, entry), RowKind::Steps, false);
+            return row(label, self.schema_value(console, entry), RowKind::Steps, r.locked);
         }
         if let Some(choice) = entry["choice"].as_str() {
             let chosen = console.engine() == choice;
@@ -988,6 +988,9 @@ impl SettingsView {
         let value = |k: &str| console.value(k);
         if let Some(key) = entry["schema"].as_str() {
             let row = console.row(key)?;
+            if row.locked {
+                return Some(Outcome::Nothing);
+            }
             return Some(match schema::stepped(row, &value(key), by) {
                 Some(next) => self.set(&console.console, key, Some(next)),
                 None => Outcome::Nothing,

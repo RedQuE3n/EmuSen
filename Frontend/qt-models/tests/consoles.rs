@@ -98,6 +98,8 @@ impl World {
             SettingRow { group: Some("Sound".into()), ..choice("Rate", "Rate", &["32000", "48000"], &["32 kHz", "48 kHz"], "32000") },
             kind("Ram", "count", "7", Some((1.0, 255.0)), Some("Machine")),
             kind("Threads", "count", "1", Some((1.0, 4.0)), Some("Machine")),
+            // A row the running engine holds, with its note.
+            SettingRow { locked: true, note: Some("Held at 2x while the CRT filter is on.".into()), ..kind("Scale", "count", "2", Some((1.0, 4.0)), Some("Machine")) },
         ];
         World { synthetic, stored: BTreeMap::new() }
     }
@@ -229,6 +231,7 @@ fn qt_7_7_e_a_synthetic_cores_declared_schema_is_its_page_with_no_code_for_it() 
             ("group:Machine", "", RowKind::Action, true),
             ("Ram", "7", RowKind::Steps, false),
             ("Threads", "1", RowKind::Steps, false),
+            ("Scale", "2", RowKind::Steps, true),
             ("screen", "None", RowKind::Steps, false),
             ("consoleshape", "TV shape", RowKind::Steps, false),
             ("reset", "", RowKind::Action, false),
@@ -253,6 +256,9 @@ fn qt_7_7_e_a_synthetic_cores_declared_schema_is_its_page_with_no_code_for_it() 
     }
     assert_eq!(view.rows()[threads].value, "4", "a count stops at its maximum");
     assert_eq!(view.step(index(&view, "group:Sound"), 1), Outcome::Nothing, "a heading takes no step");
+    let scale = index(&view, "Scale");
+    assert_eq!((view.step(scale, 1), view.choose(scale)), (Outcome::Nothing, Outcome::Nothing), "a row the engine holds takes no step");
+    assert_eq!(view.pane(scale).sentence, "Scale's hint. Held at 2x while the CRT filter is on.", "its note says why");
     let screen = index(&view, "screen");
     assert!(matches!(view.step(screen, 1), Outcome::Saved(Model::Graphics, _)));
     assert_eq!(view.rows()[screen].value, "Scanlines", "the screen's filters are those of every console");
@@ -262,7 +268,7 @@ fn qt_7_7_e_a_synthetic_cores_declared_schema_is_its_page_with_no_code_for_it() 
     let mut view = self::view(&world);
     open(&mut view, "test");
     assert_eq!(view.rows()[index(&view, "Turbo")].value, "On");
-    assert_eq!(index(&view, "Turbo"), index(&view, "Threads") + 1, "under its group's heading");
+    assert_eq!(index(&view, "Turbo"), index(&view, "Scale") + 1, "under its group's heading");
 }
 
 #[test]

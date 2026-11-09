@@ -106,7 +106,7 @@ fn the_places_come_first_then_each_console_with_games_in_the_table_s_order() {
     assert_eq!(gb.facts, "Maker · 1990 · 2 games · runs on SameBoy, a libretro core");
     assert_eq!(rows[3].facts, "Maker · 1990 · 3 games · runs on Moon, an EmuSen core");
     let lines: Vec<&str> = rows[..3].iter().map(|r| r.status.as_str()).collect();
-    assert_eq!(lines, ["5 games", "Your hearts, every console", "Last: 2"], "the places' own words, the game played last by its file name");
+    assert_eq!(lines, ["5 games", "Hearts on every console", "Last: 2"], "the places' own words, the game played last by its file name");
 }
 
 #[test]

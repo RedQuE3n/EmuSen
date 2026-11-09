@@ -2029,7 +2029,7 @@ section is what Mistress does with them. The code is `ConsolesScreen` (the plain
 
 - **Reached** from Home's Games place (A). Search still opens the grid with its keyboard; the List card's rows and
   Collections are unchanged.
-- **Along the top**, three wide places: All games (its count), Favourites ("Your hearts, every console") and Recently
+- **Along the top**, three wide places: All games (its count), Favourites ("Hearts on every console", shortened 2026-11-08 so that it fits a 200-unit line at 19 units) and Recently
   played ("Last: " and the game played last).
 - **Then the consoles that have at least one game**, in the systems table's order (`RuntimeCatalog.Shelves`, joined to
   `RuntimeCatalog.Systems` by the shelf's system), each a planet in its Moonrise hue (`StartupSplash.HueOf`, the one

@@ -1226,6 +1226,8 @@ fade as they set behind it. 1 to 120 consoles of any makers, interleaved or not,
    exist; the wheel's layer clips them.
 10. While a shelf dims the wheel to 30%, the maker's words under the hub are not drawn (as the canvas already drops the
     worlds' labels then): words at 30% read under the contrast floor.
+11. A console of no maker is a group of its own (`maker_groups`), so its stop on the dial, which the spec leaves without
+    words, is named by that console, drawn and heard, and the key names it so when the stop is focused.
 
 **Proof, measured 2026-11-09** (offscreen, the software backend). `theme-check` reads the package in both steps at the
 five sizes in dark and light, Choose a console also over the audit's 120 consoles, the sweep hearing all 120. The
@@ -1243,6 +1245,12 @@ under one maker) passing in their place. The dial stands inside the kit's `EdgeF
 40 units to transparency at an edge it runs past, the sky showing through, on both backends. Its first form ramped the sky's
 colour over the dial, and a stop's name at the edge read 2.08:1 in `n30`; the kit's rule no longer holds words crossing a
 faded edge, and `n30` and every state offscreen read clean of it (measured 2026-11-09).
+
+**The remaining findings, fixed on 2026-11-09** (WiseMan 1d651f48a merged), each reproduced first, the before and after
+side by side in `~/.cache/emusen/tmp/qt-s3-ofix/compare/`:
+1. Over 120 consoles, the dial's stops of consoles with no maker had no name a reader hears (`name`, at every size).
+   Difference 11. A catalogue of two makers and three consoles of none: 30 lines before (three stops, five sizes, both
+   variants), none after.
 
 ### 3.5 Loading and the sandbox
 

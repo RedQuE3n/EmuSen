@@ -550,10 +550,13 @@ ThemeScreen {
                                 WheelNode {
                                     id: stop
                                     required property string maker
+                                    required property string name
                                     required property int group
                                     required property int groupIndex
                                     required property int groupSize
                                     readonly property int kind: 2
+                                    // An unknown maker's group is its one console, so its stop is named by that console (EmuSen_Qt.md §3.4.6).
+                                    readonly property string label: stop.maker.length > 0 ? stop.maker : stop.name
                                     readonly property bool lit: layout.lit === root.count + 3 + stop.group
                                     readonly property real centre: (layout.dialXs[3 + stop.group] ?? 0) - 64
                                     objectName: "stop.maker." + stop.group
@@ -564,7 +567,7 @@ ThemeScreen {
                                     makers: makers
                                     made: root.made
                                     nodeIndex: root.count + 3 + stop.group
-                                    Accessible.name: stop.maker
+                                    Accessible.name: stop.label
                                     visible: stop.groupIndex === 0
                                     activeFocusOnTab: stop.groupIndex === 0
                                     x: stop.centre - 68
@@ -598,7 +601,7 @@ ThemeScreen {
                                         y: 50
                                         width: 136
                                         horizontalAlignment: Text.AlignHCenter
-                                        text: stop.maker
+                                        text: stop.label
                                         elide: Text.ElideRight
                                         color: stop.lit ? Tokens.textStrong : Tokens.muted
                                         font.family: faces.condensed
@@ -696,7 +699,7 @@ ThemeScreen {
                             x: root.keyX + 80
                             y: 150
                             width: root.keyWidth - 80
-                            text: root.keyKind === 0 ? root.focused.displayName : (root.keyKind === 1 ? root.focused.name : (root.keyKind === 2 ? root.focused.maker : ""))
+                            text: root.keyKind === 0 ? root.focused.displayName : (root.keyKind === 1 ? root.focused.name : (root.keyKind === 2 ? root.focused.label : ""))
                             wrapMode: Text.Wrap
                             maximumLineCount: 2
                             elide: Text.ElideRight

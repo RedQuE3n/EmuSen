@@ -103,6 +103,8 @@ pub struct Text {
     pub width: f64,
     pub height: f64,
     pub ellipsis: bool,
+    /// The words are the host's data (a title, a name, a line built from them), which may elide; a fixed word may not.
+    pub data: bool,
 }
 
 /// What words are drawn in and what lies behind them, for the contrast rule (EmuSen_Kit.md §7.10).
@@ -265,6 +267,16 @@ impl Item {
     /// Whether a player reads or presses it: words, pictures and anything hit-testable.
     pub fn is_read_or_pressed(&self) -> bool {
         self.is_drawn() && (matches!(self.kind, Kind::Words | Kind::Picture) || self.hit_testable)
+    }
+
+    /// Marks every item's words as data unless `fixed` knows them as one of the host's fixed words, by what a reader hears.
+    pub fn mark_data(&mut self, fixed: &dyn Fn(&str) -> bool) {
+        if let Some(text) = self.text.as_mut() {
+            text.data = !fixed(self.heard.as_deref().unwrap_or_default());
+        }
+        for child in &mut self.children {
+            child.mark_data(fixed);
+        }
     }
 
     /// Calls `f` on every visible item with its ancestors, nearest last; an invisible item hides its subtree.

@@ -22,7 +22,7 @@ fn declared() -> Vec<Colour> {
 }
 
 fn text(cap: f64, width: f64, height: f64) -> Text {
-    Text { cap_height: cap, width, height, ellipsis: false }
+    Text { cap_height: cap, width, height, ellipsis: false, data: false }
 }
 
 fn row(n: u32, y: f64, label: &str, call: &str) -> Item {
@@ -196,9 +196,27 @@ fn settings_4_83_2_cut_at_a_scrolling_edge_with_no_fade() {
 }
 
 #[test]
+fn qt_3_7_2_data_may_elide_and_fixed_words_may_not() {
+    // The same elided words, once heard as the host's data (a title) and once as one of its fixed words.
+    let elided = |heard: &str| {
+        let mut tree = clean();
+        let words = &mut tree.children[2].children[0];
+        words.heard = Some(heard.to_owned());
+        words.text = Some(Text { cap_height: 12.0, width: 100.0, height: 20.0, ellipsis: true, data: false });
+        tree.mark_data(&|w| w == "Choose a console");
+        tree
+    };
+    assert!(fit_faults(&elided("Aurora Drift (Synthetic)")).is_empty(), "a title may elide");
+    assert_eq!(fit_faults(&elided("Choose a console")), vec![Fault::Ellipsis { item: id(21) }], "a fixed word may not");
+    let mut unmarked = elided("Aurora Drift (Synthetic)");
+    unmarked.children[2].children[0].text.as_mut().unwrap().data = false;
+    assert_eq!(fit_faults(&unmarked), vec![Fault::Ellipsis { item: id(21) }], "words no host marked are held as fixed");
+}
+
+#[test]
 fn settings_4_83_2_words_cut_with_an_ellipsis_past_their_box_at_the_foot_or_too_small() {
     let mut tree = clean();
-    tree.children[2].children[0].text = Some(Text { cap_height: 11.0, width: 200.0, height: 40.0, ellipsis: true });
+    tree.children[2].children[0].text = Some(Text { cap_height: 11.0, width: 200.0, height: 40.0, ellipsis: true, data: false });
     let faults = fit_faults(&tree);
     assert!(faults.contains(&Fault::Ellipsis { item: id(21) }));
     assert!(faults.contains(&Fault::RunsPastItsBox { item: id(21) }));
@@ -208,7 +226,7 @@ fn settings_4_83_2_words_cut_with_an_ellipsis_past_their_box_at_the_foot_or_too_
 
     let mut excepted = clean();
     excepted.children[2].children[0].name = "moonriseCaption".to_owned();
-    excepted.children[2].children[0].text = Some(Text { cap_height: 11.0, width: 100.0, height: 20.0, ellipsis: false });
+    excepted.children[2].children[0].text = Some(Text { cap_height: 11.0, width: 100.0, height: 20.0, ellipsis: false, data: false });
     let faults = fit_faults(&excepted);
     assert!(faults.is_empty(), "Moonrise's caption is a named exception to the floor: {faults:?}");
 

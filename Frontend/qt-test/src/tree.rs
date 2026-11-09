@@ -165,7 +165,7 @@ fn item(index: u32, node: &Node) -> Item {
         item = item.fading(Edges { top: node.fade_top, bottom: node.fade_bottom, left: node.fade_left, right: node.fade_right });
     }
     if node.text.is_some() {
-        item = item.words(Text { cap_height: node.cap, width: node.tw, height: node.th, ellipsis: node.elided });
+        item = item.words(Text { cap_height: node.cap, width: node.tw, height: node.th, ellipsis: node.elided, data: false });
     }
     let heard = if node.heard.is_empty() { node.text.clone().unwrap_or_default() } else { node.heard.clone() };
     if !heard.is_empty() {

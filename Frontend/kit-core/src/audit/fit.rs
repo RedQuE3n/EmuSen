@@ -75,30 +75,45 @@ fn past_its_limit(item: &Item, ancestors: &[&Item], panel: Rect, slack: f64, fau
 }
 
 fn cut_at_an_edge(item: &Item, ancestors: &[&Item], slack: f64, faults: &mut Vec<Fault>) {
-    let Some(area) = ancestors.iter().rev().find(|a| a.scroll.vertical || a.scroll.horizontal) else { return };
-    let r = item.rect;
-    let a = area.rect;
-    let crosses = |near: f64, far: f64, edge: f64| near < edge - slack && far > edge + slack;
-    let mut cut = |side: Side, fades: bool| {
+    let Some(area) = nearest_scroller(ancestors) else { return };
+    for (side, fades) in crossed_edges(item, area, slack) {
         if !fades {
             faults.push(Fault::CutAtEdge { item: item.id, area: area.id, side });
         }
-    };
+    }
+}
+
+fn nearest_scroller<'a>(ancestors: &[&'a Item]) -> Option<&'a Item> {
+    ancestors.iter().rev().find(|a| a.scroll.vertical || a.scroll.horizontal).copied()
+}
+
+/// The edges of a scroller, along the axis it scrolls, that an item crosses, each with whether it fades.
+fn crossed_edges(item: &Item, area: &Item, slack: f64) -> Vec<(Side, bool)> {
+    let r = item.rect;
+    let a = area.rect;
+    let crosses = |near: f64, far: f64, edge: f64| near < edge - slack && far > edge + slack;
+    let mut sides = Vec::new();
     if area.scroll.vertical {
         if crosses(r.y, r.bottom(), a.y) {
-            cut(Side::Top, area.fades.top);
+            sides.push((Side::Top, area.fades.top));
         }
         if crosses(r.y, r.bottom(), a.bottom()) {
-            cut(Side::Bottom, area.fades.bottom);
+            sides.push((Side::Bottom, area.fades.bottom));
         }
     } else {
         if crosses(r.x, r.right(), a.x) {
-            cut(Side::Left, area.fades.left);
+            sides.push((Side::Left, area.fades.left));
         }
         if crosses(r.x, r.right(), a.right()) {
-            cut(Side::Right, area.fades.right);
+            sides.push((Side::Right, area.fades.right));
         }
     }
+    sides
+}
+
+/// Whether an item crosses a faded edge of its nearest scroller, and so is drawn fading out there (EmuSen_Kit.md §7.35).
+pub(crate) fn fading_out(item: &Item, ancestors: &[&Item]) -> bool {
+    nearest_scroller(ancestors).is_some_and(|area| crossed_edges(item, area, 0.0).iter().any(|(_, fades)| *fades))
 }
 
 fn words(item: &Item, ancestors: &[&Item], slack: f64, smallest: f64, faults: &mut Vec<Fault>) {

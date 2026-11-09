@@ -52,11 +52,15 @@ pub const CONTRAST_SPARE: f64 = 0.1;
 pub const LARGE_TEXT: f64 = 24.0;
 pub const LARGE_BOLD_TEXT: f64 = 18.66;
 
-/// Contrast (WCAG 2.1, 1.4.3): words drawn over what is behind them reach 4.5:1, or 3:1 for large type, over all but the spare share.
+/// Contrast (WCAG 2.1, 1.4.3): words drawn over what is behind them reach 4.5:1, or 3:1 for large type, over all but the spare share;
+/// words crossing a scroller's faded edge are fading out there and are not held to it.
 pub fn contrast(root: &Item) -> Vec<Fault> {
     let mut faults = Vec::new();
-    root.visit(&mut |item, _| {
+    root.visit(&mut |item, ancestors| {
         let Some(words) = &item.legibility else { return };
+        if super::fit::fading_out(item, ancestors) {
+            return;
+        }
         if words.behind.is_empty() || words.ink.a == 0 {
             return;
         }

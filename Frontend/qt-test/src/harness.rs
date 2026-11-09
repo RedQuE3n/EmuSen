@@ -357,6 +357,11 @@ impl Scene<'_> {
         done
     }
 
+    /// `set_property` without the wait, so the next grab is the first frame drawn after the change.
+    pub fn set_property_now(&mut self, object_name: &str, property: &str, value: &str) -> bool {
+        ffi::harness_set_property(self.window(), &QString::from(object_name), &QString::from(property), &QString::from(value))
+    }
+
     /// The variant the tokens paint, switched under the shown scene.
     pub fn set_variant(&mut self, variant: Variant) {
         if let Some(tokens) = self.harness.tokens() {

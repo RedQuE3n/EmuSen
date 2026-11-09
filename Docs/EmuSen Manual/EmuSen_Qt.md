@@ -1011,7 +1011,7 @@ example.
 author, licence, `api` 1.0, the dark and light variants, `fontSizes` 1 and 1.3, the screens `home`, `consoles` and
 `games`, no token override, no cue file, and three previews, `assets/previews/`, the package's own screens over the
 synthetic library at 640 × 400), `screens/Home.qml`, `Consoles.qml` and `Games.qml`, and `parts/` (`Faces`, the
-three Barlow faces from the kit's fonts; `Glyph`, a mark of `Marks` drawn in one ink; `EngineMark`; `CoverFan`). It is
+four Barlow faces from the kit's fonts; `Glyph`, a mark of `Marks` drawn in one ink; `EngineMark`; `CoverFan`). It is
 written against `EmuSen.Theme` alone, every shown word from `Words`, `Help` or a row, and is compiled into the program's
 resources by `qt-app/themes.qrc` at `qrc:/emusen/themes/emusen/` (`emusen_qt::REFERENCE_THEME`, read in QML as
 `ReferenceTheme.folder`); the host loads it as it loads any theme. A file added to the package is added to that list.
@@ -1058,21 +1058,66 @@ focused game's name and facts) take the dark variant's inks by day, through one 
 dark variant's colours, since a theme sees only the variant in force. Continue's panel and the places' tiles are panels:
 dark glass at 55% and 50% by night as before, light at 94% by day, their words the variant's own. The light variant had
 failed contrast almost everywhere (S7's survey of 2026-11-09: 530 lines on Home and 350 on the grid, words at 1.04 to
-3.1:1 over the night). Choose a console keeps its paper by day (`EmuSen_Interface.md` §24.4), which held its words
-already. Over the 120 consoles in the dark variant, an orbit's maker other than the focused one was drawn at 70% and read
+3.1:1 over the night). Choose a console kept its paper by day until it too followed the dark world (below). Over the 120 consoles in the dark variant, an orbit's maker other than the focused one was drawn at 70% and read
 3.44:1; it is now told apart by ink, `muted` beside the focused orbit's `text`, at full opacity. With no game suspended,
 the top's title and facts stand on the world beside the shelf's game rather than on Continue's panel, and take the
 world's inks; the shelf's caption moved down 6 units, clear of the focused cover's ring, which crossed it at 1280 × 720.
 
 Proof, measured 2026-11-09 offscreen on the software backend: `theme-audit --states all` over the package, both variants,
 every size: no contrast finding left (S7's survey: 1,309 lines, of them 530 on Home and 350 on the grid in light, and the
-maker labels' in dark). What stays is the fit rule's, as before and in both variants alike: a place's status line cut with
-an ellipsis at 1280 × 800 ("Game packa…"), the grid's neighbours past their row, and on Choose a console the focused
-console's name cut at the foot and, over 120 consoles, counts and engine tags under the capitals' floor at 1280 × 720.
+maker labels' in dark). What stayed was the fit rule's, the same in both variants, and is mended below (the fit at
+every size).
 Two seeded faults, each reverted: `Night` reading the variant's own tokens by day (30 low-contrast lines in `nogame`'s
 light variant); Continue's panel at 55% by day (its heading and facts low at every size). The acceptance test passes with
 the change (the maker labels were its 3.44:1). The side-by-sides, before left and after right, light, 1280 × 800 (Home,
 Home with no game, the grid, the grid empty, Choose a console): `~/.cache/emusen/tmp/qt-s3-kg/compare/*-side.png`.
+
+**The fit at every size** (2026-11-09). On WiseMan 57cd94128, offscreen on the software backend, `theme-audit --states
+all` over the package found 326 lines, every one the fit rule's and each the same in both variants, and the canvases'
+catalogues (`--catalogue`) found the same faults. Each was the package's layout, not the kit's, and is mended there:
+1. **A place's line cut with an ellipsis.** `placeStatus.2`, the Packages place's "Game packages", a fixed word
+   (`words::is_fixed`), was elided at every size in every state that draws the places (90 lines). Qt sets it 133.3 units
+   wide in Barlow at 20, and the line's box was 126, the tile's 150 less 12 each side. The line now runs to 4 units short
+   of the tile's right edge (134); its left edge stays with the name's. The other fixed lines are 107.5 ("Art and
+   facts"), 123.3, 101.7 and 32.6 wide (measured 2026-11-09 with Qt's `qml`). The acceptance test's exception for the
+   places' lines holds the same rule now: a line built from data may elide (Settings' "Dark · 60% sound" does), a fixed
+   word may not; with the old exception gone it named only Settings' line. Seeded back (the line 126 wide), the audit
+   names `placeStatus.2` cut with an ellipsis at every size in both variants.
+2. **The grid's neighbours under the floor.** `gridPrevious`, the `·` between and `gridNext`, at 18 units, drew capitals of
+   11.33 at 1280 × 720, under the floor of 11.64 (36 lines, every state that shows the grid). They are 19. Seeded back at
+   18, the audit names the three at 1280 × 720 in both variants.
+3. **The full name cut at the foot.** `consoleDetailName`, at 44 units in the canvas's line box of 1 (44), is laid out by
+   Qt at Barlow Condensed's own line, 53, whatever its fixed line height, so its words ran 9 units past their box (75
+   lines: every size, every state that focuses a console, the 120 consoles). The name takes the face's line box, 53, from
+   y 611: its baseline stands one unit higher than the canvas's, so the box ends at 664, where the facts begin. Seeded
+   back (a box of 44), the audit names the name cut at the foot at every size; left at y 612, the name's box meets the
+   facts' and the audit names the overlap at 3840 × 2160, where the unit is past its slack.
+4. **The small words at 1280 × 720.** The worlds' counts, the maker labels with their counts, and the foot's engine name
+   and tag, at 17 units, drew capitals of 10.72 at 1280 × 720 (101 lines, the 120 consoles' among them). They are 19, the
+   smallest whole size over the floor there (18.48 units; Qt's `font.pixelSize` is whole). Their line boxes are 22.8; a
+   maker label grows upward, its foot where the layout's 20-unit box ends, since grown downward the inner orbit's label
+   met its first world (the audit named the label "Sony" over that world at every size, a seeded fault); the tag's box is 24.
+   The counts take Barlow Condensed, so at 19 they are no wider than the canvas's 17 in Barlow: "480 games" is 70.7
+   units against 78.1. In Barlow at 19 (87.3) a count and its engine mark reached the next world's box on the steep
+   stretch of one maker's 40 consoles, and the maker40 catalogue named it at 1280 × 720, 1920 × 1080 and 3840 × 2160
+   (72 lines, none before). Seeded back (the counts at 17), the audit names every count at 1280 × 720.
+
+**What the look gains.** The fixes change the look as well as the fit, each by the least that fits. The counts, the maker
+labels and the engine line are 12% larger at every size, the neighbours 6%, though only 1280 × 720 put them under the
+floor: words sized for each window would copy the floor into the theme, and the tester's decision for Horizon (§3.4.3,
+2026-11-08: the floor holds with no exception, and every small text is 19) applies here as written. The counts take the
+condensed face the names and labels use, in its regular weight. "Game packages" is drawn whole where the accepted render
+cut it, the full name stands a unit higher, and a focused planet grows to 88 rather than 96 (§3.4.2's eighth difference).
+
+**Proof** (measured 2026-11-09, offscreen on the software backend unless named). `theme-audit --states all` over the
+package: no line (326 before). `--catalogue`: no line in any of the canvases' seven catalogues. n120 loses the overlaps it
+had at 16:9 (24 lines a size), where a count in Barlow at 17 and its engine mark met the next world's box; n30, long and
+eleven lose the focused NES's over Master System's count, mended by the focused body's size (§3.4.2's eighth
+difference). The acceptance test passes (Vulkan on the RX 6800) with three of its named differences
+gone: the 17- and 18-unit words at 1280 × 720, the full name's line box and the places' lines cut, the last now only a
+data line's. Nothing outside the package and the acceptance test changed, so the other four themes' findings are as they
+were. The side-by-sides, before left and after right (Home in both variants and Choose a console at 1280 × 800, the grid,
+Choose a console and the 120 consoles at 1280 × 720): `~/.cache/emusen/tmp/qt-s3-fit/compare/*-side.png`.
 
 **Proof, measured 2026-11-08.** The acceptance test (Vulkan on the RX 6800 in its own compositor, the virtual pad, the
 canvas's library) passed on WiseMan d5edac3e5 with the old screens and on the package, and its 90 grabs, 18 states
@@ -1108,17 +1153,17 @@ are unchanged.
   - the worlds;
   - the foot: the full name, the facts, the engine line, and three covers.
 - `parts/CoverRow.qml`, new: three covers whole at the console's shape, no taller than 100 and no wider than 150, 12 apart.
-- `parts/EngineLine.qml`, new: the mark, the engine's name and its tag. By day the hue is darkened to 30% lightness, so
-  the words hold 4.5:1 on the paper, as the canvas has it.
-- `parts/EngineMark.qml`: libretro's badge is now drawn in the ink it is given, as the canvas draws it, so the badge after
-  a world's count is Muted by day. It was a fixed light grey.
+- `parts/EngineLine.qml`, new: the mark, the engine's name and its tag, in the console's hue on the night in both
+  variants (until 2026-11-09 darkened by day to 30% lightness to hold 4.5:1 on the paper).
+- `parts/EngineMark.qml`: libretro's badge is now drawn in the ink it is given, as the canvas draws it. It was a fixed
+  light grey.
 - `parts/CoverFan.qml` is gone. Nothing else used it.
 
 **The layout is data.** The positions come from the kit's `OrbitLayout` (`EmuSen_Kit.md` §7.30), fed `Library.consoles`
 with `role: "group"` and `labelRole: "maker"`. The theme draws each world at (centre + rx cos θ, ry sin θ):
 - θ moves on Reel, so a turning orbit carries its worlds along the arc;
 - the radii move on Pan, so the orbits scroll radially;
-- the body's size (72, or 96 focused) moves on Quick;
+- the body's size (72, or 88 focused) moves on Quick;
 - a world's opacity moves on Fade, so worlds fade as they enter and leave a window or the three shown orbits.
 
 Nothing is placed by name, and the screen holds any count from 0 to 120. `qml-rules` treats a binding whose name ends in
@@ -1134,9 +1179,15 @@ Nothing is placed by name, and the screen holds any count from 0 to 120. `qml-ru
 - The first focus is the console last opened, else the first console in the table, else the first shelf when there is no
   console.
 
-**Night and day.** At night: the kit's `Sky`, its stars still, and the glow at the focused world in its hue. By day there
-is no sky and no glow. The paper is `Tokens.surface`, the orbit lines are ink #1F2A44 at 28%, and the discs are white at
-60% with a 14% edge.
+**Night and day.** In both variants: the kit's `Sky`, its stars still, and the glow at the focused world in its hue. The
+world stays dark by day, as Home's and the grid's do (decided 2026-11-09 by the tester, `EmuSen_Interface.md` §24.4): the
+words on it take `parts/Night.qml`'s inks, the orbit lines, the discs and the engine's hues are the night's, and the help
+bar and the covers are the variant's own. Until then the light variant drew the canvas's paper: `Tokens.surface`, no sky
+and no glow, the orbit lines in ink #1F2A44 at 28%, the discs white at 60% with a 14% edge, and the engine's hue
+darkened. Proof, measured 2026-11-09 offscreen on the software backend: `theme-audit --states all` over the package, both
+variants, finds no line; every software test of `qt-app` passes. Seeded back (the screen's words in the variant's own
+inks), the audit over eleven finds 33 low-contrast lines at every size in light. The side-by-sides of the light Choose a console, the
+paper left and the night right: `~/.cache/emusen/tmp/qt-s3-fit/compare/Consoles-light-*-paper-night.png`.
 
 **Named differences from the canvas**, each seen beside its render. Under each catalogue the worlds' points are the
 canvas's own; kit-core's test holds them within 0.01 unit.
@@ -1155,16 +1206,21 @@ canvas's own; kit-core's test holds them within 0.01 unit.
    canvas's estimated ones (318, 522, 737).
 5. After the first focus, the shown makers move only when the focus leaves them, as spec §3.1 asks; the canvas centres
    the focused maker on every press.
-6. As at stage 1, the canvas's 17-unit words fall under the floor at 1280 × 720 alone, and the full name's glyphs reach
-   past its 44-unit line box.
-7. A world's `Walkable` is the body's box (the ring's when focused), and the name and count hang beneath it, outside
-   the `Walkable`. The canvas's node was 140 units wide and held the words too. On the steep stretches of the outer
+6. The canvas's 17-unit words (the counts, the maker labels and the engine line) are 19, since at 17 they fell under the
+   floor at 1280 × 720; the counts are in Barlow Condensed, no wider than the canvas's, and a label's line grows upward
+   from the layout's 20-unit box. The full name takes Barlow
+   Condensed's own line box, 53 from y 611, where the canvas's was 44 from 612 (2026-11-09, §3.4.1).
+7. A world's `Walkable` is the body's box, the ring drawn 7 units about it when focused, and the name and count hang
+   beneath it, outside the `Walkable`. The canvas's node was 140 units wide and held the words too. On the steep stretches of the outer
    orbits those nodes covered their neighbours, which the fit audit read as overlaps of empty corners.
-8. Two of the canvas's own boxes still touch, and the fit audit names both:
-   - The focused NES's body box reaches 0.7 unit into the line box of Master System's count. The disc's edge stays
-     11 units clear of the words.
-   - A turning orbit's label sits by its window's last world. The two boxes meet at 16:9, where the outer orbit
-     holds ten.
+8. The focused body is 88 units, where the canvas drew 96 (2026-11-09), and the `Walkable` is the body's box rather than
+   the ring's. At 96, with the ring's box as the `Walkable`, the focused world's box reached into the count of the world
+   on the orbit inside it: the focused NES's into Master System's count, 10 units at 1280 × 800, in the canvases'
+   eleven, n30 and long, at every size (one line in n30, six a size in each variant in the others). The drawn ring stayed
+   clear of the words; the boxes did not. At 88 the body's box ends 0.45 unit below that count's line box, and its own
+   name still starts a unit under the ring, as at 96. Seeded back (96), the audit names the overlap over eleven at
+   every size in both variants. The second meeting the audit named on 2026-11-08, a turning
+   orbit's label by its window's last world at 16:9, is named in no catalogue on 2026-11-09.
 9. The inner orbit's window ends at y 197, not 178 (decided 2026-11-08), so it holds 2 worlds, not 3. At 178 a
    focused world at its end grew its ring to y 123, into the places row (which ends at 140). The audit over the 120
    consoles found it, and the canvas's own numbers do the same. A turning orbit shows its whole capacity, with the

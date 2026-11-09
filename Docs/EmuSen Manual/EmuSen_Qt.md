@@ -1042,6 +1042,73 @@ page says ("along and back"), and hears all 120 (man theme-check).
 - `Testing/mockups/Consoles.mockup.spec` is rewritten from `consoles.html`. The acceptance test holds it, leaving out the
   boxes that follow from the canvas's eleven consoles; kit-core's test holds those instead.
 
+#### 3.4.3 Horizon as built **[M 2026-11-08]**
+
+Horizon is the package `Frontend/themes/horizon/`, the design of `horizon.md` (2026-11-08) with Games as Rise: the
+horizon line high at y 440, the focused game or console risen over it at the right as a world in a 300 disc, its words in
+the sky at the left, and the things browsed standing on the land on one foot line (700) under a clamped camera. Its
+`theme.json` lists `home`, `consoles`, `games` and `splash`, the variants dark and light, and one token override,
+`light.accent` #B4442A (Dawn), set on the theme's engine only (§3.5.1). Its mockups are
+`Testing/themes/horizon-{home,consoles,games}.mockup.spec`, held within two units of theme-audit's recordings.
+
+**Parts.** `Backdrop` (the kit's night `Sky` drawn twice, once as the gradient alone and once with the stars clipped at
+the line, so stars stand above the line only; Dawn's gradient by day; the glow at the world's centre; the drift),
+`World` (a game's picture in the disc, a console's `Body` at 300, a place's glass disc, the corona, the rise of 24 over
+`Enter`), `HorizonLine` (the line, and the track while the row is longer than W − 128), `Strip` (a `Flickable` of
+margins 64 whose `contentX` is bound to the camera while it is not dragged, inside the kit's `EdgeFade`), `Lift`, `StripItem` (the walk
+on one axis, LB and RB jumping a group), `Cover`, `PlaceDisc`, `Faces`, `Glyph`, `EngineMark`. Home and Choose a console
+place their items freely in a `Strip` by slot (Choose a console: the places, then each maker's consoles from
+`groupStart`); Games is a horizontal `ListView` with `highlightRangeMode: ApplyRange` and the preferred range at the
+centre, which is the camera of the design's §1.6.
+
+**The camera.** off = clamp(fx + fw/2 − (W − 128)/2, 0, max(0, total − (W − 128))). The first console focused on
+Choose a console (its centre at 528 + 80 in the strip) puts the camera at off 32, so the places start at x 32; the
+mockup holds that, the canvas showing the second console. A row longer than W − 128 but shorter than W still moves
+over the strip's margins: the synthetic library's four consoles make a strip of 1,220, its last console resting 4 units
+past the window under the faded edge until the camera reaches it.
+
+**What was found building it (2026-11-08).** (1) Small text at the design's 17 units fails the capitals floor at
+1280 × 720 (capitals 10.72 against 11.6); the tester decided that the floor holds with no exception, and every small text
+is 19 (the counts, the engine line, whose tag box grew to 24, the maker labels, the Games neighbours, the Continue
+chip, the splash's caption), the console items 137.2 tall. (2) A horizontal `ListView` sets each delegate's y to 0, so
+a cover written with `y: 260 − height` stood at the land's top; each cover now stands inside a slot as tall as the land.
+(3) The software renderer ignores a clip under an item that has no layer; the starred sky and the splash's rising
+bodies are clipped inside a layer on the software backend only (proved by a pixel probe), and the GPU draws the clip
+without one (checked on the RX 6800). (4) Five faults of the audit itself, each fixed with its own test: a pass that
+panicked was a lone "audit" line (now a "stopped" finding, §3.7); a `RectangularShadow`'s vector `offset` was taken
+for a path view that never settled; a flickable's margins were not counted as scroll; the splash was held to the
+pointer rule; a recording's picture was taken mid-transition (now after `Scene::rest`).
+
+**Named differences from the canvases.** The kit's `CoverTile` draws the generated card (a game with no art) with its
+own caption, larger than the canvases' 15-unit condensed caption and, in the cover row, without one; Home draws the
+track on the horizon line (the design's §1.6), where its canvas does not; the new world rises without cross-fading
+under the old; a pressed pad A has no held look of its own (the lift settles, as the design says, but there is no
+press of the pad in the audit); the engine mark is the core's own (`EngineMark`), not the canvas's glyph. Seen in the
+side-by-sides of 2026-11-09 and named: the help bar's glyphs are the kit's generic pad, since the audit connects no
+controller with a face; a game with no hero shows the generated card's hue soft at 40% in the world, where the canvases
+draw a placeholder; Choose a console shows three places at the first console's focus (off 32), where the canvas focuses
+the second; a catalogue's consoles without a look of their own share the first shelved console's body; the splash's
+caption is 19 units (the floor above). **The strips' edge fade.** The strips of Home and Choose a console and Games' row
+stand inside the kit's `EdgeFade` (`EmuSen_Kit.md` §7.35, landed 2026-11-09) and fade to transparency over their outer 40
+units on both backends, so an item at an edge is faded, never cut. Until then a theme part, `FadeMask`, fed a `MultiEffect`
+mask, which is binary on Qt 6.11 with Vulkan (measured 2026-11-09 in a probe: a 100-unit linear alpha ramp cut wholly at
+the threshold, whatever `maskSpreadAtMin` is) and draws nothing on the software backend, so an item at the right edge
+was cut by the window, not faded (Home's last cover at 1280 × 800); `FadeMask` is gone.
+
+**Proof, measured 2026-11-08 and 2026-11-09.** On the GPU (`theme-audit --gpu`: Vulkan on the RX 6800 in a nested
+KWin of the run's own, every picture its state's size): no finding on the four screens at the five sizes in both
+variants, Choose a console over the audit's 120 consoles and over the seven catalogues (`eleven`, `empty`, `long`,
+`one-console`, `n30`, `n120`, `maker40`); the six Home "pad does not reach" findings an earlier run on the desk's own
+compositor reported at its first state are gone. The searching layout, recorded offscreen with `Browse.searching` held
+true in a scratch copy: the matches 140 tall on a foot line at 380 from x 64, unlifted, the world and the line hidden,
+no finding at any size. The splash held at 1, 3 and 5 s matches the canvas's frames for its four consoles. Side-by-sides
+with the canvases' renders are kept in `~/.cache/emusen/tmp/qt-s3/compare/horizon/`. Three faults were seeded in
+scratch copies and caught, each reverted: the camera without its lower clamp (Home's mockup: Continue at 488, not 64);
+Right stepping to the next group's first item (theme-audit: 46 "pad does not reach" findings); the drift running
+whatever the battery and reduced motion (theme-audit: not still under reduced motion, the drift looping). The drift
+running under reduced motion alone was not caught, since the audit's device is on battery at 64% and the battery rule
+stops it too: the audit proves the battery rule, and the reduced-motion rule only with it.
+
 #### 3.4.4 Meridian as built **[M 2026-11-08]**
 
 "Meridian" (`Frontend/themes/meridian/`, resources at `qrc:/emusen/themes/meridian/`) is the design of
@@ -1832,6 +1899,36 @@ metadata is the scraper's `metadata` read (EmuSen_Backend.md §30.3), its edit e
 chosen there and not again here; the plays are games.db's `records`. While the own look is shown the three library
 texts are `[]`, `{}` and `{}` and no game's metadata is read, so the own look's refresh costs what it did.
 
+**A system's full name (2026-11-09).** What an ES-DE theme reads as `${system.fullName}` (`ThemeSystem::variables`),
+a `system` element's default text (`Computed::SystemFullName`) and the words `systemFullname` and `fullname`
+(`scene/words.rs`) is the shelf's `full_name`, which `esde_shelves::read` takes from the systems table's
+`esde_full_name` and never from `display_name`. Its owner is the table (`Platform/systems/data/<id>.json`), and it
+reaches the Frontend through the runtime's existing `systems` call (`crystal-client`'s `SystemRow`): no new surface and
+no new dependency. The names are ES-DE's, from its published user guide, release 3.4.1, section "Supported game
+systems", column *Full name* (`USERGUIDE.md` at the tag `v3.4.1`,
+https://gitlab.com/es-de/emulationstation-de/-/blob/v3.4.1/USERGUIDE.md, read 2026-11-09); ES-DE's source and its
+`es_systems.xml` were not read. Before this the table held the project's short names for three consoles, so Artflix's
+title read SUPER NINTENDO where ES-DE 3.4.1 reads NINTENDO SNES (SUPER NINTENDO):
+
+| System | `esde_system` | `esde_full_name` (ES-DE 3.4.1) | `display_name` (the program's) |
+|---|---|---|---|
+| snes | snes | Nintendo SNES (Super Nintendo) | Super Nintendo |
+| gb | gb | Nintendo Game Boy | Game Boy |
+| gbc | gbc | Nintendo Game Boy Color | Game Boy Color |
+
+The other eleven already read as the guide's table does (Nintendo Entertainment System, Sega Genesis, Sega CD, Sega Mega
+Drive 32X, Sony PlayStation, Nintendo 64, Sega Master System, Sega SG-1000, Sony PlayStation 2, Sega Saturn, Sega
+Dreamcast). Every console the program carries is listed there. **The fallback:** a console the guide does not list
+writes `"esde_full_name": null` in its data file, and `emusen_systems::parse` reads it as the console's `display_name`,
+so the table's JSON, and with it every reader, always carries a name; a written blank, `""` included, is refused. The own
+look and every other screen of the Qt program name a console by `display_name` (`library.rs`) and are unchanged.
+Mistress (C#) reads the same field in its Big Picture: its themed systems, the interface settings' systems, the flatten
+switches and the screensaver's system line now read ES-DE's names too, as ES-DE's own screens do. Proof:
+`emusen-systems`' `every_console_s_es_de_full_name_is_es_de_3_4_1_s` (all fourteen) and
+`a_console_es_de_does_not_list_reads_its_display_name`; `emusen-qt-models`' client test
+`with_a_theme_chosen_the_real_library_s_rows_carry_their_es_de_names` holds `${system.fullName}` for the NES, the SNES
+and the Game Boy, read through the real runtime, to the guide's words.
+
 **`MediaIndex`.** One walk per refresh of each type folder, `<root>/<esde_system>/<folder>/<name>.<ext>`, ES-DE's own
 layout, under the media store and then `EsdeMediaDirectory`, the type folders taken from the scraper's `kinds` table; a
 key keeps the first file found, so the store wins as it does in the scraper's order. A game's cover is then set from
@@ -2173,7 +2270,7 @@ THEMES.md and USERGUIDE.md, settled or named:
 | The list's rows 6–8 px lower than ES-DE's | a row's name takes the face's own line height, not the list's `lineSpacing`, which is the rows' pitch |
 | Artflix's clock missing | ES-DE draws a clock "in the upper left corner" where a theme has none (UG "Display clock"); the loader adds one with THEMES.md's defaults, as it adds the help and the status |
 | Artflix's game count read "12 games available, 6 favorites" | THEMES.md's `gamecount`: "Number of favorites is printed inside brackets", from the shelf's counts: "14 games (7 favorites)" |
-| Artflix's title reads SUPER NINTENDO where ES-DE reads NINTENDO SNES (SUPER NINTENDO) | not accepted as a difference: **owed to H**. The systems table's `esde_full_name` is the project's short name, not ES-DE 3.4.1's full name, a data change in `Platform/systems/data` rather than the painter's |
+| Artflix's title reads SUPER NINTENDO where ES-DE reads NINTENDO SNES (SUPER NINTENDO) | not accepted as a difference: **settled 2026-11-09**. The systems table's `esde_full_name` held the project's short name; it now holds ES-DE 3.4.1's full name from its user guide, a data change in `Platform/systems/data` (§4.6, "A system's full name") |
 | The D-pad pair drawn as two glyphs (left lit, right lit) where ES-DE draws one cross | the kit has no glyph for an axis: **named, open** |
 | No VIEW MEDIA entry in a gamelist | the media viewer is not built; the entry would name a press that does nothing: **named, open** |
 | The help labels wider than ES-DE's | the kit's face where ES-DE uses its own (decided, design §12) |

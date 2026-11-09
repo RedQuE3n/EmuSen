@@ -14,6 +14,24 @@
         <file alias="screens/Home.qml">../themes/emusen/screens/Home.qml</file>
         <file alias="theme.json">../themes/emusen/theme.json</file>
     </qresource>
+    <qresource prefix="/emusen/themes/horizon">
+        <file alias="parts/Backdrop.qml">../themes/horizon/parts/Backdrop.qml</file>
+        <file alias="parts/Cover.qml">../themes/horizon/parts/Cover.qml</file>
+        <file alias="parts/EngineMark.qml">../themes/horizon/parts/EngineMark.qml</file>
+        <file alias="parts/Faces.qml">../themes/horizon/parts/Faces.qml</file>
+        <file alias="parts/Glyph.qml">../themes/horizon/parts/Glyph.qml</file>
+        <file alias="parts/HorizonLine.qml">../themes/horizon/parts/HorizonLine.qml</file>
+        <file alias="parts/Lift.qml">../themes/horizon/parts/Lift.qml</file>
+        <file alias="parts/PlaceDisc.qml">../themes/horizon/parts/PlaceDisc.qml</file>
+        <file alias="parts/Strip.qml">../themes/horizon/parts/Strip.qml</file>
+        <file alias="parts/StripItem.qml">../themes/horizon/parts/StripItem.qml</file>
+        <file alias="parts/World.qml">../themes/horizon/parts/World.qml</file>
+        <file alias="screens/Consoles.qml">../themes/horizon/screens/Consoles.qml</file>
+        <file alias="screens/Games.qml">../themes/horizon/screens/Games.qml</file>
+        <file alias="screens/Home.qml">../themes/horizon/screens/Home.qml</file>
+        <file alias="screens/Splash.qml">../themes/horizon/screens/Splash.qml</file>
+        <file alias="theme.json">../themes/horizon/theme.json</file>
+    </qresource>
     <qresource prefix="/emusen/themes/meridian">
         <file alias="parts/Backdrop.qml">../themes/meridian/parts/Backdrop.qml</file>
         <file alias="parts/Chip.qml">../themes/meridian/parts/Chip.qml</file>

@@ -17,6 +17,7 @@ fn main() {
                 "qml/ClipScene.qml",
                 "qml/PhaseScene.qml",
                 "qml/FadeScene.qml",
+                "qml/FadeResizeScene.qml",
             ])
             .depend("QtQuick")
             .depend("QtQuick.Shapes")

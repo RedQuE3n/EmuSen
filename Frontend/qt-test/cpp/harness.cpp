@@ -190,8 +190,9 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
     }
     if (item->inherits("QQuickFlickable")) {
         const int direction = item->property("flickableDirection").toInt();
-        node["sv"] = direction != 1 && item->property("contentHeight").toDouble() > item->height() + 0.5;
-        node["sh"] = direction != 2 && item->property("contentWidth").toDouble() > item->width() + 0.5;
+        const auto extent = [item](const char* size, const char* before, const char* after) { return item->property(size).toDouble() + item->property(before).toDouble() + item->property(after).toDouble(); };
+        node["sv"] = direction != 1 && extent("contentHeight", "topMargin", "bottomMargin") > item->height() + 0.5; // Qt scrolls over its margins too
+        node["sh"] = direction != 2 && extent("contentWidth", "leftMargin", "rightMargin") > item->width() + 0.5;
         node["wheel"] = item->property("interactive").toBool();
         node["ch"] = item->property("contentHeight").toDouble() * unit.height();
     }

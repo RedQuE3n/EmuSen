@@ -2,7 +2,7 @@ import QtQuick
 import EmuSen.Theme 1.0
 import "../parts"
 
-// Home's places as rows, and beside them a view flicked again before it can come to rest, so the audit can never settle it.
+// Home's places as rows, and beside them a view flicked from the start along a row too long to cross, so it never comes to rest.
 ThemeScreen {
     objectName: "Home"
     role: ThemeScreen.Home
@@ -19,11 +19,16 @@ ThemeScreen {
             width: 400
             height: 200
             clip: true
-            contentWidth: 4000
+            contentWidth: 10000000
             contentHeight: 200
-            flickableDeceleration: 1
-            Component.onCompleted: restless.flick(-4000, 0)
-            onMovementEnded: restless.flick(restless.atXEnd ? 4000 : -4000, 0)
+            flickDeceleration: 1
+        }
+        Timer {
+            running: true
+            repeat: true
+            triggeredOnStart: true
+            interval: 200
+            onTriggered: restless.flick(-4000, 0)
         }
     }
 }

@@ -65,12 +65,13 @@ fn qt_3_7_a_view_that_never_settles_stops_its_pass_loudly_and_fails_the_check() 
     assert_eq!(status, 1);
     let stopped: Vec<&str> = out.lines().filter(|l| l.contains("unsettled/screens/Home.qml:1 stopped ")).collect();
     assert_eq!(stopped.len(), 1, "one line for the pass: {out}");
-    assert!(stopped[0].contains(" stopped 1280x800, judged still under reduced motion: the audit stopped here"), "where it stopped: {out}");
-    assert!(stopped[0].contains("still moving after 5000 ms"), "the harness's words: {out}");
+    // The view is moving from the start, so the pass stops at its first settling: the reduced-motion check at 1280 x 800.
+    assert!(stopped[0].contains(":1 stopped 1280x800, judged still under reduced motion: the audit stopped here"), "where it stopped: {out}");
+    assert!(stopped[0].contains("QQuickFlickable restless") && stopped[0].contains("still moving after 5000 ms"), "the harness's words: {out}");
     let folder = themes().join("unsettled").display().to_string();
     let (out, status) = run_with(&["theme-check".into(), folder], plain, Some(Path::new(PROGRAM))).unwrap();
     assert_ne!(status, 0, "{out}");
-    assert!(out.contains(" stopped 1280x800"), "{out}");
+    assert!(out.contains("unsettled/screens/Home.qml:1 stopped "), "{out}");
 }
 
 #[test]

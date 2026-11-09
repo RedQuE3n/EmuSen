@@ -1228,6 +1228,11 @@ fade as they set behind it. 1 to 120 consoles of any makers, interleaved or not,
     worlds' labels then): words at 30% read under the contrast floor.
 11. A console of no maker is a group of its own (`maker_groups`), so its stop on the dial, which the spec leaves without
     words, is named by that console, drawn and heard, and the key names it so when the stop is focused.
+12. By day Muted is #5A4B3C where the spec has #6B5B4A (decided 2026-11-09). The glow's wash, the kit's alpha 0.2 at
+    lightness 50%, lies under words that the spec sets in Muted: Games' `addFolder` read 4.18:1 in `empty`, the hub's "·"
+    4.35:1 in `one-console` at 1280 × 720. Over the wash at its centre, on any of the paper's three stops, at any hue,
+    #6B5B4A reads 3.64:1 at the worst (hue 240) and #5A4B3C 4.68:1; a lighter wash does not reach 4.5:1 (4.30:1 at
+    lightness 70%), and words of one role drawn in two inks by where they stand would be an exception a screen at a time.
 
 **Proof, measured 2026-11-09** (offscreen, the software backend). `theme-check` reads the package in both steps at the
 five sizes in dark and light, Choose a console also over the audit's 120 consoles, the sweep hearing all 120. The
@@ -1258,6 +1263,9 @@ side by side in `~/.cache/emusen/tmp/qt-s3-ofix/compare/`:
    box (`z` 1), so a press on its foot is the panel's rather than the list's, which took the foot's last 26 units before;
    no cover comes under the panel (the d = ±2 covers stand at x 181 to 371 and 909 to 1099, the panel at 400 to 880).
    Games' orbit reaches 174 in a box from 112. Seeded back (the box at 330): the same 20 lines.
+3. In `empty`, light, Games' `addFolder` read 4.15 to 4.18:1 at every size. Difference 12.
+4. In `one-console`, light, at 1280 × 720, the hub's "·" read 4.35:1. Difference 12; with Muted seeded back to #6B5B4A,
+   both return (6 lines).
 
 ### 3.5 Loading and the sandbox
 

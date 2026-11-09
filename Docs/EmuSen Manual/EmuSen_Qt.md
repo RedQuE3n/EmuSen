@@ -944,13 +944,24 @@ world's inks; the shelf's caption moved down 6 units, clear of the focused cover
 
 Proof, measured 2026-11-09 offscreen on the software backend: `theme-audit --states all` over the package, both variants,
 every size: no contrast finding left (S7's survey: 1,309 lines, of them 530 on Home and 350 on the grid in light, and the
-maker labels' in dark). What stays is the fit rule's, as before and in both variants alike: a place's status line cut with
-an ellipsis at 1280 × 800 ("Game packa…"), the grid's neighbours past their row, and on Choose a console the focused
-console's name cut at the foot and, over 120 consoles, counts and engine tags under the capitals' floor at 1280 × 720.
+maker labels' in dark). What stayed was the fit rule's, the same in both variants, and is mended below (the fit at
+every size).
 Two seeded faults, each reverted: `Night` reading the variant's own tokens by day (30 low-contrast lines in `nogame`'s
 light variant); Continue's panel at 55% by day (its heading and facts low at every size). The acceptance test passes with
 the change (the maker labels were its 3.44:1). The side-by-sides, before left and after right, light, 1280 × 800 (Home,
 Home with no game, the grid, the grid empty, Choose a console): `~/.cache/emusen/tmp/qt-s3-kg/compare/*-side.png`.
+
+**The fit at every size** (2026-11-09). On WiseMan 57cd94128, offscreen on the software backend, `theme-audit --states
+all` over the package found 326 lines, every one the fit rule's and each the same in both variants, and the canvases'
+catalogues (`--catalogue`) found the same faults. Each was the package's layout, not the kit's, and is mended there:
+1. **A place's line cut with an ellipsis.** `placeStatus.2`, the Packages place's "Game packages", a fixed word
+   (`words::is_fixed`), was elided at every size in every state that draws the places (90 lines). Qt sets it 133.3 units
+   wide in Barlow at 20, and the line's box was 126, the tile's 150 less 12 each side. The line now runs to 4 units short
+   of the tile's right edge (134); its left edge stays with the name's. The other fixed lines are 107.5 ("Art and
+   facts"), 123.3, 101.7 and 32.6 wide (measured 2026-11-09 with Qt's `qml`). The acceptance test's exception for the
+   places' lines holds the same rule now: a line built from data may elide (Settings' "Dark · 60% sound" does), a fixed
+   word may not; with the old exception gone it named only Settings' line. Seeded back (the line 126 wide), the audit
+   names `placeStatus.2` cut with an ellipsis at every size in both variants.
 
 **Proof, measured 2026-11-08.** The acceptance test (Vulkan on the RX 6800 in its own compositor, the virtual pad, the
 canvas's library) passed on WiseMan d5edac3e5 with the old screens and on the package, and its 90 grabs, 18 states

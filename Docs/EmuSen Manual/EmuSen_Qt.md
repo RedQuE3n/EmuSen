@@ -4172,7 +4172,12 @@ frame with nothing visible changed (`assert_still("Home over the suspended game"
 against the idle gate (§9.3.2). `CardModel` now reads its facts only while it is shown, and reads them afresh as it
 opens; the cards test holds both, a hidden card's new facts swapping no frame and the card shown reading them current.
 **A state depended on the wall clock.** `Clock` gained `now`, the time it reads (0, the default, the wall clock), and
-`acceptance.rs` holds it at one instant (`common::HELD_NOW`), as esde-qt's tests hold `EsdeModel.now`. Seeded faults, each reverted:
+`acceptance.rs` holds it at one instant (`common::HELD_NOW`), as esde-qt's tests hold `EsdeModel.now`. The moment a game
+pauses stays the wall clock's, since the session and a theme's `Words` read it too, so a held clock holds only how it
+is said: holding it there as well put the pause days before the wall clock's now, and the reference theme's Continue,
+which `Words.pausedFacts` words against the wall clock, said `Paused 3 days ago`. A theme's `Words` still read the wall
+clock; holding them needs a `now` of their own on theme-qt's `Words`, an addition to the theme API (Rule T), proposed
+to the tester and not built. Seeded faults, each reverted:
 - Resume stepping past either end, so the focus never moves on: the models' Resume test;
 - the automatic state after the first slot rather than the last in use: the models' States test;
 - B on the page going to the library's screen rather than where it was opened: the models' routes test;
@@ -4180,6 +4185,11 @@ opens; the cards test holds both, a hidden card's new facts swapping no frame an
 - the kit's sink drawing nothing on the software backend: the program's test, the hero still the screenshot's green;
 - the actions' list left with no current item when its model fills: the program's test, Right from Play reaching
   nothing.
+- Delete made without asking: the models' States test;
+- the clip's player kept while the page has not the focus: the program's test, the player still made after B;
+- a hidden card reading its new facts: the cards test, 2 frames swapped under Home;
+- the clock ignoring its held instant: the cards test, the clock reading the wall clock's time;
+- crystal's forget leaving the earlier build's sidecar: crystal's `state_forget` test.
 
 ---
 

@@ -61,7 +61,9 @@ impl cxx_qt::Initialize for qobject::Clock {
         self.as_mut().on_console_changed(|clock| clock.say()).release();
         self.as_mut().on_now_changed(|clock| clock.tick()).release();
         self.as_mut().on_game_paused_changed(|mut clock| {
-            clock.as_mut().rust_mut().paused_at = clock.at();
+            // The moment of pausing is the wall clock's, which the session and a theme's Words also read; a held clock
+            // holds only how it is said.
+            clock.as_mut().rust_mut().paused_at = crate::words::now();
             clock.say();
         })
         .release();

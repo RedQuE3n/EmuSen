@@ -1759,7 +1759,12 @@ pointers to close their row. A row of several boxes is justified to the margins;
 holds while it needs at most two lines; past that the compact tier is laid out, and it scrolls when taller than the chart
 (468 units). Bodies alternate raised and lowered about each line's centre, the phase following the box's place in its
 row. The walk: Left and Right along a line; Up and Down to the node of the adjacent line nearest in x, the first of two
-at the same distance; the apex above its two pointers, which sit between the line's last item and each other. Each item
+at the same distance; the apex above its two pointers, which sit between the line's last item and each other, and Right from the apex to
+the lower right pointer. The canvas has no Right from the apex; theme-audit's 120-console sweep, which walks along each row and
+back, never reached Recently played without it (measured 2026-11-08). For the same sweep, Pointers standing alone in their row go
+Down to the ends of the next line, the lower left to its first node and the lower right to its last; from Recently played the
+nearest node in x lay mid-line, and a sweep entering there missed every console to its right (Game Boy and Super Nintendo of
+the 120). These two are the layout's only departures from the canvas. Each item
 also gets its group and the item drawn before it in its figure (a wrapped line goes on from the last body above).
 `FigureGeometry::CHART` is the Figures canvas's measures (full: body 72, pitch 110 or 130, amplitude 20, label 140,
 row pitch 232, zone 100; compact: 56, 96 or 112, 16, 124, 168, 90; chart 96 to 564; the pointers 360 wide, their stars

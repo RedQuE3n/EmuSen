@@ -273,7 +273,8 @@ pub fn figure_layout<K: PartialEq>(width: f64, keys: &[K], g: &FigureGeometry) -
 }
 
 /// Left and Right along a line, Up and Down to the nearest node in x of the next line; the pointers' apex above its two stars,
-/// which sit between the line's last item and each other.
+/// which sit between the line's last item and each other, and Right from the apex to the lower right star; standing alone,
+/// they go Down to the ends of the next line.
 fn walk(items: &mut [Point], pointers: &mut [Point; 3], lines: usize) {
     let mut by_line: Vec<Vec<(Node, f64)>> = vec![Vec::new(); lines.max(1)];
     for (p, at) in pointers.iter().enumerate() {
@@ -312,7 +313,7 @@ fn walk(items: &mut [Point], pointers: &mut [Point; 3], lines: usize) {
         }
     }
     pointers[0].left = before;
-    pointers[0].right = None;
+    pointers[0].right = Some(right);
     pointers[0].up = None;
     pointers[0].down = Some(left);
     pointers[1].up = Some(apex);
@@ -322,5 +323,10 @@ fn walk(items: &mut [Point], pointers: &mut [Point; 3], lines: usize) {
     pointers[1].left = before;
     if let Some(Node::Item(b)) = before {
         items[b].right = Some(left);
+    }
+    // Pointers standing alone open onto the next line at its ends, so a walk along a row and back takes the line whole.
+    if before.is_none() && let Some(next) = by_line.get(pointers[0].line + 1) {
+        pointers[1].down = next.first().map(|e| e.0);
+        pointers[2].down = next.last().map(|e| e.0);
     }
 }

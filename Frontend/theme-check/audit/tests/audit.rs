@@ -60,6 +60,20 @@ fn qt_3_7_a_place_no_walk_leads_to_is_unreachable_at_every_size() {
 }
 
 #[test]
+fn qt_3_7_a_view_that_never_settles_stops_its_pass_loudly_and_fails_the_check() {
+    let (out, status) = audit("unsettled");
+    assert_eq!(status, 1);
+    let stopped: Vec<&str> = out.lines().filter(|l| l.contains("unsettled/screens/Home.qml:1 stopped ")).collect();
+    assert_eq!(stopped.len(), 1, "one line for the pass: {out}");
+    assert!(stopped[0].contains(" stopped 1280x800, judged still under reduced motion: the audit stopped here"), "where it stopped: {out}");
+    assert!(stopped[0].contains("still moving after 5000 ms"), "the harness's words: {out}");
+    let folder = themes().join("unsettled").display().to_string();
+    let (out, status) = run_with(&["theme-check".into(), folder], plain, Some(Path::new(PROGRAM))).unwrap();
+    assert_ne!(status, 0, "{out}");
+    assert!(out.contains(" stopped 1280x800"), "{out}");
+}
+
+#[test]
 fn qt_3_7_consoles_laid_out_by_hand_do_not_survive_120_consoles() {
     let (out, status) = audit("by-hand");
     assert_eq!(status, 1);

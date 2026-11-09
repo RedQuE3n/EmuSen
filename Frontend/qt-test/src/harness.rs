@@ -182,7 +182,13 @@ impl Scene<'_> {
             .collect();
         let mut waited = 0;
         while let Some(&(id, _)) = views.iter().find(|&&(id, path)| !self.at_rest(id, path)) {
-            assert!(waited < SETTLE_MS, "a view ({id:#x}) still moving after {SETTLE_MS} ms");
+            if waited >= SETTLE_MS {
+                let node = tree.nodes.iter().find(|n| n.id.parse::<u64>().ok() == Some(id));
+                let named = node.map(|n| format!("{} {}", n.ty, n.name)).unwrap_or_default();
+                let mut get = |property: &str| ffi::harness_get(self.window(), id, &QString::from(property));
+                let (moving, flicking) = (get("moving"), get("flicking"));
+                panic!("a view ({id:#x} {named}; moving {moving}, flicking {flicking}) still moving after {SETTLE_MS} ms");
+            }
             self.wait(10);
             waited += 10;
         }

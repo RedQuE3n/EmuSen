@@ -144,8 +144,14 @@ THE LOADED STEP
                     and the sandbox's words, a line each
         warning     anything Qt logged while the screen was shown, the
                     theme engine's warnings among them
-        audit       a state the harness could not read (a view still
-                    moving after 5 s), with its words
+        stopped     a pass the audit could not finish: the harness
+                    panicked (a view still moving after 5 s), so the
+                    state it names, by size and variant, and every
+                    later state of that pass were not judged; the line
+                    gives the harness's words and fails the check like
+                    any finding (decided 2026-11-08: a pass that stops
+                    is never silent, and the passes agree only when
+                    both finish)
 
     --state DIR writes each state's recording into DIR as
     Screen-variant-WxH.spec and .png (EmuSen_InterfaceSpec.md's format),

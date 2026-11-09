@@ -422,6 +422,10 @@ QString harness_tree(QObject& window)
 {
     QJsonArray nodes;
     if (QQuickWindow* w = quick(window)) {
+        // Read as the next frame draws it: a positioner lays out at the polish before a frame (EmuSen_Kit.md §7.41).
+        if (QQuickTest::qIsPolishScheduled(w)) {
+            QQuickTest::qWaitForPolish(w, 1000);
+        }
         dump(w->contentItem(), 0, 1.0, nodes);
     }
     return QString::fromUtf8(QJsonDocument(nodes).toJson(QJsonDocument::Compact));

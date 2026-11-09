@@ -2547,3 +2547,36 @@ current one and the pointer making the fourth current, then the screen deleted a
 (`Scene::destroy`, `harness_destroy`: deletes a named object as a window's teardown does). Qt must log nothing. Before the
 change it logged 48 lines, all `OrbitSlot.qml:44-45`. Seeded fault: `OrbitSlot`'s `view?.` taken back to `view.` (the test
 fails on 48 lines).
+
+### 7.41 The tree read as the next frame draws it (2026-11-09)
+
+theme-audit named Orrery's help bar in its `disabled` state with Open over Search and Home, at four sizes of five
+offscreen (1920 × 1200 alone on the GPU). The entries' boxes in the recorded tree all stood at the Row's start
+(x 96, 96, 96 at 1920 × 1200), while the picture recorded with it showed them in a row. Measured on 2026-11-09 with the
+audit's held tree read twice: at once after `rest`, x 96, 96, 96; 300 ms later, x 96, 282.7, 492.8.
+
+**The cause.** Walking the focus to a declined place gives the frame a new help model, the bar's `Repeater` makes its
+entries again, and the `Row` places them at its next polish, which Qt runs only before a frame. `Scene::rest` returns at
+once while a running animation never ends, which the harness takes for a design's resting motion, and every
+`FrameAnimation` counts as one; the kit's `Sky` runs its `FrameAnimation` while its glow eases (§7.5), and the focus moving
+from a cover to a place moved the glow. The tree was read between the change and its polish: a state no frame ever draws.
+The light variant, whose sky is not drawn, waited for frames and read the row as drawn.
+
+**The rule.** `harness_tree` waits for a scheduled polish first (`QQuickTest::qWaitForPolish`, Qt's own test API), so the
+tree is the one the next frame draws, whatever is running. The audit's rules are unchanged. That `rest` cannot tell the
+sky's easing from a resting motion stays as it was: a frame clock declares neither, and the polish wait is what the tree
+needed.
+
+**Why the polish is the moment.** Qt Quick places an item in two steps: a property change marks a positioner or layout
+dirty and asks for a polish, and the polish, run on the GUI thread just before the scene graph is synchronised for a
+frame, writes the children's `x` and `y` (Qt's documentation of `QQuickItem::updatePolish`, and `QQuickTest::qWaitForPolish`,
+which Qt Quick Test provides for reading items after such a change). Between the two, a box is a value no frame draws;
+after the polish it is the value the next frame draws. Waiting for a frame would also do, but not when no frame is due,
+and a fixed wait only makes the race rarer. With no polish scheduled the read is as before. Measured on 2026-11-09 with
+the change: qt-test's 29 tests and the program's (`emusen-qt`) 26 pass, as they did before it; none reads a tree
+mid-layout, so it fixes no other finding or flake those tests knew. The finding it removes is Orrery's above; theme-audit
+over the other four themes in every state is in `EmuSen_Qt.md` §3.7.2.
+
+Held to by `qt-test/tests/polish.rs` over `PolishScene.qml`: a help bar whose model changes, one entry declined, while a
+`FrameAnimation` runs; after `rest` the entries stand where they stood. Before the change the entries read x 0, 0, 0
+where they stood at 0, 127.5 and 267.9. Seeded fault: the polish wait removed (the same three zeros).

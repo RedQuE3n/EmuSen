@@ -1266,6 +1266,8 @@ side by side in `~/.cache/emusen/tmp/qt-s3-ofix/compare/`:
 3. In `empty`, light, Games' `addFolder` read 4.15 to 4.18:1 at every size. Difference 12.
 4. In `one-console`, light, at 1280 × 720, the hub's "·" read 4.35:1. Difference 12; with Muted seeded back to #6B5B4A,
    both return (6 lines).
+5. In `disabled`, the help bar's Open over Search and Home was a misreading of the tree, not a drawing
+   (`EmuSen_Kit.md` §7.41): fixed in the harness.
 6. On teardown, 14 to 22 `TypeError`s at the end of a run (`OrbitCover.qml:16-17`, the kit's `OrbitSlot.qml:44-45`), from the covers
    outliving their orbit while the screen is deleted (`EmuSen_Kit.md` §7.40), not from `ViewCurrent`. `OrbitSlot` reads
    its view as possibly null, and `OrbitCover` its `orbit` (`?.`, `?? 0`). A run logs none; with `OrbitCover`'s guard
@@ -1574,6 +1576,12 @@ view's current item, the pointer focuses only by moving, and the walk waits out 
 finding left in any (the reference package, Meridian and Constellation 70 lines each before, Horizon 80). What stays is
 each theme's own default: the reference package's light variant's contrast and fit (46 lines), Horizon's `EdgeFade`
 warnings (the fade piece's).
+
+**After Orrery's remaining findings** (2026-11-09, §3.4.6), with the harness reading the tree after any scheduled polish
+(`EmuSen_Kit.md` §7.41), `--states all` offscreen on the software backend: Orrery none, and nothing logged; Horizon none;
+Constellation (its branch's copy) none; Meridian `nogame` alone (58 lines, the shelf's covers cut and unreached, the same 58
+from the audit without the polish wait); the reference package its 326 `fit` lines, the same as the baseline taken that
+day before its own fit work. On the GPU, Orrery in the default and its spec's ten states: none.
 
 **Not yet.** The reference package (R) has not been through it; a theme's token overrides are not applied to the theme's engine by
 the host yet, so the loaded step judges the kit's own colours; the splash's still frame is judged as every screen is, under reduced

@@ -21,12 +21,14 @@ Additions only; no type, property, signal or invokable was removed or changed.
 - **`SliderRow`** (qmldir): a row with a slider, stepped by the pad and dragged by the pointer. §7.42.
 - `MenuRow`'s ◂ ▸ and ▸ marks are no longer painted past a clip on the software backend; its surface is unchanged. §7.40.
 
-## 1.0, stage 5 piece D: a long value on a row (2026-11-09)
+## 1.0, stage 5 piece D: a long value on a row, and the text sizes (2026-11-09)
 
-No type, property, signal or invokable was added, removed or changed.
+One property added; nothing removed or changed.
 
 - `MenuRow`'s value is at most half the row and cut at its start, so a long path no longer squeezes the label out.
   `EmuSen_Kit.md` §7.46.
+- **`Tokens.textSize`** (registry): a text size by the setting's word, which sets `textScale` to the kit's scale for it
+  (kit-core's `TEXT_SIZES`). An addition; `textScale` is unchanged. §7.47.
 
 ## 1.0, stage 5 piece B: the tool screen and the page frame (2026-11-09)
 

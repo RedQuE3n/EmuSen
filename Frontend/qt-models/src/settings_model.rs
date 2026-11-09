@@ -58,9 +58,10 @@ pub mod qobject {
         #[qproperty(f64, meter, READ, NOTIFY)]
         /// The text sizes' lines, or the two variants' names; `sampleScale` gives each line's scale.
         #[qproperty(QStringList, samples, READ, NOTIFY)]
-        /// What the settings ask of the whole program, once read: the type scale, the light variant, reduced motion.
+        /// What the settings ask of the whole program, once read: the text size (its word, which the kit's tokens scale
+        /// by), the light variant, reduced motion.
         #[qproperty(bool, ready, READ, NOTIFY)]
-        #[qproperty(f64, text_scale, cxx_name = "textScale", READ, NOTIFY)]
+        #[qproperty(QString, text_size, cxx_name = "textSize", READ, NOTIFY)]
         #[qproperty(bool, light, READ, NOTIFY)]
         #[qproperty(bool, reduced_motion, cxx_name = "reducedMotion", READ, NOTIFY)]
         /// The help bar's screen (HelpModel's numbers).
@@ -161,7 +162,7 @@ pub struct SettingsModelRust {
     samples: QStringList,
     sample_scales: Vec<f64>,
     ready: bool,
-    text_scale: f64,
+    text_size: QString,
     light: bool,
     reduced_motion: bool,
     help: i32,
@@ -199,7 +200,7 @@ impl Default for SettingsModelRust {
             samples: QStringList::default(),
             sample_scales: Vec::new(),
             ready: false,
-            text_scale: 1.0,
+            text_size: QString::default(),
             light: false,
             reduced_motion: false,
             help: shown_screen(Screen::Settings),
@@ -354,10 +355,10 @@ impl qobject::SettingsModel {
 
     /// What the settings ask of the whole program, from the values read or changed.
     fn applied(mut self: Pin<&mut Self>) {
-        let (scale, light, reduced) = (self.view.text_scale(), self.view.light(), self.view.reduced_motion());
-        if self.text_scale != scale {
-            self.as_mut().rust_mut().text_scale = scale;
-            self.as_mut().text_scale_changed();
+        let (size, light, reduced) = (QString::from(self.view.text_size().as_str()), self.view.light(), self.view.reduced_motion());
+        if self.text_size != size {
+            self.as_mut().rust_mut().text_size = size;
+            self.as_mut().text_size_changed();
         }
         if self.light != light {
             self.as_mut().rust_mut().light = light;

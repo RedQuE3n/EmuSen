@@ -43,7 +43,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 45u
+#define EMUSEN_PLATFORM_ABI_VERSION 46u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -129,6 +129,7 @@ int64_t emusen_galaxia_directory(uint32_t which, uint8_t *out, size_t len);
 #define EMUSEN_GALAXIA_FILE_RECORDS 3u  /* records.db, the C# front end's records, beside states.db */
 #define EMUSEN_GALAXIA_FILE_MEDIA 4u    /* media.db, the scraper's store, in the media folder */
 #define EMUSEN_GALAXIA_FILE_THEMES 5u   /* themes.db, the installed big-picture themes, in the themes folder */
+#define EMUSEN_GALAXIA_FILE_GRAPHICS 6u /* GraphicsConfig's file, graphics.json, in the config directory itself; since 46 */
 
 /* A file of Galaxia's, by its EMUSEN_GALAXIA_FILE_* number, as a path in the process's tree; whether it exists is not asked. */
 int64_t emusen_galaxia_file(uint32_t which, uint8_t *out, size_t len);

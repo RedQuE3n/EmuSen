@@ -55,8 +55,8 @@ Window {
         found: games.count > 0
         onQuit: Qt.quit()
     }
-    // Reduced motion as the start read it until Settings has read the settings, then as they say; the type scale and the
-    // variant as they say (EmuSen_Qt.md §7.7).
+    // Reduced motion as the start read it until Settings has read the settings, then as they say; the text size, which
+    // the kit's tokens scale by, and the variant as they say (EmuSen_Qt.md §7.7).
     Binding {
         target: Kit.Tokens
         property: "reducedMotion"
@@ -64,8 +64,8 @@ Window {
     }
     Binding {
         target: Kit.Tokens
-        property: "textScale"
-        value: settingsModel.textScale
+        property: "textSize"
+        value: settingsModel.textSize
     }
     Binding {
         target: Kit.Tokens

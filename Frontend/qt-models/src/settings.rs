@@ -6,6 +6,7 @@
 
 use crate::words;
 use emusen_kit_core::settings::RowKind;
+use emusen_kit_core::tokens::text_scale_of;
 use serde_json::{json, Value};
 
 /// The screen's description: sections, their rows in order, the doors' words and the panes.
@@ -16,7 +17,7 @@ pub const DESCRIPTION: &str = include_str!("../data/settings_screen.json");
 pub enum Model {
     /// `AppSettings`, the settings file.
     App,
-    /// `GraphicsConfig`, graphics.json, with each console's keys in its `Consoles` map.
+    /// `GraphicsConfig`, its file by Galaxia's number, with each console's keys in its `Consoles` map.
     Graphics,
 }
 
@@ -444,13 +445,8 @@ impl SettingsView {
             _ => 0.0,
         };
         let samples = match (&keyed, preview) {
-            (Some(k), Preview::Sizes) => {
-                let scales = &entry["scales"];
-                self.choices(&entry, k)
-                    .into_iter()
-                    .map(|(v, w)| (format!("{w} · {}", self.word("sample")), scales[&v].as_f64().unwrap_or(1.0)))
-                    .collect()
-            }
+            // Each size's scale is the kit's, which applies the text size to every screen.
+            (Some(k), Preview::Sizes) => self.choices(&entry, k).into_iter().map(|(v, w)| (format!("{w} · {}", self.word("sample")), text_scale_of(&v))).collect(),
             (Some(k), Preview::Variants) => self.choices(&entry, k).into_iter().take(2).map(|(_, w)| (w, 1.0)).collect(),
             _ => Vec::new(),
         };
@@ -563,18 +559,9 @@ impl SettingsView {
         Some(at(self.document(model), key).map(text_of).unwrap_or_default())
     }
 
-    /// The type scale the text size names; 1 for a size the description does not know.
-    pub fn text_scale(&self) -> f64 {
-        let size = self.applied("text_scale").unwrap_or_default();
-        let scales = self.description["sections"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .flat_map(|s| s["rows"].as_array().cloned().unwrap_or_default())
-            .find(|e| e.get("scales").is_some())
-            .map(|e| e["scales"].clone())
-            .unwrap_or(Value::Null);
-        scales[&size].as_f64().unwrap_or(1.0)
+    /// The text size chosen, by the word the setting stores; the kit gives its scale (`text_scale_of`).
+    pub fn text_size(&self) -> String {
+        self.applied("text_size").unwrap_or_default()
     }
 
     fn applies_as(&self, name: &str) -> bool {

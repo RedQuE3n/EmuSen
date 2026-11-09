@@ -112,15 +112,18 @@ fn qt_7_7_settings_opens_from_home_steps_saves_and_holds_its_states() {
     scene.pad(UiButton::Left);
     wait_for(&mut scene, "settingsModel", "light", "false", 1000);
 
-    // Text size stepped: saved, and the kit's type scale follows at once.
+    // Text size stepped: saved, and the kit's type scale follows at once, from the kit's own scale for the word.
     for _ in 0..4 {
         scene.pad(UiButton::Up);
     }
     scene.pad(UiButton::Right);
-    wait_for(&mut scene, "settingsModel", "textScale", "1.15", 1000);
+    wait_for(&mut scene, "settingsModel", "textSize", "large", 1000);
     assert_eq!(stored(&platform, "TextSize"), "large");
+    assert_eq!(*scene.kit_tokens().unwrap().text_scale(), emusen_kit_core::tokens::text_scale_of("large"));
+    assert_eq!(*scene.kit_tokens().unwrap().text_scale(), 1.15);
     scene.pad(UiButton::Left);
-    wait_for(&mut scene, "settingsModel", "textScale", "1", 1000);
+    wait_for(&mut scene, "settingsModel", "textSize", "default", 1000);
+    assert_eq!(*scene.kit_tokens().unwrap().text_scale(), 1.0);
 
     // Sound ▸ Volume stepped down: a share saved as a number.
     reach(&mut scene, 2, 0);

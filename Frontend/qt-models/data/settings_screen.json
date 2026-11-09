@@ -9,7 +9,7 @@
     "games": "games"
   },
   "applies": {
-    "text_scale": "AppSettings TextSize",
+    "text_size": "AppSettings TextSize",
     "light": ["AppSettings Appearance", "light"],
     "reduced_motion": ["AppSettings ReducedMotion", "on"]
   },
@@ -47,7 +47,7 @@
          "door": "levers", "pane": {"preview": "picture", "caption": "{running} · live preview", "muted": ["A opens its levers; each one redraws the picture."]}},
         {"id": "shaders", "label": "Shaders", "hint": "The shader each console draws with: the built-in filters, the recent ones and the slang pack's presets.", "door": "shaders"},
         {"id": "crop", "row": "GraphicsConfig.Consoles Overscan", "consoles": "televisions"},
-        {"id": "textsize", "row": "AppSettings TextSize", "scales": {"default": 1.0, "large": 1.15, "larger": 1.3},
+        {"id": "textsize", "row": "AppSettings TextSize",
          "pane": {"preview": "sizes", "sentence": "Text size scales every word on the big screen; nothing is cut off at any size."}},
         {"id": "art", "row": "AppSettings HomeArt"},
         {"id": "motion", "row": "AppSettings ReducedMotion", "pane": {"by_value": {

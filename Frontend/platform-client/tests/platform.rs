@@ -5,7 +5,7 @@
 use emusen_client_fixture::{World, library, test_core};
 use emusen_platform_client::firmware::FoldersRequest;
 use emusen_platform_client::bindings::consts as bind;
-use emusen_platform_client::galaxia::consts::{DIR_CONFIG, DIR_LIBRARY, DIR_MEDIA, DIR_SAVE_STATES, FILE_GAMES, FILE_MEDIA, FILE_SETTINGS, MODEL_APP_SETTINGS, SAVE_PICTURE, SAVE_STATE};
+use emusen_platform_client::galaxia::consts::{DIR_CONFIG, DIR_LIBRARY, DIR_MEDIA, DIR_SAVE_STATES, FILE_GAMES, FILE_GRAPHICS, FILE_MEDIA, FILE_SETTINGS, MODEL_APP_SETTINGS, SAVE_PICTURE, SAVE_STATE};
 use emusen_platform_client::library::{Library, ScanRequest};
 use emusen_platform_client::pads::{Pads, SimPad, SimSet, consts as pad};
 use emusen_platform_client::scrape::ScraperConfig;
@@ -52,6 +52,8 @@ fn galaxia_names_its_files_and_endymion_reads_and_writes_the_binding_files() {
     assert_eq!(p.file(FILE_GAMES).unwrap(), p.directory(DIR_LIBRARY).unwrap().unwrap().join("games.db"));
     assert_eq!(p.file(FILE_MEDIA).unwrap(), p.directory(DIR_MEDIA).unwrap().unwrap().join("media.db"));
     assert!(p.file(FILE_SETTINGS).unwrap().starts_with(&world.root));
+    // Since 46, GraphicsConfig's file by its number, so a front end never names it.
+    assert_eq!(p.file(FILE_GRAPHICS).unwrap(), p.config_path(None, "graphics.json").unwrap());
     assert!(matches!(p.file(99), Err(Error::Status { .. })));
 
     let keys = p.bindings_load(bind::KEYS, &["NES", "SNES"]).unwrap();

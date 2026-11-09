@@ -3602,10 +3602,11 @@ their catalogue keys and holds no word of Serenity's.
 models, the catalogue, the sound devices): sections, the trail of pages, rows with the kit's `RowKind`, the pane
 (sentence, lines, muted lines, preview `Picture`, `Meter`, `Variants` or `Sizes`, caption, the meter's share, the
 samples), steps, choices and their `Outcome` (saved, a page opened, a door), and what the settings ask of the whole
-program: the type scale (`TextSize`'s scales 1, 1.15 and 1.3, Mistress's `TextSizes`, in the description, since
-neither Galaxia's row nor its model holds a scale; a question for the tester), the light variant and reduced motion. `settings_source.rs`, the source over `emusen-platform-client` (GraphicsConfig's file by
-the name `emusen_platform.h` gives it, `graphics.json`: no call of the header loads or saves a model by its kind
-alone, so this one copy stays until a file number is approved). `settings_model.rs`,
+program: the text size by its word (decided 2026-11-09: the kit owns each size's scale, since its style applies the
+text size to every screen; `text_scale_of`, `EmuSen_Kit.md` §7.47, which the pane's samples read too), the light
+variant and reduced motion. `settings_source.rs`, the source over `emusen-platform-client`: each model's file by
+Galaxia's number for it, the settings' `EMUSEN_GALAXIA_FILE_SETTINGS` and, since interface 46 (approved 2026-11-09),
+GraphicsConfig's `EMUSEN_GALAXIA_FILE_GRAPHICS` (`EmuSen_RustPlatform.md` §53), so the front end names no file. `settings_model.rs`,
 `SettingsModel`, its bridge: the rows with the roles the kit's settings frame reads (`label`, `value`, `sentence`,
 `kind`, `held`, `marked`, `key`), the section, trail, focused row and its pane as properties, `step`, `choose`, `back`,
 and the signals `door` and `left`. The settings are read off the GUI thread when the platform library is named and each
@@ -3618,7 +3619,7 @@ four. `LibraryModel.settingsFacts` gives the panes the games counted and the run
 the help bar `Settings` (Change, Value, Section, Back, Home, Mistress's words) or `SettingsPage` on a page, and the
 slot's preview: the picture as a black box of 368 × 276 holding its caption (the picture itself is piece J's), the
 meter of 16, the two variants of 176 × 160, or a line at each text size at the body's size times its scale; the pane's
-further lines in Text and Muted. The window binds the kit's `textScale` and `variant` to the model, and its
+further lines in Text and Muted. The window binds the kit's `textSize` (whose scale the kit sets) and `variant` to the model, and its
 `reducedMotion` too once the model has read the settings (the start's value before), so a step applies at once.
 
 **Routes** (`screens.rs`): Home's Settings place and the Home card's Settings row open Settings (over an ES-DE theme,
@@ -3672,7 +3673,7 @@ themes.rs`' routes (Settings from Home and the card, Themes under it, over an ES
 settings.rs` (software backend): Home's Settings place opens Settings on Controllers; the shoulders reach each section
 and wrap; the six states held at the gate's five sizes (fit, pad reach, pointer reach, no chrome, names, palette,
 contrast; SettingsDisplayLight in the light variant) and recorded; Light saved and the variant applied, Text size saved
-and the type scale applied, Volume saved as 0.95; Scraping's page opened and closed by B; Themes opened and B back to
+and the kit's type scale at its own scale for `large`, 1.15, then back to 1; Volume saved as 0.95; Scraping's page opened and closed by B; Themes opened and B back to
 Settings, then Home; nothing logged. `themes_tab.rs` now reaches the tab through Settings. `program.rs`' QML rules and
 `qmllint` hold `Settings.qml`; `qmllint` refused a `QList<f64>` property it cannot resolve, so a text size's scale is
 read through the invokable `sampleScale(index)`. The blast radius on the software backend passed: kit-qt 46,
@@ -3681,6 +3682,8 @@ reverted:
 - every value written as text: the models' Sound test (and the doors' test, through Scraping's switch);
 - a folder's pane without its whole path: the models' doors test;
 - Off written as the plain picture's key rather than its name: the models' CRT test;
+- GraphicsConfig's number answering the settings file's path: the platform client's `platform.rs`;
+- Large's scale written as 1.1 in the kit: kit-core's `tokens.rs`;
 - a console's row set on the first console alone: the models' consoles test;
 - B on the Themes tab going Home: the models' routes test;
 - `MenuRow`'s value cap taken out: the program's test, the ROM folder's label past its clip at every size;

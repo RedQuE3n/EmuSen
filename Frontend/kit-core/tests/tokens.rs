@@ -5,7 +5,7 @@ use std::time::Duration;
 use emusen_kit_core::motion::{BREATH_DELAY, BREATH_LOW, BREATH_PERIOD, Curve, MotionToken, REDUCED_FADE, breath_opacity, breathes};
 use emusen_kit_core::tokens::{
     Colour, ColourToken, Form, GRAPHIC_FLOOR, Insets, MAX_TEXT_SCALE, TEXT_FLOOR, Variant, clamp_text_scale, colour, contrast_pairs,
-    focus_marks, header_size, on_art_over, safe_area_of, spacing, type_scale,
+    focus_marks, header_size, on_art_over, safe_area_of, spacing, text_scale_of, type_scale,
 };
 
 fn close(a: f64, b: f64, within: f64) -> bool {
@@ -138,6 +138,13 @@ fn lunap_214_1_the_text_scale_is_clamped_to_1_3_and_rounds_to_the_half_unit() {
     let d = type_scale(Form::Desktop, 1.3);
     assert_eq!((d.display, d.title, d.strong, d.body, d.caption), (31.0, 21.0, 18.0, 17.0, 14.5));
     assert_eq!(type_scale(Form::Desktop, 1.25).caption, 14.0, "13.75 rounds away from zero to 14");
+}
+
+#[test]
+fn kit_7_47_each_text_size_word_has_its_scale_and_larger_is_the_most() {
+    assert_eq!([text_scale_of("default"), text_scale_of("large"), text_scale_of("larger")], [1.0, 1.15, MAX_TEXT_SCALE]);
+    assert_eq!(text_scale_of("huge"), 1.0, "a word the kit does not know is the default size");
+    assert_eq!(text_scale_of(""), 1.0);
 }
 
 #[test]

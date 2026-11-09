@@ -3,12 +3,9 @@
 
 use crate::clients::app_settings;
 use crate::settings::{Model, SettingsSource};
-use emusen_platform_client::galaxia::consts::{FILE_SETTINGS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
+use emusen_platform_client::galaxia::consts::{FILE_GRAPHICS, FILE_SETTINGS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
 use emusen_platform_client::{serenity, Platform};
 use serde_json::Value;
-
-/// GraphicsConfig's file, as `emusen_platform.h` names it beside EMUSEN_GALAXIA_MODEL_GRAPHICS_CONFIG, which has no file number.
-const GRAPHICS_FILE: &str = "graphics.json";
 
 pub struct ClientSettings {
     platform: std::sync::Arc<Platform>,
@@ -23,9 +20,11 @@ impl ClientSettings {
         Ok(ClientSettings { platform: Platform::load(platform_library).map_err(words)? })
     }
 
-    fn settings_name(&self) -> Result<String, String> {
-        let file = self.platform.file(FILE_SETTINGS).map_err(words)?;
-        file.file_name().and_then(|n| n.to_str()).map(str::to_owned).ok_or_else(|| format!("{} names no settings file", file.display()))
+    /// A model's file by Galaxia's number for it, as the name a model's load and save take: both sit in the config
+    /// directory itself.
+    fn name(&self, which: u32) -> Result<String, String> {
+        let file = self.platform.file(which).map_err(words)?;
+        file.file_name().and_then(|n| n.to_str()).map(str::to_owned).ok_or_else(|| format!("{} names no file", file.display()))
     }
 }
 
@@ -38,7 +37,7 @@ impl SettingsSource for ClientSettings {
         // A model with no file yet is a new one, so a save writes every key at its initial value beside the one changed.
         let (number, read) = match model {
             Model::App => (MODEL_APP_SETTINGS, app_settings(&self.platform)?),
-            Model::Graphics => (MODEL_GRAPHICS_CONFIG, self.platform.model_load(MODEL_GRAPHICS_CONFIG, None, GRAPHICS_FILE).map_err(words)?.unwrap_or(Value::Null)),
+            Model::Graphics => (MODEL_GRAPHICS_CONFIG, self.platform.model_load(MODEL_GRAPHICS_CONFIG, None, &self.name(FILE_GRAPHICS)?).map_err(words)?.unwrap_or(Value::Null)),
         };
         match read {
             Value::Null => self.platform.model_new(number).map_err(words),
@@ -48,8 +47,8 @@ impl SettingsSource for ClientSettings {
 
     fn save(&self, model: Model, document: &Value) -> Result<(), String> {
         match model {
-            Model::App => self.platform.model_save(MODEL_APP_SETTINGS, None, &self.settings_name()?, document).map_err(words),
-            Model::Graphics => self.platform.model_save(MODEL_GRAPHICS_CONFIG, None, GRAPHICS_FILE, document).map_err(words),
+            Model::App => self.platform.model_save(MODEL_APP_SETTINGS, None, &self.name(FILE_SETTINGS)?, document).map_err(words),
+            Model::Graphics => self.platform.model_save(MODEL_GRAPHICS_CONFIG, None, &self.name(FILE_GRAPHICS)?, document).map_err(words),
         }
     }
 

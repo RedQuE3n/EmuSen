@@ -209,9 +209,9 @@ fn qt_7_7_text_size_light_and_motion_apply_to_the_program() {
         pane.samples,
         [("Default · The quick brown fox".to_string(), 1.0), ("Large · The quick brown fox".to_string(), 1.15), ("Larger · The quick brown fox".to_string(), 1.3)]
     );
-    assert_eq!((view.text_scale(), view.light(), view.reduced_motion()), (1.0, false, false));
+    assert_eq!((view.text_size().as_str(), view.light(), view.reduced_motion()), ("default", false, false));
     view.step(size, 1);
-    assert_eq!(view.text_scale(), 1.15);
+    assert_eq!(view.text_size(), "large");
     view.step(index(&view, "variant"), 1);
     assert!(view.light());
     assert_eq!(view.pane(index(&view, "variant")).samples.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["Dark", "Light"]);

@@ -4,8 +4,8 @@
 
 use emusen_crystal_client::shapes::SystemRow;
 use emusen_platform_client::library::GameFile;
-use emusen_qt_models::esde_shelves::{names_of, settings_of, theme_key, MediaIndex, Plays};
-use emusen_qt_models::library::{refresh, Engine, LibrarySource, LibraryView};
+use emusen_qt_models::esde_shelves::{metadata_of, names_of, Metadata, settings_of, theme_key, MediaIndex, Plays};
+use emusen_qt_models::library::{refresh, Engine, FirstLook, LibrarySource, LibraryView};
 use emusen_qt_models::screens::{step, step_in, Ask, Shown};
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -54,9 +54,9 @@ impl LibrarySource for Fake {
     fn settings(&self) -> Result<Value, String> {
         Ok(self.settings.clone())
     }
-    fn metadata(&self, games: &[GameFile]) -> Result<Vec<(String, Value)>, String> {
+    fn metadata(&self, games: &[GameFile]) -> Result<Vec<(String, Metadata)>, String> {
         self.asked.fetch_add(games.len(), Ordering::Relaxed);
-        Ok(self.metadata.iter().filter(|(p, _)| games.iter().any(|g| &g.path == p)).cloned().collect())
+        Ok(self.metadata.iter().filter(|(p, _)| games.iter().any(|g| &g.path == p)).map(|(p, m)| (p.clone(), metadata_of(m))).collect())
     }
     fn plays(&self, _: &[GameFile]) -> Result<Vec<(String, Plays)>, String> {
         Ok(self.plays.clone())
@@ -195,6 +195,21 @@ fn the_media_index_and_presence_are_written_beside_the_shelves_with_the_scraper_
     assert_eq!(presence["snes"], json!(["manual", "marquee", "screenshot"]), "the variant triggers per shelf");
     assert_eq!(presence["nes"], json!(["cover"]));
     assert_eq!(presence["all"], json!(["cover", "manual", "marquee", "screenshot"]), "a collection's, each game under its own console");
+}
+
+#[test]
+fn the_first_look_lists_every_shelf_and_game_reading_no_metadata() {
+    let source = fake();
+    let first = refresh(&FirstLook(&source)).unwrap();
+    assert_eq!(source.asked.load(Ordering::Relaxed), 0, "no game's metadata is read for the first look");
+    let whole = refresh(&source).unwrap();
+    let files = |text: &str| -> Vec<(String, Vec<String>)> {
+        shelves(text).iter().map(|s| (s["name"].to_string(), s["games"].as_array().unwrap().iter().map(|g| g["file"].to_string()).collect())).collect()
+    };
+    let mut a = files(&first.esde.shelves);
+    let mut b = files(&whole.esde.shelves);
+    a.iter_mut().chain(b.iter_mut()).for_each(|(_, g)| g.sort());
+    assert_eq!(a, b, "the same shelves and games, which the whole read names and sorts by their metadata");
 }
 
 #[test]
@@ -350,8 +365,8 @@ impl LibrarySource for MetadataByMap {
     fn settings(&self) -> Result<Value, String> {
         self.0.settings()
     }
-    fn metadata(&self, _: &[GameFile]) -> Result<Vec<(String, Value)>, String> {
-        Ok(self.0.metadata.clone())
+    fn metadata(&self, _: &[GameFile]) -> Result<Vec<(String, Metadata)>, String> {
+        Ok(self.0.metadata.iter().map(|(p, m)| (p.clone(), metadata_of(m))).collect())
     }
     fn media_index(&self, s: &[String]) -> Result<MediaIndex, String> {
         self.0.media_index(s)

@@ -254,7 +254,7 @@ disassembly, board name and view; `emusen_firmware_find` and `_locate`; the chea
 (`emusen_cheats_*`); the HTTP client (`emusen_net_download_*`); the medium locks; Endymion's resampler, rate control,
 router, player slots, `pad_resolve`, `pad_combine`, `pad_controls_for`, `pads_use`,
 `pads_rescan_due`, the simulated pads' texts read, holds and device calls, the game's audio player (`emusen_endymion_audio_*`),
-the interface player's `decode`, `decode_take` and `volume`; and the rest of Serenity (sources, the compiler,
+the interface player's `volume` (its `decode` and `decode_take` are `sounds::decode` since 2026-11-09, §4.9); and the rest of Serenity (sources, the compiler,
 reflection, the cache, the lend, the ring, and the chain's other calls); since interface 42 its `serenity` module covers
 the device made for an adopting host, its raw handles, a built-in filter's preset, and a chain advanced and drawn in place
 (§1.8). Each is wrapped when a
@@ -1874,6 +1874,17 @@ picture, not its box.
   tile; Qt keeps the picture's aspect when it decodes, so `Cover` and `Fill` read the decoded aspect. A `nearest`
   picture is decoded at its own size: Qt scales a raster up only for `PreserveAspectFit` and `Crop`, and then smoothly
   (`QImage::scaled` with `SmoothTransformation`), which would blur pixel art before the GPU's nearest filter saw it.
+- **A raster is never decoded larger than itself or its box** (measured 2026-11-09). Under `PreserveAspectFit` or
+  `Crop`, Qt 6.11 scales a raster to the asked width even upward, and with both sides asked takes the larger of the two
+  ratios: Art Book Next's 454 × 1080 system art, contained in a 1,281 px slot of the carousel, was decoded at 1,281 ×
+  3,047 (15.6 MB, drawn at 504 × 1,200), nine of them 134 MiB of the program's heap and the first picture held back
+  while they were scaled. The hidden `Image` of a raster is now `Stretch`, which Qt scales down only, by one ratio for
+  both sides, never up: contained, it asks the box and is decoded to fit it or at its own size; covered, it asks the
+  width as before. A vector (`.svg`, `.svgz`) keeps the aspect modes, as it is drawn at the size asked. The painted size
+  of a contained or covered picture is computed from its own size as Qt computes `paintedWidth` and `paintedHeight`, so
+  the effect, the reflection and the scene's measurement see what they saw. The GPU scales the native raster up where
+  the box is larger, as ES-DE does. `primitives.rs` holds a picture smaller than its box at its own 64 × 64, contained
+  and covered, a 512 × 256 one contained in 128 × 128 at 128 × 64, and the painted rows of each.
 - **Qt hands a `color` uniform over premultiplied.** Measured 2026-11-08: a white picture tinted `80FF8000` read
   (64, 32, 0) over black when the shader multiplied RGB by the tint's alpha again, and reads (128, 64, 0) now. The
   shader multiplies by the colour as given.
@@ -1989,7 +2000,7 @@ pointer. Each list binds `revision: esde.revision` and refreshes on its change, 
 - **The router's tiers are not bound** (decided 2026-11-08). The scene repeats a held direction on its own clock
   (§4.8.3), so the router's repeat tiers would only produce repeats the painter ignores.
 - **The cue is a signal**, `cued(name)` with the scene's name (`navigate`, `select`, `back`, `quicksysselect`), since
-  two equal cues in a row must both sound; mapping a name to the theme's sound file is the host's (owed with H).
+  two equal cues in a row must both sound; mapping a name to the theme's sound file is the host's (§4.9).
 
 **`View.qml`** is a plain `Item` filling its parent: an `EsdeModel` sized by it, an `ElementModel`, and a `Repeater`
 whose delegate is a `DelegateChooser` on `paint`. `DelegateChooser` is in `QtQml.Models` since Qt 6.9 (measured on the
@@ -2138,6 +2149,166 @@ THEMES.md and USERGUIDE.md, settled or named:
 green; emusen-qt-test `helpbar` and `menu` green; qt-app's acceptance green. One motion run failed once at its last
 check, a frame swapped in the 2 s still window with no animation running; the two runs after it passed. The theme shows a clock,
 whose minute can turn within the window: not reproduced, recorded here.
+
+### 4.9 Hosting the view in `emusen-qt` (H) **[M 2026-11-09]**
+
+**The two choices, and how they relate.** The player's look is two settings that never stand for each other. An ES-DE
+theme is Mistress's pair: `LibraryStyle` is `Theme` and `BigPictureTheme` names a folder, read by one function,
+`esde_shelves::settings_of`, which both the program's start and `LibraryModel` call. An EmuSen theme is
+`AppSettings.EmuSenTheme`, an id resolved through the themes store (§3.8). Where the pair chooses an ES-DE theme, its view
+is the library's look and the EmuSen theme is not hosted at all: the reference's Home, Choose a console and grid are not
+made, and the chosen package's engine is not started. Where the ES-DE theme fails, the own look comes back, which is the
+EmuSen theme the id names (else the reference). The Themes tab still offers no Use on an ES-DE theme, so it writes
+neither `LibraryStyle` nor `BigPictureTheme`; Mistress's Settings remain where the pair is chosen.
+
+**What the window holds** (`Main.qml`):
+
+| Part | As built |
+|---|---|
+| The start | `start.rs` reads `esde` (the pair) and `navigation_sounds` (`AppSettings.NavigationSounds`, on by default) beside `StartupSplash`; both are the window's initial properties `esdeChosen` and `navigationSounds`. The theme's choices and the interface's switches are `LibraryModel.esdeSettings`, written at each refresh, so the view's load starts with the first read of the library and never before |
+| The view | a `Loader` of one `Esde.View`, made while the pair chooses a theme (`esdeWanted`: the start's answer or `library.themed`), filling the window in pixels over the hosts; visible while it is the look and neither the game nor the Pause Card is shown, so the Home card and the List card draw over it under the Scrim; its four texts are `LibraryModel`'s |
+| The look | `esdeLook` = wanted and not failed; failed = the model's `problem` set, or a load published (`revision` > 0) with nothing themed (an empty library). `Screens.themed` is `esdeLook`, so the steps of §4.6 apply; the reference host's three roles and the chosen theme's `Loader` are made only while it is false |
+| Moonrise | waits for the look it gives way to: `done` also needs `lookSettled` (the own look, or the view themed or failed), so the splash never fades onto an empty window while the theme loads |
+| The pad | the view takes the focus while `Screens.Esde` is shown and the splash has gone; the router is pumped by a `Timer` while it holds the focus, as a `Frame`'s is; PadReader's presses reach it through the router as they reach the reference's screens |
+| The signals | `played` → the window's `play` (recorded, opened, the game's screen); `favourite` → `LibraryModel.toggleFavourite` (games.db's `toggle_favourite`, then the library read again; the shelves' text carries the heart); `menu` → `Screens.home()` (the Home card at its first page); `options` → `Screens.list()` (the List card); `cued` → `EsdeCues.play(name, view)` |
+| The List card | under the theme it reads `esdeListFacts(shelf, selected)` and acts through `esdeListAct`, the view selecting the entry the act answers (`EsdeModel.select`) |
+| A failure | the model's `problem` raised as a notice once the splash has gone, the own look shown |
+
+**Additions to surfaces** (rule Q, reviewed, additions only): `EsdeModel.shelf`, `selected`, `sounds` (read-only) and
+`select(row)` in `EmuSen.Esde` 1.0 (the registry copied to `Testing/qmltypes`); `LibraryModel.toggleFavourite(path)`
+and `LibrarySource::toggle_favourite`, `Screens.home()` and `Screens.list()` in `EmuSen.Models` (QML builds no key
+text, §1.3, so Start and Select at the view are calls of their own); `sounds::decode` in `emusen-platform-client`.
+`emusen-esde-qt` no longer declares `QAbstractListModel` itself and names the kit's (`emusen_kit_qt::base`): with the
+program linking `emusen-esde-qt` and `emusen-qt-models` together, the two declarations' upcast shims clashed at the
+link of a test binary (`ld.lld: duplicate symbol … cxx_qt_ffi_QAbstractListModel_upcastPtr`), where the lazy archive
+order had hidden the kit's own until then. New references: `emusen-qt` on `emusen-esde-qt` (design §1) and on
+`emusen-kit-core` as a plain dependency (the cues it falls back to; it was a gate-pad and test dependency).
+
+**The sounds** (`src/cues.rs`, `EsdeCues`). ES-DE reads its seven navigation sounds once, from its first system's theme;
+the model gives that theme's files as `sounds`. The player is made off the GUI thread through qt-endymion's
+`open_player` (SDL lent, the kit's cues kept), each of the theme's WAV files decoded by `sounds::decode` (the header
+asks the count with no buffer and the rest is taken, since what does not fit waits on that thread) and kept as
+`theme:<name>`. A scene's `navigate` is `systembrowse` on the system view and `scroll` in a gamelist; a launch and a
+favourite are the host's own. A name the theme lacks falls back as Mistress's `NavigationSounds` does: scroll Move,
+systembrowse Section, select Choose, back Back, favorite Favourite, launch Launch, and quick system select the kit's own
+two bells (`QUICK_SELECT`). With NavigationSounds off nothing plays. Volume follows the player's default; the setting
+is stage 5's.
+
+**Proof, measured on 2026-11-09.** `qt-app/tests/esde.rs`, on Vulkan in a `kwin_wayland --virtual` of its own on the
+RX 6800, run inside `bwrap` with the ROM library bound read-only. The sandbox's settings choose Art Book Next from the
+corpus with the options of `Testing/esde-baseline/states.tsv`; its library is two synthetic NES images and Super Mario
+World linked from the player's library and read in place; its engines are the published installation's (VenusRT for the
+Super Nintendo). The start reads the pair; Moonrise gives way to the system view on the NES (release order), the own
+look's three roles unmade and the chosen theme's engine not started; the theme's sounds decode through the interface
+player on SDL's dummy driver; Right steps to the Super Nintendo; A opens its gamelist; Y writes the favourite and the
+shelves' text carries it; Start opens the Home card over the theme and B closes it; Select opens the List card and B
+closes it, the selection unchanged; A plays the game through the ring to its first picture, the view hidden; the menu
+chord on the virtual pad pauses it under the Pause Card, and Leave, Back to Library is the gamelist of the Super Nintendo
+at the same game, the view holding the pad again; the game closed, the view stays; a `BigPictureTheme` naming no folder,
+read again, gives way to Home with the loader's words ("no theme.xml for …") as a notice; Qt logs nothing. 12.7 s and
+11.8 s. One line follows the test's result at the process's exit, `QObject::~QObject: Timers cannot be stopped from
+another thread`, after the harness has stopped listening: **named, open**. `start.rs` (9), the cues' two rules
+(`cues::tests`), platform-client's `sound` (a WAV of 24 kHz mono decoded to 4,800 frames of 48 kHz stereo float, a
+missing file none), and the offscreen tests the change reaches (program, screens, start, splash, cards, theme,
+theme_feed, themes_tab; qt-models' library, esde, gamelists, qml, themes) green.
+
+| Seeded fault, applied alone and reverted | Caught by |
+|---|---|
+| a failed theme still the look (`esdeLook` without the failure) | `esde.rs`: the own look not shown within 20 s of the missing theme |
+| the reference's Home made under an ES-DE theme | `esde.rs`: `home.reference` active |
+| the theme's file never played, the kit's cue always | `cues::tests::the_themes_file_plays_where_it_gave_one_else_the_kits_cue` |
+
+**Named differences and what is left.** Entering a folder from the view (the painter's `played` names a folder entry;
+`esdeEnter` and `esdeLeave` are not yet called by the host), a game's description (`esdeDescription`, which the
+painter does not ask for), the device's indicators (`device` unbound, so none is drawn, as before a host reports), and
+the player's swap (`swap` unbound, as the program binds it nowhere yet). The List card's facts are read when its shelf or
+selection changes, not after an act rewrites the shelves while it stays open. ES-DE's full system names
+("Nintendo SNES (Super Nintendo)") are a change to the systems table's `esde_full_name`, not made here.
+
+**The gates at the player's library's scale, measured on 2026-11-09.** `Testing/qt-gates/sandbox.sh`'s sandbox (the
+published tree of 2026-11-08 with `emusen-qt` in release with `gate-pad`, the player's 9,007 games bound read-only) with
+Art Book Next and its options in the settings; `gates.sh` for the first press and idle memory; the gamelist's hold by
+`run.sh` with `WAYLAND_DEBUG=client`, the program's commits on its window's surface. Mistress's figure is its published
+build idle on the same theme and library (no input), since its own look's 305 MiB is not the same work.
+
+| Gate | First run | After the first fixes | After the second pass | Mistress, same theme |
+|---|---|---|---|---|
+| Idle RSS, 10 s after the window (anonymous) | 872 MiB (737) | 685, 685 MiB (552) | 306 MiB (172) in each of four rounds | 402 MiB (201) |
+| First press answered from the start | 2.33, 3.32 s | 1.32, 1.28 s (window lit 0.79 s) | 0.861, 0.934 s (settled 0.824, 0.887 s; window lit 0.69 s) | gate 0.95 s |
+| The gamelist, Down held 24.4 s | 1,450, 1,382 frames; median 16.6, 16.8 ms; worst 95.5, 36.7 ms | not re-run | 1,389 frames; median 16.7 ms; worst 35.9 ms | worst 96.8 ms (§9.3.1, its grid) |
+
+**Causes, proved by probes at scale** (the library's reads timed and RSS read after each, in the sandbox; the view's
+load of the texts those reads wrote): the library's whole read took 1,160 ms, of which the per-game metadata 378 ms
+and the covers 316 ms, and its shelves text was 6.6 MB; the scraper's answers were held whole as JSON trees for all
+9,007 games (+141 MiB); the view parsed the 6.6 MB text into a tree (+143 MiB, 203 ms) and copied it again, and parsed
+it once for each of the four texts the library publishes one after another, two or three times at once. Freed, those
+trees stayed in glibc's arenas: `malloc_trim` took the library probe from 241 to 89 MiB and the view's from 180 to 53,
+which located the cost; trimming was not kept as the fix, being glibc's alone and hiding the pattern. **Fixed:** the
+view asks one load per turn of the event loop, however many texts changed; the shelves are read straight into typed
+rows (`serde` derive, no tree); each game's metadata is kept as its chosen values the moment it is read
+(`esde_shelves::Metadata`); and with an ES-DE theme the library's first read is a `FirstLook` (the systems, games and
+records without the metadata, plays or media, 395 ms against 1,160), shown first and replaced by the whole read
+(`the_first_look_lists_every_shelf_and_game_reading_no_metadata`). Offscreen, idle went 677 → 512 MiB with the theme
+and 203 → 189 with the own look.
+
+**The second pass, measured on 2026-11-09.** No heaptrack, massif or perf is installed on the desktop, so the heap was
+profiled by a sampling allocator interposed for the run (outside the tree: every 64 KiB allocated, the allocating stack
+kept until it is freed; live, cumulative and at the peak), glibc's own `malloc_stats` read through `gdb` at idle, and
+`/proc/<pid>/smaps` grouped by mapping; the start by a shim timing every file the program opens. Offscreen with the
+software scene graph, 12 s after the start:
+
+| Cause, as measured | Live heap it held | Fix |
+|---|---|---|
+| The carousel's nine system pictures, 454 × 1080, each decoded at 1,281 × 3,047 (15.6 MB) because Qt scales a raster up under `PreserveAspectFit` (§4.8.1) | 134 MiB, and the first picture waiting on their smooth scaling | a raster's hidden `Image` stretches, which Qt scales down only: 2 MB each |
+| The own look's library copied whole into the reference host's feed at each publish (`ThemeLibrary::show` cloned the `LibraryView`, the 6.6 MB shelves text, the ES-DE state and the thirteen list texts with it), although the reference's screens are not made under an ES-DE theme | 22 MiB live, and the clones' churn | the feed copies the rows, the systems and the catalog, all its views read (`theme-qt` `view.rs`) |
+| The shelves text built as a `serde_json::Value` tree of every listing (43 MiB at the refresh's peak) and the own look's thirteen lists likewise, each game cloned into its list first | the refresh thread's arena held 116 MiB of which 36 in use: glibc keeps a thread's arena at its peak | each row is serialised straight from the game it borrows (`RowText`, `ListingText`, `games::RowText`), the keys in the order the sorted map wrote them: the 6.6 MB text is byte-identical on the 9,007 games, and every list read back equal |
+| The gamelists' sort compared names by allocating two `Vec<char>` per comparison (30 MiB of churn a refresh) | none live; 15 ms of the first read | the same comparison over the characters as they are read |
+
+Offscreen idle went 532 → 298 MiB (anonymous 409 → 175; glibc's arenas 393 MiB mapped with 268 in use → 175 with 123),
+and on the GPU 685 → 306 MiB (552 → 172), under Mistress's 402 (201). The first read with an ES-DE theme is 243 ms
+(systems 55 on the platform library's first call, the scan 107, the gamelists' listing and the text 30), from 280; the
+whole read 745 ms, from 875. The gates' sandbox and Art Book Next as before.
+
+Re-run after the pass: `qt-app/tests/esde.rs` on the GPU (15.6 s, the one line at exit still the named
+`QObject::~QObject` one), and `esde-qt`'s `primitives`, `view`, `sizes`, `mapping` (3) and `motion` on the GPU, the
+shelves parser having changed; offscreen, `qt-models`' library, esde, gamelists, clients, cards and qml, `theme-qt`'s
+three and `esde-qt`'s lint, qmltypes and painter.
+
+| Seeded fault, applied alone and reverted | Caught by |
+|---|---|
+| a raster back on Qt's aspect modes (contained, decoded at the box's width) | `primitives.rs`: the 64 × 64 picture decoded at 400 × 400 |
+| a contained picture's painted size by the larger ratio | `primitives.rs`: painted 400 × 400 where 100 × 100 |
+| every shelf row written with its description | `esde.rs` (qt-models): `each_shelf_carries_its_es_de_names_and_its_games_every_field` |
+| the own look's feed without the catalog | `theme-qt` `qml.rs`: `gamesOf by the console's key` read 0 |
+| a list row's `played` written under another key | `library.rs`: every field of a row read back, added for it (the existing round trip had no row played) |
+
+**The first press.** Timed by the shim on the GPU (warm): the settings read at 0.02 s; the platform library loaded and
+Serenity's device made before the QML engine, the library's first read begun at 0.34 s; the theme's files read at
+0.70 s, once that read was published; the system pictures opened by 0.78 s and the window lit by 0.94 s, of which the
+nine pictures' upscaling was the part removed. With the other builders' audits and builds paused (load average 2.8),
+two rounds answered the press at 0.861 and 0.934 s (the gate 0.95 s), the window lit at 0.69 s, and the gamelist's
+hold drew its worst frame at 35.9 ms (Mistress's grid 96.8). Two caveats, measured. **A cold page cache:** the first
+run after an hour of the other builders' work answered at 1.97 and 1.93 s; the shim placed the whole difference in the
+first read, 1.26 s from 0.43 to 1.69 s against 0.36 s warm, during which the platform library's scan opened 14,469
+files of the ROM library to read their heads. The program's own caches were not rewritten (the QML cache, Mesa's and
+RADV's shader caches unchanged since 03:55), so the cost is the kernel's page cache of the library. One comparison
+proves it: with the library's pages dropped (`posix_fadvise(DONTNEED)` on each of its 9,328 files, opened read-only),
+the first read took 1,022 ms; run again at once, 248 ms. A player meets that ~0.8 s after a reboot, or after other
+work has pushed the library out of memory, and Mistress alike, its scan being the same platform library's. Stage 1's
+gates (§9.3.5) and these are measured warm, after `gates.sh warm` reads the library once, so the two compare alike.
+**Load:** with three of the other builders' audits running (load average 15) the rounds read 1.16 to 2.58 s and the
+hold's worst frame 200.9 ms, so the gate is read on a quiet machine, as §9.3 asks of every gate. The press's margin is small (16 ms in the slower round);
+what remains on its path is the platform library's first call (55 ms) and scan (107 ms), and the device made before
+the QML engine rather than beside it.
+
+Left as they are, measured: the automatic collections still hold a copy of each game's row (8 MiB live); the shelves
+text is held twice, as Rust's 6.6 MB and the property's QString of 13 MiB, since QML reads the property; the platform
+library's scan reads the head of every file of an extension two systems share at each read (826 MiB of reads over the
+two reads of a start), which is the platform library's and Mistress's alike. The side-by-sides: emusen-qt's system
+view, gamelist, Home card over the theme and Pause Card over a game are in `~/.cache/emusen/qt-s4-h-gates/runs/side-qt/`;
+Mistress's system view in `side-mistress/`. **A limit of the comparison:** Mistress's Home card and Pause Card are
+reached only by a pad or the keyboard, and the gates admit no input device and no synthetic input outside the program,
+so Mistress's side shows its system view alone.
 
 ---
 
@@ -3743,6 +3914,21 @@ without the feature (`a_build_without_the_feature_has_no_gate_pad`: the words in
 trailing word accepted (the feature's parse test); `/dev` bound whole into the box (the box refused to start, exit 3);
 the FIFO not named to the program (`pad.py` never ready, `press.py` found no settle); and the pad's `a` sent as East
 (the route ended at Home: lit share 0.727 where the card's is 0.483).
+
+#### 9.3.7 The gates with an ES-DE theme as the library's look **[M 2026-11-09]**
+
+Art Book Next over the player's 9,007 games in `sandbox.sh`'s sandbox, `emusen-qt` in release with `gate-pad`, on the
+RX 6800 in a `kwin_wayland --virtual` of its own at 1920 × 1200, warm (`gates.sh warm` first) and with the other
+builders' work paused (load average 2.8). Mistress's figures are its published build on the same theme and library.
+
+| Gate | emusen-qt, two rounds | Mistress, same theme | Met |
+|---|---|---|---|
+| Idle RSS 10 s after the window (anonymous) | 306, 305 MiB (172, 172) | 402 MiB (201) | yes |
+| First press answered from the start | 0.861, 0.934 s | gate 0.95 s | yes, by 16 ms in the slower round |
+| The gamelist, Down held 24.4 s, the worst frame | 35.9 ms (median 16.7 ms, 1,389 frames) | 96.8 ms (its grid, §9.3.1) | yes |
+
+The causes found and fixed, the cold page cache's cost (about 0.8 s on the first read after a reboot, Mistress's
+alike) and what load does to the figures are in §4.9.
 
 ---
 

@@ -279,6 +279,17 @@ impl Painter {
         self.refresh();
     }
 
+    /// A row made the selection, as a step to it, and the frame at once.
+    pub fn choose(&mut self, row: i32) {
+        self.select(row);
+        self.refresh();
+    }
+
+    /// The shown system's shelf name and the primary's selected row; none before an install.
+    pub fn selection(&self) -> (&str, i32) {
+        self.stage.as_ref().map_or(("", -1), |s| (s.current.data.system().system.name.as_str(), s.current.index() as i32))
+    }
+
     // A row made the selection, as a step to it.
     fn select(&mut self, row: i32) {
         let now = self.now;
@@ -346,6 +357,16 @@ pub fn help_buttons(place: PadButton, pair: bool, swap: bool) -> (i32, i32) {
         _ => -1,
     };
     (number(control), second)
+}
+
+/// The navigation sounds of the first system's theme as `{name: file}`, the files the theme names that exist; ES-DE
+/// reads them once from its first system's theme.
+pub fn sounds(painter: &Painter) -> String {
+    let Some(stage) = &painter.stage else { return "{}".into() };
+    let Some(first) = stage.current.data.systems.first() else { return "{}".into() };
+    let found: serde_json::Map<String, serde_json::Value> =
+        first.theme.sounds().into_iter().filter(|(_, p)| p.exists).map(|(n, p)| (n.to_owned(), p.absolute.clone().into())).collect();
+    serde_json::Value::Object(found).to_string()
 }
 
 /// The first error the loader met in a system's theme, or a missing theme file, as the host's notice words it.

@@ -2,7 +2,7 @@
 //! start, as plain values handed to the window's root as its initial properties (EmuSen_Qt.md §1.2.1: no static carries them).
 
 use emusen_platform_client::galaxia::consts::{DIR_MEDIA, DIR_THEMES};
-use emusen_qt_models::themes;
+use emusen_qt_models::{esde_shelves, themes};
 use emusen_platform_client::Platform;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -29,6 +29,11 @@ pub struct Start {
     pub theme_words: String,
     /// The folders a theme may show pictures from: the media store, the artwork and ES-DE media folders (EmuSen_Qt.md §3.5).
     pub cover_stores: Vec<String>,
+    /// An ES-DE theme is the library's look: `LibraryStyle` is Theme and `BigPictureTheme` names a folder, read as the library
+    /// model reads it (`esde_shelves::settings_of`), so the own look's screens are not made at the start (EmuSen_Qt.md §4.9).
+    pub esde: bool,
+    /// AppSettings.NavigationSounds: the ES-DE theme's navigation sounds, on unless the player turned them off.
+    pub navigation_sounds: bool,
 }
 
 /// The platform library: `--platform-library PATH`, else `EMUSEN_PLATFORM_LIBRARY`, else the file beside the program.
@@ -40,6 +45,11 @@ pub fn platform_library(args: &[String], env: Option<String>, program: &Path) ->
 /// Moonrise on or off from the settings as Galaxia's model reads them; on when the file or the key is missing.
 pub fn splash_from(settings: &Value) -> bool {
     settings.get("StartupSplash").and_then(Value::as_bool).unwrap_or(true)
+}
+
+/// The navigation sounds from the settings; on when the key is missing, as Galaxia's model has it.
+pub fn navigation_sounds_from(settings: &Value) -> bool {
+    settings.get("NavigationSounds").and_then(Value::as_bool).unwrap_or(true)
 }
 
 /// Reduced motion from the settings: on only when the player chose it.
@@ -98,5 +108,6 @@ pub fn read(library: &Path) -> Start {
     Start { platform_library: library.to_string_lossy().into_owned(), splash: splash_from(&settings), reduced_motion: reduced_motion_from(&settings),
         game_mode, guide_chords: guide_chords_from(&settings, game_mode),
         theme, theme_words, cover_stores: cover_stores_from(media.as_deref(), &settings),
+        esde: esde_shelves::settings_of(&settings).themed, navigation_sounds: navigation_sounds_from(&settings),
     }
 }

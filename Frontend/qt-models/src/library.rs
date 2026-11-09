@@ -39,6 +39,10 @@ pub trait LibrarySource: Send + Sync {
     fn started(&self, _path: &str) -> Result<(), String> {
         Ok(())
     }
+    /// Turns the game at `path` a favourite or back (games.db's `toggle_favourite`); a source with no records keeps none.
+    fn toggle_favourite(&self, _path: &str) -> Result<(), String> {
+        Ok(())
+    }
     /// The shelves' systems in the runtime's order, which Choose a console follows (EmuSen_Interface.md §24.1); none
     /// leaves the systems' own order.
     fn shelves(&self) -> Result<Vec<String>, String> {
@@ -50,7 +54,7 @@ pub trait LibrarySource: Send + Sync {
     }
     /// Each game's metadata as the scraper resolves it (EmuSen_Backend.md §30.3, `metadata`), by path; a source with no
     /// scraper has none, and the file names the game.
-    fn metadata(&self, _games: &[GameFile]) -> Result<Vec<(String, serde_json::Value)>, String> {
+    fn metadata(&self, _games: &[GameFile]) -> Result<Vec<(String, crate::esde_shelves::Metadata)>, String> {
         Ok(Vec::new())
     }
     /// How often and how long each played game was played, by path, as games.db records it.
@@ -286,21 +290,21 @@ pub fn lists_of(rows: &mut [LibraryRow], systems: &[SystemRow], catalog: &Catalo
     let mut lists = HashMap::new();
     let recent = recent_of(&all, catalog);
     for row in rows.iter_mut() {
-        let games: Vec<GameRow> = if row.key == RECENT {
-            recent.clone()
+        let games: Vec<&GameRow> = if row.key == RECENT {
+            recent.iter().collect()
         } else {
             sorted
                 .iter()
+                .copied()
                 .filter(|g| match row.key.as_str() {
                     "all" => true,
                     FAVOURITES => g.favourite,
                     system => g.system == system,
                 })
-                .map(|g| (*g).clone())
                 .collect()
         };
-        row.fan = crate::games::to_json(&games[..games.len().min(FAN)]);
-        lists.insert(row.key.clone(), crate::games::to_json(&games));
+        row.fan = crate::games::to_json(games[..games.len().min(FAN)].iter().copied());
+        lists.insert(row.key.clone(), crate::games::to_json(games));
     }
     lists.entry(RECENT.to_owned()).or_insert_with(|| crate::games::to_json(&recent));
     lists
@@ -429,6 +433,43 @@ pub struct Read {
 pub type Refreshed = Result<Read, String>;
 
 /// One refresh of a source, run off the GUI thread, every gamelist as it first lists.
+/// A source's first read for an ES-DE theme: the systems, the games and the player's records without the metadata, the
+/// plays or the media, which the whole read brings after it, so the theme's view is shown first (EmuSen_Qt.md §4.9).
+pub struct FirstLook<'a>(pub &'a dyn LibrarySource);
+
+impl LibrarySource for FirstLook<'_> {
+    fn systems(&self) -> Result<Vec<SystemRow>, String> {
+        self.0.systems()
+    }
+    fn games(&self) -> Result<Vec<GameFile>, String> {
+        self.0.games()
+    }
+    fn favourites(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
+        self.0.favourites(games)
+    }
+    fn recent(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
+        self.0.recent(games)
+    }
+    fn engines(&self, systems: &[SystemRow]) -> Result<Vec<(String, Engine)>, String> {
+        self.0.engines(systems)
+    }
+    fn played(&self, games: &[GameFile]) -> Result<Vec<(String, i64)>, String> {
+        self.0.played(games)
+    }
+    fn shelves(&self) -> Result<Vec<String>, String> {
+        self.0.shelves()
+    }
+    fn settings(&self) -> Result<serde_json::Value, String> {
+        self.0.settings()
+    }
+    fn collections(&self) -> Result<Vec<Collection>, String> {
+        self.0.collections()
+    }
+    fn folder_links(&self) -> Result<Vec<(String, String)>, String> {
+        self.0.folder_links()
+    }
+}
+
 pub fn refresh(source: &dyn LibrarySource) -> Refreshed {
     refresh_with(source, &Gamelists::default())
 }

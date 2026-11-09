@@ -126,6 +126,10 @@ impl LibrarySource for ClientSource {
         self.library.change(&json!({ "op": "started", "path": path, "at": at })).map(|_| ()).map_err(words)
     }
 
+    fn toggle_favourite(&self, path: &str) -> Result<(), String> {
+        self.library.change(&json!({ "op": "toggle_favourite", "path": path })).map(|_| ()).map_err(words)
+    }
+
     fn shelves(&self) -> Result<Vec<String>, String> {
         Ok(self.runtime.shelves().map_err(words)?.into_iter().map(|s| s.system).collect())
     }
@@ -134,10 +138,13 @@ impl LibrarySource for ClientSource {
         app_settings(&self.platform)
     }
 
-    fn metadata(&self, games: &[GameFile]) -> Result<Vec<(String, Value)>, String> {
+    fn metadata(&self, games: &[GameFile]) -> Result<Vec<(String, crate::esde_shelves::Metadata)>, String> {
         let Some((_, scraper)) = &self.scraper else { return Ok(Vec::new()) };
         let names = app_settings(&self.platform)?.get("ScrapeGameNames").and_then(Value::as_bool).unwrap_or(false);
-        let one = |g: &GameFile| scraper.get(&json!({ "what": "metadata", "path": g.path, "scraped_names": names })).map(|m| (g.path.clone(), m));
+        let one = |g: &GameFile| {
+            let answer = scraper.get(&json!({ "what": "metadata", "path": g.path, "scraped_names": names }));
+            answer.map(|m| (g.path.clone(), crate::esde_shelves::metadata_of(&m)))
+        };
         games.iter().map(one).collect::<Result<_, _>>().map_err(words)
     }
 

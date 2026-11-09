@@ -42,6 +42,11 @@ pub mod qobject {
         #[qproperty(QString, letters_mark, READ, NOTIFY)]
         #[qproperty(f64, letters_px, READ, NOTIFY)]
         #[qproperty(f64, letters_opacity, READ, NOTIFY)]
+        /// The shown system's shelf, by its name in the shelves' text, and the primary's selected row.
+        #[qproperty(QString, shelf, READ, NOTIFY)]
+        #[qproperty(i32, selected, READ, NOTIFY)]
+        /// The theme's navigation sounds, `{name: file}`, from the first system's theme as ES-DE reads them.
+        #[qproperty(QString, sounds, READ, NOTIFY)]
         type EsdeModel = super::EsdeModelRust;
     }
 
@@ -66,6 +71,9 @@ pub mod qobject {
         /// Reads the theme folder again, as an update on disk asks.
         #[qinvokable]
         fn reload(self: Pin<&mut EsdeModel>);
+        /// A row of the primary selected as a step to it, as the host's List card jumps.
+        #[qinvokable]
+        fn select(self: Pin<&mut EsdeModel>, row: i32);
 
         #[qsignal]
         fn played(self: Pin<&mut EsdeModel>, path: QString);
@@ -118,10 +126,14 @@ pub struct EsdeModelRust {
     letters_mark: QString,
     letters_px: f64,
     letters_opacity: f64,
+    shelf: QString,
+    selected: i32,
+    sounds: QString,
     pub shared: Shared,
     cache: ThemeCache,
     /// The latest load asked for; an older load that finishes later is dropped.
     load: u64,
+    load_asked: bool,
 }
 
 /// The local wall clock, for the clock element and the dates.
@@ -134,12 +146,12 @@ fn local_now() -> DateTime {
 
 impl cxx_qt::Initialize for qobject::EsdeModel {
     fn initialize(mut self: Pin<&mut Self>) {
-        self.as_mut().on_settings_changed(|m| m.load()).release();
-        self.as_mut().on_shelves_changed(|m| m.load()).release();
-        self.as_mut().on_media_changed(|m| m.load()).release();
-        self.as_mut().on_presence_changed(|m| m.load()).release();
-        self.as_mut().on_width_changed(|m| m.load()).release();
-        self.as_mut().on_height_changed(|m| m.load()).release();
+        self.as_mut().on_settings_changed(|m| m.ask_load()).release();
+        self.as_mut().on_shelves_changed(|m| m.ask_load()).release();
+        self.as_mut().on_media_changed(|m| m.ask_load()).release();
+        self.as_mut().on_presence_changed(|m| m.ask_load()).release();
+        self.as_mut().on_width_changed(|m| m.ask_load()).release();
+        self.as_mut().on_height_changed(|m| m.ask_load()).release();
         self.as_mut().on_device_changed(|mut m| {
             let device = shelves::device(&m.device.to_string());
             m.as_mut().rust_mut().shared.borrow_mut().set_device(device);
@@ -156,6 +168,17 @@ impl cxx_qt::Initialize for qobject::EsdeModel {
 }
 
 impl qobject::EsdeModel {
+    // One load for the texts and the size changed together: the library publishes its four texts one after another.
+    fn ask_load(mut self: Pin<&mut Self>) {
+        if !self.load_asked {
+            self.as_mut().rust_mut().load_asked = true;
+            let _ = self.qt_thread().queue(|mut m| {
+                m.as_mut().rust_mut().load_asked = false;
+                m.load();
+            });
+        }
+    }
+
     // The texts read, the shelves built and their themes resolved off the GUI thread; the stage installed back on it.
     fn load(mut self: Pin<&mut Self>) {
         let (w, h) = (self.width.round() as i32, self.height.round() as i32);
@@ -186,6 +209,8 @@ impl qobject::EsdeModel {
             p.install(systems, w, h, local_now());
         }
         let themed = self.shared.borrow().stage.is_some();
+        let sounds = QString::from(painter::sounds(&self.shared.borrow()).as_str());
+        publish!(self, sounds, sounds_changed, sounds);
         publish!(self, problem, problem_changed, problem);
         publish!(self, themed, themed_changed, themed);
         self.publish();
@@ -193,12 +218,15 @@ impl qobject::EsdeModel {
 
     /// The frame's state onto the properties, and the revision the list models refresh on.
     fn publish(mut self: Pin<&mut Self>) {
-        let (view, moving, next, overlay) = {
+        let (view, moving, next, overlay, shelf, selected) = {
             let p = self.shared.borrow();
             let next = p.frame.next_change_ms.map_or(0, |ms| i32::try_from(ms).unwrap_or(i32::MAX).max(1));
-            (QString::from(p.view()), p.frame.moving, next, p.frame.overlay.clone())
+            let (shelf, selected) = p.selection();
+            (QString::from(p.view()), p.frame.moving, next, p.frame.overlay.clone(), QString::from(shelf), selected)
         };
         publish!(self, view, view_changed, view);
+        publish!(self, shelf, shelf_changed, shelf);
+        publish!(self, selected, selected_changed, selected);
         publish!(self, moving, moving_changed, moving);
         publish!(self, next_change_ms, next_change_ms_changed, next);
         let o = overlay.unwrap_or(emusen_esde::scene::ScrollLetters { letters: String::new(), star: false, px: 0.0, opacity: 0.0 });
@@ -265,6 +293,11 @@ impl qobject::EsdeModel {
             // Published from the event loop: a measurement arrives while a list is signalling its rows.
             let _ = self.qt_thread().queue(|m| m.publish());
         }
+    }
+
+    pub fn select(self: Pin<&mut Self>, row: i32) {
+        self.shared.borrow_mut().choose(row);
+        self.publish();
     }
 
     pub fn reload(self: Pin<&mut Self>) {

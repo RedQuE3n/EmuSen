@@ -211,6 +211,12 @@ pub mod qobject {
         /// A card closed by B on its first page or by Start.
         #[qinvokable]
         fn close(self: Pin<&mut Screens>);
+        /// Start at the ES-DE theme's view: the Home card at its first page, as ES-DE's Start opens its menu.
+        #[qinvokable]
+        fn home(self: Pin<&mut Screens>);
+        /// Select at the ES-DE theme's view, its options: the List card.
+        #[qinvokable]
+        fn list(self: Pin<&mut Screens>);
         /// The search's focus taken by its keys or its covers.
         #[qinvokable]
         #[cxx_name = "keysFocused"]
@@ -325,6 +331,14 @@ impl qobject::Screens {
 
     pub fn close(self: Pin<&mut Self>) {
         self.ask(Ask::Close);
+    }
+
+    pub fn home(self: Pin<&mut Self>) {
+        self.ask(Ask::Act(HOME.to_owned()));
+    }
+
+    pub fn list(self: Pin<&mut Self>) {
+        self.ask(Ask::Act(LIST.to_owned()));
     }
 
     pub fn keys_focused(self: Pin<&mut Self>, keys: bool) {

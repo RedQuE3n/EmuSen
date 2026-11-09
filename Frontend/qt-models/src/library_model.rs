@@ -131,6 +131,11 @@ pub mod qobject {
         #[qinvokable]
         fn started(self: Pin<&mut LibraryModel>, path: &QString);
 
+        /// Turns the game at `path` a favourite or back, then reads the games again, as the ES-DE view's favourite asks.
+        #[qinvokable]
+        #[cxx_name = "toggleFavourite"]
+        fn toggle_favourite(self: Pin<&mut LibraryModel>, path: &QString);
+
         /// The games a row leads to, as GameModel reads them: a JSON array, one object a game, written at the refresh.
         #[qinvokable]
         #[cxx_name = "gamesOf"]
@@ -387,6 +392,15 @@ impl qobject::LibraryModel {
         });
     }
 
+    pub fn toggle_favourite(self: Pin<&mut Self>, path: &QString) {
+        let Some(source) = self.source.clone() else { return };
+        let (qt, path, gamelists) = (self.qt_thread(), path.to_string(), self.view.gamelists.clone());
+        std::thread::spawn(move || {
+            let refreshed = source.toggle_favourite(&path).and_then(|()| refresh_with(source.as_ref(), &gamelists));
+            let _ = qt.queue(move |model| model.apply(None, refreshed));
+        });
+    }
+
     pub fn games_of(&self, key: &QString) -> QString {
         QString::from(self.view.games_text(&key.to_string()))
     }
@@ -506,6 +520,12 @@ impl qobject::LibraryModel {
                         if let Ok(systems) = source.systems() {
                             let worlds = splash_worlds(&systems);
                             let _ = qt.queue(move |model| model.show_splash(worlds));
+                        }
+                        // An ES-DE theme's view is shown from a first read, the metadata and media following (§4.9).
+                        let themed = source.settings().is_ok_and(|s| crate::esde_shelves::settings_of(&s).themed);
+                        if themed {
+                            let (first, shown) = (refresh(&crate::library::FirstLook(source.as_ref())), source.clone());
+                            let _ = qt.queue(move |model| model.apply(Some(shown), first));
                         }
                         let refreshed = refresh(source.as_ref());
                         (Some(source), refreshed)

@@ -4,8 +4,9 @@
 //! `GamelistOptions`, `CollectionShelves` and `ThemedLibrary.Gamelists`/`.Folders` as plain data, with no view behind
 //! them: the view model writes what they list as text, off the GUI thread.
 
-use crate::esde_shelves::EsdeGame;
-use serde_json::{json, Value};
+use crate::esde_shelves::{EsdeGame, RowText};
+use serde::Serialize;
+use serde_json::Value;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -148,8 +149,10 @@ pub const FOLDER_ENTRY: &str = "Folders";
 
 /// Two texts compared as .NET's OrdinalIgnoreCase compares them: each character's capital, then its code.
 pub fn cmp_ignore_case(a: &str, b: &str) -> Ordering {
-    let upper = |s: &str| s.chars().map(|c| c.to_uppercase().next().unwrap_or(c)).collect::<Vec<_>>();
-    upper(a).cmp(&upper(b))
+    fn upper(s: &str) -> impl Iterator<Item = char> + '_ {
+        s.chars().map(|c| c.to_uppercase().next().unwrap_or(c))
+    }
+    upper(a).cmp(upper(b))
 }
 
 /// ES-DE's sortname where the player set one, else the name; the quick selector indexes by it too.
@@ -830,35 +833,76 @@ impl Gamelists {
     }
 }
 
-/// A listing as the painter reads it, one shelf of the shelves' text.
-pub fn listing_json(shelf: &Shelf, listing: &Listing) -> Value {
-    json!({
-        "name": shelf.name,
-        "full_name": shelf.full_name,
-        "theme": shelf.theme,
-        "system": shelf.system,
-        "kind": shelf.kind.name(),
-        "collection_id": shelf.collection_id,
-        "stars": shelf.stars,
-        "key": listing.key,
-        "folder": listing.folder,
-        "sort": listing.sort.stored(),
-        "favourites_on_top": listing.favourites_on_top,
-        "counts": {
-            "games": listing.counts.games, "favorites": listing.counts.favorites, "shown": listing.counts.shown,
-            "filtered": listing.counts.filtered, "in_folder": listing.counts.in_folder,
+/// A listing as the painter reads it, one shelf of the shelves' text, written into `out` with no tree made first
+/// (EmuSen_Qt.md §4.9).
+pub fn write_listing(out: &mut Vec<u8>, shelf: &Shelf, listing: &Listing) {
+    let text = ListingText {
+        collection_id: shelf.collection_id,
+        counts: CountsText {
+            favorites: listing.counts.favorites,
+            filtered: listing.counts.filtered,
+            games: listing.counts.games,
+            in_folder: listing.counts.in_folder,
+            shown: listing.counts.shown,
         },
-        "letters": listing.letters.iter().map(|(l, i)| json!([l, i])).collect::<Vec<_>>(),
-        "games": listing.entries.iter().map(|g| entry_json(shelf, g)).collect::<Vec<_>>(),
-    })
+        favourites_on_top: listing.favourites_on_top,
+        folder: &listing.folder,
+        full_name: &shelf.full_name,
+        games: listing.entries.iter().map(|g| entry_text(shelf, g)).collect(),
+        key: &listing.key,
+        kind: shelf.kind.name(),
+        letters: &listing.letters,
+        name: &shelf.name,
+        sort: listing.sort.stored(),
+        stars: shelf.stars,
+        system: &shelf.system,
+        theme: &shelf.theme,
+    };
+    // Writing into a Vec fails only where the value cannot be written, which these plain fields never are.
+    let _ = serde_json::to_writer(out, &text);
+}
+
+/// A listing's text, borrowed; the keys in the order a JSON object's sorted map gave them.
+#[derive(Serialize)]
+struct ListingText<'a> {
+    collection_id: Option<i64>,
+    counts: CountsText,
+    favourites_on_top: bool,
+    folder: &'a str,
+    full_name: &'a str,
+    games: Vec<EntryText<'a>>,
+    key: &'a str,
+    kind: &'static str,
+    letters: &'a [(String, usize)],
+    name: &'a str,
+    sort: String,
+    stars: bool,
+    system: &'a str,
+    theme: &'a str,
+}
+
+#[derive(Serialize)]
+struct CountsText {
+    favorites: usize,
+    filtered: bool,
+    games: usize,
+    in_folder: bool,
+    shown: usize,
 }
 
 /// An entry of a listing: a console's game as its whole row; a collection's game by its file alone, its row the one
 /// its console's shelf carries, so the text holds each game once; a folder entry whole, with its description.
-fn entry_json(shelf: &Shelf, g: &EsdeGame) -> Value {
+#[derive(Serialize)]
+#[serde(untagged)]
+enum EntryText<'a> {
+    Row(RowText<'a>),
+    Member { esde_system: &'a str, file: &'a str, sort_name: &'a Option<String> },
+}
+
+fn entry_text<'a>(shelf: &Shelf, g: &'a EsdeGame) -> EntryText<'a> {
     match (shelf.kind, g.folder) {
-        (_, true) => g.to_json_whole(),
-        (Kind::Regular, false) => g.to_json(),
-        (_, false) => json!({ "file": g.file, "esde_system": g.esde_system, "sort_name": g.sort_name }),
+        (_, true) => EntryText::Row(g.row_whole()),
+        (Kind::Regular, false) => EntryText::Row(g.row()),
+        (_, false) => EntryText::Member { esde_system: &g.esde_system, file: &g.file, sort_name: &g.sort_name },
     }
 }

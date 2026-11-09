@@ -3,10 +3,11 @@
 //! refresh, off the GUI thread, so a painter parses it on its own thread and nothing on the GUI thread grows with the
 //! library. Sorting, filters, folders and collections are the gamelist rules' (gamelists.rs), applied here.
 
-use crate::gamelists::{listing_json, Collection, Counts, Gamelists, Settings, Shelf};
+use crate::gamelists::{write_listing, Collection, Counts, Gamelists, Settings, Shelf};
 use crate::library::{title_of, Catalog, LibrarySource};
 use emusen_crystal_client::shapes::SystemRow;
 use emusen_platform_client::library::GameFile;
+use serde::Serialize;
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::Path;
@@ -140,7 +141,7 @@ pub fn names_of(file: &str, folder_path: &str) -> Vec<String> {
 /// The ES-DE view's three texts: the shelves, the media index and each shelf's media presence.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Esde {
-    /// Each shelf as listed now (`gamelists::listing_json`), in the carousel's order.
+    /// Each shelf as listed now (`gamelists::write_listing`), in the carousel's order.
     pub shelves: String,
     /// `MediaIndex::to_json`.
     pub media: String,
@@ -202,27 +203,13 @@ pub struct EsdeGame {
 
 impl EsdeGame {
     /// The row as the shelves' text carries it: every field but the description, which `description_of` gives on demand.
-    pub fn to_json(&self) -> Value {
-        let mut row = self.to_json_whole();
-        if let Some(fields) = row.as_object_mut() {
-            fields.remove("description");
-        }
-        row
+    pub fn row(&self) -> RowText<'_> {
+        RowText::of(self, false)
     }
 
     /// The row with its description, as a collection's folder entry carries its own.
-    pub fn to_json_whole(&self) -> Value {
-        json!({
-            "file": self.file, "name": self.name, "esde_system": self.esde_system, "esde_full_name": self.esde_full_name,
-            "sort_name": self.sort_name, "custom_sort_name": self.custom_sort_name, "description": self.description,
-            "developer": self.developer, "publisher": self.publisher, "genre": self.genre, "players": self.players,
-            "release_date": self.release_date, "rating": self.rating, "last_played": self.last_played,
-            "play_count": self.play_count, "play_time": self.play_time, "favourite": self.favourite,
-            "completed": self.completed, "kid_game": self.kid_game, "broken": self.broken, "hidden": self.hidden,
-            "not_counted": self.not_counted, "hide_metadata": self.hide_metadata, "controller": self.controller,
-            "alt_emulator": self.emulator.is_some(), "emulator": self.emulator, "manual": self.manual, "folder": self.folder,
-            "folder_path": self.folder_path, "folder_link": self.folder_link, "is_collection": self.is_collection, "face": self.face,
-        })
+    pub fn row_whole(&self) -> RowText<'_> {
+        RowText::of(self, true)
     }
 
     /// An entry read back from its text, as the painter hands one in to be entered.
@@ -230,6 +217,84 @@ impl EsdeGame {
         let text = |key: &str| v.get(key).and_then(Value::as_str).unwrap_or("").to_owned();
         let flag = |key: &str| v.get(key).and_then(Value::as_bool).unwrap_or(false);
         EsdeGame { name: text("name"), file: text("file"), folder: flag("folder"), folder_path: text("folder_path"), is_collection: flag("is_collection"), ..EsdeGame::default() }
+    }
+}
+
+/// A game's row in the shelves' text, borrowed from it and written straight into the text, never made a tree first
+/// (EmuSen_Qt.md §4.9); the keys in the order a JSON object's sorted map gave them.
+#[derive(Serialize)]
+pub struct RowText<'a> {
+    alt_emulator: bool,
+    broken: bool,
+    completed: bool,
+    controller: &'a Option<String>,
+    custom_sort_name: &'a Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<&'a Option<String>>,
+    developer: &'a Option<String>,
+    emulator: &'a Option<String>,
+    esde_full_name: &'a str,
+    esde_system: &'a str,
+    face: &'a Option<String>,
+    favourite: bool,
+    file: &'a str,
+    folder: bool,
+    folder_link: &'a Option<String>,
+    folder_path: &'a str,
+    genre: &'a Option<String>,
+    hidden: bool,
+    hide_metadata: bool,
+    is_collection: bool,
+    kid_game: bool,
+    last_played: i64,
+    manual: bool,
+    name: &'a str,
+    not_counted: bool,
+    play_count: i64,
+    play_time: i64,
+    players: &'a Option<String>,
+    publisher: &'a Option<String>,
+    rating: Option<f64>,
+    release_date: &'a Option<String>,
+    sort_name: &'a Option<String>,
+}
+
+impl<'a> RowText<'a> {
+    fn of(g: &'a EsdeGame, whole: bool) -> RowText<'a> {
+        RowText {
+            alt_emulator: g.emulator.is_some(),
+            broken: g.broken,
+            completed: g.completed,
+            controller: &g.controller,
+            custom_sort_name: &g.custom_sort_name,
+            description: whole.then_some(&g.description),
+            developer: &g.developer,
+            emulator: &g.emulator,
+            esde_full_name: &g.esde_full_name,
+            esde_system: &g.esde_system,
+            face: &g.face,
+            favourite: g.favourite,
+            file: &g.file,
+            folder: g.folder,
+            folder_link: &g.folder_link,
+            folder_path: &g.folder_path,
+            genre: &g.genre,
+            hidden: g.hidden,
+            hide_metadata: g.hide_metadata,
+            is_collection: g.is_collection,
+            kid_game: g.kid_game,
+            last_played: g.last_played,
+            manual: g.manual,
+            name: &g.name,
+            not_counted: g.not_counted,
+            play_count: g.play_count,
+            play_time: g.play_time,
+            players: &g.players,
+            publisher: &g.publisher,
+            rating: g.rating,
+            release_date: &g.release_date,
+            sort_name: &g.sort_name,
+        }
     }
 }
 
@@ -285,7 +350,7 @@ impl EsdeState {
 pub fn read(source: &dyn LibrarySource, shelved: &[SystemRow], catalog: &Catalog, settings: &Value) -> Result<Base, String> {
     let show_hidden = settings.get("ShowHiddenGames").and_then(Value::as_bool).unwrap_or(false);
     let collections = Settings::from_json(settings.get("BigPictureCollections").unwrap_or(&Value::Null));
-    let metadata: HashMap<String, Value> = source.metadata(&catalog.games)?.into_iter().collect();
+    let metadata: HashMap<String, Metadata> = source.metadata(&catalog.games)?.into_iter().collect();
     let plays: HashMap<String, Plays> = source.plays(&catalog.games)?.into_iter().collect();
     let systems: Vec<String> = shelved.iter().map(|s| s.esde_system.clone()).filter(|s| !s.is_empty()).collect();
     let mut media = source.media_index(&systems)?;
@@ -346,10 +411,13 @@ pub fn build(base: Arc<Base>, gamelists: &Gamelists) -> (Esde, EsdeState) {
         .into_iter()
         .filter(|s| !s.games.is_empty() || s.folders.as_ref().is_some_and(|f| !f.is_empty()))
         .collect();
-    let (mut texts, mut presence, mut summaries) = (Vec::new(), Map::new(), HashMap::new());
+    let (mut texts, mut presence, mut summaries) = (b"[".to_vec(), Map::new(), HashMap::new());
     for shelf in &shelves {
         let listing = gamelists.listing(shelf, &base.links, &base.settings);
-        texts.push(listing_json(shelf, &listing));
+        if texts.len() > 1 {
+            texts.push(b',');
+        }
+        write_listing(&mut texts, shelf, &listing);
         presence.insert(shelf.name.clone(), json!(present(&base.media, &shelf.games)));
         let summary = Summary {
             key: listing.key.clone(),
@@ -364,7 +432,8 @@ pub fn build(base: Arc<Base>, gamelists: &Gamelists) -> (Esde, EsdeState) {
         };
         summaries.insert(shelf.name.clone(), summary);
     }
-    let esde = Esde { shelves: Value::Array(texts).to_string(), media: base.media.to_json(), presence: Value::Object(presence).to_string() };
+    texts.push(b']');
+    let esde = Esde { shelves: String::from_utf8(texts).unwrap_or_default(), media: base.media.to_json(), presence: Value::Object(presence).to_string() };
     (esde, EsdeState { base, shelves, summaries })
 }
 
@@ -378,9 +447,19 @@ fn present(media: &MediaIndex, games: &[EsdeGame]) -> Vec<String> {
     found.into_iter().collect()
 }
 
+/// A game's metadata as the view reads it: each scraper key's chosen value (EmuSen_Backend.md §30.3), the empty ones left
+/// out. A game's answer is made this as it is read, so the library's answers are never held whole (EmuSen_Qt.md §4.9).
+pub type Metadata = BTreeMap<String, String>;
+
+/// The scraper's `metadata` answer, `{key: {"value", …}}`, as the view keeps it.
+pub fn metadata_of(answer: &Value) -> Metadata {
+    let chosen = |(k, f): (&String, &Value)| f.get("value")?.as_str().filter(|v| !v.is_empty()).map(|v| (k.clone(), v.to_owned()));
+    answer.as_object().into_iter().flatten().filter_map(chosen).collect()
+}
+
 /// What a game's row is made from besides its file.
 struct Facts<'a> {
-    metadata: Option<&'a Value>,
+    metadata: Option<&'a Metadata>,
     plays: Plays,
     last_played: i64,
     favourite: bool,
@@ -390,7 +469,7 @@ struct Facts<'a> {
 /// One game: the metadata by the scraper's keys (EmuSen_Backend.md §30.3, `metadata`), its edit else ScreenScraper's
 /// else the default already chosen there.
 fn game_of_file(g: &GameFile, s: &SystemRow, f: &Facts) -> EsdeGame {
-    let value = |key: &str| f.metadata.and_then(|m| m.get(key)).and_then(|v| v.get("value")).and_then(Value::as_str).filter(|v| !v.is_empty());
+    let value = |key: &str| f.metadata.and_then(|m| m.get(key)).map(String::as_str);
     let text = |key: &str| value(key).map(str::to_owned);
     let flag = |key: &str| value(key) == Some("1");
     EsdeGame {

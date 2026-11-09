@@ -40,7 +40,13 @@ Item {
     readonly property alias status: image.status
     readonly property alias ownWidth: image.implicitWidth
     readonly property alias ownHeight: image.implicitHeight
-    readonly property alias paintedHeight: image.paintedHeight
+    // The painted size Qt gives a contained or covered picture, from its own size, since a raster's hidden Image stretches.
+    readonly property real paintScale: root.fit === Picture.Fit.Contain ? Math.min(root.width / Math.max(1, image.implicitWidth), root.height / Math.max(1, image.implicitHeight)) : Math.max(root.width / Math.max(1, image.implicitWidth), root.height / Math.max(1, image.implicitHeight))
+    readonly property bool fitted: root.fit === Picture.Fit.Contain || root.fit === Picture.Fit.Cover
+    readonly property real paintedWidth: root.fitted ? image.implicitWidth * root.paintScale : root.width
+    readonly property real paintedHeight: root.fitted ? image.implicitHeight * root.paintScale : root.height
+    // A raster is never decoded larger than its own size or the box; Qt's aspect modes would scale it up (EmuSen_Qt.md §4.8.1).
+    readonly property bool vector: /\.svgz?$/i.test(root.source.toString())
     readonly property bool tiled: root.fit === Picture.Fit.Tile
     readonly property real tileW: root.tileWidth > 0 ? root.tileWidth : Math.max(1, image.implicitWidth)
     readonly property real tileH: root.tileHeight > 0 ? root.tileHeight : Math.max(1, image.implicitHeight)
@@ -58,10 +64,10 @@ Item {
         asynchronous: true
         cache: true
         smooth: !root.nearest
-        fillMode: root.fit === Picture.Fit.Contain ? Image.PreserveAspectFit : root.fit === Picture.Fit.Cover ? Image.PreserveAspectCrop : Image.Stretch
-        // Contained or covered, only a width is asked for, so a vector picture keeps the aspect the scene measures (EmuSen_Qt.md §4.8.5).
+        fillMode: !root.vector ? Image.Stretch : root.fit === Picture.Fit.Contain ? Image.PreserveAspectFit : root.fit === Picture.Fit.Cover ? Image.PreserveAspectCrop : Image.Stretch
+        // A vector contained or covered, and any picture covered, asks only a width, keeping the aspect the scene measures (EmuSen_Qt.md §4.8.5).
         sourceSize.width: root.nearest ? 0 : root.tiled ? root.tileWidth : Math.ceil((root.fit === Picture.Fit.Cover ? Math.max(root.width, 2 * root.height) : root.width) * root.sourceScale)
-        sourceSize.height: root.nearest || root.fit === Picture.Fit.Contain || root.fit === Picture.Fit.Cover ? 0 : root.tiled ? root.tileHeight : Math.ceil(root.height * root.sourceScale)
+        sourceSize.height: root.nearest || root.fit === Picture.Fit.Cover || (root.vector && root.fit === Picture.Fit.Contain) ? 0 : root.tiled ? root.tileHeight : Math.ceil(root.height * root.sourceScale)
     }
     ShaderEffect {
         readonly property var source: image
@@ -79,8 +85,8 @@ Item {
         readonly property real fadeFrom: root.fadeFrom
         readonly property real fadeFalloff: root.fadeFalloff
         visible: image.status === Image.Ready
-        width: root.fit === Picture.Fit.Contain ? image.paintedWidth : root.width
-        height: root.fit === Picture.Fit.Contain ? image.paintedHeight : root.height
+        width: root.fit === Picture.Fit.Contain ? root.paintedWidth : root.width
+        height: root.fit === Picture.Fit.Contain ? root.paintedHeight : root.height
         x: (root.width - width) * root.alignX
         y: (root.height - height) * root.alignY
         fragmentShader: "qrc:/emusen/esde/picture.frag.qsb"

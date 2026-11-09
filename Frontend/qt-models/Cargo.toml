@@ -15,7 +15,8 @@ name = "emusen_qt_models"
 cxx.workspace = true
 cxx-qt.workspace = true
 cxx-qt-lib.workspace = true
-# A source's JSON reads (the library's records).
+# A source's JSON reads (the library's records), and the texts written straight from the rows.
+serde.workspace = true
 serde_json.workspace = true
 # The frontend API and the platform library, the only ways to the back end (EmuSen_Qt.md §1.1).
 emusen-crystal-client = { path = "../crystal-client" }

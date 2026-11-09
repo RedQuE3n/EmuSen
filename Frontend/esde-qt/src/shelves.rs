@@ -53,10 +53,6 @@ fn text(v: &Value, key: &str) -> Option<String> {
     v.get(key).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_owned)
 }
 
-fn flag(v: &Value, key: &str) -> bool {
-    v.get(key).and_then(Value::as_bool).unwrap_or(false)
-}
-
 /// A stored choice by Mistress's key (`Variant`, `ColorScheme`, …), or its lower-camel form.
 fn choice(v: &Value, key: &str) -> Option<String> {
     let lower = format!("{}{}", key[..1].to_lowercase(), &key[1..]);
@@ -146,93 +142,148 @@ fn media_of(media: &Value, system: &str, folder_path: &str, file: &str) -> BTree
     out
 }
 
-fn game_of(v: &Value, media: &Value) -> Game {
-    let file = text(v, "file").unwrap_or_default();
-    let name = text(v, "name").unwrap_or_else(|| file.clone());
-    let system = text(v, "esde_system").unwrap_or_default();
-    let folder_path = text(v, "folder_path").unwrap_or_default();
-    let count = |key: &str| v.get(key).and_then(Value::as_u64).unwrap_or(0);
-    let last = v.get("last_played").and_then(Value::as_i64).unwrap_or(0);
+/// A game's row as the shelves' text carries it, read straight into its fields: a missing or null field is its default.
+#[derive(Clone, Default, serde::Deserialize)]
+#[serde(default)]
+struct Row {
+    file: Option<String>,
+    name: Option<String>,
+    esde_system: Option<String>,
+    folder_path: Option<String>,
+    description: Option<String>,
+    developer: Option<String>,
+    publisher: Option<String>,
+    genre: Option<String>,
+    players: Option<String>,
+    release_date: Option<String>,
+    last_played: Option<i64>,
+    rating: Option<f64>,
+    play_time: Option<u64>,
+    play_count: Option<u64>,
+    favourite: Option<bool>,
+    completed: Option<bool>,
+    folder: Option<bool>,
+    kid_game: Option<bool>,
+    broken: Option<bool>,
+    emulator: Option<String>,
+    hide_metadata: Option<bool>,
+    not_counted: Option<bool>,
+    controller: Option<String>,
+    manual: Option<bool>,
+    alt_emulator: Option<bool>,
+    folder_link: Option<String>,
+    is_collection: Option<bool>,
+    in_collection: Option<bool>,
+}
+
+#[derive(Default, serde::Deserialize)]
+#[serde(default)]
+struct CountsRow {
+    games: Option<u64>,
+    favorites: Option<u64>,
+    shown: Option<u64>,
+    filtered: Option<bool>,
+    in_folder: Option<bool>,
+}
+
+#[derive(Default, serde::Deserialize)]
+#[serde(default)]
+struct ShelfRow {
+    name: Option<String>,
+    full_name: Option<String>,
+    theme: Option<String>,
+    kind: Option<String>,
+    stars: Option<bool>,
+    favourites_on_top: Option<bool>,
+    counts: Option<CountsRow>,
+    games: Vec<Row>,
+}
+
+// A text field as the scene reads it: none where empty.
+fn some(t: &Option<String>) -> Option<String> {
+    t.as_ref().filter(|s| !s.is_empty()).cloned()
+}
+
+fn game_of(v: &Row, media: &Value) -> Game {
+    let file = some(&v.file).unwrap_or_default();
+    let name = some(&v.name).unwrap_or_else(|| file.clone());
+    let system = some(&v.esde_system).unwrap_or_default();
+    let folder_path = some(&v.folder_path).unwrap_or_default();
+    let on = |f: Option<bool>| f.unwrap_or(false);
+    let last = v.last_played.unwrap_or(0);
     Game {
-        description: text(v, "description"),
-        developer: text(v, "developer"),
-        publisher: text(v, "publisher"),
-        genre: text(v, "genre"),
-        players: text(v, "players"),
-        release_date: text(v, "release_date").and_then(|d| date(&d)),
+        description: some(&v.description),
+        developer: some(&v.developer),
+        publisher: some(&v.publisher),
+        genre: some(&v.genre),
+        players: some(&v.players),
+        release_date: some(&v.release_date).and_then(|d| date(&d)),
         last_played: (last > 0).then(|| from_unix(last)),
-        rating: v.get("rating").and_then(Value::as_f64).map(|r| r as f32),
-        play_time_seconds: v.get("play_time").and_then(Value::as_u64),
-        play_count: count("play_count") as u32,
-        favorite: flag(v, "favourite"),
-        completed: flag(v, "completed"),
-        folder: flag(v, "folder"),
-        kid_game: flag(v, "kid_game"),
-        broken: flag(v, "broken"),
-        emulator: text(v, "emulator"),
-        hide_metadata: flag(v, "hide_metadata"),
-        not_counted: flag(v, "not_counted"),
+        rating: v.rating.map(|r| r as f32),
+        play_time_seconds: v.play_time,
+        play_count: v.play_count.unwrap_or(0) as u32,
+        favorite: on(v.favourite),
+        completed: on(v.completed),
+        folder: on(v.folder),
+        kid_game: on(v.kid_game),
+        broken: on(v.broken),
+        emulator: some(&v.emulator),
+        hide_metadata: on(v.hide_metadata),
+        not_counted: on(v.not_counted),
         media: media_of(media, &system, &folder_path, &file),
-        controller: text(v, "controller"),
-        manual: flag(v, "manual"),
-        alt_emulator: flag(v, "alt_emulator"),
-        folder_link: text(v, "folder_link"),
-        is_collection: flag(v, "is_collection"),
-        in_collection: flag(v, "in_collection"),
+        controller: some(&v.controller),
+        manual: on(v.manual),
+        alt_emulator: on(v.alt_emulator),
+        folder_link: some(&v.folder_link),
+        is_collection: on(v.is_collection),
+        in_collection: on(v.in_collection),
         ..Game::new(&name, &file)
     }
 }
 
 /// `esdeShelves` with `esdeMedia`: each shelf's system and games; a collection's game by its file alone takes the row its
-/// console's shelf carries (EmuSen_Qt.md §4.6).
+/// console's shelf carries (EmuSen_Qt.md §4.6). The text is read straight into rows, never into a tree of values, since
+/// at a library's scale the tree was 150 MiB for a 6.6 MB text (§4.9).
 pub fn shelves(shelves_text: &str, media_text: &str) -> Vec<Shelf> {
-    let all: Value = serde_json::from_str(shelves_text).unwrap_or(Value::Null);
+    let list: Vec<ShelfRow> = serde_json::from_str(shelves_text).unwrap_or_default();
     let media: Value = serde_json::from_str(media_text).unwrap_or(Value::Null);
-    let list = all.as_array().cloned().unwrap_or_default();
-    let mut whole: BTreeMap<String, Value> = BTreeMap::new();
-    for shelf in &list {
-        for g in shelf.get("games").and_then(Value::as_array).into_iter().flatten() {
-            if g.get("name").is_some() {
-                if let Some(file) = text(g, "file") {
-                    whole.entry(file).or_insert_with(|| g.clone());
-                }
-            }
+    let mut whole: BTreeMap<&str, &Row> = BTreeMap::new();
+    for g in list.iter().flat_map(|s| &s.games).filter(|g| g.name.is_some()) {
+        if let Some(file) = g.file.as_deref().filter(|f| !f.is_empty()) {
+            whole.entry(file).or_insert(g);
         }
     }
-    let systems: BTreeMap<String, ThemeSystem> = list
-        .iter()
-        .filter_map(|s| Some((text(s, "name")?, ThemeSystem::new(&text(s, "name")?, &text(s, "full_name")?, &text(s, "theme")?))))
-        .collect();
+    let system_of = |s: &ShelfRow, kind: SystemKind| Some(ThemeSystem::of_kind(&some(&s.name)?, &some(&s.full_name)?, &some(&s.theme)?, kind));
+    let systems: BTreeMap<String, ThemeSystem> =
+        list.iter().filter_map(|s| Some((some(&s.name)?, system_of(s, SystemKind::Regular)?))).collect();
     list.iter()
         .map(|s| {
-            let kind = match text(s, "kind").as_deref() {
+            let kind = match s.kind.as_deref() {
                 Some("auto") => SystemKind::AutoCollection,
                 Some("custom") => SystemKind::CustomCollection,
                 _ => SystemKind::Regular,
             };
-            let system = (|| Some(ThemeSystem::of_kind(&text(s, "name")?, &text(s, "full_name")?, &text(s, "theme")?, kind)))();
             let games = s
-                .get("games")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
+                .games
+                .iter()
                 .map(|g| {
-                    let row = if g.get("name").is_some() { g } else { text(g, "file").and_then(|f| whole.get(&f)).unwrap_or(g) };
+                    let row = if g.name.is_some() { g } else { g.file.as_deref().and_then(|f| whole.get(f).copied()).unwrap_or(g) };
                     let mut game = game_of(row, &media);
                     if kind != SystemKind::Regular {
-                        game.source = text(row, "esde_system").and_then(|n| systems.get(&n).cloned());
+                        game.source = some(&row.esde_system).and_then(|n| systems.get(&n).cloned());
                     }
                     game
                 })
                 .collect();
-            let counts = s.get("counts").map(|c| Counts {
-                games: c.get("games").and_then(Value::as_u64).unwrap_or(0) as usize,
-                favorites: c.get("favorites").and_then(Value::as_u64).unwrap_or(0) as usize,
-                shown: c.get("shown").and_then(Value::as_u64).unwrap_or(0) as usize,
-                filtered: flag(c, "filtered"),
-                in_folder: flag(c, "in_folder"),
+            let counts = s.counts.as_ref().map(|c| Counts {
+                games: c.games.unwrap_or(0) as usize,
+                favorites: c.favorites.unwrap_or(0) as usize,
+                shown: c.shown.unwrap_or(0) as usize,
+                filtered: c.filtered.unwrap_or(false),
+                in_folder: c.in_folder.unwrap_or(false),
             });
-            Shelf { system, games, stars: flag(s, "stars"), favorites_on_top: flag(s, "favourites_on_top"), counts }
+            let on = |f: Option<bool>| f.unwrap_or(false);
+            Shelf { system: system_of(s, kind), games, stars: on(s.stars), favorites_on_top: on(s.favourites_on_top), counts }
         })
         .collect()
 }

@@ -310,6 +310,7 @@ dependencies = [
  "emusen-kit-core",
  "emusen-kit-qt",
  "emusen-qt-test",
+ "serde",
  "serde_json",
 ]
 
@@ -371,6 +372,7 @@ dependencies = [
  "cxx-qt-lib",
  "emusen-client-fixture",
  "emusen-crystal-client",
+ "emusen-esde-qt",
  "emusen-kit-core",
  "emusen-kit-qt",
  "emusen-platform-client",
@@ -417,6 +419,7 @@ dependencies = [
  "emusen-qt-test",
  "emusen-theme-check",
  "emusen-theme-manifest",
+ "serde",
  "serde_json",
 ]
 

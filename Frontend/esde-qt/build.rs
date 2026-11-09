@@ -46,7 +46,7 @@ fn main() {
         QmlModule::new("EmuSen.Esde").version(1, 0).qml_files(ESDE_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtQml.Models").depend("EmuSen.Kit"),
     )
     .qrc(shaders)
-    .files(["src/base.rs", "src/marks.rs", "src/model.rs", "src/lists.rs"])
+    .files(["src/marks.rs", "src/model.rs", "src/lists.rs"])
     .qt_module("Quick")
     .build()
     .export();

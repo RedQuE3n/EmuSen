@@ -374,8 +374,8 @@ impl Tree {
         self.nodes.iter().enumerate().filter(|(_, n)| n.operable && n.visible).map(|(i, _)| i as u32).collect()
     }
 
-    /// Each item of this tree as `now` holds it: the same object, or the one a view made again in its place, with its type,
-    /// objectName and box; 0 for none (EmuSen_Kit.md §7.11).
+    /// Each item of this tree as `now` holds it: the same object, still of its type and objectName wherever it has moved, or
+    /// the one a view made again in its place, with its type, objectName and box; 0 for none (EmuSen_Kit.md §7.11).
     pub fn found_in(&self, now: &Tree) -> Vec<u64> {
         let mut by_identity: HashMap<Identity<'_>, Vec<usize>> = HashMap::new();
         for (j, node) in now.nodes.iter().enumerate() {
@@ -385,7 +385,7 @@ impl Tree {
         let mut found = vec![0; self.nodes.len()];
         // The same objects first, so a made-again item never takes the place of one that stayed.
         for (i, node) in self.nodes.iter().enumerate() {
-            if let Some(j) = now.index_of(self.ids[i]).map(|j| j as usize).filter(|&j| identity(&now.nodes[j]) == identity(node)) {
+            if let Some(j) = now.index_of(self.ids[i]).map(|j| j as usize).filter(|&j| named(&now.nodes[j]) == named(node)) {
                 taken[j] = true;
                 found[i] = self.ids[i];
             }
@@ -407,9 +407,14 @@ impl Tree {
     pub fn same_as(&self, node: &Node) -> Option<u32> {
         let id: u64 = node.id.parse().unwrap_or(0);
         self.index_of(id)
-            .filter(|&i| identity(&self.nodes[i as usize]) == identity(node))
+            .filter(|&i| named(&self.nodes[i as usize]) == named(node))
             .or_else(|| self.nodes.iter().position(|n| identity(n) == identity(node)).map(|i| i as u32))
     }
+}
+
+/// What an object that stayed keeps however it moves: its type and its objectName.
+fn named(node: &Node) -> (&str, &str) {
+    (node.ty.as_str(), node.name.as_str())
 }
 
 /// What stays when a view makes an item again where it was: its type, its objectName and its box to half a pixel.

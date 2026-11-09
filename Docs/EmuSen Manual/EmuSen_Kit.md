@@ -988,6 +988,19 @@ every step makes a card. Two seeded faults, each reverted: the re-reading taken 
 (nine rows unreachable); a landing on no element read as the list's content item failed it at 1280 × 800 (the content
 item covered, held to the pointer rule).
 
+**An element that slides is still itself** (2026-11-09). The program's acceptance test failed on the reference theme's
+Choose a console once the re-reading above was in: the pad reached neither the shelves nor two consoles at 1280 × 800 and
+one console at every other size, and at 1920 × 1200 the focused console's engine line was not shown. The orbits' consoles
+are a `Repeater`'s, never made again, but each press turns the orbits (a `Behavior` on each console's angle, the reel's
+length), and the focused console's covers are made again for each focus, so the walk read the tree again while the
+consoles were still sliding back. `found_in` kept an object as itself only while its box was unchanged, so a console
+mid-slide stood for nothing, the walk focused nothing for it and recorded no press from it, and a scope's focus was given
+back to nothing. An object still alive and still of its type and objectName is now itself wherever it has moved
+(`found_in`, `same_as`); the box is asked only of an item made again in another's place. Held to by `qt-test/tests/shift.rs`
+over `ShiftScene.qml`: six walkables in a row, the focused one growing over 300 ms so the rest slide, and marks made again
+for each focus; every Right lands on the next and the pad reaches all six. The box asked of the same object, seeded, failed
+it (no press recorded from tile 1); the acceptance test passed with the change on WiseMan c0a6358ab.
+
 ### 7.12 The pad's glyphs (stage 0, the rest, step 2; 2026-11-08)
 
 The help bar's circles were empty until this step. Each entry now draws the glyph of the control that gives its press,

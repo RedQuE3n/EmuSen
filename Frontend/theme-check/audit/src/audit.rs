@@ -1,13 +1,13 @@
 //! The loaded audits (man theme-check): each screen a package lists placed through the theme host in an engine of its own,
 //! its views fed the synthetic library, then held at the gate's five sizes in both variants to kit-core's fit, pad reach,
-//! pointer reach and no-chrome rules, and once to stillness under reduced motion. One line per finding.
+//! pointer reach, no-chrome and contrast rules, and once to stillness under reduced motion. One line per finding.
 
 use core::pin::Pin;
 use std::collections::HashSet;
 use std::path::Path;
 
 use cxx_qt::QObject;
-use emusen_kit_core::audit::{self, fit, no_chrome, pad_reach, pointer_reach, reached, Fault, Rect};
+use emusen_kit_core::audit::{self, contrast, fit, no_chrome, pad_reach, pointer_reach, reached, Fault, Rect};
 use emusen_kit_core::input::{ElementId, UiButton, WalkForm};
 use emusen_kit_core::tokens::Variant;
 use emusen_kit_qt::kinds;
@@ -204,6 +204,8 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             let mut tree = scene.tree();
             // A title or a name may elide; the program's fixed words may not.
             tree.root.mark_data(&words::is_fixed);
+            // What lies behind each text as drawn, pictures and translucent fills included, before the walk moves anything.
+            scene.sample_behind(&mut tree, f64::from(w), f64::from(h));
             let focus = scene.focus(&tree).map(ElementId);
             // The crowd's reach is the sweep's; every element on the screen is still held to the pointer.
             let walk = if pass.consoles.is_some() { Vec::new() } else { scene.walk_by(&tree, |s, button| s.key(key_of(button), 0)) };
@@ -225,6 +227,7 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
                 ("reach", reach),
                 ("pointer", pointer_reach(&tree.root, &pointed)),
                 ("chrome", no_chrome(&tree.root, WalkForm::BigScreen)),
+                ("contrast", contrast(&tree.root)),
             ];
             for (kind, faults) in found {
                 for fault in faults {

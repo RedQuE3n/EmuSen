@@ -250,12 +250,13 @@ fn find_mut(item: &mut Item, id: u32) -> Option<&mut Item> {
 }
 
 impl Tree {
-    /// Where to sample behind each visible text that has an ink: its number and its points.
+    /// Where to sample behind each visible text that has an ink and words to draw: its number and its points.
     pub fn behind_points(&self, width: f64, height: f64) -> Vec<(u32, Vec<(f64, f64)>)> {
         self.nodes
             .iter()
             .enumerate()
             .filter(|(_, n)| n.visible && n.ink.as_deref().is_some_and(|ink| !ink.is_empty()))
+            .filter(|(_, n)| n.text.as_deref().is_some_and(|t| !t.trim().is_empty()))
             .filter_map(|(i, n)| n.glyphs.map(|g| (i as u32, spread(g, width, height))))
             .filter(|(_, points)| !points.is_empty())
             .collect()

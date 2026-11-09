@@ -90,6 +90,18 @@ fn qt_3_7_a_transition_longer_than_the_kit_s_is_recorded_at_rest() {
 }
 
 #[test]
+fn qt_3_7_words_over_a_pale_picture_are_measured_against_the_picture() {
+    let (out, status) = audit("dim-picture");
+    assert_eq!(status, 1, "{out}");
+    for size in ["1280x800", "1920x1200", "1920x1080", "1280x720", "3840x2160"] {
+        let want = format!("dim-picture/screens/Home.qml:1 contrast {size} dark: low contrast: ");
+        assert!(out.lines().any(|l| l.contains(&want) && l.contains("caption")), "{want}\n{out}");
+    }
+    // The tokens alone pass: the light variant's text is dark on the same picture, and the rows keep theirs in both.
+    assert!(out.lines().all(|l| l.contains(" contrast ") && l.contains(" dark: ") && l.contains("caption")), "the caption in the dark alone: {out}");
+}
+
+#[test]
 fn qt_3_7_consoles_laid_out_by_hand_do_not_survive_120_consoles() {
     let (out, status) = audit("by-hand");
     assert_eq!(status, 1);

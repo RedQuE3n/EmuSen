@@ -1,10 +1,13 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 
 // One line of words as ES-DE draws it: each glyph at a whole-pixel pen, advanced by its advance rounded, at the size unrounded, the 'S' centred on the line (EmuSen_Qt.md §4.8.7).
 Item {
     id: root
     property string text
-    property color color: "white"
+    property color color
+    // The character the line is centred by, the scene's (EsdeModel.reference).
+    property string reference
     property string family
     property real px: 12
     readonly property int base: Math.max(1, Math.round(root.px))
@@ -19,9 +22,9 @@ Item {
         }
         return { glyphs: out, width: pen };
     }
-    readonly property rect reference: metrics.tightBoundingRect("S")
+    readonly property rect referenceBox: metrics.tightBoundingRect(root.reference)
     implicitWidth: root.placed.width
-    implicitHeight: root.reference.height * root.stretch
+    implicitHeight: root.referenceBox.height * root.stretch
     FontMetrics {
         id: metrics
         font.family: root.family
@@ -32,12 +35,13 @@ Item {
     Repeater {
         model: root.placed.glyphs
         Text {
+            id: glyph
             required property var modelData
-            x: modelData.pen
-            y: (-root.reference.y - baselineOffset) * root.stretch
+            x: glyph.modelData.pen
+            y: (-root.referenceBox.y - glyph.baselineOffset) * root.stretch
             transformOrigin: Item.TopLeft
             scale: root.stretch
-            text: modelData.glyph
+            text: glyph.modelData.glyph
             color: root.color
             font: metrics.font
         }

@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
 import EmuSen.Esde
@@ -76,6 +77,7 @@ ElementBox {
         label: Component {
             GlyphLine {
                 family: root.faceName
+                reference: root.esde ? root.esde.reference : ""
                 px: root.labelPx
             }
         }

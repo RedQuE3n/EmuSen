@@ -48,6 +48,8 @@ pub mod qobject {
         #[qproperty(QString, default_font)]
         /// The seed the gameselectors' random picks start from; 0 takes the install's time (EmuSen_Qt.md §4.8.7).
         #[qproperty(i64, selection_seed)]
+        /// The character a line of ES-DE's words is centred by (`emusen_esde::fonts::REFERENCE`).
+        #[qproperty(QString, reference, READ, CONSTANT)]
         type EsdeModel = super::EsdeModelRust;
     }
 
@@ -117,6 +119,7 @@ pub struct EsdeModelRust {
     now: i64,
     default_font: QString,
     selection_seed: i64,
+    reference: QString,
     themed: bool,
     problem: QString,
     view: QString,
@@ -143,6 +146,7 @@ fn local_now(pinned: i64) -> DateTime {
 
 impl cxx_qt::Initialize for qobject::EsdeModel {
     fn initialize(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().reference = QString::from(emusen_esde::fonts::REFERENCE);
         self.as_mut().on_settings_changed(|m| m.load()).release();
         self.as_mut().on_shelves_changed(|m| m.load()).release();
         self.as_mut().on_media_changed(|m| m.load()).release();

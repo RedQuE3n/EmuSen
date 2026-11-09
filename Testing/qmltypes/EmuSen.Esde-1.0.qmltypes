@@ -262,139 +262,148 @@ Module {
             index: 20
             lineNumber: 274
         }
-        Signal { name: "settingsChanged"; lineNumber: 311 }
-        Signal { name: "shelvesChanged"; lineNumber: 312 }
-        Signal { name: "mediaChanged"; lineNumber: 313 }
-        Signal { name: "presenceChanged"; lineNumber: 314 }
-        Signal { name: "widthChanged"; lineNumber: 315 }
-        Signal { name: "heightChanged"; lineNumber: 316 }
-        Signal { name: "swapChanged"; lineNumber: 317 }
-        Signal { name: "deviceChanged"; lineNumber: 318 }
-        Signal { name: "nowChanged"; lineNumber: 319 }
-        Signal { name: "themedChanged"; lineNumber: 320 }
-        Signal { name: "problemChanged"; lineNumber: 321 }
-        Signal { name: "viewChanged"; lineNumber: 322 }
-        Signal { name: "movingChanged"; lineNumber: 323 }
-        Signal { name: "nextChangeMsChanged"; lineNumber: 324 }
-        Signal { name: "revisionChanged"; lineNumber: 325 }
-        Signal { name: "lettersChanged"; lineNumber: 326 }
-        Signal { name: "lettersMarkChanged"; lineNumber: 327 }
-        Signal { name: "lettersPxChanged"; lineNumber: 328 }
-        Signal { name: "lettersOpacityChanged"; lineNumber: 329 }
-        Signal { name: "defaultFontChanged"; lineNumber: 330 }
-        Signal { name: "selectionSeedChanged"; lineNumber: 331 }
+        Property {
+            name: "reference"
+            type: "QString"
+            read: "getReference"
+            index: 21
+            lineNumber: 275
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Signal { name: "settingsChanged"; lineNumber: 313 }
+        Signal { name: "shelvesChanged"; lineNumber: 314 }
+        Signal { name: "mediaChanged"; lineNumber: 315 }
+        Signal { name: "presenceChanged"; lineNumber: 316 }
+        Signal { name: "widthChanged"; lineNumber: 317 }
+        Signal { name: "heightChanged"; lineNumber: 318 }
+        Signal { name: "swapChanged"; lineNumber: 319 }
+        Signal { name: "deviceChanged"; lineNumber: 320 }
+        Signal { name: "nowChanged"; lineNumber: 321 }
+        Signal { name: "themedChanged"; lineNumber: 322 }
+        Signal { name: "problemChanged"; lineNumber: 323 }
+        Signal { name: "viewChanged"; lineNumber: 324 }
+        Signal { name: "movingChanged"; lineNumber: 325 }
+        Signal { name: "nextChangeMsChanged"; lineNumber: 326 }
+        Signal { name: "revisionChanged"; lineNumber: 327 }
+        Signal { name: "lettersChanged"; lineNumber: 328 }
+        Signal { name: "lettersMarkChanged"; lineNumber: 329 }
+        Signal { name: "lettersPxChanged"; lineNumber: 330 }
+        Signal { name: "lettersOpacityChanged"; lineNumber: 331 }
+        Signal { name: "defaultFontChanged"; lineNumber: 332 }
+        Signal { name: "selectionSeedChanged"; lineNumber: 333 }
         Signal {
             name: "played"
-            lineNumber: 340
+            lineNumber: 342
             Parameter { name: "path"; type: "QString" }
         }
         Signal {
             name: "favourite"
-            lineNumber: 341
+            lineNumber: 343
             Parameter { name: "path"; type: "QString" }
         }
-        Signal { name: "menu"; lineNumber: 342 }
-        Signal { name: "options"; lineNumber: 343 }
+        Signal { name: "menu"; lineNumber: 344 }
+        Signal { name: "options"; lineNumber: 345 }
         Signal {
             name: "cued"
-            lineNumber: 344
+            lineNumber: 346
             Parameter { name: "name"; type: "QString" }
         }
         Method {
             name: "setSettings"
-            lineNumber: 280
+            lineNumber: 281
             Parameter { name: "value"; type: "QString" }
         }
         Method {
             name: "setShelves"
-            lineNumber: 282
+            lineNumber: 283
             Parameter { name: "value"; type: "QString" }
         }
         Method {
             name: "setMedia"
-            lineNumber: 284
+            lineNumber: 285
             Parameter { name: "value"; type: "QString" }
         }
         Method {
             name: "setPresence"
-            lineNumber: 286
+            lineNumber: 287
             Parameter { name: "value"; type: "QString" }
         }
         Method {
             name: "setWidth"
-            lineNumber: 288
+            lineNumber: 289
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setHeight"
-            lineNumber: 290
+            lineNumber: 291
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setSwap"
-            lineNumber: 292
+            lineNumber: 293
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "setDevice"
-            lineNumber: 294
+            lineNumber: 295
             Parameter { name: "value"; type: "QString" }
         }
         Method {
             name: "setNow"
-            lineNumber: 296
+            lineNumber: 297
             Parameter { name: "value"; type: "qlonglong" }
         }
         Method {
             name: "setDefaultFont"
-            lineNumber: 308
+            lineNumber: 309
             Parameter { name: "value"; type: "QString" }
         }
         Method {
             name: "setSelectionSeed"
-            lineNumber: 310
+            lineNumber: 311
             Parameter { name: "value"; type: "qlonglong" }
         }
         Method {
             name: "tick"
-            lineNumber: 332
+            lineNumber: 334
             Parameter { name: "ms"; type: "double" }
         }
         Method {
             name: "pressed"
-            lineNumber: 333
+            lineNumber: 335
             Parameter { name: "button"; type: "int" }
             Parameter { name: "repeat"; type: "bool" }
             Parameter { name: "jump"; type: "int" }
         }
         Method {
             name: "released"
-            lineNumber: 334
+            lineNumber: 336
             Parameter { name: "button"; type: "int" }
         }
         Method {
             name: "hover"
-            lineNumber: 335
+            lineNumber: 337
             Parameter { name: "row"; type: "int" }
         }
         Method {
             name: "tap"
-            lineNumber: 336
+            lineNumber: 338
             Parameter { name: "row"; type: "int" }
         }
         Method {
             name: "wheel"
-            lineNumber: 337
+            lineNumber: 339
             Parameter { name: "notches"; type: "int" }
         }
         Method {
             name: "measured"
-            lineNumber: 338
+            lineNumber: 340
             Parameter { name: "id"; type: "QString" }
             Parameter { name: "w"; type: "double" }
             Parameter { name: "h"; type: "double" }
         }
-        Method { name: "reload"; lineNumber: 339 }
+        Method { name: "reload"; lineNumber: 341 }
     }
     Component {
         file: "marks.cxxqt.h"

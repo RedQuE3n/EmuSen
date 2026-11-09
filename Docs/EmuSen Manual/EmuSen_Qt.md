@@ -2780,7 +2780,8 @@ advances or its hinted ones (full hinting at 14 px measured MENU 20.0 and SCREEN
 not ES-DE's), never design advances rounded one by one. So `GlyphLine.qml` (EmuSen.Esde 1.0, added) lays a line out as
 ES-DE does: each glyph a `Text` at its pen, the pens summed from `FontMetrics.advanceWidth` of the glyph at the whole
 size nearest, times the size over it, rounded; the glyph drawn at that whole size scaled to the exact one; no kerning;
-the 'S' centred on the line's height. The kit's `HelpBar` draws an entry's words with the host's component where it is
+the reference character centred on the line's height (`EsdeModel.reference`, owned by `emusen_esde::fonts::REFERENCE`, since QML
+builds no words, §1.3). The kit's `HelpBar` draws an entry's words with the host's component where it is
 given one (`label`, EmuSen_Kit.md §7.53), so `HelpElement` gives it `GlyphLine` at fs × r. After: CarAlt's MENU ink
 1050.0–1073.1 against ES-DE's 1051.8–1074.0 and SCREENSAVER 1156.0–1215.2 against 1157.0–1215.1; every label of the
 twelve states within a pixel of ES-DE's ink width where the face is drawn at its nominal size (below for the two that
@@ -2855,7 +2856,7 @@ to carry a folder's games for the selectors (an addition to the shelves' text, �
 
 **Proof**, 2026-11-09: the oracle on lavapipe for each step and once on the RX 6800 (above), failing on the nine boxes of
 the last table and on nothing else; kit-core's `glyph` (7 tests, the pair's among them); the registries of `EmuSen.Kit`
-(`PadGlyphMarks.pair`, `paired`) and `EmuSen.Esde` (`EsdeModel.defaultFont`, `selectionSeed`, `MarkShapes.aspect`,
+(`PadGlyphMarks.pair`, `paired`) and `EmuSen.Esde` (`EsdeModel.defaultFont`, `selectionSeed`, `reference`, `MarkShapes.aspect`,
 `baseline`, `GlyphLine`) committed under `Testing/qmltypes`, each addition declared last. Seven seeded faults, each
 reverted: six caught as written above (the pair glyph off, the fractional advances, the glyph's side, the info gap, no
 default face, the filled axis cut at one tip), and one, the info marks square, not caught and replaced.

@@ -4,6 +4,10 @@
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
+/// The character a help element's line is sized and centred by: THEMES.md's helpsystem `fontSize` "is based on the
+/// reference 'S' character".
+pub const REFERENCE: &str = "S";
+
 /// ES-DE's default face, the one file looked for.
 pub const FILE: &str = "Akrobat-Regular.ttf";
 /// Its family as fontconfig names it.

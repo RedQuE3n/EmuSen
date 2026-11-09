@@ -21,8 +21,11 @@ pub mod ffi {
         fn harness_key(window: Pin<&mut QObject>, key: i32, modifiers: i32);
         /// Presses a key without releasing it, or releases it: a press held.
         fn harness_key_hold(window: Pin<&mut QObject>, key: i32, down: bool);
-        /// Holds the animation clock and moves it to `ms` since it was first held, a frame's step at a time; below 0, lets it go.
-        fn harness_hold_clock(ms: i64);
+        type HeldClock;
+        /// Qt's animation clock replaced by one held at 0, until the one returned is dropped.
+        fn harness_clock_hold() -> UniquePtr<HeldClock>;
+        /// The held clock moved to `ms` since it was held, a frame's step at a time.
+        fn harness_clock_move(clock: Pin<&mut HeldClock>, ms: i64);
         fn harness_wheel(window: Pin<&mut QObject>, x: f64, y: f64, delta: i32);
         fn harness_wait(ms: i32);
         fn harness_keep_messages();

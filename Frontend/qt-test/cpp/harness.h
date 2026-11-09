@@ -1,9 +1,19 @@
 // The harness's hand-written C++ (EmuSen_Qt.md §8.3), counted against §1.4's budget: QTest's verbs and the item tree as JSON. Reasons in EmuSen_Kit.md §7.9.
 #pragma once
+#include <QtCore/QAbstractAnimation>
 #include <QtCore/QObject>
 #include <QtCore/QString>
 #include <QtQml/QQmlApplicationEngine>
 #include <cstdint>
+#include <memory>
+
+// The animation clock a harness holds: it moves only when told, so a scene is read at a stated time (EmuSen_Kit.md §7.36).
+class HeldClock : public QAnimationDriver {
+public:
+    ~HeldClock() override;
+    std::int64_t at = 0;
+    qint64 elapsed() const override { return at; }
+};
 
 bool harness_show(QObject& window, int width, int height);
 void harness_resize(QObject& window, int width, int height);
@@ -13,7 +23,8 @@ void harness_click(QObject& window, double x, double y, int button);
 void harness_hover(QObject& window, double x, double y);
 void harness_key(QObject& window, int key, int modifiers);
 void harness_key_hold(QObject& window, int key, bool down);
-void harness_hold_clock(std::int64_t ms);
+std::unique_ptr<HeldClock> harness_clock_hold();
+void harness_clock_move(HeldClock& clock, std::int64_t ms);
 void harness_wheel(QObject& window, double x, double y, int delta);
 void harness_wait(int ms);
 void harness_keep_messages();

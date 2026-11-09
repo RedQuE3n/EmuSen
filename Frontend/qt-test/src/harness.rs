@@ -46,8 +46,10 @@ pub const QT_INTERNAL: [(&str, &str); 0] = [];
 /// handheld's own 1920 × 1200 (a Legion Go S, decided 2026-11-08); 1920 × 1080, 1280 × 720 and 3840 × 2160.
 pub const SIZES: [(i32, i32); 5] = [(1280, 800), (1920, 1200), (1920, 1080), (1280, 720), (3840, 2160)];
 
-/// The engine is declared first so it drops before the application, as Qt requires.
+/// The engine and the held clock are declared first so they drop before the application, as Qt requires.
 pub struct Harness {
+    /// Qt's animation clock while the harness holds it (EmuSen_Kit.md §7.36).
+    clock: Option<cxx::UniquePtr<ffi::HeldClock>>,
     engine: cxx::UniquePtr<QQmlApplicationEngine>,
     app: cxx::UniquePtr<QGuiApplication>,
     created: Arc<AtomicUsize>,
@@ -86,7 +88,7 @@ impl Harness {
         if let Some(engine) = engine.as_mut() {
             engine.on_object_created(move |_, object, _| slot.store(object as usize, Ordering::SeqCst)).release();
         }
-        Harness { engine, app, created, now_ms: 0 }
+        Harness { clock: None, engine, app, created, now_ms: 0 }
     }
 
     /// Loads a scene whose root is a Window and shows it at a size; the window must come up exposed and active.
@@ -257,9 +259,16 @@ impl Scene<'_> {
     }
 
     /// Holds every animation's clock at `ms` since it was first held, moved there a frame at a time; `None` lets it run again
-    /// on Qt's own driver (EmuSen_Kit.md §7.34).
+    /// on Qt's own driver (EmuSen_Kit.md §7.36).
     pub fn hold_clock(&mut self, ms: Option<i64>) {
-        ffi::harness_hold_clock(ms.unwrap_or(-1));
+        match ms {
+            Some(ms) => {
+                if let Some(clock) = self.harness.clock.get_or_insert_with(ffi::harness_clock_hold).as_mut() {
+                    ffi::harness_clock_move(clock, ms);
+                }
+            }
+            None => self.harness.clock = None,
+        }
         self.wait(20);
     }
 

@@ -2143,7 +2143,7 @@ cxx-qt-lib binds.
   the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The other screens' faces (§5.2) are
   bundled when the first screen needs them; Moonrise's two are.
 
-### 7.34 A held clock, a held press and drawn covers in the harness (stage 3, theme-audit's states; 2026-11-09)
+### 7.36 A held clock, a held press and drawn covers in the harness (stage 3, theme-audit's states; 2026-11-09)
 
 theme-audit records a theme's splash at a stated time and a screen with A held (`man theme-check`, STATES), so the harness
 (`emusen-qt-test`) gained three verbs, each the framework's own mechanism.
@@ -2155,6 +2155,13 @@ theme-audit records a theme's splash at a stated time and a screen with A held (
   being jumped over. `None` uninstalls it, which leaves Qt's default timer driver in place, not a threaded render loop's own:
   a caller holds the clock last. Every `QAbstractAnimation` and `FrameAnimation` is held; a `Timer` is not. Under a held clock
   nothing settles, so `rest()` must not be called (a running animation never ends); the audit waits a frame instead.
+  The clock is the `Harness`'s, a field holding the C++ object (`harness_clock_hold` gives it, `harness_clock_move` moves it,
+  dropping it uninstalls it), not a static of `harness.cpp` (changed 2026-11-09: the house rules forbid a mutable static used
+  as a wire). The harness is the owner because the driver Qt replaces is its application's (`QUnifiedTimer` is the
+  thread's), and one harness is one application; the field is declared before the application, so it is let go first. A
+  second hold moves the one clock rather than installing another: seeded, a fresh clock at every hold failed
+  `qt_3_7_a_splash_is_held_at_1_3_and_5_s_and_judged_at_each` on Qt's own words, "animation driver already installed" and
+  "trying to uninstall a driver that is not installed".
 - **`Scene::key_hold(key, down)`**, `QTest::keyPress` or `keyRelease` alone: a press held, as a theme's pressed look reads it
   (`Keys.onPressed` without the release).
 - **`covers::draw`**, moved from the program's tests (`qt-app/tests/common`), which re-export it: covers drawn by one Qt Quick

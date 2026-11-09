@@ -1247,7 +1247,7 @@ since a run builds the library, draws its covers and starts Qt once. The list's 
 `--list-states` and held to `man theme-check`'s STATES by a test. The default library's games now have covers, drawn into an
 ES-DE media folder given to the host as the program's start gives it, so the default is the canvases' and `nocover` its own
 state. The splash's time comes from the host's side without a change to `EmuSen.Theme`: the harness holds Qt's animation clock
-(`EmuSen_Kit.md` §7.34), so every theme's splash is held as written; an API clock would have held only the themes that adopt
+(`EmuSen_Kit.md` §7.36), so every theme's splash is held as written; an API clock would have held only the themes that adopt
 it. Every state also holds an operable element to a name a reader hears (kit-core's `named`, the `name` kind), which a
 Continue entry drawn with no game, or a tile titled only beside its cover, breaks. Proof: seven fixture packages
 `tests/themes/state-*`, each wrong in one state alone and found there alone at every size in both variants.

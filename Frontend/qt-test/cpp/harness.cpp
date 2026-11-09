@@ -433,41 +433,21 @@ void harness_key_hold(QObject& window, int key, bool down)
     }
 }
 
-namespace {
+HeldClock::~HeldClock() { uninstall(); }
 
-// The animation clock held by the harness: it moves only when told, so a scene is read at a stated time (EmuSen_Kit.md §7.34).
-class HeldClock : public QAnimationDriver {
-public:
-    std::int64_t at = 0;
-    qint64 elapsed() const override { return at; }
-};
-
-HeldClock*& heldClock()
+std::unique_ptr<HeldClock> harness_clock_hold()
 {
-    static HeldClock* clock = nullptr;
+    auto clock = std::make_unique<HeldClock>();
+    clock->install();
     return clock;
 }
 
-}
-
-void harness_hold_clock(std::int64_t ms)
+void harness_clock_move(HeldClock& clock, std::int64_t ms)
 {
-    HeldClock*& clock = heldClock();
-    if (ms < 0) {
-        if (clock) {
-            clock->uninstall();
-            delete std::exchange(clock, nullptr);
-        }
-        return;
-    }
-    if (!clock) {
-        clock = new HeldClock;
-        clock->install();
-    }
     // A frame's step at a time, as a display would move it, so what a step starts runs from its own time.
-    while (clock->at < ms) {
-        clock->at = std::min(ms, clock->at + 16);
-        clock->advance();
+    while (clock.at < ms) {
+        clock.at = std::min(ms, clock.at + 16);
+        clock.advance();
         QCoreApplication::processEvents();
     }
 }

@@ -282,6 +282,10 @@ Window {
         }
         Connections {
             target: Library.consoles
+            function onModelReset() { orbits.read() }
+        }
+        Connections {
+            target: Library.consoles
             function onModelReset() { figures.read() }
         }
         Connections {

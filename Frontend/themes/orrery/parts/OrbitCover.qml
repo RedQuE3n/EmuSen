@@ -17,8 +17,6 @@ OrbitSlot {
     lit: slot.ListView.isCurrentItem && slot.orbit.activeFocus
     Accessible.name: slot.title
     focus: slot.ListView.isCurrentItem
-    // A cover given the focus directly, by the pointer or a walk, becomes the list's current one, so the orbit turns to it.
-    onActiveFocusChanged: if (slot.activeFocus) slot.orbit.currentIndex = slot.index
     CoverTile {
         anchors.fill: parent
         source: slot.cover

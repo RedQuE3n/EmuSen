@@ -63,6 +63,16 @@ impl Column {
         self.colours[ColourToken::ALL.iter().position(|t| *t == token).unwrap_or(0)]
     }
 
+    /// The column with a theme's colours in place of the kit's, for the variant it was computed for.
+    pub fn overridden(mut self, overrides: &[(ColourToken, Colour)]) -> Column {
+        for (token, colour) in overrides {
+            if let Some(i) = ColourToken::ALL.iter().position(|t| t == token) {
+                self.colours[i] = *colour;
+            }
+        }
+        self
+    }
+
     pub fn duration(&self, token: MotionToken) -> i32 {
         self.durations[Self::slot(token)]
     }

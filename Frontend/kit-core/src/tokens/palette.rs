@@ -70,6 +70,35 @@ impl ColourToken {
 
     /// The tokens held to the graphics' floor against every surface.
     pub const GRAPHICS: [ColourToken; 2] = [ColourToken::Accent, ColourToken::Border];
+
+    /// The name the kit's `Tokens` singleton gives the token, which a theme's `theme.json` overrides it by.
+    pub const fn property(self) -> &'static str {
+        match self {
+            ColourToken::Surface => "surface",
+            ColourToken::SurfaceRaised => "surfaceRaised",
+            ColourToken::InputSurface => "inputSurface",
+            ColourToken::Void => "voidFill",
+            ColourToken::Scrim => "scrim",
+            ColourToken::CaptionSurface => "captionSurface",
+            ColourToken::Border => "border",
+            ColourToken::Rule => "rule",
+            ColourToken::Text => "text",
+            ColourToken::TextStrong => "textStrong",
+            ColourToken::Muted => "muted",
+            ColourToken::Accent => "accent",
+            ColourToken::OnAccent => "overAccent",
+            ColourToken::Success => "success",
+            ColourToken::Attention => "attention",
+            ColourToken::Error => "error",
+            ColourToken::OnArt => "overArt",
+            ColourToken::OnArtScrim => "overArtScrim",
+        }
+    }
+
+    /// The token a `Tokens` property name carries, if it is a colour's.
+    pub fn named(property: &str) -> Option<ColourToken> {
+        ColourToken::ALL.into_iter().find(|t| t.property() == property)
+    }
 }
 
 /// WCAG 2.1 1.4.3: words against their surface.

@@ -24,36 +24,24 @@ use serde_json::json;
 use emusen_qt_test::{mockup, Harness, Scene};
 use std::path::{Path, PathBuf};
 
-/// Choose a console's elements whose boxes follow from the canvas's eleven consoles; the fixture shelves three, so
-/// these are held by kit-core's layout test against the canvas's own numbers (EmuSen_Qt.md §7.1 step 4).
-const COUNTED: [&str; 6] = ["consoleTile.", "consoleBody.", "consoleName.", "consoleCount.", "consoleRing.", "orbit.1"];
+/// Choose a console's elements whose boxes follow from the canvas's eleven consoles on three makers' orbits; the fixture
+/// shelves three consoles of one maker, so these are held by kit-core's orbits test against the canvas's own numbers
+/// (EmuSen_Qt.md §3.4.2).
+const COUNTED: [&str; 7] = ["tile.", "consoleBody.", "consoleName.", "consoleCount.", "consoleRing.", "rowCover.", "makerLabel."];
 
-/// A fault explained by a difference named in EmuSen_Qt.md §7.1 step 4: the orbit line in the
-/// canvas's own ink, the canvas's 17- and 18-unit words under the floor at 1280 x 720 alone, the focused console's name in
-/// the canvas's line box of 1, an engine's name too long for its tile or a place's line for its tile (cut as the accepted
-/// render cuts it), the fan's covers laid over each other, and the focused shelf cover's name, whose glyph box the focus
+/// A fault explained by a difference named in EmuSen_Qt.md §7.1 step 4 and §3.4.2: the orbit line and the places' glass
+/// edge in the canvas's own ink, the canvas's 17- and 18-unit words under the floor at 1280 x 720 alone, the focused
+/// console's name in the canvas's line box of 1, a place's line too long for its tile (cut as the accepted render cuts it),
+/// and the focused shelf cover's name, whose glyph box the focus
 /// ring's foot reaches at 1280 x 720 alone, where Mistress's render puts both (2 units under the shelf's covers).
 fn named_difference(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
     let item = |n: &str| n.trim().trim_end_matches(':').parse::<usize>().ok().and_then(|i| tree.nodes.get(i)).map_or("", |n| n.name.as_str());
     let after = |key: &str| fault.split(key).nth(1).map(|r| r.split_whitespace().next().unwrap_or(""));
-    after("palette on ").is_some_and(|i| item(i).starts_with("orbit."))
+    after("palette on ").is_some_and(|i| item(i).starts_with("orbit.") || item(i).starts_with("placeDisc."))
         || (size == (1280, 720) && fault.contains("too small to read"))
         || after("cut at the foot: ").is_some_and(|i| item(i) == "consoleDetailName")
-        || after("ellipsis: ").is_some_and(|i| item(i).starts_with("consoleEngineName.") || item(i).starts_with("placeStatus."))
-        || fault.contains("overlap: ") && fault.split("overlap: ").nth(1).is_some_and(|r| r.split(" and ").all(|i| in_fan(tree, i)))
+        || after("ellipsis: ").is_some_and(|i| item(i).starts_with("placeStatus."))
         || (size == (1280, 720) && after("low contrast: ").is_some_and(|i| item(i) == "shelfTitle"))
-}
-
-/// Whether the item numbered `n` is one of the fan's covers or inside one.
-fn in_fan(tree: &emusen_qt_test::tree::Tree, n: &str) -> bool {
-    let mut at = n.trim().trim_end_matches(':').parse::<usize>().ok().and_then(|i| tree.nodes.get(i));
-    while let Some(node) = at {
-        if node.name.starts_with("fanCover.") {
-            return true;
-        }
-        at = tree.nodes.iter().find(|p| p.id == node.parent);
-    }
-    false
 }
 
 /// The accepted render's library (Mistress's own-look fixture): eight games on three consoles, by title, each console's
@@ -362,15 +350,23 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     let first = named(&mut scene, "tile.3").expect("the first console's tile");
     let tree = scene.tree();
     scene.focus_item(&tree, first);
-    // Each engine named by its own info less the port's mark, with its sky-named symbol (EmuSen_Interface.md §24.6).
-    let tree = scene.tree();
-    let node = |name: String| tree.find_named(&name).map(|i| &tree.nodes[i as usize]);
+    // Each engine's sky-named symbol after its console's count, and its name, less the port's mark, in the foot's engine
+    // line when its console has the focus (EmuSen_Interface.md §24.6).
     for (_, name, _) in ENGINES {
         let shown = emusen_qt_models::library::without_port_mark(name);
-        let tile = (0..ENGINES.len()).find(|t| node(format!("consoleEngineName.{t}")).and_then(|n| n.text.as_deref()) == Some(shown));
-        let tile = tile.unwrap_or_else(|| panic!("{shown} on no tile"));
-        assert_eq!(node(format!("consoleEngineMark.{tile}")).map(|n| n.heard.as_str()), Some(shown.to_lowercase().as_str()));
+        let tree = scene.tree();
+        let node = |name: String| tree.find_named(&name).map(|i| &tree.nodes[i as usize]);
+        let world = (0..ENGINES.len()).find(|t| node(format!("consoleEngineMark.{t}")).is_some_and(|n| n.heard == shown.to_lowercase()));
+        let world = world.unwrap_or_else(|| panic!("{shown}'s mark on no world"));
+        let item = tree.find_named(&format!("tile.{}", world + 3)).expect("its world");
+        scene.focus_item(&tree, item);
+        scene.wait(50);
+        let tree = scene.tree();
+        let engine = tree.nodes.iter().find(|n| n.name == "engineName" && n.visible).and_then(|n| n.text.clone());
+        assert_eq!(engine.as_deref(), Some(shown), "the foot names the focused console's engine");
     }
+    let tree = scene.tree();
+    scene.focus_item(&tree, first);
     let mut consoles_mockup = mockup_of("Consoles");
     consoles_mockup.elements.retain(|e| !COUNTED.iter().any(|c| e.name.starts_with(c)));
     hold(&mut scene, "Consoles", &consoles_mockup, named_difference, &mut report);

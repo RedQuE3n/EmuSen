@@ -4,7 +4,7 @@ import QtQuick.Controls
 import QtQml.Models
 import EmuSen.Kit as Kit
 
-// The settings frame on the kit's frame: the strip of sections or the trail of pages, rows from any model by kind with a value each, and the pane with one slot over the focused row's sentence; it knows no setting (EmuSen_Kit.md §7.36).
+// The settings frame on the kit's frame: the strip of sections or the trail of pages, rows from any model by kind with a value each, and the pane with one slot over the focused row's sentence; it knows no setting (EmuSen_Kit.md §7.40).
 Kit.Frame {
     id: root
     // The rows: label, value, sentence, kind (Kit.RowKinds), held, marked, and a slider's minimum, maximum, step and amount.

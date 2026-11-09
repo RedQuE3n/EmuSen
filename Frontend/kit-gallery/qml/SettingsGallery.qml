@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
 
-// The gallery's settings states: the frame with a picture, a meter or the two variants in its pane, a page of choices and a page of sliders, each from a model the scene holds, as a host would hand them (EmuSen_Kit.md §7.36–§7.38).
+// The gallery's settings states: the frame with a picture, a meter or the two variants in its pane, a page of choices and a page of sliders, each from a model the scene holds, as a host would hand them (EmuSen_Kit.md §7.40–§7.42).
 Window {
     id: scene
     objectName: "scene"

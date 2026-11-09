@@ -1,4 +1,4 @@
-// EmuSen_Kit.md §7.36–§7.38: the settings frame with a picture, a meter and the two variants in its pane, the page of
+// EmuSen_Kit.md §7.40–§7.42: the settings frame with a picture, a meter and the two variants in its pane, the page of
 // choices and the page of sliders pass the gate (fit, pad reach, pointer reach, no chrome, names, palette, contrast) at
 // the four fit sizes, the frame where Mistress's recordings put it (SettingsSound and SettingsDisplay, 1280 x 800 and
 // 1920 x 1200); each state recorded beside its grab.
@@ -50,7 +50,7 @@ fn mistress_s_places(tree: &Tree, scale: f64, rows: f64) -> Vec<String> {
 }
 
 /// The rows' marks wholly below the window draw nothing there: the software backend paints a Shape past its clip
-/// unclipped, which MenuRow's marks did until they were held to their clip (EmuSen_Kit.md §7.34, §7.36).
+/// unclipped, which MenuRow's marks did until they were held to their clip (EmuSen_Kit.md §7.34, §7.40).
 fn nothing_below_the_window(scene: &mut emusen_qt_test::Scene<'_>, tree: &Tree, variant: Variant) -> Vec<String> {
     let (_, y, _, h) = boxed(tree, "settingsList");
     let below: Vec<(f64, f64)> = tree

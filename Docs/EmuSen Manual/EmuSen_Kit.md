@@ -2189,186 +2189,6 @@ the software backend and on Vulkan (the RX 6800); the fixed one passes on both, 
 `fade.rs` still passes on both. Seeded faults, each reverted, each a fault in the test: `layer.enabled: root.fading` as
 before, and the `Binding` not delayed.
 
-### 7.36 The settings frame (stage 5, piece A; 2026-11-09)
-
-Screen 6 of `EmuSen_Interface.md` §4, as LunaP's `SettingsLayout` drew it for the C# Settings (`EmuSen_BigPicture.md`
-§52, LunaP §213): the strip of sections at the top, rows of a label and a value down the left, and a pane at the right
-with one slot for a preview over the focused row's sentence. Weighed as `EmuSen_Qt.md` §1.3 asks, it is an extension of
-the kit, a new type over the existing `Frame`: no existing type takes a second job, and the frame knows nothing of
-settings. A host hands it rows as a list model and is told what the player did; which setting a row is, and what a step
-or a choice means, stay the host's (`SettingsModel` of stage 5's piece D).
-
-- **The measures are kit-core's** (`settings::frame`, `SETTINGS`), derived from the big screen's spacing where the two
-  agree: the strip at the safe area's top (64, 40), as high as a control (44), names 8 apart with 16 of padding; the rows
-  and the pane from 108 (the strip, then the pane gutter of 24); the pane 416 × 578 with an inset of 24, its slot 368
-  wide, 12 below the slot and 8 between lines; the pane 64 from the right edge and the rows filling what is left before
-  a gap of 32, so 704 wide at 1280 and 846.2 at 1422.2 (1920 × 1080 and 1280 × 720 on the canvas of 800); ten whole
-  rows of 54 beside the pane. These are LunaP's constants and Mistress's recorded boxes (`SettingsSound-1280x800.spec`,
-  `SettingsDisplay-1280x800.spec`), held to them by `tests/settings.rs`.
-- **The walk is kit-core's** (`settings::rows`, `RowWalk`): Up and Down move the focus and stop at the ends; the window
-  of ten moves only when the focus leaves it, a row at a time (LunaP's `KeepRowShown`); the wheel moves the window to a
-  whole row and leaves the focus; Left and Right step a value (`Steps`) or a slider (§7.38) and are kept on any other
-  row; A chooses a row, which is the host's to act on, open or ask about; a row a host marks `held` (a value the engine
-  holds, `EmuSen_BigPicture.md` §52.5 item 2) takes neither; the shoulders step the strip's sections, wrapping, while no
-  page is open under the section, and are declined, so the host's, under a trail (the console page's LB and RB, §52.4);
-  B, Start and the rest are declined to the frame. A row's kind is `Kit.RowKinds` (`Action`, `Steps`, `Opens`, `Asks`,
-  `Slider`, `Choice`), a number in the model's `kind` role.
-- **`SettingsLayout`** (kit-qt `settings.rs`) puts the measures and the walk on Qt: the measures as constant
-  properties, `paneLeft` and `rowsWidth` from the canvas's `width`, the walk's `current`, `first`, `marked`, `count` and
-  the focused row's `sentence`, `sections`, `section` and `trailShown` from the frame; it reads the roles `kind`, `held`,
-  `marked`, `sentence`, `minimum`, `maximum`, `step` and `amount` from any list model through `item_model::role_texts`,
-  and raises `stepped`, `slid`, `chosen` and `sectionChosen`.
-- **`SettingsFrame.qml`** is a `Frame` with its navigation hidden, so the frame's controller, router, keys, pointer and
-  help bar are the ones every screen has. The strip is Qt Quick Controls' `TabButton`s in the style (§7.8), each as wide
-  as its upper-cased name in Caption with its padding; it draws the `trail` instead while pages are open, the last
-  chosen. The rows are a `ListView` with a `DelegateChooser` on `kind`: a `MenuRow` with its ◂ ▸ or ▸ marks (§7.21), a
-  `ChoiceRow` (§7.37) or a `SliderRow` (§7.38). A press the frame's walk declines reaches the focused row as a key and
-  goes up to the rows' scope, which hands it to the walk; hovering a row focuses it, so the walk follows Qt's focus, and
-  a click is A there (§7.3). The view's own current index is cleared, so it never moves the focus to a row of its own
-  choosing as its model changes; the walk reads the model after the view has its rows, and again whenever the model
-  says its rows changed. The pane is SurfaceRaised with the tile radius; its slot (`preview`) holds what the host puts
-  there, a picture of 368 × 276, a meter of 16 or the two variants of 160 as LunaP drew them, and its `lines` slot what
-  the host adds under the sentence.
-- **Found and fixed on the way: a `MenuRow`'s marks past a clip.** On the software backend a `Shape` wholly past its clip
-  is painted unclipped (§7.34), so the eleventh row of a list showed its ◂ ▸ marks 26 units below the window
-  (2026-11-09, `settings-frame-Dark-1280x800.png`, the label clipped and the marks not). The marks are now held to their
-  clip as `Body`'s shapes are, through `InsideClips`; no other drawing of a `MenuRow` changes.
-
-**Where it differs from Mistress**, each named: the chosen name's underline is the style's 4 units (`barWidth`), where
-`SectionTab` drew 3; the names are set in the style's face, since `Tokens` has no family yet (§7.7), so DISPLAY's tab is
-about 111 units wide where Mistress's is 104; the help bar is the kit's, 58 on the foot (§4 of `EmuSen_Interface.md`),
-where Mistress's band is 98 from 702; a held row's value is drawn as any other, and an `Asks` row draws no `…`, both
-waiting for the host's words in piece D. The desktop form (a source list, rows of 48, search) is stage 6's, and the
-card's pages are piece D's on this frame.
-
-**Held to**: kit-core's `tests/settings.rs` (12: the measures at 1280 and at 1422.2, the ends, the window, Left and
-Right by kind, a held row, the page of choices, a long page's mark in view, the declined presses, the kinds' numbers,
-the shoulders, a slider's grid); kit-gallery's `settings_gate.rs` (the frame with a picture, a meter and the two
-variants, the page of choices and the page of sliders, at 1280 × 800, 1920 × 1200, 1920 × 1080 and 1280 × 720, dark and
-the variants light: fit, pad reach, pointer reach, no chrome, names, palette, contrast; the strip, rows and pane at
-Mistress's boxes at both 16:10 sizes; no mark drawn below the window) and `settings_walk.rs` (the pad through the
-router's queue and the pointer: the window by one at the eleventh row and the list's offset with it, a value stepped, a
-page's row chosen, a held row neither chosen nor stepped, the pane's sentence, the shoulders wrapping, B to the host;
-resting, clicking, the wheel to a whole row, a tab, a right click as B). The gallery's states are `SettingsGallery.qml`,
-a scene of the gallery module beside `Gallery.qml`, with its models as a host would hand them. Rule Q: `SettingsLayout`
-and `RowKinds` are additions to the registry and `SettingsFrame`, `ChoiceRow` and `SliderRow` to the `qmldir`; nothing
-was removed or changed (`CHANGELOG-kit.md`). The harness gained `Scene::drag` (QTest's press, eight moves and release,
-§7.9). Measured on 2026-11-09 with six seeded faults, each reverted and each caught: the window moving one row late
-(kit-core's window test), A on a choice leaving the mark (the page of choices test), a slider's step taken from the floor
-rather than the nearest step (the grid test), the rows' box one row too tall (the gate, Mistress's boxes), the `MenuRow`
-fix undone (the gate, a mark below the window at 748,674), and a slider's pad step not raised (the walk test).
-
-### 7.37 The page of choices (stage 5, piece A; 2026-11-09)
-
-A page for one row whose value is one of a few, such as a console's Engine (`EmuSen_BigPicture.md` §52.4; the same
-value as Cores' Make Default), drawn on the settings frame under the trail of the pages above it. Its rows are of kind
-`Choice` and one of them carries the model's `marked`: the page opens with the focus on the choice in force, and in its
-window on a long page; A, or a click, chooses the focused one, the mark moving to it at once and `chosen` raised for the
-host, whose rows, read again, are the mark's owner; B is the frame's, so the host closes the page keeping what was
-chosen (Mistress's line: "A chooses; B keeps what was chosen", a host's words in the `lines` slot). `ChoiceRow.qml` is a
-`MenuRow` whose words stand 32 from its edges, the choice in force marked by a dot of 10 in Accent centred in that
-inset, and heard as checked by a reader. Mistress marked it with a `●` before the value's words; the dot is a drawn
-mark, as the style's other marks are (§7.8).
-
-**Held to**: kit-core's page of choices and long page tests, the gallery's `choices` state through the gate, and the walk
-test (opened on Venus (C#), the shoulders left to the host, A on VenusRT moving the one mark to the first row, a click on
-Snes9x moving it again).
-
-### 7.38 The slider row (stage 5, piece A; 2026-11-09)
-
-A row with a slider, for a shader's levers and a crop's edges (`EmuSen_Interface.md` §16.2, `EmuSen_BigPicture.md` §52.5
-item 1). Mistress stepped these as values and typed them under A; the slider row keeps both, Left and Right through the
-walk and A for the host's prompt, and adds the pointer's drag.
-
-- **The step is kit-core's** (`settings::slider`, `SliderRange`): Left and Right move the amount by the row's `step`,
-  on the grid of steps counted from the range's `minimum` (an amount off the grid steps onto the nearest grid point
-  first) and inside the range, a range given high to low taken low to high; a row with no step takes a hundredth of
-  its range (`STEPS_WITHOUT_A_STEP`); at an end, or on a held row, the press is kept and nothing is raised. The walk
-  keeps the amount it gave until the host's rows are read again, so two quick presses take two steps.
-- **`SliderRow.qml`** is a `WholeRow`: the label over 40% of its width in Row, Qt Quick Controls' `Slider` in the style
-  (§7.8) filling the middle, and the host's words for the value in Muted, 104 wide and right-aligned so the slider does
-  not move as they change. The slider takes no focus of its own: the row holds it, and the pad's Left and Right are the
-  walk's. The slider's `stepSize` is the row's step with `snapMode` always, so a drag snaps to the same grid; a drag
-  raises `slid` with the amount, and the frame raises it with the row. A held row's slider is disabled, and neither the
-  pad nor a drag moves it.
-
-**Held to**: kit-core's slider tests (Left and Right without a step, the grid, the maximum held, an amount off the grid, a
-held slider, a range given high to low, no number); the gallery's `slider` state through the gate, and the walk test (two
-Rights and a Left by 0.5, a drag of the second row to its end giving 25 and its words `25.0%`, the held row left as it
-was by a drag and a press, though the pointer focused it).
-
-### 7.6 Building, linking, the registry, and what it is held to
-
-**The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4
-proposed). cxx-qt's build utilities find it and pass `-fuse-ld=lld` themselves, so no crate names a linker, and the two
-GNU `ld.bfd` workarounds the kit carried for a day are gone from `build.rs`: the `--no-as-needed` naming of the Qt
-libraries from §10.4, and `--undefined=cxx_qt_init_*` for the four initializers. The second one is worth keeping on
-record: when a crate that links the kit as an rlib is the final link (the kit's own integration tests), rustc places
-the extracted whole-archive `call-initializers` members after the rlib, and `ld.bfd`'s single pass has already left the
-rlib's archive, so the init functions went undefined; `lld` resolves across the whole input and has no such order.
-
-Measured on 2026-11-07 on the desktop, six compilers, CPU weight 20, the compiler cache (`sccache`) switched off so the
-figures are the compilers' own: a cold debug build of the kit and its dependencies is **65 s** under `lld` (the first
-build, under `ld.bfd`, was 73 s; cxx-qt's generated C++ dominates both, as `EmuSen_Qt.md` §10.2 found); a change to a
-Rust file that holds no bridge rebuilds in **11.4 s** (5.1 s with the cache warm), a QML file in 5.0 s with the cache;
-the ten test binaries build and link in **2.3 s** together. With the cache warm a cold build is 19.7 s, which is the
-figure a day's work sees.
-
-**Rule Q.** `Testing/qmltypes/EmuSen.Kit-1.0.qmltypes` and `EmuSen.Kit-1.0.qmldir` are the registry as
-`qmltyperegistrar` and cxx-qt write them (`Frontend/target/cxxqt/qml_modules/EmuSen/Kit/`). `tests/qmltypes.rs`
-compares the build's files to the committed ones with line numbers and header file names dropped, since those move
-with every edit; a difference fails until it is reviewed, the minor bumped for an addition or the major for a removal,
-and the files copied. Until 1.0 the comparison is strict equality; the addition and removal distinction is a reviewer's
-step, not the test's.
-
-**Tests** (`Frontend/kit-qt/tests`, 34 with §7.5's and §7.8's, no Qt application needed; the bridges themselves are
-exercised by the harness of step 9): `kinds` (the mirrors pair by pair), `column` (every colour of both variants, the metrics by form and text
-scale, motion in milliseconds and Qt's easing numbers, reduced motion zeroing movements and keeping fades at 120 ms),
-`qt_keys` (every declinable press has a Qt key both ways, Shift+Tab, Enter, the mouse's buttons), `route` (the sheet
-before the walk before the key), `router` (the queue applies at a pump only, the own tiers at 400 then 80 ms, the swap
-once, the chord once with forget, a change of tiers) and `qmltypes`. Measured on 2026-11-07 with four seeded faults,
-each reverted: `pad_button` off by one failed the kinds pairs; a declined press losing its key failed the route test; the
-CubicOut curve numbered as InCubic failed the easing test; the swap applied inverted failed two router tests.
-
-**Hand-written C++**, each part with its reason (decided 2026-11-08: cxx-qt is the binding; C++ glue is written where
-cxx-qt-lib does not reach, each part with its reason, `EmuSen_Qt.md` §1.4). The kit's `cpp/kit_glue.cpp` is `send_key`,
-a key event sent to the focus window (§7.3). The harness's `cpp/harness.cpp` holds the tree dump and QTest's verbs, which
-cxx-qt-lib does not bind (§7.9); the contrast sampling and the picture difference, pixel loops over one grab (§7.10);
-the Qt calls of §7.11 that cxx-qt-lib does not bind (`QAccessible::queryAccessibleInterface`, `QMetaProperty`'s
-declaring class, `QQuickItem::scopedFocusItem` and `setFocus`, a property by an item's address,
-`QQuickTest::qWaitForPolish`); and §7.14's message handler, since `qInstallMessageHandler` takes a C function pointer,
-which neither cxx nor cxx-qt-lib can supply. §7.16's `GamePicture` and `kit_adopt_vulkan` (`cpp/game_picture.*`):
-an item's scene-graph node with a native Vulkan texture, and a window's adopted instance and device, none of which
-cxx-qt-lib binds.
-
-### 7.7 Open
-
-- **[routine]** Install Fedora's `lld` for the toolchain, as §10.4 proposed; both linker workarounds then go.
-- **[routine]** The interface's typeface is not a token in kit-core (§1.3), so `Tokens` has no font family. Recommended:
-  add `fontDisplayFamily` and `fontBodyFamily` to kit-core's tokens with their values read from `EmuSen_Interface.md`
-  §5.2 when the first screen needs them, the gallery included, and bundle the faces as §10.2 found necessary.
-- Owed by §7.5 to a later step: Moonrise's strikes paired with the chime (the cues play through Endymion's interface
-  player since §7.15); the stars' per-tick cost measured on the handheld before stage 1 lands.
-- Owed by §7.15: which of the interface's events rings which cue (a move, a section, a choice, back) is a screen's,
-  decided with stage 1's first screen; the gallery program names no platform library, so a human look at it reads no
-  pad until a host passes one **[routine]**; a uinput pad (a kernel device, seen by every program on the desk, as
-  WiseMan's `UinputHotplugTests` makes under `EMUSEN_UINPUT_PADS=1`) is not used, since SDL's virtual pads prove the
-  same path without one.
-- Owed by §7.28 **[routine]**: a theme's button picture is drawn in its own colours, where ES-DE shifts it by
-  `iconColor` (a later piece of stage 4). Decided 2026-11-08: a key held in the ES-DE view repeats at the keyboard's
-  own rate, not ES-DE's tiers.
-- Owed by §7.8: `RatingPicker` and `DatePicker` (`Keyboard` is built, §7.22); the drawn
-  glyphs of the style (a check, a radio dot, a chevron) in place of the rings, discs and rectangles it draws now (the
-  pad's buttons are drawn since §7.12); the desktop form's menu bar and status bar.
-- Done 2026-11-08 (§7.24): a row whose control takes Up and Down itself (a `TextField`, a `ComboBox`) is passed by a
-  vertical walk; the row walks first, the control takes the keys once chosen.
-- Decided 2026-11-08 by the tester: the approved draft is Moonrise's oracle, so its caption stays at the draft's 15
-  units as the audit's named exception to the floor (§7.10).
-- Owed by §7.10 to stage 1: the frame raises `focusMoved` when the walk's focused role changes (B on the desktop's
-  content gives the navigation the focus) but no item takes Qt's focus, so the walk's role and Qt's focus part there;
-  the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The other screens' faces (§5.2) are
-  bundled when the first screen needs them; Moonrise's two are.
-
 ### 7.36 A held clock, a held press and drawn covers in the harness (stage 3, theme-audit's states; 2026-11-09)
 
 theme-audit records a theme's splash at a stated time and a screen with A held (`man theme-check`, STATES), so the harness
@@ -2518,3 +2338,333 @@ not kept (hovering item 4 left the focus on item 8); the settle not waiting on a
 a second later). theme-audit's `many` over the five themes on 2026-11-09 (the reference package and Meridian from this
 tree, Horizon, Constellation and Orrery from their branches' copies kept for the survey): no reach finding left, where
 each had 70 or 80; with the walkable's line removed, Meridian's 70 came back.
+
+### 7.40 The settings frame (stage 5, piece A; 2026-11-09)
+
+Screen 6 of `EmuSen_Interface.md` §4, as LunaP's `SettingsLayout` drew it for the C# Settings (`EmuSen_BigPicture.md`
+§52, LunaP §213): the strip of sections at the top, rows of a label and a value down the left, and a pane at the right
+with one slot for a preview over the focused row's sentence. Weighed as `EmuSen_Qt.md` §1.3 asks, it is an extension of
+the kit, a new type over the existing `Frame`: no existing type takes a second job, and the frame knows nothing of
+settings. A host hands it rows as a list model and is told what the player did; which setting a row is, and what a step
+or a choice means, stay the host's (`SettingsModel` of stage 5's piece D).
+
+- **The measures are kit-core's** (`settings::frame`, `SETTINGS`), derived from the big screen's spacing where the two
+  agree: the strip at the safe area's top (64, 40), as high as a control (44), names 8 apart with 16 of padding; the rows
+  and the pane from 108 (the strip, then the pane gutter of 24); the pane 416 × 578 with an inset of 24, its slot 368
+  wide, 12 below the slot and 8 between lines; the pane 64 from the right edge and the rows filling what is left before
+  a gap of 32, so 704 wide at 1280 and 846.2 at 1422.2 (1920 × 1080 and 1280 × 720 on the canvas of 800); ten whole
+  rows of 54 beside the pane. These are LunaP's constants and Mistress's recorded boxes (`SettingsSound-1280x800.spec`,
+  `SettingsDisplay-1280x800.spec`), held to them by `tests/settings.rs`.
+- **The walk is kit-core's** (`settings::rows`, `RowWalk`): Up and Down move the focus and stop at the ends; the window
+  of ten moves only when the focus leaves it, a row at a time (LunaP's `KeepRowShown`); the wheel moves the window to a
+  whole row and leaves the focus; Left and Right step a value (`Steps`) or a slider (§7.42) and are kept on any other
+  row; A chooses a row, which is the host's to act on, open or ask about; a row a host marks `held` (a value the engine
+  holds, `EmuSen_BigPicture.md` §52.5 item 2) takes neither; the shoulders step the strip's sections, wrapping, while no
+  page is open under the section, and are declined, so the host's, under a trail (the console page's LB and RB, §52.4);
+  B, Start and the rest are declined to the frame. A row's kind is `Kit.RowKinds` (`Action`, `Steps`, `Opens`, `Asks`,
+  `Slider`, `Choice`), a number in the model's `kind` role.
+- **`SettingsLayout`** (kit-qt `settings.rs`) puts the measures and the walk on Qt: the measures as constant
+  properties, `paneLeft` and `rowsWidth` from the canvas's `width`, the walk's `current`, `first`, `marked`, `count` and
+  the focused row's `sentence`, `sections`, `section` and `trailShown` from the frame; it reads the roles `kind`, `held`,
+  `marked`, `sentence`, `minimum`, `maximum`, `step` and `amount` from any list model through `item_model::role_texts`,
+  and raises `stepped`, `slid`, `chosen` and `sectionChosen`.
+- **`SettingsFrame.qml`** is a `Frame` with its navigation hidden, so the frame's controller, router, keys, pointer and
+  help bar are the ones every screen has. The strip is Qt Quick Controls' `TabButton`s in the style (§7.8), each as wide
+  as its upper-cased name in Caption with its padding; it draws the `trail` instead while pages are open, the last
+  chosen. The rows are a `ListView` with a `DelegateChooser` on `kind`: a `MenuRow` with its ◂ ▸ or ▸ marks (§7.21), a
+  `ChoiceRow` (§7.41) or a `SliderRow` (§7.42). A press the frame's walk declines reaches the focused row as a key and
+  goes up to the rows' scope, which hands it to the walk; hovering a row focuses it, so the walk follows Qt's focus, and
+  a click is A there (§7.3). The view's own current index is cleared, so it never moves the focus to a row of its own
+  choosing as its model changes; the walk reads the model after the view has its rows, and again whenever the model
+  says its rows changed. The pane is SurfaceRaised with the tile radius; its slot (`preview`) holds what the host puts
+  there, a picture of 368 × 276, a meter of 16 or the two variants of 160 as LunaP drew them, and its `lines` slot what
+  the host adds under the sentence.
+- **Found and fixed on the way: a `MenuRow`'s marks past a clip.** On the software backend a `Shape` wholly past its clip
+  is painted unclipped (§7.34), so the eleventh row of a list showed its ◂ ▸ marks 26 units below the window
+  (2026-11-09, `settings-frame-Dark-1280x800.png`, the label clipped and the marks not). The marks are now held to their
+  clip as `Body`'s shapes are, through `InsideClips`; no other drawing of a `MenuRow` changes.
+
+**Where it differs from Mistress**, each named: the chosen name's underline is the style's 4 units (`barWidth`), where
+`SectionTab` drew 3; the names are set in the style's face, since `Tokens` has no family yet (§7.7), so DISPLAY's tab is
+about 111 units wide where Mistress's is 104; the help bar is the kit's, 58 on the foot (§4 of `EmuSen_Interface.md`),
+where Mistress's band is 98 from 702; a held row's value is drawn as any other, and an `Asks` row draws no `…`, both
+waiting for the host's words in piece D. The desktop form (a source list, rows of 48, search) is stage 6's, and the
+card's pages are piece D's on this frame.
+
+**Held to**: kit-core's `tests/settings.rs` (12: the measures at 1280 and at 1422.2, the ends, the window, Left and
+Right by kind, a held row, the page of choices, a long page's mark in view, the declined presses, the kinds' numbers,
+the shoulders, a slider's grid); kit-gallery's `settings_gate.rs` (the frame with a picture, a meter and the two
+variants, the page of choices and the page of sliders, at 1280 × 800, 1920 × 1200, 1920 × 1080 and 1280 × 720, dark and
+the variants light: fit, pad reach, pointer reach, no chrome, names, palette, contrast; the strip, rows and pane at
+Mistress's boxes at both 16:10 sizes; no mark drawn below the window) and `settings_walk.rs` (the pad through the
+router's queue and the pointer: the window by one at the eleventh row and the list's offset with it, a value stepped, a
+page's row chosen, a held row neither chosen nor stepped, the pane's sentence, the shoulders wrapping, B to the host;
+resting, clicking, the wheel to a whole row, a tab, a right click as B). The gallery's states are `SettingsGallery.qml`,
+a scene of the gallery module beside `Gallery.qml`, with its models as a host would hand them. Rule Q: `SettingsLayout`
+and `RowKinds` are additions to the registry and `SettingsFrame`, `ChoiceRow` and `SliderRow` to the `qmldir`; nothing
+was removed or changed (`CHANGELOG-kit.md`). The harness gained `Scene::drag` (QTest's press, eight moves and release,
+§7.9). Measured on 2026-11-09 with six seeded faults, each reverted and each caught: the window moving one row late
+(kit-core's window test), A on a choice leaving the mark (the page of choices test), a slider's step taken from the floor
+rather than the nearest step (the grid test), the rows' box one row too tall (the gate, Mistress's boxes), the `MenuRow`
+fix undone (the gate, a mark below the window at 748,674), and a slider's pad step not raised (the walk test).
+
+### 7.41 The page of choices (stage 5, piece A; 2026-11-09)
+
+A page for one row whose value is one of a few, such as a console's Engine (`EmuSen_BigPicture.md` §52.4; the same
+value as Cores' Make Default), drawn on the settings frame under the trail of the pages above it. Its rows are of kind
+`Choice` and one of them carries the model's `marked`: the page opens with the focus on the choice in force, and in its
+window on a long page; A, or a click, chooses the focused one, the mark moving to it at once and `chosen` raised for the
+host, whose rows, read again, are the mark's owner; B is the frame's, so the host closes the page keeping what was
+chosen (Mistress's line: "A chooses; B keeps what was chosen", a host's words in the `lines` slot). `ChoiceRow.qml` is a
+`MenuRow` whose words stand 32 from its edges, the choice in force marked by a dot of 10 in Accent centred in that
+inset, and heard as checked by a reader. Mistress marked it with a `●` before the value's words; the dot is a drawn
+mark, as the style's other marks are (§7.8).
+
+**Held to**: kit-core's page of choices and long page tests, the gallery's `choices` state through the gate, and the walk
+test (opened on Venus (C#), the shoulders left to the host, A on VenusRT moving the one mark to the first row, a click on
+Snes9x moving it again).
+
+### 7.42 The slider row (stage 5, piece A; 2026-11-09)
+
+A row with a slider, for a shader's levers and a crop's edges (`EmuSen_Interface.md` §16.2, `EmuSen_BigPicture.md` §52.5
+item 1). Mistress stepped these as values and typed them under A; the slider row keeps both, Left and Right through the
+walk and A for the host's prompt, and adds the pointer's drag.
+
+- **The step is kit-core's** (`settings::slider`, `SliderRange`): Left and Right move the amount by the row's `step`,
+  on the grid of steps counted from the range's `minimum` (an amount off the grid steps onto the nearest grid point
+  first) and inside the range, a range given high to low taken low to high; a row with no step takes a hundredth of
+  its range (`STEPS_WITHOUT_A_STEP`); at an end, or on a held row, the press is kept and nothing is raised. The walk
+  keeps the amount it gave until the host's rows are read again, so two quick presses take two steps.
+- **`SliderRow.qml`** is a `WholeRow`: the label over 40% of its width in Row, Qt Quick Controls' `Slider` in the style
+  (§7.8) filling the middle, and the host's words for the value in Muted, 104 wide and right-aligned so the slider does
+  not move as they change. The slider takes no focus of its own: the row holds it, and the pad's Left and Right are the
+  walk's. The slider's `stepSize` is the row's step with `snapMode` always, so a drag snaps to the same grid; a drag
+  raises `slid` with the amount, and the frame raises it with the row. A held row's slider is disabled, and neither the
+  pad nor a drag moves it.
+
+**Held to**: kit-core's slider tests (Left and Right without a step, the grid, the maximum held, an amount off the grid, a
+held slider, a range given high to low, no number); the gallery's `slider` state through the gate, and the walk test (two
+Rights and a Left by 0.5, a drag of the second row to its end giving 25 and its words `25.0%`, the held row left as it
+was by a drag and a press, though the pointer focused it).
+
+### 7.43 The tool screen (stage 5, piece B; 2026-11-09)
+
+The tool screen is the big-screen form of `ManagerLayout` that `EmuSen_Interface.md` §15.2 specifies and §15.9 lists as
+the kit's to gain: a header row with the tool's facts, a section strip with the search box at its right, a columned list
+whose columns stay inside its width, the apply bar with its meter under the list, and the pane spanning the list and the
+bar. It takes everything it shows from models and knows no tool; Cores, Packages, Library, the Scraper and the Cheats
+database are each one source behind stage 5's `ToolModel` (pieces F, L and M).
+
+**Where its places come from.** `emusen_kit_core::tool` places the parts from the screen's size in design units and the
+big screen's spacing tokens (safe area, row height, help bar). Its measures are those of Mistress's recording
+`Cores-1280x800.spec`, which is the oracle for these screens (`EmuSen_Qt.md` §7, stage 5): the header 48 at the safe
+area's top; the strip 44 at 60 below it, the search 240 wide at its right; the list from 120 below the safe area's top,
+0.6 of the width (`AdaptiveLayout.ContentShare`), in as many whole rows of 54 as leave room for the bar of 110 (an inset
+of 18, a line of words, then the controls) above the content's foot; the pane 16 beside the list, from the list's top to
+the bar's foot. The content's foot is the safe area's foot less a help bar's height, 702 at 800 high, where both C#
+recordings end it. The frame's own band has stood flush on the foot, 742 to 800, since 2026-11-05 (§7.1 of
+`EmuSen_Qt.md`), so 40 units lie between the bar and the band; moving the foot to the band would add a ninth row and
+part from the recording, which is a question for the tester (§7.45). At 1280 × 800 the places are the recording's to the
+unit: header 64,40 1152 × 48, strip 64,100 912 × 44, search 976,100 240 × 44, list 64,160 691 × 432 (eight rows), bar
+64,592 691 × 110, pane 771,160 445 × 542. At 16:9 the design is 1,422.2 wide and the extra width goes to the list and the
+pane in their shares, as §15.2 says.
+
+**The pane spanning the list and the bar** is the layout's rule, not a screen's arrangement: the pane's top is the list's,
+its foot the bar's, and the bar stands on the list's foot with the list's width, so the apply bar belongs to the list.
+§15.9 item 2 is this.
+
+**FitsWidth** (`emusen_kit_core::table`, LunaP §204's `LunaTable.FitsWidth`). A column takes its width one of two ways: a
+content column the width of its widest words, rounded up to whole units; a fill column its least, then a share by weight
+of what the content columns and every fill's least leave. Where the room cannot give the fills their least, the content
+columns give up the difference in proportion to their widths; where even that cannot fit, the leasts are scaled into the
+room. The widths never sum past the room, which is the table less its lead (the mark column, 24), the gaps (24) and the
+trail (24), so the last column ends at or before the table's right less the trail and no table scrolls sideways. The
+Cores recording's three columns come out to the unit: Core (fill) 297 at 88, Console 144 at 409, Status 154 at 577 in a
+list of 691 from 64. A cell whose words are wider than its column is elided, which the fit audit counts as a fault, so a
+host gives a fill column a least that holds its longest name (§15.2 measured `Mupen64Plus-Next` at 190) and says the rest
+in the pane, as the C# Cores tool does.
+
+**On Qt.** `ToolLayout` puts the places on Qt as rectangles a screen binds to, recomputed when the size changes.
+`ColumnFit` reads a columns model (roles `key`, `fill`, `least`) and a rows model through `item_model::role_texts`, the one
+reader of a model's role the kit's layouts share, measures each content column's words in the cells' own font, and hands
+back each column's `xs` and `widths`; a screen calls `measure()` when its rows change (the screen's `Connections` on the
+model's reset, insert, remove and data signals and the list's count do so). The measuring is hand-written C++
+(`cpp/text_width.*`, `QFontMetricsF::horizontalAdvance`), since cxx-qt-lib binds `QFont` but no font metrics, and the
+alternative, measuring in QML, would need a loop over the model, which `qml-rules` forbids. `Tones` is the colour a tool's
+words take by what they say (`Text`, `Muted`, `Strong`, `Accent`, `Success`, `Attention`, `Error`), so a model hands a
+tone and never a colour; `ToneText` draws words in their tone's token.
+
+`ToolScreen.qml` is a `Frame` whose places are laid over the whole frame: its parts are declared in an item reparented to
+the frame's root, so they stand in screen coordinates as the recording places them while staying inside the frame's focus
+scope, where the frame's walk, `PadRouter` and help bar serve them. The frame's content area, offset by the safe area and
+its pane gap, could not hold the header at 40 and the list at 160 without a change to `Frame`, and the frame's surface is
+not this piece's to change. Its properties: `title`; `facts` (roles `words`, `tone`), right-aligned in Caption with a
+drawn dot between them, since a separator in QML would be words in a view; `rows` and `columns` (the columns' roles also
+`trailing` for words aligned right and `toneKey`, the row's role holding the cell's tone); `nameRole`, the role a reader
+hears for a row; `searchText` and `searchHint`; `paneTitle`, `paneCaption` and `sentences` (roles `words`, `tone`) in a
+scrolling pane with faded edges; `summary` and `summaryTone`, `progress` (below zero no job runs), `applyLabel`,
+`applyEnabled`, `meter` and `meterWords`; the signals `activated(index)` (A or a click on a row) and `applied()`. The
+strip is `SectionStrip`: the frame's own `sections` and `selectedSection`, so the shoulders step them, drawn as tabs in
+Caption upper case, the chosen one strong over the accent bar, only whole names shown, a click choosing one. The apply
+control is an `ActionButton` with the Start glyph (`Pad.Menu`), the shared action button of §7.44.
+
+**The walk.** The list holds the focus; Up from its first row reaches the search, Down from its last row and Right from
+any row reach the apply control, and Up or Left from it return to the list; Down from the search returns to the list. A
+row is a `Walkable`, so a click is A there. The list scrolls under faded edges where it holds more rows than it shows,
+and the pane where its sentences are longer than it.
+
+**Compared with the recording** (`Cores-1280x800.spec`, read 2026-11-09), the differences, each named: the face is the
+platform's sans serif until the screens' faces are bundled (§7.7), so words are a few units taller and the search box is
+46 high at its own implicit height, centred on the strip's 44; the mark column is a gap with no box, as §15.3 Q4 asks of
+an unmarked row, and a marked row says its mark in Accent in its status (the gallery's Snes9x); the apply control is
+159 wide where Mistress's is 170, its words' own width; the strip's tabs are 44 tall with the bar under the chosen one,
+as the recording draws them, but the gaps between them are the kit's TabButton's.
+
+### 7.44 The page frame (stage 5, piece B; 2026-11-09)
+
+The page frame is one screen for one thing, `EmuSen_Interface.md` §2.5 and §4 screen 3 (a game's page, its five sections
+and their deeper pages, §18.2): a hero across the top under the OnArt gradient, the cover over the hero's foot, the title,
+facts, actions and section strip beside the cover, and the content below as tiles or rows. It knows no game; piece G puts
+`GamePageModel` behind it.
+
+**Its places** (`emusen_kit_core::page`), from Mistress's `GamePage-1280x800.spec` and `GamePageStates-1280x800.spec`:
+the hero 0,0 across the screen and 360 high; the cover at 64,180, 268 high and as wide as its shape gives (201 for 3:4),
+never wider than 240, the column beside it less the pane gap; the column at 336 (the safe area's left plus 272) holding
+the title at 226, the facts at 286, the actions 44 high at 328 and the strip 44 high at 396, each to the safe area's
+right; the content from 64,464 to the content's foot of §7.43, 238 high, in which rows show four whole rows of 54. Tiles
+are pictures of 200 × 150, 24 apart, their label at 162 below the picture's top and their line at 190. §4.3 gives the
+cover as 240 × 300; the recording draws 201 × 268, and the recording is the oracle.
+
+**On Qt.** `PageLayout` puts the places on Qt, with the tile's measures as constants. `PageFrame.qml` is a `Frame` laid
+out as §7.43's tool screen is, for the same reason: the hero runs edge to edge, which no content area could hold. Its
+properties: `hero` and `cover` (pictures), `coverAspect`, `coverName` (what a reader hears for the cover), `title`,
+`facts`; `actionModel` (roles `label`, `value`, `button`, the pad button whose glyph leads the words or below zero for
+none, and `filled`, the screen's main action in the accent); `tileModel` (roles `label`, `line`, `picture`) or
+`rowModel` (roles `label`, `value`, `steps`, `opens`, drawn as the kit's `MenuRow`), chosen by `showsTiles`; the signals
+`acted(index)`, `tileChosen(index)` and `rowChosen(index)`. The hero is a backdrop to the fit audit, as a sky is, since
+the cover, the title and the actions stand over it by design; with no picture it is Void, so the OnArt words keep their
+contrast in the light variant too. A focused tile is ringed outside its picture, so the tiles' list stands the ring's
+room outside the content's box and keeps it as margins, and nothing is cut at its edges. `ActionButton.qml` is the action
+as a button: the glyph, the word, a value in Muted, filled in the accent where it is the main action, ringed when
+focused, a `Walkable`.
+
+**The walk.** The actions hold the focus at first (Play, as §4.3 says); Left and Right step them; Down reaches the
+content and Up from its first row or tile returns to the actions. The shoulders step the strip's sections through the
+frame. Left and Right on a stepped action (`Resume ◂ Slot 3 ▸`) move between the actions here; the stepping and its
+marks are piece G's, with the slots it steps.
+
+**Compared with the recordings** (read 2026-11-09), named: the title and facts are in the platform's sans serif, 60 and
+30 high where Barlow's are 53 and 27; the actions are the kit's action buttons, 16 inside their edges, where Mistress's
+cells are 8 to 21; the hero has no picture in the gallery, so its gradient is drawn over Void; the cover has no shadow
+yet (§5.4's raised shadow is not a token).
+
+### 7.45 What the tool screen and the page frame are held to, and what is open (2026-11-09)
+
+**kit-core** (`tests/table.rs` 7, `tests/tool.rs` 4, `tests/page.rs` 3): the Cores recording's cells, a fill reaching the
+trail, fills sharing by weight after their least, wide words giving way to a fill's least, a room under the leasts, content
+alone fitting and shrinking, and no width from 0 to 1,600 in steps of 7.5 putting a column past the table for five sets of
+columns; the Cores recording's places at 1280 × 800, the 16:9 shares, the pane spanning the list and the bar with whole
+rows inside the safe area above the help bar at every size from 960 to 1,800 wide and 400 to 1,000 high, and one row
+fewer and none cut 40 units shorter; the game page recording's places, a wide cover stopping short of the column, and the
+places inside the screen at 16:9.
+
+**The gallery** (`kit-gallery/tests/screens.rs` over `qml/Screens.qml`, one test, 24 states in 16.8 s, measured
+2026-11-09): the tool screen, the page with tiles and the page with rows, in both variants at the four fit sizes (1280 ×
+800, 1920 × 1200, 1920 × 1080, 1280 × 720), each through the fit audit, pad reach, pointer reach, no chrome, names,
+palette reach and contrast of §3, with the pane spanning the list and the bar and every cell inside the list less its
+trail as drawn, the walk between the parts at 1280 × 800, A on a row and a click on Apply reaching the host, and nothing
+logged by Qt; `qml-rules` and `qmllint` pass the scene, and `qt-test`'s lint test the kit's new files. Grabs and
+recordings are written beside the gallery's in `~/.cache/emusen/tmp/kit-gallery/`.
+
+**Seeded faults**, measured 2026-11-09, each reverted, each caught: the table's room taken without its trail failed six
+of `table.rs`'s seven tests, the Cores recording's cells among them; the pane laid only beside the list failed all four of
+`tool.rs`'s; the cover's width uncapped failed `page.rs`'s wide cover; in the gallery, `ToolScreen`'s pane bound to the
+list's height failed the spanning check in every tool state, `PageFrame`'s actions without their way down to the content
+failed pad reach for every row in the page's row states, and `ColumnFit` fitting a table two trails wider than its list
+put the status words past their rows in every tool state (the fit audit's words past their owner).
+
+**Rule Q.** The registry gains, additions only: `ColumnFit`, `PageLayout`, `ToolLayout` and the `Tones` namespace in
+`EmuSen.Kit-1.0.qmltypes`; `SectionStrip`, `ToolScreen`, `PageFrame`, `ToneText` and `ActionButton` in the qmldir. The
+module stays 1.0, as every kit addition before the first release has (§7.6). `EmuSen.Theme` re-exports none of them
+(`EmuSen_Qt.md` §3.1: a theme never styles a tool or a page), so its registry and `theme-qt/tests/surface.rs` are
+unchanged.
+
+**Open.**
+- **[decision]** The tool screen and the page end their content at 702, as the recordings do, 40 units above the band
+  that has stood at 742 since 2026-11-05. Recommended: keep 702 while the stage 5 screens are compared with the C#
+  recordings, and move the foot to the band (one more row on the tool screen) once stage 8 retires them, as one change
+  in `tool::content_foot`.
+- **[routine]** A stepped action's ◂ ▸ and its stepping (Resume's slots) are piece G's.
+- **[routine]** The cover's raised shadow waits for a shadow token (§5.4).
+
+### 7.6 Building, linking, the registry, and what it is held to
+
+**The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4
+proposed). cxx-qt's build utilities find it and pass `-fuse-ld=lld` themselves, so no crate names a linker, and the two
+GNU `ld.bfd` workarounds the kit carried for a day are gone from `build.rs`: the `--no-as-needed` naming of the Qt
+libraries from §10.4, and `--undefined=cxx_qt_init_*` for the four initializers. The second one is worth keeping on
+record: when a crate that links the kit as an rlib is the final link (the kit's own integration tests), rustc places
+the extracted whole-archive `call-initializers` members after the rlib, and `ld.bfd`'s single pass has already left the
+rlib's archive, so the init functions went undefined; `lld` resolves across the whole input and has no such order.
+
+Measured on 2026-11-07 on the desktop, six compilers, CPU weight 20, the compiler cache (`sccache`) switched off so the
+figures are the compilers' own: a cold debug build of the kit and its dependencies is **65 s** under `lld` (the first
+build, under `ld.bfd`, was 73 s; cxx-qt's generated C++ dominates both, as `EmuSen_Qt.md` §10.2 found); a change to a
+Rust file that holds no bridge rebuilds in **11.4 s** (5.1 s with the cache warm), a QML file in 5.0 s with the cache;
+the ten test binaries build and link in **2.3 s** together. With the cache warm a cold build is 19.7 s, which is the
+figure a day's work sees.
+
+**Rule Q.** `Testing/qmltypes/EmuSen.Kit-1.0.qmltypes` and `EmuSen.Kit-1.0.qmldir` are the registry as
+`qmltyperegistrar` and cxx-qt write them (`Frontend/target/cxxqt/qml_modules/EmuSen/Kit/`). `tests/qmltypes.rs`
+compares the build's files to the committed ones with line numbers and header file names dropped, since those move
+with every edit; a difference fails until it is reviewed, the minor bumped for an addition or the major for a removal,
+and the files copied. Until 1.0 the comparison is strict equality; the addition and removal distinction is a reviewer's
+step, not the test's.
+
+**Tests** (`Frontend/kit-qt/tests`, 34 with §7.5's and §7.8's, no Qt application needed; the bridges themselves are
+exercised by the harness of step 9): `kinds` (the mirrors pair by pair), `column` (every colour of both variants, the metrics by form and text
+scale, motion in milliseconds and Qt's easing numbers, reduced motion zeroing movements and keeping fades at 120 ms),
+`qt_keys` (every declinable press has a Qt key both ways, Shift+Tab, Enter, the mouse's buttons), `route` (the sheet
+before the walk before the key), `router` (the queue applies at a pump only, the own tiers at 400 then 80 ms, the swap
+once, the chord once with forget, a change of tiers) and `qmltypes`. Measured on 2026-11-07 with four seeded faults,
+each reverted: `pad_button` off by one failed the kinds pairs; a declined press losing its key failed the route test; the
+CubicOut curve numbered as InCubic failed the easing test; the swap applied inverted failed two router tests.
+
+**Hand-written C++**, each part with its reason (decided 2026-11-08: cxx-qt is the binding; C++ glue is written where
+cxx-qt-lib does not reach, each part with its reason, `EmuSen_Qt.md` §1.4). The kit's `cpp/kit_glue.cpp` is `send_key`,
+a key event sent to the focus window (§7.3). The harness's `cpp/harness.cpp` holds the tree dump and QTest's verbs, which
+cxx-qt-lib does not bind (§7.9); the contrast sampling and the picture difference, pixel loops over one grab (§7.10);
+the Qt calls of §7.11 that cxx-qt-lib does not bind (`QAccessible::queryAccessibleInterface`, `QMetaProperty`'s
+declaring class, `QQuickItem::scopedFocusItem` and `setFocus`, a property by an item's address,
+`QQuickTest::qWaitForPolish`); and §7.14's message handler, since `qInstallMessageHandler` takes a C function pointer,
+which neither cxx nor cxx-qt-lib can supply. §7.16's `GamePicture` and `kit_adopt_vulkan` (`cpp/game_picture.*`):
+an item's scene-graph node with a native Vulkan texture, and a window's adopted instance and device, none of which
+cxx-qt-lib binds.
+
+### 7.7 Open
+
+- **[routine]** Install Fedora's `lld` for the toolchain, as §10.4 proposed; both linker workarounds then go.
+- **[routine]** The interface's typeface is not a token in kit-core (§1.3), so `Tokens` has no font family. Recommended:
+  add `fontDisplayFamily` and `fontBodyFamily` to kit-core's tokens with their values read from `EmuSen_Interface.md`
+  §5.2 when the first screen needs them, the gallery included, and bundle the faces as §10.2 found necessary.
+- Owed by §7.5 to a later step: Moonrise's strikes paired with the chime (the cues play through Endymion's interface
+  player since §7.15); the stars' per-tick cost measured on the handheld before stage 1 lands.
+- Owed by §7.15: which of the interface's events rings which cue (a move, a section, a choice, back) is a screen's,
+  decided with stage 1's first screen; the gallery program names no platform library, so a human look at it reads no
+  pad until a host passes one **[routine]**; a uinput pad (a kernel device, seen by every program on the desk, as
+  WiseMan's `UinputHotplugTests` makes under `EMUSEN_UINPUT_PADS=1`) is not used, since SDL's virtual pads prove the
+  same path without one.
+- Owed by §7.28 **[routine]**: a theme's button picture is drawn in its own colours, where ES-DE shifts it by
+  `iconColor` (a later piece of stage 4). Decided 2026-11-08: a key held in the ES-DE view repeats at the keyboard's
+  own rate, not ES-DE's tiers.
+- Owed by §7.8: `RatingPicker` and `DatePicker` (`Keyboard` is built, §7.22); the drawn
+  glyphs of the style (a check, a radio dot, a chevron) in place of the rings, discs and rectangles it draws now (the
+  pad's buttons are drawn since §7.12); the desktop form's menu bar and status bar.
+- Done 2026-11-08 (§7.24): a row whose control takes Up and Down itself (a `TextField`, a `ComboBox`) is passed by a
+  vertical walk; the row walks first, the control takes the keys once chosen.
+- Decided 2026-11-08 by the tester: the approved draft is Moonrise's oracle, so its caption stays at the draft's 15
+  units as the audit's named exception to the floor (§7.10).
+- Owed by §7.10 to stage 1: the frame raises `focusMoved` when the walk's focused role changes (B on the desktop's
+  content gives the navigation the focus) but no item takes Qt's focus, so the walk's role and Qt's focus part there;
+  the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The other screens' faces (§5.2) are
+  bundled when the first screen needs them; Moonrise's two are.

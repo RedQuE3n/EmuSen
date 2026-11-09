@@ -16,3 +16,6 @@ pub mod sound;
 pub mod tokens;
 pub mod wheels;
 pub mod world;
+pub mod table;
+pub mod tool;
+pub mod page;

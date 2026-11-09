@@ -3,7 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import EmuSen.Kit as Kit
 
-// A row with a slider, for a lever or a crop's edge: its label, the slider and the value in words; the pad steps it by Left and Right through the frame's walk, the pointer drags it (EmuSen_Kit.md §7.38).
+// A row with a slider, for a lever or a crop's edge: its label, the slider and the value in words; the pad steps it by Left and Right through the frame's walk, the pointer drags it (EmuSen_Kit.md §7.42).
 Kit.WholeRow {
     id: root
     property string label

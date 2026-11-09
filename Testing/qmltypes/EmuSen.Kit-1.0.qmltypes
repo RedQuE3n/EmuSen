@@ -335,6 +335,97 @@ Module {
         }
     }
     Component {
+        file: "table.cxxqt.h"
+        lineNumber: 59
+        name: "ColumnFit"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/ColumnFit 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "width"
+            type: "double"
+            read: "getWidth"
+            write: "setWidth"
+            notify: "widthChanged"
+            index: 0
+            lineNumber: 64
+        }
+        Property {
+            name: "rows"
+            type: "QAbstractItemModel"
+            isPointer: true
+            read: "getRows"
+            write: "setRows"
+            notify: "rowsChanged"
+            index: 1
+            lineNumber: 65
+        }
+        Property {
+            name: "columns"
+            type: "QAbstractItemModel"
+            isPointer: true
+            read: "getColumns"
+            write: "setColumns"
+            notify: "columnsChanged"
+            index: 2
+            lineNumber: 66
+        }
+        Property {
+            name: "font"
+            type: "QFont"
+            read: "getFont"
+            write: "setFont"
+            notify: "fontChanged"
+            index: 3
+            lineNumber: 67
+        }
+        Property {
+            name: "xs"
+            type: "QVariant"
+            read: "getXs"
+            notify: "fitted"
+            index: 4
+            lineNumber: 68
+            isReadonly: true
+        }
+        Property {
+            name: "widths"
+            type: "QVariant"
+            read: "getWidths"
+            notify: "fitted"
+            index: 5
+            lineNumber: 69
+            isReadonly: true
+        }
+        Signal { name: "widthChanged"; lineNumber: 84 }
+        Signal { name: "rowsChanged"; lineNumber: 85 }
+        Signal { name: "columnsChanged"; lineNumber: 86 }
+        Signal { name: "fontChanged"; lineNumber: 87 }
+        Signal { name: "fitted"; lineNumber: 89 }
+        Method {
+            name: "setWidth"
+            lineNumber: 75
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setRows"
+            lineNumber: 77
+            Parameter { name: "value"; type: "QAbstractItemModel"; isPointer: true }
+        }
+        Method {
+            name: "setColumns"
+            lineNumber: 79
+            Parameter { name: "value"; type: "QAbstractItemModel"; isPointer: true }
+        }
+        Method {
+            name: "setFont"
+            lineNumber: 81
+            Parameter { name: "value"; type: "QFont" }
+        }
+        Method { name: "measure"; lineNumber: 88 }
+    }
+    Component {
         file: "kinds.cxxqt.h"
         lineNumber: 46
         name: "Cues"
@@ -2660,6 +2751,178 @@ Module {
         }
     }
     Component {
+        file: "page.cxxqt.h"
+        lineNumber: 50
+        name: "PageLayout"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/PageLayout 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "width"
+            type: "double"
+            read: "getWidth"
+            write: "setWidth"
+            notify: "widthChanged"
+            index: 0
+            lineNumber: 55
+        }
+        Property {
+            name: "height"
+            type: "double"
+            read: "getHeight"
+            write: "setHeight"
+            notify: "heightChanged"
+            index: 1
+            lineNumber: 56
+        }
+        Property {
+            name: "aspect"
+            type: "double"
+            read: "getAspect"
+            write: "setAspect"
+            notify: "aspectChanged"
+            index: 2
+            lineNumber: 57
+        }
+        Property {
+            name: "hero"
+            type: "QRectF"
+            read: "getHero"
+            notify: "laidOut"
+            index: 3
+            lineNumber: 58
+            isReadonly: true
+        }
+        Property {
+            name: "cover"
+            type: "QRectF"
+            read: "getCover"
+            notify: "laidOut"
+            index: 4
+            lineNumber: 59
+            isReadonly: true
+        }
+        Property {
+            name: "title"
+            type: "QRectF"
+            read: "getTitle"
+            notify: "laidOut"
+            index: 5
+            lineNumber: 60
+            isReadonly: true
+        }
+        Property {
+            name: "facts"
+            type: "QRectF"
+            read: "getFacts"
+            notify: "laidOut"
+            index: 6
+            lineNumber: 61
+            isReadonly: true
+        }
+        Property {
+            name: "actions"
+            type: "QRectF"
+            read: "getActions"
+            notify: "laidOut"
+            index: 7
+            lineNumber: 62
+            isReadonly: true
+        }
+        Property {
+            name: "strip"
+            type: "QRectF"
+            read: "getStrip"
+            notify: "laidOut"
+            index: 8
+            lineNumber: 63
+            isReadonly: true
+        }
+        Property {
+            name: "content"
+            type: "QRectF"
+            read: "getContent"
+            notify: "laidOut"
+            index: 9
+            lineNumber: 64
+            isReadonly: true
+        }
+        Property {
+            name: "rows"
+            type: "int"
+            read: "getRows"
+            notify: "laidOut"
+            index: 10
+            lineNumber: 65
+            isReadonly: true
+        }
+        Property {
+            name: "tileWidth"
+            type: "double"
+            read: "getTileWidth"
+            index: 11
+            lineNumber: 66
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "tileHeight"
+            type: "double"
+            read: "getTileHeight"
+            index: 12
+            lineNumber: 67
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "tileGap"
+            type: "double"
+            read: "getTileGap"
+            index: 13
+            lineNumber: 68
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "labelOffset"
+            type: "double"
+            read: "getLabelOffset"
+            index: 14
+            lineNumber: 69
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "lineOffset"
+            type: "double"
+            read: "getLineOffset"
+            index: 15
+            lineNumber: 70
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Signal { name: "widthChanged"; lineNumber: 94 }
+        Signal { name: "heightChanged"; lineNumber: 95 }
+        Signal { name: "aspectChanged"; lineNumber: 96 }
+        Signal { name: "laidOut"; lineNumber: 97 }
+        Method {
+            name: "setWidth"
+            lineNumber: 76
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setHeight"
+            lineNumber: 78
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setAspect"
+            lineNumber: 80
+            Parameter { name: "value"; type: "double" }
+        }
+    }
+    Component {
         file: "planets.cxxqt.h"
         lineNumber: 50
         name: "PlanetLayout"
@@ -4427,6 +4690,166 @@ Module {
             isMethodConstant: true
             lineNumber: 941
             Parameter { name: "height"; type: "double" }
+        }
+    }
+    Component {
+        file: "tones.cxxqt.h"
+        lineNumber: 6
+        name: "Tones"
+        accessSemantics: "none"
+        exports: ["EmuSen.Kit/Tones 1.0", "EmuSen.Kit/Tones 1.0"]
+        isCreatable: false
+        exportMetaObjectRevisions: [256]
+        Enum {
+            name: "Tone"
+            isScoped: true
+            type: "int"
+            lineNumber: 13
+            values: [
+                "Text",
+                "Muted",
+                "Strong",
+                "Accent",
+                "Success",
+                "Attention",
+                "Error"
+            ]
+        }
+        Enum {
+            name: "Tone"
+            isScoped: true
+            type: "int"
+            lineNumber: 13
+            values: [
+                "Text",
+                "Muted",
+                "Strong",
+                "Accent",
+                "Success",
+                "Attention",
+                "Error"
+            ]
+        }
+    }
+    Component {
+        file: "tool.cxxqt.h"
+        lineNumber: 41
+        name: "ToolLayout"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/ToolLayout 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "width"
+            type: "double"
+            read: "getWidth"
+            write: "setWidth"
+            notify: "widthChanged"
+            index: 0
+            lineNumber: 46
+        }
+        Property {
+            name: "height"
+            type: "double"
+            read: "getHeight"
+            write: "setHeight"
+            notify: "heightChanged"
+            index: 1
+            lineNumber: 47
+        }
+        Property {
+            name: "header"
+            type: "QRectF"
+            read: "getHeader"
+            notify: "laidOut"
+            index: 2
+            lineNumber: 48
+            isReadonly: true
+        }
+        Property {
+            name: "strip"
+            type: "QRectF"
+            read: "getStrip"
+            notify: "laidOut"
+            index: 3
+            lineNumber: 49
+            isReadonly: true
+        }
+        Property {
+            name: "search"
+            type: "QRectF"
+            read: "getSearch"
+            notify: "laidOut"
+            index: 4
+            lineNumber: 50
+            isReadonly: true
+        }
+        Property {
+            name: "list"
+            type: "QRectF"
+            read: "getList"
+            notify: "laidOut"
+            index: 5
+            lineNumber: 51
+            isReadonly: true
+        }
+        Property {
+            name: "bar"
+            type: "QRectF"
+            read: "getBar"
+            notify: "laidOut"
+            index: 6
+            lineNumber: 52
+            isReadonly: true
+        }
+        Property {
+            name: "pane"
+            type: "QRectF"
+            read: "getPane"
+            notify: "laidOut"
+            index: 7
+            lineNumber: 53
+            isReadonly: true
+        }
+        Property {
+            name: "rows"
+            type: "int"
+            read: "getRows"
+            notify: "laidOut"
+            index: 8
+            lineNumber: 54
+            isReadonly: true
+        }
+        Property {
+            name: "barInset"
+            type: "double"
+            read: "getBarInset"
+            index: 9
+            lineNumber: 55
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "panePadding"
+            type: "double"
+            read: "getPanePadding"
+            index: 10
+            lineNumber: 56
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Signal { name: "widthChanged"; lineNumber: 74 }
+        Signal { name: "heightChanged"; lineNumber: 75 }
+        Signal { name: "laidOut"; lineNumber: 76 }
+        Method {
+            name: "setWidth"
+            lineNumber: 62
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setHeight"
+            lineNumber: 64
+            Parameter { name: "value"; type: "double" }
         }
     }
     Component {

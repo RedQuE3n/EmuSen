@@ -65,7 +65,7 @@ Kit.Walkable {
     }
     Shape {
         objectName: "before"
-        // The software backend paints a Shape wholly past its clip unclipped, so there it is not drawn while wholly past (EmuSen_Kit.md §7.34, §7.36).
+        // The software backend paints a Shape wholly past its clip unclipped, so there it is not drawn while wholly past (EmuSen_Kit.md §7.34, §7.40).
         visible: root.steps && (GraphicsInfo.api !== GraphicsInfo.Software || beforeShown.inside)
         width: root.stepMark.width
         height: root.stepMark.height

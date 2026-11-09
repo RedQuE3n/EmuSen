@@ -1,7 +1,7 @@
 import QtQuick
 import EmuSen.Kit as Kit
 
-// One choice of a page of choices: a menu row with the choice in force marked by a dot before its label (EmuSen_Kit.md §7.37).
+// One choice of a page of choices: a menu row with the choice in force marked by a dot before its label (EmuSen_Kit.md §7.41).
 Kit.MenuRow {
     id: root
     property bool marked: false

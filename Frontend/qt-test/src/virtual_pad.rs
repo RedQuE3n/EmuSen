@@ -44,6 +44,9 @@ pub struct VirtualPad {
     _name: CString,
 }
 
+// SDL takes its joystick lock in every call on a joystick, so a pad may be pressed from another thread than its own.
+unsafe impl Send for VirtualPad {}
+
 impl Sdl {
     pub fn open() -> Sdl {
         std::env::set_var("SDL_AUDIODRIVER", "dummy");

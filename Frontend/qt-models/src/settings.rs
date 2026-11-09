@@ -111,6 +111,8 @@ pub enum Outcome {
     Saved(Model, Value),
     /// A page opened under the section.
     Opened,
+    /// The rows' values changed in place, as a card chosen on the card manager's page: read again, the focus kept.
+    Shown,
     /// A door to another screen, by its name in the description.
     Door(String),
     /// A console's setting stored through the runtime, or forgotten with none; the rows already show it.

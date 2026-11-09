@@ -414,6 +414,7 @@ impl qobject::SettingsModel {
                 self.shown(false);
             }
             Outcome::Opened => self.shown(true),
+            Outcome::Shown => self.shown(false),
             Outcome::Door(name) => self.door(QString::from(name.as_str())),
             Outcome::OpenFolder(path) => self.open_folder(QString::from(path.as_str())),
             Outcome::ChooseFolder { key, start } => self.choose_folder(QString::from(key.as_str()), QString::from(start.as_str())),

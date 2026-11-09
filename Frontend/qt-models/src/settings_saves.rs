@@ -144,13 +144,13 @@ impl SettingsView {
             let next = step(m.cards.iter().collect(), self.chosen());
             self.chosen_card = next;
             self.target_card = None;
-            return Some(Outcome::Opened);
+            return Some(Outcome::Shown);
         }
         if entry["saveop"] == "target" {
             let chosen = self.chosen()?.path.clone();
             let next = step(m.cards.iter().filter(|c| c.path != chosen).collect(), self.target());
             self.target_card = next;
-            return Some(Outcome::Opened);
+            return Some(Outcome::Shown);
         }
         Some(Outcome::Nothing)
     }

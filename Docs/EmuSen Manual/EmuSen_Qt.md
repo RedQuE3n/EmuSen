@@ -3925,7 +3925,9 @@ keeps the kit's drawn dot beside `Default` (Kit §7.41) where Mistress wrote `�
   move to (stepped through the other cards), Copy Save, Move Save and Delete Save…, which asks first (No, Yes; decided
   by the tester); Move and Delete are held while a game holds the card. Each change goes through `cards_op`
   (`CARDS_COPY`, `_MOVE`, `_DELETE`, `_IMPORT`); its words are said under the page, the cards are read again, and after a
-  move or a delete the save's pages close. Each card's saves are read with `CARDS_OPEN` as the consoles are.
+  move or a delete the save's pages close. Each card's saves are read with `CARDS_OPEN` as the consoles are. A card
+  or a target stepped reads the rows again in place, the focus kept (`Outcome::Shown`): the gate's pad reach found two
+  save rows unreachable when the step made the page's rows anew.
 - Not built here: the Custom crop page and the console's Shader levers (piece J's by the stage plan) and the running
   game's crop named in Crop overscan's pane (piece J).
 

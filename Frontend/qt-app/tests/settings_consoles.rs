@@ -143,12 +143,22 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     scene.wait(200);
     assert_eq!(sentence(&mut scene), "Shared: Card 1 in Slot 1, Card 2 in Slot 2. 2 save(s), 11 of 15 blocks free.");
     hold(&mut scene, "MemoryCardsPlayStation", &mockup::Mockup::default(), named, &mut report);
-    scene.pad(UiButton::Right);
-    scene.wait(200);
-    assert!(sentence(&mut scene).ends_with("In use by Amber Saga, which is running: its saves can be looked at, and changed when the game is closed."));
+    // The gate's walk leaves the card where it found it or a step on, so Right steps until the held card shows.
+    let in_use = "In use by Amber Saga, which is running: its saves can be looked at, and changed when the game is closed.";
+    for _ in 0..2 {
+        if sentence(&mut scene).ends_with(in_use) {
+            break;
+        }
+        scene.pad(UiButton::Right);
+        scene.wait(200);
+    }
+    assert!(sentence(&mut scene).ends_with(in_use), "{}", sentence(&mut scene));
     hold(&mut scene, "MemoryCardsPlayStationHeld", &mockup::Mockup::default(), named, &mut report);
     // A save's page and the question before Delete, which No closes.
-    scene.pad(UiButton::Left);
+    while sentence(&mut scene).ends_with(in_use) {
+        scene.pad(UiButton::Left);
+        scene.wait(200);
+    }
     scene.pad(UiButton::Down);
     wait_for(&mut scene, "settingsModel", "focused", "1", 1000);
     scene.pad(UiButton::Accept);

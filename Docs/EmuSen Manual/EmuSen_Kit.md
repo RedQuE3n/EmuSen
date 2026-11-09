@@ -1995,7 +1995,9 @@ keep the box rule exactly.
 the stack is that item's parent. The harness finds it by its class and records, for the member and everything inside
 it, the stack, the member, the member's layer (its z, then its place among its siblings, the order Qt draws them in),
 whether the member holds the focus and whether the item is the member itself (`Stacking`), and for words the four
-corners of their drawn glyphs (`inked`), since a card's title fills its card while its glyphs sit at its foot. Members of one stack may lie
+corners of their drawn glyphs (`inked`), since a card's title fills its card while its glyphs sit at its foot. The contrast
+rule samples what lies behind turned words over those same corners, so a title on a tilted card is read against the
+card, not the sky beside it (measured 2026-11-09: Orrery's tilted card titles had read 1.2:1 against the day paper). Members of one stack may lie
 over each other; two items of different members still fault when the lower one is words whose glyphs the upper one
 covers (a caption may not be hidden)
 or is a focused member (its ring may not be covered), and anything of a stack against anything outside it is held as

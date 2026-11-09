@@ -241,6 +241,26 @@ fn spread(glyphs: [f64; 4], width: f64, height: f64) -> Vec<(f64, f64)> {
     points
 }
 
+/// Points spread over the glyphs' own four corners, so words on a turned card are sampled on the card, not beside it.
+fn spread_turned(corners: [f64; 8], width: f64, height: f64) -> Vec<(f64, f64)> {
+    let (ox, oy) = (corners[0], corners[1]);
+    let (ax, ay) = (corners[2] - ox, corners[3] - oy);
+    let (dx, dy) = (corners[6] - ox, corners[7] - oy);
+    let (w, h) = (ax.hypot(ay), dx.hypot(dy));
+    let (columns, rows) = ((w / 4.0).clamp(2.0, 16.0) as usize, (h / 4.0).clamp(2.0, 6.0) as usize);
+    let mut points = Vec::with_capacity(columns * rows);
+    for row in 0..rows {
+        for column in 0..columns {
+            let (u, v) = ((column as f64 + 0.5) / columns as f64, (row as f64 + 0.5) / rows as f64);
+            let (px, py) = (ox + ax * u + dx * v, oy + ay * u + dy * v);
+            if px >= 0.0 && py >= 0.0 && px < width && py < height {
+                points.push((px, py));
+            }
+        }
+    }
+    points
+}
+
 /// The item of this number under an item, to be changed.
 fn find_mut(item: &mut Item, id: u32) -> Option<&mut Item> {
     if item.id.0 == id {
@@ -257,7 +277,10 @@ impl Tree {
             .enumerate()
             .filter(|(_, n)| n.visible && n.ink.as_deref().is_some_and(|ink| !ink.is_empty()))
             .filter(|(_, n)| n.text.as_deref().is_some_and(|t| !t.trim().is_empty()))
-            .filter_map(|(i, n)| n.glyphs.map(|g| (i as u32, spread(g, width, height))))
+            .filter_map(|(i, n)| match (n.corners, n.inked) {
+                (Some(_), Some(inked)) => Some((i as u32, spread_turned(inked, width, height))),
+                _ => n.glyphs.map(|g| (i as u32, spread(g, width, height))),
+            })
             .filter(|(_, points)| !points.is_empty())
             .collect()
     }

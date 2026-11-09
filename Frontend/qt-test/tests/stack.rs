@@ -35,6 +35,13 @@ fn kit_7_33_turned_shapes_and_a_stack_are_recorded() {
     assert!(first.rect.overlap(&second.rect).w > 50.0, "their scene boxes cross");
     let faults = fit(&tree.root, Rect::new(0.0, 0.0, 1280.0, 800.0), 0.5, 0.0);
     assert!(!faults.iter().any(|f| matches!(f, Fault::Overlap { .. })), "their shapes are apart: {faults:?}");
+    // What lies behind turned words is sampled on their own turned box, not across the box about it.
+    let corners = first.corners.expect("turned");
+    let (cx, cy) = corners.iter().fold((0.0, 0.0), |(x, y), c| (x + c.0 / 4.0, y + c.1 / 4.0));
+    let (ux, uy) = (corners[1].0 - corners[0].0, corners[1].1 - corners[0].1);
+    let (nx, ny) = (-uy / ux.hypot(uy), ux / ux.hypot(uy));
+    let points = tree.behind_points(1280.0, 800.0).into_iter().find(|(i, _)| *i == first.id.0).expect("sampled").1;
+    assert!(points.iter().all(|(x, y)| ((x - cx) * nx + (y - cy) * ny).abs() <= 13.0), "inside the turned line: {points:?}");
     let (member, caption) = (named(&tree.root, "member").unwrap(), named(&tree.root, "caption").unwrap());
     let (m, c) = (member.stacking.expect("the member is a stack's"), caption.stacking.expect("its words are the stack's"));
     assert!(m.is_member && !c.is_member && m.member == c.member && m.stack == c.stack);

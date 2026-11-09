@@ -15,8 +15,10 @@ pub struct OrbitGeometry {
     pub pitch: f64,
     /// How many slots are on screen.
     pub slots: i32,
-    /// A body's centre stays below this line and this far inside each side.
+    /// A body's centre stays below this line and this far inside each side; on the innermost slot below `inner_top`,
+    /// so a focused body's ring clears the leading row (decided 2026-11-08).
     pub top: f64,
+    pub inner_top: f64,
     pub side: f64,
     /// A group's label: this far in from its window's end toward the centre, right-aligned no further right than the
     /// width less `label_margin`, its box `label_half` above the point and never above `label_top`.
@@ -37,6 +39,7 @@ impl OrbitGeometry {
         pitch: 150.0,
         slots: 3,
         top: 178.0,
+        inner_top: 197.0,
         side: 100.0,
         label_in: 60.0,
         label_margin: 64.0,
@@ -71,7 +74,8 @@ pub fn ellipse(slot: i32, width: f64, g: &OrbitGeometry) -> Ellipse {
     let rx = (g.first_rx + f64::from(slot) * g.step_rx).max(0.0);
     let ry = (g.first_ry + f64::from(slot) * g.step_ry).max(0.0);
     let centre = width / 2.0;
-    let below = if ry > 0.0 { PI - (g.top / ry).min(1.0).asin() } else { PI / 2.0 };
+    let top = if slot <= 0 { g.inner_top } else { g.top };
+    let below = if ry > 0.0 { PI - (top / ry).min(1.0).asin() } else { PI / 2.0 };
     let inside = if rx > 0.0 { ((g.side - centre) / rx).clamp(-1.0, 1.0).acos() } else { PI / 2.0 };
     let to = below.min(inside).max(PI / 2.0);
     let mean = (rx + ry) / 2.0;
@@ -179,7 +183,12 @@ pub fn orbit_layout<K: PartialEq>(width: f64, groups: &[K], leading: &[f64], foc
         let total = (list.len() - 1) as f64 * g.pitch;
         let turning = total > e.span;
         let at = focus.checked_sub(leading.len()).and_then(|b| list.iter().position(|&w| w == b)).unwrap_or(0);
-        let offset = if turning { (at as f64 * g.pitch - e.span / 2.0).clamp(0.0, total - e.span) } else { 0.0 };
+        // The window holds gaps + 1 bodies; the focus stands at the middle one (left of the middle when even), and the set is
+        // centred in the window, so an orbit of even capacity shows all of it rather than one fewer about a centred focus.
+        let gaps = (e.span / g.pitch).floor();
+        let lead = (gaps as usize / 2) as f64 * g.pitch;
+        let start = at as f64 * g.pitch - lead - (e.span - gaps * g.pitch) / 2.0;
+        let offset = if turning { start.clamp(0.0, total - e.span) } else { 0.0 };
         let slack = 0.5_f64.to_radians();
         for (k, &w) in list.iter().enumerate() {
             let along = k as f64 * g.pitch;

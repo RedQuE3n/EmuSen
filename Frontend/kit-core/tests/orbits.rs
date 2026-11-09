@@ -22,12 +22,12 @@ fn makers(n: usize, first: Option<usize>) -> Vec<usize> {
 }
 
 #[test]
-fn the_three_slots_hold_three_six_and_nine_and_the_outer_ten_at_sixteen_by_nine() {
+fn the_three_slots_hold_two_six_and_nine_and_the_outer_ten_at_sixteen_by_nine() {
     let inner = ellipse(0, 1280.0, &G);
-    assert!(near(inner.from.to_degrees(), 54.01) && near(inner.mean, 240.0), "{inner:?}");
+    assert!(near(inner.from.to_degrees(), 63.57) && near(inner.mean, 240.0), "below y 197 on the inner slot: {inner:?}");
     assert!(near(ellipse(1, 1280.0, &G).to.to_degrees(), 151.24));
     assert!(near(ellipse(2, 1280.0, &G).from.to_degrees(), 29.43));
-    assert_eq!((capacity(0, 1280.0, &G), capacity(1, 1280.0, &G), capacity(2, 1280.0, &G)), (3, 6, 9));
+    assert_eq!((capacity(0, 1280.0, &G), capacity(1, 1280.0, &G), capacity(2, 1280.0, &G)), (2, 6, 9));
     assert_eq!(capacity(2, 1422.2, &G), 10);
 }
 
@@ -42,7 +42,7 @@ fn the_canvas_eleven_by_size_innermost_first_all_centred() {
     }
     assert!(l.worlds.iter().all(|w| w.shown));
     let labels: Vec<(f64, f64)> = l.orbits.iter().map(|o| ((o.label.0 * 100.0).round() / 100.0, (o.label.1 * 100.0).round() / 100.0)).collect();
-    assert_eq!(labels, vec![(753.72, 152.0), (971.26, 152.0), (1125.76, 219.84)]);
+    assert_eq!(labels, vec![(725.35, 152.0), (971.26, 152.0), (1125.76, 219.84)]);
     assert!(l.orbits.iter().all(|o| o.before.is_none() && o.after.is_none()));
 }
 
@@ -76,11 +76,14 @@ fn a_hundred_and_twenty_turn_and_the_forty_maker_turns_under_its_focus() {
     let n120 = makers(120, None);
     let l = orbit_layout(1280.0, &n120, &PLACES, 3 + 1, None, &G);
     assert_eq!(l.orbits.iter().filter(|o| o.shown).count(), 3);
-    assert_eq!(l.worlds.iter().filter(|w| w.shown).count(), 18, "3, 6 and 9 of ten each");
-    assert!(l.orbits[..3].iter().all(|o| o.turning && o.offset == 0.0));
+    assert_eq!(l.worlds.iter().filter(|w| w.shown).count(), 17, "2, 6 and 9 of ten each");
+    assert!(l.orbits[..3].iter().all(|o| o.turning) && l.orbits[1].offset == 0.0 && l.orbits[2].offset == 0.0);
+    assert!(l.worlds[1].shown && l.worlds[2].shown && !l.worlds[0].shown, "the second focused shows itself and the third, a whole window");
+    assert!(near(l.worlds[1].x, 560.07) && near(l.worlds[2].x, 719.93));
     let after = l.orbits[2].after.expect("the outer's ellipses past its right end");
     assert!(near(after.0, 1215.30) && near(after.1, 193.87), "{after:?}");
-    assert!(l.orbits[0].after.is_none(), "the inner's would sit among the places");
+    let inner = &l.orbits[0];
+    assert!(inner.before.is_some_and(|p| near(p.0, 458.29) && near(p.1, 157.35)) && inner.after.is_some_and(|p| near(p.0, 821.71)), "{inner:?}");
 
     let m40 = makers(120, Some(40));
     let mid = orbit_layout(1280.0, &m40, &PLACES, 3 + 20, None, &G);
@@ -88,7 +91,7 @@ fn a_hundred_and_twenty_turn_and_the_forty_maker_turns_under_its_focus() {
     assert_eq!((outer.size, outer.slot), (40, 2), "the forty sit outermost");
     assert!(near(mid.worlds[20].x, 640.0) && near(mid.worlds[20].y, 520.0), "the twenty-first at the apex");
     assert!(outer.before.is_some_and(|p| near(p.0, 64.70)) && outer.after.is_some());
-    assert_eq!(mid.worlds.iter().filter(|w| w.shown).count(), 18);
+    assert_eq!(mid.worlds.iter().filter(|w| w.shown).count(), 17);
     let last = orbit_layout(1280.0, &m40, &PLACES, 3 + 39, None, &G);
     let outer = &last.orbits[last.worlds[39].orbit];
     assert!(outer.before.is_some() && outer.after.is_none(), "at the last of the forty, worlds wait before it alone");
@@ -132,4 +135,29 @@ fn an_interleaved_table_groups_by_key_and_keeps_each_group_in_the_table_s_order(
     assert!(along(&[1, 3, 6, 8, 10]) && along(&[2, 5, 7, 9]) && along(&[0, 4]), "each orbit left to right in the table's order");
     assert_eq!(l.walk[3 + 3].left, Some(3 + 1));
     assert_eq!(l.walk[3 + 3].right, Some(3 + 6));
+}
+
+#[test]
+fn a_focused_world_on_the_inner_orbit_keeps_its_ring_below_the_places_at_the_five_sizes() {
+    // 1280 x 800 and 1920 x 1200 are 1280 units wide, 1920 x 1080, 1280 x 720 and 3840 x 2160 are 1422.2; the places end at 140.
+    for width in [1280.0, 1280.0, 1422.2, 1422.2, 1422.2] {
+        let mut inner = 0;
+        let text = |list: Vec<usize>| -> Vec<String> { list.iter().map(usize::to_string).collect() };
+        let eleven: Vec<String> = ELEVEN.iter().map(|m| (*m).to_owned()).collect();
+        for groups in [text(makers(120, None)), text(makers(30, None)), text(makers(120, Some(40))), eleven] {
+            for focus in 0..groups.len() {
+                let l = orbit_layout(width, &groups, &PLACES, 3 + focus, None, &G);
+                let w = l.worlds[focus];
+                if l.orbits[w.orbit].slot != 0 {
+                    continue;
+                }
+                inner += 1;
+                assert!(w.shown && w.y - 55.0 >= 140.0, "focused {focus} at {width}: its ring's top at {}", w.y - 55.0);
+                for shown in l.worlds.iter().filter(|o| o.shown && l.orbits[o.orbit].slot == 0) {
+                    assert!(shown.y - 36.0 >= 142.0, "a resting world's top at {}", shown.y - 36.0);
+                }
+            }
+        }
+        assert!(inner >= 20, "every catalogue focused on its inner orbit: {inner}");
+    }
 }

@@ -1770,14 +1770,18 @@ the kit's job (§7.19) and needs no knowledge of consoles: the kit is given a gr
 - **Groups.** It groups the bodies by key, ordering the groups by first appearance and keeping each group's members in
   the list's order, so an interleaved table works as a sorted one. It sorts the groups by size, ascending and stable.
 - **Slots.** Slot s is the half-ellipse about (W/2, 0) with radii 260 + 180 s by 220 + 150 s. The window on it is the
-  angles where a body's centre stays below y 178 and at least 100 inside each side; L is the window's arc length at the
+  angles where a body's centre stays below y 178 (197 on slot 0, decided 2026-11-08, so a focused body's ring clears
+  the leading row at 140) and at least 100 inside each side; L is the window's arc length at the
   mean radius. Capacity is ⌊L / 150⌋ + 1.
 - **Which groups are shown.** One group takes slot 1, or slot 2 when slot 1 cannot hold it whole. Two groups take slots 1
   and 2. Three or more take three consecutive slots from a base. The first base centres the focused group where it can;
   later the previous base (`kept`) holds until the focus leaves the shown groups, and then moves by the least that shows
   it again.
-- **A group longer than its window turns.** With off = clamp(s_focus − L/2, 0, (n − 1) · 150 − L), world i sits at
-  angle θmax − (150 i − off) / r. A group that fits is centred on π/2.
+- **A group longer than its window turns.** The window holds g + 1 bodies, g = ⌊L / 150⌋. The focus stands at the
+  ⌊g/2⌋-th of them and the set is centred in the window: off = clamp(s_focus − ⌊g/2⌋ · 150 − (L − 150 g)/2, 0,
+  (n − 1) · 150 − L), and world i sits at angle θmax − (150 i − off) / r. For an odd capacity this is the canvas's
+  centred focus; for an even one (the inner slot's 2, the middle's 6, the outer's 10 at 16:9) it shows the whole
+  capacity, where a centred focus showed one fewer. A group that fits is centred on π/2.
 - **Labels and ellipses.** A group's label is right-aligned at the point 60 units inward from its window's end, never
   further right than W − 64 and never above y 152. Ellipses sit half a pitch past each end that has more bodies beyond
   it, wherever the arc there is below y 150.
@@ -1816,8 +1820,10 @@ own. They are declared once, in `kit-qt/src/item_model.rs`, for every layout tha
 `FigureLayout`). The two layouts' own declarations each emitted the type's upcast shim and would not link side by side
 (§7.6).
 
-**Proof** (measured 2026-11-08). `kit-core/tests/orbits.rs`, eight tests:
-- the slots' windows and capacities at 1280 (3, 6, 9) and at 1422.2 (the outer slot holds 10);
+**Proof** (measured 2026-11-08). `kit-core/tests/orbits.rs`, nine tests:
+- the slots' windows and capacities at 1280 (2, 6, 9) and at 1422.2 (the outer slot holds 10);
+- a focused world on the inner orbit with its ring at or below y 140, and every resting one's top at or below 142, at
+  both widths of the five sizes over four catalogues;
 - the canvas's eleven consoles at the canvas's points, within 0.01;
 - the labels at (753.72, 152), (971.26, 152) and (1125.76, 219.84);
 - the walk, ties going to the first;

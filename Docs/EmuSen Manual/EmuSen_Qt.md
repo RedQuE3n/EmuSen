@@ -989,10 +989,11 @@ is no sky and no glow. The paper is `Tokens.surface`, the orbit lines are ink #1
 canvas's own; kit-core's test holds them within 0.01 unit.
 1. Three `PathView`s on `PathArc`s were the spec's suggestion. They became `OrbitLayout` and one `Repeater`, because a
    `PathView` needs a model per group and nothing gives one. The capacity rule and the walk are data, not bindings.
-2. LB and RB wrap from the outermost orbit to the innermost and back, as the kit's section step does on every screen.
+2. LB and RB wrap from the outermost orbit to the innermost and back, as the kit's section step does on every screen
+   (decided 2026-11-08: kept).
    Up and Down stop at the ends.
-3. The ring does not breathe. The canvas's ring carries no breath, and `idle.rs` holds the screen at no redraw once
-   still.
+3. The ring does not breathe (decided 2026-11-08): the reference theme keeps an idle screen at no redraw, which
+   `idle.rs` holds. The spec's resting breath is not drawn.
 4. The places' widths are the faces' own: each name is measured, where the canvas estimates 11.5 units a letter. The
    row is centred, so the discs stand up to 9 units right of the canvas's.
 5. After the first focus, the shown makers move only when the focus leaves them, as spec §3.1 asks; the canvas centres
@@ -1007,6 +1008,12 @@ canvas's own; kit-core's test holds them within 0.01 unit.
      11 units clear of the words.
    - A turning orbit's label sits by its window's last world. The two boxes meet at 16:9, where the outer orbit
      holds ten.
+9. The inner orbit's window ends at y 197, not 178 (decided 2026-11-08), so it holds 2 worlds, not 3. At 178 a
+   focused world at its end grew its ring to y 123, into the places row (which ends at 140). The audit over the 120
+   consoles found it, and the canvas's own numbers do the same. A turning orbit shows its whole capacity, with the
+   focus at the middle world (left of the middle when the capacity is even). The canvas centred the focus, which
+   showed one world fewer on an orbit of even capacity: the inner's 2, the middle's 6, and the outer's 10 at 16:9.
+   kit-core's test holds a focused inner world's ring at or below 140 at the five sizes.
 
 **The sweep.** theme-check's 120-console sweep walked each row in one direction, then went Down. Over the orbits, Down
 lands nearest in x, so the sweep heard 52 consoles of 120. The sweep now walks each row to both of its ends, as its man

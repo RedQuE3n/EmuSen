@@ -15,7 +15,7 @@ element placeDisc.1 x=522 y=100 w=40 h=40
 element placeName.1 x=574 y=100 h=40 token=TextStrong words=data
 element placeDisc.2 x=737 y=100 w=40 h=40
 element placeName.2 x=789 y=100 h=40 token=TextStrong words=data
-element makerLabel.0 right=753.72 y=152 h=20
+element makerLabel.0 right=725.35 y=152 h=20
 element makerLabel.1 right=971.26 y=152 h=20
 element makerLabel.2 right=1125.76 y=219.84 h=20
 note each console on its orbit: slot s has radii 260 + 180 s by 220 + 150 s about (640, 0); what the pad and the pointer reach is

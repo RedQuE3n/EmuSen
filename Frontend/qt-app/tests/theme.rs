@@ -45,6 +45,13 @@ fn qt_3_5_the_theme_s_screens_replace_the_reference_s_and_a_failed_theme_shows_t
     assert_eq!(scene.property("theme", "home"), "false");
     assert_eq!(scene.property("home", "visible"), "true", "the reference's Home is shown for a failed theme");
 
+    // A theme's token override is set on its own engine: its screen draws the theme's accent, while the program's tokens,
+    // which every card reads, keep the kit's (a theme never styles a card).
+    choose(&mut scene, "accent");
+    assert_eq!(scene.property("accentProbe", "color"), "#b4442a", "{}", scene.property("theme", "warnings"));
+    let kit = scene.kit_tokens().map(|t| (t.accent().red(), t.accent().green(), t.accent().blue()));
+    assert_eq!(kit, Some((0x4C, 0x9A, 0xE8)), "the program's accent is the kit's");
+
     // Switching at run time makes a new engine and lets the last one go; no theme, no engine.
     choose(&mut scene, "stub");
     assert_eq!(scene.property("stubHome", "visible"), "true");
@@ -53,6 +60,7 @@ fn qt_3_5_the_theme_s_screens_replace_the_reference_s_and_a_failed_theme_shows_t
     assert_eq!(scene.property("host.theme", "liveEngines"), "1", "switching twice leaks no engine");
     assert_eq!(scene.property("theme", "home"), "true");
     choose(&mut scene, "");
-    assert_eq!(scene.property("host.theme", "liveEngines"), "0");
+    assert_eq!(scene.property("chosenTheme", "status"), "Null", "no theme, no host and no engine");
+    assert_eq!(scene.property("host.theme", "liveEngines"), "");
     assert_eq!(scene.property("home", "visible"), "true");
 }

@@ -75,6 +75,7 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert_eq!(scene.property("scene", "consoles"), "1");
     assert_eq!(scene.property("scene", "shelves"), "3");
     assert_eq!(scene.property("scene", "firstConsole"), "nes");
+    assert_eq!(scene.property("figures", "count"), "1", "the figures read the consoles' groups when the list resets");
     assert!(scene.set_property("scene", "consoleKey", "nes"));
     scene.wait(20);
     assert_eq!(scene.property("scene", "consoleGames"), "1", "gamesOf by the console's key");
@@ -126,6 +127,7 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert_eq!((scene.property("scene", "screenRole").as_str(), scene.property("scene", "screenFocus").as_str()), ("2", "0"));
     assert_eq!(scene.property("scene", "gameHelp"), "5", "Home's shelf: Play, Game page, Favourite, Search, Home");
     assert_eq!((scene.property("scene", "placeHelp").as_str(), scene.property("scene", "placeGroup").as_str()), ("5", "Group"), "a place: Open, Back, Group, Search, Home");
+    assert_eq!(scene.property("scene", "declinedHelp"), "false|true|5", "accept: false dims A's entry alone");
     assert_eq!(
         scene.property("scene", "emptyWords"),
         "No games yet|Nothing played yet|No consoles have games yet|Settings › Library adds a folder|PLACES|Continue|Recent"
@@ -139,9 +141,10 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
         // Safety: the help's lists are its children.
         let entries = unsafe { help.entries(kind).as_ref() }.expect("a list for every kind");
         assert!(!emusen_qt_models::help::entries(entries.screen()).is_empty(), "kind {} has entries", kind.repr);
-        for (group, back) in emusen_theme_qt::help::FLAGS {
-            let added = unsafe { help.list(kind, group, back).as_ref() }.expect("a list for every kind and flag");
+        for (group, back, accept) in emusen_theme_qt::help::FLAGS {
+            let added = unsafe { help.list(kind, group, back, accept).as_ref() }.expect("a list for every kind and flag");
             assert_eq!(added.list(), emusen_qt_models::help::entries_with(entries.screen(), group, back), "kind {}", kind.repr);
+            assert_eq!(added.accepts(), accept, "kind {}", kind.repr);
         }
     }
 

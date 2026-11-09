@@ -67,7 +67,7 @@ pub const GAME_ROLES: [&str; 18] = [
 /// `Library.collections`: the player's collections.
 pub const COLLECTION_ROLES: [&str; 3] = ["key", "name", "count"];
 /// `Help.entries`: the help bar's entries, as the kit's `HelpBar` reads them.
-pub const HELP_ROLES: [&str; 3] = ["button", "label", "pair"];
+pub const HELP_ROLES: [&str; 4] = ["button", "label", "pair", "enabled"];
 
 /// Home's destinations' keys, in Home's order: Games, the four tools as their summaries name them, Settings, Power.
 pub const PLACE_IDS: [&str; 7] =

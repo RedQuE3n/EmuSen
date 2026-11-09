@@ -327,6 +327,11 @@ impl Scene<'_> {
         self.wait(30);
     }
 
+    /// The kit's tokens of the scene's own engine, the program's, which every card reads.
+    pub fn kit_tokens(&mut self) -> Option<Pin<&mut Tokens>> {
+        self.harness.tokens()
+    }
+
     /// The form the tokens read, switched under the shown scene.
     pub fn set_token_form(&mut self, form: WalkForm) {
         if let Some(tokens) = self.harness.tokens() {

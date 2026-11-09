@@ -66,7 +66,7 @@ fn qt_3_2_each_list_has_the_api_s_roles_and_no_other() {
         ]
     );
     assert_eq!(view::COLLECTION_ROLES, ["key", "name", "count"]);
-    assert_eq!(view::HELP_ROLES, ["button", "label", "pair"]);
+    assert_eq!(view::HELP_ROLES, ["button", "label", "pair", "enabled"]);
 }
 
 #[test]

@@ -18,6 +18,7 @@ fn main() {
         QmlFile::from("qml/RoundPicture.qml"),
         QmlFile::from("qml/PadGlyph.qml"),
         QmlFile::from("qml/PlanetLayout.qml"),
+        QmlFile::from("qml/FigureLayout.qml"),
     ];
     CxxQtBuilder::new_qml_module(QmlModule::new("EmuSen.Theme").version(1, 0).qml_files(qml).depend("QtQuick").depend("EmuSen.Kit"))
         .files([

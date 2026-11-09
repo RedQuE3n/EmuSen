@@ -20,3 +20,4 @@ CoverTile 1.0 qml/CoverTile.qml
 RoundPicture 1.0 qml/RoundPicture.qml
 PadGlyph 1.0 qml/PadGlyph.qml
 PlanetLayout 1.0 qml/PlanetLayout.qml
+FigureLayout 1.0 qml/FigureLayout.qml

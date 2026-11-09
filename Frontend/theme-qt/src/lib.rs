@@ -88,6 +88,21 @@ pub mod host {
         typed(ffi::kit_singleton(within, &QString::from("Tokens")))
     }
 
+    /// A theme's token overrides as its `theme.json` writes them (light or not, a `Tokens` property, `#RRGGBB`), set on the
+    /// kit's tokens of the theme's engine and nowhere else; an entry that names no colour token or no colour is left out.
+    pub fn set_token_overrides(within: Pin<&mut QObject>, overrides: &[(bool, String, String)]) {
+        use emusen_kit_core::tokens::{Colour, ColourToken, Variant};
+        let table = overrides
+            .iter()
+            .filter_map(|(light, name, value)| {
+                Some((if *light { Variant::Light } else { Variant::Dark }, ColourToken::named(name)?, Colour::parse(value)?))
+            })
+            .collect();
+        if let Some(tokens) = kit_tokens(within) {
+            tokens.set_overrides(table);
+        }
+    }
+
     /// The kit's pad router in the theme's engine, which the host hands the pad's presses while a theme's screen holds the focus.
     pub fn pad_router(within: Pin<&mut QObject>) -> Option<Pin<&mut emusen_kit_qt::pad::qobject::PadRouter>> {
         typed(ffi::kit_singleton(within, &QString::from("PadRouter")))

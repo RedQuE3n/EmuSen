@@ -132,13 +132,14 @@ fn place(scene: &mut Scene<'_>, folder: &str, screen: Screen) -> Result<u64, Str
 }
 
 /// The views fed as the program's host feeds them, the kit's tokens set to the big screen with reduced motion on.
-fn feed(screen: u64, library: &Synthetic, view: &LibraryView) -> Result<(), String> {
+fn feed(screen: u64, library: &Synthetic, view: &LibraryView, overrides: &[(bool, String, String)]) -> Result<(), String> {
     host::library(object(screen)).ok_or("EmuSen.Theme's Library is not in the theme's engine")?.show(view, &library.home_lines);
     host::session(object(screen)).ok_or("no Session")?.show(&library.session);
     host::device(object(screen)).ok_or("no Device")?.show(&library.device);
     let mut kit = tokens(screen).ok_or("the kit's Tokens are not in the theme's engine")?;
     kit.as_mut().set_form(kinds::form_of(WalkForm::BigScreen));
     kit.as_mut().set_reduced_motion(true);
+    host::set_token_overrides(object(screen), overrides);
     Ok(())
 }
 
@@ -332,7 +333,7 @@ pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(
         logged();
         let label = format!(", {name}");
         let pass = Pass { variants: &[Variant::Dark, Variant::Light], label: &label, consoles: Some(names) };
-        match place(&mut scene, &real.display().to_string(), screen).and_then(|id| feed(id, &library, view).map(|_| id)) {
+        match place(&mut scene, &real.display().to_string(), screen).and_then(|id| feed(id, &library, view, &package.colour_overrides()).map(|_| id)) {
             Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
             Ok(id) => {
                 let done = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| states(&mut scene, screen, id, &pass, state, &mut lines)));
@@ -353,7 +354,7 @@ pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(
                 continue;
             }
         };
-        if let Err(words) = feed(id, &library, &library.view) {
+        if let Err(words) = feed(id, &library, &library.view, &package.colour_overrides()) {
             lines.add(screen, "load", &words);
             continue;
         }
@@ -369,7 +370,7 @@ pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(
         if screen == Screen::Consoles {
             // Placed afresh over the crowd, as the program shows Choose a console once the library holds 120 consoles.
             let crowd = Pass { variants: &[Variant::Dark], label: ", 120 consoles", consoles: Some(&library.crowd_names) };
-            match place(&mut scene, &real.display().to_string(), screen).and_then(|id| feed(id, &library, &library.crowd).map(|_| id)) {
+            match place(&mut scene, &real.display().to_string(), screen).and_then(|id| feed(id, &library, &library.crowd, &package.colour_overrides()).map(|_| id)) {
                 Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
                 Ok(id) => {
                     let done = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| states(&mut scene, screen, id, &crowd, state, &mut lines)));

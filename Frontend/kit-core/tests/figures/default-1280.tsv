@@ -1,0 +1,20 @@
+# Constellation's Figures canvas, state default, W 1280: compact lines height scrolls, then each node (x y raised line left right up down), then each figure (x y width per)
+chart	0	2	464	0
+groups	5 4 2
+p0	1036.00	152.00	0	0	i4	-	-	p1
+p1	936.00	248.00	0	0	i4	p2	p0	i9
+p2	1136.00	248.00	0	0	p1	-	p0	i10
+i0	234.00	192.00	1	0	-	i1	-	i5
+i1	344.00	232.00	0	0	i0	i2	-	i6
+i2	454.00	192.00	1	0	i1	i3	-	i7
+i3	564.00	232.00	0	0	i2	i4	-	i8
+i4	674.00	192.00	1	0	i3	p1	-	i8
+i5	234.00	424.00	1	1	-	i6	i0	-
+i6	344.00	464.00	0	1	i5	i7	i1	-
+i7	454.00	424.00	1	1	i6	i8	i2	-
+i8	564.00	464.00	0	1	i7	i9	i3	-
+i9	1016.00	464.00	0	1	i8	i10	p0	-
+i10	1146.00	424.00	1	1	i9	-	p2	-
+figure	64.00	212.00	680.00	5
+figure	64.00	444.00	570.00	4
+figure	846.00	444.00	370.00	2

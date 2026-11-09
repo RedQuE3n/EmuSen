@@ -3865,7 +3865,8 @@ reverted:
   row a slot, the drawer's cards (a page of its own), the saves on them (a door to the card manager's window, not built
   on Qt) and a new card (`CARDS_NEW` at the drawer's folder, the list's `next_name`). A slot is stepped through its
   schema row while the mode is Named and is held otherwise, since the mode places the card (its `shown_with`). The Pause
-  Card's Game Options ▸ Memory Cards draws the same rows, slots first (Mistress's `GameCardRows`), from the facts
+  Card's Game Options ▸ Memory Cards draws the same rows, slots first (Mistress's `GameCardRows`), Cards opening the
+  drawer's page there too, from the facts
   `SessionModel` reads for the running console; a step is stored through the session at the console's scope and goes
   in when the game next starts.
 
@@ -3922,7 +3923,7 @@ panes and a held console; a synthetic core's declared rows each by its kind unde
 the declaration, and a row added to the declaration shown with no code; Engine as a page of choices writing `Engine`;
 Firmware's need, words, preference, folders and Open Folder; Memory cards' rows, held slots, a new card, the drawer, and
 the page leaving the media's and the firmware's keys to their pages; the shoulders and a reset; the Pause Card's Memory
-Cards over the same description through the facts' plain data. `qt-models/tests/consoles_client.rs` (2, the platform
+Cards over the same description through the facts' plain data, its drawer's page and B back to the Cards row. `qt-models/tests/consoles_client.rs` (2, the platform
 library of this commit): the crystal test core approved as a player's core is a console whose page is its declaration,
 its boot ROM `⚠ Not found`, and a step stored through the runtime reads back; the libretro test core's options, read
 from a running session, are a page with its five categories as headings in its order and its options as rows.

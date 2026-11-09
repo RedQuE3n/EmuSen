@@ -25,6 +25,8 @@ pub enum Page {
     Disc,
     /// Game Options ▸ Memory Cards (§18.5): the console's cards, the same description as Settings' (`cards.rs`).
     Cards,
+    /// A medium's drawer of cards, by its place among the media, from Memory Cards' Cards row.
+    Drawer(usize),
     /// One of Leave's questions, on the card form's question page (`card::question`).
     Ask(Ask),
 }
@@ -536,6 +538,16 @@ impl Card {
                 .into_iter()
                 .map(|r| Row { steps: r.steps, opens: r.opens, dimmed: r.held, ..row(MEMORY_CARD, &r.label, r.value) })
                 .collect(),
+            Page::Drawer(at) => self
+                .facts
+                .cards
+                .media
+                .get(at)
+                .map(cards::drawer_rows)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|r| row(MEMORY_CARD, &r.label, r.value))
+                .collect(),
             Page::Leave => vec![
                 row(LIBRARY, "Back to Library", String::new()),
                 row(RESTART, "Restart Game...", String::new()),
@@ -569,6 +581,7 @@ impl Card {
             Page::Options => "Game Options".to_string(),
             Page::Disc => "Change Disc".to_string(),
             Page::Cards => "Memory Cards".to_string(),
+            Page::Drawer(at) => self.facts.cards.media.get(at).map(|m| format!("{}s", m.title)).unwrap_or_default(),
             Page::Ask(ask) => ask.page().title,
         }
     }
@@ -625,7 +638,7 @@ impl Card {
                 self.turn(Page::Cards, 0);
                 Outcome::Shown
             }
-            MEMORY_CARD => self.step_card(self.current, 1),
+            MEMORY_CARD if self.page == Page::Cards => self.open_drawer(self.current),
             CHANGE_DISC if self.facts.discs.can_change => {
                 self.turn(Page::Disc, 0);
                 Outcome::Shown
@@ -725,10 +738,15 @@ impl Card {
             Page::Options => (Page::First, OPTIONS),
             Page::Disc => (Page::First, CHANGE_DISC),
             Page::Cards => (Page::Options, MEMORY_CARDS),
+            Page::Drawer(_) => (Page::Cards, MEMORY_CARD),
             Page::Ask(ask) => (Page::Leave, ask.key()),
         };
+        let drawer = match self.page {
+            Page::Drawer(at) => self.facts.cards.rows().iter().position(|r| r.part == cards::Part::Drawer && self.facts.cards.media.get(at).is_some_and(|m| m.medium == r.medium)),
+            _ => None,
+        };
         self.turn(to, 0);
-        self.current = self.rows().iter().position(|r| r.key == from).unwrap_or(0);
+        self.current = drawer.unwrap_or_else(|| self.rows().iter().position(|r| r.key == from).unwrap_or(0));
         Outcome::Shown
     }
 
@@ -751,6 +769,7 @@ impl Card {
             (Page::First, Some(key @ (SAVE | LOAD))) => self.slots_pane(key == LOAD),
             (Page::Disc, _) => self.disc_pane(),
             (Page::Cards, _) => self.cards_pane(),
+            (Page::Drawer(_), _) => Pane { kind: PaneKind::Sentence, sentence: cards::DRAWER_CARD.to_owned(), ..Pane::none() },
             _ => Pane::none(),
         }
     }
@@ -762,6 +781,18 @@ impl Card {
         let words = cards::pane(&facts.media, &row, &facts.schema, &|k| facts.value(k), &facts.console, true);
         let sentence = words.lines.into_iter().chain(words.muted).collect::<Vec<_>>().join(" ");
         Pane { kind: PaneKind::Sentence, sentence, ..Pane::none() }
+    }
+
+    /// A on a Memory Cards row: the drawer's page on a Cards row, else the mode or the slot one step on.
+    fn open_drawer(&mut self, index: usize) -> Outcome {
+        let rows = self.facts.cards.rows();
+        let Some(row) = rows.get(index) else { return Outcome::Nothing };
+        if row.part != cards::Part::Drawer {
+            return self.step_card(index, 1);
+        }
+        let at = self.facts.cards.media.iter().position(|m| m.medium == row.medium).unwrap_or(0);
+        self.turn(Page::Drawer(at), 0);
+        Outcome::Shown
     }
 
     /// Left or Right on a card's mode or slot: the console's setting one step on.

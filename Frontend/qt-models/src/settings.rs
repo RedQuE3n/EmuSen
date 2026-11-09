@@ -953,7 +953,7 @@ impl SettingsView {
             return Some(cards::pane(&console.media, &row, &console.schema, &|k| console.value(k), name, false));
         }
         if entry.get("drawer").is_some() {
-            return one("A card in the drawer.".to_owned());
+            return one(cards::DRAWER_CARD.to_owned());
         }
         match entry["page"].as_str() {
             Some("firmware") => Some(firmware::pane(&console.needs(), console.starts_empty, name)),

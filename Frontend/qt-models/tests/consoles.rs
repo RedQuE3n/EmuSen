@@ -399,6 +399,13 @@ fn qt_7_7_e_the_pause_cards_memory_cards_are_the_same_description_slots_first() 
     assert_eq!(card.pane().sentence, "Card 1 is in Slot 1. Left and Right choose another card; it goes in when the game next starts.");
     assert_eq!(card.step(2, 1, false), pause::Outcome::Setting { key: "Cards".into(), value: "named".into() });
     assert_eq!(card.step(0, 1, false), pause::Outcome::Setting { key: "Card1".into(), value: "Card 2".into() });
+    // Cards opens the drawer, as Settings' does, and B comes back to it.
+    card.choose(3);
+    assert_eq!(card.page, PausePage::Drawer(0));
+    assert_eq!(card.rows().iter().map(|r| r.label.as_str()).collect::<Vec<_>>(), ["Card 1"]);
+    assert_eq!(card.title(""), "Memory Cards");
+    card.back();
+    assert_eq!((card.page, card.current), (PausePage::Cards, 3));
     card.back();
     assert_eq!(card.page, PausePage::Options);
 }

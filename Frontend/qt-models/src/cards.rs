@@ -92,6 +92,9 @@ pub fn media(list: &Value) -> Vec<Medium> {
     serde_json::from_value(list.clone()).unwrap_or_default()
 }
 
+/// What a card on a drawer's page is, as Mistress's page says it.
+pub const DRAWER_CARD: &str = "A card in the drawer.";
+
 /// What a row of the page is.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Part {

@@ -39,6 +39,7 @@ pub mod qobject {
         Options,
         Disc,
         Cards,
+        Drawer,
     }
 
     extern "RustQt" {
@@ -280,6 +281,7 @@ fn shown_page(page: Page) -> PausePage {
         Page::Options => PausePage::Options,
         Page::Disc => PausePage::Disc,
         Page::Cards => PausePage::Cards,
+        Page::Drawer(_) => PausePage::Drawer,
     }
 }
 

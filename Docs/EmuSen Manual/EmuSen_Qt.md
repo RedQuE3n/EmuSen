@@ -3979,7 +3979,7 @@ keeps the kit's drawn dot beside `Default` (Kit §7.41) where Mistress wrote `�
   is not made yet, and `In use by …` for a card a running game holds); a row per save (its title, `N block(s)`,
   `· damaged`), and Import Every Game's Saves (held on a game's own card, or one in use). A save's page holds Copy or
   move to (stepped through the other cards), Copy Save, Move Save and Delete Save…, which asks first (No, Yes): a
-  question Mistress's window did not ask, added 2026-11-09, pending the tester's ruling; Move and Delete are held while a game holds the card. Each change goes through `cards_op`
+  question Mistress's window did not ask, kept by the tester's decision of 2026-11-09; Move and Delete are held while a game holds the card. Each change goes through `cards_op`
   (`CARDS_COPY`, `_MOVE`, `_DELETE`, `_IMPORT`); its words are said under the page, the cards are read again, and after a
   move or a delete the save's pages close. Each card's saves are read with `CARDS_OPEN` as the consoles are. A card
   or a target stepped reads the rows again in place, the focus kept (`Outcome::Shown`): the gate's pad reach found two

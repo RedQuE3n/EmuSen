@@ -31,6 +31,11 @@ pub struct PageGeometry {
     pub tile_gap: f64,
     pub label_offset: f64,
     pub line_offset: f64,
+    /// Words beside a picture in place of tiles or rows (a game's Overview): the picture at the content's right, the
+    /// gap between it and the words.
+    pub picture_width: f64,
+    pub picture_height: f64,
+    pub picture_gap: f64,
 }
 
 impl PageGeometry {
@@ -54,6 +59,9 @@ impl PageGeometry {
         tile_gap: 24.0,
         label_offset: 162.0,
         line_offset: 190.0,
+        picture_width: 388.0,
+        picture_height: 222.0,
+        picture_gap: 24.0,
     };
 }
 

@@ -20,6 +20,10 @@ Kit.Frame {
     property alias rowModel: rowList.model
     // Tiles where true, rows where false.
     property bool showsTiles: true
+    // Words and a picture in place of tiles or rows, as a game's Overview shows them.
+    property bool showsText: false
+    property string contentWords
+    property url contentPicture
     readonly property alias actionView: actionList
     readonly property alias tileView: tileList
     readonly property alias rowView: rowList
@@ -28,6 +32,10 @@ Kit.Frame {
     signal acted(int index)
     signal tileChosen(int index)
     signal rowChosen(int index)
+    // Left (-1) or Right (+1) on a stepped action that steps from where it stands (roles `stepLeft`, `stepRight`).
+    signal actionStepped(int index, int by)
+    // Left or Right on a row that steps.
+    signal rowStepped(int index, int by)
     controller.navigationShown: false
     Kit.PageLayout {
         id: places
@@ -109,6 +117,8 @@ Kit.Frame {
         }
         ListView {
             id: actionList
+            // A model that fills after the view was made leaves it with no current item, so no delegate would take the focus.
+            onCountChanged: if (currentIndex < 0 && count > 0) currentIndex = 0
             objectName: "pageActions"
             x: places.actions.x
             y: places.actions.y
@@ -120,18 +130,31 @@ Kit.Frame {
             keyNavigationEnabled: true
             spacing: Kit.Tokens.base * 3
             highlightMoveDuration: Kit.Tokens.instant
-            KeyNavigation.down: root.showsTiles ? tileList : rowList
+            KeyNavigation.down: root.showsText ? null : (root.showsTiles ? tileList : rowList)
             delegate: Kit.ActionButton {
                 id: action
                 required label
                 required value
                 required button
                 required filled
+                required stepped
+                required property bool stepLeft
+                required property bool stepRight
                 required property int index
                 controller: root.controller
                 focus: ListView.isCurrentItem
                 family: root.padFamily
                 onActivated: root.acted(action.index)
+                Keys.onLeftPressed: (event) => {
+                    event.accepted = action.stepLeft
+                    if (action.stepLeft)
+                        root.actionStepped(action.index, -1)
+                }
+                Keys.onRightPressed: (event) => {
+                    event.accepted = action.stepRight
+                    if (action.stepRight)
+                        root.actionStepped(action.index, 1)
+                }
                 onActiveFocusChanged: actionList.currentIndex = action.activeFocus ? action.index : actionList.currentIndex
             }
         }
@@ -143,16 +166,52 @@ Kit.Frame {
             width: places.strip.width
             height: places.strip.height
         }
+        Text {
+            objectName: "pageWords"
+            visible: root.showsText
+            x: places.content.x
+            y: places.content.y
+            width: places.content.width - places.pictureWidth - places.pictureGap
+            height: places.content.height
+            text: root.contentWords
+            color: Kit.Tokens.text
+            font.pixelSize: Kit.Tokens.fontBody
+            wrapMode: Text.Wrap
+            elide: Text.ElideRight
+        }
+        Rectangle {
+            objectName: "pagePicture"
+            visible: root.showsText
+            x: places.content.x + places.content.width - places.pictureWidth
+            y: places.content.y
+            width: places.pictureWidth
+            height: places.pictureHeight
+            radius: Kit.Tokens.rowRadius
+            color: Kit.Tokens.surfaceRaised
+            clip: true
+            Image {
+                anchors.fill: parent
+                source: root.contentPicture
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+            }
+        }
         Kit.EdgeFade {
-            visible: root.showsTiles
+            visible: root.showsTiles && !root.showsText
             x: places.content.x - root.ringRoom
             y: places.content.y - root.ringRoom
             width: places.content.width + 2 * root.ringRoom
-            height: places.content.height + root.ringRoom
-            fadeLeft: !tileList.atXBeginning
-            fadeRight: !tileList.atXEnd
+            // The ring's room above and below the content's box, as at its sides.
+            height: places.content.height + 2 * root.ringRoom
+            fadeLeft: tileList.fadeLeft
+            fadeRight: tileList.fadeRight
             ListView {
                 id: tileList
+                // The edges faded, declared on the scroller, where the fit audit reads them (EmuSen_Kit.md §7.48).
+                readonly property bool fadeLeft: !tileList.atXBeginning
+                readonly property bool fadeRight: !tileList.atXEnd
+                // A model that fills after the view was made leaves it with no current item, so no delegate would take the focus.
+                onCountChanged: if (currentIndex < 0 && count > 0) currentIndex = 0
                 objectName: "pageTiles"
                 anchors.fill: parent
                 leftMargin: root.ringRoom
@@ -171,8 +230,8 @@ Kit.Frame {
                     required property url picture
                     required property int index
                     width: places.tileWidth
-                    height: places.content.height
-                    y: root.ringRoom
+                    // A horizontal ListView places its delegates at its top, so the tile's parts stand the ring's room below it, and it reaches the room below the content.
+                    height: places.content.height + 2 * root.ringRoom
                     controller: root.controller
                     focus: ListView.isCurrentItem
                     Accessible.role: Accessible.ListItem
@@ -180,6 +239,7 @@ Kit.Frame {
                     onActivated: root.tileChosen(tile.index)
                     onActiveFocusChanged: tileList.currentIndex = tile.activeFocus ? tile.index : tileList.currentIndex
                     Rectangle {
+                        y: root.ringRoom
                         width: places.tileWidth
                         height: places.tileHeight
                         radius: Kit.Tokens.rowRadius
@@ -196,7 +256,7 @@ Kit.Frame {
                         objectName: "ring"
                         visible: tile.activeFocus
                         x: -Kit.Tokens.ringOffset
-                        y: -Kit.Tokens.ringOffset
+                        y: root.ringRoom - Kit.Tokens.ringOffset
                         width: places.tileWidth + 2 * Kit.Tokens.ringOffset
                         height: places.tileHeight + 2 * Kit.Tokens.ringOffset
                         radius: Kit.Tokens.rowRadius + Kit.Tokens.ringOffset
@@ -205,17 +265,23 @@ Kit.Frame {
                         border.color: Kit.Tokens.accent
                     }
                     Text {
-                        y: places.labelOffset
+                        y: root.ringRoom + places.labelOffset
                         width: places.tileWidth
                         text: tile.label
+                        // Lines at 1.2 of the size, Barlow's, as the recording's tiles set them, so two lines fit under the picture.
+                        lineHeightMode: Text.FixedHeight
+                        lineHeight: Math.round(Kit.Tokens.fontCaption * 1.2)
                         color: tile.activeFocus ? Kit.Tokens.textStrong : Kit.Tokens.text
                         font.pixelSize: Kit.Tokens.fontCaption
                         wrapMode: Text.Wrap
                     }
                     Text {
-                        y: places.lineOffset
+                        y: root.ringRoom + places.lineOffset
                         width: places.tileWidth
                         text: tile.line
+                        // Lines at 1.2 of the size, Barlow's, as the recording's tiles set them, so two lines fit under the picture.
+                        lineHeightMode: Text.FixedHeight
+                        lineHeight: Math.round(Kit.Tokens.fontCaption * 1.2)
                         color: Kit.Tokens.muted
                         font.pixelSize: Kit.Tokens.fontCaption
                         wrapMode: Text.Wrap
@@ -224,15 +290,19 @@ Kit.Frame {
             }
         }
         Kit.EdgeFade {
-            visible: !root.showsTiles
+            visible: !root.showsTiles && !root.showsText
             x: places.content.x
             y: places.content.y
             width: places.content.width
             height: places.rows * Kit.Tokens.rowHeight
-            fadeTop: !rowList.atYBeginning
-            fadeBottom: !rowList.atYEnd
+            fadeTop: rowList.fadeTop
+            fadeBottom: rowList.fadeBottom
             ListView {
                 id: rowList
+                readonly property bool fadeTop: !rowList.atYBeginning
+                readonly property bool fadeBottom: !rowList.atYEnd
+                // A model that fills after the view was made leaves it with no current item, so no delegate would take the focus.
+                onCountChanged: if (currentIndex < 0 && count > 0) currentIndex = 0
                 objectName: "pageRows"
                 anchors.fill: parent
                 clip: true
@@ -253,6 +323,16 @@ Kit.Frame {
                     ruled: true
                     focus: ListView.isCurrentItem
                     onActivated: root.rowChosen(row.index)
+                    Keys.onLeftPressed: (event) => {
+                        event.accepted = row.steps
+                        if (row.steps)
+                            root.rowStepped(row.index, -1)
+                    }
+                    Keys.onRightPressed: (event) => {
+                        event.accepted = row.steps
+                        if (row.steps)
+                            root.rowStepped(row.index, 1)
+                    }
                     onActiveFocusChanged: rowList.currentIndex = row.activeFocus ? row.index : rowList.currentIndex
                 }
             }

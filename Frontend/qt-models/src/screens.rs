@@ -32,6 +32,9 @@ pub enum Shown {
     Themes,
     /// Settings, from Home's Settings place and the Home card's Settings row (EmuSen_Qt.md §7.7).
     Settings,
+    /// A game's page, from X on Home or the grid, a theme's `openPage` and the Home card's Selected game (EmuSen_Qt.md
+    /// §7.8); B returns to where it was opened.
+    Page,
 }
 
 /// What asked for a change.
@@ -80,6 +83,7 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Home, Ask::Place(0)) => Some((Shown::Consoles, None)),
         (Shown::Home, Ask::Place(SETTINGS_PLACE)) => Some((Shown::Settings, None)),
         (Shown::Home, Ask::Place(POWER_PLACE)) => Some((Shown::HomeCard, Some(crate::home_card::POWER.to_owned()))),
+        (Shown::Home | Shown::Grid | Shown::SearchGrid | Shown::HomeCard, Ask::Act(key)) if key == GAME_PAGE => Some((Shown::Page, None)),
         (Shown::Home, Ask::Act(key)) if key == SEARCH => Some((Shown::Search, Some(crate::library::ALL.to_owned()))),
         // Start on Home stays on Home, which takes the focus back to where it starts.
         (Shown::Home, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
@@ -120,6 +124,28 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
     }
 }
 
+/// The game's page by the help bar's action that opens it.
+pub const GAME_PAGE: &str = crate::help::GAME_PAGE;
+
+/// Where B on a game's page returns: the screen it was opened over, the library's screen for a card (the card closed
+/// as it opened the page).
+pub fn page_origin(themed: bool, opened_over: Shown) -> Shown {
+    match opened_over {
+        Shown::HomeCard => library_of(themed),
+        other => other,
+    }
+}
+
+/// A game's page's way out: B to where it was opened, Start to the library's screen, a game started to the game.
+pub fn page_step(themed: bool, origin: Shown, ask: &Ask) -> Option<Shown> {
+    match ask {
+        Ask::Back => Some(origin),
+        Ask::Act(key) if key == HOME => Some(library_of(themed)),
+        Ask::Play => Some(Shown::Game),
+        _ => None,
+    }
+}
+
 /// The library's screen of a look: Home for the own look, the theme's view for an ES-DE theme.
 pub fn library_of(themed: bool) -> Shown {
     if themed {
@@ -141,6 +167,7 @@ pub fn step_in(themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<S
         // Start opens the Home card at its first page, as ES-DE's Start opens its menu; B at the theme's view is the
         // view's own, going back from a gamelist, and does nothing more here (decided 2026-11-08).
         (true, Shown::Esde, Ask::Act(key)) if key == HOME => Some((Shown::HomeCard, Some(crate::home_card::FIRST.to_owned()))),
+        (true, Shown::Esde | Shown::HomeCard, Ask::Act(key)) if key == GAME_PAGE => Some((Shown::Page, None)),
         (true, Shown::Esde, Ask::Act(key)) if key == LIST => Some((Shown::List, None)),
         (true, Shown::Esde | Shown::List | Shown::Pause, Ask::Play) => Some((Shown::Game, None)),
         (true, Shown::HomeCard, Ask::Act(key)) if key == crate::home_card::SETTINGS => Some((Shown::Settings, None)),
@@ -179,6 +206,7 @@ pub mod qobject {
         Esde,
         Themes,
         Settings,
+        Page,
     }
 
     extern "RustQt" {
@@ -247,11 +275,22 @@ pub struct ScreensRust {
     page: QString,
     found: bool,
     themed: bool,
+    /// The screen a game's page was opened over.
+    page_origin: Shown,
 }
 
 impl Default for ScreensRust {
     fn default() -> Self {
-        ScreensRust { shown: Screen::Home, key: QString::default(), game_running: false, home_again: 0, page: QString::default(), found: false, themed: false }
+        ScreensRust {
+            shown: Screen::Home,
+            key: QString::default(),
+            game_running: false,
+            home_again: 0,
+            page: QString::default(),
+            found: false,
+            themed: false,
+            page_origin: Shown::Home,
+        }
     }
 }
 
@@ -280,6 +319,7 @@ fn shown_of(screen: Screen) -> Shown {
         Screen::Esde => Shown::Esde,
         Screen::Themes => Shown::Themes,
         Screen::Settings => Shown::Settings,
+        Screen::Page => Shown::Page,
         _ => Shown::Home,
     }
 }
@@ -298,6 +338,7 @@ fn screen_of(shown: Shown) -> Screen {
         Shown::Esde => Screen::Esde,
         Shown::Themes => Screen::Themes,
         Shown::Settings => Screen::Settings,
+        Shown::Page => Screen::Page,
     }
 }
 
@@ -350,7 +391,15 @@ impl qobject::Screens {
     }
 
     fn apply(mut self: Pin<&mut Self>, ask: Ask) {
-        let Some((shown, key)) = step_in(self.themed, shown_of(self.shown), &ask) else { return };
+        let was = shown_of(self.shown);
+        let stepped = match was {
+            Shown::Page => page_step(self.themed, self.page_origin, &ask).map(|s| (s, None)),
+            _ => step_in(self.themed, was, &ask),
+        };
+        let Some((shown, key)) = stepped else { return };
+        if shown == Shown::Page && was != Shown::Page {
+            self.as_mut().rust_mut().page_origin = page_origin(self.themed, was);
+        }
         if let (Shown::HomeCard, Some(page)) = (shown, &key) {
             let page = QString::from(page.as_str());
             if self.page != page {

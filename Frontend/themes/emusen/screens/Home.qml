@@ -126,6 +126,8 @@ ThemeScreen {
                         activeFocusOnTab: Session.hasGame
                         Accessible.name: Words.continuePlaying
                         onActivated: if (Session.hasGame) Actions.play(Session.key)
+                        // The game in hand, whose page X opens.
+                        onActiveFocusChanged: if (continuePlaying.activeFocus && Session.hasGame) Actions.focus(Session.key)
                         KeyNavigation.down: root.firstShelf ?? root.firstPlace
                         Rectangle {
                             objectName: "continuePanel"
@@ -283,6 +285,7 @@ ThemeScreen {
                                         return
                                     root.shelfRow = cover.index
                                     root.shelfCover = cover
+                                    Actions.focus(cover.key)
                                 }
                                 KeyNavigation.left: cover.index > 0 ? shelf.itemAt(cover.index - 1) : null
                                 KeyNavigation.right: shelf.count > cover.index + 1 ? shelf.itemAt(cover.index + 1) : null

@@ -21,6 +21,15 @@ Additions only; no type, property, signal or invokable was removed or changed.
 - **`SliderRow`** (qmldir): a row with a slider, stepped by the pad and dragged by the pointer. §7.42.
 - `MenuRow`'s ◂ ▸ and ▸ marks are no longer painted past a clip on the software backend; its surface is unchanged. §7.40.
 
+## 1.0, stage 5 piece G: a game's page's parts of the page frame (2026-11-09)
+
+Additions, and one contract change to `PageFrame`'s action model.
+
+- **`PageLayout.pictureWidth`**, **`pictureHeight`**, **`pictureGap`** (registry): the Overview's picture. §7.48.
+- `PageFrame`: `showsText`, `contentWords`, `contentPicture`; the
+  signals `actionStepped` and `rowStepped`. `ActionButton`: `stepped`. §7.48.
+- Changed: `PageFrame`'s action model must give the roles `stepped`, `stepLeft` and `stepRight`. §7.48.
+
 ## 1.0, stage 5 piece D: a long value on a row, and the text sizes (2026-11-09)
 
 One property added; nothing removed or changed.

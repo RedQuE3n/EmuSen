@@ -2902,23 +2902,50 @@ Module {
             isReadonly: true
             isPropertyConstant: true
         }
-        Signal { name: "widthChanged"; lineNumber: 94 }
-        Signal { name: "heightChanged"; lineNumber: 95 }
-        Signal { name: "aspectChanged"; lineNumber: 96 }
-        Signal { name: "laidOut"; lineNumber: 97 }
+        Property {
+            name: "pictureWidth"
+            type: "double"
+            read: "getPictureWidth"
+            index: 16
+            lineNumber: 71
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "pictureHeight"
+            type: "double"
+            read: "getPictureHeight"
+            index: 17
+            lineNumber: 72
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "pictureGap"
+            type: "double"
+            read: "getPictureGap"
+            index: 18
+            lineNumber: 73
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Signal { name: "widthChanged"; lineNumber: 100 }
+        Signal { name: "heightChanged"; lineNumber: 101 }
+        Signal { name: "aspectChanged"; lineNumber: 102 }
+        Signal { name: "laidOut"; lineNumber: 103 }
         Method {
             name: "setWidth"
-            lineNumber: 76
+            lineNumber: 79
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setHeight"
-            lineNumber: 78
+            lineNumber: 81
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setAspect"
-            lineNumber: 80
+            lineNumber: 83
             Parameter { name: "value"; type: "double" }
         }
     }

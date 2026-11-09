@@ -40,6 +40,8 @@ Window {
     readonly property ThemeHost themeHost: chosenTheme.item as ThemeHost
     // Why the reference is shown in place of the theme the settings choose, said once the splash has gone.
     property string themeWords
+    // The game in hand, whose page X opens: the one the theme's focus is on, else the grid's focused game.
+    property string inHand
     // A game chosen: recorded as started, opened (resumed where it is the one suspended) and shown.
     signal play(string path)
     onPlay: (path) => {
@@ -160,7 +162,11 @@ Window {
             screens.play()
         }
         onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
-        onFocused: (game) => games.focused = games.rowOf(game)
+        onFocused: (game) => {
+            program.inHand = game
+            if (games.rowOf(game) >= 0)
+                games.focused = games.rowOf(game)
+        }
     }
     // The chosen EmuSen theme's screens over the reference's, each where the theme provides it and has not failed; the host and
     // its engine are made only while a theme other than the reference is chosen (EmuSen_Qt.md §3.5.2, §9.3.5).
@@ -195,7 +201,11 @@ Window {
                 screens.play()
             }
             onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
-            onFocused: (game) => games.focused = games.rowOf(game)
+            onFocused: (game) => {
+                program.inHand = game
+                if (games.rowOf(game) >= 0)
+                    games.focused = games.rowOf(game)
+            }
         }
     }
     // The grid's search: its words, which the keyboard types and the grid's model narrows by, the field over the one row of
@@ -362,6 +372,25 @@ Window {
         objectName: "themes"
         visible: screens.shown === Screens.Themes
         themes: themesModel
+        padFamily: program.padFamily
+        inputs: visible && !program.splashShown
+        onBacked: screens.back()
+        onActed: (key) => screens.act(key)
+    }
+    // A game's page, from X on Home and the grid, a theme's openPage and the Home card's Selected game (EmuSen_Qt.md §7.8);
+    // its doors open later pieces' pages.
+    GamePageModel {
+        id: pageModel
+        objectName: "pageModel"
+        platformLibrary: program.platformLibrary
+        cores: library.cores
+        game: screens.shown === Screens.Page ? library.gameFile(program.inHand) : ""
+        onPlayed: (path, state) => program.play(path)
+    }
+    GamePage {
+        objectName: "gamePage"
+        visible: screens.shown === Screens.Page
+        page: pageModel
         padFamily: program.padFamily
         inputs: visible && !program.splashShown
         onBacked: screens.back()

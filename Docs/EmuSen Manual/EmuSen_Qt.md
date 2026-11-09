@@ -3690,6 +3690,100 @@ reverted:
 - the preview's height read from its items' `visible`, which is false while the slot is empty, so it stays empty (the
   meter was never drawn until this was found): the program's test, the meter not drawn.
 
+### 7.8 Stage 5, piece G: a game's page (2026-11-09)
+
+`EmuSen_Interface.md` §2.5, §4 screen 3, §5.9, §18.2; the oracle is Mistress's recordings `GamePage`, `GamePageStates`,
+`GamePageOptions`, `GamePageMedia` and `GamePageDetails` (1280 × 800 and 1920 × 1200); behaviour and words from
+Mistress's `Pages/GamePage`, `GamePageHost`, `Views/GamePageView` and `MainWindow.GamePage`.
+
+**Decided 2026-11-09:** the page's model is `GamePageModel`; `GameModel` stays the grid's list (§1.2 corrected).
+
+**The model** (`emusen-qt-models`, one job a file). `game_page.rs`, plain Rust: the `GamePageSource` a read and a change
+go through (the client crates, or a test's fake), one `Read` of the game, and `GamePage` over it: the facts line (console
+· year · developer · publisher, where it differs · time played · last played, Mistress's words), the actions (Play, Resume
+with the state it stands on, Favourite with its heart), the five sections, each section's content (the Overview's words
+and picture; States as eight slots with the automatic state after the last slot in use, before the empty ones, the
+state Resume loads marked; Options as Engine, Controller profile, Cheats, Display crop and Package; Media as the
+scraper's pictures and clip; Details as Scrape This Game, Edit Details, Cover art, Open Folder and Hide from Library),
+what each press asks (`Outcome`: a change saved, the game started from a state or not, a door), and the help bar by
+what is focused. The slots' count is the Pause Card's (`pause::SLOTS`), one owner. `game_page_source.rs`, the source over
+the client crates, needs no session: the title and facts from the scraper's metadata (edits first), the record from
+games.db, the pictures and the clip from the media store and the ES-DE folder, the states by **Galaxia's save paths**
+(`EMUSEN_GALAXIA_SAVE_STATE` per slot, `SAVE_RESUME_STATE`, the package's kinds for a packaged game, each state's picture
+by `SAVE_PICTURE`; when it was saved is its file's time), which was enough: no frontend-API minor was asked for. The
+engines are the console's from the systems table, named from the runtime's cores and stored as the game's
+`altemulator` edit (Mistress's `SetEngine`); the profiles are Endymion's, by the game's file name; the cheats are the
+game's saved list (`emusen_galaxia_cheat_game_list` and the cheat file model); the crop is offered where Serenity's
+catalogue gives the console a television's screen, and reads `This game's` where games.db holds a crop. The clip's
+file is read too, for the hero. `game_page_model.rs`, the bridge: `GamePageModel`, the content as a list model
+with the roles the kit's page frame reads (`label`, `value`, `line`, `picture`, `steps`, `opens`, `marked`, `key`) and
+the rest as properties, read off the GUI thread over clients it opens once and keeps; and `PageActionModel`, the
+actions as the frame's action list, from `GamePageModel.actions` as plain data, as `GameModel` takes its games. The help
+bar has ten new screens, `GamePage` to `GamePageNone` (`help.rs`, appended). `LibraryModel.gameFile(path)` gives the
+page the scan's record of the game (its system and package).
+
+**The screen** (`qt-app/qml/GamePage.qml`): the kit's `PageFrame` over the two models; Y is the page's own (the heart,
+`declared`), every other declared action the screens'. **Routes** (`screens.rs`): X on Home, the grid or the search's
+covers (`gamePage`), the Home card's Selected game, and a theme's `Actions.openPage(key)` (carried as the game taken in
+hand, then the page) open the page on the game in hand, which the theme's focus names (`Actions.focus`; the reference
+theme's Home now names its Continue and shelf games too); B returns to the screen it was opened over, or under a card to
+the library's screen; Start goes to the library's screen; a game started goes to the game.
+
+**Compared with Mistress** (measured on 2026-11-09). The Qt recordings were read by WiseMan's `SpecDocument.Parse`
+through `Another_frontend_s_recordings_match_these_within_the_tolerances` (the WiseMan build of the same day, no
+build). As in §7.7, `InterfaceSpec.Compare` matches by name, and the kit's parts carry the kit's names (`pageTitle`,
+`pageFacts`, `pageCover`, `pageHero`, `pageSections`, `pageActions`, `helpBar`) where Avalonia's were `PageTitle`,
+`PageFacts`, `PageCover`, `PagePoster`, `PageSections`, `PageActions` and `PageHelpBar`, and its actions, rows and tiles
+none, so it lists them missing and extra. The parts were then compared under that map of names (actions, rows and tiles
+by their words), two design units the tolerance, at both sizes: the strip, the actions' row, the cover's place and
+height, the Overview's words and picture, every row of Details, the States' and Media's tiles' pictures stand at
+Mistress's places with her words. **Differences that remain, each for the tester:**
+- The cover is 240 wide where Mistress's is 201: the systems table gives the Super Nintendo a landscape box (`cover_aspect`
+  0.73, height over width), so the kit's frame draws it at its widest, 240; Mistress's fixture found no descriptor for
+  its game and fell back to 3:4. The console's name reads `Super Nintendo` (the table's display name) where hers reads
+  `SNES`.
+- The title and the facts are boxes across the column (880 wide, 60 and 30 high) where hers fit their words (368 × 53,
+  509 × 27); the words start at her places. The kit's, `EmuSen_Kit.md` §7.44, as are the actions' widths (Play 122 where
+  hers is 115, Resume 349 where hers is 357, Favourite 220 at 831 where hers is 205 at 832) and the help bar at 742 (her
+  band at 702), §7.40 and §7.45's open decision.
+- The Overview's words are a box of the content's height (238) where hers fits its lines (106).
+- A tile's box is the picture, its two lines and the ring's room (457 to 709, 252 high) where hers is the picture
+  (150); the picture stands at hers, 64,464, 200 × 150, and its lines at 626 and 654 as hers. The Auto tile's second line
+  takes 52 where hers takes 48 (the platform's face). WiseMan's rules read the fifth slot, crossing the list's right
+  edge, as past its clip: the kit fades that edge, which its rules do not read.
+- Favourite is reached from Resume by Right only after Resume has stepped through its states (LunaP's `MoveInActions`,
+  as Mistress's page does), and the walk presses each direction once, so the gate's pad reach and WiseMan's both name it
+  unreached. The test holds the condition: Right from Play is Resume, Right steps its states, then reaches Favourite, and
+  Left comes back.
+- Options holds no Cheats row (the test's game has no saved cheats; the row and its count are held by the models' test)
+  and no Television standard row (not built: the standard's store is the C# `GameRecords`, with no Rust reader yet), so
+  Display crop stands second where hers stands third. Package reads `Linked` or `Not a package` only; its layers are
+  piece I's page.
+- Media lists the clip as a tile (the test's game has one); Mistress's fixture had none, so her Marquee stands third.
+  Media has no player's own screenshots: Mistress's `MediaLibrary.Screenshots` has no Rust reader yet.
+- Cover art reads `Its own` or `Generated`, without `· 8 to choose from`: the covers to choose from are piece I's page.
+- States has no Delete… (X) and loads no state at the game's start: A on a state, and Resume, start the game, and the
+  resume question of §18.3 offers the automatic state. Loading a chosen state at the start needs the session to start
+  from a state, which `SessionModel` does not yet; Delete… asks the question form, piece I's with the page's deeper pages.
+- The doors (Cheats, Display crop, Package, Scrape This Game, Edit Details, Cover art, Open Folder, Hide from Library,
+  and A on a picture) go nowhere yet: pieces I and J.
+
+**Held to** (measured on 2026-11-09). `qt-models/tests/game_page.rs` (6, no Qt): the facts line and the actions as
+Mistress's; Resume stepping its states and letting the focus move on at either end; the states slot by slot with Auto
+after the last in use and the resumed state marked; Options' rows, the engine stepped and wrapping, the doors, a single
+engine named and not stepped; the Overview, Media's tiles and Details' rows; the routes into the page from Home, the grid,
+the search's covers, the Home card and an ES-DE theme's view, and B back to each. `qt-app/tests/game_page.rs` (software
+backend): a scratch tree with two Super Nintendo games, one with Mistress's fixture's facts as games.db edits, four
+states saved by Galaxia's paths, pictures drawn by the harness in the ES-DE media folder and a clip; X on the grid opens
+the page on its Overview with the facts and the description; Right reaches Resume, steps it, and reaches Favourite; the
+five states held at the gate's five sizes (fit, pad reach, pointer reach, no chrome, names, palette, contrast) and
+recorded; Y turns the heart and saves it; B returns to the grid. Nothing logged. Seeded faults, each reverted:
+- Resume stepping past either end, so the focus never moves on: the models' Resume test;
+- the automatic state after the first slot rather than the last in use: the models' States test;
+- B on the page going to the library's screen rather than where it was opened: the models' routes test;
+- the actions' list left with no current item when its model fills: the program's test, Right from Play reaching
+  nothing.
+
 ---
 
 ## 8. Testing

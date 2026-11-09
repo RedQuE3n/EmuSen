@@ -2622,6 +2622,31 @@ removed or changed. Held to by kit-core's `kit_7_47_each_text_size_word_has_its_
 program's Settings test (the kit's `textScale` at `text_scale_of("large")` once Large is chosen); seeded, Large's scale
 as 1.1 failed the first.
 
+### 7.48 The page frame's own parts for a game's page (stage 5, piece G; 2026-11-09)
+
+**`PageFrame`** gained, for a game's page (`EmuSen_Qt.md` §7.8):
+- words beside a picture in place of tiles or rows, as the Overview shows them: `showsText`, `contentWords`,
+  `contentPicture`, the picture 388 × 222 at the content's right and the words in the rest less a gap of 24, from
+  Mistress's `GamePage` recording (`PageLayout`'s new constants `pictureWidth`, `pictureHeight`, `pictureGap`, from
+  kit-core's `PageGeometry`);
+- a stepped action: the action model's roles `stepped` (◂ ▸ drawn either side of the value, on `ActionButton` as
+  `stepped`), `stepLeft` and `stepRight` (whether Left or Right steps it from where it stands), and the signal
+  `actionStepped(index, by)`. Left or Right on an action that can step that way steps it; past either end the focus moves
+  to the neighbour, as LunaP's `MoveInActions` does, so every action is reached. The host says which way each action can
+  step, from the value it holds;
+- `rowStepped(index, by)`: Left or Right on a row that steps.
+
+A list whose model fills after the view was made has no current item, so no delegate took the focus and the walk found
+the list itself (the program's first run of the game's page, 2026-11-09, where the actions and the rows come from models
+read off the GUI thread): each of the frame's three lists now makes its first item current when it fills.
+
+**Rule Q.** Additions to the registry (`PageLayout`'s three constants), and to `PageFrame`'s and `ActionButton`'s properties and signals. One change to a contract: the action model's delegate now
+requires the roles `stepped`, `stepLeft` and `stepRight`, so a host's action model must name them; the gallery's does.
+The module stays 1.0 (§7.6). `EmuSen.Theme` re-exports none of it.
+
+**Held to**: kit-gallery's screens test (the page with tiles and with rows, both variants, the four sizes) and the
+registry's comparison, and the program's game page test (`EmuSen_Qt.md` §7.8).
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

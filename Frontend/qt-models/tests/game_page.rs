@@ -1,8 +1,10 @@
 //! A game's page without Qt (EmuSen_Qt.md §7.8): the facts line, the actions and Resume's stepping, the states as the
-//! design orders them, the Options rows and their stepping, the doors, and the help bar by the focus.
+//! design orders them, the Options rows and their stepping, the doors, the help bar by the focus, and the screens' routes
+//! into the page and back to where it was opened.
 
 use emusen_qt_models::game_page::*;
 use emusen_qt_models::help::Screen;
+use emusen_qt_models::screens::{page_origin, page_step, step, step_in, Ask, Shown, GAME_PAGE};
 
 const NOW: i64 = 1_762_700_000;
 
@@ -132,4 +134,20 @@ fn qt_7_8_the_overview_media_and_details() {
     assert_eq!(rows.iter().map(|r| r.label).collect::<Vec<_>>(), ["Scrape This Game", "Edit Details", "Cover art", "Open Folder", "Hide from Library"]);
     assert_eq!(rows[2].value, "Generated");
     assert_eq!(page.choose_row(0), Outcome::Door(SCRAPE));
+}
+
+#[test]
+fn qt_7_8_the_page_opens_over_the_grid_home_and_the_cards_and_b_returns() {
+    let page = Ask::Act(GAME_PAGE.into());
+    for from in [Shown::Home, Shown::Grid, Shown::SearchGrid, Shown::HomeCard] {
+        assert_eq!(step(from, &page), Some((Shown::Page, None)), "{from:?}");
+    }
+    assert_eq!(step_in(true, Shown::Esde, &page), Some((Shown::Page, None)));
+    assert_eq!(step(Shown::Consoles, &page), None, "Choose a console has no game in hand");
+    assert_eq!(page_step(false, page_origin(false, Shown::Grid), &Ask::Back), Some(Shown::Grid));
+    assert_eq!(page_step(false, page_origin(false, Shown::HomeCard), &Ask::Back), Some(Shown::Home), "a card closed as it opened the page");
+    assert_eq!(page_step(true, page_origin(true, Shown::HomeCard), &Ask::Back), Some(Shown::Esde));
+    assert_eq!(page_step(true, Shown::Esde, &Ask::Act("home".into())), Some(Shown::Esde));
+    assert_eq!(page_step(false, Shown::Grid, &Ask::Act("home".into())), Some(Shown::Home));
+    assert_eq!(page_step(false, Shown::Grid, &Ask::Play), Some(Shown::Game));
 }

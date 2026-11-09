@@ -2117,6 +2117,34 @@ through a resize (the resized first frame black between the rows); on the GPU a 
 `kit_7_35_words_crossing_a_faded_edge_are_fading_out_and_not_held_to_contrast`, and the same words across an edge that
 does not fade, or inside the strip, still held.
 
+**The layer goes off only once the event queue is clear** (found 2026-11-09). `theme-audit --gpu` over Meridian
+faulted twice in `QQuickItem::geometryChange` under `QQuickWindow::resizeEvent`, at the resize to 3840 × 2160, where an
+`EdgeFade` in the hidden Recent band had its `fadeRight` fall as the window grew. The cause is a use after free inside
+Qt. A layer's `ShaderEffectSource` listens to its item's geometry (`QQuickShaderEffectSource::setSourceItem` adds it as a
+`Geometry` change listener), and `QQuickItemLayer::deactivate` deletes it at once when `layer.enabled` goes false
+(`delete m_effectSource`, the effect item the same). `QQuickItem::geometryChange` tells its listeners from a copy of
+their list (`notifyChangeListeners`, "intentional copy (QTBUG-54732)"), so a listener deleted while the list is being told
+is still called (`qquickitem.cpp`, `qquickitem_p.h`, `qquickshadereffectsource.cpp`, Qt 6.11.2, read 2026-11-09). An edge
+bound to the scroller's own size falls exactly there: the fade's new size reaches `held` and the scroller through their
+anchors, which come first in the fade's list, the scroller's width notifies, the edge's binding falls, `fading` with it,
+and the layer is deleted; the fade's list then reaches the dead source. Backtraced on 2026-11-09 on both backends: the
+deactivation under `QQuickFlickable::geometryChange` under the fade's `fillChanged`, and the fault in the fade's own
+`geometryChange` three anchors below `resizeEvent`, as the audit's. Hidden or shown makes no difference; whether the freed
+memory is reused by then does, which is why it faulted in the audit and passed in small scenes. So `EdgeFade` turns its
+layer on at once and off through a `Binding` with `delayed: true` (Qt's own way to write a value once the event queue is
+clear): `layer.enabled` is `fading || held.layered`. Until then the layer draws with no edge fading, the same picture. A
+theme needs no gating of its edges on visibility. The warnings Horizon's survey logged on 2026-11-09 at placing (`Cannot
+read property 'x' of null`, lines 17 to 21) are not this: they came from the first form's `x: root.source.x`, built at
+4dc9678bd under Horizon's files for the second form, which sets no `source`; the second form reads no such property.
+
+`qt-test/tests/fade_resize.rs` over `FadeResizeScene.qml` holds it: an `EdgeFade` in a hidden band, its right edge bound to
+its scroller's `contentWidth > width` (2000), the window grown to 3840 × 2160 and back twice, then the same shown, and
+nothing logged. The test sets glibc's `M_PERTURB` (`mallopt`), so freed memory is overwritten and a call into it faults on
+every run; without it the unfixed kit passed on both backends. Measured 2026-11-09: the unfixed kit faults in that test on
+the software backend and on Vulkan (the RX 6800); the fixed one passes on both, three runs on software, two on Vulkan, and
+`fade.rs` still passes on both. Seeded faults, each reverted, each a fault in the test: `layer.enabled: root.fading` as
+before, and the `Binding` not delayed.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

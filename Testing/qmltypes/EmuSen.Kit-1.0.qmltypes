@@ -979,6 +979,25 @@ Module {
         }
     }
     Component {
+        file: "inside_clips.h"
+        lineNumber: 7
+        name: "InsideClips"
+        accessSemantics: "reference"
+        prototype: "QQuickItem"
+        exports: ["EmuSen.Kit/InsideClips 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "inside"
+            type: "bool"
+            read: "inside"
+            notify: "insideChanged"
+            index: 0
+            lineNumber: 10
+            isReadonly: true
+        }
+        Signal { name: "insideChanged"; lineNumber: 18 }
+    }
+    Component {
         file: "keypass.cxxqt.h"
         lineNumber: 15
         name: "KeyPass"

@@ -40,6 +40,10 @@ pub enum Screen {
     Themes,
     /// The Themes tab on a theme in use, not checked clean, or of a kind not chosen here: Check alone.
     ThemesChecked,
+    /// Settings on a section (EmuSen_BigPicture.md §52): the shoulders step the sections.
+    Settings,
+    /// Settings on a page under a section: the shoulders are the page's.
+    SettingsPage,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -143,6 +147,20 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
         Screen::ThemesChecked => &[
             (UiButton::Screensaver, "Check", Some(CHECK)),
             (UiButton::PageUp, "Kind", None),
+            (UiButton::Back, "Back", None),
+            (UiButton::Menu, "Home", Some(HOME)),
+        ],
+        // Mistress's SettingsView hints: Change, Value, Section, Back, Home.
+        Screen::Settings => &[
+            (UiButton::Accept, "Change", None),
+            (UiButton::Left, "Value", None),
+            (UiButton::PageUp, "Section", None),
+            (UiButton::Back, "Back", None),
+            (UiButton::Menu, "Home", Some(HOME)),
+        ],
+        Screen::SettingsPage => &[
+            (UiButton::Accept, "Change", None),
+            (UiButton::Left, "Value", None),
             (UiButton::Back, "Back", None),
             (UiButton::Menu, "Home", Some(HOME)),
         ],

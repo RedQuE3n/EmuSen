@@ -95,6 +95,8 @@ fn the_watched_themes_hold_at_the_five_sizes() {
         assert!(folder.join("capabilities.xml").exists(), "{theme} in the corpus at {}", folder.display());
         let (choices, picked) = common::choices_of(&variant, &scheme, &font);
         for view in ["system", "gamelist"] {
+            // The clock held at one instant, so its words, and so its box, are the same at every size and every hour.
+            assert!(scene.set_property("view", "now", common::HELD_NOW));
             common::install(&mut scene, &folder, &choices, view, &texts, w0, h0);
             let problem = scene.property("esdeModel", "problem");
             if !problem.is_empty() {

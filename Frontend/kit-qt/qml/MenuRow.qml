@@ -65,7 +65,7 @@ Kit.Walkable {
     }
     Shape {
         objectName: "before"
-        // The software backend paints a Shape wholly past its clip unclipped, so there it is not drawn while wholly past (EmuSen_Kit.md §7.34, §7.36).
+        // The software backend paints a Shape wholly past its clip unclipped, so there it is not drawn while wholly past (EmuSen_Kit.md §7.34, §7.40).
         visible: root.steps && (GraphicsInfo.api !== GraphicsInfo.Software || beforeShown.inside)
         width: root.stepMark.width
         height: root.stepMark.height
@@ -89,6 +89,9 @@ Kit.Walkable {
         text: root.value
         color: Kit.Tokens.muted
         font: root.labelFont
+        // At most half the row, a long value (a folder's path) cut at its start so its end shows (EmuSen_Kit.md §7.46).
+        width: Math.min(valueText.implicitWidth, root.width / 2)
+        elide: Text.ElideLeft
         anchors.right: after.visible ? after.left : parent.right
         anchors.rightMargin: after.visible ? root.markGap : root.inset
         anchors.verticalCenter: parent.verticalCenter

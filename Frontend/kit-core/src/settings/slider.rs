@@ -1,4 +1,4 @@
-//! A slider row's range and its step by the pad (EmuSen_Kit.md §7.38): Left and Right move the amount one step, held
+//! A slider row's range and its step by the pad (EmuSen_Kit.md §7.42): Left and Right move the amount one step, held
 //! within the range and on the grid of steps from its minimum, so a value read back is the one a drag snaps to.
 
 /// The steps a pad takes across a range whose step is not given: a hundredth of it.

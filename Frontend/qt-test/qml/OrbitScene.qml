@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
 
-// A fixture: a list laid on an orbit by the kit's OrbitSlot, as a theme's screen holds one, in an item the test deletes as a window deletes a placed screen (EmuSen_Kit.md §7.40).
+// A fixture: a list laid on an orbit by the kit's OrbitSlot, as a theme's screen holds one, in an item the test deletes as a window deletes a placed screen (EmuSen_Kit.md §7.48).
 Window {
     id: scene
     objectName: "scene"

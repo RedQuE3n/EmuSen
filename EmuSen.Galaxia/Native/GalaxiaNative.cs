@@ -44,6 +44,7 @@ namespace EmuSen.Galaxia.Native
         Records,
         Media,
         Themes,
+        Graphics,
     }
 
     // The redirects a test moves, as EMUSEN_GALAXIA_OVERRIDE_*.

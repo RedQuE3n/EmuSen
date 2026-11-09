@@ -1,5 +1,5 @@
 //! `SettingsLayout`: kit-core's settings frame on Qt, its measures and the walk over a page's rows read from any list
-//! model's `kind`, `held`, `marked`, `sentence` and a slider's `minimum`, `maximum`, `step` and `amount` roles; `Kit.RowKinds` numbers the kinds (EmuSen_Kit.md §7.36–§7.38).
+//! model's `kind`, `held`, `marked`, `sentence` and a slider's `minimum`, `maximum`, `step` and `amount` roles; `Kit.RowKinds` numbers the kinds (EmuSen_Kit.md §7.40–§7.42).
 
 use core::pin::Pin;
 

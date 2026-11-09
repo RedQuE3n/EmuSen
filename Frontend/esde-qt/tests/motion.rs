@@ -50,6 +50,7 @@ fn the_slide_holds_the_overlays_still_and_a_held_list_fades_its_metadata() {
     let mut scene = harness.load(common::VIEW, W, H);
     assert!(scene.set_property("view", "media", &media));
     assert!(scene.set_property("view", "shelves", &shelves(60)));
+    assert!(scene.set_property("view", "now", common::HELD_NOW));
     assert!(scene.set_property("view", "settings", &settings(&theme, "\"DisplayClock\":true")));
     until(&mut scene, "the theme loaded", |s| s.property("esdeModel", "themed") == "true");
     assert_eq!(scene.property("esdeModel", "problem"), "");

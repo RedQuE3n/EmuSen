@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
 
-// A fixture: the help bar's entries change while a frame clock runs, as a theme's help changes with the focus over its sky (EmuSen_Kit.md §7.41).
+// A fixture: the help bar's entries change while a frame clock runs, as a theme's help changes with the focus over its sky (EmuSen_Kit.md §7.49).
 Window {
     id: scene
     objectName: "scene"

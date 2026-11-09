@@ -1,4 +1,4 @@
-//! The walk over a settings page's rows (EmuSen_Kit.md §7.36): Up and Down move the focus and stop at the ends, Left and
+//! The walk over a settings page's rows (EmuSen_Kit.md §7.40): Up and Down move the focus and stop at the ends, Left and
 //! Right step a stepped value or a slider, A chooses, a page of choices keeps its mark on the one chosen, and the shoulders
 //! step the strip's sections, wrapping, while no page is open under them. The window
 //! of rows shown moves only when the focus leaves it, a row at a time, as LunaP's `KeepRowShown` did.

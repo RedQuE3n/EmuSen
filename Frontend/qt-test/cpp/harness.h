@@ -52,5 +52,5 @@ void harness_hide_words(QObject& window, bool hidden);
 std::uint64_t harness_frames(QObject& window);
 QString harness_running(QObject& window);
 int harness_difference(QObject& window, const QString& reference, int tolerance, int reach, const QString& loose, const QString& marks);
-// A left-button drag in steps, as a hand moves a slider's handle (EmuSen_Kit.md §7.38).
+// A left-button drag in steps, as a hand moves a slider's handle (EmuSen_Kit.md §7.42).
 void harness_drag(QObject& window, double x0, double y0, double x1, double y1);

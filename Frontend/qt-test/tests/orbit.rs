@@ -1,4 +1,4 @@
-// EmuSen_Kit.md §7.40: a list laid on an orbit by the kit's OrbitSlot is deleted with its screen, as a window deletes a placed
+// EmuSen_Kit.md §7.48: a list laid on an orbit by the kit's OrbitSlot is deleted with its screen, as a window deletes a placed
 // screen, after its covers were focused by the pad and by the pointer, and Qt logs nothing on the way.
 
 use emusen_kit_core::input::UiButton;

@@ -4,7 +4,7 @@ fn main() {
     CxxQtBuilder::new_qml_module(
         QmlModule::new("EmuSen.Gallery")
             .version(1, 0)
-            .qml_files(["qml/Gallery.qml", "qml/SettingsGallery.qml"])
+            .qml_files(["qml/Gallery.qml", "qml/SettingsGallery.qml", "qml/Screens.qml"])
             .depend("QtQuick")
             .depend("EmuSen.Kit")
             .depend("EmuSen.Endymion"),

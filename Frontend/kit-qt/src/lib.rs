@@ -35,3 +35,7 @@ pub mod stars;
 pub mod tokens;
 pub mod wheels;
 pub mod world;
+pub mod tones;
+pub mod tool;
+pub mod page;
+pub mod table;

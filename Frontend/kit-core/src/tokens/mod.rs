@@ -6,8 +6,8 @@ mod palette;
 
 pub use colour::Colour;
 pub use metrics::{
-    FocusMarks, Insets, MAX_TEXT_SCALE, SAFE_AREA_FRACTION, Spacing, TypeScale, clamp_text_scale, focus_marks, header_size, safe_area_of,
-    spacing, type_scale,
+    FocusMarks, Insets, MAX_TEXT_SCALE, SAFE_AREA_FRACTION, Spacing, TEXT_SIZES, TypeScale, clamp_text_scale, focus_marks, header_size,
+    safe_area_of, spacing, text_scale_of, type_scale,
 };
 pub use palette::{ColourToken, ContrastPair, GRAPHIC_FLOOR, TEXT_FLOOR, colour, contrast_pairs, on_art_over};
 

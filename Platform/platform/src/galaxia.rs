@@ -516,14 +516,25 @@ pub unsafe extern "C" fn emusen_galaxia_package_resolve(
     out: *mut u8,
     len: usize,
 ) -> i64 {
-    let result = || -> Result<String, i32> {
+    thread_local! {
+        static WAITING: crate::reply::Waiting = const { std::cell::RefCell::new(None) };
+    }
+    let given = || -> Result<(&str, &str, Option<&str>, &str), i32> {
         let at = unsafe { required(at, at_len) }?;
-        let (p, l, c) = (unsafe { required(packages, packages_len) }?, unsafe { text(library, library_len) }?, unsafe { required(compressed, compressed_len) }?);
+        Ok((at, unsafe { required(packages, packages_len) }?, unsafe { text(library, library_len) }?, unsafe { required(compressed, compressed_len) }?))
+    };
+    let (at, p, l, c) = match given() {
+        Ok(g) => g,
+        Err(s) => return s as i64,
+    };
+    let key = [at, p, l.unwrap_or(""), c].join("\0");
+    // Done once: the length query resolves, rewriting a moved game's manifest, and the fill takes its answer - see EmuSen_RustPlatform.md §47.25.
+    let result = || -> Result<String, i32> {
         let r = claims::resolve(&roots_from(p, l, c), at).map_err(|words| fail(status::IO, words))?;
         let package = serde_json::json!(r.package).to_string();
         Ok(format!("{{\"game\":{},\"package\":{package},\"moved\":{}}}", serde_json::json!(&r.game).to_string(), r.moved))
     };
-    answer(result(), out, len)
+    unsafe { crate::reply::answer(&WAITING, 0, &key, out, len, result, |s| s) }
 }
 
 /// Maps the file whole and read-only, its handle in `mapped`; the bytes stay in place until `emusen_galaxia_unmap`.
@@ -597,6 +608,31 @@ mod tests {
         let mut out = vec![0u8; length as usize];
         assert_eq!(call(out.as_mut_ptr(), out.len()), length);
         Ok(String::from_utf8(out).unwrap())
+    }
+
+    // The length query resolves and the fill takes that answer, so a moved game is said moved once (EmuSen_RustPlatform.md §47.25).
+    #[test]
+    fn a_moved_game_resolved_by_length_then_fill_reports_moved() {
+        let dir = std::env::temp_dir().join(format!("emusen-platform-resolve-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (packages, library, compressed) = (dir.join("Packages"), dir.join("Roms"), dir.join("Compressed"));
+        std::fs::create_dir_all(library.join("NES")).unwrap();
+        let dump = b"a game, no header";
+        std::fs::write(library.join("NES/g.nes"), dump).unwrap();
+        let crc = !dump.iter().fold(!0u32, |c, b| (0..8).fold(c ^ u32::from(*b), |c, _| if c & 1 == 1 { (c >> 1) ^ 0xEDB8_8320 } else { c >> 1 }));
+        let manifest = format!(r#"{{"format":"emusen-package","version":"1.3","system":"nes","mode":"linked","game":{{"role":"image","where":"library","path":"NES/g.nes","size":{}}},"dump":{{"file":{{"crc32":"{crc:08x}"}}}}}}"#, dump.len());
+        let file = packages.join("NES/g.nes/package.json").to_string_lossy().into_owned();
+        assert_eq!(unsafe { emusen_galaxia_package_write(file.as_ptr(), file.len(), manifest.as_ptr(), manifest.len()) }, 0);
+        let moved = library.join("NES/h.nes").to_string_lossy().into_owned();
+        std::fs::rename(library.join("NES/g.nes"), &moved).unwrap();
+        let (p, l, c) = (packages.to_string_lossy().into_owned(), library.to_string_lossy().into_owned(), compressed.to_string_lossy().into_owned());
+        let resolve = |at: &str| ask(|out, len| unsafe { emusen_galaxia_package_resolve(at.as_ptr(), at.len(), p.as_ptr(), p.len(), l.as_ptr(), l.len(), c.as_ptr(), c.len(), out, len) }).unwrap();
+        let first: serde_json::Value = serde_json::from_str(&resolve(&moved)).unwrap();
+        assert_eq!((first["game"].as_str(), first["moved"].as_bool()), (Some(moved.as_str()), Some(true)), "{first}");
+        assert!(std::fs::read_to_string(&file).unwrap().contains("NES/h.nes"), "the manifest names the new place");
+        let again: serde_json::Value = serde_json::from_str(&resolve(&moved)).unwrap();
+        assert_eq!(again["moved"].as_bool(), Some(false), "asked again, nothing has moved since");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

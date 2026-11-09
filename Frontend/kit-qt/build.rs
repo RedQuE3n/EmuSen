@@ -4,7 +4,7 @@ use std::process::Command;
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 
 // The kit's own components (EmuSen_Qt.md §1.4); the EmuSen style travels as a resource module, style/EmuSen.qrc (§1.5), and the splash's two faces as fonts/Fonts.qrc (EmuSen_Kit.md §7.10).
-const KIT_FILES: [&str; 25] = [
+const KIT_FILES: [&str; 30] = [
     "qml/Walkable.qml",
     "qml/Body.qml",
     "qml/Sky.qml",
@@ -30,6 +30,11 @@ const KIT_FILES: [&str; 25] = [
     "qml/SettingsFrame.qml",
     "qml/ChoiceRow.qml",
     "qml/SliderRow.qml",
+    "qml/SectionStrip.qml",
+    "qml/ToolScreen.qml",
+    "qml/PageFrame.qml",
+    "qml/ToneText.qml",
+    "qml/ActionButton.qml",
 ];
 
 /// Qt's shader baker over EdgeFade's fragment shader, into a resource beside the module's own at qrc:/qt/qml/EmuSen/Kit/shaders/ (EmuSen_Kit.md §7.35).
@@ -80,9 +85,13 @@ fn main() {
         "src/keypass.rs",
         "src/current.rs",
         "src/settings.rs",
+        "src/tones.rs",
+        "src/tool.rs",
+        "src/page.rs",
+        "src/table.rs",
     ])
     .include_dir("cpp")
-    .cpp_files(["cpp/kit_glue.cpp", "cpp/game_picture.h", "cpp/game_picture.cpp", "cpp/edge_mask.h", "cpp/edge_mask.cpp", "cpp/inside_clips.h", "cpp/inside_clips.cpp"])
+    .cpp_files(["cpp/kit_glue.cpp", "cpp/game_picture.h", "cpp/game_picture.cpp", "cpp/edge_mask.h", "cpp/edge_mask.cpp", "cpp/inside_clips.h", "cpp/inside_clips.cpp", "cpp/text_width.h", "cpp/text_width.cpp"])
     .qt_module("Quick")
     .qt_module("QuickControls2")
     .build()

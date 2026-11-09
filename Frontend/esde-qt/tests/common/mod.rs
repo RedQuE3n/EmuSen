@@ -362,6 +362,10 @@ pub fn choices_of(variant: &str, scheme: &Option<String>, font: &str) -> (String
 }
 
 /// A watched theme's view installed afresh at `w` × `h` on the oracle's texts, the clock shown; waits until it is themed.
+/// The instant a test holds the clock at (EsdeModel's `now`, Unix seconds): 2026-11-06 12:00 UTC, so a minute turning over
+/// mid-test changes no clock's words.
+pub const HELD_NOW: &str = "1793966400";
+
 pub fn install(scene: &mut Scene<'_>, folder: &Path, choices: &str, view: &str, texts: &(String, String, String), w: i32, h: i32) {
     let text = settings(folder, &format!("\"DisplayClock\":true,\"StartupView\":\"{view}\"")).replacen('{', &format!("{{\"choices\":{{{choices}}},"), 1);
     assert!(scene.set_property("view", "shelves", "[]"));

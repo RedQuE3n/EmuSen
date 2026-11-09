@@ -1,4 +1,4 @@
-// EmuSen_Kit.md §7.36–§7.38: the settings frame walked by the pad through the router's queue and by the pointer, as a
+// EmuSen_Kit.md §7.40–§7.42: the settings frame walked by the pad through the router's queue and by the pointer, as a
 // player does: rows moved and stepped, the window following, the shoulders and a tab choosing a section, A and a click
 // choosing, B and a right click going back; a page of choices opened on its mark and the mark moved by A and a click; a
 // slider stepped by Left and Right and dragged, a held one left as it is.

@@ -422,7 +422,7 @@ QString harness_tree(QObject& window)
 {
     QJsonArray nodes;
     if (QQuickWindow* w = quick(window)) {
-        // Read as the next frame draws it: a positioner lays out at the polish before a frame (EmuSen_Kit.md §7.41).
+        // Read as the next frame draws it: a positioner lays out at the polish before a frame (EmuSen_Kit.md §7.49).
         if (QQuickTest::qIsPolishScheduled(w)) {
             QQuickTest::qWaitForPolish(w, 1000);
         }
@@ -588,7 +588,7 @@ bool harness_set_property(QObject& root, const QString& object_name, const QStri
     return object != nullptr && QQmlProperty(object, property, qmlContext(object)).write(QVariant(value));
 }
 
-// Deletes a named object at once, as a window's teardown deletes what it holds (EmuSen_Kit.md §7.40).
+// Deletes a named object at once, as a window's teardown deletes what it holds (EmuSen_Kit.md §7.48).
 bool harness_destroy(QObject& root, const QString& object_name)
 {
     QObject* object = root.findChild<QObject*>(object_name);

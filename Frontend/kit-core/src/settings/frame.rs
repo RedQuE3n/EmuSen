@@ -1,5 +1,5 @@
 //! The settings frame's measures in design units on the big screen, as screen 6 of EmuSen_Interface.md §4 and LunaP's
-//! `SettingsLayout` set them (EmuSen_Kit.md §7.36): the strip under the safe area's top, the rows from the left, the pane
+//! `SettingsLayout` set them (EmuSen_Kit.md §7.40): the strip under the safe area's top, the rows from the left, the pane
 //! at the right, the rows taking what the pane and the gap leave.
 
 use crate::tokens::{Form, spacing};

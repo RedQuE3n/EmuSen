@@ -1,4 +1,4 @@
-// EmuSen_Kit.md §7.36–§7.38: the settings frame's measures held to Mistress's recordings (SettingsSound-1280x800.spec,
+// EmuSen_Kit.md §7.40–§7.42: the settings frame's measures held to Mistress's recordings (SettingsSound-1280x800.spec,
 // SettingsDisplay-1280x800.spec), and the walk over its rows, a slider row and a page of choices.
 
 use emusen_kit_core::input::UiButton;

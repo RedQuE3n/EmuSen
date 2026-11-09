@@ -13,7 +13,7 @@ OrbitSlot {
     required property bool favourite
     required property string facts
     view: slot.orbit
-    // The orbit is null while the screen is torn down, before its covers (EmuSen_Kit.md §7.40).
+    // The orbit is null while the screen is torn down, before its covers (EmuSen_Kit.md §7.48).
     turning: slot.orbit?.turning ?? 0
     lit: slot.ListView.isCurrentItem && (slot.orbit?.activeFocus ?? false)
     Accessible.name: slot.title

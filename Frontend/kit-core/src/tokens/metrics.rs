@@ -59,6 +59,15 @@ pub struct FocusMarks {
 /// The largest text scale a player may choose.
 pub const MAX_TEXT_SCALE: f64 = 1.3;
 
+/// The text sizes a player chooses, by the word the setting stores (`AppSettings.TextSize`), and the type scale each
+/// asks of the kit (EmuSen_Kit.md §7.47).
+pub const TEXT_SIZES: [(&str, f64); 3] = [("default", 1.0), ("large", 1.15), ("larger", MAX_TEXT_SCALE)];
+
+/// The type scale of a text size by its word; 1 for a word the kit does not know.
+pub fn text_scale_of(size: &str) -> f64 {
+    TEXT_SIZES.iter().find(|(word, _)| *word == size).map_or(1.0, |(_, scale)| *scale)
+}
+
 /// The share of each dimension kept clear at the big screen's edges.
 pub const SAFE_AREA_FRACTION: f64 = 0.05;
 

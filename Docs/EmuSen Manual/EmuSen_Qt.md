@@ -936,8 +936,7 @@ focused game's name and facts) take the dark variant's inks by day, through one 
 dark variant's colours, since a theme sees only the variant in force. Continue's panel and the places' tiles are panels:
 dark glass at 55% and 50% by night as before, light at 94% by day, their words the variant's own. The light variant had
 failed contrast almost everywhere (S7's survey of 2026-11-09: 530 lines on Home and 350 on the grid, words at 1.04 to
-3.1:1 over the night). Choose a console keeps its paper by day (`EmuSen_Interface.md` §24.4), which held its words
-already. Over the 120 consoles in the dark variant, an orbit's maker other than the focused one was drawn at 70% and read
+3.1:1 over the night). Choose a console kept its paper by day until it too followed the dark world (below). Over the 120 consoles in the dark variant, an orbit's maker other than the focused one was drawn at 70% and read
 3.44:1; it is now told apart by ink, `muted` beside the focused orbit's `text`, at full opacity. With no game suspended,
 the top's title and facts stand on the world beside the shelf's game rather than on Continue's panel, and take the
 world's inks; the shelf's caption moved down 6 units, clear of the focused cover's ring, which crossed it at 1280 × 720.
@@ -1032,10 +1031,10 @@ are unchanged.
   - the worlds;
   - the foot: the full name, the facts, the engine line, and three covers.
 - `parts/CoverRow.qml`, new: three covers whole at the console's shape, no taller than 100 and no wider than 150, 12 apart.
-- `parts/EngineLine.qml`, new: the mark, the engine's name and its tag. By day the hue is darkened to 30% lightness, so
-  the words hold 4.5:1 on the paper, as the canvas has it.
-- `parts/EngineMark.qml`: libretro's badge is now drawn in the ink it is given, as the canvas draws it, so the badge after
-  a world's count is Muted by day. It was a fixed light grey.
+- `parts/EngineLine.qml`, new: the mark, the engine's name and its tag, in the console's hue on the night in both
+  variants (until 2026-11-09 darkened by day to 30% lightness to hold 4.5:1 on the paper).
+- `parts/EngineMark.qml`: libretro's badge is now drawn in the ink it is given, as the canvas draws it. It was a fixed
+  light grey.
 - `parts/CoverFan.qml` is gone. Nothing else used it.
 
 **The layout is data.** The positions come from the kit's `OrbitLayout` (`EmuSen_Kit.md` §7.30), fed `Library.consoles`
@@ -1058,9 +1057,15 @@ Nothing is placed by name, and the screen holds any count from 0 to 120. `qml-ru
 - The first focus is the console last opened, else the first console in the table, else the first shelf when there is no
   console.
 
-**Night and day.** At night: the kit's `Sky`, its stars still, and the glow at the focused world in its hue. By day there
-is no sky and no glow. The paper is `Tokens.surface`, the orbit lines are ink #1F2A44 at 28%, and the discs are white at
-60% with a 14% edge.
+**Night and day.** In both variants: the kit's `Sky`, its stars still, and the glow at the focused world in its hue. The
+world stays dark by day, as Home's and the grid's do (decided 2026-11-09 by the tester, `EmuSen_Interface.md` §24.4): the
+words on it take `parts/Night.qml`'s inks, the orbit lines, the discs and the engine's hues are the night's, and the help
+bar and the covers are the variant's own. Until then the light variant drew the canvas's paper: `Tokens.surface`, no sky
+and no glow, the orbit lines in ink #1F2A44 at 28%, the discs white at 60% with a 14% edge, and the engine's hue
+darkened. Proof, measured 2026-11-09 offscreen on the software backend: `theme-audit --states all` over the package, both
+variants, finds no line; every software test of `qt-app` passes. Seeded back (the screen's words in the variant's own
+inks), the audit over eleven finds 33 low-contrast lines at every size in light. The side-by-sides of the light Choose a console, the
+paper left and the night right: `~/.cache/emusen/tmp/qt-s3-fit/compare/Consoles-light-*-paper-night.png`.
 
 **Named differences from the canvas**, each seen beside its render. Under each catalogue the worlds' points are the
 canvas's own; kit-core's test holds them within 0.01 unit.

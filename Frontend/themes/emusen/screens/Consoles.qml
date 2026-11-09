@@ -49,15 +49,15 @@ ThemeScreen {
             width: 40
             height: 40
             radius: 20
-            color: root.day ? Qt.rgba(1, 1, 1, 0.6) : Qt.rgba(38 / 255, 38 / 255, 43 / 255, 0.5)
+            color: Qt.rgba(38 / 255, 38 / 255, 43 / 255, 0.5)
             border.width: 1
-            border.color: root.day ? Qt.rgba(31 / 255, 42 / 255, 68 / 255, 0.14) : Qt.rgba(140 / 255, 150 / 255, 220 / 255, 0.18)
+            border.color: Qt.rgba(140 / 255, 150 / 255, 220 / 255, 0.18)
             Glyph {
                 anchors.centerIn: parent
                 width: 22
                 height: 22
                 path: Marks.path(place.key)
-                ink: Tokens.textStrong
+                ink: night.textStrong
             }
         }
         Rectangle {
@@ -79,7 +79,7 @@ ThemeScreen {
             height: 40
             verticalAlignment: Text.AlignVCenter
             text: place.name
-            color: Tokens.textStrong
+            color: night.textStrong
             font.family: faces.condensed
             font.weight: Font.Medium
             font.pixelSize: 24
@@ -206,7 +206,7 @@ ThemeScreen {
                     height: modelData[2]
                     path: Marks.sparkle
                     filled: true
-                    ink: Tokens.textStrong
+                    ink: night.textStrong
                 }
             }
         }
@@ -218,7 +218,7 @@ ThemeScreen {
             width: Math.min(implicitWidth, 140)
             text: node.name
             elide: Text.ElideRight
-            color: Tokens.textStrong
+            color: night.textStrong
             font.family: faces.condensed
             font.weight: Font.Medium
             font.pixelSize: 20
@@ -237,7 +237,7 @@ ThemeScreen {
                 objectName: "consoleCount." + node.index
                 anchors.verticalCenter: parent.verticalCenter
                 text: Words.games(node.count)
-                color: Tokens.muted
+                color: night.muted
                 // 19 units, the smallest whole size over the capitals' floor at 1280 x 720, condensed to stay as wide as the canvas's 17 (EmuSen_Qt.md §3.4.1).
                 font.family: faces.condensedRegular
                 font.pixelSize: 19
@@ -254,7 +254,7 @@ ThemeScreen {
                     anchors.fill: parent
                     mark: node.engineMark
                     libretro: node.libretro
-                    ink: node.libretro ? (root.day ? "#5F5F5F" : "#A9A9B2") : Qt.hsla(node.hue / 360, root.day ? 0.6 : 0.5, root.day ? 0.3 : 0.72, 1)
+                    ink: node.libretro ? "#A9A9B2" : Qt.hsla(node.hue / 360, 0.5, 0.72, 1)
                 }
             }
         }
@@ -269,8 +269,6 @@ ThemeScreen {
             focus: true
             // Canvas units to pixels, for the covers' decoded size.
             readonly property real pixelScale: canvas.unit
-            // Day: no sky and no glow, the paper's surface (EmuSen_Interface.md §24.4).
-            readonly property bool day: Tokens.variant === Tokens.Light
             // The focused item, a shelf or a console, and the first shelf (All games), whose count is every game.
             property var focusedTile: null
             property var allGames: null
@@ -291,17 +289,10 @@ ThemeScreen {
                 target: layout
                 function onJumped(index) { (index < shelfTiles.count ? shelfTiles.itemAt(index) : consoleTiles.itemAt(index - shelfTiles.count)).forceActiveFocus() }
             }
-            Rectangle {
-                objectName: "consolesPaper"
-                anchors.fill: parent
-                visible: root.day
-                color: Tokens.surface
-            }
             Sky {
                 id: sky
                 objectName: "consolesSky"
                 anchors.fill: parent
-                visible: !root.day
                 glowHue: root.focusedTile && root.focusedTile.planet ? root.focusedTile.hue : -1
                 glowX: root.focusedTile && root.focusedTile.planet ? root.focusedTile.cx / root.width : 0.5
                 glowY: root.focusedTile && root.focusedTile.planet ? root.focusedTile.cy / root.height : 0.5
@@ -336,7 +327,7 @@ ThemeScreen {
                         x: 64
                         y: 40
                         text: Words.gamesHeading
-                        color: Tokens.textStrong
+                        color: night.textStrong
                         font.family: faces.condensed
                         font.weight: Font.Medium
                         font.pixelSize: 32
@@ -349,7 +340,7 @@ ThemeScreen {
                         x: title.x + title.contentWidth + 20
                         y: 52
                         text: Words.chooseAConsole
-                        color: Tokens.muted
+                        color: night.muted
                         font.family: faces.regular
                         font.pixelSize: 20
                         lineHeight: 24
@@ -360,7 +351,7 @@ ThemeScreen {
                         x: root.width - 64 - width
                         y: 52
                         text: Words.summary(Library.consoles.count, root.allGames ? root.allGames.count : 0)
-                        color: Tokens.muted
+                        color: night.muted
                         font.family: faces.regular
                         font.pixelSize: 20
                         lineHeight: 24
@@ -398,7 +389,7 @@ ThemeScreen {
                                 }
                                 ShapePath {
                                     fillColor: "transparent"
-                                    strokeColor: root.day ? Qt.rgba(31 / 255, 42 / 255, 68 / 255, 0.28) : Qt.rgba(140 / 255, 150 / 255, 220 / 255, 0.32)
+                                    strokeColor: Qt.rgba(140 / 255, 150 / 255, 220 / 255, 0.32)
                                     strokeWidth: 1
                                     PathAngleArc {
                                         centerX: layout.centre
@@ -422,7 +413,7 @@ ThemeScreen {
                             objectName: "makerLabel." + label.index
                             visible: layout.orbitShown[label.index] ?? false
                             // The focused orbit's maker brighter than the rest, by ink rather than opacity, so the rest keep 4.5:1 over the crowd.
-                            readonly property color ink: layout.focusedOrbit === label.index ? Tokens.text : Tokens.muted
+                            readonly property color ink: layout.focusedOrbit === label.index ? night.text : night.muted
                             x: (layout.labelRights[label.index] ?? 0) - width
                             // The 19-unit line grows upward, its foot where the layout's 20-unit box ends (EmuSen_Qt.md §3.4.2).
                             y: (layout.labelTops[label.index] ?? 0) + 20 - height
@@ -479,7 +470,7 @@ ThemeScreen {
                                     width: 3
                                     height: 3
                                     radius: 1.5
-                                    color: Tokens.muted
+                                    color: night.muted
                                 }
                             }
                         }
@@ -501,7 +492,7 @@ ThemeScreen {
                                     width: 3
                                     height: 3
                                     radius: 1.5
-                                    color: Tokens.muted
+                                    color: night.muted
                                 }
                             }
                         }
@@ -531,7 +522,7 @@ ThemeScreen {
                         width: root.width
                         horizontalAlignment: Text.AlignHCenter
                         text: Words.noConsoles
-                        color: Tokens.muted
+                        color: night.muted
                         font.family: faces.regular
                         font.pixelSize: 22
                         lineHeight: 26.4
@@ -545,7 +536,7 @@ ThemeScreen {
                         width: coverRow.x - 96
                         text: root.focusedTile ? root.focusedTile.fullName : ""
                         elide: Text.ElideRight
-                        color: Tokens.textStrong
+                        color: night.textStrong
                         font.family: faces.condensed
                         font.weight: Font.Medium
                         font.pixelSize: 44
@@ -559,7 +550,7 @@ ThemeScreen {
                         width: coverRow.x - 96
                         text: root.focusedTile ? root.focusedTile.facts : ""
                         elide: Text.ElideRight
-                        color: Tokens.muted
+                        color: night.muted
                         font.family: faces.regular
                         font.pixelSize: 22
                         lineHeight: 26.4
@@ -590,6 +581,10 @@ ThemeScreen {
             }
             Faces {
                 id: faces
+            }
+            // The world is the night in both variants, its words the dark variant's inks (decided 2026-11-09).
+            Night {
+                id: night
             }
         }
     }

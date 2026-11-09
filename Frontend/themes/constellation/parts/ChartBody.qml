@@ -75,9 +75,12 @@ ChartNode {
     }
     Column {
         objectName: "bodyLabel." + body.index
+        // Focused, the label steps 8 out, clear of the ring's 7 past the box.
+        readonly property real clear: body.activeFocus ? 8 : 0
         visible: body.inView
         x: (body.box - (body.layout?.labelWidth ?? 140)) / 2
-        y: body.raised ? -height : body.box
+        y: body.raised ? -height - clear : body.box + clear
+        Behavior on y { NumberAnimation { duration: Tokens.quick; easing.type: Tokens.quickCurve } }
         width: body.layout?.labelWidth ?? 140
         Text {
             objectName: "bodyName." + body.index

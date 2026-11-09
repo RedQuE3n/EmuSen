@@ -1085,6 +1085,51 @@ its consoles); Down no longer stepping the rail (the sweep over `one-console` mi
 the splash at 1, 3 and 5 s (the audit records its finished frame only), the grid's rows for a tall and a square console
 (the synthetic library's consoles are all wide), and the bells, which no striker rings yet.
 
+#### 3.4.5 Constellation as built **[M 2026-11-09]**
+
+"Constellation" (`Frontend/themes/constellation/`, resources at `qrc:/emusen/themes/constellation/`) is the design of
+`qt-s3/final/constellation.md`: Home a star chart whose lines are the pad's walk, Choose a console the makers as figures
+(the kit's `FigureLayout`, `EmuSen_Kit.md` §7.31), Games a grid joined by connectors. Written against `EmuSen.Theme` alone;
+its parts are one job each: `Backdrop`, `ChartNode` (a node's place and walk), `ChartBody`, `ChartPointer`, `ChartLine`,
+`ChartFade`, `Star`, `Connector`, `ConsoleKey`, `Chip`, `Glass`, `Glyph`, `EngineMark`, `Faces`.
+
+**Named differences from the spec**, each decided or measured on 2026-11-08 and 2026-11-09:
+1. Small words are 19 units, not 17 (the audit's legibility floor at 1280 × 720, decided).
+2. The chart's lines by day are at the canvas's 10% and 45% (the spec's prose says 35% and 60%).
+3. The splash's points follow maker order without the 24-unit gap across a maker (a dashed segment marks it); past 24
+   consoles the pitch shrinks to keep three rows, and the segments shorten so the line ends by 4.6 s (decided 2026-11-09).
+4. The day sky's stars are the theme's own; the kit's `Sky` draws the night's.
+5. Games' connectors are measured on the painted covers, the focused one as scaled 1.06 about its centre.
+6. A console's label sits at the edge of its body's 96-unit box (4 further out than the canvas), and **the focused body's
+   label steps 8 further out** over Quick, clear of the focus ring, which reaches 7 past the box (110 about the 96 body, 94
+   about the 80). Where it crossed the ring the count read 1.98 to 3.45:1 by night and 2.23 to 3.24:1 by day, and the
+   crowd's name 1.44:1 (measured 2026-11-09). So that a raised label on the chart's first line or a lowered one on its last
+   still lies inside it, the chart's viewport reaches 8 past the layout's 96 … 564 at each end (88 … 572), the layout's
+   points kept where they were.
+7. **RECENT gives way to the focus**: centred at 823 while the block holds the focus, clear of its ring (to 811), else at
+   819, clear of a focused cover scaled 1.06 (from 830.6), where the spec centres it at 820. The 32-unit gap holds a
+   22.8-unit line with either one but not both; at 820 the block's ring ran under the word (1.98:1 by night, 2.23:1 by
+   day) and a focused cover overlapped it at 3840 × 2160. A line of 19 instead ran the word past its foot.
+8. All games' name sits beside its star where the compact tier's chart top would cut it.
+9. The walk's two departures in the kit: Right from the Pointers' apex, and a lone Pointer's Down to the next line's ends.
+
+**Proof, measured 2026-11-08** (offscreen, the software backend, before the audit's contrast rule). `theme-check` reads the
+package `ok` in both steps and `qmllint` is clean: the three screens and the splash at the five sizes in both variants and
+Choose a console over the audit's 120 consoles, and over the catalogues `eleven`, `one-console`, `n30`, `n120`, `maker40`,
+`long` and `empty`, hold no finding. The three `Testing/themes/constellation-*.mockup.spec`, written by hand from the spec and
+the canvases, hold the recordings within two units (Home 30 of 30 boxes, Choose a console 23 of 23 over `eleven`, Games 8 of
+8). Side-by-sides with the canvases' renders (Home, Choose a console and Games at 1280 × 800 and 1920 × 1200, both
+variants) are kept in `~/.cache/emusen/tmp/qt-s3/compare/constellation/`. Faults seeded and caught, each reverted: the labels
+back inside the body's box (overlap, over `eleven`); a place's line at 17 (too small at 1280 × 720); the chart's bottom fade
+dropped (cut at its foot, over `n120`). Dropping a body's `KeyNavigation.right` was not caught: the walk still reaches every
+node by its other edges.
+
+**Measured 2026-11-09**, offscreen with the contrast rule and every state of §3.7.2 (`theme-audit --states all`): no
+finding once differences 6 and 7 are in, but `many`'s reach, which is the rule's and every theme's (§3.7.2). Faults seeded and caught, each reverted: the chart at the layout's 96 … 564 with the
+label's step (the focused NES's name cut at the chart's top at every size in both variants, `pressed`); the label without
+its step and RECENT at 820 (the contrast findings of 6 and 7, the default state). Not yet proved: the splash at 1, 3 and 5 s
+on the GPU.
+
 ### 3.5 Loading and the sandbox
 
 Each theme runs in a `QQmlEngine` of its own, created by Rust with: an import path list holding only Qt's modules on an

@@ -37,7 +37,7 @@ ThemeScreen {
                 NumberAnimation { from: 1; to: 0; duration: 2000; easing.type: Easing.InOutSine }
             }
             readonly property real restOpacity: 0.08 + 0.04 * root.breath
-            // The camera on the focused row, clamped to the chart: 468 units shown from y 96.
+            // The camera on the focused row, clamped to the chart: 468 units of the layout shown from y 96, with 8 more at each end for a focused body's label.
             readonly property real camera: root.focused && layout.scrolls ? Math.max(0, Math.min(root.focused.cy - 234, layout.contentHeight - 468)) : 0
             onCameraChanged: chartView.contentY = root.camera
             FigureLayout {
@@ -116,16 +116,16 @@ ThemeScreen {
                         lineHeight: 24
                         lineHeightMode: Text.FixedHeight
                     }
-                    // The chart, 96 to 564, scrolled under a clamped camera on the focused row and faded 24 at an edge it runs past.
+                    // The chart, 96 to 564 and 8 past each end where a focused body's label steps clear of its ring, scrolled under a clamped camera on the focused row and faded 24 at an edge it runs past.
                     Flickable {
                         id: chartView
                         objectName: "chart"
-                        y: 96
+                        y: 88
                         width: root.width
-                        height: 468
+                        height: 484
                         clip: true
                         contentWidth: root.width
-                        contentHeight: Math.max(468, layout.contentHeight)
+                        contentHeight: Math.max(484, layout.contentHeight + 16)
                         boundsBehavior: Flickable.StopAtBounds
                         property bool fadeTop: chartView.contentY > 0.5
                         property bool fadeBottom: chartView.contentY + chartView.height < chartView.contentHeight - 0.5
@@ -143,11 +143,12 @@ ThemeScreen {
                                 easing.type: Tokens.panCurve
                             }
                         }
-                        // Content coordinates: the layout's y less the chart's top.
+                        // Content coordinates: the layout's y less the chart's top, 96.
                         Item {
                             id: content
+                            y: 8
                             width: root.width
-                            height: chartView.contentHeight
+                            height: chartView.contentHeight - 16
                             Scene {
                                 id: lines
                                 objectName: "chartLines"
@@ -327,9 +328,9 @@ ThemeScreen {
                         objectName: "chartThumb"
                         visible: layout.scrolls
                         x: root.width - 56
-                        y: 96 + (468 - height) * (chartView.contentHeight > 468 ? chartView.contentY / (chartView.contentHeight - 468) : 0)
+                        y: 96 + (468 - height) * (chartView.contentHeight > chartView.height ? chartView.contentY / (chartView.contentHeight - chartView.height) : 0)
                         width: 2
-                        height: Math.max(24, 468 * 468 / Math.max(468, chartView.contentHeight))
+                        height: Math.max(24, 468 * chartView.height / Math.max(chartView.height, chartView.contentHeight))
                         radius: 1
                         color: Tokens.border
                     }

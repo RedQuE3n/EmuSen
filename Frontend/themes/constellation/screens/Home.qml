@@ -356,10 +356,12 @@ ThemeScreen {
                     Item {
                         objectName: "recentChartLabel"
                         visible: shelf.count > 0
-                        x: 820 + root.ox - 11.4
+                        // In the gap, giving way to the focus: clear of the block's ring (811) while the block holds it, else of a focused cover (830.6).
+                        x: (block.activeFocus ? 823 : 819) + root.ox - 11.4
                         y: 304 - recentLabel.width / 2
                         width: 22.8
                         height: recentLabel.width
+                        Behavior on x { NumberAnimation { duration: Tokens.quick; easing.type: Tokens.quickCurve } }
                     Text {
                         id: recentLabel
                         objectName: "recentLabel"

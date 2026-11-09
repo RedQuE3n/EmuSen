@@ -1852,6 +1852,38 @@ focus the walk reaches every node of every catalogue. `theme-qt`'s harness scene
 list's reset and turns to the first console. Seeded faults, each reverted: the reach taken as two (three tests failed:
 the eleven, the hundred and twenty, the forty-maker), the camera centred on the first stop whatever the focus (the thirty).
 
+### 7.33 Overlap on turned shapes, and a stack the kit lays out (stage 3, Orrery; 2026-11-09)
+
+Orrery's orbits tilt each cover by the ellipse's normal and, by the spec, lay a neighbour partly under the apex. The fit
+rule's overlap measured every item by its scene box, the axis-aligned box about it, so two tilted covers whose shapes
+clear each other were faults, and an overlap the design intends was one too. Decided 2026-11-09: the rule measures the
+true shape, and the kit declares the stacks whose members may overlap; bending the design's steps around the measure
+was refused.
+
+**Turned shapes.** The harness records a turned item's four corners in the scene (`corners`, where an edge of it is not
+level), and `Item::shape` is those corners or the scene box's. Two items overlap when their shapes share more than the
+slack along every separating axis (the edges' normals of both, the separating axis theorem); two items neither turned
+keep the box rule exactly.
+
+**Stacks.** `StackMember`, a kit-qt object with no properties, marks the item it is placed in as one member of a stack;
+the stack is that item's parent. The harness finds it by its class and records, for the member and everything inside
+it, the stack, the member, the member's layer (its z, then its place among its siblings, the order Qt draws them in),
+whether the member holds the focus and whether the item is the member itself (`Stacking`). Members of one stack may lie
+over each other; two items of different members still fault when the lower one is words (a caption may not be hidden)
+or is a focused member (its ring may not be covered), and anything of a stack against anything outside it is held as
+before. `EmuSen.Theme` does not export `StackMember`, so only the kit's own types declare a stack: today `OrbitSlot`, a
+`Walkable` that places a cover of a list on an ellipse about the list's centre by its distance from `turning`, tilted
+by the normal, scaled by distance and lifted 12 when lit (Orrery's Home and Games, `qt-s3/final/orrery.md` §1.2), its
+covers stacked by nearness to the apex. `OrbitSlot` is re-exported by name (rule Q, additions only).
+
+**Held to** (measured 2026-11-09): `kit-core/tests/stack.rs`, two bars turned 45° whose scene boxes cross by over 100
+units but whose shapes lie 10 apart pass, and 5 of 20 shared is a fault; three covers over each other in their order
+pass; a stack's cover over a label outside it, a caption under its neighbour, a focused member under another and two
+stacks' covers over each other are each caught. `qt-test/tests/stack.rs`: the harness records a turned Text's corners,
+two turned lines whose boxes cross are not an overlap, and a `StackMember`'s item and its words carry one stack. Seeded
+faults, each reverted: captions allowed under a neighbour (the stack test), stacks not told apart (the stack test),
+turned items measured by their boxes (the turned test).
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

@@ -25,3 +25,4 @@ Keyboard 1.0 qml/Keyboard.qml
 NoticeLayer 1.0 qml/NoticeLayer.qml
 RoundPicture 1.0 qml/RoundPicture.qml
 CoverTile 1.0 qml/CoverTile.qml
+OrbitSlot 1.0 qml/OrbitSlot.qml

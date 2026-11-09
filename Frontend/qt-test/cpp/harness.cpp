@@ -156,6 +156,26 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
     node["y"] = rect.y();
     node["w"] = rect.width();
     node["h"] = rect.height();
+    // A turned item's shape is its four corners in the scene, which the overlap rule reads in place of its scene box.
+    const QPointF c0 = item->mapToScene(QPointF(0, 0)), c1 = item->mapToScene(QPointF(item->width(), 0));
+    const QPointF c2 = item->mapToScene(QPointF(item->width(), item->height())), c3 = item->mapToScene(QPointF(0, item->height()));
+    if (std::abs(c1.y() - c0.y()) > 1e-6 || std::abs(c3.x() - c0.x()) > 1e-6) {
+        node["corners"] = QJsonArray{c0.x(), c0.y(), c1.x(), c1.y(), c2.x(), c2.y(), c3.x(), c3.y()};
+    }
+    // A member of a stack the kit lays out (a StackMember child, which no theme can place): its stack, itself, its layer.
+    for (QQuickItem* up = item; up != nullptr; up = up->parentItem()) {
+        const QObjectList& owned = up->children();
+        if (std::none_of(owned.begin(), owned.end(), [](const QObject* o) { return o->inherits("StackMember"); })) {
+            continue;
+        }
+        const QList<QQuickItem*> siblings = up->parentItem() != nullptr ? up->parentItem()->childItems() : QList<QQuickItem*>{};
+        node["stack"] = QString::number(idOf(up->parentItem()));
+        node["member"] = QString::number(idOf(up));
+        node["layer"] = up->z() * 100000.0 + siblings.indexOf(up);
+        node["memberFocus"] = up->hasActiveFocus();
+        node["isMember"] = up == item;
+        break;
+    }
     node["visible"] = item->isVisible() && opacity > 0;
     node["enabled"] = item->isEnabled();
     node["scale"] = unit.height();

@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use emusen_kit_core::audit::{Axes, Edges, Item, Kind, Legibility, Rect, Text};
+use emusen_kit_core::audit::{Axes, Edges, Item, Kind, Legibility, Rect, Stacking, Text};
 use emusen_kit_core::tokens::Colour;
 use serde::Deserialize;
 
@@ -51,6 +51,20 @@ pub struct Node {
     pub text: Option<String>,
     #[serde(default)]
     pub elided: bool,
+    /// A turned item's four corners in the scene, x and y in turn.
+    #[serde(default)]
+    pub corners: Option<[f64; 8]>,
+    /// The stack a kit layout declares that the item lies in, its member and the member's layer.
+    #[serde(default)]
+    pub stack: Option<String>,
+    #[serde(default)]
+    pub member: Option<String>,
+    #[serde(default)]
+    pub layer: f64,
+    #[serde(default, rename = "memberFocus")]
+    pub member_focus: bool,
+    #[serde(default, rename = "isMember")]
+    pub is_member: bool,
     /// A turned item's own width and height in the scene's units, unturned.
     #[serde(default)]
     pub own: Option<[f64; 2]>,
@@ -166,6 +180,19 @@ fn item(index: u32, node: &Node) -> Item {
     }
     if node.fade_top || node.fade_bottom || node.fade_left || node.fade_right {
         item = item.fading(Edges { top: node.fade_top, bottom: node.fade_bottom, left: node.fade_left, right: node.fade_right });
+    }
+    if let Some(c) = node.corners {
+        item = item.turned([(c[0], c[1]), (c[2], c[3]), (c[4], c[5]), (c[6], c[7])]);
+    }
+    if let (Some(stack), Some(member)) = (&node.stack, &node.member) {
+        let number = |s: &str| s.parse::<u64>().unwrap_or(0);
+        item = item.stacked(Stacking {
+            stack: number(stack),
+            member: number(member),
+            layer: node.layer,
+            focused: node.member_focus,
+            is_member: node.is_member,
+        });
     }
     if node.text.is_some() {
         item = item.words(Text { cap_height: node.cap, width: node.tw, height: node.th, ellipsis: node.elided, data: false, own: node.own.map(|o| (o[0], o[1])) });

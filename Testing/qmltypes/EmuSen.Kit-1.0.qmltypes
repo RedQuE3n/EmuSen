@@ -2490,6 +2490,15 @@ Module {
         }
     }
     Component {
+        file: "stack.cxxqt.h"
+        lineNumber: 15
+        name: "StackMember"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/StackMember 1.0"]
+        exportMetaObjectRevisions: [256]
+    }
+    Component {
         file: "sky.cxxqt.h"
         lineNumber: 295
         name: "StarField"

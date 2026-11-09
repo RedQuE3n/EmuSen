@@ -121,3 +121,7 @@ and the console screens' maker groups are added, each after the members it joins
   the dots' count and the dial's clamped camera (`EmuSen_Kit.md` §7.32). Orrery's Choose a console needs one stop per
   maker and a walk across worlds and stops; QML may hold neither a function nor a list of groups. Additions only, in both
   registries.
+- **`OrbitSlot`** (the kit's, by name), 2026-11-09: a cover of a list placed on an ellipse by its distance from the
+  list's turning position, tilted and scaled, the covers one stack whose members the fit rule lets overlap in their
+  order (`EmuSen_Kit.md` §7.33). Orrery's orbits overlap a neighbour under the apex by design; the overlap may only be
+  declared by the kit's layout, never by a theme. Additions only, in both registries.

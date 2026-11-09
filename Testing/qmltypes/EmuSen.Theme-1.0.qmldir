@@ -22,3 +22,4 @@ PadGlyph 1.0 qml/PadGlyph.qml
 PlanetLayout 1.0 qml/PlanetLayout.qml
 FigureLayout 1.0 qml/FigureLayout.qml
 WheelLayout 1.0 qml/WheelLayout.qml
+OrbitSlot 1.0 qml/OrbitSlot.qml

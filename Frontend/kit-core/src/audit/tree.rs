@@ -122,6 +122,18 @@ pub struct Legibility {
     pub behind: Vec<Colour>,
 }
 
+/// An item's place in a stack a kit layout declares (EmuSen_Kit.md §7.33): the stack and the member it lies in, as the
+/// harness numbers them, the member's place in the stacking order (higher draws over lower), whether the member holds the
+/// focus, and whether this item is the member itself.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Stacking {
+    pub stack: u64,
+    pub member: u64,
+    pub layer: f64,
+    pub focused: bool,
+    pub is_member: bool,
+}
+
 /// One item of a screen's tree, as a recording or a harness describes it; the rules read nothing else.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Item {
@@ -144,6 +156,9 @@ pub struct Item {
     pub click_call: Option<String>,
     pub accept_call: Option<String>,
     pub wheel_scrolls: bool,
+    /// A turned item's four corners in the scene, in order round its edge; None where its scene box is its shape.
+    pub corners: Option<[(f64, f64); 4]>,
+    pub stacking: Option<Stacking>,
     pub children: Vec<Item>,
 }
 
@@ -171,6 +186,8 @@ impl Item {
             click_call: None,
             accept_call: None,
             wheel_scrolls: false,
+            corners: None,
+            stacking: None,
             children: Vec::new(),
         }
     }
@@ -222,6 +239,23 @@ impl Item {
     pub fn fading(mut self, edges: Edges) -> Item {
         self.fades = edges;
         self
+    }
+
+    /// Turned: its shape is these four corners, not its scene box.
+    pub fn turned(mut self, corners: [(f64, f64); 4]) -> Item {
+        self.corners = Some(corners);
+        self
+    }
+
+    pub fn stacked(mut self, stacking: Stacking) -> Item {
+        self.stacking = Some(stacking);
+        self
+    }
+
+    /// The item's shape: its corners when turned, else its scene box's.
+    pub fn shape(&self) -> [(f64, f64); 4] {
+        let r = self.rect;
+        self.corners.unwrap_or([(r.x, r.y), (r.right(), r.y), (r.right(), r.bottom()), (r.x, r.bottom())])
     }
 
     pub fn words(mut self, text: Text) -> Item {

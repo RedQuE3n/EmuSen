@@ -6,17 +6,11 @@
 mod common;
 
 use std::collections::BTreeMap;
-use std::path::Path;
 
-use common::{settings, until, Scratch};
-use emusen_esde::loader::{self, Choices, ThemeSystem};
+use common::{until, Scratch};
 use emusen_kit_core::input::UiButton;
 use emusen_qt_test::harness::SIZES;
 use emusen_qt_test::{Harness, Scene};
-
-// The systems in the order ES-DE 3.4.1 shows them on the oracle's library (its capture of Art Book Next's carousel, 2026-11-08), the SNES first.
-const ORDER: [(&str, &str); 5] =
-    [("snes", "Super Nintendo"), ("n64", "Nintendo 64"), ("nes", "Nintendo Entertainment System"), ("gb", "Game Boy"), ("gbc", "Game Boy Color")];
 
 // A box and whether the painter sized it by its laid-out words (a help bar, a status row, an auto-sized text).
 type Boxes = BTreeMap<String, ((f64, f64, f64, f64), bool)>;
@@ -41,21 +35,6 @@ fn fractions(scene: &mut Scene<'_>, w: f64, h: f64) -> Boxes {
 fn ratio(w: i32, h: i32) -> (i32, i32) {
     let g = (1..=w.min(h)).rev().find(|d| w % d == 0 && h % d == 0).unwrap();
     (w / g, h / g)
-}
-
-// A step along a view's primary element, as the painter reads its axis: down a list or a vertical carousel, else right.
-fn along(theme: &Path, choices: &Choices, view: &str) -> UiButton {
-    let t = loader::load(&theme.to_string_lossy(), &ThemeSystem::new("snes", "Super Nintendo", "snes"), choices, None);
-    let vertical = match t.view(view).primary() {
-        Some(p) if p.kind() == "textlist" => true,
-        Some(p) if p.kind() == "carousel" => p.string("type").is_some_and(|t| t.starts_with("vertical")),
-        _ => false,
-    };
-    if vertical {
-        UiButton::Down
-    } else {
-        UiButton::Right
-    }
 }
 
 /// What the view puts in the window besides the theme's elements: none (the quick-scroll overlay is hidden at rest).
@@ -105,7 +84,7 @@ fn the_watched_themes_hold_at_the_five_sizes() {
     assert!(common::oracle_library().join("gamelists").exists(), "the oracle's library: Testing/esde-oracle/library.py");
     let _kwin = common::start();
     let scratch = Scratch::new("sizes");
-    let (shelves, media, presence) = common::oracle_texts(&ORDER);
+    let texts = common::oracle_texts(&common::ORDER);
     let out = common::compare_dir();
     let mut harness = Harness::new();
     let mut failures = vec![];
@@ -114,26 +93,14 @@ fn the_watched_themes_hold_at_the_five_sizes() {
     for (theme, variant, scheme, font) in common::watched() {
         let folder = common::corpus().join(&theme);
         assert!(folder.join("capabilities.xml").exists(), "{theme} in the corpus at {}", folder.display());
-        let mut choices = format!("\"Variant\":\"{variant}\",\"FontSize\":\"{font}\"");
-        if let Some(s) = &scheme {
-            choices += &format!(",\"ColorScheme\":\"{s}\"");
-        }
-        let picked = Choices { variant: Some(variant.clone()), color_scheme: scheme.clone(), font_size: Some(font.clone()), ..Choices::default() };
+        let (choices, picked) = common::choices_of(&variant, &scheme, &font);
         for view in ["system", "gamelist"] {
-            let text = settings(&folder, &format!("\"DisplayClock\":true,\"StartupView\":\"{view}\"")).replacen('{', &format!("{{\"choices\":{{{choices}}},"), 1);
-            assert!(scene.set_property("view", "shelves", "[]"));
-            until(&mut scene, "the view emptied", |s| s.property("esdeModel", "themed") == "false");
-            scene.resize(w0, h0);
-            assert!(scene.set_property("view", "media", &media));
-            assert!(scene.set_property("view", "presence", &presence));
-            assert!(scene.set_property("view", "settings", &text));
-            assert!(scene.set_property("view", "shelves", &shelves));
-            until(&mut scene, "the theme loaded", |s| s.property("esdeModel", "themed") == "true");
+            common::install(&mut scene, &folder, &choices, view, &texts, w0, h0);
             let problem = scene.property("esdeModel", "problem");
             if !problem.is_empty() {
                 failures.push(format!("{theme}: {problem}"));
             }
-            let step = along(&folder, &picked, view);
+            let step = common::along(&folder, &picked, view);
             if view == "gamelist" {
                 // The first game: the folder Tower Set is entry 0, as ES-DE lists it.
                 scene.pad(step);

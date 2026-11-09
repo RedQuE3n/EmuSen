@@ -213,6 +213,8 @@ pub struct Data {
     pub scroll_overlay: bool,
     /// The gameselectors' random picks start from this, set by the host; each navigation of the view draws again.
     pub selection_seed: u64,
+    /// The face of a text whose theme names none: ES-DE's own where the host found it (`fonts`), else the painter's body face.
+    pub default_font: Option<String>,
 }
 
 impl Data {
@@ -235,6 +237,7 @@ impl Data {
             help: HelpContext::default(),
             scroll_overlay: false,
             selection_seed: 0,
+            default_font: None,
         }
     }
 

@@ -14,6 +14,8 @@ Item {
     property alias swap: esde.swap
     property alias device: esde.device
     property alias now: esde.now
+    property alias defaultFont: esde.defaultFont
+    property alias selectionSeed: esde.selectionSeed
     property int family: Kit.Families.Generic
     readonly property alias scene: esde
     focus: true

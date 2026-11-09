@@ -2231,7 +2231,8 @@ picture, not its box.
   as a `file:` URL.
 - **One report per extent.** `TextBlock` raises `measured` from `Text`'s `contentSizeChanged`, which Qt emits once per
   layout that changes either axis; the same words set again report nothing. A face file that does not load, or none
-  named, sets the kit's Barlow (decided 2026-11-08: the kit's face is the default). Qt's `FontLoader` keeps one font
+  named, sets the kit's Barlow (decided 2026-11-08: the kit's face is the default; since 2026-11-09 a theme that names no
+face takes ES-DE's Akrobat where the player has it installed, §4.8.7). Qt's `FontLoader` keeps one font
   per URL for the process, so a face is loaded once whatever the number of texts.
 
 #### 4.8.2 Proof (E1)
@@ -2464,7 +2465,7 @@ THEMES.md and USERGUIDE.md, settled or named:
 | Artflix's title reads SUPER NINTENDO where ES-DE reads NINTENDO SNES (SUPER NINTENDO) | not accepted as a difference: **settled 2026-11-09**. The systems table's `esde_full_name` held the project's short name; it now holds ES-DE 3.4.1's full name from its user guide, a data change in `Platform/systems/data` (§4.6, "A system's full name") |
 | The D-pad pair drawn as two glyphs (left lit, right lit) where ES-DE draws one cross | the kit has no glyph for an axis: **named, open** |
 | No VIEW MEDIA entry in a gamelist | the media viewer is not built; the entry would name a press that does nothing: **named, open** |
-| The help labels wider than ES-DE's | the kit's face where ES-DE uses its own (decided, design §12) |
+| The help labels wider than ES-DE's | the kit's face where ES-DE uses its own (decided, design §12; replaced 2026-11-09 by ES-DE's Akrobat where installed, §4.8.7) |
 | The clock's time | the wall clock at the grab |
 | CarAlt's system view: a band of the theme's yellow down the middle where ES-DE draws three games' screenshots | those screenshots are the system view's `cover1`–`cover3`, fed by a gameselector, which is later (13 pairs, §4.5.5); the yellow is the theme's own picture beneath them: **named, later** with the gameselector |
 | CarAlt's gamelist: the lower screenshot (`cover3`, zIndex 3) drawn over the theme's dark mask (`topline3`, `circle2.svg`, zIndex 3), where ES-DE draws the mask over it | the loader breaks a zIndex tie by first definition, a choice (EmuSen_BigPicture.md §12.2), and `topline3` is defined first; ES-DE 3.4.1 drew the later-defined `cover3` beneath. THEMES.md states no tie order, and one capture does not tell an order by name from others: **named, open**, to be settled on captures of more ties before the loader's rule changes |
@@ -2712,6 +2713,25 @@ and the approved AppImage's captures of 2026-11-08 (`Testing/esde-oracle/README.
 2026-11-09 by the tester:** the font files bundled in that AppImage count as evidence too (fonts only; still never ES-DE's
 code or graphics); their metrics, read through Qt's `FontMetrics`, are kept below.
 
+**ES-DE's default face, read where the player has it.** A theme that names no font is drawn by ES-DE in Akrobat: the
+letter pens of Art Book Next's help labels (no `fontPath`, 25.67 px) are Akrobat's to the pixel (MENU's ink starts at
+0, 17, 29, 43 px against Akrobat's 0, 17, 29, 43; Ubuntu Condensed gives 0, 19, 31, 46, NanumSquare Neo 0, 25, 41, 61).
+Akrobat is published by Fontfabric under its *Commercial EULA for free fonts*
+(https://www.fontfabric.com/fontfabric-commercial-eula-for-free-fonts/, read 2026-11-09), which allows embedding the
+font in a product but not redistributing the font files themselves, nor derivative works, without Fontfabric's written
+consent (sections 04 and 05); it is not the OFL and says nothing of the GPL. **Decided 2026-11-09 by the tester:** the
+painter reads Akrobat at run time from where the player already has it and redistributes nothing; where it is not
+installed, the kit's body face stands, as §4.8.1 had it. So a theme without a font matches ES-DE only where Akrobat is
+installed, the help box of Art Book Next among them. `emusen_esde::fonts` has the one job: `locate` looks for
+`Akrobat-Regular.ttf` in an installed ES-DE's `resources/fonts` (the distribution's package under `/usr/share/es-de` and
+`/usr/local/share/es-de`, the user's `~/ES-DE`, the Flatpak `org.es_de.frontend` system-wide and per user, a running
+AppImage's `/tmp/.mount_ES-DE*` mount; USERGUIDE.md names `/usr/share/es-de` as the installation folder), and then asks
+fontconfig for the family (`fc-list :family=Akrobat:style=Regular file`); `default_font` does this once and caches the
+path (a `OnceLock`, written once, read after). The scene's `Data::default_font` carries it, and every text, list,
+carousel, grid and help element whose theme names no `fontPath` takes it (`paint::face_of`). `EsdeModel.defaultFont`
+(`View.defaultFont`) gives a file instead, for a host or a test; empty, the one found. The oracle gives it the AppImage's
+own file by path.
+
 **The boxes, held to ES-DE.** `oracle.rs` holds every element of a state's `.spec` to where ES-DE draws it, within two
 design units: the C# scene's box where the C# drew it where ES-DE does, and otherwise the box measured on ES-DE's capture,
 committed as `Testing/esde-baseline/esde-boxes.tsv` (22 rows, each with how it was measured). `NAMED_BOXES` is empty. The
@@ -2784,6 +2804,47 @@ gaps, 0.25 em from a mark to its words and 0.375 em between items: 82.1 units ag
 items' gap at 0.2 em (3.9 and 3.4 units narrower, failing). A first fault, the marks square again, moved the box by
 1.2 units and was not caught: the gamepad narrower and the star wider by about the same; the spacing fault replaced it.
 
+**A system's name in the oracle.** The oracle's library gave the SNES as "Super Nintendo", a copy of a name whose owner
+is the systems table (§4.6, "A system's full name"). `tests/common` now reads `esde_full_name` from
+`Platform/systems/data/<id>.json`, so Artflix's title reads NINTENDO SNES (SUPER NINTENDO) as in ES-DE's capture.
+
+**2. The pictures: the ceiling.** The MAE of a watched state is held to the last committed corpus measure (a rise of
+more than 0.05 fails, as before), and a fall of more than 0.05 fails too until the run that measures it commits it
+(`EMUSEN_ESDE_CORPUS=1`), so the ceiling falls with the figure; the C# figure is printed beside it and holds nothing.
+`a_row_that_worsens_is_named` holds `fell` with `worsened`.
+
+| Theme | State | 1280 before | 1280 after | 1920 before | 1920 after |
+|---|---|---|---|---|---|
+| Art Book Next | system | 0.99 | 0.99 | 0.37 | 0.36 |
+| Art Book Next | gamelist | 2.46 | 2.46 | 1.97 | 1.97 |
+| Artflix | system | 6.50 | **4.96** | 6.40 | **4.28** |
+| Artflix | gamelist | 8.30 | **8.23** | 8.27 | **7.59** |
+| CarAlt | system | 17.94 | **7.17** | 16.49 | 16.49 |
+| CarAlt | gamelist | 6.00 | 6.01 | 5.63 | 5.63 |
+
+The RX 6800 on 2026-11-09, before (the committed measure of the day, WiseMan 04a8ebd02) and after, committed as
+`Testing/esde-corpus/2026-11-09.tsv` (a re-measure of the day); lavapipe agreed within 0.07. Artflix's system view fell
+by a quarter and a third: its description and title are Akrobat as ES-DE draws them, and its title names the system as
+ES-DE does. Seeded fault: no default face (Art Book Next's help bars 39–73 units wider, failing).
+
+*CarAlt's system view at 1280 × 800 fell from 17.94 to 7.17* because the painter now shows the games ES-DE's capture
+shows. A gameselector's picks are random in ES-DE and seeded in the painter, so comparing them compared two draws, not
+two painters. `Testing/esde-baseline/picks.tsv` records the games each capture shows by element (read off the capture:
+Lumen Garden, Juniper Vault, Ember Circuit), and the oracle seeds the painter (`EsdeModel.selectionSeed`, added; 0 takes
+the install's time as before) with the first seed whose picks, by the scene's own `selector::game_for` on the systems
+the painter builds from the same texts, are those games, as it pins the clock to the capture's time. At 1920 × 1200
+ES-DE's capture shows Juniper Vault, Hollow Comet and Rune Gate, and Rune Gate is inside the folder Tower Set: ES-DE's
+selector draws from every game of the system, and the painter's system holds only the level the gamelist shows (the
+host's rows), so no seed gives that pick. That state keeps its time-seeded picks: **[blocked]**, needing the host's rows
+to carry a folder's games for the selectors (an addition to the shelves' text, §4.6) or the tester's word.
+
+**What is left, state by state, by its share of the error** (the error inside each element's box over the state's):
+
+| State | Largest causes |
+|---|---|
+| CarAlt system | at 1920 × 1200 the three covers (most of 16.5), the picks above; at 1280 × 800 the description and the bands' edges |
+| every other state | the texts' layout: descriptions (Artflix's 47 % of its system view, CarAlt's gamelist 43 %, Art Book Next's gamelist 32 %) wrap at other words, since ES-DE lays every text out by the rules of item 3 (Artflix's "developed by Nintendo … 1991 in North" is 508 px by ES-DE's rule and 497 by Qt's, so ES-DE wraps before "North" in its 512-px box and Qt after it) |
+
 **Boxes still off ES-DE, each [blocked]** (named nowhere; the oracle fails on them):
 
 | Where | Off | Why |
@@ -2791,6 +2852,13 @@ items' gap at 0.2 em (3.9 and 3.4 units narrower, failing). A first fault, the m
 | Artflix and CarAlt gamelists, `helpsystem_help` (four) | 50–119 units | ES-DE lists VIEW MEDIA (X, its media viewer); the painter has no media viewer, so the entry is left out (§4.8.5). Closing it needs the media viewer built |
 | Art Book Next at 1920 × 1200: the system and gamelist help bars, the clock | 8.9, 4.8, 2.8 | ES-DE draws these two TrueType faces (Akrobat, Mulish) about 2.6 % wider at 1920 × 1200 than their nominal size: the help's MENU pens fit 39.3–39.8 px for 38.5 (at 1280 × 800 25.4–25.9 for 25.67), and the same rule at 1280 × 800 is within a pixel. Not hinting as Qt applies it (full hinting at 38, 39 and 40 px gives 25, 17; 25, 18; 26, 18 for M, E where ES-DE's pens step 26, 18, 20), and neither face sets the integer-ppem flag. The CFF faces (rost, Exo 2) measure their nominal sizes at 1920 × 1200 |
 | Artflix system, `helpsystem_help` | 2.1 and 2.0 | SCREENSAVER's ink 102 px in ES-DE, 104 in Qt; Exo 2's MENU pens fit 19.0–19.5 px at a nominal 20 at 1280 × 800 (and 30 at 1920 × 1200), the same size-dependent widths as the row above |
+
+**Proof**, 2026-11-09: the oracle on lavapipe for each step and once on the RX 6800 (above), failing on the nine boxes of
+the last table and on nothing else; kit-core's `glyph` (7 tests, the pair's among them); the registries of `EmuSen.Kit`
+(`PadGlyphMarks.pair`, `paired`) and `EmuSen.Esde` (`EsdeModel.defaultFont`, `selectionSeed`, `MarkShapes.aspect`,
+`baseline`, `GlyphLine`) committed under `Testing/qmltypes`, each addition declared last. Seven seeded faults, each
+reverted: six caught as written above (the pair glyph off, the fractional advances, the glyph's side, the info gap, no
+default face, the filled axis cut at one tip), and one, the info marks square, not caught and replaced.
 
 ---
 

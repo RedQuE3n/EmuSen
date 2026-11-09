@@ -204,10 +204,11 @@ const ORACLE_TYPES: [(&str, &str); 5] =
 /// The oracle library as `esdeShelves`, `esdeMedia` and `esdePresence` in ES-DE's order (`order`, the systems as ES-DE
 /// shows them): folders on top, then favourites, then the rest, each by name, as its settings have it (FoldersOnTop,
 /// FavoritesFirst). Read from the gamelists library.py writes, whose form is fixed.
-pub fn oracle_texts(order: &[(&str, &str)]) -> (String, String, String) {
+pub fn oracle_texts(order: &[&str]) -> (String, String, String) {
     let root = oracle_library();
     let (mut shelves, mut media, mut presence) = (vec![], vec![], vec![]);
-    for (system, full) in order {
+    for system in order {
+        let full = &full_name(system);
         let xml = std::fs::read_to_string(root.join("gamelists").join(system).join("gamelist.xml")).unwrap();
         let mut rows: Vec<(u8, String, String)> = vec![];
         // ES-DE counts every game of the system, those inside folders too (its captures: 14 games, 7 favourites).
@@ -327,13 +328,24 @@ pub fn settle_picture(scene: &mut Scene<'_>, scratch: &Path) -> bool {
 }
 
 // The systems in the order ES-DE 3.4.1 shows them on the oracle's library (its capture of Art Book Next's carousel, 2026-11-08), the SNES first.
-pub const ORDER: [(&str, &str); 5] =
-    [("snes", "Super Nintendo"), ("n64", "Nintendo 64"), ("nes", "Nintendo Entertainment System"), ("gb", "Game Boy"), ("gbc", "Game Boy Color")];
+pub const ORDER: [&str; 5] = ["snes", "n64", "nes", "gb", "gbc"];
+
+/// A system's name as an ES-DE theme reads it (`${system.fullName}`), from its owner, the systems table's data file (EmuSen_Qt.md §4.6).
+pub fn full_name(system: &str) -> String {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../Platform/systems/data/{system}.json"));
+    let row: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    row["esde_full_name"].as_str().unwrap_or_else(|| panic!("{system}: the oracle's systems are all named by ES-DE")).to_owned()
+}
+
+/// The oracle's SNES as the loader is given it.
+pub fn oracle_snes() -> emusen_esde::loader::ThemeSystem {
+    emusen_esde::loader::ThemeSystem::new("snes", &full_name("snes"), "snes")
+}
 
 /// A step along a view's primary element, as the painter reads its axis: down a list or a vertical carousel, else right.
 pub fn along(theme: &Path, choices: &emusen_esde::loader::Choices, view: &str) -> emusen_kit_core::input::UiButton {
-    use emusen_esde::loader::{self, ThemeSystem};
-    let t = loader::load(&theme.to_string_lossy(), &ThemeSystem::new("snes", "Super Nintendo", "snes"), choices, None);
+    use emusen_esde::loader;
+    let t = loader::load(&theme.to_string_lossy(), &oracle_snes(), choices, None);
     let vertical = match t.view(view).primary() {
         Some(p) if p.kind() == "textlist" => true,
         Some(p) if p.kind() == "carousel" => p.string("type").is_some_and(|t| t.starts_with("vertical")),
@@ -361,13 +373,18 @@ pub fn choices_of(variant: &str, scheme: &Option<String>, font: &str) -> (String
     (text, picked)
 }
 
+/// The painter's settings for a watched theme's view: the theme, its choices, the clock shown and the view to start in.
+pub fn install_settings(folder: &Path, choices: &str, view: &str) -> String {
+    settings(folder, &format!("\"DisplayClock\":true,\"StartupView\":\"{view}\"")).replacen('{', &format!("{{\"choices\":{{{choices}}},"), 1)
+}
+
 /// A watched theme's view installed afresh at `w` × `h` on the oracle's texts, the clock shown; waits until it is themed.
 /// The instant a test holds the clock at (EsdeModel's `now`, Unix seconds): 2026-11-06 12:00 UTC, so a minute turning over
 /// mid-test changes no clock's words.
 pub const HELD_NOW: &str = "1793966400";
 
 pub fn install(scene: &mut Scene<'_>, folder: &Path, choices: &str, view: &str, texts: &(String, String, String), w: i32, h: i32) {
-    let text = settings(folder, &format!("\"DisplayClock\":true,\"StartupView\":\"{view}\"")).replacen('{', &format!("{{\"choices\":{{{choices}}},"), 1);
+    let text = install_settings(folder, choices, view);
     assert!(scene.set_property("view", "shelves", "[]"));
     until(scene, "the view emptied", |s| s.property("esdeModel", "themed") == "false");
     scene.resize(w, h);

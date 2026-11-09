@@ -4,6 +4,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 
+use emusen_esde::fonts;
 use emusen_esde::loader::{self, Choices, MediaPresence, Theme, ThemeSystem};
 use emusen_esde::scene::{Data, DateTime, DeviceStatus, Frame, HelpContext, Layout, PadButton, Row, Rows, Stage, System, Time};
 
@@ -70,6 +71,10 @@ pub struct Painter {
     pub swap: bool,
     /// What the host reports of the device for systemstatus; none until it reports.
     pub device: DeviceStatus,
+    /// ES-DE's default face as the host gave it; none, the one `fonts` finds.
+    pub default_font: Option<String>,
+    /// The gameselectors' seed as the host gave it; none, the install's time.
+    pub selection_seed: Option<u64>,
 }
 
 impl Default for Painter {
@@ -80,7 +85,7 @@ impl Default for Painter {
 
 impl Painter {
     pub fn new(settings: Settings) -> Self {
-        Painter { stage: None, now: 0, frame: Frame::default(), held: None, settings, generation: 0, swap: false, device: DeviceStatus::default() }
+        Painter { stage: None, now: 0, frame: Frame::default(), held: None, settings, generation: 0, swap: false, device: DeviceStatus::default(), default_font: None, selection_seed: None }
     }
 
     /// Installs a refresh's systems, keeping the view and the selection where they still exist.
@@ -99,8 +104,9 @@ impl Painter {
         data.system_index = system.min(data.systems.len() - 1);
         data.game_index = game;
         data.now = now;
-        // The gameselectors' random picks start from the install's time, so a pinned time pins them too.
-        data.selection_seed = now.seconds() as u64;
+        // The gameselectors' random picks start from the host's seed, else the install's time, so a pinned time pins them too.
+        data.selection_seed = self.selection_seed.unwrap_or(now.seconds() as u64);
+        data.default_font = self.default_font.clone().or_else(|| fonts::default_font().map(|p| p.to_string_lossy().into_owned()));
         data.show_clock = self.settings.show_clock;
         data.show_help = self.settings.show_help;
         data.scroll_overlay = self.settings.scroll_overlay;

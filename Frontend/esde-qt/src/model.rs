@@ -44,6 +44,10 @@ pub mod qobject {
         #[qproperty(QString, letters_mark, READ, NOTIFY)]
         #[qproperty(f64, letters_px, READ, NOTIFY)]
         #[qproperty(f64, letters_opacity, READ, NOTIFY)]
+        /// ES-DE's default face as a file the host gives; empty, the one `emusen_esde::fonts` finds (EmuSen_Qt.md §4.8.7).
+        #[qproperty(QString, default_font)]
+        /// The seed the gameselectors' random picks start from; 0 takes the install's time (EmuSen_Qt.md §4.8.7).
+        #[qproperty(i64, selection_seed)]
         type EsdeModel = super::EsdeModelRust;
     }
 
@@ -111,6 +115,8 @@ pub struct EsdeModelRust {
     swap: bool,
     device: QString,
     now: i64,
+    default_font: QString,
+    selection_seed: i64,
     themed: bool,
     problem: QString,
     view: QString,
@@ -143,6 +149,8 @@ impl cxx_qt::Initialize for qobject::EsdeModel {
         self.as_mut().on_presence_changed(|m| m.load()).release();
         self.as_mut().on_width_changed(|m| m.load()).release();
         self.as_mut().on_height_changed(|m| m.load()).release();
+        self.as_mut().on_default_font_changed(|m| m.load()).release();
+        self.as_mut().on_selection_seed_changed(|m| m.load()).release();
         self.as_mut().on_device_changed(|mut m| {
             let device = shelves::device(&m.device.to_string());
             m.as_mut().rust_mut().shared.borrow_mut().set_device(device);
@@ -192,6 +200,8 @@ impl qobject::EsdeModel {
         {
             let mut p = self.shared.borrow_mut();
             p.settings = settings;
+            p.default_font = (!self.default_font.is_empty()).then(|| self.default_font.to_string());
+            p.selection_seed = u64::try_from(self.selection_seed).ok().filter(|s| *s != 0);
             p.install(systems, w, h, local_now(self.now));
         }
         let themed = self.shared.borrow().stage.is_some();

@@ -244,6 +244,24 @@ Module {
             lineNumber: 272
             isReadonly: true
         }
+        Property {
+            name: "defaultFont"
+            type: "QString"
+            read: "getDefaultFont"
+            write: "setDefaultFont"
+            notify: "defaultFontChanged"
+            index: 19
+            lineNumber: 273
+        }
+        Property {
+            name: "selectionSeed"
+            type: "qlonglong"
+            read: "getSelectionSeed"
+            write: "setSelectionSeed"
+            notify: "selectionSeedChanged"
+            index: 20
+            lineNumber: 274
+        }
         Signal { name: "settingsChanged"; lineNumber: 311 }
         Signal { name: "shelvesChanged"; lineNumber: 312 }
         Signal { name: "mediaChanged"; lineNumber: 313 }
@@ -263,6 +281,8 @@ Module {
         Signal { name: "lettersMarkChanged"; lineNumber: 327 }
         Signal { name: "lettersPxChanged"; lineNumber: 328 }
         Signal { name: "lettersOpacityChanged"; lineNumber: 329 }
+        Signal { name: "defaultFontChanged"; lineNumber: 330 }
+        Signal { name: "selectionSeedChanged"; lineNumber: 331 }
         Signal {
             name: "played"
             lineNumber: 340
@@ -323,6 +343,16 @@ Module {
         Method {
             name: "setNow"
             lineNumber: 296
+            Parameter { name: "value"; type: "qlonglong" }
+        }
+        Method {
+            name: "setDefaultFont"
+            lineNumber: 308
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setSelectionSeed"
+            lineNumber: 310
             Parameter { name: "value"; type: "qlonglong" }
         }
         Method {

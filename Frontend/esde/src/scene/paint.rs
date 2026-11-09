@@ -52,6 +52,11 @@ pub(super) fn existing(path: Option<&ThemePath>) -> Option<String> {
     path.filter(|p| p.exists).map(|p| p.absolute.clone())
 }
 
+/// An element's face: the theme's `fontPath`, else ES-DE's default face where the host found one.
+pub(super) fn face_of(e: &Element, data: &Data) -> Option<String> {
+    existing(e.path("fontPath")).or_else(|| data.default_font.clone())
+}
+
 pub(super) fn color(e: &Element, property: &str, default: u32) -> Color {
     e.color(property).unwrap_or(Color(default))
 }
@@ -202,7 +207,7 @@ fn text(e: &Element, said: String, scroll: Option<TextScroll>, ctx: &Ctx) -> Dra
     let clock = e.kind() == "clock";
     let mut t = Text {
         text: said,
-        font: existing(e.path("fontPath")),
+        font: face_of(e, ctx.data),
         px: e.float("fontSize").unwrap_or(if clock { 0.035 } else { 0.045 }) as f64 * ctx.h,
         color: color(e, "color", if clock { 0xFFFF_FFFF } else { 0x0000_00FF }),
         h_align: h_align(e.string("horizontalAlignment")),
@@ -399,7 +404,7 @@ fn help_element(e: &Element, ctx: &Ctx) -> Option<Draft> {
     let bg = color(e, "backgroundColor", 0);
     let paint = Paint::Help(Help {
         entries,
-        font: existing(e.path("fontPath")),
+        font: face_of(e, ctx.data),
         px: e.float("fontSize").unwrap_or(0.035) as f64 * ctx.h,
         label_color: color(e, "textColor", 0x7777_77FF),
         icon_color: color(e, "iconColor", 0x7777_77FF),
@@ -432,7 +437,7 @@ fn info(e: &Element, ctx: &Ctx) -> Option<Draft> {
     let size = element_size(e, ctx);
     let paint = Paint::Info(Info {
         items,
-        font: existing(e.path("fontPath")),
+        font: face_of(e, ctx.data),
         px: e.float("fontSize").unwrap_or(0.045) as f64 * ctx.h,
         color: color(e, "color", 0x0000_00FF),
         background: color(e, "backgroundColor", 0),
@@ -484,7 +489,7 @@ fn status(e: &Element, ctx: &Ctx) -> Option<Draft> {
     let paint = Paint::Status(Status {
         items,
         height: e.float("height").unwrap_or(0.035) as f64 * ctx.h,
-        font: existing(e.path("fontPath")),
+        font: face_of(e, ctx.data),
         text_scale: e.float("textRelativeScale").unwrap_or(0.9) as f64,
         color: color(e, "color", 0xFFFF_FFFF),
         background: padded(e, ctx, Tint { color: bg, end: bg, vertical: false }),

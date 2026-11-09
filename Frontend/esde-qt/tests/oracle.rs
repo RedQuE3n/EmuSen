@@ -1,10 +1,10 @@
-//! The oracle comparison (EmuSen_Qt.md §4.8.6): each watched theme's system view at the SNES and its gamelist at the
-//! first game, at 1280 × 800 and 1920 × 1200, on the oracle's library, grabbed on the GPU tier and held to ES-DE 3.4.1's
-//! captures (EmuSen_Qt.md §4.8.7): every element's box within two design units of where ES-DE draws it (the C# scene's
-//! spec, or the box measured on the capture in `Testing/esde-baseline/esde-boxes.tsv` where the C#'s is not ES-DE's), and
-//! the mean absolute error, the help bar's strip left out, no higher than the C# painter's in `mae.tsv`. The corpus
-//! measure of `esde-check` gains the watched columns and is written for `Testing/esde-corpus`; a row that worsens against
-//! the last committed measure fails.
+//! The oracle comparison (EmuSen_Qt.md §4.8.6, §4.8.7): each watched theme's system view at the SNES and its gamelist at
+//! the first game, at 1280 × 800 and 1920 × 1200, on the oracle's library, grabbed on the GPU tier and held to ES-DE
+//! 3.4.1's captures: every element's box within two design units of where ES-DE draws it (the C# scene's spec, or the
+//! box measured on the capture in `Testing/esde-baseline/esde-boxes.tsv` where the C#'s is not ES-DE's), and the mean
+//! absolute error, the help bar's strip left out, no higher than the last committed measure. The corpus measure of
+//! `esde-check` gains the watched columns and is written for `Testing/esde-corpus`; a row that worsens against the last
+//! committed measure fails, and a watched figure that falls fails until the lower one is committed.
 
 mod common;
 
@@ -24,11 +24,6 @@ const STATES: [(&str, &str); 2] = [("system", "system"), ("gamelist", "gamelist-
 /// Boxes off ES-DE's that the tester has named: (theme, state, the spec's key), at both sizes. Empty since 2026-11-09
 /// (EmuSen_Qt.md §4.8.7); an entry no longer seen fails, so the list cannot outlive its findings.
 const NAMED_BOXES: [(&str, &str, &str); 0] = [];
-
-/// States whose MAE is above the C# painter's, measured on 2026-11-09 and named in EmuSen_Qt.md §4.8.6: (theme, state,
-/// width, the measured figure as a ceiling). A state above its ceiling fails, and one back under the C#'s fails too.
-const NAMED_MAE: [(&str, &str, i32, f64); 0] = [
-];
 
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -73,6 +68,39 @@ fn esde_boxes() -> BTreeMap<(String, String, i32, String), [f64; 4]> {
             ((c[0].to_owned(), c[1].to_owned(), c[2].parse().unwrap(), c[3].to_owned()), [n(4), n(5), n(6), n(7)])
         })
         .collect()
+}
+
+/// ES-DE's random picks in a capture: (theme, state, width) → (the element's spec key, the game it shows), in order.
+fn captured_picks() -> BTreeMap<(String, String, i32), Vec<(String, String)>> {
+    let text = std::fs::read_to_string(repo().join("Testing/esde-baseline/picks.tsv")).unwrap();
+    text.lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .skip(1)
+        .map(|l| {
+            let c: Vec<&str> = l.split('\t').collect();
+            let picks = c[3].split(',').map(|p| p.split_once('=').map(|(k, g)| (k.to_owned(), g.to_owned())).unwrap()).collect();
+            ((c[0].to_owned(), c[1].to_owned(), c[2].parse().unwrap()), picks)
+        })
+        .collect()
+}
+
+/// The first seed whose gameselector picks show ES-DE's captured games, read through the scene's own rule
+/// (`selector::game_for`) on the systems the painter builds from the same texts, so the oracle's state is the capture's.
+fn seed_for(settings: &str, texts: &(String, String, String), w: i32, h: i32, picks: &[(String, String)]) -> u64 {
+    use emusen_esde_qt::{painter, shelves};
+    let systems = painter::systems(&painter::ThemeCache::default(), &shelves::settings(settings), shelves::shelves(&texts.0, &texts.1), &shelves::presence(&texts.2), w, h);
+    let system = &systems[0];
+    let view = system.theme.view("system");
+    (1..1_000_000)
+        .find(|seed| {
+            picks.iter().all(|(key, game)| {
+                let (kind, name) = key.split_once('_').unwrap();
+                view.find(kind, name)
+                    .and_then(|e| emusen_esde::scene::selector::game_for(e, view, system, *seed))
+                    .is_some_and(|i| system.games[i].name == *game)
+            })
+        })
+        .unwrap_or_else(|| panic!("no seed picks {picks:?}"))
 }
 
 /// The C# baseline's rows: (theme, state, width) → (strip top, strip bottom, MAE).
@@ -234,6 +262,10 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
     let texts = common::oracle_texts(&common::ORDER);
     let baseline = baseline();
     let esde = esde_boxes();
+    let picks = captured_picks();
+    // ES-DE's default face, read from the approved AppImage's fonts by path as an installed ES-DE's would be (EmuSen_Qt.md §4.8.7).
+    let face = oracle.join("bin/AppDir/usr/share/es-de/resources/fonts").join(emusen_esde::fonts::FILE);
+    assert!(face.is_file(), "ES-DE's face at {}: Testing/esde-oracle/README.md", face.display());
     let mut harness = Harness::new();
     let mut failures = vec![];
     let mut table = vec!["theme\tstate\tsize\tqt_mae\tcs_mae\trects_off".to_owned()];
@@ -254,6 +286,10 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
                 let taken = std::fs::metadata(&capture).and_then(|m| m.modified()).unwrap_or_else(|e| panic!("{}: {e}", capture.display()));
                 let taken = taken.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
                 assert!(scene.set_property("view", "now", &taken.to_string()));
+                assert!(scene.set_property("view", "defaultFont", &face.to_string_lossy()));
+                // The gameselectors' picks as ES-DE's random ones in this capture, as the clock is its time.
+                let seed = picks.get(&(theme.clone(), state.to_owned(), w)).map_or(0, |p| seed_for(&common::install_settings(&folder, &choices, view), &texts, w, h, p));
+                assert!(scene.set_property("view", "selectionSeed", &seed.to_string()));
                 common::install(&mut scene, &folder, &choices, view, &texts, w, h);
                 let problem = scene.property("esdeModel", "problem");
                 if !problem.is_empty() {
@@ -273,7 +309,7 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
                 let tree = scene.tree();
 
                 // The rectangles against the C# scene's.
-                let system = emusen_esde::loader::ThemeSystem::new("snes", "Super Nintendo", "snes");
+                let system = common::oracle_snes();
                 let theme_view = emusen_esde::loader::load(&folder.to_string_lossy(), &system, &picked, None);
                 let spec: Vec<_> = spec_boxes(&repo().join(format!("Testing/esde-baseline/{name}.spec")), theme_view.view(view))
                     .into_iter()
@@ -297,19 +333,13 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
                     eprintln!("{at}: drawn by Qt, not by the C#: {}", noted.join(", "));
                 }
 
-                // The picture against ES-DE's, the help bar's strip left out, beside the C# painter's on the same rows.
+                // The picture against ES-DE's, the help bar's strip left out, the C# painter's figure on the same rows beside it.
                 let (top, bottom, cs_mae) = baseline[&(theme.clone(), state.to_owned(), w)];
                 let (ew, eh, esde) = pixels(&capture).unwrap_or_else(|| panic!("ES-DE's capture {}: Testing/esde-baseline/capture.sh", capture.display()));
                 let (qw, qh, qtp) = pixels(&qt_png).unwrap();
                 assert_eq!((ew, eh, qw, qh), (w, h, w, h), "{at}: the capture and the grab at the state's size");
+                // The ceiling is the last committed measure, held below with the corpus; the C#'s figure is printed beside it.
                 let (qt_held, cs_held) = (mae(&esde, &qtp, w, (top, bottom)), cs_mae);
-                match NAMED_MAE.iter().find(|(t, s, width, _)| *t == theme && *s == state && *width == w) {
-                    Some((.., ceiling)) if qt_held > ceiling + 0.005 => failures.push(format!("{at}: MAE {qt_held:.2} above its named {ceiling:.2}")),
-                    Some(_) if qt_held <= cs_held + 0.005 => failures.push(format!("{at}: MAE {qt_held:.2} back under the C#'s {cs_held:.2}: unname it")),
-                    Some(_) => {}
-                    None if qt_held > cs_held + 0.005 => failures.push(format!("{at}: MAE {qt_held:.2} above the C# painter's {cs_held:.2}")),
-                    None => {}
-                }
                 table.push(format!("{theme}\t{state}\t{w}x{h}\t{qt_held:.2}\t{cs_held:.2}\t{}", off.len()));
                 eprintln!("{}  ({} pixels differ by over 8 levels within a pixel)", table.last().unwrap(), differing.unwrap_or(0));
                 let column = format!("mae_{view}_{w}");
@@ -353,8 +383,15 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
     let mut earlier: Vec<PathBuf> = std::fs::read_dir(&committed).unwrap().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "tsv")).collect();
     earlier.sort();
     if let Some(last) = earlier.last() {
-        for w in worsened(&std::fs::read_to_string(last).unwrap(), &measure) {
+        let last_text = std::fs::read_to_string(last).unwrap();
+        for w in worsened(&last_text, &measure) {
             failures.push(format!("against {}: {w}", last.file_name().unwrap().to_string_lossy()));
+        }
+        // The ceiling falls with the figure: a lower one is committed by the run that measures it.
+        if std::env::var_os("EMUSEN_ESDE_CORPUS").is_none() {
+            for w in fell(&last_text, &measure) {
+                failures.push(format!("against {}: {w}: commit the lower measure (EMUSEN_ESDE_CORPUS=1)", last.file_name().unwrap().to_string_lossy()));
+            }
         }
     }
     if !report.all_load {
@@ -369,10 +406,30 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// Watched figures that fell from `old` to `new` by more than a run's noise, so the committed ceiling would lag them.
+fn fell(old: &str, new: &str) -> Vec<String> {
+    let (old, new) = (corpus_rows(old), corpus_rows(new));
+    let mut out = vec![];
+    for (theme, now) in &new {
+        let Some(was) = old.get(theme) else { continue };
+        for c in ["mae_system_1280", "mae_gamelist_1280", "mae_system_1920", "mae_gamelist_1920"] {
+            let num = |r: &BTreeMap<String, String>| r.get(c).and_then(|v| v.parse::<f64>().ok());
+            if let (Some(a), Some(b)) = (num(was), num(now)) {
+                if b < a - 0.05 {
+                    out.push(format!("{theme}: {c} {a} → {b}"));
+                }
+            }
+        }
+    }
+    out
+}
+
 #[test]
 fn a_row_that_worsens_is_named() {
     let old = "theme\tloads\tunknown\tunsupported\tundrawn\tmae_system_1280\nA\tyes\t0\t5\t-\t1.00\nB\tyes\t0\t2\t-\t-\n";
     let new = "theme\tloads\tunknown\tunsupported\tundrawn\tmae_system_1280\nA\tno\t0\t6\tvideo\t1.20\nB\tyes\t0\t2\t-\t3.00\nC\tno\t1\t9\t-\t-\n";
     assert_eq!(worsened(old, new), ["A: no longer loads", "A: unsupported 5 → 6", "A: mae_system_1280 1 → 1.2", "A: video undrawn"]);
     assert!(worsened(new, new).is_empty());
+    assert_eq!(fell(new, old), ["A: mae_system_1280 1.2 → 1"]);
+    assert!(fell(old, new).is_empty());
 }

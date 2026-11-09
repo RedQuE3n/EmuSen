@@ -320,3 +320,22 @@ fn every_row_s_games_and_its_fan_are_written_once_a_refresh_at_a_library_s_scale
     assert_eq!(view.games_text("nowhere"), "[]", "a key that is no row leads to no games");
     assert_eq!(from_json(view.games_text("recent")).len(), 4);
 }
+
+#[test]
+fn the_themes_group_and_back_entries_go_where_the_canvases_put_them() {
+    use emusen_kit_core::input::UiButton;
+    use emusen_qt_models::help::entries_with;
+    let words = |screen, group, back| -> Vec<&str> { entries_with(screen, group, back).iter().map(|e| e.1).collect() };
+    assert_eq!(words(Screen::Home, true, false), ["Resume", "Game page", "Favourite", "Group", "Search", "Home"]);
+    assert_eq!(words(Screen::HomePlaces, true, false), ["Open", "Group", "Search", "Home"]);
+    assert_eq!(words(Screen::Consoles, true, false), ["Open", "Back", "Group", "Favourites", "Random game"]);
+    assert_eq!(words(Screen::HomeShelf, false, true), ["Play", "Game page", "Favourite", "Back", "Search", "Home"]);
+    assert_eq!(words(Screen::HomePlaces, true, true), ["Open", "Back", "Group", "Search", "Home"]);
+    assert_eq!(entries_with(Screen::Consoles, false, true), entries(Screen::Consoles), "a screen with B gets no second");
+    for screen in [Screen::Grid, Screen::GridSearched, Screen::Search] {
+        assert_eq!(entries_with(screen, true, true), entries(screen), "{screen:?}: the shoulders already mean something");
+    }
+    let group = entries_with(Screen::Consoles, true, false)[2];
+    assert_eq!((group.0, group.2), (UiButton::PageUp, None), "the shoulders' pair, no action: the theme's walk answers it");
+    assert_eq!(action_lines(Screen::Consoles), "favourites Search\nrandom Screensaver\nhome Menu\n", "the declared actions unchanged");
+}

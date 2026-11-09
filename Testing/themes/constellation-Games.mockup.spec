@@ -7,7 +7,6 @@ element gridTitle y=40.8 h=38.4 token=TextStrong words=data
 element gridCells x=126 y=92 w=1052 h=536
 element gridCell.0 x=142 y=108 w=180 h=240
 element gridCell.1 x=346 y=108 w=180 h=240
-element gridCell.5 x=142 y=372 w=180 h=240
 element gridKey x=64 y=626 w=1152 h=100
 element gridFocusTitle x=88 y=642 h=38.4 token=TextStrong words=data
 element gridFocusFacts x=88 y=684 h=26.4 token=Muted words=data

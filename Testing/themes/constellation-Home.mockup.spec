@@ -10,7 +10,7 @@ element continue x=64 y=96 w=740 h=416
 element continueRing x=57 y=89 w=754 h=430 token=Accent
 note the caption bar: 88 tall on the block's foot, padding 12 20 0; line 1 the eyebrow and the chip, line 2 (top 44) the title and the facts
 element captionBar x=64 y=424 w=740 h=88
-element captionEyebrow x=84 y=437 h=20 text="CONTINUE PLAYING"
+element captionEyebrow x=84 y=437 h=22.8 text="CONTINUE PLAYING"
 element captionChip right=784 y=434 h=26
 element captionTitle x=84 y=468 h=31 words=data
 element captionFacts y=473 h=24 words=data

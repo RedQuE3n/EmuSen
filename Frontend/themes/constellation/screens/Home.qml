@@ -215,7 +215,8 @@ ThemeScreen {
                             Rectangle {
                                 anchors.fill: parent
                                 radius: 12
-                                color: Tokens.inputSurface
+                                // A game's picture sits on black in both variants, as the game's own bars are.
+                                color: "#000000"
                             }
                             RoundPicture {
                                 objectName: "blockHero"
@@ -264,7 +265,7 @@ ThemeScreen {
                                 preferredRendererType: Shape.CurveRenderer
                                 ShapePath {
                                     strokeColor: "transparent"
-                                    fillColor: Tokens.captionSurface
+                                    fillColor: "#AB000000"
                                     PathRectangle {
                                         width: 740
                                         height: 88

@@ -3962,7 +3962,12 @@ gate's five sizes and recorded. Seeded faults, each reverted:
 - `MenuRow`'s value held to half its row again (Kit §7.50): the program's test, SA-1 catch-up cut at all five sizes;
 - Open Folder given the folder's parent: the program's test, the caught URL;
 - the rows' view's current index left to Qt (Kit §7.51): the program's test, B on Firmware ending on the first row;
-- the dialog's Cancel answered as a choice of no folder: the program's test, the ROM folder saved blank.
+- the dialog's Cancel answered as a choice of no folder: the program's test, the ROM folder saved blank;
+- a row the engine holds drawn steppable: the models' synthetic-core test;
+- Delete Save sent without its question: the models' card manager test;
+- the noun re-cased from `noun` rather than read from `noun_in_text`: the models' Pause Card test (`1 Card`);
+- the frame's `sentenceTone` left unbound: the program's test, the firmware sentence in the text's colour;
+- the runtime's fallback to an engine's own system taken out: the client test, the core's card not listed.
 
 #### 7.7.F Cores on the tool screen, the approval at first launch and the firmware question (stage 5, piece F; 2026-11-09)
 

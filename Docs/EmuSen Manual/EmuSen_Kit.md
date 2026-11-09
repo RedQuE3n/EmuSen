@@ -2604,8 +2604,9 @@ so a folder's path of 70 characters (the test's scratch tree) took the whole row
 width, which the gate read as the label cut, past its box and past its clip. The value is now at most half the row and
 cut at its start (`Text.ElideLeft`), so the label keeps the other half and the end of a path, the folder's own name,
 shows, as a file manager's narrow column shows one. A value that fits is drawn as before; nothing of the surface
-changed. The cut is still a finding of the gate's ("cut with an ellipsis"), which Settings' test names for a folder's
-value alone. Held to by `qt-app/tests/settings.rs`; seeded, the cap taken out failed it again (the label cut and past its
+changed. The cut is still a finding of the gate's ("cut with an ellipsis"). Settings names it for a folder's value alone, on the
+condition that focusing the row gives the whole path in the pane (`EmuSen_Qt.md` §7.7); any other value cut on a row
+stays a finding. Held to by `qt-app/tests/settings.rs`; seeded, the cap taken out failed it again (the label cut and past its
 box, the value past its row's clip).
 
 ### 7.6 Building, linking, the registry, and what it is held to

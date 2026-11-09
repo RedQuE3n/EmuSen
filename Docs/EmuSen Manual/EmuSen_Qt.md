@@ -3593,16 +3593,19 @@ A row set **for every console**, Picture shape and Crop overscan, is set on each
 (`emusen_serenity_filters`, its `screens`) has a screen for, or each whose screen is a television, and reads `Console's`
 while they differ, as Mistress's `ForEvery` does (decided 2026-11-03). The **CRT shader** row's tiers are the catalogue's
 own: Off, then the CRT filter's `quality` choices; a console's tier is its `ScreenFilter` naming the filter and its
-`ShaderParameters` value, else the setting's initial value. Off writes `None`, Mistress's `ScreenFilters.None`, the one
-word of Serenity's the description holds until piece J gives the filter key a Rust reader.
+`ShaderParameters` value, else the setting's initial value. A console's `ScreenFilter` holds a filter's name as the
+catalogue gives it: the CRT's (`CRT`) for a tier, and for Off the plain picture's, the catalogue's
+`effect.None.nearest`, whose name is `None` (Mistress's `ScreenFilters.None`). The description names the two filters by
+their catalogue keys and holds no word of Serenity's.
 
 **The model** (`emusen-qt-models`, one job a file): `settings.rs`, plain Rust over a `SettingsSource` (the rows, the two
 models, the catalogue, the sound devices): sections, the trail of pages, rows with the kit's `RowKind`, the pane
 (sentence, lines, muted lines, preview `Picture`, `Meter`, `Variants` or `Sizes`, caption, the meter's share, the
 samples), steps, choices and their `Outcome` (saved, a page opened, a door), and what the settings ask of the whole
-program: the type scale (`TextSize`'s scales 1, 1.15 and 1.3, Mistress's `TextSizes`, in the description), the light
-variant and reduced motion. `settings_source.rs`, the source over `emusen-platform-client` (GraphicsConfig's file by
-the name `emusen_platform.h` gives it, `graphics.json`, since the model has no file number). `settings_model.rs`,
+program: the type scale (`TextSize`'s scales 1, 1.15 and 1.3, Mistress's `TextSizes`, in the description, since
+neither Galaxia's row nor its model holds a scale; a question for the tester), the light variant and reduced motion. `settings_source.rs`, the source over `emusen-platform-client` (GraphicsConfig's file by
+the name `emusen_platform.h` gives it, `graphics.json`: no call of the header loads or saves a model by its kind
+alone, so this one copy stays until a file number is approved). `settings_model.rs`,
 `SettingsModel`, its bridge: the rows with the roles the kit's settings frame reads (`label`, `value`, `sentence`,
 `kind`, `held`, `marked`, `key`), the section, trail, focused row and its pane as properties, `step`, `choose`, `back`,
 and the signals `door` and `left`. The settings are read off the GUI thread when the platform library is named and each
@@ -3643,7 +3646,11 @@ and the text sizes' lines at hers. **Differences that remain, each for the teste
   the kit's `MenuRow`.
 - Library ▸ ROM folder: the test's scratch tree's path is 70 characters, so the value is cut at its start (§7.46 of the
   kit) and the pane's first line, `2 games under …`, takes three lines; Mistress's recording names her run folder
-  `<run>` and holds that line as volatile. The test names the cut for a folder's value alone.
+  `<run>` and holds that line as volatile. **A folder's value cut on its row is a named exception** (decided
+  2026-11-09), on one condition the tests hold: focusing the row shows the whole path in the pane, wrapped (the ROM
+  folder's sentence names it; Artwork, ES-DE media and ES-DE theme folders give it as a line), so nothing is hidden.
+  The program's test holds the ROM folder's pane to the scratch tree's whole path, the models' test the Artwork
+  folder's. Any other value cut on its row is still a finding.
 - Library ▸ Collections has no value (Mistress's `1`, her fixture's one collection) and EmuSen ▸ Logging none (her
   `Off`): the library's collections and the runtime's log switch are not read here yet (pieces M and the shell's).
 - Display ▸ CRT shader's caption reads "The last game · Off CRT", since the sandbox has played nothing, where Mistress's
@@ -3672,6 +3679,8 @@ read through the invokable `sampleScale(index)`. The blast radius on the softwar
 qt-models 78, kit-gallery 7, and emusen-qt's fifteen software test binaries. Seeded faults, each
 reverted:
 - every value written as text: the models' Sound test (and the doors' test, through Scraping's switch);
+- a folder's pane without its whole path: the models' doors test;
+- Off written as the plain picture's key rather than its name: the models' CRT test;
 - a console's row set on the first console alone: the models' consoles test;
 - B on the Themes tab going Home: the models' routes test;
 - `MenuRow`'s value cap taken out: the program's test, the ROM folder's label past its clip at every size;

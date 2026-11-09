@@ -20,7 +20,8 @@ fn focused(scene: &mut Scene<'_>) -> String {
 
 /// The gate's findings this screen names for the tester: the help bar's words under the floor at 1280 × 720, as the
 /// Themes tab and the grid name them; and a folder's path longer than half its row, cut at its start so the folder's
-/// own name shows (the scratch tree's ROM folder is 70 characters, EmuSen_Qt.md §7.7).
+/// own name shows, which the pane gives whole once the row is focused (held below; EmuSen_Qt.md §7.7). Any other value
+/// cut on its row stays a finding.
 fn named(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
     let item = fault.rsplit(": ").next().and_then(|n| n.parse::<usize>().ok()).and_then(|i| tree.nodes.get(i));
     let path_cut = fault.contains("cut with an ellipsis") && item.is_some_and(|n| n.name == "value" && n.text.as_deref().is_some_and(|t| t.starts_with('/')));
@@ -46,7 +47,7 @@ fn reach(scene: &mut Scene<'_>, section: i32, row: i32) {
 
 #[test]
 fn qt_7_7_settings_opens_from_home_steps_saves_and_holds_its_states() {
-    let _world = sandbox("qt-app-settings", &[("NES", "One.nes"), ("NES", "Two.nes")]);
+    let world = sandbox("qt-app-settings", &[("NES", "One.nes"), ("NES", "Two.nes")]);
     let platform = Platform::load(library()).unwrap();
     // Two values as Mistress's own-look fixture holds them, so the recordings are compared on the same settings.
     let mut held = platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
@@ -81,6 +82,10 @@ fn qt_7_7_settings_opens_from_home_steps_saves_and_holds_its_states() {
     hold(&mut scene, "SettingsSound", &mockup::Mockup::default(), named, &mut report);
     reach(&mut scene, 4, 0);
     hold(&mut scene, "SettingsLibrary", &mockup::Mockup::default(), named, &mut report);
+    // The ROM folder's path, cut at its start on the row, is whole in the pane once the row is focused: the named cut's
+    // condition.
+    let roms = world.root.join("Roms").display().to_string();
+    assert!(scene.property("settingsSentence", "text").contains(&roms), "the pane names {roms} whole");
     reach(&mut scene, 5, 0);
     hold(&mut scene, "SettingsEmuSen", &mockup::Mockup::default(), named, &mut report);
     // The shoulders wrap from EmuSen to Controllers, then on to Display.

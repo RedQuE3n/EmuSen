@@ -29,7 +29,10 @@ impl SettingsSource for Fake {
     fn catalogue(&self) -> Result<Value, String> {
         let balanced = 1.0f64.to_bits();
         Ok(json!({
-            "filters": [{"key": "CRT", "settings": [{"id": "quality", "initial": balanced, "choices": ["Performance", "Balanced", "Accurate"]}]}],
+            "filters": [
+                {"key": "CRT", "name": "CRT", "settings": [{"id": "quality", "initial": balanced, "choices": ["Performance", "Balanced", "Accurate"]}]},
+                {"key": "effect.None.nearest", "name": "Plain"}
+            ],
             "screens": [{"console": "NES", "kind": "Television"}, {"console": "GB", "kind": "Lcd"}, {"console": "SNES", "kind": "Television"}]
         }))
     }
@@ -143,7 +146,7 @@ fn qt_7_7_the_crt_row_takes_its_tiers_from_serenitys_catalogue() {
         view.step(crt, -1);
     }
     assert_eq!(view.rows()[crt].value, "Off", "from Console's, Left starts at the last tier and steps down to Off");
-    assert_eq!(view.read.graphics["Consoles"]["NES"]["ScreenFilter"], "None");
+    assert_eq!(view.read.graphics["Consoles"]["NES"]["ScreenFilter"], "Plain", "Off is the catalogue's plain picture by its name there");
     view.facts = json!({"running": "Aurora Drift"});
     assert_eq!(view.pane(crt).caption, "Aurora Drift · Off CRT");
 }
@@ -163,6 +166,10 @@ fn qt_7_7_doors_open_pages_and_screens_and_b_closes_a_page_first() {
     assert_eq!(view.rows()[0].kind, RowKind::Opens);
     assert_eq!(view.pane(0).sentence, "3 games under /games, read in place and never moved.");
     assert_eq!(view.choose(index(&view, "themes")), Outcome::Door("themes".into()));
+    // A folder cut on its row shows whole in the pane once focused.
+    view.read.app["ArtworkDirectory"] = json!("/a/folder/long/enough/to/be/cut/on/its/row/of/seven/hundred/and/four/units/Art");
+    assert_eq!(view.pane(1).lines, ["/a/folder/long/enough/to/be/cut/on/its/row/of/seven/hundred/and/four/units/Art"]);
+    assert!(view.pane(0).sentence.contains("/games"));
 
     assert_eq!(view.choose(index(&view, "scraping")), Outcome::Opened);
     assert_eq!(view.trail(), ["Library", "Scraping"]);

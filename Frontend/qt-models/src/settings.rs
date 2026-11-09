@@ -313,12 +313,21 @@ impl SettingsView {
     }
 
     fn filter(&self, entry: &Value) -> Option<&Value> {
-        self.read.catalogue["filters"].as_array()?.iter().find(|f| f["key"] == entry["filter"])
+        self.filter_keyed(&entry["filter"])
+    }
+
+    fn filter_keyed(&self, key: &Value) -> Option<&Value> {
+        self.read.catalogue["filters"].as_array()?.iter().find(|f| f["key"] == *key)
+    }
+
+    /// The word a console's `ScreenFilter` holds for a filter of the catalogue: the filter's name there.
+    fn filter_name(&self, key: &Value) -> String {
+        self.filter_keyed(key).map_or_else(|| text_of(key), |f| text_of(&f["name"]))
     }
 
     /// Each console's choice on the CRT row: 0 off, else 1 and the setting's value there or its initial value.
     fn filter_at(&self, entry: &Value) -> Vec<usize> {
-        let name = text_of(&entry["filter"]);
+        let name = self.filter_name(&entry["filter"]);
         let setting = text_of(&entry["setting"]);
         let initial = self
             .filter(entry)
@@ -515,11 +524,12 @@ impl SettingsView {
         }
         if entry.get("filter").is_some() && count > 0 {
             let next = chosen.map_or(if by > 0 { 0 } else { count - 1 }, |i| wrapped(i, by, count));
-            let name = text_of(&entry["filter"]);
+            let name = self.filter_name(&entry["filter"]);
+            let off = self.filter_name(&entry["off"]);
             let setting = text_of(&entry["setting"]);
             for c in self.consoles(entry["consoles"].as_str().unwrap_or("every")) {
                 if next == 0 {
-                    set_at(&mut self.read.graphics, &format!("Consoles.{c}.ScreenFilter"), entry["off"].clone());
+                    set_at(&mut self.read.graphics, &format!("Consoles.{c}.ScreenFilter"), json!(off));
                 } else {
                     set_at(&mut self.read.graphics, &format!("Consoles.{c}.ScreenFilter"), json!(name));
                     let parameters = &mut self.read.graphics["ShaderParameters"];

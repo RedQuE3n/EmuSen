@@ -856,29 +856,29 @@ Module {
         Signal { name: "actionLinesChanged"; lineNumber: 271 }
         Signal {
             name: "sectionChosen"
-            lineNumber: 286
+            lineNumber: 288
             Parameter { name: "key"; type: "QString" }
         }
         Signal {
             name: "focusMoved"
-            lineNumber: 287
+            lineNumber: 289
             Parameter { name: "role"; type: "Roles::Role" }
         }
-        Signal { name: "detailOpened"; lineNumber: 288 }
-        Signal { name: "detailClosed"; lineNumber: 289 }
-        Signal { name: "pageClosed"; lineNumber: 290 }
+        Signal { name: "detailOpened"; lineNumber: 290 }
+        Signal { name: "detailClosed"; lineNumber: 291 }
+        Signal { name: "pageClosed"; lineNumber: 292 }
         Signal {
             name: "actionInvoked"
-            lineNumber: 291
+            lineNumber: 293
             Parameter { name: "key"; type: "QString" }
         }
         Signal {
             name: "sheetPressed"
-            lineNumber: 292
+            lineNumber: 294
             Parameter { name: "button"; type: "Pad::PadButton" }
         }
-        Signal { name: "sheetDismissed"; lineNumber: 293 }
-        Signal { name: "backDeclined"; lineNumber: 294 }
+        Signal { name: "sheetDismissed"; lineNumber: 295 }
+        Signal { name: "backDeclined"; lineNumber: 296 }
         Method {
             name: "setForm"
             lineNumber: 237
@@ -955,41 +955,53 @@ Module {
             Parameter { name: "hovered"; type: "bool" }
         }
         Method {
-            name: "click"
+            name: "hoverAt"
             lineNumber: 276
+            Parameter { name: "item"; type: "QQuickItem"; isPointer: true }
+            Parameter { name: "hovered"; type: "bool" }
+            Parameter { name: "at"; type: "QPointF" }
+        }
+        Method {
+            name: "pointerMoved"
+            lineNumber: 277
+            Parameter { name: "at"; type: "QPointF" }
+        }
+        Method {
+            name: "click"
+            lineNumber: 278
             Parameter { name: "item"; type: "QQuickItem"; isPointer: true }
             Parameter { name: "button"; type: "int" }
         }
         Method {
             name: "moveFocus"
             type: "bool"
-            lineNumber: 277
+            lineNumber: 279
             Parameter { name: "by"; type: "int" }
         }
         Method {
             name: "focusRole"
             type: "bool"
-            lineNumber: 278
+            lineNumber: 280
             Parameter { name: "role"; type: "Roles::Role" }
         }
         Method {
             name: "stepSection"
             type: "bool"
-            lineNumber: 279
+            lineNumber: 281
             Parameter { name: "by"; type: "int" }
         }
-        Method { name: "openDetail"; type: "bool"; lineNumber: 280 }
-        Method { name: "closeDetail"; type: "bool"; lineNumber: 281 }
-        Method { name: "openPage"; lineNumber: 282 }
-        Method { name: "closePage"; type: "bool"; lineNumber: 283 }
+        Method { name: "openDetail"; type: "bool"; lineNumber: 282 }
+        Method { name: "closeDetail"; type: "bool"; lineNumber: 283 }
+        Method { name: "openPage"; lineNumber: 284 }
+        Method { name: "closePage"; type: "bool"; lineNumber: 285 }
         Method {
             name: "setAction"
-            lineNumber: 284
+            lineNumber: 286
             Parameter { name: "key"; type: "QString" }
             Parameter { name: "button"; type: "Pad::PadButton" }
             Parameter { name: "enabled"; type: "bool" }
         }
-        Method { name: "clearActions"; lineNumber: 285 }
+        Method { name: "clearActions"; lineNumber: 287 }
     }
     Component {
         file: "game_picture.h"
@@ -4438,6 +4450,23 @@ Module {
             type: "int"
             lineNumber: 104
             values: ["Dark", "Light"]
+        }
+    }
+    Component {
+        file: "current.cxxqt.h"
+        lineNumber: 15
+        name: "ViewCurrent"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/ViewCurrent 1.0"]
+        isCreatable: false
+        isSingleton: true
+        exportMetaObjectRevisions: [256]
+        Method {
+            name: "take"
+            isMethodConstant: true
+            lineNumber: 25
+            Parameter { name: "item"; type: "QQuickItem"; isPointer: true }
         }
     }
     Component {

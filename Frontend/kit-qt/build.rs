@@ -78,6 +78,7 @@ fn main() {
         "src/keyboard.rs",
         "src/notices.rs",
         "src/keypass.rs",
+        "src/current.rs",
         "src/settings.rs",
     ])
     .include_dir("cpp")

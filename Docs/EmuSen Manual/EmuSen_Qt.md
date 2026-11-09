@@ -921,6 +921,37 @@ Repeaters' own `itemAdded`, never by an item kept from before. Delegates' data i
 3. The grid reports its focused game to the program (`Actions.focus`) and draws the focus the program holds
    (`Browse.focusRow`), so the List card's jumps move it as before.
 
+**A declined place** (2026-11-09). A place the host declines (`available` false in `Library.places`) is still walked
+to and still drawn in its tile, its words and its mark at 38%, the dim look the other themes give it, where Home had
+drawn it as an offered one. theme-audit's `disabled` state, offscreen on the software backend: in the dark variant the
+finding "a declined place drawn as if offered" is gone at every size, its words exempt as drawn apart (`EmuSen_Kit.md`
+§7.38); at 80% it came back at all five sizes (a seeded fault, reverted). The light variant kept it until its words
+turned light (below).
+
+**The light variant: the world stays dark** (decided 2026-11-09 by the tester). In light, the world, Home's and the grid's
+night sky, stays dark and the words drawn on it turn light; only the cards and panels go light. The words on the world
+(Home's status line, the wordmark, RECENT and the focused cover's name; the grid's path, heading, count, neighbours and the
+focused game's name and facts) take the dark variant's inks by day, through one part, `parts/Night.qml` (`textStrong`
+#EEEEF0, `text` #D4D4D4, `muted` #8D8D91 by day, the kit's own tokens by night), the one place the theme copies the
+dark variant's colours, since a theme sees only the variant in force. Continue's panel and the places' tiles are panels:
+dark glass at 55% and 50% by night as before, light at 94% by day, their words the variant's own. The light variant had
+failed contrast almost everywhere (S7's survey of 2026-11-09: 530 lines on Home and 350 on the grid, words at 1.04 to
+3.1:1 over the night). Choose a console keeps its paper by day (`EmuSen_Interface.md` §24.4), which held its words
+already. Over the 120 consoles in the dark variant, an orbit's maker other than the focused one was drawn at 70% and read
+3.44:1; it is now told apart by ink, `muted` beside the focused orbit's `text`, at full opacity. With no game suspended,
+the top's title and facts stand on the world beside the shelf's game rather than on Continue's panel, and take the
+world's inks; the shelf's caption moved down 6 units, clear of the focused cover's ring, which crossed it at 1280 × 720.
+
+Proof, measured 2026-11-09 offscreen on the software backend: `theme-audit --states all` over the package, both variants,
+every size: no contrast finding left (S7's survey: 1,309 lines, of them 530 on Home and 350 on the grid in light, and the
+maker labels' in dark). What stays is the fit rule's, as before and in both variants alike: a place's status line cut with
+an ellipsis at 1280 × 800 ("Game packa…"), the grid's neighbours past their row, and on Choose a console the focused
+console's name cut at the foot and, over 120 consoles, counts and engine tags under the capitals' floor at 1280 × 720.
+Two seeded faults, each reverted: `Night` reading the variant's own tokens by day (30 low-contrast lines in `nogame`'s
+light variant); Continue's panel at 55% by day (its heading and facts low at every size). The acceptance test passes with
+the change (the maker labels were its 3.44:1). The side-by-sides, before left and after right, light, 1280 × 800 (Home,
+Home with no game, the grid, the grid empty, Choose a console): `~/.cache/emusen/tmp/qt-s3-kg/compare/*-side.png`.
+
 **Proof, measured 2026-11-08.** The acceptance test (Vulkan on the RX 6800 in its own compositor, the virtual pad, the
 canvas's library) passed on WiseMan d5edac3e5 with the old screens and on the package, and its 90 grabs, 18 states
 (Home, Home with nothing left, Choose a console, the grid, the List card, the Home card's two pages, the Pause Card's
@@ -1408,6 +1439,54 @@ has a tile no walk leads to, named at every size in both variants; `by-hand` lay
 size with 120 consoles; `literal`, `multimedia` and `low-contrast` are each named by the static step and not loaded. `theme-check`'s
 reading of the program's lines, the note, and its refusal without the program are tested with a stand-in script, with no Qt.
 `emusen-theme-manifest`'s `API` and `CUES` are held to `EmuSen.Theme`'s committed registry by `tests/registry.rs` (rule Q).
+
+**The states** (2026-11-09). `theme-audit --states LIST` (or `all`) records the states the four themes' specs name beyond the
+default: `nogame`, `empty`, `one-console`, `one-game`, `many`, `nocover`, `norecent`, `long`, `pressed`, `disabled` and the
+splash held at 1, 3 and 5 s; the capacity states stay `--catalogue`'s. Each is fed through the theme's own surfaces as the
+program feeds them (`Library.show` with the places the host declines, `Browse`, `Session`, the kit's `Tokens`), a screen placed
+afresh and judged by every rule of the default, recorded under its name. One run takes a list rather than one state a run,
+since a run builds the library, draws its covers and starts Qt once. The list's one owner is `states.rs`, printed by
+`--list-states` and held to `man theme-check`'s STATES by a test. The default library's games now have covers, drawn into an
+ES-DE media folder given to the host as the program's start gives it, so the default is the canvases' and `nocover` its own
+state. The splash's time comes from the host's side without a change to `EmuSen.Theme`: the harness holds Qt's animation clock
+(`EmuSen_Kit.md` §7.36), so every theme's splash is held as written; an API clock would have held only the themes that adopt
+it. Every state also holds an operable element to a name a reader hears (kit-core's `named`, the `name` kind), which a
+Continue entry drawn with no game, or a tile titled only beside its cover, breaks. Proof: seven fixture packages
+`tests/themes/state-*`, each wrong in one state alone and found there alone at every size in both variants.
+Five seeded faults, each caught: the declined places not fed (the disabled fixture), the held clock moved without advancing
+the driver (the splash fixture), the session's game kept in nogame (the nogame fixture), the covers kept in nocover (the nocover
+fixture) and a state renamed in the man page (the list's test).
+
+**The themes in every state**, measured 2026-11-09 offscreen on the software backend, the contrast rule included, findings
+by state beyond what the default already has: Horizon only `many`; Meridian `nogame` (the shelf's covers past the edge with
+no fade at 1422 and the shelf unreached from the first focus), `empty` (Games' empty words over the heading), `many`;
+Constellation `nogame` (RECENT's label over the hero at 3840 × 2160), `many`; Orrery `long` and `nocover` (an orbit's cover
+past the orbit's clip), `disabled` (the help bar's Open over Search at 1920 × 1200), `many` (a generated card's title at 10.5
+capitals at 1280 × 720). Three findings were the rules' rather than the themes', and each was fixed on 2026-11-09 (`EmuSen_Kit.md` §7.11,
+§7.38): the walk lost delegates a view made again, so the plain `ListView` of 9,000 rows was unreached after the first
+size; a declined place drawn at 38% is exempt while it is drawn apart from its offered look; and words mid-fade under a
+held clock are not judged.
+
+**Again on 2026-11-09**, after those fixes and the walkable's A (`EmuSen_Kit.md` §7.37), on WiseMan d8ee3187e, every
+state, offscreen on the software backend. The `disabled` state's contrast is gone from Meridian, Constellation and Orrery,
+whose declined place is drawn apart; the reference package's is not, since its Home draws a declined place as an offered
+one (a finding of its own, "a declined place drawn as if offered"). The splash's contrast at 5 s is gone from every theme.
+Meridian's rail entry shows its pressed bar (6 wide in the `pressed` recordings, 4 otherwise). What stays in `many` is the
+themes': a grid cell (the reference package's, Meridian's and Constellation's `gridCell`, Horizon's strip) focused by
+the walk as the pointer focuses it does not become its view's current item, so the pad moves on from the cell that was
+current; the walk focuses an element as a hover does (`Walkable`'s `HoverHandler`), so a player pointing then pressing
+meets the same. By theme, beyond the default's findings: the reference package `disabled` (above) and `many`; Meridian
+`nogame` (as before) and `many`; Horizon `many`, and Qt's warnings from the kit's `EdgeFade` with no target at placing
+(`TypeError: Cannot read property 'x' of null`, every screen); Constellation `nogame` and `many`; Orrery, its contrast
+measured over the glyphs, `long` and `disabled` (fit, as before), `empty` (contrast 4.15 to 4.18:1) and the 120 consoles'
+maker stops unnamed. The reference package carries its default's findings into every state.
+
+**The grids, in the kit** (2026-11-09). A walkable focused inside a `ListView` or `GridView` now makes its delegate the
+view's current item, the pointer focuses only by moving, and the walk waits out a view turning to its current item
+(`EmuSen_Kit.md` §7.39). `theme-audit --states many` over the five themes, offscreen on the software backend: no reach
+finding left in any (the reference package, Meridian and Constellation 70 lines each before, Horizon 80). What stays is
+each theme's own default: the reference package's light variant's contrast and fit (46 lines), Horizon's `EdgeFade`
+warnings (the fade piece's).
 
 **Not yet.** The reference package (R) has not been through it; a theme's token overrides are not applied to the theme's engine by
 the host yet, so the loaded step judges the kit's own colours; the splash's still frame is judged as every screen is, under reduced

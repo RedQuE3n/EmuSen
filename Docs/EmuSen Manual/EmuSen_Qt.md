@@ -2782,7 +2782,7 @@ ES-DE does: each glyph a `Text` at its pen, the pens summed from `FontMetrics.ad
 size nearest, times the size over it, rounded; the glyph drawn at that whole size scaled to the exact one; no kerning;
 the reference character centred on the line's height (`EsdeModel.reference`, owned by `emusen_esde::fonts::REFERENCE`, since QML
 builds no words, §1.3). The kit's `HelpBar` draws an entry's words with the host's component where it is
-given one (`label`, EmuSen_Kit.md §7.53), so `HelpElement` gives it `GlyphLine` at fs × r. After: CarAlt's MENU ink
+given one (`label`, EmuSen_Kit.md §7.54), so `HelpElement` gives it `GlyphLine` at fs × r. After: CarAlt's MENU ink
 1050.0–1073.1 against ES-DE's 1051.8–1074.0 and SCREENSAVER 1156.0–1215.2 against 1157.0–1215.1; every label of the
 twelve states within a pixel of ES-DE's ink width where the face is drawn at its nominal size (below for the two that
 are not). Seeded faults: the advances left fractional (CarAlt's bar 5.9 units narrower, Art Book Next's 3.2, Artflix's
@@ -2794,9 +2794,9 @@ calls that Qt does not track: a first form laid out once and kept the old widths
 action (Choose, the gamelist's System: a d-pad with both arrows of its axis; THEMES.md's `button_lr` and `button_ltrt`
 for the shoulders and the triggers). kit-core's `glyph::paired` gives one glyph for a d-pad axis, the two shoulders or
 the two triggers, and kit-qt's `PadGlyph.pair` draws it; the kit's `HelpBar.pairGlyph` draws an entry's pair as that one
-glyph, which `HelpElement` turns on (EmuSen_Kit.md §7.53). CarAlt's Choose now inks 1221–1237 against ES-DE's 1221–1237;
+glyph, which `HelpElement` turns on (EmuSen_Kit.md §7.54). CarAlt's Choose now inks 1221–1237 against ES-DE's 1221–1237;
 it had drawn two glyphs over 1198–1238. Seeded faults: `pairGlyph` off (the four system bars 22.3–40.9 units wider,
-failing); the filled axis cut at one tip only (kit-core's `kit_7_53_a_pair_pressed_for_one_action_is_one_glyph`, failing).
+failing); the filled axis cut at one tip only (kit-core's `kit_7_54_a_pair_pressed_for_one_action_is_one_glyph`, failing).
 
 **gamelistinfo.** ES-DE draws Artflix's counts as a gamepad 22 × 11 px standing on the digits' baseline, the digits, a
 star 18 × 18 centred on them, and the 7 (1152–1234). The painter drew each mark in a square an em wide, centred on a

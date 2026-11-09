@@ -61,7 +61,7 @@ pub mod qobject {
         /// The outlined set or the filled one (EmuSen_Kit.md §7.28).
         #[qproperty(GlyphStyle, style)]
         #[qproperty(bool, letter_bold, READ, NOTIFY)]
-        /// The press drawn with `button` as one glyph where kit-core has one for the two, -1 (the default) for none (EmuSen_Kit.md §7.53).
+        /// The press drawn with `button` as one glyph where kit-core has one for the two, -1 (the default) for none (EmuSen_Kit.md §7.54).
         #[qproperty(i32, pair)]
         /// Whether the glyph drawn is the pair's one.
         #[qproperty(bool, paired, READ, NOTIFY)]

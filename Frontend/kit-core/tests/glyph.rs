@@ -166,9 +166,9 @@ fn kit_7_28_an_unknown_pad_is_lettered_as_an_xbox_pad_in_the_filled_set_only() {
     }
 }
 
-// EmuSen_Kit.md §7.53: a d-pad axis, the shoulders or the triggers as one glyph, in either order and both sets; no other two.
+// EmuSen_Kit.md §7.54: a d-pad axis, the shoulders or the triggers as one glyph, in either order and both sets; no other two.
 #[test]
-fn kit_7_53_a_pair_pressed_for_one_action_is_one_glyph() {
+fn kit_7_54_a_pair_pressed_for_one_action_is_one_glyph() {
     use PadControl::{Down, Left, LeftShoulder, LeftTrigger, Right, RightShoulder, RightTrigger, South, Up};
     for style in GlyphStyle::ALL {
         for (a, b) in [(Left, Right), (Up, Down), (LeftShoulder, RightShoulder), (LeftTrigger, RightTrigger)] {

@@ -320,7 +320,7 @@ fn dpad_arm(control: PadControl) -> Vec<Point> {
     }
 }
 
-/// Two controls a help bar names as one action, drawn as one glyph (EmuSen_Kit.md §7.53).
+/// Two controls a help bar names as one action, drawn as one glyph (EmuSen_Kit.md §7.54).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Pair {
     /// A d-pad axis: both of its directions.
@@ -342,7 +342,7 @@ fn pair_of(a: PadControl, b: PadControl) -> Option<Pair> {
 
 /// One glyph for two controls pressed for one action: a d-pad axis is the plus with both of its directions marked, and
 /// the two shoulders or the two triggers are their two bodies side by side, unlettered, the same in every family. None
-/// for any other two, which a bar draws as two glyphs (EmuSen_Kit.md §7.53).
+/// for any other two, which a bar draws as two glyphs (EmuSen_Kit.md §7.54).
 pub fn paired(a: PadControl, b: PadControl, style: GlyphStyle) -> Option<Glyph> {
     let pair = pair_of(a, b)?;
     Some(match style {

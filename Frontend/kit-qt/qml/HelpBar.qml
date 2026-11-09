@@ -22,9 +22,9 @@ Item {
     property real entryScale: 1
     // A glyph's side in pixels before entryScale; 0 is the glyph's own size.
     property real glyphSize: 0
-    // An entry's pair drawn as one glyph where the kit has one for the two, as ES-DE's help does; off, two glyphs (EmuSen_Kit.md §7.53).
+    // An entry's pair drawn as one glyph where the kit has one for the two, as ES-DE's help does; off, two glyphs (EmuSen_Kit.md §7.54).
     property bool pairGlyph: false
-    // A host's own drawing of an entry's words, a component with `text` and `color`; null, the kit's Text in labelFont (§7.53).
+    // A host's own drawing of an entry's words, a component with `text` and `color`; null, the kit's Text in labelFont (§7.54).
     property Component label: null
     // The bar's own colour and radius, drawn by its backing; the paddings are its box's around the entries.
     property color color: root.glass ? Qt.alpha(Kit.Tokens.inputSurface, root.glassOpacity) : Kit.Tokens.surface

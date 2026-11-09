@@ -2775,7 +2775,7 @@ Held to by `qt-test/tests/polish.rs` over `PolishScene.qml`: a help bar whose mo
 `FrameAnimation` runs; after `rest` the entries stand where they stood. Before the change the entries read x 0, 0, 0
 where they stood at 0, 127.5 and 267.9. Seeded fault: the polish wait removed (the same three zeros).
 
-### 7.53 A pair as one glyph, and a host's words on the help bar (stage 4, X; 2026-11-09)
+### 7.54 A pair as one glyph, and a host's words on the help bar (stage 4, X; 2026-11-09)
 
 Two extensions under rule Q for the ES-DE painter's help bar (EmuSen_Qt.md §4.8.7), each declared after what was there;
 neither changes what an existing screen draws.
@@ -2797,7 +2797,7 @@ neither changes what an existing screen draws.
   (null by default, the kit's `Text` in `labelFont`). The ES-DE painter gives it `GlyphLine`, ES-DE's own line layout,
   since Qt's text layout has no form of it (EmuSen_Qt.md §4.8.7, item 3).
 
-**Held to**: kit-core's `tests/glyph.rs` `kit_7_53_a_pair_pressed_for_one_action_is_one_glyph` (the four pairs in both
+**Held to**: kit-core's `tests/glyph.rs` `kit_7_54_a_pair_pressed_for_one_action_is_one_glyph` (the four pairs in both
 sets and either order, closed, inside the box, unlettered, every hole inside its shape, unlike the single control's
 glyph, the filled axis the single direction's plus with both tips' arrows; four other pairs give none); the registry
 under `Testing/qmltypes` (`PadGlyphMarks.pair`, `paired`); the ES-DE oracle, where the help bars of the four system

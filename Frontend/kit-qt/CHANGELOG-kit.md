@@ -9,9 +9,9 @@ entry names what was added and the section of `EmuSen_Kit.md` that records it.
 Additions only; no type, property, signal or invokable was removed or changed.
 
 - **`PadGlyphMarks.pair`** and **`paired`** (registry): a second press drawn with `button` as one glyph where kit-core
-  has one for the two (a d-pad axis, the shoulders, the triggers), and whether it is. §7.53.
+  has one for the two (a d-pad axis, the shoulders, the triggers), and whether it is. §7.54.
 - `PadGlyph.pair` and `paired`; `HelpBar.pairGlyph` (false by default) and `HelpBar.label` (null by default), QML
-  properties of the qmldir's types. §7.53.
+  properties of the qmldir's types. §7.54.
 
 ## 1.0, stage 3: an orbit deleted with its screen (2026-11-09)
 

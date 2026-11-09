@@ -2699,6 +2699,10 @@ is empty. Eleven boxes stay named, each explained:
 day): 71 of 71 load, none drawn whole, and 61 use no undrawn kind (45 before: the 22 themes counting `gameselector`
 undrawn no longer do); no row worsened.
 
+**Superseded as the bar, 2026-11-09**: the C# painter's boxes and figures no longer hold the Qt painter; ES-DE's do
+(§4.8.7). The eleven boxes above are held to ES-DE's: the status's, the marquee's and `gamelistInfo`'s are within two
+units of it at both sizes and the clock's at 1280 × 800; the rest are in §4.8.7's last table.
+
 #### 4.8.7 ES-DE as the bar: the boxes, the pictures, the help bar's words and the pair glyph **[M 2026-11-09]**
 
 **Decided 2026-11-09 by the tester: the goal is 100 % compatibility with ES-DE themes.** The C# painter is no longer
@@ -2707,6 +2711,24 @@ explained is not a difference closed. The evidence is ES-DE's published document
 and the approved AppImage's captures of 2026-11-08 (`Testing/esde-oracle/README.md`), never ES-DE's source. **Decided
 2026-11-09 by the tester:** the font files bundled in that AppImage count as evidence too (fonts only; still never ES-DE's
 code or graphics); their metrics, read through Qt's `FontMetrics`, are kept below.
+
+**The boxes, held to ES-DE.** `oracle.rs` holds every element of a state's `.spec` to where ES-DE draws it, within two
+design units: the C# scene's box where the C# drew it where ES-DE does, and otherwise the box measured on ES-DE's capture,
+committed as `Testing/esde-baseline/esde-boxes.tsv` (22 rows, each with how it was measured). `NAMED_BOXES` is empty. The
+measures, on the 2026-11-08 captures:
+
+1. *A background's edges, less the theme's paddings* (Art Book Next's clock and system-view help bar): the sub-pixel edge
+   from the partly covered column or row beside each run of the background's colour, through a row and column clear of
+   words and of the rounded corners. The help bar at 1280 × 800 spans 341.44–939.0 × 704.47–761.0, so the element is
+   359.22, 716.14, 559.78 × 33.20 (Qt's 360.3, 717.0, 559.3 × 33.0).
+2. *The first icon's ink less its box's margin, and the anchored edge at the theme's `pos` and `origin`* (the help bars
+   with no background): the icon's box is 0.9 of `fontSize` × H (below), its disc centred in it.
+3. *Nothing drawn*: Art Book Next's `systemstatus` with no device reported is the element at its `pos` and `origin`,
+   0 × 0, as THEMES.md has it; ES-DE draws nothing there.
+4. *The drawn picture*: CarAlt's marquee spans 840–1160 × 52–172 (1260–1740 × 78–258 at 1920 × 1200), the box Qt draws;
+   the C#'s 320 × 160 at y 32 was not ES-DE's.
+5. *Ink to advance*: Artflix's `gamelistInfo` from its gamepad's ink at the theme's `pos` (1152) to the 7's advance,
+   82.5 units (82.0 at 1920 × 1200).
 
 **The help bar measured on the captures** (all twelve states; `fontSize` × H written fs, `entryRelativeScale` r):
 
@@ -2752,6 +2774,23 @@ the two triggers, and kit-qt's `PadGlyph.pair` draws it; the kit's `HelpBar.pair
 glyph, which `HelpElement` turns on (EmuSen_Kit.md §7.53). CarAlt's Choose now inks 1221–1237 against ES-DE's 1221–1237;
 it had drawn two glyphs over 1198–1238. Seeded faults: `pairGlyph` off (the four system bars 22.3–40.9 units wider,
 failing); the filled axis cut at one tip only (kit-core's `kit_7_53_a_pair_pressed_for_one_action_is_one_glyph`, failing).
+
+**gamelistinfo.** ES-DE draws Artflix's counts as a gamepad 22 × 11 px standing on the digits' baseline, the digits, a
+star 18 × 18 centred on them, and the 7 (1152–1234). The painter drew each mark in a square an em wide, centred on a
+line 1.5 em high, so the marks sat 7 px high and the gamepad was squeezed to 20 px. A mark now has its own width
+(`MarkShapes.aspect`, the gamepad 1.06 em) and stands on the words' first baseline at its own baseline share
+(`MarkShapes.baseline`, 0.85 of an info mark's em, owned by `marks::INFO_BASELINE`; `TextBlock.baselineY`), with ES-DE's
+gaps, 0.25 em from a mark to its words and 0.375 em between items: 82.1 units against ES-DE's 82.5. Seeded fault: the
+items' gap at 0.2 em (3.9 and 3.4 units narrower, failing). A first fault, the marks square again, moved the box by
+1.2 units and was not caught: the gamepad narrower and the star wider by about the same; the spacing fault replaced it.
+
+**Boxes still off ES-DE, each [blocked]** (named nowhere; the oracle fails on them):
+
+| Where | Off | Why |
+|---|---|---|
+| Artflix and CarAlt gamelists, `helpsystem_help` (four) | 50–119 units | ES-DE lists VIEW MEDIA (X, its media viewer); the painter has no media viewer, so the entry is left out (§4.8.5). Closing it needs the media viewer built |
+| Art Book Next at 1920 × 1200: the system and gamelist help bars, the clock | 8.9, 4.8, 2.8 | ES-DE draws these two TrueType faces (Akrobat, Mulish) about 2.6 % wider at 1920 × 1200 than their nominal size: the help's MENU pens fit 39.3–39.8 px for 38.5 (at 1280 × 800 25.4–25.9 for 25.67), and the same rule at 1280 × 800 is within a pixel. Not hinting as Qt applies it (full hinting at 38, 39 and 40 px gives 25, 17; 25, 18; 26, 18 for M, E where ES-DE's pens step 26, 18, 20), and neither face sets the integer-ppem flag. The CFF faces (rost, Exo 2) measure their nominal sizes at 1920 × 1200 |
+| Artflix system, `helpsystem_help` | 2.1 and 2.0 | SCREENSAVER's ink 102 px in ES-DE, 104 in Qt; Exo 2's MENU pens fit 19.0–19.5 px at a nominal 20 at 1280 × 800 (and 30 at 1920 × 1200), the same size-dependent widths as the row above |
 
 ---
 

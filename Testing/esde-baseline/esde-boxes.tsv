@@ -1,0 +1,24 @@
+# ES-DE 3.4.1's box of an element where the C# scene's spec is not ES-DE's, measured on the 2026-11-08 captures; see README.md.
+theme	state	width	key	x	y	w	h	how
+art-book-next-es-de	system	1280	clock_clock	38.12	38.39	61.22	22.42	the background's edges on the capture less the theme's paddings (26.45-111.0 x 25.06-74.15)
+art-book-next-es-de	system	1920	clock_clock	38.48	38.74	63.86	23.17	the background's edges on the capture less the theme's paddings (26.81-114.0 x 25.41-75.25)
+art-book-next-es-de	system	1280	helpsystem_help-system-view	359.22	716.14	559.78	33.20	the background's edges on the capture less the theme's paddings (341.44-939.0 x 704.47-761.0)
+art-book-next-es-de	system	1920	helpsystem_help-system-view	357.18	716.11	562.89	33.56	the background's edges on the capture less the theme's paddings (339.40-940.07 x 704.44-761.33)
+art-book-next-es-de	gamelist-1	1280	helpsystem_help-gamelist-view	59.00	716.14	368.20	33.20	the bar on a panel of its own grey: the first icon's ink to the last label's less 2 px, as the system view's background measures them; y and h the system view's
+art-book-next-es-de	gamelist-1	1920	helpsystem_help-gamelist-view	60.00	716.11	371.47	33.56	the bar on a panel of its own grey: the first icon's ink to the last label's less 2 px, as the system view's background measures them; y and h the system view's
+art-book-next-es-de	system	1280	systemstatus_system-status	1246.67	50.00	0.00	0.00	nothing drawn: the element at the theme's pos and origin, 0 x 0 (THEMES.md, no device reported)
+art-book-next-es-de	system	1920	systemstatus_system-status	1246.67	50.00	0.00	0.00	nothing drawn: the element at the theme's pos and origin, 0 x 0 (THEMES.md, no device reported)
+art-book-next-es-de	gamelist-1	1280	systemstatus_system-status	1246.67	50.00	0.00	0.00	nothing drawn: the element at the theme's pos and origin, 0 x 0 (THEMES.md, no device reported)
+art-book-next-es-de	gamelist-1	1920	systemstatus_system-status	1246.67	50.00	0.00	0.00	nothing drawn: the element at the theme's pos and origin, 0 x 0 (THEMES.md, no device reported)
+artflix-revisited-es-de	system	1280	helpsystem_help	449.90	768.00	380.20	18.00	the first icon's ink less the icon box's margin, and the anchored edge at the theme's pos and origin (centred on x 640)
+artflix-revisited-es-de	system	1920	helpsystem_help	447.66	768.00	384.68	18.00	the first icon's ink less the icon box's margin, and the anchored edge at the theme's pos and origin (centred on x 640)
+artflix-revisited-es-de	gamelist-1	1280	helpsystem_help	267.90	768.00	744.20	18.00	the first icon's ink less the icon box's margin, and the anchored edge at the theme's pos and origin (centred on x 640)
+artflix-revisited-es-de	gamelist-1	1920	helpsystem_help	265.00	768.00	750.00	18.00	the first icon's ink less the icon box's margin, and the anchored edge at the theme's pos and origin (centred on x 640)
+artflix-revisited-es-de	gamelist-1	1280	gamelistinfo_gamelistInfo	1152.00	760.00	82.50	16.00	the gamepad's ink at the theme's pos to the 7's advance
+artflix-revisited-es-de	gamelist-1	1920	gamelistinfo_gamelistInfo	1152.00	760.00	82.00	16.00	the gamepad's ink at the theme's pos to the 7's advance
+caralt-es-de	system	1280	helpsystem_help	1028.90	773.80	244.70	16.20	the first icon's ink less the icon box's margin, and the anchored edge at the theme's pos and origin (right edge 1273.6)
+caralt-es-de	system	1920	helpsystem_help	1035.90	773.80	237.70	16.20	the first icon's ink less the icon box's margin, and the anchored edge at the theme's pos and origin (right edge 1273.6)
+caralt-es-de	gamelist-1	1280	helpsystem_help	943.00	779.63	330.60	10.37	the first icon's ink less the icon box's margin, and the anchored edge at the theme's pos and origin (right edge 1273.6)
+caralt-es-de	gamelist-1	1920	helpsystem_help	943.10	779.63	330.50	10.37	the first icon's ink less the icon box's margin, and the anchored edge at the theme's pos and origin (right edge 1273.6)
+caralt-es-de	gamelist-1	1280	image_marquee	839.70	52.00	320.00	120.00	the picture's drawn edges (840-1160 x 52-172)
+caralt-es-de	gamelist-1	1920	image_marquee	839.70	52.00	320.00	120.00	the picture's drawn edges (1260-1740 x 78-258)

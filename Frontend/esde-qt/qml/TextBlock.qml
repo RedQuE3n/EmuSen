@@ -46,6 +46,8 @@ Item {
     readonly property alias contentHeight: label.contentHeight
     readonly property string family: label.font.family
     readonly property alias fontStatus: face.status
+    // The first line's baseline, in the block's own coordinates.
+    readonly property real baselineY: label.y + label.baselineOffset
     // The words' laid-out extent, once per change of it, for the scene's measured().
     signal measured(real width, real height)
 

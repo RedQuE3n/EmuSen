@@ -1,9 +1,10 @@
 //! The oracle comparison (EmuSen_Qt.md §4.8.6): each watched theme's system view at the SNES and its gamelist at the
 //! first game, at 1280 × 800 and 1920 × 1200, on the oracle's library, grabbed on the GPU tier and held to ES-DE 3.4.1's
-//! captures through the C# baseline (`Testing/esde-baseline`): the mean absolute error, the help bar's strip left out,
-//! no higher than the C# painter's in `mae.tsv`, and every element's box within two design units of the C# scene's. The
-//! corpus measure of `esde-check` gains the watched columns and is written for `Testing/esde-corpus`; a row that
-//! worsens against the last committed measure fails.
+//! captures (EmuSen_Qt.md §4.8.7): every element's box within two design units of where ES-DE draws it (the C# scene's
+//! spec, or the box measured on the capture in `Testing/esde-baseline/esde-boxes.tsv` where the C#'s is not ES-DE's), and
+//! the mean absolute error, the help bar's strip left out, no higher than the C# painter's in `mae.tsv`. The corpus
+//! measure of `esde-check` gains the watched columns and is written for `Testing/esde-corpus`; a row that worsens against
+//! the last committed measure fails.
 
 mod common;
 
@@ -20,21 +21,9 @@ use emusen_qt_test::{Harness, Scene};
 const SIZES: [(i32, i32); 2] = [(1280, 800), (1920, 1200)];
 const STATES: [(&str, &str); 2] = [("system", "system"), ("gamelist", "gamelist-1")];
 
-/// Boxes off the C#'s, measured on 2026-11-09 and named in EmuSen_Qt.md §4.8.6: (theme, state, the spec's key), at both
-/// sizes. An entry no longer seen fails, so the list cannot outlive its findings.
-const NAMED_BOXES: [(&str, &str, &str); 11] = [
-    ("art-book-next-es-de", "system", "clock_clock"),
-    ("art-book-next-es-de", "system", "systemstatus_system-status"),
-    ("art-book-next-es-de", "system", "helpsystem_help-system-view"),
-    ("art-book-next-es-de", "gamelist-1", "systemstatus_system-status"),
-    ("art-book-next-es-de", "gamelist-1", "helpsystem_help-gamelist-view"),
-    ("artflix-revisited-es-de", "system", "helpsystem_help"),
-    ("artflix-revisited-es-de", "gamelist-1", "gamelistinfo_gamelistInfo"),
-    ("artflix-revisited-es-de", "gamelist-1", "helpsystem_help"),
-    ("caralt-es-de", "system", "helpsystem_help"),
-    ("caralt-es-de", "gamelist-1", "image_marquee"),
-    ("caralt-es-de", "gamelist-1", "helpsystem_help"),
-];
+/// Boxes off ES-DE's that the tester has named: (theme, state, the spec's key), at both sizes. Empty since 2026-11-09
+/// (EmuSen_Qt.md §4.8.7); an entry no longer seen fails, so the list cannot outlive its findings.
+const NAMED_BOXES: [(&str, &str, &str); 0] = [];
 
 /// States whose MAE is above the C# painter's, measured on 2026-11-09 and named in EmuSen_Qt.md §4.8.6: (theme, state,
 /// width, the measured figure as a ceiling). A state above its ceiling fails, and one back under the C#'s fails too.
@@ -70,6 +59,20 @@ fn mae(a: &[[u8; 3]], b: &[[u8; 3]], w: i32, strip: (i32, i32)) -> f64 {
         n += 3;
     }
     total as f64 / n.max(1) as f64
+}
+
+/// ES-DE's boxes measured on its captures where the C# scene's is not ES-DE's: (theme, state, width, key) → box in design units.
+fn esde_boxes() -> BTreeMap<(String, String, i32, String), [f64; 4]> {
+    let text = std::fs::read_to_string(repo().join("Testing/esde-baseline/esde-boxes.tsv")).unwrap();
+    text.lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .skip(1)
+        .map(|l| {
+            let c: Vec<&str> = l.split('\t').collect();
+            let n = |i: usize| c[i].parse::<f64>().unwrap_or_else(|e| panic!("esde-boxes.tsv: {l}: {e}"));
+            ((c[0].to_owned(), c[1].to_owned(), c[2].parse().unwrap(), c[3].to_owned()), [n(4), n(5), n(6), n(7)])
+        })
+        .collect()
 }
 
 /// The C# baseline's rows: (theme, state, width) → (strip top, strip bottom, MAE).
@@ -145,8 +148,8 @@ fn qt_boxes(nodes: &[Node], unit: f64) -> BTreeMap<(String, String), Vec<[f64; 4
     out
 }
 
-/// Each element the C# drew, held to Qt's box of the same name and place within `mockup::UNITS`: the ones off (each a
-/// line), and those Qt draws that the C# did not (noted, not held).
+/// Each element of the spec, held to Qt's box of the same name and place within `mockup::UNITS`: the ones off (each a
+/// line), and those Qt draws that the spec does not hold (noted, not held).
 fn rects(spec: &[(String, String, String, [f64; 4])], qt: &BTreeMap<(String, String), Vec<[f64; 4]>>) -> (Vec<(String, String)>, Vec<String>) {
     let mut seen: BTreeMap<(String, String), usize> = BTreeMap::new();
     let mut off = vec![];
@@ -159,7 +162,7 @@ fn rects(spec: &[(String, String, String, [f64; 4])], qt: &BTreeMap<(String, Str
                 let d = (0..4).map(|i| (got[i] - want[i]).abs()).fold(0.0, f64::max);
                 if d > mockup::UNITS {
                     let f = |b: &[f64; 4]| format!("{:.1},{:.1} {:.1}×{:.1}", b[0], b[1], b[2], b[3]);
-                    off.push((key.clone(), format!("{} against the C#'s {}, {d:.1} off", f(got), f(want))));
+                    off.push((key.clone(), format!("{} against ES-DE's {}, {d:.1} off", f(got), f(want))));
                 }
             }
         }
@@ -230,6 +233,7 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
     let scratch = Scratch::new("oracle");
     let texts = common::oracle_texts(&common::ORDER);
     let baseline = baseline();
+    let esde = esde_boxes();
     let mut harness = Harness::new();
     let mut failures = vec![];
     let mut table = vec!["theme\tstate\tsize\tqt_mae\tcs_mae\trects_off".to_owned()];
@@ -271,7 +275,13 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
                 // The rectangles against the C# scene's.
                 let system = emusen_esde::loader::ThemeSystem::new("snes", "Super Nintendo", "snes");
                 let theme_view = emusen_esde::loader::load(&folder.to_string_lossy(), &system, &picked, None);
-                let spec = spec_boxes(&repo().join(format!("Testing/esde-baseline/{name}.spec")), theme_view.view(view));
+                let spec: Vec<_> = spec_boxes(&repo().join(format!("Testing/esde-baseline/{name}.spec")), theme_view.view(view))
+                    .into_iter()
+                    .map(|(key, kind, name, b)| {
+                        let measured = esde.get(&(theme.clone(), state.to_owned(), w, key.clone())).copied();
+                        (key, kind, name, measured.unwrap_or(b))
+                    })
+                    .collect();
                 let unit = f64::from(w) / 1280.0;
                 let qt = qt_boxes(&tree.nodes, unit);
                 let (off, noted) = rects(&spec, &qt);

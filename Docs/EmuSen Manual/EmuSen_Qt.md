@@ -939,6 +939,49 @@ faults); an empty picture URL refused by the sandbox (`theme_feed.rs`, 22 refusa
 row (`scale.rs`, 9,000 covers for 4). The stage 1 start-up gates of §9.3.1 (Home shown ≤ 0.35 s, the first press
 ≤ 0.95 s on the real library) were not re-run: their driver is no longer kept.
 
+#### 3.4.4 Meridian as built **[M 2026-11-08]**
+
+"Meridian" (`Frontend/themes/meridian/`, resources at `qrc:/emusen/themes/meridian/`) is the design of
+`qt-s3/final/meridian.md`: a glass rail of destinations at the left, the band showing what the focused entry holds. Written
+against `EmuSen.Theme` alone; its parts are one job each: `Backdrop` (the kit's night `Sky`, or the day gradient and moon),
+`Glass`, `RailEntry` (mark or world, name, line, the bar), `RailFade` (the viewport's mask), `Track`, `Chip` (a help kind's
+first entry), `Faces`, `Glyph`, `EngineMark`. The kit's `Frame` carries the help bar and the actions; the rail and the band
+are placed freely, since in the big-screen form `Frame`'s navigation role is a title row across the top.
+
+**How it lays out from data.** Choose a console's rail places a console at `groupStart + groupIndex` after its group's
+`group` headings (the role added for it, §3.2), so 1 to 120 consoles of any makers, interleaved or not, need no sorting in QML;
+the rail scrolls by the least that shows the focused entry whole, a heading kept with its group's first, and LB/RB step to
+the next group's first entry or climb to the previous group's. Up and Down move a rank, and the entry of that rank takes the
+focus, so the walk follows maker order rather than the table's. Games' tile box is 156 × min(208, 156 / shape) of the
+section's cover shape, and as many rows show as end above 580. The splash places the worlds by the same rank.
+
+**Named differences from the spec**, each decided or measured on 2026-11-08:
+1. Small words are 19 units where the spec has 17, and the chips 19 for 18: the audit's capitals floor fails both at
+   1280 × 720 (decided: no exceptions to the floor). A rail entry's line takes the entry's width past its inset (200).
+2. The band's cross-fade snaps under reduced motion, so a recording never catches two bands at once.
+3. The rail's fading mask is a layer effect, which the software backend does not draw; there the rows are cut at the edge.
+4. The splash's worlds land min(250, 2300 / n) ms apart, so 120 land within the six seconds (the canvas's 250 ms runs past
+   seventeen worlds).
+5. Continue's mark in the rail is `Marks.crescent`; an unknown maker's heading is a rule with no words.
+6. The day moon is drawn at 25%, not 50%: at 50% it reads as a disc over the heads at the right edge.
+7. A shelf's band shows its own first three covers (`firstOf`), not the three most recent across consoles.
+8. Two kit defects show in the software recordings and are queued for the kit (2026-11-08): a Shape inside a clipping
+   Flickable is painted past the clip on the software backend (a rail row cut by the edge shows its world above the rail),
+   and CoverTile's generated card writes its title in `TextStrong`, near-black on the card in the light variant. The rail's
+   fade is a layer effect, kept off on the software backend, where it draws nothing.
+
+**Proof, measured 2026-11-08** (offscreen, the software backend). `theme-check` reads the package `ok` in both steps: the
+three screens and the splash at the five sizes in dark and light, Choose a console over the audit's 120 consoles, and over
+the canvases' catalogues `one-console`, `empty`, `long`, `eleven` and `n30` (`maker40` and `n120` not yet run to the end:
+the audit's own crowd, 120 consoles with 40 under one maker, passes in their place). The three
+`Testing/themes/meridian-*.mockup.spec`, written by hand from the spec's tables and the canvases, hold the recordings at
+1280 × 800 and 1920 × 1200 within two units. Side-by-sides with the spec's renders are kept in
+`~/.cache/emusen/tmp/qt-s3/compare/meridian/`. Three faults were seeded and caught, each reverted: a light accent of
+#5FD0B5 (the static step's contrast, 1.88:1); consoles placed by `groupIndex` alone (the sweep over `eleven` heard none of
+its consoles); Down no longer stepping the rail (the sweep over `one-console` missed its console). Not proved offscreen:
+the splash at 1, 3 and 5 s (the audit records its finished frame only), the grid's rows for a tall and a square console
+(the synthetic library's consoles are all wide), and the bells, which no striker rings yet.
+
 ### 3.5 Loading and the sandbox
 
 Each theme runs in a `QQmlEngine` of its own, created by Rust with: an import path list holding only Qt's modules on an

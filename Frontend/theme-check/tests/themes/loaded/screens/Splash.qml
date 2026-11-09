@@ -1,7 +1,7 @@
 import QtQuick
 import EmuSen.Theme 1.0
 
-// A splash that breathes its wordmark while motion is allowed and stands still under reduced motion.
+// A splash that breathes its wordmark, above the screen's centre, while motion is allowed and stands still under reduced motion.
 ThemeScreen {
     objectName: "Splash"
     role: ThemeScreen.Splash
@@ -9,7 +9,8 @@ ThemeScreen {
     NormalizedCanvas {
         Text {
             objectName: "wordmark"
-            anchors.centerIn: parent
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: 200
             text: Words.title
             color: Tokens.text
             font.family: "Barlow"

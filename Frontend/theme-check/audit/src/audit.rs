@@ -208,8 +208,14 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             // The crowd's reach is the sweep's; every element on the screen is still held to the pointer.
             let walk = if pass.consoles.is_some() { Vec::new() } else { scene.walk_by(&tree, |s, button| s.key(key_of(button), 0)) };
             let walked = edges(&walk);
-            let pointed: HashSet<ElementId> =
-                if pass.consoles.is_some() { tree.operable().into_iter().map(ElementId).collect() } else { reached(focus, &walked) };
+            // The splash is watched, not operated: nothing on it is clicked, whatever stands at its centre.
+            let pointed: HashSet<ElementId> = if screen == Screen::Splash {
+                HashSet::new()
+            } else if pass.consoles.is_some() {
+                tree.operable().into_iter().map(ElementId).collect()
+            } else {
+                reached(focus, &walked)
+            };
             let measures = Measures::of(WalkForm::BigScreen, f64::from(h));
             let panel = Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
             let smallest = measures.floor * audit::DESKTOP_CAPS * measures.unit;

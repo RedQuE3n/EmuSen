@@ -556,6 +556,51 @@ Adding an `fsync` would be a behaviour change with a cost on the path that runs 
 
 ---
 
+### 3.15 The front end's own settings rows, as data (2026-11-09)
+
+*Decided 2026-11-09:* the rows a settings screen shows for the program's own keys (a label, a sentence, the values and
+their words), until then C# code in `SettingsScreen.Sections.cs` (`Pick`, `ControllerTypes`, `Regions` and the rest) and
+`PlayerPreferencesRows.cs`, are data. They live in `Platform/galaxia/data/frontend_settings.json`, beside the models that
+own the keys (`models.rs`'s `AppSettings` and `GraphicsConfig`), because a row is a statement about a key: the key's
+values, its default and its words change with the key, and one owner holds both. The file is embedded when the crate is
+built and read by `settings_rows` (`rows()`), as the systems table is.
+
+**The shape** is the frontend API's `settings_schema` row (`emusen_crystal.h`; `Platform/crystal/src/settings_api.rs`):
+`key`, `label`, `hint`, `kind` (`switch`, `count` or `choice`), `default`, `min`, `max`, `choices`, `choice_labels`,
+`group`, `shown_with` and `locked`, every member written. `note` is an engine's sentence about the value chosen and is
+never one of these. So a front end draws a core's rows and its own by one path (`SettingsModel`, Qt stage 5 piece D).
+The rows sit under the model that owns their keys: `AppSettings` (a nested model's field as `BigPictureCollections.FoldersOnTop`),
+`GraphicsConfig`, and `GraphicsConfig.Consoles`, a console's own keys in that model's `Consoles` map (`PictureShape`,
+`Overscan`). `group` names the page the row is on (Controllers, Players, Display, Sound, Library, Scraping, Collections,
+EmuSen, Saves and states); where a row stands among a page's doors and actions is the screen's, not the key's.
+
+**How values are written.** A switch's are `true` and `false`. A setting stored as a share and shown as a percentage in
+steps of five (`StickDeadzone`, `Volume`) is a choice whose values are the stored numbers (`0.05` ... `0.95`) and whose
+words are the percentages, so the stored value is never rescaled by a screen; `NavigationVolume`, stored as a percentage,
+is the same with whole numbers. `KeyboardPlayer` offers the eight players Endymion seats. `SoundOutputDevice` holds one
+fixed choice, `System default`; the devices connected are added to it from Endymion's list
+(`emusen_endymion_audio_device_list`), since they are the machine's and not the key's. `ScrapeRegion`'s automatic value
+is `auto`, the scraper's own word (`Platform/scrape/src/rules.rs`, `AUTOMATIC_REGION`) and Galaxia's default; the C#
+row stored an empty text for it, which is not that word.
+
+**Keys with no row**, each with its owner, which the tests name:
+- folders chosen through a picker (`RomDirectory`, `ArtworkDirectory`, `EsdeMediaDirectory`, `LogDirectory`,
+  `StateDirectory`) and the theme (`BigPictureTheme`, `LibraryStyle`, `EmuSenTheme`, the Themes tab's): a row opens
+  their page, it does not hold a value;
+- list-valued keys whose switches are made one per member (`AutoCollections`, `HiddenCustomCollections`,
+  `FlattenedSystems`), from the collections and the systems table;
+- `ScreenFilter`, the CRT's tier and its levers, whose values are Serenity's filter catalogue (`emusen_serenity_filters`)
+  and a preset's parameters: a row copying them would be a second owner;
+- a console's crop edges (`CropLeft` and its three), and the window colours and Logging, which are not Galaxia's keys.
+
+**Proof**, measured 2026-11-09 (`settings_rows`' four tests): the committed file reads, each row has exactly the
+schema's members and a page; each of the 59 keys the C# rows set, read from those files, has exactly one row and no other
+key has one, and none of the keys above does; each key is a field of its model (a console's key is not) and each default
+is the model's initial value in its text form; and a row that is none is refused with words (an unknown kind, a switch's
+default that is not true or false, choices without their words, a default none of its choices, a key twice, a `note`).
+Three faults were seeded and caught: a row dropped and a picker's key given a row (the one-row test), and a default
+moved off the model's (the default test).
+
 ## 5. `SaveLibrary` — what the files are called
 
 One spelling of the naming rules, previously duplicated across two frontends and computed three different ways by three cores.

@@ -180,7 +180,7 @@ fn qt_7_7_cores_walks_into_mistress_s_five_recorded_states() {
         hold(&mut scene, "CoresOptions", &none, named, &mut report);
         scene.pad(UiButton::Right);
         scene.wait(200);
-        assert!(scene.property("coresModel", "cardRows").contains("Always yours"), "{}", scene.property("coresModel", "cardRows"));
+        assert!(scene.property("coresModel", "cardRows").contains("Yours"), "{}", scene.property("coresModel", "cardRows"));
         scene.pad(UiButton::Back);
         wait_for(&mut scene, "coresModel", "cardOpen", "false", 1000);
         scene.wait(300);

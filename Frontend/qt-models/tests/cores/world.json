@@ -368,9 +368,9 @@
      "open"
     ],
     "choice_labels": [
-     "In use when none is found",
-     "Always yours",
-     "Always the open one"
+     "Automatic",
+     "Yours",
+     "Open"
     ],
     "group": "System"
    }

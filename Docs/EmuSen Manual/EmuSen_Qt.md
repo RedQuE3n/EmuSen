@@ -3849,7 +3849,11 @@ passing.
 approval's answers in the other order, Approve first (`cores.rs`' approval test and `launch.rs`' first); the launch
 asking only of approved cores (three of `launch.rs`' four); a marked row's mark word shown only while a job runs
 (`cores.rs`' plan test); and the model's guard against the list's own moves during a fill removed, so a section's reset
-and the model's focus set each other back and forth (`qt-app/tests/cores.rs`: the list never came to rest in 5 s).
+and the model's focus set each other back and forth (`qt-app/tests/cores.rs`: the list never came to rest in 5 s). Then
+for Search, Options, Firmware, Roll Back and the harness, each reverted, each caught: the tree's old test of a clip
+(an empty overlap) back (`culled.rs`); the List card's Search not docking the keyboard (`cores.rs`' search test); a switch
+not turned by a step (the options test); a found file said as none found (the firmware test); and Roll Back sent as
+`core-update` (the roll back test).
 
 ---
 

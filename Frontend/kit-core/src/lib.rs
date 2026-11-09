@@ -12,4 +12,5 @@ pub mod motion;
 pub mod notice;
 pub mod sound;
 pub mod tokens;
+pub mod wheels;
 pub mod world;

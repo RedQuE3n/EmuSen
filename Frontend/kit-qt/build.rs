@@ -44,6 +44,7 @@ fn main() {
         "src/glyph.rs",
         "src/planets.rs",
         "src/figures.rs",
+        "src/wheels.rs",
         "src/picture.rs",
         "src/keyboard.rs",
         "src/notices.rs",

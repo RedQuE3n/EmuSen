@@ -1801,6 +1801,57 @@ among eleven others; an interleaved table groups by first appearance. `theme-qt`
 groups on the list's reset. Seeded faults, each reverted: the pointers moved to open their row (three tests failed), a
 tie going to the last (the forty-maker's walk), the compact tier taken past one line (the eleven).
 
+### 7.32 Groups as wheels over a dial (stage 3, Orrery; 2026-11-08)
+
+Orrery's Choose a console, Wheelwork (`qt-s3/final/orrery.md` §3), stands one maker's wheel at the left with its
+consoles on the spokes' ends, the focused one always at the top, and runs a dial along the foot: the screen's places,
+then one small wheel per maker. The dial needs one stop per group and a walk across two kinds of node, which a theme's QML
+cannot hold (§1.3 of `EmuSen_Qt.md`: no function, no arrays), and the walk must not change as the wheel turns, so
+the reach audit sees one graph. Decided 2026-11-08: the layout is the kit's, beside `FigureLayout`, and `EmuSen.Theme`
+re-exports it by name.
+
+**`kit-core`'s `wheels::wheels(width, keys, places, geometry)`** groups the items by first appearance and gives each its
+group and its place in it, each group's first item and size, the dial's stops (the `places` first, then one per group)
+with their centres from x 64 at the pitch, the dial's width, its shown width (W − 128) and whether it scrolls. Nodes are
+the items in table order, then the stops. **The walk**: an item's Left and Right are its group's previous and next item
+and past a wheel's ends the walk runs on into the previous group's last and the next group's first, so Right held from
+the first world hears every console in maker order (the canvas stops at a wheel's ends, which leaves theme-audit's sweep,
+Right and Left along a row with Down between, only the first maker's worlds; changed 2026-11-08 so the sweep reaches all 120);
+its Down is its group's stop; a stop's Left and Right run along the
+dial, a group's stop goes Up to the group's first item, a place goes Up nowhere; the shoulders go to the previous and
+next group's stop from any node (from a place, RB to the first group's). **`wheels::turn(layout, current, geometry)`**
+is the wheel as the focus stands: a focused item puts its group's wheel at its place; a group's stop turns that wheel to
+its first item; a place dims the first group's wheel (the spec's "mechanism waiting"); each item of the wheel gets its
+distance from the top, shown within the reach of three either way, so slot (d + 8) mod 8 holds it and the rest wait
+behind the rim, counted as `hidden` for the three dots; the stop lit for the focus; and the camera, which centres that
+stop and is clamped to the dial (the canvas's `want`, `off`). `WheelGeometry::WHEELWORK` is the canvas's measures (eight
+slots, reach 3, the dial from x 64 to a margin of 64, pitch 136). The wheel's centre, radius and the slots' angles are
+the theme's drawing: the layout gives `step` (45°), and a world's angle is 90° − step × d, so a turn animates the angle
+and the worlds travel the rim. It names no console.
+
+**`kit-qt`'s `WheelLayout`** reads the role a screen names from any list model as text, through
+`item_model::role_texts`, which `FigureLayout` now shares (one reader of a model's role for every layout). Inputs:
+`width`, `places`, `model`, `role`, `weightRole` (a numeric role summed per group, so a maker's stop can say its games)
+and `current` (a node, -1 none). On `laidOut`, which follows the rows, the width or the
+places only: `count`, `groups`, `reach`, `step`, `dialWidth`, `view`, `scrolls`, and the lists `groupOf`, `placeIn`,
+`firsts`, `sizes`, `totals`, `ranks` (each group's rank by size, the fewest first, for rings filled from the inside, as
+Orrery's splash draws its orbits), `dialXs` and the walk's `left`, `right`, `up`, `down`, `previous`, `next` over the items and then the
+stops. On `turned`, which follows `current`: `wheel` (-1 none), `dimmed`, `hidden`, `lit`, `camera`, and the lists
+`turns`, `onWheel` and `shown` over the items. A screen calls `read()` when the model resets. Added last to the registry
+(rule Q, §7.6); nothing was removed.
+
+**Held to** (`kit-core/tests/wheels.rs`, 6, measured 2026-11-08), the canvas's rules over its states: the eleven of three
+makers focused on the second fill slots 7, 0, 1, 2 and 3 with six stops at 132 … 812 and no camera; one console is one
+world and four stops; none is no wheel and three places; thirty of twelve makers is a fifteen-stop dial that scrolls,
+the camera 0 at the first maker, centred at a middle one and clamped at the last at W 1280 and 1422.2; a hundred and
+twenty of twelve show five of ten at the second world and seven of ten at the sixth, the last maker eleven presses of RB
+away; the forty-maker's mid-point fills every slot but the rim's with 33 hidden, and its last world stands at the top
+with nothing after it, and Right from the first world runs through all 120; an interleaved table groups by first
+appearance and steps by group, not by row, running on in maker order. From the first
+focus the walk reaches every node of every catalogue. `theme-qt`'s harness scene reads the consoles' groups on the
+list's reset and turns to the first console. Seeded faults, each reverted: the reach taken as two (three tests failed:
+the eleven, the hundred and twenty, the forty-maker), the camera centred on the first stop whatever the focus (the thirty).
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

@@ -238,9 +238,22 @@ Window {
             model: Library.consoles
             role: "group"
         }
+        WheelLayout {
+            id: wheels
+            objectName: "wheels"
+            width: 1280
+            places: 3
+            current: 0
+            model: Library.consoles
+            role: "group"
+        }
         Connections {
             target: Library.consoles
             function onModelReset() { figures.read() }
+        }
+        Connections {
+            target: Library.consoles
+            function onModelReset() { wheels.read() }
         }
         HelpBar {
             objectName: "helpBar"

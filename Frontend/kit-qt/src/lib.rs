@@ -29,4 +29,5 @@ pub mod router;
 pub mod sky;
 pub mod stars;
 pub mod tokens;
+pub mod wheels;
 pub mod world;

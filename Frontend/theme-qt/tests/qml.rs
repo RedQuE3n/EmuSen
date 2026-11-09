@@ -76,6 +76,9 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert_eq!(scene.property("scene", "shelves"), "3");
     assert_eq!(scene.property("scene", "firstConsole"), "nes");
     assert_eq!(scene.property("figures", "count"), "1", "the figures read the consoles' groups when the list resets");
+    assert_eq!(scene.property("wheels", "count"), "1", "the wheels read the consoles' groups when the list resets");
+    assert_eq!(scene.property("wheels", "wheel"), "0", "the first console's wheel turned to it");
+    assert_eq!(scene.property("wheels", "dialWidth"), "544", "three places and one maker on the dial");
     assert!(scene.set_property("scene", "consoleKey", "nes"));
     scene.wait(20);
     assert_eq!(scene.property("scene", "consoleGames"), "1", "gamesOf by the console's key");

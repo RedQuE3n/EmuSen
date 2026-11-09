@@ -116,3 +116,8 @@ and the console screens' maker groups are added, each after the members it joins
   and every list asked for without the flag, is enabled. A theme draws the disabled look of a place the host would
   decline (`available` false) with its bar's A dimmed, and could not mark one entry of a list it may not build. Each kind
   now has eight lists, made once. A delegate reads the role as `model.enabled`. Found by Horizon's disabled state.
+- **`WheelLayout`** (the kit's, by name), the same day: a list model's groups as wheels turned under a fixed top and a dial
+  of the screen's places and one stop per group, with a walk that holds still while the wheel turns, the slots by distance,
+  the dots' count and the dial's clamped camera (`EmuSen_Kit.md` §7.32). Orrery's Choose a console needs one stop per
+  maker and a walk across worlds and stops; QML may hold neither a function nor a list of groups. Additions only, in both
+  registries.

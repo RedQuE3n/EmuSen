@@ -1,6 +1,6 @@
 //! Settings ▸ Consoles in the program (EmuSen_Qt.md §7.7.E), over the world Mistress's recordings script
 //! (`settings_consoles.json`): the list, a console's page, Engine as a page of choices, the shoulders to another console,
-//! Firmware with Open Folder, and Memory cards, each state held at the gate's sizes and recorded for the comparison.
+//! Firmware with Open Folder, Memory cards, and a folder row's choice in the system's folder dialog, each state held at the gate's sizes and recorded for the comparison.
 
 mod common;
 
@@ -14,6 +14,10 @@ use emusen_qt_test::{mockup, Scene};
 
 /// The gate's findings this screen names for the tester, as Settings names them (`settings.rs`): the help bar's words
 /// under the floor at 1280 × 720.
+fn stored(platform: &Platform, key: &str) -> serde_json::Value {
+    platform.model_load(emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap()[key].clone()
+}
+
 fn named(fault: &str, _: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
     size == (1280, 720) && fault.contains("too small to read")
 }
@@ -108,15 +112,40 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     assert_eq!(scene.property("folders", "caught"), url, "the folder's file: URL, taken in place of a file manager");
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "settingsModel", "help", "20", 1000);
-    wait_for(&mut scene, "settingsModel", "focused", "0", 1000);
+    wait_for(&mut scene, "settingsModel", "focused", "1", 1000);
 
     // Memory cards: the mode, the slots, the drawer, the saves and a new card.
-    open_row(&mut scene, 2);
+    scene.pad(UiButton::Down);
+    wait_for(&mut scene, "settingsModel", "focused", "2", 1000);
+    scene.pad(UiButton::Accept);
+    scene.wait(200);
     assert!(sentence(&mut scene).starts_with("Shared: every PlayStation game"), "{}", sentence(&mut scene));
     hold(&mut scene, "SettingsMemoryCards", &mockup::Mockup::default(), named, &mut report);
     scene.pad(UiButton::Back);
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "settingsModel", "help", "17", 1000);
+
+    // Library ▸ ROM folder asks the system's folder dialog, caught here: the folder chosen is saved, Cancel saves nothing.
+    assert!(scene.set_property("folders", "catching", "true"));
+    scene.pad(UiButton::PageDown);
+    wait_for(&mut scene, "settingsModel", "section", "4", 1000);
+    scene.wait(200);
+    let roms = stored(&platform, "RomDirectory");
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "folders", "waiting", "true", 1000);
+    assert_eq!(scene.property("folders", "asked"), roms.as_str().unwrap(), "the dialog starts at the folder the row holds");
+    assert!(scene.set_property("folders", "cancel", "true"));
+    wait_for(&mut scene, "folders", "waiting", "false", 1000);
+    assert_eq!(stored(&platform, "RomDirectory"), roms, "Cancel saves nothing");
+    assert!(scene.set_property("folders", "cancel", "false"));
+    let chosen = _world.dir("Chosen Roms");
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "folders", "waiting", "true", 1000);
+    assert!(scene.set_property("folders", "answer", chosen.to_str().unwrap()));
+    wait_for(&mut scene, "folders", "waiting", "false", 1000);
+    scene.wait(200);
+    assert_eq!(stored(&platform, "RomDirectory"), chosen.to_str().unwrap(), "the folder chosen, saved through AppSettings");
+    assert!(scene.property("settingsSentence", "text").contains(chosen.to_str().unwrap()), "and shown at once");
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Home", 2000);
     scene.assert_quiet();

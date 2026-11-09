@@ -3792,10 +3792,10 @@ and the text sizes' lines at hers. **Differences that remain, each for the teste
   `Off`): the library's collections and the runtime's log switch are not read here yet (pieces M and the shell's).
 - Display ▸ CRT shader's caption reads "The last game · Off CRT", since the sandbox has played nothing, where Mistress's
   fixture names its game; the box follows the words.
-- Not built in this piece, each a door that goes nowhere yet: Shader levers and Shaders (piece J), the folder rows'
-  prompt, Cheats, Compressed discs (pieces I and L), Logging and Shell, and the Scraping page's doors (Member account,
+- Not built in this piece, each a door that goes nowhere yet: Shader levers and Shaders (piece J), Cheats, Compressed discs (pieces I and L), Logging and Shell, and the Scraping page's doors (Member account,
   Resume, Cancel, Status, Scraper; piece M) and the Collections page's own (piece M). Controllers holds its keys' rows
-  only, its doors being piece H's, and Consoles is empty until piece E. Light or dark's `System` reads as dark and
+  only, its doors being piece H's. Consoles and the folder rows were built with piece E
+  (§7.7.E). Light or dark's `System` reads as dark and
   Reduced motion's `System` as full motion, since the desktop's preference has no Rust reader yet (§7.1). Volume under
   Steam's Game Mode, which Mistress turns into a sentence about the device's quick menu, is a row like any other here.
 
@@ -3879,6 +3879,19 @@ read), and a schema row's words and steps one (`schema.rs`, which Cores' Options
 test sets `catching`, which hands the `file` scheme to the object through `QDesktopServices::setUrlHandler`, Qt's own
 interception, so the URL is read and no file manager starts.
 
+**Folder rows open the system's folder dialog** (decided 2026-11-09): the ROM folder, the artwork folder, the ES-DE
+media and theme folders and Firmware's Folder each name their key (`"folder": "AppSettings RomDirectory"`); A asks
+`Folders.choose`, beside Open Folder in the same owner, which opens the program's QtQuick.Dialogs `FolderDialog`, the
+system's own through the desktop portal where there is one, at the folder the row holds; the folder chosen goes back as
+a local path for the key and is saved through the row's model (`SettingsModel.setFolder`, AppSettings), and Cancel saves
+nothing. A test sets `catching`, reads the request (`asked`, `waiting`) and answers it (`answer`, `cancel`), so no
+dialog opens.
+
+**B returns to the row that opened the page**, as Mistress's pages do: the model answers the row (`back`) and the
+screen focuses it through the walk. Found on the way and fixed where it lived, in the kit's settings frame (Kit §7.51):
+the rows' `ListView` set a current index of its own when rows arrived in it empty, and focused that row after the
+host's focus.
+
 **For the recordings**, `SettingsModel.world` names a file holding the consoles' world in place of the runtime's, as
 Cores' does (`qt-app/tests/settings_consoles.json`: the systems table's consoles, the ten engines Mistress's recording
 lists, the Super Nintendo's SA-1 row, the PlayStation's BIOS and cards). The schema and the values the runtime gives
@@ -3887,22 +3900,22 @@ are proved separately, over the real runtime.
 **Compared with Mistress** (measured on 2026-11-09, the Qt recordings read by WiseMan's
 `Another_frontend_s_recordings_match_these_within_the_tolerances` on the WiseMan build of the day, no build).
 `InterfaceRules.All` found nothing in the ten. Under the map of names of §7.7, every row of the five states stands at
-Mistress's box with her label and value, at both sizes, and every pane line has her words. **Differences that remain,
-each for the tester:**
-- The pane's sentence is set in the style's face (§7.7), so the lines under it stand 6 to 14 units lower, and the
-  engine's sentence on the console page takes four lines where hers takes three (150 units, hers 106).
-- Engine's chosen value reads `Default` beside the kit's drawn dot where Mistress wrote `● Default`.
-- B on a page returns to the page's first row (as piece D's pages do) where Mistress returned to the row that opened
-  it: the model gives the row (`back` answers it), but the kit's walk, read again as the rows change, ends on the first
-  row when the view's new first delegate takes the focus after the host's; a kit change for that is left to the tester.
-- The pane's firmware and success lines are plain text with their marks (`✓`, `⚠`); Mistress tinted them Success and
-  Attention.
-- A schema row the engine holds (Mistress's `Locked`) is not marked held: the runtime's schema answers no `locked`,
-  only the note, which the pane gives.
-- Not built here: the Custom crop page and Shader levers (piece J), the card manager's window behind Saves on the cards,
-  the folder picker behind Folder. **The card manager lists no medium for a console outside the systems table**
-  (crystal's `media_for` reaches a core's battery files through the table's pack), so a synthetic core's declared card
-  is not yet a page; a runtime extension is proposed for the tester.
+Mistress's box with her label and value, at both sizes, and every pane line has her words. **Open for the tester**, none
+taken as accepted here:
+- The pane's sentence is set in the kit's face (§7.7, Kit §7.40), so the lines under it stand 6 to 14 units lower, and
+  the engine's sentence on the console page takes four lines where hers takes three (150 units, hers 106).
+- Engine's chosen value reads `Default` beside the kit's drawn dot (Kit §7.41) where Mistress wrote `● Default`.
+- Mistress tinted the firmware line Success or Attention; the kit's sentence has no tone, so the mark (`✓`, `⚠`) alone
+  says it. A tone for the sentence is a kit addition (Rule Q minor), proposed.
+- A row the engine holds (Mistress's `Locked`) is not drawn held: the runtime's `settings_schema` answers no `locked`,
+  only the note, which the pane gives; a minor of the frontend API, proposed.
+- The card manager lists no medium for a console outside the systems table (crystal's `media_for` reaches a core's
+  battery files through the table's pack), so a synthetic core's declared card is not yet a page; a runtime fix,
+  proposed. `cards.rs` writes a medium's noun inside a sentence as the card manager's words do (an acronym kept, else
+  lower case), which the list does not give; an addition to the list (`noun_in_text`), proposed, would remove the copy.
+- Not built here: the Custom crop page and the console's Shader levers (piece J's by the stage plan), the running
+  game's crop named in Crop overscan's pane (piece J), and the card manager's window behind Saves on the cards (its saves
+  copied, moved, deleted and imported over `cards_op`), whose piece the tester decides.
 
 **Held to** (measured on 2026-11-09). `qt-models/tests/consoles.rs` (7, no Qt, over a fake runtime): the list's order,
 panes and a held console; a synthetic core's declared rows each by its kind under its group's heading, stepped within
@@ -3915,7 +3928,10 @@ its boot ROM `⚠ Not found`, and a step stored through the runtime reads back; 
 from a running session, are a page with its five categories as headings in its order and its options as rows.
 `qt-app/tests/settings_consoles.rs` (software backend): the five states held at the gate's five sizes (fit, pad reach,
 pointer reach, no chrome, names, palette, contrast) and recorded; RB to the PlayStation; Open EmuSen's folder giving
-Galaxia's firmware folder's `file:` URL to the caught handler; nothing logged. Seeded faults, each reverted:
+Galaxia's firmware folder's `file:` URL to the caught handler; B on Firmware back on the Firmware row; Library ▸ ROM
+folder asking the dialog at the stored folder, Cancel saving nothing and a folder chosen saved and shown; nothing
+logged. `qt-models/tests/settings.rs` gained the folder rows' request and save, `qt-models/tests/cores.rs` Cores'
+Firmware page by need with Open Folder. Seeded faults, each reverted:
 - Engine's choice written under another key: the models' Engine test;
 - firmware files grouped by file rather than by need: the models' Firmware test;
 - a slot steppable whatever the mode: the models' Memory cards test;
@@ -3923,7 +3939,9 @@ Galaxia's firmware folder's `file:` URL to the caught handler; nothing logged. S
   was not caught before; the assertion was added);
 - a reset forgetting every console's picture: the models' reset test;
 - `MenuRow`'s value held to half its row again (Kit §7.50): the program's test, SA-1 catch-up cut at all five sizes;
-- Open Folder given the folder's parent: the program's test, the caught URL.
+- Open Folder given the folder's parent: the program's test, the caught URL;
+- the rows' view's current index left to Qt (Kit §7.51): the program's test, B on Firmware ending on the first row;
+- the dialog's Cancel answered as a choice of no folder: the program's test, the ROM folder saved blank.
 
 #### 7.7.F Cores on the tool screen, the approval at first launch and the firmware question (stage 5, piece F; 2026-11-09)
 

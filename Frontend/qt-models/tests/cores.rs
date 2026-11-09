@@ -366,12 +366,13 @@ fn firmware_lists_the_console_s_files_found_or_not_and_where_they_go() {
     tool.card_choose(1);
     let (title, _, rows, _) = tool.card().unwrap();
     assert_eq!(title, "Diamond · Firmware");
-    // One row a need, worded as Settings' Firmware page words it (firmware.rs), with the copy recognised.
-    assert_eq!((rows[0].label.as_str(), rows[0].value.as_str()), ("PlayStation BIOS", "✓ Found · SCPH5501"));
+    // One row a need, worded as Settings' Firmware page words it (firmware.rs), short on a card's row, the copy in the pane.
+    assert_eq!((rows[0].label.as_str(), rows[0].value.as_str()), ("PlayStation BIOS", "✓ Found"));
+    assert_eq!(rows[0].pane.lines[0].0, "Your own: SCPH5501");
     let open = rows.last().unwrap();
     assert_eq!((open.key.as_str(), open.label.as_str()), ("folder:/home/player/EmuSen/Firmware", "Open Folder"), "the program's one Open Folder");
-    assert_eq!(rows[0].pane.lines[0], ("scph5501.bin · Optional".to_owned(), "Diamond runs without it, on its open replacement.".to_owned()));
-    assert_eq!(rows[0].pane.lines[1].0, "Put it in /home/player/EmuSen/Firmware.");
+    assert_eq!(rows[0].pane.lines[1], ("scph5501.bin · Optional".to_owned(), "Diamond runs without it, on its open replacement.".to_owned()));
+    assert_eq!(rows[0].pane.lines[2].0, "Put it in /home/player/EmuSen/Firmware.");
     // No firmware answer for the PlayStation 2, so LRPS2's page offers none, as C#'s did with no firmware pane.
     tool.card_back();
     tool.card_back();

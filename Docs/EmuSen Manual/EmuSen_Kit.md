@@ -2785,3 +2785,15 @@ long label still keeps its half and a folder's path longer than the room is stil
 exception of `EmuSen_Qt.md` §7.7). Nothing of the surface changed. Held to by the program's Consoles test (the value
 whole at the gate's five sizes) and its Settings test (the ROM folder's path still cut, its pane whole); seeded, the
 half-row cap put back failed the first with the value cut at all five sizes.
+
+### 7.51 The rows' view keeps no current index of its own (stage 5, piece E; 2026-11-09)
+
+Found by Settings ▸ Consoles in the program (`EmuSen_Qt.md` §7.7.E): B on a console's Firmware page was to return the
+focus to the Firmware row, and the host's `focusRow(1)` took, then the first row took the focus back. Traced on the
+software backend (the walk's `current` and each row's `activeFocus`, 2026-11-09): the rows removed and the page's rows
+inserted, the walk at 0 and then at 1 by the host, then row 1 losing the active focus and row 0 gaining it, which the
+row's handler turned into `focusRow(0)`. Qt's item views set a current index of their own when rows arrive in an empty
+view and give that row the focus; `currentIndex: -1`, a constant binding, does not hold against it. The view now clears
+its current index again whenever it sets one, so the walk's focus is the only one: the trace then ended at 1. Nothing of
+the surface changed. Held to by the program's Consoles test (B on Firmware returns to the Firmware row); seeded, the
+clearing taken out failed it (the focus on row 0).

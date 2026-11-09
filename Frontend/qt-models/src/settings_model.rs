@@ -124,6 +124,20 @@ pub mod qobject {
         #[qinvokable]
         fn shoulder(self: Pin<&mut SettingsModel>, by: i32) -> bool;
 
+        /// A page closed: the row that opened it is focused again.
+        #[qsignal]
+        fn refocus(self: Pin<&mut SettingsModel>, row: i32);
+
+        /// A folder row's key (`Model Key`) to choose a folder for in the system's dialog, starting at `start`.
+        #[qsignal]
+        #[cxx_name = "chooseFolder"]
+        fn choose_folder(self: Pin<&mut SettingsModel>, key: QString, start: QString);
+
+        /// The folder chosen for a folder row's key, saved at once.
+        #[qinvokable]
+        #[cxx_name = "setFolder"]
+        fn set_folder(self: Pin<&mut SettingsModel>, key: &QString, path: &QString);
+
         /// A folder to show in the system's file manager, through the program's one action for it.
         #[qsignal]
         #[cxx_name = "openFolder"]
@@ -345,10 +359,20 @@ impl qobject::SettingsModel {
 
     pub fn back(mut self: Pin<&mut Self>) {
         match self.as_mut().rust_mut().view.back() {
-            // The walk opens the section or page on its first row, as piece D's pages do (EmuSen_Qt.md §7.7.E).
-            Some(_) => self.shown(true),
+            Some(row) => {
+                self.as_mut().shown(true);
+                self.refocus(row as i32);
+            }
             None => self.left(),
         }
+    }
+
+    pub fn set_folder(mut self: Pin<&mut Self>, key: &QString, path: &QString) {
+        if path.is_empty() {
+            return;
+        }
+        let outcome = self.as_mut().rust_mut().view.set_folder(&key.to_string(), &path.to_string());
+        self.outcome(outcome);
     }
 
     pub fn shoulder(mut self: Pin<&mut Self>, by: i32) -> bool {
@@ -377,6 +401,7 @@ impl qobject::SettingsModel {
             Outcome::Opened => self.shown(true),
             Outcome::Door(name) => self.door(QString::from(name.as_str())),
             Outcome::OpenFolder(path) => self.open_folder(QString::from(path.as_str())),
+            Outcome::ChooseFolder { key, start } => self.choose_folder(QString::from(key.as_str()), QString::from(start.as_str())),
             Outcome::Set { .. } | Outcome::NewCard(_) if !self.world.is_empty() => self.shown(false),
             Outcome::Set { console, key, value } => {
                 let set = ClientConsoles::open(&self.platform_library.to_string(), &self.cores.to_string()).and_then(|c| c.set(&console, &key, value.as_deref()));

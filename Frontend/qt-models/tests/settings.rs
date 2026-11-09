@@ -234,3 +234,19 @@ fn qt_7_7_a_stored_value_no_choice_holds_is_shown_and_kept() {
     assert_eq!(view.rows()[3].value, "System default", "a step past the kept device wraps to the first");
     assert_eq!(source.saved.borrow().len(), 0, "the view saves nothing itself; the model saves what a step hands it");
 }
+
+#[test]
+fn qt_7_7_e_a_folder_row_asks_the_folder_dialog_and_saves_its_answer_in_its_model() {
+    let source = fake(json!({"RomDirectory": "/games", "FirmwareDirectory": ""}), json!({}));
+    let mut view = view(&source);
+    section(&mut view, "Library");
+    let rom = index(&view, "rom");
+    assert_eq!(view.rows()[rom].kind, RowKind::Opens);
+    assert_eq!(view.choose(rom), Outcome::ChooseFolder { key: "AppSettings RomDirectory".into(), start: "/games".into() });
+    let Outcome::Saved(Model::App, saved) = view.set_folder("AppSettings RomDirectory", "/new/games") else { panic!("the folder saved") };
+    assert_eq!(saved["RomDirectory"], json!("/new/games"));
+    assert_eq!(view.rows()[rom].value, "/new/games");
+    for id in ["art", "media", "themefolder"] {
+        assert!(matches!(view.choose(index(&view, id)), Outcome::ChooseFolder { .. }), "{id} asks the dialog too");
+    }
+}

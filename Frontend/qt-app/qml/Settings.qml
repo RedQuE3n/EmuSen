@@ -16,6 +16,8 @@ Kit.NormalizedCanvas {
     Connections {
         target: screen.settings
         function onLeft() { screen.backed() }
+        // B closed a page: the row that opened it is focused again, as Mistress's pages return.
+        function onRefocus(row) { frame.layout.focusRow(row) }
     }
     // The shoulders the frame declines under a trail: on a console's page, the console before or after it.
     Keys.onPressed: (event) => {

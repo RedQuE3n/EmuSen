@@ -102,6 +102,11 @@ Kit.Frame {
             highlightFollowsCurrentItem: false
             // Cleared, so the view never moves the focus to a row of its own choosing as its model changes; the walk's is the one.
             currentIndex: -1
+            // Qt's item views set a current index of their own as rows arrive in an empty view, and focus its row; cleared again at once, so the walk's focus stands (EmuSen_Kit.md §7.51).
+            onCurrentIndexChanged: {
+                if (list.currentIndex !== -1)
+                    list.currentIndex = -1
+            }
             onContentYChanged: {
                 if (!list.moving)
                     layout.scrollTo(Math.round(list.contentY / Kit.Tokens.rowHeight))

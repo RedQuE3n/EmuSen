@@ -4,11 +4,14 @@
 
 #include <QtCore/QObject>
 #include <QtCore/QString>
+#include <QtCore/QUrl>
 #include <QtGui/QDesktopServices>
 
 QString folderUrl(const QString &path);
 
 bool folderOpen(const QString &path);
+
+QString folderPath(const QUrl &url);
 
 // Qt's own way to take a scheme's URLs in place of the desktop's handler, which a test uses so no file manager starts.
 template <typename Receiver>

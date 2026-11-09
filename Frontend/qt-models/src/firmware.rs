@@ -113,8 +113,16 @@ pub fn value(needs: &[Need], needed_by_all: bool) -> String {
 
 /// A need's row value on the Firmware page.
 pub fn status(need: &Need, needed_by_all: bool) -> String {
+    match need.found() {
+        Some(_) => format!("✓ Found · {}", need.recognised()),
+        None => short_status(need, needed_by_all),
+    }
+}
+
+/// A need's value where a row is narrow, as a card's is: the copy recognised left to the pane.
+pub fn short_status(need: &Need, needed_by_all: bool) -> String {
     if need.found().is_some() {
-        format!("✓ Found · {}", need.recognised())
+        "✓ Found".to_owned()
     } else if need.missing() && needed_by_all {
         "⚠ Not found".to_owned()
     } else if need.missing() {

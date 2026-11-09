@@ -738,10 +738,14 @@ impl Cores {
             .iter()
             .enumerate()
             .map(|(at, need)| {
-                let mut lines: Vec<(String, String)> =
-                    need.files.iter().map(|f| (format!("{} · {}", f.file, if f.required { "Required" } else { "Optional" }), f.need.clone())).collect();
+                let mut lines: Vec<(String, String)> = need
+                    .found()
+                    .map(|_| (format!("Your own: {}", need.recognised()), "Recognised by its content.".to_owned()))
+                    .into_iter()
+                    .collect();
+                lines.extend(need.files.iter().map(|f| (format!("{} · {}", f.file, if f.required { "Required" } else { "Optional" }), f.need.clone())));
                 lines.push((format!("Put it in {shown}."), "EmuSen recognises it by its content and never downloads it.".to_owned()));
-                CardRow::new(&format!("firmware.{at}"), &need.name).value(&firmware::status(need, all)).pane(CardPane { lines, ..CardPane::default() })
+                CardRow::new(&format!("firmware.{at}"), &need.name).value(&firmware::short_status(need, all)).pane(CardPane { lines, ..CardPane::default() })
             })
             .collect();
         if let Some(folder) = folder {

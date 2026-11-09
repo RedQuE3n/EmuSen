@@ -118,6 +118,8 @@ pub enum Outcome {
     Reread,
     /// A folder shown in the system's file manager.
     OpenFolder(String),
+    /// A folder to choose in the system's folder dialog, for a key (`Model Key`), starting at the folder it holds.
+    ChooseFolder { key: String, start: String },
     /// Several at once, in order: a console reset forgets its keys and its picture.
     All(Vec<Outcome>),
 }
@@ -578,7 +580,7 @@ impl SettingsView {
         let label = keyed.as_ref().map_or_else(|| text_of(&entry["label"]), |k| text_of(&k.row["label"]));
         let kind = if keyed.is_some() || entry.get("filter").is_some() {
             RowKind::Steps
-        } else if entry.get("page").is_some() || entry.get("door").is_some() {
+        } else if entry.get("page").is_some() || entry.get("door").is_some() || entry.get("folder").is_some() {
             RowKind::Opens
         } else {
             RowKind::Action
@@ -820,10 +822,24 @@ impl SettingsView {
         if let Some(group) = entry["page"].as_str() {
             return self.open(Page::Group(group.to_owned()), text_of(&entry["label"]), index);
         }
+        if let Some(key) = entry["folder"].as_str() {
+            let (model, field) = key.split_once(' ').unwrap_or((key, ""));
+            let start = at(self.document(model), field).map(text_of).unwrap_or_default();
+            return Outcome::ChooseFolder { key: key.to_owned(), start };
+        }
         if let Some(folder) = entry["open"].as_str() {
             return self.read.folders.get(folder).map_or(Outcome::Nothing, |path| Outcome::OpenFolder(path.clone()));
         }
         entry["door"].as_str().map_or(Outcome::Nothing, |d| Outcome::Door(d.to_owned()))
+    }
+
+    /// The folder chosen in the dialog for a folder row's key, saved as its model's every other value is.
+    pub fn set_folder(&mut self, key: &str, path: &str) -> Outcome {
+        let Some((model, field)) = key.split_once(' ') else { return Outcome::Nothing };
+        let graphics = model.starts_with("GraphicsConfig");
+        let document = if graphics { &mut self.read.graphics } else { &mut self.read.app };
+        set_at(document, field, json!(path));
+        Outcome::Saved(if graphics { Model::Graphics } else { Model::App }, document.clone())
     }
 
     /// A key's stored text, by its `Model Key`, as the description's `applies` names it.

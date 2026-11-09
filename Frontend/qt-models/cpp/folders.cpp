@@ -13,3 +13,8 @@ bool folderOpen(const QString &path)
 {
     return QDesktopServices::openUrl(QUrl::fromLocalFile(path));
 }
+
+QString folderPath(const QUrl &url)
+{
+    return url.isLocalFile() ? url.toLocalFile() : QString();
+}

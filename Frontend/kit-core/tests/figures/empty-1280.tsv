@@ -1,6 +1,6 @@
 # Constellation's Figures canvas, state empty, W 1280: compact lines height scrolls, then each node (x y raised line left right up down), then each figure (x y width per)
 chart	0	1	232	0
 groups	
-p0	640.00	152.00	0	0	-	-	-	p1
+p0	640.00	152.00	0	0	-	p2	-	p1
 p1	540.00	248.00	0	0	-	p2	p0	-
 p2	740.00	248.00	0	0	p1	-	p0	-

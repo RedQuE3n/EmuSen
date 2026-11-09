@@ -19,13 +19,12 @@ use std::time::{Duration, SystemTime};
 const COBALT: &str = "Cobalt Harbor (Synthetic)";
 const LANTERN: &str = "Lantern Bay (Synthetic)";
 
-/// The gate's findings this screen names for the tester: the help bar's words under the floor at 1280 × 720, as every
-/// big-screen state names them; and Favourite, which Right reaches from Resume only once Resume has stepped through its
+/// The gate's finding this screen names for the tester: Favourite, which Right reaches from Resume only once Resume has stepped through its
 /// states (LunaP's `MoveInActions`), where the walk presses each direction once (held below, EmuSen_Qt.md §7.8).
-fn named(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
+fn named(fault: &str, tree: &emusen_qt_test::tree::Tree, _size: (i32, i32)) -> bool {
     let item = fault.rsplit(": ").next().and_then(|n| n.parse::<usize>().ok()).and_then(|i| tree.nodes.get(i));
     let favourite = fault.contains("the pad does not reach") && item.is_some_and(|n| n.ty.starts_with("ActionButton") && n.heard == "Favourite");
-    favourite || (size == (1280, 720) && fault.contains("too small to read"))
+    favourite
 }
 
 /// A state's file, saved `ago` seconds before now.

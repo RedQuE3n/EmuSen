@@ -231,12 +231,24 @@ Window {
             leading: 3
             bodies: 2
         }
+        OrbitLayout {
+            id: orbits
+            objectName: "orbits"
+            width: 1280
+            leading: Library.shelves.count
+            model: Library.consoles
+            role: "group"
+        }
         FigureLayout {
             id: figures
             objectName: "figures"
             width: 1280
             model: Library.consoles
             role: "group"
+        }
+        Connections {
+            target: Library.consoles
+            function onModelReset() { orbits.read() }
         }
         Connections {
             target: Library.consoles

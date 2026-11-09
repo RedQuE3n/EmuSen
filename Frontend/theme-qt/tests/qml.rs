@@ -75,6 +75,7 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert_eq!(scene.property("scene", "consoles"), "1");
     assert_eq!(scene.property("scene", "shelves"), "3");
     assert_eq!(scene.property("scene", "firstConsole"), "nes");
+    assert_eq!(scene.property("orbits", "orbitCount"), "1", "the orbits read the consoles' groups when the list resets");
     assert_eq!(scene.property("figures", "count"), "1", "the figures read the consoles' groups when the list resets");
     assert!(scene.set_property("scene", "consoleKey", "nes"));
     scene.wait(20);

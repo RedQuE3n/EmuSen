@@ -23,3 +23,20 @@ pub mod ffi {
         fn role_names(self: &QAbstractItemModel) -> QHash_i32_QByteArray;
     }
 }
+
+use cxx_qt_lib::{QModelIndex, QString};
+
+/// Each row's value of the role named `role`, read as text (a number's digits); a model without the role gives every row
+/// the empty text, and no model gives no rows.
+pub fn role_texts(model: Option<&ffi::QAbstractItemModel>, role: &QString) -> Vec<String> {
+    let Some(model) = model else { return Vec::new() };
+    let root = QModelIndex::default();
+    let wanted = role.to_string();
+    let role = model.role_names().iter().find(|(_, name)| name.to_string() == wanted).map(|(r, _)| *r);
+    (0..model.row_count(&root))
+        .map(|row| {
+            let value = role.map(|r| model.data(&model.index(row, 0, &root), r)).unwrap_or_default();
+            value.value::<QString>().map(|s| s.to_string()).unwrap_or_default()
+        })
+        .collect()
+}

@@ -4307,7 +4307,7 @@ harness's list of Qt's own (`QT_INTERNAL`). `qt-app/tests/clip_gpu.rs` holds **t
 in `GamePicture::onSwapped` on the render thread after its last assertion: the test dropped the device before the
 window, whose `frameSwapped` then reached the closed device's feed (its backtrace under gdb); it now hides the window and
 drops the harness before the device, as `acceptance.rs` ends. `acceptance.rs` on the merged tree ran its states about
-1.3 times slower than the fit builder's run of the same day (which took about 600 s itself, under other agents' load)
+1.3 times slower than an earlier run of the same day on the reference theme alone (about 600 s, the machine under other builds' load)
 and ran past its 600 s watch, a hang detector; the watch is now 1200 s (decided 2026-11-09), and splitting acceptance by
 screen group is a separate job. With the watch at 1200 s it ran to its end and found two defects, both fixed
 (decided 2026-11-09): **a hidden card's words rewrote themselves.** Under Home with a game suspended, the Home card,

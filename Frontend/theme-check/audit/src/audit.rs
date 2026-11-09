@@ -242,14 +242,17 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             if pass.press {
                 scene.key_hold(RETURN, true);
             }
-            if pass.focus.is_some() || pass.press {
+            // Reach and pointer are the walk's tree's, whose numbers the walk's edges name; the rest are judged on what is shown.
+            let held_tree = (pass.focus.is_some() || pass.press).then(|| {
                 if !pass.held {
                     scene.rest();
                 }
-                tree = scene.tree();
-                tree.root.mark_data(&words::is_fixed);
-            }
-            let shown = scene.focus(&tree).map(ElementId);
+                let mut shown = scene.tree();
+                shown.root.mark_data(&words::is_fixed);
+                shown
+            });
+            let seen = held_tree.as_ref().unwrap_or(&tree);
+            let shown = scene.focus(seen).map(ElementId);
             // The splash is watched, not operated: nothing on it is clicked, whatever stands at its centre.
             let pointed: HashSet<ElementId> = if screen == Screen::Splash {
                 HashSet::new()
@@ -263,15 +266,15 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             let smallest = measures.floor * audit::DESKTOP_CAPS * measures.unit;
             let reach = if pass.consoles.is_some() { Vec::new() } else { pad_reach(&tree.root, focus, &walked) };
             let found = [
-                ("fit", fit(&tree.root, panel, measures.slack, smallest)),
-                ("reach", reach),
-                ("pointer", pointer_reach(&tree.root, &pointed)),
-                ("chrome", no_chrome(&tree.root, WalkForm::BigScreen)),
-                ("name", named(&tree.root)),
+                ("fit", fit(&seen.root, panel, measures.slack, smallest), seen),
+                ("reach", reach, &tree),
+                ("pointer", pointer_reach(&tree.root, &pointed), &tree),
+                ("chrome", no_chrome(&seen.root, WalkForm::BigScreen), seen),
+                ("name", named(&seen.root), seen),
             ];
-            for (kind, faults) in found {
+            for (kind, faults, judged) in found {
                 for fault in faults {
-                    let who: Vec<String> = items(&fault).into_iter().map(|i| described(&tree, i)).collect();
+                    let who: Vec<String> = items(&fault).into_iter().map(|i| described(judged, i)).collect();
                     lines.add(screen, kind, &format!("{w}x{h} {name}: {fault} ({})", who.join("; ")));
                 }
             }
@@ -280,7 +283,7 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
                 let declared = palette(variant);
                 let header =
                     Header { state: &file, case: title(screen), kind: "menu", width: w, height: h, measures, palette: &declared };
-                let _ = std::fs::write(dir.join(format!("{file}.spec")), spec::write(&tree, &tree.root, &header, shown.map(|f| f.0), &walk));
+                let _ = std::fs::write(dir.join(format!("{file}.spec")), spec::write(seen, &seen.root, &header, shown.map(|f| f.0), &walk));
                 // The walk's last put-back moved the focus home, so whatever that started ends before the picture; a held clock moves nothing.
                 if pass.held {
                     scene.wait(100);

@@ -231,16 +231,17 @@ ThemeScreen {
             id: countRow
             x: (node.width - width) / 2
             y: node.above + node.size / 2 + 32
-            height: 20.4
+            height: 22.8
             spacing: 6
             Text {
                 objectName: "consoleCount." + node.index
                 anchors.verticalCenter: parent.verticalCenter
                 text: Words.games(node.count)
                 color: Tokens.muted
-                font.family: faces.regular
-                font.pixelSize: 17
-                lineHeight: 20.4
+                // 19 units, the smallest whole size over the capitals' floor at 1280 x 720, condensed to stay as wide as the canvas's 17 (EmuSen_Qt.md §3.4.1).
+                font.family: faces.condensedRegular
+                font.pixelSize: 19
+                lineHeight: 22.8
                 lineHeightMode: Text.FixedHeight
             }
             // The engine's mark in the console's hue, a Scene as the world's body is (EmuSen_Qt.md §3.4.2).
@@ -423,18 +424,19 @@ ThemeScreen {
                             // The focused orbit's maker brighter than the rest, by ink rather than opacity, so the rest keep 4.5:1 over the crowd.
                             readonly property color ink: layout.focusedOrbit === label.index ? Tokens.text : Tokens.muted
                             x: (layout.labelRights[label.index] ?? 0) - width
-                            y: layout.labelTops[label.index] ?? 0
-                            height: 20
+                            // The 19-unit line grows upward, its foot where the layout's 20-unit box ends (EmuSen_Qt.md §3.4.2).
+                            y: (layout.labelTops[label.index] ?? 0) + 20 - height
+                            height: 22.8
                             spacing: 5
                             Text {
                                 text: layout.labels[label.index] ?? ""
                                 color: label.ink
                                 font.family: faces.condensed
                                 font.weight: Font.Medium
-                                font.pixelSize: 17
+                                font.pixelSize: 19
                                 font.letterSpacing: 2
                                 font.capitalization: Font.AllUppercase
-                                lineHeight: 20
+                                lineHeight: 22.8
                                 lineHeightMode: Text.FixedHeight
                             }
                             Text {
@@ -443,8 +445,8 @@ ThemeScreen {
                                 color: label.ink
                                 font.family: faces.condensed
                                 font.weight: Font.Medium
-                                font.pixelSize: 17
-                                lineHeight: 20
+                                font.pixelSize: 19
+                                lineHeight: 22.8
                                 lineHeightMode: Text.FixedHeight
                             }
                             Text {
@@ -453,9 +455,9 @@ ThemeScreen {
                                 color: label.ink
                                 font.family: faces.condensed
                                 font.weight: Font.Medium
-                                font.pixelSize: 17
+                                font.pixelSize: 19
                                 font.letterSpacing: 2
-                                lineHeight: 20
+                                lineHeight: 22.8
                                 lineHeightMode: Text.FixedHeight
                             }
                         }

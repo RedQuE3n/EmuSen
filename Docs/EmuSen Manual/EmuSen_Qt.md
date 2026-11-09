@@ -889,7 +889,7 @@ example.
 author, licence, `api` 1.0, the dark and light variants, `fontSizes` 1 and 1.3, the screens `home`, `consoles` and
 `games`, no token override, no cue file, and three previews, `assets/previews/`, the package's own screens over the
 synthetic library at 640 × 400), `screens/Home.qml`, `Consoles.qml` and `Games.qml`, and `parts/` (`Faces`, the
-three Barlow faces from the kit's fonts; `Glyph`, a mark of `Marks` drawn in one ink; `EngineMark`; `CoverFan`). It is
+four Barlow faces from the kit's fonts; `Glyph`, a mark of `Marks` drawn in one ink; `EngineMark`; `CoverFan`). It is
 written against `EmuSen.Theme` alone, every shown word from `Words`, `Help` or a row, and is compiled into the program's
 resources by `qt-app/themes.qrc` at `qrc:/emusen/themes/emusen/` (`emusen_qt::REFERENCE_THEME`, read in QML as
 `ReferenceTheme.folder`); the host loads it as it loads any theme. A file added to the package is added to that list.
@@ -971,6 +971,32 @@ catalogues (`--catalogue`) found the same faults. Each was the package's layout,
    y 611: its baseline stands one unit higher than the canvas's, so the box ends at 664, where the facts begin. Seeded
    back (a box of 44), the audit names the name cut at the foot at every size; left at y 612, the name's box meets the
    facts' and the audit names the overlap at 3840 × 2160, where the unit is past its slack.
+4. **The small words at 1280 × 720.** The worlds' counts, the maker labels with their counts, and the foot's engine name
+   and tag, at 17 units, drew capitals of 10.72 at 1280 × 720 (101 lines, the 120 consoles' among them). They are 19, the
+   smallest whole size over the floor there (18.48 units; Qt's `font.pixelSize` is whole). Their line boxes are 22.8; a
+   maker label grows upward, its foot where the layout's 20-unit box ends, since grown downward the inner orbit's label
+   met its first world (the audit named the label "Sony" over that world at every size, a seeded fault); the tag's box is 24.
+   The counts take Barlow Condensed, so at 19 they are no wider than the canvas's 17 in Barlow: "480 games" is 70.7
+   units against 78.1. In Barlow at 19 (87.3) a count and its engine mark reached the next world's box on the steep
+   stretch of one maker's 40 consoles, and the maker40 catalogue named it at 1280 × 720, 1920 × 1080 and 3840 × 2160
+   (72 lines, none before). Seeded back (the counts at 17), the audit names every count at 1280 × 720.
+
+**What the look gains.** The fixes change the look as well as the fit, each by the least that fits. The counts, the maker
+labels and the engine line are 12% larger at every size, the neighbours 6%, though only 1280 × 720 put them under the
+floor: words sized for each window would copy the floor into the theme, and the tester's decision for Horizon (§3.4.3,
+2026-11-08: the floor holds with no exception, and every small text is 19) applies here as written. The counts take the
+condensed face the names and labels use, in its regular weight. "Game packages" is drawn whole where the accepted render
+cut it, and the full name stands a unit higher.
+
+**Proof** (measured 2026-11-09, offscreen on the software backend unless named). `theme-audit --states all` over the
+package: no line (326 before). `--catalogue`: one-console, n120, maker40 and empty have no line; n30, long and eleven
+keep only the overlap §3.4.2's eighth difference names (the focused NES's box and Master System's count: one line, and
+six a size in each variant), which they had before. n120 also loses the overlaps it had at 16:9 (24 lines a size), where
+a count in Barlow at 17 and its engine mark met the next world's box. The acceptance test passes (Vulkan on the RX 6800) with three of its named differences
+gone: the 17- and 18-unit words at 1280 × 720, the full name's line box and the places' lines cut, the last now only a
+data line's. Nothing outside the package and the acceptance test changed, so the other four themes' findings are as they
+were. The side-by-sides, before left and after right (Home in both variants and Choose a console at 1280 × 800, the grid,
+Choose a console and the 120 consoles at 1280 × 720): `~/.cache/emusen/tmp/qt-s3-fit/compare/*-side.png`.
 
 **Proof, measured 2026-11-08.** The acceptance test (Vulkan on the RX 6800 in its own compositor, the virtual pad, the
 canvas's library) passed on WiseMan d5edac3e5 with the old screens and on the package, and its 90 grabs, 18 states
@@ -1053,14 +1079,17 @@ canvas's own; kit-core's test holds them within 0.01 unit.
    canvas's estimated ones (318, 522, 737).
 5. After the first focus, the shown makers move only when the focus leaves them, as spec §3.1 asks; the canvas centres
    the focused maker on every press.
-6. As at stage 1, the canvas's 17-unit words fall under the floor at 1280 × 720 alone. The full name takes Barlow
+6. The canvas's 17-unit words (the counts, the maker labels and the engine line) are 19, since at 17 they fell under the
+   floor at 1280 × 720; the counts are in Barlow Condensed, no wider than the canvas's, and a label's line grows upward
+   from the layout's 20-unit box. The full name takes Barlow
    Condensed's own line box, 53 from y 611, where the canvas's was 44 from 612 (2026-11-09, §3.4.1).
 7. A world's `Walkable` is the body's box (the ring's when focused), and the name and count hang beneath it, outside
    the `Walkable`. The canvas's node was 140 units wide and held the words too. On the steep stretches of the outer
    orbits those nodes covered their neighbours, which the fit audit read as overlaps of empty corners.
-8. Two of the canvas's own boxes still touch, and the fit audit names both:
-   - The focused NES's body box reaches 0.7 unit into the line box of Master System's count. The disc's edge stays
-     11 units clear of the words.
+8. Two of the canvas's own boxes still touch, and the fit audit named both on 2026-11-08; on 2026-11-09 the canvases'
+   catalogues name only the first:
+   - The focused NES's ring box reaches into the line box of Master System's count: 7 units at the canvas's 17, 10 at
+     19 (at 1280 × 800, measured 2026-11-09). The drawn ring stays clear of the words.
    - A turning orbit's label sits by its window's last world. The two boxes meet at 16:9, where the outer orbit
      holds ten.
 9. The inner orbit's window ends at y 197, not 178 (decided 2026-11-08), so it holds 2 worlds, not 3. At 178 a

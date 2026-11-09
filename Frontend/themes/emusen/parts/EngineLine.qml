@@ -19,7 +19,8 @@ Item {
         anchors.fill: parent
         Row {
             id: line
-            height: parent.height
+            // Centred on the line's 20 units, the tag's box reaching 2 above and below (EmuSen_Qt.md §3.4.2).
+            anchors.verticalCenter: parent.verticalCenter
             spacing: 6
             EngineMark {
                 objectName: "engineMark"
@@ -39,7 +40,7 @@ Item {
                 color: root.ink
                 font.family: root.family
                 font.weight: Font.Medium
-                font.pixelSize: 17
+                font.pixelSize: 19
                 font.letterSpacing: 1.5
                 font.capitalization: Font.AllUppercase
             }
@@ -47,7 +48,7 @@ Item {
                 objectName: "engineTag"
                 anchors.verticalCenter: parent.verticalCenter
                 width: tagWord.implicitWidth + 12
-                height: 22
+                height: 24
                 radius: 4
                 color: root.libretro ? "transparent" : Qt.hsla(root.hue / 360, 0.6, 0.5, 0.14)
                 border.color: root.libretro ? (root.day ? "#8C8C8C" : "#6E6E78") : Qt.hsla(root.hue / 360, 0.45, root.day ? 0.4 : 0.52, 1)
@@ -58,7 +59,7 @@ Item {
                     color: root.libretro ? (root.day ? "#5F5F5F" : "#A9A9B2") : Qt.hsla(root.hue / 360, root.day ? 0.6 : 0.7, root.day ? 0.3 : 0.82, 1)
                     font.family: root.family
                     font.weight: Font.Medium
-                    font.pixelSize: 17
+                    font.pixelSize: 19
                     font.letterSpacing: 0.8
                 }
             }

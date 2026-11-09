@@ -130,3 +130,7 @@ and the console screens' maker groups are added, each after the members it joins
   labels, the ellipses and a walk by steps (`EmuSen_Kit.md` §7.30). The reference theme's Choose a console needs the
   makers sorted by size and each orbit's window; QML may hold neither a loop nor a list of groups. Additions only, in both
   registries.
+- **`EdgeFade`** (the kit's, by name), the same day: a scroller's faded edges, the backdrop's colour ramped over each
+  faded edge, soft and the same on every backend; the software backend draws no shader effect and so no `MultiEffect`,
+  and `MultiEffect`'s mask cuts sharply on the GPU (`EmuSen_Kit.md` §7.35). Meridian's rail faded through a `MultiEffect` kept off on the software backend,
+  where its rows were cut instead; every theme that fades a scroller needs the same. Additions only, in both registries.

@@ -1993,6 +1993,40 @@ through OpenGL (§7.10). On the RX 6800 that way (2026-11-09) the test passes be
 before and after are the same picture, and the software backend's grabs after differ from the GPU's at 0.1% of the
 pixels at 12%, the glyphs' edges.
 
+### 7.35 A fade every theme can use, and which backends draw each effect (2026-11-08)
+
+**MultiEffect draws nothing on the software backend, by design.** Qt's documentation of `MultiEffect` describes it as
+combining its effects "into a single item and shader" (doc.qt.io/qt-6/qml-qtquick-effects-multieffect.html, read
+2026-11-08), and the software adaptation's page states that "ShaderEffect components in QtQuick 2 cannot be rendered by
+the Software adaptation" and that "any attempts to use unsupported features are ignored"
+(doc.qt.io/qt-6/qtquick-visualcanvas-adaptations-software.html, read 2026-11-08). So a layer effect, a mask among them,
+is an empty box there, as the notice's shadow was (§7.23).
+
+**`MultiEffect`'s mask does not fade on the GPU either.** On Qt 6.11 its mask cuts sharply whatever `maskSpreadAtMin`
+says (a probe of 2026-11-08 under Horizon), and the kit's own first `EdgeFade`, a `MultiEffect` mask over a ramped mask
+item, drew no fade at all on the RX 6800 (the column's accent at the edge, measured 2026-11-09 by the fade test below).
+
+**`EdgeFade`** is the kit's one fade, re-exported by `EmuSen.Theme` by name. It stands under the same parent as a
+scroller (`source`), over it, and ramps `backdrop` (the surface unless set) from clear to whole over each edge it is told
+to fade (`fadeTop` … `fadeRight`, bound to the scroller's own declarations, which the audit reads), over `length` (7 base
+units unless set): plain gradient `Rectangle`s, the kit's `EdgeRamp`, one an edge, which every backend draws alike. It is
+a fade to a colour, not to transparency: exact where what stands behind the scroller is one colour, and an approximation
+over a picture or a translucent fill, where a theme gives the colour that stands there (decided 2026-11-09 over a shader
+of the kit's own, which the software backend could not draw and which would need a shader build step the kit lacks).
+
+| Effect | GPU | Software backend |
+|---|---|---|
+| `MultiEffect` (shadow, blur, mask, colourize) | drawn | nothing (no shader effects) |
+| `EdgeFade` | the backdrop ramped over the edge | the same |
+| `RoundPicture` | a texture-filled rounded `Shape` | the `Image` with plain corners (§7.29) |
+| `Body`, `PadGlyph` | Shapes | Shapes through a layer, clipped (§7.34) |
+| The notice's shadow (§7.23) | drawn | none |
+
+Held to by `qt-test/tests/fade.rs` over `FadeScene.qml` (a column of the accent in a clipping Flickable fading at its
+foot over the window's surface): the column's colour above the fade, the backdrop within 16 levels at the edge, and the
+middle of the fade 20 levels from both; it passes on the software backend and, with `EMUSEN_QT_GPU`, on the RX 6800
+through OpenGL (2026-11-09), where the mask form failed it.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

@@ -15,6 +15,8 @@ pub struct Medium {
     pub medium: String,
     pub title: String,
     pub noun: String,
+    /// The noun as a sentence writes it, as the card manager words it ("card").
+    pub noun_in_text: String,
     pub extension: String,
     pub kind: String,
     pub mode: String,
@@ -51,7 +53,7 @@ impl Medium {
             .iter()
             .map(|c| serde_json::json!({ "path": c.path, "name": c.name, "label": c.label, "games_own": c.games_own, "held_by": c.held_by }))
             .collect();
-        serde_json::json!({ "medium": self.medium, "title": self.title, "noun": self.noun, "extension": self.extension, "kind": self.kind,
+        serde_json::json!({ "medium": self.medium, "title": self.title, "noun": self.noun, "noun_in_text": self.noun_in_text, "extension": self.extension, "kind": self.kind,
                             "mode": self.mode, "mode_key": self.mode_key, "slots": slots, "cards": cards, "next_name": self.next_name })
     }
 
@@ -60,9 +62,9 @@ impl Medium {
         self.cards.iter().filter(|c| !c.games_own).collect()
     }
 
-    /// The noun inside a sentence ("card"; an acronym kept).
+    /// The noun inside a sentence ("card"), the card manager's words for it.
     pub fn noun_in_text(&self) -> String {
-        in_text(&self.noun)
+        self.noun_in_text.clone()
     }
 
     /// "2 cards": the drawer counted in the medium's noun.
@@ -76,15 +78,6 @@ impl Medium {
         let folder = self.slots.iter().find_map(|s| std::path::Path::new(&s.path).parent())?;
         Some(folder.join(format!("{}{}", self.next_name, self.extension)).to_string_lossy().into_owned())
     }
-}
-
-/// Words inside a sentence, each lowercased but an acronym, as the card manager's own words write a noun.
-fn in_text(words: &str) -> String {
-    words
-        .split(' ')
-        .map(|w| if w.chars().count() > 1 && w.chars().all(|c| !c.is_alphabetic() || c.is_uppercase()) { w.to_owned() } else { w.to_lowercase() })
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 /// The card manager's list, read; an answer it did not give is no media.

@@ -1,6 +1,6 @@
 //! Settings ▸ Consoles over the real runtime, built from this commit, in a scratch tree (EmuSen_Qt.md §7.7.E): a
 //! synthetic core dropped in as a player's core is a console whose page is its declaration, with no code for it; its
-//! firmware and a stored setting come back through the frontend API; and a hosted core's options, read
+//! firmware, its card and a stored setting come back through the frontend API; and a hosted core's options, read
 //! from a running session, are a page with its categories as headings.
 
 use emusen_client_fixture::cores::{hosted, installation, libretro_entry, RING_GAME};
@@ -66,9 +66,10 @@ fn qt_7_7_e_a_synthetic_core_dropped_in_is_a_console_whose_page_is_its_declarati
         assert!(keys.contains(&key), "the declaration's {key} in {keys:?}");
     }
     assert_eq!(test.firmware.iter().map(|(_, f)| f.file.as_str()).collect::<Vec<_>>(), ["boot.rom"]);
-    // The card manager lists media for a console of the systems table alone (EmuSen_Qt.md §7.7.E names the gap), so the
-    // test core's card is not a page yet; the page follows whatever the list says.
-    assert_eq!(test.media, consoles::read(&source).unwrap().console(&test.console).unwrap().media);
+    // The card manager lists the card the core declares, though the systems table does not know its console (frontend
+    // API 2.1), with its noun as a sentence writes it.
+    let card = test.media.iter().find(|m| m.medium == "test.card").unwrap_or_else(|| panic!("the core's card: {:?}", test.media)).clone();
+    assert_eq!(card.noun_in_text(), card.noun.to_lowercase());
 
     let console = test.console.clone();
     let mut view = page(read, &console);
@@ -77,7 +78,7 @@ fn qt_7_7_e_a_synthetic_core_dropped_in_is_a_console_whose_page_is_its_declarati
     assert_eq!((rows[id("Wide")].value.as_str(), rows[id("Wide")].kind), ("Off", RowKind::Steps));
     assert_eq!(rows[id("Rate")].value, "32 kHz", "a choice by the label the core gives it");
     assert_eq!(rows[id("Ram")].value, "7");
-    assert_eq!(rows[id("cards")].held, test.media.is_empty(), "Memory cards opens where the card manager lists a medium");
+    assert!(!rows[id("cards")].held, "the core's card makes the Memory cards page");
     assert_eq!(rows[id("firmware")].value, "⚠ Not found", "the boot ROM the core declares, required with no open replacement, and not in the tree");
 
     // A step stored through the runtime reads back as the console's value.
@@ -87,6 +88,15 @@ fn qt_7_7_e_a_synthetic_core_dropped_in_is_a_console_whose_page_is_its_declarati
     let reread = consoles::read(&source).unwrap();
     assert_eq!(reread.console(&console).unwrap().value("Rate"), "48000");
 
+    // Memory cards over the card manager: a new card asked for in the drawer.
+    let cards = view.rows().iter().position(|r| r.id == "cards").unwrap();
+    assert_eq!(view.choose(cards), Outcome::Opened);
+    let new = view.rows().iter().position(|r| r.id == "new:test.card").expect("a new card row");
+    assert_eq!(view.rows()[new].label, format!("New {}", card.noun_in_text()));
+    let Outcome::NewCard(path) = view.choose(new) else { panic!("a new card asked for") };
+    // No format module reads the core's card, so the card manager names a blank one, which its game formats.
+    let (done, words) = source.cards_change(emusen_crystal_client::consts::CARDS_NEW, &serde_json::json!({ "path": path }));
+    assert!(done && words.contains("new, blank card"), "{words}");
 }
 
 #[test]

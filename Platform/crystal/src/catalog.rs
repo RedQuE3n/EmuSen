@@ -230,6 +230,10 @@ impl<'d> Catalog<'d> {
                 let id = pack_of(console)?.id.as_str();
                 self.discovery.for_system(id).filter_map(|c| info::systems(&c.sidecar.info_json).into_iter().find(|s| s.id == id)).next()
             })
+            .or_else(|| {
+                // A console the systems table does not list is its engine's own system, named by its id, as a session of it places its media.
+                self.discovery.for_system(console).filter_map(|c| info::systems(&c.sidecar.info_json).into_iter().find(|s| s.id == console)).next()
+            })
     }
 
     /// The console's pad from its engine's info, or every button for a console no engine serves (§18.10.12).

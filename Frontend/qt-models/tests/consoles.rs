@@ -159,7 +159,7 @@ impl ConsoleSource for World {
         if console != "PlayStation" {
             return json!([]);
         }
-        json!([{"medium": "psx.card", "title": "Memory Card", "noun": "Card", "extension": ".mcr", "kind": "removable", "mode": "shared",
+        json!([{"medium": "psx.card", "title": "Memory Card", "noun": "Card", "noun_in_text": "card", "extension": ".mcr", "kind": "removable", "mode": "shared",
                 "mode_key": "Cards", "next_name": "Card 3",
                 "slots": [{"label": "Slot 1", "name": "Card 1", "path": "/saves/PlayStation/Cards/Card 1.mcr"},
                           {"label": "Slot 2", "name": "Card 2", "path": "/saves/PlayStation/Cards/Card 2.mcr"}],

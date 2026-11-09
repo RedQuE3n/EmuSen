@@ -843,13 +843,16 @@ walkable element holding it, found through a fresh tree by its nearest ancestor 
 scroll offsets: a recording must not depend on the states visited before it. After every press the harness reads back
 and restores what the tree recorded of two kinds. The selections, values and scrolls Qt Quick's own classes declare
 (`currentIndex`, `value`, `contentX`, `contentY`, and a path's `offset`, each only where a `QQuick` class declares it
-and it is writable, so a binding is written only where a press already broke it) are written back where they differ;
+as a number and it is writable, so a binding is written only where a press already broke it) are written back where they differ;
 a path's offset is not written, since it follows its current index by the view's own animation, and writing it
 mid-move was measured to leave the carousel between cards; the views are settled instead (below). A focus scope's
 remembered item is given back with `setFocus`, which moves no focus outside the scope. Found on 2026-11-08: the dark
 and the light Controls state at 1280 × 800 differed by six focus edges, because the first state's walk had pressed
 Right on the tab bar (changing the tab) and Right from the combo box (leaving its row remembering the text field), and
-every later state began there; it showed at one size only because that state is visited first.
+every later state began there; it showed at one size only because that state is visited first. Found the same day: Qt Quick's
+`RectangularShadow` declares a writable `offset` too, a vector, and was taken for a path view whose `moving` reads as
+nothing, so the settle never ended on a screen with a shadowed cover; the properties are kept only when Qt types them as
+numbers.
 
 **A state is read only when its views are at rest, as Qt declares it** (`Scene::settle`). Every flickable and path
 view in the tree must be neither `moving` nor `flicking`, and a path view that holds its current item in its highlight

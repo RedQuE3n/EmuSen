@@ -118,7 +118,8 @@ QJsonObject keptOf(QQuickItem* item)
     QJsonObject kept;
     for (const char* name : {"currentIndex", "value", "contentX", "contentY", "offset"}) {
         const QMetaProperty p = item->metaObject()->property(item->metaObject()->indexOfProperty(name));
-        if (p.isValid() && p.isWritable() && QByteArray(p.enclosingMetaObject()->className()).startsWith("QQuick")) {
+        const bool number = p.typeId() == QMetaType::Double || p.typeId() == QMetaType::Float || p.typeId() == QMetaType::Int;
+        if (p.isValid() && p.isWritable() && number && QByteArray(p.enclosingMetaObject()->className()).startsWith("QQuick")) { // a shadow's offset is a vector, not a view's
             kept[QLatin1String(name)] = p.read(item).toDouble();
         }
     }

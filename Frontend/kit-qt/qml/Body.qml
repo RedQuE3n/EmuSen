@@ -47,7 +47,16 @@ Item {
             width: shapes.unitWidth
             height: shapes.unitHeight
             opacity: drawn.inkOpacity
+            // The software backend paints a Shape wholly past its clip unclipped, so there it is not drawn while wholly past (EmuSen_Kit.md §7.34).
+            visible: GraphicsInfo.api !== GraphicsInfo.Software || shown.inside
             preferredRendererType: Shape.CurveRenderer
+            Kit.InsideClips {
+                id: shown
+                x: drawn.boundingRect.x
+                y: drawn.boundingRect.y
+                width: drawn.boundingRect.width
+                height: drawn.boundingRect.height
+            }
             transform: Scale {
                 xScale: root.width / shapes.unitWidth
                 yScale: root.height / shapes.unitHeight

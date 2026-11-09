@@ -136,7 +136,7 @@ QRectF glyphBox(QQuickItem* item)
     const int across = item->property("effectiveHorizontalAlignment").toInt(), down = item->property("verticalAlignment").toInt();
     const double x = left + ((across & Qt::AlignRight) ? w - tw : (across & Qt::AlignHCenter) ? (w - tw) / 2 : 0);
     const double y = top + ((down & Qt::AlignBottom) ? h - th : (down & Qt::AlignVCenter) ? (h - th) / 2 : 0);
-    return item->mapRectToScene(QRectF(x, y, tw, th));
+    return QRectF(x, y, tw, th);
 }
 
 void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArray& out)
@@ -156,6 +156,26 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
     node["y"] = rect.y();
     node["w"] = rect.width();
     node["h"] = rect.height();
+    // A turned item's shape is its four corners in the scene, which the overlap rule reads in place of its scene box.
+    const QPointF c0 = item->mapToScene(QPointF(0, 0)), c1 = item->mapToScene(QPointF(item->width(), 0));
+    const QPointF c2 = item->mapToScene(QPointF(item->width(), item->height())), c3 = item->mapToScene(QPointF(0, item->height()));
+    if (std::abs(c1.y() - c0.y()) > 1e-6 || std::abs(c3.x() - c0.x()) > 1e-6) {
+        node["corners"] = QJsonArray{c0.x(), c0.y(), c1.x(), c1.y(), c2.x(), c2.y(), c3.x(), c3.y()};
+    }
+    // A member of a stack the kit lays out (a StackMember child, which no theme can place): its stack, itself, its layer.
+    for (QQuickItem* up = item; up != nullptr; up = up->parentItem()) {
+        const QObjectList& owned = up->children();
+        if (std::none_of(owned.begin(), owned.end(), [](const QObject* o) { return o->inherits("StackMember"); })) {
+            continue;
+        }
+        const QList<QQuickItem*> siblings = up->parentItem() != nullptr ? up->parentItem()->childItems() : QList<QQuickItem*>{};
+        node["stack"] = QString::number(idOf(up->parentItem()));
+        node["member"] = QString::number(idOf(up));
+        node["layer"] = up->z() * 100000.0 + siblings.indexOf(up);
+        node["memberFocus"] = up->hasActiveFocus();
+        node["isMember"] = up == item;
+        break;
+    }
     node["visible"] = item->isVisible() && opacity > 0;
     node["enabled"] = item->isEnabled();
     node["scale"] = unit.height();
@@ -191,8 +211,16 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
         node["size"] = font.pixelSize() > 0 ? font.pixelSize() : font.pointSizeF() * 4.0 / 3.0;
         node["bold"] = font.weight() >= QFont::Bold;
         node["face"] = font.family();
-        const QRectF glyphs = glyphBox(item);
+        const QRectF laid = glyphBox(item), glyphs = item->mapRectToScene(laid);
         node["glyphs"] = QJsonArray{glyphs.x(), glyphs.y(), glyphs.width(), glyphs.height()};
+        // The glyphs' own four corners in the scene, which a stack's rule holds uncovered (EmuSen_Kit.md §7.33).
+        QJsonArray inked;
+        for (const QPointF& p : {laid.topLeft(), laid.topRight(), laid.bottomRight(), laid.bottomLeft()}) {
+            const QPointF at = item->mapToScene(p);
+            inked.append(at.x());
+            inked.append(at.y());
+        }
+        node["inked"] = inked;
     }
     if (item->inherits("QQuickFlickable")) {
         const int direction = item->property("flickableDirection").toInt();

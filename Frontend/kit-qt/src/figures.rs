@@ -4,7 +4,7 @@
 use core::pin::Pin;
 
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QList, QModelIndex, QString, QVariant};
+use cxx_qt_lib::{QList, QString, QVariant};
 use emusen_kit_core::figures::{figure_layout, FigureGeometry, Node};
 
 #[cxx_qt::bridge]
@@ -145,19 +145,8 @@ where
 impl qobject::FigureLayout {
     /// Each row's group key, read as text (a number's digits) from the role the screen names; a model without the role is one group.
     pub fn read(mut self: Pin<&mut Self>) {
-        let mut keys = Vec::new();
         // SAFETY: QML hands the pointer of a live model, cleared by the engine when the model is destroyed.
-        if let Some(model) = unsafe { self.model.as_ref() } {
-            let root = QModelIndex::default();
-            let wanted = self.role.to_string();
-            let role = model.role_names().iter().find(|(_, name)| name.to_string() == wanted).map(|(r, _)| *r);
-            keys = (0..model.row_count(&root))
-                .map(|row| {
-                    let value = role.map(|r| model.data(&model.index(row, 0, &root), r)).unwrap_or_default();
-                    value.value::<QString>().map(|s| s.to_string()).unwrap_or_default()
-                })
-                .collect();
-        }
+        let keys = crate::item_model::role_texts(unsafe { self.model.as_ref() }, &self.role);
         self.as_mut().rust_mut().keys = keys;
         self.lay_out();
     }

@@ -216,6 +216,27 @@ Window {
             title: Session.title
             mark: Marks.heart
         }
+        CoverTile {
+            objectName: "coverTileScaled"
+            width: 120
+            height: 160
+            scale: 0.8
+            title: Session.title
+            mark: Marks.heart
+        }
+        Item {
+            scale: 0.8
+            width: 120
+            height: 160
+            CoverTile {
+                objectName: "coverTileInScaled"
+                width: 120
+                height: 160
+                drawnScale: 0.8
+                title: Session.title
+                mark: Marks.heart
+            }
+        }
         RoundPicture {
             objectName: "roundPicture"
             width: 40
@@ -231,6 +252,14 @@ Window {
             leading: 3
             bodies: 2
         }
+        OrbitLayout {
+            id: orbits
+            objectName: "orbits"
+            width: 1280
+            leading: Library.shelves.count
+            model: Library.consoles
+            role: "group"
+        }
         FigureLayout {
             id: figures
             objectName: "figures"
@@ -238,9 +267,30 @@ Window {
             model: Library.consoles
             role: "group"
         }
+        WheelLayout {
+            id: wheels
+            objectName: "wheels"
+            width: 1280
+            places: 3
+            current: 0
+            model: Library.consoles
+            role: "group"
+        }
+        Connections {
+            target: Library.consoles
+            function onModelReset() { orbits.read() }
+        }
+        Connections {
+            target: Library.consoles
+            function onModelReset() { orbits.read() }
+        }
         Connections {
             target: Library.consoles
             function onModelReset() { figures.read() }
+        }
+        Connections {
+            target: Library.consoles
+            function onModelReset() { wheels.read() }
         }
         HelpBar {
             objectName: "helpBar"

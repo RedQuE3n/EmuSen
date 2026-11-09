@@ -4,7 +4,8 @@
         <file alias="assets/previews/consoles.png">../themes/emusen/assets/previews/consoles.png</file>
         <file alias="assets/previews/games.png">../themes/emusen/assets/previews/games.png</file>
         <file alias="assets/previews/home.png">../themes/emusen/assets/previews/home.png</file>
-        <file alias="parts/CoverFan.qml">../themes/emusen/parts/CoverFan.qml</file>
+        <file alias="parts/CoverRow.qml">../themes/emusen/parts/CoverRow.qml</file>
+        <file alias="parts/EngineLine.qml">../themes/emusen/parts/EngineLine.qml</file>
         <file alias="parts/EngineMark.qml">../themes/emusen/parts/EngineMark.qml</file>
         <file alias="parts/Faces.qml">../themes/emusen/parts/Faces.qml</file>
         <file alias="parts/Glyph.qml">../themes/emusen/parts/Glyph.qml</file>
@@ -39,7 +40,6 @@
         <file alias="parts/Glass.qml">../themes/meridian/parts/Glass.qml</file>
         <file alias="parts/Glyph.qml">../themes/meridian/parts/Glyph.qml</file>
         <file alias="parts/RailEntry.qml">../themes/meridian/parts/RailEntry.qml</file>
-        <file alias="parts/RailFade.qml">../themes/meridian/parts/RailFade.qml</file>
         <file alias="parts/Track.qml">../themes/meridian/parts/Track.qml</file>
         <file alias="screens/Consoles.qml">../themes/meridian/screens/Consoles.qml</file>
         <file alias="screens/Games.qml">../themes/meridian/screens/Games.qml</file>

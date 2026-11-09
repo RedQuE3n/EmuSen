@@ -39,7 +39,16 @@ Item {
             required property string cutLetter
             required property var holes
             anchors.fill: parent
+            // The software backend paints a Shape wholly past its clip unclipped, so there it is not drawn while wholly past (EmuSen_Kit.md §7.34).
+            visible: GraphicsInfo.api !== GraphicsInfo.Software || shown.inside
             preferredRendererType: Shape.CurveRenderer
+            Kit.InsideClips {
+                id: shown
+                x: drawn.boundingRect.x
+                y: drawn.boundingRect.y
+                width: drawn.boundingRect.width
+                height: drawn.boundingRect.height
+            }
             ShapePath {
                 fillColor: drawn.filled ? root.ink : Qt.alpha(root.ink, 0)
                 strokeColor: drawn.stroke > 0 ? root.ink : Qt.alpha(root.ink, 0)
@@ -60,9 +69,17 @@ Item {
         }
     }
     Shape {
+        id: letter
         anchors.fill: parent
-        visible: marks.letter.length > 0 && !marks.cut
+        visible: marks.letter.length > 0 && !marks.cut && (GraphicsInfo.api !== GraphicsInfo.Software || letterShown.inside)
         preferredRendererType: Shape.CurveRenderer
+        Kit.InsideClips {
+            id: letterShown
+            x: letter.boundingRect.x
+            y: letter.boundingRect.y
+            width: letter.boundingRect.width
+            height: letter.boundingRect.height
+        }
         ShapePath {
             fillColor: root.ink
             strokeColor: Qt.alpha(root.ink, 0)

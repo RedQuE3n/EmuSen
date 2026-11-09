@@ -116,3 +116,27 @@ and the console screens' maker groups are added, each after the members it joins
   and every list asked for without the flag, is enabled. A theme draws the disabled look of a place the host would
   decline (`available` false) with its bar's A dimmed, and could not mark one entry of a list it may not build. Each kind
   now has eight lists, made once. A delegate reads the role as `model.enabled`. Found by Horizon's disabled state.
+- **`WheelLayout`** (the kit's, by name), the same day: a list model's groups as wheels turned under a fixed top and a dial
+  of the screen's places and one stop per group, with a walk that holds still while the wheel turns, the slots by distance,
+  the dots' count and the dial's clamped camera (`EmuSen_Kit.md` §7.32). Orrery's Choose a console needs one stop per
+  maker and a walk across worlds and stops; QML may hold neither a function nor a list of groups. Additions only, in both
+  registries.
+- **`OrbitSlot`** (the kit's, by name), 2026-11-09: a cover of a list placed on an ellipse by its distance from the
+  list's turning position, tilted and scaled, the covers one stack whose members the fit rule lets overlap in their
+  order (`EmuSen_Kit.md` §7.33). Orrery's orbits overlap a neighbour under the apex by design; the overlap may only be
+  declared by the kit's layout, never by a theme. Additions only, in both registries.
+- **`OrbitLayout`** (the kit's, by name), 2026-11-08: a list model's groups on nested half-ellipses about the top centre,
+  the smallest innermost, three shown and scrolled past, a group longer than its window turning under the focus, with the
+  labels, the ellipses and a walk by steps (`EmuSen_Kit.md` §7.30). The reference theme's Choose a console needs the
+  makers sorted by size and each orbit's window; QML may hold neither a loop nor a list of groups. Additions only, in both
+  registries.
+- **`EdgeFade`** (the kit's, by name), the same day: a scroller's faded edges, every theme's one fade. Meridian's rail
+  faded through a `MultiEffect` kept off on the software backend, where its rows were cut instead; every theme that fades
+  a scroller needs the same. Additions only, in both registries. Changed before release, 2026-11-09: `EdgeFade` holds
+  what it fades (its children, a scroller placed inside it) and fades it to transparency, so what lies behind shows
+  through, a picture included, on the GPU and on the software backend alike (`EmuSen_Kit.md` §7.35); `fadeTop` …
+  `fadeRight` and `length` are as they were. The first form, standing beside a `source` and ramping a `backdrop` colour
+  over it, was a fade to a colour, wrong over a picture, and no theme used it; `source` and `backdrop` are gone.
+- **`CoverTile.drawnScale`** (2026-11-09): the scale a cover is drawn at, the tile's own `scale` unless set by a theme
+  that scales an ancestor; the generated card's title keeps its size on the screen under it, so it stays at or above
+  the legibility floor (`EmuSen_Kit.md` §7.29). Found by Orrery's far covers, drawn at 0.8.

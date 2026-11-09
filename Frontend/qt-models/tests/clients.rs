@@ -4,6 +4,7 @@
 
 use emusen_client_fixture::{library, World};
 use emusen_crystal_client::Config;
+use emusen_esde::loader::ThemeSystem;
 use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS};
 use emusen_platform_client::Platform;
 use emusen_qt_models::clients::ClientSource;
@@ -71,6 +72,8 @@ fn with_a_theme_chosen_the_real_library_s_rows_carry_their_es_de_names() {
     image.resize(16 + 16384, 0);
     std::fs::write(world.dir("Roms/NES").join("Synthetic.nes"), &image).unwrap();
     std::fs::write(world.dir("Roms/NES/Puzzle").join("Foldered.nes"), &image).unwrap();
+    std::fs::write(world.dir("Roms/SNES").join("Synthetic.sfc"), vec![0u8; 0x8000]).unwrap();
+    std::fs::write(world.dir("Roms/GB").join("Synthetic.gb"), vec![0u8; 0x8000]).unwrap();
 
     let none = Config { development: false, cores: Some(Vec::new()), player_cores: Some(Vec::new()) };
     let source = ClientSource::open(path, &none).unwrap();
@@ -80,6 +83,12 @@ fn with_a_theme_chosen_the_real_library_s_rows_carry_their_es_de_names() {
     let nes = source.runtime.systems().unwrap().into_iter().find(|s| s.id == "nes").unwrap();
     assert_eq!(shelves[0]["system"].as_str(), Some("nes"), "{shelves}");
     assert_eq!((shelves[0]["name"].as_str(), shelves[0]["full_name"].as_str()), (Some(nes.esde_system.as_str()), Some(nes.esde_full_name.as_str())), "the systems table's names");
+    // ES-DE 3.4.1's user guide, "Supported game systems": a theme's ${system.fullName}, never the program's display_name.
+    for (system, full) in [("nes", "Nintendo Entertainment System"), ("snes", "Nintendo SNES (Super Nintendo)"), ("gb", "Nintendo Game Boy")] {
+        let shelf = shelves.as_array().unwrap().iter().find(|s| s["system"] == system).unwrap_or_else(|| panic!("no {system} shelf: {shelves}"));
+        let seen = ThemeSystem::new(shelf["name"].as_str().unwrap(), shelf["full_name"].as_str().unwrap(), shelf["theme"].as_str().unwrap());
+        assert_eq!(seen.variables()["system.fullName"], full, "{system}");
+    }
     let folder = &shelves[0]["games"][0];
     assert_eq!((folder["name"].as_str(), folder["folder"].as_bool(), folder["folder_path"].as_str()), (Some("Puzzle"), Some(true), Some("Puzzle")), "the scan's folder (emusen_library.h 1.3) makes a folder entry");
     let game = &shelves[0]["games"][1];

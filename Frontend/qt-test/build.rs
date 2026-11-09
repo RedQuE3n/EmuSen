@@ -14,8 +14,13 @@ fn main() {
                 "qml/WalkScene.qml",
                 "qml/HelpBarScene.qml",
                 "qml/StillScene.qml",
+                "qml/ClipScene.qml",
+                "qml/PhaseScene.qml",
+                "qml/FadeScene.qml",
+                "qml/FadeResizeScene.qml",
             ])
             .depend("QtQuick")
+            .depend("QtQuick.Shapes")
             .depend("EmuSen.Kit"),
     )
     .qrc("qml/Pictures.qrc")

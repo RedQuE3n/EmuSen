@@ -75,30 +75,45 @@ fn past_its_limit(item: &Item, ancestors: &[&Item], panel: Rect, slack: f64, fau
 }
 
 fn cut_at_an_edge(item: &Item, ancestors: &[&Item], slack: f64, faults: &mut Vec<Fault>) {
-    let Some(area) = ancestors.iter().rev().find(|a| a.scroll.vertical || a.scroll.horizontal) else { return };
-    let r = item.rect;
-    let a = area.rect;
-    let crosses = |near: f64, far: f64, edge: f64| near < edge - slack && far > edge + slack;
-    let mut cut = |side: Side, fades: bool| {
+    let Some(area) = nearest_scroller(ancestors) else { return };
+    for (side, fades) in crossed_edges(item, area, slack) {
         if !fades {
             faults.push(Fault::CutAtEdge { item: item.id, area: area.id, side });
         }
-    };
+    }
+}
+
+fn nearest_scroller<'a>(ancestors: &[&'a Item]) -> Option<&'a Item> {
+    ancestors.iter().rev().find(|a| a.scroll.vertical || a.scroll.horizontal).copied()
+}
+
+/// The edges of a scroller, along the axis it scrolls, that an item crosses, each with whether it fades.
+fn crossed_edges(item: &Item, area: &Item, slack: f64) -> Vec<(Side, bool)> {
+    let r = item.rect;
+    let a = area.rect;
+    let crosses = |near: f64, far: f64, edge: f64| near < edge - slack && far > edge + slack;
+    let mut sides = Vec::new();
     if area.scroll.vertical {
         if crosses(r.y, r.bottom(), a.y) {
-            cut(Side::Top, area.fades.top);
+            sides.push((Side::Top, area.fades.top));
         }
         if crosses(r.y, r.bottom(), a.bottom()) {
-            cut(Side::Bottom, area.fades.bottom);
+            sides.push((Side::Bottom, area.fades.bottom));
         }
     } else {
         if crosses(r.x, r.right(), a.x) {
-            cut(Side::Left, area.fades.left);
+            sides.push((Side::Left, area.fades.left));
         }
         if crosses(r.x, r.right(), a.right()) {
-            cut(Side::Right, area.fades.right);
+            sides.push((Side::Right, area.fades.right));
         }
     }
+    sides
+}
+
+/// Whether an item crosses a faded edge of its nearest scroller, and so is drawn fading out there (EmuSen_Kit.md §7.35).
+pub(crate) fn fading_out(item: &Item, ancestors: &[&Item]) -> bool {
+    nearest_scroller(ancestors).is_some_and(|area| crossed_edges(item, area, 0.0).iter().any(|(_, fades)| *fades))
 }
 
 fn words(item: &Item, ancestors: &[&Item], slack: f64, smallest: f64, faults: &mut Vec<Fault>) {
@@ -134,10 +149,52 @@ fn overlaps(items: &[(&Item, Vec<&Item>)], slack: f64, faults: &mut Vec<Fault>) 
             if a.rect.holds(&b.rect, slack) || b.rect.holds(&a.rect, slack) {
                 continue;
             }
-            let shared = a.rect.overlap(&b.rect);
-            if shared.w > slack && shared.h > slack {
-                faults.push(Fault::Overlap { a: a.id, b: b.id });
+            if !shapes_overlap(a, b, slack) {
+                continue;
             }
+            // Members of one declared stack may lie over each other in their order; words or a focused member under another may not.
+            if let (Some(sa), Some(sb)) = (a.stacking, b.stacking)
+                && sa.stack == sb.stack
+                && sa.member != sb.member
+            {
+                let (low, low_stacking, high) = if sa.layer < sb.layer { (a, sa, b) } else { (b, sb, a) };
+                // Words are covered when their drawn glyphs are, not their layout box, which a card's title fills.
+                let glyphs_covered = || match low.inked {
+                    Some(inked) => shapes_meet(inked, high.shape(), slack),
+                    None => true,
+                };
+                let hidden = (low.kind == Kind::Words && glyphs_covered()) || (low_stacking.is_member && low_stacking.focused);
+                if hidden {
+                    faults.push(Fault::Overlap { a: low.id, b: high.id });
+                }
+                continue;
+            }
+            faults.push(Fault::Overlap { a: a.id, b: b.id });
         }
     }
+}
+
+/// Whether two items' shapes share more than `slack` along every separating axis: their scene boxes when neither is turned,
+/// else the turned corners by the separating axis theorem, so two turned boxes whose scene boxes cross but whose shapes do
+/// not are apart.
+fn shapes_overlap(a: &Item, b: &Item, slack: f64) -> bool {
+    if a.corners.is_none() && b.corners.is_none() {
+        let shared = a.rect.overlap(&b.rect);
+        return shared.w > slack && shared.h > slack;
+    }
+    shapes_meet(a.shape(), b.shape(), slack)
+}
+
+/// Whether two four-cornered shapes share more than `slack` along every separating axis.
+fn shapes_meet(pa: [(f64, f64); 4], pb: [(f64, f64); 4], slack: f64) -> bool {
+    let axes = [pa, pb].into_iter().flat_map(|p| [(p[1].0 - p[0].0, p[1].1 - p[0].1), (p[2].0 - p[1].0, p[2].1 - p[1].1)]);
+    let span = |p: &[(f64, f64); 4], (ax, ay): (f64, f64)| {
+        p.iter().map(|(x, y)| x * ax + y * ay).fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| (lo.min(v), hi.max(v)))
+    };
+    axes.filter(|(x, y)| x.hypot(*y) > 1e-9).all(|(x, y)| {
+        let len = x.hypot(y);
+        let axis = (x / len, y / len);
+        let ((alo, ahi), (blo, bhi)) = (span(&pa, axis), span(&pb, axis));
+        ahi.min(bhi) - alo.max(blo) > slack
+    })
 }

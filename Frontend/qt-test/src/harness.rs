@@ -41,7 +41,7 @@ const STRICTLY_ENFORCE_RANGE: f64 = 2.0;
 
 /// Messages Qt logs of its own accord that no code of ours causes, each with its reason (EmuSen_Kit.md §7.14).
 pub const QT_INTERNAL: [(&str, &str); 2] = [
-    // Qt Multimedia converting a clip's frame to a picture where there is no RHI, the software backend's path (EmuSen_Kit.md §7.48).
+    // Qt Multimedia converting a clip's frame to a picture where there is no RHI, the software backend's path (EmuSen_Kit.md §7.50).
     ("No RHI backend. Using CPU conversion.", "Qt Multimedia on the software backend"),
     // QtCore's, once Qt Multimedia starts in a process whose application was made on a test runner's thread; the program makes it on main.
     ("QApplication was not created in the main() thread", "the test runner's thread"),
@@ -409,6 +409,13 @@ impl Scene<'_> {
     /// Sets a property of the object with this objectName (or the root's) from text, a dotted path reaching into an object property; Qt converts.
     pub fn set_property(&mut self, object_name: &str, property: &str, value: &str) -> bool {
         let done = ffi::harness_set_property(self.window(), &QString::from(object_name), &QString::from(property), &QString::from(value));
+        self.wait(30);
+        done
+    }
+
+    /// Deletes the named object at once, as the window's own teardown deletes a placed screen with it, then waits a moment.
+    pub fn destroy(&mut self, object_name: &str) -> bool {
+        let done = ffi::harness_destroy(self.window(), &QString::from(object_name));
         self.wait(30);
         done
     }

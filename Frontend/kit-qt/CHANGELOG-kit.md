@@ -4,6 +4,12 @@ The kit is the QML module `EmuSen.Kit` (EmuSen_Qt.md §1.4), held by rule Q (§5
 writes it, is committed under `Testing/qmltypes/` and compared on every build. A minor adds and never removes; each
 entry names what was added and the section of `EmuSen_Kit.md` that records it.
 
+## 1.0, stage 3: an orbit deleted with its screen (2026-11-09)
+
+No type, property, signal or invokable was added, removed or changed.
+
+- `OrbitSlot` reads its `view` as possibly null, so covers outliving their deleted view log nothing. §7.48.
+
 ## 1.0, stage 5 piece A: the settings frame, the page of choices and the slider row (2026-11-09)
 
 Additions only; no type, property, signal or invokable was removed or changed.
@@ -26,12 +32,12 @@ Additions only; no type, property, signal or invokable was removed or changed.
 Additions, and one contract change to `PageFrame`'s action model.
 
 - **`VideoTile`** (qmldir): a clip over its still, after the poster's delay, silent unless unmuted; Qt Multimedia over
-  the system's FFmpeg. `EmuSen_Kit.md` §7.48.
-- **`VideoFrames`** (registry): a clip's frames drawn on the software backend, where `VideoOutput` draws nothing. §7.48.
-- **`PageLayout.pictureWidth`**, **`pictureHeight`**, **`pictureGap`** (registry): the Overview's picture. §7.48.
+  the system's FFmpeg. `EmuSen_Kit.md` §7.50.
+- **`VideoFrames`** (registry): a clip's frames drawn on the software backend, where `VideoOutput` draws nothing. §7.50.
+- **`PageLayout.pictureWidth`**, **`pictureHeight`**, **`pictureGap`** (registry): the Overview's picture. §7.50.
 - `PageFrame`: `clip`, `clipPlaying`, `clipMuted`, `videoTile`; `showsText`, `contentWords`, `contentPicture`; the
-  signals `actionStepped` and `rowStepped`. `ActionButton`: `stepped`. §7.48.
-- Changed: `PageFrame`'s action model must give the roles `stepped`, `stepLeft` and `stepRight`. §7.48.
+  signals `actionStepped` and `rowStepped`. `ActionButton`: `stepped`. §7.50.
+- Changed: `PageFrame`'s action model must give the roles `stepped`, `stepLeft` and `stepRight`. §7.50.
 - The module depends on `QtMultimedia`.
 
 ## 1.0, stage 5 piece D: a long value on a row, and the text sizes (2026-11-09)

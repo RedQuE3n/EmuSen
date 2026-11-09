@@ -1,4 +1,4 @@
-// EmuSen.Kit.VideoFrames: a video's frames drawn as pictures, for the software backend, where VideoOutput draws nothing (EmuSen_Kit.md §7.48).
+// EmuSen.Kit.VideoFrames: a video's frames drawn as pictures, for the software backend, where VideoOutput draws nothing (EmuSen_Kit.md §7.50).
 #pragma once
 
 #include <QtGui/QImage>

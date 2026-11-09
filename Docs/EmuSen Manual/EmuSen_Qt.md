@@ -764,7 +764,7 @@ OpenH264, which is also installed. A clip of 64 × 48 frames written by a test a
 of the window was the colour behind it, on both `grabToImage` and `QQuickWindow::grabWindow`. The software backend is the
 test tier (§8.1) and the fallback where there is no Vulkan (§1.8), so (a) alone fails "drawn on both backends".
 
-**Decided 2026-11-09 by the tester: (b).** `EmuSen.Kit.VideoTile` (`EmuSen_Kit.md` §7.48): `MediaPlayer` decodes;
+**Decided 2026-11-09 by the tester: (b).** `EmuSen.Kit.VideoTile` (`EmuSen_Kit.md` §7.50): `MediaPlayer` decodes;
 on an RHI backend `VideoOutput` draws, Qt's own path, with no copy through the CPU; on the software backend the kit's
 `VideoFrames` (`kit-qt/cpp/video_frames.*`, the Multimedia module's `QVideoSink`, each frame converted by
 `QVideoFrame::toImage` and drawn as an image node) draws the same frames. The decoder is Qt's and the system's; nothing
@@ -1265,6 +1265,95 @@ its consoles); Down no longer stepping the rail (the sweep over `one-console` mi
 the splash at 1, 3 and 5 s (the audit records its finished frame only), the grid's rows for a tall and a square console
 (the synthetic library's consoles are all wide), and the bells, which no striker rings yet.
 
+#### 3.4.6 Orrery as built **[M 2026-11-09]**
+
+"Orrery" (`Frontend/themes/orrery/`, resources at `qrc:/emusen/themes/orrery/`) is the design of `qt-s3/final/orrery.md`:
+the paused game under the moon, the recent games on one wide orbit with the focus at its apex, and a dial of small
+wheels along the foot; Choose a console is Wheelwork, one maker's wheel turned under a fixed top. Written against
+`EmuSen.Theme` alone. Its parts, one job each: `Backdrop` (the kit's night `Sky`, or the Atlas paper with the glow as a
+warm wash), `Moon`, `Orbit` and `OrbitCover` (a list laid on an ellipse), `DialWheel` (a 44-unit wheel with its teeth),
+`WheelNode` (a node of Wheelwork's walk), `Chip`, `Track`, `Faces`, `Glyph`, `EngineMark`.
+
+**The orbits.** The directions name Qt's `PathView` on a `PathArc`. A `PathView` spreads its items over the whole path
+when the model holds fewer than `pathItemCount`, and wraps a long list round, so the last games would stand left of the
+first; the canvas spaces covers by angle, 18° (Home) or 24° (Games), and never wraps. The orbit is a horizontal
+`ListView` instead (`Orbit`), which keeps only the covers about the current one made (9,000 games make a handful) and does
+not wrap; its `turning`, the current index followed over Reel, places each cover through the kit's `OrbitSlot`
+(`EmuSen_Kit.md` §7.33) at θ = 90° − step × d about the orbit's centre, tilted by the ellipse's normal and scaled by
+distance, so a turn carries every visible cover along the arc together. The fourth cover from the apex exists at opacity
+0 and fades in. The covers of one orbit are a stack the kit declares: a neighbour may lie under the apex, as the spec has
+it (Games' d = ±1 by 19 units), but no caption's glyphs and no focused cover may.
+
+**Wheelwork lays out from data** through the kit's `WheelLayout` (`EmuSen_Kit.md` §7.32): the dial's stops, its
+clamped camera, the slots by distance from the focus, the dots, each maker's games (`totals`) and the walk, which a
+`WheelNode` reads as `KeyNavigation`. The walk's lists change only with the rows, so the graph holds still while the
+wheel turns. A world's angle is 90° − 45° × d, followed over Reel, so the worlds travel the rim; those past three steps
+fade as they set behind it. 1 to 120 consoles of any makers, interleaved or not, need no sorting in QML.
+
+**Named differences from the spec**, each decided or measured on 2026-11-09:
+1. Small words are 19 units where the spec has 17 (the capitals floor at 1280 × 720, decided 2026-11-08); the dial's
+   names take the stop's whole pitch (136) so "Recently played" is not cut.
+2. Right past a wheel's last world goes on to the next maker's first (and Left past the first back), and a shelf's Up
+   goes to the first world, where the canvas stops: theme-audit's sweep reaches every console only so.
+3. "Played 9 h 40 min" under Continue is not drawn: `Words` has no word for the time played.
+4. The moon is the canvas's crescent at 26 units (its `crescent` class), not the 64-unit box the table names; the key's
+   moon stands at 102, two above the table, so it clears the name's line box.
+5. The splash's worlds set out min(300, 2900 / n) ms apart so 120 settle by six seconds, and past three makers the
+   orbits share the span from 208 to 496.
+6. Consoles → Games over Pan with the orbit inking from the wheel's ring is the host's transition, not drawn by the theme.
+7. The pressed states (a cover dropping its lift, a world settling to 72) are not drawn: no pressed state reaches a theme.
+8. The covers' soft shadows are not drawn; by day the glow is a radial wash on the Atlas paper, as the renders show it.
+9. Worlds off the wheel, or past three steps, wait below the rim at opacity 0 rather than unmade, so the walk's targets
+   exist; the wheel's layer clips them.
+10. While a shelf dims the wheel to 30%, the maker's words under the hub are not drawn (as the canvas already drops the
+    worlds' labels then): words at 30% read under the contrast floor.
+11. A console of no maker is a group of its own (`maker_groups`), so its stop on the dial, which the spec leaves without
+    words, is named by that console, drawn and heard, and the key names it so when the stop is focused.
+12. By day Muted is #5A4B3C where the spec has #6B5B4A (decided 2026-11-09). The glow's wash, the kit's alpha 0.2 at
+    lightness 50%, lies under words that the spec sets in Muted: Games' `addFolder` read 4.18:1 in `empty`, the hub's "·"
+    4.35:1 in `one-console` at 1280 × 720. Over the wash at its centre, on any of the paper's three stops, at any hue,
+    #6B5B4A reads 3.64:1 at the worst (hue 240) and #5A4B3C 4.68:1; a lighter wash does not reach 4.5:1 (4.30:1 at
+    lightness 70%), and words of one role drawn in two inks by where they stand would be an exception a screen at a time.
+
+**Proof, measured 2026-11-09** (offscreen, the software backend). `theme-check` reads the package in both steps at the
+five sizes in dark and light, Choose a console also over the audit's 120 consoles, the sweep hearing all 120. The
+orbit scales its covers, so `OrbitCover` sets the kit's `CoverTile.drawnScale` to the slot's scale: a generated card's
+title on a d = ±2 cover at 0.8 had read 11.31 against the floor's 11.64 at 1280 × 720. `theme-check` reads `ok` with the contrast rule
+in every loaded state (WiseMan 4c58991fb with the turned sampling of `EmuSen_Kit.md` §7.33).
+The three `Testing/themes/orrery-*.mockup.spec`, written by hand from the spec's tables and the canvases, hold the
+recordings at 1280 × 800 and 1920 × 1200, dark and light, within two units. Side-by-sides with the spec's renders are kept in
+`~/.cache/emusen/tmp/qt-s3/compare/orrery/`. Three faults were seeded and caught, each reverted: a light accent of
+#E0A070 (the static step's contrast, 2.23:1); the motes resting on battery and under reduced motion (the stillness rule, 125 frames swapped in 2 s); Right
+along the wheel walking Left (the 120 consoles' sweep heard 2). Not proved offscreen: the splash at 1, 3 and 5 s (the audit records its finished
+frame only) and the bells, which no striker rings yet. Of the canvases' catalogues, `one-console`, `empty`, `long`,
+`eleven` and `n30` read clean; `n120` and `maker40` were not run to the end, the audit's own crowd (120 consoles, 40
+under one maker) passing in their place. The dial stands inside the kit's `EdgeFade` (`EmuSen_Kit.md` §7.35) and fades
+40 units to transparency at an edge it runs past, the sky showing through, on both backends. Its first form ramped the sky's
+colour over the dial, and a stop's name at the edge read 2.08:1 in `n30`; the kit's rule no longer holds words crossing a
+faded edge, and `n30` and every state offscreen read clean of it (measured 2026-11-09).
+
+**The remaining findings, fixed on 2026-11-09** (WiseMan 1d651f48a merged), each reproduced first, the before and after
+side by side in `~/.cache/emusen/tmp/qt-s3-ofix/compare/`:
+1. Over 120 consoles, the dial's stops of consoles with no maker had no name a reader hears (`name`, at every size).
+   Difference 11. A catalogue of two makers and three consoles of none: 30 lines before (three stops, five sizes, both
+   variants), none after.
+2. In `long`, the cover two left of the apex, wide (Brass Lantern at 1.39), turned by the ellipse's normal, rose to
+   y 327.4 over Home's orbit box at 330 (`fit`, past its scroller, 20 lines). A cover of the widest shape the slot
+   takes (1.6) reaches 321.2 at d = ±2, so the orbit's box starts at 316 (426 high, its foot unchanged at 742); the
+   covers are placed from the screen's top, not the box's, so nothing moves. Continue's panel (to 356) now stands over the
+   box (`z` 1), so a press on its foot is the panel's rather than the list's, which took the foot's last 26 units before;
+   no cover comes under the panel (the d = ±2 covers stand at x 181 to 371 and 909 to 1099, the panel at 400 to 880).
+   Games' orbit reaches 174 in a box from 112. Seeded back (the box at 330): the same 20 lines.
+3. In `empty`, light, Games' `addFolder` read 4.15 to 4.18:1 at every size. Difference 12.
+4. In `one-console`, light, at 1280 × 720, the hub's "·" read 4.35:1. Difference 12; with Muted seeded back to #6B5B4A,
+   both return (6 lines).
+5. In `disabled`, the help bar's Open over Search and Home was a misreading of the tree, not a drawing
+   (`EmuSen_Kit.md` §7.49): fixed in the harness.
+6. On teardown, 14 to 22 `TypeError`s at the end of a run (`OrbitCover.qml:16-17`, the kit's `OrbitSlot.qml:44-45`), from the covers
+   outliving their orbit while the screen is deleted (`EmuSen_Kit.md` §7.48), not from `ViewCurrent`. `OrbitSlot` reads
+   its view as possibly null, and `OrbitCover` its `orbit` (`?.`, `?? 0`). A run logs none; with `OrbitCover`'s guard
+   seeded back, `nogame` alone logged 7 at `OrbitCover.qml:16`.
+
 ### 3.5 Loading and the sandbox
 
 Each theme runs in a `QQmlEngine` of its own, created by Rust with: an import path list holding only Qt's modules on an
@@ -1568,6 +1657,12 @@ view's current item, the pointer focuses only by moving, and the walk waits out 
 finding left in any (the reference package, Meridian and Constellation 70 lines each before, Horizon 80). What stays is
 each theme's own default: the reference package's light variant's contrast and fit (46 lines), Horizon's `EdgeFade`
 warnings (the fade piece's).
+
+**After Orrery's remaining findings** (2026-11-09, §3.4.6), with the harness reading the tree after any scheduled polish
+(`EmuSen_Kit.md` §7.49), `--states all` offscreen on the software backend: Orrery none, and nothing logged; Horizon none;
+Constellation (its branch's copy) none; Meridian `nogame` alone (58 lines, the shelf's covers cut and unreached, the same 58
+from the audit without the polish wait); the reference package its 326 `fit` lines, the same as the baseline taken that
+day before its own fit work. On the GPU, Orrery in the default and its spec's ten states: none.
 
 **Not yet.** The reference package (R) has not been through it; a theme's token overrides are not applied to the theme's engine by
 the host yet, so the loaded step judges the kit's own colours; the splash's still frame is judged as every screen is, under reduced
@@ -3775,7 +3870,7 @@ hand, then the page) open the page on the game in hand, which the theme's focus 
 theme's Home now names its Continue and shelf games too); B returns to the screen it was opened over, or under a card to
 the library's screen; Start goes to the library's screen; a game started goes to the game.
 
-**The clip** (§1.8.9; `EmuSen_Kit.md` §7.48): the hero is a `VideoTile` whose still is the hero's picture; while the page
+**The clip** (§1.8.9; `EmuSen_Kit.md` §7.50): the hero is a `VideoTile` whose still is the hero's picture; while the page
 holds the focus the clip plays after the poster's delay and fades in, looped; when the page loses the focus (B, Start,
 a card over it) it stops and the still stands alone. It is silent: §5.9 gives the hero no sound, and no setting gives it
 one. Reduced motion and Play videos off keep the still.

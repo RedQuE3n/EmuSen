@@ -215,7 +215,7 @@ Kit.Frame {
             fadeRight: tileList.fadeRight
             ListView {
                 id: tileList
-                // The edges faded, declared on the scroller, where the fit audit reads them (EmuSen_Kit.md §7.48).
+                // The edges faded, declared on the scroller, where the fit audit reads them (EmuSen_Kit.md §7.50).
                 readonly property bool fadeLeft: !tileList.atXBeginning
                 readonly property bool fadeRight: !tileList.atXEnd
                 // A model that fills after the view was made leaves it with no current item, so no delegate would take the focus.

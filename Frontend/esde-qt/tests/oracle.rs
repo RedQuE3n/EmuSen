@@ -45,9 +45,7 @@ const NAMED_BOXES: [(&str, &str, &str); 18] = [
 
 /// States whose MAE is above the C# painter's, measured on 2026-11-09 and named in EmuSen_Qt.md §4.8.6: (theme, state,
 /// width, the measured figure as a ceiling). A state above its ceiling fails, and one back under the C#'s fails too.
-const NAMED_MAE: [(&str, &str, i32, f64); 3] = [
-    ("artflix-revisited-es-de", "system", 1280, 7.42),
-    ("artflix-revisited-es-de", "system", 1920, 7.36),
+const NAMED_MAE: [(&str, &str, i32, f64); 1] = [
     ("caralt-es-de", "system", 1280, 26.40),
 ];
 
@@ -128,23 +126,43 @@ fn turned(b: [f64; 4], degrees: f64, origin: (f64, f64)) -> [f64; 4] {
     [x0, y0, xs.iter().copied().fold(f64::MIN, f64::max) - x0, ys.iter().copied().fold(f64::MIN, f64::max) - y0]
 }
 
-/// The drawn elements' boxes in design units (window pixels over `unit`), by name, in drawing order.
-fn qt_boxes(nodes: &[Node], unit: f64) -> BTreeMap<String, Vec<[f64; 4]>> {
-    let mut out: BTreeMap<String, Vec<[f64; 4]>> = BTreeMap::new();
+/// The delegate of View.qml that draws an element of this kind, so two kinds sharing a name (the loader's `(default)` clock
+/// and status) are told apart.
+fn delegate(kind: &str) -> &'static str {
+    match kind {
+        "image" | "video" | "animation" => "PictureElement",
+        "text" | "datetime" | "clock" => "TextElement",
+        "rating" => "RatingElement",
+        "badges" => "BadgesElement",
+        "helpsystem" => "HelpElement",
+        "gamelistinfo" => "InfoElement",
+        "systemstatus" => "StatusElement",
+        "carousel" => "CarouselElement",
+        "textlist" => "TextListView",
+        "grid" => "GridElement",
+        _ => "",
+    }
+}
+
+/// The drawn elements' boxes in design units (window pixels over `unit`), by delegate and name, in drawing order.
+fn qt_boxes(nodes: &[Node], unit: f64) -> BTreeMap<(String, String), Vec<[f64; 4]>> {
+    let mut out: BTreeMap<(String, String), Vec<[f64; 4]>> = BTreeMap::new();
     for n in nodes.iter().filter(|n| n.visible && n.name.starts_with("element-")) {
-        out.entry(n.name["element-".len()..].to_owned()).or_default().push([n.x / unit, n.y / unit, n.w / unit, n.h / unit]);
+        let class = n.cls.split('_').next().unwrap_or_default().to_owned();
+        out.entry((class, n.name["element-".len()..].to_owned())).or_default().push([n.x / unit, n.y / unit, n.w / unit, n.h / unit]);
     }
     out
 }
 
 /// Each element the C# drew, held to Qt's box of the same name and place within `mockup::UNITS`: the ones off (each a
 /// line), and those Qt draws that the C# did not (noted, not held).
-fn rects(spec: &[(String, String, String, [f64; 4])], qt: &BTreeMap<String, Vec<[f64; 4]>>) -> (Vec<(String, String)>, Vec<String>) {
-    let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
+fn rects(spec: &[(String, String, String, [f64; 4])], qt: &BTreeMap<(String, String), Vec<[f64; 4]>>) -> (Vec<(String, String)>, Vec<String>) {
+    let mut seen: BTreeMap<(String, String), usize> = BTreeMap::new();
     let mut off = vec![];
-    for (key, _, name, want) in spec {
-        let k = seen.entry(name).or_default();
-        match qt.get(name).and_then(|v| v.get(*k)) {
+    for (key, kind, name, want) in spec {
+        let at = (delegate(kind).to_owned(), name.clone());
+        let k = seen.entry(at.clone()).or_default();
+        match qt.get(&at).and_then(|v| v.get(*k)) {
             None => off.push((key.clone(), "not drawn".to_owned())),
             Some(got) => {
                 let d = (0..4).map(|i| (got[i] - want[i]).abs()).fold(0.0, f64::max);
@@ -158,7 +176,7 @@ fn rects(spec: &[(String, String, String, [f64; 4])], qt: &BTreeMap<String, Vec<
     }
     let noted = qt
         .iter()
-        .flat_map(|(name, v)| (seen.get(name.as_str()).copied().unwrap_or(0)..v.len()).map(move |_| name.clone()))
+        .flat_map(|(at, v)| (seen.get(at).copied().unwrap_or(0)..v.len()).map(move |_| format!("{} {}", at.0, at.1)))
         .collect();
     (off, noted)
 }
@@ -285,7 +303,7 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
                     .iter()
                     .filter(|e| e.1 == "clock")
                     .map(|e| e.3)
-                    .chain(theme_view.view(view).of_kind("clock").flat_map(|e| qt.get(&e.name).cloned().unwrap_or_default()))
+                    .chain(theme_view.view(view).of_kind("clock").flat_map(|e| qt.get(&(delegate("clock").to_owned(), e.name.clone())).cloned().unwrap_or_default()))
                     .map(|b| ((b[0] * unit).floor() as i32, (b[1] * unit).floor() as i32, (b[2] * unit).ceil() as i32 + 1, (b[3] * unit).ceil() as i32 + 1))
                     .collect();
                 let cs_png = common::compare_dir().join("../csharp").join(format!("{name}.png"));

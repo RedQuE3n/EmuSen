@@ -2260,6 +2260,24 @@ within 0.01 on all twelve grabs); the final figures are the RX 6800's.
      four unnamed; the release date, players and play time boxes and CarAlt's second players' text are within two units.
    - Seeded fault: a vector picture drawn nearest left at its own size again; caught as Art Book Next's system state at
      2.11 and 1.56, above the C#'s, at both sizes.
+2. **Artflix: the wheel's dimming, the game count and the status.**
+   - *The other systems were dimmed twice*, not left bright: the scene darkened each unfocused slot's tint by
+     `unfocusedItemDimming` and the painter multiplied the picture by the slot's `dim` again, 0.25 for Artflix's 0.5
+     (the 90th percentile of the Game Boy logo's grey 42 where ES-DE's is 72 and the C#'s 72). THEMES.md defines one
+     dimming "for all items except the currently selected entry"; the scene now leaves the tint the theme's and the
+     painter applies `dim` once (`primary.rs`).
+   - *`gamelistInfo` was 0 wide*: its delegate never reported its extent, so the theme's `size` of `w 0.02` (`w` is not
+     a number, so the width is 0, "automatically size") kept the scene's box at 0. `InfoElement.qml` reports its row's
+     width and a line's height. It draws 79 units wide where ES-DE's ink spans 83 and the C# box 86: the counts' marks
+     are the kit's, not ES-DE's.
+   - *The `(default)` status at the left* was the comparison's: it matched boxes by name alone, and the loader names both
+     the clock and the status it adds `(default)`, so Artflix's clock (THEMES.md's clock default, x 23) was held to the
+     status's box. Boxes are now matched by the delegate that draws the kind as well as the name (`oracle.rs`); the
+     status itself drew nothing, which item 4 takes up.
+   - Artflix's system view after this step: 6.39 and 6.31 (C# 6.50, 6.41), unnamed; its gamelist 8.19 and 8.20 (C# 9.24,
+     9.10).
+   - Seeded fault: the tint dimmed in the scene again; caught as Artflix's system view at 7.37 and 7.31, above the C#'s,
+     at both sizes.
 
 ---
 

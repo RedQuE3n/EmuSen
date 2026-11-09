@@ -49,6 +49,7 @@ pub mod ffi {
         fn harness_focused_singleton(window: Pin<&mut QObject>, module: &QString, name: &QString) -> *mut QObject;
         fn harness_roots(engine: Pin<&mut QQmlApplicationEngine>) -> i32;
         fn harness_set_property(root: Pin<&mut QObject>, object_name: &QString, property: &QString, value: &QString) -> bool;
+        fn harness_destroy(root: Pin<&mut QObject>, object_name: &QString) -> bool;
         fn harness_watch(root: Pin<&mut QObject>, object_name: &QString, property: &QString) -> bool;
         fn harness_notified(root: Pin<&mut QObject>, object_name: &QString, property: &QString) -> i32;
         fn harness_colours_at(window: Pin<&mut QObject>, points: &QString) -> QString;

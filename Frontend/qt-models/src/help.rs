@@ -44,6 +44,8 @@ pub enum Screen {
     Settings,
     /// Settings on a page under a section: the shoulders are the page's.
     SettingsPage,
+    /// A tool's search with the keyboard docked: Type, Delete, Space and Done (EmuSen_Interface.md §15.2).
+    ToolSearch,
     /// A console's page under Consoles: the shoulders step to the console before or after it.
     SettingsConsole,
     /// A page of choices (EmuSen_Interface.md §18.11): A chooses, B keeps what was chosen.
@@ -167,6 +169,12 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Left, "Value", None),
             (UiButton::Back, "Back", None),
             (UiButton::Menu, "Home", Some(HOME)),
+        ],
+        Screen::ToolSearch => &[
+            (UiButton::Accept, "Type", None),
+            (UiButton::Back, "Delete", None),
+            (UiButton::Search, "Space", Some("space")),
+            (UiButton::Screensaver, "Done", Some("done")),
         ],
         Screen::SettingsConsole => &[
             (UiButton::Accept, "Change", None),

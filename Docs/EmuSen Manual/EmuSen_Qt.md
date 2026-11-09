@@ -400,7 +400,48 @@ consoles with no games shown (three view tests), the rows replaced without the m
 never saw the fourth row) and two roles' names swapped (the harness test). At interface 40 (2026-11-08) the source's
 test also finds games.db where Galaxia names it, inside the scratch tree, and all seven pass again.
 
+#### 1.2.2 `ToolModel`, `RowsModel` and `LaunchModel` as built **[M 2026-11-09]**
+
+Stage 5's tools are one description and one bridge, so Packages, Library, the Scraper, the Cheats database and
+Collections each add a source and change neither (§7.7.F; `EmuSen_Interface.md` §15.9, §16).
+
+- **`qt-models::tools`** (plain Rust, no Qt): the tool screen as data, `Words` with a `Tone` (the kit's `Tones` in its
+  order), `Column`, `Item` (a row: its key, a cell per column, the sections and filters it is listed under, the words a
+  search finds it by, its value for each sort), `Pane`, `Bar` and `Mark`; the trait `Source`, which a tool implements
+  (its title, columns, rows, sections, filters and sorts, facts, pane, bar, a row's action on A, a row's page under X, the
+  List card's own rows, marks, the plan's summary and question, applying it, an action by key, a question answered, a
+  refresh and a poll of its jobs); and `Tool<S>`, which holds what every tool's screen holds the same way: the section,
+  filter, sort and search, the focused row by key, the marks, the cards over the screen (X's page with its pages, Select's
+  List card of Filter ◂ ▸, Sort ◂ ▸ and the tool's rows) and the question (the plan, or one the source asked). A marked
+  row says its mark's word in Accent in its last column (§15.3 Q4); the help bar is A by the row's action, B, the
+  shoulders by the source's word, then X, Select and Start where they mean something now; the marks go when an applied
+  run ends. A source chosen at run time is a `Box<dyn Source>`, which forwards.
+- **`tools::cores`**, the first source, is C#'s `CoresPane`, `CoreRow`, `CoresPlan`, `CoresWords` and `CoreApproval`
+  in Rust, one file each (`row`, `plan`, `words`, `approval`) beside the source (`mod`), over a `Backend` trait: the
+  runtime's `cores`, `systems`, the console's `Engine` setting, `core_approve`, `core_revoke`, `firmware_status` and
+  `rescan`, and the core tool's jobs (`core-ls` with details, `core-fetch`, `core-verify`, `core-get`, `core-update`,
+  `core-rm`), each drained without waiting, never pushed. `Clients` answers over the two client crates; `Scripted`
+  answers from a file holding a world (the listings, the settings, the disk, and each job's events and whether it ends),
+  which is how Mistress's recordings script theirs (`WindowFitAuditTests.CoresWindow.cs`) and so how the Qt recordings of
+  §7.7.F are made. The cores folder's free space is `statvfs` through `libc`, a new dependency of the crate, since
+  neither client answers it.
+- **`RowsModel`**: rows handed as plain data, a JSON array of objects, put on Qt as a list model whose roles are the
+  objects' keys; the same keys and count change the rows in place (`dataChanged`), so a focused delegate stays, as
+  `CardModel`'s rows do (§7.2). `ToolModel` hands every list this way: facts, columns (`key`, `toneKey`, `fill`,
+  `least`, `trailing`), rows (`c0…`, `t0…`, `name` as a reader hears it), sentences, the help bar's entries and a card's
+  rows in `MenuCard`'s roles.
+- **`ToolModel`** (`tool`, `platformLibrary`, `cores`, `world`, `open`): the source the `tool` enum names, made when the
+  screen first opens and read anew each time it opens; every word as a property; the pad's and the pointer's asks
+  (`focus`, `activate`, `chooseSection`, `search`, `act`, `answer`, `card*`, `poll`) **queued after the event that
+  asked**, as `Screens` does, because a card that closes on A would otherwise hand the same press to the list beneath it
+  (found in §7.7.F's walk: the plan opened under a mark), and a fill's signals would call back into the model while it
+  fills. While it fills, the list's own moves (a reset putting it at its first row, or it following `current`) are not
+  taken as the player's, since the two would otherwise set each other back and forth. `busy` runs the screen's timer,
+  which pulls the jobs every 100 ms.
+- **`LaunchModel`** (`launch.rs` words and rules, `launch_model.rs` bridge): §7.7.F's questions before a game opens.
+
 ### 1.3 QML views: layout only
+
 
 A QML file may hold anchors, layouts, bindings with arithmetic and ternaries, states, transitions, animations whose
 durations read tokens, `forceActiveFocus()` in a handler, and handler lines that call one invokable. It may not hold
@@ -1220,6 +1261,95 @@ its consoles); Down no longer stepping the rail (the sweep over `one-console` mi
 the splash at 1, 3 and 5 s (the audit records its finished frame only), the grid's rows for a tall and a square console
 (the synthetic library's consoles are all wide), and the bells, which no striker rings yet.
 
+#### 3.4.6 Orrery as built **[M 2026-11-09]**
+
+"Orrery" (`Frontend/themes/orrery/`, resources at `qrc:/emusen/themes/orrery/`) is the design of `qt-s3/final/orrery.md`:
+the paused game under the moon, the recent games on one wide orbit with the focus at its apex, and a dial of small
+wheels along the foot; Choose a console is Wheelwork, one maker's wheel turned under a fixed top. Written against
+`EmuSen.Theme` alone. Its parts, one job each: `Backdrop` (the kit's night `Sky`, or the Atlas paper with the glow as a
+warm wash), `Moon`, `Orbit` and `OrbitCover` (a list laid on an ellipse), `DialWheel` (a 44-unit wheel with its teeth),
+`WheelNode` (a node of Wheelwork's walk), `Chip`, `Track`, `Faces`, `Glyph`, `EngineMark`.
+
+**The orbits.** The directions name Qt's `PathView` on a `PathArc`. A `PathView` spreads its items over the whole path
+when the model holds fewer than `pathItemCount`, and wraps a long list round, so the last games would stand left of the
+first; the canvas spaces covers by angle, 18° (Home) or 24° (Games), and never wraps. The orbit is a horizontal
+`ListView` instead (`Orbit`), which keeps only the covers about the current one made (9,000 games make a handful) and does
+not wrap; its `turning`, the current index followed over Reel, places each cover through the kit's `OrbitSlot`
+(`EmuSen_Kit.md` §7.33) at θ = 90° − step × d about the orbit's centre, tilted by the ellipse's normal and scaled by
+distance, so a turn carries every visible cover along the arc together. The fourth cover from the apex exists at opacity
+0 and fades in. The covers of one orbit are a stack the kit declares: a neighbour may lie under the apex, as the spec has
+it (Games' d = ±1 by 19 units), but no caption's glyphs and no focused cover may.
+
+**Wheelwork lays out from data** through the kit's `WheelLayout` (`EmuSen_Kit.md` §7.32): the dial's stops, its
+clamped camera, the slots by distance from the focus, the dots, each maker's games (`totals`) and the walk, which a
+`WheelNode` reads as `KeyNavigation`. The walk's lists change only with the rows, so the graph holds still while the
+wheel turns. A world's angle is 90° − 45° × d, followed over Reel, so the worlds travel the rim; those past three steps
+fade as they set behind it. 1 to 120 consoles of any makers, interleaved or not, need no sorting in QML.
+
+**Named differences from the spec**, each decided or measured on 2026-11-09:
+1. Small words are 19 units where the spec has 17 (the capitals floor at 1280 × 720, decided 2026-11-08); the dial's
+   names take the stop's whole pitch (136) so "Recently played" is not cut.
+2. Right past a wheel's last world goes on to the next maker's first (and Left past the first back), and a shelf's Up
+   goes to the first world, where the canvas stops: theme-audit's sweep reaches every console only so.
+3. "Played 9 h 40 min" under Continue is not drawn: `Words` has no word for the time played.
+4. The moon is the canvas's crescent at 26 units (its `crescent` class), not the 64-unit box the table names; the key's
+   moon stands at 102, two above the table, so it clears the name's line box.
+5. The splash's worlds set out min(300, 2900 / n) ms apart so 120 settle by six seconds, and past three makers the
+   orbits share the span from 208 to 496.
+6. Consoles → Games over Pan with the orbit inking from the wheel's ring is the host's transition, not drawn by the theme.
+7. The pressed states (a cover dropping its lift, a world settling to 72) are not drawn: no pressed state reaches a theme.
+8. The covers' soft shadows are not drawn; by day the glow is a radial wash on the Atlas paper, as the renders show it.
+9. Worlds off the wheel, or past three steps, wait below the rim at opacity 0 rather than unmade, so the walk's targets
+   exist; the wheel's layer clips them.
+10. While a shelf dims the wheel to 30%, the maker's words under the hub are not drawn (as the canvas already drops the
+    worlds' labels then): words at 30% read under the contrast floor.
+11. A console of no maker is a group of its own (`maker_groups`), so its stop on the dial, which the spec leaves without
+    words, is named by that console, drawn and heard, and the key names it so when the stop is focused.
+12. By day Muted is #5A4B3C where the spec has #6B5B4A (decided 2026-11-09). The glow's wash, the kit's alpha 0.2 at
+    lightness 50%, lies under words that the spec sets in Muted: Games' `addFolder` read 4.18:1 in `empty`, the hub's "·"
+    4.35:1 in `one-console` at 1280 × 720. Over the wash at its centre, on any of the paper's three stops, at any hue,
+    #6B5B4A reads 3.64:1 at the worst (hue 240) and #5A4B3C 4.68:1; a lighter wash does not reach 4.5:1 (4.30:1 at
+    lightness 70%), and words of one role drawn in two inks by where they stand would be an exception a screen at a time.
+
+**Proof, measured 2026-11-09** (offscreen, the software backend). `theme-check` reads the package in both steps at the
+five sizes in dark and light, Choose a console also over the audit's 120 consoles, the sweep hearing all 120. The
+orbit scales its covers, so `OrbitCover` sets the kit's `CoverTile.drawnScale` to the slot's scale: a generated card's
+title on a d = ±2 cover at 0.8 had read 11.31 against the floor's 11.64 at 1280 × 720. `theme-check` reads `ok` with the contrast rule
+in every loaded state (WiseMan 4c58991fb with the turned sampling of `EmuSen_Kit.md` §7.33).
+The three `Testing/themes/orrery-*.mockup.spec`, written by hand from the spec's tables and the canvases, hold the
+recordings at 1280 × 800 and 1920 × 1200, dark and light, within two units. Side-by-sides with the spec's renders are kept in
+`~/.cache/emusen/tmp/qt-s3/compare/orrery/`. Three faults were seeded and caught, each reverted: a light accent of
+#E0A070 (the static step's contrast, 2.23:1); the motes resting on battery and under reduced motion (the stillness rule, 125 frames swapped in 2 s); Right
+along the wheel walking Left (the 120 consoles' sweep heard 2). Not proved offscreen: the splash at 1, 3 and 5 s (the audit records its finished
+frame only) and the bells, which no striker rings yet. Of the canvases' catalogues, `one-console`, `empty`, `long`,
+`eleven` and `n30` read clean; `n120` and `maker40` were not run to the end, the audit's own crowd (120 consoles, 40
+under one maker) passing in their place. The dial stands inside the kit's `EdgeFade` (`EmuSen_Kit.md` §7.35) and fades
+40 units to transparency at an edge it runs past, the sky showing through, on both backends. Its first form ramped the sky's
+colour over the dial, and a stop's name at the edge read 2.08:1 in `n30`; the kit's rule no longer holds words crossing a
+faded edge, and `n30` and every state offscreen read clean of it (measured 2026-11-09).
+
+**The remaining findings, fixed on 2026-11-09** (WiseMan 1d651f48a merged), each reproduced first, the before and after
+side by side in `~/.cache/emusen/tmp/qt-s3-ofix/compare/`:
+1. Over 120 consoles, the dial's stops of consoles with no maker had no name a reader hears (`name`, at every size).
+   Difference 11. A catalogue of two makers and three consoles of none: 30 lines before (three stops, five sizes, both
+   variants), none after.
+2. In `long`, the cover two left of the apex, wide (Brass Lantern at 1.39), turned by the ellipse's normal, rose to
+   y 327.4 over Home's orbit box at 330 (`fit`, past its scroller, 20 lines). A cover of the widest shape the slot
+   takes (1.6) reaches 321.2 at d = ±2, so the orbit's box starts at 316 (426 high, its foot unchanged at 742); the
+   covers are placed from the screen's top, not the box's, so nothing moves. Continue's panel (to 356) now stands over the
+   box (`z` 1), so a press on its foot is the panel's rather than the list's, which took the foot's last 26 units before;
+   no cover comes under the panel (the d = ±2 covers stand at x 181 to 371 and 909 to 1099, the panel at 400 to 880).
+   Games' orbit reaches 174 in a box from 112. Seeded back (the box at 330): the same 20 lines.
+3. In `empty`, light, Games' `addFolder` read 4.15 to 4.18:1 at every size. Difference 12.
+4. In `one-console`, light, at 1280 × 720, the hub's "·" read 4.35:1. Difference 12; with Muted seeded back to #6B5B4A,
+   both return (6 lines).
+5. In `disabled`, the help bar's Open over Search and Home was a misreading of the tree, not a drawing
+   (`EmuSen_Kit.md` §7.49): fixed in the harness.
+6. On teardown, 14 to 22 `TypeError`s at the end of a run (`OrbitCover.qml:16-17`, the kit's `OrbitSlot.qml:44-45`), from the covers
+   outliving their orbit while the screen is deleted (`EmuSen_Kit.md` §7.48), not from `ViewCurrent`. `OrbitSlot` reads
+   its view as possibly null, and `OrbitCover` its `orbit` (`?.`, `?? 0`). A run logs none; with `OrbitCover`'s guard
+   seeded back, `nogame` alone logged 7 at `OrbitCover.qml:16`.
+
 ### 3.5 Loading and the sandbox
 
 Each theme runs in a `QQmlEngine` of its own, created by Rust with: an import path list holding only Qt's modules on an
@@ -1523,6 +1653,12 @@ view's current item, the pointer focuses only by moving, and the walk waits out 
 finding left in any (the reference package, Meridian and Constellation 70 lines each before, Horizon 80). What stays is
 each theme's own default: the reference package's light variant's contrast and fit (46 lines), Horizon's `EdgeFade`
 warnings (the fade piece's).
+
+**After Orrery's remaining findings** (2026-11-09, §3.4.6), with the harness reading the tree after any scheduled polish
+(`EmuSen_Kit.md` §7.49), `--states all` offscreen on the software backend: Orrery none, and nothing logged; Horizon none;
+Constellation (its branch's copy) none; Meridian `nogame` alone (58 lines, the shelf's covers cut and unreached, the same 58
+from the audit without the polish wait); the reference package its 326 `fit` lines, the same as the baseline taken that
+day before its own fit work. On the GPU, Orrery in the default and its spec's ten states: none.
 
 **Not yet.** The reference package (R) has not been through it; a theme's token overrides are not applied to the theme's engine by
 the host yet, so the loaded step judges the kit's own colours; the splash's still frame is judged as every screen is, under reduced
@@ -3690,7 +3826,6 @@ reverted:
 - the preview's height read from its items' `visible`, which is false while the slot is empty, so it stays empty (the
   meter was never drawn until this was found): the program's test, the meter not drawn.
 
-
 #### 7.7.E Stage 5, piece E: Consoles and a console's pages (2026-11-09)
 
 `EmuSen_Interface.md` §18.10, §18.11; `EmuSen_BigPicture.md` §52.4; the oracle is Mistress's `SettingsConsoles`,
@@ -3718,7 +3853,8 @@ reverted:
   place and A opens it as the kit's page of choices (Kit §7.41): each engine with `Default` on the one in force (the
   kit draws the dot Mistress wrote as `●`) and `✓ Installed` on the others; A chooses and returns, B keeps what was
   chosen. An engine is named as the other screens name it (`clients::engine_shown`).
-- **Firmware** (`firmware.rs`, the one owner of a console's firmware words, shared with Cores' Firmware page): files
+- **Firmware** (`firmware.rs`, the one owner of a console's firmware needs and their words, shared with Cores' Firmware
+  page, §7.7.F, whose rows are now one a need with the same value words, its panes keeping their file lines): files
   meeting the same need are one row, named by the systems table's `firmware_name` (the PlayStation's three regional
   BIOS files are `PlayStation BIOS`); its value `✓ Found · SCPH-1001`, `⚠ Not found`, `Not found`, `Only some games` or
   `Not needed` by whether the console starts empty; its pane says what runs and what the overview says of each file.
@@ -3736,7 +3872,10 @@ reverted:
 **Open Folder** (decided 2026-11-09): `Folders` (`folders.rs`) is the program's one action that shows a folder in the
 system's file manager, a `file:` URL (`QUrl::fromLocalFile`) opened by `QDesktopServices`; it is offered everywhere,
 Steam's Game Mode included, where the player can switch to another window. Settings raises `openFolder` with a path and
-the program hands it to `Folders`; Firmware's Open EmuSen's folder is the first user, Cores' Firmware page the next. A
+the program hands it to `Folders`; Firmware's Open EmuSen's folder is one user, and Cores' Firmware page, which left
+it out, now ends with Open Folder on the firmware folder (the tool asks its host with `folder:` and the path). The
+runtime's `Engine` key has one owner in the front end (`consoles::ENGINE_KEY`, which Cores and the library's engine line
+read), and a schema row's words and steps one (`schema.rs`, which Cores' Options reads). A
 test sets `catching`, which hands the `file` scheme to the object through `QDesktopServices::setUrlHandler`, Qt's own
 interception, so the URL is read and no file manager starts.
 
@@ -3785,6 +3924,132 @@ Galaxia's firmware folder's `file:` URL to the caught handler; nothing logged. S
 - a reset forgetting every console's picture: the models' reset test;
 - `MenuRow`'s value held to half its row again (Kit §7.50): the program's test, SA-1 catch-up cut at all five sizes;
 - Open Folder given the folder's parent: the program's test, the caught URL.
+
+#### 7.7.F Cores on the tool screen, the approval at first launch and the firmware question (stage 5, piece F; 2026-11-09)
+
+`EmuSen_Interface.md` §15.2–15.8, §18.10; C#'s `EmuSen.Tools.Cores`, `CoresWindow` and `MainWindow.CoreApproval`
+read for behaviour and words. The models are §1.2.2's.
+
+**Cores.** Home's Cores place (index 4) opens `Cores.qml`: the kit's `ToolScreen` over `ToolModel` with the Cores
+source, every word from the model, the screens' faces (Barlow Condensed for the title, Barlow for the rest). A does the
+row's action as §15.5 names it (`Install…` and `Update…` mark the row and ask the plan at once, `Approve…` asks the
+approval, `Make Default` sets the console's `Engine` through the runtime, the strip's console where the row runs it);
+X opens the row's page on the Card form (`MenuCard`, breadcrumb `Cores`): Mark to install, update or remove, or Unmark,
+Options ▸, Firmware ▸, Approve…, Verify, Roll Back…, Remove…, and Details ▸, a page of the raw facts with each fact
+whole in the pane; Select opens the List card (Search, Filter ◂ All ▸ through the six states, Sort ◂ Console ▸ by name or
+status, Check for Updates, Verify); Start asks the plan in the question form, No first; the shoulders step the consoles;
+B goes Home.
+- **Search** docks the kit's keyboard under the strip, as the grid's search does (§7.6): A types into the search box,
+  Y a space, X keeps the words and gives the list back, B deletes, and B on no words closes it; the list narrows as the
+  words change (`HelpModel.ToolSearch`: Type, Delete, Space, Done). While the keyboard is docked the list keeps the
+  whole rows above its band and the apply bar and the pane are not drawn (the kit's `keysTop`), so nothing lies under it.
+- **Options ▸** (A on a console's default, as §15.5 has it, and a row of the page for any core with an engine) is the
+  engine's options for its console from the runtime's settings schema (`settings_schema` with the console and the
+  engine), a row each in the schema's words: a choice by its label, a switch On or Off, a count; Left and Right, or A,
+  step a value, stored for the console through `settings_set`; a row shown only with another's value is shown while it
+  holds; the hint and note are the row's pane (`tools::cores::options`). C# opened the console's settings at the
+  engine's options; Settings ▸ Consoles ▸ <console> is piece E's, and when it lands this page is the door it opens to.
+- **Firmware ▸** (where the core's information or the runtime names firmware, and the runtime says what is found) is
+  the console's files from `firmware_status`, each `✓ Found`, `⚠ None found` or `Not needed`, its pane the file,
+  whether it is required, what the runtime says it is for, and `Put it in <folder>.` with `EmuSen recognises it by its
+  content and never downloads it.` (§18.10's words; C#'s FirmwarePane was a window of its own).
+- **Roll Back…** (where the core tool keeps an earlier build, its `previous`) asks `Roll Back <name>?`: `Put back the
+  build of <date>, kept when this one was installed in its place.` and `The build installed now is kept instead, so Roll
+  Back again returns to it. Both keep their approvals.` (`EmuSen_Cores.md` §5.4); Yes runs `core-rollback` as a job of
+  its own, the row `Rolling back…`, then `Rolled back` and `Rolled back <name> to the build of <date>.` on the bar. C#
+  had listed Roll Back in §15.5 and not built it. The screen's timer pulls a job's
+events every 100 ms while one runs. The catalogue is read once when a home that never read it opens Cores, as C# does.
+
+**The approval at first launch.** Every game chosen now passes through `LaunchModel.prepare` before it is recorded and
+opened: off the interface thread it reads the route and the runtime's cores and finds the core the game would open on
+where it waits for the player's approval (the routed engine's library, a libretro core's file, a waiting default, C#'s
+`AwaitingOn` rule for rule). The question is Cores' own (`tools::cores::approval`, one owner of the words): `Approve
+<name>?`, the sentences of §15.6, the hash in groups of eight in the caption, `Not Now` first and focused, B Not Now.
+Approve records the hash through the runtime; Not Now opens the game on the fallback engine where the route names one,
+said as a notice once the game is under way (`<name> waits for your approval, so this game opens on <engine>.`). A
+default the runtime holds back is said and nothing asked. A core the installation vouches for is never asked about.
+Since each model holds its own runtime, the game's runtime lists the cores again before each open (`rescan`, one call),
+so an approval made by Cores or by the question is seen by the next game.
+
+**The firmware question.** Then the firmware the routed engine requires and the library lacks
+(`firmware_needed`, required files only, since 2026-10-03 the only ones asked about): one question per file,
+`<chip> firmware needed`, its file name and size, that it is the player's own dump and EmuSen never downloads it, the
+firmware folder Galaxia names, and what happens without it (the chip not emulated, or the open replacement's effect).
+The big screen has no file picker and the form shows no file list (§18.10), so the answers are `Play Without It`
+(first) and `Check Again`, which asks the runtime again once the player has put the file in the folder; B gives the game
+up and nothing opens. C#'s picker installed the chosen file with `firmware_install`; that call stays for the desktop
+form (stage 6). No core the project builds marks firmware required, so the question is held by tests over words and
+answers, and over the fixture by its absence.
+
+**Not offered, for the tester:** `Open Folder` on a core's page, and `Update All…`, which C# did not build either.
+Decided 2026-11-09 by the tester, after this was written: Open Folder is offered everywhere, Game Mode included, as the
+program's one action (§7.7.E); the Firmware page now ends with it.
+
+**The recordings' world.** Mistress's five Cores recordings are made over a scripted world
+(`WindowFitAuditTests.CoresWindow.cs`: three of EmuSen's cores, a player's core waiting for approval, PCEE2 approved under
+`libretro/`, a listing of five libretro cores, a fetch refused offline and an install that never ends). The same world is
+data, `qt-models/tests/cores/world.json` and `no-catalogue.json`, handed to `ToolModel.world` through the program's
+`coresWorld` property, so the Qt recordings show the same cores in the same states through the same source code as the
+back end's would; `Scripted` is the only part that differs, and the model tests below hold the behaviour, the approval
+path through the real runtime.
+
+**Compared with Mistress** (measured on 2026-11-09). `qt-app/tests/cores.rs` walks the program by the pad from Home into
+the five states, `Cores` (the PlayStation 2's section, LRPS2 focused), `CoresDetail` (All, Extra PS2 Core), `CoresPlan`
+(LRPS2 marked to install and Beetle PSX to update on X's pages, Start's plan), `CoresRunning` (Yes, the install at 18 MB
+of 41 MB) and `CoresNoCatalogue`, and holds each at the five sizes: the gate's fit audit, pad reach, pointer reach and
+no chrome, the spec written and grabbed into `~/.cache/emusen/tmp/qt-s5-f/compare/qt/`. WiseMan's
+`Another_frontend_s_recordings_match_these_within_the_tolerances`, pointed there, read every recording back and compared
+it with Mistress's at 1280 × 800 and 1920 × 1200. The places match the recording: list 64,160 691 × 432, apply bar
+64,592 691 × 110, pane 771,160 445 × 542, search 976,99 240 × 46 (the kit's own 46, §7.43 of `EmuSen_Kit.md`); every
+word of the facts, the rows, the status words and their tones, the pane's sentences, the bar's line, the meter's words
+and the help bar's entries is Mistress's. The differences, each named:
+- Structure: Avalonia's wrappers (`AdaptiveLayers`, `AdaptiveHeader`, `AdaptiveContent`, `AdaptiveStatus`,
+  `AdaptiveDetail`, the `PART_` parts, 12 or 13 a state) have no Qt counterpart, and the kit's parts carry the kit's
+  names (`toolFacts`, `toolList`, `toolPane`…, 29 to 35 a state), as stages 1 and 2 found for their screens.
+- The walk: Mistress walks the strip's tabs and records `Mark: not marked, …` as each row's name; the Qt strip is
+  stepped by the shoulders and never walked (§7.43 of `EmuSen_Kit.md`), and a row is heard by its three cells, so the
+  focus edges differ in every state.
+- The facts start at 520 where Mistress's start at 574: the kit draws its dot 12 units from each fact where Mistress
+  writes ` · `. The pane's sentences stand 3 to 12 units lower (Qt's line height for Barlow at 22).
+- The help bar stands on the band at 742, Mistress's at 702 (the kit's open question, `EmuSen_Kit.md` §7.45).
+- `CoresPlan`: the Qt recording holds the screen under the modal question, so the spec rules read 30 overlaps of the list
+  and pane with the question's card and six items the pad does not reach; Mistress's plan is a sheet whose screen is not
+  recorded beneath it. To the gate the screen under a question or a card is a backdrop (`backdrop`, as ThemeHost's
+  screens under the Home card are), drawn and not reached.
+- The default row's A is `Options` here; Mistress's recordings were made with no host for options, so A was unnamed on
+  VenusRT (`CoresNoCatalogue`'s help bar).
+- **A harness defect, fixed:** a row the list has scrolled out of its box at 1280 × 720 (`CoresDetail`, VenusRT above
+  Snes9x) met the list's box by a rounding's sliver (scale 0.9: a row of 48.6 above a list at 144), so the tree read it
+  as shown and the overlap rule found it over the strip, though nothing is drawn there (the grab). `qt-test`'s tree now
+  takes less than half a pixel inside a clip as outside (`SLIVER`, `tree.rs`), held by `qt-test/tests/culled.rs`.
+
+**Held to** (measured on 2026-11-09). `qt-models/tests/cores.rs` 6 (the listing's join, order, sections, facts, status
+words and tones, meter; the pane's sentences and A in the help bar; Make Default; X's page, the marks, the plan, the
+install running with its steps ticked and nothing offered while it runs; the approval asked, Not Now recording nothing,
+Approve recording the hash; no catalogue; the List card's filter and sort, the search, the Details page);
+`qt-models/tests/launch.rs` 4 over the platform library and the test core with no network (C#'s `CoreApprovalTests`: a
+player's core asked about once and approved through the runtime, its hash in the question; declined, nothing recorded,
+and a core an installation's manifest vouches for never asked about; the firmware question's words and answers;
+`LaunchModel` through QML asking, approving and naming the game, then asking nothing the second time);
+`qt-models/tests/cores.rs` adds 4 (the List card's Search and its words kept, Options stepped and stored with a row
+hidden by another's value, Firmware found and its folder, Roll Back asked and run as `core-rollback`);
+`qt-models/tests/qml.rs` 2; `qt-test/tests/culled.rs` 1; `qt-app/tests/cores.rs` (the five recorded states and
+`CoresSearch`, `CoresOptions` and `CoresFirmware`, 40 held states, nothing logged by Qt, then Roll Back by the pad);
+`acceptance.rs` on the RX 6800, the launch's question in its path (512 s); the rest
+of qt-app's tests by hand on the software backend (`cards`, `first_frame`, `gate_pad`, `idle`, `pause`,
+`pause_pages`, `program`, `scale`, `screens`, `splash`, `start`, `still`, `theme`, `theme_feed`, `themes_tab`), all
+passing.
+
+**Seeded faults**, each reverted, each caught: a row waiting for approval toned Muted (`cores.rs`' listing test); the
+approval's answers in the other order, Approve first (`cores.rs`' approval test and `launch.rs`' first); the launch
+asking only of approved cores (three of `launch.rs`' four); a marked row's mark word shown only while a job runs
+(`cores.rs`' plan test); and the model's guard against the list's own moves during a fill removed, so a section's reset
+and the model's focus set each other back and forth (`qt-app/tests/cores.rs`: the list never came to rest in 5 s). Then
+for Search, Options, Firmware, Roll Back and the harness, each reverted, each caught: the tree's old test of a clip
+(an empty overlap) back (`culled.rs`); the List card's Search not docking the keyboard (`cores.rs`' search test); a switch
+not turned by a step (the options test); a found file said as none found (the firmware test); and Roll Back sent as
+`core-update` (the roll back test).
+
 ---
 
 ## 8. Testing

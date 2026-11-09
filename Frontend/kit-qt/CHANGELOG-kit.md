@@ -4,6 +4,12 @@ The kit is the QML module `EmuSen.Kit` (EmuSen_Qt.md §1.4), held by rule Q (§5
 writes it, is committed under `Testing/qmltypes/` and compared on every build. A minor adds and never removes; each
 entry names what was added and the section of `EmuSen_Kit.md` that records it.
 
+## 1.0, stage 3: an orbit deleted with its screen (2026-11-09)
+
+No type, property, signal or invokable was added, removed or changed.
+
+- `OrbitSlot` reads its `view` as possibly null, so covers outliving their deleted view log nothing. §7.48.
+
 ## 1.0, stage 5 piece A: the settings frame, the page of choices and the slider row (2026-11-09)
 
 Additions only; no type, property, signal or invokable was removed or changed.

@@ -298,6 +298,8 @@ impl qobject::SessionModel {
             }
         }
         let Some(runtime) = self.runtime.clone() else { return };
+        // A core approved, installed or made default since the last game, by Cores or the launch's question, is listed (EmuSen_Qt.md §7.7).
+        let _ = runtime.rescan();
         let pads = match self.as_mut().game_input() {
             Ok(pads) => pads,
             Err(words) => return self.as_mut().set_problem(QString::from(&words)),
@@ -395,13 +397,9 @@ impl qobject::SessionModel {
     /// The cores folder a host names, else the runtime's own default (emusen_crystal.h, the config's `cores`); the
     /// player's cores folder Galaxia's either way, which a named folder would otherwise leave unscanned (EmuSen_Qt.md §1.8.7).
     fn runtime_config(self: Pin<&mut Self>) -> Result<Config, String> {
-        if self.cores.is_empty() {
-            return Ok(Config::default());
-        }
-        let cores = vec![self.cores.to_string()];
+        let cores = self.cores.to_string();
         let platform = self.platform()?;
-        let player = platform.directory(galaxia::consts::DIR_CORES).map_err(|e| e.to_string())?;
-        Ok(Config { cores: Some(cores), player_cores: Some(player.into_iter().map(|p| p.to_string_lossy().into_owned()).collect()), ..Config::default() })
+        crate::clients::runtime_config(&platform, &cores)
     }
 
     /// The game's side of the pads a `PadReader` hands over, when one is named by its `gamePads`; the router is made on the

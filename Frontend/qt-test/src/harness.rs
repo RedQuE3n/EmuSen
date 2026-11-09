@@ -408,6 +408,13 @@ impl Scene<'_> {
         done
     }
 
+    /// Deletes the named object at once, as the window's own teardown deletes a placed screen with it, then waits a moment.
+    pub fn destroy(&mut self, object_name: &str) -> bool {
+        let done = ffi::harness_destroy(self.window(), &QString::from(object_name));
+        self.wait(30);
+        done
+    }
+
     /// `set_property` without the wait, so the next grab is the first frame drawn after the change.
     pub fn set_property_now(&mut self, object_name: &str, property: &str, value: &str) -> bool {
         ffi::harness_set_property(self.window(), &QString::from(object_name), &QString::from(property), &QString::from(value))

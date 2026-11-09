@@ -71,17 +71,17 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
 
     // Its page: the engine, firmware, cards, the core's own row, then the picture's rows.
     scene.pad(UiButton::Accept);
-    wait_for(&mut scene, "settingsModel", "help", "19", 1000);
+    wait_for(&mut scene, "settingsModel", "help", "20", 1000);
     assert!(sentence(&mut scene).starts_with("VenusRT (Rust), the Super Nintendo's engine"), "{}", sentence(&mut scene));
     hold(&mut scene, "SettingsConsolePage", &mockup::Mockup::default(), named, &mut report);
 
     // Engine as a page of choices, B keeping what was chosen.
     scene.pad(UiButton::Accept);
-    wait_for(&mut scene, "settingsModel", "help", "20", 1000);
+    wait_for(&mut scene, "settingsModel", "help", "21", 1000);
     assert_eq!(sentence(&mut scene), "VenusRT (Rust) runs every Super Nintendo game.");
     hold(&mut scene, "SettingsEngine", &mockup::Mockup::default(), named, &mut report);
     scene.pad(UiButton::Back);
-    wait_for(&mut scene, "settingsModel", "help", "19", 1000);
+    wait_for(&mut scene, "settingsModel", "help", "20", 1000);
 
     // RB twice: the Sega CD, then the PlayStation, among the consoles an engine runs.
     scene.pad(UiButton::PageDown);
@@ -107,7 +107,7 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     assert!(url.starts_with("file:///"), "{url}");
     assert_eq!(scene.property("folders", "caught"), url, "the folder's file: URL, taken in place of a file manager");
     scene.pad(UiButton::Back);
-    wait_for(&mut scene, "settingsModel", "help", "19", 1000);
+    wait_for(&mut scene, "settingsModel", "help", "20", 1000);
     wait_for(&mut scene, "settingsModel", "focused", "0", 1000);
 
     // Memory cards: the mode, the slots, the drawer, the saves and a new card.

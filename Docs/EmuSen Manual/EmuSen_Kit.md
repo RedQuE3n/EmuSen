@@ -2172,7 +2172,7 @@ Proof, measured 2026-11-09: theme-audit's `state-splash` fixture, a wordmark pas
 found at 3 s alone and its pictures at 1 s and 5 s are equal and differ from 3 s's (`qt_3_7_a_splash_is_held_at_1_3_and_5_s_and_judged_at_each`);
 `state-pressed`'s row grown by a held Return overlaps its neighbour in the pressed state alone.
 
-### 7.38 A declined place under the contrast rule (theme-audit; 2026-11-09)
+### 7.38 A declined place, and words mid-fade, under the contrast rule (theme-audit; 2026-11-09)
 
 **A declined place.** The harness has exempted a disabled control's words since §7.10 (`enabled` false), as WCAG 2.2's
 1.4.3 exempts "text or images of text that are part of an inactive user interface component" (https://www.w3.org/TR/WCAG22/,
@@ -2191,7 +2191,17 @@ written for a focus indicator, which must be found, not for a state that is read
 is weak against a design that changes one dot; the grid's spacing and the two pictures differing in nothing else (the
 same focus, the views at rest) keep stray pixels out.
 
-Held to by theme-audit's test over a fixture, with its seeded faults reverted. `state-declined`: Home's places
+**Words mid-fade.** A held clock (§7.36) reads the splash at 1, 3 and 5 s, and S6 found every theme's caption at 5 s
+(2.05 to 2.30:1) mid-fade. Contrast is judged at rest, and the harness can read honestly whether a text is moving, not
+where it will rest: a `Behavior`'s target value is Qt's private, and a theme's own time property drives the rest. So a
+text is skipped while its opacity changes: the clock is held a frame (16 ms) before the stated time, the tree read, then
+held at the time and read again, and a text whose ink, its colour with its opacity, differs between the two is not judged
+in that state (`changing`, `rested` in theme-audit). The same text at rest at any other time is judged.
+
+Held to by theme-audit's tests over two fixtures, each with its seeded faults reverted. `state-declined`: Home's places
 as rows, the declined row's words at 38% and the last row's (Power, offered) at 38%; in the default and the `disabled`
 state, at every size and variant, Power alone is found. The declined picture compared with itself (nothing changes)
 failed it (the Scraper drawn as if offered and found low); every text exempted failed it (Power no longer found).
+`state-fade`: a caption fading to rest at 0.3 between 0.5 and 1.5 s, a title fading in to full between 4.5 and 5.5 s;
+only the caption, at 3 s, at 5 s and in the default, is found. No text skipped failed it (the caption found at 1 s); every
+text skipped failed it (the caption not found at 3 s).

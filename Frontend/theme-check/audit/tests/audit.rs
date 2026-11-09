@@ -275,6 +275,18 @@ fn qt_3_7_a_declined_place_drawn_apart_is_exempt_and_a_dim_offered_one_is_not() 
 }
 
 #[test]
+fn qt_3_7_words_are_judged_at_rest_not_while_their_opacity_changes() {
+    let (out, status) = audit_states("state-fade", "default,splash-1s,splash-3s,splash-5s", None);
+    assert_eq!(status, 1, "{out}");
+    // The caption mid-fade at 1 s and the title mid-fade at 5 s are not judged; the caption at rest, at 0.3, is.
+    assert!(out.lines().all(|l| l.contains("state-fade/screens/Splash.qml:1 contrast ") && l.contains("restsFaint")), "{out}");
+    for state in [", splash-3s: ", ", splash-5s: ", " dark: ", " light: "] {
+        assert!(out.lines().any(|l| l.contains(state)), "the caption at rest{state}\n{out}");
+    }
+    assert!(!out.contains(", splash-1s: "), "the caption mid-fade at 1 s is not judged: {out}");
+}
+
+#[test]
 fn qt_3_7_states_list_and_an_unknown_one_is_refused() {
     let out = Command::new(PROGRAM).arg("--list-states").output().expect("theme-audit runs");
     let listed = String::from_utf8_lossy(&out.stdout).into_owned();

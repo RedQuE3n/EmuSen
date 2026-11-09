@@ -209,13 +209,15 @@ struct Pass<'a> {
     press: bool,
     /// The animation clock is held, so nothing moves and the picture is taken without waiting for rest.
     held: bool,
+    /// Under a held clock, the texts whose ink changed over the frame before it: mid-change, so not judged for contrast.
+    moving: Option<&'a HashSet<String>>,
     /// The places the host declines, by key and by the name a reader hears: exempt from the words' contrast when drawn apart.
     declined: &'a [(&'a str, String)],
 }
 
 impl<'a> Pass<'a> {
     fn plain(variants: &'a [Variant], label: &'a str, consoles: Option<&'a [String]>) -> Pass<'a> {
-        Pass { variants, label, consoles, focus: None, press: false, held: false, declined: &[] }
+        Pass { variants, label, consoles, focus: None, press: false, held: false, moving: None, declined: &[] }
     }
 }
 
@@ -235,6 +237,9 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             tree.root.mark_data(&words::is_fixed);
             // What lies behind each text as drawn, pictures and translucent fills included, before the walk moves anything.
             scene.sample_behind(&mut tree, f64::from(w), f64::from(h));
+            if let Some(moving) = pass.moving {
+                rested(&mut tree, moving);
+            }
             let focus = scene.focus(&tree).map(ElementId);
             // The crowd's reach is the sweep's; every element on the screen is still held to the pointer.
             let walk = if pass.consoles.is_some() { Vec::new() } else { scene.walk_by(&tree, |s, button| s.key(key_of(button), 0)) };
@@ -254,6 +259,9 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
                 let mut shown = scene.tree();
                 shown.root.mark_data(&words::is_fixed);
                 scene.sample_behind(&mut shown, f64::from(w), f64::from(h));
+                if let Some(moving) = pass.moving {
+                    rested(&mut shown, moving);
+                }
                 shown
             });
             let measures = Measures::of(WalkForm::BigScreen, f64::from(h));
@@ -596,8 +604,12 @@ fn held(
         match id {
             Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
             Ok(id) => {
+                // Contrast is judged at rest: a text whose ink changes over the frame before the held time is mid-change.
+                scene.hold_clock(Some(ms - FRAME_MS));
+                let before = scene.tree();
                 scene.hold_clock(Some(ms));
-                let pass = Pass { held: true, ..Pass::plain(std::slice::from_ref(&variant), label, None) };
+                let moving = changing(&before, &scene.tree());
+                let pass = Pass { held: true, moving: Some(&moving), ..Pass::plain(std::slice::from_ref(&variant), label, None) };
                 lines.guarded(screen, |lines| states(scene, screen, id, &pass, state, lines));
             }
         }
@@ -662,6 +674,29 @@ fn grid(node: &emusen_qt_test::tree::Node, (width, height): (f64, f64)) -> Vec<(
         y += step;
     }
     points
+}
+
+/// A display's frame, the step a held clock moves by.
+const FRAME_MS: i64 = 16;
+
+/// The texts whose ink, its colour with its opacity, differs between two readings of one screen.
+fn changing(before: &Tree, after: &Tree) -> HashSet<String> {
+    let inks: std::collections::HashMap<&str, (f64, Option<&String>)> =
+        before.nodes.iter().filter(|n| n.text.is_some()).map(|n| (n.id.as_str(), (n.opacity, n.ink.as_ref()))).collect();
+    after
+        .nodes
+        .iter()
+        .filter(|n| inks.get(n.id.as_str()).is_some_and(|&(opacity, ink)| opacity != n.opacity || ink != n.ink.as_ref()))
+        .map(|n| n.id.clone())
+        .collect()
+}
+
+/// Leaves the texts mid-change out of the contrast rule.
+fn rested(tree: &mut Tree, moving: &HashSet<String>) {
+    let mid: Vec<u32> = (0..tree.nodes.len() as u32).filter(|&i| moving.contains(&tree.nodes[i as usize].id)).collect();
+    for index in mid {
+        tree.not_judged(index);
+    }
 }
 
 #[cfg(test)]

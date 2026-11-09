@@ -175,3 +175,83 @@ fn qt_3_7_a_desktop_at_125_percent_still_records_one_pixel_a_unit() {
     assert_eq!((picture.width(), picture.height()), (1280, 800), "one device pixel a unit");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// theme-audit's lines on a fixture in the states a list names, the default among them.
+fn audit_states(name: &str, states: &str, record: Option<&Path>) -> (String, i32) {
+    let mut command = Command::new(PROGRAM);
+    if let Some(dir) = record {
+        command.arg("--state").arg(dir);
+    }
+    let out = command.arg("--states").arg(states).arg(themes().join(name)).output().expect("theme-audit runs");
+    assert!(matches!(out.status.code(), Some(0 | 1)), "theme-audit could not run: {}", String::from_utf8_lossy(&out.stderr));
+    (String::from_utf8_lossy(&out.stdout).into_owned(), out.status.code().unwrap_or(2))
+}
+
+/// A fixture wrong in one state alone: found there, of one kind, at every size in both variants, and nowhere in the default.
+fn found_only_in(name: &str, screen: &str, state: &str, kind: &str, words: &str) {
+    let (out, status) = audit_states(name, &format!("default,{state}"), None);
+    assert_eq!(status, 1, "{name}: {out}");
+    assert!(out.lines().all(|l| l.contains(&format!("{name}/screens/{screen}.qml:1 {kind} ")) && l.contains(&format!(", {state}: "))), "{state} alone, {kind} alone: {out}");
+    for size in ["1280x800", "1920x1200", "1920x1080", "1280x720", "3840x2160"] {
+        for variant in ["dark", "light"] {
+            let want = format!("{kind} {size} {variant}, {state}: {words}");
+            assert!(out.lines().any(|l| l.contains(&want)), "{want}\n{out}");
+        }
+    }
+}
+
+#[test]
+fn qt_3_7_a_continue_entry_drawn_with_no_game_is_named_for_no_reader() {
+    found_only_in("state-nogame", "Home", "nogame", "name", "no name a reader hears");
+}
+
+#[test]
+fn qt_3_7_a_tile_titled_only_beside_its_cover_is_unnamed_without_one() {
+    found_only_in("state-nocover", "Games", "nocover", "name", "no name a reader hears");
+}
+
+#[test]
+fn qt_3_7_a_declined_place_that_cannot_hold_the_focus_is_unreachable() {
+    found_only_in("state-disabled", "Home", "disabled", "reach", "the pad does not reach");
+}
+
+#[test]
+fn qt_3_7_a_press_that_grows_its_row_over_the_next_overlaps() {
+    found_only_in("state-pressed", "Home", "pressed", "fit", "overlap");
+}
+
+#[test]
+fn qt_3_7_the_empty_words_in_too_narrow_a_box_elide_in_an_empty_library() {
+    found_only_in("state-empty", "Games", "empty", "fit", "cut with an ellipsis");
+}
+
+#[test]
+fn qt_3_7_a_count_set_near_the_right_edge_runs_past_it_at_9000_games() {
+    found_only_in("state-many", "Games", "many", "fit", "past its panel");
+}
+
+#[test]
+fn qt_3_7_a_splash_is_held_at_1_3_and_5_s_and_judged_at_each() {
+    let dir = std::env::temp_dir().join(format!("theme-audit-splash-{}", std::process::id()));
+    let (out, status) = audit_states("state-splash", "default,splash-1s,splash-3s,splash-5s", Some(&dir));
+    assert_eq!(status, 1, "{out}");
+    assert!(out.lines().all(|l| l.contains("state-splash/screens/Splash.qml:1 fit ") && l.contains(", splash-3s: ")), "at 3 s alone: {out}");
+    assert!(out.contains("fit 1280x800 dark, splash-3s: past its panel") && out.contains("fit 3840x2160 light, splash-3s: past its panel"), "{out}");
+    // Each held time is its own picture: the wordmark past the edge at 3 s, in place at 1 and 5.
+    let picture = |state: &str| std::fs::read(dir.join(format!("Splash-dark-{state}-1280x800.png"))).expect(state);
+    assert_ne!(picture("splash-1s"), picture("splash-3s"));
+    assert_eq!(picture("splash-1s"), picture("splash-5s"), "the wordmark in place at both");
+    let spec = std::fs::read_to_string(dir.join("Splash-light-splash-3s-1920x1200.spec")).unwrap();
+    assert!(spec.contains("wordmark"), "the held state recorded");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn qt_3_7_states_list_and_an_unknown_one_is_refused() {
+    let out = Command::new(PROGRAM).arg("--list-states").output().expect("theme-audit runs");
+    let listed = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(listed.lines().any(|l| l.starts_with("nocover\tHome,Consoles,Games\t")), "{listed}");
+    let out = Command::new(PROGRAM).arg("--states").arg("nogame,lost").arg(themes().join("loaded")).output().expect("theme-audit runs");
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("lost is not a state"));
+}

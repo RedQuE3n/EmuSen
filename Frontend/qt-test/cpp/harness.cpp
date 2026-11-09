@@ -4,6 +4,7 @@
 #endif
 #include "harness.h"
 
+#include <QtCore/QAbstractAnimation>
 #include <QtCore/QCoreApplication>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
@@ -402,6 +403,56 @@ void harness_key(QObject& window, int key, int modifiers)
 {
     if (QQuickWindow* w = quick(window)) {
         QTest::keyClick(w, static_cast<Qt::Key>(key), Qt::KeyboardModifiers::fromInt(modifiers));
+    }
+}
+
+void harness_key_hold(QObject& window, int key, bool down)
+{
+    if (QQuickWindow* w = quick(window)) {
+        if (down) {
+            QTest::keyPress(w, static_cast<Qt::Key>(key));
+        } else {
+            QTest::keyRelease(w, static_cast<Qt::Key>(key));
+        }
+    }
+}
+
+namespace {
+
+// The animation clock held by the harness: it moves only when told, so a scene is read at a stated time (EmuSen_Kit.md §7.34).
+class HeldClock : public QAnimationDriver {
+public:
+    std::int64_t at = 0;
+    qint64 elapsed() const override { return at; }
+};
+
+HeldClock*& heldClock()
+{
+    static HeldClock* clock = nullptr;
+    return clock;
+}
+
+}
+
+void harness_hold_clock(std::int64_t ms)
+{
+    HeldClock*& clock = heldClock();
+    if (ms < 0) {
+        if (clock) {
+            clock->uninstall();
+            delete std::exchange(clock, nullptr);
+        }
+        return;
+    }
+    if (!clock) {
+        clock = new HeldClock;
+        clock->install();
+    }
+    // A frame's step at a time, as a display would move it, so what a step starts runs from its own time.
+    while (clock->at < ms) {
+        clock->at = std::min(ms, clock->at + 16);
+        clock->advance();
+        QCoreApplication::processEvents();
     }
 }
 

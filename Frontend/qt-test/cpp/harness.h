@@ -11,6 +11,8 @@ QString harness_tree(QObject& window);
 void harness_click(QObject& window, double x, double y, int button);
 void harness_hover(QObject& window, double x, double y);
 void harness_key(QObject& window, int key, int modifiers);
+void harness_key_hold(QObject& window, int key, bool down);
+void harness_hold_clock(std::int64_t ms);
 void harness_wheel(QObject& window, double x, double y, int delta);
 void harness_wait(int ms);
 void harness_keep_messages();

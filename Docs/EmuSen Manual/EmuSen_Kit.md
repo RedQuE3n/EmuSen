@@ -2039,3 +2039,25 @@ cxx-qt-lib binds.
   content gives the navigation the focus) but no item takes Qt's focus, so the walk's role and Qt's focus part there;
   the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The other screens' faces (§5.2) are
   bundled when the first screen needs them; Moonrise's two are.
+
+### 7.34 A held clock, a held press and drawn covers in the harness (stage 3, theme-audit's states; 2026-11-09)
+
+theme-audit records a theme's splash at a stated time and a screen with A held (`man theme-check`, STATES), so the harness
+(`emusen-qt-test`) gained three verbs, each the framework's own mechanism.
+
+- **`Scene::hold_clock(Some(ms))`** replaces Qt's animation driver with one whose `elapsed()` is a number the harness sets
+  (`QAnimationDriver`, the documented way to drive Qt's animation timer; `cpp/harness.cpp`'s `HeldClock`). The first hold
+  installs it at 0; each later one moves it to `ms` 16 ms at a time, calling `advance()` and processing events at each step,
+  as a display's frames would, so a `Behavior` or a `FrameAnimation` that a step starts runs from its own time rather than
+  being jumped over. `None` uninstalls it, which leaves Qt's default timer driver in place, not a threaded render loop's own:
+  a caller holds the clock last. Every `QAbstractAnimation` and `FrameAnimation` is held; a `Timer` is not. Under a held clock
+  nothing settles, so `rest()` must not be called (a running animation never ends); the audit waits a frame instead.
+- **`Scene::key_hold(key, down)`**, `QTest::keyPress` or `keyRelease` alone: a press held, as a theme's pressed look reads it
+  (`Keys.onPressed` without the release).
+- **`covers::draw`**, moved from the program's tests (`qt-app/tests/common`), which re-export it: covers drawn by one Qt Quick
+  window resized to each box and grabbed, a flat colour, a white rim and the words. theme-audit draws the synthetic library's
+  covers with it, so the two keep one drawing.
+
+Proof, measured 2026-11-09: theme-audit's `state-splash` fixture, a wordmark past the right edge from 2.5 s to 3.5 s, is
+found at 3 s alone and its pictures at 1 s and 5 s are equal and differ from 3 s's (`qt_3_7_a_splash_is_held_at_1_3_and_5_s_and_judged_at_each`);
+`state-pressed`'s row grown by a held Return overlaps its neighbour in the pressed state alone.

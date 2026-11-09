@@ -5,7 +5,8 @@ NAME
 
 SYNOPSIS
     theme-check [--static] [--state DIR] <folder>...
-    theme-audit [--gpu] [--state DIR] [--catalogue FILE] [--section KEY] <folder>
+    theme-audit [--gpu] [--state DIR] [--states LIST] [--catalogue FILE] [--section KEY] <folder>
+    theme-audit --list-states
 
 DESCRIPTION
     The development tool of the emusen.dev module for EmuSen theme
@@ -146,6 +147,11 @@ THE LOADED STEP
                     (decided 2026-11-08: its focus is the screen itself,
                     and what stands at its centre is the design's)
         chrome      desktop chrome on the big screen
+        name        an operable element with no name a reader hears
+                    (Accessible.name, else the words under it;
+                    EmuSen_InterfaceSpec.md §4.3, kit-core's named), as a
+                    Continue entry drawn with no game, or a tile whose
+                    title is drawn only beside its cover
         motion      a screen not still under reduced motion
         load        the host could not place the screen: the engine's
                     and the sandbox's words, a line each
@@ -236,6 +242,64 @@ THE LOADED STEP
     its rows out as tall as they are, and with 120 consoles runs off
     every size. A package takes about 80 s, most of it the crowd.
 
+STATES
+    --states LIST records the states LIST names, comma-separated, or all
+    of them for all; without it the run is the default alone. A state
+    is fed through the theme's own surfaces as the program feeds them
+    (Library.show with the places the host declines, Browse, Session,
+    Device, the kit's Tokens), never by editing the theme's files, and
+    each screen it names that the package lists is placed afresh and
+    judged as the default is: the rules above at the five sizes in both
+    variants, the recording and its size. Lines and recordings carry
+    the state's name (Home-dark-nogame-1280x800). The list's one owner
+    is the audit's states.rs; theme-audit --list-states prints it, a
+    line a state (name, screens, words, tab-separated), and a test holds
+    this section to it. One run for every state, since each run builds
+    the synthetic library, draws its covers and starts Qt once.
+
+    The default library's games have covers (decided 2026-11-09, so the
+    default is the canvases' and nocover a state of its own): each a
+    flat colour with its console and title, drawn by Qt Quick into an
+    ES-DE media folder that the host is given as the theme's cover
+    store, as the program's start gives it (emusen-qt-test's covers).
+
+    default     the synthetic library with Fable of Tiles suspended;
+                the splash finished under reduced motion; Choose a
+                console again over 120 consoles
+    nogame      Home with no game to continue
+    empty       Home, Consoles and Games over Testing/themes/catalogues/
+                empty.tsv: no console and no game; Games shows the
+                All shelf
+    one-console the synthetic library's NES games alone, one suspended
+    one-game    Games over one-game.tsv: a console holding one game
+    many        Games over many.tsv: a console holding 9,000 games
+    nocover     the default library with no cover
+    norecent    the same games never played and none hearted, no game
+                suspended
+    long        a ninth game whose title is too long for any place,
+                played last and suspended
+    pressed     Return held on the first focus, which a Walkable
+                answers as A, while the state is judged and recorded
+    disabled    Home with the Scraper declined by the host (its row's
+                available false) and the focus walked to it by the
+                pad along the walk's own presses
+    splash-1s   the splash with motion allowed and every animation's
+                clock held 1 s after it is placed
+    splash-3s   the same at 3 s
+    splash-5s   the same at 5 s
+
+    The capacity states (n30, n120, maker40) are --catalogue's. A held
+    clock is the harness's (EmuSen_Kit.md §7.34): Qt's animation driver
+    replaced by one moved only by the audit, a frame's 16 ms at a time
+    from the placing, so a theme's splash is held as it is written and
+    the theme API gains nothing. Under it the screen is placed afresh in
+    each variant, since a change of variant animates colours that a held
+    clock would never finish, and is recorded without waiting for rest.
+    A Timer is not an animation and is not held. Letting the clock go
+    leaves Qt's default driver in place of a threaded render loop's own,
+    so the held states run last. The reference theme has no Splash.qml
+    and no splash states: its splash is Moonrise, the kit's.
+
 EXIT STATUS
     0 for no finding, 1 for one or more, 2 when it could not run (no
     folder given, a folder missing, an option unknown, theme-audit not
@@ -253,6 +317,8 @@ EXAMPLES
     theme-check --state /tmp/horizon Frontend/themes/horizon
     theme-audit --gpu --state /tmp/horizon-gpu Frontend/themes/horizon
     theme-audit --state /tmp/states --catalogue Testing/themes/catalogues/n30.tsv Frontend/themes/emusen
+    theme-audit --states all --state /tmp/states Frontend/themes/meridian
+    theme-audit --states nogame,splash-3s Frontend/themes/meridian
     theme-check Frontend/theme-check/tests/themes/low-contrast
 
         .../low-contrast/theme.json:11 contrast accent on surface is

@@ -5,6 +5,7 @@
 #![allow(clippy::missing_safety_doc, clippy::too_many_arguments)]
 
 pub mod compositor;
+pub mod covers;
 pub mod ffi;
 pub mod harness;
 pub mod lint;

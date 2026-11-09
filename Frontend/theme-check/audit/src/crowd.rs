@@ -3,7 +3,6 @@
 
 use emusen_crystal_client::shapes::SystemRow;
 use emusen_platform_client::library::GameFile;
-use emusen_qt_models::clients::ClientSource;
 use emusen_qt_models::esde_shelves::{MediaIndex, Plays};
 use emusen_qt_models::gamelists::Collection;
 use emusen_qt_models::library::{Engine, LibrarySource};
@@ -17,14 +16,14 @@ const NO_MAKER: usize = 10;
 
 /// The clients' answers, with `systems` and `games` added to.
 pub struct Crowd<'a> {
-    inner: &'a ClientSource,
+    inner: &'a dyn LibrarySource,
     systems: Vec<SystemRow>,
     games: Vec<GameFile>,
 }
 
 impl<'a> Crowd<'a> {
     /// The added consoles copy a shelved console's row of each maker, under a made-up name, id, year and hue.
-    pub fn new(inner: &'a ClientSource, root: &Path) -> Result<Crowd<'a>, String> {
+    pub fn new(inner: &'a dyn LibrarySource, root: &Path) -> Result<Crowd<'a>, String> {
         let table = inner.systems()?;
         let games = inner.games()?;
         let shelved: Vec<&SystemRow> = table.iter().filter(|s| games.iter().any(|g| g.system.as_ref() == Some(&s.id))).collect();
@@ -74,6 +73,9 @@ impl LibrarySource for Crowd<'_> {
     }
     fn engines(&self, systems: &[SystemRow]) -> Result<Vec<(String, Engine)>, String> {
         self.inner.engines(systems)
+    }
+    fn media(&self, systems: &[SystemRow], games: &[GameFile], types: &[&str]) -> Result<Vec<(String, String)>, String> {
+        self.inner.media(systems, games, types)
     }
     fn played(&self, games: &[GameFile]) -> Result<Vec<(String, i64)>, String> {
         self.inner.played(games)

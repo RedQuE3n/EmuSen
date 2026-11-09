@@ -1236,6 +1236,20 @@ size with 120 consoles; `literal`, `multimedia` and `low-contrast` are each name
 reading of the program's lines, the note, and its refusal without the program are tested with a stand-in script, with no Qt.
 `emusen-theme-manifest`'s `API` and `CUES` are held to `EmuSen.Theme`'s committed registry by `tests/registry.rs` (rule Q).
 
+**The states** (2026-11-09). `theme-audit --states LIST` (or `all`) records the states the four themes' specs name beyond the
+default: `nogame`, `empty`, `one-console`, `one-game`, `many`, `nocover`, `norecent`, `long`, `pressed`, `disabled` and the
+splash held at 1, 3 and 5 s; the capacity states stay `--catalogue`'s. Each is fed through the theme's own surfaces as the
+program feeds them (`Library.show` with the places the host declines, `Browse`, `Session`, the kit's `Tokens`), a screen placed
+afresh and judged by every rule of the default, recorded under its name. One run takes a list rather than one state a run,
+since a run builds the library, draws its covers and starts Qt once. The list's one owner is `states.rs`, printed by
+`--list-states` and held to `man theme-check`'s STATES by a test. The default library's games now have covers, drawn into an
+ES-DE media folder given to the host as the program's start gives it, so the default is the canvases' and `nocover` its own
+state. The splash's time comes from the host's side without a change to `EmuSen.Theme`: the harness holds Qt's animation clock
+(`EmuSen_Kit.md` §7.34), so every theme's splash is held as written; an API clock would have held only the themes that adopt
+it. Every state also holds an operable element to a name a reader hears (kit-core's `named`, the `name` kind), which a
+Continue entry drawn with no game, or a tile titled only beside its cover, breaks. Proof: seven fixture packages
+`tests/themes/state-*`, each wrong in one state alone and found there alone at every size in both variants.
+
 **Not yet.** The reference package (R) has not been through it; a theme's token overrides are not applied to the theme's engine by
 the host yet, so the loaded step judges the kit's own colours; the splash's still frame is judged as every screen is, under reduced
 motion, since the host gives a splash no `still` of its own yet.

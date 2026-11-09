@@ -250,6 +250,19 @@ impl Scene<'_> {
         self.wait(20);
     }
 
+    /// Holds a key down (a press held, as a player holds A), or lets it up.
+    pub fn key_hold(&mut self, key: i32, down: bool) {
+        ffi::harness_key_hold(self.window(), key, down);
+        self.wait(20);
+    }
+
+    /// Holds every animation's clock at `ms` since it was first held, moved there a frame at a time; `None` lets it run again
+    /// on Qt's own driver (EmuSen_Kit.md §7.34).
+    pub fn hold_clock(&mut self, ms: Option<i64>) {
+        ffi::harness_hold_clock(ms.unwrap_or(-1));
+        self.wait(20);
+    }
+
     pub fn wheel(&mut self, x: f64, y: f64, notches: i32) {
         ffi::harness_wheel(self.window(), x, y, notches * 120);
         self.wait(20);

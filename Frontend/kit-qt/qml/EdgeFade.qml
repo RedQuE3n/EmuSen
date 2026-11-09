@@ -15,13 +15,19 @@ Item {
     readonly property bool fading: root.fadeTop || root.fadeBottom || root.fadeLeft || root.fadeRight
     // The software backend draws no shader effect; there the EdgeMask inside the layer fades it.
     readonly property bool software: GraphicsInfo.api === GraphicsInfo.Software
-    layer.enabled: root.fading
+    // On at once, off only once the event queue is clear: Qt deletes a layer when it goes off, under a geometry change still telling it (EmuSen_Kit.md §7.35).
+    layer.enabled: root.fading || held.layered
     layer.effect: root.software ? null : ramps
     Item {
         id: held
         anchors.fill: parent
         // A shade under whole until the software layer holds an alpha channel, so Qt makes the layer with one (EmuSen_Kit.md §7.35).
         opacity: root.software && !mask.primed ? 0.999 : 1
+        property bool layered
+        Binding on layered {
+            value: root.fading
+            delayed: true
+        }
     }
     Kit.EdgeMask {
         id: mask

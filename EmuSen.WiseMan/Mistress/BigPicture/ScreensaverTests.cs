@@ -295,7 +295,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 seen.Add(game);
                 Assert.Equal(Shown[game], PictureKind(saver));
                 Assert.Equal(game, saver.GameName);
-                Assert.Equal(game == Fable ? "Nintendo Entertainment System" : "Super Nintendo", saver.SystemName);
+                Assert.Equal(game == Fable ? "Nintendo Entertainment System" : "Nintendo SNES (Super Nintendo)", saver.SystemName);
                 Assert.Equal(game == Aurora, saver.StarShown);
                 s.Run(10000, step: 250);
                 Assert.Equal(TimeSpan.FromSeconds(10), saver.Changed - last);

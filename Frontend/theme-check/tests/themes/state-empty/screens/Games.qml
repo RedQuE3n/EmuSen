@@ -6,6 +6,10 @@ import "../parts"
 ThemeScreen {
     objectName: "Games"
     role: ThemeScreen.Games
+    Rectangle {
+        anchors.fill: parent
+        color: Tokens.surface
+    }
     Rows {
         visible: Browse.games.count > 0
         rows: Browse.games

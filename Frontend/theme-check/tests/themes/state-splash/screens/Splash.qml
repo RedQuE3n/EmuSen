@@ -8,6 +8,10 @@ ThemeScreen {
     role: ThemeScreen.Splash
     length: 6000
     still: Tokens.reducedMotion
+    Rectangle {
+        anchors.fill: parent
+        color: Tokens.surface
+    }
     NormalizedCanvas {
         id: canvas
         property real time: screen.still ? screen.length : 0

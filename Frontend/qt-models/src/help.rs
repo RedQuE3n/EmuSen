@@ -44,6 +44,18 @@ pub enum Screen {
     Settings,
     /// Settings on a page under a section: the shoulders are the page's.
     SettingsPage,
+    /// A game's page (EmuSen_Qt.md §7.8), by what is focused: Play, Resume (with its slots where it steps them),
+    /// Favourite; a state, a picture, a stepped row, a door, a row of Details, or nothing A acts on.
+    GamePage,
+    GamePageResume,
+    GamePageResumeSlots,
+    GamePageFavourite,
+    GamePageLoad,
+    GamePageView,
+    GamePageValue,
+    GamePageChange,
+    GamePageChoose,
+    GamePageNone,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -164,6 +176,18 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Back, "Back", None),
             (UiButton::Menu, "Home", Some(HOME)),
         ],
+        // Mistress's GamePage.Hints: A's word for what is focused, Left and Right where they step, Y the heart, the
+        // shoulders the sections, B and Start.
+        Screen::GamePage => &[(UiButton::Accept, "Play", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageResume => &[(UiButton::Accept, "Resume", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageResumeSlots => &[(UiButton::Accept, "Resume", None), (UiButton::Left, "Slot", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageFavourite => &[(UiButton::Accept, "Favourite", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageLoad => &[(UiButton::Accept, "Load", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageView => &[(UiButton::Accept, "View", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageValue => &[(UiButton::Left, "Value", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageChange => &[(UiButton::Accept, "Change", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageChoose => &[(UiButton::Accept, "Choose", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageNone => &[PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
     }
 }
 
@@ -174,6 +198,11 @@ pub const CHECK: &str = "check";
 /// themes' help bars, EmuSen_Qt.md §3.2): no action, since the walk and the theme answer them.
 pub const GROUP: Entry = (UiButton::PageUp, "Group", None);
 pub const BACK: Entry = (UiButton::Back, "Back", None);
+
+/// A game's page's shared entries: Y the heart, the shoulders the sections (the frame steps them), Start Home.
+const PAGE_HEART: Entry = (UiButton::Search, "Favourite", Some(FAVOURITE));
+const PAGE_SECTION: Entry = (UiButton::PageUp, "Section", None);
+const PAGE_HOME: Entry = (UiButton::Menu, "Home", Some(HOME));
 
 /// Where the group entry goes in a screen's bar, after the entries that act on the focused item; none where the shoulders
 /// already mean something (the grid's Console, the search's Move to grid) or the screen has no row of groups.

@@ -337,7 +337,7 @@ and about a second when nothing changed.
 
 One job: turn the client crates' answers into Qt's model and property types for QML, and turn QML's actions into client
 calls. One `#[cxx_qt::bridge]` QObject per screen or shared role, as `EmuSen_Interface.md` names them: `LibraryModel`
-(consoles with games, the places, shelves, a console's games, collections, search), `GameModel` (one game's page),
+(consoles with games, the places, shelves, a console's games, collections, search), `GamePageModel` (one game's page; `GameModel` is the grid's list, decided 2026-11-09, §7.8),
 `SessionModel` (the running game: paused, rewind, states, discs, speed), `DeviceModel` (controllers, clock, battery,
 network, output), `CoresModel`, `SettingsModel` (the six sections, derived from the schema, §6.3), `ScraperModel`,
 `PackagesModel`, `CheatsModel`, `FirmwareModel`. Rows are `QAbstractListModel` subclasses (`#[base = QAbstractListModel]`,

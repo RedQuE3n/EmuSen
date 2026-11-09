@@ -25,6 +25,7 @@ fn main() {
             "src/pictures.rs",
             "src/themes_model.rs",
             "src/settings_model.rs",
+            "src/game_page_model.rs",
         ])
         .include_dir("cpp")
         .cpp_files(["cpp/session_pictures.cpp"])

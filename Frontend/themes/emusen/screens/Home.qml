@@ -80,7 +80,7 @@ ThemeScreen {
                         x: 64
                         y: 40
                         text: Words.statusLine(Device.controllers, Device.clock)
-                        color: Tokens.muted
+                        color: night.muted
                         font.family: faces.regular
                         font.pixelSize: 20
                         lineHeight: 24
@@ -105,7 +105,7 @@ ThemeScreen {
                         x: root.width - 64 - width
                         y: 37.6
                         text: Words.title
-                        color: Tokens.textStrong
+                        color: night.textStrong
                         font.family: faces.light
                         font.weight: Font.Light
                         font.pixelSize: 24
@@ -133,7 +133,8 @@ ThemeScreen {
                             visible: Session.hasGame
                             radius: Tokens.tileRadius + 4
                             color: Tokens.surfaceRaised
-                            opacity: 0.55
+                            // A panel: dark glass by night, light by day, its words the variant's own (EmuSen_Qt.md §3.4.1).
+                            opacity: night.day ? 0.94 : 0.55
                         }
                         Rectangle {
                             objectName: "continueRing"
@@ -212,7 +213,8 @@ ThemeScreen {
                             width: parent.width - 421
                             text: root.topTitle
                             elide: Text.ElideRight
-                            color: Tokens.textStrong
+                            // On Continue's panel while a game is suspended, else on the world beside the shelf's game.
+                            color: Session.hasGame ? Tokens.textStrong : night.textStrong
                             font.family: faces.condensed
                             font.weight: Font.Medium
                             font.pixelSize: 44
@@ -235,7 +237,7 @@ ThemeScreen {
                             width: parent.width - x - 12
                             text: root.topFacts
                             elide: Text.ElideRight
-                            color: Tokens.muted
+                            color: Session.hasGame ? Tokens.muted : night.muted
                             font.family: faces.regular
                             font.pixelSize: 22
                             lineHeight: 26.4
@@ -247,7 +249,7 @@ ThemeScreen {
                         x: 64
                         y: 376
                         text: Words.recent
-                        color: Tokens.muted
+                        color: night.muted
                         font.family: faces.regular
                         font.pixelSize: 20
                         lineHeight: 24
@@ -302,12 +304,13 @@ ThemeScreen {
                     Text {
                         objectName: "shelfTitle"
                         x: 64
-                        y: 586
+                        // Clear of the focused cover's ring, which a 16:9 window draws closer.
+                        y: 592
                         width: root.width - 128
                         visible: root.shelfFocused
                         text: root.shelfFocused ? root.shelfCover?.title ?? "" : ""
                         elide: Text.ElideRight
-                        color: Tokens.text
+                        color: night.text
                         font.family: faces.regular
                         font.pixelSize: 22
                         lineHeight: 26.4
@@ -324,6 +327,8 @@ ThemeScreen {
                             required property string name
                             required property string line
                             required property bool attention
+                            // A place the host declines is still walked to, its words drawn at 38% (EmuSen_Qt.md §3.4.1).
+                            required property bool available
                             controller: frame.controller
                             objectName: "place." + place.index
                             focus: !Session.hasGame && shelf.count === 0 && place.index === 0
@@ -342,7 +347,7 @@ ThemeScreen {
                                 anchors.fill: parent
                                 radius: Tokens.tileRadius
                                 color: Tokens.surfaceRaised
-                                opacity: 0.5
+                                opacity: night.day ? 0.94 : 0.5
                             }
                             Rectangle {
                                 anchors.fill: parent
@@ -368,6 +373,7 @@ ThemeScreen {
                                 width: parent.width - 24
                                 text: place.name
                                 elide: Text.ElideRight
+                                opacity: place.available ? 1 : 0.38
                                 color: Tokens.textStrong
                                 font.family: faces.regular
                                 font.pixelSize: 20
@@ -378,6 +384,7 @@ ThemeScreen {
                                 x: 12
                                 y: 32
                                 spacing: 8
+                                opacity: place.available ? 1 : 0.38
                                 Glyph {
                                     objectName: "placeAttention." + place.index
                                     visible: place.attention
@@ -406,6 +413,9 @@ ThemeScreen {
             }
             Faces {
                 id: faces
+            }
+            Night {
+                id: night
             }
         }
     }

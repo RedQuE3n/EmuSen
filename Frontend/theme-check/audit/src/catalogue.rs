@@ -4,7 +4,6 @@
 
 use emusen_crystal_client::shapes::SystemRow;
 use emusen_platform_client::library::GameFile;
-use emusen_qt_models::clients::ClientSource;
 use emusen_qt_models::esde_shelves::{MediaIndex, Plays};
 use emusen_qt_models::gamelists::Collection;
 use emusen_qt_models::library::{Engine, LibrarySource};
@@ -51,7 +50,7 @@ pub fn parse(text: &str) -> Result<Vec<Entry>, String> {
 
 /// The clients' answers with the catalogue's consoles and games in place of the library's own.
 pub struct Catalogue<'a> {
-    inner: &'a ClientSource,
+    inner: &'a dyn LibrarySource,
     systems: Vec<SystemRow>,
     games: Vec<GameFile>,
     engines: Vec<(String, Engine)>,
@@ -60,7 +59,7 @@ pub struct Catalogue<'a> {
 impl<'a> Catalogue<'a> {
     /// Each entry copies its `like` row of the table under its own name and id, else the first shelved console's under a made-up
     /// year and hue as well.
-    pub fn new(inner: &'a ClientSource, root: &Path, entries: &[Entry]) -> Result<Catalogue<'a>, String> {
+    pub fn new(inner: &'a dyn LibrarySource, root: &Path, entries: &[Entry]) -> Result<Catalogue<'a>, String> {
         let table = inner.systems()?;
         let shelved = inner.games()?;
         let first = table
@@ -115,6 +114,9 @@ impl LibrarySource for Catalogue<'_> {
     }
     fn engines(&self, _systems: &[SystemRow]) -> Result<Vec<(String, Engine)>, String> {
         Ok(self.engines.clone())
+    }
+    fn media(&self, systems: &[SystemRow], games: &[GameFile], types: &[&str]) -> Result<Vec<(String, String)>, String> {
+        self.inner.media(systems, games, types)
     }
     fn played(&self, games: &[GameFile]) -> Result<Vec<(String, i64)>, String> {
         self.inner.played(games)

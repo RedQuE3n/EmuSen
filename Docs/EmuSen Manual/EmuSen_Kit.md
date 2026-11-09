@@ -361,7 +361,7 @@ ways in:
   close. The player's A/B swap is applied once, in `PadRouter` (§7.4); the walk's own `set_swap_accept_back` stays off,
   so the fact has one owner.
 - **The pointer.** `Walkable.qml`, the module's first component, is the §1.7 declaration made once: an `Item` with a
-  `HoverHandler` calling `controller.hover(item, hovered)` and one `TapHandler` for the left, right and back buttons
+  `HoverHandler` calling `controller.hoverAt(item, hovered, at)` (a pointer that has not moved focuses nothing, §7.39; `hover(item, hovered)`, unguarded, stays for any other caller) and one `TapHandler` for the left, right and back buttons
   calling `controller.click(item, button)`. Rust maps Qt's button to kit-core's `PointerButton` (`qt_keys`), asks
   `intent` and acts: `Focus` gives the item the active focus (`QQuickItem::forceActiveFocus`, called through cxx-qt's
   `extern "C++Qt"` without glue); `Activate` focuses the item and then offers Accept through the same `offer`, so a
@@ -956,6 +956,50 @@ the first difference at line 14). The put-back is held by `spec.rs` (a second wa
 before). Three more seeded faults, each reverted: no put-back failed `spec.rs`'s second walk; selections never written
 failed `style.rs` (the tab and the choice at 1, not 0; the menu scene's list puts itself back when a row takes the focus,
 so `spec.rs` could not see it); the remembered focus not given back failed `style.rs` (the combo box's focus false).
+
+**A delegate made again stands for the one the tree read** (2026-11-09). theme-audit's `many` state, a console of 9,000
+games, found every theme's rows unreachable at every size after the first, and a plain `ListView` of 9,000 walkable rows
+the same (`qt-test`'s `LongListScene.qml`). The cause was the walk's bookkeeping, not the views: the tree names items by
+their `QObject`'s address, and a view deletes a delegate scrolled out of it (past its cache) and makes another when it
+scrolls back. At 1280 × 800 the walk's Down from the last row it had built scrolled the list by a row, the first row's
+delegate was deleted, and the put-back's scroll made a new one. At the next size the tree's first row, the focus, was that
+new delegate, read last; by the time the walk reached it, Down from the last row had deleted and remade it again, so
+focusing it by its old address found nothing and the walk skipped it silently: no edge from the focus, every row
+unreachable (measured: 15 rows, 56 presses recorded, none from `row.0`). A freed address can also be taken by the next
+delegate made, so the old number could name the wrong row. And a focus scope's remembered item was given back by an
+address that no longer existed, which is how a theme's screen came to hold the focus on the list's content item.
+
+The walk now keeps, beside the tree, the object standing for each of its items (`walk_by`'s `live`). Each read of the
+tree marks the items it reads (a dynamic property, `harnessRead`); after a put-back, when the window holds an item with
+no mark (`harness_made_since`), or the focus had landed on no item the walk knew, the tree is read again and each of the
+first reading's items is found in it: the same object if its type, objectName and box are still the same, else the
+unclaimed item that has them (`Tree::found_in`, to half a pixel, the put-back having scrolled the views back). The
+put-back then runs again through those objects, so a scope's focus is given back to the row made again. Landings are
+read through the same objects, and a focus on no element of the tree (a row the list made as it scrolled) lands on none,
+recorded `none`, where it had been read as the list's content item and held to the pointer rule. `Scene::focus` finds a
+focused item made again in the tree's item's place the same way.
+
+Held to by `qt-test/tests/longlist.rs`: at each of the five sizes the first row holds the focus, the walk reaches every
+row on the screen, a click reaches each element the walk reaches, and the walk puts the focus back on the first row. Before the change it failed at 1920 × 1200 with nine rows
+unreachable. The S6 probe (that list in a theme package, `theme-audit --states many`) went from five sizes of reach
+findings in each variant to none, and from 46 s to 19 s. Cost, measured 2026-11-09 at a load of 7 to 8 on 16 threads:
+the gallery's gate 67.0 and 68.7 s against 60.9 s with the re-reading taken out, nearly all of it the carousel, whose
+every step makes a card. Two seeded faults, each reverted: the re-reading taken out failed `longlist.rs` at 1920 × 1200
+(nine rows unreachable); a landing on no element read as the list's content item failed it at 1280 × 800 (the content
+item covered, held to the pointer rule).
+
+**An element that slides is still itself** (2026-11-09). The program's acceptance test failed on the reference theme's
+Choose a console once the re-reading above was in: the pad reached neither the shelves nor two consoles at 1280 × 800 and
+one console at every other size, and at 1920 × 1200 the focused console's engine line was not shown. The orbits' consoles
+are a `Repeater`'s, never made again, but each press turns the orbits (a `Behavior` on each console's angle, the reel's
+length), and the focused console's covers are made again for each focus, so the walk read the tree again while the
+consoles were still sliding back. `found_in` kept an object as itself only while its box was unchanged, so a console
+mid-slide stood for nothing, the walk focused nothing for it and recorded no press from it, and a scope's focus was given
+back to nothing. An object still alive and still of its type and objectName is now itself wherever it has moved
+(`found_in`, `same_as`); the box is asked only of an item made again in another's place. Held to by `qt-test/tests/shift.rs`
+over `ShiftScene.qml`: six walkables in a row, the focused one growing over 300 ms so the rest slide, and marks made again
+for each focus; every Right lands on the next and the pad reaches all six. The box asked of the same object, seeded, failed
+it (no press recorded from tile 1); the acceptance test passed with the change on WiseMan c0a6358ab.
 
 ### 7.12 The pad's glyphs (stage 0, the rest, step 2; 2026-11-08)
 
@@ -2216,3 +2260,153 @@ cxx-qt-lib binds.
   content gives the navigation the focus) but no item takes Qt's focus, so the walk's role and Qt's focus part there;
   the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The other screens' faces (§5.2) are
   bundled when the first screen needs them; Moonrise's two are.
+
+### 7.36 A held clock, a held press and drawn covers in the harness (stage 3, theme-audit's states; 2026-11-09)
+
+theme-audit records a theme's splash at a stated time and a screen with A held (`man theme-check`, STATES), so the harness
+(`emusen-qt-test`) gained three verbs, each the framework's own mechanism.
+
+- **`Scene::hold_clock(Some(ms))`** replaces Qt's animation driver with one whose `elapsed()` is a number the harness sets
+  (`QAnimationDriver`, the documented way to drive Qt's animation timer; `cpp/harness.cpp`'s `HeldClock`). The first hold
+  installs it at 0; each later one moves it to `ms` 16 ms at a time, calling `advance()` and processing events at each step,
+  as a display's frames would, so a `Behavior` or a `FrameAnimation` that a step starts runs from its own time rather than
+  being jumped over. `None` uninstalls it, which leaves Qt's default timer driver in place, not a threaded render loop's own:
+  a caller holds the clock last. Every `QAbstractAnimation` and `FrameAnimation` is held; a `Timer` is not. Under a held clock
+  nothing settles, so `rest()` must not be called (a running animation never ends); the audit waits a frame instead.
+  The clock is the `Harness`'s, a field holding the C++ object (`harness_clock_hold` gives it, `harness_clock_move` moves it,
+  dropping it uninstalls it), not a static of `harness.cpp` (changed 2026-11-09: the house rules forbid a mutable static used
+  as a wire). The harness is the owner because the driver Qt replaces is its application's (`QUnifiedTimer` is the
+  thread's), and one harness is one application; the field is declared before the application, so it is let go first. A
+  second hold moves the one clock rather than installing another: seeded, a fresh clock at every hold failed
+  `qt_3_7_a_splash_is_held_at_1_3_and_5_s_and_judged_at_each` on Qt's own words, "animation driver already installed" and
+  "trying to uninstall a driver that is not installed".
+  The same two lines came from Horizon's GPU run on 2026-11-09, once a hold, from another cause: a threaded render loop
+  (Qt Quick's on Vulkan, or the software one under `QSG_RENDER_LOOP=threaded`) installs its own animation driver, so Qt
+  refused the held clock (the first line), every timed state was read on the render loop's clock instead, and letting the
+  clock go uninstalled a driver Qt had never taken (the second); offscreen under a threaded loop the run then crashed.
+  theme-audit, the program that holds the clock, now sets `QSG_RENDER_LOOP=basic` before Qt starts, whatever the
+  environment asks, so the held clock is the one driver installed, once a hold, and let go once. The harness itself sets no
+  render loop: its other users (the program's Vulkan acceptance test) run on Qt's choice. Held to by theme-audit's
+  `qt_3_7_a_held_clock_logs_nothing_where_the_environment_asks_for_a_threaded_render_loop`, the splash fixture's three
+  timed states under `QSG_RENDER_LOOP=threaded`: their findings alone, no warning line and nothing on standard error. Seeded,
+  the setting taken out failed it on both lines.
+- **`Scene::key_hold(key, down)`**, `QTest::keyPress` or `keyRelease` alone: a press held, as a theme's pressed look reads it
+  (`Keys.onPressed` without the release).
+- **`covers::draw`**, moved from the program's tests (`qt-app/tests/common`), which re-export it: covers drawn by one Qt Quick
+  window resized to each box and grabbed, a flat colour, a white rim and the words. theme-audit draws the synthetic library's
+  covers with it, so the two keep one drawing.
+
+Proof, measured 2026-11-09: theme-audit's `state-splash` fixture, a wordmark past the right edge from 2.5 s to 3.5 s, is
+found at 3 s alone and its pictures at 1 s and 5 s are equal and differ from 3 s's (`qt_3_7_a_splash_is_held_at_1_3_and_5_s_and_judged_at_each`);
+`state-pressed`'s row grown by a held Return overlaps its neighbour in the pressed state alone.
+
+### 7.37 A on a walkable: the element's own handler hears it first (2026-11-09)
+
+A `Walkable` answered Return and Enter with `Keys.onReturnPressed` and `Keys.onEnterPressed`. Qt's `Keys` treats a key
+with a handler of its own as accepted before the handler runs, and emits the general `pressed` only for a key still not
+accepted after it (Qt's `QQuickKeysAttached::keyPressed`), so a theme's `Keys.onPressed` written on a `Walkable` itself
+never heard A; one written on a focused child did. Found by theme-audit's `pressed` state on 2026-11-09: Meridian's rail
+entry widens its bar to 6 while A is held (`RailEntry.qml`, `Keys.onPressed` on the entry, which passes the key on) and
+never did.
+
+The walkable's Return handler now emits the element's own `pressed` first, with the key not accepted, so every
+`Keys.onPressed` on the element hears A; if none of them takes it (accepts it), the walkable activates. Either way the
+key ends accepted, so A never reaches the items around the element: the frame answers a Return that reaches it as the
+pad's A, which on the big screen opens the content's detail (kit-core's walk), and Meridian's handler, written to let
+"the press still reach Walkable's own handler", sets the key not accepted. Enter is sent through the same handler. A
+key the walkable does not act on is not accepted and goes on as before. The handler is three statements of QML, not
+logic moved into a model: it is the order of two of Qt's own signals.
+
+Held to by `qt-test/tests/walkable.rs` over `WalkableKeysScene.qml`, with Return, Enter and the pad's A: a plain
+walkable activates once a press; one whose `Keys.onPressed` passes A on hears it and activates once; one whose handler
+takes A does not activate; none lets A reach the item around them, which still hears a key no one acts on. Two seeded
+faults, each reverted: the old handlers failed it (the passing handler heard nothing); the key left as the theme's
+handler left it failed it (A reached the item around, twice).
+
+### 7.38 A declined place, and words mid-fade, under the contrast rule (theme-audit; 2026-11-09)
+
+**A declined place.** The harness has exempted a disabled control's words since §7.10 (`enabled` false), as WCAG 2.2's
+1.4.3 exempts "text or images of text that are part of an inactive user interface component" (https://www.w3.org/TR/WCAG22/,
+read 2026-11-09). A place the host declines is not disabled in Qt's sense: the pad still walks to it, so a theme draws it
+dim (every theme at 38%) with `enabled` true, and theme-audit's `disabled` state held its words to 4.5:1 (S6's survey:
+Meridian, Constellation and Orrery 20 lines each, the Scraper's name and line at 1.8 to 3.2:1). Decided 2026-11-09: such a
+place is exempt, and nothing else is. theme-audit finds the declined places by the name a reader hears (`place_name`, the
+state's keys), and exempts the words under each only when it is drawn apart from its offered look: the place's box is read
+on a grid (`grid`, about 10,000 points, a design unit apart or less), declined and then offered through the theme's own
+surface (`Library.show_declined`, which changes the rows in place, so the delegates and the focus on the place stay), and
+some point must change by 3:1 (kit-core's `STATE_CHANGE`, `changed_share`), the ratio WCAG 2.2's 2.4.13 asks "between
+the same pixels in the focused and unfocused states". A place drawn as if offered keeps the rule and is a finding of its
+own. 2.4.13's area, "a 2 CSS pixel thick perimeter of the unfocused component", is not asked, and why: words dimmed to 38%
+change about 2% of a 480 × 56 row, where the ring is 7.9%, so the area would name every theme's dim look as no look; it is
+written for a focus indicator, which must be found, not for a state that is read on the place itself. Any changed point
+is weak against a design that changes one dot; the grid's spacing and the two pictures differing in nothing else (the
+same focus, the views at rest) keep stray pixels out.
+
+**Words mid-fade.** A held clock (§7.36) reads the splash at 1, 3 and 5 s, and S6 found every theme's caption at 5 s
+(2.05 to 2.30:1) mid-fade. Contrast is judged at rest, and the harness can read honestly whether a text is moving, not
+where it will rest: a `Behavior`'s target value is Qt's private, and a theme's own time property drives the rest. So a
+text is skipped while its opacity changes: the clock is held a frame (16 ms) before the stated time, the tree read, then
+held at the time and read again, and a text whose ink, its colour with its opacity, differs between the two is not judged
+in that state (`changing`, `rested` in theme-audit). The same text at rest at any other time is judged.
+
+Held to by theme-audit's tests over two fixtures, each with its seeded faults reverted. `state-declined`: Home's places
+as rows, the declined row's words at 38% and the last row's (Power, offered) at 38%; in the default and the `disabled`
+state, at every size and variant, Power alone is found. The declined picture compared with itself (nothing changes)
+failed it (the Scraper drawn as if offered and found low); every text exempted failed it (Power no longer found).
+`state-fade`: a caption fading to rest at 0.3 between 0.5 and 1.5 s, a title fading in to full between 4.5 and 5.5 s;
+only the caption, at 3 s, at 5 s and in the default, is found. No text skipped failed it (the caption found at 1 s); every
+text skipped failed it (the caption not found at 3 s).
+
+### 7.39 A walkable focused inside a view becomes its current item; the pointer focuses by moving (2026-11-09)
+
+A `ListView` or `GridView` moves its keys from its `currentIndex`, not from the item holding the focus. The pointer
+focuses a walkable directly (§7.3, `Walkable`'s `HoverHandler`), and so does theme-audit's walk, so a cell hovered in a
+theme's grid held the focus while the view's current item stayed where it was, and Right went on from that one. Found by
+theme-audit's `many` state on 2026-11-09 in every theme (`EmuSen_Qt.md` §3.7.2): each grid's cells unreached past the first
+row's first, every cell's Right landing on cell 1 and Down on cell 5. The kit's `MenuPanel` had made its row current on
+focus since §7.8, and Orrery's orbit cover did the same for itself; the themes' grids did not.
+
+**The walkable makes itself current.** Decided 2026-11-09: the kit owns this once, an extension of `Walkable`, so every
+theme's grid and strip has it without a line of its own. When a walkable takes the active focus it calls the singleton
+`ViewCurrent.take(item)` (`current.rs`), which looks up the item's parents for the first standing directly in an item
+view's `contentItem` (the delegate: the walkable itself, or an item it stands in, as Horizon's cover stands in its slot)
+and sets the view's `currentIndex` to `indexAt` that delegate's centre. A view is an item view when Qt's own class says so
+(`QObject::inherits("QQuickItemView")`, the base of `ListView` and `GridView`), so a `PathView` or a `Flickable` with a
+`currentIndex` is never moved; the kit's `Carousel` is itself the walkable. A walkable in no item view, or over no delegate
+(a header), changes nothing, and nor does the view's own current item: a view gives the focus to the delegate it makes
+current before placing it, so its box says nothing yet (a strip that made its eighth item at x 0 read it as item 0, and
+Right from item 6 landed on item 0). What the view does with its current item follows unchanged: a `highlightRangeMode`
+turns the strip or the orbit to it, as Orrery's line already chose. `MenuPanel`'s own line is removed. *C++ part*: one
+function in `cpp/kit_glue.cpp`, `make_current` [own, because an item's parents, `inherits` and `QMetaObject::invokeMethod`
+for `indexAt` have no Rust binding in cxx-qt-lib, and the kit's QML holds no functions (`qml-rules`)].
+
+**The pointer focuses by moving.** A view that turns to its current item moves other items under a pointer that stays
+still, and Qt delivers a hover to each item that comes under it. With the walkable making itself current, the strip
+then ran on: hovering a strip's fifth item turned the strip, the seventh came under the pointer and took the focus, the
+strip turned again, and it stopped at its end (measured on 2026-11-09 in `GridScene.qml`: the focus at item 7 of 8 within
+300 ms). The same hover moved the focus off the item a key had chosen whenever a key turned the strip under a resting
+pointer. `FrameController` now keeps where the pointer was last seen over a walkable (`hoverAt(item, hovered, at)`, beside the unguarded `hover(item, hovered)` it keeps, and
+`pointerMoved(at)`, the scene position from the `HoverHandler`'s point; Qt sets the point before it reports `hovered`),
+and an element coming under the pointer at that same place takes no focus. A pointer that moves gives the focus as before.
+
+**The walk settles a turning view.** theme-audit's walk focuses each element and puts back what the press moved, then
+waits for the views to rest (`Scene::settle`). Qt's `moving` reports a flick or a drag, not a view turning to its current
+item, so the walk read Horizon's strip mid-turn after the put-back, lost its first cover (found by its box, which had not
+yet come back) and recorded no press from it: every cover unreached at most sizes. `harness_turning` [own, in
+`qt-test/cpp/harness.cpp`, for the same reason] reads a view as turning while its highlight follows its current item and
+stands off it, until three frames pass without the highlight moving (a theme may place its delegates itself, as Orrery's
+orbit does, where the highlight rests off them); the settle waits on it.
+
+Held to by `qt-test/tests/grid.rs` over `GridScene.qml`: a grid of ten walkable cells, five a row, and a strip of thirty
+that turns its current item into a band, whose walkables stand inside each delegate's `FocusScope`. The pointer rests on
+a cell or an item and the pad presses: Right from cell 7 lands on 8 (`currentIndex` 8), Down from cell 3 on 8, Left from
+cell 9 on 8; Right from the strip's item 4 on 5, Left from item 3 on 2 after the strip turned; each hovered item keeps
+the focus while the strip turns under the pointer; Right six times from item 2 lands on item 8, through items the strip
+made. Then the walk over the same scene: every strip item's Right lands on the next, and the last read's on none; the walk
+puts the strip back; a settle after focusing item 5 leaves the strip at rest. Five seeded faults, each reverted and each
+failing it: the walkable's line removed (Right from cell 7 on cell 1); the view's own current item not excepted (Right six
+times landed on item 1); the walkable's own delegate alone looked at (Right from item 4 on item 1); the pointer's place
+not kept (hovering item 4 left the focus on item 8); the settle not waiting on a turn (contentX 121 when settled, 470 half
+a second later). theme-audit's `many` over the five themes on 2026-11-09 (the reference package and Meridian from this
+tree, Horizon, Constellation and Orrery from their branches' copies kept for the survey): no reach finding left, where
+each had 70 or 80; with the walkable's line removed, Meridian's 70 came back.

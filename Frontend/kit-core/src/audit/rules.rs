@@ -82,3 +82,19 @@ pub fn contrast(root: &Item) -> Vec<Fault> {
     });
     faults
 }
+
+/// The least change between two states of one element at the same pixels, WCAG 2.2 2.4.13's ratio between a focused and an
+/// unfocused look: a declined place is exempt from the words' contrast (1.4.3's inactive component) only when some point
+/// of it changes by this much from its offered look (EmuSen_Kit.md §7.38).
+pub const STATE_CHANGE: f64 = 3.0;
+
+/// The share of points whose colour changes by `STATE_CHANGE` or more between two pictures of one element, read at the
+/// same points; points read in only one picture are left out.
+pub fn changed_share(one: &[Option<Colour>], other: &[Option<Colour>]) -> f64 {
+    let pairs: Vec<(Colour, Colour)> = one.iter().zip(other).filter_map(|(a, b)| Some(((*a)?, (*b)?))).collect();
+    if pairs.is_empty() {
+        return 0.0;
+    }
+    let changed = pairs.iter().filter(|(a, b)| a.contrast(*b) >= STATE_CHANGE).count();
+    changed as f64 / pairs.len() as f64
+}

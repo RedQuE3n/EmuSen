@@ -30,6 +30,8 @@ pub mod qobject {
         #[qproperty(QString, no_consoles, cxx_name = "noConsoles", READ, CONSTANT)]
         #[qproperty(QString, add_folder, cxx_name = "addFolder", READ, CONSTANT)]
         #[qproperty(QString, places, READ, CONSTANT)]
+        #[qproperty(QString, continue_entry, cxx_name = "continueEntry", READ, CONSTANT)]
+        #[qproperty(QString, recent_entry, cxx_name = "recentEntry", READ, CONSTANT)]
         type ThemeWords = super::ThemeWordsRust;
     }
 
@@ -85,6 +87,8 @@ pub struct ThemeWordsRust {
     no_consoles: QString,
     add_folder: QString,
     places: QString,
+    continue_entry: QString,
+    recent_entry: QString,
 }
 
 impl Default for ThemeWordsRust {
@@ -105,6 +109,8 @@ impl Default for ThemeWordsRust {
             no_consoles: QString::from(words::NO_CONSOLES),
             add_folder: QString::from(words::ADD_FOLDER),
             places: QString::from(words::PLACES),
+            continue_entry: QString::from(words::CONTINUE_ENTRY),
+            recent_entry: QString::from(words::RECENT_ENTRY),
         }
     }
 }

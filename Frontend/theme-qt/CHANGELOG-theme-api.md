@@ -102,3 +102,7 @@ and the console screens' maker groups are added, each after the members it joins
   `groupStart`. The rows stay in the table's order and a theme's QML neither sorts nor sums, so a screen drawing makers
   together could not place a console whose maker returns later in the table (as theme-audit's 120-console crowd has
   them) without it. Found by Meridian's rail.
+- **`Words.continueEntry` and `recentEntry`** ("Continue", "Recent"), and **`Marks.path` of Home's seven places**
+  (`games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`), the same day: a theme listing Continue and
+  the Recent shelf beside the places as destinations (Meridian's rail) names and marks each, and had neither word nor
+  mark. The words are `words.rs`'s and the paths `marks.rs`'s, as the canvases draw them.

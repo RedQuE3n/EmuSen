@@ -92,7 +92,7 @@ Window {
     readonly property bool secondEnabled: (scene.consoleKey.length >= 0 && placeList.count > 1 ? placeList.itemAt(1) as PlaceRow : null)?.available ?? false
     readonly property int placeHelp: placeHelpList.count
     readonly property string placeGroup: (placeHelpList.count > 2 ? placeHelpList.itemAt(2) as HelpRow : null)?.label ?? ""
-    readonly property string emptyWords: [Words.noGames, Words.noRecent, Words.noConsoles, Words.addFolder, Words.places].join("|")
+    readonly property string emptyWords: [Words.noGames, Words.noRecent, Words.noConsoles, Words.addFolder, Words.places, Words.continueEntry, Words.recentEntry].join("|")
     readonly property string paused: Words.pausedAgo(Session.pausedSince)
     property bool listEnabled: Actions.enabled("list")
     readonly property int rungs: Bells.ladder(3)

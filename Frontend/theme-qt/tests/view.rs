@@ -89,6 +89,7 @@ fn qt_3_2_the_library_s_lists_over_the_real_clients() {
     assert!(places.iter().all(|r| r.len() == view::PLACE_ROLES.len()));
     let ids: Vec<&str> = places.iter().map(|r| text(&r[0])).collect();
     assert_eq!(ids, ["games", "scraper", "packages", "library", "cores", "settings", "power"], "Home's destinations in Home's order");
+    assert!(ids.iter().all(|key| !emusen_qt_models::marks::path(key).is_empty()), "every place has its mark in Marks.path");
     let kinds: Vec<&str> = places.iter().map(|r| text(&r[2])).collect();
     assert_eq!(kinds, ["library", "tool", "tool", "tool", "tool", "settings", "power"]);
     assert_eq!((text(&places[1][3]), &places[1][4]), ("41 no art", &Cell::Flag(true)), "the scraper's live line asks for the player");

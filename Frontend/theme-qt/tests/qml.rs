@@ -128,7 +128,7 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert_eq!((scene.property("scene", "placeHelp").as_str(), scene.property("scene", "placeGroup").as_str()), ("5", "Group"), "a place: Open, Back, Group, Search, Home");
     assert_eq!(
         scene.property("scene", "emptyWords"),
-        "No games yet|Nothing played yet|No consoles have games yet|Settings › Library adds a folder|PLACES"
+        "No games yet|Nothing played yet|No consoles have games yet|Settings › Library adds a folder|PLACES|Continue|Recent"
     );
     assert!(scene.property("scene", "paused").starts_with("Paused "), "pausedAgo from the models' words");
     assert_eq!(scene.property("scene", "rungs"), "3", "the ladder's count, with no striker too");

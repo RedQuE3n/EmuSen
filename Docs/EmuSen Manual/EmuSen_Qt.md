@@ -1086,6 +1086,30 @@ its consoles); Down no longer stepping the rail (the sweep over `one-console` mi
 the splash at 1, 3 and 5 s (the audit records its finished frame only), the grid's rows for a tall and a square console
 (the synthetic library's consoles are all wide), and the bells, which no striker rings yet.
 
+**The states, measured 2026-11-09** (§3.7.2's `--states`, with the contrast rule). Four findings were the theme's and are
+fixed: (1) in `nogame` the Recent shelf was not reached from the first focus: its rows come after the `ListView` is made,
+which leaves `currentIndex` at −1, so Right on Recent gave the focus to a list with no current cover; the shelf now takes
+its first cover as current when rows come. (2) In `nogame` the shelf's covers ran past its right edge with no fade at
+1920 × 1080, 1280 × 720 and 3840 × 2160; the shelf now stands inside the kit's `EdgeFade` (`EmuSen_Kit.md` §7.35) and fades
+24 units at an edge it runs past, as the rail does (§1.6 of the spec). (3) In `empty` Games' `noGames` words lay under the
+floating label of the rail's focused entry; with no games the floating label is not drawn, since the heading names the
+section and the empty words stand where the label would. (4) On the GPU, by day, CONTINUE PLAYING read 4.37 to 4.49:1 over
+the paused frame's shadow and the EMUSEN tag 4.30:1 on its tint at 1280 × 720 (measured 2026-11-09): named differences
+9 and 10 below.
+
+9. By day the paused frame's shadow is black at 25%, not 45%: at 45% its blur darkened the sky under the eyebrow below
+   4.5:1. By night it stays at 45%.
+10. By day a core's engine line and its EMUSEN tag are written in hsl(h, 60%, 24%), not the spec's 30%: at 30% a yellow
+    hue reads 3.42:1 on the tag's tint over the sky's foot, at 24% the least over every hue is 4.87:1 (computed over the
+    hue circle in steps of 2°). The tag's ink is the line's, one colour.
+11. Games' floating label is not drawn while the grid is empty (finding 3).
+
+The shelf's fades hold only while the Recent band is shown: an `EdgeFade` under the hidden band whose edge changed as the
+window grew crashed the GPU run at the resize to 3840 × 2160 (twice, in `QQuickItem::geometryChange`; measured 2026-11-09
+and queued for the kit). Proof, measured 2026-11-09: offscreen, `nogame` and `empty` hold no finding; on the GPU
+(`theme-audit --gpu`), the default state, `nogame`, `empty` and `pressed` hold none. Each finding above was the audit's on
+the theme before its fix, which a revert restores.
+
 ### 3.5 Loading and the sandbox
 
 Each theme runs in a `QQmlEngine` of its own, created by Rust with: an import path list holding only Qt's modules on an

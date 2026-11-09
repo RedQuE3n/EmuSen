@@ -449,7 +449,7 @@ ThemeScreen {
                                     spacing: 6
                                     readonly property real hue: root.consoleShown ? root.focused.hue : 0
                                     readonly property bool libretro: root.consoleShown && root.focused.libretro
-                                    readonly property color ink: engineRow.libretro ? (root.light ? Tokens.muted : "#C9C9D0") : (root.light ? Qt.hsla(engineRow.hue / 360, 0.6, 0.3, 1) : Qt.hsla(engineRow.hue / 360, 0.85, 0.8, 1))
+                                    readonly property color ink: engineRow.libretro ? (root.light ? Tokens.muted : "#C9C9D0") : (root.light ? Qt.hsla(engineRow.hue / 360, 0.6, 0.24, 1) : Qt.hsla(engineRow.hue / 360, 0.85, 0.8, 1))
                                     EngineMark {
                                         anchors.verticalCenter: parent.verticalCenter
                                         width: 15
@@ -482,7 +482,7 @@ ThemeScreen {
                                             id: tagWord
                                             anchors.centerIn: parent
                                             text: engineRow.libretro ? Words.libretroTag : Words.emusenTag
-                                            color: engineRow.libretro ? (root.light ? Tokens.muted : "#A9A9B2") : (root.light ? Qt.hsla(engineRow.hue / 360, 0.6, 0.3, 1) : Qt.hsla(engineRow.hue / 360, 0.7, 0.82, 1))
+                                            color: engineRow.libretro ? (root.light ? Tokens.muted : "#A9A9B2") : (root.light ? engineRow.ink : Qt.hsla(engineRow.hue / 360, 0.7, 0.82, 1))
                                             font.family: faces.condensed
                                             font.weight: Font.Medium
                                             font.pixelSize: 19

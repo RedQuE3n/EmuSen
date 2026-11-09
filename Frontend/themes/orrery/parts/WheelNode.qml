@@ -13,18 +13,20 @@ Walkable {
     // The node in the layout: a console's row, count + a shelf's place, or count + 3 + a maker's group.
     property int nodeIndex: -1
     readonly property int consoleCount: node.layout?.count ?? 0
-    readonly property int leftIndex: node.made < 0 ? -1 : node.layout?.left[node.nodeIndex] ?? -1
-    readonly property int rightIndex: node.made < 0 ? -1 : node.layout?.right[node.nodeIndex] ?? -1
-    readonly property int upIndex: node.made < 0 ? -1 : node.layout?.up[node.nodeIndex] ?? -1
-    readonly property int downIndex: node.made < 0 ? -1 : node.layout?.down[node.nodeIndex] ?? -1
-    readonly property int previousIndex: node.made < 0 ? -1 : node.layout?.previous[node.nodeIndex] ?? -1
-    readonly property int nextIndex: node.made < 0 ? -1 : node.layout?.next[node.nodeIndex] ?? -1
+    // The lists a neighbour is looked up in, which the engine clears as the screen is torn down.
+    readonly property bool ready: node.worlds !== null && node.shelves !== null && node.makers !== null && node.layout !== null
+    readonly property int leftIndex: node.made < 0 || !node.ready ? -1 : node.layout?.left[node.nodeIndex] ?? -1
+    readonly property int rightIndex: node.made < 0 || !node.ready ? -1 : node.layout?.right[node.nodeIndex] ?? -1
+    readonly property int upIndex: node.made < 0 || !node.ready ? -1 : node.layout?.up[node.nodeIndex] ?? -1
+    readonly property int downIndex: node.made < 0 || !node.ready ? -1 : node.layout?.down[node.nodeIndex] ?? -1
+    readonly property int previousIndex: node.made < 0 || !node.ready ? -1 : node.layout?.previous[node.nodeIndex] ?? -1
+    readonly property int nextIndex: node.made < 0 || !node.ready ? -1 : node.layout?.next[node.nodeIndex] ?? -1
     readonly property Item leftItem: node.leftIndex < 0 ? null : (node.leftIndex < node.consoleCount ? node.worlds.itemAt(node.leftIndex) : (node.leftIndex < node.consoleCount + 3 ? node.shelves.itemAt(node.leftIndex - node.consoleCount) : node.makers.itemAt(node.layout.firsts[node.leftIndex - node.consoleCount - 3])))
     readonly property Item rightItem: node.rightIndex < 0 ? null : (node.rightIndex < node.consoleCount ? node.worlds.itemAt(node.rightIndex) : (node.rightIndex < node.consoleCount + 3 ? node.shelves.itemAt(node.rightIndex - node.consoleCount) : node.makers.itemAt(node.layout.firsts[node.rightIndex - node.consoleCount - 3])))
     readonly property Item upItem: node.upIndex < 0 ? null : (node.upIndex < node.consoleCount ? node.worlds.itemAt(node.upIndex) : (node.upIndex < node.consoleCount + 3 ? node.shelves.itemAt(node.upIndex - node.consoleCount) : node.makers.itemAt(node.layout.firsts[node.upIndex - node.consoleCount - 3])))
     readonly property Item downItem: node.downIndex < 0 ? null : (node.downIndex < node.consoleCount ? node.worlds.itemAt(node.downIndex) : (node.downIndex < node.consoleCount + 3 ? node.shelves.itemAt(node.downIndex - node.consoleCount) : node.makers.itemAt(node.layout.firsts[node.downIndex - node.consoleCount - 3])))
-    readonly property Item previousItem: node.previousIndex < node.consoleCount + 3 ? null : node.makers.itemAt(node.layout.firsts[node.previousIndex - node.consoleCount - 3])
-    readonly property Item nextItem: node.nextIndex < node.consoleCount + 3 ? null : node.makers.itemAt(node.layout.firsts[node.nextIndex - node.consoleCount - 3])
+    readonly property Item previousItem: node.previousIndex < node.consoleCount + 3 || !node.ready ? null : node.makers.itemAt(node.layout.firsts[node.previousIndex - node.consoleCount - 3])
+    readonly property Item nextItem: node.nextIndex < node.consoleCount + 3 || !node.ready ? null : node.makers.itemAt(node.layout.firsts[node.nextIndex - node.consoleCount - 3])
     KeyNavigation.left: node.leftItem
     KeyNavigation.right: node.rightItem
     KeyNavigation.up: node.upItem

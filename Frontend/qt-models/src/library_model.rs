@@ -126,6 +126,12 @@ pub mod qobject {
         #[cxx_name = "consoleOf"]
         fn console_of(self: &LibraryModel, path: &QString) -> QString;
 
+        /// A game's file as the scan found it, for its page: `{"path", "system", "package"}`; empty for a game the
+        /// library does not hold.
+        #[qinvokable]
+        #[cxx_name = "gameFile"]
+        fn game_file(self: &LibraryModel, path: &QString) -> QString;
+
         /// The Home card's facts as plain data (home_card.rs): the suspended game by its path and the words of its pause,
         /// the tools' summaries, and whether Steam's Game Mode holds the session.
         #[qinvokable]
@@ -363,6 +369,12 @@ impl qobject::LibraryModel {
 
     pub fn console_of(&self, path: &QString) -> QString {
         QString::from(self.view.console_of(&path.to_string()).as_str())
+    }
+
+    pub fn game_file(&self, path: &QString) -> QString {
+        let path = path.to_string();
+        let Some(g) = self.view.catalog.games.iter().find(|g| g.path == path) else { return QString::default() };
+        QString::from(serde_json::json!({ "path": g.path, "system": g.system, "package": g.package }).to_string().as_str())
     }
 
     pub fn title_of(&self, path: &QString) -> QString {

@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Shapes
 import EmuSen.Kit as Kit
 
 // An action on the frame: the pad's glyph where it has one, its word and its value, filled in the accent where it is the screen's main action, ringed when focused; a click or A is the action (EmuSen_Kit.md §7.44).
@@ -10,6 +11,9 @@ Kit.Walkable {
     // The pad button whose glyph leads the words; below zero, none.
     property int button: -1
     property bool filled: false
+    // A value Left and Right step, marked ◂ ▸ on either side of it.
+    property bool stepped: false
+    readonly property size stepMark: Qt.size(8, 11)
     property int family: Kit.Families.Generic
     property font labelFont: Qt.font({ pixelSize: Kit.Tokens.fontRow })
     readonly property color ink: root.filled ? Kit.Tokens.overAccent : (root.enabled ? Kit.Tokens.text : Kit.Tokens.muted)
@@ -52,12 +56,44 @@ Kit.Walkable {
             color: root.ink
             font: root.labelFont
         }
+        Shape {
+            objectName: "before"
+            visible: root.stepped
+            anchors.verticalCenter: parent.verticalCenter
+            width: root.stepMark.width
+            height: root.stepMark.height
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                strokeWidth: -1
+                fillColor: root.ink
+                startX: root.stepMark.width
+                startY: 0
+                PathLine { x: 0; y: root.stepMark.height / 2 }
+                PathLine { x: root.stepMark.width; y: root.stepMark.height }
+            }
+        }
         Text {
             visible: root.value.length > 0
             anchors.verticalCenter: parent.verticalCenter
             text: root.value
             color: root.filled ? root.ink : Kit.Tokens.muted
             font: root.labelFont
+        }
+        Shape {
+            objectName: "after"
+            visible: root.stepped
+            anchors.verticalCenter: parent.verticalCenter
+            width: root.stepMark.width
+            height: root.stepMark.height
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                strokeWidth: -1
+                fillColor: root.ink
+                startX: 0
+                startY: 0
+                PathLine { x: root.stepMark.width; y: root.stepMark.height / 2 }
+                PathLine { x: 0; y: root.stepMark.height }
+            }
         }
     }
 }

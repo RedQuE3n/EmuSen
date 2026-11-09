@@ -35,6 +35,9 @@ pub mod qobject {
         #[qproperty(f64, tile_gap, READ, CONSTANT)]
         #[qproperty(f64, label_offset, READ, CONSTANT)]
         #[qproperty(f64, line_offset, READ, CONSTANT)]
+        #[qproperty(f64, picture_width, READ, CONSTANT)]
+        #[qproperty(f64, picture_height, READ, CONSTANT)]
+        #[qproperty(f64, picture_gap, READ, CONSTANT)]
         type PageLayout = super::PageLayoutRust;
 
     }
@@ -67,6 +70,9 @@ pub struct PageLayoutRust {
     tile_gap: f64,
     label_offset: f64,
     line_offset: f64,
+    picture_width: f64,
+    picture_height: f64,
+    picture_gap: f64,
 }
 
 impl Default for PageLayoutRust {
@@ -89,6 +95,9 @@ impl Default for PageLayoutRust {
             tile_gap: g.tile_gap,
             label_offset: g.label_offset,
             line_offset: g.line_offset,
+            picture_width: g.picture_width,
+            picture_height: g.picture_height,
+            picture_gap: g.picture_gap,
         }
     }
 }

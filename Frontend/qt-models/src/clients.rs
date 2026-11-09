@@ -41,6 +41,11 @@ fn words(e: impl std::fmt::Display) -> String {
 }
 
 impl ClientSource {
+    /// The sources-alone scraper, for a game's metadata and media; none where it could not open.
+    pub fn scraper(&self) -> Option<&ScrapeService> {
+        self.scraper.as_ref().map(|(_, s)| s)
+    }
+
     /// The scan's request: the player's ROM folder, the shelves' systems, and the packages and compressed folders.
     pub fn scan_request(&self) -> Result<ScanRequest, String> {
         let settings = app_settings(&self.platform)?;

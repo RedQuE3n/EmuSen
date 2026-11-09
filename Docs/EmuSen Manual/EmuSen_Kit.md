@@ -2808,3 +2808,47 @@ sentence is a `ToneText`. Weighed as `EmuSen_Qt.md` §1.3 asks, an extension of 
 Rule Q: an addition to `SettingsFrame` (qmldir), recorded in `CHANGELOG-kit.md`; nothing was removed or changed. Held to
 by the program's Consoles test (the Super Nintendo's `✓ No firmware needed` drawn in the dark variant's Success,
 #35A064); seeded, the tone left unbound failed it.
+
+### 7.53 The clip and the page frame's own parts for a game's page (stage 5, piece G; 2026-11-09)
+
+**`VideoTile`** (qmldir) is a clip over its still: the still (`still`) first; once `playing` turns true and the motion
+token `poster` (1.5 s) has passed, the clip (`source`) plays, looped, and fades in over `posterFade`; when `playing` turns
+false, or the source changes, the player goes and the still stands alone. It is silent unless `muted` is false. Reduced
+motion keeps the still (`EmuSen_Interface.md` §5.9). `showing` says whether a frame of the clip stands over the still,
+`running` whether its player is made, `frames` how many frames the kit's sink has drawn. The player, decoder and drawing
+are **`VideoClip`** (qmldir), which the tile makes only while its clip is to play, so a window that shows no clip never
+starts Qt Multimedia: made with every window, it started Qt Multimedia in every run of the program (2026-11-09). The decoder is Qt Multimedia's over the system's FFmpeg (`EmuSen_Qt.md` §1.8.9). On an RHI
+backend `VideoOutput` draws; on the software backend, where `VideoOutput` draws nothing (measured 2026-11-09), the kit's
+**`VideoFrames`** (registry; `cpp/video_frames.*`) does: a `QVideoSink` the player writes to, each frame converted with
+`QVideoFrame::toImage` and drawn as an image node, cropped to fill as the still is; `frames` counts the frames drawn
+since the last `clear()`. One tile serves the game's page's hero and, when it is mapped, the ES-DE engine's `video`
+element, so a theme never imports QtMultimedia. The kit now links Qt's Multimedia module and its QML module depends on
+`QtMultimedia`.
+
+**`PageFrame`** gained, for a game's page (`EmuSen_Qt.md` §7.8):
+- the hero's clip: `clipSource`, `clipPlaying` and `clipMuted` (not `clip`, which is every item's own), a `VideoTile` in place of the hero's picture under the OnArt
+  gradient, its still the `hero`; `videoTile` names it;
+- words beside a picture in place of tiles or rows, as the Overview shows them: `showsText`, `contentWords`,
+  `contentPicture`, the picture 388 × 222 at the content's right and the words in the rest less a gap of 24, from
+  Mistress's `GamePage` recording (`PageLayout`'s new constants `pictureWidth`, `pictureHeight`, `pictureGap`, from
+  kit-core's `PageGeometry`);
+- a stepped action: the action model's roles `stepped` (◂ ▸ drawn either side of the value, on `ActionButton` as
+  `stepped`), `stepLeft` and `stepRight` (whether Left or Right steps it from where it stands), and the signal
+  `actionStepped(index, by)`. Left or Right on an action that can step that way steps it; past either end the focus moves
+  to the neighbour, as LunaP's `MoveInActions` does, so every action is reached. The host says which way each action can
+  step, from the value it holds;
+- `rowStepped(index, by)`: Left or Right on a row that steps.
+
+A list whose model fills after the view was made has no current item, so no delegate took the focus and the walk found
+the list itself (the program's first run of the game's page, 2026-11-09, where the actions and the rows come from models
+read off the GUI thread): each of the frame's three lists now makes its first item current when it fills.
+
+**Rule Q.** Additions to the registry (`VideoFrames`; `PageLayout`'s three constants) and the qmldir (`VideoTile`,
+`VideoClip`), and
+to `PageFrame`'s and `ActionButton`'s properties and signals. One change to a contract: the action model's delegate now
+requires the roles `stepped`, `stepLeft` and `stepRight`, so a host's action model must name them; the gallery's does.
+The module stays 1.0 (§7.6). `EmuSen.Theme` re-exports none of it.
+
+**Held to**: kit-gallery's screens test (the page with tiles and with rows, both variants, the four sizes) and the
+registry's comparison, and the program's game page test, which holds the clip on the software backend
+(`EmuSen_Qt.md` §7.8).

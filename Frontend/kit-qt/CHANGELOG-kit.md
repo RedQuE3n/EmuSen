@@ -36,6 +36,20 @@ Additions only; no type, property, signal or invokable was removed or changed.
 - **`SliderRow`** (qmldir): a row with a slider, stepped by the pad and dragged by the pointer. §7.42.
 - `MenuRow`'s ◂ ▸ and ▸ marks are no longer painted past a clip on the software backend; its surface is unchanged. §7.40.
 
+## 1.0, stage 5 piece G: the clip, and a game's page's parts of the page frame (2026-11-09)
+
+Additions, and one contract change to `PageFrame`'s action model.
+
+- **`VideoTile`** (qmldir): a clip over its still, after the poster's delay, silent unless unmuted; Qt Multimedia over
+  the system's FFmpeg. `EmuSen_Kit.md` §7.50.
+- **`VideoClip`** (qmldir): VideoTile's player, made only while a clip is to play. §7.50.
+- **`VideoFrames`** (registry): a clip's frames drawn on the software backend, where `VideoOutput` draws nothing. §7.50.
+- **`PageLayout.pictureWidth`**, **`pictureHeight`**, **`pictureGap`** (registry): the Overview's picture. §7.50.
+- `PageFrame`: `clipSource`, `clipPlaying`, `clipMuted`, `videoTile`; `showsText`, `contentWords`, `contentPicture`; the
+  signals `actionStepped` and `rowStepped`. `ActionButton`: `stepped`. §7.50.
+- Changed: `PageFrame`'s action model must give the roles `stepped`, `stepLeft` and `stepRight`. §7.50.
+- The module depends on `QtMultimedia`.
+
 ## 1.0, stage 5 piece D: a long value on a row, and the text sizes (2026-11-09)
 
 One property added; nothing removed or changed.

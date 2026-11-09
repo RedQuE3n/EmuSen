@@ -49,6 +49,16 @@ pub mod qobject {
         ToolSearch,
         SettingsConsole,
         SettingsChoices,
+        GamePage,
+        GamePageResume,
+        GamePageResumeSlots,
+        GamePageFavourite,
+        GamePageLoad,
+        GamePageView,
+        GamePageValue,
+        GamePageChange,
+        GamePageChoose,
+        GamePageNone,
     }
 
     extern "RustQt" {
@@ -147,6 +157,16 @@ impl qobject::HelpModel {
             HelpScreen::ToolSearch => Screen::ToolSearch,
             HelpScreen::SettingsConsole => Screen::SettingsConsole,
             HelpScreen::SettingsChoices => Screen::SettingsChoices,
+            HelpScreen::GamePage => Screen::GamePage,
+            HelpScreen::GamePageResume => Screen::GamePageResume,
+            HelpScreen::GamePageResumeSlots => Screen::GamePageResumeSlots,
+            HelpScreen::GamePageFavourite => Screen::GamePageFavourite,
+            HelpScreen::GamePageLoad => Screen::GamePageLoad,
+            HelpScreen::GamePageView => Screen::GamePageView,
+            HelpScreen::GamePageValue => Screen::GamePageValue,
+            HelpScreen::GamePageChange => Screen::GamePageChange,
+            HelpScreen::GamePageChoose => Screen::GamePageChoose,
+            HelpScreen::GamePageNone => Screen::GamePageNone,
             _ => Screen::Home,
         }
     }
@@ -201,6 +221,16 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::ToolSearch => HelpScreen::ToolSearch,
         Screen::SettingsConsole => HelpScreen::SettingsConsole,
         Screen::SettingsChoices => HelpScreen::SettingsChoices,
+        Screen::GamePage => HelpScreen::GamePage,
+        Screen::GamePageResume => HelpScreen::GamePageResume,
+        Screen::GamePageResumeSlots => HelpScreen::GamePageResumeSlots,
+        Screen::GamePageFavourite => HelpScreen::GamePageFavourite,
+        Screen::GamePageLoad => HelpScreen::GamePageLoad,
+        Screen::GamePageView => HelpScreen::GamePageView,
+        Screen::GamePageValue => HelpScreen::GamePageValue,
+        Screen::GamePageChange => HelpScreen::GamePageChange,
+        Screen::GamePageChoose => HelpScreen::GamePageChoose,
+        Screen::GamePageNone => HelpScreen::GamePageNone,
     };
     shown.repr
 }

@@ -88,9 +88,9 @@ Window {
             facts: "Super Nintendo · 1994 · Lantern Works · Never played"
             coverName: "Cobalt Harbor, cover"
             actionModel: ListModel {
-                ListElement { label: "Play"; value: ""; button: 4; filled: true }
-                ListElement { label: "Resume"; value: "Auto · 12 min ago"; button: -1; filled: false }
-                ListElement { label: "Favourite"; value: ""; button: 7; filled: false }
+                ListElement { label: "Play"; value: ""; button: 4; filled: true; stepped: false; stepLeft: false; stepRight: false }
+                ListElement { label: "Resume"; value: "Auto · 12 min ago"; button: -1; filled: false; stepped: true; stepLeft: false; stepRight: false }
+                ListElement { label: "Favourite"; value: ""; button: 7; filled: false; stepped: false; stepLeft: false; stepRight: false }
             }
             tileModel: ListModel {
                 ListElement { label: "Slot 1"; line: "2 h ago"; picture: "" }

@@ -337,7 +337,7 @@ and about a second when nothing changed.
 
 One job: turn the client crates' answers into Qt's model and property types for QML, and turn QML's actions into client
 calls. One `#[cxx_qt::bridge]` QObject per screen or shared role, as `EmuSen_Interface.md` names them: `LibraryModel`
-(consoles with games, the places, shelves, a console's games, collections, search), `GameModel` (one game's page),
+(consoles with games, the places, shelves, a console's games, collections, search), `GamePageModel` (one game's page; `GameModel` is the grid's list, decided 2026-11-09, §7.8),
 `SessionModel` (the running game: paused, rewind, states, discs, speed), `DeviceModel` (controllers, clock, battery,
 network, output), `CoresModel`, `SettingsModel` (the six sections, derived from the schema, §6.3), `ScraperModel`,
 `PackagesModel`, `CheatsModel`, `FirmwareModel`. Rows are `QAbstractListModel` subclasses (`#[base = QAbstractListModel]`,
@@ -773,6 +773,51 @@ window less height than asked for (its decoration), so the mapping now reads the
 swapchain: a render pass after the present (`WRITE_AFTER_PRESENT`) and a barrier after the acquire (`WRITE_AFTER_READ`).
 The same test without the grab gives none. The tests therefore require no finding up to the grab and after it, and around
 the grab allow only those two (`assert_qt_grab_only`), which name `vkQueuePresentKHR` and `vkAcquireNextImageKHR`.
+
+#### 1.8.9 The clip's decoder: Qt Multimedia over the system's FFmpeg **[M 2026-11-09]**
+
+A game's page plays its clip on the hero (decided 2026-11-09 by the tester, for stage 5; `EmuSen_Interface.md` §5.9),
+and the ES-DE engine's `video` element (§4.2, §11 Q5) is the same need: a short gameplay clip, decoded and drawn in a
+rectangle, looped, usually silent. One decoder serves both if it lives in the kit, which both already import.
+
+**What the clips are.** ScreenScraper's `video-normalized` files, the ones EmuSen's scraper fetches and ES-DE's themes
+ask for (`EmuSen_BigPicture.md` §5.5): MP4 with H.264 video and AAC sound, small and of low resolution. The media
+store's lookup also takes `.mkv`, `.avi`, `.wmv`, `.mov` and `.webm` for a video (`Platform/scrape/src/kinds.rs`), the
+names a player's own ES-DE media folder may hold.
+
+**The candidates.**
+
+| | Licence | Codecs here | Software backend | New to the tree |
+|---|---|---|---|---|
+| (a) Qt Multimedia from QML alone: `MediaPlayer` into `VideoOutput` | Qt Multimedia LGPL-3.0 or GPL-3.0; FFmpeg as the system builds it | everything the system's FFmpeg decodes | plays, **draws nothing** | a runtime QML import |
+| (b) as (a), with a sink of the kit's own drawing the frames where `VideoOutput` cannot | the same | the same | drawn | the Multimedia module linked by the kit, and its headers to build |
+| (c) a Rust decoder (`ffmpeg-next` over libav*) into a texture | FFmpeg's; the crate's MIT/Apache | the same | drawn | a crate, FFmpeg's headers, the most code |
+| (d) LibVLC | LGPL-2.1+ | VLC's own | through a callback, as (c) | bindings, a second media stack |
+
+Measured on the desktop on 2026-11-09: `qt6-qtmultimedia` 6.11.2 (Fedora; `LGPL-3.0-only OR GPL-3.0-only WITH
+Qt-GPL-exception-1.0`) is installed; its FFmpeg plugin (`plugins/multimedia/libffmpegmediaplugin.so`) links the system's
+`libavformat.so.62`, `libavcodec.so.62`, `libswscale.so.9` and `libswresample.so.6`, FFmpeg 8.1.3, here RPM Fusion's
+build, which Qt reports as "FFmpeg version 8.1.3 GPL version 3 or later" (configured `--enable-gpl --enable-version3
+--enable-libx264 --enable-libopenh264`). Fedora's own build, `ffmpeg-free`, is LGPL and decodes H.264 through Cisco's
+OpenH264, which is also installed. A clip of 64 × 48 frames written by a test as a YUV4MPEG2 stream played through
+`MediaPlayer` on both scene-graph backends (state Playing, the position advancing), but under the software adaptation
+(`QT_QUICK_BACKEND=software`, and the `offscreen` platform, which is always software) `VideoOutput` drew nothing: a grab
+of the window was the colour behind it, on both `grabToImage` and `QQuickWindow::grabWindow`. The software backend is the
+test tier (§8.1) and the fallback where there is no Vulkan (§1.8), so (a) alone fails "drawn on both backends".
+
+**Decided 2026-11-09 by the tester: (b).** `EmuSen.Kit.VideoTile` (`EmuSen_Kit.md` §7.50): `MediaPlayer` decodes;
+on an RHI backend `VideoOutput` draws, Qt's own path, with no copy through the CPU; on the software backend the kit's
+`VideoFrames` (`kit-qt/cpp/video_frames.*`, the Multimedia module's `QVideoSink`, each frame converted by
+`QVideoFrame::toImage` and drawn as an image node) draws the same frames. The decoder is Qt's and the system's; nothing
+was downloaded, and no decoder of our own was written. Building the kit now needs `qt6-qtmultimedia-devel` (installed by
+the tester on 2026-11-09). The ES-DE engine's `video` element takes the same `VideoTile` when it is mapped (§4.3), so
+one decoder serves the page and the themes, and a theme never imports QtMultimedia (§3.5's sandbox refuses it).
+
+**What is not settled, and where it goes.** The licence of what is bundled (§9.2): a bundle carrying this desktop's
+FFmpeg carries a GPL build and owes its source; an LGPL build would be `ffmpeg-free`; the choice is stage 7's. The
+handheld: whether SteamOS's image carries Qt Multimedia and which FFmpeg it links is **not measured** (owed with the
+handheld's next measurement, §9.3); the AppImage bundles Qt's Multimedia plugin either way. The cost of decoding there is
+`EmuSen_BigPicture.md`'s P5 (under 5% of one core for a `video-normalized` clip), still to be measured on the Legion Go S.
 
 ### 1.9 Homes for the front-end logic still in C#
 
@@ -4150,6 +4195,146 @@ for Search, Options, Firmware, Roll Back and the harness, each reverted, each ca
 not turned by a step (the options test); a found file said as none found (the firmware test); and Roll Back sent as
 `core-update` (the roll back test).
 
+### 7.8 Stage 5, piece G: a game's page and its clip (2026-11-09)
+
+`EmuSen_Interface.md` §2.5, §4 screen 3, §5.9, §18.2; the oracle is Mistress's recordings `GamePage`, `GamePageStates`,
+`GamePageOptions`, `GamePageMedia` and `GamePageDetails` (1280 × 800 and 1920 × 1200); behaviour and words from
+Mistress's `Pages/GamePage`, `GamePageHost`, `Views/GamePageView` and `MainWindow.GamePage`.
+
+**Decided 2026-11-09:** the page's model is `GamePageModel`; `GameModel` stays the grid's list (§1.2 corrected).
+**Decided 2026-11-09 by the tester:** the page plays the game's clip in stage 5, not a still alone; the decoder is §1.8.9's.
+
+**The model** (`emusen-qt-models`, one job a file). `game_page.rs`, plain Rust: the `GamePageSource` a read and a change
+go through (the client crates, or a test's fake), one `Read` of the game, and `GamePage` over it: the facts line (console
+· year · developer · publisher, where it differs · time played · last played, Mistress's words), the actions (Play, Resume
+with the state it stands on, Favourite with its heart), the five sections, each section's content (the Overview's words
+and picture; States as eight slots with the automatic state after the last slot in use, before the empty ones, the
+state Resume loads marked; Options as Engine, Controller profile, Cheats, Display crop and Package; Media as the
+scraper's pictures and clip; Details as Scrape This Game, Edit Details, Cover art, Open Folder and Hide from Library),
+what each press asks (`Outcome`: a change saved, the game started from a state or not, a door, a question asked
+first), and the help bar by what is focused. Two changes ask first, in the question form with No focused and B
+answering No, as Mistress's page does: X on a state (`Delete Slot 2?`, naming when it was saved; Yes deletes the
+state, its picture by Galaxia's `SAVE_PICTURE` and the runtime's record of it, `emusen_crystal_state_forget`), and
+Details ▸ Hide from Library (Yes saves the game's `hidden` edit in games.db and the page closes). The slots' count is the Pause Card's (`pause::SLOTS`), one owner. `game_page_source.rs`, the source over
+the client crates, needs no session: the title and facts from the scraper's metadata (edits first), the record from
+games.db, the pictures and the clip from the media store and the ES-DE folder, the states by **Galaxia's save paths**
+(`EMUSEN_GALAXIA_SAVE_STATE` per slot, `SAVE_RESUME_STATE`, the package's kinds for a packaged game, each state's picture
+by `SAVE_PICTURE`; when it was saved is its file's time), which was enough: no frontend-API minor was asked for. The
+engines are the console's from the systems table, named from the runtime's cores and stored as the game's
+`altemulator` edit (Mistress's `SetEngine`); the profiles are Endymion's, by the game's file name; the cheats are the
+game's saved list (`emusen_galaxia_cheat_game_list` and the cheat file model); the crop is offered where Serenity's
+catalogue gives the console a television's screen, and reads `This game's` where games.db holds a crop. Settings ▸
+Display ▸ Play videos off gives no clip. `game_page_model.rs`, the bridge: `GamePageModel`, the content as a list model
+with the roles the kit's page frame reads (`label`, `value`, `line`, `picture`, `steps`, `opens`, `marked`, `key`) and
+the rest as properties, read off the GUI thread over clients it opens once and keeps; and `PageActionModel`, the
+actions as the frame's action list, from `GamePageModel.actions` as plain data, as `GameModel` takes its games. The help
+bar has ten new screens, `GamePage` to `GamePageNone` (`help.rs`, appended). `LibraryModel.gameFile(path)` gives the
+page the scan's record of the game (its system and package).
+
+**The screen** (`qt-app/qml/GamePage.qml`): the kit's `PageFrame` over the two models; Y is the page's own (the heart,
+`declared`), every other declared action the screens'. **Routes** (`screens.rs`): X on Home, the grid or the search's
+covers (`gamePage`), the Home card's Selected game, and a theme's `Actions.openPage(key)` (carried as the game taken in
+hand, then the page) open the page on the game in hand, which the theme's focus names (`Actions.focus`; the reference
+theme's Home now names its Continue and shelf games too); B returns to the screen it was opened over, or under a card to
+the library's screen; Start goes to the library's screen; a game started goes to the game.
+
+**The clip** (§1.8.9; `EmuSen_Kit.md` §7.50): the hero is a `VideoTile` whose still is the hero's picture; while the page
+holds the focus the clip plays after the poster's delay and fades in, looped; when the page loses the focus (B, Start,
+a card over it) its player goes and the still stands alone. The player is made only while a clip is to play, so the
+program starts Qt Multimedia only for a page with a clip. It is silent: §5.9 gives the hero no sound, and no setting gives it
+one. Reduced motion and Play videos off keep the still.
+
+**Compared with Mistress** (measured on 2026-11-09). The Qt recordings were read by WiseMan's `SpecDocument.Parse`
+through `Another_frontend_s_recordings_match_these_within_the_tolerances` (the WiseMan build of the same day, no
+build). As in §7.7, `InterfaceSpec.Compare` matches by name, and the kit's parts carry the kit's names (`pageTitle`,
+`pageFacts`, `pageCover`, `pageHero`, `pageSections`, `pageActions`, `helpBar`) where Avalonia's were `PageTitle`,
+`PageFacts`, `PageCover`, `PagePoster`, `PageSections`, `PageActions` and `PageHelpBar`, and its actions, rows and tiles
+none, so it lists them missing and extra. The parts were then compared under that map of names (actions, rows and tiles
+by their words), two design units the tolerance, at both sizes: the strip, the actions' row, the cover's place and
+height, the Overview's words and picture, every row of Details, the States' and Media's tiles' pictures stand at
+Mistress's places with her words. **Differences that remain, each for the tester:**
+- The clip: the recordings hold a still, as Mistress's page never played one. Here the states were held with Play videos
+  off, so they hold the still too; the clip is held by the test below.
+- The cover is 240 wide where Mistress's is 201: the systems table gives the Super Nintendo a landscape box (`cover_aspect`
+  0.73, height over width), so the kit's frame draws it at its widest, 240; Mistress's fixture found no descriptor for
+  its game and fell back to 3:4. The console's name reads `Super Nintendo` (the table's display name) where hers reads
+  `SNES`.
+- The title and the facts are boxes across the column (880 wide, 60 and 30 high) where hers fit their words (368 × 53,
+  509 × 27); the words start at her places. The kit's, `EmuSen_Kit.md` §7.44, as are the actions' widths (Play 122 where
+  hers is 115, Resume 349 where hers is 357, Favourite 220 at 831 where hers is 205 at 832) and the help bar at 742 (her
+  band at 702), §7.40 and §7.45's open decision.
+- The Overview's words are a box of the content's height (238) where hers fits its lines (106).
+- A tile's box is the picture, its two lines and the ring's room (457 to 709, 252 high) where hers is the picture
+  (150); the picture stands at hers, 64,464, 200 × 150, and its lines at 626 and 654 as hers. The Auto tile's second line
+  takes 52 where hers takes 48 (the platform's face). WiseMan's rules read the fifth slot, crossing the list's right
+  edge, as past its clip: the kit fades that edge, which its rules do not read.
+- Favourite is reached from Resume by Right only after Resume has stepped through its states (LunaP's `MoveInActions`,
+  as Mistress's page does), and the walk presses each direction once, so the gate's pad reach and WiseMan's both name it
+  unreached. The test holds the condition: Right from Play is Resume, Right steps its states, then reaches Favourite, and
+  Left comes back.
+- Options holds no Cheats row (the test's game has no saved cheats; the row and its count are held by the models' test)
+  and no Television standard row (not built: the standard's store is the C# `GameRecords`, with no Rust reader yet), so
+  Display crop stands second where hers stands third. Package reads `Linked` or `Not a package` only; its layers are
+  piece I's page.
+- Media lists the clip as a tile (the test's game has one); Mistress's fixture had none, so her Marquee stands third.
+  Media has no player's own screenshots: Mistress's `MediaLibrary.Screenshots` has no Rust reader yet.
+- Cover art reads `Its own` or `Generated`, without `· 8 to choose from`: the covers to choose from are piece I's page.
+- States has no Delete… (X) and loads no state at the game's start: A on a state, and Resume, start the game, and the
+  resume question of §18.3 offers the automatic state. Loading a chosen state at the start needs the session to start
+  from a state, which `SessionModel` does not yet; Delete… asks the question form, piece I's with the page's deeper pages.
+- The doors (Cheats, Display crop, Package, Scrape This Game, Edit Details, Cover art, Open Folder, Hide from Library,
+  and A on a picture) go nowhere yet: pieces I and J.
+
+**Held to** (measured on 2026-11-09). `qt-models/tests/game_page.rs` (6, no Qt): the facts line and the actions as
+Mistress's; Resume stepping its states and letting the focus move on at either end; the states slot by slot with Auto
+after the last in use and the resumed state marked; Options' rows, the engine stepped and wrapping, the doors, a single
+engine named and not stepped; the Overview, Media's tiles and Details' rows; the routes into the page from Home, the grid,
+the search's covers, the Home card and an ES-DE theme's view, and B back to each. `qt-app/tests/game_page.rs` (software
+backend): a scratch tree with two Super Nintendo games, one with Mistress's fixture's facts as games.db edits, four
+states saved by Galaxia's paths, pictures drawn by the harness in the ES-DE media folder and a clip; X on the grid opens
+the page on its Overview with the facts and the description; Right reaches Resume, steps it, and reaches Favourite; the
+five states held at the gate's five sizes (fit, pad reach, pointer reach, no chrome, names, palette, contrast) and
+recorded; Y turns the heart and saves it; B returns to the grid. Then with Play videos on, **the clip**: the test writes a
+clip itself, 64 × 48 frames of one colour (magenta) for two seconds as a YUV4MPEG2 stream, the simplest a test can write
+by hand, under the `.mkv` name the media store looks for (FFmpeg finds the format by its content), and never a game's
+media; the hero shows the still (the screenshot's green) first, then the player plays, the kit's sink draws frames, and
+the hero shows the clip's magenta; B, and the player goes; the other game, with no clip, keeps its still and makes no
+player; X on Slot 1 asks, No keeps it and Delete deletes it; the other game's Hide from Library asks, and Hide saves the
+edit and returns to the grid; nothing logged but the two messages Qt Multimedia gives on the software tier, now in the
+harness's list of Qt's own (`QT_INTERNAL`). `qt-app/tests/clip_gpu.rs` holds **the clip on Vulkan** (measured
+2026-11-09 on the RX 6800, in the test's own compositor, the window adopting Serenity's device): the still first, then
+`VideoOutput` draws the clip's magenta and the kit's sink draws nothing, and B removes the player. Its first run crashed
+in `GamePicture::onSwapped` on the render thread after its last assertion: the test dropped the device before the
+window, whose `frameSwapped` then reached the closed device's feed (its backtrace under gdb); it now hides the window and
+drops the harness before the device, as `acceptance.rs` ends. `acceptance.rs` on the merged tree ran its states about
+1.3 times slower than an earlier run of the same day on the reference theme alone (about 600 s, the machine under other builds' load)
+and ran past its 600 s watch, a hang detector; the watch is now 1200 s (decided 2026-11-09), and splitting acceptance by
+screen group is a separate job. With the watch at 1200 s it ran to its end and found two defects, both fixed
+(decided 2026-11-09): **a hidden card's words rewrote themselves.** Under Home with a game suspended, the Home card,
+hidden, rewrote its pane's caption ("Paused N minutes ago") as the paused minute turned over, so the window swapped a
+frame with nothing visible changed (`assert_still("Home over the suspended game")`): wasted work on the handheld, and
+against the idle gate (§9.3.2). `CardModel` now reads its facts only while it is shown, and reads them afresh as it
+opens; the cards test holds both, a hidden card's new facts swapping no frame and the card shown reading them current.
+**A state depended on the wall clock.** `Clock` gained `now`, the time it reads (0, the default, the wall clock), and
+`acceptance.rs` holds it at one instant (`common::HELD_NOW`), as esde-qt's tests hold `EsdeModel.now`. The moment a game
+pauses stays the wall clock's, since the session and a theme's `Words` read it too, so a held clock holds only how it
+is said: holding it there as well put the pause days before the wall clock's now, and the reference theme's Continue,
+which `Words.pausedFacts` words against the wall clock, said `Paused 3 days ago`. A theme's `Words` still read the wall
+clock; holding them needs a `now` of their own on theme-qt's `Words`, an addition to the theme API (Rule T), proposed
+to the tester and not built. Seeded faults, each reverted:
+- Resume stepping past either end, so the focus never moves on: the models' Resume test;
+- the automatic state after the first slot rather than the last in use: the models' States test;
+- B on the page going to the library's screen rather than where it was opened: the models' routes test;
+- the clip left playing when `playing` turns false: the program's test, the player still playing after B;
+- the kit's sink drawing nothing on the software backend: the program's test, the hero still the screenshot's green;
+- the actions' list left with no current item when its model fills: the program's test, Right from Play reaching
+  nothing.
+- Delete made without asking: the models' States test;
+- the clip's player kept while the page has not the focus: the program's test, the player still made after B;
+- a hidden card reading its new facts: the cards test, 2 frames swapped under Home;
+- the clock ignoring its held instant: the cards test, the clock reading the wall clock's time;
+- crystal's forget leaving the earlier build's sidecar: crystal's `state_forget` test.
+
 ---
 
 ## 8. Testing
@@ -4263,6 +4448,11 @@ On the distribution's Qt: Fedora 44's 6.11.2 (`qt6-qtbase-devel`, `qt6-qtdeclara
   every request still gated by the player's action. On SteamOS the Flatpak is what Discover installs and updates, which
   is the route a player without a terminal has; the AppImage is the route for a player who wants one folder. Building the
   Flatpak is stage 7 and needs its own go; nothing of its SDK is installed now.
+- **FFmpeg in a bundle** (noted 2026-11-09, §1.8.9). Qt Multimedia decodes through the system's FFmpeg. A bundle that
+  carries the desktop's FFmpeg carries RPM Fusion's GPL-3.0-or-later build (with x264), which a GPL-3 program may ship
+  with its source offered; an LGPL build would be Fedora's `ffmpeg-free`, which decodes H.264 through OpenH264. Which one
+  the AppImage carries, and whether the Flatpak takes the runtime's codecs extension, is **left open for stage 7**. Qt
+  Multimedia on the handheld (SteamOS's image) is **not measured** and is owed.
 - **Not SteamOS's own Qt.** Measured 2026-11-07 on the handheld (SteamOS 3.9.5, build 20261023.100): `qt6-base`
   6.11.1-1 and `qt6-declarative` 6.11.1-3 in `/usr/lib`, with the `wayland` and `xcb` platform plugins and the Basic,
   Fusion, Material, Universal, Imagine and FluentWinUI3 styles; glibc 2.43; ICU 78.3 (the desktop's Qt links ICU 77).
@@ -4909,6 +5099,8 @@ end. The questions are kept as asked, with their recommendations, as the record 
    Rust dependency on the runtime crates? Recommended: the headers, for the audit and the interchangeable front ends.
 5. **[decision] Video in themes.** Qt Multimedia with an LGPL FFmpeg bundled, or a Rust decoder into a texture?
    Recommended: Qt Multimedia, behind the kit's `VideoTile` so a theme never imports it.
+   *Built 2026-11-09 for the game's page, over the system's FFmpeg, with a sink of the kit's own on the software backend
+   (§1.8.9); the licence of the FFmpeg bundled is stage 7's (§9.2).*
 6. **[decision] Lottie animations in ES-DE themes.** Qt's Lottie module is GPL-only in the open edition; a Rust Lottie
    renderer (rlottie bindings or a pure-Rust crate) into a texture is the alternative. Recommended: defer; no watched
    theme uses one (`EmuSen_BigPicture.md` §3), and the corpus will say when it matters.

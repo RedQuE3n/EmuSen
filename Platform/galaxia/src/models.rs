@@ -184,6 +184,7 @@ model! {
         library_style: Text = text("Theme"),
         big_picture_theme: Text = None,
         esde_media_directory: Text = None,
+        emu_sen_theme: Text = None,
         chd_output_directory: Text = None,
         navigation_sounds: bool = true,
         max_play_time_tracking: i32 = 8,

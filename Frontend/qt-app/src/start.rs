@@ -1,7 +1,8 @@
 //! What the program reads before its window opens: the platform library's path and the player's settings that shape the
 //! start, as plain values handed to the window's root as its initial properties (EmuSen_Qt.md §1.2.1: no static carries them).
 
-use emusen_platform_client::galaxia::consts::DIR_MEDIA;
+use emusen_platform_client::galaxia::consts::{DIR_MEDIA, DIR_THEMES};
+use emusen_qt_models::themes;
 use emusen_platform_client::Platform;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -21,8 +22,11 @@ pub struct Start {
     pub game_mode: bool,
     /// Guide held with Up, Down or the right shoulder over a game (AppSettings.GuideChords, EmuSen_BigPicture.md §48.7).
     pub guide_chords: bool,
-    /// The EmuSen theme's folder: `--theme DIR`, else `EMUSEN_THEME`; empty for the reference (EmuSen_Qt.md §3.5).
+    /// The EmuSen theme's folder: `--theme DIR`, else `EMUSEN_THEME`, else the settings' id resolved through the themes store;
+    /// empty for the reference (EmuSen_Qt.md §3.5, §3.8).
     pub theme: String,
+    /// Why the reference is shown in place of the id the settings hold; empty when it is not.
+    pub theme_words: String,
     /// The folders a theme may show pictures from: the media store, the artwork and ES-DE media folders (EmuSen_Qt.md §3.5).
     pub cover_stores: Vec<String>,
 }
@@ -68,6 +72,13 @@ pub fn theme(args: &[String], env: Option<String>) -> String {
     named.or(env).unwrap_or_default()
 }
 
+/// The theme the settings choose, by its id, as the host's folder and the words when the reference stands in for it.
+pub fn chosen_theme(settings: &Value, store: Option<&Path>) -> (String, String) {
+    let id = themes::chosen_of(settings);
+    let resolved = themes::resolve(&id, store);
+    (resolved.host_folder(), resolved.words(&id))
+}
+
 /// The folders a theme's pictures may come from: the media store, then the settings' artwork and ES-DE media folders where set.
 pub fn cover_stores_from(media: Option<&Path>, settings: &Value) -> Vec<String> {
     let set = |key: &str| settings.get(key).and_then(Value::as_str).filter(|v| !v.is_empty()).map(str::to_owned);
@@ -80,9 +91,12 @@ pub fn read(library: &Path) -> Start {
     let settings = platform.as_ref().and_then(|p| emusen_qt_models::clients::app_settings(p).ok()).unwrap_or(Value::Null);
     let media = platform.as_ref().and_then(|p| p.directory(DIR_MEDIA).ok().flatten());
     let args: Vec<String> = std::env::args().collect();
+    let store = platform.as_ref().and_then(|p| p.directory(DIR_THEMES).ok().flatten());
+    let named = theme(&args, std::env::var("EMUSEN_THEME").ok());
+    let (theme, theme_words) = if named.is_empty() { chosen_theme(&settings, store.as_deref()) } else { (named, String::new()) };
     let game_mode = game_mode_from(std::env::var("XDG_CURRENT_DESKTOP").ok().as_deref(), std::env::var("SteamDeck").ok().as_deref());
     Start { platform_library: library.to_string_lossy().into_owned(), splash: splash_from(&settings), reduced_motion: reduced_motion_from(&settings),
         game_mode, guide_chords: guide_chords_from(&settings, game_mode),
-        theme: theme(&args, std::env::var("EMUSEN_THEME").ok()), cover_stores: cover_stores_from(media.as_deref(), &settings),
+        theme, theme_words, cover_stores: cover_stores_from(media.as_deref(), &settings),
     }
 }

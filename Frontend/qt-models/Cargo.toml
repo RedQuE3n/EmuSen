@@ -26,6 +26,11 @@ emusen-kit-core.workspace = true
 emusen-qt-endymion = { path = "../qt-endymion" }
 # The game picture's feed as GamePicture declares it (EmuSen_Qt.md §1.8), the one type taken from the kit.
 emusen-kit-qt.workspace = true
+# The Themes tab (EmuSen_Qt.md §3.8): theme.json read through its schema's one owner, a package checked by theme-check, an ES-DE
+# theme's capabilities read and measured by the ES-DE engine's check; each Qt-free, outside the workspace.
+emusen-theme-manifest = { path = "../theme-check/manifest" }
+emusen-theme-check = { path = "../theme-check" }
+emusen-esde = { path = "../esde" }
 
 [build-dependencies]
 cxx-qt-build.workspace = true

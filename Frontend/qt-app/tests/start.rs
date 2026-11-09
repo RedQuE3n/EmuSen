@@ -1,6 +1,6 @@
 //! What the program reads before its window opens (EmuSen_Qt.md §7): where the platform library is, and Moonrise on or off.
 
-use emusen_qt::start::{cover_stores_from, game_mode_from, guide_chords_from, platform_library, reduced_motion_from, splash_from, theme, LIBRARY_FILE};
+use emusen_qt::start::{chosen_theme, cover_stores_from, game_mode_from, guide_chords_from, platform_library, reduced_motion_from, splash_from, theme, LIBRARY_FILE};
 use serde_json::json;
 use std::path::Path;
 
@@ -61,4 +61,18 @@ fn a_theme_s_pictures_come_from_the_media_store_and_the_artwork_folders_set() {
     let settings = json!({ "ArtworkDirectory": "/art", "EsdeMediaDirectory": "" });
     assert_eq!(cover_stores_from(Some(Path::new("/media")), &settings), ["/media", "/art"]);
     assert!(cover_stores_from(None, &serde_json::Value::Null).is_empty());
+}
+
+#[test]
+fn the_settings_theme_id_resolves_through_the_store_and_a_missing_one_falls_back_with_words() {
+    let store = std::env::temp_dir().join(format!("emusen-start-themes-{}", std::process::id()));
+    std::fs::create_dir_all(store.join("dawn")).unwrap();
+    std::fs::write(store.join("dawn/theme.json"), "{}").unwrap();
+    assert_eq!(chosen_theme(&serde_json::Value::Null, Some(&store)), (String::new(), String::new()), "none stored: the reference");
+    assert_eq!(chosen_theme(&json!({ "EmuSenTheme": "emusen" }), Some(&store)), (String::new(), String::new()));
+    assert_eq!(chosen_theme(&json!({ "EmuSenTheme": "dawn" }), Some(&store)).0, store.join("dawn").to_str().unwrap());
+    let (folder, words) = chosen_theme(&json!({ "EmuSenTheme": "gone" }), Some(&store));
+    assert_eq!(folder, "", "a missing folder: the reference");
+    assert!(words.contains("“gone”") && words.contains("EmuSen's own theme is shown"), "{words}");
+    std::fs::remove_dir_all(store).unwrap();
 }

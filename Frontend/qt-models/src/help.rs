@@ -36,6 +36,10 @@ pub enum Screen {
     QuestionBack,
     /// The Pause Card's Change Disc (EmuSen_Interface.md §20.2): A puts the disc in, Start is not offered.
     PauseDisc,
+    /// The Themes tab on a theme Use is offered for (EmuSen_Qt.md §3.8).
+    Themes,
+    /// The Themes tab on a theme in use, not checked clean, or of a kind not chosen here: Check alone.
+    ThemesChecked,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -129,8 +133,24 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Back, "Back", None),
             (UiButton::Screensaver, "Screenshot", Some(crate::pause::SCREENSHOT)),
         ],
+        Screen::Themes => &[
+            (UiButton::Accept, "Use", None),
+            (UiButton::Screensaver, "Check", Some(CHECK)),
+            (UiButton::PageUp, "Kind", None),
+            (UiButton::Back, "Back", None),
+            (UiButton::Menu, "Home", Some(HOME)),
+        ],
+        Screen::ThemesChecked => &[
+            (UiButton::Screensaver, "Check", Some(CHECK)),
+            (UiButton::PageUp, "Kind", None),
+            (UiButton::Back, "Back", None),
+            (UiButton::Menu, "Home", Some(HOME)),
+        ],
     }
 }
+
+/// The Themes tab's check of the focused theme.
+pub const CHECK: &str = "check";
 
 /// Start's action away from a game and a card: Home (EmuSen_BigPicture.md §51.2, §51.3).
 pub const HOME: &str = "home";

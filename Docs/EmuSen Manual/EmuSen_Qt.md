@@ -1009,7 +1009,7 @@ where the theme's slot is `themed`; a role the theme omits, and every role once 
 theme's splash slot is made only while the splash is shown and is drawn in a layer over Moonrise, faded with it: Moonrise keeps the
 splash's clock, the skip and the fade (`EmuSen_Interface.md` §22), so a theme's splash cannot hold the start or take a press. Until
 `EmuSen.Theme`'s `Screen` gives a splash its `length`, Moonrise's length is the splash's, and Moonrise draws unseen under a theme's
-splash. The theme is chosen by `--theme DIR` or `EMUSEN_THEME`, empty for the reference; the cover stores are the media store and the
+splash. The theme is chosen by `--theme DIR` or `EMUSEN_THEME`, else by the settings' id (§3.8), empty for the reference; the cover stores are the media store and the
 settings' `ArtworkDirectory` and `EsdeMediaDirectory`. With no theme chosen the program is unchanged.
 
 **Proof.** `theme-host/tests/policy.rs` (5 tests, no Qt): the folder, the cover store and nothing else on disk; no network and no
@@ -1050,7 +1050,10 @@ theme (S); a themed Games screen opens no List card until `Actions.openListCard`
   `LibraryModel.select`). `Actions.openHomeCard` is declined: Power opens the Home card, as before.
 
 **Two hosts.** `ThemeHost.qml` is one theme: its host, its slots, its feed and the program's models it is fed from. The
-window holds two: the reference (`ReferenceTheme.folder`) and the chosen theme (`--theme`, `EMUSEN_THEME`). The
+window holds two: the reference (`ReferenceTheme.folder`) and the chosen theme (`--theme`, `EMUSEN_THEME`, else the
+settings' `EmuSenTheme` resolved as §3.8 says). The chosen theme's host is a `Loader`'s item (`chosenTheme`), made only
+while a theme other than the reference is chosen and destroyed, engine and all, when the reference is chosen again
+(§3.8, §9.3.7). The
 reference's slot for a role is made only where the chosen theme does not draw it (`homeWanted` and the others), so a
 role the chosen theme omits, and every role once it fails, is the reference's, as §3.5.1 had it with the old screens. A
 slot under a card (Home under the Home card, the grid under the List card) is disabled and declares `backdrop`, as the
@@ -1156,6 +1159,76 @@ reading of the program's lines, the note, and its refusal without the program ar
 **Not yet.** The reference package (R) has not been through it; a theme's token overrides are not applied to the theme's engine by
 the host yet, so the loaded step judges the kit's own colours; the splash's still frame is judged as every screen is, under reduced
 motion, since the host gives a splash no `still` of its own yet.
+
+### 3.8 The Themes tab as built **[M 2026-11-08]**
+
+**What it is.** One screen, `Themes.qml` (`EmuSen.App`) on the kit's `Frame` in its big-screen form: the navigation is the
+two kinds, "EmuSen" and "ES-DE", which the shoulders step as the frame's sections; the content is the themes of the kind
+listed in a `MenuPanel`, each row its name and its state ("In use", "Checking…", "Checked", "N findings"); the detail,
+beside, is the focused theme's first preview, its name, a line (author, `EmuSen.Theme` version, variants; for ES-DE, its
+variants) and its check's words; the actions are the help bar's: **A Use**, offered only on an EmuSen package whose last
+check was clean and that is not in use (the bar then reads `ThemesChecked`, without Use), **X Check**, LB RB the kind,
+B back to Home, Start Home. Until Settings is built (stage 5) it is reached from Home's Settings place and from the Home
+card's Settings row, which until now closed the card and did nothing (decided 2026-11-08: both, since the card's first
+page is not reached from Home in the own look, only its Power page).
+
+**The model.** `emusen-qt-models` holds it in two files, one job each: `themes.rs`, plain data with no Qt (the rows, the
+id's resolution, the check), and `themes_model.rs`, `ThemesModel`, its bridge (the rows of the kind listed as roles `id`,
+`name`, `kind`, `author`, `api`, `variants`, `preview`, `current`, `checked`, `usable`, and `label`/`value` for the
+panel's rows; the focused row's detail as properties; `use(id)`, `check(id)`, `accept()`, `act(key)`; the signal
+`used(folder)`). It reads the settings and the store only while the tab is `open`, each time it opens, off the GUI
+thread; a check also runs off it and comes back through `qt_thread().queue`. A check is kept on its row while the
+program runs; it is not written anywhere.
+
+**Rows.** The reference first, from its `theme.json` in the resources (`ReferenceTheme.manifest`, read through Qt as the
+host reads any package) and checked by construction, since the build's own tests hold it to `theme-check`; then every
+folder directly under Galaxia's themes store (`DIR_THEMES`, `home/Themes`, already in Galaxia's table, so Galaxia gained
+no store), in name order: a folder with `theme.json` is an EmuSen package, read through `emusen-theme-manifest`; one with
+`capabilities.xml` (in it or its first subfolder that has one, as `esde-check` finds a theme's root) or `theme.xml` is an
+ES-DE theme, its name and selectable variants from the ES-DE engine's `capabilities::read`. Hidden folders, `.part` and
+`.old` folders (the store's unfinished downloads) and a folder named `emusen` are left out.
+
+**The id, and where it is stored.** Decided 2026-11-08: the setting holds a theme's **id**, never a folder. The id is a
+folder's name directly under the store; `emusen` is the reference in the resources. `AppSettings.EmuSenTheme` was added
+to Galaxia's model (after `EsdeMediaDirectory`; the disk corpus's eight recordings of the model gained the member) and to
+Mistress's `AppSettings`, so a save from Mistress keeps it (`EmuSen_Config_Reference.md` §7.3). Use writes it through
+Galaxia's model (`clients::store_app_setting`, one key changed, every other key as read). `themes::resolve` is the one
+resolution, used by the tab and by the program's start (`start::chosen_theme`): an empty id or `emusen` is the reference;
+a name with a separator or a leading dot is refused; a folder that is not there, or is not a theme, is **missing**, and
+the reference is shown with the words "The theme “…” is not in the themes folder, so EmuSen's own theme is shown.", a
+notice raised once the splash has faded. `--theme` and `EMUSEN_THEME` still name a folder and win over the setting.
+
+**The check.** An EmuSen package runs `theme-check`'s library (`run_with`, both steps), named by the folder's name so its
+findings read `dawn/screens/Home.qml:3 literal …`; the loaded step's program is found as `theme-check` finds it
+(`EMUSEN_THEME_AUDIT`, `PATH`), else beside the running program; without it the check cannot be clean, and its words are
+the finding. An ES-DE theme runs `esde-check`'s measure over EmuSen's five systems: clean when it is themed for every one
+and says no error. **An ES-DE theme is listed and checked, but Use is not offered** for it: the program does not draw
+ES-DE themes through the tab yet (stage 4's hosting piece); a stored id naming one falls back to the reference with words.
+
+**Switching.** `used(folder)` sets the window's `theme`: an EmuSen package's folder, or empty for the reference. The
+chosen theme's host is a `Loader` whose item is made only while the theme is neither empty nor the reference's folder,
+so with the reference chosen the window holds the reference's host alone. Switching between two themes reloads the one
+host (its engine before is destroyed first, §3.5.1); choosing the reference destroys the host.
+
+**New references** (house rules): `emusen-qt-models` on `emusen-theme-manifest`, `emusen-theme-check` and `emusen-esde`,
+the three Qt-free crates whose library it calls; `emusen-qt`'s `ReferenceTheme` calls `emusen-theme-host`'s
+`sandbox_read`, a dependency it already had. No reflection, no mutable static.
+
+**Proof, measured on 2026-11-08.** `qt-models/tests/themes.rs` (6 tests, no Qt) over a scratch store holding a copy of
+theme-check's `clean` fixture, a small ES-DE theme, a folder that is no theme, a hidden package and one named `emusen`:
+the rows and their order; Use only after a clean check, never on findings, the theme in use or an ES-DE theme; the id
+resolved, refused (`../dawn`, `.hidden`) or missing with words; `theme-check` on `clean` and `literal` with a stand-in for
+`theme-audit`, and refused without one; the Screens steps. `qt-app/tests/themes_tab.rs` (offscreen): Home's Settings place
+opens the tab; at the five sizes the gate holds (fit, pad and pointer reach, contrast; recorded as `ThemesTab-*`); X
+checks, A uses, the settings file holds `dawn`, then `dusk`, the host switches with one engine live, `literal`'s findings
+offer no Use, the reference chosen leaves no host; the ES-DE kind lists its theme without Use; the kinds round-trip with
+the first row focused. `qt-app/tests/theme.rs` and `start.rs` updated for the host being made only when chosen. Seeded,
+each reverted: Use offered without a clean check (both tests); the id's check dropped (the resolve test); the host made
+always (`theme.rs`, `themes_tab.rs`); Use not storing the id (`themes_tab.rs`). A fifth, the model not refocusing its
+first row after a read, was not caught, so the forced re-notification it guarded was removed and the plain setter kept.
+
+**Not yet.** Downloading themes; ES-DE's variant and colour-scheme choices; Use on an ES-DE theme (stage 4); checks kept
+across runs.
 
 ---
 

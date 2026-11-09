@@ -4011,8 +4011,11 @@ with the state it stands on, Favourite with its heart), the five sections, each 
 and picture; States as eight slots with the automatic state after the last slot in use, before the empty ones, the
 state Resume loads marked; Options as Engine, Controller profile, Cheats, Display crop and Package; Media as the
 scraper's pictures and clip; Details as Scrape This Game, Edit Details, Cover art, Open Folder and Hide from Library),
-what each press asks (`Outcome`: a change saved, the game started from a state or not, a door), and the help bar by
-what is focused. The slots' count is the Pause Card's (`pause::SLOTS`), one owner. `game_page_source.rs`, the source over
+what each press asks (`Outcome`: a change saved, the game started from a state or not, a door, a question asked
+first), and the help bar by what is focused. Two changes ask first, in the question form with No focused and B
+answering No, as Mistress's page does: X on a state (`Delete Slot 2?`, naming when it was saved; Yes deletes the
+state, its picture by Galaxia's `SAVE_PICTURE` and the runtime's record of it, `emusen_crystal_state_forget`), and
+Details ▸ Hide from Library (Yes saves the game's `hidden` edit in games.db and the page closes). The slots' count is the Pause Card's (`pause::SLOTS`), one owner. `game_page_source.rs`, the source over
 the client crates, needs no session: the title and facts from the scraper's metadata (edits first), the record from
 games.db, the pictures and the clip from the media store and the ES-DE folder, the states by **Galaxia's save paths**
 (`EMUSEN_GALAXIA_SAVE_STATE` per slot, `SAVE_RESUME_STATE`, the package's kinds for a packaged game, each state's picture
@@ -4037,7 +4040,8 @@ the library's screen; Start goes to the library's screen; a game started goes to
 
 **The clip** (§1.8.9; `EmuSen_Kit.md` §7.50): the hero is a `VideoTile` whose still is the hero's picture; while the page
 holds the focus the clip plays after the poster's delay and fades in, looped; when the page loses the focus (B, Start,
-a card over it) it stops and the still stands alone. It is silent: §5.9 gives the hero no sound, and no setting gives it
+a card over it) its player goes and the still stands alone. The player is made only while a clip is to play, so the
+program starts Qt Multimedia only for a page with a clip. It is silent: §5.9 gives the hero no sound, and no setting gives it
 one. Reduced motion and Play videos off keep the still.
 
 **Compared with Mistress** (measured on 2026-11-09). The Qt recordings were read by WiseMan's `SpecDocument.Parse`
@@ -4094,9 +4098,25 @@ recorded; Y turns the heart and saves it; B returns to the grid. Then with Play 
 clip itself, 64 × 48 frames of one colour (magenta) for two seconds as a YUV4MPEG2 stream, the simplest a test can write
 by hand, under the `.mkv` name the media store looks for (FFmpeg finds the format by its content), and never a game's
 media; the hero shows the still (the screenshot's green) first, then the player plays, the kit's sink draws frames, and
-the hero shows the clip's magenta; B, and the player stops; the other game, with no clip, keeps its still and plays
-nothing; nothing logged but the two messages Qt Multimedia gives on the software tier, now in the harness's list of
-Qt's own (`QT_INTERNAL`). The clip on Vulkan is owed to `acceptance.rs` (a GPU run). Seeded faults, each reverted:
+the hero shows the clip's magenta; B, and the player goes; the other game, with no clip, keeps its still and makes no
+player; X on Slot 1 asks, No keeps it and Delete deletes it; the other game's Hide from Library asks, and Hide saves the
+edit and returns to the grid; nothing logged but the two messages Qt Multimedia gives on the software tier, now in the
+harness's list of Qt's own (`QT_INTERNAL`). `qt-app/tests/clip_gpu.rs` holds **the clip on Vulkan** (measured
+2026-11-09 on the RX 6800, in the test's own compositor, the window adopting Serenity's device): the still first, then
+`VideoOutput` draws the clip's magenta and the kit's sink draws nothing, and B removes the player. Its first run crashed
+in `GamePicture::onSwapped` on the render thread after its last assertion: the test dropped the device before the
+window, whose `frameSwapped` then reached the closed device's feed (its backtrace under gdb); it now hides the window and
+drops the harness before the device, as `acceptance.rs` ends. `acceptance.rs` on the merged tree ran its states about
+1.3 times slower than the fit builder's run of the same day (which took about 600 s itself, under other agents' load)
+and ran past its 600 s watch, a hang detector; the watch is now 1200 s (decided 2026-11-09), and splitting acceptance by
+screen group is a separate job. With the watch at 1200 s it ran to its end and found two defects, both fixed
+(decided 2026-11-09): **a hidden card's words rewrote themselves.** Under Home with a game suspended, the Home card,
+hidden, rewrote its pane's caption ("Paused N minutes ago") as the paused minute turned over, so the window swapped a
+frame with nothing visible changed (`assert_still("Home over the suspended game")`): wasted work on the handheld, and
+against the idle gate (§9.3.2). `CardModel` now reads its facts only while it is shown, and reads them afresh as it
+opens; the cards test holds both, a hidden card's new facts swapping no frame and the card shown reading them current.
+**A state depended on the wall clock.** `Clock` gained `now`, the time it reads (0, the default, the wall clock), and
+`acceptance.rs` holds it at one instant (`common::HELD_NOW`), as esde-qt's tests hold `EsdeModel.now`. Seeded faults, each reverted:
 - Resume stepping past either end, so the focus never moves on: the models' Resume test;
 - the automatic state after the first slot rather than the last in use: the models' States test;
 - B on the page going to the library's screen rather than where it was opened: the models' routes test;

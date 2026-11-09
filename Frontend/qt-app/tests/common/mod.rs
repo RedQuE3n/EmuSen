@@ -156,3 +156,8 @@ pub fn write_clip(path: &std::path::Path) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, bytes).unwrap();
 }
+
+/// One instant the program's clock is held at, in seconds since 1970 (Clock.now), for a test whose states must not
+/// depend on the minute they are read in.
+#[allow(dead_code)]
+pub const HELD_NOW: &str = "1793966400";

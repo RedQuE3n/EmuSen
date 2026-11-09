@@ -293,7 +293,8 @@ fn approved_test_core(world: &emusen_client_fixture::World, cores: &Path) {
 #[test]
 fn each_screen_matches_its_mockup_and_passes_the_gate() {
     let kwin = Compositor::start(3840, 2160);
-    kwin.watch(600);
+    // A hang detector, not a gate: the run's own length grew past 600 s under load (EmuSen_Qt.md §7.8).
+    kwin.watch(1200);
     std::env::set_var("QT_QUICK_BACKEND", "rhi");
     std::env::set_var("QSG_RHI_BACKEND", "vulkan");
     std::env::set_var("QSG_RENDER_LOOP", "threaded");
@@ -309,6 +310,9 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     let pad = sdl.attach("EmuSen Test Xbox Pad", 0x045e, 0x028e);
     let mut scene = harness.load_prepared(MAIN_URL, 1280, 800, |window| unsafe { adoption.adopt(window.cast()) }.expect("Qt adopts the device"));
     assert!(scene.set_property("program", "splash", "false"));
+    // The clock held at one instant, so no state depends on the minute it is read in: a paused game's "Paused N minutes
+    // ago" turning over under Home once failed assert_still (EmuSen_Qt.md §7.8).
+    assert!(scene.set_property("clock", "now", common::HELD_NOW));
     assert!(scene.set_property("program", "onlyPads", &pad.id.to_string()));
     assert!(scene.set_property("program", "feed", &host.feed.address().to_string()));
     assert!(scene.set_property("library", "cores", cores.to_str().unwrap()));

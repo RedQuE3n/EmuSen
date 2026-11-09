@@ -21,6 +21,9 @@ pub mod qobject {
         #[qproperty(QString, console)]
         #[qproperty(bool, game_paused, cxx_name = "gamePaused")]
         #[qproperty(QString, paused, READ, NOTIFY)]
+        /// The time the clock reads, in seconds since 1970; 0, the default, is the wall clock. A test holds it, as
+        /// esde-qt's tests hold EsdeModel's, so no state depends on the minute it is read in.
+        #[qproperty(i64, now)]
         type Clock = super::ClockRust;
     }
 
@@ -49,14 +52,16 @@ pub struct ClockRust {
     game_paused: bool,
     paused_at: i64,
     paused: QString,
+    now: i64,
 }
 
 impl cxx_qt::Initialize for qobject::Clock {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().on_controllers_changed(|clock| clock.say()).release();
         self.as_mut().on_console_changed(|clock| clock.say()).release();
+        self.as_mut().on_now_changed(|clock| clock.tick()).release();
         self.as_mut().on_game_paused_changed(|mut clock| {
-            clock.as_mut().rust_mut().paused_at = crate::words::now();
+            clock.as_mut().rust_mut().paused_at = clock.at();
             clock.say();
         })
         .release();
@@ -69,8 +74,18 @@ impl qobject::Clock {
         if self.game_paused { self.paused_at as f64 } else { 0.0 }
     }
 
+    /// Now, held or the wall clock's.
+    fn at(&self) -> i64 {
+        if self.now > 0 { self.now } else { crate::words::now() }
+    }
+
     pub fn tick(mut self: Pin<&mut Self>) {
-        let time = QTime::current_time().format(&QString::from("hh:mm"));
+        // A held time reads its hours and minutes in UTC; the wall clock's are the player's own.
+        let time = if self.now > 0 {
+            QString::from(format!("{:02}:{:02}", self.now.rem_euclid(86_400) / 3600, self.now.rem_euclid(3600) / 60).as_str())
+        } else {
+            QTime::current_time().format(&QString::from("hh:mm"))
+        };
         if self.time != time {
             self.as_mut().rust_mut().time = time;
             self.as_mut().time_changed();
@@ -85,7 +100,7 @@ impl qobject::Clock {
             self.as_mut().line_changed();
         }
         let paused =
-            if self.game_paused { crate::words::paused_facts(&self.console.to_string(), self.paused_at, crate::words::now()) } else { String::new() };
+            if self.game_paused { crate::words::paused_facts(&self.console.to_string(), self.paused_at, self.at()) } else { String::new() };
         let paused = QString::from(paused.as_str());
         if self.paused != paused {
             self.as_mut().rust_mut().paused = paused;

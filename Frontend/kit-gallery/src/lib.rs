@@ -12,3 +12,6 @@ extern crate emusen_qt_endymion;
 pub const GALLERY_URL: &str = "qrc:/qt/qml/EmuSen/Gallery/qml/Gallery.qml";
 
 pub mod grab;
+
+/// Where the gallery's screens live: the tool screen and the page frame (EmuSen_Kit.md §7.39, §7.40).
+pub const SCREENS_URL: &str = "qrc:/qt/qml/EmuSen/Gallery/qml/Screens.qml";

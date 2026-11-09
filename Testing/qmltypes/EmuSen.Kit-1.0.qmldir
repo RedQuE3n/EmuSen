@@ -27,3 +27,8 @@ RoundPicture 1.0 qml/RoundPicture.qml
 CoverTile 1.0 qml/CoverTile.qml
 OrbitSlot 1.0 qml/OrbitSlot.qml
 EdgeFade 1.0 qml/EdgeFade.qml
+SectionStrip 1.0 qml/SectionStrip.qml
+ToolScreen 1.0 qml/ToolScreen.qml
+PageFrame 1.0 qml/PageFrame.qml
+ToneText 1.0 qml/ToneText.qml
+ActionButton 1.0 qml/ActionButton.qml

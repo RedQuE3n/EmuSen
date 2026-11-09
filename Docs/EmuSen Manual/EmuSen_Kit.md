@@ -2145,6 +2145,156 @@ the software backend and on Vulkan (the RX 6800); the fixed one passes on both, 
 `fade.rs` still passes on both. Seeded faults, each reverted, each a fault in the test: `layer.enabled: root.fading` as
 before, and the `Binding` not delayed.
 
+### 7.39 The tool screen (stage 5, piece B; 2026-11-09)
+
+The tool screen is the big-screen form of `ManagerLayout` that `EmuSen_Interface.md` §15.2 specifies and §15.9 lists as
+the kit's to gain: a header row with the tool's facts, a section strip with the search box at its right, a columned list
+whose columns stay inside its width, the apply bar with its meter under the list, and the pane spanning the list and the
+bar. It takes everything it shows from models and knows no tool; Cores, Packages, Library, the Scraper and the Cheats
+database are each one source behind stage 5's `ToolModel` (pieces F, L and M).
+
+**Where its places come from.** `emusen_kit_core::tool` places the parts from the screen's size in design units and the
+big screen's spacing tokens (safe area, row height, help bar). Its measures are those of Mistress's recording
+`Cores-1280x800.spec`, which is the oracle for these screens (`EmuSen_Qt.md` §7, stage 5): the header 48 at the safe
+area's top; the strip 44 at 60 below it, the search 240 wide at its right; the list from 120 below the safe area's top,
+0.6 of the width (`AdaptiveLayout.ContentShare`), in as many whole rows of 54 as leave room for the bar of 110 (an inset
+of 18, a line of words, then the controls) above the content's foot; the pane 16 beside the list, from the list's top to
+the bar's foot. The content's foot is the safe area's foot less a help bar's height, 702 at 800 high, where both C#
+recordings end it. The frame's own band has stood flush on the foot, 742 to 800, since 2026-11-05 (§7.1 of
+`EmuSen_Qt.md`), so 40 units lie between the bar and the band; moving the foot to the band would add a ninth row and
+part from the recording, which is a question for the tester (§7.41). At 1280 × 800 the places are the recording's to the
+unit: header 64,40 1152 × 48, strip 64,100 912 × 44, search 976,100 240 × 44, list 64,160 691 × 432 (eight rows), bar
+64,592 691 × 110, pane 771,160 445 × 542. At 16:9 the design is 1,422.2 wide and the extra width goes to the list and the
+pane in their shares, as §15.2 says.
+
+**The pane spanning the list and the bar** is the layout's rule, not a screen's arrangement: the pane's top is the list's,
+its foot the bar's, and the bar stands on the list's foot with the list's width, so the apply bar belongs to the list.
+§15.9 item 2 is this.
+
+**FitsWidth** (`emusen_kit_core::table`, LunaP §204's `LunaTable.FitsWidth`). A column takes its width one of two ways: a
+content column the width of its widest words, rounded up to whole units; a fill column its least, then a share by weight
+of what the content columns and every fill's least leave. Where the room cannot give the fills their least, the content
+columns give up the difference in proportion to their widths; where even that cannot fit, the leasts are scaled into the
+room. The widths never sum past the room, which is the table less its lead (the mark column, 24), the gaps (24) and the
+trail (24), so the last column ends at or before the table's right less the trail and no table scrolls sideways. The
+Cores recording's three columns come out to the unit: Core (fill) 297 at 88, Console 144 at 409, Status 154 at 577 in a
+list of 691 from 64. A cell whose words are wider than its column is elided, which the fit audit counts as a fault, so a
+host gives a fill column a least that holds its longest name (§15.2 measured `Mupen64Plus-Next` at 190) and says the rest
+in the pane, as the C# Cores tool does.
+
+**On Qt.** `ToolLayout` puts the places on Qt as rectangles a screen binds to, recomputed when the size changes.
+`ColumnFit` reads a columns model (roles `key`, `fill`, `least`) and a rows model through `item_model::role_texts`, the one
+reader of a model's role the kit's layouts share, measures each content column's words in the cells' own font, and hands
+back each column's `xs` and `widths`; a screen calls `measure()` when its rows change (the screen's `Connections` on the
+model's reset, insert, remove and data signals and the list's count do so). The measuring is hand-written C++
+(`cpp/text_width.*`, `QFontMetricsF::horizontalAdvance`), since cxx-qt-lib binds `QFont` but no font metrics, and the
+alternative, measuring in QML, would need a loop over the model, which `qml-rules` forbids. `Tones` is the colour a tool's
+words take by what they say (`Text`, `Muted`, `Strong`, `Accent`, `Success`, `Attention`, `Error`), so a model hands a
+tone and never a colour; `ToneText` draws words in their tone's token.
+
+`ToolScreen.qml` is a `Frame` whose places are laid over the whole frame: its parts are declared in an item reparented to
+the frame's root, so they stand in screen coordinates as the recording places them while staying inside the frame's focus
+scope, where the frame's walk, `PadRouter` and help bar serve them. The frame's content area, offset by the safe area and
+its pane gap, could not hold the header at 40 and the list at 160 without a change to `Frame`, and the frame's surface is
+not this piece's to change. Its properties: `title`; `facts` (roles `words`, `tone`), right-aligned in Caption with a
+drawn dot between them, since a separator in QML would be words in a view; `rows` and `columns` (the columns' roles also
+`trailing` for words aligned right and `toneKey`, the row's role holding the cell's tone); `nameRole`, the role a reader
+hears for a row; `searchText` and `searchHint`; `paneTitle`, `paneCaption` and `sentences` (roles `words`, `tone`) in a
+scrolling pane with faded edges; `summary` and `summaryTone`, `progress` (below zero no job runs), `applyLabel`,
+`applyEnabled`, `meter` and `meterWords`; the signals `activated(index)` (A or a click on a row) and `applied()`. The
+strip is `SectionStrip`: the frame's own `sections` and `selectedSection`, so the shoulders step them, drawn as tabs in
+Caption upper case, the chosen one strong over the accent bar, only whole names shown, a click choosing one. The apply
+control is an `ActionButton` with the Start glyph (`Pad.Menu`), the shared action button of §7.40.
+
+**The walk.** The list holds the focus; Up from its first row reaches the search, Down from its last row and Right from
+any row reach the apply control, and Up or Left from it return to the list; Down from the search returns to the list. A
+row is a `Walkable`, so a click is A there. The list scrolls under faded edges where it holds more rows than it shows,
+and the pane where its sentences are longer than it.
+
+**Compared with the recording** (`Cores-1280x800.spec`, read 2026-11-09), the differences, each named: the face is the
+platform's sans serif until the screens' faces are bundled (§7.7), so words are a few units taller and the search box is
+46 high at its own implicit height, centred on the strip's 44; the mark column is a gap with no box, as §15.3 Q4 asks of
+an unmarked row, and a marked row says its mark in Accent in its status (the gallery's Snes9x); the apply control is
+159 wide where Mistress's is 170, its words' own width; the strip's tabs are 44 tall with the bar under the chosen one,
+as the recording draws them, but the gaps between them are the kit's TabButton's.
+
+### 7.40 The page frame (stage 5, piece B; 2026-11-09)
+
+The page frame is one screen for one thing, `EmuSen_Interface.md` §2.5 and §4 screen 3 (a game's page, its five sections
+and their deeper pages, §18.2): a hero across the top under the OnArt gradient, the cover over the hero's foot, the title,
+facts, actions and section strip beside the cover, and the content below as tiles or rows. It knows no game; piece G puts
+`GamePageModel` behind it.
+
+**Its places** (`emusen_kit_core::page`), from Mistress's `GamePage-1280x800.spec` and `GamePageStates-1280x800.spec`:
+the hero 0,0 across the screen and 360 high; the cover at 64,180, 268 high and as wide as its shape gives (201 for 3:4),
+never wider than 240, the column beside it less the pane gap; the column at 336 (the safe area's left plus 272) holding
+the title at 226, the facts at 286, the actions 44 high at 328 and the strip 44 high at 396, each to the safe area's
+right; the content from 64,464 to the content's foot of §7.39, 238 high, in which rows show four whole rows of 54. Tiles
+are pictures of 200 × 150, 24 apart, their label at 162 below the picture's top and their line at 190. §4.3 gives the
+cover as 240 × 300; the recording draws 201 × 268, and the recording is the oracle.
+
+**On Qt.** `PageLayout` puts the places on Qt, with the tile's measures as constants. `PageFrame.qml` is a `Frame` laid
+out as §7.39's tool screen is, for the same reason: the hero runs edge to edge, which no content area could hold. Its
+properties: `hero` and `cover` (pictures), `coverAspect`, `coverName` (what a reader hears for the cover), `title`,
+`facts`; `actionModel` (roles `label`, `value`, `button`, the pad button whose glyph leads the words or below zero for
+none, and `filled`, the screen's main action in the accent); `tileModel` (roles `label`, `line`, `picture`) or
+`rowModel` (roles `label`, `value`, `steps`, `opens`, drawn as the kit's `MenuRow`), chosen by `showsTiles`; the signals
+`acted(index)`, `tileChosen(index)` and `rowChosen(index)`. The hero is a backdrop to the fit audit, as a sky is, since
+the cover, the title and the actions stand over it by design; with no picture it is Void, so the OnArt words keep their
+contrast in the light variant too. A focused tile is ringed outside its picture, so the tiles' list stands the ring's
+room outside the content's box and keeps it as margins, and nothing is cut at its edges. `ActionButton.qml` is the action
+as a button: the glyph, the word, a value in Muted, filled in the accent where it is the main action, ringed when
+focused, a `Walkable`.
+
+**The walk.** The actions hold the focus at first (Play, as §4.3 says); Left and Right step them; Down reaches the
+content and Up from its first row or tile returns to the actions. The shoulders step the strip's sections through the
+frame. Left and Right on a stepped action (`Resume ◂ Slot 3 ▸`) move between the actions here; the stepping and its
+marks are piece G's, with the slots it steps.
+
+**Compared with the recordings** (read 2026-11-09), named: the title and facts are in the platform's sans serif, 60 and
+30 high where Barlow's are 53 and 27; the actions are the kit's action buttons, 16 inside their edges, where Mistress's
+cells are 8 to 21; the hero has no picture in the gallery, so its gradient is drawn over Void; the cover has no shadow
+yet (§5.4's raised shadow is not a token).
+
+### 7.41 What the tool screen and the page frame are held to, and what is open (2026-11-09)
+
+**kit-core** (`tests/table.rs` 7, `tests/tool.rs` 4, `tests/page.rs` 3): the Cores recording's cells, a fill reaching the
+trail, fills sharing by weight after their least, wide words giving way to a fill's least, a room under the leasts, content
+alone fitting and shrinking, and no width from 0 to 1,600 in steps of 7.5 putting a column past the table for five sets of
+columns; the Cores recording's places at 1280 × 800, the 16:9 shares, the pane spanning the list and the bar with whole
+rows inside the safe area above the help bar at every size from 960 to 1,800 wide and 400 to 1,000 high, and one row
+fewer and none cut 40 units shorter; the game page recording's places, a wide cover stopping short of the column, and the
+places inside the screen at 16:9.
+
+**The gallery** (`kit-gallery/tests/screens.rs` over `qml/Screens.qml`, one test, 24 states in 16.8 s, measured
+2026-11-09): the tool screen, the page with tiles and the page with rows, in both variants at the four fit sizes (1280 ×
+800, 1920 × 1200, 1920 × 1080, 1280 × 720), each through the fit audit, pad reach, pointer reach, no chrome, names,
+palette reach and contrast of §3, with the pane spanning the list and the bar and every cell inside the list less its
+trail as drawn, the walk between the parts at 1280 × 800, A on a row and a click on Apply reaching the host, and nothing
+logged by Qt; `qml-rules` and `qmllint` pass the scene, and `qt-test`'s lint test the kit's new files. Grabs and
+recordings are written beside the gallery's in `~/.cache/emusen/tmp/kit-gallery/`.
+
+**Seeded faults**, measured 2026-11-09, each reverted, each caught: the table's room taken without its trail failed six
+of `table.rs`'s seven tests, the Cores recording's cells among them; the pane laid only beside the list failed all four of
+`tool.rs`'s; the cover's width uncapped failed `page.rs`'s wide cover; in the gallery, `ToolScreen`'s pane bound to the
+list's height failed the spanning check in every tool state, `PageFrame`'s actions without their way down to the content
+failed pad reach for every row in the page's row states, and `ColumnFit` fitting a table two trails wider than its list
+put the status words past their rows in every tool state (the fit audit's words past their owner).
+
+**Rule Q.** The registry gains, additions only: `ColumnFit`, `PageLayout`, `ToolLayout` and the `Tones` namespace in
+`EmuSen.Kit-1.0.qmltypes`; `SectionStrip`, `ToolScreen`, `PageFrame`, `ToneText` and `ActionButton` in the qmldir. The
+module stays 1.0, as every kit addition before the first release has (§7.6). `EmuSen.Theme` re-exports none of them
+(`EmuSen_Qt.md` §3.1: a theme never styles a tool or a page), so its registry and `theme-qt/tests/surface.rs` are
+unchanged.
+
+**Open.**
+- **[decision]** The tool screen and the page end their content at 702, as the recordings do, 40 units above the band
+  that has stood at 742 since 2026-11-05. Recommended: keep 702 while the stage 5 screens are compared with the C#
+  recordings, and move the foot to the band (one more row on the tool screen) once stage 8 retires them, as one change
+  in `tool::content_foot`.
+- **[routine]** A stepped action's ◂ ▸ and its stepping (Resume's slots) are piece G's.
+- **[routine]** The cover's raised shadow waits for a shadow token (§5.4).
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

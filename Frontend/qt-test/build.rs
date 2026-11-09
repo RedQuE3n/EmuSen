@@ -19,6 +19,7 @@ fn main() {
                 "qml/FadeScene.qml",
                 "qml/LongListScene.qml",
                 "qml/WalkableKeysScene.qml",
+                "qml/GridScene.qml",
             ])
             .depend("QtQuick")
             .depend("QtQuick.Shapes")

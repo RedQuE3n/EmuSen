@@ -42,7 +42,6 @@ Rectangle {
             current: ListView.isCurrentItem
             focus: ListView.isCurrentItem
             onActivated: root.activated(row.index)
-            onActiveFocusChanged: list.currentIndex = row.activeFocus ? row.index : list.currentIndex
         }
         ScrollBar.vertical: ScrollBar {
             parent: root

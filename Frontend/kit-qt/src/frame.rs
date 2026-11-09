@@ -4,7 +4,7 @@ use core::pin::Pin;
 
 use cxx_qt::CxxQtType;
 
-use cxx_qt_lib::{QList, QString, QStringList};
+use cxx_qt_lib::{QList, QPointF, QString, QStringList};
 use emusen_kit_core::input::{intent, ElementId, InputEvent, Intent, Key, UiButton, Walk, WalkAction, WalkEvent, WalkForm};
 
 use crate::kinds::{self, Form, PadButton, Role};
@@ -52,6 +52,8 @@ pub mod qobject {
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qstringlist.h");
         type QStringList = cxx_qt_lib::QStringList;
+        include!("cxx-qt-lib/qpointf.h");
+        type QPointF = cxx_qt_lib::QPointF;
         include!("emusen-kit-qt/src/kinds.cxxqt.h");
         #[namespace = "Forms"]
         type Form = crate::kinds::ffi::Form;
@@ -124,9 +126,12 @@ pub mod qobject {
         /// A key the focused control declined: Tab walks the roles, the others are the presses they map to; true if used.
         #[qinvokable]
         fn key(self: Pin<&mut FrameController>, key: i32, modifiers: i32) -> bool;
-        /// The pointer rests on a walkable element: the ring moves to it.
+        /// The pointer comes onto a walkable element at `at`, in the scene: the ring moves to it, unless the pointer has not moved.
         #[qinvokable]
-        unsafe fn hover(self: Pin<&mut FrameController>, item: *mut QQuickItem, hovered: bool);
+        unsafe fn hover(self: Pin<&mut FrameController>, item: *mut QQuickItem, hovered: bool, at: QPointF);
+        /// The pointer moved over a walkable element, to `at` in the scene.
+        #[qinvokable]
+        fn pointer_moved(self: Pin<&mut FrameController>, at: QPointF);
         /// A pointer button on a walkable element: the left is A there, the right and the back button are B.
         #[qinvokable]
         unsafe fn click(self: Pin<&mut FrameController>, item: *mut QQuickItem, button: i32);
@@ -173,6 +178,8 @@ pub struct FrameControllerRust {
     syncing: bool,
     /// A declined press is on its way to the focused control as a key; if the key comes back, it was walked already.
     passing: bool,
+    /// Where the pointer was last seen, in the scene: an element coming under a pointer that stays there moved, the pointer did not.
+    pointer: Option<(f64, f64)>,
 }
 
 impl Default for FrameControllerRust {
@@ -195,6 +202,7 @@ impl Default for FrameControllerRust {
             actions: Vec::new(),
             syncing: false,
             passing: false,
+            pointer: None,
         }
     }
 }
@@ -337,10 +345,18 @@ impl qobject::FrameController {
         }
     }
 
-    pub unsafe fn hover(self: Pin<&mut Self>, item: *mut qobject::QQuickItem, hovered: bool) {
-        if hovered && matches!(intent(InputEvent::Hover(ElementId(0))), Some(Intent::Focus(_))) {
+    pub unsafe fn hover(mut self: Pin<&mut Self>, item: *mut qobject::QQuickItem, hovered: bool, at: QPointF) {
+        let at = (at.x(), at.y());
+        if !hovered || self.as_mut().rust_mut().pointer.replace(at) == Some(at) {
+            return;
+        }
+        if matches!(intent(InputEvent::Hover(ElementId(0))), Some(Intent::Focus(_))) {
             focus(item);
         }
+    }
+
+    pub fn pointer_moved(mut self: Pin<&mut Self>, at: QPointF) {
+        self.as_mut().rust_mut().pointer = Some((at.x(), at.y()));
     }
 
     pub unsafe fn click(mut self: Pin<&mut Self>, item: *mut qobject::QQuickItem, button: i32) {

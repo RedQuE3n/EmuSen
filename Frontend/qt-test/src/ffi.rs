@@ -16,6 +16,8 @@ pub mod ffi {
         fn harness_tree(window: Pin<&mut QObject>) -> QString;
         /// Whether the window holds an item made since its tree was last read.
         fn harness_made_since(window: Pin<&mut QObject>) -> bool;
+        /// Whether the view numbered `id` still turns to its current item: its highlight follows it and stands elsewhere.
+        fn harness_turning(window: Pin<&mut QObject>, id: u64) -> bool;
         fn harness_click(window: Pin<&mut QObject>, x: f64, y: f64, button: i32);
         fn harness_hover(window: Pin<&mut QObject>, x: f64, y: f64);
         fn harness_key(window: Pin<&mut QObject>, key: i32, modifiers: i32);

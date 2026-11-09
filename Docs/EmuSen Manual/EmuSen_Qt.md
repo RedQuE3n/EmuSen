@@ -1382,6 +1382,13 @@ meets the same. By theme, beyond the default's findings: the reference package `
 measured over the glyphs, `long` and `disabled` (fit, as before), `empty` (contrast 4.15 to 4.18:1) and the 120 consoles'
 maker stops unnamed. The reference package carries its default's findings into every state.
 
+**The grids, in the kit** (2026-11-09). A walkable focused inside a `ListView` or `GridView` now makes its delegate the
+view's current item, the pointer focuses only by moving, and the walk waits out a view turning to its current item
+(`EmuSen_Kit.md` §7.39). `theme-audit --states many` over the five themes, offscreen on the software backend: no reach
+finding left in any (the reference package, Meridian and Constellation 70 lines each before, Horizon 80). What stays is
+each theme's own default: the reference package's light variant's contrast and fit (46 lines), Horizon's `EdgeFade`
+warnings (the fade piece's).
+
 **Not yet.** The reference package (R) has not been through it; a theme's token overrides are not applied to the theme's engine by
 the host yet, so the loaded step judges the kit's own colours; the splash's still frame is judged as every screen is, under reduced
 motion, since the host gives a splash no `still` of its own yet.

@@ -201,6 +201,9 @@ impl Scene<'_> {
     }
 
     fn at_rest(&mut self, id: u64, path: bool) -> bool {
+        if ffi::harness_turning(self.window(), id) {
+            return false;
+        }
         let mut get = |property: &str| ffi::harness_get(self.window(), id, &QString::from(property));
         if get("moving") != 0.0 || get("flicking") != 0.0 {
             return false;

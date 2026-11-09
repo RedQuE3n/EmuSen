@@ -361,7 +361,7 @@ ways in:
   close. The player's A/B swap is applied once, in `PadRouter` (§7.4); the walk's own `set_swap_accept_back` stays off,
   so the fact has one owner.
 - **The pointer.** `Walkable.qml`, the module's first component, is the §1.7 declaration made once: an `Item` with a
-  `HoverHandler` calling `controller.hover(item, hovered)` and one `TapHandler` for the left, right and back buttons
+  `HoverHandler` calling `controller.hover(item, hovered, at)` (a pointer that has not moved focuses nothing, §7.39) and one `TapHandler` for the left, right and back buttons
   calling `controller.click(item, button)`. Rust maps Qt's button to kit-core's `PointerButton` (`qt_keys`), asks
   `intent` and acts: `Focus` gives the item the active focus (`QQuickItem::forceActiveFocus`, called through cxx-qt's
   `extern "C++Qt"` without glue); `Activate` focuses the item and then offers Accept through the same `offer`, so a
@@ -2252,3 +2252,57 @@ failed it (the Scraper drawn as if offered and found low); every text exempted f
 `state-fade`: a caption fading to rest at 0.3 between 0.5 and 1.5 s, a title fading in to full between 4.5 and 5.5 s;
 only the caption, at 3 s, at 5 s and in the default, is found. No text skipped failed it (the caption found at 1 s); every
 text skipped failed it (the caption not found at 3 s).
+
+### 7.39 A walkable focused inside a view becomes its current item; the pointer focuses by moving (2026-11-09)
+
+A `ListView` or `GridView` moves its keys from its `currentIndex`, not from the item holding the focus. The pointer
+focuses a walkable directly (§7.3, `Walkable`'s `HoverHandler`), and so does theme-audit's walk, so a cell hovered in a
+theme's grid held the focus while the view's current item stayed where it was, and Right went on from that one. Found by
+theme-audit's `many` state on 2026-11-09 in every theme (`EmuSen_Qt.md` §3.7.2): each grid's cells unreached past the first
+row's first, every cell's Right landing on cell 1 and Down on cell 5. The kit's `MenuPanel` had made its row current on
+focus since §7.8, and Orrery's orbit cover did the same for itself; the themes' grids did not.
+
+**The walkable makes itself current.** Decided 2026-11-09: the kit owns this once, an extension of `Walkable`, so every
+theme's grid and strip has it without a line of its own. When a walkable takes the active focus it calls the singleton
+`ViewCurrent.take(item)` (`current.rs`), which looks up the item's parents for the first standing directly in an item
+view's `contentItem` (the delegate: the walkable itself, or an item it stands in, as Horizon's cover stands in its slot)
+and sets the view's `currentIndex` to `indexAt` that delegate's centre. A view is an item view when Qt's own class says so
+(`QObject::inherits("QQuickItemView")`, the base of `ListView` and `GridView`), so a `PathView` or a `Flickable` with a
+`currentIndex` is never moved; the kit's `Carousel` is itself the walkable. A walkable in no item view, or over no delegate
+(a header), changes nothing, and nor does the view's own current item: a view gives the focus to the delegate it makes
+current before placing it, so its box says nothing yet (a strip that made its eighth item at x 0 read it as item 0, and
+Right from item 6 landed on item 0). What the view does with its current item follows unchanged: a `highlightRangeMode`
+turns the strip or the orbit to it, as Orrery's line already chose. `MenuPanel`'s own line is removed. *C++ part*: one
+function in `cpp/kit_glue.cpp`, `make_current` [own, because an item's parents, `inherits` and `QMetaObject::invokeMethod`
+for `indexAt` have no Rust binding in cxx-qt-lib, and the kit's QML holds no functions (`qml-rules`)].
+
+**The pointer focuses by moving.** A view that turns to its current item moves other items under a pointer that stays
+still, and Qt delivers a hover to each item that comes under it. With the walkable making itself current, the strip
+then ran on: hovering a strip's fifth item turned the strip, the seventh came under the pointer and took the focus, the
+strip turned again, and it stopped at its end (measured on 2026-11-09 in `GridScene.qml`: the focus at item 7 of 8 within
+300 ms). The same hover moved the focus off the item a key had chosen whenever a key turned the strip under a resting
+pointer. `FrameController` now keeps where the pointer was last seen over a walkable (`hover(item, hovered, at)` and
+`pointerMoved(at)`, the scene position from the `HoverHandler`'s point; Qt sets the point before it reports `hovered`),
+and an element coming under the pointer at that same place takes no focus. A pointer that moves gives the focus as before.
+
+**The walk settles a turning view.** theme-audit's walk focuses each element and puts back what the press moved, then
+waits for the views to rest (`Scene::settle`). Qt's `moving` reports a flick or a drag, not a view turning to its current
+item, so the walk read Horizon's strip mid-turn after the put-back, lost its first cover (found by its box, which had not
+yet come back) and recorded no press from it: every cover unreached at most sizes. `harness_turning` [own, in
+`qt-test/cpp/harness.cpp`, for the same reason] reads a view as turning while its highlight follows its current item and
+stands off it, until three frames pass without the highlight moving (a theme may place its delegates itself, as Orrery's
+orbit does, where the highlight rests off them); the settle waits on it.
+
+Held to by `qt-test/tests/grid.rs` over `GridScene.qml`: a grid of ten walkable cells, five a row, and a strip of thirty
+that turns its current item into a band, whose walkables stand inside each delegate's `FocusScope`. The pointer rests on
+a cell or an item and the pad presses: Right from cell 7 lands on 8 (`currentIndex` 8), Down from cell 3 on 8, Left from
+cell 9 on 8; Right from the strip's item 4 on 5, Left from item 3 on 2 after the strip turned; each hovered item keeps
+the focus while the strip turns under the pointer; Right six times from item 2 lands on item 8, through items the strip
+made. Then the walk over the same scene: every strip item's Right lands on the next, and the last read's on none; the walk
+puts the strip back; a settle after focusing item 5 leaves the strip at rest. Five seeded faults, each reverted and each
+failing it: the walkable's line removed (Right from cell 7 on cell 1); the view's own current item not excepted (Right six
+times landed on item 1); the walkable's own delegate alone looked at (Right from item 4 on item 1); the pointer's place
+not kept (hovering item 4 left the focus on item 8); the settle not waiting on a turn (contentX 121 when settled, 470 half
+a second later). theme-audit's `many` over the five themes on 2026-11-09 (the reference package and Meridian from this
+tree, Horizon, Constellation and Orrery from their branches' copies kept for the survey): no reach finding left, where
+each had 70 or 80; with the walkable's line removed, Meridian's 70 came back.

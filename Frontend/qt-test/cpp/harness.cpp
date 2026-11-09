@@ -392,6 +392,32 @@ bool harness_made_since(QObject& window)
     return w != nullptr && madeSince(w->contentItem());
 }
 
+// Qt's item views move their highlight to the current item by an animation of their own, which `moving` does not report.
+bool harness_turning(QObject& window, std::uint64_t id)
+{
+    QQuickItem* view = itemOf(window, id);
+    auto* highlight = view != nullptr && view->property("highlightFollowsCurrentItem").toBool() ? view->property("highlightItem").value<QQuickItem*>() : nullptr;
+    auto* current = view != nullptr ? view->property("currentItem").value<QQuickItem*>() : nullptr;
+    if (highlight == nullptr || current == nullptr || highlight->position() == current->position()) {
+        if (view != nullptr) {
+            view->setProperty("harnessHighlightAt", QVariant());
+        }
+        return false;
+    }
+    // Off its item, the highlight rests once three frames pass without moving it: a view may place its delegates itself.
+    const std::uint64_t frame = harness_frames(window);
+    const QVariant seen = view->property("harnessHighlightAt");
+    if (!seen.isValid() || seen.toPointF() != highlight->position()) {
+        view->setProperty("harnessHighlightAt", highlight->position());
+        view->setProperty("harnessHighlightFrame", QVariant::fromValue<qulonglong>(frame));
+    }
+    if (frame < view->property("harnessHighlightFrame").toULongLong() + 3) {
+        quick(window)->update();
+        return true;
+    }
+    return false;
+}
+
 QString harness_tree(QObject& window)
 {
     QJsonArray nodes;

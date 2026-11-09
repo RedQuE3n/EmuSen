@@ -18,9 +18,13 @@ FocusScope {
         event.accepted = true
     }
     Keys.onEnterPressed: (event) => root.Keys.returnPressed(event)
+    // Focused inside a ListView or GridView, by the pointer or a walk, it makes its delegate the view's current item (EmuSen_Kit.md §7.39).
+    onActiveFocusChanged: if (root.activeFocus) Kit.ViewCurrent.take(root)
     HoverHandler {
         id: hover
-        onHoveredChanged: root.controller.hover(root, hovered)
+        onHoveredChanged: root.controller.hover(root, hover.hovered, hover.point.scenePosition)
+        // What comes under a pointer that stays where it is takes no focus: the controller keeps where it was (EmuSen_Kit.md §7.39).
+        onPointChanged: if (hover.hovered) root.controller.pointerMoved(hover.point.scenePosition)
     }
     TapHandler {
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.BackButton

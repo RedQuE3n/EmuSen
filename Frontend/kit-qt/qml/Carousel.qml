@@ -26,7 +26,9 @@ PathView {
         }
     }
     HoverHandler {
-        onHoveredChanged: root.controller.hover(root, hovered)
+        id: hover
+        onHoveredChanged: root.controller.hover(root, hover.hovered, hover.point.scenePosition)
+        onPointChanged: if (hover.hovered) root.controller.pointerMoved(hover.point.scenePosition)
     }
     TapHandler {
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.BackButton

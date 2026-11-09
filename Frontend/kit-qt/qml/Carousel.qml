@@ -27,7 +27,7 @@ PathView {
     }
     HoverHandler {
         id: hover
-        onHoveredChanged: root.controller.hover(root, hover.hovered, hover.point.scenePosition)
+        onHoveredChanged: root.controller.hoverAt(root, hover.hovered, hover.point.scenePosition)
         onPointChanged: if (hover.hovered) root.controller.pointerMoved(hover.point.scenePosition)
     }
     TapHandler {

@@ -361,7 +361,7 @@ ways in:
   close. The player's A/B swap is applied once, in `PadRouter` (§7.4); the walk's own `set_swap_accept_back` stays off,
   so the fact has one owner.
 - **The pointer.** `Walkable.qml`, the module's first component, is the §1.7 declaration made once: an `Item` with a
-  `HoverHandler` calling `controller.hover(item, hovered, at)` (a pointer that has not moved focuses nothing, §7.39) and one `TapHandler` for the left, right and back buttons
+  `HoverHandler` calling `controller.hoverAt(item, hovered, at)` (a pointer that has not moved focuses nothing, §7.39; `hover(item, hovered)`, unguarded, stays for any other caller) and one `TapHandler` for the left, right and back buttons
   calling `controller.click(item, button)`. Rust maps Qt's button to kit-core's `PointerButton` (`qt_keys`), asks
   `intent` and acts: `Focus` gives the item the active focus (`QQuickItem::forceActiveFocus`, called through cxx-qt's
   `extern "C++Qt"` without glue); `Activate` focuses the item and then offers Accept through the same `offer`, so a
@@ -2385,7 +2385,7 @@ still, and Qt delivers a hover to each item that comes under it. With the walkab
 then ran on: hovering a strip's fifth item turned the strip, the seventh came under the pointer and took the focus, the
 strip turned again, and it stopped at its end (measured on 2026-11-09 in `GridScene.qml`: the focus at item 7 of 8 within
 300 ms). The same hover moved the focus off the item a key had chosen whenever a key turned the strip under a resting
-pointer. `FrameController` now keeps where the pointer was last seen over a walkable (`hover(item, hovered, at)` and
+pointer. `FrameController` now keeps where the pointer was last seen over a walkable (`hoverAt(item, hovered, at)`, beside the unguarded `hover(item, hovered)` it keeps, and
 `pointerMoved(at)`, the scene position from the `HoverHandler`'s point; Qt sets the point before it reports `hovered`),
 and an element coming under the pointer at that same place takes no focus. A pointer that moves gives the focus as before.
 

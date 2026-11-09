@@ -126,9 +126,12 @@ pub mod qobject {
         /// A key the focused control declined: Tab walks the roles, the others are the presses they map to; true if used.
         #[qinvokable]
         fn key(self: Pin<&mut FrameController>, key: i32, modifiers: i32) -> bool;
+        /// The pointer rests on a walkable element: the ring moves to it.
+        #[qinvokable]
+        unsafe fn hover(self: Pin<&mut FrameController>, item: *mut QQuickItem, hovered: bool);
         /// The pointer comes onto a walkable element at `at`, in the scene: the ring moves to it, unless the pointer has not moved.
         #[qinvokable]
-        unsafe fn hover(self: Pin<&mut FrameController>, item: *mut QQuickItem, hovered: bool, at: QPointF);
+        unsafe fn hover_at(self: Pin<&mut FrameController>, item: *mut QQuickItem, hovered: bool, at: QPointF);
         /// The pointer moved over a walkable element, to `at` in the scene.
         #[qinvokable]
         fn pointer_moved(self: Pin<&mut FrameController>, at: QPointF);
@@ -345,7 +348,13 @@ impl qobject::FrameController {
         }
     }
 
-    pub unsafe fn hover(mut self: Pin<&mut Self>, item: *mut qobject::QQuickItem, hovered: bool, at: QPointF) {
+    pub unsafe fn hover(self: Pin<&mut Self>, item: *mut qobject::QQuickItem, hovered: bool) {
+        if hovered && matches!(intent(InputEvent::Hover(ElementId(0))), Some(Intent::Focus(_))) {
+            focus(item);
+        }
+    }
+
+    pub unsafe fn hover_at(mut self: Pin<&mut Self>, item: *mut qobject::QQuickItem, hovered: bool, at: QPointF) {
         let at = (at.x(), at.y());
         if !hovered || self.as_mut().rust_mut().pointer.replace(at) == Some(at) {
             return;

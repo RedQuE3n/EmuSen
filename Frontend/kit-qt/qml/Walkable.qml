@@ -22,7 +22,7 @@ FocusScope {
     onActiveFocusChanged: if (root.activeFocus) Kit.ViewCurrent.take(root)
     HoverHandler {
         id: hover
-        onHoveredChanged: root.controller.hover(root, hover.hovered, hover.point.scenePosition)
+        onHoveredChanged: root.controller.hoverAt(root, hover.hovered, hover.point.scenePosition)
         // What comes under a pointer that stays where it is takes no focus: the controller keeps where it was (EmuSen_Kit.md §7.39).
         onPointChanged: if (hover.hovered) root.controller.pointerMoved(hover.point.scenePosition)
     }

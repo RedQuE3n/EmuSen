@@ -962,6 +962,9 @@ catalogues (`--catalogue`) found the same faults. Each was the package's layout,
    places' lines holds the same rule now: a line built from data may elide (Settings' "Dark · 60% sound" does), a fixed
    word may not; with the old exception gone it named only Settings' line. Seeded back (the line 126 wide), the audit
    names `placeStatus.2` cut with an ellipsis at every size in both variants.
+2. **The grid's neighbours under the floor.** `gridPrevious`, the `·` between and `gridNext`, at 18 units, drew capitals of
+   11.33 at 1280 × 720, under the floor of 11.64 (36 lines, every state that shows the grid). They are 19. Seeded back at
+   18, the audit names the three at 1280 × 720 in both variants.
 
 **Proof, measured 2026-11-08.** The acceptance test (Vulkan on the RX 6800 in its own compositor, the virtual pad, the
 canvas's library) passed on WiseMan d5edac3e5 with the old screens and on the package, and its 90 grabs, 18 states

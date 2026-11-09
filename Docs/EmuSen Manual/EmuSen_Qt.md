@@ -986,13 +986,13 @@ labels and the engine line are 12% larger at every size, the neighbours 6%, thou
 floor: words sized for each window would copy the floor into the theme, and the tester's decision for Horizon (§3.4.3,
 2026-11-08: the floor holds with no exception, and every small text is 19) applies here as written. The counts take the
 condensed face the names and labels use, in its regular weight. "Game packages" is drawn whole where the accepted render
-cut it, and the full name stands a unit higher.
+cut it, the full name stands a unit higher, and a focused planet grows to 88 rather than 96 (§3.4.2's eighth difference).
 
 **Proof** (measured 2026-11-09, offscreen on the software backend unless named). `theme-audit --states all` over the
-package: no line (326 before). `--catalogue`: one-console, n120, maker40 and empty have no line; n30, long and eleven
-keep only the overlap §3.4.2's eighth difference names (the focused NES's box and Master System's count: one line, and
-six a size in each variant), which they had before. n120 also loses the overlaps it had at 16:9 (24 lines a size), where
-a count in Barlow at 17 and its engine mark met the next world's box. The acceptance test passes (Vulkan on the RX 6800) with three of its named differences
+package: no line (326 before). `--catalogue`: no line in any of the canvases' seven catalogues. n120 loses the overlaps it
+had at 16:9 (24 lines a size), where a count in Barlow at 17 and its engine mark met the next world's box; n30, long and
+eleven lose the focused NES's over Master System's count, mended by the focused body's size (§3.4.2's eighth
+difference). The acceptance test passes (Vulkan on the RX 6800) with three of its named differences
 gone: the 17- and 18-unit words at 1280 × 720, the full name's line box and the places' lines cut, the last now only a
 data line's. Nothing outside the package and the acceptance test changed, so the other four themes' findings are as they
 were. The side-by-sides, before left and after right (Home in both variants and Choose a console at 1280 × 800, the grid,
@@ -1042,7 +1042,7 @@ are unchanged.
 with `role: "group"` and `labelRole: "maker"`. The theme draws each world at (centre + rx cos θ, ry sin θ):
 - θ moves on Reel, so a turning orbit carries its worlds along the arc;
 - the radii move on Pan, so the orbits scroll radially;
-- the body's size (72, or 96 focused) moves on Quick;
+- the body's size (72, or 88 focused) moves on Quick;
 - a world's opacity moves on Fade, so worlds fade as they enter and leave a window or the three shown orbits.
 
 Nothing is placed by name, and the screen holds any count from 0 to 120. `qml-rules` treats a binding whose name ends in
@@ -1083,15 +1083,17 @@ canvas's own; kit-core's test holds them within 0.01 unit.
    floor at 1280 × 720; the counts are in Barlow Condensed, no wider than the canvas's, and a label's line grows upward
    from the layout's 20-unit box. The full name takes Barlow
    Condensed's own line box, 53 from y 611, where the canvas's was 44 from 612 (2026-11-09, §3.4.1).
-7. A world's `Walkable` is the body's box (the ring's when focused), and the name and count hang beneath it, outside
-   the `Walkable`. The canvas's node was 140 units wide and held the words too. On the steep stretches of the outer
+7. A world's `Walkable` is the body's box, the ring drawn 7 units about it when focused, and the name and count hang
+   beneath it, outside the `Walkable`. The canvas's node was 140 units wide and held the words too. On the steep stretches of the outer
    orbits those nodes covered their neighbours, which the fit audit read as overlaps of empty corners.
-8. Two of the canvas's own boxes still touch, and the fit audit named both on 2026-11-08; on 2026-11-09 the canvases'
-   catalogues name only the first:
-   - The focused NES's ring box reaches into the line box of Master System's count: 7 units at the canvas's 17, 10 at
-     19 (at 1280 × 800, measured 2026-11-09). The drawn ring stays clear of the words.
-   - A turning orbit's label sits by its window's last world. The two boxes meet at 16:9, where the outer orbit
-     holds ten.
+8. The focused body is 88 units, where the canvas drew 96 (2026-11-09), and the `Walkable` is the body's box rather than
+   the ring's. At 96, with the ring's box as the `Walkable`, the focused world's box reached into the count of the world
+   on the orbit inside it: the focused NES's into Master System's count, 10 units at 1280 × 800, in the canvases'
+   eleven, n30 and long, at every size (one line in n30, six a size in each variant in the others). The drawn ring stayed
+   clear of the words; the boxes did not. At 88 the body's box ends 0.45 unit below that count's line box, and its own
+   name still starts a unit under the ring, as at 96. Seeded back (96), the audit names the overlap over eleven at
+   every size in both variants. The second meeting the audit named on 2026-11-08, a turning
+   orbit's label by its window's last world at 16:9, is named in no catalogue on 2026-11-09.
 9. The inner orbit's window ends at y 197, not 178 (decided 2026-11-08), so it holds 2 worlds, not 3. At 178 a
    focused world at its end grew its ring to y 123, into the places row (which ends at 140). The audit over the 120
    consoles found it, and the canvas's own numbers do the same. A turning orbit shows its whole capacity, with the

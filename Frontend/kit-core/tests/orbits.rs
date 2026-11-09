@@ -152,7 +152,7 @@ fn a_focused_world_on_the_inner_orbit_keeps_its_ring_below_the_places_at_the_fiv
                     continue;
                 }
                 inner += 1;
-                assert!(w.shown && w.y - 55.0 >= 140.0, "focused {focus} at {width}: its ring's top at {}", w.y - 55.0);
+                assert!(w.shown && w.y - 51.0 >= 140.0, "focused {focus} at {width}: its ring's top at {}", w.y - 51.0);
                 for shown in l.worlds.iter().filter(|o| o.shown && l.orbits[o.orbit].slot == 0) {
                     assert!(shown.y - 36.0 >= 142.0, "a resting world's top at {}", shown.y - 36.0);
                 }

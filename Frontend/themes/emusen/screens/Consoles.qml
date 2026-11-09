@@ -117,8 +117,8 @@ ThemeScreen {
         property real angle: layout.angles[node.index] ?? Math.PI / 2
         readonly property real cx: layout.centre + node.rx * Math.cos(node.angle)
         readonly property real cy: node.ry * Math.sin(node.angle)
-        // The body's height: 96 focused, 72 at rest and while pressed.
-        property real size: node.lit && !press.active ? 96 : 72
+        // The body's height: 88 focused, so its box clears the words of the orbit inside (EmuSen_Qt.md §3.4.2), 72 at rest and while pressed.
+        property real size: node.lit && !press.active ? 88 : 72
         objectName: "world." + node.index
         focus: Browse.section.length > 0 ? node.key === Browse.section : node.index === 0
         visible: node.shown || node.opacity > 0
@@ -153,12 +153,12 @@ ThemeScreen {
             Accessible.name: node.name
             Accessible.description: Words.games(node.count)
             focus: true
-            // The body's box, and the ring's when focused.
+            // The body's box; the ring is drawn 7 about it.
             readonly property real margin: node.lit ? 7 : 0
             x: (node.width - width) / 2
             y: node.above - height / 2
-            width: node.size + 2 * hit.margin
-            height: node.size + 2 * hit.margin
+            width: node.size
+            height: node.size
             onActiveFocusChanged: {
                 if (!hit.activeFocus)
                     return
@@ -183,12 +183,12 @@ ThemeScreen {
                 height: node.size
                 width: node.size * drawn.tileWidth / Math.max(1, drawn.tileHeight)
                 x: (hit.width - width) / 2
-                y: hit.margin
             }
             Rectangle {
                 objectName: "consoleRing." + node.index
                 visible: node.lit
                 anchors.fill: parent
+                anchors.margins: -hit.margin
                 radius: width / 2
                 color: "transparent"
                 border.color: Tokens.accent
@@ -200,8 +200,8 @@ ThemeScreen {
                 Glyph {
                     required property var modelData
                     objectName: "consoleSparkle"
-                    x: modelData[0] < 0 ? hit.margin - 4 - width : hit.width - hit.margin
-                    y: hit.margin + modelData[1] * node.size
+                    x: modelData[0] < 0 ? -4 - width : hit.width
+                    y: modelData[1] * node.size
                     width: modelData[2]
                     height: modelData[2]
                     path: Marks.sparkle

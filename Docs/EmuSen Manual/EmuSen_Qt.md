@@ -1266,6 +1266,10 @@ side by side in `~/.cache/emusen/tmp/qt-s3-ofix/compare/`:
 3. In `empty`, light, Games' `addFolder` read 4.15 to 4.18:1 at every size. Difference 12.
 4. In `one-console`, light, at 1280 × 720, the hub's "·" read 4.35:1. Difference 12; with Muted seeded back to #6B5B4A,
    both return (6 lines).
+6. On teardown, 14 to 22 `TypeError`s at the end of a run (`OrbitCover.qml:16-17`, the kit's `OrbitSlot.qml:44-45`), from the covers
+   outliving their orbit while the screen is deleted (`EmuSen_Kit.md` §7.40), not from `ViewCurrent`. `OrbitSlot` reads
+   its view as possibly null, and `OrbitCover` its `orbit` (`?.`, `?? 0`). A run logs none; with `OrbitCover`'s guard
+   seeded back, `nogame` alone logged 7 at `OrbitCover.qml:16`.
 
 ### 3.5 Loading and the sandbox
 

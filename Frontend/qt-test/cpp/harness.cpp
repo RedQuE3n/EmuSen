@@ -584,6 +584,14 @@ bool harness_set_property(QObject& root, const QString& object_name, const QStri
     return object != nullptr && QQmlProperty(object, property, qmlContext(object)).write(QVariant(value));
 }
 
+// Deletes a named object at once, as a window's teardown deletes what it holds (EmuSen_Kit.md §7.40).
+bool harness_destroy(QObject& root, const QString& object_name)
+{
+    QObject* object = root.findChild<QObject*>(object_name);
+    delete object;
+    return object != nullptr;
+}
+
 namespace {
 
 QObject* named(QObject& root, const QString& object_name)

@@ -22,6 +22,7 @@ fn main() {
                 "qml/WalkableKeysScene.qml",
                 "qml/GridScene.qml",
                 "qml/ShiftScene.qml",
+                "qml/OrbitScene.qml",
             ])
             .depend("QtQuick")
             .depend("QtQuick.Shapes")

@@ -54,7 +54,8 @@ namespace EmuSen.WiseMan.Mistress
             {
                 using var runtime = new EmuSen.Crystal.Client.CrystalRuntime();
                 using var overview = System.Text.Json.JsonDocument.Parse(runtime.FirmwareOverview());
-                return overview.RootElement.GetProperty("systems").EnumerateArray().Single(s => s.GetProperty("name").GetString() == "Super Nintendo").GetProperty("items").EnumerateArray()
+                string name = EmuSen.Mistress.Library.RuntimeCatalog.Shelves.Single(s => s.EsdeSystem == "snes").EsdeFullName;
+                return overview.RootElement.GetProperty("systems").EnumerateArray().Single(s => s.GetProperty("name").GetString() == name).GetProperty("items").EnumerateArray()
                     .Select(i => new FirmwareItem(i.GetProperty("file").GetString()!, i.GetProperty("size").GetInt32())).ToList();
             }
         }

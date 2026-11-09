@@ -260,7 +260,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // ES-DE's "Systems sorting", in the three orders Mistress can answer: its own release order, full names, and each system's first release year.
         [Theory]
         [InlineData(BigPictureInterface.SortRelease, "nes,gb,gbc,snes,n64")]
-        [InlineData(BigPictureInterface.SortFullNames, "gb,gbc,n64,nes,snes")]
+        [InlineData(BigPictureInterface.SortFullNames, "n64,nes,gb,gbc,snes")]
         [InlineData(BigPictureInterface.SortReleaseYear, "nes,gb,snes,n64,gbc")]
         public Task The_systems_follow_the_chosen_order_and_the_startup_list_with_them(string sorting, string order) => Session.Dispatch(() =>
         {

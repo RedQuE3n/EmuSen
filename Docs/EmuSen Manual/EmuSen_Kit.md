@@ -2014,7 +2014,7 @@ two turned lines whose boxes cross are not an overlap, and a `StackMember`'s ite
 faults, each reverted: captions allowed under a neighbour (the stack test), stacks not told apart (the stack test),
 turned items measured by their boxes (the turned test).
 
-### 7.34 A body and a glyph cut at a clipping edge on the software backend (2026-11-08)
+### 7.34 A body and a glyph cut at a clipping edge on the software backend (2026-11-08, remade 2026-11-09)
 
 **The defect.** On the software backend a Qt Quick `Shape` is painted past a clipping ancestor, while a `Text` beside it is
 cut (first seen in §7.10, where the carousel was made not to depend on the clip; seen again in Meridian's recordings, a rail
@@ -2024,20 +2024,42 @@ scrolled by 32 and back, sampling every 4 pixels above and below the Flickable. 
 past the edges at 123 of 462 points at rest and 224 scrolled, the glyph at 73 of 396 and 133; the words at none. A row
 wholly outside the Flickable was drawn whole, and a row the scroll had moved was drawn at both places.
 
-**The fix.** On the software backend alone (`GraphicsInfo.api === GraphicsInfo.Software`) each is drawn through a layer,
-an image the software renderer does clip: `PadGlyph` on its own item; `Body` on an item that holds its shapes and reaches
-as far past the box as a ring does, `ceil(0.16 × width)` to each side with a ring and none without (kit-core's ring is
-an ellipse 64 units each side of a planet's centre with a stroke of 2.4, 15.2 past the box of 100; the moons lie inside).
-Three nearer forms were tried on 2026-11-08 and dropped: a layer cut to the box lost the ring; a layer whose
-`sourceRect` is larger than its item is scaled into the item's box, which drew the bodies at half their size; and an item
-reaching half the box past every side broke the gallery's promise that nothing under the carousel rests outside its box.
-A reach of a fraction of a pixel moved the drawing by resampling (38 pixels of 64,000 at 2%), so it is whole.
-The GPU draws no layer and is unchanged. After: no point past either edge in any of the three states; inside the Flickable the grab at rest is the same picture as before, pixel for pixel at 2% (`magick compare`, 0
-of 64,000). The test also holds the ring past the body's box. The grabs before and after, on each backend, are
-`clip-<state>-<backend>.png` written to `EMUSEN_QT_COMPARE`; `EMUSEN_QT_GPU` runs the same test on the GPU, offscreen
-through OpenGL (§7.10). On the RX 6800 that way (2026-11-09) the test passes before the fix and after, the GPU's grabs
-before and after are the same picture, and the software backend's grabs after differ from the GPU's at 0.1% of the
-pixels at 12%, the glyphs' edges.
+**The cause** (found 2026-11-09). A Shape on the software backend is a `QSGRenderNode`, painted by Qt's
+`QQuickShapeSoftwareRenderNode`, whose `render()` sets the painter's clip only when the clip region it is given is not
+empty; and the renderer gives a render node its dirty region, cut to its clip, as that region
+(`qquickshapesoftwarerenderer.cpp`, `qsgsoftwarerenderablenode.cpp` of Qt 6.11, read 2026-11-09). A Shape whose bounds lie
+wholly past its clip has an empty region, so it is painted with no clip at all, whole. A probe of the same day: a circle
+of 80 in a clipping item of 60, 20 inside it, was cut (no red past the clip); at 70, wholly past it, 4,872 pixels of it
+were drawn below. One partly inside is cut correctly. The node's bounds are its paths' bounds, widened by the stroke or a
+unit, not its item's: a circle centred on its item's top edge, the item wholly past the clip, was cut correctly.
+
+**The fix.** On the software backend alone, each Shape of `Body` and `PadGlyph` is not drawn while its paths' bounds,
+`Shape.boundingRect` (which holds the stroke's ink), meet no clipping ancestor's area: the kit's `InsideClips`, an item
+the size of those bounds inside the Shape, tells it so (`inside`), measured again whenever any ancestor moves, scrolls or
+scales, which `QQuickItem::ItemObservesViewport` makes Qt report as `ItemTransformHasChanged`. The bounds lie within the
+node's own, so where they meet the clip the node's region is not empty and Qt cuts it; where they do not, nothing of the
+Shape's ink lies inside the clip. C++ glue, since QML hears of no ancestor's move (`EmuSen_Qt.md` §1.4). The GPU is
+unchanged.
+
+**The layer it replaces, and why it went.** From 2026-11-08 each was drawn through a layer on the software backend
+instead, which is clipped, but which is not the same picture: the layer's pixmap is rasterised on its own pixel grid
+and drawn at the item's place, snapped to the window's pixels, and it is sized to the item's size rounded, then scaled
+to it. Measured 2026-11-09 with a circle of 46 drawn plainly and through a layer: at a whole-pixel place and size 1
+pixel differed, by 3 levels; at a place of (100.37, 60.25) 42 pixels, by up to 130 levels; at a size of 46.3, 79
+pixels, by up to 235; `layer.smooth` changed nothing. Moonrise's bodies stand at such places and sizes, and
+`qt-app/tests/splash.rs` read them 202 pixels off Mistress's splash, where with the layer off they pass; the landing
+check had not run that test. So the layer was wrong, not the reference; the reference stands.
+
+**What it is held to.** `qt-test/tests/clip.rs` over `ClipScene.qml`: four rows of a `Body`, a `PadGlyph` and words in a
+`Flickable` 160 high that clips, grabbed at rest, scrolled by 32 and back, sampling every 4 pixels above and below it.
+Before either fix the body was drawn past the edges at 123 of 462 points at rest and 224 scrolled, the glyph at 73 of
+396 and 133, the words at none; after, none, and the first row's ring past its body's box is drawn. And
+`qt-test/tests/phase.rs` over `PhaseScene.qml`: a ringed body with two moons at (30.37, 20.25), 46.3 square, and a glyph
+at a fractional place too, uncut inside a clipping `Flickable`, are the same picture pixel for pixel as the same under no
+clip, and the body as its shapes drawn as plain Shapes by Qt with nothing of the kit's around them. Seeded faults,
+2026-11-09, each reverted: the layer back on `Body` on the software backend, caught by the phase test (1,671 of 5,328
+pixels off the plain shapes); `InsideClips` always inside, caught by the clip test (the body past the edges at 123
+points at rest). The grabs are `clip-<state>-<backend>.png` and `phase-software.png`, written to `EMUSEN_QT_COMPARE`.
 
 ### 7.35 A fade every theme can use, and which backends draw each effect (2026-11-08)
 
@@ -2065,7 +2087,7 @@ of the kit's own, which the software backend could not draw and which would need
 | `MultiEffect` (shadow, blur, mask, colourize) | drawn | nothing (no shader effects) |
 | `EdgeFade` | the backdrop ramped over the edge | the same |
 | `RoundPicture` | a texture-filled rounded `Shape` | the `Image` with plain corners (§7.29) |
-| `Body`, `PadGlyph` | Shapes | Shapes through a layer, clipped (§7.34) |
+| `Body`, `PadGlyph` | Shapes | Shapes, each not drawn while wholly past its clip (§7.34) |
 | The notice's shadow (§7.23) | drawn | none |
 
 Held to by `qt-test/tests/fade.rs` over `FadeScene.qml` (a column of the accent in a clipping Flickable fading at its

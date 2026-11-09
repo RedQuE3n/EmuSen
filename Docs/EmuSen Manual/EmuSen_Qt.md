@@ -1251,6 +1251,13 @@ side by side in `~/.cache/emusen/tmp/qt-s3-ofix/compare/`:
 1. Over 120 consoles, the dial's stops of consoles with no maker had no name a reader hears (`name`, at every size).
    Difference 11. A catalogue of two makers and three consoles of none: 30 lines before (three stops, five sizes, both
    variants), none after.
+2. In `long`, the cover two left of the apex, wide (Brass Lantern at 1.39), turned by the ellipse's normal, rose to
+   y 327.4 over Home's orbit box at 330 (`fit`, past its scroller, 20 lines). A cover of the widest shape the slot
+   takes (1.6) reaches 321.2 at d = ±2, so the orbit's box starts at 316 (426 high, its foot unchanged at 742); the
+   covers are placed from the screen's top, not the box's, so nothing moves. Continue's panel (to 356) now stands over the
+   box (`z` 1), so a press on its foot is the panel's rather than the list's, which took the foot's last 26 units before;
+   no cover comes under the panel (the d = ±2 covers stand at x 181 to 371 and 909 to 1099, the panel at 400 to 880).
+   Games' orbit reaches 174 in a box from 112. Seeded back (the box at 330): the same 20 lines.
 
 ### 3.5 Loading and the sandbox
 

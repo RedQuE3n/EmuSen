@@ -150,6 +150,8 @@ ThemeScreen {
                         activeFocusOnTab: Session.hasGame
                         x: 400 + root.ox
                         y: 76
+                        // Over the orbit's box, which reaches under its foot, so the pointer has all of it; no cover comes under it.
+                        z: 1
                         width: 480
                         height: 280
                         onActivated: Actions.play(Session.key)
@@ -312,14 +314,14 @@ ThemeScreen {
                             lineHeightMode: Text.FixedHeight
                         }
                     }
-                    // The recent games on the orbit about (W/2, 0), 620 x 540, 18° apart, the focus at the apex.
+                    // The recent games on the orbit about (W/2, 0), 620 x 540, 18° apart, the focus at the apex; its box clears a wide cover two from the apex (EmuSen_Qt.md §3.4.6).
                     Orbit {
                         id: orbit
                         objectName: "orbit"
                         x: 0
-                        y: 330
+                        y: 316
                         width: root.width
-                        height: 412
+                        height: 426
                         focus: !Session.hasGame && orbit.count > 0
                         model: Library.shelf
                         KeyNavigation.up: Session.hasGame ? panel : null

@@ -1092,7 +1092,7 @@ the splash at 1, 3 and 5 s (the audit records its finished frame only), the grid
 `qt-s3/final/constellation.md`: Home a star chart whose lines are the pad's walk, Choose a console the makers as figures
 (the kit's `FigureLayout`, `EmuSen_Kit.md` §7.31), Games a grid joined by connectors. Written against `EmuSen.Theme` alone;
 its parts are one job each: `Backdrop`, `ChartNode` (a node's place and walk), `ChartBody`, `ChartPointer`, `ChartLine`,
-`ChartFade`, `Star`, `Connector`, `ConsoleKey`, `Chip`, `Glass`, `Glyph`, `EngineMark`, `Faces`.
+`Star`, `Connector`, `ConsoleKey`, `Chip`, `Glass`, `Glyph`, `EngineMark`, `Faces`.
 
 **Named differences from the spec**, each decided or measured on 2026-11-08 and 2026-11-09:
 1. Small words are 19 units, not 17 (the audit's legibility floor at 1280 × 720, decided).
@@ -1106,7 +1106,9 @@ its parts are one job each: `Backdrop`, `ChartNode` (a node's place and walk), `
    about the 80). Where it crossed the ring the count read 1.98 to 3.45:1 by night and 2.23 to 3.24:1 by day, and the
    crowd's name 1.44:1 (measured 2026-11-09). So that a raised label on the chart's first line or a lowered one on its last
    still lies inside it, the chart's viewport reaches 8 past the layout's 96 … 564 at each end (88 … 572), the layout's
-   points kept where they were.
+   points kept where they were. The chart stands inside the kit's `EdgeFade` (`EmuSen_Kit.md` §7.35) and fades 24 at an
+   edge it runs past, on both backends; its earlier `MultiEffect` mask drew no fade on the GPU and was kept off on the
+   software backend, so a row at the edge was cut.
 7. **RECENT gives way to the focus**: centred at 823 while the block holds the focus, clear of its ring (to 811), else at
    819, clear of a focused cover scaled 1.06 (from 830.6), where the spec centres it at 820. The 32-unit gap holds a
    22.8-unit line with either one but not both; at 820 the block's ring ran under the word (1.98:1 by night, 2.23:1 by

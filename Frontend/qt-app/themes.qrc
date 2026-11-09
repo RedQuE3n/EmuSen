@@ -17,7 +17,6 @@
     <qresource prefix="/emusen/themes/constellation">
         <file alias="parts/Backdrop.qml">../themes/constellation/parts/Backdrop.qml</file>
         <file alias="parts/ChartBody.qml">../themes/constellation/parts/ChartBody.qml</file>
-        <file alias="parts/ChartFade.qml">../themes/constellation/parts/ChartFade.qml</file>
         <file alias="parts/ChartLine.qml">../themes/constellation/parts/ChartLine.qml</file>
         <file alias="parts/ChartNode.qml">../themes/constellation/parts/ChartNode.qml</file>
         <file alias="parts/ChartPointer.qml">../themes/constellation/parts/ChartPointer.qml</file>

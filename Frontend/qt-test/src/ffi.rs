@@ -14,6 +14,8 @@ pub mod ffi {
         fn harness_show(window: Pin<&mut QObject>, width: i32, height: i32) -> bool;
         fn harness_resize(window: Pin<&mut QObject>, width: i32, height: i32);
         fn harness_tree(window: Pin<&mut QObject>) -> QString;
+        /// Whether the window holds an item made since its tree was last read.
+        fn harness_made_since(window: Pin<&mut QObject>) -> bool;
         fn harness_click(window: Pin<&mut QObject>, x: f64, y: f64, button: i32);
         fn harness_hover(window: Pin<&mut QObject>, x: f64, y: f64);
         fn harness_key(window: Pin<&mut QObject>, key: i32, modifiers: i32);

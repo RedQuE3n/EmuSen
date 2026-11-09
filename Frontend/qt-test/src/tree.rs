@@ -330,6 +330,51 @@ impl Tree {
     pub fn operable(&self) -> Vec<u32> {
         self.nodes.iter().enumerate().filter(|(_, n)| n.operable && n.visible).map(|(i, _)| i as u32).collect()
     }
+
+    /// Each item of this tree as `now` holds it: the same object, or the one a view made again in its place, with its type,
+    /// objectName and box; 0 for none (EmuSen_Kit.md §7.11).
+    pub fn found_in(&self, now: &Tree) -> Vec<u64> {
+        let mut by_identity: HashMap<Identity<'_>, Vec<usize>> = HashMap::new();
+        for (j, node) in now.nodes.iter().enumerate() {
+            by_identity.entry(identity(node)).or_default().push(j);
+        }
+        let mut taken = vec![false; now.nodes.len()];
+        let mut found = vec![0; self.nodes.len()];
+        // The same objects first, so a made-again item never takes the place of one that stayed.
+        for (i, node) in self.nodes.iter().enumerate() {
+            if let Some(j) = now.index_of(self.ids[i]).map(|j| j as usize).filter(|&j| identity(&now.nodes[j]) == identity(node)) {
+                taken[j] = true;
+                found[i] = self.ids[i];
+            }
+        }
+        for (i, node) in self.nodes.iter().enumerate() {
+            if found[i] != 0 {
+                continue;
+            }
+            if let Some(&j) = by_identity.get(&identity(node)).and_then(|c| c.iter().find(|&&j| !taken[j])) {
+                taken[j] = true;
+                found[i] = now.ids[j];
+            }
+        }
+        found
+    }
+
+    /// The item of this tree that `node` of another reading is: the same object if it is still that item, else the item of
+    /// the same type, objectName and box.
+    pub fn same_as(&self, node: &Node) -> Option<u32> {
+        let id: u64 = node.id.parse().unwrap_or(0);
+        self.index_of(id)
+            .filter(|&i| identity(&self.nodes[i as usize]) == identity(node))
+            .or_else(|| self.nodes.iter().position(|n| identity(n) == identity(node)).map(|i| i as u32))
+    }
+}
+
+/// What stays when a view makes an item again where it was: its type, its objectName and its box to half a pixel.
+type Identity<'a> = (&'a str, &'a str, [i64; 4]);
+
+fn identity(node: &Node) -> Identity<'_> {
+    let half = |v: f64| (v * 2.0).round() as i64;
+    (node.ty.as_str(), node.name.as_str(), [half(node.x), half(node.y), half(node.w), half(node.h)])
 }
 
 /// The first words under an item: a control named by what it holds, as Avalonia's automation peers resolved it (InterfaceSpec §4.3).

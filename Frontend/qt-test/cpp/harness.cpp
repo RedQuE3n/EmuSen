@@ -147,6 +147,7 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
     const double opacity = parentOpacity * item->opacity();
     const bool control = item->inherits("QQuickControl");
     const bool handlers = hasPointerHandler(item);
+    item->setProperty("harnessRead", true); // read once, so an item made since (a delegate made again) is told apart
     QJsonObject node;
     node["id"] = QString::number(idOf(item));
     node["parent"] = QString::number(parent);
@@ -276,6 +277,15 @@ QQuickItem* itemOf(QObject& window, std::uint64_t id)
     return w != nullptr ? find(w->contentItem(), id) : nullptr;
 }
 
+bool madeSince(QQuickItem* item)
+{
+    if (!item->property("harnessRead").isValid()) {
+        return true;
+    }
+    const QList<QQuickItem*> children = item->childItems();
+    return std::any_of(children.begin(), children.end(), madeSince);
+}
+
 // Every text at no opacity, or back at the opacity it had, so a grab shows what is behind the words.
 void hideWords(QQuickItem* item, bool hidden)
 {
@@ -374,6 +384,12 @@ void harness_resize(QObject& window, int width, int height)
         QTest::qWaitFor([w, width, height] { return w->contentItem()->width() == width && w->contentItem()->height() == height; }, 2000); // the platform's geometry event delivered, as a window manager's arrives
         QQuickTest::qWaitForPolish(w); // what Qt declares: no item still to lay out
     }
+}
+
+bool harness_made_since(QObject& window)
+{
+    QQuickWindow* w = quick(window);
+    return w != nullptr && madeSince(w->contentItem());
 }
 
 QString harness_tree(QObject& window)

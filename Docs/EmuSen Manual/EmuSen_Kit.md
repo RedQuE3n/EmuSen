@@ -957,6 +957,37 @@ before). Three more seeded faults, each reverted: no put-back failed `spec.rs`'s
 failed `style.rs` (the tab and the choice at 1, not 0; the menu scene's list puts itself back when a row takes the focus,
 so `spec.rs` could not see it); the remembered focus not given back failed `style.rs` (the combo box's focus false).
 
+**A delegate made again stands for the one the tree read** (2026-11-09). theme-audit's `many` state, a console of 9,000
+games, found every theme's rows unreachable at every size after the first, and a plain `ListView` of 9,000 walkable rows
+the same (`qt-test`'s `LongListScene.qml`). The cause was the walk's bookkeeping, not the views: the tree names items by
+their `QObject`'s address, and a view deletes a delegate scrolled out of it (past its cache) and makes another when it
+scrolls back. At 1280 × 800 the walk's Down from the last row it had built scrolled the list by a row, the first row's
+delegate was deleted, and the put-back's scroll made a new one. At the next size the tree's first row, the focus, was that
+new delegate, read last; by the time the walk reached it, Down from the last row had deleted and remade it again, so
+focusing it by its old address found nothing and the walk skipped it silently: no edge from the focus, every row
+unreachable (measured: 15 rows, 56 presses recorded, none from `row.0`). A freed address can also be taken by the next
+delegate made, so the old number could name the wrong row. And a focus scope's remembered item was given back by an
+address that no longer existed, which is how a theme's screen came to hold the focus on the list's content item.
+
+The walk now keeps, beside the tree, the object standing for each of its items (`walk_by`'s `live`). Each read of the
+tree marks the items it reads (a dynamic property, `harnessRead`); after a put-back, when the window holds an item with
+no mark (`harness_made_since`), or the focus had landed on no item the walk knew, the tree is read again and each of the
+first reading's items is found in it: the same object if its type, objectName and box are still the same, else the
+unclaimed item that has them (`Tree::found_in`, to half a pixel, the put-back having scrolled the views back). The
+put-back then runs again through those objects, so a scope's focus is given back to the row made again. Landings are
+read through the same objects, and a focus on no element of the tree (a row the list made as it scrolled) lands on none,
+recorded `none`, where it had been read as the list's content item and held to the pointer rule. `Scene::focus` finds a
+focused item made again in the tree's item's place the same way.
+
+Held to by `qt-test/tests/longlist.rs`: at each of the five sizes the first row holds the focus, the walk reaches every
+row on the screen, a click reaches each element the walk reaches, and the walk puts the focus back on the first row. Before the change it failed at 1920 × 1200 with nine rows
+unreachable. The S6 probe (that list in a theme package, `theme-audit --states many`) went from five sizes of reach
+findings in each variant to none, and from 46 s to 19 s. Cost, measured 2026-11-09 at a load of 7 to 8 on 16 threads:
+the gallery's gate 67.0 and 68.7 s against 60.9 s with the re-reading taken out, nearly all of it the carousel, whose
+every step makes a card. Two seeded faults, each reverted: the re-reading taken out failed `longlist.rs` at 1920 × 1200
+(nine rows unreachable); a landing on no element read as the list's content item failed it at 1280 × 800 (the content
+item covered, held to the pointer rule).
+
 ### 7.12 The pad's glyphs (stage 0, the rest, step 2; 2026-11-08)
 
 The help bar's circles were empty until this step. Each entry now draws the glyph of the control that gives its press,

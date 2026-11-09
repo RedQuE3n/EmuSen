@@ -278,8 +278,28 @@ impl Scene<'_> {
         let now = self.tree();
         let mut at = now.index_of(id)? as usize;
         loop {
-            if let Some(index) = now.nodes[at].id.parse().ok().and_then(|held| tree.index_of(held)) {
+            // The item itself, or one a view made again where the tree's stood (a delegate scrolled out and back).
+            if let Some(index) = tree.same_as(&now.nodes[at]) {
                 return Some(tree.walkable_of(index));
+            }
+            at = now.nodes.iter().position(|n| n.id == now.nodes[at].parent)?;
+        }
+    }
+
+    /// The walk's `focus`, read through `live`, the objects that stand for the tree's items now, never through the tree's own
+    /// numbers, whose objects a view may have deleted and whose addresses a new item may hold.
+    fn landed(&mut self, tree: &Tree, live: &[u64]) -> Option<u32> {
+        // A focus inside no element of the tree (a row a list made as it scrolled) lands on none, not on the list's content.
+        let known = |id: u64| live.iter().position(|&l| l != 0 && l == id).map(|i| tree.walkable_of(i as u32)).filter(|&w| tree.nodes[w as usize].operable);
+        let id = ffi::harness_focus(self.window());
+        if let Some(index) = known(id) {
+            return Some(index);
+        }
+        let now = self.tree();
+        let mut at = now.index_of(id)? as usize;
+        loop {
+            if let Some(index) = now.nodes[at].id.parse().ok().and_then(known) {
+                return Some(index);
             }
             at = now.nodes.iter().position(|n| n.id == now.nodes[at].parent)?;
         }
@@ -555,40 +575,54 @@ impl Scene<'_> {
     /// The walk with each press made by `press`: a real pad's, where `walk` pushes into the router's queue.
     pub fn walk_by(&mut self, tree: &Tree, mut press: impl FnMut(&mut Self, UiButton)) -> Vec<Step> {
         let mut steps = Vec::new();
+        // The object standing for each of the tree's items: a view deletes a delegate scrolled out of it and makes another
+        // when it scrolls back, so a press can leave the tree's numbers naming nothing, or a new item at a freed address.
+        let mut live = tree.ids.clone();
         for from in tree.operable() {
             for button in [UiButton::Up, UiButton::Down, UiButton::Left, UiButton::Right] {
-                if !self.focus_item(tree, from) {
+                let id = live[from as usize];
+                if id == 0 || !ffi::harness_focus_item(self.window(), id) {
                     continue;
                 }
+                self.wait(5);
                 press(self, button);
-                let to = match self.focus(tree) {
+                // A focus on no item the walk knows is found by reading the tree, which marks what it reads as read.
+                let mut read = !live.contains(&ffi::harness_focus(self.window()));
+                let to = match self.landed(tree, &live) {
                     Some(to) if to == from => Landing::Same,
                     Some(to) => Landing::At(to),
                     None => Landing::Lost,
                 };
                 steps.push(Step { from, button, to });
-                self.put_back(tree);
+                // Items made since the tree was read stand for the tree's own once found; a scope's focus is then given back to them.
+                for _ in 0..3 {
+                    self.put_back(tree, &live);
+                    if !std::mem::take(&mut read) && !ffi::harness_made_since(self.window()) {
+                        break;
+                    }
+                    live = tree.found_in(&self.tree());
+                }
             }
         }
         steps
     }
 
-    /// Writes back every selection, value, scroll and focus scope's remembered item that differs from the tree's, then
-    /// settles the views; a path's offset is not written, since it follows its current index by the view's own animation.
-    fn put_back(&mut self, before: &Tree) {
-        for node in before.nodes.iter().filter(|n| !n.scoped.is_empty()) {
-            let want: u64 = node.scoped.parse().unwrap_or(0);
-            if ffi::harness_scoped(self.window(), node.id.parse().unwrap_or(0)) != want {
+    /// Writes back every selection, value, scroll and focus scope's remembered item that differs from the tree's, through
+    /// `live`, then settles the views; a path's offset is not written, since it follows its current index by the view's own
+    /// animation.
+    fn put_back(&mut self, before: &Tree, live: &[u64]) {
+        for (i, node) in before.nodes.iter().enumerate().filter(|(_, n)| !n.scoped.is_empty()) {
+            let want = node.scoped.parse().ok().and_then(|id| before.index_of(id)).map_or(0, |w| live[w as usize]);
+            if want != 0 && live[i] != 0 && ffi::harness_scoped(self.window(), live[i]) != want {
                 ffi::harness_give_focus(self.window(), want);
             }
         }
-        for node in &before.nodes {
-            let id: u64 = node.id.parse().unwrap_or(0);
+        for (i, node) in before.nodes.iter().enumerate() {
             for (property, value) in node.kept.iter().filter(|(property, _)| *property != "offset") {
                 let name = QString::from(property.as_str());
-                let now = ffi::harness_get(self.window(), id, &name);
+                let now = ffi::harness_get(self.window(), live[i], &name);
                 if now.is_finite() && value.is_finite() && (now - value).abs() > 1e-6 {
-                    ffi::harness_put(self.window(), id, &name, *value);
+                    ffi::harness_put(self.window(), live[i], &name, *value);
                 }
             }
         }

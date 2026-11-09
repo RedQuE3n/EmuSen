@@ -90,6 +90,18 @@ fn qt_3_7_a_transition_longer_than_the_kit_s_is_recorded_at_rest() {
 }
 
 #[test]
+fn qt_3_7_words_over_a_pale_picture_are_measured_against_the_picture() {
+    let (out, status) = audit("dim-picture");
+    assert_eq!(status, 1, "{out}");
+    for size in ["1280x800", "1920x1200", "1920x1080", "1280x720", "3840x2160"] {
+        let want = format!("dim-picture/screens/Home.qml:1 contrast {size} dark: low contrast: ");
+        assert!(out.lines().any(|l| l.contains(&want) && l.contains("caption")), "{want}\n{out}");
+    }
+    // The tokens alone pass: the light variant's text is dark on the same picture, and the rows keep theirs in both.
+    assert!(out.lines().all(|l| l.contains(" contrast ") && l.contains(" dark: ") && l.contains("caption")), "the caption in the dark alone: {out}");
+}
+
+#[test]
 fn qt_3_7_consoles_laid_out_by_hand_do_not_survive_120_consoles() {
     let (out, status) = audit("by-hand");
     assert_eq!(status, 1);
@@ -150,5 +162,28 @@ fn qt_3_7_a_catalogue_records_choose_a_console_over_its_consoles_alone() {
     let out = Command::new(PROGRAM).arg("--catalogue").arg(&bad).arg(themes().join("loaded")).output().expect("theme-audit runs");
     assert_eq!(out.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&out.stderr).contains("bad.tsv: line 1: the games count"), "the line named");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn qt_3_7_a_desktop_at_125_percent_still_records_one_pixel_a_unit() {
+    let dir = std::env::temp_dir().join(format!("theme-audit-scaled-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // An offscreen screen at 120 dpi over a base of 96, a scale of 1.25, as the desktop was when its pictures came out 1600 x 1000.
+    let screen = dir.join("scaled.json");
+    std::fs::write(&screen, r#"{"screens":[{"name":"scaled","x":0,"y":0,"width":2560,"height":1600,"logicalDpi":120,"logicalBaseDpi":96,"dpr":1.25}]}"#).unwrap();
+    let file = dir.join("one.tsv");
+    std::fs::write(&file, "Sega\tGenesis\t12\tNephrite\temusen\tmd\n").unwrap();
+    let state = dir.join("state");
+    let out = Command::new(PROGRAM)
+        .env("QT_QPA_PLATFORM", format!("offscreen:configfile={}", screen.display()))
+        .arg("--state").arg(&state).arg("--catalogue").arg(&file).arg(themes().join("loaded"))
+        .output().expect("theme-audit runs");
+    let lines = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(!lines.contains(" recording "), "every picture at its state's size: {lines}");
+    assert_eq!(out.status.code(), Some(0), "{lines}");
+    let png = std::fs::read(state.join("Consoles-dark-one-1280x800.png")).expect("the recording's picture");
+    let picture = cxx_qt_lib::QImage::from_data(&png, Some("PNG")).expect("a PNG");
+    assert_eq!((picture.width(), picture.height()), (1280, 800), "one device pixel a unit");
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use emusen_kit_core::audit::{Axes, Edges, Item, Kind, Legibility, Rect, Text};
+use emusen_kit_core::audit::{Axes, Edges, Item, Kind, Legibility, Rect, Stacking, Text};
 use emusen_kit_core::tokens::Colour;
 use serde::Deserialize;
 
@@ -51,6 +51,23 @@ pub struct Node {
     pub text: Option<String>,
     #[serde(default)]
     pub elided: bool,
+    /// A turned item's four corners in the scene, x and y in turn.
+    #[serde(default)]
+    pub corners: Option<[f64; 8]>,
+    /// The words' drawn glyphs' four corners in the scene, x and y in turn.
+    #[serde(default)]
+    pub inked: Option<[f64; 8]>,
+    /// The stack a kit layout declares that the item lies in, its member and the member's layer.
+    #[serde(default)]
+    pub stack: Option<String>,
+    #[serde(default)]
+    pub member: Option<String>,
+    #[serde(default)]
+    pub layer: f64,
+    #[serde(default, rename = "memberFocus")]
+    pub member_focus: bool,
+    #[serde(default, rename = "isMember")]
+    pub is_member: bool,
     /// A turned item's own width and height in the scene's units, unturned.
     #[serde(default)]
     pub own: Option<[f64; 2]>,
@@ -167,6 +184,22 @@ fn item(index: u32, node: &Node) -> Item {
     if node.fade_top || node.fade_bottom || node.fade_left || node.fade_right {
         item = item.fading(Edges { top: node.fade_top, bottom: node.fade_bottom, left: node.fade_left, right: node.fade_right });
     }
+    if let Some(c) = node.inked {
+        item = item.inked([(c[0], c[1]), (c[2], c[3]), (c[4], c[5]), (c[6], c[7])]);
+    }
+    if let Some(c) = node.corners {
+        item = item.turned([(c[0], c[1]), (c[2], c[3]), (c[4], c[5]), (c[6], c[7])]);
+    }
+    if let (Some(stack), Some(member)) = (&node.stack, &node.member) {
+        let number = |s: &str| s.parse::<u64>().unwrap_or(0);
+        item = item.stacked(Stacking {
+            stack: number(stack),
+            member: number(member),
+            layer: node.layer,
+            focused: node.member_focus,
+            is_member: node.is_member,
+        });
+    }
     if node.text.is_some() {
         item = item.words(Text { cap_height: node.cap, width: node.tw, height: node.th, ellipsis: node.elided, data: false, own: node.own.map(|o| (o[0], o[1])) });
     }
@@ -208,6 +241,26 @@ fn spread(glyphs: [f64; 4], width: f64, height: f64) -> Vec<(f64, f64)> {
     points
 }
 
+/// Points spread over the glyphs' own four corners, so words on a turned card are sampled on the card, not beside it.
+fn spread_turned(corners: [f64; 8], width: f64, height: f64) -> Vec<(f64, f64)> {
+    let (ox, oy) = (corners[0], corners[1]);
+    let (ax, ay) = (corners[2] - ox, corners[3] - oy);
+    let (dx, dy) = (corners[6] - ox, corners[7] - oy);
+    let (w, h) = (ax.hypot(ay), dx.hypot(dy));
+    let (columns, rows) = ((w / 4.0).clamp(2.0, 16.0) as usize, (h / 4.0).clamp(2.0, 6.0) as usize);
+    let mut points = Vec::with_capacity(columns * rows);
+    for row in 0..rows {
+        for column in 0..columns {
+            let (u, v) = ((column as f64 + 0.5) / columns as f64, (row as f64 + 0.5) / rows as f64);
+            let (px, py) = (ox + ax * u + dx * v, oy + ay * u + dy * v);
+            if px >= 0.0 && py >= 0.0 && px < width && py < height {
+                points.push((px, py));
+            }
+        }
+    }
+    points
+}
+
 /// The item of this number under an item, to be changed.
 fn find_mut(item: &mut Item, id: u32) -> Option<&mut Item> {
     if item.id.0 == id {
@@ -217,13 +270,17 @@ fn find_mut(item: &mut Item, id: u32) -> Option<&mut Item> {
 }
 
 impl Tree {
-    /// Where to sample behind each visible text that has an ink: its number and its points.
+    /// Where to sample behind each visible text that has an ink and words to draw: its number and its points.
     pub fn behind_points(&self, width: f64, height: f64) -> Vec<(u32, Vec<(f64, f64)>)> {
         self.nodes
             .iter()
             .enumerate()
             .filter(|(_, n)| n.visible && n.ink.as_deref().is_some_and(|ink| !ink.is_empty()))
-            .filter_map(|(i, n)| n.glyphs.map(|g| (i as u32, spread(g, width, height))))
+            .filter(|(_, n)| n.text.as_deref().is_some_and(|t| !t.trim().is_empty()))
+            .filter_map(|(i, n)| match (n.corners, n.inked) {
+                (Some(_), Some(inked)) => Some((i as u32, spread_turned(inked, width, height))),
+                _ => n.glyphs.map(|g| (i as u32, spread(g, width, height))),
+            })
             .filter(|(_, points)| !points.is_empty())
             .collect()
     }

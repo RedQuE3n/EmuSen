@@ -238,6 +238,8 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
                 let header =
                     Header { state: &file, case: title(screen), kind: "menu", width: w, height: h, measures, palette: &declared };
                 let _ = std::fs::write(dir.join(format!("{file}.spec")), spec::write(&tree, &tree.root, &header, focus.map(|f| f.0), &walk));
+                // The walk's last put-back moved the focus home, so whatever that started ends before the picture.
+                scene.rest();
                 scene.grab(&dir.join(format!("{file}.png")).display().to_string());
             }
             if let Some(missed) = pass.consoles.and_then(|all| swept(scene, all, (f64::from(w), f64::from(h)))) {

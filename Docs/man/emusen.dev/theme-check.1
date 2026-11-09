@@ -169,7 +169,14 @@ THE LOADED STEP
     --state DIR writes each state's recording into DIR as
     Screen-variant-WxH.spec and .png (EmuSen_InterfaceSpec.md's format),
     the recordings a theme's side-by-sides are made from; with several
-    folders, each package's go into DIR/<its folder's name>.
+    folders, each package's go into DIR/<its folder's name>. Each picture
+    is taken once the screen rests after the walk's last put-back: no
+    animation running but those that loop without end (a design's
+    resting motion), or with none, no frame swapped for 100 ms; a screen
+    that has not rested in 5 s is a stopped finding. The put-back moves
+    the focus home, and a world that rises on a change of focus was
+    caught half-faded (measured 2026-11-08, Horizon's Choose a console);
+    a fixed wait would go stale under a theme's own longer transitions.
 
     --catalogue FILE (theme-audit alone) places Choose a console once,
     over the synthetic library with FILE's consoles in place of its own,

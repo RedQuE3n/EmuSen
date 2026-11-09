@@ -325,3 +325,51 @@ pub fn settle_picture(scene: &mut Scene<'_>, scratch: &Path) -> bool {
     }
     false
 }
+
+// The systems in the order ES-DE 3.4.1 shows them on the oracle's library (its capture of Art Book Next's carousel, 2026-11-08), the SNES first.
+pub const ORDER: [(&str, &str); 5] =
+    [("snes", "Super Nintendo"), ("n64", "Nintendo 64"), ("nes", "Nintendo Entertainment System"), ("gb", "Game Boy"), ("gbc", "Game Boy Color")];
+
+/// A step along a view's primary element, as the painter reads its axis: down a list or a vertical carousel, else right.
+pub fn along(theme: &Path, choices: &emusen_esde::loader::Choices, view: &str) -> emusen_kit_core::input::UiButton {
+    use emusen_esde::loader::{self, ThemeSystem};
+    let t = loader::load(&theme.to_string_lossy(), &ThemeSystem::new("snes", "Super Nintendo", "snes"), choices, None);
+    let vertical = match t.view(view).primary() {
+        Some(p) if p.kind() == "textlist" => true,
+        Some(p) if p.kind() == "carousel" => p.string("type").is_some_and(|t| t.starts_with("vertical")),
+        _ => false,
+    };
+    if vertical {
+        emusen_kit_core::input::UiButton::Down
+    } else {
+        emusen_kit_core::input::UiButton::Right
+    }
+}
+
+/// One watched theme's options as the painter's `choices` text and as the loader's `Choices`.
+pub fn choices_of(variant: &str, scheme: &Option<String>, font: &str) -> (String, emusen_esde::loader::Choices) {
+    let mut text = format!("\"Variant\":\"{variant}\",\"FontSize\":\"{font}\"");
+    if let Some(s) = scheme {
+        text += &format!(",\"ColorScheme\":\"{s}\"");
+    }
+    let picked = emusen_esde::loader::Choices {
+        variant: Some(variant.to_owned()),
+        color_scheme: scheme.clone(),
+        font_size: Some(font.to_owned()),
+        ..emusen_esde::loader::Choices::default()
+    };
+    (text, picked)
+}
+
+/// A watched theme's view installed afresh at `w` × `h` on the oracle's texts, the clock shown; waits until it is themed.
+pub fn install(scene: &mut Scene<'_>, folder: &Path, choices: &str, view: &str, texts: &(String, String, String), w: i32, h: i32) {
+    let text = settings(folder, &format!("\"DisplayClock\":true,\"StartupView\":\"{view}\"")).replacen('{', &format!("{{\"choices\":{{{choices}}},"), 1);
+    assert!(scene.set_property("view", "shelves", "[]"));
+    until(scene, "the view emptied", |s| s.property("esdeModel", "themed") == "false");
+    scene.resize(w, h);
+    assert!(scene.set_property("view", "media", &texts.1));
+    assert!(scene.set_property("view", "presence", &texts.2));
+    assert!(scene.set_property("view", "settings", &text));
+    assert!(scene.set_property("view", "shelves", &texts.0));
+    until(scene, "the theme loaded", |s| s.property("esdeModel", "themed") == "true");
+}

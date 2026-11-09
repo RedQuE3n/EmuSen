@@ -63,7 +63,7 @@ ElementBox {
             required property string marker
             required property bool folder
             readonly property bool chosen: line.index === root.selected
-            // ES-DE prefixes the marker to the name, so a row without one starts at the margin (EmuSen_Qt.md §4.8.5).
+            // The band sits at the row's top, as ES-DE's selector does; ES-DE prefixes the marker to the name, so a row without one starts at the margin (EmuSen_Qt.md §4.8.5).
             readonly property real room: line.marker.length > 0 ? root.markerWidth : 0
             objectName: "row-" + line.index
             width: root.width
@@ -77,7 +77,7 @@ ElementBox {
             Rectangle {
                 visible: line.chosen && root.hasSelectedBackground
                 x: root.margin - root.selectedBackgroundLeft
-                y: (root.rowHeight - root.bandHeight) / 2
+                y: 0
                 width: line.room + Math.min(name.contentWidth, name.width) + root.selectedBackgroundLeft + root.selectedBackgroundRight
                 height: root.bandHeight
                 radius: root.selectedBackgroundRadius
@@ -85,7 +85,7 @@ ElementBox {
             }
             Mark {
                 x: root.margin
-                anchors.verticalCenter: parent.verticalCenter
+                y: (root.bandHeight - root.px) / 2
                 width: root.px
                 height: root.px
                 mark: line.marker
@@ -94,7 +94,7 @@ ElementBox {
             TextBlock {
                 id: name
                 x: root.margin + line.room
-                y: (root.rowHeight - root.bandHeight) / 2
+                y: 0
                 width: root.width - 2 * root.margin - line.room
                 height: root.bandHeight
                 text: line.text

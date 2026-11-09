@@ -9,7 +9,7 @@ use std::fmt;
 
 pub use fit::{CAPS_SLACK, DESKTOP_CAPS, SMALL_TEXT_EXCEPTIONS, SMALLEST_TEXT, TWO_ROWS, fit, smallest_capitals};
 pub use reach::{Edge, pad_reach, pointer_reach, reached};
-pub use rules::{CONTRAST_SPARE, LARGE_BOLD_TEXT, LARGE_TEXT, contrast, named, no_chrome, palette_reach};
+pub use rules::{CONTRAST_SPARE, LARGE_BOLD_TEXT, LARGE_TEXT, STATE_CHANGE, changed_share, contrast, named, no_chrome, palette_reach};
 pub use tree::{Axes, Edges, Item, Kind, Legibility, Rect, Stacking, Text};
 
 use crate::input::{ElementId, WalkForm};

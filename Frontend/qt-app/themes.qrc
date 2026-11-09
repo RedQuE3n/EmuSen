@@ -9,6 +9,7 @@
         <file alias="parts/EngineMark.qml">../themes/emusen/parts/EngineMark.qml</file>
         <file alias="parts/Faces.qml">../themes/emusen/parts/Faces.qml</file>
         <file alias="parts/Glyph.qml">../themes/emusen/parts/Glyph.qml</file>
+        <file alias="parts/Night.qml">../themes/emusen/parts/Night.qml</file>
         <file alias="screens/Consoles.qml">../themes/emusen/screens/Consoles.qml</file>
         <file alias="screens/Games.qml">../themes/emusen/screens/Games.qml</file>
         <file alias="screens/Home.qml">../themes/emusen/screens/Home.qml</file>

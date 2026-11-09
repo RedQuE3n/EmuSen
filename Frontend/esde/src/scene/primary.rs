@@ -99,11 +99,6 @@ fn fit_of(e: &Element) -> Fit {
     }
 }
 
-fn dimmed(c: crate::loader::Color, dim: f64) -> crate::loader::Color {
-    let ch = |v: u8| ((v as f64 * dim) as u32).min(255);
-    crate::loader::Color((ch(c.r()) << 24) | (ch(c.g()) << 16) | (ch(c.b()) << 8) | c.a() as u32)
-}
-
 /// A carousel at a position in items (fractional while it moves, not wrapped) in its box of `bw` × `bh` pixels.
 pub fn carousel(e: &Element, data: &Data, count: usize, position: f64, bw: f64, bh: f64) -> Carousel {
     let (sw, sh) = (data.width, data.height);
@@ -297,7 +292,8 @@ pub fn carousel(e: &Element, data: &Data, count: usize, position: f64, bw: f64, 
                     opacity,
                     dim,
                     saturation: saturation * if selected { 1.0 } else { unfocused_sat },
-                    tint: dimmed(if selected { selected_tint } else { base_tint }, dim),
+                    // The painter multiplies by dim once, so the tint stays the theme's.
+                    tint: if selected { selected_tint } else { base_tint },
                     reflection: reflects.then(|| {
                         (
                             (e.float("reflectionsOpacity").unwrap_or(0.5) as f64).clamp(0.0, 1.0) * opacity,

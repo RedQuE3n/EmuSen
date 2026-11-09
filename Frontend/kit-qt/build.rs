@@ -75,6 +75,7 @@ fn main() {
         "src/keyboard.rs",
         "src/notices.rs",
         "src/keypass.rs",
+        "src/current.rs",
     ])
     .include_dir("cpp")
     .cpp_files(["cpp/kit_glue.cpp", "cpp/game_picture.h", "cpp/game_picture.cpp", "cpp/edge_mask.h", "cpp/edge_mask.cpp", "cpp/inside_clips.h", "cpp/inside_clips.cpp"])

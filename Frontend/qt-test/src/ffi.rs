@@ -14,9 +14,20 @@ pub mod ffi {
         fn harness_show(window: Pin<&mut QObject>, width: i32, height: i32) -> bool;
         fn harness_resize(window: Pin<&mut QObject>, width: i32, height: i32);
         fn harness_tree(window: Pin<&mut QObject>) -> QString;
+        /// Whether the window holds an item made since its tree was last read.
+        fn harness_made_since(window: Pin<&mut QObject>) -> bool;
+        /// Whether the view numbered `id` still turns to its current item: its highlight follows it and stands elsewhere.
+        fn harness_turning(window: Pin<&mut QObject>, id: u64) -> bool;
         fn harness_click(window: Pin<&mut QObject>, x: f64, y: f64, button: i32);
         fn harness_hover(window: Pin<&mut QObject>, x: f64, y: f64);
         fn harness_key(window: Pin<&mut QObject>, key: i32, modifiers: i32);
+        /// Presses a key without releasing it, or releases it: a press held.
+        fn harness_key_hold(window: Pin<&mut QObject>, key: i32, down: bool);
+        type HeldClock;
+        /// Qt's animation clock replaced by one held at 0, until the one returned is dropped.
+        fn harness_clock_hold() -> UniquePtr<HeldClock>;
+        /// The held clock moved to `ms` since it was held, a frame's step at a time.
+        fn harness_clock_move(clock: Pin<&mut HeldClock>, ms: i64);
         fn harness_wheel(window: Pin<&mut QObject>, x: f64, y: f64, delta: i32);
         fn harness_wait(ms: i32);
         fn harness_keep_messages();

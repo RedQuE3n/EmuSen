@@ -211,6 +211,8 @@ pub struct Data {
     pub help: HelpContext,
     /// ES-DE's quick-scroll overlay over a held textlist.
     pub scroll_overlay: bool,
+    /// The gameselectors' random picks start from this, set by the host; each navigation of the view draws again.
+    pub selection_seed: u64,
 }
 
 impl Data {
@@ -232,6 +234,7 @@ impl Data {
             swap: false,
             help: HelpContext::default(),
             scroll_overlay: false,
+            selection_seed: 0,
         }
     }
 

@@ -1,9 +1,9 @@
 # Constellation's Figures canvas, state maker40, W 1422.2: compact lines height scrolls, then each node (x y raised line left right up down), then each figure (x y width per)
 chart	1	16	2688	1
 groups	40 8 8 8 7 7 7 7 7 7 7 7
-p0	711.10	120.00	0	0	-	-	-	p1
-p1	611.10	216.00	0	0	-	p2	p0	i4
-p2	811.10	216.00	0	0	p1	-	p0	i6
+p0	711.10	120.00	0	0	-	p2	-	p1
+p1	611.10	216.00	0	0	-	p2	p0	i0
+p2	811.10	216.00	0	0	p1	-	p0	i11
 i0	228.10	332.00	1	1	-	i1	p1	i12
 i1	324.10	364.00	0	1	i0	i2	p1	i13
 i2	420.10	332.00	1	1	i1	i3	p1	i14

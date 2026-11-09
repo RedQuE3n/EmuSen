@@ -778,7 +778,7 @@ with the fields a theme may read and nothing more. The table is the module as bu
 | `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only; `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
 | `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown) |
 | `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` (a shelf's icon, one of Home's seven places by its key, or an engine's mark) |
-| `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `FigureLayout`, `WheelLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31); `WheelLayout` turns groups as wheels over a dial (§7.32) |
+| `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `OrbitLayout`, `FigureLayout`, `WheelLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31); `WheelLayout` turns groups as wheels over a dial (§7.32); `OrbitLayout` places groups on nested orbits (§7.30) |
 | `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()` |
 
 A theme provides `screens/Home.qml`, `screens/Consoles.qml` and `screens/Games.qml`, each a `ThemeScreen`, and may provide
@@ -938,6 +938,109 @@ dropped (`cards.rs`, the focus stayed on Power); the slot under the Home card no
 faults); an empty picture URL refused by the sandbox (`theme_feed.rs`, 22 refusals logged); the fan made of the whole
 row (`scale.rs`, 9,000 covers for 4). The stage 1 start-up gates of §9.3.1 (Home shown ≤ 0.35 s, the first press
 ≤ 0.95 s on the real library) were not re-run: their driver is no longer kept.
+
+#### 3.4.2 The reference theme's Choose a console: the orbits **[M 2026-11-08]**
+
+**Decided 2026-11-08 by the tester:** the reference theme's Choose a console becomes the orbits. Each maker's consoles sit
+on a half-ellipse about the top centre, the smallest group innermost, as the stage 3 design `reference-consoles.md` and its
+canvas `consoles.html` give it. They replace the planet rows and the fan of four covers. Home, the grid and the splash
+are unchanged.
+
+**What it is made of.**
+- `screens/Consoles.qml`, the screen. It holds:
+  - the head;
+  - the shelves as a row of glass discs;
+  - the orbits' lines, cut at y 584;
+  - each maker's label, and the ellipses where an orbit turns;
+  - the worlds;
+  - the foot: the full name, the facts, the engine line, and three covers.
+- `parts/CoverRow.qml`, new: three covers whole at the console's shape, no taller than 100 and no wider than 150, 12 apart.
+- `parts/EngineLine.qml`, new: the mark, the engine's name and its tag. By day the hue is darkened to 30% lightness, so
+  the words hold 4.5:1 on the paper, as the canvas has it.
+- `parts/EngineMark.qml`: libretro's badge is now drawn in the ink it is given, as the canvas draws it, so the badge after
+  a world's count is Muted by day. It was a fixed light grey.
+- `parts/CoverFan.qml` is gone. Nothing else used it.
+
+**The layout is data.** The positions come from the kit's `OrbitLayout` (`EmuSen_Kit.md` §7.30), fed `Library.consoles`
+with `role: "group"` and `labelRole: "maker"`. The theme draws each world at (centre + rx cos θ, ry sin θ):
+- θ moves on Reel, so a turning orbit carries its worlds along the arc;
+- the radii move on Pan, so the orbits scroll radially;
+- the body's size (72, or 96 focused) moves on Quick;
+- a world's opacity moves on Fade, so worlds fade as they enter and leave a window or the three shown orbits.
+
+Nothing is placed by name, and the screen holds any count from 0 to 120. `qml-rules` treats a binding whose name ends in
+`Role` as a model role's name rather than words shown to the player, as Qt's own `textRole` and `valueRole` are.
+
+**The walk.**
+- The arrows go through the layout's steps (`Keys.onLeftPressed: layout.stepLeft()` and the rest), and `jumped(index)`
+  gives the focus to the item the layout names.
+- LB and RB use the frame's sections: the layout's `sections` (one key per orbit, innermost first) and `section` (the
+  focused orbit's key, or on a place the key before the innermost shown orbit). `sectionChosen` calls `jump(key)`, which
+  lands on that orbit nearest the focus in x.
+- The help bar takes `Help.entries(Help.Console, {group: true})`: A Open, B Back, LB RB Group, Y Favourites, X Random game.
+- The first focus is the console last opened, else the first console in the table, else the first shelf when there is no
+  console.
+
+**Night and day.** At night: the kit's `Sky`, its stars still, and the glow at the focused world in its hue. By day there
+is no sky and no glow. The paper is `Tokens.surface`, the orbit lines are ink #1F2A44 at 28%, and the discs are white at
+60% with a 14% edge.
+
+**Named differences from the canvas**, each seen beside its render. Under each catalogue the worlds' points are the
+canvas's own; kit-core's test holds them within 0.01 unit.
+1. Three `PathView`s on `PathArc`s were the spec's suggestion. They became `OrbitLayout` and one `Repeater`, because a
+   `PathView` needs a model per group and nothing gives one. The capacity rule and the walk are data, not bindings.
+2. LB and RB wrap from the outermost orbit to the innermost and back, as the kit's section step does on every screen
+   (decided 2026-11-08: kept).
+   Up and Down stop at the ends.
+3. The ring does not breathe (decided 2026-11-08): the reference theme keeps an idle screen at no redraw, which
+   `idle.rs` holds. The spec's resting breath is not drawn.
+4. The places' widths are the faces' own: each name is measured, where the canvas places its row by an estimate of
+   11.5 units a letter. The spec's rule is the row centred with 48 between. The canvas's own browser draws the three
+   names 100.54, 108.71 and 165.92 wide (measured 2026-11-09 in headless Chrome), shorter than its estimate, so its
+   drawn row stands 3.5 units left of centre and its gaps are 51.5 and 54.3. Under the spec's rule with those widths the
+   first disc stands at 326.4; the screen puts it at 326.6. The mockup spec holds the rule's positions, and notes the
+   canvas's estimated ones (318, 522, 737).
+5. After the first focus, the shown makers move only when the focus leaves them, as spec §3.1 asks; the canvas centres
+   the focused maker on every press.
+6. As at stage 1, the canvas's 17-unit words fall under the floor at 1280 × 720 alone, and the full name's glyphs reach
+   past its 44-unit line box.
+7. A world's `Walkable` is the body's box (the ring's when focused), and the name and count hang beneath it, outside
+   the `Walkable`. The canvas's node was 140 units wide and held the words too. On the steep stretches of the outer
+   orbits those nodes covered their neighbours, which the fit audit read as overlaps of empty corners.
+8. Two of the canvas's own boxes still touch, and the fit audit names both:
+   - The focused NES's body box reaches 0.7 unit into the line box of Master System's count. The disc's edge stays
+     11 units clear of the words.
+   - A turning orbit's label sits by its window's last world. The two boxes meet at 16:9, where the outer orbit
+     holds ten.
+9. The inner orbit's window ends at y 197, not 178 (decided 2026-11-08), so it holds 2 worlds, not 3. At 178 a
+   focused world at its end grew its ring to y 123, into the places row (which ends at 140). The audit over the 120
+   consoles found it, and the canvas's own numbers do the same. A turning orbit shows its whole capacity, with the
+   focus at the middle world (left of the middle when the capacity is even). The canvas centred the focus, which
+   showed one world fewer on an orbit of even capacity: the inner's 2, the middle's 6, and the outer's 10 at 16:9.
+   kit-core's test holds a focused inner world's ring at or below 140 at the five sizes.
+10. Two colours on the screen are not the kit's tokens, and each is argued here:
+   - The engine's mark after a world's count and the foot's engine line (mark, name and tag) are drawn in the console's
+     hue, as the canvas and `EmuSen_Interface.md` §24.6 draw them. A hue is the console's, as the world's body is, so
+     both stand in the kit's `Scene` (`EmuSen_Kit.md` §7.20): the gate's palette leaves the colour to the theme and
+     still holds the words to contrast. The stage 1 reference drew its engine row in a `Scene` for the same reason.
+   - The places' glass discs take the canvas's edge, its line ink #8C96DC at 18%, the ink the orbit lines are named
+     for in §7.1 step 4. The fill is the kit's raised surface at 50%. No token is that ink, and the kit's border at 18%
+     would not show on the sky. The acceptance test names the disc's edge with the orbit lines.
+
+**The sweep.** theme-check's 120-console sweep walked each row in one direction, then went Down. Over the orbits, Down
+lands nearest in x, so the sweep heard 52 consoles of 120. The sweep now walks each row to both of its ends, as its man
+page says ("along and back"), and hears all 120 (man theme-check).
+
+**Proof** (measured 2026-11-08).
+- Offscreen, these pass: `qt-app`'s `program.rs` (`qml-rules`' theme profile and `qmllint` on the package), `screens.rs`,
+  `idle.rs`, `theme_feed.rs` and `scale.rs`; `theme-qt`'s `surface.rs` and `qml.rs`; `kit-qt`'s `qmltypes.rs`;
+  `kit-core`'s `orbits.rs`; `qml-rules`.
+- `screens.rs` walks: the first console, Up to a place, Down back to the console, Right along the orbit.
+- `scale.rs` holds each step over 9,000 games under 400 ms, and a console's three covers as three delegates.
+- The recordings over the canvases' catalogues (`theme-audit --catalogue`, man theme-check) and the side-by-sides beside
+  the canvas's renders are kept in `~/.cache/emusen/tmp/qt-s3/compare/emusen-consoles/`.
+- `Testing/mockups/Consoles.mockup.spec` is rewritten from `consoles.html`. The acceptance test holds it, leaving out the
+  boxes that follow from the canvas's eleven consoles; kit-core's test holds those instead.
 
 #### 3.4.4 Meridian as built **[M 2026-11-08]**
 

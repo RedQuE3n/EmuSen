@@ -1,5 +1,5 @@
 //! The program at a library's scale (EmuSen_Qt.md §9.3.1): 9,000 synthetic games, hard links to one image. A step on
-//! Choose a console builds the fan's four covers and nothing per game of the row, and returns at once; the grid of every
+//! Choose a console builds the row's three covers and nothing per game of the console, and returns at once; the grid of every
 //! game follows the focus, the focused cover always inside the view.
 
 mod common;
@@ -18,10 +18,10 @@ fn focused(scene: &mut emusen_qt_test::Scene<'_>) -> String {
     scene.focus(&tree).map(|i| tree.nodes[i as usize].name.clone()).unwrap_or_default()
 }
 
-/// The fan's covers, made and shown or not, and every item of the scene.
+/// The row's covers, made and shown or not, and every item of the scene.
 fn counts(scene: &mut emusen_qt_test::Scene<'_>) -> (usize, usize) {
     let tree = scene.tree();
-    (tree.nodes.iter().filter(|n| n.name.starts_with("fanCover.")).count(), tree.nodes.len())
+    (tree.nodes.iter().filter(|n| n.name.starts_with("rowCover.")).count(), tree.nodes.len())
 }
 
 #[test]
@@ -43,11 +43,19 @@ fn a_step_builds_nothing_per_game_and_the_grid_follows_the_focus() {
     assert_eq!(scene.property("screens", "shown"), "Consoles");
     scene.wait(100);
 
-    // All games (9,000), the NES (6,000), the Game Boy (3,000), the favourites (none) and back: each step answered at once.
+    // The NES (6,000) first, the Game Boy (3,000), the favourites (none), All games (9,000) and back: each step answered at once.
     let (fan, items) = counts(&mut scene);
-    assert_eq!(fan, 4, "All games fans four covers");
-    let mut planet = None;
-    let walk = [(UiButton::Down, "nes", 4), (UiButton::Right, "gb", 4), (UiButton::Left, "nes", 4), (UiButton::Up, "favourites", 0), (UiButton::Left, "all", 4)];
+    assert_eq!(fan, 3, "the first console shows three covers");
+    let mut place = None;
+    let walk = [
+        (UiButton::Right, "gb", 3),
+        (UiButton::Left, "nes", 3),
+        (UiButton::Up, "favourites", 0),
+        (UiButton::Left, "all", 3),
+        (UiButton::Down, "nes", 3),
+        (UiButton::Up, "favourites", 0),
+        (UiButton::Left, "all", 3),
+    ];
     for (button, key, fanned) in walk {
         let started = Instant::now();
         scene.pad(button);
@@ -56,12 +64,12 @@ fn a_step_builds_nothing_per_game_and_the_grid_follows_the_focus() {
         assert!(took < STEP, "the step onto {key} held the GUI thread {took:?}");
         scene.wait(100);
         let (fan, now) = counts(&mut scene);
-        assert_eq!(fan, fanned, "{key} fans its first covers");
+        assert_eq!(fan, fanned, "{key} shows its first covers");
         if fanned == 0 {
             continue;
         }
-        // A place's tile and a lit planet's differ by their own marks alone; a row's games add nothing.
-        let alike = if key == "all" { items } else { *planet.get_or_insert(now) };
+        // A place and a lit world differ by their own marks alone; a console's games add nothing.
+        let alike = if key == "all" { *place.get_or_insert(now) } else { items };
         assert_eq!(now, alike, "the scene on {key} holds as many items as on a row of another size");
     }
 

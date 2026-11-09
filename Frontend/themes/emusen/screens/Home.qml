@@ -324,6 +324,8 @@ ThemeScreen {
                             required property string name
                             required property string line
                             required property bool attention
+                            // A place the host declines is still walked to, its words drawn at 38% (EmuSen_Qt.md §3.4.1).
+                            required property bool available
                             controller: frame.controller
                             objectName: "place." + place.index
                             focus: !Session.hasGame && shelf.count === 0 && place.index === 0
@@ -368,6 +370,7 @@ ThemeScreen {
                                 width: parent.width - 24
                                 text: place.name
                                 elide: Text.ElideRight
+                                opacity: place.available ? 1 : 0.38
                                 color: Tokens.textStrong
                                 font.family: faces.regular
                                 font.pixelSize: 20
@@ -378,6 +381,7 @@ ThemeScreen {
                                 x: 12
                                 y: 32
                                 spacing: 8
+                                opacity: place.available ? 1 : 0.38
                                 Glyph {
                                     objectName: "placeAttention." + place.index
                                     visible: place.attention

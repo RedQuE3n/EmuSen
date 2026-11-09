@@ -921,6 +921,13 @@ Repeaters' own `itemAdded`, never by an item kept from before. Delegates' data i
 3. The grid reports its focused game to the program (`Actions.focus`) and draws the focus the program holds
    (`Browse.focusRow`), so the List card's jumps move it as before.
 
+**A declined place** (2026-11-09). A place the host declines (`available` false in `Library.places`) is still walked
+to and still drawn in its tile, its words and its mark at 38%, the dim look the other themes give it, where Home had
+drawn it as an offered one. theme-audit's `disabled` state, offscreen on the software backend: in the dark variant the
+finding "a declined place drawn as if offered" is gone at every size, its words exempt as drawn apart (`EmuSen_Kit.md`
+§7.38); at 80% it came back at all five sizes (a seeded fault, reverted). The light variant kept it until its words
+turned light (below).
+
 **Proof, measured 2026-11-08.** The acceptance test (Vulkan on the RX 6800 in its own compositor, the virtual pad, the
 canvas's library) passed on WiseMan d5edac3e5 with the old screens and on the package, and its 90 grabs, 18 states
 (Home, Home with nothing left, Choose a console, the grid, the List card, the Home card's two pages, the Pause Card's

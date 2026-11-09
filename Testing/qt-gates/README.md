@@ -4,10 +4,11 @@ The scripts that measure the Qt front end's gates against Mistress in a composit
 Nothing here is built or shipped; each script is plain text in and out, and none touches the player's own home.
 
 - `run.sh <run-dir> <seconds> <program> [<arg>...]` — one run: KWin's virtual compositor at 1,920 × 1,200 with
-  Xwayland, on a D-Bus of its own, every window fullscreen by a rule; the program started with polled grabs and, when
-  `PAD` names steps, a uinput pad; everything it started stopped at the end, and the whole run under a watchdog.
-  `BOX` is the game's colour box for the grabs, `INTERVAL` their interval in ms (35). `WIDTH` and `HEIGHT` set the
-  virtual compositor's size (1,920 and 1,200), and `FULL=1` keeps every grab at that full size.
+  Xwayland (`XWAYLAND=0` leaves it out), on a D-Bus of its own, every window fullscreen by a rule; the program started
+  with polled grabs and, when `PAD` names steps, the gate pad; everything it started stopped at the end, and the whole
+  run under a watchdog. `BOX` is the game's colour box for the grabs, `INTERVAL` their interval in ms (35). `WIDTH`
+  and `HEIGHT` set the virtual compositor's size (1,920 and 1,200), and `FULL=1` keeps every grab at that full size.
+  The run's log ends with the count of input devices named "gate pad" on the machine, which is 0.
   With `DESK=<output>` the run uses the session's own compositor instead (`WAYLAND_DISPLAY` wayland-0, `DISPLAY` :0
   and the session's `XDG_RUNTIME_DIR`, each overridable as `DESK_WAYLAND`, `DESK_DISPLAY`, `DESK_RUNTIME`): no grabs,
   since the session's KWin refuses `ScreenShot2` to a client it has not authorised, and the pad started only once the
@@ -18,10 +19,26 @@ Nothing here is built or shipped; each script is plain text in and out, and none
   `active` marks the program's first focus. The script is unloaded at the end; the session's rules and settings are
   not touched.
 - `grab.py` — the grabs, through KWin's `ScreenShot2`: one line each (time, share of the screen lit, share in the
-  colour box, the PNG), the PNGs at 480 × 300, or at the compositor's full size with `FULL=1`.
-- `pad.py` — the pad, "gate pad" (vendor 1209, product 0001), pressed by steps: `wait:<s>`, `tap:<button>`,
-  `hold:<button>:<s>`. Every program on the desk reads it, so no `guide`, and nothing else reading pads while it runs.
+  colour box, the PNG), the PNGs at 480 × 300, or at the compositor's full size with `FULL=1`. GdkPixbuf scales them
+  (on the desktop and the handheld alike) and the script writes the PNG itself.
+- `pad.py <fifo> <step>...` — the gate pad's steps: `wait:<s>`, `settle:<grabs.tsv>:<s>`, `tap:<button>`,
+  `hold:<button>:<s>`, written as presses down a FIFO into an SDL virtual pad inside `emusen-qt` built with its
+  `gate-pad` feature (`EMUSEN_GATE_PAD` names the FIFO, and the window reads that pad alone). No input device is made, on
+  any machine: until 2026-11-08 this script made a uinput pad, which every program on the desk read, and Steam acted on
+  its press and launched a game. A program without the feature (Mistress, a player's build) hears no gate pad.
 - `first.py <run-dir>` — the program's exec to its window and to the game's first picture, from the grabs.
+- `sandbox.sh <root> <qt-bin-dir>` — the sandbox the start-up and memory gates run in: the published tree's program
+  folder copied with `emusen-qt` and `emusen-qt-play` beside the platform library, the tree's marker, and a home of its
+  own whose settings are the big screen in the reference look, Moonrise off, scraping off, the player's ROM folder as
+  the library (read-only through `bwrap` when run) and saves inside the sandbox.
+- `rss.py` — `RSS=<comm>` in `run.sh`: the program's `VmRSS` and `RssAnon` every 0.5 s to `rss.tsv`.
+- `press.py <run-dir>` — the first press: the pad's `settle:<grabs.tsv>:<s>` step waits until the window is lit and its
+  lit share has stood unchanged for `<s>` seconds in the polled grabs, then `tap:right` presses; `press.py` prints the
+  press and the first grab whose picture differs from the last before it (the focus ring moved), from the run's start.
+  The pad is made inside the program as it starts, so the press is never held back by the pad's arrival.
+- `gates.sh <root> <out> warm|start|idle|pause...` — the rebuilt method of §9.3.5, a round of the gates for one sandbox; `figures.py <runs> <round>` reads its figures.
+  `ROUTE` replaces the pad's way to the Pause Card for another library; `BOXED=1` (set by `../handheld/box.sh`) runs it
+  inside the handheld's box (§9.3.6, `../handheld/README.md`).
 - `shell.py <tree>/lib/EmuSen` — a terminal over a published tree's platform library: its shell with every EmuSen
   module and the runtime's settings service, as Mistress's shell has them, so `cores fetch`, `get`, `approve` and
   `default` run as typed. Lines come from stdin. Its executable is the Python interpreter, so an approved entry is read
@@ -52,7 +69,9 @@ program by `bwrap`:
       bash run.sh runs/r1-qt 66 "${RO[@]}" $SB/emusen-qt-play --seconds 62 --game "$SMB"
     bash run.sh runs/r1-mistress 62 "${RO[@]}" $SB/../../bin/EmuSen --play "$SMB"
 
-`emusen-qt-play` prints its counts at its end; Mistress's are its `[fps]` lines in `program.log`. Taking the tester's
+`emusen-qt-play` prints its counts at its end; Mistress's are its `[fps]` lines in `program.log`. These runs of
+2026-11-08 had the uinput pad; neither program has the gate pad, so `PAD` there now waits on a FIFO nobody opens, and a
+run of either that needs presses waits for the program to carry the feature. Taking the tester's
 screen needs the tester's consent.
 
 `cores fetch` and `cores get` are network requests to buildbot.libretro.com; run them only with the tester's go. Each run

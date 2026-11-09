@@ -33,6 +33,8 @@ fn main() {
         .and_then(|platform| Host::new(&platform, &App::platform_name().to_string(), gpu.as_deref(), false, &presets))
         .inspect_err(|words| eprintln!("No game can be played: {words}"))
         .ok();
+    #[cfg(feature = "gate-pad")]
+    let gate_pad = emusen_qt::gate_pad::start();
     let mut engine = QQmlApplicationEngine::new();
     if let Some(mut engine) = engine.as_mut() {
         let mut initial = QMap::<QMapPair_QString_QVariant>::default();
@@ -45,6 +47,10 @@ fn main() {
         let mut stores = QStringList::default();
         start.cover_stores.iter().for_each(|s| stores.append(QString::from(s)));
         initial.insert(QString::from("coverStores"), QVariant::from(&stores));
+        #[cfg(feature = "gate-pad")]
+        if let Some(id) = &gate_pad {
+            initial.insert(QString::from("onlyPads"), QVariant::from(&QString::from(id)));
+        }
         if let Some(host) = &host {
             initial.insert(QString::from("feed"), QVariant::from(&host.feed.address()));
         }

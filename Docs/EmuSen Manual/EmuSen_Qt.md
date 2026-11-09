@@ -3370,6 +3370,126 @@ picture either way. Steam opened a window each time the pad appeared.
 
 The logs of every run are in `~/.cache/emusen/tmp/qt-desk/runs/`; the sandbox was removed after the runs.
 
+#### 9.3.5 The start-up and memory gates with the reference theme as a package, on a rebuilt method **[M 2026-11-08]**
+
+The window now holds two theme hosts (the reference theme, compiled in as a package, and the chosen theme), so Home's
+first picture, the first press and memory were measured again on `WiseMan` (`0cfed0437`) and on `qt-s3-r` (`b14e92dc6`),
+both `emusen-qt` in release (opt-level 2), by one script, three rounds each, the two builds alternating within a round.
+
+**The method is a rebuild.** The script and sandbox of §9.3.1 were not kept, so `Testing/qt-gates/` gained `sandbox.sh`,
+`gates.sh`, `figures.py`, `press.py` and `rss.py` (README.md) from §9.3.1's written method. These figures are
+comparable between the two builds measured here, and with §9.3.1's only as far as the method below agrees with it. Where
+the written method left a choice, it was taken as follows:
+
+- The sandbox: the published tree's program folder (2026-11-08 07:58) with the build beside the platform library, a home
+  of its own (Moonrise off, the big screen in the reference look, scraping and online covers off, the player's ROM folder
+  as the library, bound read-only with `bwrap`), restored from a snapshot taken after one start had read the library
+  (9,007 games shown) before every run. §9.3.1's home was snapshotted the same way; its exact settings were not written.
+- "Home shown" is given twice, since the earlier rule (the first grab with Games' focus ring standing) was not kept: the
+  first grab with the window lit (over 1% of the screen) and the first grab whose lit share equals the settled value
+  (within 0.5%), the whole picture. Each is late by up to one grab interval (35 ms) and 0.03 to 0.05 s of grab latency.
+- The first press: the pad is made before the program starts; it presses Right once the window is lit and its lit share
+  has stood unchanged for 0.1 s in the polled grabs (the "still window" rule), and the answer is the first grab whose
+  picture differs from the last before the press. Qt's `qt.quick.focus` log wrote nothing in these builds (the program
+  logs nothing under `QT_LOGGING_RULES`), so §9.3.1's focus-log answer was not available.
+- Memory idle: `VmRSS` of the `emusen-qt` process 10 s after the window was lit, in a run with no pad. Memory at the
+  Pause Card: the median of the samples 3 to 6 s after the Guide chord, over ActRaiser (U) [!] on VenusRT (Home, Choose
+  a console, Super Nintendo, the grid's second row, Play, 10 s of play, the chord); the card was seen in each run's
+  last grabs. The pad's route is timed by waits, and the same route was seen to reach the card in all six runs.
+- A KWin virtual compositor at 1,920 x 1,200 on the RX 6800, one run at a time, Mistress's X11 path not involved.
+
+| Gate | WiseMan, rounds 1-3 | qt-s3-r, rounds 1-3 |
+|---|---|---|
+| Home: first grab with the window lit | 0.318, 0.316, 0.316 s | 0.354, 0.331, 0.347 s |
+| Home: the picture whole | 0.458, 0.456, 0.456 s | 0.495, 0.471, 0.487 s |
+| Window still, press, picture changed (answer) | 0.62, 0.60, 0.60 s; 0.055, 0.035, 0.036 s | 0.64, 0.63, 0.64 s; 0.035, 0.052, 0.026 s |
+| RSS 10 s after Home (anonymous) | 208, 207, 208 MiB (87, 87, 87) | 222, 221, 223 MiB (102, 102, 102) |
+| RSS at the Pause Card (anonymous) | 260, 259, 260 MiB (134, 134, 135) | 279, 258, 257 MiB (147, 132, 132) |
+
+**Reading.** The first press is equal (answered within 26 to 55 ms on both; its press comes 30 to 40 ms later on qt-s3-r
+only because the picture is whole later). Home's picture is later on qt-s3-r by 15 to 39 ms, against the spread of the
+three rounds of 2 ms on WiseMan and 24 ms on qt-s3-r, and idle memory is higher by 14 MiB (15 MiB anonymous, a steady
+figure with a spread of 2 MiB): both are more than the rounds' spread, and both inside the margin to the earlier
+gates' figures (Home 0.25 to 0.34 s, idle 201 MiB). At the Pause Card two of qt-s3-r's three rounds equal WiseMan's; the
+third is 19 MiB higher. **Not traced:** a profile of the cause was not made; the increases fit a second engine holding the
+reference theme's package, but that is not proved here. A trace would count the engines' items and the memory of the
+host's engine at idle, which needs the harness's counters rather than these external grabs. No change was made to
+qt-s3-r.
+
+#### 9.3.6 The big screen's tests and gates on the handheld, with input inside the program **[M 2026-11-08]**
+
+Decided 2026-11-08 by the tester: the big screen is tested on the handheld. The same day a desktop gate's uinput pad
+(`pad.py` of §9.3.5) was read by Steam, which opened Big Picture and launched a game on the desk: a uinput device is
+system-wide, and Steam reads every pad. **No test makes a uinput or any other system-wide input device, on either
+machine.** Input reaches only the program under test, and every run on the handheld leaves Game Mode and Steam as they
+were. The scripts are `Testing/handheld/` and `Testing/qt-gates/` (their READMEs).
+
+**The gate pad is inside `emusen-qt`.** Two forms keep a press inside the test's own session: keys sent into the nested
+KWin by its fake-input protocol, or a pad in the program's own process. The second was taken: the gates time the pad's
+own path (SDL, Endymion's reader, the router), which a key would skip; the fake-input protocol needs a Wayland client
+written for it and gives no Guide button; and an SDL virtual pad is what the acceptance tests already press
+(`emusen_qt_test::virtual_pad`). With the cargo feature `gate-pad`, off by default, `emusen-qt` reads the FIFO that
+`EMUSEN_GATE_PAD` names, attaches an SDL virtual pad in its own process, names it alone to the window (`onlyPads`) and
+presses it line by line (`Right 1`, `Right 0`: `PadControl`'s names, SDL's numbers from `emusen_qt_endymion::reading`).
+`pad.py` keeps its steps and writes them down the FIFO. A player's build never has the feature: `qt-app/tests/gate_pad.rs`
+holds that the default build carries none of the pad's words (its variable, `SDL_AttachVirtualJoystick`, its name) and
+that the feature is not a default one, and with the feature, that the words are there and the lines parse. The new
+dependency, `emusen-qt` on `emusen-qt-test` and `emusen-kit-core`, exists only under the feature.
+
+**The box** (`Testing/handheld/box.sh`, by `bwrap`): the root read-only; `/home` empty but for the scratch folder and the
+desktop checkout's path, bound to the unpacked tree, since the tests name their files by the path they were built at;
+`/dev` with the GPU's nodes alone, and the box refuses to start a command if `/dev/input`, `/dev/uinput` or a hidraw node
+is visible; `/tmp`, `XDG_RUNTIME_DIR` and a D-Bus session of its own that starts no service (no desktop portal). The
+handheld's own controller is not in the box to be read, and nothing in it reaches gamescope, Steam or the session's bus.
+Each run is a scope of CPU weight 20 and 6 GB through `hh.sh test`, on the charger. **SteamOS's Qt (6.11.1) exports no
+private API**, and cxx-qt's generated code needs `Qt_6.11_PRIVATE_API`, so the programs run on the desktop's Qt 6.11.2,
+carried as the AppImage of §10.5 would carry it (`qtbundle.sh`: Qt's and ICU's libraries and what the handheld lacks by
+soname, the Wayland and offscreen platforms, the QML modules the front end imports; 155 MB), named by a `qt.conf` beside
+each program and by the library path, which the handheld's KWin does not inherit. The grabs' PNGs are written by
+`grab.py` itself, since the handheld's GdkPixbuf saves through a sandboxed loader that cannot start inside the box; the
+lit shares are counted as before on a 192 × 120 nearest-neighbour picture.
+
+**The tests**, built on the desktop at `qt-hh-tests` (WiseMan `0954ce6b6` with §9.3.5's scripts), the platform library and
+the test core in `test-fast`:
+
+- `emusen-kit-gallery`'s stage 0 gate (offscreen, Qt's software renderer, as on the desktop; `qmllint` the handheld's
+  own): **passed**, 63 s.
+- `emusen-qt`'s acceptance (Vulkan on RADV Phoenix, its own `kwin_wayland --virtual` at 3,840 × 2,160 for the kit's
+  largest size, an SDL virtual pad of its own process): **failed in both runs at the same check**, 136 and 137 s in, after
+  Home, Home with nothing left, Choose a console, the grid and the games list had passed at the five sizes:
+  `Home over the suspended game: 1 frames swapped in 2 s with nothing changing; running: []`. The window drew one frame
+  in the 2 s after the screen was still by every running animation's account. **Not traced:** the late frame was not
+  identified, and the desktop's run of the same commit was not repeated here; the check waits only 100 ms after the last animation before it counts,
+  so a frame finishing later on the slower GPU fits, but that is not proved here. No change was made.
+
+**The start-up and memory gates**, §9.3.5's method in the box: `emusen-qt` in release with `gate-pad` (WiseMan
+`0954ce6b6`), placed beside the platform library of the published tree of 2026-11-08 07:58; KWin's virtual compositor at
+1,920 × 1,200 without Xwayland, grabs every 35 ms (kept: about 28 a second); the library the handheld's own ROM folder on its
+card, 6,383 games on ten consoles, read once before the snapshot. The Pause Card's route of §9.3.5 reached ActRaiser (U)
+[!] on VenusRT unchanged on this library, and the card stood in every round's last grabs (lit share 0.483). Three rounds,
+one run at a time, nothing else of EmuSen running:
+
+| Gate | Handheld, rounds 1-3 | Desktop, §9.3.5 (WiseMan, rounds 1-3) |
+|---|---|---|
+| Home: first grab with the window lit | 0.383, 0.386, 0.382 s | 0.318, 0.316, 0.316 s |
+| Home: the picture whole | 0.523, 0.526, 0.523 s | 0.458, 0.456, 0.456 s |
+| Window still, press, picture changed (answer) | 0.660, 0.658, 0.655 s; 0.039, 0.043, 0.043 s | 0.62, 0.60, 0.60 s; 0.055, 0.035, 0.036 s |
+| RSS 10 s after Home (anonymous) | 164, 164, 163 MiB (78, 78, 78) | 208, 207, 208 MiB (87, 87, 87) |
+| RSS at the Pause Card (anonymous) | 212, 212, 212 MiB (121, 121, 121) | 260, 259, 260 MiB (134, 134, 135) |
+
+**Reading.** The rounds agree within 4 ms and 1 MiB, so no fourth was taken. Home's picture is whole 0.52 s after the
+program starts and a press is answered within 39 to 43 ms, inside one or two grabs. The handheld's Home comes about 67 ms
+later than the desktop's and its memory is 44 to 48 MiB lower; the columns differ in the build (`0954ce6b6` against
+`0cfed0437`), the library (6,383 against 9,007 games), the GPU and its driver, and the Qt build (the bundle against
+Fedora's own), so the difference is a measurement of the two machines and is not attributed to any one of these. The
+input-device count at the end of every run was 0.
+
+**Seeded and caught:** `gate-pad` made a default feature (`the_feature_is_not_a_default_one`); the pad compiled in
+without the feature (`a_build_without_the_feature_has_no_gate_pad`: the words in the program); a press line with a
+trailing word accepted (the feature's parse test); `/dev` bound whole into the box (the box refused to start, exit 3);
+the FIFO not named to the program (`pad.py` never ready, `press.py` found no settle); and the pad's `a` sent as East
+(the route ended at Home: lit share 0.727 where the card's is 0.483).
+
 ---
 
 ## 10. The toolchain spike (outside the tree, `~/.cache/emusen/qt-spike/`)

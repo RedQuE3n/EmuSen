@@ -8,6 +8,7 @@ use emusen_kit_core::sound::{self, Cue, RATE};
 pub struct BellCache {
     cues: HashMap<Cue, Vec<f32>>,
     quick_select: Option<Vec<f32>>,
+    rungs: Vec<Vec<f32>>,
     renders: u32,
 }
 
@@ -23,6 +24,21 @@ impl BellCache {
             *renders += 1;
             cue.samples()
         })
+    }
+
+    /// The bells of the ladder's first `count` rungs, rendered the first time only (a splash's or a picker's notes).
+    pub fn ladder(&mut self, count: usize) -> usize {
+        while self.rungs.len() < count {
+            self.rungs.push(sound::bell_samples(self.rungs.len()));
+            self.renders += 1;
+        }
+        count
+    }
+
+    /// One rung's bell, rendered the first time only.
+    pub fn rung(&mut self, rung: usize) -> &[f32] {
+        self.ladder(rung + 1);
+        &self.rungs[rung]
     }
 
     pub fn quick_select(&mut self) -> &[f32] {

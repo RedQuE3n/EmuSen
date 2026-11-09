@@ -53,6 +53,18 @@ Module {
             Parameter { name: "cue"; type: "Cues::Cue" }
         }
         Method { name: "quickSelectFrames"; type: "int"; lineNumber: 41 }
+        Method {
+            name: "ladder"
+            type: "int"
+            lineNumber: 42
+            Parameter { name: "count"; type: "int" }
+        }
+        Method {
+            name: "rungFrames"
+            type: "int"
+            lineNumber: 43
+            Parameter { name: "rung"; type: "int" }
+        }
     }
     Component {
         file: "kinds.cxxqt.h"

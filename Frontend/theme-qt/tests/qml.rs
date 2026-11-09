@@ -10,6 +10,7 @@ use cxx_qt_lib::QString;
 use emusen_client_fixture::World;
 use emusen_qt_test::Harness;
 use emusen_theme_qt::actions::{Action, ActionSink};
+use emusen_theme_qt::bells::Striker;
 use emusen_theme_qt::cues::{Cue, CuePlayer};
 use emusen_theme_qt::device::DeviceFacts;
 use emusen_theme_qt::help::KINDS;
@@ -25,6 +26,23 @@ impl ActionSink for Taker {
     fn act(&mut self, action: &Action) -> bool {
         self.0.lock().unwrap().push(action.clone());
         matches!(action, Action::Play(_))
+    }
+
+    fn would(&self, action: &Action) -> bool {
+        matches!(action, Action::Play(_))
+    }
+}
+
+/// A striker keeping the rungs made ready and struck.
+struct Struck(Arc<Mutex<Vec<(&'static str, usize)>>>);
+
+impl Striker for Struck {
+    fn ladder(&mut self, count: usize) {
+        self.0.lock().unwrap().push(("ladder", count));
+    }
+
+    fn strike(&mut self, rung: usize) {
+        self.0.lock().unwrap().push(("strike", rung));
     }
 }
 
@@ -62,9 +80,14 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert_eq!(scene.property("scene", "consoleGames"), "1", "gamesOf by the console's key");
     assert_eq!(scene.property("scene", "firstTitle"), "Synthetic");
     assert_eq!((scene.property("scene", "secondPlace").as_str(), scene.property("scene", "secondAttention").as_str()), ("Scraper", "true"));
+    assert_eq!((scene.property("scene", "firstGroupSize").as_str(), scene.property("scene", "secondEnabled").as_str()), ("1", "true"));
+    host::library(within(window)).unwrap().show_declined(&["scraper".to_owned()]);
+    scene.wait(20);
+    assert_eq!(scene.property("scene", "secondEnabled"), "false", "a place the host would decline reads as not available");
+    assert_eq!(scene.property("scene", "secondPlace"), "Scraper", "the row changed in place");
     {
         let library = host::library(within(window)).unwrap();
-        for (list, roles) in [("consoles", 12), ("places", 6), ("shelves", 4), ("recent", 18), ("shelf", 18), ("favourites", 18), ("collections", 3)] {
+        for (list, roles) in [("consoles", 15), ("places", 7), ("shelves", 4), ("recent", 18), ("shelf", 18), ("favourites", 18), ("collections", 3)] {
             assert_eq!(library.list(list).map(|l| l.roles().len()), Some(roles), "{list}'s roles");
         }
     }
@@ -102,6 +125,13 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert_eq!(scene.property("scene", "dark"), "0");
     assert_eq!((scene.property("scene", "screenRole").as_str(), scene.property("scene", "screenFocus").as_str()), ("2", "0"));
     assert_eq!(scene.property("scene", "gameHelp"), "5", "Home's shelf: Play, Game page, Favourite, Search, Home");
+    assert_eq!((scene.property("scene", "placeHelp").as_str(), scene.property("scene", "placeGroup").as_str()), ("5", "Group"), "a place: Open, Back, Group, Search, Home");
+    assert_eq!(
+        scene.property("scene", "emptyWords"),
+        "No games yet|Nothing played yet|No consoles have games yet|Settings › Library adds a folder|PLACES"
+    );
+    assert!(scene.property("scene", "paused").starts_with("Paused "), "pausedAgo from the models' words");
+    assert_eq!(scene.property("scene", "rungs"), "3", "the ladder's count, with no striker too");
     assert!(scene.property("scene", "gameActions").contains("previous PageUp"), "the frame declares the help's actions");
 
     let help = host::help(within(window)).unwrap();
@@ -109,14 +139,20 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
         // Safety: the help's lists are its children.
         let entries = unsafe { help.entries(kind).as_ref() }.expect("a list for every kind");
         assert!(!emusen_qt_models::help::entries(entries.screen()).is_empty(), "kind {} has entries", kind.repr);
+        for (group, back) in emusen_theme_qt::help::FLAGS {
+            let added = unsafe { help.list(kind, group, back).as_ref() }.expect("a list for every kind and flag");
+            assert_eq!(added.list(), emusen_qt_models::help::entries_with(entries.screen(), group, back), "kind {}", kind.repr);
+        }
     }
 
     let mut actions = host::actions(within(window)).unwrap();
     let game = QString::from("/roms/Synthetic.nes");
     assert!(!actions.as_mut().play(&game), "with no host, nothing is taken");
+    assert!(!actions.enabled(&QString::from("list")), "with no host, nothing is enabled");
     let asked = Arc::new(Mutex::new(Vec::new()));
     actions.as_mut().set_sink(Some(Box::new(Taker(Arc::clone(&asked)))));
     assert!(actions.as_mut().play(&game), "Play taken");
+    assert!(!actions.enabled(&QString::from("list")), "enabled asks the host without acting");
     assert!(!actions.as_mut().back(), "Back declined");
     assert!(!actions.as_mut().step_section(1));
     assert!(!actions.as_mut().act(&QString::from("list")));
@@ -132,5 +168,14 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     cues.as_mut().set_player(Some(Box::new(Rung(Arc::clone(&rung)))));
     cues.as_mut().quicksysselect();
     assert_eq!(*rung.lock().unwrap(), [Cue::QuickSysSelect], "silence with no player, then the player rings");
+
+    let struck = Arc::new(Mutex::new(Vec::new()));
+    let mut bells = host::bells(within(window)).unwrap();
+    bells.as_mut().strike(0);
+    bells.as_mut().set_striker(Some(Box::new(Struck(Arc::clone(&struck)))));
+    assert_eq!(bells.as_mut().ladder(13), 13);
+    bells.as_mut().strike(4);
+    bells.as_mut().strike(-1);
+    assert_eq!(*struck.lock().unwrap(), [("ladder", 13), ("strike", 4)], "silence with no striker, then rung i rings; no rung below 0");
     scene.assert_quiet();
 }

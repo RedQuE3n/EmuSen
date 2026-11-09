@@ -21,9 +21,25 @@ fn whole(rows: &[Row]) -> bool {
 fn qt_3_2_each_list_has_the_api_s_roles_and_no_other() {
     assert_eq!(
         view::CONSOLE_ROLES,
-        ["key", "name", "displayName", "maker", "year", "count", "hue", "body", "engineName", "engineKind", "engineMark", "libretro"]
+        [
+            "key",
+            "name",
+            "displayName",
+            "maker",
+            "year",
+            "count",
+            "hue",
+            "body",
+            "engineName",
+            "engineKind",
+            "engineMark",
+            "libretro",
+            "group",
+            "groupIndex",
+            "groupSize"
+        ]
     );
-    assert_eq!(view::PLACE_ROLES, ["key", "name", "kind", "line", "attention", "count"]);
+    assert_eq!(view::PLACE_ROLES, ["key", "name", "kind", "line", "attention", "count", "available"]);
     assert_eq!(view::SHELF_ROLES, ["key", "name", "line", "count"]);
     assert_eq!(
         view::GAME_ROLES,
@@ -66,8 +82,9 @@ fn qt_3_2_the_library_s_lists_over_the_real_clients() {
     assert!(!text(&nes[7]).is_empty(), "the body is the world the kit's Body draws");
     assert_eq!(text(&nes[9]), "emusen", "the engine's kind");
     assert_eq!(nes[5], Cell::Whole(1));
+    assert_eq!(nes[12..], [Cell::Whole(0), Cell::Whole(0), Cell::Whole(1)], "the one console is its maker's group alone");
 
-    let places = view::places(v, &view::lines_of(common::HOME_LINES));
+    let places = view::places(v, &view::lines_of(common::HOME_LINES), &[]);
     assert!(places.iter().all(|r| r.len() == view::PLACE_ROLES.len()));
     let ids: Vec<&str> = places.iter().map(|r| text(&r[0])).collect();
     assert_eq!(ids, ["games", "scraper", "packages", "library", "cores", "settings", "power"], "Home's destinations in Home's order");
@@ -75,6 +92,11 @@ fn qt_3_2_the_library_s_lists_over_the_real_clients() {
     assert_eq!(kinds, ["library", "tool", "tool", "tool", "tool", "settings", "power"]);
     assert_eq!((text(&places[1][3]), &places[1][4]), ("41 no art", &Cell::Flag(true)), "the scraper's live line asks for the player");
     assert_eq!(places[0][5], Cell::Whole(1), "Games counts its consoles");
+    assert!(places.iter().all(|r| r[6] == Cell::Flag(true)), "every place available while the host declines none");
+    let declined = view::places(v, &[], &["packages".to_owned()]);
+    let enabled: Vec<&Cell> = declined.iter().map(|r| &r[6]).collect();
+    assert_eq!(enabled.iter().filter(|c| ***c == Cell::Flag(false)).count(), 1);
+    assert_eq!(declined[2][6], Cell::Flag(false), "a place the host would decline is not available");
 
     let shelves = view::shelves(v);
     let seen: Vec<(&str, &Cell)> = shelves.iter().map(|r| (text(&r[0]), &r[3])).collect();
@@ -94,4 +116,15 @@ fn qt_3_2_the_library_s_lists_over_the_real_clients() {
     assert!(view::games_of(v, "no-such-console", 0).is_empty());
     assert_eq!(view::search(v, "SYNTH", 0).len(), 1, "a search in any case");
     assert!(view::search(v, "zelda", 0).is_empty() && view::search(v, "  ", 0).is_empty());
+}
+
+#[test]
+fn qt_3_2_a_console_s_group_is_its_maker_s_in_order_of_first_appearance() {
+    let makers = ["Nintendo", "Sega", "Nintendo", "", "Sony", "", "Sega", "Nintendo"];
+    assert_eq!(
+        view::maker_groups(&makers),
+        [(0, 0, 3), (1, 0, 2), (0, 1, 3), (2, 0, 1), (3, 0, 1), (4, 0, 1), (1, 1, 2), (0, 2, 3)],
+        "the ordinal, the place within and the size; an unknown maker is a group of its own"
+    );
+    assert!(view::maker_groups(&[]).is_empty());
 }

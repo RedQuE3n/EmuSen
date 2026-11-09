@@ -767,13 +767,14 @@ with the fields a theme may read and nothing more. The table is the module as bu
 
 | Name | Kind | What it holds |
 |---|---|---|
-| `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`, `libretro`); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `shelf`, `recent` less the suspended game; `collections` (`key`, `name`, `count`); `gamesOf(key)` for a console's or a shelf's key, `firstOf(key, count)` its first games, and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords`, `facts` (cover and hero as file URLs) |
+| `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`, `libretro`, `group` = the maker's ordinal in order of first appearance, `groupIndex` = the place within it, `groupSize`; an unknown maker is a group of its own); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles; `available`, false where the host would decline `openPlace`, not `enabled`, which would override `Item.enabled` in a delegate); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `shelf`, `recent` less the suspended game; `collections` (`key`, `name`, `count`); `gamesOf(key)` for a console's or a shelf's key, `firstOf(key, count)` its first games, and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords`, `facts` (cover and hero as file URLs) |
 | `Session` | singleton | `hasGame`, `title`, `consoleId`, `pausedSince`, `played` (seconds), `frame` (the item the game's picture is drawn in, for a `ShaderEffectSource`), `key` (the game's file), `console` (its console's name), `hue` (-1 for none) |
 | `Device` | singleton | `controllers`, `family` (the glyphs' family, as `Frame.padFamily` takes it), `clock`, `battery` (-1 none), `charging`, `network`, `bigScreen`, `form` |
-| `Actions` | singleton | `play(key)`, `openPage(key)`, `favourite(key)`, `random(console)`, `openConsole(key)`, `openPlace(key)`, `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`, `act(key)` (a help bar's declared action), `focus(key)` (the game or row the focus is on); each returns whether it was taken |
+| `Actions` | singleton | `play(key)`, `openPage(key)`, `favourite(key)`, `random(console)`, `openConsole(key)`, `openPlace(key)`, `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`, `act(key)` (a help bar's declared action), `focus(key)` (the game or row the focus is on); each returns whether it was taken; `enabled(key)`, whether the host would take `act(key)`, asked without acting |
 | `Cues` | singleton | `scroll()`, `systembrowse()`, `select()`, `back()`, `favorite()`, `launch()`, `quicksysselect()`: the seven names of `EmuSen_Interface.md` §23, rung by the host through Endymion at the player's volume |
-| `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`, `summary(consoles, games)`: the curated face of `words.rs` |
-| `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, `SectionSearched`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; the curated face of `help.rs` |
+| `Bells` | singleton | `ladder(count)` (the ladder's first rungs made ready), `strike(i)` (rings rung i, the bell world i rings in Moonrise), handed to the host's striker, rendered by the kit's `Bells` and rung at the Navigation volume |
+| `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`, `summary(consoles, games)`; the empty states `noGames`, `noRecent`, `noConsoles`, `addFolder`, the eyebrow `places` and `pausedAgo(pausedSince)`: the curated face of `words.rs` |
+| `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, `SectionSearched`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; `entries(kind, {group, back})` the same with LB RB Group and B Back added where the kind takes them; the curated face of `help.rs` |
 | `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only; `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
 | `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown) |
 | `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` |
@@ -813,8 +814,25 @@ The C++ class names carry `Theme` (`ThemeLibrary`, `ThemeWords`, ...), registere
 **What the views do not hold yet.** The own look's library view reads no scraper facts and no collections (the ES-DE
 view does), so `players`, `year`, `genre`, `rating`, `description` and `video` are empty or 0 and `collections` is
 empty; the roles stand so a theme written now reads them when the view does. `hero` falls back to the cover. Not yet in
-the module: `VideoTile` (stage 4) and `Bells` with
-`ladder(count)` and `strike(i)`, which the kit's `Bells` does not offer; each is added by name when the kit has it.
+the module: `VideoTile` (stage 4).
+
+**The four themes' additions (2026-11-08).** Gaps 9 to 12 and the maker groups, listed in the changelog. Help's group and
+back entries name no action: the theme's own walk answers them, the shoulders reaching the focused item as PageUp and
+PageDown when the frame declines them, so `actionLines` is unchanged; where they go in each bar is `help.rs`'s
+(`group_at`, `back_at`), as the canvases place them. The help singleton makes four lists a kind, one for each pair of
+flags, once. `Actions.enabled` asks the sink's `would`, which the program's sink answers with the same rule that `act`
+carries (only the theme's Home card is declined). `Bells` is the module's own singleton beside `Cues`, handing rungs to a
+`Striker` as `Cues` hands names to a `CuePlayer`: the kit's `Bells` renders (each rung once and kept, kit-core's
+`bell_samples`) and cannot ring, and the program sets no striker yet, so a splash's bells are silent until it does. A
+console's group is computed once a feed over the consoles' rows in the table's order (`view::maker_groups`); a screen
+that draws makers together orders by `group`, then `groupIndex`. Proof, measured 2026-11-08: `help.rs`'s placings against the
+canvases' bars (qt-models' `library.rs`); `maker_groups` over interleaved and unknown makers and the roles' lists
+(`tests/view.rs`); the harness scene reading a place's bar with both flags, the empty words, `pausedAgo`, a place turned
+unavailable in place, `Actions.enabled` false with no sink and asked without acting, and `Bells` silent with no striker,
+then rung 4 struck and no rung below 0 (`tests/qml.rs`); the kit's rungs rendered once each and equal to kit-core's
+picker bells (`kit-qt/tests/bells.rs`); both registries copied after review. Three faults were seeded and caught: Group
+placed after Consoles' Favourites (the placings test), unknown makers merged into one group (the view test), and declined
+places not refilled (the harness test).
 
 **What the host does.** The host (§3.5) makes the theme's engine, then feeds `Library.show(view, homeLines)` after each
 refresh of the library model, `Session.show` and `show_frame` while a game is suspended, `Device.show` on each status

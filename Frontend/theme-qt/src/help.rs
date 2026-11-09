@@ -1,13 +1,14 @@
 //! `Help`, the help bar's entries for what a theme's focus is on (EmuSen_Qt.md §3.2): `entries(kind)` gives the same
-//! list each time, with the roles the kit's `HelpBar` reads and the actions `Frame` declares, from emusen-qt-models' help.rs.
+//! list each time, with the roles the kit's `HelpBar` reads and the actions `Frame` declares, from emusen-qt-models' help.rs;
+//! `entries(kind, {group, back})` the same with the shoulders' Group and B's Back added where the kind takes them.
 
 use crate::glue::ffi;
 use crate::view::HELP_ROLES;
 use core::pin::Pin;
 use cxx_qt::casting::Upcast;
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
-use emusen_qt_models::help::{self, action_lines, entries, Screen};
+use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QMap, QMapPair_QString_QVariant, QModelIndex, QString, QVariant};
+use emusen_qt_models::help::{self, action_lines, entries_with, Entry, Screen};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -22,6 +23,8 @@ pub mod qobject {
         type QModelIndex = cxx_qt_lib::QModelIndex;
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qmap.h");
+        type QMap_QString_QVariant = cxx_qt_lib::QMap<cxx_qt_lib::QMapPair_QString_QVariant>;
     }
 
     /// What the focus is on: Continue, a game on Home, a console, a place, a game of a section, the search.
@@ -53,6 +56,10 @@ pub mod qobject {
     extern "RustQt" {
         #[qinvokable]
         fn entries(self: &ThemeHelp, kind: HelpKind) -> *mut ThemeHelpEntries;
+        /// The kind's list with `group` (LB RB Group) and `back` (B Back where the kind has none) added as asked.
+        #[qinvokable]
+        #[cxx_name = "entries"]
+        fn entries_with(self: &ThemeHelp, kind: HelpKind, flags: &QMap_QString_QVariant) -> *mut ThemeHelpEntries;
 
         #[qinvokable]
         #[cxx_override]
@@ -98,52 +105,74 @@ pub fn screen_of(kind: HelpKind) -> Screen {
     }
 }
 
-/// One list for each kind, the singleton's children.
+/// The added entries a list may hold: none, the group's, B's, both; a list's place in a kind's four.
+pub const FLAGS: [(bool, bool); 4] = [(false, false), (true, false), (false, true), (true, true)];
+
+/// Four lists for each kind, one for each of `FLAGS`, the singleton's children.
 pub struct ThemeHelpRust {
-    lists: [*mut qobject::ThemeHelpEntries; 7],
+    lists: [[*mut qobject::ThemeHelpEntries; 4]; 7],
 }
 
 impl Default for ThemeHelpRust {
     fn default() -> Self {
-        ThemeHelpRust { lists: [std::ptr::null_mut(); 7] }
+        ThemeHelpRust { lists: [[std::ptr::null_mut(); 4]; 7] }
     }
 }
 
 impl cxx_qt::Initialize for qobject::ThemeHelp {
     fn initialize(mut self: Pin<&mut Self>) {
         for (i, kind) in KINDS.into_iter().enumerate() {
-            let list = ffi::new_help_entries(self.as_mut().upcast_pin());
-            // Safety: the list was just made, a child of this singleton.
-            if let Some(entries) = unsafe { list.as_mut() } {
-                unsafe { Pin::new_unchecked(entries) }.show(screen_of(kind));
+            for (f, (group, back)) in FLAGS.into_iter().enumerate() {
+                let list = ffi::new_help_entries(self.as_mut().upcast_pin());
+                // Safety: the list was just made, a child of this singleton.
+                if let Some(entries) = unsafe { list.as_mut() } {
+                    unsafe { Pin::new_unchecked(entries) }.show(screen_of(kind), group, back);
+                }
+                self.as_mut().rust_mut().lists[i][f] = list;
             }
-            self.as_mut().rust_mut().lists[i] = list;
         }
     }
 }
 
 impl qobject::ThemeHelp {
     pub fn entries(&self, kind: HelpKind) -> *mut qobject::ThemeHelpEntries {
-        KINDS.iter().position(|k| *k == kind).map_or(std::ptr::null_mut(), |i| self.lists[i])
+        self.list(kind, false, false)
+    }
+
+    pub fn entries_with(&self, kind: HelpKind, flags: &QMap<QMapPair_QString_QVariant>) -> *mut qobject::ThemeHelpEntries {
+        let flag = |name: &str| flags.get(&QString::from(name)).and_then(|v| v.value::<bool>()).unwrap_or(false);
+        self.list(kind, flag("group"), flag("back"))
+    }
+
+    /// A kind's list with the entries asked for added.
+    pub fn list(&self, kind: HelpKind, group: bool, back: bool) -> *mut qobject::ThemeHelpEntries {
+        let f = FLAGS.iter().position(|x| *x == (group, back)).unwrap_or(0);
+        KINDS.iter().position(|k| *k == kind).map_or(std::ptr::null_mut(), |i| self.lists[i][f])
     }
 }
 
 /// A help bar's screen and its actions as the kit's frame reads them (EmuSen_Kit.md §7.19).
 pub struct ThemeHelpEntriesRust {
     screen: Screen,
+    list: Vec<Entry>,
     action_lines: QString,
 }
 
 impl Default for ThemeHelpEntriesRust {
     fn default() -> Self {
-        ThemeHelpEntriesRust { screen: Screen::Home, action_lines: QString::from(action_lines(Screen::Home).as_str()) }
+        ThemeHelpEntriesRust {
+            screen: Screen::Home,
+            list: entries_with(Screen::Home, false, false),
+            action_lines: QString::from(action_lines(Screen::Home).as_str()),
+        }
     }
 }
 
 impl qobject::ThemeHelpEntries {
-    /// The screen whose entries the list holds, set once when it is made.
-    fn show(mut self: Pin<&mut Self>, screen: Screen) {
+    /// The screen whose entries the list holds, with the added entries asked for, set once when it is made.
+    fn show(mut self: Pin<&mut Self>, screen: Screen, group: bool, back: bool) {
         self.as_mut().rust_mut().screen = screen;
+        self.as_mut().rust_mut().list = entries_with(screen, group, back);
         self.as_mut().rust_mut().action_lines = QString::from(action_lines(screen).as_str());
     }
 
@@ -152,8 +181,13 @@ impl qobject::ThemeHelpEntries {
         self.screen
     }
 
+    /// The entries as the bar shows them, for the host's tests.
+    pub fn list(&self) -> &[Entry] {
+        &self.list
+    }
+
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
-        let Some((button, label, _)) = entries(self.screen).get(index.row() as usize) else {
+        let Some((button, label, _)) = self.list.get(index.row() as usize) else {
             return QVariant::default();
         };
         match role {
@@ -173,6 +207,6 @@ impl qobject::ThemeHelpEntries {
     }
 
     pub fn row_count(&self, _parent: &QModelIndex) -> i32 {
-        entries(self.screen).len() as i32
+        self.list.len() as i32
     }
 }

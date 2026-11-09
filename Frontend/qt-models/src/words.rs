@@ -58,6 +58,16 @@ pub const LIBRETRO_TAG: &str = "LIBRETRO";
 /// The Favourites place's line.
 pub const FAVOURITES_LINE: &str = "Your hearts, every console";
 
+/// The empty states, as the themes' canvases word them: no game at all, nothing played, no console with games, and how
+/// the player adds a folder.
+pub const NO_GAMES: &str = "No games yet";
+pub const NO_RECENT: &str = "Nothing played yet";
+pub const NO_CONSOLES: &str = "No consoles have games yet";
+pub const ADD_FOLDER: &str = "Settings › Library adds a folder";
+
+/// The eyebrow over Home's places.
+pub const PLACES: &str = "PLACES";
+
 /// A count of games.
 pub fn games(n: usize) -> String {
     counted(n, "game", "games")

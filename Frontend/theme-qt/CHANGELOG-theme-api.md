@@ -35,7 +35,8 @@ Decided 2026-11-08 by the tester: the additions found by writing four original t
   `Moonrise`. `Walkable` (every item the pad and the pointer reach) and `Scene` (a theme's own colours, §7.20 of
   EmuSen_Kit.md) are added: the design's rule that every item is a `Walkable` needs them.
 - **Not yet in the module**: `VideoTile` (stage 4), and `Bells` with `ladder(count)` and `strike(i)` (the kit's `Bells`
-  renders cues and has neither yet). Each is added by name when the kit has it.
+  renders cues and has neither yet). Each is added by name when the kit has it. (`Bells` was added later the same day,
+  below.)
 
 ## 1.0, amended for the reference theme as a package (2026-11-08)
 
@@ -67,3 +68,32 @@ addition, appended after the members it joins so that no index in the registry m
 - **The kit's types by name**: `CoverTile` (a cover whole at its own shape on its box's foot, the generated card
   otherwise, the favourite's mark), `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`, the pad's buttons in the kit's
   order) and `PlanetLayout` (Choose a console's rows of bodies and their walk).
+
+## 1.0, amended for the four themes (2026-11-08)
+
+Decided 2026-11-08: the gaps 9 to 12 found by the four themes' specifications (Horizon, Meridian, Constellation, Orrery)
+and the console screens' maker groups are added, each after the members it joins.
+
+- **`Help.entries(kind, {group, back})`** (gap 9): the kind's list with **LB RB Group** (the shoulders jump a group of the
+  screen's own row) and **B Back** (where the kind has none) added as asked, at the places the canvases put them: Group
+  after Home's three game entries or a place's Open, and after Choose a console's Open and Back; Back before it. A kind
+  whose shoulders already mean something (the grid, the search) takes no Group. Neither names an action: the theme's
+  own walk answers them, the shoulders reaching it as PageUp and PageDown. `entries(kind)` is unchanged. The words and
+  places are `help.rs`'s (`GROUP`, `BACK`, `entries_with`).
+- **`Words.noGames`, `noRecent`, `noConsoles`, `addFolder`, `places`, `pausedAgo(pausedSince)`** (gap 10): the empty
+  states, "No games yet", "Nothing played yet", "No consoles have games yet", "Settings › Library adds a folder"; the
+  PLACES eyebrow; "Paused 12 minutes ago". From `words.rs`; no theme writes them.
+- **`Library.places` rows gain `available`, and `Actions.enabled(key)`** (gap 11): a place is not available when the host
+  would decline its `openPlace` (`ThemeLibrary::show_declined`), and `enabled(key)` says whether the host would take
+  `act(key)`, asked without acting (`ActionSink::would`, true unless a sink says otherwise; false with no sink). The role
+  is not named `enabled`, as the specifications had it: a delegate declaring it would override `Item.enabled`, and a
+  disabled item could not hold the focus and the ring that the disabled look keeps.
+- **`Bells`** (gap 12): `ladder(count)` makes the ladder's first `count` rungs ready and returns the count; `strike(i)`
+  rings rung i, the bell world i rings in Moonrise and a console in a picker. Both are handed to the host's `Striker`,
+  which renders through the kit's `Bells` (`ladder(count)` and `rungFrames(i)`, each rung rendered once and kept) and
+  rings at the Navigation volume; with no striker, silence. The theme's `Bells` is a singleton of this module, not the
+  kit's type, because the kit's renders and does not ring.
+- **Console rows gain `group`, `groupIndex`, `groupSize`**: the console's maker's ordinal in order of first appearance
+  in the table, its place within that group and the group's size, from the catalogue's maker; a console of unknown
+  maker is a group of its own. Every console screen lays out its makers and jumps them with the shoulders from these.
+

@@ -40,6 +40,12 @@ pub mod qobject {
         fn peak(self: Pin<&mut Bells>, cue: Cue) -> f64;
         #[qinvokable]
         fn quick_select_frames(self: Pin<&mut Bells>) -> i32;
+        /// The bells of the ladder's first `count` rungs, rendered once and kept; the count kept.
+        #[qinvokable]
+        fn ladder(self: Pin<&mut Bells>, count: i32) -> i32;
+        /// One rung's bell, as a picker's console or a splash's world i rings it; the number of stereo frames.
+        #[qinvokable]
+        fn rung_frames(self: Pin<&mut Bells>, rung: i32) -> i32;
     }
 
     impl cxx_qt::Initialize for Bells {}
@@ -101,6 +107,18 @@ impl qobject::Bells {
 
     pub fn quick_select_frames(mut self: Pin<&mut Self>) -> i32 {
         let frames = self.as_mut().rust_mut().cache.quick_select().len() / 2;
+        self.count_renders();
+        frames as i32
+    }
+
+    pub fn ladder(mut self: Pin<&mut Self>, count: i32) -> i32 {
+        let kept = self.as_mut().rust_mut().cache.ladder(count.max(0) as usize) as i32;
+        self.count_renders();
+        kept
+    }
+
+    pub fn rung_frames(mut self: Pin<&mut Self>, rung: i32) -> i32 {
+        let frames = self.as_mut().rust_mut().cache.rung(rung.max(0) as usize).len() / 2;
         self.count_renders();
         frames as i32
     }

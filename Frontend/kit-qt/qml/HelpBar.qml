@@ -24,6 +24,8 @@ Item {
     property real glyphSize: 0
     // An entry's pair drawn as one glyph where the kit has one for the two, as ES-DE's help does; off, two glyphs (EmuSen_Kit.md §7.53).
     property bool pairGlyph: false
+    // A host's own drawing of an entry's words, a component with `text` and `color`; null, the kit's Text in labelFont (§7.53).
+    property Component label: null
     // The bar's own colour and radius, drawn by its backing; the paddings are its box's around the entries.
     property color color: root.glass ? Qt.alpha(Kit.Tokens.inputSurface, root.glassOpacity) : Kit.Tokens.surface
     property alias radius: backing.radius
@@ -134,8 +136,28 @@ Item {
                         button: Math.max(0, entry.pair)
                         swap: Kit.PadRouter.swapAcceptBack
                     }
+                    Loader {
+                        id: words
+                        anchors.verticalCenter: parent.verticalCenter
+                        active: root.label !== null
+                        visible: active
+                        sourceComponent: root.label
+                        Binding {
+                            target: words.item
+                            property: "text"
+                            value: entry.label
+                            when: words.item !== null
+                        }
+                        Binding {
+                            target: words.item
+                            property: "color"
+                            value: root.labelColor
+                            when: words.item !== null
+                        }
+                    }
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
+                        visible: root.label === null
                         text: entry.label
                         color: root.labelColor
                         font.family: root.labelFont.family

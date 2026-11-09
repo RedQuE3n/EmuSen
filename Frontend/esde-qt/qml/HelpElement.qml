@@ -23,12 +23,12 @@ ElementBox {
     required property real padRight
     required property real padBottom
     property int family: Kit.Families.Generic
+    readonly property string faceName: face.status === FontLoader.Ready ? face.font.family : body.font.family
     // THEMES.md: fontSize sets the text and the icons; entryRelativeScale above 1 shrinks the icons, below 1 the text.
-    // The element's height over the font's size, which ES-DE's icon fills, and the kit glyph's ink over its side (EmuSen_Qt.md §4.8.6).
+    // The element's height over the font's size, the side of ES-DE's icon box, measured on its captures (EmuSen_Qt.md §4.8.7).
     readonly property real heightShare: 0.9
-    readonly property real inkShare: 0.88
     readonly property real lineHeight: root.px * root.heightShare
-    readonly property real glyphSide: root.lineHeight / root.inkShare * Math.min(1, 1 / Math.max(0.2, root.entryScale))
+    readonly property real glyphSide: root.lineHeight * Math.min(1, 1 / Math.max(0.2, root.entryScale))
     readonly property size extent: Qt.size(bar.implicitWidth, root.lineHeight)
     readonly property real labelPx: root.px * Math.min(1, root.entryScale)
     PartsModel {
@@ -72,7 +72,13 @@ ElementBox {
         ruled: false
         family: root.family
         glyphStyle: root.filled ? Kit.GlyphStyles.Filled : Kit.GlyphStyles.Outlined
-        labelFont: Qt.font({ family: face.status === FontLoader.Ready ? face.font.family : body.font.family, pixelSize: Math.round(root.labelPx) })
+        labelFont: Qt.font({ family: root.faceName, pixelSize: Math.round(root.labelPx) })
+        label: Component {
+            GlyphLine {
+                family: root.faceName
+                px: root.labelPx
+            }
+        }
         pairGlyph: true
         entrySpacing: root.entrySpacing
         glyphGap: root.iconGap

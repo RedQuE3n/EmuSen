@@ -2775,10 +2775,10 @@ Held to by `qt-test/tests/polish.rs` over `PolishScene.qml`: a help bar whose mo
 `FrameAnimation` runs; after `rest` the entries stand where they stood. Before the change the entries read x 0, 0, 0
 where they stood at 0, 127.5 and 267.9. Seeded fault: the polish wait removed (the same three zeros).
 
-### 7.53 A pair as one glyph (stage 4, X; 2026-11-09)
+### 7.53 A pair as one glyph, and a host's words on the help bar (stage 4, X; 2026-11-09)
 
-An extension under rule Q for the ES-DE painter's help bar (EmuSen_Qt.md §4.8.7), declared after what was there;
-it changes what an existing screen draws.
+Two extensions under rule Q for the ES-DE painter's help bar (EmuSen_Qt.md §4.8.7), each declared after what was there;
+neither changes what an existing screen draws.
 
 - **The pair glyph** (approved by the tester 2026-11-09). ES-DE's help draws one icon for a pair of presses that make one
   action: the d-pad with both arrows of its axis for Choose and the gamelist's System, and its `button_lr` and
@@ -2793,6 +2793,9 @@ it changes what an existing screen draws.
   and `paired` alias them, and the glyph's accessible name is both controls' ("D-pad left and D-pad right").
   `HelpBar.pairGlyph` (false by default, so Mistress's own bars still draw two) draws an entry's `pair` as the one glyph
   and leaves the second out where it is drawn.
+- **`HelpBar.label`**, a component that draws an entry's words in place of the kit's `Text`, given `text` and `color`
+  (null by default, the kit's `Text` in `labelFont`). The ES-DE painter gives it `GlyphLine`, ES-DE's own line layout,
+  since Qt's text layout has no form of it (EmuSen_Qt.md §4.8.7, item 3).
 
 **Held to**: kit-core's `tests/glyph.rs` `kit_7_53_a_pair_pressed_for_one_action_is_one_glyph` (the four pairs in both
 sets and either order, closed, inside the box, unlettered, every hole inside its shape, unlike the single control's

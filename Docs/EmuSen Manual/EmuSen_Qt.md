@@ -2708,6 +2708,43 @@ and the approved AppImage's captures of 2026-11-08 (`Testing/esde-oracle/README.
 2026-11-09 by the tester:** the font files bundled in that AppImage count as evidence too (fonts only; still never ES-DE's
 code or graphics); their metrics, read through Qt's `FontMetrics`, are kept below.
 
+**The help bar measured on the captures** (all twelve states; `fontSize` × H written fs, `entryRelativeScale` r):
+
+- *The icon's box is 0.9 fs square*, its disc 0.8 fs: CarAlt's disc 14.40 px at fs 18 and 21.73 at 27, Artflix's 16.2–16.5
+  at 20 and 24.4 at 30 (coverage-weighted widths), and CarAlt's d-pad pair fills 16.0 of the 16.2 box. The gaps measured
+  from the disc's ink are the theme's `iconTextSpacing` and `entrySpacing` plus that margin. Art Book Next's disc is
+  larger, 31.4–31.6 px at fs 36.67 (0.86 fs), in the same 0.9 fs box; the kit's filled disc (0.85 of its side) inks
+  0.77 fs there. `HelpElement` draws the glyph at the box's side (it had drawn it at the box over 0.88, 1.02 fs, which
+  made every entry 0.12 fs wider: CarAlt's bar 9.6 units wider than ES-DE's).
+- *The words are at fs × r unrounded, each glyph at a whole-pixel pen advanced by its advance rounded* (item 3 below).
+- *The 'S' is centred on the bar*: CarAlt's capitals stand on rows 778–787 beside a disc on 774.8–789.2, so the line is
+  placed by the reference 'S' (THEMES.md: the size "is based on the reference 'S' character") rather than by the face's
+  ascent and descent, which drew Qt's capitals 2 px high.
+
+**3. The help bar's labels with the theme's own font, 5–9 % narrower than ES-DE's.** CarAlt's labels are rost.otf at
+fs × r = 18 × 0.8 = 14.4 px. ES-DE's MENU spans 22 px of ink where Qt's spanned 20, SCREENSAVER 57 against 52. Two causes,
+proved on the pens:
+
+- *The size was rounded*: QML's `font.pixelSize` is an integer, so 14.4 drew at 14.
+- *The advances were fractional*: ES-DE places each glyph at a whole pixel and advances by the glyph's advance rounded.
+  The same glyph's ink profile repeats column for column wherever it stands (rost's E as 2.1, 8.6, 3.6, 3.0 of coverage
+  at 1173, 1178 and 1205), which only whole-pixel pens give, and the pens of SCREENSAVER's letters stand at 0, 5, 10, 16,
+  21, 26, 32, 37, 43, 49, 54 px: rost's advances at 14.4 px rounded one by one (5.20, 4.64, 5.53, 4.51 … px), where
+  fractional advances at 14.4 give 0, 5.2, 9.8, 15.4, 19.9 … and Qt's at 14 gave 0, 5.1, 9.6, 14.9, 19.3 …. Rounding at
+  14 gives 0, 5, 10, 15, 19, which the E at 15 rules out.
+
+Neither has a mode in Qt's text layout: a QML font's pixel size is whole, and `QTextLayout` gives a face's design
+advances or its hinted ones (full hinting at 14 px measured MENU 20.0 and SCREENSAVER 48.0 px, rost's hinter's widths,
+not ES-DE's), never design advances rounded one by one. So `GlyphLine.qml` (EmuSen.Esde 1.0, added) lays a line out as
+ES-DE does: each glyph a `Text` at its pen, the pens summed from `FontMetrics.advanceWidth` of the glyph at the whole
+size nearest, times the size over it, rounded; the glyph drawn at that whole size scaled to the exact one; no kerning;
+the 'S' centred on the line's height. The kit's `HelpBar` draws an entry's words with the host's component where it is
+given one (`label`, EmuSen_Kit.md §7.53), so `HelpElement` gives it `GlyphLine` at fs × r. After: CarAlt's MENU ink
+1050.0–1073.1 against ES-DE's 1051.8–1074.0 and SCREENSAVER 1156.0–1215.2 against 1157.0–1215.1; every label of the
+twelve states within a pixel of ES-DE's ink width where the face is drawn at its nominal size (below for the two that
+are not). Seeded faults: the advances left fractional (CarAlt's bar 5.9 units narrower, Art Book Next's 3.2, Artflix's
+5.5, all failing); the glyph's side at the box over 0.88 again (the system bars 9.6–17.6 units wider, failing).
+
 **4. The pair glyph** (approved by the tester 2026-11-09). ES-DE draws one icon for a pair of presses that make one
 action (Choose, the gamelist's System: a d-pad with both arrows of its axis; THEMES.md's `button_lr` and `button_ltrt`
 for the shoulders and the triggers). kit-core's `glyph::paired` gives one glyph for a d-pad axis, the two shoulders or

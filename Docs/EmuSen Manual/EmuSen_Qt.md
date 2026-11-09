@@ -273,6 +273,8 @@ the device made for an adopting host, its raw handles, a built-in filter's prese
   seat a pad takes, a move, a kept seat let go, the highest player.
 - `audio`: SDL's devices by name and the game player moved to one (`emusen_endymion_audio_device_list`, `_set`); a name
   no device has plays the default and answers false, as the interface player's `set_device` does.
+- `galaxia`: since interface 45, the front end's own settings rows (`emusen_galaxia_settings_rows`, `EmuSen_Galaxia.md`
+  §3.15), as JSON in the settings schema's row shape, for `SettingsModel`.
 - `systems`: the bytes OpenVGDB hashed for a system's file (`emusen_systems_openvgdb`), none where they are its own.
 - `serenity`: a `.slangp` read (`emusen_serenity_preset_load`), a failed read being a document with `fail`, and the
   passes' parameters merged (`_parameters_merge`).

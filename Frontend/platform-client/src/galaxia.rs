@@ -1,5 +1,5 @@
 //! Galaxia through the platform library: where the tree's directories and Galaxia's files are, a config file's path,
-//! the config models (the player's settings) as the documents Galaxia binds, and the saved cheat lists' names. A model crosses as JSON and stays
+//! the config models (the player's settings) as the documents Galaxia binds, the saved cheat lists' names, and the front end's own settings rows. A model crosses as JSON and stays
 //! Galaxia's: its fields are not restated here, so a model has one owner.
 
 use crate::error::Result;
@@ -96,6 +96,13 @@ impl Platform {
             let mut parts = b.split(|b| *b == 0).map(|p| String::from_utf8_lossy(p).into_owned());
             (parts.next().unwrap_or_default(), parts.next().unwrap_or_default())
         }))
+    }
+
+    /// The front end's own settings rows (since 45): `{"AppSettings": [...], "GraphicsConfig": [...],
+    /// "GraphicsConfig.Consoles": [...]}`, each row in the settings schema's shape, the rows Galaxia's to describe.
+    pub fn settings_rows(&self) -> Result<Value> {
+        let bytes = self.read(|o, l| unsafe { self.lib.emusen_galaxia_settings_rows(o, l) })?.unwrap_or_default();
+        json("settings_rows", &bytes)
     }
 
     /// A new instance of a model, every field at its initial value.

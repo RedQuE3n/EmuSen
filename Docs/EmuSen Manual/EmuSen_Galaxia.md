@@ -563,7 +563,8 @@ their words), until then C# code in `SettingsScreen.Sections.cs` (`Pick`, `Contr
 `PlayerPreferencesRows.cs`, are data. They live in `Platform/galaxia/data/frontend_settings.json`, beside the models that
 own the keys (`models.rs`'s `AppSettings` and `GraphicsConfig`), because a row is a statement about a key: the key's
 values, its default and its words change with the key, and one owner holds both. The file is embedded when the crate is
-built and read by `settings_rows` (`rows()`), as the systems table is.
+built and read by `settings_rows` (`rows()`), as the systems table is. A front end reads them through
+`emusen_galaxia_settings_rows` (interface 45, `EmuSen_RustPlatform.md` §52).
 
 **The shape** is the frontend API's `settings_schema` row (`emusen_crystal.h`; `Platform/crystal/src/settings_api.rs`):
 `key`, `label`, `hint`, `kind` (`switch`, `count` or `choice`), `default`, `min`, `max`, `choices`, `choice_labels`,

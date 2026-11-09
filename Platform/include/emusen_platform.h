@@ -6,7 +6,8 @@
  * end calls for what both offer. This header is the components' own interface; since 38 the systems table, the cheat
  * codecs, a firmware install, the card manager and a cheat database's install are the frontend API's alone
  * (EmuSen_RustPlatform.md, section 47.24); since 39 scraping is the emusen.scrape service's table alone (47.25); since
- * 40 Endymion reads and writes the four binding files and Galaxia names its files (EmuSen_Input.md, section 5.2). The
+ * 40 Endymion reads and writes the four binding files and Galaxia names its files (EmuSen_Input.md, section 5.2); since
+ * 45 Galaxia serves the front end's own settings rows (EmuSen_Galaxia.md, section 3.15). The
  * rules are argued in EmuSen_RustPlatform.md, section 3, and are the core ABI's (emusen_core.h) one layer up:
  *
  *  - The host calls and the library returns. The library never calls the host: what the C# reports through a
@@ -42,7 +43,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 44u
+#define EMUSEN_PLATFORM_ABI_VERSION 45u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -469,6 +470,16 @@ int32_t emusen_galaxia_cheat_name_valid(const uint8_t *name, size_t name_len);
  * path, or one whose name is blank, "." or "..".
  */
 int64_t emusen_galaxia_cheat_game_list(const uint8_t *console, size_t console_len, const uint8_t *rom_path, size_t rom_path_len, uint8_t *out, size_t len);
+
+/* ---- Galaxia: the front end's own settings rows (EmuSen_Galaxia.md, section 3.15; since 45) ---- */
+
+/*
+ * The rows a settings screen shows for AppSettings' and GraphicsConfig's keys, as JSON: {"AppSettings": [row, ...],
+ * "GraphicsConfig": [...], "GraphicsConfig.Consoles": [...]}, each row in emusen_crystal_settings_schema's shape
+ * without "note": {"key", "label", "hint", "kind", "default", "min", "max", "choices", "choice_labels", "group",
+ * "shown_with", "locked"}. The same text on every call; PARSE with words only for a build whose rows were committed broken.
+ */
+int64_t emusen_galaxia_settings_rows(uint8_t *out, size_t len);
 
 /* ---- Galaxia: the error log (EmuSen_Settings_Reference.md, section 4.70) ---- */
 

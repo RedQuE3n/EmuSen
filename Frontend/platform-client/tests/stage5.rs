@@ -204,3 +204,19 @@ fn openvgdb_hashes_a_dump_without_its_header_and_presets_are_read_and_merged() {
     assert_eq!(merged[0]["initial"], json!(0.5f32.to_bits()));
     assert!(matches!(serenity::parameters_merge(&p, &json!([])), Err(Error::Status { .. })));
 }
+
+#[test]
+fn the_front_ends_settings_rows_come_from_galaxia_by_length_then_fill() {
+    let _world = World::new("settings-rows");
+    let p = Platform::load(library()).unwrap();
+    let rows = p.settings_rows().unwrap();
+    let app = rows["AppSettings"].as_array().unwrap();
+    let all = app.len() + rows["GraphicsConfig"].as_array().unwrap().len() + rows["GraphicsConfig.Consoles"].as_array().unwrap().len();
+    assert_eq!(all, 59, "every key a settings screen sets");
+    let schema = ["key", "label", "hint", "kind", "default", "min", "max", "choices", "choice_labels", "group", "shown_with", "locked"];
+    let swap = app.iter().find(|r| r["key"] == "SwapPadButtons").unwrap();
+    assert_eq!(swap.as_object().unwrap().keys().filter(|k| schema.contains(&k.as_str())).count(), schema.len(), "{swap}");
+    assert_eq!((swap["kind"].as_str(), swap["default"].as_str(), swap["group"].as_str()), (Some("switch"), Some("false"), Some("Controllers")));
+    let overscan = &rows["GraphicsConfig.Consoles"].as_array().unwrap().iter().find(|r| r["key"] == "Overscan").unwrap()["choices"];
+    assert_eq!(overscan, &json!(["off", "tv", "custom"]));
+}

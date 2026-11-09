@@ -4522,3 +4522,18 @@ gave a period of that size, which the 0.9 smoothing took about two seconds of sw
 session test, given swaps 4 ms apart from 1 s, locked for none of them: 7 frames over 30 swaps (`qt-models`' `session`,
 now asserting at least 24). A count of zero is no swap and now no sample; the same test locks on every swap. This is
 also why §1.8.4's gate counted only after the first 2 s.
+
+## 52. Interface 45, 2026-11-09: the front end's own settings rows, served by Galaxia
+
+*Approved 2026-11-09 by the tester.* The rows a settings screen shows for the program's own keys are data in Galaxia
+(`EmuSen_Galaxia.md` §3.15), and a front end reaches Galaxia only through this library, so one call carries them:
+`emusen_galaxia_settings_rows(out, len)`, by the length-query idiom, answering `frontend_settings.json` as committed
+once `settings_rows::rows()` reads it (`Platform/platform/src/galaxia_config.rs`). The same text on every call, so the
+two calls of the idiom agree; a build whose rows were committed broken answers PARSE with the reader's words, which the
+crate's tests refuse before it can be built. Rows rather than a schema call of the frontend API's, because the keys are
+Galaxia's, not a core's, and need no runtime. `Frontend/platform-client` wraps it as `Platform::settings_rows`, answering
+the document as `serde_json::Value` so that Galaxia stays the rows' one owner. The C# half has its rows in code until it
+retires and never calls it, so `GalaxiaParityTests` counts it as the front end's. `lib.rs`, `emusen_platform.h` and
+`PlatformLibrary.InterfaceVersion` moved to 45 together. Measured by `stage5.rs`'s
+`the_front_ends_settings_rows_come_from_galaxia_by_length_then_fill` (all 59 rows, a row's twelve members, a console's
+crop choices); an empty answer seeded in the C layer was caught.

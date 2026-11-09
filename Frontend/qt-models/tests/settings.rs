@@ -39,6 +39,9 @@ impl SettingsSource for Fake {
     fn outputs(&self) -> Vec<String> {
         vec!["Speakers".into()]
     }
+    fn folders(&self) -> std::collections::BTreeMap<String, String> {
+        [("firmware".to_owned(), "/emusen/Firmware".to_owned())].into()
+    }
 }
 
 fn fake(app: Value, graphics: Value) -> Fake {
@@ -171,16 +174,17 @@ fn qt_7_7_doors_open_pages_and_screens_and_b_closes_a_page_first() {
     assert_eq!(view.pane(1).lines, ["/a/folder/long/enough/to/be/cut/on/its/row/of/seven/hundred/and/four/units/Art"]);
     assert!(view.pane(0).sentence.contains("/games"));
 
-    assert_eq!(view.choose(index(&view, "scraping")), Outcome::Opened);
+    let index_of_scraping = index(&view, "scraping");
+    assert_eq!(view.choose(index_of_scraping), Outcome::Opened);
     assert_eq!(view.trail(), ["Library", "Scraping"]);
     assert_eq!(view.rows()[0].label, "Use ScreenScraper");
     assert!(view.rows().iter().all(|r| r.kind == RowKind::Steps));
     view.choose(0);
     assert_eq!(view.read.app["Scraping"], json!(false));
-    assert!(view.back(), "B closes the page");
+    assert_eq!(view.back(), Some(index_of_scraping), "B closes the page, back to the row that opened it");
     assert!(view.trail().is_empty());
     assert_eq!(view.rows()[3].value, "Off");
-    assert!(!view.back(), "B on a section is the screens'");
+    assert_eq!(view.back(), None, "B on a section is the screens'");
 }
 
 #[test]
@@ -229,4 +233,20 @@ fn qt_7_7_a_stored_value_no_choice_holds_is_shown_and_kept() {
     view.step(3, 1);
     assert_eq!(view.rows()[3].value, "System default", "a step past the kept device wraps to the first");
     assert_eq!(source.saved.borrow().len(), 0, "the view saves nothing itself; the model saves what a step hands it");
+}
+
+#[test]
+fn qt_7_7_e_a_folder_row_asks_the_folder_dialog_and_saves_its_answer_in_its_model() {
+    let source = fake(json!({"RomDirectory": "/games", "FirmwareDirectory": ""}), json!({}));
+    let mut view = view(&source);
+    section(&mut view, "Library");
+    let rom = index(&view, "rom");
+    assert_eq!(view.rows()[rom].kind, RowKind::Opens);
+    assert_eq!(view.choose(rom), Outcome::ChooseFolder { key: "AppSettings RomDirectory".into(), start: "/games".into() });
+    let Outcome::Saved(Model::App, saved) = view.set_folder("AppSettings RomDirectory", "/new/games") else { panic!("the folder saved") };
+    assert_eq!(saved["RomDirectory"], json!("/new/games"));
+    assert_eq!(view.rows()[rom].value, "/new/games");
+    for id in ["art", "media", "themefolder"] {
+        assert!(matches!(view.choose(index(&view, id)), Outcome::ChooseFolder { .. }), "{id} asks the dialog too");
+    }
 }

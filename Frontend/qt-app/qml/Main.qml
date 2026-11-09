@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Dialogs
 import EmuSen.Kit as Kit
 import EmuSen.Models
 import EmuSen.Endymion
@@ -345,9 +346,26 @@ Window {
         id: settingsModel
         objectName: "settingsModel"
         platformLibrary: program.platformLibrary
+        cores: library.cores
         open: screens.shown === Screens.Settings
         facts: library.loading ? "" : library.settingsFacts(player.session.running ? player.session.game : "")
         onDoor: (name) => screens.act(name)
+        onOpenFolder: (path) => folders.open(path)
+        onChooseFolder: (key, start) => folders.choose(key, start)
+    }
+    // The program's folder actions (EmuSen_Qt.md §7.7.E): one shown in the system's file manager, one chosen in the
+    // system's own folder dialog (through the desktop portal where there is one), whose answer the row's model saves.
+    Folders {
+        id: folders
+        objectName: "folders"
+        onDialogAsked: folderDialog.open()
+        onChosen: (key, path) => settingsModel.setFolder(key, path)
+    }
+    FolderDialog {
+        id: folderDialog
+        currentFolder: folders.dialogFolder
+        onAccepted: folders.accepted(folderDialog.selectedFolder)
+        onRejected: folders.rejected()
     }
     Settings {
         objectName: "settings"
@@ -387,6 +405,8 @@ Window {
         cores: library.cores
         world: program.coresWorld
         open: screens.shown === Screens.Cores
+        // Open Folder on a firmware page, through the program's one action for it (EmuSen_Qt.md §7.7.E).
+        onOpenFolder: (path) => folders.open(path)
     }
     Cores {
         objectName: "cores"

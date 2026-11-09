@@ -46,6 +46,10 @@ pub enum Screen {
     SettingsPage,
     /// A tool's search with the keyboard docked: Type, Delete, Space and Done (EmuSen_Interface.md §15.2).
     ToolSearch,
+    /// A console's page under Consoles: the shoulders step to the console before or after it.
+    SettingsConsole,
+    /// A page of choices (EmuSen_Interface.md §18.11): A chooses, B keeps what was chosen.
+    SettingsChoices,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -172,6 +176,14 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Search, "Space", Some("space")),
             (UiButton::Screensaver, "Done", Some("done")),
         ],
+        Screen::SettingsConsole => &[
+            (UiButton::Accept, "Change", None),
+            (UiButton::Left, "Value", None),
+            (UiButton::PageUp, "Console", None),
+            (UiButton::Back, "Back", None),
+            (UiButton::Menu, "Home", Some(HOME)),
+        ],
+        Screen::SettingsChoices => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None)],
     }
 }
 

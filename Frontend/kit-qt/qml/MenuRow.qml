@@ -52,6 +52,7 @@ Kit.Walkable {
         color: root.sectionEnd ? Kit.Tokens.border : Kit.Tokens.rule
     }
     Text {
+        id: labelText
         objectName: "label"
         text: root.label
         color: root.activeFocus ? Kit.Tokens.textStrong : Kit.Tokens.text
@@ -89,8 +90,9 @@ Kit.Walkable {
         text: root.value
         color: Kit.Tokens.muted
         font: root.labelFont
-        // At most half the row, a long value (a folder's path) cut at its start so its end shows (EmuSen_Kit.md §7.46).
-        width: Math.min(valueText.implicitWidth, root.width / 2)
+        // What the label leaves of the row, and at least half of it, a long value (a folder's path) cut at its start so its end shows (EmuSen_Kit.md §7.46, §7.50).
+        width: Math.min(valueText.implicitWidth, Math.max(root.width / 2, root.width - root.inset * 2 - labelText.implicitWidth - Kit.Tokens.base * 2
+            - (root.steps ? root.stepMark.width + root.markGap : 0) - (root.steps || root.opens ? root.afterMark.width + root.markGap : 0)))
         elide: Text.ElideLeft
         anchors.right: after.visible ? after.left : parent.right
         anchors.rightMargin: after.visible ? root.markGap : root.inset

@@ -278,6 +278,8 @@ pub struct SettingRow {
     pub group: Option<String>,
     pub note: Option<String>,
     pub shown_with: Option<ShownWith>,
+    /// The running engine holds the value, its note saying why.
+    pub locked: bool,
 }
 
 /// The key and value a setting means something only with.

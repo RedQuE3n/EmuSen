@@ -71,7 +71,8 @@ mod tests {
         assert!(check_version("lib", here).is_ok());
         assert!(check_version("lib", here + 1).is_ok(), "a later minor only adds");
         let older = check_version("lib", (raw::EMUSEN_CRYSTAL_MAJOR - 1) << 16 | 13).unwrap_err();
-        assert_eq!(older.to_string(), "The frontend API's library at lib is version 1.13; this program needs 2.0 or a later minor of 2.");
+        let (major, minor) = (raw::EMUSEN_CRYSTAL_MAJOR, raw::EMUSEN_CRYSTAL_MINOR);
+        assert_eq!(older.to_string(), format!("The frontend API's library at lib is version 1.13; this program needs {major}.{minor} or a later minor of {major}."));
         assert!(check_version("lib", (raw::EMUSEN_CRYSTAL_MAJOR + 1) << 16).is_err());
     }
 }

@@ -136,6 +136,10 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "hostAsked"]
         fn host_asked(self: Pin<&mut ToolModel>, key: QString);
+        /// A folder to show in the system's file manager, through the program's one action for it (`Folders`).
+        #[qsignal]
+        #[cxx_name = "openFolder"]
+        fn open_folder(self: Pin<&mut ToolModel>, path: QString);
     }
 
     impl cxx_qt::Initialize for ToolModel {}
@@ -316,8 +320,10 @@ impl qobject::ToolModel {
             change(tool)
         };
         self.as_mut().fill();
-        if let Some(key) = host {
-            self.as_mut().host_asked(QString::from(key.as_str()));
+        match host.as_deref().map(|k| (k, k.strip_prefix(crate::tools::cores::OPEN_FOLDER))) {
+            Some((_, Some(path))) => self.as_mut().open_folder(QString::from(path)),
+            Some((key, None)) => self.as_mut().host_asked(QString::from(key)),
+            None => {}
         }
     }
 

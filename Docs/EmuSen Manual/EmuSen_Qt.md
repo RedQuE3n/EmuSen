@@ -1104,9 +1104,8 @@ the paused frame's shadow and the EMUSEN tag 4.30:1 on its tint at 1280 × 720 (
     hue circle in steps of 2°). The tag's ink is the line's, one colour.
 11. Games' floating label is not drawn while the grid is empty (finding 3).
 
-The shelf's fades hold only while the Recent band is shown: an `EdgeFade` under the hidden band whose edge changed as the
-window grew crashed the GPU run at the resize to 3840 × 2160 (twice, in `QQuickItem::geometryChange`; measured 2026-11-09
-and queued for the kit). Proof, measured 2026-11-09: offscreen, `nogame` and `empty` hold no finding; on the GPU
+An `EdgeFade` whose edge changed as the window grew crashed the GPU run at the resize to 3840 × 2160 (the kit's layer
+turned off during the resize, fixed in the kit on 2026-11-09, `EmuSen_Kit.md` §7.35). Proof, measured 2026-11-09: offscreen, every state of §3.7.2 holds no finding but `many`'s reach, which is the rule's; on the GPU
 (`theme-audit --gpu`), the default state, `nogame`, `empty` and `pressed` hold none. Each finding above was the audit's on
 the theme before its fix, which a revert restores.
 

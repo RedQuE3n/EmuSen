@@ -397,7 +397,6 @@ ThemeScreen {
                             y: 150
                             width: root.bandWidth + 32
                             height: 230
-                            // Only while the band is shown: a layer toggled on the hidden band as the window grew crashed the GPU run (EmuSen_Qt.md §3.4.4).
                             fadeLeft: shelfList.fadeLeft
                             fadeRight: shelfList.fadeRight
                             length: 24
@@ -417,8 +416,8 @@ ThemeScreen {
                                 highlight: Item {}
                                 boundsBehavior: Flickable.StopAtBounds
                                 // The fit audit's edge rule reads a faded edge from these.
-                                property bool fadeLeft: recentBand.visible && shelfList.contentX > shelfList.originX - shelfList.leftMargin + 0.5
-                                property bool fadeRight: recentBand.visible && shelfList.contentX + shelfList.width < shelfList.originX + shelfList.contentWidth + shelfList.rightMargin - 0.5
+                                property bool fadeLeft: shelfList.contentX > shelfList.originX - shelfList.leftMargin + 0.5
+                                property bool fadeRight: shelfList.contentX + shelfList.width < shelfList.originX + shelfList.contentWidth + shelfList.rightMargin - 0.5
                                 model: Library.shelf
                                 // Rows come after the shelf is made, which leaves no current cover for Right to enter on.
                                 onCountChanged: if (shelfList.currentIndex < 0 && shelfList.count > 0) shelfList.currentIndex = 0

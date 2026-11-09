@@ -479,6 +479,7 @@
     "medium": "psx.card",
     "title": "Memory Card",
     "noun": "Card",
+    "noun_in_text": "card",
     "extension": ".mcr",
     "kind": "removable",
     "capacity": 15,
@@ -499,8 +500,71 @@
       "path": "/saves/PlayStation/Cards/Card 2.mcr"
      }
     ],
-    "cards": []
+    "cards": [
+     {
+      "path": "/saves/PlayStation/Cards/Card 1.mcr",
+      "name": "Card 1",
+      "label": "Card 1",
+      "games_own": false,
+      "held_by": null
+     },
+     {
+      "path": "/saves/PlayStation/Cards/Card 2.mcr",
+      "name": "Card 2",
+      "label": "Card 2",
+      "games_own": false,
+      "held_by": "Amber Saga"
+     }
+    ]
    }
   ]
+ },
+ "opened": {
+  "/saves/PlayStation/Cards/Card 1.mcr": {
+   "exists": true,
+   "length": 131072,
+   "formatted": true,
+   "free": 11,
+   "problem": null,
+   "saves": [
+    {
+     "id": "BASLUS-00067",
+     "title": "DRACULA X CHRONICLE SAVE",
+     "units": 1,
+     "game": null,
+     "damaged": false
+    },
+    {
+     "id": "BESLES-01234",
+     "title": "Tomb Raider II, Venice, a long title",
+     "units": 3,
+     "game": null,
+     "damaged": false
+    }
+   ]
+  },
+  "/saves/PlayStation/Cards/Card 2.mcr": {
+   "exists": true,
+   "length": 131072,
+   "formatted": true,
+   "free": 11,
+   "problem": null,
+   "saves": [
+    {
+     "id": "BASLUS-00067",
+     "title": "DRACULA X CHRONICLE SAVE",
+     "units": 1,
+     "game": null,
+     "damaged": false
+    },
+    {
+     "id": "BESLES-01234",
+     "title": "Tomb Raider II, Venice, a long title",
+     "units": 3,
+     "game": null,
+     "damaged": false
+    }
+   ]
+  }
  }
 }

@@ -417,7 +417,16 @@ impl qobject::SettingsModel {
             Outcome::Door(name) => self.door(QString::from(name.as_str())),
             Outcome::OpenFolder(path) => self.open_folder(QString::from(path.as_str())),
             Outcome::ChooseFolder { key, start } => self.choose_folder(QString::from(key.as_str()), QString::from(start.as_str())),
-            Outcome::Set { .. } | Outcome::NewCard(_) if !self.world.is_empty() => self.shown(false),
+            Outcome::Set { .. } | Outcome::NewCard(_) | Outcome::Cards { .. } if !self.world.is_empty() => self.shown(false),
+            Outcome::Cards { op, args } => {
+                let (done, words) = match ClientConsoles::open(&self.platform_library.to_string(), &self.cores.to_string()) {
+                    Ok(c) => c.cards_change(op, &args),
+                    Err(e) => (false, e),
+                };
+                self.as_mut().rust_mut().view.cards_said(op, done, words);
+                self.as_mut().shown(true);
+                self.refresh();
+            }
             Outcome::Set { console, key, value } => {
                 let set = ClientConsoles::open(&self.platform_library.to_string(), &self.cores.to_string()).and_then(|c| c.set(&console, &key, value.as_deref()));
                 let failed = set.is_err();

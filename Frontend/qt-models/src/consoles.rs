@@ -25,6 +25,8 @@ pub trait ConsoleSource {
     fn overview(&self) -> Vec<FirmwareItem>;
     /// The card manager's list of the console's media.
     fn cards(&self, console: &str) -> Value;
+    /// A card as the card manager opens it (`CARDS_OPEN`); null for a file of no medium.
+    fn open_card(&self, path: &str) -> Value;
 }
 
 /// One console as Settings shows it.
@@ -151,6 +153,9 @@ pub fn read(source: &dyn ConsoleSource) -> Result<ConsoleRead, String> {
             c.firmware.extend(source.firmware(system).unwrap_or_default().into_iter().map(|f| (system.clone(), f)));
         }
         c.media = cards::media(&source.cards(&c.console));
+        for m in &mut c.media {
+            m.opened = m.cards.iter().filter_map(|card| Some((card.path.clone(), serde_json::from_value(source.open_card(&card.path)).ok()?))).collect();
+        }
     }
     Ok(ConsoleRead { consoles, cores: source.cores(), overview: source.overview() })
 }

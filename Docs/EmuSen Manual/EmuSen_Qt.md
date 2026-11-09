@@ -3901,22 +3901,33 @@ are proved separately, over the real runtime.
 **Compared with Mistress** (measured on 2026-11-09, the Qt recordings read by WiseMan's
 `Another_frontend_s_recordings_match_these_within_the_tolerances` on the WiseMan build of the day, no build).
 `InterfaceRules.All` found nothing in the ten. Under the map of names of §7.7, every row of the five states stands at
-Mistress's box with her label and value, at both sizes, and every pane line has her words. **Open for the tester**, none
-taken as accepted here:
-- The pane's sentence is set in the kit's face (§7.7, Kit §7.40), so the lines under it stand 6 to 14 units lower, and
-  the engine's sentence on the console page takes four lines where hers takes three (150 units, hers 106).
-- Engine's chosen value reads `Default` beside the kit's drawn dot (Kit §7.41) where Mistress wrote `● Default`.
-- Mistress tinted the firmware line Success or Attention; the kit's sentence has no tone, so the mark (`✓`, `⚠`) alone
-  says it. A tone for the sentence is a kit addition (Rule Q minor), proposed.
-- A row the engine holds (Mistress's `Locked`) is not drawn held: the runtime's `settings_schema` answers no `locked`,
-  only the note, which the pane gives; a minor of the frontend API, proposed.
-- The card manager lists no medium for a console outside the systems table (crystal's `media_for` reaches a core's
-  battery files through the table's pack), so a synthetic core's declared card is not yet a page; a runtime fix,
-  proposed. `cards.rs` writes a medium's noun inside a sentence as the card manager's words do (an acronym kept, else
-  lower case), which the list does not give; an addition to the list (`noun_in_text`), proposed, would remove the copy.
-- Not built here: the Custom crop page and the console's Shader levers (piece J's by the stage plan), the running
-  game's crop named in Crop overscan's pane (piece J), and the card manager's window behind Saves on the cards (its saves
-  copied, moved, deleted and imported over `cards_op`), whose piece the tester decides.
+Mistress's box with her label and value, at both sizes, and every pane line has her words. **Decided by the tester on
+2026-11-09:** the pane's sentence keeps the kit's face (Kit §7.40), so the lines under it stand 6 to 14 units lower than
+hers and the engine's sentence on the console page takes four lines where hers takes three; and Engine's chosen value
+keeps the kit's drawn dot beside `Default` (Kit §7.41) where Mistress wrote `● Default`.
+
+**Built on the tester's rulings of 2026-11-09:**
+- **The firmware lines' tints.** A console's firmware line is Success where nothing is wanting and Attention where every
+  game needs a file not found, as Mistress's `FirmwareLine` tinted it; a need's pane line Success when found, Attention
+  when wanting, and a file of the wrong size in Attention. `firmware.rs` gives each line its tone (`tools::Tone`, the
+  kit's `Tones` in their order); `SettingsModel.sentenceTone` and `lineTone(index)` hand them to the kit's sentence
+  (`SettingsFrame.sentenceTone`, Kit §7.52) and to the screen's lines (`ToneText`).
+- **A row the engine holds is drawn held**, as Mistress's `Locked`: the schema's `locked` (named by frontend API 2.1,
+  `EmuSen_RustPlatform.md` §54) is read by the client, the row is the kit's `held` and takes no step, and its note is its
+  pane's sentence; Cores' Options page takes no step on it either.
+- **A core's own card is a page** for a console the systems table does not list (the runtime's fix, §54 there), and the
+  card manager's `noun_in_text` words "New card" and "2 cards", so the front end no longer re-cases the noun.
+- **The card manager** behind Saves on the cards (`settings_saves.rs`, Mistress's Memory Cards window on the frame):
+  the medium's page holds the Card row, stepped through the drawer's cards and the games' own, its pane Mistress's
+  words (the mode and each slot's card, `N save(s), F of C blocks free.`, the format module's problem, or that the card
+  is not made yet, and `In use by …` for a card a running game holds); a row per save (its title, `N block(s)`,
+  `· damaged`), and Import Every Game's Saves (held on a game's own card, or one in use). A save's page holds Copy or
+  move to (stepped through the other cards), Copy Save, Move Save and Delete Save…, which asks first (No, Yes; decided
+  by the tester); Move and Delete are held while a game holds the card. Each change goes through `cards_op`
+  (`CARDS_COPY`, `_MOVE`, `_DELETE`, `_IMPORT`); its words are said under the page, the cards are read again, and after a
+  move or a delete the save's pages close. Each card's saves are read with `CARDS_OPEN` as the consoles are.
+- Not built here: the Custom crop page and the console's Shader levers (piece J's by the stage plan) and the running
+  game's crop named in Crop overscan's pane (piece J).
 
 **Held to** (measured on 2026-11-09). `qt-models/tests/consoles.rs` (7, no Qt, over a fake runtime): the list's order,
 panes and a held console; a synthetic core's declared rows each by its kind under its group's heading, stepped within
@@ -3932,7 +3943,14 @@ pointer reach, no chrome, names, palette, contrast) and recorded; RB to the Play
 Galaxia's firmware folder's `file:` URL to the caught handler; B on Firmware back on the Firmware row; Library ▸ ROM
 folder asking the dialog at the stored folder, Cancel saving nothing and a folder chosen saved and shown; nothing
 logged. `qt-models/tests/settings.rs` gained the folder rows' request and save, `qt-models/tests/cores.rs` Cores'
-Firmware page by need with Open Folder. Seeded faults, each reverted:
+Firmware page by need with Open Folder. The rulings' work is held to by: the models' tones on the list's and the
+Super Nintendo's firmware lines; a synthetic declaration's held row refusing its step with its note in the pane; the
+card manager's test (the card's words and saves, Import's request, Copy and Move to the other card, Delete's question,
+No and Yes, the words said and the pages closed, a game's own card with Import held); the client test's crystal test
+core listing its own card with `noun_in_text` and a new card made in its drawer, and the hosted core's held
+`tc_deinterlace` drawn held with its note; and the program's test: the Super Nintendo's firmware sentence in Success,
+the card manager's states `MemoryCardsPlayStation`, `MemoryCardsPlayStationHeld` and `MemoryCardsDelete` held at the
+gate's five sizes and recorded. Seeded faults, each reverted:
 - Engine's choice written under another key: the models' Engine test;
 - firmware files grouped by file rather than by need: the models' Firmware test;
 - a slot steppable whatever the mode: the models' Memory cards test;

@@ -19,11 +19,41 @@ pub struct Medium {
     pub noun_in_text: String,
     pub extension: String,
     pub kind: String,
+    /// The units a card holds and their name, where a format module reads the medium; none where none does.
+    pub capacity: Option<u64>,
+    pub unit: Option<String>,
     pub mode: String,
     pub mode_key: String,
     pub slots: Vec<Slot>,
     pub cards: Vec<Card>,
     pub next_name: String,
+    /// Each card's listing as the card manager opens it, by its path (`CARDS_OPEN`).
+    #[serde(skip)]
+    pub opened: Vec<(String, Opened)>,
+}
+
+/// A card as the card manager opens it: whether its file exists, its length, whether it is formatted, the units free, a
+/// problem reading it, and its saves.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Opened {
+    pub exists: bool,
+    pub length: u64,
+    pub formatted: bool,
+    pub free: u64,
+    pub problem: Option<String>,
+    pub saves: Vec<Save>,
+}
+
+/// A save on a card.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Save {
+    pub id: String,
+    pub title: String,
+    pub units: u64,
+    pub game: Option<String>,
+    pub damaged: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
@@ -60,6 +90,55 @@ impl Medium {
     /// The cards in the drawer: the medium's own files, not a game's.
     pub fn drawer(&self) -> Vec<&Card> {
         self.cards.iter().filter(|c| !c.games_own).collect()
+    }
+
+    /// Whether a format module reads the medium, so its saves are listed.
+    pub fn readable(&self) -> bool {
+        self.capacity.is_some()
+    }
+
+    /// A card's listing, where it was opened.
+    pub fn opened(&self, path: &str) -> Option<&Opened> {
+        self.opened.iter().find(|(p, _)| p == path).map(|(_, o)| o)
+    }
+
+    /// The card the first slot holds under a shared or named mode, where it is one of the cards; else the first card
+    /// (Mistress's `AssignedCard`).
+    pub fn first_card(&self) -> Option<&Card> {
+        let assigned = matches!(self.mode.as_str(), "shared" | "named").then(|| self.slots.first()).flatten();
+        assigned.and_then(|slot| self.cards.iter().find(|c| c.path == slot.path)).or(self.cards.first())
+    }
+
+    /// The mode in words, and which card each slot holds under it (Mistress's `ModeText`).
+    pub fn mode_text(&self) -> String {
+        if !matches!(self.mode.as_str(), "shared" | "named") {
+            return "Per game: each game keeps its own.".to_owned();
+        }
+        let slots: Vec<String> = self.slots.iter().map(|s| format!("{} in {}", s.name, s.label)).collect();
+        format!("{}: {}.", if self.mode == "shared" { "Shared" } else { "Named" }, slots.join(", "))
+    }
+
+    /// What a card holds, in Mistress's window's words: the mode, then the saves and the units free, why it cannot be
+    /// read, or that it does not exist yet; and that a running game holds it.
+    pub fn about(&self, card: &Card) -> String {
+        let mode = self.mode_text();
+        let unit = self.unit.clone().unwrap_or_default();
+        let mut words = match (self.opened(&card.path), self.capacity) {
+            (None, _) => format!("{mode} No card of this medium is in the drawer or a game's yet."),
+            (Some(o), None) => format!("{mode} {} bytes. No format module reads this medium yet, so its saves are not listed; a new card can still be made.", crate::words::grouped(o.length as usize)),
+            (Some(o), Some(capacity)) if o.formatted => format!("{mode} {} save(s), {} of {capacity} {unit}s free.", o.saves.len(), o.free),
+            (Some(o), Some(_)) => format!("{mode} {}", o.problem.clone().unwrap_or_default()),
+        };
+        if let Some(holder) = &card.held_by {
+            words.push_str(&format!(" In use by {holder}, which is running: its saves can be looked at, and changed when the game is closed."));
+        }
+        words
+    }
+
+    /// A save's line on its card: its title, its units and whether it is damaged.
+    pub fn save_value(&self, save: &Save) -> String {
+        let unit = self.unit.clone().unwrap_or_default();
+        format!("{} {unit}(s){}", save.units, if save.damaged { "  ·  damaged" } else { "" })
     }
 
     /// The noun inside a sentence ("card"), the card manager's words for it.

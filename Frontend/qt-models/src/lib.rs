@@ -44,6 +44,7 @@ pub mod session;
 pub mod session_model;
 pub mod settings;
 pub mod settings_model;
+pub mod settings_saves;
 pub mod settings_source;
 pub mod themes;
 pub mod themes_model;

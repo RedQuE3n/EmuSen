@@ -121,6 +121,9 @@ pub enum Outcome {
     Reread,
     /// A folder shown in the system's file manager.
     OpenFolder(String),
+    /// One of the card manager's changes (`CARDS_COPY`, `_MOVE`, `_DELETE`, `_IMPORT`) and its arguments; its words are
+    /// told back through `cards_said`, and the consoles read again.
+    Cards { op: u32, args: Value },
     /// A folder to choose in the system's folder dialog, for a key (`Model Key`), starting at the folder it holds.
     ChooseFolder { key: String, start: String },
     /// Several at once, in order: a console reset forgets its keys and its picture.
@@ -140,6 +143,12 @@ pub enum Page {
     Cards(String),
     /// A medium's drawer of cards, by the console and the medium.
     Drawer(String, String),
+    /// The card manager's page of a medium: a card chosen and the saves on it (Mistress's Memory Cards window).
+    Saves(String, String),
+    /// A save on the chosen card, by its id: copy, move or delete it.
+    Save(String, String, String),
+    /// The question before a save is deleted, by the save's id.
+    Delete(String, String, String),
 }
 
 impl Page {
@@ -147,6 +156,7 @@ impl Page {
         match self {
             Page::Group(_) => None,
             Page::Console(c) | Page::Engine(c) | Page::Firmware(c) | Page::Cards(c) | Page::Drawer(c, _) => Some(c),
+            Page::Saves(c, _) | Page::Save(c, _, _) | Page::Delete(c, _, _) => Some(c),
         }
     }
 }
@@ -158,9 +168,13 @@ pub struct SettingsView {
     pub read: Read,
     pub section: usize,
     /// The pages open, outermost first, each with the label of the row that opened it and that row's index.
-    pages: Vec<(Page, String, usize)>,
+    pub(crate) pages: Vec<(Page, String, usize)>,
     /// The program's facts a pane names: `games`, the games in the library; `running`, the game's title.
     pub facts: Value,
+    /// The card manager's page: the card chosen and the card a save goes to, by path, and the last change's words.
+    pub(crate) chosen_card: Option<String>,
+    pub(crate) target_card: Option<String>,
+    pub(crate) said: String,
 }
 
 impl Default for SettingsView {
@@ -237,7 +251,7 @@ struct Keyed<'a> {
 impl SettingsView {
     pub fn new() -> SettingsView {
         let description = serde_json::from_str(DESCRIPTION).expect("the settings screen's description is JSON");
-        SettingsView { description, read: Read::default(), section: 0, pages: Vec::new(), facts: Value::Null }
+        SettingsView { description, read: Read::default(), section: 0, pages: Vec::new(), facts: Value::Null, chosen_card: None, target_card: None, said: String::new() }
     }
 
     fn word(&self, name: &str) -> String {
@@ -289,7 +303,7 @@ impl SettingsView {
         self.pages.pop().map(|(_, _, at)| at)
     }
 
-    fn open(&mut self, page: Page, label: String, at: usize) -> Outcome {
+    pub(crate) fn open(&mut self, page: Page, label: String, at: usize) -> Outcome {
         self.pages.push((page, label, at));
         Outcome::Opened
     }
@@ -317,7 +331,7 @@ impl SettingsView {
     }
 
     /// The console a page is of.
-    fn console(&self) -> Option<&Console> {
+    pub(crate) fn console(&self) -> Option<&Console> {
         self.page().and_then(Page::console).and_then(|c| self.read.consoles.console(c))
     }
 
@@ -393,8 +407,14 @@ impl SettingsView {
                 let m = console.media.iter().find(|m| &m.medium == medium);
                 m.map(cards::drawer_rows).unwrap_or_default().iter().enumerate().map(|(at, r)| json!({ "id": r.id, "drawer": at })).collect()
             }
+            Page::Saves(..) | Page::Save(..) | Page::Delete(..) => self.saves_entries(),
             Page::Group(_) => Vec::new(),
         }
+    }
+
+    /// Whether a page of the card manager is shown, whose rows `settings_saves.rs` resolves.
+    fn on_saves(&self) -> bool {
+        matches!(self.page(), Some(Page::Saves(..) | Page::Save(..) | Page::Delete(..)))
     }
 
     fn card_row(&self, entry: &Value) -> Option<cards::Row> {
@@ -608,6 +628,9 @@ impl SettingsView {
 
     /// A row of the Consoles section or a console's page that the description alone does not resolve.
     fn console_row(&self, entry: &Value) -> Option<Row> {
+        if self.on_saves() {
+            return self.saves_row(entry);
+        }
         let id = text_of(&entry["id"]);
         let row = |label: String, value: String, kind: RowKind, held: bool| Some(Row { id: id.clone(), label, value, kind, held, marked: false });
         if let Some(name) = entry["console"].as_str() {
@@ -915,6 +938,9 @@ impl SettingsView {
     /// The pane of a row the description alone does not word: the list's consoles, a console's schema and engines, its
     /// firmware and its cards.
     fn console_pane(&self, entry: &Value) -> Option<firmware::Words> {
+        if self.on_saves() {
+            return self.saves_pane(entry);
+        }
         let one = |line: String| Some(firmware::Words { lines: vec![line], ..Default::default() });
         if let Some(name) = entry["console"].as_str() {
             return Some(self.list_pane(self.read.consoles.console(name)?));
@@ -984,6 +1010,9 @@ impl SettingsView {
 
     /// Left or Right on a console's row: a schema row, a card's mode or slot, a screen's filter.
     fn console_step(&mut self, entry: &Value, by: i32) -> Option<Outcome> {
+        if self.on_saves() {
+            return self.saves_step(entry, by);
+        }
         let console = self.console()?.clone();
         let value = |k: &str| console.value(k);
         if let Some(key) = entry["schema"].as_str() {
@@ -1022,6 +1051,9 @@ impl SettingsView {
     /// A on a console's row: a console's page, the engines' page, a choice taken, a page of firmware or cards, a card
     /// made, the console reset, the folders read again.
     fn console_choose(&mut self, entry: &Value, index: usize) -> Option<Outcome> {
+        if self.on_saves() {
+            return self.saves_choose(entry, index);
+        }
         if let Some(name) = entry["console"].as_str() {
             let c = self.read.consoles.console(name)?;
             return Some(if c.runs() { self.open(Page::Console(c.console.clone()), c.name.clone(), index) } else { Outcome::Nothing });
@@ -1045,7 +1077,13 @@ impl SettingsView {
                     let title = console.media.iter().find(|m| m.medium == card.medium).map(|m| format!("{}s", m.title)).unwrap_or_default();
                     self.open(Page::Drawer(console.console.clone(), card.medium.clone()), title, index)
                 }
-                cards::Part::Saves => Outcome::Door(format!("cardsaves:{}", console.console)),
+                cards::Part::Saves => {
+                    let title = console.media.iter().find(|m| m.medium == card.medium).map(|m| m.title.clone()).unwrap_or_default();
+                    self.chosen_card = None;
+                    self.target_card = None;
+                    self.said.clear();
+                    self.open(Page::Saves(console.console.clone(), card.medium.clone()), title, index)
+                }
                 cards::Part::New => console.media.iter().find(|m| m.medium == card.medium).and_then(|m| m.new_card_path()).map_or(Outcome::Nothing, Outcome::NewCard),
                 _ => self.console_step(entry, 1).unwrap_or(Outcome::Nothing),
             });

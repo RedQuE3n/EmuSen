@@ -155,11 +155,22 @@ impl ConsoleSource for World {
     fn overview(&self) -> Vec<FirmwareItem> {
         vec![FirmwareItem { file: "scph5501.bin".into(), effect: Some("accuracy".into()), cost: Some("Most games start and save as on a console. Some do not.".into()), ..FirmwareItem::default() }]
     }
+    fn open_card(&self, path: &str) -> Value {
+        match path {
+            "/saves/PlayStation/Cards/Card 1.mcr" => json!({"exists": true, "length": 131072, "formatted": true, "free": 11, "problem": null,
+                "saves": [{"id": "BASLUS-00067", "title": "DRACULA X CHRONICLE SAVE", "units": 1, "game": null, "damaged": false},
+                          {"id": "BESLES-01234", "title": "Tomb Raider II, Venice", "units": 3, "game": "Tomb Raider II", "damaged": false}]}),
+            "/saves/a.mcr" => json!({"exists": true, "length": 131072, "formatted": true, "free": 14, "problem": null,
+                "saves": [{"id": "BASLUS-00999", "title": "A GAME'S OWN", "units": 1, "game": null, "damaged": true}]}),
+            _ => Value::Null,
+        }
+    }
     fn cards(&self, console: &str) -> Value {
         if console != "PlayStation" {
             return json!([]);
         }
         json!([{"medium": "psx.card", "title": "Memory Card", "noun": "Card", "noun_in_text": "card", "extension": ".mcr", "kind": "removable", "mode": "shared",
+                "capacity": 15, "unit": "block",
                 "mode_key": "Cards", "next_name": "Card 3",
                 "slots": [{"label": "Slot 1", "name": "Card 1", "path": "/saves/PlayStation/Cards/Card 1.mcr"},
                           {"label": "Slot 2", "name": "Card 2", "path": "/saves/PlayStation/Cards/Card 2.mcr"}],
@@ -365,7 +376,8 @@ fn qt_7_7_e_memory_cards_are_the_mode_the_slots_the_drawer_and_a_new_card() {
     assert!(!view.rows()[1].held, "under Named the slots are chosen");
     assert!(matches!(view.step(1, 1), Outcome::Set { key, value: Some(v), .. } if key == "Card1" && v == "Card 2"));
     assert_eq!(view.choose(5), Outcome::NewCard("/saves/PlayStation/Cards/Card 3.mcr".into()));
-    assert_eq!(view.choose(4), Outcome::Door("cardsaves:PlayStation".into()));
+    assert_eq!(view.choose(4), Outcome::Opened, "the card manager's page");
+    view.back();
     assert_eq!(view.choose(3), Outcome::Opened);
     assert_eq!(view.trail(), ["Consoles", "PlayStation", "Memory cards", "Memory Cards"]);
     assert_eq!(view.rows().iter().map(|r| r.label.as_str()).collect::<Vec<_>>(), ["Card 1"], "the drawer: its own cards, not a game's");
@@ -419,4 +431,49 @@ fn qt_7_7_e_the_pause_cards_memory_cards_are_the_same_description_slots_first() 
     assert_eq!((card.page, card.current), (PausePage::Cards, 3));
     card.back();
     assert_eq!(card.page, PausePage::Options);
+}
+
+#[test]
+fn qt_7_7_e_the_card_manager_lists_a_cards_saves_and_copies_moves_and_deletes_them_after_a_question() {
+    let world = World::new();
+    let mut view = view(&world);
+    open(&mut view, "PlayStation");
+    assert_eq!(view.choose(index(&view, "cards")), Outcome::Opened);
+    assert_eq!(view.choose(index(&view, "saves:psx.card")), Outcome::Opened);
+    assert_eq!(view.trail(), ["Consoles", "PlayStation", "Memory cards", "Memory Card"]);
+    let rows: Vec<(String, String)> = view.rows().into_iter().map(|r| (r.label, r.value)).collect();
+    assert_eq!(rows, [
+        ("Card".into(), "Card 1".into()),
+        ("DRACULA X CHRONICLE SAVE".into(), "1 block(s)".into()),
+        ("Tomb Raider II, Venice".into(), "3 block(s)".into()),
+        ("Import Every Game's Saves".into(), String::new()),
+    ], "the card the first slot holds, its saves, and Import");
+    assert_eq!(view.pane(0).sentence, "Shared: Card 1 in Slot 1, Card 2 in Slot 2. 2 save(s), 11 of 15 blocks free.", "Mistress's words");
+    assert_eq!(view.pane(2).muted, ["Tomb Raider II"]);
+    assert_eq!(view.choose(3), Outcome::Cards { op: emusen_crystal_client::consts::CARDS_IMPORT, args: json!({ "to": "/saves/PlayStation/Cards/Card 1.mcr", "from": ["/saves/a.mcr"] }) });
+
+    // A save's page: the other card as its target, Copy and Move, and Delete after a question.
+    assert_eq!(view.choose(1), Outcome::Opened);
+    let page: Vec<(String, String, bool)> = view.rows().into_iter().map(|r| (r.label, r.value, r.held)).collect();
+    assert_eq!(page, [("Copy or move to".into(), "a".into(), false), ("Copy Save".into(), String::new(), false), ("Move Save".into(), String::new(), false), ("Delete Save…".into(), String::new(), false)]);
+    let copy = json!({ "from": "/saves/PlayStation/Cards/Card 1.mcr", "save": "BASLUS-00067", "to": "/saves/a.mcr" });
+    assert_eq!(view.choose(1), Outcome::Cards { op: emusen_crystal_client::consts::CARDS_COPY, args: copy.clone() });
+    assert_eq!(view.choose(2), Outcome::Cards { op: emusen_crystal_client::consts::CARDS_MOVE, args: copy });
+    assert_eq!(view.choose(3), Outcome::Opened, "Delete asks first");
+    assert_eq!(view.rows().iter().map(|r| r.label.as_str()).collect::<Vec<_>>(), ["No", "Yes"]);
+    assert_eq!(view.pane(0).sentence, "Delete DRACULA X CHRONICLE SAVE from Card 1? It cannot be brought back.");
+    assert_eq!(view.choose(0), Outcome::Opened, "No closes the question and deletes nothing");
+    assert_eq!(view.trail().last().map(String::as_str), Some("DRACULA X CHRONICLE SAVE"));
+    view.choose(3);
+    let delete = Outcome::Cards { op: emusen_crystal_client::consts::CARDS_DELETE, args: json!({ "card": "/saves/PlayStation/Cards/Card 1.mcr", "save": "BASLUS-00067" }) };
+    assert_eq!(view.choose(1), delete);
+    view.cards_said(emusen_crystal_client::consts::CARDS_DELETE, true, "DRACULA X CHRONICLE SAVE deleted from Card 1".into());
+    assert_eq!(view.trail().last().map(String::as_str), Some("Memory Card"), "back on the card's page, the save gone");
+    assert_eq!(view.pane(0).muted, ["DRACULA X CHRONICLE SAVE deleted from Card 1"], "and the card manager's words said");
+
+    // The card stepped to a game's own: its saves, and Import held, since it is one of the games' own.
+    view.step(0, 1);
+    assert_eq!(view.rows()[0].value, "a");
+    assert_eq!(view.rows()[1].value, "1 block(s)  ·  damaged");
+    assert!(view.rows().last().unwrap().held);
 }

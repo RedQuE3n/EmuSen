@@ -3,7 +3,7 @@
 
 use crate::consoles::ConsoleSource;
 use emusen_crystal_client::shapes::{CoreRow, FirmwareFile, FirmwareItem, SettingRow, SystemRow};
-use emusen_crystal_client::consts::{CARDS_LIST, CARDS_NEW};
+use emusen_crystal_client::consts::{CARDS_LIST, CARDS_NEW, CARDS_OPEN};
 use emusen_crystal_client::{Runtime, Scope};
 use serde_json::{json, Value};
 
@@ -34,6 +34,16 @@ impl ClientConsoles {
         let answer = self.runtime.cards_op(CARDS_NEW, &json!({ "path": path })).map_err(words)?.unwrap_or(Value::Null);
         if answer["done"] == true { Ok(()) } else { Err(answer["words"].as_str().unwrap_or("The card was not made.").to_owned()) }
     }
+
+    /// One of the card manager's changes (copy, move, delete, import): whether it was done, and its words, or the
+    /// refusal's.
+    pub fn cards_change(&self, op: u32, args: &Value) -> (bool, String) {
+        match self.runtime.cards_op(op, args) {
+            Ok(Some(answer)) => (answer["done"] == true, answer["words"].as_str().unwrap_or_default().to_owned()),
+            Ok(None) => (false, String::new()),
+            Err(e) => (false, e.to_string()),
+        }
+    }
 }
 
 impl ConsoleSource for ClientConsoles {
@@ -63,6 +73,10 @@ impl ConsoleSource for ClientConsoles {
 
     fn cards(&self, console: &str) -> Value {
         self.runtime.cards_op(CARDS_LIST, &json!({ "console": console })).ok().flatten().unwrap_or(Value::Null)
+    }
+
+    fn open_card(&self, path: &str) -> Value {
+        self.runtime.cards_op(CARDS_OPEN, &json!({ "path": path })).ok().flatten().unwrap_or(Value::Null)
     }
 }
 
@@ -111,5 +125,9 @@ impl ConsoleSource for ScriptedConsoles {
 
     fn cards(&self, console: &str) -> Value {
         self.world["cards"][console].clone()
+    }
+
+    fn open_card(&self, path: &str) -> Value {
+        self.world["opened"][path].clone()
     }
 }

@@ -132,6 +132,39 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     scene.wait(200);
     assert!(sentence(&mut scene).starts_with("Shared: every PlayStation game"), "{}", sentence(&mut scene));
     hold(&mut scene, "SettingsMemoryCards", &mockup::Mockup::default(), named, &mut report);
+
+    // Saves on the cards: the card manager, as Mistress's Memory Cards window; the card in use by a running game.
+    for _ in 0..4 {
+        scene.pad(UiButton::Down);
+    }
+    wait_for(&mut scene, "settingsModel", "focused", "4", 1000);
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "settingsModel", "focused", "0", 1000);
+    scene.wait(200);
+    assert_eq!(sentence(&mut scene), "Shared: Card 1 in Slot 1, Card 2 in Slot 2. 2 save(s), 11 of 15 blocks free.");
+    hold(&mut scene, "MemoryCardsPlayStation", &mockup::Mockup::default(), named, &mut report);
+    scene.pad(UiButton::Right);
+    scene.wait(200);
+    assert!(sentence(&mut scene).ends_with("In use by Amber Saga, which is running: its saves can be looked at, and changed when the game is closed."));
+    hold(&mut scene, "MemoryCardsPlayStationHeld", &mockup::Mockup::default(), named, &mut report);
+    // A save's page and the question before Delete, which No closes.
+    scene.pad(UiButton::Left);
+    scene.pad(UiButton::Down);
+    wait_for(&mut scene, "settingsModel", "focused", "1", 1000);
+    scene.pad(UiButton::Accept);
+    scene.wait(200);
+    for _ in 0..3 {
+        scene.pad(UiButton::Down);
+    }
+    wait_for(&mut scene, "settingsModel", "focused", "3", 1000);
+    scene.pad(UiButton::Accept);
+    scene.wait(200);
+    assert_eq!(sentence(&mut scene), "Delete DRACULA X CHRONICLE SAVE from Card 1? It cannot be brought back.");
+    hold(&mut scene, "MemoryCardsDelete", &mockup::Mockup::default(), named, &mut report);
+    scene.pad(UiButton::Accept);
+    scene.wait(200);
+    scene.pad(UiButton::Back);
+    scene.pad(UiButton::Back);
     scene.pad(UiButton::Back);
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "settingsModel", "help", "17", 1000);

@@ -51,6 +51,8 @@ fn qt_1_3_logic_literals_rows_and_imports_are_findings() {
     assert_eq!(rules("import QtQml.Models"), vec![], "allowed for DelegateChooser (EmuSen_Qt.md §4.8.4)");
     assert_eq!(rules("import QtQuick.LocalStorage"), vec![Rule::Import]);
     assert_eq!(rules("DelegateChooser { role: \"paint\" }"), vec![], "a chooser's role is a name");
+    assert_eq!(rules("ComboBox { textRole: \"name\"; valueRole: \"key\" }"), vec![], "a binding ending in Role names a model's role");
+    assert_eq!(rules("Text { roleText: \"words\" }"), vec![Rule::Words], "only the ending names a role");
     assert_eq!(rules("import QtWebEngine"), vec![Rule::Import]);
     assert_eq!(rules("import QtQuick.Controls.impl"), vec![]);
     assert_eq!(rules("import EmuSen.Theme 1.0"), vec![]);

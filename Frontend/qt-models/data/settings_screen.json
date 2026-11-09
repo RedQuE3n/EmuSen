@@ -82,7 +82,7 @@
     {
       "id": "consoles",
       "name": "Consoles",
-      "rows": []
+      "from": "consoles"
     },
     {
       "id": "library",
@@ -121,5 +121,55 @@
         {"id": "about", "label": "About", "hint": "EmuSen's version.", "value": {"fact": "version"}}
       ]
     }
-  ]
+  ],
+  "consoles": {
+    "words": {
+      "unsupported": "Not supported yet",
+      "no_engine": "EmuSen has no engine for the {console} yet.",
+      "facts": "{console} · {games} · engine {engine}",
+      "crt": "CRT profile {crt}",
+      "shares": "What every {console} game shares, unless the game's own options say otherwise.",
+      "heading": "The {console}'s {group} settings.",
+      "engine": "{engine}, the {console}'s engine: every {console} game opens on it unless the game's own options choose another.",
+      "engine_others": "{others} can be chosen here too; this is the same setting as Cores' Make Default.",
+      "chosen": "Default",
+      "installed": "✓ Installed",
+      "runs": "{choice} runs every {console} game.",
+      "would_run": "{choice} would run every {console} game.",
+      "choose": "A chooses; B keeps what was chosen.",
+      "cartridge": "The {console}'s games keep their saves in the cartridge; there is no card to choose."
+    },
+    "page": [
+      {"id": "engine", "schema": "Engine", "page": "engine"},
+      {"id": "firmware", "label": "Firmware", "hint": "The firmware the {console}'s engines use, found by its content in your folders.", "page": "firmware"},
+      {"id": "cards", "label": "Memory cards", "hint": "The {console}'s cards: shared by every game as the console's were, or one per game.",
+       "none": "The {console}'s games keep their saves in the cartridge.", "page": "cards"},
+      {"schema": "*"},
+      {"id": "crtprofile", "label": "CRT profile", "hint": "The television the {console}'s picture is drawn on.", "screen": "Television",
+       "filter": "CRT", "setting": "quality", "off": "effect.None.nearest", "consoles": "this"},
+      {"id": "consolelevers", "label": "Shader levers", "hint": "The CRT's own levers for the {console}.", "screen": "Television", "door": "levers", "while": "CRT"},
+      {"id": "consolecrop", "row": "GraphicsConfig.Consoles Overscan", "consoles": "this", "screen": "Television",
+       "pane": {"sentence": "The whole picture, the part a television showed, or a crop of your own."}},
+      {"id": "screen", "label": "Screen", "hint": "The {console}'s screen as it is drawn.", "screen": "other", "filters": "suiting", "off": "effect.None.nearest", "consoles": "this"},
+      {"id": "consoleshape", "row": "GraphicsConfig.Consoles PictureShape", "consoles": "this",
+       "pane": {"sentence": "The screen the console was made for, or each pixel square."}},
+      {"id": "reset", "label": "Reset this console", "hint": "Every {console} setting back to its default: the engine's rows, its picture and its shaders; a row the engine holds stays.", "reset": true}
+    ],
+    "firmware": [
+      {"needs": true},
+      {"id": "fwreplacement", "schema": "FirmwarePreference", "label": "Open replacement",
+       "hint": "Whether the console's open replacement runs in place of firmware of your own. Takes effect when a game is next loaded.",
+       "words": {"auto": "In use when none is found", "replacement": "Always", "own": "Never"},
+       "pane": {"by_value": {
+         "In use when none is found": "Your own firmware runs where it is found; where it is not, the open replacement runs in its place.",
+         "Always": "The open replacement runs even where your own firmware is found.",
+         "Never": "Only your own firmware runs: a game whose firmware is not found does not start, and says which file it needs."},
+        "muted": ["Takes effect when a game is next loaded. EmuSen never downloads firmware."]}},
+      {"id": "fwfolder", "label": "Folder", "hint": "Your firmware folder, searched before EmuSen's; only ever read.", "door": "firmwarefolder",
+       "value": {"from": "AppSettings FirmwareDirectory", "blank": "EmuSen's folder"}},
+      {"id": "fwclear", "label": "Use EmuSen's folder alone", "hint": "Forgets your folder; firmware is then looked for in EmuSen's own.", "clear": "AppSettings FirmwareDirectory"},
+      {"id": "fwopen", "label": "Open EmuSen's folder", "hint": "EmuSen's own firmware folder in the file manager, made if it is not there yet.", "open": "firmware"},
+      {"id": "fwcheck", "label": "Check again", "hint": "Reads the folders again, as after a file is put in one.", "reread": true}
+    ]
+  }
 }

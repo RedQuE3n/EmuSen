@@ -3690,6 +3690,101 @@ reverted:
 - the preview's height read from its items' `visible`, which is false while the slot is empty, so it stays empty (the
   meter was never drawn until this was found): the program's test, the meter not drawn.
 
+
+#### 7.7.E Stage 5, piece E: Consoles and a console's pages (2026-11-09)
+
+`EmuSen_Interface.md` §18.10, §18.11; `EmuSen_BigPicture.md` §52.4; the oracle is Mistress's `SettingsConsoles`,
+`SettingsConsolePage`, `SettingsEngine`, `SettingsFirmware` and `SettingsMemoryCards` (1280 × 800 and 1920 × 1200), the
+`MemoryCards*` recordings read for their words.
+
+**A console's page is derived from what its engines declare** (§6.2 item 5, §6.3): no code names a console or a core.
+- **The list** (`consoles.rs`, plain Rust over a `ConsoleSource`): every console the runtime's `systems` names, each once
+  by its first system, those an engine runs first, then by release year and name; one no engine runs is listed held,
+  `Not supported yet`. Its pane is Mistress's `ConsolePane`: the games (`LibraryModel.settingsFacts` now counts each
+  system's), the engine, the firmware in one line, the CRT's tier and the first choice of the console's own, and what
+  every game of the console shares. The schema, each key's value (`settings_get`), each system's `firmware_status`, the
+  firmware overview and the card manager's list are read off the GUI thread each time Settings opens.
+- **The page** is the description's (`settings_screen.json`, `consoles.page`, the screen's own words in `consoles.words`):
+  Engine, Firmware, Memory cards, then `*`, the schema's every other row that its `shown_with` lets mean something,
+  each group under a heading (a held row of words, Mistress's `group:` rows), then the picture's rows: CRT profile,
+  Shader levers (held until the CRT is chosen), Crop overscan and Picture shape for a console whose Serenity screen is a
+  television, Screen (the catalogue's filters for every console and those naming it) for any other, and Reset this
+  console. A row of the schema is drawn by its kind through `schema.rs` (`shown`, `stepped`: a switch On or Off, a choice
+  by its label, a count within its range), and stored through the runtime's `settings_set` at the console's scope. The
+  keys the page draws in rows of its own (the description's `schema` keys, and each medium's mode and slots by the card
+  manager's `mode_key`) are left out of `*`. Reset forgets every declared key and the console's own entries of
+  GraphicsConfig. LB and RB step the page to the console before or after it among those an engine runs.
+- **Engine** is the runtime's console setting `Engine`, the value Cores' Make Default writes; Left and Right step it in
+  place and A opens it as the kit's page of choices (Kit §7.41): each engine with `Default` on the one in force (the
+  kit draws the dot Mistress wrote as `●`) and `✓ Installed` on the others; A chooses and returns, B keeps what was
+  chosen. An engine is named as the other screens name it (`clients::engine_shown`).
+- **Firmware** (`firmware.rs`, the one owner of a console's firmware words, shared with Cores' Firmware page): files
+  meeting the same need are one row, named by the systems table's `firmware_name` (the PlayStation's three regional
+  BIOS files are `PlayStation BIOS`); its value `✓ Found · SCPH-1001`, `⚠ Not found`, `Not found`, `Only some games` or
+  `Not needed` by whether the console starts empty; its pane says what runs and what the overview says of each file.
+  Then the schema's `FirmwarePreference` worded as §18.10 words it (`In use when none is found`, `Always`, `Never`),
+  Folder (AppSettings' FirmwareDirectory, else `EmuSen's folder`), Use EmuSen's folder alone (held while no folder is
+  set), Open EmuSen's folder and Check again (the consoles read again).
+- **Memory cards** (`cards.rs`, one description for Settings and the Pause Card): over `cards_op`'s list, the mode, a
+  row a slot, the drawer's cards (a page of its own), the saves on them (a door to the card manager's window, not built
+  on Qt) and a new card (`CARDS_NEW` at the drawer's folder, the list's `next_name`). A slot is stepped through its
+  schema row while the mode is Named and is held otherwise, since the mode places the card (its `shown_with`). The Pause
+  Card's Game Options ▸ Memory Cards draws the same rows, slots first (Mistress's `GameCardRows`), from the facts
+  `SessionModel` reads for the running console; a step is stored through the session at the console's scope and goes
+  in when the game next starts.
+
+**Open Folder** (decided 2026-11-09): `Folders` (`folders.rs`) is the program's one action that shows a folder in the
+system's file manager, a `file:` URL (`QUrl::fromLocalFile`) opened by `QDesktopServices`; it is offered everywhere,
+Steam's Game Mode included, where the player can switch to another window. Settings raises `openFolder` with a path and
+the program hands it to `Folders`; Firmware's Open EmuSen's folder is the first user, Cores' Firmware page the next. A
+test sets `catching`, which hands the `file` scheme to the object through `QDesktopServices::setUrlHandler`, Qt's own
+interception, so the URL is read and no file manager starts.
+
+**For the recordings**, `SettingsModel.world` names a file holding the consoles' world in place of the runtime's, as
+Cores' does (`qt-app/tests/settings_consoles.json`: the systems table's consoles, the ten engines Mistress's recording
+lists, the Super Nintendo's SA-1 row, the PlayStation's BIOS and cards). The schema and the values the runtime gives
+are proved separately, over the real runtime.
+
+**Compared with Mistress** (measured on 2026-11-09, the Qt recordings read by WiseMan's
+`Another_frontend_s_recordings_match_these_within_the_tolerances` on the WiseMan build of the day, no build).
+`InterfaceRules.All` found nothing in the ten. Under the map of names of §7.7, every row of the five states stands at
+Mistress's box with her label and value, at both sizes, and every pane line has her words. **Differences that remain,
+each for the tester:**
+- The pane's sentence is set in the style's face (§7.7), so the lines under it stand 6 to 14 units lower, and the
+  engine's sentence on the console page takes four lines where hers takes three (150 units, hers 106).
+- Engine's chosen value reads `Default` beside the kit's drawn dot where Mistress wrote `● Default`.
+- B on a page returns to the page's first row (as piece D's pages do) where Mistress returned to the row that opened
+  it: the model gives the row (`back` answers it), but the kit's walk, read again as the rows change, ends on the first
+  row when the view's new first delegate takes the focus after the host's; a kit change for that is left to the tester.
+- The pane's firmware and success lines are plain text with their marks (`✓`, `⚠`); Mistress tinted them Success and
+  Attention.
+- A schema row the engine holds (Mistress's `Locked`) is not marked held: the runtime's schema answers no `locked`,
+  only the note, which the pane gives.
+- Not built here: the Custom crop page and Shader levers (piece J), the card manager's window behind Saves on the cards,
+  the folder picker behind Folder. **The card manager lists no medium for a console outside the systems table**
+  (crystal's `media_for` reaches a core's battery files through the table's pack), so a synthetic core's declared card
+  is not yet a page; a runtime extension is proposed for the tester.
+
+**Held to** (measured on 2026-11-09). `qt-models/tests/consoles.rs` (7, no Qt, over a fake runtime): the list's order,
+panes and a held console; a synthetic core's declared rows each by its kind under its group's heading, stepped within
+the declaration, and a row added to the declaration shown with no code; Engine as a page of choices writing `Engine`;
+Firmware's need, words, preference, folders and Open Folder; Memory cards' rows, held slots, a new card, the drawer, and
+the page leaving the media's and the firmware's keys to their pages; the shoulders and a reset; the Pause Card's Memory
+Cards over the same description through the facts' plain data. `qt-models/tests/consoles_client.rs` (2, the platform
+library of this commit): the crystal test core approved as a player's core is a console whose page is its declaration,
+its boot ROM `⚠ Not found`, and a step stored through the runtime reads back; the libretro test core's options, read
+from a running session, are a page with its five categories as headings in its order and its options as rows.
+`qt-app/tests/settings_consoles.rs` (software backend): the five states held at the gate's five sizes (fit, pad reach,
+pointer reach, no chrome, names, palette, contrast) and recorded; RB to the PlayStation; Open EmuSen's folder giving
+Galaxia's firmware folder's `file:` URL to the caught handler; nothing logged. Seeded faults, each reverted:
+- Engine's choice written under another key: the models' Engine test;
+- firmware files grouped by file rather than by need: the models' Firmware test;
+- a slot steppable whatever the mode: the models' Memory cards test;
+- the media's keys left in the page's `*`: the models' Memory cards test, once it held the PlayStation page's rows (it
+  was not caught before; the assertion was added);
+- a reset forgetting every console's picture: the models' reset test;
+- `MenuRow`'s value held to half its row again (Kit §7.50): the program's test, SA-1 catch-up cut at all five sizes;
+- Open Folder given the folder's parent: the program's test, the caught URL.
 ---
 
 ## 8. Testing

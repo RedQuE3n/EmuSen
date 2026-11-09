@@ -17,6 +17,11 @@ Kit.NormalizedCanvas {
         target: screen.settings
         function onLeft() { screen.backed() }
     }
+    // The shoulders the frame declines under a trail: on a console's page, the console before or after it.
+    Keys.onPressed: (event) => {
+        if (event.key === Qt.Key_PageUp || event.key === Qt.Key_PageDown)
+            event.accepted = screen.settings.shoulder(event.key === Qt.Key_PageDown ? 1 : -1)
+    }
     Kit.SettingsFrame {
         id: frame
         objectName: "settingsFrame"

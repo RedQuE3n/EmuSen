@@ -2622,6 +2622,17 @@ removed or changed. Held to by kit-core's `kit_7_47_each_text_size_word_has_its_
 program's Settings test (the kit's `textScale` at `text_scale_of("large")` once Large is chosen); seeded, Large's scale
 as 1.1 failed the first.
 
+### 7.50 A value takes what the label leaves (stage 5, piece E; 2026-11-09)
+
+Found by Settings ▸ Consoles in the program (`EmuSen_Qt.md` §7.7.E): the Super Nintendo's SA-1 catch-up, a choice the
+core labels `After every S-CPU instruction (exact)`, was cut at half its row (§7.46) beside a label of thirteen
+characters, at every size of the gate, where Mistress's row shows it whole. A `MenuRow`'s value is now as wide as the
+row leaves it after the insets, the label's own width, the gap and the marks, and never less than half the row, so a
+long label still keeps its half and a folder's path longer than the room is still cut at its start (§7.46, and the named
+exception of `EmuSen_Qt.md` §7.7). Nothing of the surface changed. Held to by the program's Consoles test (the value
+whole at the gate's five sizes) and its Settings test (the ROM folder's path still cut, its pane whole); seeded, the
+half-row cap put back failed the first with the value cut at all five sizes.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

@@ -4,6 +4,7 @@
 //! (`GameMenuRows`, `LeaveRows`, `ReelRows`, `PauseCardPane`), so the two front ends say the same.
 
 use crate::card;
+use crate::cards;
 use crate::help::Screen;
 use crate::library::GameRow;
 use crate::reel::{self, Reel};
@@ -22,6 +23,8 @@ pub enum Page {
     Options,
     /// Change Disc (§20.2): the game's own discs, the console's other games, the tray.
     Disc,
+    /// Game Options ▸ Memory Cards (§18.5): the console's cards, the same description as Settings' (`cards.rs`).
+    Cards,
     /// One of Leave's questions, on the card form's question page (`card::question`).
     Ask(Ask),
 }
@@ -98,6 +101,41 @@ pub struct Facts {
     pub discs: DiscFacts,
     /// Whether player 2 has a pad, so Swap Players is offered.
     pub second_player: bool,
+    /// The console's cards, their schema rows and the values the console holds.
+    pub cards: CardFacts,
+}
+
+/// The running console's cards as the card manager lists them, with the schema's rows for their mode and slots.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct CardFacts {
+    pub console: String,
+    pub media: Vec<cards::Medium>,
+    pub schema: Vec<emusen_crystal_client::shapes::SettingRow>,
+    pub values: std::collections::BTreeMap<String, String>,
+}
+
+impl CardFacts {
+    pub fn value(&self, key: &str) -> String {
+        self.values.get(key).cloned().or_else(|| self.schema.iter().find(|r| r.key == key).and_then(|r| r.default.clone())).unwrap_or_default()
+    }
+
+    pub fn rows(&self) -> Vec<cards::Row> {
+        cards::rows(&self.media, &self.schema, &|k| self.value(k), true)
+    }
+
+    fn to_json(&self) -> Value {
+        json!({ "console": self.console, "media": self.media.iter().map(cards::Medium::to_json).collect::<Vec<_>>(),
+                "schema": crate::schema::to_json(&self.schema), "values": self.values })
+    }
+
+    fn from_json(v: &Value) -> CardFacts {
+        CardFacts {
+            console: v["console"].as_str().unwrap_or_default().to_owned(),
+            media: cards::media(&v["media"]),
+            schema: serde_json::from_value(v["schema"].clone()).unwrap_or_default(),
+            values: serde_json::from_value(v["values"].clone()).unwrap_or_default(),
+        }
+    }
 }
 
 /// The session's drive (Mistress's `Discs`): how many discs the game has, the one in, and whether it can change.
@@ -125,6 +163,7 @@ impl Default for Facts {
             system: String::new(),
             discs: DiscFacts::default(),
             second_player: false,
+            cards: CardFacts::default(),
         }
     }
 }
@@ -136,7 +175,7 @@ impl Facts {
             self.slots.iter().map(|s| json!({ "slot": s.slot, "exists": s.exists, "when": s.when, "picture": s.picture })).collect();
         json!({ "slot": self.slot, "slots": slots, "rewindWhy": self.rewind_why, "rewindSeconds": self.rewind_seconds,
                 "held": self.held, "now": self.now, "hz": self.hz, "speed": self.speed, "pictures": self.pictures,
-                "path": self.path, "system": self.system, "secondPlayer": self.second_player,
+                "path": self.path, "system": self.system, "secondPlayer": self.second_player, "cards": self.cards.to_json(),
                 "discs": { "count": self.discs.count, "index": self.discs.index, "canChange": self.discs.can_change, "lidOpen": self.discs.lid_open } })
         .to_string()
     }
@@ -175,6 +214,7 @@ impl Facts {
                 lid_open: v["discs"]["lidOpen"].as_bool().unwrap_or(false),
             },
             second_player: v["secondPlayer"].as_bool().unwrap_or(false),
+            cards: CardFacts::from_json(&v["cards"]),
         }
     }
 
@@ -269,6 +309,8 @@ pub const CONTROLLERS: &str = "controllers";
 pub const DISPLAY: &str = "display";
 pub const SOUND: &str = "sound";
 pub const MEMORY_CARDS: &str = "memoryCards";
+/// A row of Memory Cards' page, each found by its place on the page.
+pub const MEMORY_CARD: &str = "memoryCard";
 /// A disc of the game's own, another game of the console, and the tray, on Change Disc's page.
 pub const OWN_DISC: &str = "ownDisc";
 pub const OTHER_DISC: &str = "otherDisc";
@@ -311,7 +353,7 @@ pub fn speed_value(percent: u32) -> String {
 }
 
 /// What the card asks of the session or the window after a press.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Outcome {
     /// Nothing changed.
     Nothing,
@@ -347,6 +389,8 @@ pub enum Outcome {
     Eject,
     /// Players 1 and 2 swapped, and the card closed.
     SwapPlayers,
+    /// A console's setting stored, a card's mode or slot; it goes in when the game next starts.
+    Setting { key: String, value: String },
 }
 
 /// The context pane's kind.
@@ -485,6 +529,13 @@ impl Card {
                 rows
             }
             Page::Disc => self.disc_rows(),
+            Page::Cards => self
+                .facts
+                .cards
+                .rows()
+                .into_iter()
+                .map(|r| Row { steps: r.steps, opens: r.opens, dimmed: r.held, ..row(MEMORY_CARD, &r.label, r.value) })
+                .collect(),
             Page::Leave => vec![
                 row(LIBRARY, "Back to Library", String::new()),
                 row(RESTART, "Restart Game...", String::new()),
@@ -517,6 +568,7 @@ impl Card {
             Page::Reel => "Rewind".to_string(),
             Page::Options => "Game Options".to_string(),
             Page::Disc => "Change Disc".to_string(),
+            Page::Cards => "Memory Cards".to_string(),
             Page::Ask(ask) => ask.page().title,
         }
     }
@@ -569,6 +621,11 @@ impl Card {
                 self.turn(Page::Options, 0);
                 Outcome::Shown
             }
+            MEMORY_CARDS if self.page == Page::Options => {
+                self.turn(Page::Cards, 0);
+                Outcome::Shown
+            }
+            MEMORY_CARD => self.step_card(self.current, 1),
             CHANGE_DISC if self.facts.discs.can_change => {
                 self.turn(Page::Disc, 0);
                 Outcome::Shown
@@ -620,6 +677,7 @@ impl Card {
         match self.key_at(index) {
             Some(SAVE | LOAD) => Outcome::Slot((self.facts.slot as i64 - 1 + by as i64).rem_euclid(SLOTS as i64) as u32 + 1),
             Some(SPEED) => self.step_speed(by),
+            Some(MEMORY_CARD) => self.step_card(index, by),
             Some(MOMENT | GO_BACK | HOLD) => self.reel_moved(|r| r.step(by, held)),
             _ => Outcome::Nothing,
         }
@@ -666,6 +724,7 @@ impl Card {
             Page::Reel => (Page::First, REWIND),
             Page::Options => (Page::First, OPTIONS),
             Page::Disc => (Page::First, CHANGE_DISC),
+            Page::Cards => (Page::Options, MEMORY_CARDS),
             Page::Ask(ask) => (Page::Leave, ask.key()),
         };
         self.turn(to, 0);
@@ -691,7 +750,30 @@ impl Card {
             (Page::First, Some(REWIND)) => self.reel_pane(),
             (Page::First, Some(key @ (SAVE | LOAD))) => self.slots_pane(key == LOAD),
             (Page::Disc, _) => self.disc_pane(),
+            (Page::Cards, _) => self.cards_pane(),
             _ => Pane::none(),
+        }
+    }
+
+    /// A card row's words, as Settings' Memory cards gives them in a game.
+    fn cards_pane(&self) -> Pane {
+        let facts = &self.facts.cards;
+        let Some(row) = facts.rows().into_iter().nth(self.current) else { return Pane::none() };
+        let words = cards::pane(&facts.media, &row, &facts.schema, &|k| facts.value(k), &facts.console, true);
+        let sentence = words.lines.into_iter().chain(words.muted).collect::<Vec<_>>().join(" ");
+        Pane { kind: PaneKind::Sentence, sentence, ..Pane::none() }
+    }
+
+    /// Left or Right on a card's mode or slot: the console's setting one step on.
+    fn step_card(&mut self, index: usize, by: i32) -> Outcome {
+        let facts = &self.facts.cards;
+        let Some(row) = facts.rows().into_iter().nth(index) else { return Outcome::Nothing };
+        match cards::step(&row, &facts.schema, &|k| facts.value(k), by) {
+            Some((key, value)) => {
+                self.facts.cards.values.insert(key.clone(), value.clone());
+                Outcome::Setting { key, value }
+            }
+            None => Outcome::Nothing,
         }
     }
 

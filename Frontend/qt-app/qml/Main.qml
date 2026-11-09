@@ -334,9 +334,16 @@ Window {
         id: settingsModel
         objectName: "settingsModel"
         platformLibrary: program.platformLibrary
+        cores: library.cores
         open: screens.shown === Screens.Settings
         facts: library.loading ? "" : library.settingsFacts(player.session.running ? player.session.game : "")
         onDoor: (name) => screens.act(name)
+        onOpenFolder: (path) => folders.open(path)
+    }
+    // The one action that shows a folder in the system's file manager (EmuSen_Qt.md §7.7.E).
+    Folders {
+        id: folders
+        objectName: "folders"
     }
     Settings {
         objectName: "settings"

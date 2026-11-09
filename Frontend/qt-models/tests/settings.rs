@@ -39,6 +39,9 @@ impl SettingsSource for Fake {
     fn outputs(&self) -> Vec<String> {
         vec!["Speakers".into()]
     }
+    fn folders(&self) -> std::collections::BTreeMap<String, String> {
+        [("firmware".to_owned(), "/emusen/Firmware".to_owned())].into()
+    }
 }
 
 fn fake(app: Value, graphics: Value) -> Fake {
@@ -171,16 +174,17 @@ fn qt_7_7_doors_open_pages_and_screens_and_b_closes_a_page_first() {
     assert_eq!(view.pane(1).lines, ["/a/folder/long/enough/to/be/cut/on/its/row/of/seven/hundred/and/four/units/Art"]);
     assert!(view.pane(0).sentence.contains("/games"));
 
-    assert_eq!(view.choose(index(&view, "scraping")), Outcome::Opened);
+    let index_of_scraping = index(&view, "scraping");
+    assert_eq!(view.choose(index_of_scraping), Outcome::Opened);
     assert_eq!(view.trail(), ["Library", "Scraping"]);
     assert_eq!(view.rows()[0].label, "Use ScreenScraper");
     assert!(view.rows().iter().all(|r| r.kind == RowKind::Steps));
     view.choose(0);
     assert_eq!(view.read.app["Scraping"], json!(false));
-    assert!(view.back(), "B closes the page");
+    assert_eq!(view.back(), Some(index_of_scraping), "B closes the page, back to the row that opened it");
     assert!(view.trail().is_empty());
     assert_eq!(view.rows()[3].value, "Off");
-    assert!(!view.back(), "B on a section is the screens'");
+    assert_eq!(view.back(), None, "B on a section is the screens'");
 }
 
 #[test]

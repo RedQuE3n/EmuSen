@@ -2,6 +2,7 @@
 //! or page shown, with the roles the kit's settings frame reads, and the focused row's pane as properties. A read runs
 //! off the GUI thread and comes back through qt_thread().queue; a change is saved through Galaxia's model at once.
 
+use crate::consoles_source::{ClientConsoles, ScriptedConsoles};
 use crate::help::Screen;
 use crate::help_model::shown_screen;
 use crate::settings::{self, Outcome, Preview, SettingsView};
@@ -39,6 +40,10 @@ pub mod qobject {
         #[qml_element]
         /// The platform library, through which the settings are read and saved.
         #[qproperty(QString, platform_library, cxx_name = "platformLibrary")]
+        /// The runtime's cores folder, as the library's; empty for the installation's own.
+        #[qproperty(QString, cores)]
+        /// A file holding the consoles' world in place of the runtime's, as the recordings script theirs; empty for the runtime.
+        #[qproperty(QString, world)]
         /// Whether Settings is shown: the settings are read each time it opens.
         #[qproperty(bool, open)]
         /// The program's facts a pane names, as LibraryModel.settingsFacts writes them.
@@ -114,6 +119,15 @@ pub mod qobject {
         /// B on a section: Settings is left.
         #[qsignal]
         fn left(self: Pin<&mut SettingsModel>);
+
+        /// LB (-1) or RB (+1) on a console's page: the console before or after it; false elsewhere.
+        #[qinvokable]
+        fn shoulder(self: Pin<&mut SettingsModel>, by: i32) -> bool;
+
+        /// A folder to show in the system's file manager, through the program's one action for it.
+        #[qsignal]
+        #[cxx_name = "openFolder"]
+        fn open_folder(self: Pin<&mut SettingsModel>, path: QString);
     }
 
     unsafe extern "RustQt" {
@@ -148,6 +162,8 @@ pub mod qobject {
 
 pub struct SettingsModelRust {
     platform_library: QString,
+    cores: QString,
+    world: QString,
     open: bool,
     facts: QString,
     sections: QStringList,
@@ -186,6 +202,8 @@ impl Default for SettingsModelRust {
         let view = SettingsView::new();
         SettingsModelRust {
             platform_library: QString::default(),
+            cores: QString::default(),
+            world: QString::default(),
             open: false,
             facts: QString::default(),
             sections: list(view.sections().into_iter()),
@@ -258,7 +276,7 @@ impl qobject::SettingsModel {
             SENTENCE => text(&self.view.pane(index.row() as usize).sentence),
             KIND => QVariant::from(&(emusen_kit_core::settings::RowKind::ALL.iter().position(|k| *k == row.kind).unwrap_or(0) as i32)),
             HELD => QVariant::from(&row.held),
-            MARKED => QVariant::from(&false),
+            MARKED => QVariant::from(&row.marked),
             KEY => text(&row.id),
             _ => QVariant::default(),
         }
@@ -288,8 +306,16 @@ impl qobject::SettingsModel {
         let asked = self.asked.wrapping_add(1);
         self.as_mut().rust_mut().asked = asked;
         let thread = self.qt_thread();
+        let (cores, world) = (self.cores.to_string(), self.world.to_string());
         std::thread::spawn(move || {
-            let read = ClientSettings::open(&library).and_then(|source| settings::read(&source));
+            let read = ClientSettings::open(&library).and_then(|source| settings::read(&source)).and_then(|mut read| {
+                read.consoles = if world.is_empty() {
+                    crate::consoles::read(&ClientConsoles::open(&library, &cores)?)?
+                } else {
+                    crate::consoles::read(&ScriptedConsoles::open(&world)?)?
+                };
+                Ok(read)
+            });
             let _ = thread.queue(move |mut model| {
                 if model.asked != asked {
                     return;
@@ -318,11 +344,19 @@ impl qobject::SettingsModel {
     }
 
     pub fn back(mut self: Pin<&mut Self>) {
-        if self.as_mut().rust_mut().view.back() {
-            self.shown(true);
-        } else {
-            self.left();
+        match self.as_mut().rust_mut().view.back() {
+            // The walk opens the section or page on its first row, as piece D's pages do (EmuSen_Qt.md §7.7.E).
+            Some(_) => self.shown(true),
+            None => self.left(),
         }
+    }
+
+    pub fn shoulder(mut self: Pin<&mut Self>, by: i32) -> bool {
+        let stepped = self.as_mut().rust_mut().view.shoulder(by);
+        if stepped {
+            self.shown(true);
+        }
+        stepped
     }
 
     fn read_if_named(self: Pin<&mut Self>) {
@@ -342,6 +376,29 @@ impl qobject::SettingsModel {
             }
             Outcome::Opened => self.shown(true),
             Outcome::Door(name) => self.door(QString::from(name.as_str())),
+            Outcome::OpenFolder(path) => self.open_folder(QString::from(path.as_str())),
+            Outcome::Set { .. } | Outcome::NewCard(_) if !self.world.is_empty() => self.shown(false),
+            Outcome::Set { console, key, value } => {
+                let set = ClientConsoles::open(&self.platform_library.to_string(), &self.cores.to_string()).and_then(|c| c.set(&console, &key, value.as_deref()));
+                let failed = set.is_err();
+                self.as_mut().said(set.err().unwrap_or_default());
+                self.as_mut().shown(false);
+                // The engine chosen changes the schema the page draws, and a refusal leaves the stored value as it was.
+                if failed || key == crate::consoles::ENGINE_KEY {
+                    self.refresh();
+                }
+            }
+            Outcome::NewCard(path) => {
+                let made = ClientConsoles::open(&self.platform_library.to_string(), &self.cores.to_string()).and_then(|c| c.new_card(&path));
+                self.as_mut().said(made.err().unwrap_or_default());
+                self.refresh();
+            }
+            Outcome::Reread => self.refresh(),
+            Outcome::All(all) => {
+                for one in all {
+                    self.as_mut().outcome(one);
+                }
+            }
         }
     }
 
@@ -411,7 +468,7 @@ impl qobject::SettingsModel {
             self.as_mut().rust_mut().trail = trail;
             self.as_mut().trail_changed();
         }
-        let help = shown_screen(if self.view.page_open() { Screen::SettingsPage } else { Screen::Settings });
+        let help = shown_screen(self.view.help());
         if self.help != help {
             self.as_mut().rust_mut().help = help;
             self.as_mut().help_changed();

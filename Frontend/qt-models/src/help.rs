@@ -44,6 +44,10 @@ pub enum Screen {
     Settings,
     /// Settings on a page under a section: the shoulders are the page's.
     SettingsPage,
+    /// A console's page under Consoles: the shoulders step to the console before or after it.
+    SettingsConsole,
+    /// A page of choices (EmuSen_Interface.md §18.11): A chooses, B keeps what was chosen.
+    SettingsChoices,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -164,6 +168,14 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Back, "Back", None),
             (UiButton::Menu, "Home", Some(HOME)),
         ],
+        Screen::SettingsConsole => &[
+            (UiButton::Accept, "Change", None),
+            (UiButton::Left, "Value", None),
+            (UiButton::PageUp, "Console", None),
+            (UiButton::Back, "Back", None),
+            (UiButton::Menu, "Home", Some(HOME)),
+        ],
+        Screen::SettingsChoices => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None)],
     }
 }
 

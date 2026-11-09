@@ -38,6 +38,7 @@ pub mod qobject {
         Ask,
         Options,
         Disc,
+        Cards,
     }
 
     extern "RustQt" {
@@ -180,6 +181,11 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "swapAsked"]
         fn swap_asked(self: Pin<&mut PauseModel>);
+
+        /// A console's setting to store: a card's mode or slot on Memory Cards; the card stays.
+        #[qsignal]
+        #[cxx_name = "settingAsked"]
+        fn setting_asked(self: Pin<&mut PauseModel>, key: QString, value: QString);
     }
 
     unsafe extern "RustQt" {
@@ -273,6 +279,7 @@ fn shown_page(page: Page) -> PausePage {
         Page::Ask(_) => PausePage::Ask,
         Page::Options => PausePage::Options,
         Page::Disc => PausePage::Disc,
+        Page::Cards => PausePage::Cards,
     }
 }
 
@@ -387,6 +394,10 @@ impl qobject::PauseModel {
             Outcome::SwapPlayers => {
                 self.as_mut().swap_asked();
                 self.as_mut().resumed();
+            }
+            Outcome::Setting { key, value } => {
+                self.as_mut().setting_asked(QString::from(key.as_str()), QString::from(value.as_str()));
+                self.shown();
             }
         }
     }

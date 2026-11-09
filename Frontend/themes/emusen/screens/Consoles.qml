@@ -243,14 +243,18 @@ ThemeScreen {
                 lineHeight: 20.4
                 lineHeightMode: Text.FixedHeight
             }
-            EngineMark {
-                objectName: "consoleEngineMark." + node.index
+            // The engine's mark in the console's hue, a Scene as the world's body is (EmuSen_Qt.md §3.4.2).
+            Scene {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 13
                 height: 13
-                mark: node.engineMark
-                libretro: node.libretro
-                ink: node.libretro ? (root.day ? "#5F5F5F" : "#A9A9B2") : Qt.hsla(node.hue / 360, root.day ? 0.6 : 0.5, root.day ? 0.3 : 0.72, 1)
+                EngineMark {
+                    objectName: "consoleEngineMark." + node.index
+                    anchors.fill: parent
+                    mark: node.engineMark
+                    libretro: node.libretro
+                    ink: node.libretro ? (root.day ? "#5F5F5F" : "#A9A9B2") : Qt.hsla(node.hue / 360, root.day ? 0.6 : 0.5, root.day ? 0.3 : 0.72, 1)
+                }
             }
         }
     }

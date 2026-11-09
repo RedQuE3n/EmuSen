@@ -994,8 +994,12 @@ canvas's own; kit-core's test holds them within 0.01 unit.
    Up and Down stop at the ends.
 3. The ring does not breathe (decided 2026-11-08): the reference theme keeps an idle screen at no redraw, which
    `idle.rs` holds. The spec's resting breath is not drawn.
-4. The places' widths are the faces' own: each name is measured, where the canvas estimates 11.5 units a letter. The
-   row is centred, so the discs stand up to 9 units right of the canvas's.
+4. The places' widths are the faces' own: each name is measured, where the canvas places its row by an estimate of
+   11.5 units a letter. The spec's rule is the row centred with 48 between. The canvas's own browser draws the three
+   names 100.54, 108.71 and 165.92 wide (measured 2026-11-09 in headless Chrome), shorter than its estimate, so its
+   drawn row stands 3.5 units left of centre and its gaps are 51.5 and 54.3. Under the spec's rule with those widths the
+   first disc stands at 326.4; the screen puts it at 326.6. The mockup spec holds the rule's positions, and notes the
+   canvas's estimated ones (318, 522, 737).
 5. After the first focus, the shown makers move only when the focus leaves them, as spec §3.1 asks; the canvas centres
    the focused maker on every press.
 6. As at stage 1, the canvas's 17-unit words fall under the floor at 1280 × 720 alone, and the full name's glyphs reach
@@ -1014,6 +1018,14 @@ canvas's own; kit-core's test holds them within 0.01 unit.
    focus at the middle world (left of the middle when the capacity is even). The canvas centred the focus, which
    showed one world fewer on an orbit of even capacity: the inner's 2, the middle's 6, and the outer's 10 at 16:9.
    kit-core's test holds a focused inner world's ring at or below 140 at the five sizes.
+10. Two colours on the screen are not the kit's tokens, and each is argued here:
+   - The engine's mark after a world's count and the foot's engine line (mark, name and tag) are drawn in the console's
+     hue, as the canvas and `EmuSen_Interface.md` §24.6 draw them. A hue is the console's, as the world's body is, so
+     both stand in the kit's `Scene` (`EmuSen_Kit.md` §7.20): the gate's palette leaves the colour to the theme and
+     still holds the words to contrast. The stage 1 reference drew its engine row in a `Scene` for the same reason.
+   - The places' glass discs take the canvas's edge, its line ink #8C96DC at 18%, the ink the orbit lines are named
+     for in §7.1 step 4. The fill is the kit's raised surface at 50%. No token is that ink, and the kit's border at 18%
+     would not show on the sky. The acceptance test names the disc's edge with the orbit lines.
 
 **The sweep.** theme-check's 120-console sweep walked each row in one direction, then went Down. Over the orbits, Down
 lands nearest in x, so the sweep heard 52 consoles of 120. The sweep now walks each row to both of its ends, as its man

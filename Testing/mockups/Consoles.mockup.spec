@@ -5,16 +5,16 @@ mockup 1
 canvas Consoles 1280 800
 source reference-consoles/consoles.html
 note the canvas focuses the Super Nintendo, the second of eleven consoles; Sony (2) is innermost, Sega (4) middle, Nintendo (5) outer
-note the places' left edges are the canvas's estimate of each name's width; the screen measures its own words
+note the places' row is centred with 48 between, from the canvas's names as its browser draws them (100.54, 108.71, 165.92, measured 2026-11-09); the canvas's own left edges, 318, 522 and 737, come from its estimate of 11.5 a letter
 element consolesTitle x=64 y=40 h=38.4 token=TextStrong text="GAMES"
 element consolesSubtitle y=52 h=24 token=Muted text="Choose a console"
 element consolesSummary right=1216 y=52 h=24 token=Muted words=data
-element placeDisc.0 x=318 y=100 w=40 h=40
-element placeName.0 x=370 y=100 h=40 token=TextStrong words=data
-element placeDisc.1 x=522 y=100 w=40 h=40
-element placeName.1 x=574 y=100 h=40 token=TextStrong words=data
-element placeDisc.2 x=737 y=100 w=40 h=40
-element placeName.2 x=789 y=100 h=40 token=TextStrong words=data
+element placeDisc.0 x=326.4 y=100 w=40 h=40
+element placeName.0 x=378.4 y=100 h=40 token=TextStrong words=data
+element placeDisc.1 x=527 y=100 w=40 h=40
+element placeName.1 x=579 y=100 h=40 token=TextStrong words=data
+element placeDisc.2 x=735.7 y=100 w=40 h=40
+element placeName.2 x=787.7 y=100 h=40 token=TextStrong words=data
 element makerLabel.0 right=725.35 y=152 h=20
 element makerLabel.1 right=971.26 y=152 h=20
 element makerLabel.2 right=1125.76 y=219.84 h=20

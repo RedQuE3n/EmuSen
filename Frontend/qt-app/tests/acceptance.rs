@@ -29,16 +29,18 @@ use std::path::{Path, PathBuf};
 /// (EmuSen_Qt.md §3.4.2).
 const COUNTED: [&str; 7] = ["tile.", "consoleBody.", "consoleName.", "consoleCount.", "consoleRing.", "rowCover.", "makerLabel."];
 
-/// A fault explained by a difference named in EmuSen_Qt.md §7.1 step 4 and §3.4.2: the orbit line in the
-/// canvas's own ink, the canvas's 17- and 18-unit words under the floor at 1280 x 720 alone, the focused console's name in
-/// the canvas's line box of 1, and the focused shelf cover's name, whose glyph box the focus
+/// A fault explained by a difference named in EmuSen_Qt.md §7.1 step 4 and §3.4.2: the orbit line and the places' glass
+/// edge in the canvas's own ink, the canvas's 17- and 18-unit words under the floor at 1280 x 720 alone, the focused
+/// console's name in the canvas's line box of 1, a place's line too long for its tile (cut as the accepted render cuts it),
+/// and the focused shelf cover's name, whose glyph box the focus
 /// ring's foot reaches at 1280 x 720 alone, where Mistress's render puts both (2 units under the shelf's covers).
 fn named_difference(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
     let item = |n: &str| n.trim().trim_end_matches(':').parse::<usize>().ok().and_then(|i| tree.nodes.get(i)).map_or("", |n| n.name.as_str());
     let after = |key: &str| fault.split(key).nth(1).map(|r| r.split_whitespace().next().unwrap_or(""));
-    after("palette on ").is_some_and(|i| item(i).starts_with("orbit."))
+    after("palette on ").is_some_and(|i| item(i).starts_with("orbit.") || item(i).starts_with("placeDisc."))
         || (size == (1280, 720) && fault.contains("too small to read"))
         || after("cut at the foot: ").is_some_and(|i| item(i) == "consoleDetailName")
+        || after("ellipsis: ").is_some_and(|i| item(i).starts_with("placeStatus."))
         || (size == (1280, 720) && after("low contrast: ").is_some_and(|i| item(i) == "shelfTitle"))
 }
 

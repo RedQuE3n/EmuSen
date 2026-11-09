@@ -65,13 +65,15 @@ Kit.Walkable {
     }
     Shape {
         objectName: "before"
-        visible: root.steps
+        // The software backend paints a Shape wholly past its clip unclipped, so there it is not drawn while wholly past (EmuSen_Kit.md §7.34, §7.36).
+        visible: root.steps && (GraphicsInfo.api !== GraphicsInfo.Software || beforeShown.inside)
         width: root.stepMark.width
         height: root.stepMark.height
         anchors.right: valueText.left
         anchors.rightMargin: root.markGap
         anchors.verticalCenter: parent.verticalCenter
         preferredRendererType: Shape.CurveRenderer
+        Kit.InsideClips { id: beforeShown; anchors.fill: parent }
         ShapePath {
             strokeWidth: -1
             fillColor: Kit.Tokens.muted
@@ -94,13 +96,14 @@ Kit.Walkable {
     Shape {
         id: after
         objectName: "after"
-        visible: root.steps || root.opens
+        visible: (root.steps || root.opens) && (GraphicsInfo.api !== GraphicsInfo.Software || afterShown.inside)
         width: root.afterMark.width
         height: root.afterMark.height
         anchors.right: parent.right
         anchors.rightMargin: root.inset
         anchors.verticalCenter: parent.verticalCenter
         preferredRendererType: Shape.CurveRenderer
+        Kit.InsideClips { id: afterShown; anchors.fill: parent }
         ShapePath {
             strokeWidth: -1
             fillColor: Kit.Tokens.muted

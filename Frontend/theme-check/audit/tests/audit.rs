@@ -75,6 +75,21 @@ fn qt_3_7_a_view_that_never_settles_stops_its_pass_loudly_and_fails_the_check() 
 }
 
 #[test]
+fn qt_3_7_a_transition_longer_than_the_kit_s_is_recorded_at_rest() {
+    let state = std::env::temp_dir().join(format!("theme-audit-slow-{}", std::process::id()));
+    let out = Command::new(PROGRAM).arg("--state").arg(&state).arg(themes().join("slow")).output().expect("theme-audit runs");
+    let lines = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(!lines.contains(" stopped "), "the veil comes to rest: {lines}");
+    let png = std::fs::read(state.join("Home-dark-1280x800.png")).expect("the recording's picture");
+    let picture = cxx_qt_lib::QImage::from_data(&png, Some("PNG")).expect("a PNG");
+    // The veil's centre, (900, 450) at one pixel a unit, in the kit's dark accent #4C9AE8 once its 1.5 s fade has ended.
+    let ink = picture.pixel_color(900, 450);
+    let (r, g, b) = (ink.red(), ink.green(), ink.blue());
+    assert!((r - 0x4C).abs() <= 2 && (g - 0x9A).abs() <= 2 && (b - 0xE8).abs() <= 2, "the veil whole, not mid-fade: {r},{g},{b}");
+    let _ = std::fs::remove_dir_all(&state);
+}
+
+#[test]
 fn qt_3_7_consoles_laid_out_by_hand_do_not_survive_120_consoles() {
     let (out, status) = audit("by-hand");
     assert_eq!(status, 1);

@@ -285,6 +285,34 @@ impl Scene<'_> {
         ffi::harness_running(self.window()).to_string().lines().map(str::to_owned).collect()
     }
 
+    /// Waits until no transition runs: every running animation loops without end (a design's resting motion), and with none
+    /// running, the window swaps no frame for 100 ms; it fails past `SETTLE_MS`, naming what still runs (EmuSen_Kit.md §7.11).
+    pub fn rest(&mut self) {
+        let mut waited = 0;
+        loop {
+            let running = self.running();
+            let passing: Vec<&String> = running.iter().filter(|r| !r.ends_with(" looping")).collect();
+            if passing.is_empty() {
+                if !running.is_empty() {
+                    return;
+                }
+                let before = self.frames();
+                self.wait(100);
+                waited += 100;
+                if self.frames() == before {
+                    return;
+                }
+            } else {
+                self.wait(50);
+                waited += 50;
+            }
+            if waited >= SETTLE_MS {
+                let running = self.running();
+                panic!("a transition still running after {SETTLE_MS} ms: {}", if running.is_empty() { "frames still swapping".to_owned() } else { running.join(", ") });
+            }
+        }
+    }
+
     /// Once every animation has stopped (within `SETTLE_MS`), the window swaps no frame for two seconds; a span in which the
     /// scene's clock read a new minute is measured once more, since that minute is a change (EmuSen_Qt.md §9.3.2).
     pub fn assert_still(&mut self, what: &str) {

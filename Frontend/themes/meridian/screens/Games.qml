@@ -28,6 +28,8 @@ ThemeScreen {
         property bool isConsole
         readonly property bool current: section.key === Browse.section
         readonly property bool chosen: root.railRank === section.rank
+        // Rows wholly outside the viewport go unpainted, by opacity so they can still take the focus.
+        opacity: section.y + section.height > rail.contentY && section.y < rail.contentY + rail.height ? 1 : 0
         controller: frame.controller
         faces: root.faceSet
         compact: true

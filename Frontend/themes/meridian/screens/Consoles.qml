@@ -28,6 +28,8 @@ ThemeScreen {
         // Where the entry lies in the rail's list, its maker's heading kept with a group's first.
         property real spanTop
         readonly property bool chosen: root.railRank === entry.rank
+        // Rows wholly outside the viewport go unpainted, by opacity so they can still take the focus.
+        opacity: entry.y + entry.height > rail.contentY && entry.y < rail.contentY + rail.height ? 1 : 0
         controller: frame.controller
         faces: root.faceSet
         held: false
@@ -253,7 +255,7 @@ ThemeScreen {
                                     required property int groupStart
                                     required property int groupSize
                                     objectName: "heading." + heading.group
-                                    visible: heading.groupIndex === 0
+                                    visible: heading.groupIndex === 0 && heading.y + 40 > rail.contentY && heading.y < rail.contentY + rail.height
                                     x: 0
                                     y: 162 + heading.group * 40 + heading.groupStart * 54
                                     width: 280

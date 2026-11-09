@@ -19,6 +19,9 @@ type Boxes = BTreeMap<String, ((f64, f64, f64, f64), bool)>;
 // pixels and hinted at its own size, so a 14 px help bar is not exactly two thirds of a 21 px one (EmuSen_Qt.md §4.8.5).
 const WORDS: f64 = 0.04;
 
+// The instant the clock is held at (EsdeModel's `now`, Unix seconds): 2026-11-06 12:00 UTC.
+const HELD_NOW: &str = "1793966400";
+
 // Every drawn element's box as a fraction of the window, keyed by its name and its place among elements of that name.
 fn fractions(scene: &mut Scene<'_>, w: f64, h: f64) -> Boxes {
     let mut seen: BTreeMap<String, usize> = BTreeMap::new();
@@ -95,6 +98,8 @@ fn the_watched_themes_hold_at_the_five_sizes() {
         assert!(folder.join("capabilities.xml").exists(), "{theme} in the corpus at {}", folder.display());
         let (choices, picked) = common::choices_of(&variant, &scheme, &font);
         for view in ["system", "gamelist"] {
+            // The clock held at one instant, so its words, and so its box, are the same at every size and every hour.
+            assert!(scene.set_property("view", "now", HELD_NOW));
             common::install(&mut scene, &folder, &choices, view, &texts, w0, h0);
             let problem = scene.property("esdeModel", "problem");
             if !problem.is_empty() {

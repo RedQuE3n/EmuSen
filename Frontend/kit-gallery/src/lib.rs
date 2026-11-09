@@ -11,4 +11,7 @@ extern crate emusen_qt_endymion;
 /// Where the gallery's scene lives in the resource system.
 pub const GALLERY_URL: &str = "qrc:/qt/qml/EmuSen/Gallery/qml/Gallery.qml";
 
+/// The settings frame's states, the page of choices and the slider rows (EmuSen_Kit.md §7.36–§7.38).
+pub const SETTINGS_URL: &str = "qrc:/qt/qml/EmuSen/Gallery/qml/SettingsGallery.qml";
+
 pub mod grab;

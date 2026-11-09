@@ -27,3 +27,6 @@ RoundPicture 1.0 qml/RoundPicture.qml
 CoverTile 1.0 qml/CoverTile.qml
 OrbitSlot 1.0 qml/OrbitSlot.qml
 EdgeFade 1.0 qml/EdgeFade.qml
+SettingsFrame 1.0 qml/SettingsFrame.qml
+ChoiceRow 1.0 qml/ChoiceRow.qml
+SliderRow 1.0 qml/SliderRow.qml

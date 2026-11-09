@@ -245,6 +245,12 @@ impl Scene<'_> {
         self.wait(20);
     }
 
+    /// The left button pressed at one point, moved in steps to another and let go there.
+    pub fn drag(&mut self, from: (f64, f64), to: (f64, f64)) {
+        ffi::harness_drag(self.window(), from.0, from.1, to.0, to.1);
+        self.wait(20);
+    }
+
     pub fn right_click(&mut self, x: f64, y: f64) {
         ffi::harness_click(self.window(), x, y, 2);
         self.wait(20);

@@ -2145,6 +2145,114 @@ the software backend and on Vulkan (the RX 6800); the fixed one passes on both, 
 `fade.rs` still passes on both. Seeded faults, each reverted, each a fault in the test: `layer.enabled: root.fading` as
 before, and the `Binding` not delayed.
 
+### 7.36 The settings frame (stage 5, piece A; 2026-11-09)
+
+Screen 6 of `EmuSen_Interface.md` §4, as LunaP's `SettingsLayout` drew it for the C# Settings (`EmuSen_BigPicture.md`
+§52, LunaP §213): the strip of sections at the top, rows of a label and a value down the left, and a pane at the right
+with one slot for a preview over the focused row's sentence. Weighed as `EmuSen_Qt.md` §1.3 asks, it is an extension of
+the kit, a new type over the existing `Frame`: no existing type takes a second job, and the frame knows nothing of
+settings. A host hands it rows as a list model and is told what the player did; which setting a row is, and what a step
+or a choice means, stay the host's (`SettingsModel` of stage 5's piece D).
+
+- **The measures are kit-core's** (`settings::frame`, `SETTINGS`), derived from the big screen's spacing where the two
+  agree: the strip at the safe area's top (64, 40), as high as a control (44), names 8 apart with 16 of padding; the rows
+  and the pane from 108 (the strip, then the pane gutter of 24); the pane 416 × 578 with an inset of 24, its slot 368
+  wide, 12 below the slot and 8 between lines; the pane 64 from the right edge and the rows filling what is left before
+  a gap of 32, so 704 wide at 1280 and 846.2 at 1422.2 (1920 × 1080 and 1280 × 720 on the canvas of 800); ten whole
+  rows of 54 beside the pane. These are LunaP's constants and Mistress's recorded boxes (`SettingsSound-1280x800.spec`,
+  `SettingsDisplay-1280x800.spec`), held to them by `tests/settings.rs`.
+- **The walk is kit-core's** (`settings::rows`, `RowWalk`): Up and Down move the focus and stop at the ends; the window
+  of ten moves only when the focus leaves it, a row at a time (LunaP's `KeepRowShown`); the wheel moves the window to a
+  whole row and leaves the focus; Left and Right step a value (`Steps`) or a slider (§7.38) and are kept on any other
+  row; A chooses a row, which is the host's to act on, open or ask about; a row a host marks `held` (a value the engine
+  holds, `EmuSen_BigPicture.md` §52.5 item 2) takes neither; the shoulders step the strip's sections, wrapping, while no
+  page is open under the section, and are declined, so the host's, under a trail (the console page's LB and RB, §52.4);
+  B, Start and the rest are declined to the frame. A row's kind is `Kit.RowKinds` (`Action`, `Steps`, `Opens`, `Asks`,
+  `Slider`, `Choice`), a number in the model's `kind` role.
+- **`SettingsLayout`** (kit-qt `settings.rs`) puts the measures and the walk on Qt: the measures as constant
+  properties, `paneLeft` and `rowsWidth` from the canvas's `width`, the walk's `current`, `first`, `marked`, `count` and
+  the focused row's `sentence`, `sections`, `section` and `trailShown` from the frame; it reads the roles `kind`, `held`,
+  `marked`, `sentence`, `minimum`, `maximum`, `step` and `amount` from any list model through `item_model::role_texts`,
+  and raises `stepped`, `slid`, `chosen` and `sectionChosen`.
+- **`SettingsFrame.qml`** is a `Frame` with its navigation hidden, so the frame's controller, router, keys, pointer and
+  help bar are the ones every screen has. The strip is Qt Quick Controls' `TabButton`s in the style (§7.8), each as wide
+  as its upper-cased name in Caption with its padding; it draws the `trail` instead while pages are open, the last
+  chosen. The rows are a `ListView` with a `DelegateChooser` on `kind`: a `MenuRow` with its ◂ ▸ or ▸ marks (§7.21), a
+  `ChoiceRow` (§7.37) or a `SliderRow` (§7.38). A press the frame's walk declines reaches the focused row as a key and
+  goes up to the rows' scope, which hands it to the walk; hovering a row focuses it, so the walk follows Qt's focus, and
+  a click is A there (§7.3). The view's own current index is cleared, so it never moves the focus to a row of its own
+  choosing as its model changes; the walk reads the model after the view has its rows, and again whenever the model
+  says its rows changed. The pane is SurfaceRaised with the tile radius; its slot (`preview`) holds what the host puts
+  there, a picture of 368 × 276, a meter of 16 or the two variants of 160 as LunaP drew them, and its `lines` slot what
+  the host adds under the sentence.
+- **Found and fixed on the way: a `MenuRow`'s marks past a clip.** On the software backend a `Shape` wholly past its clip
+  is painted unclipped (§7.34), so the eleventh row of a list showed its ◂ ▸ marks 26 units below the window
+  (2026-11-09, `settings-frame-Dark-1280x800.png`, the label clipped and the marks not). The marks are now held to their
+  clip as `Body`'s shapes are, through `InsideClips`; no other drawing of a `MenuRow` changes.
+
+**Where it differs from Mistress**, each named: the chosen name's underline is the style's 4 units (`barWidth`), where
+`SectionTab` drew 3; the names are set in the style's face, since `Tokens` has no family yet (§7.7), so DISPLAY's tab is
+about 111 units wide where Mistress's is 104; the help bar is the kit's, 58 on the foot (§4 of `EmuSen_Interface.md`),
+where Mistress's band is 98 from 702; a held row's value is drawn as any other, and an `Asks` row draws no `…`, both
+waiting for the host's words in piece D. The desktop form (a source list, rows of 48, search) is stage 6's, and the
+card's pages are piece D's on this frame.
+
+**Held to**: kit-core's `tests/settings.rs` (12: the measures at 1280 and at 1422.2, the ends, the window, Left and
+Right by kind, a held row, the page of choices, a long page's mark in view, the declined presses, the kinds' numbers,
+the shoulders, a slider's grid); kit-gallery's `settings_gate.rs` (the frame with a picture, a meter and the two
+variants, the page of choices and the page of sliders, at 1280 × 800, 1920 × 1200, 1920 × 1080 and 1280 × 720, dark and
+the variants light: fit, pad reach, pointer reach, no chrome, names, palette, contrast; the strip, rows and pane at
+Mistress's boxes at both 16:10 sizes; no mark drawn below the window) and `settings_walk.rs` (the pad through the
+router's queue and the pointer: the window by one at the eleventh row and the list's offset with it, a value stepped, a
+page's row chosen, a held row neither chosen nor stepped, the pane's sentence, the shoulders wrapping, B to the host;
+resting, clicking, the wheel to a whole row, a tab, a right click as B). The gallery's states are `SettingsGallery.qml`,
+a scene of the gallery module beside `Gallery.qml`, with its models as a host would hand them. Rule Q: `SettingsLayout`
+and `RowKinds` are additions to the registry and `SettingsFrame`, `ChoiceRow` and `SliderRow` to the `qmldir`; nothing
+was removed or changed (`CHANGELOG-kit.md`). The harness gained `Scene::drag` (QTest's press, eight moves and release,
+§7.9). Measured on 2026-11-09 with six seeded faults, each reverted and each caught: the window moving one row late
+(kit-core's window test), A on a choice leaving the mark (the page of choices test), a slider's step taken from the floor
+rather than the nearest step (the grid test), the rows' box one row too tall (the gate, Mistress's boxes), the `MenuRow`
+fix undone (the gate, a mark below the window at 748,674), and a slider's pad step not raised (the walk test).
+
+### 7.37 The page of choices (stage 5, piece A; 2026-11-09)
+
+A page for one row whose value is one of a few, such as a console's Engine (`EmuSen_BigPicture.md` §52.4; the same
+value as Cores' Make Default), drawn on the settings frame under the trail of the pages above it. Its rows are of kind
+`Choice` and one of them carries the model's `marked`: the page opens with the focus on the choice in force, and in its
+window on a long page; A, or a click, chooses the focused one, the mark moving to it at once and `chosen` raised for the
+host, whose rows, read again, are the mark's owner; B is the frame's, so the host closes the page keeping what was
+chosen (Mistress's line: "A chooses; B keeps what was chosen", a host's words in the `lines` slot). `ChoiceRow.qml` is a
+`MenuRow` whose words stand 32 from its edges, the choice in force marked by a dot of 10 in Accent centred in that
+inset, and heard as checked by a reader. Mistress marked it with a `●` before the value's words; the dot is a drawn
+mark, as the style's other marks are (§7.8).
+
+**Held to**: kit-core's page of choices and long page tests, the gallery's `choices` state through the gate, and the walk
+test (opened on Venus (C#), the shoulders left to the host, A on VenusRT moving the one mark to the first row, a click on
+Snes9x moving it again).
+
+### 7.38 The slider row (stage 5, piece A; 2026-11-09)
+
+A row with a slider, for a shader's levers and a crop's edges (`EmuSen_Interface.md` §16.2, `EmuSen_BigPicture.md` §52.5
+item 1). Mistress stepped these as values and typed them under A; the slider row keeps both, Left and Right through the
+walk and A for the host's prompt, and adds the pointer's drag.
+
+- **The step is kit-core's** (`settings::slider`, `SliderRange`): Left and Right move the amount by the row's `step`,
+  on the grid of steps counted from the range's `minimum` (an amount off the grid steps onto the nearest grid point
+  first) and inside the range, a range given high to low taken low to high; a row with no step takes a hundredth of
+  its range (`STEPS_WITHOUT_A_STEP`); at an end, or on a held row, the press is kept and nothing is raised. The walk
+  keeps the amount it gave until the host's rows are read again, so two quick presses take two steps.
+- **`SliderRow.qml`** is a `WholeRow`: the label over 40% of its width in Row, Qt Quick Controls' `Slider` in the style
+  (§7.8) filling the middle, and the host's words for the value in Muted, 104 wide and right-aligned so the slider does
+  not move as they change. The slider takes no focus of its own: the row holds it, and the pad's Left and Right are the
+  walk's. The slider's `stepSize` is the row's step with `snapMode` always, so a drag snaps to the same grid; a drag
+  raises `slid` with the amount, and the frame raises it with the row. A held row's slider is disabled, and neither the
+  pad nor a drag moves it.
+
+**Held to**: kit-core's slider tests (Left and Right without a step, the grid, the maximum held, an amount off the grid, a
+held slider, a range given high to low, no number); the gallery's `slider` state through the gate, and the walk test (two
+Rights and a Left by 0.5, a drag of the second row to its end giving 25 and its words `25.0%`, the held row left as it
+was by a drag and a press, though the pointer focused it).
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

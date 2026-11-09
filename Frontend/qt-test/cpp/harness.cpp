@@ -638,3 +638,17 @@ QString harness_running(QObject& window)
     out.removeDuplicates();
     return out.join(QLatin1Char('\n'));
 }
+
+void harness_drag(QObject& window, double x0, double y0, double x1, double y1)
+{
+    QQuickWindow* w = quick(window);
+    if (w == nullptr) {
+        return;
+    }
+    const auto at = [&](double t) { return QPoint(static_cast<int>(x0 + (x1 - x0) * t), static_cast<int>(y0 + (y1 - y0) * t)); };
+    QTest::mousePress(w, Qt::LeftButton, Qt::NoModifier, at(0));
+    for (int step = 1; step <= 8; ++step) {
+        QTest::mouseMove(w, at(step / 8.0), 10);
+    }
+    QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier, at(1));
+}

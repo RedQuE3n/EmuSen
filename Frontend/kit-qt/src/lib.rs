@@ -27,6 +27,7 @@ pub mod picture;
 pub mod planets;
 pub mod qt_keys;
 pub mod router;
+pub mod settings;
 pub mod sky;
 pub mod stack;
 pub mod stars;

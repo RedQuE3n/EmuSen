@@ -2876,6 +2876,333 @@ Module {
         }
     }
     Component {
+        file: "settings.cxxqt.h"
+        lineNumber: 57
+        name: "RowKinds"
+        accessSemantics: "none"
+        exports: ["EmuSen.Kit/RowKinds 1.0", "EmuSen.Kit/RowKinds 1.0"]
+        isCreatable: false
+        exportMetaObjectRevisions: [256]
+        Enum {
+            name: "RowKindNumber"
+            isScoped: true
+            type: "int"
+            lineNumber: 64
+            values: ["Action", "Steps", "Opens", "Asks", "Slider", "Choice"]
+        }
+        Enum {
+            name: "RowKindNumber"
+            isScoped: true
+            type: "int"
+            lineNumber: 64
+            values: ["Action", "Steps", "Opens", "Asks", "Slider", "Choice"]
+        }
+    }
+    Component {
+        file: "settings.cxxqt.h"
+        lineNumber: 133
+        name: "SettingsLayout"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/SettingsLayout 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "model"
+            type: "QAbstractItemModel"
+            isPointer: true
+            read: "getModel"
+            write: "setModel"
+            notify: "modelChanged"
+            index: 0
+            lineNumber: 138
+        }
+        Property {
+            name: "width"
+            type: "double"
+            read: "getWidth"
+            write: "setWidth"
+            notify: "widthChanged"
+            index: 1
+            lineNumber: 139
+        }
+        Property {
+            name: "sections"
+            type: "int"
+            read: "getSections"
+            write: "setSections"
+            notify: "sectionsChanged"
+            index: 2
+            lineNumber: 140
+        }
+        Property {
+            name: "section"
+            type: "int"
+            read: "getSection"
+            write: "setSection"
+            notify: "sectionChanged"
+            index: 3
+            lineNumber: 141
+        }
+        Property {
+            name: "trailShown"
+            type: "bool"
+            read: "getTrailShown"
+            write: "setTrailShown"
+            notify: "trailShownChanged"
+            index: 4
+            lineNumber: 142
+        }
+        Property {
+            name: "side"
+            type: "double"
+            read: "getSide"
+            index: 5
+            lineNumber: 143
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "stripTop"
+            type: "double"
+            read: "getStripTop"
+            index: 6
+            lineNumber: 144
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "stripHeight"
+            type: "double"
+            read: "getStripHeight"
+            index: 7
+            lineNumber: 145
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "stripGap"
+            type: "double"
+            read: "getStripGap"
+            index: 8
+            lineNumber: 146
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "tabPadding"
+            type: "double"
+            read: "getTabPadding"
+            index: 9
+            lineNumber: 147
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "contentTop"
+            type: "double"
+            read: "getContentTop"
+            index: 10
+            lineNumber: 148
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "paneWidth"
+            type: "double"
+            read: "getPaneWidth"
+            index: 11
+            lineNumber: 149
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "paneHeight"
+            type: "double"
+            read: "getPaneHeight"
+            index: 12
+            lineNumber: 150
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "paneInset"
+            type: "double"
+            read: "getPaneInset"
+            index: 13
+            lineNumber: 151
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "slotGap"
+            type: "double"
+            read: "getSlotGap"
+            index: 14
+            lineNumber: 152
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "lineGap"
+            type: "double"
+            read: "getLineGap"
+            index: 15
+            lineNumber: 153
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "rowsShown"
+            type: "int"
+            read: "getRowsShown"
+            index: 16
+            lineNumber: 154
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "paneLeft"
+            type: "double"
+            read: "getPaneLeft"
+            notify: "laidOut"
+            index: 17
+            lineNumber: 155
+            isReadonly: true
+        }
+        Property {
+            name: "rowsWidth"
+            type: "double"
+            read: "getRowsWidth"
+            notify: "laidOut"
+            index: 18
+            lineNumber: 156
+            isReadonly: true
+        }
+        Property {
+            name: "count"
+            type: "int"
+            read: "getCount"
+            notify: "walked"
+            index: 19
+            lineNumber: 157
+            isReadonly: true
+        }
+        Property {
+            name: "current"
+            type: "int"
+            read: "getCurrent"
+            notify: "walked"
+            index: 20
+            lineNumber: 158
+            isReadonly: true
+        }
+        Property {
+            name: "first"
+            type: "int"
+            read: "getFirst"
+            notify: "walked"
+            index: 21
+            lineNumber: 159
+            isReadonly: true
+        }
+        Property {
+            name: "marked"
+            type: "int"
+            read: "getMarked"
+            notify: "walked"
+            index: 22
+            lineNumber: 160
+            isReadonly: true
+        }
+        Property {
+            name: "sentence"
+            type: "QString"
+            read: "getSentence"
+            notify: "walked"
+            index: 23
+            lineNumber: 161
+            isReadonly: true
+        }
+        Signal { name: "modelChanged"; lineNumber: 195 }
+        Signal { name: "widthChanged"; lineNumber: 196 }
+        Signal { name: "sectionsChanged"; lineNumber: 197 }
+        Signal { name: "sectionChanged"; lineNumber: 198 }
+        Signal { name: "trailShownChanged"; lineNumber: 199 }
+        Signal { name: "laidOut"; lineNumber: 205 }
+        Signal { name: "walked"; lineNumber: 206 }
+        Signal {
+            name: "stepped"
+            lineNumber: 207
+            Parameter { name: "row"; type: "int" }
+            Parameter { name: "by"; type: "int" }
+        }
+        Signal {
+            name: "sectionChosen"
+            lineNumber: 208
+            Parameter { name: "section"; type: "int" }
+        }
+        Signal {
+            name: "slid"
+            lineNumber: 209
+            Parameter { name: "row"; type: "int" }
+            Parameter { name: "amount"; type: "double" }
+        }
+        Signal {
+            name: "chosen"
+            lineNumber: 210
+            Parameter { name: "row"; type: "int" }
+        }
+        Method {
+            name: "setModel"
+            lineNumber: 167
+            Parameter { name: "value"; type: "QAbstractItemModel"; isPointer: true }
+        }
+        Method {
+            name: "setWidth"
+            lineNumber: 169
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setSections"
+            lineNumber: 171
+            Parameter { name: "value"; type: "int" }
+        }
+        Method {
+            name: "setSection"
+            lineNumber: 173
+            Parameter { name: "value"; type: "int" }
+        }
+        Method {
+            name: "setTrailShown"
+            lineNumber: 175
+            Parameter { name: "value"; type: "bool" }
+        }
+        Method { name: "read"; lineNumber: 200 }
+        Method {
+            name: "press"
+            type: "bool"
+            lineNumber: 201
+            Parameter { name: "button"; type: "Pad::PadButton" }
+        }
+        Method {
+            name: "key"
+            type: "bool"
+            lineNumber: 202
+            Parameter { name: "key"; type: "int" }
+            Parameter { name: "modifiers"; type: "int" }
+        }
+        Method {
+            name: "focusRow"
+            lineNumber: 203
+            Parameter { name: "row"; type: "int" }
+        }
+        Method {
+            name: "scrollTo"
+            lineNumber: 204
+            Parameter { name: "first"; type: "int" }
+        }
+    }
+    Component {
         file: "stack.cxxqt.h"
         lineNumber: 15
         name: "StackMember"

@@ -52,5 +52,6 @@ pub mod ffi {
             loose: &QString,
             marks: &QString,
         ) -> i32;
+        fn harness_drag(window: Pin<&mut QObject>, x0: f64, y0: f64, x1: f64, y1: f64);
     }
 }

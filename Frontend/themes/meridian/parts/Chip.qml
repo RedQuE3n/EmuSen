@@ -32,7 +32,7 @@ Row {
                 anchors.verticalCenter: parent.verticalCenter
                 text: first.label
                 color: chip.onArt ? Tokens.overArt : Tokens.textStrong
-                font.family: chip.faces.regular
+                font.family: (chip.faces?.regular ?? "")
                 font.pixelSize: 19
                 lineHeight: 22.8
                 lineHeightMode: Text.FixedHeight

@@ -89,7 +89,7 @@ Walkable {
             text: entry.name
             elide: Text.ElideRight
             color: entry.activeFocus ? Tokens.textStrong : Tokens.text
-            font.family: entry.activeFocus ? entry.faces.medium : entry.faces.regular
+            font.family: entry.activeFocus ? (entry.faces?.medium ?? "") : (entry.faces?.regular ?? "")
             font.pixelSize: 22
             lineHeight: 26.4
             lineHeightMode: Text.FixedHeight
@@ -116,7 +116,7 @@ Walkable {
                 text: entry.line
                 elide: Text.ElideRight
                 color: entry.attention ? Tokens.attention : Tokens.muted
-                font.family: entry.faces.regular
+                font.family: (entry.faces?.regular ?? "")
                 font.pixelSize: 19
                 lineHeight: 22.8
                 lineHeightMode: Text.FixedHeight

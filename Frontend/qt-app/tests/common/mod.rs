@@ -11,7 +11,6 @@ use emusen_kit_core::tokens::Variant;
 use emusen_qt_test::harness::{edges, palette, Measures, SIZES};
 use emusen_qt_test::spec::{self, Header};
 use emusen_qt_test::{mockup, Scene};
-use emusen_qt_test::Harness;
 use std::path::PathBuf;
 
 pub fn wait_for(scene: &mut emusen_qt_test::Scene<'_>, object: &str, property: &str, value: &str, ms: i32) {

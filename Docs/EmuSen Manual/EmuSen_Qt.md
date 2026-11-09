@@ -1251,6 +1251,20 @@ state. The splash's time comes from the host's side without a change to `EmuSen.
 it. Every state also holds an operable element to a name a reader hears (kit-core's `named`, the `name` kind), which a
 Continue entry drawn with no game, or a tile titled only beside its cover, breaks. Proof: seven fixture packages
 `tests/themes/state-*`, each wrong in one state alone and found there alone at every size in both variants.
+Five seeded faults, each caught: the declined places not fed (the disabled fixture), the held clock moved without advancing
+the driver (the splash fixture), the session's game kept in nogame (the nogame fixture), the covers kept in nocover (the nocover
+fixture) and a state renamed in the man page (the list's test).
+
+**The themes in every state**, measured 2026-11-09 offscreen on the software backend, the contrast rule included, findings
+by state beyond what the default already has: Horizon only `many`; Meridian `nogame` (the shelf's covers past the edge with
+no fade at 1422 and the shelf unreached from the first focus), `empty` (Games' empty words over the heading), `many`;
+Constellation `nogame` (RECENT's label over the hero at 3840 × 2160), `many`; Orrery `long` and `nocover` (an orbit's cover
+past the orbit's clip), `disabled` (the help bar's Open over Search at 1920 × 1200), `many` (a generated card's title at 10.5
+capitals at 1280 × 720). Three findings are the rules' rather than the themes': `many`'s reach (every theme, and a plain
+`ListView` of 9,000 rows, lose the focus to the view once the window is resized, so the later sizes are unreached; the
+harness's walk over a view that recreates its delegates, still to be proved), `disabled`'s contrast (a place drawn at 38% as
+the specs ask is held to 4.5:1, which WCAG 2.1 1.4.3 does not ask of an inactive control) and the splash's contrast at 5 s
+(words fading in, read mid-fade). The reference package carries its default's findings into every state.
 
 **Not yet.** The reference package (R) has not been through it; a theme's token overrides are not applied to the theme's engine by
 the host yet, so the loaded step judges the kit's own colours; the splash's still frame is judged as every screen is, under reduced

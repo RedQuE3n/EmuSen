@@ -183,3 +183,10 @@ fn qt_3_7_the_loaded_step_without_its_program_or_with_a_failing_one_cannot_run()
     assert!(words.contains("theme-audit did not run") && words.contains("the platform library: missing"), "{words}");
     let _ = std::fs::remove_dir_all(program.parent().unwrap());
 }
+
+#[test]
+fn qt_3_7_each_state_fixture_keeps_the_static_rules_so_its_one_fault_is_its_state_s() {
+    for name in ["state-nogame", "state-nocover", "state-disabled", "state-pressed", "state-empty", "state-many", "state-splash"] {
+        assert_eq!(check(name), ("ok\n".to_owned(), 0), "{name}");
+    }
+}

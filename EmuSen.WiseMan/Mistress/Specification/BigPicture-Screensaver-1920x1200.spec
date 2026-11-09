@@ -16,7 +16,7 @@ tree
   1 CrossFadeImage at=0,0,1920,1200 by=panel limit=0,0,1920,1200 nohit role=none
     2 FittedImage at=0,0,1920,1200 by=panel drawn limit=0,0,1920,1200 nohit role=image
   3 Canvas at=0,0,1920,1200 by=panel limit=0,0,1920,1200 role=none
-    4 Border at=26,24,373,126 by=panel limit=0,0,1920,1200 paints=#000000AA role=none
+    4 Border at=26,24,505,126 by=panel limit=0,0,1920,1200 paints=#000000AA role=none
     5 FontText at=47,34,326,41 by=panel heard="Dune Relay (Synthetic)" limit=0,0,1920,1200 role=text
-    6 FontText at=47,97,225,41 by=panel heard="Super Nintendo" limit=0,0,1920,1200 role=text
+    6 FontText at=47,97,458,41 by=panel heard="Nintendo SNES (Super Nintendo)" limit=0,0,1920,1200 role=text
 focus none

@@ -32,6 +32,14 @@ fn stated<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option
     Option::<T>::deserialize(d)
 }
 
+/// ES-DE's full name as written, or empty for `null`, which `parse` reads as `display_name`; a written blank is refused.
+fn esde_name<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    match Option::<String>::deserialize(d)? {
+        Some(name) if name.trim().is_empty() => Err(serde::de::Error::custom("esde_full_name is blank")),
+        name => Ok(name.unwrap_or_default()),
+    }
+}
+
 /// One system's facts, as its data file states them: every field written, `null` where a fact is unknown, and in the
 /// order the table writes them.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
@@ -51,6 +59,9 @@ pub struct System {
     /// Height over width of the console's North American box.
     pub cover_aspect: f64,
     pub esde_system: String,
+    /// The system's full name as ES-DE 3.4.1's user guide lists it, which an ES-DE theme reads as `${system.fullName}`;
+    /// `null` in a file where the guide lists no such system, read as `display_name` (EmuSen_Qt.md §4.6).
+    #[serde(deserialize_with = "esde_name")]
     pub esde_full_name: String,
     /// Whether an image records its own length, so a malformed one must be refused (EmuSen_CoreAPI.md §21.4).
     pub self_delimiting_images: bool,
@@ -220,7 +231,10 @@ pub const DATA: [(&str, &str); 14] = [
 /// refuses a field missing, unknown, written twice or of the wrong kind; the rest is checked here.
 pub fn parse(file: &str, text: &str) -> Result<System, Error> {
     let fail = |what: String| Error { file: file.to_string(), what };
-    let system: System = serde_json::from_str(text).map_err(|e| fail(e.to_string()))?;
+    let mut system: System = serde_json::from_str(text).map_err(|e| fail(e.to_string()))?;
+    if system.esde_full_name.is_empty() {
+        system.esde_full_name = system.display_name.clone();
+    }
     check(&system).map_err(fail)?;
     if system.id != file {
         return Err(fail(format!("its id is {}, not the {file} it is named for", system.id)));
@@ -397,6 +411,41 @@ mod tests {
         assert_eq!((order("n64").as_deref(), order("nes").as_deref(), order("md").as_deref()), (Some("big"), Some("little"), Some("big")));
         assert_eq!(parse("nes", &nes().replace("\"byte_order\": \"little\"", "\"byte_order\": null")).unwrap().byte_order, None);
         assert_eq!(refused("nes", &nes().replace("\"byte_order\": \"little\"", "\"byte_order\": \"middle\"")), "byte_order middle is neither big nor little");
+    }
+
+    // ES-DE 3.4.1's user guide, "Supported game systems", its Full name column (EmuSen_Qt.md §4.6).
+    #[test]
+    fn every_console_s_es_de_full_name_is_es_de_3_4_1_s() {
+        let documented = [
+            ("nes", "Nintendo Entertainment System"),
+            ("snes", "Nintendo SNES (Super Nintendo)"),
+            ("md", "Sega Genesis"),
+            ("mcd", "Sega CD"),
+            ("32x", "Sega Mega Drive 32X"),
+            ("psx", "Sony PlayStation"),
+            ("gb", "Nintendo Game Boy"),
+            ("gbc", "Nintendo Game Boy Color"),
+            ("n64", "Nintendo 64"),
+            ("sms", "Sega Master System"),
+            ("sg1000", "Sega SG-1000"),
+            ("ps2", "Sony PlayStation 2"),
+            ("saturn", "Sega Saturn"),
+            ("dreamcast", "Sega Dreamcast"),
+        ];
+        let table: Vec<(&str, &str)> = table().unwrap().iter().map(|s| (s.id.as_str(), s.esde_full_name.as_str())).collect();
+        assert_eq!(table, documented);
+        assert_eq!(find("snes").unwrap().display_name, "Super Nintendo", "the program's own name stays its own");
+    }
+
+    #[test]
+    fn a_console_es_de_does_not_list_reads_its_display_name() {
+        let unlisted = nes().replace("\"esde_full_name\": \"Nintendo Entertainment System\"", "\"esde_full_name\": null");
+        assert_eq!(parse("nes", &unlisted).unwrap().esde_full_name, "NES");
+        assert!(to_json(&[parse("nes", &unlisted).unwrap()]).contains(r#""esde_full_name":"NES""#), "the table's JSON never carries a null name");
+        let named = |name: &str| nes().replace("\"esde_full_name\": \"Nintendo Entertainment System\"", &format!("\"esde_full_name\": {name}"));
+        assert!(refused("nes", &named("\" \"")).contains("esde_full_name is blank"));
+        assert!(refused("nes", &named("\"\"")).contains("esde_full_name is blank"), "only null falls back");
+        assert!(refused("nes", &nes().replace("  \"esde_full_name\": \"Nintendo Entertainment System\",\n", "")).contains("missing field `esde_full_name`"));
     }
 
     #[test]

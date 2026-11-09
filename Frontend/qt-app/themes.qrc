@@ -18,7 +18,6 @@
         <file alias="parts/Cover.qml">../themes/horizon/parts/Cover.qml</file>
         <file alias="parts/EngineMark.qml">../themes/horizon/parts/EngineMark.qml</file>
         <file alias="parts/Faces.qml">../themes/horizon/parts/Faces.qml</file>
-        <file alias="parts/FadeMask.qml">../themes/horizon/parts/FadeMask.qml</file>
         <file alias="parts/Glyph.qml">../themes/horizon/parts/Glyph.qml</file>
         <file alias="parts/HorizonLine.qml">../themes/horizon/parts/HorizonLine.qml</file>
         <file alias="parts/Lift.qml">../themes/horizon/parts/Lift.qml</file>

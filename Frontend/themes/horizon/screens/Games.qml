@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Effects
 import EmuSen.Theme
 import "../parts"
 
@@ -242,90 +241,86 @@ ThemeScreen {
                                 easing.type: Easing.OutCubic
                             }
                         }
-                        ListView {
-                            id: covers
-                            objectName: "strip"
-                            // The fit audit's edge rule reads a faded edge from these.
-                            property bool fadeLeft: true
-                            property bool fadeRight: true
-                            readonly property real focusWidth: covers.currentItem ? covers.currentItem.width : 0
+                        EdgeFade {
                             anchors.fill: parent
-                            orientation: ListView.Horizontal
-                            spacing: 28
-                            leftMargin: 64
-                            rightMargin: 64
-                            focus: true
-                            boundsBehavior: Flickable.StopAtBounds
-                            // The clamped camera: the focus walks to the centre, then the row moves under it, stopping at either end.
-                            highlightRangeMode: ListView.ApplyRange
-                            preferredHighlightBegin: (root.width - covers.focusWidth) / 2
-                            preferredHighlightEnd: (root.width + covers.focusWidth) / 2
-                            highlightMoveDuration: Tokens.reel
-                            highlightMoveVelocity: -1
-                            highlight: Item {}
-                            keyNavigationWraps: false
-                            Keys.onUpPressed: (event) => event.accepted = true
-                            Keys.onDownPressed: (event) => event.accepted = true
-                            model: Browse.games
-                            // The software renderer draws no shader effect, so there the strip is cut at the window's edge instead.
-                            layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
-                            layer.effect: MultiEffect {
-                                maskEnabled: true
-                                maskSource: mask
-                            }
-                            // A horizontal list sets each delegate's y to 0, so the cover stands on the foot line inside a slot as tall as the land.
-                            delegate: FocusScope {
-                                id: slot
-                                required property int index
-                                required property string key
-                                required property string title
-                                required property string facts
-                                required property string description
-                                required property string cover
-                                required property string hero
-                                required property real coverShape
-                                required property real consoleHue
-                                required property bool favourite
-                                readonly property alias cell: cell
-                                width: cell.width
-                                height: 302
-                                StripItem {
-                                    id: cell
-                                    readonly property string description: slot.description
-                                    controller: frame.controller
-                                    objectName: "gameCover." + slot.index
-                                    focus: true
-                                    key: slot.key
-                                    title: slot.title
-                                    facts: slot.facts
-                                    steps: false
-                                    still: Browse.searching
-                                    kind: 1
-                                    picture: slot.hero
-                                    hue: slot.consoleHue
-                                    y: 260 - height
-                                    width: root.coverHeight * slot.coverShape
-                                    height: root.coverHeight
-                                    Accessible.name: slot.title
-                                    onActivated: Actions.play(slot.key)
-                                    onActiveFocusChanged: if (cell.activeFocus) Actions.focus(slot.key)
-                                    Cover {
-                                        anchors.fill: parent
-                                        source: slot.cover
+                            fadeLeft: covers.fadeLeft
+                            fadeRight: covers.fadeRight
+                            length: 40
+                            ListView {
+                                id: covers
+                                objectName: "strip"
+                                // The fit audit's edge rule reads a faded edge from these.
+                                property bool fadeLeft: true
+                                property bool fadeRight: true
+                                readonly property real focusWidth: covers.currentItem ? covers.currentItem.width : 0
+                                anchors.fill: parent
+                                orientation: ListView.Horizontal
+                                spacing: 28
+                                leftMargin: 64
+                                rightMargin: 64
+                                focus: true
+                                boundsBehavior: Flickable.StopAtBounds
+                                // The clamped camera: the focus walks to the centre, then the row moves under it, stopping at either end.
+                                highlightRangeMode: ListView.ApplyRange
+                                preferredHighlightBegin: (root.width - covers.focusWidth) / 2
+                                preferredHighlightEnd: (root.width + covers.focusWidth) / 2
+                                highlightMoveDuration: Tokens.reel
+                                highlightMoveVelocity: -1
+                                highlight: Item {}
+                                keyNavigationWraps: false
+                                Keys.onUpPressed: (event) => event.accepted = true
+                                Keys.onDownPressed: (event) => event.accepted = true
+                                model: Browse.games
+                                // A horizontal list sets each delegate's y to 0, so the cover stands on the foot line inside a slot as tall as the land.
+                                delegate: FocusScope {
+                                    id: slot
+                                    required property int index
+                                    required property string key
+                                    required property string title
+                                    required property string facts
+                                    required property string description
+                                    required property string cover
+                                    required property string hero
+                                    required property real coverShape
+                                    required property real consoleHue
+                                    required property bool favourite
+                                    readonly property alias cell: cell
+                                    width: cell.width
+                                    height: 302
+                                    StripItem {
+                                        id: cell
+                                        readonly property string description: slot.description
+                                        controller: frame.controller
+                                        objectName: "gameCover." + slot.index
+                                        focus: true
+                                        key: slot.key
                                         title: slot.title
+                                        facts: slot.facts
+                                        steps: false
+                                        still: Browse.searching
+                                        kind: 1
+                                        picture: slot.hero
                                         hue: slot.consoleHue
-                                        favourite: slot.favourite
-                                        pixelScale: root.pixelScale
+                                        y: 260 - height
+                                        width: root.coverHeight * slot.coverShape
+                                        height: root.coverHeight
+                                        Accessible.name: slot.title
+                                        onActivated: Actions.play(slot.key)
+                                        onActiveFocusChanged: if (cell.activeFocus) Actions.focus(slot.key)
+                                        Cover {
+                                            anchors.fill: parent
+                                            source: slot.cover
+                                            title: slot.title
+                                            hue: slot.consoleHue
+                                            favourite: slot.favourite
+                                            pixelScale: root.pixelScale
+                                        }
                                     }
                                 }
+                                WheelHandler {
+                                    onWheel: (event) => covers.currentIndex = Math.max(0, Math.min(covers.count - 1, covers.currentIndex + (event.angleDelta.y + event.angleDelta.x < 0 ? 1 : -1)))
+                                }
                             }
-                            WheelHandler {
-                                onWheel: (event) => covers.currentIndex = Math.max(0, Math.min(covers.count - 1, covers.currentIndex + (event.angleDelta.y + event.angleDelta.x < 0 ? 1 : -1)))
-                            }
-                        }
-                        FadeMask {
-                            id: mask
-                            anchors.fill: parent
                         }
                     }
                     // The focus as the program holds it: the theme reports each move (Actions.focus) and the List card moves it too.

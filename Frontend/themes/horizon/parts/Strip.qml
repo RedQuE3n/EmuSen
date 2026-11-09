@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import EmuSen.Theme
 
 // The land's strip for a free arrangement: items placed in its content from x 0 on the foot line 700, drawn at 64 - off under the clamped camera, faded over the outer 40 units at each edge (EmuSen_Qt.md §3.4.2).
@@ -18,43 +17,39 @@ Item {
     signal stepped(int by)
     y: 440
     height: 302
-    Flickable {
-        id: flick
-        objectName: "strip"
-        // The fit audit's edge rule reads a faded edge from these.
-        property bool fadeLeft: true
-        property bool fadeRight: true
+    EdgeFade {
         anchors.fill: parent
-        flickableDirection: Flickable.HorizontalFlick
-        boundsBehavior: Flickable.StopAtBounds
-        leftMargin: 64
-        rightMargin: 64
-        contentWidth: root.total
-        contentHeight: root.height
-        // The camera follows the focus; a drag may look along the row, and it returns once let go.
-        Binding on contentX {
-            value: root.off - 64
-            when: !flick.moving
-            restoreMode: Binding.RestoreNone
-        }
-        WheelHandler {
-            onWheel: (event) => root.stepped(event.angleDelta.y + event.angleDelta.x < 0 ? 1 : -1)
-        }
-        Behavior on contentX {
-            NumberAnimation {
-                duration: Tokens.reel
-                easing.type: Easing.OutQuad
+        fadeLeft: flick.fadeLeft
+        fadeRight: flick.fadeRight
+        length: 40
+        Flickable {
+            id: flick
+            objectName: "strip"
+            // The fit audit's edge rule reads a faded edge from these.
+            property bool fadeLeft: true
+            property bool fadeRight: true
+            anchors.fill: parent
+            flickableDirection: Flickable.HorizontalFlick
+            boundsBehavior: Flickable.StopAtBounds
+            leftMargin: 64
+            rightMargin: 64
+            contentWidth: root.total
+            contentHeight: root.height
+            // The camera follows the focus; a drag may look along the row, and it returns once let go.
+            Binding on contentX {
+                value: root.off - 64
+                when: !flick.moving
+                restoreMode: Binding.RestoreNone
+            }
+            WheelHandler {
+                onWheel: (event) => root.stepped(event.angleDelta.y + event.angleDelta.x < 0 ? 1 : -1)
+            }
+            Behavior on contentX {
+                NumberAnimation {
+                    duration: Tokens.reel
+                    easing.type: Easing.OutQuad
+                }
             }
         }
-        // The software renderer draws no shader effect, so there the strip is cut at the window's edge instead.
-        layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
-        layer.effect: MultiEffect {
-            maskEnabled: true
-            maskSource: mask
-        }
-    }
-    FadeMask {
-        id: mask
-        anchors.fill: parent
     }
 }

@@ -2792,6 +2792,15 @@ Module {
         }
     }
     Component {
+        file: "stack.cxxqt.h"
+        lineNumber: 15
+        name: "StackMember"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/StackMember 1.0"]
+        exportMetaObjectRevisions: [256]
+    }
+    Component {
         file: "sky.cxxqt.h"
         lineNumber: 295
         name: "StarField"
@@ -4019,5 +4028,360 @@ Module {
             lineNumber: 104
             values: ["Dark", "Light"]
         }
+    }
+    Component {
+        file: "wheels.cxxqt.h"
+        lineNumber: 86
+        name: "WheelLayout"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/WheelLayout 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "width"
+            type: "double"
+            read: "getWidth"
+            write: "setWidth"
+            notify: "widthChanged"
+            index: 0
+            lineNumber: 91
+        }
+        Property {
+            name: "places"
+            type: "int"
+            read: "getPlaces"
+            write: "setPlaces"
+            notify: "placesChanged"
+            index: 1
+            lineNumber: 92
+        }
+        Property {
+            name: "model"
+            type: "QAbstractItemModel"
+            isPointer: true
+            read: "getModel"
+            write: "setModel"
+            notify: "modelChanged"
+            index: 2
+            lineNumber: 93
+        }
+        Property {
+            name: "role"
+            type: "QString"
+            read: "getRole"
+            write: "setRole"
+            notify: "roleChanged"
+            index: 3
+            lineNumber: 94
+        }
+        Property {
+            name: "weightRole"
+            type: "QString"
+            read: "getWeightRole"
+            write: "setWeightRole"
+            notify: "weightRoleChanged"
+            index: 4
+            lineNumber: 95
+        }
+        Property {
+            name: "current"
+            type: "int"
+            read: "getCurrent"
+            write: "setCurrent"
+            notify: "currentChanged"
+            index: 5
+            lineNumber: 96
+        }
+        Property {
+            name: "count"
+            type: "int"
+            read: "getCount"
+            notify: "laidOut"
+            index: 6
+            lineNumber: 97
+            isReadonly: true
+        }
+        Property {
+            name: "groups"
+            type: "int"
+            read: "getGroups"
+            notify: "laidOut"
+            index: 7
+            lineNumber: 98
+            isReadonly: true
+        }
+        Property {
+            name: "reach"
+            type: "int"
+            read: "getReach"
+            notify: "laidOut"
+            index: 8
+            lineNumber: 99
+            isReadonly: true
+        }
+        Property {
+            name: "step"
+            type: "double"
+            read: "getStep"
+            notify: "laidOut"
+            index: 9
+            lineNumber: 100
+            isReadonly: true
+        }
+        Property {
+            name: "dialWidth"
+            type: "double"
+            read: "getDialWidth"
+            notify: "laidOut"
+            index: 10
+            lineNumber: 101
+            isReadonly: true
+        }
+        Property {
+            name: "view"
+            type: "double"
+            read: "getView"
+            notify: "laidOut"
+            index: 11
+            lineNumber: 102
+            isReadonly: true
+        }
+        Property {
+            name: "scrolls"
+            type: "bool"
+            read: "getScrolls"
+            notify: "laidOut"
+            index: 12
+            lineNumber: 103
+            isReadonly: true
+        }
+        Property {
+            name: "groupOf"
+            type: "QVariant"
+            read: "getGroupOf"
+            notify: "laidOut"
+            index: 13
+            lineNumber: 104
+            isReadonly: true
+        }
+        Property {
+            name: "placeIn"
+            type: "QVariant"
+            read: "getPlaceIn"
+            notify: "laidOut"
+            index: 14
+            lineNumber: 105
+            isReadonly: true
+        }
+        Property {
+            name: "firsts"
+            type: "QVariant"
+            read: "getFirsts"
+            notify: "laidOut"
+            index: 15
+            lineNumber: 106
+            isReadonly: true
+        }
+        Property {
+            name: "sizes"
+            type: "QVariant"
+            read: "getSizes"
+            notify: "laidOut"
+            index: 16
+            lineNumber: 107
+            isReadonly: true
+        }
+        Property {
+            name: "totals"
+            type: "QVariant"
+            read: "getTotals"
+            notify: "laidOut"
+            index: 17
+            lineNumber: 108
+            isReadonly: true
+        }
+        Property {
+            name: "ranks"
+            type: "QVariant"
+            read: "getRanks"
+            notify: "laidOut"
+            index: 18
+            lineNumber: 109
+            isReadonly: true
+        }
+        Property {
+            name: "dialXs"
+            type: "QVariant"
+            read: "getDialXs"
+            notify: "laidOut"
+            index: 19
+            lineNumber: 110
+            isReadonly: true
+        }
+        Property {
+            name: "left"
+            type: "QVariant"
+            read: "getLeft"
+            notify: "laidOut"
+            index: 20
+            lineNumber: 111
+            isReadonly: true
+        }
+        Property {
+            name: "right"
+            type: "QVariant"
+            read: "getRight"
+            notify: "laidOut"
+            index: 21
+            lineNumber: 112
+            isReadonly: true
+        }
+        Property {
+            name: "up"
+            type: "QVariant"
+            read: "getUp"
+            notify: "laidOut"
+            index: 22
+            lineNumber: 113
+            isReadonly: true
+        }
+        Property {
+            name: "down"
+            type: "QVariant"
+            read: "getDown"
+            notify: "laidOut"
+            index: 23
+            lineNumber: 114
+            isReadonly: true
+        }
+        Property {
+            name: "previous"
+            type: "QVariant"
+            read: "getPrevious"
+            notify: "laidOut"
+            index: 24
+            lineNumber: 115
+            isReadonly: true
+        }
+        Property {
+            name: "next"
+            type: "QVariant"
+            read: "getNext"
+            notify: "laidOut"
+            index: 25
+            lineNumber: 116
+            isReadonly: true
+        }
+        Property {
+            name: "wheel"
+            type: "int"
+            read: "getWheel"
+            notify: "turned"
+            index: 26
+            lineNumber: 117
+            isReadonly: true
+        }
+        Property {
+            name: "dimmed"
+            type: "bool"
+            read: "getDimmed"
+            notify: "turned"
+            index: 27
+            lineNumber: 118
+            isReadonly: true
+        }
+        Property {
+            name: "hidden"
+            type: "int"
+            read: "getHidden"
+            notify: "turned"
+            index: 28
+            lineNumber: 119
+            isReadonly: true
+        }
+        Property {
+            name: "lit"
+            type: "int"
+            read: "getLit"
+            notify: "turned"
+            index: 29
+            lineNumber: 120
+            isReadonly: true
+        }
+        Property {
+            name: "camera"
+            type: "double"
+            read: "getCamera"
+            notify: "turned"
+            index: 30
+            lineNumber: 121
+            isReadonly: true
+        }
+        Property {
+            name: "turns"
+            type: "QVariant"
+            read: "getTurns"
+            notify: "turned"
+            index: 31
+            lineNumber: 122
+            isReadonly: true
+        }
+        Property {
+            name: "onWheel"
+            type: "QVariant"
+            read: "getOnWheel"
+            notify: "turned"
+            index: 32
+            lineNumber: 123
+            isReadonly: true
+        }
+        Property {
+            name: "shown"
+            type: "QVariant"
+            read: "getShown"
+            notify: "turned"
+            index: 33
+            lineNumber: 124
+            isReadonly: true
+        }
+        Signal { name: "widthChanged"; lineNumber: 169 }
+        Signal { name: "placesChanged"; lineNumber: 170 }
+        Signal { name: "modelChanged"; lineNumber: 171 }
+        Signal { name: "roleChanged"; lineNumber: 172 }
+        Signal { name: "weightRoleChanged"; lineNumber: 173 }
+        Signal { name: "currentChanged"; lineNumber: 174 }
+        Signal { name: "laidOut"; lineNumber: 176 }
+        Signal { name: "turned"; lineNumber: 177 }
+        Method {
+            name: "setWidth"
+            lineNumber: 130
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setPlaces"
+            lineNumber: 132
+            Parameter { name: "value"; type: "int" }
+        }
+        Method {
+            name: "setModel"
+            lineNumber: 134
+            Parameter { name: "value"; type: "QAbstractItemModel"; isPointer: true }
+        }
+        Method {
+            name: "setRole"
+            lineNumber: 136
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setWeightRole"
+            lineNumber: 138
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setCurrent"
+            lineNumber: 140
+            Parameter { name: "value"; type: "int" }
+        }
+        Method { name: "read"; lineNumber: 175 }
     }
 }

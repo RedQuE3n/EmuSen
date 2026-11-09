@@ -62,7 +62,11 @@ impl Default for Harness {
 
 impl Harness {
     /// Offscreen, the software backend, Qt's log on the console (Fedora's Qt sends it to journald when stderr is no TTY) and the EmuSen style, set before Qt starts; one per process.
+    /// Always one device pixel a window pixel, whatever the desktop's scale, so a grab is the size its state names.
     pub fn new() -> Harness {
+        std::env::set_var("QT_ENABLE_HIGHDPI_SCALING", "0");
+        std::env::set_var("QT_SCALE_FACTOR", "1");
+        std::env::remove_var("QT_SCREEN_SCALE_FACTORS");
         if std::env::var_os("QT_QPA_PLATFORM").is_none() {
             std::env::set_var("QT_QPA_PLATFORM", "offscreen");
         }

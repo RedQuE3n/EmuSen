@@ -6,6 +6,11 @@ ThemeScreen {
     objectName: "Splash"
     role: ThemeScreen.Splash
     length: 3000
+    // The splash paints its own ground: the window behind a theme is the program's void, dark in either variant.
+    Rectangle {
+        anchors.fill: parent
+        color: Tokens.surface
+    }
     NormalizedCanvas {
         Text {
             objectName: "wordmark"

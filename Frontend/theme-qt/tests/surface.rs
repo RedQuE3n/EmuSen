@@ -152,12 +152,14 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
             "Body",
             "Carousel",
             "CoverTile",
+            "EdgeFade",
             "FigureLayout",
             "Frame",
             "HelpBar",
             "Moonrise",
             "NormalizedCanvas",
             "OrbitLayout",
+            "OrbitSlot",
             "PadGlyph",
             "PlanetLayout",
             "RoundPicture",
@@ -165,7 +167,8 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
             "Sky",
             "ThemeScreen",
             "Tokens",
-            "Walkable"
+            "Walkable",
+            "WheelLayout"
         ],
         "the kit's types by name, the screen and the tokens; never the whole kit"
     );

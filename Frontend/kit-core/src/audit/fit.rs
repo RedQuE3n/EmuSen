@@ -134,10 +134,52 @@ fn overlaps(items: &[(&Item, Vec<&Item>)], slack: f64, faults: &mut Vec<Fault>) 
             if a.rect.holds(&b.rect, slack) || b.rect.holds(&a.rect, slack) {
                 continue;
             }
-            let shared = a.rect.overlap(&b.rect);
-            if shared.w > slack && shared.h > slack {
-                faults.push(Fault::Overlap { a: a.id, b: b.id });
+            if !shapes_overlap(a, b, slack) {
+                continue;
             }
+            // Members of one declared stack may lie over each other in their order; words or a focused member under another may not.
+            if let (Some(sa), Some(sb)) = (a.stacking, b.stacking)
+                && sa.stack == sb.stack
+                && sa.member != sb.member
+            {
+                let (low, low_stacking, high) = if sa.layer < sb.layer { (a, sa, b) } else { (b, sb, a) };
+                // Words are covered when their drawn glyphs are, not their layout box, which a card's title fills.
+                let glyphs_covered = || match low.inked {
+                    Some(inked) => shapes_meet(inked, high.shape(), slack),
+                    None => true,
+                };
+                let hidden = (low.kind == Kind::Words && glyphs_covered()) || (low_stacking.is_member && low_stacking.focused);
+                if hidden {
+                    faults.push(Fault::Overlap { a: low.id, b: high.id });
+                }
+                continue;
+            }
+            faults.push(Fault::Overlap { a: a.id, b: b.id });
         }
     }
+}
+
+/// Whether two items' shapes share more than `slack` along every separating axis: their scene boxes when neither is turned,
+/// else the turned corners by the separating axis theorem, so two turned boxes whose scene boxes cross but whose shapes do
+/// not are apart.
+fn shapes_overlap(a: &Item, b: &Item, slack: f64) -> bool {
+    if a.corners.is_none() && b.corners.is_none() {
+        let shared = a.rect.overlap(&b.rect);
+        return shared.w > slack && shared.h > slack;
+    }
+    shapes_meet(a.shape(), b.shape(), slack)
+}
+
+/// Whether two four-cornered shapes share more than `slack` along every separating axis.
+fn shapes_meet(pa: [(f64, f64); 4], pb: [(f64, f64); 4], slack: f64) -> bool {
+    let axes = [pa, pb].into_iter().flat_map(|p| [(p[1].0 - p[0].0, p[1].1 - p[0].1), (p[2].0 - p[1].0, p[2].1 - p[1].1)]);
+    let span = |p: &[(f64, f64); 4], (ax, ay): (f64, f64)| {
+        p.iter().map(|(x, y)| x * ax + y * ay).fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| (lo.min(v), hi.max(v)))
+    };
+    axes.filter(|(x, y)| x.hypot(*y) > 1e-9).all(|(x, y)| {
+        let len = x.hypot(y);
+        let axis = (x / len, y / len);
+        let ((alo, ahi), (blo, bhi)) = (span(&pa, axis), span(&pb, axis));
+        ahi.min(bhi) - alo.max(blo) > slack
+    })
 }

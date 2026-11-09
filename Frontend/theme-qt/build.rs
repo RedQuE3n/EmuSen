@@ -20,6 +20,9 @@ fn main() {
         QmlFile::from("qml/PlanetLayout.qml"),
         QmlFile::from("qml/OrbitLayout.qml"),
         QmlFile::from("qml/FigureLayout.qml"),
+        QmlFile::from("qml/WheelLayout.qml"),
+        QmlFile::from("qml/OrbitSlot.qml"),
+        QmlFile::from("qml/EdgeFade.qml"),
     ];
     CxxQtBuilder::new_qml_module(QmlModule::new("EmuSen.Theme").version(1, 0).qml_files(qml).depend("QtQuick").depend("EmuSen.Kit"))
         .files([

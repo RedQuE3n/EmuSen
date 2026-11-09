@@ -778,7 +778,7 @@ with the fields a theme may read and nothing more. The table is the module as bu
 | `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only; `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
 | `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown) |
 | `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` (a shelf's icon, one of Home's seven places by its key, or an engine's mark) |
-| `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `OrbitLayout`, `FigureLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31) |
+| `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `OrbitLayout`, `FigureLayout`, `WheelLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31); `WheelLayout` turns groups as wheels over a dial (§7.32); `OrbitLayout` places groups on nested orbits (§7.30) |
 | `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()` |
 
 A theme provides `screens/Home.qml`, `screens/Consoles.qml` and `screens/Games.qml`, each a `ThemeScreen`, and may provide
@@ -1306,7 +1306,9 @@ host, `EmuSen.Theme`, the models, the harness and the clients' test world; the s
 does, then its views are fed (`Library.show`, `Session.show`, `Device.show`) after placement, as the program reads its library after
 placing a theme's screens; the kit's `Tokens` of the theme's engine are set to the big screen form and reduced motion. The screen must
 be still at rest; then at the five sizes of §3.6 in both variants the harness's tree is walked by arrow keys and held to kit-core's
-`fit`, `pad_reach`, `pointer_reach` and `no_chrome`. Choose a console is placed once more over the same library grown to 120
+`fit`, `pad_reach`, `pointer_reach`, `no_chrome` and `contrast`. Contrast is the program's own gate's rule (EmuSen_Kit.md §7.10),
+measured against a grab with every text hidden, so words over a picture or a translucent fill are judged against what is drawn
+behind them; until 2026-11-08 the loaded step judged no theme's text, and the static step holds only the declared tokens. Choose a console is placed once more over the same library grown to 120
 consoles (decided 2026-11-08, so a theme survives cores being added: 40 under one maker, ten under none), judged in the dark variant
 with every element held to the pointer and the pad's reach measured by a sweep that must hear each console's name on the focus,
 inside the window.

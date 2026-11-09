@@ -770,7 +770,7 @@ see: a star dimmer than 24 levels over the sky.
 26.2.4) through GLX, with no window on the desktop. Two differences showed:
 
 - The software backend ignores a clip for Qt Quick Shapes (a red `Shape` at x = 150 inside a clipping `Item` 100 wide
-  was red at (175, 145)); the GPU clips. So the carousel's worlds past its box, hidden on the GPU, were drawn over the
+  was red at (175, 145)); the GPU clips. (Fixed for `Body` and `PadGlyph` on 2026-11-08, §7.34.) So the carousel's worlds past its box, hidden on the GPU, were drawn over the
   menu's rows in the gate's grabs. The kit no longer depends on the clip: the carousel shows as many whole items as fit,
   an odd number about the centre (`pathItemCount`), so none rests outside its box on either renderer; the clip stays
   for the half items passing its edges during a step. The gate holds the promise (above).
@@ -1760,6 +1760,19 @@ two types, added last to the registry's qmldir (rule Q, additions only), and `Em
 Proof: the program's card pane and every cover of the reference package are these types, so the stage 1 and stage 2
 recordings (`qt-app/tests/cards.rs`, the acceptance test) hold them to the accepted renders unchanged.
 
+**The generated card's title** (2026-11-08) is drawn in `overArt` and the kit's Barlow (`Barlow-Regular`, the body face,
+loaded by the tile). It was `textStrong` in the system face: near-black on the card's hsl(h, 45%, 32%) in the light
+variant, and not the design's face in either. White on the card's head, its lightest end, is 4.75:1 at
+the lightest hue and up to 12.0:1 at the darkest (computed over the 360 hues), and more toward the foot, where the title
+stands. Drawn smaller than its box, the title keeps its size on the screen (decided 2026-11-09, over dropping the title,
+so a card always names its game): `drawnScale`, the tile's own `scale` unless a theme that scales an ancestor sets it,
+divides the title's size when under 1. Orrery draws a far cover at 0.8, where the title's capitals measured 11.31 at
+1280 × 720 against the floor's 11.64. `theme-qt/tests/qml.rs` holds the title's ink and face in both variants, and its
+capitals on the screen the same for a plain tile, a tile scaled 0.8 and a tile in an item scaled 0.8 that says so. Re-recorded on the RX 6800 on
+2026-11-09 (the acceptance test and `cards.rs`, both passing before and after): of 100 pictures only the Pause Card's
+Change Disc page changed for the card, whose disc has no picture (its title now Barlow and white, at every size); Home
+and the Saved page changed only in their clocks' minutes.
+
 ### 7.30 Orbits: groups of bodies on nested half-ellipses (stage 3, the reference theme's Choose a console; 2026-11-08)
 
 **Decided 2026-11-08: an extension of the kit, a new type beside `PlanetLayout`.** The reference theme's Choose a console
@@ -1881,6 +1894,151 @@ consoles of three makers, one console, none, thirty of twelve makers, a hundred 
 among eleven others; an interleaved table groups by first appearance. `theme-qt`'s harness scene reads the consoles'
 groups on the list's reset. Seeded faults, each reverted: the pointers moved to open their row (three tests failed), a
 tie going to the last (the forty-maker's walk), the compact tier taken past one line (the eleven).
+
+### 7.32 Groups as wheels over a dial (stage 3, Orrery; 2026-11-08)
+
+Orrery's Choose a console, Wheelwork (`qt-s3/final/orrery.md` §3), stands one maker's wheel at the left with its
+consoles on the spokes' ends, the focused one always at the top, and runs a dial along the foot: the screen's places,
+then one small wheel per maker. The dial needs one stop per group and a walk across two kinds of node, which a theme's QML
+cannot hold (§1.3 of `EmuSen_Qt.md`: no function, no arrays), and the walk must not change as the wheel turns, so
+the reach audit sees one graph. Decided 2026-11-08: the layout is the kit's, beside `FigureLayout`, and `EmuSen.Theme`
+re-exports it by name.
+
+**`kit-core`'s `wheels::wheels(width, keys, places, geometry)`** groups the items by first appearance and gives each its
+group and its place in it, each group's first item and size, the dial's stops (the `places` first, then one per group)
+with their centres from x 64 at the pitch, the dial's width, its shown width (W − 128) and whether it scrolls. Nodes are
+the items in table order, then the stops. **The walk**: an item's Left and Right are its group's previous and next item
+and past a wheel's ends the walk runs on into the previous group's last and the next group's first, so Right held from
+the first world hears every console in maker order (the canvas stops at a wheel's ends, which leaves theme-audit's sweep,
+Right and Left along a row with Down between, only the first maker's worlds; changed 2026-11-08 so the sweep reaches all 120);
+its Down is its group's stop; a stop's Left and Right run along the
+dial, a group's stop goes Up to the group's first item, a place to the first group's first (the canvas's places go
+Up nowhere, which leaves the audit's sweep, starting on a place, no world to hear; changed 2026-11-09); the shoulders go to the previous and
+next group's stop from any node (from a place, RB to the first group's). **`wheels::turn(layout, current, geometry)`**
+is the wheel as the focus stands: a focused item puts its group's wheel at its place; a group's stop turns that wheel to
+its first item; a place dims the first group's wheel (the spec's "mechanism waiting"); each item of the wheel gets its
+distance from the top, shown within the reach of three either way, so slot (d + 8) mod 8 holds it and the rest wait
+behind the rim, counted as `hidden` for the three dots; the stop lit for the focus; and the camera, which centres that
+stop and is clamped to the dial (the canvas's `want`, `off`). `WheelGeometry::WHEELWORK` is the canvas's measures (eight
+slots, reach 3, the dial from x 64 to a margin of 64, pitch 136). The wheel's centre, radius and the slots' angles are
+the theme's drawing: the layout gives `step` (45°), and a world's angle is 90° − step × d, so a turn animates the angle
+and the worlds travel the rim. It names no console.
+
+**`kit-qt`'s `WheelLayout`** reads the role a screen names from any list model as text, through
+`item_model::role_texts`, which `FigureLayout` now shares (one reader of a model's role for every layout). Inputs:
+`width`, `places`, `model`, `role`, `weightRole` (a numeric role summed per group, so a maker's stop can say its games)
+and `current` (a node, -1 none). On `laidOut`, which follows the rows, the width or the
+places only: `count`, `groups`, `reach`, `step`, `dialWidth`, `view`, `scrolls`, and the lists `groupOf`, `placeIn`,
+`firsts`, `sizes`, `totals`, `ranks` (each group's rank by size, the fewest first, for rings filled from the inside, as
+Orrery's splash draws its orbits), `dialXs` and the walk's `left`, `right`, `up`, `down`, `previous`, `next` over the items and then the
+stops. On `turned`, which follows `current`: `wheel` (-1 none), `dimmed`, `hidden`, `lit`, `camera`, and the lists
+`turns`, `onWheel` and `shown` over the items. A screen calls `read()` when the model resets. Added last to the registry
+(rule Q, §7.6); nothing was removed.
+
+**Held to** (`kit-core/tests/wheels.rs`, 6, measured 2026-11-08), the canvas's rules over its states: the eleven of three
+makers focused on the second fill slots 7, 0, 1, 2 and 3 with six stops at 132 … 812 and no camera; one console is one
+world and four stops; none is no wheel and three places; thirty of twelve makers is a fifteen-stop dial that scrolls,
+the camera 0 at the first maker, centred at a middle one and clamped at the last at W 1280 and 1422.2; a hundred and
+twenty of twelve show five of ten at the second world and seven of ten at the sixth, the last maker eleven presses of RB
+away; the forty-maker's mid-point fills every slot but the rim's with 33 hidden, and its last world stands at the top
+with nothing after it, and Right from the first world runs through all 120; an interleaved table groups by first
+appearance and steps by group, not by row, running on in maker order. From the first
+focus the walk reaches every node of every catalogue. `theme-qt`'s harness scene reads the consoles' groups on the
+list's reset and turns to the first console. Seeded faults, each reverted: the reach taken as two (three tests failed:
+the eleven, the hundred and twenty, the forty-maker), the camera centred on the first stop whatever the focus (the thirty).
+
+### 7.33 Overlap on turned shapes, and a stack the kit lays out (stage 3, Orrery; 2026-11-09)
+
+Orrery's orbits tilt each cover by the ellipse's normal and, by the spec, lay a neighbour partly under the apex. The fit
+rule's overlap measured every item by its scene box, the axis-aligned box about it, so two tilted covers whose shapes
+clear each other were faults, and an overlap the design intends was one too. Decided 2026-11-09: the rule measures the
+true shape, and the kit declares the stacks whose members may overlap; bending the design's steps around the measure
+was refused.
+
+**Turned shapes.** The harness records a turned item's four corners in the scene (`corners`, where an edge of it is not
+level), and `Item::shape` is those corners or the scene box's. Two items overlap when their shapes share more than the
+slack along every separating axis (the edges' normals of both, the separating axis theorem); two items neither turned
+keep the box rule exactly.
+
+**Stacks.** `StackMember`, a kit-qt object with no properties, marks the item it is placed in as one member of a stack;
+the stack is that item's parent. The harness finds it by its class and records, for the member and everything inside
+it, the stack, the member, the member's layer (its z, then its place among its siblings, the order Qt draws them in),
+whether the member holds the focus and whether the item is the member itself (`Stacking`), and for words the four
+corners of their drawn glyphs (`inked`), since a card's title fills its card while its glyphs sit at its foot. Members of one stack may lie
+over each other; two items of different members still fault when the lower one is words whose glyphs the upper one
+covers (a caption may not be hidden)
+or is a focused member (its ring may not be covered), and anything of a stack against anything outside it is held as
+before. `EmuSen.Theme` does not export `StackMember`, so only the kit's own types declare a stack: today `OrbitSlot`, a
+`Walkable` that places a cover of a list on an ellipse about the list's centre by its distance from `turning`, tilted
+by the normal, scaled by distance and lifted 12 when lit (Orrery's Home and Games, `qt-s3/final/orrery.md` §1.2), its
+covers stacked by nearness to the apex. `OrbitSlot` is re-exported by name (rule Q, additions only).
+
+**Held to** (measured 2026-11-09): `kit-core/tests/stack.rs`, two bars turned 45° whose scene boxes cross by over 100
+units but whose shapes lie 10 apart pass, and 5 of 20 shared is a fault; three covers over each other in their order
+pass, and so does a caption whose box reaches under the apex while its glyphs clear it; a stack's cover over a label outside it, a caption under its neighbour, a focused member under another and two
+stacks' covers over each other are each caught. `qt-test/tests/stack.rs`: the harness records a turned Text's corners,
+two turned lines whose boxes cross are not an overlap, and a `StackMember`'s item and its words carry one stack. Seeded
+faults, each reverted: captions allowed under a neighbour (the stack test), stacks not told apart (the stack test),
+turned items measured by their boxes (the turned test).
+
+### 7.34 A body and a glyph cut at a clipping edge on the software backend (2026-11-08)
+
+**The defect.** On the software backend a Qt Quick `Shape` is painted past a clipping ancestor, while a `Text` beside it is
+cut (first seen in §7.10, where the carousel was made not to depend on the clip; seen again in Meridian's recordings, a rail
+row cut by its edge showing its world above the rail). Proved on 2026-11-08 by `qt-test/tests/clip.rs` over
+`ClipScene.qml`: four rows of a `Body`, a `PadGlyph` and words in a `Flickable` 160 high that clips, grabbed at rest,
+scrolled by 32 and back, sampling every 4 pixels above and below the Flickable. On the unchanged kit the body was drawn
+past the edges at 123 of 462 points at rest and 224 scrolled, the glyph at 73 of 396 and 133; the words at none. A row
+wholly outside the Flickable was drawn whole, and a row the scroll had moved was drawn at both places.
+
+**The fix.** On the software backend alone (`GraphicsInfo.api === GraphicsInfo.Software`) each is drawn through a layer,
+an image the software renderer does clip: `PadGlyph` on its own item; `Body` on an item that holds its shapes and reaches
+as far past the box as a ring does, `ceil(0.16 × width)` to each side with a ring and none without (kit-core's ring is
+an ellipse 64 units each side of a planet's centre with a stroke of 2.4, 15.2 past the box of 100; the moons lie inside).
+Three nearer forms were tried on 2026-11-08 and dropped: a layer cut to the box lost the ring; a layer whose
+`sourceRect` is larger than its item is scaled into the item's box, which drew the bodies at half their size; and an item
+reaching half the box past every side broke the gallery's promise that nothing under the carousel rests outside its box.
+A reach of a fraction of a pixel moved the drawing by resampling (38 pixels of 64,000 at 2%), so it is whole.
+The GPU draws no layer and is unchanged. After: no point past either edge in any of the three states; inside the Flickable the grab at rest is the same picture as before, pixel for pixel at 2% (`magick compare`, 0
+of 64,000). The test also holds the ring past the body's box. The grabs before and after, on each backend, are
+`clip-<state>-<backend>.png` written to `EMUSEN_QT_COMPARE`; `EMUSEN_QT_GPU` runs the same test on the GPU, offscreen
+through OpenGL (§7.10). On the RX 6800 that way (2026-11-09) the test passes before the fix and after, the GPU's grabs
+before and after are the same picture, and the software backend's grabs after differ from the GPU's at 0.1% of the
+pixels at 12%, the glyphs' edges.
+
+### 7.35 A fade every theme can use, and which backends draw each effect (2026-11-08)
+
+**MultiEffect draws nothing on the software backend, by design.** Qt's documentation of `MultiEffect` describes it as
+combining its effects "into a single item and shader" (doc.qt.io/qt-6/qml-qtquick-effects-multieffect.html, read
+2026-11-08), and the software adaptation's page states that "ShaderEffect components in QtQuick 2 cannot be rendered by
+the Software adaptation" and that "any attempts to use unsupported features are ignored"
+(doc.qt.io/qt-6/qtquick-visualcanvas-adaptations-software.html, read 2026-11-08). So a layer effect, a mask among them,
+is an empty box there, as the notice's shadow was (§7.23).
+
+**`MultiEffect`'s mask does not fade on the GPU either.** On Qt 6.11 its mask cuts sharply whatever `maskSpreadAtMin`
+says (a probe of 2026-11-08 under Horizon), and the kit's own first `EdgeFade`, a `MultiEffect` mask over a ramped mask
+item, drew no fade at all on the RX 6800 (the column's accent at the edge, measured 2026-11-09 by the fade test below).
+
+**`EdgeFade`** is the kit's one fade, re-exported by `EmuSen.Theme` by name. It stands under the same parent as a
+scroller (`source`), over it, and ramps `backdrop` (the surface unless set) from clear to whole over each edge it is told
+to fade (`fadeTop` … `fadeRight`, bound to the scroller's own declarations, which the audit reads), over `length` (7 base
+units unless set): plain gradient `Rectangle`s, the kit's `EdgeRamp`, one an edge, which every backend draws alike. It is
+a fade to a colour, not to transparency: exact where what stands behind the scroller is one colour, and an approximation
+over a picture or a translucent fill, where a theme gives the colour that stands there (decided 2026-11-09 over a shader
+of the kit's own, which the software backend could not draw and which would need a shader build step the kit lacks).
+
+| Effect | GPU | Software backend |
+|---|---|---|
+| `MultiEffect` (shadow, blur, mask, colourize) | drawn | nothing (no shader effects) |
+| `EdgeFade` | the backdrop ramped over the edge | the same |
+| `RoundPicture` | a texture-filled rounded `Shape` | the `Image` with plain corners (§7.29) |
+| `Body`, `PadGlyph` | Shapes | Shapes through a layer, clipped (§7.34) |
+| The notice's shadow (§7.23) | drawn | none |
+
+Held to by `qt-test/tests/fade.rs` over `FadeScene.qml` (a column of the accent in a clipping Flickable fading at its
+foot over the window's surface): the column's colour above the fade, the backdrop within 16 levels at the edge, and the
+middle of the fade 20 levels from both; it passes on the software backend and, with `EMUSEN_QT_GPU`, on the RX 6800
+through OpenGL (2026-11-09), where the mask form failed it.
 
 ### 7.6 Building, linking, the registry, and what it is held to
 

@@ -9,6 +9,7 @@ QtObject {
     readonly property int form: Kit.Tokens.form
     readonly property int variant: Kit.Tokens.variant
     readonly property real textScale: Kit.Tokens.textScale
+    readonly property string textSize: Kit.Tokens.textSize
     readonly property bool reducedMotion: Kit.Tokens.reducedMotion
     readonly property color surface: Kit.Tokens.surface
     readonly property color surfaceRaised: Kit.Tokens.surfaceRaised

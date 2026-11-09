@@ -24,6 +24,7 @@ fn main() {
             "src/pane_model.rs",
             "src/pictures.rs",
             "src/themes_model.rs",
+            "src/settings_model.rs",
             "src/rows_model.rs",
             "src/tool_model.rs",
             "src/launch_model.rs",

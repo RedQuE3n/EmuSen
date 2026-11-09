@@ -44,6 +44,8 @@ pub mod qobject {
         PauseDisc,
         Themes,
         ThemesChecked,
+        Settings,
+        SettingsPage,
         ToolSearch,
     }
 
@@ -138,6 +140,8 @@ impl qobject::HelpModel {
             HelpScreen::PauseDisc => Screen::PauseDisc,
             HelpScreen::Themes => Screen::Themes,
             HelpScreen::ThemesChecked => Screen::ThemesChecked,
+            HelpScreen::Settings => Screen::Settings,
+            HelpScreen::SettingsPage => Screen::SettingsPage,
             HelpScreen::ToolSearch => Screen::ToolSearch,
             _ => Screen::Home,
         }
@@ -188,6 +192,8 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::PauseDisc => HelpScreen::PauseDisc,
         Screen::Themes => HelpScreen::Themes,
         Screen::ThemesChecked => HelpScreen::ThemesChecked,
+        Screen::Settings => HelpScreen::Settings,
+        Screen::SettingsPage => HelpScreen::SettingsPage,
         Screen::ToolSearch => HelpScreen::ToolSearch,
     };
     shown.repr

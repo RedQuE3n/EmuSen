@@ -277,7 +277,9 @@ the device made for an adopting host, its raw handles, a built-in filter's prese
   §3.15), as JSON in the settings schema's row shape, for `SettingsModel`.
 - `systems`: the bytes OpenVGDB hashed for a system's file (`emusen_systems_openvgdb`), none where they are its own.
 - `serenity`: a `.slangp` read (`emusen_serenity_preset_load`), a failed read being a document with `fail`, and the
-  passes' parameters merged (`_parameters_merge`).
+  passes' parameters merged (`_parameters_merge`); since piece D (§7.7) the catalogue, `emusen_serenity_filters`, as
+  the header's document (`serenity::catalogue`), for Settings' rows set on every console or every television and the
+  CRT's tiers.
 
 *An action answers once.* The length-query idiom calls twice; `emusen_cheats_prune_apply` and
 `emusen_galaxia_package_resolve` did their work on each call until 2026-11-09, when the library came to keep the
@@ -1575,9 +1577,9 @@ listed in a `MenuPanel`, each row its name and its state ("In use", "Checking…
 beside, is the focused theme's first preview, its name, a line (author, `EmuSen.Theme` version, variants; for ES-DE, its
 variants) and its check's words; the actions are the help bar's: **A Use**, offered only on an EmuSen package whose last
 check was clean and that is not in use (the bar then reads `ThemesChecked`, without Use), **X Check**, LB RB the kind,
-B back to Home, Start Home. Until Settings is built (stage 5) it is reached from Home's Settings place and from the Home
-card's Settings row, which until now closed the card and did nothing (decided 2026-11-08: both, since the card's first
-page is not reached from Home in the own look, only its Power page).
+B back to Home, Start Home. Until Settings was built it was reached from Home's Settings place and from the Home
+card's Settings row (decided 2026-11-08). Since stage 5 piece D (§7.7) it is a page of Settings: Library ▸ Themes opens
+it, B goes back to Settings and Start goes Home.
 
 **The model.** `emusen-qt-models` holds it in two files, one job each: `themes.rs`, plain data with no Qt (the rows, the
 id's resolution, the check), and `themes_model.rs`, `ThemesModel`, its bridge (the rows of the kind listed as roles `id`,
@@ -3603,6 +3605,131 @@ Seeded faults, each reverted: the shoulders kept for sections with none (kit-cor
 the grid (the models' `cards`); Resume asking (the models' `question`); the covers' focus not held by the Binding (the
 program's `cards`: the found game not focused). A restored seeded file keeps the copy's older time, so cargo kept the
 faulted build until the file was touched again; the runner now touches each file it puts back.
+
+### 7.7 Stage 5, piece D: Settings (2026-11-09)
+
+`EmuSen_Interface.md` §2.7, §4 screen 6, §13c, §16.2; `EmuSen_BigPicture.md` §52; the oracle is Mistress's recordings
+`SettingsSound`, `SettingsLibrary`, `SettingsEmuSen`, `SettingsTextSize`, `SettingsDisplay` and `SettingsDisplayLight`
+(`EmuSen.WiseMan/Mistress/Specification/`, 1280 × 800 and 1920 × 1200).
+
+**No row is written in code** (decided 2026-11-09: EmuSen's own rows are the data file, drawn by the same path as a
+core's `settings_schema` rows). Three owners, one fact each:
+- **A key's row** (label, sentence, values, their words, default, `locked`) is Galaxia's, `frontend_settings.json`, read
+  through interface 45's `emusen_galaxia_settings_rows` (`EmuSen_Galaxia.md` §3.15). A `switch` is stepped between its
+  two values, a `choice` through its own, a `count` within `min` and `max`; a `locked` row is drawn as the kit's `held`.
+- **Where a row stands, and what a door opens**, is the screen's: `Frontend/qt-models/data/settings_screen.json`, the
+  six sections in order, each row either a key of Galaxia's (`"row": "AppSettings Volume"`), a door with its words (to
+  a page of one of Galaxia's groups, `"page": "Scraping"`, or to another screen, `"door": "themes"`), or the CRT's row
+  from Serenity's catalogue; its pane (a preview kind, a sentence, plain and muted lines, a sentence by the value shown,
+  a caption) and the few words of the screen's own (On, Off, Console's, The last game). A line names a value as
+  `{value}`, a key's words as `{AppSettings ResumeOnLaunch}` and the program's facts as `{games}` or `{running}`.
+- **What is chosen** is the models': `AppSettings`, and `GraphicsConfig` with each console's keys in its `Consoles` map,
+  loaded and saved through Galaxia's model (`model_load`, `model_save`; a model with no file yet is made new first, so a
+  save writes every key). A value is written back in the stored value's own type: a share as a number (`Volume` 0.95),
+  a whole number as one (`NavigationVolume` 65), a switch as a boolean. A stored value none of the choices holds (a sound
+  device not connected now) is shown as itself and kept as a choice, as Mistress's Output row keeps it; a blank is the
+  default.
+
+A row set **for every console**, Picture shape and Crop overscan, is set on each console Serenity's catalogue
+(`emusen_serenity_filters`, its `screens`) has a screen for, or each whose screen is a television, and reads `Console's`
+while they differ, as Mistress's `ForEvery` does (decided 2026-11-03). The **CRT shader** row's tiers are the catalogue's
+own: Off, then the CRT filter's `quality` choices; a console's tier is its `ScreenFilter` naming the filter and its
+`ShaderParameters` value, else the setting's initial value. A console's `ScreenFilter` holds a filter's name as the
+catalogue gives it: the CRT's (`CRT`) for a tier, and for Off the plain picture's, the catalogue's
+`effect.None.nearest`, whose name is `None` (Mistress's `ScreenFilters.None`). The description names the two filters by
+their catalogue keys and holds no word of Serenity's.
+
+**The model** (`emusen-qt-models`, one job a file): `settings.rs`, plain Rust over a `SettingsSource` (the rows, the two
+models, the catalogue, the sound devices): sections, the trail of pages, rows with the kit's `RowKind`, the pane
+(sentence, lines, muted lines, preview `Picture`, `Meter`, `Variants` or `Sizes`, caption, the meter's share, the
+samples), steps, choices and their `Outcome` (saved, a page opened, a door), and what the settings ask of the whole
+program: the text size by its word (decided 2026-11-09: the kit owns each size's scale, since its style applies the
+text size to every screen; `text_scale_of`, `EmuSen_Kit.md` §7.47, which the pane's samples read too), the light
+variant and reduced motion. `settings_source.rs`, the source over `emusen-platform-client`: each model's file by
+Galaxia's number for it, the settings' `EMUSEN_GALAXIA_FILE_SETTINGS` and, since interface 46 (approved 2026-11-09),
+GraphicsConfig's `EMUSEN_GALAXIA_FILE_GRAPHICS` (`EmuSen_RustPlatform.md` §53), so the front end names no file. `settings_model.rs`,
+`SettingsModel`, its bridge: the rows with the roles the kit's settings frame reads (`label`, `value`, `sentence`,
+`kind`, `held`, `marked`, `key`), the section, trail, focused row and its pane as properties, `step`, `choose`, `back`,
+and the signals `door` and `left`. The settings are read off the GUI thread when the platform library is named and each
+time Settings opens; a change is saved at once on the GUI thread. A section or page turn removes the rows and inserts
+the new ones rather than resetting the model: a reset cancelled a delegate the view was still making past the new
+count, which Qt logged as `DelegateModel::cancel: index out range 11 4` going from Display's fifteen rows to Sound's
+four. `LibraryModel.settingsFacts` gives the panes the games counted and the running game's title.
+
+**The screen** (`qt-app/qml/Settings.qml`): the kit's `SettingsFrame` (`EmuSen_Kit.md` §7.40) over `SettingsModel`,
+the help bar `Settings` (Change, Value, Section, Back, Home, Mistress's words) or `SettingsPage` on a page, and the
+slot's preview: the picture as a black box of 368 × 276 holding its caption (the picture itself is piece J's), the
+meter of 16, the two variants of 176 × 160, or a line at each text size at the body's size times its scale; the pane's
+further lines in Text and Muted. The window binds the kit's `textSize` (whose scale the kit sets) and `variant` to the model, and its
+`reducedMotion` too once the model has read the settings (the start's value before), so a step applies at once.
+
+**Routes** (`screens.rs`): Home's Settings place and the Home card's Settings row open Settings (over an ES-DE theme,
+the card's row too, and B returns to the theme's view); B on a section goes back, Start goes Home; Library ▸ Themes
+opens the Themes tab (§3.8), whose B now returns to Settings.
+
+**Compared with Mistress** (measured on 2026-11-09). The Qt recordings were read by WiseMan's `SpecDocument.Parse`
+through `Another_frontend_s_recordings_match_these_within_the_tolerances` (on the WiseMan build of the same day, no
+build). `InterfaceRules.All` found one fault in the twelve, the ROM folder's value cut with an ellipsis (below).
+`InterfaceSpec.Compare` matches by name, and the frame's parts carry the kit's names (`settingsStrip`, `settingsList`,
+`settingsPane`, `settingsSentence`, `helpBar`) where Avalonia's were `SettingsSections`, `SettingsRows`,
+`SettingsPane`, `SettingsLine` and `SettingsHelpBar`, and the kit's rows carry none where Mistress's were
+`SettingsRow.<id>`, so it lists those as missing and extra (and the focus edges by the walk's paths). The screen's own
+parts carry Mistress's names (`SettingsMeter`, `SettingsPicture`, `SettingsCaption`, `SettingsVariants`,
+`SettingsLine`). The parts were then compared under that map of names, two design units the tolerance: every row of
+the six states stands at Mistress's box with her label and value, and the pane, the meter, the variants, the picture
+and the text sizes' lines at hers. **Differences that remain, each for the tester:**
+- The strip's tabs are 4 to 10 units wider and the strip 782.8 wide where Mistress's `WholeRow` spans 1152, and the help
+  bar is the kit's, 58 on the foot from 742, where Mistress's band is 98 from 702: the kit's, named in
+  `EmuSen_Kit.md` §7.40.
+- The pane's sentence is set in the style's face, not Barlow (the kit's frame, §7.40 there), so a sentence of two lines
+  in Mistress's takes three here (90 units where hers is 53 or 80), and the lines under it stand that much lower
+  (EmuSen's `Resume · Always start again` at 230, hers at 193). The screen's own lines are in Barlow.
+- A row's name as a reader hears it is its label alone ("Volume"), where Mistress's adds the value ("Volume, 100%"):
+  the kit's `MenuRow`.
+- Library ▸ ROM folder: the test's scratch tree's path is 70 characters, so the value is cut at its start (§7.46 of the
+  kit) and the pane's first line, `2 games under …`, takes three lines; Mistress's recording names her run folder
+  `<run>` and holds that line as volatile. **A folder's value cut on its row is a named exception** (decided
+  2026-11-09), on one condition the tests hold: focusing the row shows the whole path in the pane, wrapped (the ROM
+  folder's sentence names it; Artwork, ES-DE media and ES-DE theme folders give it as a line), so nothing is hidden.
+  The program's test holds the ROM folder's pane to the scratch tree's whole path, the models' test the Artwork
+  folder's. Any other value cut on its row is still a finding.
+- Library ▸ Collections has no value (Mistress's `1`, her fixture's one collection) and EmuSen ▸ Logging none (her
+  `Off`): the library's collections and the runtime's log switch are not read here yet (pieces M and the shell's).
+- Display ▸ CRT shader's caption reads "The last game · Off CRT", since the sandbox has played nothing, where Mistress's
+  fixture names its game; the box follows the words.
+- Not built in this piece, each a door that goes nowhere yet: Shader levers and Shaders (piece J), the folder rows'
+  prompt, Cheats, Compressed discs (pieces I and L), Logging and Shell, and the Scraping page's doors (Member account,
+  Resume, Cancel, Status, Scraper; piece M) and the Collections page's own (piece M). Controllers holds its keys' rows
+  only, its doors being piece H's, and Consoles is empty until piece E. Light or dark's `System` reads as dark and
+  Reduced motion's `System` as full motion, since the desktop's preference has no Rust reader yet (§7.1). Volume under
+  Steam's Game Mode, which Mistress turns into a sentence about the device's quick menu, is a row like any other here.
+
+**Held to** (measured on 2026-11-09). `qt-models/tests/settings.rs` (8, no Qt, over Galaxia's committed rows): every
+row the description names resolves; Sound's values and its meter, a step saved in each type, a device added to the
+choices; a console's row `Console's` while consoles differ and set on each television; the CRT's tiers from the
+catalogue, `Console's` between tiers, Off writing `None`, the running game in the caption; Library's doors, values and
+the ROM pane, Themes as a door, Scraping as a page with its trail and B; EmuSen's pane naming another key's words and
+About the version; text size, light and reduced motion applied; a stored value no choice holds kept. `qt-models/tests/
+themes.rs`' routes (Settings from Home and the card, Themes under it, over an ES-DE theme too). `qt-app/tests/
+settings.rs` (software backend): Home's Settings place opens Settings on Controllers; the shoulders reach each section
+and wrap; the six states held at the gate's five sizes (fit, pad reach, pointer reach, no chrome, names, palette,
+contrast; SettingsDisplayLight in the light variant) and recorded; Light saved and the variant applied, Text size saved
+and the kit's type scale at its own scale for `large`, 1.15, then back to 1; Volume saved as 0.95; Scraping's page opened and closed by B; Themes opened and B back to
+Settings, then Home; nothing logged. `themes_tab.rs` now reaches the tab through Settings. `program.rs`' QML rules and
+`qmllint` hold `Settings.qml`; `qmllint` refused a `QList<f64>` property it cannot resolve, so a text size's scale is
+read through the invokable `sampleScale(index)`. The blast radius on the software backend passed: kit-qt 46,
+qt-models 78, kit-gallery 7, and emusen-qt's fifteen software test binaries. Seeded faults, each
+reverted:
+- every value written as text: the models' Sound test (and the doors' test, through Scraping's switch);
+- a folder's pane without its whole path: the models' doors test;
+- Off written as the plain picture's key rather than its name: the models' CRT test;
+- GraphicsConfig's number answering the settings file's path: the platform client's `platform.rs`;
+- Large's scale written as 1.1 in the kit: kit-core's `tokens.rs`;
+- a console's row set on the first console alone: the models' consoles test;
+- B on the Themes tab going Home: the models' routes test;
+- `MenuRow`'s value cap taken out: the program's test, the ROM folder's label past its clip at every size;
+- the preview's height read from its items' `visible`, which is false while the slot is empty, so it stays empty (the
+  meter was never drawn until this was found): the program's test, the meter not drawn.
 
 #### 7.7.F Cores on the tool screen, the approval at first launch and the firmware question (stage 5, piece F; 2026-11-09)
 

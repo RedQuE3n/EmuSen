@@ -89,6 +89,9 @@ Kit.Walkable {
         text: root.value
         color: Kit.Tokens.muted
         font: root.labelFont
+        // At most half the row, a long value (a folder's path) cut at its start so its end shows (EmuSen_Kit.md §7.46).
+        width: Math.min(valueText.implicitWidth, root.width / 2)
+        elide: Text.ElideLeft
         anchors.right: after.visible ? after.left : parent.right
         anchors.rightMargin: after.visible ? root.markGap : root.inset
         anchors.verticalCenter: parent.verticalCenter

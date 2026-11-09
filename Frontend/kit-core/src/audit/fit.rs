@@ -57,11 +57,12 @@ fn limit_of<'a>(ancestors: &[&'a Item]) -> Option<&'a Item> {
 }
 
 fn past_its_limit(item: &Item, ancestors: &[&Item], panel: Rect, slack: f64, faults: &mut Vec<Fault>) {
-    let (limit, scrolls_down, limit_id) = match limit_of(ancestors) {
-        Some(a) => (a.rect, a.scroll.vertical, Some(a.id)),
-        None => (panel, false, None),
+    let (limit, scrolls_across, scrolls_down, limit_id) = match limit_of(ancestors) {
+        Some(a) => (a.rect, a.scroll.horizontal, a.scroll.vertical, Some(a.id)),
+        None => (panel, false, false, None),
     };
-    let across = limit.holds_across(&item.rect, slack);
+    // A scroller excuses what lies beyond it along the axis it scrolls; what crosses its edge is the edge rule's.
+    let across = scrolls_across || limit.holds_across(&item.rect, slack);
     let down = scrolls_down || limit.holds_down(&item.rect, slack);
     if across && down {
         return;

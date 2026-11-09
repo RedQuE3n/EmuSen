@@ -167,7 +167,7 @@ it). The Qt harness of §8.1 will fill such a tree from `objectName`, `mapToScen
 
 | Rule | Function | Source |
 |---|---|---|
-| The fit audit: past its panel or its nearest clipping or scrolling ancestor (a scroller excuses only what it scrolls to, up and down), words past their button or row, overlap of two things read or pressed neither inside the other by more than the slack, a scroller under two rows of 42, a drawn item sliced by a scrolling edge that does not fade, words cut with an ellipsis, past their box or at the foot, capitals under Inter's at 16 (11.64 design pixels, slack 0.036; no floor on the desktop), a title or footer cut; popups and hidden subtrees skipped | `fit` | Settings Reference §4.83.2, §4.83.7 |
+| The fit audit: past its panel or its nearest clipping or scrolling ancestor (a scroller excuses what it scrolls to, along the axis it scrolls), words past their button or row, overlap of two things read or pressed neither inside the other by more than the slack, a scroller under two rows of 42, a drawn item sliced by a scrolling edge that does not fade, words cut with an ellipsis, past their box or at the foot, capitals under Inter's at 16 (11.64 design pixels, slack 0.036; no floor on the desktop), a title or footer cut; popups and hidden subtrees skipped | `fit` | Settings Reference §4.83.2, §4.83.7 |
 | Pad reach: from the focus, the recorded edges reach every operable element not kept out of view | `pad_reach`, `reached` | InterfaceSpec §4.2 |
 | Pointer reach: a click at the centre of each element the walk reaches hits it or one of its own children and calls what A calls; the wheel moves every scroller | `pointer_reach` | EmuSen_Qt.md §8.1 |
 | No chrome: in the big-screen and card forms no menu bar or status bar is visible | `no_chrome` | §8.1 |
@@ -183,15 +183,18 @@ LunaP §204 moved it onto the kit's controls. This one reads only the tree it is
 `SpecDocument`, so the same rules hold a recording from any front end. The slack and the floor are arguments rather than
 constants, and a words item carries its capitals' height already measured, since measuring a face's H is the harness's
 job. The pointer rules are new: the C# front end had none, which is why its big-screen Home took no mouse (§0.2 of
-`EmuSen_Qt.md`).
+`EmuSen_Qt.md`). A scroller excuses what lies beyond it along either axis it scrolls, where `FitAudit.Check` excused only up and
+down, since a pad never scrolled sideways there (decided 2026-11-08: the Qt themes' strips scroll sideways under the pad,
+Horizon's first). What crosses a scroller's edge is still held by the edge rule, which accepts only a faded edge.
 
 ### 3.1 What it is held to
 
 `tests/audit.rs`: a clean big-screen state passes every rule; then one fault planted per rule and found, with the
 boundary beside it: past the panel, past a scroller's side but excused past its foot, within the slack; words past
 their button; an overlap, a picture inside a control (not one), half a pixel (not one), a row's own words (not one); a
-scroller of 80 (too little) and 84; a row sliced by a scroller's foot with and without a fade, and a picture past a
-sideways scroller's side; an ellipsis, words past their box and at the foot, capitals of 11.0, 11.59 and 11.61 and the
+scroller of 80 (too little) and 84; a row sliced by a scroller's foot with and without a fade, a picture sliced by a
+sideways scroller's side, and a window-wide sideways strip excusing what lies beyond it, sliced at its faded edges and
+cut at an unfaded one; an ellipsis, words past their box and at the foot, capitals of 11.0, 11.59 and 11.61 and the
 desktop's no floor; a title and a footer cut; a popup and a hidden subtree skipped; the pad not reaching a button, an
 unseen row excused, no focus; a scrim covering a row's centre, a row's own words over it (not covered), a click that
 calls something other than A, a scroller the wheel does not move; a status bar on the big screen and on a card, and on

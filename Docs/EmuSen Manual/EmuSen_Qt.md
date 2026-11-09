@@ -1042,6 +1042,73 @@ page says ("along and back"), and hears all 120 (man theme-check).
 - `Testing/mockups/Consoles.mockup.spec` is rewritten from `consoles.html`. The acceptance test holds it, leaving out the
   boxes that follow from the canvas's eleven consoles; kit-core's test holds those instead.
 
+#### 3.4.3 Horizon as built **[M 2026-11-08]**
+
+Horizon is the package `Frontend/themes/horizon/`, the design of `horizon.md` (2026-11-08) with Games as Rise: the
+horizon line high at y 440, the focused game or console risen over it at the right as a world in a 300 disc, its words in
+the sky at the left, and the things browsed standing on the land on one foot line (700) under a clamped camera. Its
+`theme.json` lists `home`, `consoles`, `games` and `splash`, the variants dark and light, and one token override,
+`light.accent` #B4442A (Dawn), set on the theme's engine only (§3.5.1). Its mockups are
+`Testing/themes/horizon-{home,consoles,games}.mockup.spec`, held within two units of theme-audit's recordings.
+
+**Parts.** `Backdrop` (the kit's night `Sky` drawn twice, once as the gradient alone and once with the stars clipped at
+the line, so stars stand above the line only; Dawn's gradient by day; the glow at the world's centre; the drift),
+`World` (a game's picture in the disc, a console's `Body` at 300, a place's glass disc, the corona, the rise of 24 over
+`Enter`), `HorizonLine` (the line, and the track while the row is longer than W − 128), `Strip` (a `Flickable` of
+margins 64 whose `contentX` is bound to the camera while it is not dragged, inside the kit's `EdgeFade`), `Lift`, `StripItem` (the walk
+on one axis, LB and RB jumping a group), `Cover`, `PlaceDisc`, `Faces`, `Glyph`, `EngineMark`. Home and Choose a console
+place their items freely in a `Strip` by slot (Choose a console: the places, then each maker's consoles from
+`groupStart`); Games is a horizontal `ListView` with `highlightRangeMode: ApplyRange` and the preferred range at the
+centre, which is the camera of the design's §1.6.
+
+**The camera.** off = clamp(fx + fw/2 − (W − 128)/2, 0, max(0, total − (W − 128))). The first console focused on
+Choose a console (its centre at 528 + 80 in the strip) puts the camera at off 32, so the places start at x 32; the
+mockup holds that, the canvas showing the second console. A row longer than W − 128 but shorter than W still moves
+over the strip's margins: the synthetic library's four consoles make a strip of 1,220, its last console resting 4 units
+past the window under the faded edge until the camera reaches it.
+
+**What was found building it (2026-11-08).** (1) Small text at the design's 17 units fails the capitals floor at
+1280 × 720 (capitals 10.72 against 11.6); the tester decided that the floor holds with no exception, and every small text
+is 19 (the counts, the engine line, whose tag box grew to 24, the maker labels, the Games neighbours, the Continue
+chip, the splash's caption), the console items 137.2 tall. (2) A horizontal `ListView` sets each delegate's y to 0, so
+a cover written with `y: 260 − height` stood at the land's top; each cover now stands inside a slot as tall as the land.
+(3) The software renderer ignores a clip under an item that has no layer; the starred sky and the splash's rising
+bodies are clipped inside a layer on the software backend only (proved by a pixel probe), and the GPU draws the clip
+without one (checked on the RX 6800). (4) Five faults of the audit itself, each fixed with its own test: a pass that
+panicked was a lone "audit" line (now a "stopped" finding, §3.7); a `RectangularShadow`'s vector `offset` was taken
+for a path view that never settled; a flickable's margins were not counted as scroll; the splash was held to the
+pointer rule; a recording's picture was taken mid-transition (now after `Scene::rest`).
+
+**Named differences from the canvases.** The kit's `CoverTile` draws the generated card (a game with no art) with its
+own caption, larger than the canvases' 15-unit condensed caption and, in the cover row, without one; Home draws the
+track on the horizon line (the design's §1.6), where its canvas does not; the new world rises without cross-fading
+under the old; a pressed pad A has no held look of its own (the lift settles, as the design says, but there is no
+press of the pad in the audit); the engine mark is the core's own (`EngineMark`), not the canvas's glyph. Seen in the
+side-by-sides of 2026-11-09 and named: the help bar's glyphs are the kit's generic pad, since the audit connects no
+controller with a face; a game with no hero shows the generated card's hue soft at 40% in the world, where the canvases
+draw a placeholder; Choose a console shows three places at the first console's focus (off 32), where the canvas focuses
+the second; a catalogue's consoles without a look of their own share the first shelved console's body; the splash's
+caption is 19 units (the floor above). **The strips' edge fade.** The strips of Home and Choose a console and Games' row
+stand inside the kit's `EdgeFade` (`EmuSen_Kit.md` §7.35, landed 2026-11-09) and fade to transparency over their outer 40
+units on both backends, so an item at an edge is faded, never cut. Until then a theme part, `FadeMask`, fed a `MultiEffect`
+mask, which is binary on Qt 6.11 with Vulkan (measured 2026-11-09 in a probe: a 100-unit linear alpha ramp cut wholly at
+the threshold, whatever `maskSpreadAtMin` is) and draws nothing on the software backend, so an item at the right edge
+was cut by the window, not faded (Home's last cover at 1280 × 800); `FadeMask` is gone.
+
+**Proof, measured 2026-11-08 and 2026-11-09.** On the GPU (`theme-audit --gpu`: Vulkan on the RX 6800 in a nested
+KWin of the run's own, every picture its state's size): no finding on the four screens at the five sizes in both
+variants, Choose a console over the audit's 120 consoles and over the seven catalogues (`eleven`, `empty`, `long`,
+`one-console`, `n30`, `n120`, `maker40`); the six Home "pad does not reach" findings an earlier run on the desk's own
+compositor reported at its first state are gone. The searching layout, recorded offscreen with `Browse.searching` held
+true in a scratch copy: the matches 140 tall on a foot line at 380 from x 64, unlifted, the world and the line hidden,
+no finding at any size. The splash held at 1, 3 and 5 s matches the canvas's frames for its four consoles. Side-by-sides
+with the canvases' renders are kept in `~/.cache/emusen/tmp/qt-s3/compare/horizon/`. Three faults were seeded in
+scratch copies and caught, each reverted: the camera without its lower clamp (Home's mockup: Continue at 488, not 64);
+Right stepping to the next group's first item (theme-audit: 46 "pad does not reach" findings); the drift running
+whatever the battery and reduced motion (theme-audit: not still under reduced motion, the drift looping). The drift
+running under reduced motion alone was not caught, since the audit's device is on battery at 64% and the battery rule
+stops it too: the audit proves the battery rule, and the reduced-motion rule only with it.
+
 #### 3.4.4 Meridian as built **[M 2026-11-08]**
 
 "Meridian" (`Frontend/themes/meridian/`, resources at `qrc:/emusen/themes/meridian/`) is the design of

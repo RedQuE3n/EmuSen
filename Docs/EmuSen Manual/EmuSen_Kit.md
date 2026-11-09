@@ -2693,3 +2693,65 @@ cxx-qt-lib binds.
   content gives the navigation the focus) but no item takes Qt's focus, so the walk's role and Qt's focus part there;
   the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The other screens' faces (§5.2) are
   bundled when the first screen needs them; Moonrise's two are.
+
+### 7.48 An orbit deleted with its screen (2026-11-09)
+
+When Orrery's screens were torn down, Qt logged three `TypeError`s a cover, at `OrbitSlot.qml`'s `Translate` (`slot.view`
+null) and at the theme's `OrbitCover.qml` (`slot.orbit` null): 14 to 22 lines at the end of a theme-audit run over Orrery,
+by the screen placed last, measured on 2026-11-09. They were first seen after the kit's `ViewCurrent` (§7.39) and taken for its doing; they are not.
+With `Walkable`'s line removed the same lines came back in the harness (32 of `OrbitSlot`), and a scene whose covers no key or
+pointer had touched logged them too.
+
+**The cause.** A `ListView` deleted at once, as a window deletes what it holds or the harness deletes a named item, releases
+its delegates to `QQmlDelegateModel`, which deletes them later (`deleteLater`). Under `pragma ComponentBehavior: Bound`
+the delegates read the screen's ids, and the deleted view's id now reads null, so their bindings run once more and every
+read through the view throws. Measured in the harness on 2026-11-09 with probe scenes: a delegate of a type of its own
+(the kit's `Walkable` or `OrbitSlot`, or a copy in a local file) inside a bound file logged on the delete; the same scene
+without the pragma, or with a `FocusScope` written in the delegate's place, logged nothing; a `Loader` letting the same
+screen go logged nothing, since Qt clears a loaded item's context before deleting it. theme-audit's own teardown between
+screens, through the host's sandbox, was quiet; the lines came at the end of the run, when the harness's window goes with
+the placed screen in it, as the program's does when it closes.
+
+**The rule.** A delegate outlives its view while a screen is torn down, so a binding that reads the view must read it
+as possibly null. `OrbitSlot` reads `view?.width`, `view?.contentX` and `view?.y` (`?? 0`), so no theme's orbit logs on the
+kit's side; a theme's own delegate that reads its list by id does the same, as Orrery's `OrbitCover` now does for its
+`turning` and `lit` (`EmuSen_Qt.md` §3.4.6). What the guard gives while the screen goes is never drawn.
+
+Held to by `qt-test/tests/orbit.rs` over `OrbitScene.qml`: eight covers on an orbit in a bound file, the pad moving the
+current one and the pointer making the fourth current, then the screen deleted at once with the harness's new `destroy`
+(`Scene::destroy`, `harness_destroy`: deletes a named object as a window's teardown does). Qt must log nothing. Before the
+change it logged 48 lines, all `OrbitSlot.qml:44-45`. Seeded fault: `OrbitSlot`'s `view?.` taken back to `view.` (the test
+fails on 48 lines).
+
+### 7.49 The tree read as the next frame draws it (2026-11-09)
+
+theme-audit named Orrery's help bar in its `disabled` state with Open over Search and Home, at four sizes of five
+offscreen (1920 × 1200 alone on the GPU). The entries' boxes in the recorded tree all stood at the Row's start
+(x 96, 96, 96 at 1920 × 1200), while the picture recorded with it showed them in a row. Measured on 2026-11-09 with the
+audit's held tree read twice: at once after `rest`, x 96, 96, 96; 300 ms later, x 96, 282.7, 492.8.
+
+**The cause.** Walking the focus to a declined place gives the frame a new help model, the bar's `Repeater` makes its
+entries again, and the `Row` places them at its next polish, which Qt runs only before a frame. `Scene::rest` returns at
+once while a running animation never ends, which the harness takes for a design's resting motion, and every
+`FrameAnimation` counts as one; the kit's `Sky` runs its `FrameAnimation` while its glow eases (§7.5), and the focus moving
+from a cover to a place moved the glow. The tree was read between the change and its polish: a state no frame ever draws.
+The light variant, whose sky is not drawn, waited for frames and read the row as drawn.
+
+**The rule.** `harness_tree` waits for a scheduled polish first (`QQuickTest::qWaitForPolish`, Qt's own test API), so the
+tree is the one the next frame draws, whatever is running. The audit's rules are unchanged. That `rest` cannot tell the
+sky's easing from a resting motion stays as it was: a frame clock declares neither, and the polish wait is what the tree
+needed.
+
+**Why the polish is the moment.** Qt Quick places an item in two steps: a property change marks a positioner or layout
+dirty and asks for a polish, and the polish, run on the GUI thread just before the scene graph is synchronised for a
+frame, writes the children's `x` and `y` (Qt's documentation of `QQuickItem::updatePolish`, and `QQuickTest::qWaitForPolish`,
+which Qt Quick Test provides for reading items after such a change). Between the two, a box is a value no frame draws;
+after the polish it is the value the next frame draws. Waiting for a frame would also do, but not when no frame is due,
+and a fixed wait only makes the race rarer. With no polish scheduled the read is as before. Measured on 2026-11-09 with
+the change: qt-test's 29 tests and the program's (`emusen-qt`) 26 pass, as they did before it; none reads a tree
+mid-layout, so it fixes no other finding or flake those tests knew. The finding it removes is Orrery's above; theme-audit
+over the other four themes in every state is in `EmuSen_Qt.md` §3.7.2.
+
+Held to by `qt-test/tests/polish.rs` over `PolishScene.qml`: a help bar whose model changes, one entry declined, while a
+`FrameAnimation` runs; after `rest` the entries stand where they stood. Before the change the entries read x 0, 0, 0
+where they stood at 0, 127.5 and 267.9. Seeded fault: the polish wait removed (the same three zeros).

@@ -40,9 +40,10 @@ Kit.Walkable {
             origin.y: slot.height / 2
             angle: slot.tilt
         },
+        // A deleted screen's view is gone before its covers, which Qt deletes later (EmuSen_Kit.md §7.48).
         Translate {
-            x: slot.view.width / 2 + slot.rx * Math.cos(slot.theta) - (slot.x - slot.view.contentX + slot.width / 2)
-            y: slot.cy + slot.ry * Math.sin(slot.theta) - slot.view.y - slot.height / 2 - (slot.lit ? 12 : 0)
+            x: (slot.view?.width ?? 0) / 2 + slot.rx * Math.cos(slot.theta) - (slot.x - (slot.view?.contentX ?? 0) + slot.width / 2)
+            y: slot.cy + slot.ry * Math.sin(slot.theta) - (slot.view?.y ?? 0) - slot.height / 2 - (slot.lit ? 12 : 0)
         }
     ]
     Kit.StackMember {}

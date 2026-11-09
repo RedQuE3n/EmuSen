@@ -2775,7 +2775,41 @@ Held to by `qt-test/tests/polish.rs` over `PolishScene.qml`: a help bar whose mo
 `FrameAnimation` runs; after `rest` the entries stand where they stood. Before the change the entries read x 0, 0, 0
 where they stood at 0, 127.5 and 267.9. Seeded fault: the polish wait removed (the same three zeros).
 
-### 7.50 The clip and the page frame's own parts for a game's page (stage 5, piece G; 2026-11-09)
+### 7.50 A value takes what the label leaves (stage 5, piece E; 2026-11-09)
+
+Found by Settings ▸ Consoles in the program (`EmuSen_Qt.md` §7.7.E): the Super Nintendo's SA-1 catch-up, a choice the
+core labels `After every S-CPU instruction (exact)`, was cut at half its row (§7.46) beside a label of thirteen
+characters, at every size of the gate, where Mistress's row shows it whole. A `MenuRow`'s value is now as wide as the
+row leaves it after the insets, the label's own width, the gap and the marks, and never less than half the row, so a
+long label still keeps its half and a folder's path longer than the room is still cut at its start (§7.46, and the named
+exception of `EmuSen_Qt.md` §7.7). Nothing of the surface changed. Held to by the program's Consoles test (the value
+whole at the gate's five sizes) and its Settings test (the ROM folder's path still cut, its pane whole); seeded, the
+half-row cap put back failed the first with the value cut at all five sizes.
+
+### 7.51 The rows' view keeps no current index of its own (stage 5, piece E; 2026-11-09)
+
+Found by Settings ▸ Consoles in the program (`EmuSen_Qt.md` §7.7.E): B on a console's Firmware page was to return the
+focus to the Firmware row, and the host's `focusRow(1)` took, then the first row took the focus back. Traced on the
+software backend (the walk's `current` and each row's `activeFocus`, 2026-11-09): the rows removed and the page's rows
+inserted, the walk at 0 and then at 1 by the host, then row 1 losing the active focus and row 0 gaining it, which the
+row's handler turned into `focusRow(0)`. Qt's item views set a current index of their own when rows arrive in an empty
+view and give that row the focus; `currentIndex: -1`, a constant binding, does not hold against it. The view now clears
+its current index again whenever it sets one, so the walk's focus is the only one: the trace then ended at 1. Nothing of
+the surface changed. Held to by the program's Consoles test (B on Firmware returns to the Firmware row); seeded, the
+clearing taken out failed it (the focus on row 0).
+
+### 7.52 The settings frame's sentence in a tone (stage 5, piece E; 2026-11-09)
+
+Asked for by Settings ▸ Consoles (`EmuSen_Qt.md` §7.7.E), decided by the tester on 2026-11-09: Mistress tinted a
+console's firmware line Success where nothing is wanting and Attention where every game needs a file that is not found,
+and that line is often the focused row's sentence, which the frame draws. `SettingsFrame` gained `sentenceTone`, a
+`Tones` value the host sets for the focused row (by what its sentence says, never a colour), `Text` unless set; the
+sentence is a `ToneText`. Weighed as `EmuSen_Qt.md` §1.3 asks, an extension of the frame: one property, no second job.
+Rule Q: an addition to `SettingsFrame` (qmldir), recorded in `CHANGELOG-kit.md`; nothing was removed or changed. Held to
+by the program's Consoles test (the Super Nintendo's `✓ No firmware needed` drawn in the dark variant's Success,
+#35A064); seeded, the tone left unbound failed it.
+
+### 7.53 The clip and the page frame's own parts for a game's page (stage 5, piece G; 2026-11-09)
 
 **`VideoTile`** (qmldir) is a clip over its still: the still (`still`) first; once `playing` turns true and the motion
 token `poster` (1.5 s) has passed, the clip (`source`) plays, looped, and fades in over `posterFade`; when `playing` turns

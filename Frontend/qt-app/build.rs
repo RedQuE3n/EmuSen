@@ -9,6 +9,7 @@ fn main() {
             .depend("QtQuick")
             .depend("QtQuick.Shapes")
             .depend("QtQuick.Effects")
+            .depend("QtQuick.Dialogs")
             .depend("EmuSen.Kit")
             .depend("EmuSen.Models")
             .depend("EmuSen.Endymion")

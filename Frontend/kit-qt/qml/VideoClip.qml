@@ -3,7 +3,7 @@ import QtQuick
 import QtMultimedia
 import EmuSen.Kit as Kit
 
-// VideoTile's player, made only while a clip is to play, so a window that shows none never starts Qt Multimedia: the clip after the poster's delay, looped, drawn by VideoOutput on the GPU and by VideoFrames on the software backend (EmuSen_Kit.md §7.50).
+// VideoTile's player, made only while a clip is to play, so a window that shows none never starts Qt Multimedia: the clip after the poster's delay, looped, drawn by VideoOutput on the GPU and by VideoFrames on the software backend (EmuSen_Kit.md §7.53).
 Item {
     id: root
     property url source

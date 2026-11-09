@@ -46,6 +46,10 @@ pub enum Screen {
     SettingsPage,
     /// A tool's search with the keyboard docked: Type, Delete, Space and Done (EmuSen_Interface.md §15.2).
     ToolSearch,
+    /// A console's page under Consoles: the shoulders step to the console before or after it.
+    SettingsConsole,
+    /// A page of choices (EmuSen_Interface.md §18.11): A chooses, B keeps what was chosen.
+    SettingsChoices,
     /// A game's page (EmuSen_Qt.md §7.8), by what is focused: Play, Resume (with its slots where it steps them),
     /// Favourite; a state, a picture, a stepped row, a door, a row of Details, or nothing A acts on.
     GamePage,
@@ -184,6 +188,14 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Search, "Space", Some("space")),
             (UiButton::Screensaver, "Done", Some("done")),
         ],
+        Screen::SettingsConsole => &[
+            (UiButton::Accept, "Change", None),
+            (UiButton::Left, "Value", None),
+            (UiButton::PageUp, "Console", None),
+            (UiButton::Back, "Back", None),
+            (UiButton::Menu, "Home", Some(HOME)),
+        ],
+        Screen::SettingsChoices => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None)],
         // Mistress's GamePage.Hints: A's word for what is focused, Left and Right where they step, Y the heart, the
         // shoulders the sections, B and Start.
         Screen::GamePage => &[(UiButton::Accept, "Play", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],

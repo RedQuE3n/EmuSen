@@ -2,10 +2,15 @@
 //! Rust over a source the client crates or a test's fake answer; its bridge only puts that on Qt.
 
 pub mod card;
+pub mod cards;
 pub mod card_model;
 pub mod clients;
 pub mod clock;
+pub mod consoles;
+pub mod consoles_source;
 pub mod esde_shelves;
+pub mod firmware;
+pub mod folders;
 pub mod game_model;
 pub mod game_page;
 pub mod game_page_model;
@@ -34,6 +39,7 @@ pub mod reel;
 pub mod question;
 pub mod question_model;
 pub mod resume;
+pub mod schema;
 pub mod row_roles;
 pub mod rows_model;
 pub mod screens;
@@ -41,6 +47,7 @@ pub mod session;
 pub mod session_model;
 pub mod settings;
 pub mod settings_model;
+pub mod settings_saves;
 pub mod settings_source;
 pub mod themes;
 pub mod themes_model;

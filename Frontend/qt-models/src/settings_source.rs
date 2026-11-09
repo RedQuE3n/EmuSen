@@ -3,7 +3,7 @@
 
 use crate::clients::app_settings;
 use crate::settings::{Model, SettingsSource};
-use emusen_platform_client::galaxia::consts::{FILE_GRAPHICS, FILE_SETTINGS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
+use emusen_platform_client::galaxia::consts::{DIR_FIRMWARE, FILE_GRAPHICS, FILE_SETTINGS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
 use emusen_platform_client::{serenity, Platform};
 use serde_json::Value;
 
@@ -58,5 +58,10 @@ impl SettingsSource for ClientSettings {
 
     fn outputs(&self) -> Vec<String> {
         self.platform.audio_devices().unwrap_or_default()
+    }
+
+    fn folders(&self) -> std::collections::BTreeMap<String, String> {
+        let firmware = self.platform.directory(DIR_FIRMWARE).ok().flatten();
+        firmware.into_iter().map(|d| ("firmware".to_owned(), d.display().to_string())).collect()
     }
 }

@@ -4,6 +4,15 @@ The kit is the QML module `EmuSen.Kit` (EmuSen_Qt.md §1.4), held by rule Q (§5
 writes it, is committed under `Testing/qmltypes/` and compared on every build. A minor adds and never removes; each
 entry names what was added and the section of `EmuSen_Kit.md` that records it.
 
+## 1.0, stage 5 piece E: a sentence's tone, a value beside a short label, the rows' view (2026-11-09)
+
+Additions only; no type, property, signal or invokable was removed or changed.
+
+- **`SettingsFrame.sentenceTone`** (qmldir): the tone (`Tones`) of the focused row's sentence, `Text` unless the host
+  says otherwise. §7.52.
+- `MenuRow`'s value takes what its label leaves of the row, at least half; its surface is unchanged. §7.50.
+- `SettingsFrame`'s rows keep no current index of the view's own; its surface is unchanged. §7.51.
+
 ## 1.0, stage 3: an orbit deleted with its screen (2026-11-09)
 
 No type, property, signal or invokable was added, removed or changed.

@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
 
-// A clip over its still: the still first, the clip faded in over it the poster's delay after `playing` turns true, and the still alone again when it turns false or the clip changes; its player (VideoClip) is made only while the clip is to play; silent unless `muted` is false (EmuSen_Kit.md §7.50).
+// A clip over its still: the still first, the clip faded in over it the poster's delay after `playing` turns true, and the still alone again when it turns false or the clip changes; its player (VideoClip) is made only while the clip is to play; silent unless `muted` is false (EmuSen_Kit.md §7.53).
 Item {
     id: root
     property url source

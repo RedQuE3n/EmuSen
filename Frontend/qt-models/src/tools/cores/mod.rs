@@ -10,6 +10,7 @@ pub mod row;
 pub mod words;
 
 use crate::card::{Pane as CardPane, Row as CardRow};
+use crate::firmware;
 use crate::tools::{Action, Bar, Column, Effect, Item, Mark, Pane, Source, Tone, Words};
 use approval::Asking;
 use backend::{Backend, Job};
@@ -19,7 +20,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 /// The console's setting naming its engine.
-pub const ENGINE_KEY: &str = "Engine";
+pub use crate::consoles::ENGINE_KEY;
 
 /// What the host opens for Cores; a destination it has not got is not offered. The big screen has no file manager, so
 /// Open Folder is the desktop form's (stage 6).
@@ -58,6 +59,8 @@ pub struct Cores {
     order: Vec<String>,
     engines_of: HashMap<String, Vec<String>>,
     firmware_of: HashMap<String, String>,
+    /// The consoles that start with no game in them, whose firmware every game needs.
+    starts_empty: HashSet<String>,
     have_firmware: RefCell<HashMap<String, Option<&'static str>>>,
     listing: Vec<Core>,
     tool_rows: Vec<Core>,
@@ -106,6 +109,7 @@ impl Cores {
             order: Vec::new(),
             engines_of: HashMap::new(),
             firmware_of: HashMap::new(),
+            starts_empty: HashSet::new(),
             have_firmware: RefCell::new(HashMap::new()),
             listing: Vec::new(),
             tool_rows: Vec::new(),
@@ -182,6 +186,7 @@ impl Cores {
         self.consoles = Consoles::default();
         self.engines_of.clear();
         self.firmware_of.clear();
+        self.starts_empty.clear();
         self.have_firmware.borrow_mut().clear();
         let systems = match self.backend.systems() {
             Ok(s) => s,
@@ -193,6 +198,9 @@ impl Cores {
         let mut listed: Vec<(String, String, i32)> = Vec::new();
         for s in systems.iter().filter(|s| !s.id.is_empty() && !s.console.is_empty()) {
             self.consoles.console_of.insert(s.id.clone(), s.console.clone());
+            if s.starts_empty {
+                self.starts_empty.insert(s.console.clone());
+            }
             if self.engines_of.contains_key(&s.console) {
                 continue;
             }
@@ -717,31 +725,33 @@ impl Cores {
         system.and_then(|s| self.backend.firmware(s)).unwrap_or_default()
     }
 
-    /// One row a file: found or not, and in the pane the file, whether it is needed, and the folder it goes in
-    /// (EmuSen_Interface.md §18.10).
+    /// One row a need, as Settings' Firmware page has it (`firmware.rs`, EmuSen_Interface.md §18.10): found or not, in
+    /// the pane each file, whether it is needed, and the folder it goes in; then Open Folder on that folder.
     fn firmware_rows(&self, row: &Core) -> Vec<CardRow> {
-        let folder = self.backend.firmware_folder().unwrap_or_else(|| "the firmware folder".to_owned());
-        self.firmware_files(row)
+        let folder = self.backend.firmware_folder();
+        let shown = folder.clone().unwrap_or_else(|| "the firmware folder".to_owned());
+        let console = row.consoles.first().cloned().unwrap_or_default();
+        let system = row.systems.iter().find(|s| self.consoles.console_of.get(*s) == Some(&console)).or(row.systems.first()).cloned().unwrap_or_default();
+        let files: Vec<_> = self.firmware_files(row).into_iter().map(|f| (system.clone(), f)).collect();
+        let all = self.starts_empty.contains(&console);
+        let mut rows: Vec<CardRow> = firmware::needs(&files, self.firmware_of.get(&console).map(String::as_str))
             .iter()
             .enumerate()
-            .map(|(at, f)| {
-                let value = match f.status.as_str() {
-                    "present" => "✓ Found",
-                    "missing" => "⚠ None found",
-                    _ => "Not needed",
-                };
-                let label = if f.label.is_empty() { f.file.clone() } else { f.label.clone() };
-                let need = if f.required { "Required" } else { "Optional" };
-                let pane = CardPane {
-                    lines: vec![
-                        (format!("{} · {need}", f.file), f.need.clone()),
-                        (format!("Put it in {folder}."), "EmuSen recognises it by its content and never downloads it.".to_owned()),
-                    ],
-                    ..CardPane::default()
-                };
-                CardRow::new(&format!("firmware.{at}"), &label).value(value).pane(pane)
+            .map(|(at, need)| {
+                let mut lines: Vec<(String, String)> = need
+                    .found()
+                    .map(|_| (format!("Your own: {}", need.recognised()), "Recognised by its content.".to_owned()))
+                    .into_iter()
+                    .collect();
+                lines.extend(need.files.iter().map(|f| (format!("{} · {}", f.file, if f.required { "Required" } else { "Optional" }), f.need.clone())));
+                lines.push((format!("Put it in {shown}."), "EmuSen recognises it by its content and never downloads it.".to_owned()));
+                CardRow::new(&format!("firmware.{at}"), &need.name).value(&firmware::short_status(need, all)).pane(CardPane { lines, ..CardPane::default() })
             })
-            .collect()
+            .collect();
+        if let Some(folder) = folder {
+            rows.push(CardRow::new(&format!("{OPEN_FOLDER}{folder}"), "Open Folder"));
+        }
+        rows
     }
 
     /// The build kept for Roll Back, by its date, where the tool keeps one.
@@ -797,6 +807,8 @@ pub const DEFAULT: &str = "default";
 pub const OPTIONS: &str = "options";
 pub const FIRMWARE: &str = "firmware";
 pub const FOLDER: &str = "folder";
+/// Open Folder on a folder, the program's one action for it (`Folders`): the host is asked with the folder after it.
+pub const OPEN_FOLDER: &str = "folder:";
 pub const VERIFY: &str = "verify";
 pub const CHECK: &str = "check";
 pub const DETAILS: &str = "details";
@@ -1038,6 +1050,7 @@ impl Source for Cores {
                 None => Effect::Done,
             },
             (FOLDER, Some(_)) => Effect::Host(action.to_owned()),
+            (open, _) if open.starts_with(OPEN_FOLDER) => Effect::Host(open.to_owned()),
             (other, Some(_)) if other.starts_with(MARK) => Effect::Mark(other[MARK.len()..].to_owned(), false),
             _ => Effect::Done,
         }

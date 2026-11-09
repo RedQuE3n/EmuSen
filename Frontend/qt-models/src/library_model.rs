@@ -111,7 +111,7 @@ pub mod qobject {
         #[cxx_name = "titleOf"]
         fn title_of(self: &LibraryModel, path: &QString) -> QString;
 
-        /// The facts Settings' panes name, as SettingsModel.facts reads them: every game counted, and the running game's title.
+        /// The facts Settings' panes name, as SettingsModel.facts reads them: every game counted, each system's, and the running game's title.
         #[qinvokable]
         #[cxx_name = "settingsFacts"]
         fn settings_facts(self: &LibraryModel, running: &QString) -> QString;
@@ -384,7 +384,13 @@ impl qobject::LibraryModel {
     pub fn settings_facts(&self, running: &QString) -> QString {
         let running = running.to_string();
         let title = if running.is_empty() { String::new() } else { crate::library::title_of(&running) };
-        QString::from(serde_json::json!({ "games": self.view.catalog.games.len(), "running": title }).to_string().as_str())
+        let mut systems = serde_json::Map::new();
+        for game in &self.view.catalog.games {
+            let system = game.system.clone().unwrap_or_default();
+            let n = systems.get(&system).and_then(serde_json::Value::as_u64).unwrap_or(0) + 1;
+            systems.insert(system, n.into());
+        }
+        QString::from(serde_json::json!({ "games": self.view.catalog.games.len(), "running": title, "systems": systems }).to_string().as_str())
     }
 
     pub fn home_card_facts(&self, suspended: &QString, paused: &QString, game_mode: bool) -> QString {

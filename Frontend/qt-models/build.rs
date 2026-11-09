@@ -28,10 +28,11 @@ fn main() {
             "src/rows_model.rs",
             "src/tool_model.rs",
             "src/launch_model.rs",
+            "src/folders.rs",
             "src/game_page_model.rs",
         ])
         .include_dir("cpp")
-        .cpp_files(["cpp/session_pictures.cpp"])
+        .cpp_files(["cpp/session_pictures.cpp", "cpp/folders.cpp"])
         .qt_module("Quick")
         .qt_module("Qml")
         .build()

@@ -16,6 +16,13 @@ Kit.NormalizedCanvas {
     Connections {
         target: screen.settings
         function onLeft() { screen.backed() }
+        // B closed a page: the row that opened it is focused again, as Mistress's pages return.
+        function onRefocus(row) { frame.layout.focusRow(row) }
+    }
+    // The shoulders the frame declines under a trail: on a console's page, the console before or after it.
+    Keys.onPressed: (event) => {
+        if (event.key === Qt.Key_PageUp || event.key === Qt.Key_PageDown)
+            event.accepted = screen.settings.shoulder(event.key === Qt.Key_PageDown ? 1 : -1)
     }
     Kit.SettingsFrame {
         id: frame
@@ -31,6 +38,7 @@ Kit.NormalizedCanvas {
         sections: screen.settings.sections
         section: screen.settings.section
         trail: screen.settings.trail
+        sentenceTone: screen.settings.sentenceTone
         help: HelpModel {
             screen: screen.settings.help
         }
@@ -134,14 +142,15 @@ Kit.NormalizedCanvas {
             spacing: frame.layout.lineGap
             Repeater {
                 model: screen.settings.paneLines
-                delegate: Text {
+                delegate: Kit.ToneText {
                     id: line
                     objectName: "SettingsLine"
                     required property string modelData
+                    required property int index
                     width: parent.width
                     text: line.modelData
                     wrapMode: Text.Wrap
-                    color: Kit.Tokens.text
+                    tone: screen.settings.lineTone(line.index)
                     font.family: faces.regular
                     font.pixelSize: Kit.Tokens.fontBody
                 }

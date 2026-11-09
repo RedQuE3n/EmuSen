@@ -82,17 +82,17 @@
     {
       "id": "consoles",
       "name": "Consoles",
-      "rows": []
+      "from": "consoles"
     },
     {
       "id": "library",
       "name": "Library",
       "rows": [
-        {"id": "rom", "label": "ROM folder", "hint": "The folder the library lists, read in place and never moved.", "door": "romfolder",
+        {"id": "rom", "label": "ROM folder", "hint": "The folder the library lists, read in place and never moved.", "folder": "AppSettings RomDirectory",
          "value": {"from": "AppSettings RomDirectory", "blank": "Not set"},
          "pane": {"sentence": "{games} under {value}, read in place and never moved.",
           "muted": ["A opens the folder picker; new games are found on the next start or with Check Again in the Library Manager."]}},
-        {"id": "art", "label": "Artwork folder", "hint": "Box art, named like the game's file; blank keeps it beside the games.", "door": "artfolder",
+        {"id": "art", "label": "Artwork folder", "hint": "Box art, named like the game's file; blank keeps it beside the games.", "folder": "AppSettings ArtworkDirectory",
          "value": {"from": "AppSettings ArtworkDirectory", "blank": "beside the games"}, "pane": {"lines": ["{value}"]}},
         {"id": "themes", "label": "Themes", "hint": "The big picture's look: EmuSen's own, or an ES-DE theme's; A opens the themes and their options.", "door": "themes",
          "value": {"from": "AppSettings EmuSenTheme", "blank": "EmuSen (built in)", "words": {"emusen": "EmuSen (built in)"}}},
@@ -102,9 +102,9 @@
         {"id": "hidden", "row": "AppSettings ShowHiddenGames"},
         {"id": "cheats", "label": "Cheats", "hint": "The cheats of the game last played, turned on or off, and the cheat database.", "door": "cheats"},
         {"id": "discs", "label": "Compressed discs", "hint": "The library's discs converted to CHD beside them, checked and listed; the library is only read.", "door": "discs"},
-        {"id": "media", "label": "ES-DE media folder", "hint": "An ES-DE downloaded_media folder whose art the theme shows; only ever read.", "door": "mediafolder",
+        {"id": "media", "label": "ES-DE media folder", "hint": "An ES-DE downloaded_media folder whose art the theme shows; only ever read.", "folder": "AppSettings EsdeMediaDirectory",
          "value": {"from": "AppSettings EsdeMediaDirectory", "blank": "None"}, "pane": {"lines": ["{value}"]}},
-        {"id": "themefolder", "label": "ES-DE theme folder", "hint": "A theme folder for ES-DE to read in place, which then joins the themes.", "door": "themefolder",
+        {"id": "themefolder", "label": "ES-DE theme folder", "hint": "A theme folder for ES-DE to read in place, which then joins the themes.", "folder": "AppSettings BigPictureTheme",
          "value": {"from": "AppSettings BigPictureTheme", "blank": "None"}, "pane": {"lines": ["{value}"]}}
       ]
     },
@@ -121,5 +121,55 @@
         {"id": "about", "label": "About", "hint": "EmuSen's version.", "value": {"fact": "version"}}
       ]
     }
-  ]
+  ],
+  "consoles": {
+    "words": {
+      "unsupported": "Not supported yet",
+      "no_engine": "EmuSen has no engine for the {console} yet.",
+      "facts": "{console} · {games} · engine {engine}",
+      "crt": "CRT profile {crt}",
+      "shares": "What every {console} game shares, unless the game's own options say otherwise.",
+      "heading": "The {console}'s {group} settings.",
+      "engine": "{engine}, the {console}'s engine: every {console} game opens on it unless the game's own options choose another.",
+      "engine_others": "{others} can be chosen here too; this is the same setting as Cores' Make Default.",
+      "chosen": "Default",
+      "installed": "✓ Installed",
+      "runs": "{choice} runs every {console} game.",
+      "would_run": "{choice} would run every {console} game.",
+      "choose": "A chooses; B keeps what was chosen.",
+      "cartridge": "The {console}'s games keep their saves in the cartridge; there is no card to choose."
+    },
+    "page": [
+      {"id": "engine", "schema": "Engine", "page": "engine"},
+      {"id": "firmware", "label": "Firmware", "hint": "The firmware the {console}'s engines use, found by its content in your folders.", "page": "firmware"},
+      {"id": "cards", "label": "Memory cards", "hint": "The {console}'s cards: shared by every game as the console's were, or one per game.",
+       "none": "The {console}'s games keep their saves in the cartridge.", "page": "cards"},
+      {"schema": "*"},
+      {"id": "crtprofile", "label": "CRT profile", "hint": "The television the {console}'s picture is drawn on.", "screen": "Television",
+       "filter": "CRT", "setting": "quality", "off": "effect.None.nearest", "consoles": "this"},
+      {"id": "consolelevers", "label": "Shader levers", "hint": "The CRT's own levers for the {console}.", "screen": "Television", "door": "levers", "while": "CRT"},
+      {"id": "consolecrop", "row": "GraphicsConfig.Consoles Overscan", "consoles": "this", "screen": "Television",
+       "pane": {"sentence": "The whole picture, the part a television showed, or a crop of your own."}},
+      {"id": "screen", "label": "Screen", "hint": "The {console}'s screen as it is drawn.", "screen": "other", "filters": "suiting", "off": "effect.None.nearest", "consoles": "this"},
+      {"id": "consoleshape", "row": "GraphicsConfig.Consoles PictureShape", "consoles": "this",
+       "pane": {"sentence": "The screen the console was made for, or each pixel square."}},
+      {"id": "reset", "label": "Reset this console", "hint": "Every {console} setting back to its default: the engine's rows, its picture and its shaders; a row the engine holds stays.", "reset": true}
+    ],
+    "firmware": [
+      {"needs": true},
+      {"id": "fwreplacement", "schema": "FirmwarePreference", "label": "Open replacement",
+       "hint": "Whether the console's open replacement runs in place of firmware of your own. Takes effect when a game is next loaded.",
+       "words": {"auto": "In use when none is found", "replacement": "Always", "own": "Never"},
+       "pane": {"by_value": {
+         "In use when none is found": "Your own firmware runs where it is found; where it is not, the open replacement runs in its place.",
+         "Always": "The open replacement runs even where your own firmware is found.",
+         "Never": "Only your own firmware runs: a game whose firmware is not found does not start, and says which file it needs."},
+        "muted": ["Takes effect when a game is next loaded. EmuSen never downloads firmware."]}},
+      {"id": "fwfolder", "label": "Folder", "hint": "Your firmware folder, searched before EmuSen's; only ever read.", "folder": "AppSettings FirmwareDirectory",
+       "value": {"from": "AppSettings FirmwareDirectory", "blank": "EmuSen's folder"}},
+      {"id": "fwclear", "label": "Use EmuSen's folder alone", "hint": "Forgets your folder; firmware is then looked for in EmuSen's own.", "clear": "AppSettings FirmwareDirectory"},
+      {"id": "fwopen", "label": "Open EmuSen's folder", "hint": "EmuSen's own firmware folder in the file manager, made if it is not there yet.", "open": "firmware"},
+      {"id": "fwcheck", "label": "Check again", "hint": "Reads the folders again, as after a file is put in one.", "reread": true}
+    ]
+  }
 }

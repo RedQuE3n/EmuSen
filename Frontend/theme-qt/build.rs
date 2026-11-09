@@ -18,6 +18,7 @@ fn main() {
         QmlFile::from("qml/RoundPicture.qml"),
         QmlFile::from("qml/PadGlyph.qml"),
         QmlFile::from("qml/PlanetLayout.qml"),
+        QmlFile::from("qml/OrbitLayout.qml"),
         QmlFile::from("qml/FigureLayout.qml"),
         QmlFile::from("qml/WheelLayout.qml"),
         QmlFile::from("qml/OrbitSlot.qml"),

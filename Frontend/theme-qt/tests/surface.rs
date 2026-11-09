@@ -157,6 +157,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
             "HelpBar",
             "Moonrise",
             "NormalizedCanvas",
+            "OrbitLayout",
             "OrbitSlot",
             "PadGlyph",
             "PlanetLayout",

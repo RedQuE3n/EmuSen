@@ -1893,6 +1893,308 @@ Module {
         Method { name: "expire"; lineNumber: 84 }
     }
     Component {
+        file: "orbits.cxxqt.h"
+        lineNumber: 86
+        name: "OrbitLayout"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/OrbitLayout 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "width"
+            type: "double"
+            read: "getWidth"
+            write: "setWidth"
+            notify: "widthChanged"
+            index: 0
+            lineNumber: 91
+        }
+        Property {
+            name: "leading"
+            type: "int"
+            read: "getLeading"
+            write: "setLeading"
+            notify: "leadingChanged"
+            index: 1
+            lineNumber: 92
+        }
+        Property {
+            name: "model"
+            type: "QAbstractItemModel"
+            isPointer: true
+            read: "getModel"
+            write: "setModel"
+            notify: "modelChanged"
+            index: 2
+            lineNumber: 93
+        }
+        Property {
+            name: "role"
+            type: "QString"
+            read: "getRole"
+            write: "setRole"
+            notify: "roleChanged"
+            index: 3
+            lineNumber: 94
+        }
+        Property {
+            name: "labelRole"
+            type: "QString"
+            read: "getLabelRole"
+            write: "setLabelRole"
+            notify: "labelRoleChanged"
+            index: 4
+            lineNumber: 95
+        }
+        Property {
+            name: "current"
+            type: "int"
+            read: "getCurrent"
+            write: "setCurrent"
+            notify: "currentChanged"
+            index: 5
+            lineNumber: 96
+        }
+        Property {
+            name: "centre"
+            type: "double"
+            read: "getCentre"
+            notify: "laidOut"
+            index: 6
+            lineNumber: 97
+            isReadonly: true
+        }
+        Property {
+            name: "orbitCount"
+            type: "int"
+            read: "getOrbitCount"
+            notify: "laidOut"
+            index: 7
+            lineNumber: 98
+            isReadonly: true
+        }
+        Property {
+            name: "focusedOrbit"
+            type: "int"
+            read: "getFocusedOrbit"
+            notify: "laidOut"
+            index: 8
+            lineNumber: 99
+            isReadonly: true
+        }
+        Property {
+            name: "angles"
+            type: "QVariant"
+            read: "getAngles"
+            notify: "laidOut"
+            index: 9
+            lineNumber: 100
+            isReadonly: true
+        }
+        Property {
+            name: "orbitOf"
+            type: "QVariant"
+            read: "getOrbitOf"
+            notify: "laidOut"
+            index: 10
+            lineNumber: 101
+            isReadonly: true
+        }
+        Property {
+            name: "shown"
+            type: "QVariant"
+            read: "getShown"
+            notify: "laidOut"
+            index: 11
+            lineNumber: 102
+            isReadonly: true
+        }
+        Property {
+            name: "radiiX"
+            type: "QVariant"
+            read: "getRadiiX"
+            notify: "laidOut"
+            index: 12
+            lineNumber: 103
+            isReadonly: true
+        }
+        Property {
+            name: "radiiY"
+            type: "QVariant"
+            read: "getRadiiY"
+            notify: "laidOut"
+            index: 13
+            lineNumber: 104
+            isReadonly: true
+        }
+        Property {
+            name: "orbitShown"
+            type: "QVariant"
+            read: "getOrbitShown"
+            notify: "laidOut"
+            index: 14
+            lineNumber: 105
+            isReadonly: true
+        }
+        Property {
+            name: "sizes"
+            type: "QVariant"
+            read: "getSizes"
+            notify: "laidOut"
+            index: 15
+            lineNumber: 106
+            isReadonly: true
+        }
+        Property {
+            name: "turning"
+            type: "QVariant"
+            read: "getTurning"
+            notify: "laidOut"
+            index: 16
+            lineNumber: 107
+            isReadonly: true
+        }
+        Property {
+            name: "labelRights"
+            type: "QVariant"
+            read: "getLabelRights"
+            notify: "laidOut"
+            index: 17
+            lineNumber: 108
+            isReadonly: true
+        }
+        Property {
+            name: "labelTops"
+            type: "QVariant"
+            read: "getLabelTops"
+            notify: "laidOut"
+            index: 18
+            lineNumber: 109
+            isReadonly: true
+        }
+        Property {
+            name: "beforeXs"
+            type: "QVariant"
+            read: "getBeforeXs"
+            notify: "laidOut"
+            index: 19
+            lineNumber: 110
+            isReadonly: true
+        }
+        Property {
+            name: "beforeYs"
+            type: "QVariant"
+            read: "getBeforeYs"
+            notify: "laidOut"
+            index: 20
+            lineNumber: 111
+            isReadonly: true
+        }
+        Property {
+            name: "afterXs"
+            type: "QVariant"
+            read: "getAfterXs"
+            notify: "laidOut"
+            index: 21
+            lineNumber: 112
+            isReadonly: true
+        }
+        Property {
+            name: "afterYs"
+            type: "QVariant"
+            read: "getAfterYs"
+            notify: "laidOut"
+            index: 22
+            lineNumber: 113
+            isReadonly: true
+        }
+        Property {
+            name: "sections"
+            type: "QStringList"
+            read: "getSections"
+            notify: "laidOut"
+            index: 23
+            lineNumber: 114
+            isReadonly: true
+        }
+        Property {
+            name: "section"
+            type: "QString"
+            read: "getSection"
+            notify: "laidOut"
+            index: 24
+            lineNumber: 115
+            isReadonly: true
+        }
+        Property {
+            name: "labels"
+            type: "QStringList"
+            read: "getLabels"
+            notify: "laidOut"
+            index: 25
+            lineNumber: 116
+            isReadonly: true
+        }
+        Signal { name: "widthChanged"; lineNumber: 153 }
+        Signal { name: "leadingChanged"; lineNumber: 154 }
+        Signal { name: "modelChanged"; lineNumber: 155 }
+        Signal { name: "roleChanged"; lineNumber: 156 }
+        Signal { name: "labelRoleChanged"; lineNumber: 157 }
+        Signal { name: "currentChanged"; lineNumber: 158 }
+        Signal { name: "laidOut"; lineNumber: 166 }
+        Signal {
+            name: "jumped"
+            lineNumber: 167
+            Parameter { name: "index"; type: "int" }
+        }
+        Method {
+            name: "setWidth"
+            lineNumber: 122
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setLeading"
+            lineNumber: 124
+            Parameter { name: "value"; type: "int" }
+        }
+        Method {
+            name: "setModel"
+            lineNumber: 126
+            Parameter { name: "value"; type: "QAbstractItemModel"; isPointer: true }
+        }
+        Method {
+            name: "setRole"
+            lineNumber: 128
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setLabelRole"
+            lineNumber: 130
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setCurrent"
+            lineNumber: 132
+            Parameter { name: "value"; type: "int" }
+        }
+        Method { name: "read"; lineNumber: 159 }
+        Method {
+            name: "lead"
+            lineNumber: 160
+            Parameter { name: "index"; type: "int" }
+            Parameter { name: "centre"; type: "double" }
+        }
+        Method {
+            name: "jump"
+            lineNumber: 161
+            Parameter { name: "key"; type: "QString" }
+        }
+        Method { name: "stepLeft"; lineNumber: 162 }
+        Method { name: "stepRight"; lineNumber: 163 }
+        Method { name: "stepUp"; lineNumber: 164 }
+        Method { name: "stepDown"; lineNumber: 165 }
+    }
+    Component {
         file: "kinds.cxxqt.h"
         lineNumber: 6
         name: "Pad"

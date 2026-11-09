@@ -1821,7 +1821,8 @@ do this:
 The model is read through `QAbstractItemModel`'s own `rowCount`, `index`, `data` and `roleNames`, with no C++ of its
 own. They are declared once, in `kit-qt/src/item_model.rs`, for every layout that reads a model (`OrbitLayout`,
 `FigureLayout`). The two layouts' own declarations each emitted the type's upcast shim and would not link side by side
-(§7.6).
+(§7.6). The roles are read as text by the one reader there, `item_model::role_texts`. A model without the group role
+gives every row the empty key, so its rows make one group, as an empty maker does.
 
 **Proof** (measured 2026-11-08). `kit-core/tests/orbits.rs`, nine tests:
 - the slots' windows and capacities at 1280 (2, 6, 9) and at 1422.2 (the outer slot holds 10);

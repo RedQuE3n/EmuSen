@@ -116,3 +116,8 @@ and the console screens' maker groups are added, each after the members it joins
   and every list asked for without the flag, is enabled. A theme draws the disabled look of a place the host would
   decline (`available` false) with its bar's A dimmed, and could not mark one entry of a list it may not build. Each kind
   now has eight lists, made once. A delegate reads the role as `model.enabled`. Found by Horizon's disabled state.
+- **`OrbitLayout`** (the kit's, by name), the same day: a list model's groups on nested half-ellipses about the top centre,
+  the smallest innermost, three shown and scrolled past, a group longer than its window turning under the focus, with the
+  labels, the ellipses and a walk by steps (`EmuSen_Kit.md` §7.30). The reference theme's Choose a console needs the
+  makers sorted by size and each orbit's window; QML may hold neither a loop nor a list of groups. Additions only, in both
+  registries.

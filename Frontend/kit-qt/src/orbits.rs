@@ -4,7 +4,7 @@
 use core::pin::Pin;
 
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QList, QModelIndex, QString, QStringList, QVariant};
+use cxx_qt_lib::{QList, QString, QStringList, QVariant};
 use emusen_kit_core::orbits::{orbit_layout, OrbitGeometry, Steps};
 
 #[cxx_qt::bridge]
@@ -14,12 +14,8 @@ pub mod qobject {
         type QVariant = cxx_qt_lib::QVariant;
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
-        include!("cxx-qt-lib/qmodelindex.h");
-        type QModelIndex = cxx_qt_lib::QModelIndex;
         include!("cxx-qt-lib/qstringlist.h");
         type QStringList = cxx_qt_lib::QStringList;
-        include!("cxx-qt-lib/qhash.h");
-        type QHash_i32_QByteArray = cxx_qt_lib::QHash<cxx_qt_lib::QHashPair_i32_QByteArray>;
     }
 
     unsafe extern "C++" {
@@ -192,24 +188,13 @@ where
 }
 
 impl qobject::OrbitLayout {
-    /// Each row's group key and label, read as text from the roles the screen names; a model without the group role
-    /// groups nothing, and an orbit's label is its first row's.
+    /// Each row's group key and label, read as text from the roles the screen names (item_model::role_texts); a model
+    /// without the group role holds every row in one group, and an orbit's label is its first row's.
     pub fn read(mut self: Pin<&mut Self>) {
-        let (mut groups, mut names) = (Vec::new(), Vec::new());
         // SAFETY: QML hands the pointer of a live model, cleared by the engine when the model is destroyed.
-        if let Some(model) = unsafe { self.model.as_ref() } {
-            let root = QModelIndex::default();
-            let roles = model.role_names();
-            let find = |wanted: String| roles.iter().find(|(_, name)| name.to_string() == wanted).map(|(r, _)| *r);
-            let column = |role: Option<i32>| -> Vec<String> {
-                let Some(role) = role else { return Vec::new() };
-                (0..model.row_count(&root))
-                    .map(|row| model.data(&model.index(row, 0, &root), role).value::<QString>().map(|s| s.to_string()).unwrap_or_default())
-                    .collect()
-            };
-            groups = column(find(self.role.to_string()));
-            names = column(find(self.label_role.to_string()));
-        }
+        let model = unsafe { self.model.as_ref() };
+        let groups = crate::item_model::role_texts(model, &self.role);
+        let names = crate::item_model::role_texts(model, &self.label_role);
         let mut r = self.as_mut().rust_mut();
         if r.groups != groups {
             r.base = None;

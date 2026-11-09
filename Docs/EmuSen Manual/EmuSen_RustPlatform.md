@@ -4396,6 +4396,20 @@ classes over the binding (the Scraping namespace, `CoverChoiceTests`, `GameMetad
 and the packaged library's fit audit 16. Seeded and caught: a close that ignores its serial and an open that does not
 name games.db to `emusen.games` (`scraping.rs`), and the shortened wait (`two_connections.rs`).
 
+**A call that changes something answers once (2026-11-09).** The length-query idiom calls twice, first with no buffer
+and then to fill one, and two calls that act did the work on each: `emusen_cheats_prune_apply` removed the folders on
+the length query and, on the fill, reported each as failed because it was gone, and `emusen_galaxia_package_resolve`
+rewrote a moved game's manifest on the length query and answered `moved: false` on the fill. Both now keep their answer
+as the library's and the scraper's reads do (`reply.rs`, `answer`): the call that does the work keeps its answer in the
+layer's slot, keyed by the call and its request (the prune's text; the resolve's path and its three roots), and the same
+call asked again takes it, so the fill does no work; a call whose buffer holds the answer the first time keeps nothing.
+No header change. Measured by `a_prune_applied_by_length_then_fill_removes_once_and_says_so` (`cheats.rs`: one folder
+removed, `{"removed":1,"failed":[]}`) and `a_moved_game_resolved_by_length_then_fill_reports_moved` (`galaxia.rs`:
+`moved: true`, the manifest rewritten, and `false` when asked again); the prune answered as before was seeded and
+caught. The C# callers did not misreport: `GalaxiaNative.PackageResolve` asks once into 16 KiB (`Document`), asking
+again only for a longer answer, and `emusen_cheats_prune_apply` has no C# caller beyond the export list
+`ServiceLibrary.cs` checks.
+
 ### 47.26 Interface 40: the binding files are Endymion's, and Galaxia names its files
 
 *2026-11-08*, for the Qt front end's stage 0 (`EmuSen_Qt.md` §1.9, row 3, and §1.2.1). Endymion reads and writes

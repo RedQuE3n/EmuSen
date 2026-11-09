@@ -3,7 +3,7 @@
 //! are the header's JSON and cross as `serde_json::Value`.
 
 use crate::error::Result;
-use crate::out::{ANSWER_ROOM, json, once, to_json};
+use crate::out::{json, to_json};
 use crate::platform::Platform;
 use crate::raw;
 use serde_json::Value;
@@ -69,11 +69,10 @@ impl Drop for CheatsDatabase {
 
 impl Platform {
     /// A plan applied inside its folder, `{"directory", "removing": [{system, path}]}`: `{"removed", "failed"}`, each
-    /// failure a folder's words. Asked once, since a second call would find the folders gone.
+    /// failure a folder's words. The library applies it once and answers the fill from that.
     pub fn cheats_prune_apply(&self, request: &Value) -> Result<Value> {
         let r = to_json(request);
-        let room = ANSWER_ROOM + 2 * r.len() + 512 * request["removing"].as_array().map_or(0, Vec::len);
-        let bytes = once(|o, l| unsafe { self.lib.emusen_cheats_prune_apply(r.as_ptr(), r.len(), o, l) }, room, || self.last_error())?;
+        let bytes = self.read(|o, l| unsafe { self.lib.emusen_cheats_prune_apply(r.as_ptr(), r.len(), o, l) })?.unwrap_or_default();
         json("cheats_prune_apply", &bytes)
     }
 }

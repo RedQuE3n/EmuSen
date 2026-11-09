@@ -277,12 +277,10 @@ the device made for an adopting host, its raw handles, a built-in filter's prese
 - `serenity`: a `.slangp` read (`emusen_serenity_preset_load`), a failed read being a document with `fail`, and the
   passes' parameters merged (`_parameters_merge`).
 
-*Actions are asked once.* The length-query idiom calls twice, which is harmless for a read and wrong for a call that
-changes something: `emusen_cheats_prune_apply` called twice removes the folders, then fails on each because it is gone,
-and `emusen_galaxia_package_resolve` rewrites a moved game's manifest on the first call and answers `moved: false` on
-the second (both measured 2026-11-09). These two are asked once, into 64 KiB (two paths of PATH_MAX with every byte
-escaped) and, for a prune, room for each folder's words; an answer longer than that fails with words saying the change
-was made. A job's `next` needs no such care: the header copies and takes an event only when the buffer holds it.
+*An action answers once.* The length-query idiom calls twice; `emusen_cheats_prune_apply` and
+`emusen_galaxia_package_resolve` did their work on each call until 2026-11-09, when the library came to keep the
+answer of the call that did the work for the fill (`EmuSen_RustPlatform.md` §47.25), so the wrappers read them by the
+plain idiom. A job's `next` needs no such care: the header copies and takes an event only when the buffer holds it.
 
 *Proof.* `tests/stage5.rs`, six tests over the fixture, never the network: the disc batch, `pkg-ls`, `rom-check` and
 `rom-dups` (two copies of one dump found as one) pulled from start to end in a scratch library, an unknown op refused
@@ -291,8 +289,8 @@ aimed by its request's test seam at a closed loopback port and refused with word
 planned, pruned to one and the folder gone, the saved lists and a game's list named; a manifest written, read back
 member for member, indexed, resolved, and found again by size and CRC-32 after the game moved; a pad taking its kept
 seat and a move trading seats; an iNES dump's bytes without the header and a preset read and merged. `tests/sound.rs`
-adds the devices on SDL's dummy driver. Four faults were seeded and caught: a resolve asked by the length query (moved
-read false), a job's end read as waiting (the two job tests time out), a kept seat described as connected, and a game's
+adds the devices on SDL's dummy driver. Four faults were seeded and caught: a resolve done again on the fill (moved read
+false; now held in the library), a job's end read as waiting (the two job tests time out), a kept seat described as connected, and a game's
 list name and category swapped.
 
 **Proof, measured 2026-11-08** against the library built from the same commit: 12 tests pass (13 at interface 40, below), the binding's

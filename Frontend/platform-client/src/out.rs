@@ -19,20 +19,3 @@ pub(crate) fn copy_out(call: impl FnMut(*mut u8, usize) -> i64, words: impl FnOn
 pub(crate) fn answer(call: impl FnMut(*mut u8, usize) -> i64, words: impl FnOnce() -> String) -> Result<Vec<u8>> {
     emusen_c_calls::read(call, None, status_name, words).map(Option::unwrap_or_default)
 }
-
-/// The room an action's answer is given: two paths of PATH_MAX with every byte escaped fit it.
-pub(crate) const ANSWER_ROOM: usize = 64 * 1024;
-
-/// An action's answer from one call into `room` bytes: a call that changes something (a prune, a moved game's manifest
-/// rewritten) would run twice under the length query, so it is asked once; an answer longer than the room is a failure
-/// whose words say the change was made.
-pub(crate) fn once(call: impl FnOnce(*mut u8, usize) -> i64, room: usize, words: impl FnOnce() -> String) -> Result<Vec<u8>> {
-    let mut buf = vec![0u8; room];
-    let n = check(call(buf.as_mut_ptr(), buf.len()), words)? as usize;
-    if n > room {
-        let said = format!("The answer of {n} bytes did not fit the {room} bytes given; the change was made.");
-        return Err(crate::error::status(crate::raw::EMUSEN_PLATFORM_IO, said));
-    }
-    buf.truncate(n);
-    Ok(buf)
-}

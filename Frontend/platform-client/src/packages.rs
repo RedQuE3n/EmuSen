@@ -4,7 +4,7 @@
 //! answer cross as `serde_json::Value`.
 
 use crate::error::Result;
-use crate::out::{ANSWER_ROOM, json, once, string, text};
+use crate::out::{json, string, text};
 use crate::platform::Platform;
 use serde_json::Value;
 
@@ -48,18 +48,16 @@ impl Platform {
         json("package_index", &bytes)
     }
 
-    /// What `at` opens as: `{"game", "package", "moved"}`; a moved game's manifest is rewritten. Asked once, since a
-    /// second call would find the manifest already rewritten and say nothing moved.
+    /// What `at` opens as: `{"game", "package", "moved"}`; a moved game's manifest is rewritten, once, the library
+    /// answering the fill from the work its length query did.
     pub fn package_resolve(&self, at: &str, roots: Roots) -> Result<Value> {
         let (l, ll) = text(roots.library);
         let (p, c) = (roots.packages, roots.compressed);
-        let bytes = once(
-            |o, len| unsafe {
+        let bytes = self
+            .read(|o, len| unsafe {
                 self.lib.emusen_galaxia_package_resolve(at.as_ptr(), at.len(), p.as_ptr(), p.len(), l, ll, c.as_ptr(), c.len(), o, len)
-            },
-            ANSWER_ROOM,
-            || self.last_error(),
-        )?;
+            })?
+            .unwrap_or_default();
         json("package_resolve", &bytes)
     }
 }

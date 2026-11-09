@@ -1,10 +1,11 @@
 //! A game's page in the program (EmuSen_Qt.md §7.8): X on the grid opens it, the shoulders step its five sections, an
 //! engine stepped is saved, Y turns the heart, B returns to the grid; the five states Mistress recorded are held at the
-//! gate's sizes and recorded.
+//! gate's sizes and recorded; and the hero's clip, a clip this test writes itself, plays after the still, stops when
+//! the page loses the focus, and a game with no clip keeps its still.
 
 mod common;
 
-use common::{draw_covers, hold, sandbox, wait_for};
+use common::{draw_covers, hold, sandbox, wait_for, write_clip};
 use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
 use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS, SAVE_RESUME_STATE, SAVE_STATE};
@@ -67,8 +68,13 @@ fn section(scene: &mut Scene<'_>, index: i32) {
     scene.wait(200);
 }
 
+/// The hero's colour a little under its top, where the OnArt gradient is still clear.
+fn hero_colour(scene: &mut Scene<'_>) -> emusen_kit_core::tokens::Colour {
+    scene.colours_at(&[(640.0, 30.0)])[0].expect("the hero drawn")
+}
+
 #[test]
-fn qt_7_8_a_games_page_opens_from_the_grid_and_holds_its_states() {
+fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip() {
     let world = sandbox("qt-app-game-page", &[("SNES", &format!("{COBALT}.sfc")), ("SNES", &format!("{LANTERN}.sfc"))]);
     let platform = Platform::load(library()).unwrap();
     let rom = world.root.join("Roms/SNES").join(format!("{COBALT}.sfc"));
@@ -96,7 +102,10 @@ fn qt_7_8_a_games_page_opens_from_the_grid_and_holds_its_states() {
         .map(|(i, folder)| (media.join("snes").join(folder).join(format!("{COBALT}.png")), (512, 448), i, format!("snes {folder}")))
         .collect();
     draw_covers(&mut harness, &world.root, &pictures, |_| {});
+    write_clip(&media.join("snes/videos").join(format!("{COBALT}.mkv")));
     set_setting(&platform, "EsdeMediaDirectory", serde_json::json!(media.to_str().unwrap()));
+    // The recordings hold a still: the clip is off while the states are held, and on for the clip's own part.
+    set_setting(&platform, "PlayVideos", serde_json::json!(false));
 
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
@@ -121,6 +130,7 @@ fn qt_7_8_a_games_page_opens_from_the_grid_and_holds_its_states() {
     let facts = scene.property("pageModel", "facts");
     assert!(facts.ends_with("1994 · Lantern Works · Publisher P · Never played"), "{facts}");
     assert!(scene.property("pageModel", "words").starts_with("Cobalt Harbor is a game invented"));
+    assert_eq!(scene.property("pageModel", "clip"), "", "Play videos off: no clip");
     let mut report = Vec::new();
     // Right from Play is Resume; Right steps Resume through the four states, then reaches Favourite.
     let help = |s: emusen_qt_models::help::Screen| emusen_qt_models::help_model::shown_screen(s).to_string();
@@ -162,6 +172,41 @@ fn qt_7_8_a_games_page_opens_from_the_grid_and_holds_its_states() {
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Grid", 1000);
 
+    // With Play videos on: the still first, then the clip over it after the poster's delay, drawn on this backend.
+    set_setting(&platform, "PlayVideos", serde_json::json!(true));
+    scene.pad(UiButton::Screensaver);
+    wait_for(&mut scene, "screens", "shown", "Page", 2000);
+    for _ in 0..100 {
+        if !scene.property("pageModel", "clip").is_empty() {
+            break;
+        }
+        scene.wait(50);
+    }
+    assert!(scene.property("pageModel", "clip").ends_with(".mkv"));
+    let still = hero_colour(&mut scene);
+    assert!(still.g > 150 && still.r < 150, "the still first, the screenshot's green: {still:?}");
+    wait_for(&mut scene, "videoPlayer", "playbackState", "PlayingState", 4000);
+    wait_for(&mut scene, "pageClip", "showing", "true", 4000);
+    assert!(scene.property("videoFrames", "frames").parse::<i32>().unwrap_or(0) > 0, "the frames drawn by the kit's sink");
+    // The fade over the still done.
+    scene.wait(1200);
+    let clip = hero_colour(&mut scene);
+    assert!(clip.r > 150 && clip.b > 150 && clip.g < 110, "the clip's magenta over the still: {clip:?}");
+
+    // B: the page loses the focus, and the clip stops.
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "screens", "shown", "Grid", 1000);
+    wait_for(&mut scene, "videoPlayer", "playbackState", "StoppedState", 2000);
+
+    // The other game has no clip: its page keeps its still, and nothing plays.
+    open_page(&mut scene, 1);
+    assert_eq!(scene.property("pageModel", "title"), LANTERN);
+    assert_eq!(scene.property("pageModel", "clip"), "");
+    scene.wait(2500);
+    assert_eq!(scene.property("videoPlayer", "playbackState"), "StoppedState");
+    assert_eq!(scene.property("videoFrames", "frames"), "0");
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "screens", "shown", "Grid", 1000);
     scene.assert_quiet();
     assert!(report.is_empty(), "{}", report.join("\n"));
 }

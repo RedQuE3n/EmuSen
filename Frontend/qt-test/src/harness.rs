@@ -40,7 +40,12 @@ pub const CLOCK: (&str, &str) = ("clock", "time");
 const STRICTLY_ENFORCE_RANGE: f64 = 2.0;
 
 /// Messages Qt logs of its own accord that no code of ours causes, each with its reason (EmuSen_Kit.md §7.14).
-pub const QT_INTERNAL: [(&str, &str); 0] = [];
+pub const QT_INTERNAL: [(&str, &str); 2] = [
+    // Qt Multimedia converting a clip's frame to a picture where there is no RHI, the software backend's path (EmuSen_Kit.md §7.48).
+    ("No RHI backend. Using CPU conversion.", "Qt Multimedia on the software backend"),
+    // QtCore's, once Qt Multimedia starts in a process whose application was made on a test runner's thread; the program makes it on main.
+    ("QApplication was not created in the main() thread", "the test runner's thread"),
+];
 
 /// The sizes the gate runs at (EmuSen_Interface.md §24.7): 1280 × 800, a Steam Deck–class size kept as a fit size; the
 /// handheld's own 1920 × 1200 (a Legion Go S, decided 2026-11-08); 1920 × 1080, 1280 × 720 and 3840 × 2160.

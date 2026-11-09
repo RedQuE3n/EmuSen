@@ -733,6 +733,51 @@ swapchain: a render pass after the present (`WRITE_AFTER_PRESENT`) and a barrier
 The same test without the grab gives none. The tests therefore require no finding up to the grab and after it, and around
 the grab allow only those two (`assert_qt_grab_only`), which name `vkQueuePresentKHR` and `vkAcquireNextImageKHR`.
 
+#### 1.8.9 The clip's decoder: Qt Multimedia over the system's FFmpeg **[M 2026-11-09]**
+
+A game's page plays its clip on the hero (decided 2026-11-09 by the tester, for stage 5; `EmuSen_Interface.md` §5.9),
+and the ES-DE engine's `video` element (§4.2, §11 Q5) is the same need: a short gameplay clip, decoded and drawn in a
+rectangle, looped, usually silent. One decoder serves both if it lives in the kit, which both already import.
+
+**What the clips are.** ScreenScraper's `video-normalized` files, the ones EmuSen's scraper fetches and ES-DE's themes
+ask for (`EmuSen_BigPicture.md` §5.5): MP4 with H.264 video and AAC sound, small and of low resolution. The media
+store's lookup also takes `.mkv`, `.avi`, `.wmv`, `.mov` and `.webm` for a video (`Platform/scrape/src/kinds.rs`), the
+names a player's own ES-DE media folder may hold.
+
+**The candidates.**
+
+| | Licence | Codecs here | Software backend | New to the tree |
+|---|---|---|---|---|
+| (a) Qt Multimedia from QML alone: `MediaPlayer` into `VideoOutput` | Qt Multimedia LGPL-3.0 or GPL-3.0; FFmpeg as the system builds it | everything the system's FFmpeg decodes | plays, **draws nothing** | a runtime QML import |
+| (b) as (a), with a sink of the kit's own drawing the frames where `VideoOutput` cannot | the same | the same | drawn | the Multimedia module linked by the kit, and its headers to build |
+| (c) a Rust decoder (`ffmpeg-next` over libav*) into a texture | FFmpeg's; the crate's MIT/Apache | the same | drawn | a crate, FFmpeg's headers, the most code |
+| (d) LibVLC | LGPL-2.1+ | VLC's own | through a callback, as (c) | bindings, a second media stack |
+
+Measured on the desktop on 2026-11-09: `qt6-qtmultimedia` 6.11.2 (Fedora; `LGPL-3.0-only OR GPL-3.0-only WITH
+Qt-GPL-exception-1.0`) is installed; its FFmpeg plugin (`plugins/multimedia/libffmpegmediaplugin.so`) links the system's
+`libavformat.so.62`, `libavcodec.so.62`, `libswscale.so.9` and `libswresample.so.6`, FFmpeg 8.1.3, here RPM Fusion's
+build, which Qt reports as "FFmpeg version 8.1.3 GPL version 3 or later" (configured `--enable-gpl --enable-version3
+--enable-libx264 --enable-libopenh264`). Fedora's own build, `ffmpeg-free`, is LGPL and decodes H.264 through Cisco's
+OpenH264, which is also installed. A clip of 64 × 48 frames written by a test as a YUV4MPEG2 stream played through
+`MediaPlayer` on both scene-graph backends (state Playing, the position advancing), but under the software adaptation
+(`QT_QUICK_BACKEND=software`, and the `offscreen` platform, which is always software) `VideoOutput` drew nothing: a grab
+of the window was the colour behind it, on both `grabToImage` and `QQuickWindow::grabWindow`. The software backend is the
+test tier (§8.1) and the fallback where there is no Vulkan (§1.8), so (a) alone fails "drawn on both backends".
+
+**Decided 2026-11-09 by the tester: (b).** `EmuSen.Kit.VideoTile` (`EmuSen_Kit.md` §7.48): `MediaPlayer` decodes;
+on an RHI backend `VideoOutput` draws, Qt's own path, with no copy through the CPU; on the software backend the kit's
+`VideoFrames` (`kit-qt/cpp/video_frames.*`, the Multimedia module's `QVideoSink`, each frame converted by
+`QVideoFrame::toImage` and drawn as an image node) draws the same frames. The decoder is Qt's and the system's; nothing
+was downloaded, and no decoder of our own was written. Building the kit now needs `qt6-qtmultimedia-devel` (installed by
+the tester on 2026-11-09). The ES-DE engine's `video` element takes the same `VideoTile` when it is mapped (§4.3), so
+one decoder serves the page and the themes, and a theme never imports QtMultimedia (§3.5's sandbox refuses it).
+
+**What is not settled, and where it goes.** The licence of what is bundled (§9.2): a bundle carrying this desktop's
+FFmpeg carries a GPL build and owes its source; an LGPL build would be `ffmpeg-free`; the choice is stage 7's. The
+handheld: whether SteamOS's image carries Qt Multimedia and which FFmpeg it links is **not measured** (owed with the
+handheld's next measurement, §9.3); the AppImage bundles Qt's Multimedia plugin either way. The cost of decoding there is
+`EmuSen_BigPicture.md`'s P5 (under 5% of one core for a `video-normalized` clip), still to be measured on the Legion Go S.
+
 ### 1.9 Homes for the front-end logic still in C#
 
 The survey of the remaining C# (2026-11-07) lists front-end logic that needs a Rust owner. Each is given one layer here,
@@ -3690,13 +3735,14 @@ reverted:
 - the preview's height read from its items' `visible`, which is false while the slot is empty, so it stays empty (the
   meter was never drawn until this was found): the program's test, the meter not drawn.
 
-### 7.8 Stage 5, piece G: a game's page (2026-11-09)
+### 7.8 Stage 5, piece G: a game's page and its clip (2026-11-09)
 
 `EmuSen_Interface.md` §2.5, §4 screen 3, §5.9, §18.2; the oracle is Mistress's recordings `GamePage`, `GamePageStates`,
 `GamePageOptions`, `GamePageMedia` and `GamePageDetails` (1280 × 800 and 1920 × 1200); behaviour and words from
 Mistress's `Pages/GamePage`, `GamePageHost`, `Views/GamePageView` and `MainWindow.GamePage`.
 
 **Decided 2026-11-09:** the page's model is `GamePageModel`; `GameModel` stays the grid's list (§1.2 corrected).
+**Decided 2026-11-09 by the tester:** the page plays the game's clip in stage 5, not a still alone; the decoder is §1.8.9's.
 
 **The model** (`emusen-qt-models`, one job a file). `game_page.rs`, plain Rust: the `GamePageSource` a read and a change
 go through (the client crates, or a test's fake), one `Read` of the game, and `GamePage` over it: the facts line (console
@@ -3714,8 +3760,8 @@ by `SAVE_PICTURE`; when it was saved is its file's time), which was enough: no f
 engines are the console's from the systems table, named from the runtime's cores and stored as the game's
 `altemulator` edit (Mistress's `SetEngine`); the profiles are Endymion's, by the game's file name; the cheats are the
 game's saved list (`emusen_galaxia_cheat_game_list` and the cheat file model); the crop is offered where Serenity's
-catalogue gives the console a television's screen, and reads `This game's` where games.db holds a crop. The clip's
-file is read too, for the hero. `game_page_model.rs`, the bridge: `GamePageModel`, the content as a list model
+catalogue gives the console a television's screen, and reads `This game's` where games.db holds a crop. Settings ▸
+Display ▸ Play videos off gives no clip. `game_page_model.rs`, the bridge: `GamePageModel`, the content as a list model
 with the roles the kit's page frame reads (`label`, `value`, `line`, `picture`, `steps`, `opens`, `marked`, `key`) and
 the rest as properties, read off the GUI thread over clients it opens once and keeps; and `PageActionModel`, the
 actions as the frame's action list, from `GamePageModel.actions` as plain data, as `GameModel` takes its games. The help
@@ -3729,6 +3775,11 @@ hand, then the page) open the page on the game in hand, which the theme's focus 
 theme's Home now names its Continue and shelf games too); B returns to the screen it was opened over, or under a card to
 the library's screen; Start goes to the library's screen; a game started goes to the game.
 
+**The clip** (§1.8.9; `EmuSen_Kit.md` §7.48): the hero is a `VideoTile` whose still is the hero's picture; while the page
+holds the focus the clip plays after the poster's delay and fades in, looped; when the page loses the focus (B, Start,
+a card over it) it stops and the still stands alone. It is silent: §5.9 gives the hero no sound, and no setting gives it
+one. Reduced motion and Play videos off keep the still.
+
 **Compared with Mistress** (measured on 2026-11-09). The Qt recordings were read by WiseMan's `SpecDocument.Parse`
 through `Another_frontend_s_recordings_match_these_within_the_tolerances` (the WiseMan build of the same day, no
 build). As in §7.7, `InterfaceSpec.Compare` matches by name, and the kit's parts carry the kit's names (`pageTitle`,
@@ -3738,6 +3789,8 @@ none, so it lists them missing and extra. The parts were then compared under tha
 by their words), two design units the tolerance, at both sizes: the strip, the actions' row, the cover's place and
 height, the Overview's words and picture, every row of Details, the States' and Media's tiles' pictures stand at
 Mistress's places with her words. **Differences that remain, each for the tester:**
+- The clip: the recordings hold a still, as Mistress's page never played one. Here the states were held with Play videos
+  off, so they hold the still too; the clip is held by the test below.
 - The cover is 240 wide where Mistress's is 201: the systems table gives the Super Nintendo a landscape box (`cover_aspect`
   0.73, height over width), so the kit's frame draws it at its widest, 240; Mistress's fixture found no descriptor for
   its game and fell back to 3:4. The console's name reads `Super Nintendo` (the table's display name) where hers reads
@@ -3777,10 +3830,18 @@ backend): a scratch tree with two Super Nintendo games, one with Mistress's fixt
 states saved by Galaxia's paths, pictures drawn by the harness in the ES-DE media folder and a clip; X on the grid opens
 the page on its Overview with the facts and the description; Right reaches Resume, steps it, and reaches Favourite; the
 five states held at the gate's five sizes (fit, pad reach, pointer reach, no chrome, names, palette, contrast) and
-recorded; Y turns the heart and saves it; B returns to the grid. Nothing logged. Seeded faults, each reverted:
+recorded; Y turns the heart and saves it; B returns to the grid. Then with Play videos on, **the clip**: the test writes a
+clip itself, 64 × 48 frames of one colour (magenta) for two seconds as a YUV4MPEG2 stream, the simplest a test can write
+by hand, under the `.mkv` name the media store looks for (FFmpeg finds the format by its content), and never a game's
+media; the hero shows the still (the screenshot's green) first, then the player plays, the kit's sink draws frames, and
+the hero shows the clip's magenta; B, and the player stops; the other game, with no clip, keeps its still and plays
+nothing; nothing logged but the two messages Qt Multimedia gives on the software tier, now in the harness's list of
+Qt's own (`QT_INTERNAL`). The clip on Vulkan is owed to `acceptance.rs` (a GPU run). Seeded faults, each reverted:
 - Resume stepping past either end, so the focus never moves on: the models' Resume test;
 - the automatic state after the first slot rather than the last in use: the models' States test;
 - B on the page going to the library's screen rather than where it was opened: the models' routes test;
+- the clip left playing when `playing` turns false: the program's test, the player still playing after B;
+- the kit's sink drawing nothing on the software backend: the program's test, the hero still the screenshot's green;
 - the actions' list left with no current item when its model fills: the program's test, Right from Play reaching
   nothing.
 
@@ -3897,6 +3958,11 @@ On the distribution's Qt: Fedora 44's 6.11.2 (`qt6-qtbase-devel`, `qt6-qtdeclara
   every request still gated by the player's action. On SteamOS the Flatpak is what Discover installs and updates, which
   is the route a player without a terminal has; the AppImage is the route for a player who wants one folder. Building the
   Flatpak is stage 7 and needs its own go; nothing of its SDK is installed now.
+- **FFmpeg in a bundle** (noted 2026-11-09, §1.8.9). Qt Multimedia decodes through the system's FFmpeg. A bundle that
+  carries the desktop's FFmpeg carries RPM Fusion's GPL-3.0-or-later build (with x264), which a GPL-3 program may ship
+  with its source offered; an LGPL build would be Fedora's `ffmpeg-free`, which decodes H.264 through OpenH264. Which one
+  the AppImage carries, and whether the Flatpak takes the runtime's codecs extension, is **left open for stage 7**. Qt
+  Multimedia on the handheld (SteamOS's image) is **not measured** and is owed.
 - **Not SteamOS's own Qt.** Measured 2026-11-07 on the handheld (SteamOS 3.9.5, build 20261023.100): `qt6-base`
   6.11.1-1 and `qt6-declarative` 6.11.1-3 in `/usr/lib`, with the `wayland` and `xcb` platform plugins and the Basic,
   Fusion, Material, Universal, Imagine and FluentWinUI3 styles; glibc 2.43; ICU 78.3 (the desktop's Qt links ICU 77).
@@ -4543,6 +4609,8 @@ end. The questions are kept as asked, with their recommendations, as the record 
    Rust dependency on the runtime crates? Recommended: the headers, for the audit and the interchangeable front ends.
 5. **[decision] Video in themes.** Qt Multimedia with an LGPL FFmpeg bundled, or a Rust decoder into a texture?
    Recommended: Qt Multimedia, behind the kit's `VideoTile` so a theme never imports it.
+   *Built 2026-11-09 for the game's page, over the system's FFmpeg, with a sink of the kit's own on the software backend
+   (§1.8.9); the licence of the FFmpeg bundled is stage 7's (§9.2).*
 6. **[decision] Lottie animations in ES-DE themes.** Qt's Lottie module is GPL-only in the open edition; a Rust Lottie
    renderer (rlottie bindings or a pure-Rust crate) into a texture is the alternative. Recommended: defer; no watched
    theme uses one (`EmuSen_BigPicture.md` §3), and the corpus will say when it matters.

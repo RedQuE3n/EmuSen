@@ -4918,6 +4918,36 @@ Module {
         }
     }
     Component {
+        file: "video_frames.h"
+        lineNumber: 11
+        name: "VideoFrames"
+        accessSemantics: "reference"
+        prototype: "QQuickItem"
+        exports: ["EmuSen.Kit/VideoFrames 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "videoSink"
+            type: "QVideoSink"
+            isPointer: true
+            read: "videoSink"
+            index: 0
+            lineNumber: 14
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "frames"
+            type: "int"
+            read: "frames"
+            notify: "framesChanged"
+            index: 1
+            lineNumber: 15
+            isReadonly: true
+        }
+        Signal { name: "framesChanged"; lineNumber: 25 }
+        Method { name: "clear"; lineNumber: 22 }
+    }
+    Component {
         file: "current.cxxqt.h"
         lineNumber: 15
         name: "ViewCurrent"

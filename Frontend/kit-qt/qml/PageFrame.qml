@@ -6,6 +6,10 @@ import EmuSen.Kit as Kit
 Kit.Frame {
     id: root
     property url hero
+    // The hero's clip, which plays over the hero's picture while `clipPlaying` (Kit.VideoTile); silent unless `clipMuted` is false.
+    property url clip
+    property bool clipPlaying: false
+    property bool clipMuted: true
     property url cover
     // The cover's width per unit of its height: 0.75 for a 3:4 box.
     property real coverAspect: 0.75
@@ -27,6 +31,7 @@ Kit.Frame {
     readonly property alias actionView: actionList
     readonly property alias tileView: tileList
     readonly property alias rowView: rowList
+    readonly property alias videoTile: heroClip
     // The room a focused tile's ring takes outside it.
     readonly property real ringRoom: Kit.Tokens.ringOffset + Kit.Tokens.ringThickness
     signal acted(int index)
@@ -59,11 +64,14 @@ Kit.Frame {
             height: places.hero.height
             color: Kit.Tokens.voidFill
             clip: true
-            Image {
+            Kit.VideoTile {
+                id: heroClip
+                objectName: "pageClip"
                 anchors.fill: parent
-                source: root.hero
-                fillMode: Image.PreserveAspectCrop
-                asynchronous: true
+                still: root.hero
+                source: root.clip
+                playing: root.clipPlaying
+                muted: root.clipMuted
             }
             Rectangle {
                 anchors.fill: parent

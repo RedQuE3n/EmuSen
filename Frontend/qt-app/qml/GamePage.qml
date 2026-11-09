@@ -33,6 +33,9 @@ Kit.NormalizedCanvas {
         helpSpacing: 40
         helpGlyphGap: 10
         hero: screen.page.hero
+        clip: screen.page.clip
+        // The clip plays while the page holds the focus, and stops when it loses it.
+        clipPlaying: screen.visible && frame.activeFocus
         cover: screen.page.cover
         coverAspect: screen.page.coverAspect
         coverName: screen.page.coverName

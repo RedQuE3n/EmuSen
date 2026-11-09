@@ -1760,6 +1760,19 @@ two types, added last to the registry's qmldir (rule Q, additions only), and `Em
 Proof: the program's card pane and every cover of the reference package are these types, so the stage 1 and stage 2
 recordings (`qt-app/tests/cards.rs`, the acceptance test) hold them to the accepted renders unchanged.
 
+**The generated card's title** (2026-11-08) is drawn in `overArt` and the kit's Barlow (`Barlow-Regular`, the body face,
+loaded by the tile). It was `textStrong` in the system face: near-black on the card's hsl(h, 45%, 32%) in the light
+variant, and not the design's face in either. White on the card's head, its lightest end, is 4.75:1 at
+the lightest hue and up to 12.0:1 at the darkest (computed over the 360 hues), and more toward the foot, where the title
+stands. Drawn smaller than its box, the title keeps its size on the screen (decided 2026-11-09, over dropping the title,
+so a card always names its game): `drawnScale`, the tile's own `scale` unless a theme that scales an ancestor sets it,
+divides the title's size when under 1. Orrery draws a far cover at 0.8, where the title's capitals measured 11.31 at
+1280 × 720 against the floor's 11.64. `theme-qt/tests/qml.rs` holds the title's ink and face in both variants, and its
+capitals on the screen the same for a plain tile, a tile scaled 0.8 and a tile in an item scaled 0.8 that says so. Re-recorded on the RX 6800 on
+2026-11-09 (the acceptance test and `cards.rs`, both passing before and after): of 100 pictures only the Pause Card's
+Change Disc page changed for the card, whose disc has no picture (its title now Barlow and white, at every size); Home
+and the Saved page changed only in their clocks' minutes.
+
 ### 7.30 Orbits: groups of bodies on nested half-ellipses (stage 3, the reference theme's Choose a console; 2026-11-08)
 
 **Decided 2026-11-08: an extension of the kit, a new type beside `PlanetLayout`.** The reference theme's Choose a console

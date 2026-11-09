@@ -134,3 +134,6 @@ and the console screens' maker groups are added, each after the members it joins
   faded edge, soft and the same on every backend; the software backend draws no shader effect and so no `MultiEffect`,
   and `MultiEffect`'s mask cuts sharply on the GPU (`EmuSen_Kit.md` §7.35). Meridian's rail faded through a `MultiEffect` kept off on the software backend,
   where its rows were cut instead; every theme that fades a scroller needs the same. Additions only, in both registries.
+- **`CoverTile.drawnScale`** (2026-11-09): the scale a cover is drawn at, the tile's own `scale` unless set by a theme
+  that scales an ancestor; the generated card's title keeps its size on the screen under it, so it stays at or above
+  the legibility floor (`EmuSen_Kit.md` §7.29). Found by Orrery's far covers, drawn at 0.8.

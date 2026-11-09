@@ -928,6 +928,30 @@ finding "a declined place drawn as if offered" is gone at every size, its words 
 §7.38); at 80% it came back at all five sizes (a seeded fault, reverted). The light variant kept it until its words
 turned light (below).
 
+**The light variant: the world stays dark** (decided 2026-11-09 by the tester). In light, the world, Home's and the grid's
+night sky, stays dark and the words drawn on it turn light; only the cards and panels go light. The words on the world
+(Home's status line, the wordmark, RECENT and the focused cover's name; the grid's path, heading, count, neighbours and the
+focused game's name and facts) take the dark variant's inks by day, through one part, `parts/Night.qml` (`textStrong`
+#EEEEF0, `text` #D4D4D4, `muted` #8D8D91 by day, the kit's own tokens by night), the one place the theme copies the
+dark variant's colours, since a theme sees only the variant in force. Continue's panel and the places' tiles are panels:
+dark glass at 55% and 50% by night as before, light at 94% by day, their words the variant's own. The light variant had
+failed contrast almost everywhere (S7's survey of 2026-11-09: 530 lines on Home and 350 on the grid, words at 1.04 to
+3.1:1 over the night). Choose a console keeps its paper by day (`EmuSen_Interface.md` §24.4), which held its words
+already. Over the 120 consoles in the dark variant, an orbit's maker other than the focused one was drawn at 70% and read
+3.44:1; it is now told apart by ink, `muted` beside the focused orbit's `text`, at full opacity. With no game suspended,
+the top's title and facts stand on the world beside the shelf's game rather than on Continue's panel, and take the
+world's inks; the shelf's caption moved down 6 units, clear of the focused cover's ring, which crossed it at 1280 × 720.
+
+Proof, measured 2026-11-09 offscreen on the software backend: `theme-audit --states all` over the package, both variants,
+every size: no contrast finding left (S7's survey: 1,309 lines, of them 530 on Home and 350 on the grid in light, and the
+maker labels' in dark). What stays is the fit rule's, as before and in both variants alike: a place's status line cut with
+an ellipsis at 1280 × 800 ("Game packa…"), the grid's neighbours past their row, and on Choose a console the focused
+console's name cut at the foot and, over 120 consoles, counts and engine tags under the capitals' floor at 1280 × 720.
+Two seeded faults, each reverted: `Night` reading the variant's own tokens by day (30 low-contrast lines in `nogame`'s
+light variant); Continue's panel at 55% by day (its heading and facts low at every size). The acceptance test passes with
+the change (the maker labels were its 3.44:1). The side-by-sides, before left and after right, light, 1280 × 800 (Home,
+Home with no game, the grid, the grid empty, Choose a console): `~/.cache/emusen/tmp/qt-s3-kg/compare/*-side.png`.
+
 **Proof, measured 2026-11-08.** The acceptance test (Vulkan on the RX 6800 in its own compositor, the virtual pad, the
 canvas's library) passed on WiseMan d5edac3e5 with the old screens and on the package, and its 90 grabs, 18 states
 (Home, Home with nothing left, Choose a console, the grid, the List card, the Home card's two pages, the Pause Card's

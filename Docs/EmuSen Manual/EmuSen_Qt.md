@@ -1165,6 +1165,10 @@ consoles (decided 2026-11-08, so a theme survives cores being added: 40 under on
 with every element held to the pointer and the pad's reach measured by a sweep that must hear each console's name on the focus,
 inside the window.
 Anything Qt logs while a screen is shown is a finding. The kinds, the sweep and the library are in `man theme-check`.
+**The Games screen is shown a section** (2026-11-08): `theme-audit` feeds `Browse` as the program's `showBrowse` does,
+through `browse::facts_of` (moved from `qt-app` into `emusen-theme-qt`, its one owner), with the first console's section or
+the one `--section KEY` names; until then every theme's grid was judged and recorded empty.
+
 **Data may elide, fixed words may not** (decided 2026-11-08). kit-core's audit `Text` carries `data`, set by
 `Item::mark_data` from what a reader hears; `theme-audit` marks every text that is not one of the program's fixed words
 (`words::is_fixed`), so a title, a console's name or a line built from them may elide as a design's limits say, while a

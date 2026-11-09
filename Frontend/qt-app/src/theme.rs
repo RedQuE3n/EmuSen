@@ -12,7 +12,7 @@ use emusen_qt_models::library::LibraryView;
 use emusen_qt_models::library_model::qobject::{LibraryModel, QAbstractListModel};
 use emusen_qt_models::{help, screens, words};
 use emusen_theme_qt::actions::{Action, ActionSink};
-use emusen_theme_qt::browse::BrowseFacts;
+use emusen_theme_qt::browse::facts_of;
 use emusen_theme_qt::device::DeviceFacts;
 use emusen_theme_qt::host;
 use emusen_theme_qt::session::SessionFacts;
@@ -190,29 +190,6 @@ unsafe fn model<T: Upcast<QAbstractListModel>>(object: *mut cxx_qt::QObject) -> 
     unsafe { T::from_base_ptr(object as *const QAbstractListModel) }
 }
 
-/// The section's facts as Choose a console's row for its key holds them; the shoulders' neighbours are the rows either
-/// side, and the count is the search's while one narrows the section.
-pub fn browse_facts(view: &LibraryView, section: &str, count_line: &str, focus_row: i32, open: (bool, bool, bool), searched: bool) -> BrowseFacts {
-    let rows = view.rows.rows();
-    let at = rows.iter().position(|r| r.key == section);
-    let row = at.map(|i| &rows[i]);
-    let beside = |by: usize| at.filter(|_| rows.len() > 1).map(|i| rows[(i + by) % rows.len()].name.clone()).unwrap_or_default();
-    BrowseFacts {
-        section: section.to_owned(),
-        heading: row.map(|r| r.heading.clone()).unwrap_or_default(),
-        world: row.map(|r| r.world.clone()).unwrap_or_default(),
-        hue: row.map_or(0.0, |r| r.hue),
-        count_line: if count_line.is_empty() { row.map(|r| words::games(r.count)).unwrap_or_default() } else { count_line.to_owned() },
-        previous: beside(rows.len().saturating_sub(1)),
-        next: beside(1),
-        focus_row,
-        searching: open.0,
-        typing: open.1,
-        list_open: open.2,
-        searched,
-    }
-}
-
 /// What the window does for an action: each of the theme's `Actions` as one of the feed's signals.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Carried {
@@ -373,7 +350,7 @@ impl qobject::ThemeFeed {
         let (Some(games), Some(library)) = (unsafe { section.games.as_ref() }, self.library()) else { return };
         let open = (section.searching, section.typing, section.list_open);
         let searched = !games.search().is_empty();
-        let facts = browse_facts(library.view(), &section.key, &games.count_line().to_string(), *games.focused(), open, searched);
+        let facts = facts_of(library.view(), &section.key, &games.count_line().to_string(), *games.focused(), open, searched);
         let rows = view::games(library.view(), games.rows(), words::now());
         let Some(engine) = self.engine() else { return };
         if let Some(mut browse) = host::browse(engine) {

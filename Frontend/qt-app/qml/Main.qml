@@ -156,10 +156,13 @@ Window {
         objectName: "chosenTheme"
         anchors.fill: parent
         active: program.theme.length > 0 && program.theme !== ReferenceTheme.folder
+        // A Loader is a focus scope: it takes the focus while one of the theme's screens is to hold it.
+        focus: program.themeHost?.takesFocus ?? false
         sourceComponent: ThemeHost {
             objectName: "theme"
             visible: !program.gameShown
-            folder: program.theme
+            // Loaded once the host is whole, so its connections hear the new engine and feed it the models as they stand.
+            folder: chosenTheme.status === Loader.Ready ? program.theme : ""
             coverStores: program.coverStores
             screens: screens
             library: library

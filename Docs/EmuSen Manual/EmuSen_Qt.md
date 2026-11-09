@@ -1053,7 +1053,7 @@ theme (S); a themed Games screen opens no List card until `Actions.openListCard`
 window holds two: the reference (`ReferenceTheme.folder`) and the chosen theme (`--theme`, `EMUSEN_THEME`, else the
 settings' `EmuSenTheme` resolved as §3.8 says). The chosen theme's host is a `Loader`'s item (`chosenTheme`), made only
 while a theme other than the reference is chosen and destroyed, engine and all, when the reference is chosen again
-(§3.8, §9.3.7). The
+(§3.8, §9.3.5). The
 reference's slot for a role is made only where the chosen theme does not draw it (`homeWanted` and the others), so a
 role the chosen theme omits, and every role once it fails, is the reference's, as §3.5.1 had it with the old screens. A
 slot under a card (Home under the Home card, the grid under the List card) is disabled and declares `backdrop`, as the
@@ -3470,6 +3470,14 @@ third is 19 MiB higher. **Not traced:** a profile of the cause was not made; the
 reference theme's package, but that is not proved here. A trace would count the engines' items and the memory of the
 host's engine at idle, which needs the harness's counters rather than these external grabs. No change was made to
 qt-s3-r.
+
+**The cause, read from the host (2026-11-08, §3.8).** With no theme chosen the chosen theme's host never made an engine:
+`ThemeHost` makes its sandbox only when its folder is set, and the folder was empty (`host.rs`, `reload`: an empty folder
+loads nothing). So both builds measured here ran one sandboxed engine at most, and qt-s3-r's is the reference's own: the
+increase is the cost of drawing the reference as a package in an engine of its own (§3.5.2), not a second engine for a
+theme nobody chose. The Themes tab's change makes the chosen theme's host a `Loader`'s item, made only while a theme other
+than the reference is chosen; that removes the idle host's items, feed and connections but no engine, so the gates were
+not run again for it (decided 2026-11-08).
 
 #### 9.3.6 The big screen's tests and gates on the handheld, with input inside the program **[M 2026-11-08]**
 

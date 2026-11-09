@@ -105,6 +105,9 @@ pub struct Text {
     pub ellipsis: bool,
     /// The words are the host's data (a title, a name, a line built from them), which may elide; a fixed word may not.
     pub data: bool,
+    /// The item's own box in the scene's units, unturned, where a turn makes its scene box another shape; None where the
+    /// scene box is its own. The words are measured along the item's own axes, so they are held to this box.
+    pub own: Option<(f64, f64)>,
 }
 
 /// What words are drawn in and what lies behind them, for the contrast rule (EmuSen_Kit.md §7.10).

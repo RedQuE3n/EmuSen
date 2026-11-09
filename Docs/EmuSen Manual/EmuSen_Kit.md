@@ -742,6 +742,13 @@ see: a star dimmer than 24 levels over the sky.
 - Words were measured in their item's units (`contentWidth`, `contentHeight`, the cap height) while boxes were in the
   scene's, so under the canvas's scale every text at 1280 × 720 ran past its box and every text at 3840 × 2160 read as
   too small. The dump multiplies them by the item's scale in the scene.
+- A turned Text was held to its scene box, the bounding box of its turned footprint, while its words were measured along its
+  own axes, so Constellation's RECENT chart label, turned -90°, ran past a box 23 wide at 1280 × 800 though its own box held
+  it whole (measured 2026-11-08). The dump now measures words by the scene's scale along the item's own axes and, for a
+  turned item, records its own box (`own`, width and height unturned in the scene's units); the word rules hold the words
+  to that box, and the placement rules (clip, panel, overlap, pointer) keep the scene box. Held to by `qt-test`'s
+  `tests/turned.rs`: a turned word that fits its own box passes and one longer than its own box is still caught; seeded,
+  the scene box in place of the own box failed the first.
 - A `TextField` is a `QQuickTextInput`, not a `QQuickControl`, so no text field was operable or held to pad reach. A
   text input or edit with `activeFocusOnTab` now is.
 - A focus scope was a container, not operable, whenever any child held its focus. A `PathView` gives its current card

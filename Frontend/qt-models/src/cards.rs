@@ -189,7 +189,7 @@ pub fn rows(media: &[Medium], schema: &[SettingRow], value: &dyn Fn(&str) -> Str
 /// The pane of a row: the mode's words, a slot's card, or what the row does.
 pub fn pane(media: &[Medium], row: &Row, schema: &[SettingRow], value: &dyn Fn(&str) -> String, console: &str, game: bool) -> crate::firmware::Words {
     let Some(m) = media.iter().find(|m| m.medium == row.medium) else { return Default::default() };
-    let said = |line: String, muted: Option<String>| crate::firmware::Words { lines: vec![line], muted: muted.into_iter().collect() };
+    let said = |line: String, muted: Option<String>| crate::firmware::Words { lines: vec![line], muted: muted.into_iter().collect(), tones: Vec::new() };
     match row.part {
         Part::Mode => mode_pane(m, schema, value, console),
         Part::Slot(_) if game => said(format!("{} is in {}.", row.value, row.label), Some("Left and Right choose another card; it goes in when the game next starts.".to_owned())),
@@ -207,6 +207,7 @@ pub fn mode_pane(m: &Medium, schema: &[SettingRow], value: &dyn Fn(&str) -> Stri
     crate::firmware::Words {
         lines: vec![format!("{mode}: every {console} game sees the same {noun}s when they are shared, as the console did; per game gives each game its own.")],
         muted: vec![format!("{} in the drawer", m.counted())],
+        tones: Vec::new(),
     }
 }
 

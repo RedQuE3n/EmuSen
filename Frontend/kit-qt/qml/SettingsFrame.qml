@@ -14,6 +14,8 @@ Kit.Frame {
     property list<string> trail
     // The chosen section, which the shoulders and a click change.
     property alias section: layout.section
+    // The tone of the focused row's sentence (Kit.Tones), which the host says by what the sentence says (EmuSen_Kit.md §7.52).
+    property int sentenceTone: Kit.Tones.Text
     // The pane's one slot: a picture, a meter or the two variants, drawn over the sentence.
     property alias preview: previewSlot.data
     // Further lines of the pane, under the sentence.
@@ -204,12 +206,12 @@ Kit.Frame {
                 height: previewSlot.childrenRect.height > 0 ? previewSlot.childrenRect.height + layout.slotGap - layout.lineGap : 0
                 visible: previewSlot.height > 0
             }
-            Text {
+            Kit.ToneText {
                 objectName: "settingsSentence"
                 width: parent.width
                 text: layout.sentence
                 wrapMode: Text.Wrap
-                color: Kit.Tokens.text
+                tone: root.sentenceTone
                 font.pixelSize: Kit.Tokens.fontBody
                 visible: text.length > 0
             }

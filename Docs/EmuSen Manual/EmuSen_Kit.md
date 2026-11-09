@@ -2797,3 +2797,14 @@ view and give that row the focus; `currentIndex: -1`, a constant binding, does n
 its current index again whenever it sets one, so the walk's focus is the only one: the trace then ended at 1. Nothing of
 the surface changed. Held to by the program's Consoles test (B on Firmware returns to the Firmware row); seeded, the
 clearing taken out failed it (the focus on row 0).
+
+### 7.52 The settings frame's sentence in a tone (stage 5, piece E; 2026-11-09)
+
+Asked for by Settings ▸ Consoles (`EmuSen_Qt.md` §7.7.E), decided by the tester on 2026-11-09: Mistress tinted a
+console's firmware line Success where nothing is wanting and Attention where every game needs a file that is not found,
+and that line is often the focused row's sentence, which the frame draws. `SettingsFrame` gained `sentenceTone`, a
+`Tones` value the host sets for the focused row (by what its sentence says, never a colour), `Text` unless set; the
+sentence is a `ToneText`. Weighed as `EmuSen_Qt.md` §1.3 asks, an extension of the frame: one property, no second job.
+Rule Q: an addition to `SettingsFrame` (qmldir), recorded in `CHANGELOG-kit.md`; nothing was removed or changed. Held to
+by the program's Consoles test (the Super Nintendo's `✓ No firmware needed` drawn in the dark variant's Success,
+#35A064); seeded, the tone left unbound failed it.

@@ -3,6 +3,7 @@
 //! Firmware page. The files are the runtime's `firmware_status` (EmuSen_Cores.md §3.11, §3.13); files that meet the
 //! same need, as a console's regional BIOSes, are one need. Nothing here knows a console.
 
+use crate::tools::Tone;
 use emusen_crystal_client::shapes::{FirmwareFile, FirmwareItem};
 
 /// One need of a console's firmware and the files that meet it.
@@ -95,6 +96,18 @@ pub fn line(needs: &[Need], needed_by_all: bool) -> String {
     format!("No {} of your own: the open replacement runs in its place", needs[0].word)
 }
 
+/// The tone of the firmware's line: Success where none is needed or one is found, Attention where every game needs one
+/// and none is found, as Mistress's `FirmwareLine` tinted it.
+pub fn line_tone(needs: &[Need], needed_by_all: bool) -> Tone {
+    if needs.is_empty() || !needed_by_all || needs.iter().any(|n| n.found().is_some()) {
+        Tone::Success
+    } else if needs.iter().any(Need::missing) {
+        Tone::Attention
+    } else {
+        Tone::Text
+    }
+}
+
 /// The Firmware row's value on a console's page.
 pub fn value(needs: &[Need], needed_by_all: bool) -> String {
     let found = needs.iter().any(|n| n.found().is_some());
@@ -139,12 +152,14 @@ pub fn short_status(need: &Need, needed_by_all: bool) -> String {
 pub struct Words {
     pub lines: Vec<String>,
     pub muted: Vec<String>,
+    /// Each plain line's tone, by what it says (a line past the list is in the text's tone).
+    pub tones: Vec<Tone>,
 }
 
 /// The pane of a console's Firmware row: what is found, and that it is recognised by content and never downloaded.
 pub fn pane(needs: &[Need], needed_by_all: bool, console: &str) -> Words {
     if needs.is_empty() {
-        return Words { lines: vec![format!("The {console} needs no firmware.")], muted: vec!["EmuSen never downloads firmware.".to_owned()] };
+        return Words { lines: vec![format!("The {console} needs no firmware.")], muted: vec!["EmuSen never downloads firmware.".to_owned()], tones: Vec::new() };
     }
     let mut muted = Vec::new();
     let absent = needs.iter().filter(|n| n.missing()).count();
@@ -152,13 +167,20 @@ pub fn pane(needs: &[Need], needed_by_all: bool, console: &str) -> Words {
         muted.push(format!("{} only some games use not found.", crate::words::counted(absent, "chip file", "chip files")));
     }
     muted.push("Recognised by its content in your firmware folders. EmuSen never downloads firmware; without your own, the open replacement runs most games.".to_owned());
-    Words { lines: vec![line(needs, needed_by_all)], muted }
+    Words { lines: vec![line(needs, needed_by_all)], muted, tones: vec![line_tone(needs, needed_by_all)] }
 }
 
 /// A need's pane: what runs, your own copy when found, else the open replacement; then what the runtime's overview says
 /// of each file: where it was found, why one of the wrong size is unused, what the open version changes.
 pub fn need_pane(need: &Need, needed_by_all: bool, console: &str, engine: &str, replaced: bool, overview: &[FirmwareItem]) -> Words {
     let files = need.file_names();
+    let tone = if need.found().is_some() {
+        Tone::Success
+    } else if need.missing() && needed_by_all {
+        Tone::Attention
+    } else {
+        Tone::Text
+    };
     let (said, muted) = if need.found().is_some() {
         let runs = if replaced { "runs the open replacement instead, as Open replacement says Always" } else { "uses it" };
         (format!("✓ Your own {} ({}) was recognised by its content, and {engine} {runs}.", need.name, need.recognised()), "EmuSen never downloads firmware.".to_owned())
@@ -175,7 +197,7 @@ pub fn need_pane(need: &Need, needed_by_all: bool, console: &str, engine: &str, 
             format!("Your own copy ({files}) is used once it is found. EmuSen never downloads firmware."),
         )
     };
-    let mut words = Words { lines: vec![said], muted: vec![muted] };
+    let mut words = Words { lines: vec![said], muted: vec![muted], tones: vec![tone] };
     for file in &need.files {
         let Some(item) = overview.iter().find(|i| i.file.eq_ignore_ascii_case(&file.file)) else { continue };
         if let Some(folder) = &item.found_in {
@@ -184,6 +206,8 @@ pub fn need_pane(need: &Need, needed_by_all: bool, console: &str, engine: &str, 
         if item.wrong_size {
             let folder = item.wrong_size_in.clone().unwrap_or_else(|| "EmuSen's folder".to_owned());
             words.lines.push(format!("{}: not used, the file in {folder} is not {} bytes.", file.file, crate::words::grouped(item.size as usize)));
+            words.tones.resize(words.lines.len() - 1, Tone::Text);
+            words.tones.push(Tone::Attention);
         }
         if item.found_in.is_none() {
             match item.effect.as_deref() {

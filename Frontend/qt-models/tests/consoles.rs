@@ -7,6 +7,7 @@ use emusen_kit_core::settings::RowKind;
 use emusen_qt_models::consoles::{self, ConsoleSource};
 use emusen_qt_models::pause::{self, Card, Page as PausePage};
 use emusen_qt_models::settings::{self, Model, Outcome, SettingsSource, SettingsView};
+use emusen_qt_models::tools::Tone;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
@@ -202,6 +203,9 @@ fn qt_7_7_e_every_console_is_listed_those_an_engine_runs_first_by_year() {
     assert_eq!(snes.lines, ["✓ No firmware needed", "CRT profile Off · SA-1 catch-up After every S-CPU instruction (exact)"]);
     assert_eq!(snes.muted, ["What every Super Nintendo game shares, unless the game's own options say otherwise."]);
     assert_eq!(view.pane(1).lines[0], "No BIOS of your own: the open replacement runs in its place", "a console that starts empty names its BIOS");
+    // Mistress's tints: the firmware line in Success where nothing is wanting, the text's where the replacement runs.
+    assert_eq!(snes.tones, [Tone::Text, Tone::Success]);
+    assert_eq!(view.pane(1).tones, [Tone::Text, Tone::Text]);
 }
 
 #[test]
@@ -270,6 +274,7 @@ fn qt_7_7_e_engine_is_a_page_of_choices_on_the_value_cores_make_default_writes()
     let ids: Vec<&str> = page.iter().map(|r| r.id.as_str()).collect();
     assert_eq!(ids, ["engine", "firmware", "cards", "sa1_catch_up", "crtprofile", "consolelevers", "consolecrop", "consoleshape", "reset"], "Mistress's page");
     assert_eq!(page[1].value, "only some games", "a cartridge's chip needed by some games");
+    assert_eq!((view.pane(1).sentence.as_str(), view.pane(1).tones.as_slice()), ("✓ No firmware needed", &[Tone::Success][..]));
     assert!(page[5].held, "Shader levers wait for the CRT to be chosen");
     let pane = view.pane(0);
     assert_eq!(pane.sentence, "VenusRT, the Super Nintendo's engine: every Super Nintendo game opens on it unless the game's own options choose another.");

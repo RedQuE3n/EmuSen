@@ -38,6 +38,7 @@ Kit.NormalizedCanvas {
         sections: screen.settings.sections
         section: screen.settings.section
         trail: screen.settings.trail
+        sentenceTone: screen.settings.sentenceTone
         help: HelpModel {
             screen: screen.settings.help
         }
@@ -141,14 +142,15 @@ Kit.NormalizedCanvas {
             spacing: frame.layout.lineGap
             Repeater {
                 model: screen.settings.paneLines
-                delegate: Text {
+                delegate: Kit.ToneText {
                     id: line
                     objectName: "SettingsLine"
                     required property string modelData
+                    required property int index
                     width: parent.width
                     text: line.modelData
                     wrapMode: Text.Wrap
-                    color: Kit.Tokens.text
+                    tone: screen.settings.lineTone(line.index)
                     font.family: faces.regular
                     font.pixelSize: Kit.Tokens.fontBody
                 }

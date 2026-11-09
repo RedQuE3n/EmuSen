@@ -57,6 +57,8 @@ pub mod qobject {
         #[qproperty(i32, focused)]
         #[qproperty(QStringList, pane_lines, cxx_name = "paneLines", READ, NOTIFY)]
         #[qproperty(QStringList, pane_muted, cxx_name = "paneMuted", READ, NOTIFY)]
+        /// The tone (Kit.Tones) of the focused row's sentence; `lineTone` gives each further line's.
+        #[qproperty(i32, sentence_tone, cxx_name = "sentenceTone", READ, NOTIFY)]
         /// The pane's preview: 0 none, 1 the game's picture, 2 a meter, 3 the two variants, 4 the text sizes.
         #[qproperty(i32, preview, READ, NOTIFY)]
         #[qproperty(QString, caption, READ, NOTIFY)]
@@ -94,6 +96,11 @@ pub mod qobject {
         /// The settings read again.
         #[qinvokable]
         fn refresh(self: Pin<&mut SettingsModel>);
+
+        /// The tone (Kit.Tones) of the pane's further line at `index`, the text's past the tones the pane gives.
+        #[qinvokable]
+        #[cxx_name = "lineTone"]
+        fn line_tone(self: &SettingsModel, index: i32) -> i32;
 
         /// The scale of the sample at `index`, 1 past the samples.
         #[qinvokable]
@@ -186,6 +193,8 @@ pub struct SettingsModelRust {
     focused: i32,
     pane_lines: QStringList,
     pane_muted: QStringList,
+    sentence_tone: i32,
+    line_tones: Vec<i32>,
     preview: i32,
     caption: QString,
     meter: f64,
@@ -226,6 +235,8 @@ impl Default for SettingsModelRust {
             focused: 0,
             pane_lines: QStringList::default(),
             pane_muted: QStringList::default(),
+            sentence_tone: 0,
+            line_tones: Vec::new(),
             preview: 0,
             caption: QString::default(),
             meter: 0.0,
@@ -306,6 +317,10 @@ impl qobject::SettingsModel {
 
     pub fn row_count(&self, _parent: &QModelIndex) -> i32 {
         self.rows.len() as i32
+    }
+
+    pub fn line_tone(&self, index: i32) -> i32 {
+        usize::try_from(index).ok().and_then(|i| self.line_tones.get(i)).copied().unwrap_or(0)
     }
 
     pub fn sample_scale(&self, index: i32) -> f64 {
@@ -504,8 +519,19 @@ impl qobject::SettingsModel {
     /// The focused row's pane.
     fn pane(mut self: Pin<&mut Self>) {
         let pane = self.view.pane(self.focused.max(0) as usize);
+        // The kit's Tones are numbered in the order tools::Tone lists them.
+        let tones: Vec<i32> = pane.tones.iter().map(|t| *t as i32).collect();
+        let sentence_tone = tones.first().copied().unwrap_or(0);
+        if self.sentence_tone != sentence_tone {
+            self.as_mut().rust_mut().sentence_tone = sentence_tone;
+            self.as_mut().sentence_tone_changed();
+        }
+        // The lines' tones before the lines, so the delegates the new lines make read theirs.
+        let line_tones: Vec<i32> = tones.iter().skip(1).copied().collect();
+        let lines_changed = self.line_tones != line_tones;
+        self.as_mut().rust_mut().line_tones = line_tones;
         let lines = list(pane.lines.into_iter());
-        if self.pane_lines != lines {
+        if self.pane_lines != lines || lines_changed {
             self.as_mut().rust_mut().pane_lines = lines;
             self.as_mut().pane_lines_changed();
         }

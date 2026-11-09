@@ -5,6 +5,7 @@
 //! hold what is chosen. Tested without Qt over a fake source.
 
 use crate::consoles::{self, Console, ConsoleRead};
+use crate::tools::Tone;
 use crate::{cards, firmware, schema, words};
 use emusen_kit_core::settings::RowKind;
 use emusen_kit_core::tokens::text_scale_of;
@@ -98,6 +99,8 @@ pub struct Pane {
     pub meter: f64,
     /// A line and its scale for each text size, or the two variants' names.
     pub samples: Vec<(String, f64)>,
+    /// The sentence's tone, then each plain line's, by what it says.
+    pub tones: Vec<Tone>,
 }
 
 /// What a press asked for, beyond the rows read again.
@@ -690,7 +693,7 @@ impl SettingsView {
         let Some(entry) = self.entries().get(index).cloned() else { return Pane::default() };
         if let Some(words) = self.console_pane(&entry) {
             let mut lines = words.lines.into_iter();
-            return Pane { sentence: lines.next().unwrap_or_default(), lines: lines.collect(), muted: words.muted, ..Pane::default() };
+            return Pane { sentence: lines.next().unwrap_or_default(), lines: lines.collect(), muted: words.muted, tones: words.tones, ..Pane::default() };
         }
         let keyed = self.keyed(&entry);
         let (value, chosen, count) = self.value(&entry);
@@ -724,6 +727,7 @@ impl SettingsView {
             caption: pane["caption"].as_str().map(fill).unwrap_or_default(),
             meter,
             samples,
+            tones: Vec::new(),
         }
     }
 
@@ -885,7 +889,7 @@ impl SettingsView {
     fn list_pane(&self, c: &Console) -> firmware::Words {
         let name = c.name.as_str();
         if !c.runs() {
-            return firmware::Words { lines: vec![said(&self.console_word("no_engine"), &[("console", name)])], muted: Vec::new() };
+            return firmware::Words { lines: vec![said(&self.console_word("no_engine"), &[("console", name)])], ..Default::default() };
         }
         let games = words::counted(self.games_of(c), &self.word("game"), &self.word("games"));
         let engine = self.read.consoles.engine_name(&c.engine());
@@ -904,13 +908,14 @@ impl SettingsView {
         if !facts.is_empty() {
             lines.push(facts.join(" · "));
         }
-        firmware::Words { lines, muted: vec![said(&self.console_word("shares"), &[("console", name)])] }
+        let tones = vec![Tone::Text, firmware::line_tone(&c.needs(), c.starts_empty)];
+        firmware::Words { lines, muted: vec![said(&self.console_word("shares"), &[("console", name)])], tones }
     }
 
     /// The pane of a row the description alone does not word: the list's consoles, a console's schema and engines, its
     /// firmware and its cards.
     fn console_pane(&self, entry: &Value) -> Option<firmware::Words> {
-        let one = |line: String| Some(firmware::Words { lines: vec![line], muted: Vec::new() });
+        let one = |line: String| Some(firmware::Words { lines: vec![line], ..Default::default() });
         if let Some(name) = entry["console"].as_str() {
             return Some(self.list_pane(self.read.consoles.console(name)?));
         }
@@ -926,7 +931,7 @@ impl SettingsView {
                 let chosen = console.engine();
                 let others: Vec<String> = row.choices.iter().flatten().filter(|c| **c != chosen).map(|c| self.read.consoles.engine_name(c)).collect();
                 let muted = if others.is_empty() { Vec::new() } else { vec![said(&self.console_word("engine_others"), &[("others", &others.join(", "))])] };
-                return Some(firmware::Words { lines: vec![said(&self.console_word("engine"), &[("console", name), ("engine", &engine)])], muted });
+                return Some(firmware::Words { lines: vec![said(&self.console_word("engine"), &[("console", name), ("engine", &engine)])], muted, ..Default::default() });
             }
             let value = self.schema_value(console, entry);
             let pane = &entry["pane"];
@@ -935,12 +940,12 @@ impl SettingsView {
                 format!("{}{note}", row.hint.clone().unwrap_or_default())
             });
             let sentence = pane["by_value"][&value].as_str().map_or(hint, str::to_owned);
-            return Some(firmware::Words { lines: vec![self.fill(&sentence, &value)], muted: strings(&pane["muted"]) });
+            return Some(firmware::Words { lines: vec![self.fill(&sentence, &value)], muted: strings(&pane["muted"]), ..Default::default() });
         }
         if let Some(choice) = entry["choice"].as_str() {
             let word = if console.engine() == choice { "runs" } else { "would_run" };
             let engine = self.read.consoles.engine_name(choice);
-            return Some(firmware::Words { lines: vec![said(&self.console_word(word), &[("choice", &engine), ("console", name)])], muted: vec![self.console_word("choose")] });
+            return Some(firmware::Words { lines: vec![said(&self.console_word(word), &[("choice", &engine), ("console", name)])], muted: vec![self.console_word("choose")], ..Default::default() });
         }
         if let Some(at) = entry["need"].as_u64() {
             let need = console.needs().into_iter().nth(at as usize)?;

@@ -7,6 +7,8 @@ mod common;
 use common::{hold, sandbox, wait_for};
 use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
+use emusen_kit_core::tokens::{colour, ColourToken};
+use emusen_kit_core::tokens::Variant;
 use emusen_platform_client::galaxia::consts::DIR_FIRMWARE;
 use emusen_platform_client::Platform;
 use emusen_qt::MAIN_URL;
@@ -78,6 +80,15 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     wait_for(&mut scene, "settingsModel", "help", "20", 1000);
     assert!(sentence(&mut scene).starts_with("VenusRT (Rust), the Super Nintendo's engine"), "{}", sentence(&mut scene));
     hold(&mut scene, "SettingsConsolePage", &mockup::Mockup::default(), named, &mut report);
+    // The firmware line in Success, as Mistress tinted it: the kit's sentence in the tone the model gives.
+    scene.pad(UiButton::Down);
+    wait_for(&mut scene, "settingsModel", "focused", "1", 1000);
+    scene.wait(100);
+    assert_eq!(sentence(&mut scene), "✓ No firmware needed");
+    let success = colour(Variant::Dark, ColourToken::Success).to_hex().to_lowercase();
+    assert_eq!(scene.property("settingsSentence", "color").to_lowercase(), success);
+    scene.pad(UiButton::Up);
+    wait_for(&mut scene, "settingsModel", "focused", "0", 1000);
 
     // Engine as a page of choices, B keeping what was chosen.
     scene.pad(UiButton::Accept);

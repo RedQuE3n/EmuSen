@@ -73,7 +73,7 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
 #[test]
 fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     let rows = ["data", "roleNames", "rowCount"];
-    let api: [(&str, &[&str], &[&str]); 11] = [
+    let api: [(&str, &[&str], &[&str]); 12] = [
         ("Library", &["consoles", "places", "shelves", "recent", "shelf", "favourites", "collections"], &["gamesOf", "search", "firstOf"]),
         ("Session", &["hasGame", "key", "title", "consoleId", "console", "hue", "pausedSince", "played", "frame"], &[]),
         ("Device", &["controllers", "family", "clock", "battery", "charging", "network", "bigScreen", "form"], &[]),
@@ -95,9 +95,11 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "search",
                 "act",
                 "focus",
+                "enabled",
             ],
         ),
         ("Cues", &[], &["scroll", "systembrowse", "select", "back", "favorite", "launch", "quicksysselect"]),
+        ("Bells", &[], &["ladder", "strike"]),
         (
             "Words",
             &[
@@ -111,8 +113,15 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "search",
                 "emusenTag",
                 "libretroTag",
+                "noGames",
+                "noRecent",
+                "noConsoles",
+                "addFolder",
+                "places",
+                "continueEntry",
+                "recentEntry",
             ],
-            &["games", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption"],
+            &["games", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo"],
         ),
         ("Help", &[], &["entries"]),
         (

@@ -278,6 +278,10 @@ impl ActionSink for Sink {
         }
         true
     }
+
+    fn would(&self, action: &Action) -> bool {
+        !self.0.get().is_null() && carried(action, None, &[]).is_some()
+    }
 }
 
 impl cxx_qt::Initialize for qobject::ThemeFeed {

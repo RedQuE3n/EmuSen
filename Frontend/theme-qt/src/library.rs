@@ -69,6 +69,9 @@ pub struct ThemeLibraryRust {
     found: *mut ThemeRows,
     words: String,
     view: LibraryView,
+    /// Home's lines as last fed, and the places the host would decline.
+    lines: Vec<(String, bool)>,
+    declined: Vec<String>,
 }
 
 impl Default for ThemeLibraryRust {
@@ -88,6 +91,8 @@ impl Default for ThemeLibraryRust {
             found: none,
             words: String::new(),
             view: LibraryView::empty(),
+            lines: Vec::new(),
+            declined: Vec::new(),
         }
     }
 }
@@ -139,7 +144,8 @@ impl qobject::ThemeLibrary {
     pub fn show(mut self: Pin<&mut Self>, view: &LibraryView, home_lines: &str) {
         let now = words::now();
         fill(self.consoles, view::consoles(view));
-        fill(self.places, view::places(view, &view::lines_of(home_lines)));
+        let lines = view::lines_of(home_lines);
+        fill(self.places, view::places(view, &lines, &self.declined));
         fill(self.shelves, view::shelves(view));
         fill(self.recent, view::games_of(view, RECENT, now));
         fill(self.shelf, view::shelf(view, &self.suspended, now));
@@ -154,6 +160,15 @@ impl qobject::ThemeLibrary {
         }
         fill(self.found, view::search(view, &self.words, now));
         self.as_mut().rust_mut().view = view.clone();
+        self.as_mut().rust_mut().lines = lines;
+    }
+
+    /// The host's feed of the places whose `openPlace` it would decline, by key; their rows are not `available`.
+    pub fn show_declined(mut self: Pin<&mut Self>, keys: &[String]) {
+        if self.declined != keys {
+            self.as_mut().rust_mut().declined = keys.to_vec();
+            fill(self.places, view::places(&self.view, &self.lines, keys));
+        }
     }
 
     /// The host's feed of the suspended game's file, which the shelf leaves out; empty for none.

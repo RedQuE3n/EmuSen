@@ -10,6 +10,7 @@ use emusen_platform_client::{Lent, Platform};
 use emusen_qt_models::clients::ClientSource;
 use emusen_qt_models::library::{refresh, Kind, LibrarySource, LibraryView};
 use emusen_qt_models::words;
+use crate::catalogue::{Catalogue, Entry};
 use crate::crowd::Crowd;
 use emusen_theme_qt::device::DeviceFacts;
 use emusen_theme_qt::session::SessionFacts;
@@ -40,6 +41,8 @@ pub struct Synthetic {
     pub crowd: LibraryView,
     /// The crowd's consoles by the names a tile shows.
     pub crowd_names: Vec<String>,
+    /// The library with a catalogue's consoles in place of its own, and their names, when one is given.
+    pub catalogue: Option<(LibraryView, Vec<String>)>,
     pub home_lines: String,
     pub session: SessionFacts,
     pub device: DeviceFacts,
@@ -55,8 +58,8 @@ fn records(platform: &Arc<Platform>) -> Result<Library, String> {
     Library::open(platform, &file, &sqlite).map_err(|e| format!("the games' records: {e}"))
 }
 
-/// The library made in a scratch tree and read; the error names the step that failed.
-pub fn make() -> Result<Synthetic, String> {
+/// The library made in a scratch tree and read, and over `entries` when given; the error names the step that failed.
+pub fn make(entries: Option<&[Entry]>) -> Result<Synthetic, String> {
     let world = World::new("theme-audit");
     for (title, ext) in GAMES {
         std::fs::write(rom(&world, title, ext), [0u8; 4096]).map_err(|e| format!("a synthetic game: {e}"))?;
@@ -89,7 +92,22 @@ pub fn make() -> Result<Synthetic, String> {
     if !crowd.problem.is_empty() {
         return Err(format!("the library of 120 consoles: {}", crowd.problem));
     }
-    let crowd_names = crowd.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).map(|r| r.name.clone()).collect();
+    let names = |view: &LibraryView| -> Vec<String> {
+        view.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).map(|r| r.name.clone()).collect()
+    };
+    let crowd_names = names(&crowd);
+    let catalogue = match entries {
+        None => None,
+        Some(entries) => {
+            let mut listed = LibraryView::empty();
+            listed.apply(refresh(&Catalogue::new(&source, &world.root, entries)?));
+            if !listed.problem.is_empty() {
+                return Err(format!("the catalogue's library: {}", listed.problem));
+            }
+            let shown = names(&listed);
+            Some((listed, shown))
+        }
+    };
     let settings_line = words::settings_line(true, &view.catalog.settings);
     let lines: Vec<serde_json::Value> = words::home_lines(view.catalog.games.len(), &serde_json::Value::Null, &settings_line)
         .into_iter()
@@ -108,5 +126,5 @@ pub fn make() -> Result<Synthetic, String> {
         played: 5400,
     };
     let device = DeviceFacts { controllers: 1, clock: "21:42".into(), battery: 64, ..DeviceFacts::default() };
-    Ok(Synthetic { world, view, crowd, crowd_names, home_lines: serde_json::Value::Array(lines).to_string(), session, device })
+    Ok(Synthetic { world, view, crowd, crowd_names, catalogue, home_lines: serde_json::Value::Array(lines).to_string(), session, device })
 }

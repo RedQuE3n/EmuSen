@@ -3,6 +3,7 @@
 //! asks for changes through `Actions`. The kit's types are re-exported by name from `qml/`, never the whole kit.
 
 pub mod actions;
+pub mod bells;
 pub mod browse;
 pub mod cues;
 pub mod device;
@@ -19,6 +20,7 @@ pub mod words;
 /// singleton to feed, made by the engine on the first ask.
 pub mod host {
     use crate::actions::qobject::ThemeActions;
+    use crate::bells::qobject::ThemeBells;
     use crate::browse::qobject::ThemeBrowse;
     use crate::cues::qobject::ThemeCues;
     use crate::device::qobject::ThemeDevice;
@@ -63,6 +65,10 @@ pub mod host {
 
     pub fn cues(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeCues>> {
         find(within, "Cues")
+    }
+
+    pub fn bells(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeBells>> {
+        find(within, "Bells")
     }
 
     pub fn words(within: Pin<&mut QObject>) -> Option<Pin<&mut ThemeWords>> {

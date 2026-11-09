@@ -152,6 +152,45 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
 /// The Themes tab's check of the focused theme.
 pub const CHECK: &str = "check";
 
+/// The shoulders' entry where a screen's shoulders jump a group of its own row, and B's where a screen has none (the
+/// themes' help bars, EmuSen_Qt.md §3.2): no action, since the walk and the theme answer them.
+pub const GROUP: Entry = (UiButton::PageUp, "Group", None);
+pub const BACK: Entry = (UiButton::Back, "Back", None);
+
+/// Where the group entry goes in a screen's bar, after the entries that act on the focused item; none where the shoulders
+/// already mean something (the grid's Console, the search's Move to grid) or the screen has no row of groups.
+pub fn group_at(screen: Screen) -> Option<usize> {
+    match screen {
+        Screen::Home | Screen::HomeShelf => Some(3),
+        Screen::HomePlaces => Some(1),
+        Screen::Consoles => Some(2),
+        _ => None,
+    }
+}
+
+/// Where B Back goes in a screen's bar that has no B: after the entries that act on the focused item.
+pub fn back_at(screen: Screen) -> Option<usize> {
+    match screen {
+        Screen::Home | Screen::HomeShelf => Some(3),
+        Screen::HomePlaces => Some(1),
+        _ => None,
+    }
+}
+
+/// A screen's entries with the group's and B's added where the screen takes them, B before the group.
+pub fn entries_with(screen: Screen, group: bool, back: bool) -> Vec<Entry> {
+    let mut list = entries(screen).to_vec();
+    let has_back = list.iter().any(|e| e.0 == UiButton::Back);
+    let back_place = back_at(screen).filter(|_| back && !has_back);
+    if let Some(at) = back_place {
+        list.insert(at, BACK);
+    }
+    if let Some(at) = group_at(screen).filter(|_| group) {
+        list.insert(at + usize::from(back_place.is_some_and(|b| b <= at)), GROUP);
+    }
+    list
+}
+
 /// Start's action away from a game and a card: Home (EmuSen_BigPicture.md §51.2, §51.3).
 pub const HOME: &str = "home";
 

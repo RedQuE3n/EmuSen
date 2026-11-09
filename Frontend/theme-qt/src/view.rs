@@ -21,10 +21,26 @@ pub enum Cell {
 pub type Row = Vec<Cell>;
 
 /// `Library.consoles`: each console with games, in the shelves' order.
-pub const CONSOLE_ROLES: [&str; 12] =
-    ["key", "name", "displayName", "maker", "year", "count", "hue", "body", "engineName", "engineKind", "engineMark", "libretro"];
+pub const CONSOLE_ROLES: [&str; 16] = [
+    "key",
+    "name",
+    "displayName",
+    "maker",
+    "year",
+    "count",
+    "hue",
+    "body",
+    "engineName",
+    "engineKind",
+    "engineMark",
+    "libretro",
+    "group",
+    "groupIndex",
+    "groupSize",
+    "groupStart",
+];
 /// `Library.places`: Home's destinations in Home's order.
-pub const PLACE_ROLES: [&str; 6] = ["key", "name", "kind", "line", "attention", "count"];
+pub const PLACE_ROLES: [&str; 7] = ["key", "name", "kind", "line", "attention", "count", "available"];
 /// `Library.shelves`: the library's three places, All, Favourites and Recent, which `gamesOf` also takes.
 pub const SHELF_ROLES: [&str; 4] = ["key", "name", "line", "count"];
 /// `Library.gamesOf`, `recent`, `favourites` and `search`: one game a row.
@@ -72,13 +88,36 @@ fn text(s: &str) -> Cell {
     Cell::Text(s.to_owned())
 }
 
-/// The consoles with games, each with the systems table's facts and the engine it runs now.
+/// Each maker's group: its ordinal in order of first appearance, the place within it, its size and how many consoles the
+/// groups before it hold, so a console's place in maker order is start + index; an unknown (empty) maker is a group of its own.
+pub fn maker_groups(makers: &[&str]) -> Vec<(i32, i32, i32, i32)> {
+    let mut order: Vec<&str> = Vec::new();
+    let mut sizes: Vec<i32> = Vec::new();
+    let mut placed = Vec::with_capacity(makers.len());
+    for maker in makers {
+        let group = match order.iter().position(|m| !maker.is_empty() && m == maker) {
+            Some(g) => g,
+            None => {
+                order.push(maker);
+                sizes.push(0);
+                order.len() - 1
+            }
+        };
+        placed.push((group as i32, sizes[group]));
+        sizes[group] += 1;
+    }
+    let starts: Vec<i32> = sizes.iter().scan(0, |before, size| Some(std::mem::replace(before, *before + size))).collect();
+    placed.into_iter().map(|(g, i)| (g, i, sizes[g as usize], starts[g as usize])).collect()
+}
+
+/// The consoles with games, each with the systems table's facts, the engine it runs now and its maker's group.
 pub fn consoles(view: &LibraryView) -> Vec<Row> {
-    view.rows
-        .rows()
+    let shown: Vec<_> = view.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).collect();
+    let groups = maker_groups(&shown.iter().map(|r| r.maker.as_str()).collect::<Vec<_>>());
+    shown
         .iter()
-        .filter(|r| r.kind == Some(Kind::Console))
-        .map(|r| {
+        .zip(groups)
+        .map(|(r, (group, index, size, start))| {
             vec![
                 text(&r.key),
                 text(&r.name),
@@ -92,6 +131,10 @@ pub fn consoles(view: &LibraryView) -> Vec<Row> {
                 text(if r.engine_name.is_empty() { "" } else { engine_kind(r.libretro) }),
                 text(&r.engine_mark),
                 Cell::Flag(!r.engine_name.is_empty() && r.libretro),
+                Cell::Whole(group),
+                Cell::Whole(index),
+                Cell::Whole(size),
+                Cell::Whole(start),
             ]
         })
         .collect()
@@ -111,8 +154,9 @@ pub fn lines_of(json: &str) -> Vec<(String, bool)> {
         .collect()
 }
 
-/// Home's seven destinations with their live lines; Games counts the consoles it leads to.
-pub fn places(view: &LibraryView, lines: &[(String, bool)]) -> Vec<Row> {
+/// Home's seven destinations with their live lines; Games counts the consoles it leads to; a place the host declines
+/// is not available.
+pub fn places(view: &LibraryView, lines: &[(String, bool)], declined: &[String]) -> Vec<Row> {
     let consoles = view.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).count();
     PLACE_IDS
         .iter()
@@ -128,6 +172,7 @@ pub fn places(view: &LibraryView, lines: &[(String, bool)]) -> Vec<Row> {
                 Cell::Text(line),
                 Cell::Flag(attention),
                 Cell::Whole(if i == 0 { consoles as i32 } else { 0 }),
+                Cell::Flag(!declined.iter().any(|d| d == id)),
             ]
         })
         .collect()

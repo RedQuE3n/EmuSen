@@ -1,0 +1,13 @@
+# long: the canvases' catalogue for the state long: a console's name and a libretro core's name too long for their places (consoles.html, 2026-11-08), one console a line:
+# maker, name, games, engine, its kind (emusen or libretro), the table's console whose look it takes. Tab-separated; man theme-check.
+Nintendo	NES	1566	Moon	emusen	nes
+Nintendo	Super Nintendo Entertainment System	795	Venus	emusen	snes
+Nintendo	Nintendo 64	266	Mars	emusen	n64
+Nintendo	Game Boy	1929	Mercury	emusen	gb
+Nintendo	Game Boy Color	426	Mercury	emusen	gbc
+Sega	Master System	370	Endou	emusen	sms
+Sega	Genesis	947	Nephrite	emusen	md
+Sega	Sega CD	5	Nephrite	emusen	mcd
+Sega	Dreamcast	27	Mupen64Plus-Next	libretro	dreamcast
+Sony	PlayStation	37	Diamond	emusen	psx
+Sony	PlayStation 2	56	PCSX2	libretro	ps2

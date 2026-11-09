@@ -36,3 +36,18 @@ fn kit_7_1_every_cue_mirrors_its_kit_core_cue() {
     }
     assert_eq!(kinds::sound_cue(QmlCue { repr: 9 }), None);
 }
+
+#[test]
+fn kit_7_5_the_ladder_s_rungs_render_once_each_and_are_the_picker_s_bells() {
+    let mut cache = BellCache::default();
+    assert_eq!(cache.ladder(5), 5);
+    assert_eq!(cache.renders(), 5);
+    assert_eq!(cache.ladder(3), 3, "fewer asked, nothing new rendered");
+    assert_eq!(cache.renders(), 5);
+    assert_eq!(cache.rung(4), emusen_kit_core::sound::bell_samples(4).as_slice(), "rung i is the bell a console rings in a picker");
+    let low = cache.rung(0).to_vec();
+    assert_ne!(low.as_slice(), cache.rung(4), "each rung its own pitch");
+    assert_eq!(cache.renders(), 5);
+    cache.rung(6);
+    assert_eq!(cache.renders(), 7, "a rung past the ladder renders the rungs up to it");
+}

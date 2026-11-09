@@ -93,3 +93,32 @@ fn qt_8_4_the_audit_s_scene_keeps_the_qml_rules() {
     let complaints = qmllint(&[&scenes]);
     assert!(complaints.is_empty(), "{}", complaints.join("\n"));
 }
+
+#[test]
+fn qt_3_7_a_catalogue_records_choose_a_console_over_its_consoles_alone() {
+    let dir = std::env::temp_dir().join(format!("theme-audit-catalogue-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("two.tsv");
+    std::fs::write(&file, "# two consoles of two makers\nSega\tGenesis\t12\tNephrite\temusen\tmd\nSony\tPlayStation\t3\tDiamond\temusen\tpsx\n").unwrap();
+    let state = dir.join("state");
+    let out = Command::new(PROGRAM).arg("--state").arg(&state).arg("--catalogue").arg(&file).arg(themes().join("loaded")).output().expect("theme-audit runs");
+    let lines = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert_eq!(out.status.code(), Some(0), "the loaded fixture over the catalogue: {lines}{}", String::from_utf8_lossy(&out.stderr));
+    for variant in ["dark", "light"] {
+        for size in ["1280x800", "1920x1200", "1920x1080", "1280x720", "3840x2160"] {
+            let name = format!("Consoles-{variant}-two-{size}");
+            assert!(state.join(format!("{name}.png")).exists(), "{name}.png");
+            assert!(state.join(format!("{name}.spec")).exists(), "{name}.spec");
+        }
+    }
+    let recorded: Vec<String> = std::fs::read_dir(&state).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+    assert!(recorded.iter().all(|f| f.starts_with("Consoles-")), "Choose a console alone: {recorded:?}");
+    let spec = std::fs::read_to_string(state.join("Consoles-dark-two-1280x800.spec")).unwrap();
+    assert!(spec.contains("Genesis") && spec.contains("PlayStation"), "the catalogue's consoles on the screen");
+    let bad = dir.join("bad.tsv");
+    std::fs::write(&bad, "Sega\tGenesis\tmany\n").unwrap();
+    let out = Command::new(PROGRAM).arg("--catalogue").arg(&bad).arg(themes().join("loaded")).output().expect("theme-audit runs");
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("bad.tsv: line 1: the games count"), "the line named");
+    let _ = std::fs::remove_dir_all(&dir);
+}

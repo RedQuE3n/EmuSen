@@ -59,6 +59,9 @@ pub mod qobject {
         /// The game the focus is on, by its row's `key`, so the cards and the shoulders act on it.
         #[qinvokable]
         fn focus(self: Pin<&mut ThemeActions>, game: &QString) -> bool;
+        /// Whether the host would take `act(key)` now, without acting: a declined action's item and help entry look disabled.
+        #[qinvokable]
+        fn enabled(self: &ThemeActions, key: &QString) -> bool;
     }
 }
 
@@ -84,6 +87,10 @@ pub enum Action {
 /// The host's side: takes an action, or declines it, and says which.
 pub trait ActionSink {
     fn act(&mut self, action: &Action) -> bool;
+    /// Whether `act` would take the action, asked without acting; a host that declines nothing need not say.
+    fn would(&self, _action: &Action) -> bool {
+        true
+    }
 }
 
 #[derive(Default)]
@@ -155,5 +162,9 @@ impl qobject::ThemeActions {
 
     pub fn focus(self: Pin<&mut Self>, game: &QString) -> bool {
         self.take(Action::Focus(game.to_string()))
+    }
+
+    pub fn enabled(&self, key: &QString) -> bool {
+        self.sink.as_ref().is_some_and(|sink| sink.would(&Action::Act(key.to_string())))
     }
 }

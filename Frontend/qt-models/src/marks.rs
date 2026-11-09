@@ -14,6 +14,13 @@ pub fn path(name: &str) -> &'static str {
         "shard" => "M12 3l3.5 17h-7zM6 10l2 10M18 9l-2 11",
         "gem" => "M4 9l3.5-4.5h9L20 9l-8 11zM4 9h16",
         "planet" => "M12 5a7 7 0 1 0 0 14a7 7 0 1 0 0-14",
+        "games" => "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
+        "scraper" => "M21 12a9 9 0 1 1-3-6.7M21 3v6h-6",
+        "packages" => "M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10",
+        "library" => "M4 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4zM20 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6z",
+        "cores" => "M8 8h8v8H8zM4 10h4M4 14h4M16 10h4M16 14h4M10 4v4M14 4v4M10 16v4M14 16v4",
+        "settings" => "M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1",
+        "power" => "M12 2v10M18.4 6.6a9 9 0 1 1-12.8 0",
         _ => "",
     }
 }

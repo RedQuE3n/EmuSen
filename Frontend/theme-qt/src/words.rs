@@ -25,6 +25,13 @@ pub mod qobject {
         #[qproperty(QString, search, READ, CONSTANT)]
         #[qproperty(QString, emusen_tag, cxx_name = "emusenTag", READ, CONSTANT)]
         #[qproperty(QString, libretro_tag, cxx_name = "libretroTag", READ, CONSTANT)]
+        #[qproperty(QString, no_games, cxx_name = "noGames", READ, CONSTANT)]
+        #[qproperty(QString, no_recent, cxx_name = "noRecent", READ, CONSTANT)]
+        #[qproperty(QString, no_consoles, cxx_name = "noConsoles", READ, CONSTANT)]
+        #[qproperty(QString, add_folder, cxx_name = "addFolder", READ, CONSTANT)]
+        #[qproperty(QString, places, READ, CONSTANT)]
+        #[qproperty(QString, continue_entry, cxx_name = "continueEntry", READ, CONSTANT)]
+        #[qproperty(QString, recent_entry, cxx_name = "recentEntry", READ, CONSTANT)]
         type ThemeWords = super::ThemeWordsRust;
     }
 
@@ -57,6 +64,10 @@ pub mod qobject {
         /// Choose a console's summary: "11 consoles · 1,566 games".
         #[qinvokable]
         fn summary(self: &ThemeWords, consoles: i32, games: i32) -> QString;
+        /// How long ago the suspended game was paused: "Paused 12 minutes ago".
+        #[qinvokable]
+        #[cxx_name = "pausedAgo"]
+        fn paused_ago(self: &ThemeWords, paused_since: f64) -> QString;
     }
 }
 
@@ -71,6 +82,13 @@ pub struct ThemeWordsRust {
     search: QString,
     emusen_tag: QString,
     libretro_tag: QString,
+    no_games: QString,
+    no_recent: QString,
+    no_consoles: QString,
+    add_folder: QString,
+    places: QString,
+    continue_entry: QString,
+    recent_entry: QString,
 }
 
 impl Default for ThemeWordsRust {
@@ -86,6 +104,13 @@ impl Default for ThemeWordsRust {
             search: QString::from(words::SEARCH),
             emusen_tag: QString::from(words::EMUSEN_TAG),
             libretro_tag: QString::from(words::LIBRETRO_TAG),
+            no_games: QString::from(words::NO_GAMES),
+            no_recent: QString::from(words::NO_RECENT),
+            no_consoles: QString::from(words::NO_CONSOLES),
+            add_folder: QString::from(words::ADD_FOLDER),
+            places: QString::from(words::PLACES),
+            continue_entry: QString::from(words::CONTINUE_ENTRY),
+            recent_entry: QString::from(words::RECENT_ENTRY),
         }
     }
 }
@@ -125,6 +150,10 @@ impl qobject::ThemeWords {
 
     pub fn summary(&self, consoles: i32, games: i32) -> QString {
         said(words::summary(consoles.max(0) as usize, games.max(0) as usize))
+    }
+
+    pub fn paused_ago(&self, paused_since: f64) -> QString {
+        said(words::paused_ago(paused_since as i64, words::now()))
     }
 
     pub fn splash_caption(&self, consoles: i32) -> QString {

@@ -22,6 +22,10 @@ Window {
         required property string engineKind
         required property string engineMark
         required property bool libretro
+        required property int group
+        required property int groupIndex
+        required property int groupSize
+        required property int groupStart
     }
     component PlaceRow: Item {
         required property string key
@@ -30,6 +34,7 @@ Window {
         required property string line
         required property bool attention
         required property int count
+        required property bool available
     }
     component GameRow: Item {
         required property string key
@@ -83,7 +88,25 @@ Window {
     // Home's places stand before the feed, so their probe is read again when the test names a console after the feed.
     readonly property string secondPlace: (scene.consoleKey.length >= 0 && placeList.count > 1 ? placeList.itemAt(1) as PlaceRow : null)?.name ?? ""
     readonly property bool secondAttention: (scene.consoleKey.length >= 0 && placeList.count > 1 ? placeList.itemAt(1) as PlaceRow : null)?.attention ?? false
+    readonly property int firstGroupSize: (consoleList.count > 0 ? consoleList.itemAt(0) as ConsoleRow : null)?.groupSize ?? 0
+    readonly property bool secondEnabled: (scene.consoleKey.length >= 0 && placeList.count > 1 ? placeList.itemAt(1) as PlaceRow : null)?.available ?? false
+    readonly property int placeHelp: placeHelpList.count
+    readonly property string placeGroup: (placeHelpList.count > 2 ? placeHelpList.itemAt(2) as HelpRow : null)?.label ?? ""
+    readonly property string emptyWords: [Words.noGames, Words.noRecent, Words.noConsoles, Words.addFolder, Words.places, Words.continueEntry, Words.recentEntry].join("|")
+    readonly property string paused: Words.pausedAgo(Session.pausedSince)
+    property bool listEnabled: Actions.enabled("list")
+    readonly property int rungs: Bells.ladder(3)
     readonly property string firstTitle: (gameList.count > 0 ? gameList.itemAt(0) as GameRow : null)?.title ?? ""
+    component HelpRow: Item {
+        required property int button
+        required property string label
+        required property int pair
+    }
+    Repeater {
+        id: placeHelpList
+        model: Help.entries(Help.Place, {group: true, back: true})
+        delegate: HelpRow {}
+    }
     Repeater {
         id: gameHelpList
         model: Help.entries(Help.Game)

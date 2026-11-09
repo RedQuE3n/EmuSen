@@ -179,9 +179,20 @@ fn settings_4_83_2_cut_at_a_scrolling_edge_with_no_fade() {
             .wheel_scrolls()
             .child(Item::new(51, Kind::Picture, Rect::new(950.0, 320.0, 120.0, 80.0))),
     );
-    let faults = fit_faults(&sideways);
-    assert!(faults.contains(&Fault::CutAtEdge { item: id(51), area: id(50), side: Side::Right }), "{faults:?}");
-    assert!(faults.contains(&Fault::PastItsLimit { item: id(51), limit: Some(id(50)) }), "and a pad never scrolls sideways: {faults:?}");
+    assert_eq!(fit_faults(&sideways), vec![Fault::CutAtEdge { item: id(51), area: id(50), side: Side::Right }], "sliced, not past its side");
+
+    // A strip as wide as the window, scrolling sideways under the pad: what lies beyond it is excused, as below a list.
+    let strip = |fades: bool| {
+        clean().child(
+            Item::new(52, Kind::Scroller, Rect::new(0.0, 440.0, 1280.0, 302.0))
+                .scrolling(Axes { vertical: false, horizontal: true })
+                .fading(Edges { left: fades, right: fades, ..Edges::default() })
+                .child(Item::new(53, Kind::Picture, Rect::new(1187.0, 524.0, 128.0, 176.0)))
+                .child(Item::new(54, Kind::Picture, Rect::new(1344.0, 524.0, 252.0, 176.0))),
+        )
+    };
+    assert_eq!(fit_faults(&strip(true)), vec![], "past a sideways scroller's side, and sliced at a faded edge");
+    assert_eq!(fit_faults(&strip(false)), vec![Fault::CutAtEdge { item: id(53), area: id(52), side: Side::Right }], "the window's edge with no fade");
 }
 
 #[test]

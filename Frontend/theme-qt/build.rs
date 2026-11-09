@@ -27,6 +27,7 @@ fn main() {
             "src/device.rs",
             "src/actions.rs",
             "src/cues.rs",
+            "src/bells.rs",
             "src/words.rs",
             "src/help.rs",
             "src/browse.rs",

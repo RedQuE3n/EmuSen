@@ -175,10 +175,16 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
     if (item->inherits("QQuickText") || item->inherits("QQuickTextInput")) {
         node["text"] = item->property("text").toString();
         node["elided"] = item->property("truncated").toBool();
-        node["tw"] = item->property("contentWidth").toDouble() * unit.width();
-        node["th"] = item->property("contentHeight").toDouble() * unit.height();
+        // Words run along the item's own axes: measured by the scene's scale along each, and held to the item's own box when turned.
+        const QPointF origin = item->mapToScene(QPointF(0, 0)), across = item->mapToScene(QPointF(1, 0)) - origin, down = item->mapToScene(QPointF(0, 1)) - origin;
+        const double sx = std::hypot(across.x(), across.y()), sy = std::hypot(down.x(), down.y());
+        node["tw"] = item->property("contentWidth").toDouble() * sx;
+        node["th"] = item->property("contentHeight").toDouble() * sy;
+        if (std::abs(across.y()) > 1e-6 || std::abs(down.x()) > 1e-6) {
+            node["own"] = QJsonArray{item->width() * sx, item->height() * sy};
+        }
         const QFont font = item->property("font").value<QFont>();
-        node["cap"] = QFontMetricsF(font).capHeight() * unit.height();
+        node["cap"] = QFontMetricsF(font).capHeight() * sy;
         QColor ink = item->property("color").value<QColor>();
         ink.setAlphaF(ink.alphaF() * opacity);
         node["ink"] = item->isEnabled() ? ink.name(QColor::HexArgb) : QString(); // words of a disabled control are exempt (WCAG 2.1, 1.4.3)

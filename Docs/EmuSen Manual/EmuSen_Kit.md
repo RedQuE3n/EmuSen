@@ -770,7 +770,7 @@ see: a star dimmer than 24 levels over the sky.
 26.2.4) through GLX, with no window on the desktop. Two differences showed:
 
 - The software backend ignores a clip for Qt Quick Shapes (a red `Shape` at x = 150 inside a clipping `Item` 100 wide
-  was red at (175, 145)); the GPU clips. So the carousel's worlds past its box, hidden on the GPU, were drawn over the
+  was red at (175, 145)); the GPU clips. (Fixed for `Body` and `PadGlyph` on 2026-11-08, §7.34.) So the carousel's worlds past its box, hidden on the GPU, were drawn over the
   menu's rows in the gate's grabs. The kit no longer depends on the clip: the carousel shows as many whole items as fit,
   an odd number about the centre (`pathItemCount`), so none rests outside its box on either renderer; the clip stays
   for the half items passing its edges during a step. The gate holds the promise (above).
@@ -1967,6 +1967,31 @@ stacks' covers over each other are each caught. `qt-test/tests/stack.rs`: the ha
 two turned lines whose boxes cross are not an overlap, and a `StackMember`'s item and its words carry one stack. Seeded
 faults, each reverted: captions allowed under a neighbour (the stack test), stacks not told apart (the stack test),
 turned items measured by their boxes (the turned test).
+
+### 7.34 A body and a glyph cut at a clipping edge on the software backend (2026-11-08)
+
+**The defect.** On the software backend a Qt Quick `Shape` is painted past a clipping ancestor, while a `Text` beside it is
+cut (first seen in §7.10, where the carousel was made not to depend on the clip; seen again in Meridian's recordings, a rail
+row cut by its edge showing its world above the rail). Proved on 2026-11-08 by `qt-test/tests/clip.rs` over
+`ClipScene.qml`: four rows of a `Body`, a `PadGlyph` and words in a `Flickable` 160 high that clips, grabbed at rest,
+scrolled by 32 and back, sampling every 4 pixels above and below the Flickable. On the unchanged kit the body was drawn
+past the edges at 123 of 462 points at rest and 224 scrolled, the glyph at 73 of 396 and 133; the words at none. A row
+wholly outside the Flickable was drawn whole, and a row the scroll had moved was drawn at both places.
+
+**The fix.** On the software backend alone (`GraphicsInfo.api === GraphicsInfo.Software`) each is drawn through a layer,
+an image the software renderer does clip: `PadGlyph` on its own item; `Body` on an item that holds its shapes and reaches
+as far past the box as a ring does, `ceil(0.16 × width)` to each side with a ring and none without (kit-core's ring is
+an ellipse 64 units each side of a planet's centre with a stroke of 2.4, 15.2 past the box of 100; the moons lie inside).
+Three nearer forms were tried on 2026-11-08 and dropped: a layer cut to the box lost the ring; a layer whose
+`sourceRect` is larger than its item is scaled into the item's box, which drew the bodies at half their size; and an item
+reaching half the box past every side broke the gallery's promise that nothing under the carousel rests outside its box.
+A reach of a fraction of a pixel moved the drawing by resampling (38 pixels of 64,000 at 2%), so it is whole.
+The GPU draws no layer and is unchanged. After: no point past either edge in any of the three states; inside the Flickable the grab at rest is the same picture as before, pixel for pixel at 2% (`magick compare`, 0
+of 64,000). The test also holds the ring past the body's box. The grabs before and after, on each backend, are
+`clip-<state>-<backend>.png` written to `EMUSEN_QT_COMPARE`; `EMUSEN_QT_GPU` runs the same test on the GPU, offscreen
+through OpenGL (§7.10). On the RX 6800 that way (2026-11-09) the test passes before the fix and after, the GPU's grabs
+before and after are the same picture, and the software backend's grabs after differ from the GPU's at 0.1% of the
+pixels at 12%, the glyphs' edges.
 
 ### 7.6 Building, linking, the registry, and what it is held to
 

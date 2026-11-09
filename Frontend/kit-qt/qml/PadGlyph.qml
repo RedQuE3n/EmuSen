@@ -14,6 +14,8 @@ Item {
     readonly property alias name: marks.name
     // The glyph's own side over the glyph type's size.
     readonly property real sideShare: 1.4
+    // The software backend paints a Shape past a clipping ancestor once it scrolls, so there it is drawn through a layer, which is clipped (EmuSen_Kit.md §7.34).
+    layer.enabled: GraphicsInfo.api === GraphicsInfo.Software
     implicitWidth: Kit.Tokens.fontGlyph * root.sideShare
     implicitHeight: root.implicitWidth
     Accessible.role: Accessible.Graphic

@@ -14,6 +14,7 @@ fn main() {
                 "qml/WalkScene.qml",
                 "qml/HelpBarScene.qml",
                 "qml/StillScene.qml",
+                "qml/ClipScene.qml",
             ])
             .depend("QtQuick")
             .depend("EmuSen.Kit"),

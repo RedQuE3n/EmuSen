@@ -1818,7 +1818,8 @@ and past a wheel's ends the walk runs on into the previous group's last and the 
 the first world hears every console in maker order (the canvas stops at a wheel's ends, which leaves theme-audit's sweep,
 Right and Left along a row with Down between, only the first maker's worlds; changed 2026-11-08 so the sweep reaches all 120);
 its Down is its group's stop; a stop's Left and Right run along the
-dial, a group's stop goes Up to the group's first item, a place goes Up nowhere; the shoulders go to the previous and
+dial, a group's stop goes Up to the group's first item, a place to the first group's first (the canvas's places go
+Up nowhere, which leaves the audit's sweep, starting on a place, no world to hear; changed 2026-11-09); the shoulders go to the previous and
 next group's stop from any node (from a place, RB to the first group's). **`wheels::turn(layout, current, geometry)`**
 is the wheel as the focus stands: a focused item puts its group's wheel at its place; a group's stop turns that wheel to
 its first item; a place dims the first group's wheel (the spec's "mechanism waiting"); each item of the wheel gets its
@@ -1868,8 +1869,10 @@ keep the box rule exactly.
 **Stacks.** `StackMember`, a kit-qt object with no properties, marks the item it is placed in as one member of a stack;
 the stack is that item's parent. The harness finds it by its class and records, for the member and everything inside
 it, the stack, the member, the member's layer (its z, then its place among its siblings, the order Qt draws them in),
-whether the member holds the focus and whether the item is the member itself (`Stacking`). Members of one stack may lie
-over each other; two items of different members still fault when the lower one is words (a caption may not be hidden)
+whether the member holds the focus and whether the item is the member itself (`Stacking`), and for words the four
+corners of their drawn glyphs (`inked`), since a card's title fills its card while its glyphs sit at its foot. Members of one stack may lie
+over each other; two items of different members still fault when the lower one is words whose glyphs the upper one
+covers (a caption may not be hidden)
 or is a focused member (its ring may not be covered), and anything of a stack against anything outside it is held as
 before. `EmuSen.Theme` does not export `StackMember`, so only the kit's own types declare a stack: today `OrbitSlot`, a
 `Walkable` that places a cover of a list on an ellipse about the list's centre by its distance from `turning`, tilted
@@ -1878,7 +1881,7 @@ covers stacked by nearness to the apex. `OrbitSlot` is re-exported by name (rule
 
 **Held to** (measured 2026-11-09): `kit-core/tests/stack.rs`, two bars turned 45° whose scene boxes cross by over 100
 units but whose shapes lie 10 apart pass, and 5 of 20 shared is a fault; three covers over each other in their order
-pass; a stack's cover over a label outside it, a caption under its neighbour, a focused member under another and two
+pass, and so does a caption whose box reaches under the apex while its glyphs clear it; a stack's cover over a label outside it, a caption under its neighbour, a focused member under another and two
 stacks' covers over each other are each caught. `qt-test/tests/stack.rs`: the harness records a turned Text's corners,
 two turned lines whose boxes cross are not an overlap, and a `StackMember`'s item and its words carry one stack. Seeded
 faults, each reverted: captions allowed under a neighbour (the stack test), stacks not told apart (the stack test),

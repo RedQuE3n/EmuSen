@@ -158,6 +158,8 @@ pub struct Item {
     pub wheel_scrolls: bool,
     /// A turned item's four corners in the scene, in order round its edge; None where its scene box is its shape.
     pub corners: Option<[(f64, f64); 4]>,
+    /// Words' drawn glyphs' four corners in the scene, where a stack's rule looks for them; None where unmeasured.
+    pub inked: Option<[(f64, f64); 4]>,
     pub stacking: Option<Stacking>,
     pub children: Vec<Item>,
 }
@@ -187,6 +189,7 @@ impl Item {
             accept_call: None,
             wheel_scrolls: false,
             corners: None,
+            inked: None,
             stacking: None,
             children: Vec::new(),
         }
@@ -244,6 +247,11 @@ impl Item {
     /// Turned: its shape is these four corners, not its scene box.
     pub fn turned(mut self, corners: [(f64, f64); 4]) -> Item {
         self.corners = Some(corners);
+        self
+    }
+
+    pub fn inked(mut self, corners: [(f64, f64); 4]) -> Item {
+        self.inked = Some(corners);
         self
     }
 

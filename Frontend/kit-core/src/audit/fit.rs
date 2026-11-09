@@ -143,7 +143,12 @@ fn overlaps(items: &[(&Item, Vec<&Item>)], slack: f64, faults: &mut Vec<Fault>) 
                 && sa.member != sb.member
             {
                 let (low, low_stacking, high) = if sa.layer < sb.layer { (a, sa, b) } else { (b, sb, a) };
-                let hidden = low.kind == Kind::Words || (low_stacking.is_member && low_stacking.focused);
+                // Words are covered when their drawn glyphs are, not their layout box, which a card's title fills.
+                let glyphs_covered = || match low.inked {
+                    Some(inked) => shapes_meet(inked, high.shape(), slack),
+                    None => true,
+                };
+                let hidden = (low.kind == Kind::Words && glyphs_covered()) || (low_stacking.is_member && low_stacking.focused);
                 if hidden {
                     faults.push(Fault::Overlap { a: low.id, b: high.id });
                 }
@@ -162,7 +167,11 @@ fn shapes_overlap(a: &Item, b: &Item, slack: f64) -> bool {
         let shared = a.rect.overlap(&b.rect);
         return shared.w > slack && shared.h > slack;
     }
-    let (pa, pb) = (a.shape(), b.shape());
+    shapes_meet(a.shape(), b.shape(), slack)
+}
+
+/// Whether two four-cornered shapes share more than `slack` along every separating axis.
+fn shapes_meet(pa: [(f64, f64); 4], pb: [(f64, f64); 4], slack: f64) -> bool {
     let axes = [pa, pb].into_iter().flat_map(|p| [(p[1].0 - p[0].0, p[1].1 - p[0].1), (p[2].0 - p[1].0, p[2].1 - p[1].1)]);
     let span = |p: &[(f64, f64); 4], (ax, ay): (f64, f64)| {
         p.iter().map(|(x, y)| x * ax + y * ay).fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), v| (lo.min(v), hi.max(v)))

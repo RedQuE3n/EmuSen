@@ -57,7 +57,7 @@ fn the_default_eleven_fill_the_slots_about_the_second() {
     assert_eq!(w.steps[0].left, None, "the walk stops at the first maker's first");
     assert_eq!((w.steps[4].right, w.steps[5].left, w.steps[10].right), (Some(5), Some(4), None), "and runs on between makers");
     assert_eq!(w.steps[14], Steps { left: Some(13), right: Some(15), up: Some(0), down: None, previous: None, next: Some(15) });
-    assert_eq!(w.steps[11], Steps { left: None, right: Some(12), up: None, down: None, previous: None, next: Some(14) }, "a place");
+    assert_eq!(w.steps[11], Steps { left: None, right: Some(12), up: Some(0), down: None, previous: None, next: Some(14) }, "a place");
     assert_eq!(w.steps[16].right, None, "the dial ends at its last maker");
     // A maker's stop turns its wheel to its first; a place dims the first wheel.
     let s = turn(&w, Some(15), &G);

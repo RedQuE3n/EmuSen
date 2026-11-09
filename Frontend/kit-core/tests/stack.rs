@@ -56,6 +56,12 @@ fn a_stack_lies_over_itself_in_its_order_and_over_nothing_else() {
     let faults = overlaps(&screen(vec![cover(20, 400.0, 10.0, 10.0, true), hidden]));
     assert!(faults.contains(&Fault::Overlap { a: ElementId(31), b: ElementId(20) }), "a caption under its neighbour: {faults:?}");
 
+    // A caption whose box reaches under the apex while its drawn glyphs clear it is whole.
+    let mut boxed = cover(30, 560.0, 50.0, 9.0, false);
+    boxed.children[0].rect = Rect::new(570.0, 230.0, 180.0, 24.0);
+    boxed.children[0].inked = Some([(620.0, 232.0), (740.0, 232.0), (740.0, 252.0), (620.0, 252.0)]);
+    assert_eq!(overlaps(&screen(vec![cover(20, 400.0, 10.0, 10.0, true), boxed])), vec![], "its glyphs are clear");
+
     // Seeded: a stack's cover over a label outside the stack.
     let label = Item::new(50, Kind::Words, Rect::new(700.0, 240.0, 120.0, 24.0)).words(Text {
         cap_height: 14.0,

@@ -54,6 +54,9 @@ pub struct Node {
     /// A turned item's four corners in the scene, x and y in turn.
     #[serde(default)]
     pub corners: Option<[f64; 8]>,
+    /// The words' drawn glyphs' four corners in the scene, x and y in turn.
+    #[serde(default)]
+    pub inked: Option<[f64; 8]>,
     /// The stack a kit layout declares that the item lies in, its member and the member's layer.
     #[serde(default)]
     pub stack: Option<String>,
@@ -180,6 +183,9 @@ fn item(index: u32, node: &Node) -> Item {
     }
     if node.fade_top || node.fade_bottom || node.fade_left || node.fade_right {
         item = item.fading(Edges { top: node.fade_top, bottom: node.fade_bottom, left: node.fade_left, right: node.fade_right });
+    }
+    if let Some(c) = node.inked {
+        item = item.inked([(c[0], c[1]), (c[2], c[3]), (c[4], c[5]), (c[6], c[7])]);
     }
     if let Some(c) = node.corners {
         item = item.turned([(c[0], c[1]), (c[2], c[3]), (c[4], c[5]), (c[6], c[7])]);

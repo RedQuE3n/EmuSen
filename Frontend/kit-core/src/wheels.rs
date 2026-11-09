@@ -144,7 +144,8 @@ pub fn wheels<K: PartialEq>(width: f64, keys: &[K], places: usize, g: &WheelGeom
         steps.push(Steps {
             left: s.checked_sub(1).map(stop),
             right: (s + 1 < stops).then(|| stop(s + 1)),
-            up: group.map(|gr| firsts[gr]),
+            // A place goes Up to the first world, so every node is reached from every other.
+            up: group.map_or(firsts.first().copied(), |gr| Some(firsts[gr])),
             down: None,
             previous: group.and_then(|gr| shoulder(gr.checked_sub(1))),
             next: shoulder(Some(group.map_or(0, |gr| gr + 1))),

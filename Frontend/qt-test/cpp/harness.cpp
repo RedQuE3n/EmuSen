@@ -136,7 +136,7 @@ QRectF glyphBox(QQuickItem* item)
     const int across = item->property("effectiveHorizontalAlignment").toInt(), down = item->property("verticalAlignment").toInt();
     const double x = left + ((across & Qt::AlignRight) ? w - tw : (across & Qt::AlignHCenter) ? (w - tw) / 2 : 0);
     const double y = top + ((down & Qt::AlignBottom) ? h - th : (down & Qt::AlignVCenter) ? (h - th) / 2 : 0);
-    return item->mapRectToScene(QRectF(x, y, tw, th));
+    return QRectF(x, y, tw, th);
 }
 
 void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArray& out)
@@ -211,8 +211,16 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
         node["size"] = font.pixelSize() > 0 ? font.pixelSize() : font.pointSizeF() * 4.0 / 3.0;
         node["bold"] = font.weight() >= QFont::Bold;
         node["face"] = font.family();
-        const QRectF glyphs = glyphBox(item);
+        const QRectF laid = glyphBox(item), glyphs = item->mapRectToScene(laid);
         node["glyphs"] = QJsonArray{glyphs.x(), glyphs.y(), glyphs.width(), glyphs.height()};
+        // The glyphs' own four corners in the scene, which a stack's rule holds uncovered (EmuSen_Kit.md §7.33).
+        QJsonArray inked;
+        for (const QPointF& p : {laid.topLeft(), laid.topRight(), laid.bottomRight(), laid.bottomLeft()}) {
+            const QPointF at = item->mapToScene(p);
+            inked.append(at.x());
+            inked.append(at.y());
+        }
+        node["inked"] = inked;
     }
     if (item->inherits("QQuickFlickable")) {
         const int direction = item->property("flickableDirection").toInt();

@@ -18,7 +18,7 @@ ThemeScreen {
             anchors.fill: parent
             focus: true
             readonly property real pixelScale: canvas.unit
-            readonly property var focused: covers.currentItem
+            readonly property var focused: covers.currentItem ? covers.currentItem.cell : null
             readonly property bool empty: covers.count === 0 && !Browse.searching
             readonly property real hue: root.focused ? root.focused.hue : Browse.hue
             readonly property real wordsWidth: Math.min(820, root.width - 480)
@@ -127,7 +127,7 @@ ThemeScreen {
                             elide: Text.ElideRight
                             color: Tokens.muted
                             font.family: faces.regular
-                            font.pixelSize: 18
+                            font.pixelSize: 19
                         }
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
@@ -135,7 +135,7 @@ ThemeScreen {
                             text: Words.between
                             color: Tokens.muted
                             font.family: faces.regular
-                            font.pixelSize: 18
+                            font.pixelSize: 19
                         }
                         Text {
                             objectName: "gamesNext"
@@ -145,7 +145,7 @@ ThemeScreen {
                             elide: Text.ElideRight
                             color: Tokens.muted
                             font.family: faces.regular
-                            font.pixelSize: 18
+                            font.pixelSize: 19
                         }
                         PadGlyph {
                             anchors.verticalCenter: parent.verticalCenter
@@ -273,38 +273,50 @@ ThemeScreen {
                                 maskEnabled: true
                                 maskSource: mask
                             }
-                            delegate: StripItem {
-                                id: cell
+                            // A horizontal list sets each delegate's y to 0, so the cover stands on the foot line inside a slot as tall as the land.
+                            delegate: FocusScope {
+                                id: slot
                                 required property int index
-                                required key
-                                required title
-                                required facts
+                                required property string key
+                                required property string title
+                                required property string facts
                                 required property string description
                                 required property string cover
                                 required property string hero
                                 required property real coverShape
                                 required property real consoleHue
                                 required property bool favourite
-                                controller: frame.controller
-                                objectName: "gameCover." + cell.index
-                                steps: false
-                                still: Browse.searching
-                                kind: 1
-                                picture: cell.hero
-                                hue: cell.consoleHue
-                                y: 260 - height
-                                width: root.coverHeight * cell.coverShape
-                                height: root.coverHeight
-                                Accessible.name: cell.title
-                                onActivated: Actions.play(cell.key)
-                                onActiveFocusChanged: if (cell.activeFocus) Actions.focus(cell.key)
-                                Cover {
-                                    anchors.fill: parent
-                                    source: cell.cover
-                                    title: cell.title
-                                    hue: cell.consoleHue
-                                    favourite: cell.favourite
-                                    pixelScale: root.pixelScale
+                                readonly property alias cell: cell
+                                width: cell.width
+                                height: 302
+                                StripItem {
+                                    id: cell
+                                    readonly property string description: slot.description
+                                    controller: frame.controller
+                                    objectName: "gameCover." + slot.index
+                                    focus: true
+                                    key: slot.key
+                                    title: slot.title
+                                    facts: slot.facts
+                                    steps: false
+                                    still: Browse.searching
+                                    kind: 1
+                                    picture: slot.hero
+                                    hue: slot.consoleHue
+                                    y: 260 - height
+                                    width: root.coverHeight * slot.coverShape
+                                    height: root.coverHeight
+                                    Accessible.name: slot.title
+                                    onActivated: Actions.play(slot.key)
+                                    onActiveFocusChanged: if (cell.activeFocus) Actions.focus(slot.key)
+                                    Cover {
+                                        anchors.fill: parent
+                                        source: slot.cover
+                                        title: slot.title
+                                        hue: slot.consoleHue
+                                        favourite: slot.favourite
+                                        pixelScale: root.pixelScale
+                                    }
                                 }
                             }
                             WheelHandler {

@@ -152,7 +152,7 @@ ThemeScreen {
                             objectName: "engineLine"
                             visible: !root.onPlace
                             spacing: 6
-                            height: 20.4
+                            height: 24
                             readonly property bool libretro: root.focused?.libretro ?? false
                             readonly property color ink: engine.libretro ? (root.night ? "#C9C9D0" : Tokens.muted) : Qt.hsla(Math.max(0, root.hue) / 360, root.night ? 0.85 : 0.6, root.night ? 0.8 : 0.3, 1)
                             id: engine
@@ -173,7 +173,7 @@ ThemeScreen {
                                 color: engine.ink
                                 font.family: faces.condensed
                                 font.weight: Font.Medium
-                                font.pixelSize: 17
+                                font.pixelSize: 19
                                 font.letterSpacing: 1.5
                                 font.capitalization: Font.AllUppercase
                             }
@@ -181,7 +181,7 @@ ThemeScreen {
                                 objectName: "engineTag"
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: tag.implicitWidth + 10
-                                height: 22
+                                height: 24
                                 radius: Tokens.rowRadius
                                 color: engine.libretro ? "transparent" : Qt.hsla(Math.max(0, root.hue) / 360, 0.6, 0.5, 0.14)
                                 border.width: 1
@@ -193,7 +193,7 @@ ThemeScreen {
                                     color: engine.libretro ? (root.night ? "#A9A9B2" : Tokens.muted) : Qt.hsla(Math.max(0, root.hue) / 360, root.night ? 0.7 : 0.6, root.night ? 0.82 : 0.3, 1)
                                     font.family: faces.condensed
                                     font.weight: Font.Medium
-                                    font.pixelSize: 17
+                                    font.pixelSize: 19
                                     font.letterSpacing: 0.8
                                 }
                             }
@@ -355,7 +355,7 @@ ThemeScreen {
                                 x: machine.stripX
                                 y: strip.foot - height
                                 width: 160
-                                height: 134
+                                height: 137.2
                                 boxX: 40
                                 boxWidth: 80
                                 boxHeight: 80
@@ -427,8 +427,8 @@ ThemeScreen {
                                     text: Words.games(machine.count)
                                     color: Tokens.muted
                                     font.family: faces.regular
-                                    font.pixelSize: 17
-                                    lineHeight: 20.4
+                                    font.pixelSize: 19
+                                    lineHeight: 22.8
                                     lineHeightMode: Text.FixedHeight
                                 }
                             }
@@ -454,10 +454,10 @@ ThemeScreen {
                                     color: Tokens.muted
                                     font.family: faces.condensed
                                     font.weight: Font.Medium
-                                    font.pixelSize: 17
+                                    font.pixelSize: 19
                                     font.letterSpacing: 2
                                     font.capitalization: Font.AllUppercase
-                                    lineHeight: 20
+                                    lineHeight: 22.8
                                     lineHeightMode: Text.FixedHeight
                                 }
                                 Text {
@@ -466,8 +466,8 @@ ThemeScreen {
                                     color: Tokens.muted
                                     font.family: faces.condensed
                                     font.weight: Font.Medium
-                                    font.pixelSize: 17
-                                    lineHeight: 20
+                                    font.pixelSize: 19
+                                    lineHeight: 22.8
                                     lineHeightMode: Text.FixedHeight
                                 }
                                 Text {
@@ -475,9 +475,9 @@ ThemeScreen {
                                     color: Tokens.muted
                                     font.family: faces.condensed
                                     font.weight: Font.Medium
-                                    font.pixelSize: 17
+                                    font.pixelSize: 19
                                     font.letterSpacing: 2
-                                    lineHeight: 20
+                                    lineHeight: 22.8
                                     lineHeightMode: Text.FixedHeight
                                 }
                             }

@@ -21,7 +21,7 @@ ThemeScreen {
             readonly property int bodies: Library.consoles.count
             readonly property real pitch: Math.min(96, root.bodies > 1 ? (root.width - 128) / root.bodies : 96)
             readonly property real size: Math.min(64, root.pitch - 16)
-            readonly property real left: root.width / 2 - (root.bodies * root.pitch - (root.pitch - root.size)) / 2
+            readonly property real rowStart: root.width / 2 - (root.bodies * root.pitch - (root.pitch - root.size)) / 2
             readonly property real line: Math.max(0, Math.min(1, (root.time - 600) / 1200))
             readonly property real words: Math.max(0, Math.min(1, (root.time - 4600) / 800))
             NumberAnimation on time {
@@ -70,7 +70,7 @@ ThemeScreen {
                         readonly property bool struck: root.time >= rising.start + 250
                         objectName: "splashBody." + rising.index
                         visible: rising.v > 0
-                        x: root.left + rising.index * root.pitch
+                        x: root.rowStart + rising.index * root.pitch
                         y: 540 + (420 - 540) * rising.spring - root.size / 2
                         width: root.size
                         height: root.size
@@ -114,9 +114,9 @@ ThemeScreen {
                 color: Tokens.muted
                 font.family: faces.medium
                 font.weight: Font.Medium
-                font.pixelSize: 17
+                font.pixelSize: 19
                 font.letterSpacing: 6
-                lineHeight: 20
+                lineHeight: 22.8
                 lineHeightMode: Text.FixedHeight
             }
             Faces {

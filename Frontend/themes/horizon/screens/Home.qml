@@ -310,8 +310,8 @@ ThemeScreen {
                                             text: chip.label
                                             color: Tokens.overArt
                                             font.family: faces.regular
-                                            font.pixelSize: 18
-                                            lineHeight: 22
+                                            font.pixelSize: 19
+                                            lineHeight: 22.8
                                             lineHeightMode: Text.FixedHeight
                                         }
                                     }

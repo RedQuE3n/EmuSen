@@ -2597,6 +2597,17 @@ unchanged.
 - **[routine]** A stepped action's ◂ ▸ and its stepping (Resume's slots) are piece G's.
 - **[routine]** The cover's raised shadow waits for a shadow token (§5.4).
 
+### 7.46 A long value on a `MenuRow` (stage 5, piece D; 2026-11-09)
+
+Found by Settings' Library section in the program (`EmuSen_Qt.md` §7.7): a row's value was laid out at its own width,
+so a folder's path of 70 characters (the test's scratch tree) took the whole row and squeezed the label to a negative
+width, which the gate read as the label cut, past its box and past its clip. The value is now at most half the row and
+cut at its start (`Text.ElideLeft`), so the label keeps the other half and the end of a path, the folder's own name,
+shows, as a file manager's narrow column shows one. A value that fits is drawn as before; nothing of the surface
+changed. The cut is still a finding of the gate's ("cut with an ellipsis"), which Settings' test names for a folder's
+value alone. Held to by `qt-app/tests/settings.rs`; seeded, the cap taken out failed it again (the label cut and past its
+box, the value past its row's clip).
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

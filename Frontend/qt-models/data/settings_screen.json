@@ -1,0 +1,125 @@
+{
+  "words": {
+    "on": "On",
+    "off": "Off",
+    "every": "Console's",
+    "last_game": "The last game",
+    "sample": "The quick brown fox",
+    "game": "game",
+    "games": "games"
+  },
+  "applies": {
+    "text_scale": "AppSettings TextSize",
+    "light": ["AppSettings Appearance", "light"],
+    "reduced_motion": ["AppSettings ReducedMotion", "on"]
+  },
+  "sections": [
+    {
+      "id": "controllers",
+      "name": "Controllers",
+      "rows": [
+        {"id": "rumble", "row": "AppSettings Rumble"},
+        {"id": "swap", "row": "AppSettings SwapPadButtons"},
+        {"id": "chords", "row": "AppSettings GuideChords"},
+        {"id": "type", "row": "AppSettings ControllerType"},
+        {"id": "firstonly", "row": "AppSettings FirstControllerOnly"},
+        {"id": "notices", "row": "AppSettings ControllerNotifications"},
+        {"id": "keyboard", "row": "AppSettings OnScreenKeyboard"},
+        {"id": "stickdpad", "row": "AppSettings AnalogStickAsDpad"},
+        {"id": "deadzone", "row": "AppSettings StickDeadzone"},
+        {"id": "mirror", "row": "AppSettings MirrorPlayer1ToPlayer2"}
+      ]
+    },
+    {
+      "id": "display",
+      "name": "Display",
+      "rows": [
+        {"id": "shape", "row": "GraphicsConfig.Consoles PictureShape", "consoles": "every"},
+        {"id": "crt", "label": "CRT shader", "hint": "The television's picture for every console that had one.",
+         "filter": "CRT", "setting": "quality", "off": "None", "consoles": "televisions",
+         "pane": {"preview": "picture", "caption": "{running} · {value} CRT", "by_value": {
+           "Performance": "Performance: a plain scanline and the mask, for a weak machine.",
+           "Balanced": "Balanced: the mask and the bloom at half strength. Accurate costs 3× more; Performance is a plain scanline.",
+           "Accurate": "Accurate: the whole tube, its glow, glass and phosphors, at three times Balanced's cost.",
+           "Off": "Off: the console's pixels as they are, with no television.",
+           "*": "Each console keeps its own; Left and Right set one for them all."}}},
+        {"id": "levers", "label": "Shader levers", "hint": "The CRT's own levers for one console: the mask, the bloom, the scanlines and the glass.",
+         "door": "levers", "pane": {"preview": "picture", "caption": "{running} · live preview", "muted": ["A opens its levers; each one redraws the picture."]}},
+        {"id": "shaders", "label": "Shaders", "hint": "The shader each console draws with: the built-in filters, the recent ones and the slang pack's presets.", "door": "shaders"},
+        {"id": "crop", "row": "GraphicsConfig.Consoles Overscan", "consoles": "televisions"},
+        {"id": "textsize", "row": "AppSettings TextSize", "scales": {"default": 1.0, "large": 1.15, "larger": 1.3},
+         "pane": {"preview": "sizes", "sentence": "Text size scales every word on the big screen; nothing is cut off at any size."}},
+        {"id": "art", "row": "AppSettings HomeArt"},
+        {"id": "motion", "row": "AppSettings ReducedMotion", "pane": {"by_value": {
+           "On": "Nothing moves: a page appears at once, and a fade takes a moment.",
+           "Off": "Pages and shelves move as they are drawn to.",
+           "*": "The desktop's own setting: full motion."}, "muted": ["Applies at once, on the big screen."]}},
+        {"id": "splash", "row": "AppSettings StartupSplash"},
+        {"id": "variant", "row": "AppSettings Appearance",
+         "pane": {"preview": "variants", "sentence": "Dark is the big screen's default; Light follows the desktop's choice when you ask it to."}},
+        {"id": "videos", "row": "AppSettings PlayVideos"},
+        {"id": "smooth", "row": "GraphicsConfig SyncToDisplay"},
+        {"id": "statusbar", "row": "AppSettings ShowStatusBar"},
+        {"id": "messages", "row": "AppSettings ShowStatusText"},
+        {"id": "fps", "row": "AppSettings ShowFpsBar"}
+      ]
+    },
+    {
+      "id": "sound",
+      "name": "Sound",
+      "rows": [
+        {"id": "volume", "row": "AppSettings Volume",
+         "pane": {"preview": "meter", "sentence": "The game's volume. On the handheld this row defers to the device's quick menu."}},
+        {"id": "navsounds", "row": "AppSettings NavigationSounds"},
+        {"id": "soundvolume", "row": "AppSettings BigPictureInterface.NavigationVolume", "pane": {"preview": "meter"}},
+        {"id": "output", "row": "AppSettings SoundOutputDevice", "more": "outputs",
+         "pane": {"by_value": {
+           "System default": "The game and the interface's sounds play where the system sends sound.",
+           "*": "The game and the interface's sounds play on {value}."},
+          "muted": ["A device not connected when EmuSen starts falls back to the system default."]}}
+      ]
+    },
+    {
+      "id": "consoles",
+      "name": "Consoles",
+      "rows": []
+    },
+    {
+      "id": "library",
+      "name": "Library",
+      "rows": [
+        {"id": "rom", "label": "ROM folder", "hint": "The folder the library lists, read in place and never moved.", "door": "romfolder",
+         "value": {"from": "AppSettings RomDirectory", "blank": "Not set"},
+         "pane": {"sentence": "{games} under {value}, read in place and never moved.",
+          "muted": ["A opens the folder picker; new games are found on the next start or with Check Again in the Library Manager."]}},
+        {"id": "art", "label": "Artwork folder", "hint": "Box art, named like the game's file; blank keeps it beside the games.", "door": "artfolder",
+         "value": {"from": "AppSettings ArtworkDirectory", "blank": "beside the games"}},
+        {"id": "themes", "label": "Themes", "hint": "The big picture's look: EmuSen's own, or an ES-DE theme's; A opens the themes and their options.", "door": "themes",
+         "value": {"from": "AppSettings EmuSenTheme", "blank": "EmuSen (built in)", "words": {"emusen": "EmuSen (built in)"}}},
+        {"id": "scraping", "label": "Scraping", "hint": "Where art and facts come from, and what is fetched.", "page": "Scraping",
+         "value": {"from": "AppSettings Scraping", "words": {"true": "ScreenScraper", "false": "Off"}}},
+        {"id": "collections", "label": "Collections", "hint": "The automatic collections shown, your own, and how lists are sorted.", "page": "Collections"},
+        {"id": "hidden", "row": "AppSettings ShowHiddenGames"},
+        {"id": "cheats", "label": "Cheats", "hint": "The cheats of the game last played, turned on or off, and the cheat database.", "door": "cheats"},
+        {"id": "discs", "label": "Compressed discs", "hint": "The library's discs converted to CHD beside them, checked and listed; the library is only read.", "door": "discs"},
+        {"id": "media", "label": "ES-DE media folder", "hint": "An ES-DE downloaded_media folder whose art the theme shows; only ever read.", "door": "mediafolder",
+         "value": {"from": "AppSettings EsdeMediaDirectory", "blank": "None"}},
+        {"id": "themefolder", "label": "ES-DE theme folder", "hint": "A theme folder for ES-DE to read in place, which then joins the themes.", "door": "themefolder",
+         "value": {"from": "AppSettings BigPictureTheme", "blank": "None"}}
+      ]
+    },
+    {
+      "id": "emusen",
+      "name": "EmuSen",
+      "rows": [
+        {"id": "saves", "label": "Saves and states", "hint": "Where states go, what happens when a game starts again, and how play time is counted.", "page": "Saves and states",
+         "pane": {"sentence": "States and saves live beside the games, with one resume point kept per game.", "muted": ["Resume · {AppSettings ResumeOnLaunch}"]}},
+        {"id": "bigpicture", "row": "AppSettings BigScreen"},
+        {"id": "background", "row": "AppSettings PauseInBackground"},
+        {"id": "logging", "label": "Logging", "hint": "Whether the runtime writes its log, and where each session's log goes.", "door": "logging"},
+        {"id": "shell", "label": "Shell", "hint": "DianaSh, EmuSen's own shell, for scripts and the runtime's commands.", "door": "shell"},
+        {"id": "about", "label": "About", "hint": "EmuSen's version.", "value": {"fact": "version"}}
+      ]
+    }
+  ]
+}

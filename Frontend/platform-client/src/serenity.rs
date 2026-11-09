@@ -126,6 +126,13 @@ fn preset_text(platform: &Platform, path: &str) -> Result<Vec<u8>> {
     Ok(platform.read(|out, cap| unsafe { platform.lib.emusen_serenity_preset_load(path.as_ptr(), path.len(), out, cap) })?.unwrap_or_default())
 }
 
+/// Serenity's catalogue (`emusen_serenity_filters`): the filters with their settings, the screens with their kinds, and
+/// the crop's limits, as the header describes the document.
+pub fn catalogue(platform: &Platform) -> Result<serde_json::Value> {
+    let bytes = platform.read(|out, cap| unsafe { platform.lib.emusen_serenity_filters(out, cap) })?.unwrap_or_default();
+    crate::out::json("serenity_filters", &bytes)
+}
+
 /// A `.slangp` preset read through its `#reference` chain: `{"path", "passes", "textures", "parameters"}`, a float as its
 /// 32 bits; a read that fails is a document too, `{"fail", "message", ...}`, as the header gives it.
 pub fn preset_load(platform: &Platform, path: &str) -> Result<serde_json::Value> {

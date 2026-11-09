@@ -2172,6 +2172,29 @@ Proof, measured 2026-11-09: theme-audit's `state-splash` fixture, a wordmark pas
 found at 3 s alone and its pictures at 1 s and 5 s are equal and differ from 3 s's (`qt_3_7_a_splash_is_held_at_1_3_and_5_s_and_judged_at_each`);
 `state-pressed`'s row grown by a held Return overlaps its neighbour in the pressed state alone.
 
+### 7.37 A on a walkable: the element's own handler hears it first (2026-11-09)
+
+A `Walkable` answered Return and Enter with `Keys.onReturnPressed` and `Keys.onEnterPressed`. Qt's `Keys` treats a key
+with a handler of its own as accepted before the handler runs, and emits the general `pressed` only for a key still not
+accepted after it (Qt's `QQuickKeysAttached::keyPressed`), so a theme's `Keys.onPressed` written on a `Walkable` itself
+never heard A; one written on a focused child did. Found by theme-audit's `pressed` state on 2026-11-09: Meridian's rail
+entry widens its bar to 6 while A is held (`RailEntry.qml`, `Keys.onPressed` on the entry, which passes the key on) and
+never did.
+
+The walkable's Return handler now emits the element's own `pressed` first, with the key not accepted, so every
+`Keys.onPressed` on the element hears A; if none of them takes it (accepts it), the walkable activates. Either way the
+key ends accepted, so A never reaches the items around the element: the frame answers a Return that reaches it as the
+pad's A, which on the big screen opens the content's detail (kit-core's walk), and Meridian's handler, written to let
+"the press still reach Walkable's own handler", sets the key not accepted. Enter is sent through the same handler. A
+key the walkable does not act on is not accepted and goes on as before. The handler is three statements of QML, not
+logic moved into a model: it is the order of two of Qt's own signals.
+
+Held to by `qt-test/tests/walkable.rs` over `WalkableKeysScene.qml`, with Return, Enter and the pad's A: a plain
+walkable activates once a press; one whose `Keys.onPressed` passes A on hears it and activates once; one whose handler
+takes A does not activate; none lets A reach the item around them, which still hears a key no one acts on. Two seeded
+faults, each reverted: the old handlers failed it (the passing handler heard nothing); the key left as the theme's
+handler left it failed it (A reached the item around, twice).
+
 ### 7.38 A declined place, and words mid-fade, under the contrast rule (theme-audit; 2026-11-09)
 
 **A declined place.** The harness has exempted a disabled control's words since §7.10 (`enabled` false), as WCAG 2.2's

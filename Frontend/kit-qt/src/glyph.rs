@@ -61,6 +61,10 @@ pub mod qobject {
         /// The outlined set or the filled one (EmuSen_Kit.md §7.28).
         #[qproperty(GlyphStyle, style)]
         #[qproperty(bool, letter_bold, READ, NOTIFY)]
+        /// The press drawn with `button` as one glyph where kit-core has one for the two, -1 (the default) for none (EmuSen_Kit.md §7.53).
+        #[qproperty(i32, pair)]
+        /// Whether the glyph drawn is the pair's one.
+        #[qproperty(bool, paired, READ, NOTIFY)]
         type PadGlyphMarks = super::PadGlyphMarksRust;
     }
 
@@ -111,6 +115,8 @@ pub struct PadGlyphMarksRust {
     name: QString,
     style: GlyphStyle,
     letter_bold: bool,
+    pair: i32,
+    paired: bool,
     glyph: Glyph,
 }
 
@@ -127,6 +133,8 @@ impl Default for PadGlyphMarksRust {
             name: QString::default(),
             style: GlyphStyle::Outlined,
             letter_bold: false,
+            pair: -1,
+            paired: false,
             glyph: Glyph { marks: Vec::new(), letter: None },
         };
         rust.rebuild();
@@ -140,13 +148,19 @@ impl PadGlyphMarksRust {
         let style = kinds::glyph_style(self.style);
         let family = glyph::lettered(kinds::pad_family(self.family), style);
         let control = kinds::ui_button(self.button).unwrap_or(UiButton::Guide).control(self.swap);
-        self.glyph = glyph::styled(family, control, style);
+        let second = kinds::ui_button(PadButton { repr: self.pair }).map(|b| b.control(self.swap));
+        let paired = second.and_then(|b| glyph::paired(control, b, style).map(|g| (g, b)));
+        self.glyph = paired.as_ref().map_or_else(|| glyph::styled(family, control, style), |(g, _)| g.clone());
+        self.paired = paired.is_some();
         let letter = self.glyph.letter;
         self.letter = QString::from(letter.map_or("", |l| l.text));
         self.letter_scale = letter.map_or(1.0, |l| l.scale);
         self.letter_bold = letter.is_some_and(|l| l.bold);
         self.cut = self.glyph.marks.iter().any(|m| m.cut);
-        self.name = QString::from(glyph::name(family, control));
+        self.name = QString::from(&match paired {
+            Some((_, b)) => format!("{} and {}", glyph::name(family, control), glyph::name(family, b)),
+            None => glyph::name(family, control).to_owned(),
+        });
     }
 }
 
@@ -157,6 +171,7 @@ impl cxx_qt::Initialize for qobject::PadGlyphMarks {
         self.as_mut().on_swap_changed(|this| this.refresh()).release();
         self.as_mut().on_size_changed(|this| this.resize()).release();
         self.as_mut().on_style_changed(|this| this.refresh()).release();
+        self.as_mut().on_pair_changed(|this| this.refresh()).release();
     }
 }
 
@@ -176,6 +191,7 @@ impl qobject::PadGlyphMarks {
         self.as_mut().cut_changed();
         self.as_mut().name_changed();
         self.as_mut().letter_bold_changed();
+        self.as_mut().paired_changed();
     }
 
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {

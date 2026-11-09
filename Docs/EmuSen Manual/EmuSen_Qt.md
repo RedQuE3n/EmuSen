@@ -2699,6 +2699,23 @@ is empty. Eleven boxes stay named, each explained:
 day): 71 of 71 load, none drawn whole, and 61 use no undrawn kind (45 before: the 22 themes counting `gameselector`
 undrawn no longer do); no row worsened.
 
+#### 4.8.7 ES-DE as the bar: the boxes, the pictures, the help bar's words and the pair glyph **[M 2026-11-09]**
+
+**Decided 2026-11-09 by the tester: the goal is 100 % compatibility with ES-DE themes.** The C# painter is no longer
+the bar. A difference from ES-DE 3.4.1 is a defect even where the C# painter has the same difference, and a difference
+explained is not a difference closed. The evidence is ES-DE's published documents (THEMES.md, USERGUIDE.md at v3.4.1)
+and the approved AppImage's captures of 2026-11-08 (`Testing/esde-oracle/README.md`), never ES-DE's source. **Decided
+2026-11-09 by the tester:** the font files bundled in that AppImage count as evidence too (fonts only; still never ES-DE's
+code or graphics); their metrics, read through Qt's `FontMetrics`, are kept below.
+
+**4. The pair glyph** (approved by the tester 2026-11-09). ES-DE draws one icon for a pair of presses that make one
+action (Choose, the gamelist's System: a d-pad with both arrows of its axis; THEMES.md's `button_lr` and `button_ltrt`
+for the shoulders and the triggers). kit-core's `glyph::paired` gives one glyph for a d-pad axis, the two shoulders or
+the two triggers, and kit-qt's `PadGlyph.pair` draws it; the kit's `HelpBar.pairGlyph` draws an entry's pair as that one
+glyph, which `HelpElement` turns on (EmuSen_Kit.md §7.53). CarAlt's Choose now inks 1221–1237 against ES-DE's 1221–1237;
+it had drawn two glyphs over 1198–1238. Seeded faults: `pairGlyph` off (the four system bars 22.3–40.9 units wider,
+failing); the filled axis cut at one tip only (kit-core's `kit_7_53_a_pair_pressed_for_one_action_is_one_glyph`, failing).
+
 ---
 
 ## 5. The stable developer surface

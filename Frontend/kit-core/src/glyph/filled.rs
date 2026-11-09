@@ -2,7 +2,7 @@
 //! buttons (EmuSen_BigPicture.md §40.1, EmuSen_Kit.md §7.28). The holes of a shape never overlap one another or its
 //! letter, since the shape is filled odd-even; a stroked symbol is cut as the band between two outlines.
 
-use super::{at, circle, closed, direction, face_letter, plus, rect, rounded, shoulder_label, Glyph, Letter, Mark, PadFamily, C};
+use super::{at, circle, closed, direction, face_letter, plus, rect, rounded, shoulder_label, sides, Glyph, Letter, Mark, PadFamily, Pair, C};
 use crate::input::PadControl;
 use crate::world::Point;
 
@@ -99,13 +99,29 @@ fn face(family: PadFamily, control: PadControl) -> Glyph {
     body(disc(), holes)
 }
 
+const DPAD_HALF: f64 = 0.16;
+const DPAD_REACH: f64 = 0.46;
+
 /// A solid plus with an arrow cut into the tip of the arm the press moves along.
 fn dpad(control: PadControl) -> Glyph {
-    let (half, reach) = (0.16, 0.46);
+    body(plus(DPAD_HALF, DPAD_REACH), vec![arrow(control)])
+}
+
+/// The arrow cut into the tip of a direction's arm.
+fn arrow(control: PadControl) -> Vec<Point> {
     let (dx, dy) = direction(control);
-    let (tip, base, wide) = (reach - 0.05, reach - 0.2, 0.1);
-    let arrow = closed(vec![at(dx * tip, dy * tip), at(dx * base - dy * wide, dy * base + dx * wide), at(dx * base + dy * wide, dy * base - dx * wide)]);
-    body(plus(half, reach), vec![arrow])
+    let (tip, base, wide) = (DPAD_REACH - 0.05, DPAD_REACH - 0.2, 0.1);
+    closed(vec![at(dx * tip, dy * tip), at(dx * base - dy * wide, dy * base + dx * wide), at(dx * base + dy * wide, dy * base - dx * wide)])
+}
+
+/// A pair as one glyph: the solid plus with an arrow cut into both tips of the axis, or the two bodies side by side.
+pub(super) fn paired(pair: Pair) -> Glyph {
+    match pair {
+        Pair::Axis(a, b) => body(plus(DPAD_HALF, DPAD_REACH), vec![arrow(a), arrow(b)]),
+        Pair::Sides { trigger } => {
+            Glyph { marks: sides(trigger).into_iter().map(|points| Mark { points, filled: true, stroke: 0.0, cut: false, holes: Vec::new() }).collect(), letter: None }
+        }
+    }
 }
 
 /// A shoulder's body rounded at the top, a trigger's taller and rounded at the bottom, its family's name cut out.

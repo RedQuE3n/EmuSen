@@ -165,3 +165,33 @@ fn kit_7_28_an_unknown_pad_is_lettered_as_an_xbox_pad_in_the_filled_set_only() {
         }
     }
 }
+
+// EmuSen_Kit.md §7.53: a d-pad axis, the shoulders or the triggers as one glyph, in either order and both sets; no other two.
+#[test]
+fn kit_7_53_a_pair_pressed_for_one_action_is_one_glyph() {
+    use PadControl::{Down, Left, LeftShoulder, LeftTrigger, Right, RightShoulder, RightTrigger, South, Up};
+    for style in GlyphStyle::ALL {
+        for (a, b) in [(Left, Right), (Up, Down), (LeftShoulder, RightShoulder), (LeftTrigger, RightTrigger)] {
+            let g = glyph::paired(a, b, style).unwrap_or_else(|| panic!("{style:?} {a:?}+{b:?} has a pair glyph"));
+            assert_eq!(glyph::paired(b, a, style), Some(g.clone()), "{style:?} {a:?}+{b:?}: the order does not matter");
+            assert!(g.letter.is_none(), "{style:?} {a:?}+{b:?}: unlettered");
+            for m in &g.marks {
+                assert_eq!(m.points.first(), m.points.last(), "{style:?} {a:?}+{b:?}: closed");
+                assert!(m.points.iter().flatten().all(|v| (0.0..=1.0).contains(v)), "{style:?} {a:?}+{b:?} leaves the box");
+                for hole in &m.holes {
+                    assert!(hole.iter().all(|p| inside(*p, &m.points)), "{style:?} {a:?}+{b:?}: a hole leaves its shape");
+                }
+            }
+            assert_ne!(g, glyph::styled(PadFamily::Xbox, a, style), "{style:?} {a:?}+{b:?}: not the single control's glyph");
+        }
+        for (a, b) in [(Left, Up), (South, Left), (Left, Left), (LeftShoulder, RightTrigger)] {
+            assert!(glyph::paired(a, b, style).is_none(), "{style:?} {a:?}+{b:?} is no pair");
+        }
+    }
+    // The filled axis is the single direction's plus with the other tip's arrow cut too.
+    let axis = glyph::paired(Left, Right, GlyphStyle::Filled).unwrap();
+    let left = glyph::styled(PadFamily::Xbox, Left, GlyphStyle::Filled);
+    let right = glyph::styled(PadFamily::Xbox, Right, GlyphStyle::Filled);
+    assert_eq!(axis.marks[0].points, left.marks[0].points);
+    assert_eq!(axis.marks[0].holes, [left.marks[0].holes[0].clone(), right.marks[0].holes[0].clone()]);
+}

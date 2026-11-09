@@ -4,6 +4,15 @@ The kit is the QML module `EmuSen.Kit` (EmuSen_Qt.md §1.4), held by rule Q (§5
 writes it, is committed under `Testing/qmltypes/` and compared on every build. A minor adds and never removes; each
 entry names what was added and the section of `EmuSen_Kit.md` that records it.
 
+## 1.0, stage 4 piece X: a pair as one glyph, and a host's words on the help bar (2026-11-09)
+
+Additions only; no type, property, signal or invokable was removed or changed.
+
+- **`PadGlyphMarks.pair`** and **`paired`** (registry): a second press drawn with `button` as one glyph where kit-core
+  has one for the two (a d-pad axis, the shoulders, the triggers), and whether it is. §7.53.
+- `PadGlyph.pair` and `paired`; `HelpBar.pairGlyph` (false by default) and `HelpBar.label` (null by default), QML
+  properties of the qmldir's types. §7.53.
+
 ## 1.0, stage 3: an orbit deleted with its screen (2026-11-09)
 
 No type, property, signal or invokable was added, removed or changed.

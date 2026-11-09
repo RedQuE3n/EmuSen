@@ -73,6 +73,7 @@ ElementBox {
         family: root.family
         glyphStyle: root.filled ? Kit.GlyphStyles.Filled : Kit.GlyphStyles.Outlined
         labelFont: Qt.font({ family: face.status === FontLoader.Ready ? face.font.family : body.font.family, pixelSize: Math.round(root.labelPx) })
+        pairGlyph: true
         entrySpacing: root.entrySpacing
         glyphGap: root.iconGap
         labelColor: root.color

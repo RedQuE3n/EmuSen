@@ -2774,3 +2774,30 @@ over the other four themes in every state is in `EmuSen_Qt.md` §3.7.2.
 Held to by `qt-test/tests/polish.rs` over `PolishScene.qml`: a help bar whose model changes, one entry declined, while a
 `FrameAnimation` runs; after `rest` the entries stand where they stood. Before the change the entries read x 0, 0, 0
 where they stood at 0, 127.5 and 267.9. Seeded fault: the polish wait removed (the same three zeros).
+
+### 7.53 A pair as one glyph (stage 4, X; 2026-11-09)
+
+An extension under rule Q for the ES-DE painter's help bar (EmuSen_Qt.md §4.8.7), declared after what was there;
+it changes what an existing screen draws.
+
+- **The pair glyph** (approved by the tester 2026-11-09). ES-DE's help draws one icon for a pair of presses that make one
+  action: the d-pad with both arrows of its axis for Choose and the gamelist's System, and its `button_lr` and
+  `button_ltrt` for the shoulders and the triggers (THEMES.md, `customButtonIcon`'s keys). The kit drew a pair as two
+  glyphs side by side. kit-core's `glyph::paired(a, b, style)` gives one glyph for two controls when they are a d-pad
+  axis (left and right, up and down), the two shoulders or the two triggers, in either order, and none for any other
+  two. A d-pad axis is the single direction's plus with both of its directions marked: in the filled set the solid plus
+  with an arrow cut into both tips, in the outlined set the outlined plus with both arms filled. The shoulders and the
+  triggers are their two bodies side by side, each the shape of one at half its width, unlettered, the same in every
+  family (a body has room for one family's name, not two). kit-qt: `PadGlyphMarks.pair` (int, -1 for none, the
+  default) draws the pair's glyph where kit-core has one, and `paired` (read-only) says whether it does; `PadGlyph.pair`
+  and `paired` alias them, and the glyph's accessible name is both controls' ("D-pad left and D-pad right").
+  `HelpBar.pairGlyph` (false by default, so Mistress's own bars still draw two) draws an entry's `pair` as the one glyph
+  and leaves the second out where it is drawn.
+
+**Held to**: kit-core's `tests/glyph.rs` `kit_7_53_a_pair_pressed_for_one_action_is_one_glyph` (the four pairs in both
+sets and either order, closed, inside the box, unlettered, every hole inside its shape, unlike the single control's
+glyph, the filled axis the single direction's plus with both tips' arrows; four other pairs give none); the registry
+under `Testing/qmltypes` (`PadGlyphMarks.pair`, `paired`); the ES-DE oracle, where the help bars of the four system
+views now span ES-DE's widths (CarAlt's Choose inks 1221–1237 as ES-DE's does). Measured on 2026-11-09 with two seeded
+faults, each reverted: the filled axis cut at one tip failed kit-core's test ("not the single control's glyph"), and
+`pairGlyph` left off in the ES-DE painter failed the oracle (the four system bars 22.3–40.9 units wider than ES-DE's).

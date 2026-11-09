@@ -51,6 +51,8 @@ pub mod qobject {
         #[qml_singleton]
         /// Where the reference theme's package lives: the program's resources.
         #[qproperty(QString, folder, READ, CONSTANT)]
+        /// Its `theme.json`, for the Themes tab's first row.
+        #[qproperty(QString, manifest, READ, CONSTANT)]
         type ReferenceTheme = super::ReferenceThemeRust;
     }
 
@@ -112,11 +114,16 @@ pub mod qobject {
 /// The reference theme's place, `crate::REFERENCE_THEME`.
 pub struct ReferenceThemeRust {
     folder: QString,
+    manifest: QString,
 }
 
 impl Default for ReferenceThemeRust {
     fn default() -> Self {
-        ReferenceThemeRust { folder: QString::from(crate::REFERENCE_THEME) }
+        let mut manifest = QString::default();
+        let file = QString::from(format!("{}theme.json", crate::REFERENCE_THEME).as_str());
+        // Read through Qt, as the host reads any package, since the folder is in the resources.
+        emusen_theme_host::sandbox::ffi::sandbox_read(&file, &mut manifest);
+        ReferenceThemeRust { folder: QString::from(crate::REFERENCE_THEME), manifest }
     }
 }
 

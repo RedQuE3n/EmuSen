@@ -23,6 +23,7 @@ fn main() {
             "src/card_model.rs",
             "src/pane_model.rs",
             "src/pictures.rs",
+            "src/themes_model.rs",
         ])
         .include_dir("cpp")
         .cpp_files(["cpp/session_pictures.cpp"])

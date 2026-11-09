@@ -36,6 +36,10 @@ Window {
     readonly property int padFamily: pads.family === Kit.Families.Generic ? Kit.Families.Xbox : pads.family
     readonly property bool gameShown: screens.shown === Screens.Game
     readonly property bool pauseShown: screens.shown === Screens.Pause
+    // The chosen theme's host while one is made.
+    readonly property ThemeHost themeHost: chosenTheme.item as ThemeHost
+    // Why the reference is shown in place of the theme the settings choose, said once the splash has gone.
+    property string themeWords
     // A game chosen: recorded as started, opened (resumed where it is the one suspended) and shown.
     signal play(string path)
     onPlay: (path) => {
@@ -69,7 +73,7 @@ Window {
         // While Guide is held for its chords the game hears nothing, as Mistress keeps the pad from it.
         gameMuted: Kit.PadRouter.guideHeld
         // A theme's screens hear the pad through their own engine's router (EmuSen_Qt.md §3.5.2).
-        onButton: (button, down) => themeHost.holdsFocus ? themeHost.feed.push(button, down) : referenceHost.holdsFocus ? referenceHost.feed.push(button, down) : Kit.PadRouter.push(button, down)
+        onButton: (button, down) => program.themeHost?.holdsFocus ? program.themeHost.feed.push(button, down) : referenceHost.holdsFocus ? referenceHost.feed.push(button, down) : Kit.PadRouter.push(button, down)
     }
     // Home's lines that change with the time: the status line and the paused game's facts.
     Clock {
@@ -134,9 +138,9 @@ Window {
         family: program.padFamily
         reducedMotion: program.reducedMotion
         inputs: !program.splashShown
-        homeWanted: !themeHost.home
-        consolesWanted: !themeHost.consoles
-        gamesWanted: !themeHost.games
+        homeWanted: !(program.themeHost?.home ?? false)
+        consolesWanted: !(program.themeHost?.consoles ?? false)
+        gamesWanted: !(program.themeHost?.games ?? false)
         onPlayed: (path) => program.play(path)
         onResumed: {
             player.session.resume()
@@ -145,33 +149,41 @@ Window {
         onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
         onFocused: (game) => games.focused = games.rowOf(game)
     }
-    // The chosen EmuSen theme's screens over the reference's, each where the theme provides it and has not failed.
-    ThemeHost {
-        id: themeHost
-        objectName: "theme"
+    // The chosen EmuSen theme's screens over the reference's, each where the theme provides it and has not failed; the host and
+    // its engine are made only while a theme other than the reference is chosen (EmuSen_Qt.md §3.5.2, §9.3.5).
+    Loader {
+        id: chosenTheme
+        objectName: "chosenTheme"
         anchors.fill: parent
-        visible: !program.gameShown
-        folder: program.theme
-        coverStores: program.coverStores
-        screens: screens
-        library: library
-        session: player.session
-        clock: clock
-        grid: games
-        picture: player.picture
-        controllers: pads.connected
-        family: program.padFamily
-        reducedMotion: program.reducedMotion
-        inputs: !program.splashShown
-        splashShown: program.splashShown
-        splashLayer: splashLayer
-        onPlayed: (path) => program.play(path)
-        onResumed: {
-            player.session.resume()
-            screens.play()
+        active: program.theme.length > 0 && program.theme !== ReferenceTheme.folder
+        // A Loader is a focus scope: it takes the focus while one of the theme's screens is to hold it.
+        focus: program.themeHost?.takesFocus ?? false
+        sourceComponent: ThemeHost {
+            objectName: "theme"
+            visible: !program.gameShown
+            // Loaded once the host is whole, so its connections hear the new engine and feed it the models as they stand.
+            folder: chosenTheme.status === Loader.Ready ? program.theme : ""
+            coverStores: program.coverStores
+            screens: screens
+            library: library
+            session: player.session
+            clock: clock
+            grid: games
+            picture: player.picture
+            controllers: pads.connected
+            family: program.padFamily
+            reducedMotion: program.reducedMotion
+            inputs: !program.splashShown
+            splashShown: program.splashShown
+            splashLayer: splashLayer
+            onPlayed: (path) => program.play(path)
+            onResumed: {
+                player.session.resume()
+                screens.play()
+            }
+            onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
+            onFocused: (game) => games.focused = games.rowOf(game)
         }
-        onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
-        onFocused: (game) => games.focused = games.rowOf(game)
     }
     // The grid's search: its words, which the keyboard types and the grid's model narrows by, the field over the one row of
     // covers and the keyboard docked beneath, over the theme's Games screen (EmuSen_Interface.md §18.1; EmuSen_Qt.md §7.6).
@@ -303,6 +315,26 @@ Window {
             onActed: (key) => screens.act(key)
         }
     }
+    // The Themes tab, reached from the Home card's Settings row until Settings is built (EmuSen_Qt.md §3.8): Use stores a
+    // theme's id and the chosen theme's host switches at once.
+    ThemesModel {
+        id: themesModel
+        objectName: "themesModel"
+        platformLibrary: program.platformLibrary
+        reference: ReferenceTheme.manifest
+        referenceFolder: ReferenceTheme.folder
+        open: screens.shown === Screens.Themes
+        onUsed: (folder) => program.theme = folder
+    }
+    Themes {
+        objectName: "themes"
+        visible: screens.shown === Screens.Themes
+        themes: themesModel
+        padFamily: program.padFamily
+        inputs: visible && !program.splashShown
+        onBacked: screens.back()
+        onActed: (key) => screens.act(key)
+    }
     // The Home card over Home, opened at Power by its place (EmuSen_Interface.md §2.3; EmuSen_BigPicture.md §51.2).
     Kit.NormalizedCanvas {
         id: homeCardCanvas
@@ -418,6 +450,12 @@ Window {
         objectName: "notices"
         gameRunning: program.gameShown
     }
+    // The theme the settings choose that cannot be shown, said once, after the splash has faded.
+    Timer {
+        interval: Kit.Tokens.fade
+        running: !program.splashShown && program.themeWords.length > 0
+        onTriggered: notices.raise(program.themeWords, true, false)
+    }
     Connections {
         target: player.session
         function onNoticeChanged() { notices.raise(player.session.notice, player.session.noticeAttention, true) }
@@ -473,7 +511,7 @@ Window {
         id: splashLayer
         objectName: "splashLayer"
         anchors.fill: parent
-        visible: themeHost.splash && program.splash && moonrise.opacity > 0
+        visible: (program.themeHost?.splash ?? false) && program.splash && moonrise.opacity > 0
         opacity: moonrise.opacity
     }
 }

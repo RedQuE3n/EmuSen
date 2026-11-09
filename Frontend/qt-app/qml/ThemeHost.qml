@@ -42,6 +42,8 @@ Item {
     readonly property alias feed: feed
     // Whether one of the theme's screens holds the focus, so the pad's presses go to the theme's engine.
     readonly property bool holdsFocus: homeSlot.activeFocus || consolesSlot.activeFocus || gamesSlot.activeFocus
+    // Whether one of its screens is to take the keys, for a host made inside a focus scope (the window's Loader).
+    readonly property bool takesFocus: homeSlot.focus || consolesSlot.focus || gamesSlot.focus || splashSlot.focus
     // The Home screen placed, read as a theme's ThemeScreen (its engine's type, so not named here).
     readonly property var homeScreen: homeSlot.placed ? (homeSlot.item as Item)?.children[0] ?? null : null
     signal played(string path)
@@ -89,10 +91,23 @@ Item {
         onFocused: (game) => themed.focused(game)
         onSelected: (index) => themed.library.select(index)
     }
-    // A new engine is fed everything the feed holds; each feed after is the one model that changed.
+    // A new engine is fed everything the feed holds, and the models as they stand, since a host made at run time (the
+    // Themes tab's Use) has held nothing yet; each feed after is the one model that changed.
     Connections {
         target: host
         function onGenerationChanged() { feed.attach() }
+    }
+    Connections {
+        target: host
+        function onGenerationChanged() { feed.showLibrary(themed.library) }
+    }
+    Connections {
+        target: host
+        function onGenerationChanged() { feed.showSession(themed.session.game, themed.session.running, themed.clock.pausedAt(), themed.picture) }
+    }
+    Connections {
+        target: host
+        function onGenerationChanged() { feed.showBrowse(themed.grid, themed.screens.key, themed.searching, themed.typing, themed.listOpen) }
     }
     Connections {
         target: themed.library

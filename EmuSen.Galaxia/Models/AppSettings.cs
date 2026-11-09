@@ -153,6 +153,8 @@ namespace EmuSen.Galaxia.Models
         // The ES-DE theme folder, read in place; and an ES-DE downloaded_media folder, also only read - see §4.52.
         public string? BigPictureTheme { get; set; }
         public string? EsdeMediaDirectory { get; set; }
+        // The Qt program's theme by its id, kept here so a save from Mistress keeps it - see EmuSen_Config_Reference.md §7.3.
+        public string? EmuSenTheme { get; set; }
 
         // Where the CHD tool writes; blank is home/Compressed, and it may not overlap the library - see EmuSen_GamePackages.md §20.1.
         public string? ChdOutputDirectory { get; set; }

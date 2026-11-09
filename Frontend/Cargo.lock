@@ -409,11 +409,14 @@ dependencies = [
  "cxx-qt-lib",
  "emusen-client-fixture",
  "emusen-crystal-client",
+ "emusen-esde",
  "emusen-kit-core",
  "emusen-kit-qt",
  "emusen-platform-client",
  "emusen-qt-endymion",
  "emusen-qt-test",
+ "emusen-theme-check",
+ "emusen-theme-manifest",
  "serde_json",
 ]
 

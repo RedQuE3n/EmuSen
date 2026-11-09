@@ -28,6 +28,8 @@ pub enum Shown {
     /// The ES-DE theme's view in place of Home, Choose a console and the grid, its system and gamelist views one screen
     /// whose model says which (EmuSen_Qt.md §4.6).
     Esde,
+    /// The Themes tab, from the Home card's Settings row until Settings is built (EmuSen_Qt.md §3.8).
+    Themes,
 }
 
 /// What asked for a change.
@@ -57,7 +59,8 @@ pub enum Ask {
     Restyled,
 }
 
-/// Home's Power place, by its index in `words::HOME_PLACES`.
+/// Home's Settings and Power places, by their index in `words::HOME_PLACES`.
+pub const SETTINGS_PLACE: usize = 5;
 pub const POWER_PLACE: usize = 6;
 
 /// The grid's List card and the search, by the actions that open them.
@@ -71,14 +74,19 @@ pub const TO_GRID: &str = "toGrid";
 pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
     match (shown, ask) {
         (Shown::Home, Ask::Place(0)) => Some((Shown::Consoles, None)),
+        // Settings is the Themes tab until Settings is built, from Home's place and the Home card's row alike.
+        (Shown::Home, Ask::Place(SETTINGS_PLACE)) => Some((Shown::Themes, None)),
         (Shown::Home, Ask::Place(POWER_PLACE)) => Some((Shown::HomeCard, Some(crate::home_card::POWER.to_owned()))),
         (Shown::Home, Ask::Act(key)) if key == SEARCH => Some((Shown::Search, Some(crate::library::ALL.to_owned()))),
         // Start on Home stays on Home, which takes the focus back to where it starts.
         (Shown::Home, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
         (Shown::Consoles | Shown::Grid | Shown::Search | Shown::SearchGrid, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
         (Shown::HomeCard, Ask::Back | Ask::Close) => Some((Shown::Home, None)),
+        (Shown::HomeCard, Ask::Act(key)) if key == crate::home_card::SETTINGS => Some((Shown::Themes, None)),
         // The card closes on its rows' actions; those of a later stage (Exit Big Picture, the tools) do nothing more yet.
         (Shown::HomeCard, Ask::Act(_)) => Some((Shown::Home, None)),
+        (Shown::Themes, Ask::Back) => Some((Shown::Home, None)),
+        (Shown::Themes, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
         (Shown::Grid, Ask::Act(key)) if key == LIST => Some((Shown::List, None)),
         (Shown::List, Ask::Back | Ask::Close) => Some((Shown::Grid, None)),
         (Shown::List, Ask::Act(key)) if key == SEARCH => Some((Shown::Search, None)),
@@ -158,6 +166,7 @@ pub mod qobject {
         Search,
         SearchGrid,
         Esde,
+        Themes,
     }
 
     extern "RustQt" {
@@ -257,6 +266,7 @@ fn shown_of(screen: Screen) -> Shown {
         Screen::Search => Shown::Search,
         Screen::SearchGrid => Shown::SearchGrid,
         Screen::Esde => Shown::Esde,
+        Screen::Themes => Shown::Themes,
         _ => Shown::Home,
     }
 }
@@ -273,6 +283,7 @@ fn screen_of(shown: Shown) -> Screen {
         Shown::Search => Screen::Search,
         Shown::SearchGrid => Screen::SearchGrid,
         Shown::Esde => Screen::Esde,
+        Shown::Themes => Screen::Themes,
     }
 }
 

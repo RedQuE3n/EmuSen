@@ -8,7 +8,7 @@ use cxx_qt::casting::Upcast;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
 use emusen_qt_models::game_model::qobject::GameModel;
-use emusen_qt_models::library::{self, GameRow, LibraryView};
+use emusen_qt_models::library::LibraryView;
 use emusen_qt_models::library_model::qobject::{LibraryModel, QAbstractListModel};
 use emusen_qt_models::{help, screens, words};
 use emusen_theme_qt::actions::{Action, ActionSink};
@@ -183,11 +183,6 @@ unsafe fn model<T: Upcast<QAbstractListModel>>(object: *mut cxx_qt::QObject) -> 
     unsafe { T::from_base_ptr(object as *const QAbstractListModel) }
 }
 
-/// A game as the library's lists show it, by its file; none for a game the library does not hold.
-fn game_row(view: &LibraryView, path: &str) -> Option<GameRow> {
-    library::games_of_at(library::ALL, &view.systems, &view.catalog, words::now()).into_iter().find(|g| g.path == path)
-}
-
 /// The section's facts as Choose a console's row for its key holds them; the shoulders' neighbours are the rows either
 /// side, and the count is the search's while one narrows the section.
 pub fn browse_facts(view: &LibraryView, section: &str, count_line: &str, focus_row: i32, open: (bool, bool, bool), searched: bool) -> BrowseFacts {
@@ -332,7 +327,7 @@ impl qobject::ThemeFeed {
         let Some(shown) = self.session.clone() else { return };
         let running = shown.running;
         let library = self.library().filter(|_| running);
-        let found = library.and_then(|l| game_row(l.view(), &shown.game));
+        let found = library.and_then(|l| l.view().game(&shown.game));
         let facts = SessionFacts {
             has_game: running,
             key: if running { shown.game.clone() } else { String::new() },

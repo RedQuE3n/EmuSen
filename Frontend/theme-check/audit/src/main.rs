@@ -3,7 +3,6 @@
 
 mod audit;
 mod crowd;
-mod glue;
 mod world;
 
 use std::path::PathBuf;

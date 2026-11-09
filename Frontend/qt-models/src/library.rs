@@ -485,6 +485,11 @@ impl LibraryView {
         of.map(console_name).unwrap_or_default()
     }
 
+    /// A game's row as every game's list holds it, by its file; none for a game the library does not hold.
+    pub fn game(&self, path: &str) -> Option<GameRow> {
+        games_of_at(ALL, &self.systems, &self.catalog, words::now()).into_iter().find(|g| g.path == path)
+    }
+
     /// Whether a console of the systems table starts with nothing in it, where the List card and the Home card offer
     /// Start Console (Mistress's `ConsolesThatStartEmpty`).
     pub fn starts_empty(&self) -> bool {

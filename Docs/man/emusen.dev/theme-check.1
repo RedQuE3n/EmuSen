@@ -150,9 +150,11 @@ THE LOADED STEP
     which stops after the static step. A package with static findings is
     not loaded, and a note says so.
 
-    The audit's glue is one C++ function, a kit singleton found in the
-    engine an object lives in (QQmlEngine::singletonInstance, which
-    cxx-qt-lib does not bind). The screen's object is reached by its
+    The audit has no glue of its own. The kit's Tokens of a theme's
+    engine is found through emusen-theme-qt's host::kit_tokens, the one
+    owner of that lookup (QQmlEngine::singletonInstance, which cxx-qt-lib
+    does not bind); a second bridge of the same name would not link
+    beside it (decided 2026-11-08). The screen's object is reached by its
     number in the harness's tree, which is its QObject's address.
 
     Proof, measured on 2026-11-08: the fixture packages under

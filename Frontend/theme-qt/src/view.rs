@@ -21,7 +21,7 @@ pub enum Cell {
 pub type Row = Vec<Cell>;
 
 /// `Library.consoles`: each console with games, in the shelves' order.
-pub const CONSOLE_ROLES: [&str; 15] = [
+pub const CONSOLE_ROLES: [&str; 16] = [
     "key",
     "name",
     "displayName",
@@ -37,6 +37,7 @@ pub const CONSOLE_ROLES: [&str; 15] = [
     "group",
     "groupIndex",
     "groupSize",
+    "groupStart",
 ];
 /// `Library.places`: Home's destinations in Home's order.
 pub const PLACE_ROLES: [&str; 7] = ["key", "name", "kind", "line", "attention", "count", "available"];
@@ -87,9 +88,9 @@ fn text(s: &str) -> Cell {
     Cell::Text(s.to_owned())
 }
 
-/// Each maker's group: its ordinal in order of first appearance, the place within it and its size; an unknown (empty)
-/// maker is a group of its own.
-pub fn maker_groups(makers: &[&str]) -> Vec<(i32, i32, i32)> {
+/// Each maker's group: its ordinal in order of first appearance, the place within it, its size and how many consoles the
+/// groups before it hold, so a console's place in maker order is start + index; an unknown (empty) maker is a group of its own.
+pub fn maker_groups(makers: &[&str]) -> Vec<(i32, i32, i32, i32)> {
     let mut order: Vec<&str> = Vec::new();
     let mut sizes: Vec<i32> = Vec::new();
     let mut placed = Vec::with_capacity(makers.len());
@@ -105,7 +106,8 @@ pub fn maker_groups(makers: &[&str]) -> Vec<(i32, i32, i32)> {
         placed.push((group as i32, sizes[group]));
         sizes[group] += 1;
     }
-    placed.into_iter().map(|(g, i)| (g, i, sizes[g as usize])).collect()
+    let starts: Vec<i32> = sizes.iter().scan(0, |before, size| Some(std::mem::replace(before, *before + size))).collect();
+    placed.into_iter().map(|(g, i)| (g, i, sizes[g as usize], starts[g as usize])).collect()
 }
 
 /// The consoles with games, each with the systems table's facts, the engine it runs now and its maker's group.
@@ -115,7 +117,7 @@ pub fn consoles(view: &LibraryView) -> Vec<Row> {
     shown
         .iter()
         .zip(groups)
-        .map(|(r, (group, index, size))| {
+        .map(|(r, (group, index, size, start))| {
             vec![
                 text(&r.key),
                 text(&r.name),
@@ -132,6 +134,7 @@ pub fn consoles(view: &LibraryView) -> Vec<Row> {
                 Cell::Whole(group),
                 Cell::Whole(index),
                 Cell::Whole(size),
+                Cell::Whole(start),
             ]
         })
         .collect()

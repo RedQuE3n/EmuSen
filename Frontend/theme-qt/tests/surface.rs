@@ -118,6 +118,8 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "noConsoles",
                 "addFolder",
                 "places",
+                "continueEntry",
+                "recentEntry",
             ],
             &["games", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo"],
         ),

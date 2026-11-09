@@ -68,6 +68,10 @@ pub const ADD_FOLDER: &str = "Settings › Library adds a folder";
 /// The eyebrow over Home's places.
 pub const PLACES: &str = "PLACES";
 
+/// Continue and the Recent shelf as a list of destinations names them, beside the places (Meridian's rail).
+pub const CONTINUE_ENTRY: &str = "Continue";
+pub const RECENT_ENTRY: &str = "Recent";
+
 /// A count of games.
 pub fn games(n: usize) -> String {
     counted(n, "game", "games")

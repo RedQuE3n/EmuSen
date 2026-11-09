@@ -1543,7 +1543,10 @@ int32_t emusen_serenity_parse_format(const uint8_t *name, size_t name_len, int32
  * one, with "choices" (null or the names of its values)], "structural", "raw", "defaults" ({console: values}, "" for
  * any console, or null), "aspect" (the double's 64 bits, or null), "crops_itself", "rows_once", "history_depth"}],
  * "screens": [{"console", "kind" ("Television" or "Lcd"), "profile", "hosts_picture", "gap"}], "owed": [{"console",
- * "note"}], "televisions": the consoles drawn on a television row of their own, "reduce": the reducing pass's GLSL}. A key is a filter's own name, or a simple effect's as
+ * "note"}], "televisions": the consoles drawn on a television row of their own, "crop" (since 45): {"television", the
+ * share of the glass a television's raster reached past it, and "most_at_an_edge", the most a crop may hide at one
+ * edge, each a double's 64 bits}, a screen of kind "Television" being one with an overscan to crop, "reduce": the
+ * reducing pass's GLSL}. A key is a filter's own name, or a simple effect's as
  * "effect.<None|Scanlines|Crt>.<nearest|linear>".
  *
  * Every other call takes a filter as a document: {"key"} for one of the catalog's (an unknown key is BAD_ARGUMENT), or

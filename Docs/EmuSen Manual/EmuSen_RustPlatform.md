@@ -4537,3 +4537,6 @@ retires and never calls it, so `GalaxiaParityTests` counts it as the front end's
 `PlatformLibrary.InterfaceVersion` moved to 45 together. Measured by `stage5.rs`'s
 `the_front_ends_settings_rows_come_from_galaxia_by_length_then_fill` (all 59 rows, a row's twelve members, a console's
 crop choices); an empty answer seeded in the C layer was caught.
+
+The same interface carries Serenity's crop limits in `emusen_serenity_filters`' catalogue, `"crop"`, a member added to
+a document and no new call (`EmuSen_Serenity.md` §2.10).

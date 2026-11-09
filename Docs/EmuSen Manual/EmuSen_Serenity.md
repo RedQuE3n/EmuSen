@@ -312,6 +312,19 @@ The share is the same in both regions; a PAL set's overscan was not found stated
 
 ---
 
+**In Rust, 2026-11-09 (approved by the tester).** The crop's facts join the screens' catalogue, whose owner is
+`Platform/serenity/src/filters/screens.rs`: `TELEVISION_OVERSCAN` (0.07) and `MOST_AT_AN_EDGE` (0.25), and
+`overscans(console)`, true for a screen of kind Television, an attachment's included by its own row (Sega CD, 32X), and
+false for an LCD and for a console with no row yet (Saturn, Dreamcast). `emusen_serenity_filters`' catalogue carries the
+two limits as `"crop": {"television", "most_at_an_edge"}`, each a double's 64 bits as `aspect` is, since interface 45;
+which consoles have an overscan is read from its `screens`. The systems table has no overscan key: the screen's kind
+already says it, and a second copy would be a second owner. The C# constants stay where they are until the C# half
+retires: `PictureCrop.TelevisionOverscan` and `PictureCrop.MostAtAnEdge` (`EmuSen.Serenity/PictureCrop.cs`), and
+`ConsoleCrop.HasOverscan` and `MostPercent` (`EmuSen.Mistress/Library/ConsoleCrop.cs`). Measured by
+`screens.rs`' test against those values (the ten consoles C# names, a television's edge 0.0327102803738317) and the
+catalogue's test in `serenity_filters.rs`; an `overscans` that read `televisions()`, which leaves the attachments out,
+was seeded and caught.
+
 ### 2.11 Pictures from a frontend's own buffers, and the coretop window over a session (decided 2026-10-17)
 
 Two additions came with emusen-shell's move onto the frontend API (`EmuSen_Backend.md` §14.11). Each names only

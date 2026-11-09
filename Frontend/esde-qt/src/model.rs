@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{QDateTime, QString};
+use cxx_qt_lib::{QDateTime, QString, QTimeZone};
 use emusen_esde::scene::{DateTime, System};
 use emusen_kit_core::input::UiButton;
 
@@ -32,6 +32,8 @@ pub mod qobject {
         #[qproperty(f64, height)]
         #[qproperty(bool, swap)]
         #[qproperty(QString, device)]
+        /// The time the clock and the relative dates read, in seconds since 1970; 0 reads the wall clock.
+        #[qproperty(i64, now)]
         #[qproperty(bool, themed, READ, NOTIFY)]
         #[qproperty(QString, problem, READ, NOTIFY)]
         #[qproperty(QString, view, READ, NOTIFY)]
@@ -108,6 +110,7 @@ pub struct EsdeModelRust {
     height: f64,
     swap: bool,
     device: QString,
+    now: i64,
     themed: bool,
     problem: QString,
     view: QString,
@@ -124,9 +127,9 @@ pub struct EsdeModelRust {
     load: u64,
 }
 
-/// The local wall clock, for the clock element and the dates.
-fn local_now() -> DateTime {
-    let now = QDateTime::current_date_time();
+/// The local time at `pinned` seconds since 1970, or the wall clock's at 0, for the clock element and the dates.
+fn local_now(pinned: i64) -> DateTime {
+    let now = if pinned == 0 { QDateTime::current_date_time() } else { QDateTime::from_secs_since_epoch(pinned, &QTimeZone::system_time_zone()) };
     let (d, t) = (now.date(), now.time());
     let u = |v: i32| u32::try_from(v).unwrap_or(0);
     DateTime::new(d.year(), u(d.month()), u(d.day()), u(t.hour()), u(t.minute()), u(t.second()))
@@ -143,6 +146,12 @@ impl cxx_qt::Initialize for qobject::EsdeModel {
         self.as_mut().on_device_changed(|mut m| {
             let device = shelves::device(&m.device.to_string());
             m.as_mut().rust_mut().shared.borrow_mut().set_device(device);
+            m.publish();
+        })
+        .release();
+        self.as_mut().on_now_changed(|mut m| {
+            let now = local_now(m.now);
+            m.as_mut().rust_mut().shared.borrow_mut().set_now(now);
             m.publish();
         })
         .release();
@@ -183,7 +192,7 @@ impl qobject::EsdeModel {
         {
             let mut p = self.shared.borrow_mut();
             p.settings = settings;
-            p.install(systems, w, h, local_now());
+            p.install(systems, w, h, local_now(self.now));
         }
         let themed = self.shared.borrow().stage.is_some();
         publish!(self, problem, problem_changed, problem);
@@ -225,7 +234,7 @@ impl qobject::EsdeModel {
     pub fn tick(self: Pin<&mut Self>, ms: f64) {
         {
             let mut p = self.shared.borrow_mut();
-            p.set_now(local_now());
+            p.set_now(local_now(self.now));
             p.tick(ms);
         }
         self.publish();

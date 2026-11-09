@@ -42,7 +42,7 @@ const NAMED_BOXES: [(&str, &str, &str); 14] = [
 /// States whose MAE is above the C# painter's, measured on 2026-11-09 and named in EmuSen_Qt.md §4.8.6: (theme, state,
 /// width, the measured figure as a ceiling). A state above its ceiling fails, and one back under the C#'s fails too.
 const NAMED_MAE: [(&str, &str, i32, f64); 1] = [
-    ("caralt-es-de", "system", 1280, 26.40),
+    ("caralt-es-de", "system", 1280, 26.06),
 ];
 
 fn repo() -> PathBuf {
@@ -63,12 +63,11 @@ fn pixels(path: &Path) -> Option<(i32, i32, Vec<[u8; 3]>)> {
     Some((w, h, out))
 }
 
-/// The mean absolute error over R, G and B of the rows outside `strip`, and outside `masked` boxes when any are given.
-fn mae(a: &[[u8; 3]], b: &[[u8; 3]], w: i32, strip: (i32, i32), masked: &[(i32, i32, i32, i32)]) -> f64 {
+/// The mean absolute error over R, G and B of the rows outside `strip`.
+fn mae(a: &[[u8; 3]], b: &[[u8; 3]], w: i32, strip: (i32, i32)) -> f64 {
     let (mut total, mut n) = (0u64, 0u64);
     for (i, (p, q)) in a.iter().zip(b).enumerate() {
-        let (x, y) = (i as i32 % w, i as i32 / w);
-        if (strip.0..strip.1).contains(&y) || masked.iter().any(|m| x >= m.0 && x < m.0 + m.2 && y >= m.1 && y < m.1 + m.3) {
+        if (strip.0..strip.1).contains(&(i as i32 / w)) {
             continue;
         }
         total += (0..3).map(|c| u64::from(p[c].abs_diff(q[c]))).sum::<u64>();
@@ -237,7 +236,7 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
     let baseline = baseline();
     let mut harness = Harness::new();
     let mut failures = vec![];
-    let mut table = vec!["theme\tstate\tsize\tqt_mae\tcs_mae\tqt_mae_unclocked\tcs_mae_unclocked\trects_off".to_owned()];
+    let mut table = vec!["theme\tstate\tsize\tqt_mae\tcs_mae\trects_off".to_owned()];
     let mut watched: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
     let mut boxes_seen = vec![false; NAMED_BOXES.len()];
     let (w0, h0) = SIZES[0];
@@ -250,6 +249,11 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
         for (view, state) in STATES {
             for (w, h) in SIZES {
                 let at = format!("{theme} {state} {w}x{h}");
+                let capture = oracle.join(&theme).join(format!("{state}-{w}x{h}.png"));
+                // The clock and the relative dates at the capture's time, as the C# baseline set them (Testing/esde-baseline/README.md).
+                let taken = std::fs::metadata(&capture).and_then(|m| m.modified()).unwrap_or_else(|e| panic!("{}: {e}", capture.display()));
+                let taken = taken.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+                assert!(scene.set_property("view", "now", &taken.to_string()));
                 common::install(&mut scene, &folder, &choices, view, &texts, w, h);
                 let problem = scene.property("esdeModel", "problem");
                 if !problem.is_empty() {
@@ -265,7 +269,6 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
                 let name = format!("{theme}-{state}-{w}x{h}");
                 let qt_png = out.join("qt").join(format!("{name}.png"));
                 assert!(scene.grab(&qt_png.to_string_lossy()));
-                let capture = oracle.join(&theme).join(format!("{state}-{w}x{h}.png"));
                 let differing = scene.difference(&capture.to_string_lossy(), 8, 1, &[], &out.join("difference").join(format!("{name}.png")).to_string_lossy());
                 let tree = scene.tree();
 
@@ -293,19 +296,7 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
                 let (ew, eh, esde) = pixels(&capture).unwrap_or_else(|| panic!("ES-DE's capture {}: Testing/esde-baseline/capture.sh", capture.display()));
                 let (qw, qh, qtp) = pixels(&qt_png).unwrap();
                 assert_eq!((ew, eh, qw, qh), (w, h, w, h), "{at}: the capture and the grab at the state's size");
-                let qt_mae = mae(&esde, &qtp, w, (top, bottom), &[]);
-                // The clocks read the wall clock at their grabs, which no run repeats, so both painters are held without their boxes.
-                let clocks: Vec<(i32, i32, i32, i32)> = spec
-                    .iter()
-                    .filter(|e| e.1 == "clock")
-                    .map(|e| e.3)
-                    .chain(theme_view.view(view).of_kind("clock").flat_map(|e| qt.get(&(delegate("clock").to_owned(), e.name.clone())).cloned().unwrap_or_default()))
-                    .map(|b| ((b[0] * unit).floor() as i32, (b[1] * unit).floor() as i32, (b[2] * unit).ceil() as i32 + 1, (b[3] * unit).ceil() as i32 + 1))
-                    .collect();
-                let cs_png = common::compare_dir().join("../csharp").join(format!("{name}.png"));
-                let cs_unclocked = pixels(&cs_png).map_or(cs_mae, |(_, _, cs)| mae(&esde, &cs, w, (top, bottom), &clocks));
-                let qt_unclocked = mae(&esde, &qtp, w, (top, bottom), &clocks);
-                let (qt_held, cs_held) = (qt_unclocked, cs_unclocked);
+                let (qt_held, cs_held) = (mae(&esde, &qtp, w, (top, bottom)), cs_mae);
                 match NAMED_MAE.iter().find(|(t, s, width, _)| *t == theme && *s == state && *width == w) {
                     Some((.., ceiling)) if qt_held > ceiling + 0.005 => failures.push(format!("{at}: MAE {qt_held:.2} above its named {ceiling:.2}")),
                     Some(_) if qt_held <= cs_held + 0.005 => failures.push(format!("{at}: MAE {qt_held:.2} back under the C#'s {cs_held:.2}: unname it")),
@@ -313,7 +304,7 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
                     None if qt_held > cs_held + 0.005 => failures.push(format!("{at}: MAE {qt_held:.2} above the C# painter's {cs_held:.2}")),
                     None => {}
                 }
-                table.push(format!("{theme}\t{state}\t{w}x{h}\t{qt_mae:.2}\t{cs_mae:.2}\t{qt_unclocked:.2}\t{cs_unclocked:.2}\t{}", off.len()));
+                table.push(format!("{theme}\t{state}\t{w}x{h}\t{qt_held:.2}\t{cs_held:.2}\t{}", off.len()));
                 eprintln!("{}  ({} pixels differ by over 8 levels within a pixel)", table.last().unwrap(), differing.unwrap_or(0));
                 let column = format!("mae_{view}_{w}");
                 watched.entry(theme.clone()).or_default().insert(column, format!("{qt_held:.2}"));

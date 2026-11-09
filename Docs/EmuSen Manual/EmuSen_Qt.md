@@ -2149,10 +2149,11 @@ game) at 1280 × 800 and 1920 × 1200, on the oracle's library, and holds the gr
 - **The picture.** The reference is ES-DE 3.4.1's capture of each state (the pinned AppImage of
   `Testing/esde-oracle/README.md`), taken by the oracle rig on 2026-11-08 and reused, not taken again. The mean absolute
   error over R, G and B is computed as `Testing/esde-baseline/compare.py` computes it, over every row but the help bar's
-  strip (`mae.tsv`'s rows), and the C# painter's figure is recomputed over the same pixels from its grab. Both leave out
-  the clocks' boxes (the spec's and the theme's own clock elements as Qt places them): the C# baseline set its clock to
-  the capture's time, while `EsdeModel` reads the wall clock and has no setting for it, so a clock's digits would be
-  noise of up to 0.34 (CarAlt's large clock). The Qt figure must not exceed the C#'s.
+  strip (`mae.tsv`'s rows), and the C# painter's figure is recomputed over the same pixels from its grab. Both left out
+  the clocks' boxes until `EsdeModel` could be given a time (step 4 below): the C# baseline set its clock to the
+  capture's time, while the model read the wall clock, so a clock's digits were noise of up to 0.34 (CarAlt's large
+  clock). Since then the clock is pinned to the capture's time and `mae.tsv`'s figure is held as it stands. The Qt
+  figure must not exceed the C#'s.
 - **The boxes.** Every element of the state's `.spec` is found by its name and place among elements of that name and
   held within `mockup::UNITS` (two design units of 1280 × 800) on x, y, width and height. The spec holds a box before
   its turn and the item tree the turned item's bounds, so a turned element (CarAlt's `gamecount`, `Syslogo`, turned 90°)
@@ -2296,6 +2297,14 @@ within 0.01 on all twelve grabs); the final figures are the RX 6800's.
      all, so Artflix's and CarAlt's status boxes (the C#'s 0 × 0 at the same place) clear.
    - Seeded fault: the empty status not drawn again; caught as `systemstatus_*` not drawn in the eight Artflix and CarAlt
      states.
+4. **The clock.** `EsdeModel` gains `now`, seconds since 1970 that the clock and the relative dates read, 0 for the wall
+   clock (the default), with the view's `now` alias (`model.rs`, `View.qml`; the registry gains the property, added to
+   1.0 as E3's additions were, since the module is not yet published). The oracle sets it to each capture's
+   modification time, as the C# baseline did, so both painters are held with the clocks in: the masks and the
+   `_unclocked` columns of `oracle.tsv` are gone. Art Book Next's clock reads 13:03 in ES-DE's, the C#'s and Qt's grabs.
+   With the clocks in, CarAlt's system view measures 26.01 at 1280 × 800 (C# 24.72), its ceiling now 26.06.
+   - Seeded fault: the pinned time ignored for the wall clock (09:36 on the day); caught as Art Book Next's system view at
+     1920 × 1200 at 0.41, above the C#'s 0.38.
 
 ---
 

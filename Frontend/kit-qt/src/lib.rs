@@ -15,6 +15,7 @@ pub mod convert;
 pub mod figures;
 pub mod frame;
 pub mod glyph;
+pub mod item_model;
 pub mod keyboard;
 pub mod keypass;
 pub mod kinds;

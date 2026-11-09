@@ -189,7 +189,7 @@ fn every_pointer_path_makes_the_pad_s_call() {
 
 #[test]
 fn an_item_gliding_under_a_still_pointer_does_not_take_the_selection() {
-    let theme = Theme::new("glide");
+    let theme = Theme::new("still");
     let mut p = painter(&theme);
     p.hover(1);
     assert_eq!(selected(&p), 1, "hover at rest selects");

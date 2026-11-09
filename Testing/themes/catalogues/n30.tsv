@@ -1,0 +1,32 @@
+# n30: the canvases' catalogue for the state n30: thirty consoles of twelve makers (consoles.html, 2026-11-08), one console a line:
+# maker, name, games, engine, its kind (emusen or libretro), the table's console whose look it takes. Tab-separated; man theme-check.
+Nintendo	Nintendo I	3	Venus	emusen	
+Nintendo	Nintendo II	56	Mars	emusen	
+Nintendo	Nintendo III	109	Hosted III	libretro	
+Sega	Sega I	134	Mars	emusen	
+Sega	Sega II	187	Hosted II	libretro	
+Sega	Sega III	240	Mercury	emusen	
+Sony	Sony I	265	Hosted I	libretro	
+Sony	Sony II	318	Mercury	emusen	
+Sony	Sony III	371	Diamond	emusen	
+Atari	Atari I	396	Mercury	emusen	
+Atari	Atari II	449	Diamond	emusen	
+Atari	Atari III	502	Hosted III	libretro	
+NEC	NEC I	527	Diamond	emusen	
+NEC	NEC II	580	Hosted II	libretro	
+NEC	NEC III	633	Endou	emusen	
+SNK	SNK I	658	Hosted I	libretro	
+SNK	SNK II	711	Endou	emusen	
+SNK	SNK III	764	Sapphire	emusen	
+Bandai	Bandai I	789	Endou	emusen	
+Bandai	Bandai II	842	Sapphire	emusen	
+Microsoft	Microsoft I	920	Sapphire	emusen	
+Microsoft	Microsoft II	973	Hosted II	libretro	
+Commodore	Commodore I	1051	Hosted I	libretro	
+Commodore	Commodore II	1104	Mars	emusen	
+Panasonic	Panasonic I	1182	Mars	emusen	
+Panasonic	Panasonic II	35	Moon	emusen	
+Philips	Philips I	113	Moon	emusen	
+Philips	Philips II	166	Hosted II	libretro	
+Amstrad	Amstrad I	244	Hosted I	libretro	
+Amstrad	Amstrad II	297	Diamond	emusen	

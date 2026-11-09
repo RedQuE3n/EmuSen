@@ -19,8 +19,10 @@ use emusen_qt_test::tree::Tree;
 use emusen_qt_test::{Harness, Scene};
 use emusen_theme_manifest::Screen;
 use emusen_qt_models::library::LibraryView;
+use emusen_qt_models::words;
 use emusen_theme_qt::host;
 
+use crate::catalogue::Entry;
 use crate::world::Synthetic;
 
 /// The scene, written beside the synthetic library and loaded from there.
@@ -174,7 +176,9 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
         for (w, h) in SIZES {
             scene.resize(w, h);
             scene.wait(150);
-            let tree = scene.tree();
+            let mut tree = scene.tree();
+            // A title or a name may elide; the program's fixed words may not.
+            tree.root.mark_data(&words::is_fixed);
             let focus = scene.focus(&tree).map(ElementId);
             // The crowd's reach is the sweep's; every element on the screen is still held to the pointer.
             let walk = if pass.consoles.is_some() { Vec::new() } else { scene.walk_by(&tree, |s, button| s.key(key_of(button), 0)) };
@@ -305,7 +309,8 @@ fn panic_words(payload: &(dyn std::any::Any + Send)) -> String {
 }
 
 /// The findings of the package at `folder` (named `shown` in the lines), its screens loaded in turn.
-pub fn run(folder: &Path, shown: &str, state: Option<&Path>) -> Result<Vec<String>, String> {
+/// With a catalogue (`man theme-check`, --catalogue), Choose a console alone is placed over it, its states labelled by its name.
+pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(&str, &[Entry])>) -> Result<Vec<String>, String> {
     let shown = shown.trim_end_matches('/');
     let text = std::fs::read_to_string(folder.join("theme.json")).map_err(|e| format!("{shown}/theme.json: {e}"))?;
     let mut lines = Lines { shown, out: Vec::new() };
@@ -317,12 +322,29 @@ pub fn run(folder: &Path, shown: &str, state: Option<&Path>) -> Result<Vec<Strin
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
     let real = std::fs::canonicalize(folder).map_err(|e| format!("{shown}: {e}"))?;
-    let library = crate::world::make()?;
+    let library = crate::world::make(catalogue.map(|(_, entries)| entries))?;
     let file = library.world.root.join("Audit.qml");
     std::fs::write(&file, SCENE).map_err(|e| format!("the scene: {e}"))?;
     std::panic::set_hook(Box::new(|_| {}));
     let mut harness = Harness::new();
     let mut scene = harness.load(&format!("file://{}", file.display()), 1280, 800);
+    if let (Some((name, _)), Some((view, names))) = (catalogue, library.catalogue.as_ref()) {
+        let screen = Screen::Consoles;
+        logged();
+        let label = format!(", {name}");
+        let pass = Pass { variants: &[Variant::Dark, Variant::Light], label: &label, consoles: Some(names) };
+        match place(&mut scene, &real.display().to_string(), screen).and_then(|id| feed(id, &library, view, &package.colour_overrides()).map(|_| id)) {
+            Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
+            Ok(id) => {
+                let done = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| states(&mut scene, screen, id, &pass, state, &mut lines)));
+                if let Err(payload) = done {
+                    lines.add(screen, "audit", &panic_words(payload.as_ref()));
+                }
+            }
+        }
+        logged().iter().for_each(|w| lines.add(screen, "warning", w));
+        return Ok(lines.out);
+    }
     for screen in Screen::ALL.into_iter().filter(|s| package.screens.contains(s)) {
         logged();
         let id = match place(&mut scene, &real.display().to_string(), screen) {

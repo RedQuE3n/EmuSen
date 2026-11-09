@@ -231,6 +231,17 @@ Window {
             leading: 3
             bodies: 2
         }
+        FigureLayout {
+            id: figures
+            objectName: "figures"
+            width: 1280
+            model: Library.consoles
+            role: "group"
+        }
+        Connections {
+            target: Library.consoles
+            function onModelReset() { figures.read() }
+        }
         HelpBar {
             objectName: "helpBar"
             model: Help.entries(Help.Place)

@@ -401,6 +401,234 @@ Module {
         }
     }
     Component {
+        file: "figures.cxxqt.h"
+        lineNumber: 52
+        name: "FigureLayout"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/FigureLayout 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "width"
+            type: "double"
+            read: "getWidth"
+            write: "setWidth"
+            notify: "widthChanged"
+            index: 0
+            lineNumber: 57
+        }
+        Property {
+            name: "model"
+            type: "QAbstractItemModel"
+            isPointer: true
+            read: "getModel"
+            write: "setModel"
+            notify: "modelChanged"
+            index: 1
+            lineNumber: 58
+        }
+        Property {
+            name: "role"
+            type: "QString"
+            read: "getRole"
+            write: "setRole"
+            notify: "roleChanged"
+            index: 2
+            lineNumber: 59
+        }
+        Property {
+            name: "count"
+            type: "int"
+            read: "getCount"
+            notify: "laidOut"
+            index: 3
+            lineNumber: 60
+            isReadonly: true
+        }
+        Property {
+            name: "compact"
+            type: "bool"
+            read: "getCompact"
+            notify: "laidOut"
+            index: 4
+            lineNumber: 61
+            isReadonly: true
+        }
+        Property {
+            name: "body"
+            type: "double"
+            read: "getBody"
+            notify: "laidOut"
+            index: 5
+            lineNumber: 62
+            isReadonly: true
+        }
+        Property {
+            name: "labelWidth"
+            type: "double"
+            read: "getLabelWidth"
+            notify: "laidOut"
+            index: 6
+            lineNumber: 63
+            isReadonly: true
+        }
+        Property {
+            name: "zone"
+            type: "double"
+            read: "getZone"
+            notify: "laidOut"
+            index: 7
+            lineNumber: 64
+            isReadonly: true
+        }
+        Property {
+            name: "contentHeight"
+            type: "double"
+            read: "getContentHeight"
+            notify: "laidOut"
+            index: 8
+            lineNumber: 65
+            isReadonly: true
+        }
+        Property {
+            name: "scrolls"
+            type: "bool"
+            read: "getScrolls"
+            notify: "laidOut"
+            index: 9
+            lineNumber: 66
+            isReadonly: true
+        }
+        Property {
+            name: "xs"
+            type: "QVariant"
+            read: "getXs"
+            notify: "laidOut"
+            index: 10
+            lineNumber: 67
+            isReadonly: true
+        }
+        Property {
+            name: "ys"
+            type: "QVariant"
+            read: "getYs"
+            notify: "laidOut"
+            index: 11
+            lineNumber: 68
+            isReadonly: true
+        }
+        Property {
+            name: "raised"
+            type: "QVariant"
+            read: "getRaised"
+            notify: "laidOut"
+            index: 12
+            lineNumber: 69
+            isReadonly: true
+        }
+        Property {
+            name: "left"
+            type: "QVariant"
+            read: "getLeft"
+            notify: "laidOut"
+            index: 13
+            lineNumber: 70
+            isReadonly: true
+        }
+        Property {
+            name: "right"
+            type: "QVariant"
+            read: "getRight"
+            notify: "laidOut"
+            index: 14
+            lineNumber: 71
+            isReadonly: true
+        }
+        Property {
+            name: "up"
+            type: "QVariant"
+            read: "getUp"
+            notify: "laidOut"
+            index: 15
+            lineNumber: 72
+            isReadonly: true
+        }
+        Property {
+            name: "down"
+            type: "QVariant"
+            read: "getDown"
+            notify: "laidOut"
+            index: 16
+            lineNumber: 73
+            isReadonly: true
+        }
+        Property {
+            name: "prior"
+            type: "QVariant"
+            read: "getPrior"
+            notify: "laidOut"
+            index: 17
+            lineNumber: 74
+            isReadonly: true
+        }
+        Property {
+            name: "groupOf"
+            type: "QVariant"
+            read: "getGroupOf"
+            notify: "laidOut"
+            index: 18
+            lineNumber: 75
+            isReadonly: true
+        }
+        Property {
+            name: "figureXs"
+            type: "QVariant"
+            read: "getFigureXs"
+            notify: "laidOut"
+            index: 19
+            lineNumber: 76
+            isReadonly: true
+        }
+        Property {
+            name: "figureYs"
+            type: "QVariant"
+            read: "getFigureYs"
+            notify: "laidOut"
+            index: 20
+            lineNumber: 77
+            isReadonly: true
+        }
+        Property {
+            name: "firsts"
+            type: "QVariant"
+            read: "getFirsts"
+            notify: "laidOut"
+            index: 21
+            lineNumber: 78
+            isReadonly: true
+        }
+        Signal { name: "widthChanged"; lineNumber: 108 }
+        Signal { name: "modelChanged"; lineNumber: 109 }
+        Signal { name: "roleChanged"; lineNumber: 110 }
+        Signal { name: "laidOut"; lineNumber: 112 }
+        Method {
+            name: "setWidth"
+            lineNumber: 84
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setModel"
+            lineNumber: 86
+            Parameter { name: "value"; type: "QAbstractItemModel"; isPointer: true }
+        }
+        Method {
+            name: "setRole"
+            lineNumber: 88
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method { name: "read"; lineNumber: 111 }
+    }
+    Component {
         file: "kinds.cxxqt.h"
         lineNumber: 11
         name: "Forms"

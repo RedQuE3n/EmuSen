@@ -66,6 +66,18 @@ pub fn app_settings(platform: &Platform) -> Result<Value, String> {
     Ok(platform.model_load(MODEL_APP_SETTINGS, None, name).map_err(words)?.unwrap_or(Value::Null))
 }
 
+/// The player's settings with one key changed, saved through Galaxia's model, which writes every other key as it read it.
+pub fn store_app_setting(platform: &Platform, key: &str, value: Value) -> Result<(), String> {
+    let file = platform.file(FILE_SETTINGS).map_err(words)?;
+    let name = file.file_name().and_then(|n| n.to_str()).ok_or_else(|| format!("{} names no settings file", file.display()))?;
+    let mut settings = match app_settings(platform)? {
+        Value::Null => platform.model_new(MODEL_APP_SETTINGS).map_err(words)?,
+        read => read,
+    };
+    settings[key] = value;
+    platform.model_save(MODEL_APP_SETTINGS, None, name, &settings).map_err(words)
+}
+
 impl LibrarySource for ClientSource {
     fn systems(&self) -> Result<Vec<SystemRow>, String> {
         self.runtime.systems().map_err(words)

@@ -106,6 +106,11 @@ and the console screens' maker groups are added, each after the members it joins
   (`games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`), the same day: a theme listing Continue and
   the Recent shelf beside the places as destinations (Meridian's rail) names and marks each, and had neither word nor
   mark. The words are `words.rs`'s and the paths `marks.rs`'s, as the canvases draw them.
+- **`FigureLayout`** (the kit's, by name), the same day: a list model's groups packed as figures on a chart, every
+  item's place, its figure's line and its walk, and the three pointers that close the first row (`EmuSen_Kit.md` §7.31).
+  Constellation's Choose a console is a shelf packer over its makers, justified rows, a compact tier and a walk to the
+  nearest body of the next line; QML may hold no function and the rows give no list of groups, so a theme could not lay
+  it out without one. Additions only, in both registries.
 - **`Help.entries(kind, {accept})` and an `enabled` role on the help's rows** (the same day): `accept: false` gives the
   kind's list with A's entry not `enabled`, which the kit's `HelpBar` draws at 38% and does not press; every other entry,
   and every list asked for without the flag, is enabled. A theme draws the disabled look of a place the host would

@@ -109,7 +109,7 @@ fn words(item: &Item, ancestors: &[&Item], slack: f64, smallest: f64, faults: &m
         faults.push(Fault::WordsPastOwner { words: item.id, owner: owner.id });
     }
     let Some(text) = item.text else { return };
-    if text.ellipsis {
+    if text.ellipsis && !text.data {
         faults.push(Fault::Ellipsis { item: item.id });
     }
     if text.width > item.rect.w + slack {

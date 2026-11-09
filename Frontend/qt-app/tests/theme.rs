@@ -60,6 +60,7 @@ fn qt_3_5_the_theme_s_screens_replace_the_reference_s_and_a_failed_theme_shows_t
     assert_eq!(scene.property("host.theme", "liveEngines"), "1", "switching twice leaks no engine");
     assert_eq!(scene.property("theme", "home"), "true");
     choose(&mut scene, "");
-    assert_eq!(scene.property("host.theme", "liveEngines"), "0");
+    assert_eq!(scene.property("chosenTheme", "status"), "Null", "no theme, no host and no engine");
+    assert_eq!(scene.property("host.theme", "liveEngines"), "");
     assert_eq!(scene.property("home", "visible"), "true");
 }

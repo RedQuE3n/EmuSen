@@ -44,6 +44,7 @@ fn main() {
         initial.insert(QString::from("gameMode"), QVariant::from(&start.game_mode));
         initial.insert(QString::from("guideChords"), QVariant::from(&start.guide_chords));
         initial.insert(QString::from("theme"), QVariant::from(&QString::from(&start.theme)));
+        initial.insert(QString::from("themeWords"), QVariant::from(&QString::from(&start.theme_words)));
         let mut stores = QStringList::default();
         start.cover_stores.iter().for_each(|s| stores.append(QString::from(s)));
         initial.insert(QString::from("coverStores"), QVariant::from(&stores));

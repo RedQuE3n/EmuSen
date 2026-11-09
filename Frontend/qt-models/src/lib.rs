@@ -33,5 +33,7 @@ pub mod row_roles;
 pub mod screens;
 pub mod session;
 pub mod session_model;
+pub mod themes;
+pub mod themes_model;
 pub mod words;
 pub mod words_object;

@@ -1,0 +1,122 @@
+# n120: the canvases' catalogue for the state n120: 120 consoles of twelve makers (consoles.html, 2026-11-08), one console a line:
+# maker, name, games, engine, its kind (emusen or libretro), the table's console whose look it takes. Tab-separated; man theme-check.
+Nintendo	Nintendo I	3	Venus	emusen	
+Nintendo	Nintendo II	56	Mars	emusen	
+Nintendo	Nintendo III	109	Hosted III	libretro	
+Nintendo	Nintendo IV	162	Mercury	emusen	
+Nintendo	Nintendo V	215	Diamond	emusen	
+Nintendo	Nintendo VI	268	Hosted VI	libretro	
+Nintendo	Nintendo VII	321	Endou	emusen	
+Nintendo	Nintendo VIII	374	Sapphire	emusen	
+Nintendo	Nintendo IX	427	Hosted IX	libretro	
+Nintendo	Nintendo X	480	Mars	emusen	
+Sega	Sega I	134	Mars	emusen	
+Sega	Sega II	187	Hosted II	libretro	
+Sega	Sega III	240	Mercury	emusen	
+Sega	Sega IV	293	Diamond	emusen	
+Sega	Sega V	346	Hosted V	libretro	
+Sega	Sega VI	399	Endou	emusen	
+Sega	Sega VII	452	Sapphire	emusen	
+Sega	Sega VIII	505	Hosted VIII	libretro	
+Sega	Sega IX	558	Mars	emusen	
+Sega	Sega X	611	Moon	emusen	
+Sony	Sony I	265	Hosted I	libretro	
+Sony	Sony II	318	Mercury	emusen	
+Sony	Sony III	371	Diamond	emusen	
+Sony	Sony IV	424	Hosted IV	libretro	
+Sony	Sony V	477	Endou	emusen	
+Sony	Sony VI	530	Sapphire	emusen	
+Sony	Sony VII	583	Hosted VII	libretro	
+Sony	Sony VIII	636	Mars	emusen	
+Sony	Sony IX	689	Moon	emusen	
+Sony	Sony X	742	Hosted X	libretro	
+Atari	Atari I	396	Mercury	emusen	
+Atari	Atari II	449	Diamond	emusen	
+Atari	Atari III	502	Hosted III	libretro	
+Atari	Atari IV	555	Endou	emusen	
+Atari	Atari V	608	Sapphire	emusen	
+Atari	Atari VI	661	Hosted VI	libretro	
+Atari	Atari VII	714	Mars	emusen	
+Atari	Atari VIII	767	Moon	emusen	
+Atari	Atari IX	820	Hosted IX	libretro	
+Atari	Atari X	873	Diamond	emusen	
+NEC	NEC I	527	Diamond	emusen	
+NEC	NEC II	580	Hosted II	libretro	
+NEC	NEC III	633	Endou	emusen	
+NEC	NEC IV	686	Sapphire	emusen	
+NEC	NEC V	739	Hosted V	libretro	
+NEC	NEC VI	792	Mars	emusen	
+NEC	NEC VII	845	Moon	emusen	
+NEC	NEC VIII	898	Hosted VIII	libretro	
+NEC	NEC IX	951	Diamond	emusen	
+NEC	NEC X	1004	Nephrite	emusen	
+SNK	SNK I	658	Hosted I	libretro	
+SNK	SNK II	711	Endou	emusen	
+SNK	SNK III	764	Sapphire	emusen	
+SNK	SNK IV	817	Hosted IV	libretro	
+SNK	SNK V	870	Mars	emusen	
+SNK	SNK VI	923	Moon	emusen	
+SNK	SNK VII	976	Hosted VII	libretro	
+SNK	SNK VIII	1029	Diamond	emusen	
+SNK	SNK IX	1082	Nephrite	emusen	
+SNK	SNK X	1135	Hosted X	libretro	
+Bandai	Bandai I	789	Endou	emusen	
+Bandai	Bandai II	842	Sapphire	emusen	
+Bandai	Bandai III	895	Hosted III	libretro	
+Bandai	Bandai IV	948	Mars	emusen	
+Bandai	Bandai V	1001	Moon	emusen	
+Bandai	Bandai VI	1054	Hosted VI	libretro	
+Bandai	Bandai VII	1107	Diamond	emusen	
+Bandai	Bandai VIII	1160	Nephrite	emusen	
+Bandai	Bandai IX	13	Hosted IX	libretro	
+Bandai	Bandai X	66	Sapphire	emusen	
+Microsoft	Microsoft I	920	Sapphire	emusen	
+Microsoft	Microsoft II	973	Hosted II	libretro	
+Microsoft	Microsoft III	1026	Mars	emusen	
+Microsoft	Microsoft IV	1079	Moon	emusen	
+Microsoft	Microsoft V	1132	Hosted V	libretro	
+Microsoft	Microsoft VI	1185	Diamond	emusen	
+Microsoft	Microsoft VII	38	Nephrite	emusen	
+Microsoft	Microsoft VIII	91	Hosted VIII	libretro	
+Microsoft	Microsoft IX	144	Sapphire	emusen	
+Microsoft	Microsoft X	197	Venus	emusen	
+Commodore	Commodore I	1051	Hosted I	libretro	
+Commodore	Commodore II	1104	Mars	emusen	
+Commodore	Commodore III	1157	Moon	emusen	
+Commodore	Commodore IV	10	Hosted IV	libretro	
+Commodore	Commodore V	63	Diamond	emusen	
+Commodore	Commodore VI	116	Nephrite	emusen	
+Commodore	Commodore VII	169	Hosted VII	libretro	
+Commodore	Commodore VIII	222	Sapphire	emusen	
+Commodore	Commodore IX	275	Venus	emusen	
+Commodore	Commodore X	328	Hosted X	libretro	
+Panasonic	Panasonic I	1182	Mars	emusen	
+Panasonic	Panasonic II	35	Moon	emusen	
+Panasonic	Panasonic III	88	Hosted III	libretro	
+Panasonic	Panasonic IV	141	Diamond	emusen	
+Panasonic	Panasonic V	194	Nephrite	emusen	
+Panasonic	Panasonic VI	247	Hosted VI	libretro	
+Panasonic	Panasonic VII	300	Sapphire	emusen	
+Panasonic	Panasonic VIII	353	Venus	emusen	
+Panasonic	Panasonic IX	406	Hosted IX	libretro	
+Panasonic	Panasonic X	459	Moon	emusen	
+Philips	Philips I	113	Moon	emusen	
+Philips	Philips II	166	Hosted II	libretro	
+Philips	Philips III	219	Diamond	emusen	
+Philips	Philips IV	272	Nephrite	emusen	
+Philips	Philips V	325	Hosted V	libretro	
+Philips	Philips VI	378	Sapphire	emusen	
+Philips	Philips VII	431	Venus	emusen	
+Philips	Philips VIII	484	Hosted VIII	libretro	
+Philips	Philips IX	537	Moon	emusen	
+Philips	Philips X	590	Mercury	emusen	
+Amstrad	Amstrad I	244	Hosted I	libretro	
+Amstrad	Amstrad II	297	Diamond	emusen	
+Amstrad	Amstrad III	350	Nephrite	emusen	
+Amstrad	Amstrad IV	403	Hosted IV	libretro	
+Amstrad	Amstrad V	456	Sapphire	emusen	
+Amstrad	Amstrad VI	509	Venus	emusen	
+Amstrad	Amstrad VII	562	Hosted VII	libretro	
+Amstrad	Amstrad VIII	615	Moon	emusen	
+Amstrad	Amstrad IX	668	Mercury	emusen	
+Amstrad	Amstrad X	721	Hosted X	libretro	

@@ -5,7 +5,7 @@ NAME
 
 SYNOPSIS
     theme-check [--static] [--state DIR] <folder>...
-    theme-audit [--state DIR] <folder>
+    theme-audit [--state DIR] [--catalogue FILE] <folder>
 
 DESCRIPTION
     The development tool of the emusen.dev module for EmuSen theme
@@ -126,6 +126,13 @@ THE LOADED STEP
                     runs past its box, too small to read, and the rest
                     of EmuSen_Kit.md §3's fit rules; the items are named
                     by number, type, objectName or words, and box
+                    An ellipsis is a fault only on the program's fixed
+                    words (qt-models' words::is_fixed: the words of
+                    words.rs and the shelves' names); a title, a name or
+                    a phrase counted or built from them is data and may
+                    elide, as a design's limits say (decided 2026-11-08).
+                    The words are told apart by what a reader hears, so
+                    a theme cannot mark its own words as data.
         reach       an operable element the pad does not reach from the
                     focus; for the crowd, the consoles the sweep did not
                     hear
@@ -144,6 +151,23 @@ THE LOADED STEP
     Screen-variant-WxH.spec and .png (EmuSen_InterfaceSpec.md's format),
     the recordings a theme's side-by-sides are made from; with several
     folders, each package's go into DIR/<its folder's name>.
+
+    --catalogue FILE (theme-audit alone) places Choose a console once,
+    over the synthetic library with FILE's consoles in place of its own,
+    and judges it in both variants at the five sizes, the pad's reach by
+    the crowd's sweep over those consoles; no other screen is placed. The
+    states are labelled by the file's stem (Consoles-dark-n30-1280x800).
+    A catalogue is plain text, one console a line, tab-separated: the
+    maker (- for none), the name, how many games it holds, the engine it
+    runs on, that engine's kind (emusen or libretro), and the table's
+    console whose look (its body, hue and year) it takes; the last three
+    may be left out, a console without its own look taking the first
+    shelved console's under a made-up hue and year. # begins a comment.
+    It is how a design's capacity states are recorded beside its canvas's
+    #state= (decided 2026-11-08: one console, 30, 120, one maker of 40):
+    Testing/themes/catalogues holds the canvases' own, eleven, one-console,
+    n30, n120, maker40, long and empty, written from consoles.html's
+    synthetic catalogue. A line it cannot read is named and nothing runs.
 
     theme-check finds theme-audit as EMUSEN_THEME_AUDIT names it, else on
     PATH; without it the command does not run unless --static is given,
@@ -179,6 +203,7 @@ EXAMPLES
     theme-check Frontend/themes/emusen
     theme-check --static Frontend/themes/emusen
     theme-check --state /tmp/horizon Frontend/themes/horizon
+    theme-audit --state /tmp/states --catalogue Testing/themes/catalogues/n30.tsv Frontend/themes/emusen
     theme-check Frontend/theme-check/tests/themes/low-contrast
 
         .../low-contrast/theme.json:11 contrast accent on surface is

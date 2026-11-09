@@ -1743,6 +1743,42 @@ two types, added last to the registry's qmldir (rule Q, additions only), and `Em
 Proof: the program's card pane and every cover of the reference package are these types, so the stage 1 and stage 2
 recordings (`qt-app/tests/cards.rs`, the acceptance test) hold them to the accepted renders unchanged.
 
+### 7.31 Groups as figures on a chart (stage 3, Constellation; 2026-11-08)
+
+Constellation's Choose a console draws each maker as a figure of stars, laid out by count. The layout is a shelf packer
+with sums per row and a walk to the nearest body of the next line, which a theme's QML cannot hold (§1.3 of
+`EmuSen_Qt.md`: no function, no arrays) and `Library.consoles` gives no list of groups to iterate. Decided 2026-11-08:
+it is the kit's, beside `PlanetLayout`, and `EmuSen.Theme` re-exports it by name.
+
+**`kit-core`'s `figures::figure_layout(width, keys, geometry)`** takes each item's group key in the table's order and
+groups them by first appearance. A figure's box is its label zone, its bodies at the pitch (the pair's pitch for a group
+of two) and a label's width; a group too long for the width wraps into lines of as many as fit, at least two. The packer
+puts the leading box of three pointers first in the flow, places boxes on shelves of the safe width (gap 64), gives a
+figure of several lines a row group of its own, shared only with the pointers waiting alone when both fit, and moves the
+pointers to close their row. A row of several boxes is justified to the margins; a lone box is centred. The full tier
+holds while it needs at most two lines; past that the compact tier is laid out, and it scrolls when taller than the chart
+(468 units). Bodies alternate raised and lowered about each line's centre, the phase following the box's place in its
+row. The walk: Left and Right along a line; Up and Down to the node of the adjacent line nearest in x, the first of two
+at the same distance; the apex above its two pointers, which sit between the line's last item and each other. Each item
+also gets its group and the item drawn before it in its figure (a wrapped line goes on from the last body above).
+`FigureGeometry::CHART` is the Figures canvas's measures (full: body 72, pitch 110 or 130, amplitude 20, label 140,
+row pitch 232, zone 100; compact: 56, 96 or 112, 16, 124, 168, 90; chart 96 to 564; the pointers 360 wide, their stars
+at (180, -60), (80, 36) and (280, 36)). It names no console.
+
+**`kit-qt`'s `FigureLayout`** reads the role a screen names from any list model, as text (a number's digits), lays it out
+at `width`, and gives the lists by index (`xs`, `ys`, `raised`, `left`, `right`, `up`, `down` over the items and then the
+three pointers at `count` to `count + 2`; `prior` and `groupOf` over the items; `figureXs`, `figureYs` and `firsts` over
+the groups), the tier's `body`, `labelWidth` and `zone`, `compact`, `contentHeight` and `scrolls`. A screen calls
+`read()` when the model resets. Added last to the registry (rule Q, §7.6); nothing was removed.
+
+**Held to** (`kit-core/tests/figures.rs`, 6, measured 2026-11-08): the canvas's own packer, run in a browser over its
+states, gave every node's place, raised side, line and four neighbours, every figure's box and the chart's tier, lines,
+height and scrolling, kept as `tests/figures/*.tsv`; the layout matches all of them at W 1280 and 1422.2 for eleven
+consoles of three makers, one console, none, thirty of twelve makers, a hundred and twenty of twelve and a maker of forty
+among eleven others; an interleaved table groups by first appearance. `theme-qt`'s harness scene reads the consoles'
+groups on the list's reset. Seeded faults, each reverted: the pointers moved to open their row (three tests failed), a
+tie going to the last (the forty-maker's walk), the compact tier taken past one line (the eleven).
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

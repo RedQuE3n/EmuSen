@@ -184,6 +184,7 @@ model! {
         library_style: Text = text("Theme"),
         big_picture_theme: Text = None,
         esde_media_directory: Text = None,
+        emu_sen_theme: Text = None,
         chd_output_directory: Text = None,
         navigation_sounds: bool = true,
         max_play_time_tracking: i32 = 8,
@@ -484,7 +485,7 @@ mod tests {
     fn app_settings_has_every_property_and_skips_the_retired_key_while_it_is_null() {
         let text = AppSettings::default().file_text().unwrap();
         let names: Vec<String> = serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&text).unwrap().keys().cloned().collect();
-        assert_eq!(names.len(), 72);
+        assert_eq!(names.len(), 73);
         assert!(names.iter().any(|n| n == "Scrape3DBoxes") && names.iter().any(|n| n == "MirrorPlayer1ToPlayer2"));
         assert!(text.contains("\"SelectedCore\": \"All consoles\",") && text.contains("\"BigPicture\": {},") && !text.contains("OnlineCovers"));
         let old: AppSettings = read(r#"{"OnlineCovers":false}"#);

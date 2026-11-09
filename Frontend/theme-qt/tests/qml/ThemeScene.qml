@@ -216,6 +216,27 @@ Window {
             title: Session.title
             mark: Marks.heart
         }
+        CoverTile {
+            objectName: "coverTileScaled"
+            width: 120
+            height: 160
+            scale: 0.8
+            title: Session.title
+            mark: Marks.heart
+        }
+        Item {
+            scale: 0.8
+            width: 120
+            height: 160
+            CoverTile {
+                objectName: "coverTileInScaled"
+                width: 120
+                height: 160
+                drawnScale: 0.8
+                title: Session.title
+                mark: Marks.heart
+            }
+        }
         RoundPicture {
             objectName: "roundPicture"
             width: 40

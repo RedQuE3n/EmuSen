@@ -1,7 +1,7 @@
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 
 // The kit's own components (EmuSen_Qt.md §1.4); the EmuSen style travels as a resource module, style/EmuSen.qrc (§1.5), and the splash's two faces as fonts/Fonts.qrc (EmuSen_Kit.md §7.10).
-const KIT_FILES: [&str; 21] = [
+const KIT_FILES: [&str; 23] = [
     "qml/Walkable.qml",
     "qml/Body.qml",
     "qml/Sky.qml",
@@ -23,6 +23,8 @@ const KIT_FILES: [&str; 21] = [
     "qml/RoundPicture.qml",
     "qml/CoverTile.qml",
     "qml/OrbitSlot.qml",
+    "qml/EdgeRamp.qml",
+    "qml/EdgeFade.qml",
 ];
 
 fn main() {

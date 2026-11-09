@@ -8,6 +8,7 @@ use core::pin::Pin;
 use cxx_qt::QObject;
 use cxx_qt_lib::QString;
 use emusen_client_fixture::World;
+use emusen_kit_core::tokens::Variant;
 use emusen_qt_test::Harness;
 use emusen_theme_qt::actions::{Action, ActionSink};
 use emusen_theme_qt::bells::Striker;
@@ -112,6 +113,20 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     scene.wait(20);
     assert_eq!((scene.property("scene", "sessionTitle").as_str(), scene.property("scene", "hasGame").as_str()), ("Synthetic", "true"));
     assert_eq!(scene.property("scene", "status"), "2 controllers · 21:42");
+    // A cover with no picture is the generated card, its title in the ink over art and the kit's Barlow (EmuSen_Kit.md §7.29).
+    for variant in [Variant::Dark, Variant::Light] {
+        scene.set_variant(variant);
+        let tree = scene.tree();
+        let titles: Vec<_> = tree.nodes.iter().filter(|n| n.name == "coverCardTitle").collect();
+        assert_eq!(titles.len(), 3, "the plain tile's, the scaled tile's and the tile's in a scaled item");
+        for title in &titles {
+            assert_eq!((title.ink.as_deref(), title.face.as_deref()), (Some("#ffffffff"), Some("Barlow")), "{variant:?}");
+        }
+        // Drawn at 0.8, by its own scale or an ancestor's it is told of, the title's capitals on the screen are the plain tile's,
+        // within the 2% a face's metrics move by between sizes (15.41 and 15.12 measured 2026-11-09; 12.3 unkept).
+        let caps: Vec<f64> = titles.iter().map(|t| t.cap).collect();
+        assert!(caps[0] > 0.0 && caps[1..].iter().all(|c| (c / caps[0] - 1.0).abs() < 0.03), "the title's capitals at 1, 0.8 and 0.8: {caps:?}");
+    }
     assert_eq!((scene.property("scene", "sessionKey").as_str(), scene.property("scene", "sessionConsole").as_str()), ("/roms/Synthetic.nes", "Nintendo Entertainment System"));
     assert_eq!(scene.property("scene", "shelf"), shelved, "the shelf is fed by the library, the suspended game by the host");
     assert_eq!(scene.property("scene", "summary"), "2 consoles · 3 games");

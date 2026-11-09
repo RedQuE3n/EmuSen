@@ -20,6 +20,8 @@ Item {
     property real litRise: 6
     // Whether a lit cover lifts at all; not under the docked keyboard, whose room holds the cover and no more (EmuSen_Qt.md §7.6).
     property bool lifts: true
+    // The scale the tile is drawn at: its own, unless a theme scales an ancestor and says so; under it the card's title keeps its size on the screen, at or above the legibility floor (EmuSen_Kit.md §7.29).
+    property real drawnScale: root.scale
     // Whether the picture stands at the box's right rather than its middle.
     property bool alignRight: false
     // Whether the picture was read and drawn, not the generated card.
@@ -48,7 +50,11 @@ Item {
             verticalAlignment: Image.AlignBottom
             horizontalAlignment: root.alignRight ? Image.AlignRight : Image.AlignHCenter
         }
-        // The generated card: the title on the console's hue, as Mistress draws a game it has no art for.
+        // The generated card: the title on the console's hue in the ink over art and the kit's Barlow, as Mistress draws a game it has no art for.
+        FontLoader {
+            id: face
+            source: "qrc:/emusen/fonts/Barlow-Regular.ttf"
+        }
         Rectangle {
             id: card
             visible: root.source.length === 0 || picture.status === Image.Error
@@ -62,14 +68,16 @@ Item {
             }
             border.color: Kit.Tokens.rule
             Text {
+                objectName: "coverCardTitle"
                 anchors.fill: parent
                 anchors.margins: 6
                 text: root.title
                 wrapMode: Text.Wrap
                 elide: Text.ElideRight
                 verticalAlignment: Text.AlignBottom
-                color: Kit.Tokens.textStrong
-                font.pixelSize: Kit.Tokens.fontBody
+                color: Kit.Tokens.overArt
+                font.family: face.font.family
+                font.pixelSize: Kit.Tokens.fontBody / Math.min(1, root.drawnScale)
             }
         }
         Item {

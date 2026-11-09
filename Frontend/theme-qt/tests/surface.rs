@@ -152,6 +152,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
             "Body",
             "Carousel",
             "CoverTile",
+            "EdgeFade",
             "FigureLayout",
             "Frame",
             "HelpBar",

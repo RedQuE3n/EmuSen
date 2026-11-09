@@ -1,5 +1,5 @@
 {
- "note": "As world.json, before libretro's catalogue was ever read: the listing holds no libretro core, and the fetch is refused offline.",
+ "note": "As world.json, before libretro's catalogue was ever read: the listing holds no libretro core, and the fetch is refused offline. PCEE2's options, the PlayStation's firmware found and a build of PCEE2 kept for Roll Back are added for Qt's pages, which Mistress's recordings do not hold.",
  "systems": [
   {
    "id": "snes",
@@ -19,7 +19,8 @@
    "release_year": 1994,
    "engines": [
     "Diamond"
-   ]
+   ],
+   "firmware_name": "PlayStation BIOS"
   },
   {
    "id": "ps2",
@@ -63,7 +64,8 @@
    "license": "GPL-3.0-or-later",
    "systems": [
     "psx"
-   ]
+   ],
+   "firmware": "optional"
   },
   {
    "library": "/opt/emusen/libvenusrt.so",
@@ -164,5 +166,78 @@
    ],
    "ends": false
   }
- }
+ },
+ "schema": {
+  "PlayStation 2/PCEE2": [
+   {
+    "key": "pcee2_renderer",
+    "label": "Renderer",
+    "hint": "How the picture is drawn.",
+    "kind": "choice",
+    "default": "vulkan",
+    "choices": [
+     "vulkan",
+     "software"
+    ],
+    "choice_labels": [
+     "Vulkan",
+     "Software"
+    ],
+    "group": "Picture"
+   },
+   {
+    "key": "pcee2_widescreen",
+    "label": "Widescreen patches",
+    "hint": "Shows 16:9 where a game has a patch.",
+    "kind": "switch",
+    "default": "false",
+    "group": "Picture"
+   },
+   {
+    "key": "pcee2_upscale",
+    "label": "Upscale",
+    "kind": "count",
+    "default": "1",
+    "min": 1,
+    "max": 4,
+    "group": "Picture",
+    "shown_with": {
+     "key": "pcee2_renderer",
+     "value": "vulkan"
+    }
+   }
+  ],
+  "PlayStation/Diamond": [
+   {
+    "key": "diamond_bios",
+    "label": "BIOS",
+    "hint": "The open replacement when none is found.",
+    "kind": "choice",
+    "default": "auto",
+    "choices": [
+     "auto",
+     "own",
+     "open"
+    ],
+    "choice_labels": [
+     "In use when none is found",
+     "Always yours",
+     "Always the open one"
+    ],
+    "group": "System"
+   }
+  ]
+ },
+ "firmware": {
+  "psx": [
+   {
+    "label": "PlayStation BIOS",
+    "file": "scph5501.bin",
+    "required": false,
+    "status": "present",
+    "need": "Diamond runs without it, on its open replacement."
+   }
+  ]
+ },
+ "firmware_folder": "/home/player/EmuSen/Firmware"
 }

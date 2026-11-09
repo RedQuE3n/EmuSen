@@ -159,6 +159,10 @@ pub trait Source {
     fn running(&self) -> bool;
     /// The row a run or an approval acted on, to be focused when the list is shown afresh; taken once.
     fn acted_on(&mut self) -> Option<String>;
+    /// A row of a row's page stepped by Left or Right (or A, by one): the page's rows again, none where it does not step.
+    fn step(&mut self, _key: &str, _item: &str, _by: i32) -> Option<Vec<CardRow>> {
+        None
+    }
 }
 
 /// The cards over the screen: a row's page (X) and the List card (Select).
@@ -188,6 +192,7 @@ pub const SEARCH_HINT: &str = "Search";
 pub const APPLY_LABEL: &str = "Apply…";
 
 /// The List card's own rows.
+pub const SEARCH: &str = "search";
 pub const FILTER: &str = "filter";
 pub const SORT: &str = "sort";
 
@@ -203,13 +208,15 @@ pub struct Tool<S> {
     /// The cards open, the last on top, each with its focused row.
     cards: Vec<(Card, usize)>,
     asked: Option<(Question, Asked)>,
+    /// The search box takes words from the docked keyboard, as the List card's Search asks.
+    searching: bool,
     /// A plan was applied and its jobs run: the marks go when they end.
     applied: bool,
 }
 
 impl<S: Source> Tool<S> {
     pub fn new(source: S) -> Tool<S> {
-        Tool { source, section: 0, filter: 0, sort: 0, search: String::new(), focused: None, marks: Vec::new(), cards: Vec::new(), asked: None, applied: false }
+        Tool { source, section: 0, filter: 0, sort: 0, search: String::new(), focused: None, marks: Vec::new(), cards: Vec::new(), asked: None, searching: false, applied: false }
     }
 
     /// The rows shown: the section's, passing the filter and the search, in the sort's order.
@@ -429,6 +436,7 @@ impl<S: Source> Tool<S> {
             Card::List => {
                 let value = |list: Vec<(String, String)>, at: usize| list.get(at).map(|s| s.1.clone()).unwrap_or_default();
                 let mut rows = vec![
+                    CardRow::new(SEARCH, "Search"),
                     CardRow::new(FILTER, "Filter").value(&value(self.source.filters(), self.filter)).steps(),
                     CardRow { section_end: true, ..CardRow::new(SORT, "Sort").value(&value(self.source.sorts(), self.sort)).steps() },
                 ];
@@ -446,8 +454,13 @@ impl<S: Source> Tool<S> {
 
     /// Left or Right on a card's row: the List card's filter and sort step through theirs.
     pub fn card_step(&mut self, index: usize, by: i32) {
-        let Some((Card::List, _)) = self.cards.last() else { return };
         let Some(row) = self.card().and_then(|c| c.2.get(index).cloned()) else { return };
+        if let Some((Card::Page { key, rows, .. }, _)) = self.cards.last_mut() {
+            if let Some(again) = self.source.step(key, &row.key, by) {
+                *rows = again;
+            }
+            return;
+        }
         let step = |at: usize, n: usize| (at as i32 + by).rem_euclid(n.max(1) as i32) as usize;
         match row.key.as_str() {
             FILTER => self.filter = step(self.filter, self.source.filters().len()),
@@ -469,6 +482,11 @@ impl<S: Source> Tool<S> {
                 self.card_step(index, 1);
                 None
             }
+            (Card::List, SEARCH) => {
+                self.cards.clear();
+                self.searching = true;
+                None
+            }
             (Card::List, action) => {
                 self.cards.clear();
                 let section = self.section_key();
@@ -477,6 +495,12 @@ impl<S: Source> Tool<S> {
             }
             (Card::Page { key, .. }, action) => {
                 let key = key.clone();
+                if let Some(again) = self.source.step(&key, action, 1) {
+                    if let Some((Card::Page { rows, .. }, _)) = self.cards.last_mut() {
+                        *rows = again;
+                    }
+                    return None;
+                }
                 let section = self.section_key();
                 let effect = self.source.act(action, Some(&key), &section);
                 if !matches!(effect, Effect::Page(..)) {
@@ -485,6 +509,16 @@ impl<S: Source> Tool<S> {
                 self.take(effect, Some(&key))
             }
         }
+    }
+
+    /// Whether the search box takes words from the docked keyboard.
+    pub fn searching(&self) -> bool {
+        self.searching
+    }
+
+    /// The docked keyboard closed, its words kept.
+    pub fn end_search(&mut self) {
+        self.searching = false;
     }
 
     /// B on a card: its last page, or the card closed.
@@ -500,6 +534,7 @@ impl<S: Source> Tool<S> {
     pub fn refresh(&mut self) {
         self.cards.clear();
         self.asked = None;
+        self.searching = false;
         self.source.refresh();
     }
 
@@ -637,5 +672,8 @@ impl Source for Box<dyn Source> {
     }
     fn acted_on(&mut self) -> Option<String> {
         (**self).acted_on()
+    }
+    fn step(&mut self, key: &str, item: &str, by: i32) -> Option<Vec<CardRow>> {
+        (**self).step(key, item, by)
     }
 }

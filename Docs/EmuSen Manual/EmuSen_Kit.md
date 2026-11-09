@@ -2608,6 +2608,13 @@ gallery's still models could not show, each fixed in `ToolScreen.qml` with no ch
 - The screen's words were the platform's sans serif with no way for a host to name its faces, so the header's facts in
   Mistress's longest case (no catalogue: 914 units in Barlow) took 1,066 and left the title 54 units for `CORES`.
   `titleFont`, `captionFont` and `bodyFont` join `cellFont`, the tokens' sizes in the platform's face by default.
+- Not the kit's but its harness's: a row scrolled out of a clipping list by all but a rounding's sliver was read as
+  shown, so the overlap rule counted it; `qt-test`'s tree takes less than half a pixel inside a clip as outside
+  (`tests/culled.rs`).
+- A tool's search types on the docked keyboard (`Keyboard`, §7.6), whose band covered the list's foot, the apply bar and
+  the pane, words the gate counted as overlapped. `keysTop` (design units, below zero for none) is where a docked band
+  begins: the list keeps its whole rows above it, and the bar and the pane are not drawn while one is docked. An
+  addition to a QML file's properties; the registry is unchanged.
 
 ### 7.6 Building, linking, the registry, and what it is held to
 

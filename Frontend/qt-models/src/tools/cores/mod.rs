@@ -4,6 +4,7 @@
 
 pub mod approval;
 pub mod backend;
+pub mod options;
 pub mod plan;
 pub mod row;
 pub mod words;
@@ -20,11 +21,10 @@ use std::collections::{HashMap, HashSet, VecDeque};
 /// The console's setting naming its engine.
 pub const ENGINE_KEY: &str = "Engine";
 
-/// What the host opens for Cores; a destination it has not got is not offered.
+/// What the host opens for Cores; a destination it has not got is not offered. The big screen has no file manager, so
+/// Open Folder is the desktop form's (stage 6).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Host {
-    pub options: bool,
-    pub firmware: bool,
     pub folder: bool,
 }
 
@@ -221,7 +221,7 @@ impl Cores {
     /// The console's engine: its stored setting, else the first engine discovery lists for it.
     fn is_default(&self, console: &str, engine: &str) -> bool {
         let first = self.engines_of.get(console).and_then(|e| e.first()).cloned();
-        self.backend.engine(console).or(first).as_deref() == Some(engine)
+        self.backend.setting(console, ENGINE_KEY).or(first).as_deref() == Some(engine)
     }
 
     fn runtime_rows(&mut self) -> Vec<Core> {
@@ -398,6 +398,12 @@ impl Cores {
                 self.installed.push(name);
                 self.revoke_all(e);
             }
+            ("restored", _) => {
+                let name = self.rows.iter().find(|r| r.stem == stem).map(|r| r.name.clone()).or(stem).unwrap_or_default();
+                self.outcomes.insert(key, "rolled back".to_owned());
+                let build = text(e, "build").map(|b| words::long_day(&b).unwrap_or(b)).unwrap_or_default();
+                self.notice = Some(format!("Rolled back {name} to the build of {build}."));
+            }
             ("removed", _) => {
                 self.outcomes.insert(key, "removed".to_owned());
                 self.revoke_all(e);
@@ -454,7 +460,7 @@ impl Cores {
         let chosen = section.strip_prefix("console:").filter(|c| row.consoles.iter().any(|r| r == c));
         let consoles: Vec<String> = chosen.map_or_else(|| row.consoles.clone(), |c| vec![c.to_owned()]);
         for console in consoles {
-            if let Err(e) = self.backend.set_engine(&console, &engine) {
+            if let Err(e) = self.backend.set_setting(&console, ENGINE_KEY, &engine) {
                 self.notice = Some(format!("{} could not be made the {}'s engine: {e}", row.name, self.consoles.name(&console)));
             }
         }
@@ -518,7 +524,7 @@ impl Cores {
         }
         let (engine, console) = (row.engine.as_ref()?, row.consoles.first()?);
         let first = self.engines_of.get(console).and_then(|e| e.first()).cloned();
-        let current = self.backend.engine(console).or(first)?;
+        let current = self.backend.setting(console, ENGINE_KEY).or(first)?;
         if &current == engine {
             return None;
         }
@@ -695,6 +701,85 @@ impl Cores {
     }
 }
 
+impl Cores {
+    /// The engine's options for the row's first console, from the runtime's schema, each in its stored value.
+    fn options(&self, row: &Core) -> Vec<CardRow> {
+        let (Some(console), Some(engine)) = (row.consoles.first(), row.engine.as_deref()) else { return Vec::new() };
+        let schema = self.backend.schema(console, engine);
+        let value = |key: &str, default: &Option<String>| self.backend.setting(console, key).or_else(|| default.clone()).unwrap_or_default();
+        options::rows(&schema, &value, OPTION)
+    }
+
+    /// The firmware of the row's first console, as the runtime finds it.
+    fn firmware_files(&self, row: &Core) -> Vec<emusen_crystal_client::shapes::FirmwareFile> {
+        let Some(first) = row.consoles.first() else { return Vec::new() };
+        let system = row.systems.iter().find(|s| self.consoles.console_of.get(*s) == Some(first)).or(row.systems.first());
+        system.and_then(|s| self.backend.firmware(s)).unwrap_or_default()
+    }
+
+    /// One row a file: found or not, and in the pane the file, whether it is needed, and the folder it goes in
+    /// (EmuSen_Interface.md §18.10).
+    fn firmware_rows(&self, row: &Core) -> Vec<CardRow> {
+        let folder = self.backend.firmware_folder().unwrap_or_else(|| "the firmware folder".to_owned());
+        self.firmware_files(row)
+            .iter()
+            .enumerate()
+            .map(|(at, f)| {
+                let value = match f.status.as_str() {
+                    "present" => "✓ Found",
+                    "missing" => "⚠ None found",
+                    _ => "Not needed",
+                };
+                let label = if f.label.is_empty() { f.file.clone() } else { f.label.clone() };
+                let need = if f.required { "Required" } else { "Optional" };
+                let pane = CardPane {
+                    lines: vec![
+                        (format!("{} · {need}", f.file), f.need.clone()),
+                        (format!("Put it in {folder}."), "EmuSen recognises it by its content and never downloads it.".to_owned()),
+                    ],
+                    ..CardPane::default()
+                };
+                CardRow::new(&format!("firmware.{at}"), &label).value(value).pane(pane)
+            })
+            .collect()
+    }
+
+    /// The build kept for Roll Back, by its date, where the tool keeps one.
+    fn kept_build(&self, row: &Core) -> Option<String> {
+        let previous = self.info_of(row)?.get("previous")?;
+        text(previous, "build").filter(|b| !b.is_empty())
+    }
+
+    /// The kept build put back by the core tool, a job of its own (EmuSen_Cores.md §5.4).
+    fn roll_back(&mut self, key: &str) {
+        let Some(row) = self.row(key).cloned() else { return };
+        let Some(stem) = row.stem.clone() else { return };
+        if self.job.is_some() {
+            return;
+        }
+        self.outcomes.clear();
+        self.installed.clear();
+        self.notice = None;
+        self.acted_on = Some(row.key.clone());
+        self.steps = vec![plan::Step { request: json!({ "op": "core-rollback", "cores": [stem] }), doing: "Rolling back", rows: vec![row.key] }].into();
+        self.step_count = 1;
+        self.steps_done = 0;
+        self.next_step();
+    }
+}
+
+/// Roll Back's question: what is put back and that both builds keep their approvals (EmuSen_Cores.md §5.4).
+fn roll_back_question(row: &Core, build: &str) -> crate::question::Question {
+    let day = words::long_day(build).unwrap_or_else(|| build.to_owned());
+    crate::tools::plan_question(
+        &format!("Roll Back {}?", row.name),
+        &[
+            format!("Put back the build of {day}, kept when this one was installed in its place."),
+            "The build installed now is kept instead, so Roll Back again returns to it. Both keep their approvals.".to_owned(),
+        ],
+    )
+}
+
 /// What the project found of the build, one owner for the pane and the approval (EmuSen_Cores.md §4.6).
 fn tested(info: &Value) -> Option<String> {
     let t = info.get("tested")?;
@@ -718,6 +803,8 @@ pub const DETAILS: &str = "details";
 const MARK: &str = "mark:";
 const UNMARK: &str = "unmark";
 const REMOVE_ASK: &str = "remove";
+pub const ROLL_BACK: &str = "rollback";
+const OPTION: &str = "option:";
 
 impl Source for Cores {
     fn title(&self) -> &str {
@@ -843,7 +930,7 @@ impl Source for Cores {
             Some(Action::new(plan::UPDATE, "Update…"))
         } else if engine && !row.is_default {
             Some(Action::new(DEFAULT, "Make Default"))
-        } else if engine && self.host.options {
+        } else if engine {
             Some(Action::new(OPTIONS, "Options"))
         } else {
             None
@@ -863,10 +950,10 @@ impl Source for Cores {
         }
         let engine = row.engine.is_some() && !row.consoles.is_empty();
         let installed_libretro = row.is_libretro() && row.installed();
-        if engine && self.host.options {
+        if engine {
             rows.push(CardRow::new(OPTIONS, "Options").opens());
         }
-        if !self.firmware_listed(row).is_empty() && self.host.firmware {
+        if (!self.firmware_listed(row).is_empty() || row.firmware.is_some()) && !self.firmware_files(row).is_empty() {
             rows.push(CardRow::new(FIRMWARE, "Firmware").opens());
         }
         if self.hash_of(row).is_some() && (row.awaits_approval() || installed_libretro) {
@@ -874,6 +961,11 @@ impl Source for Cores {
         }
         if installed_libretro {
             rows.push(CardRow::new(VERIFY, "Verify"));
+        }
+        if installed_libretro && self.kept_build(row).is_some() {
+            rows.push(CardRow::new(ROLL_BACK, "Roll Back…"));
+        }
+        if installed_libretro {
             rows.push(CardRow::new(REMOVE_ASK, "Remove…"));
         }
         if row.installed() && self.host.folder {
@@ -939,13 +1031,25 @@ impl Source for Cores {
                 Effect::Done
             }
             (DETAILS, Some(row)) => Effect::Page(format!("{} · details", row.name), self.details(&row)),
-            (OPTIONS | FIRMWARE | FOLDER, Some(_)) => Effect::Host(action.to_owned()),
+            (OPTIONS, Some(row)) => Effect::Page(format!("{} · Options", row.name), self.options(&row)),
+            (FIRMWARE, Some(row)) => Effect::Page(format!("{} · Firmware", row.name), self.firmware_rows(&row)),
+            (ROLL_BACK, Some(row)) => match self.kept_build(&row) {
+                Some(build) => Effect::Ask(roll_back_question(&row, &build), format!("{ROLL_BACK}:{}", row.key)),
+                None => Effect::Done,
+            },
+            (FOLDER, Some(_)) => Effect::Host(action.to_owned()),
             (other, Some(_)) if other.starts_with(MARK) => Effect::Mark(other[MARK.len()..].to_owned(), false),
             _ => Effect::Done,
         }
     }
 
     fn answer(&mut self, asked: &str, yes: bool) {
+        if let Some(key) = asked.strip_prefix(&format!("{ROLL_BACK}:")) {
+            if yes {
+                self.roll_back(key);
+            }
+            return;
+        }
         let Some(key) = asked.strip_prefix(&format!("{APPROVE}:")) else { return };
         let Some(row) = self.row(key).cloned() else { return };
         let Some(sha) = self.hash_of(&row).filter(|_| yes) else { return };
@@ -1013,5 +1117,20 @@ impl Source for Cores {
             return None;
         }
         self.acted_on.take()
+    }
+
+    /// An option of the Options page stepped through its choices, stored for the console, and the page read again.
+    fn step(&mut self, key: &str, item: &str, by: i32) -> Option<Vec<CardRow>> {
+        let setting = item.strip_prefix(OPTION)?;
+        let row = self.row(key)?.clone();
+        let (console, engine) = (row.consoles.first()?.clone(), row.engine.clone()?);
+        let schema = self.backend.schema(&console, &engine);
+        let found = schema.iter().find(|s| s.key == setting)?;
+        let now = self.backend.setting(&console, setting).or_else(|| found.default.clone()).unwrap_or_default();
+        let next = options::stepped(found, &now, by)?;
+        if let Err(e) = self.backend.set_setting(&console, setting, &next) {
+            self.notice = Some(format!("{} could not be changed: {e}", found.label));
+        }
+        Some(self.options(&row))
     }
 }

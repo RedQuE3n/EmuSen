@@ -44,6 +44,7 @@ pub mod qobject {
         PauseDisc,
         Themes,
         ThemesChecked,
+        ToolSearch,
     }
 
     extern "RustQt" {
@@ -137,6 +138,7 @@ impl qobject::HelpModel {
             HelpScreen::PauseDisc => Screen::PauseDisc,
             HelpScreen::Themes => Screen::Themes,
             HelpScreen::ThemesChecked => Screen::ThemesChecked,
+            HelpScreen::ToolSearch => Screen::ToolSearch,
             _ => Screen::Home,
         }
     }
@@ -186,6 +188,7 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::PauseDisc => HelpScreen::PauseDisc,
         Screen::Themes => HelpScreen::Themes,
         Screen::ThemesChecked => HelpScreen::ThemesChecked,
+        Screen::ToolSearch => HelpScreen::ToolSearch,
     };
     shown.repr
 }

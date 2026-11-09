@@ -40,6 +40,8 @@ pub enum Screen {
     Themes,
     /// The Themes tab on a theme in use, not checked clean, or of a kind not chosen here: Check alone.
     ThemesChecked,
+    /// A tool's search with the keyboard docked: Type, Delete, Space and Done (EmuSen_Interface.md §15.2).
+    ToolSearch,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -145,6 +147,12 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::PageUp, "Kind", None),
             (UiButton::Back, "Back", None),
             (UiButton::Menu, "Home", Some(HOME)),
+        ],
+        Screen::ToolSearch => &[
+            (UiButton::Accept, "Type", None),
+            (UiButton::Back, "Delete", None),
+            (UiButton::Search, "Space", Some("space")),
+            (UiButton::Screensaver, "Done", Some("done")),
         ],
     }
 }

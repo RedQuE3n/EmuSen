@@ -26,6 +26,9 @@ Kit.Frame {
     property int summaryTone: Kit.Tones.Text
     // Below zero no job runs; from 0 to 1, the running job's share done.
     property real progress: -1
+    // Where a docked keyboard's band begins, in design units; below zero none is docked. While one is, the list keeps the whole rows above it and the bar and the pane are not drawn, so nothing lies under the band.
+    property real keysTop: -1
+    readonly property bool keysDocked: root.keysTop >= 0
     property string applyLabel
     property bool applyEnabled: false
     property real meter: 0
@@ -131,7 +134,7 @@ Kit.Frame {
             x: places.list.x
             y: places.list.y
             width: places.list.width
-            height: places.list.height
+            height: root.keysDocked ? Math.min(places.list.height, Math.floor((root.keysTop - places.list.y) / Kit.Tokens.rowHeight) * Kit.Tokens.rowHeight) : places.list.height
             color: Kit.Tokens.inputSurface
             Kit.EdgeFade {
                 anchors.fill: parent
@@ -209,6 +212,7 @@ Kit.Frame {
         }
         Item {
             objectName: "toolBar"
+            visible: !root.keysDocked
             x: places.bar.x
             y: places.bar.y
             width: places.bar.width
@@ -264,6 +268,7 @@ Kit.Frame {
         }
         Rectangle {
             objectName: "toolPane"
+            visible: !root.keysDocked
             x: places.pane.x
             y: places.pane.y
             width: places.pane.width

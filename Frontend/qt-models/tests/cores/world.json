@@ -1,5 +1,5 @@
 {
- "note": "Mistress's recordings' world (WindowFitAuditTests.CoresWindow.cs): the runtime's three cores of EmuSen's own, a player's core waiting for approval and PCEE2 approved under libretro/; the core tool's listing, a fetch refused offline, and an install that runs and does not end.",
+ "note": "Mistress's recordings' world (WindowFitAuditTests.CoresWindow.cs): the runtime's three cores of EmuSen's own, a player's core waiting for approval and PCEE2 approved under libretro/; the core tool's listing, a fetch refused offline, and an install that runs and does not end. PCEE2's options, the PlayStation's firmware found and a build of PCEE2 kept for Roll Back are added for Qt's pages, which Mistress's recordings do not hold.",
  "systems": [
   {
    "id": "snes",
@@ -19,7 +19,8 @@
    "release_year": 1994,
    "engines": [
     "Diamond"
-   ]
+   ],
+   "firmware_name": "PlayStation BIOS"
   },
   {
    "id": "ps2",
@@ -63,7 +64,8 @@
    "license": "GPL-3.0-or-later",
    "systems": [
     "psx"
-   ]
+   ],
+   "firmware": "optional"
   },
   {
    "library": "/opt/emusen/libvenusrt.so",
@@ -176,7 +178,11 @@
       "PCSX2 Team",
       "libretro"
      ],
-     "size": 41943040
+     "size": 41943040,
+     "previous": {
+      "build": "2026-10-24",
+      "sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+     }
     },
     {
      "event": "core",
@@ -285,6 +291,101 @@
     }
    ],
    "ends": false
+  },
+  "core-rollback": {
+   "events": [
+    {
+     "event": "restored",
+     "stem": "pcee2",
+     "sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+     "build": "2026-10-24",
+     "previous": "5555555555555555555555555555555555555555555555555555555555555555",
+     "revoke": [],
+     "tested": {
+      "match": "none"
+     }
+    },
+    {
+     "event": "done",
+     "op": "core-rollback",
+     "counts": {},
+     "catalogue": "2026-10-31"
+    }
+   ],
+   "ends": true
   }
- }
+ },
+ "schema": {
+  "PlayStation 2/PCEE2": [
+   {
+    "key": "pcee2_renderer",
+    "label": "Renderer",
+    "hint": "How the picture is drawn.",
+    "kind": "choice",
+    "default": "vulkan",
+    "choices": [
+     "vulkan",
+     "software"
+    ],
+    "choice_labels": [
+     "Vulkan",
+     "Software"
+    ],
+    "group": "Picture"
+   },
+   {
+    "key": "pcee2_widescreen",
+    "label": "Widescreen patches",
+    "hint": "Shows 16:9 where a game has a patch.",
+    "kind": "switch",
+    "default": "false",
+    "group": "Picture"
+   },
+   {
+    "key": "pcee2_upscale",
+    "label": "Upscale",
+    "kind": "count",
+    "default": "1",
+    "min": 1,
+    "max": 4,
+    "group": "Picture",
+    "shown_with": {
+     "key": "pcee2_renderer",
+     "value": "vulkan"
+    }
+   }
+  ],
+  "PlayStation/Diamond": [
+   {
+    "key": "diamond_bios",
+    "label": "BIOS",
+    "hint": "The open replacement when none is found.",
+    "kind": "choice",
+    "default": "auto",
+    "choices": [
+     "auto",
+     "own",
+     "open"
+    ],
+    "choice_labels": [
+     "In use when none is found",
+     "Always yours",
+     "Always the open one"
+    ],
+    "group": "System"
+   }
+  ]
+ },
+ "firmware": {
+  "psx": [
+   {
+    "label": "PlayStation BIOS",
+    "file": "scph5501.bin",
+    "required": false,
+    "status": "present",
+    "need": "Diamond runs without it, on its open replacement."
+   }
+  ]
+ },
+ "firmware_folder": "/home/player/EmuSen/Firmware"
 }

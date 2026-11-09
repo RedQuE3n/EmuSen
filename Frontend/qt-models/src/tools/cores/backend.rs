@@ -3,9 +3,9 @@
 //! (EmuSen_Qt.md §1.1). `Clients` answers over the two client crates; `Scripted` answers from a file that holds a world,
 //! as Mistress's recordings of Cores script theirs (EmuSen_Qt.md §7.7).
 
-use emusen_crystal_client::shapes::{CoreRow, FirmwareFile, SystemRow};
+use emusen_crystal_client::shapes::{CoreRow, FirmwareFile, SettingRow, SystemRow};
 use emusen_crystal_client::{Runtime, Scope};
-use emusen_platform_client::galaxia::consts::DIR_CORES;
+use emusen_platform_client::galaxia::consts::{DIR_CORES, DIR_FIRMWARE};
 use emusen_platform_client::tools::ToolJob;
 use emusen_platform_client::Platform;
 use serde_json::Value;
@@ -20,9 +20,13 @@ pub trait Job {
 pub trait Backend {
     fn systems(&self) -> Result<Vec<SystemRow>, String>;
     fn cores(&self) -> Result<Vec<CoreRow>, String>;
-    /// A console's stored engine, none where it stores none.
-    fn engine(&self, console: &str) -> Option<String>;
-    fn set_engine(&self, console: &str, engine: &str) -> Result<(), String>;
+    /// A console's setting as stored or defaulted, none where it has neither; and one stored.
+    fn setting(&self, console: &str, key: &str) -> Option<String>;
+    fn set_setting(&self, console: &str, key: &str, value: &str) -> Result<(), String>;
+    /// The settings an engine declares for a console (its options).
+    fn schema(&self, console: &str, engine: &str) -> Vec<SettingRow>;
+    /// The folder the player's firmware goes in.
+    fn firmware_folder(&self) -> Option<String>;
     fn approve(&self, sha256: &str) -> Result<(), String>;
     fn revoke(&self, sha256: &str) -> Result<(), String>;
     /// A system's firmware files and their status; none where the runtime cannot say.
@@ -62,12 +66,20 @@ impl Backend for Clients {
         self.runtime.cores().map_err(words)
     }
 
-    fn engine(&self, console: &str) -> Option<String> {
-        self.runtime.settings_get(0, Scope::Console, Some(console), super::ENGINE_KEY).ok().flatten().filter(|e| !e.is_empty())
+    fn setting(&self, console: &str, key: &str) -> Option<String> {
+        self.runtime.settings_get(0, Scope::Console, Some(console), key).ok().flatten().filter(|e| !e.is_empty())
     }
 
-    fn set_engine(&self, console: &str, engine: &str) -> Result<(), String> {
-        self.runtime.settings_set(0, Scope::Console, Some(console), super::ENGINE_KEY, Some(engine)).map_err(words)
+    fn set_setting(&self, console: &str, key: &str, value: &str) -> Result<(), String> {
+        self.runtime.settings_set(0, Scope::Console, Some(console), key, Some(value)).map_err(words)
+    }
+
+    fn schema(&self, console: &str, engine: &str) -> Vec<SettingRow> {
+        self.runtime.settings_schema(0, Some(console), Some(engine)).unwrap_or_default()
+    }
+
+    fn firmware_folder(&self) -> Option<String> {
+        self.platform.directory(DIR_FIRMWARE).ok()?.map(|d| d.display().to_string())
     }
 
     fn approve(&self, sha256: &str) -> Result<(), String> {
@@ -133,8 +145,9 @@ impl Job for Script {
 
 impl Scripted {
     /// The world in the file at `path`: `systems` and `cores` as the runtime lists them, `settings` by
-    /// `<console>/<key>`, `space` as `[free, total]`, `sizes` by library, and `jobs` by the request's `op` (`*` for any
-    /// other) as `{"events": [...], "ends": bool}`.
+    /// `<console>/<key>`, `space` as `[free, total]`, `sizes` by library, `schema` by `<console>/<engine>`,
+    /// `firmware` by system, `firmware_folder`, and `jobs` by the request's `op` (`*` for any other) as
+    /// `{"events": [...], "ends": bool}`.
     pub fn open(path: &str) -> Result<Scripted, String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
         let world: Value = serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))?;
@@ -156,13 +169,22 @@ impl Backend for Scripted {
         serde_json::from_value(self.list("cores")).map_err(words)
     }
 
-    fn engine(&self, console: &str) -> Option<String> {
-        self.settings.lock().ok()?.get(&format!("{console}/{}", super::ENGINE_KEY)).cloned()
+    fn setting(&self, console: &str, key: &str) -> Option<String> {
+        self.settings.lock().ok()?.get(&format!("{console}/{key}")).cloned()
     }
 
-    fn set_engine(&self, console: &str, engine: &str) -> Result<(), String> {
-        self.settings.lock().map_err(words)?.insert(format!("{console}/{}", super::ENGINE_KEY), engine.to_owned());
+    fn set_setting(&self, console: &str, key: &str, value: &str) -> Result<(), String> {
+        self.settings.lock().map_err(words)?.insert(format!("{console}/{key}"), value.to_owned());
         Ok(())
+    }
+
+    fn schema(&self, console: &str, engine: &str) -> Vec<SettingRow> {
+        let rows = self.world.get("schema").and_then(|s| s.get(format!("{console}/{engine}"))).cloned().unwrap_or(Value::Array(Vec::new()));
+        serde_json::from_value(rows).unwrap_or_default()
+    }
+
+    fn firmware_folder(&self) -> Option<String> {
+        self.world.get("firmware_folder")?.as_str().map(str::to_owned)
     }
 
     fn approve(&self, _sha256: &str) -> Result<(), String> {
@@ -173,8 +195,8 @@ impl Backend for Scripted {
         Ok(())
     }
 
-    fn firmware(&self, _system: &str) -> Option<Vec<FirmwareFile>> {
-        None
+    fn firmware(&self, system: &str) -> Option<Vec<FirmwareFile>> {
+        serde_json::from_value(self.world.get("firmware")?.get(system)?.clone()).ok()
     }
 
     fn rescan(&self) {}

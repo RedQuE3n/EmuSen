@@ -15,12 +15,14 @@ Kit.NormalizedCanvas {
     Kit.ToolScreen {
         id: frame
         objectName: "coresScreen"
+        // Under a card or a question the screen is drawn and nothing on it is reached: a backdrop to the gate, as ThemeHost's screens are.
+        property bool backdrop: screen.tool.cardOpen || screen.tool.asking
         anchors.fill: parent
         form: Kit.Forms.BigScreen
-        focus: screen.inputs && !screen.tool.cardOpen
+        focus: screen.inputs && !screen.tool.cardOpen && !screen.tool.searching
         padFamily: screen.padFamily
         // The question draws its own help bar over the screen's.
-        helpShown: !screen.tool.asking
+        helpShown: !screen.tool.asking && !screen.tool.searching && !screen.tool.cardOpen
         helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
         helpSpacing: 40
         helpGlyphGap: 10
@@ -34,6 +36,8 @@ Kit.NormalizedCanvas {
         title: screen.tool.title
         nameRole: "name"
         searchHint: screen.tool.searchHint
+        searchText: screen.tool.searchText
+        keysTop: screen.tool.searching ? keyboard.y : -1
         facts: RowsModel {
             rows: screen.tool.facts
         }
@@ -72,7 +76,8 @@ Kit.NormalizedCanvas {
         // The list takes the keys back from a card as it closes.
         Connections {
             target: screen.tool
-            function onCardClosed() { frame.forceActiveFocus() }
+            function onListFocused() { frame.forceActiveFocus() }
+            function onSearchOpened() { searchFrame.forceActiveFocus() }
         }
         Connections {
             target: frame.controller
@@ -103,6 +108,51 @@ Kit.NormalizedCanvas {
         // Opened each time the tool asks; a Binding, since B closing the popup would undo a plain one.
         Binding {
             question.visible: screen.tool.asking
+        }
+    }
+    // The search's words typed on the docked keyboard, from the List card's Search (EmuSen_Interface.md §15.2), as the grid's search types them.
+    Kit.KeyboardModel {
+        id: typist
+        onTextChanged: screen.tool.search(typist.text)
+        onClosed: screen.tool.endSearch()
+    }
+    Connections {
+        target: screen.tool
+        function onSearchingChanged() { typist.setText(screen.tool.searchText, screen.tool.searchText.length) }
+    }
+    Kit.Frame {
+        id: searchFrame
+        objectName: "coresSearch"
+        anchors.fill: parent
+        visible: screen.tool.searching
+        surfaceDrawn: false
+        focus: screen.inputs && screen.tool.searching
+        padFamily: screen.padFamily
+        helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        helpSpacing: 40
+        helpGlyphGap: 10
+        controller.navigationShown: false
+        help: HelpModel {
+            screen: HelpModel.ToolSearch
+        }
+        Connections {
+            target: searchFrame.controller
+            function onActionInvoked(key) { typist.act(key) }
+        }
+        Item {
+            x: -searchFrame.safeX
+            y: -searchFrame.safeY
+            width: screen.width
+            height: screen.height
+            Kit.Keyboard {
+                id: keyboard
+                objectName: "coresKeyboard"
+                model: typist
+                y: 398
+                width: screen.width
+                focus: true
+                labelFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontBody })
+            }
         }
     }
     // A row's page under X and the List card under Select, on the Card form over the screen (EmuSen_Interface.md §15.5).

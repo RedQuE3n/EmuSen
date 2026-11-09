@@ -3614,9 +3614,29 @@ source, every word from the model, the screens' faces (Barlow Condensed for the 
 row's action as §15.5 names it (`Install…` and `Update…` mark the row and ask the plan at once, `Approve…` asks the
 approval, `Make Default` sets the console's `Engine` through the runtime, the strip's console where the row runs it);
 X opens the row's page on the Card form (`MenuCard`, breadcrumb `Cores`): Mark to install, update or remove, or Unmark,
-Approve…, Verify, Remove…, and Details ▸, a page of the raw facts with each fact whole in the pane; Select opens the List
-card (Filter ◂ All ▸ through the six states, Sort ◂ Console ▸ by name or status, Check for Updates, Verify); Start asks
-the plan in the question form, No first; the shoulders step the consoles; B goes Home. The screen's timer pulls a job's
+Options ▸, Firmware ▸, Approve…, Verify, Roll Back…, Remove…, and Details ▸, a page of the raw facts with each fact
+whole in the pane; Select opens the List card (Search, Filter ◂ All ▸ through the six states, Sort ◂ Console ▸ by name or
+status, Check for Updates, Verify); Start asks the plan in the question form, No first; the shoulders step the consoles;
+B goes Home.
+- **Search** docks the kit's keyboard under the strip, as the grid's search does (§7.6): A types into the search box,
+  Y a space, X keeps the words and gives the list back, B deletes, and B on no words closes it; the list narrows as the
+  words change (`HelpModel.ToolSearch`: Type, Delete, Space, Done). While the keyboard is docked the list keeps the
+  whole rows above its band and the apply bar and the pane are not drawn (the kit's `keysTop`), so nothing lies under it.
+- **Options ▸** (A on a console's default, as §15.5 has it, and a row of the page for any core with an engine) is the
+  engine's options for its console from the runtime's settings schema (`settings_schema` with the console and the
+  engine), a row each in the schema's words: a choice by its label, a switch On or Off, a count; Left and Right, or A,
+  step a value, stored for the console through `settings_set`; a row shown only with another's value is shown while it
+  holds; the hint and note are the row's pane (`tools::cores::options`). C# opened the console's settings at the
+  engine's options; Settings ▸ Consoles ▸ <console> is piece E's, and when it lands this page is the door it opens to.
+- **Firmware ▸** (where the core's information or the runtime names firmware, and the runtime says what is found) is
+  the console's files from `firmware_status`, each `✓ Found`, `⚠ None found` or `Not needed`, its pane the file,
+  whether it is required, what the runtime says it is for, and `Put it in <folder>.` with `EmuSen recognises it by its
+  content and never downloads it.` (§18.10's words; C#'s FirmwarePane was a window of its own).
+- **Roll Back…** (where the core tool keeps an earlier build, its `previous`) asks `Roll Back <name>?`: `Put back the
+  build of <date>, kept when this one was installed in its place.` and `The build installed now is kept instead, so Roll
+  Back again returns to it. Both keep their approvals.` (`EmuSen_Cores.md` §5.4); Yes runs `core-rollback` as a job of
+  its own, the row `Rolling back…`, then `Rolled back` and `Rolled back <name> to the build of <date>.` on the bar. C#
+  had listed Roll Back in §15.5 and not built it. The screen's timer pulls a job's
 events every 100 ms while one runs. The catalogue is read once when a home that never read it opens Cores, as C# does.
 
 **The approval at first launch.** Every game chosen now passes through `LaunchModel.prepare` before it is recorded and
@@ -3640,11 +3660,8 @@ up and nothing opens. C#'s picker installed the chosen file with `firmware_insta
 form (stage 6). No core the project builds marks firmware required, so the question is held by tests over words and
 answers, and over the fixture by its absence.
 
-**Decided here, each for the tester** (none changes an interface): the Search row of §15.5's List card is not built,
-since the strip's search box (Up from the first row) is where words are typed until the docked keyboard comes to the
-tool screen; `Options ▸`, `Firmware ▸` and `Open Folder` are not offered (the host has no console page until piece E,
-and no folder on the big screen), so the default row has no A, as C# does with no host; `Update All…` and `Roll Back…`
-are not built, as C# built neither.
+**Not offered, for the tester:** `Open Folder`, since the big screen has no file manager (the desktop form's, stage 6),
+and `Update All…`, which C# did not build either.
 
 **The recordings' world.** Mistress's five Cores recordings are made over a scripted world
 (`WindowFitAuditTests.CoresWindow.cs`: three of EmuSen's cores, a player's core waiting for approval, PCEE2 approved under
@@ -3675,10 +3692,14 @@ and the help bar's entries is Mistress's. The differences, each named:
 - The help bar stands on the band at 742, Mistress's at 702 (the kit's open question, `EmuSen_Kit.md` §7.45).
 - `CoresPlan`: the Qt recording holds the screen under the modal question, so the spec rules read 30 overlaps of the list
   and pane with the question's card and six items the pad does not reach; Mistress's plan is a sheet whose screen is not
-  recorded beneath it. The program's test names the six (`named`: a modal question is up).
-- A row the list has scrolled wholly out of its box at 1280 × 720 (`CoresDetail`, VenusRT above Snes9x) is read by the
-  gate's overlap rule at its own box over the strip, though Qt culls it and nothing is drawn there (the grab); the test
-  names such an overlap (`scrolled_out`). The audit reading a scroller's clip is a question for the harness.
+  recorded beneath it. To the gate the screen under a question or a card is a backdrop (`backdrop`, as ThemeHost's
+  screens under the Home card are), drawn and not reached.
+- The default row's A is `Options` here; Mistress's recordings were made with no host for options, so A was unnamed on
+  VenusRT (`CoresNoCatalogue`'s help bar).
+- **A harness defect, fixed:** a row the list has scrolled out of its box at 1280 × 720 (`CoresDetail`, VenusRT above
+  Snes9x) met the list's box by a rounding's sliver (scale 0.9: a row of 48.6 above a list at 144), so the tree read it
+  as shown and the overlap rule found it over the strip, though nothing is drawn there (the grab). `qt-test`'s tree now
+  takes less than half a pixel inside a clip as outside (`SLIVER`, `tree.rs`), held by `qt-test/tests/culled.rs`.
 
 **Held to** (measured on 2026-11-09). `qt-models/tests/cores.rs` 6 (the listing's join, order, sections, facts, status
 words and tones, meter; the pane's sentences and A in the help bar; Make Default; X's page, the marks, the plan, the
@@ -3688,7 +3709,11 @@ Approve recording the hash; no catalogue; the List card's filter and sort, the s
 player's core asked about once and approved through the runtime, its hash in the question; declined, nothing recorded,
 and a core an installation's manifest vouches for never asked about; the firmware question's words and answers;
 `LaunchModel` through QML asking, approving and naming the game, then asking nothing the second time);
-`qt-models/tests/qml.rs` 2; `qt-app/tests/cores.rs` (the five states, 25 held states, nothing logged by Qt); the rest
+`qt-models/tests/cores.rs` adds 4 (the List card's Search and its words kept, Options stepped and stored with a row
+hidden by another's value, Firmware found and its folder, Roll Back asked and run as `core-rollback`);
+`qt-models/tests/qml.rs` 2; `qt-test/tests/culled.rs` 1; `qt-app/tests/cores.rs` (the five recorded states and
+`CoresSearch`, `CoresOptions` and `CoresFirmware`, 40 held states, nothing logged by Qt, then Roll Back by the pad);
+`acceptance.rs` on the RX 6800, the launch's question in its path (512 s); the rest
 of qt-app's tests by hand on the software backend (`cards`, `first_frame`, `gate_pad`, `idle`, `pause`,
 `pause_pages`, `program`, `scale`, `screens`, `splash`, `start`, `still`, `theme`, `theme_feed`, `themes_tab`), all
 passing.

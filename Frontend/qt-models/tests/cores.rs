@@ -3,7 +3,7 @@
 //! action in the help bar, the marks and the plan, a job's progress pulled, and the approval asked and recorded
 //! (EmuSen_Interface.md §15.2–15.6; EmuSen_Qt.md §7.7).
 
-use emusen_crystal_client::shapes::{CoreRow, FirmwareFile, SystemRow};
+use emusen_crystal_client::shapes::{CoreRow, FirmwareFile, SettingRow, SystemRow};
 use emusen_qt_models::tools::cores::backend::{Backend, Job, Scripted};
 use emusen_qt_models::tools::cores::{Cores, Host};
 use emusen_qt_models::tools::{Source, Tone, Tool, Words};
@@ -17,6 +17,7 @@ const NO_CATALOGUE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/cores/no-
 struct Recorded {
     world: Scripted,
     approved: Arc<Mutex<Vec<String>>>,
+    started: Arc<Mutex<Vec<Value>>>,
 }
 
 impl Backend for Recorded {
@@ -26,11 +27,17 @@ impl Backend for Recorded {
     fn cores(&self) -> Result<Vec<CoreRow>, String> {
         self.world.cores()
     }
-    fn engine(&self, console: &str) -> Option<String> {
-        self.world.engine(console)
+    fn setting(&self, console: &str, key: &str) -> Option<String> {
+        self.world.setting(console, key)
     }
-    fn set_engine(&self, console: &str, engine: &str) -> Result<(), String> {
-        self.world.set_engine(console, engine)
+    fn set_setting(&self, console: &str, key: &str, value: &str) -> Result<(), String> {
+        self.world.set_setting(console, key, value)
+    }
+    fn schema(&self, console: &str, engine: &str) -> Vec<SettingRow> {
+        self.world.schema(console, engine)
+    }
+    fn firmware_folder(&self) -> Option<String> {
+        self.world.firmware_folder()
     }
     fn approve(&self, sha256: &str) -> Result<(), String> {
         self.approved.lock().unwrap().push(sha256.to_owned());
@@ -44,6 +51,7 @@ impl Backend for Recorded {
     }
     fn rescan(&self) {}
     fn start(&self, request: &Value) -> Result<Box<dyn Job>, String> {
+        self.started.lock().unwrap().push(request.clone());
         self.world.start(request)
     }
     fn space(&self) -> Option<(u64, u64)> {
@@ -55,15 +63,21 @@ impl Backend for Recorded {
 }
 
 fn opened(world: &str) -> (Tool<Cores>, Arc<Mutex<Vec<String>>>) {
+    let (tool, approved, _) = opened_recording(world);
+    (tool, approved)
+}
+
+fn opened_recording(world: &str) -> (Tool<Cores>, Arc<Mutex<Vec<String>>>, Arc<Mutex<Vec<Value>>>) {
     let approved = Arc::new(Mutex::new(Vec::new()));
-    let backend = Recorded { world: Scripted::open(world).unwrap(), approved: approved.clone() };
+    let started = Arc::new(Mutex::new(Vec::new()));
+    let backend = Recorded { world: Scripted::open(world).unwrap(), approved: approved.clone(), started: started.clone() };
     let mut tool = Tool::new(Cores::new(Box::new(backend), Host::default()));
     tool.refresh();
     for _ in 0..8 {
         tool.poll();
     }
     assert!(!tool.source.running(), "the listing and the catalogue's fetch end");
-    (tool, approved)
+    (tool, approved, started)
 }
 
 fn cells(tool: &Tool<Cores>) -> Vec<Vec<String>> {
@@ -158,7 +172,7 @@ fn the_pane_says_the_core_in_sentences_and_a_names_the_row_s_action() {
     assert_eq!(tool.source.cores().iter().find(|c| c.name == "Sapphire").map(|c| c.is_default), Some(true));
     assert_eq!(tool.source.cores().iter().find(|c| c.name == "PCEE2").map(|c| c.is_default), Some(false));
     focus_on(&mut tool, "VenusRT");
-    assert_eq!(help(&tool), ["Back", "Console", "More", "List", "Apply…"]);
+    assert_eq!(help(&tool), ["Options", "Back", "Console", "More", "List", "Apply…"], "the default's A is its options");
 }
 
 #[test]
@@ -262,13 +276,13 @@ fn the_list_card_filters_and_sorts_and_the_details_page_holds_the_raw_facts() {
     let (mut tool, _) = opened(WORLD);
     tool.list();
     let labels: Vec<String> = tool.card().unwrap().2.into_iter().map(|r| format!("{} {}", r.label, r.value)).collect();
-    assert_eq!(labels, ["Filter All", "Sort Console", "Check for Updates ", "Verify "]);
-    tool.card_step(0, 4);
-    assert_eq!(tool.card().unwrap().2[0].value, "To approve");
+    assert_eq!(labels, ["Search ", "Filter All", "Sort Console", "Check for Updates ", "Verify "]);
+    tool.card_step(1, 4);
+    assert_eq!(tool.card().unwrap().2[1].value, "To approve");
     let names: Vec<String> = cells(&tool).into_iter().map(|c| c[0].clone()).collect();
     assert_eq!(names, ["Extra PS2 Core"]);
-    tool.card_step(0, -4);
-    tool.card_step(1, 1);
+    tool.card_step(1, -4);
+    tool.card_step(2, 1);
     let names: Vec<String> = cells(&tool).into_iter().map(|c| c[0].clone()).collect();
     assert_eq!(names.first().map(String::as_str), Some("Beetle PSX"), "by name: {names:?}");
     tool.card_back();
@@ -289,4 +303,105 @@ fn the_list_card_filters_and_sorts_and_the_details_page_holds_the_raw_facts() {
     tool.card_back();
     tool.card_back();
     assert!(!tool.card_open());
+}
+
+#[test]
+fn the_list_card_s_search_docks_the_keyboard_and_its_words_narrow_the_list() {
+    let (mut tool, _) = opened(WORLD);
+    tool.list();
+    tool.card_choose(0);
+    assert!(tool.searching() && !tool.card_open(), "Search closes the card and docks the keyboard");
+    tool.set_search("gl");
+    let names: Vec<String> = cells(&tool).into_iter().map(|c| c[0].clone()).collect();
+    assert_eq!(names, ["Only GL"]);
+    tool.end_search();
+    assert!(!tool.searching());
+    assert_eq!(tool.search(), "gl", "the words are kept when the keyboard closes");
+}
+
+#[test]
+fn options_are_the_engine_s_settings_stepped_and_stored_for_its_console() {
+    let (mut tool, _) = opened(WORLD);
+    focus_on(&mut tool, "PCEE2");
+    assert_eq!(help(&tool)[0], "Options");
+    tool.activate(tool.focus().unwrap());
+    let (title, breadcrumb, rows, _) = tool.card().unwrap();
+    assert_eq!((title.as_str(), breadcrumb.as_str()), ("PCEE2 · Options", "Cores"));
+    let shown: Vec<(String, String, bool)> = rows.iter().map(|r| (r.label.clone(), r.value.clone(), r.steps)).collect();
+    assert_eq!(
+        shown,
+        [
+            ("Renderer".to_owned(), "Vulkan".to_owned(), true),
+            ("Widescreen patches".to_owned(), "Off".to_owned(), true),
+            ("Upscale".to_owned(), "1".to_owned(), true),
+        ]
+    );
+    assert_eq!(rows[0].pane.lines[0].0, "How the picture is drawn.");
+    tool.card_step(2, 1);
+    assert_eq!(tool.card().unwrap().2[2].value, "2", "a count steps within its range");
+    tool.card_choose(1);
+    assert_eq!(tool.card().unwrap().2[1].value, "On", "A turns a switch");
+    assert!(tool.card_open(), "a stepped option keeps the page");
+    // A choice that hides another: Software has no upscale.
+    tool.card_step(0, 1);
+    let labels: Vec<String> = tool.card().unwrap().2.into_iter().map(|r| format!("{} {}", r.label, r.value)).collect();
+    assert_eq!(labels, ["Renderer Software", "Widescreen patches On"]);
+    tool.card_back();
+    tool.more();
+    let page: Vec<String> = tool.card().unwrap().2.into_iter().map(|r| r.label).collect();
+    assert!(page.contains(&"Options".to_owned()), "{page:?}");
+}
+
+#[test]
+fn firmware_lists_the_console_s_files_found_or_not_and_where_they_go() {
+    let (mut tool, _) = opened(WORLD);
+    tool.choose_section("PlayStation");
+    focus_on(&mut tool, "Diamond");
+    let said = words(&tool.pane().sentences).iter().map(|w| w.to_string()).collect::<Vec<_>>();
+    assert!(said.contains(&"Can use a PlayStation BIOS of your own, which EmuSen never downloads; it runs without one.".to_owned()), "{said:?}");
+    assert!(said.contains(&"✓ You have one.".to_owned()), "{said:?}");
+    tool.more();
+    let page: Vec<String> = tool.card().unwrap().2.into_iter().map(|r| r.label).collect();
+    assert_eq!(page, ["Options", "Firmware", "Details"]);
+    tool.card_choose(1);
+    let (title, _, rows, _) = tool.card().unwrap();
+    assert_eq!(title, "Diamond · Firmware");
+    assert_eq!((rows[0].label.as_str(), rows[0].value.as_str()), ("PlayStation BIOS", "✓ Found"));
+    assert_eq!(rows[0].pane.lines[0], ("scph5501.bin · Optional".to_owned(), "Diamond runs without it, on its open replacement.".to_owned()));
+    assert_eq!(rows[0].pane.lines[1].0, "Put it in /home/player/EmuSen/Firmware.");
+    // No firmware answer for the PlayStation 2, so LRPS2's page offers none, as C#'s did with no firmware pane.
+    tool.card_back();
+    tool.card_back();
+    tool.choose_section("PlayStation 2");
+    focus_on(&mut tool, "LRPS2");
+    tool.more();
+    let page: Vec<String> = tool.card().unwrap().2.into_iter().map(|r| r.label).collect();
+    assert_eq!(page, ["Mark to install", "Details"]);
+}
+
+#[test]
+fn roll_back_asks_then_puts_the_kept_build_back_through_the_core_tool() {
+    let (mut tool, _, started) = opened_recording(WORLD);
+    focus_on(&mut tool, "PCEE2");
+    assert!(words(&tool.pane().sentences).contains(&"The build of 2026-10-24 is kept for Roll Back."));
+    tool.more();
+    let rows = tool.card().unwrap().2;
+    let at = rows.iter().position(|r| r.label == "Roll Back…").expect("Roll Back… where a build is kept");
+    tool.card_choose(at);
+    let q = tool.question().unwrap().clone();
+    assert_eq!(q.title, "Roll Back PCEE2?");
+    assert_eq!(q.sentences[0], "Put back the build of 24 October 2026, kept when this one was installed in its place.");
+    assert_eq!((q.choices.as_slice(), q.back), (["No".to_owned(), "Yes".to_owned()].as_slice(), Some(0)));
+    tool.answer(0);
+    assert!(!started.lock().unwrap().iter().any(|r| r["op"] == "core-rollback"), "No runs nothing");
+    tool.more();
+    tool.card_choose(at);
+    tool.answer(1);
+    assert!(started.lock().unwrap().iter().any(|r| r["op"] == "core-rollback" && r["cores"][0] == "pcee2"));
+    for _ in 0..8 {
+        tool.poll();
+    }
+    assert_eq!(tool.source.notice(), Some("Rolled back PCEE2 to the build of 24 October 2026."));
+    let pcee2 = tool.rows().into_iter().find(|i| i.cells[0].words == "PCEE2").unwrap();
+    assert_eq!(pcee2.cells[2].words, "Rolled back");
 }

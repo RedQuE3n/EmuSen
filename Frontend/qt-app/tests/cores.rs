@@ -19,29 +19,9 @@ fn focused(scene: &mut Scene<'_>) -> String {
 
 /// The differences the tester has been told of, which a held state does not count as faults (EmuSen_Qt.md §7.7).
 fn named(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
-    // Under a question the screen beneath is not walked: the question is modal, as Mistress's plan sheet is.
-    let asked = tree.nodes.iter().any(|n| n.ty == "QQuickPopupItem" && n.visible);
-    (size == (1280, 720) && fault.contains("too small to read")) || (asked && fault.contains("the pad does not reach")) || scrolled_out(fault, tree)
-}
-
-/// An overlap with a row the list has scrolled wholly out of its box, which Qt culls and so draws nowhere: the audit
-/// reads the row's box, not its list's clip (EmuSen_Qt.md §7.7.F).
-fn scrolled_out(fault: &str, tree: &emusen_qt_test::tree::Tree) -> bool {
-    let Some(pair) = fault.strip_prefix("gate: overlap: ") else { return false };
-    let Some(list) = tree.nodes.iter().find(|n| n.name == "toolRows") else { return false };
-    let inside = |n: &emusen_qt_test::tree::Node| {
-        let mut at = Some(n);
-        while let Some(node) = at {
-            if node.id == list.id {
-                return true;
-            }
-            at = tree.nodes.iter().find(|p| p.id == node.parent);
-        }
-        false
-    };
-    pair.split(" and ").filter_map(|i| i.trim().parse::<usize>().ok()).filter_map(|i| tree.nodes.get(i)).any(|n| {
-        inside(n) && n.id != list.id && (n.y + n.h <= list.y + 1.0 || n.y >= list.y + list.h - 1.0)
-    })
+    // The docked keyboard takes every press itself while it is up, as the grid's search's does (cards.rs).
+    let typing = tree.nodes.iter().any(|n| n.name == "coresKeyboard" && n.visible);
+    (size == (1280, 720) && fault.contains("too small to read")) || (typing && fault.contains("the pad does not reach"))
 }
 
 /// The program on Home with Cores' world named, then Cores opened from its place.
@@ -163,6 +143,82 @@ fn qt_7_7_cores_walks_into_mistress_s_five_recorded_states() {
         let mut scene = open(&mut harness, "no-catalogue.json");
         assert_eq!(scene.property("coresModel", "summary"), "Buildbot.libretro.com could not be reached.");
         hold(&mut scene, "CoresNoCatalogue", &none, named, &mut report);
+
+        // Search: Select's List card, its first row docks the keyboard; A types, X keeps the words, B deletes and closes.
+        scene.pad(UiButton::Options);
+        wait_for(&mut scene, "coresModel", "cardOpen", "true", 1000);
+        scene.wait(300);
+        scene.pad(UiButton::Accept);
+        wait_for(&mut scene, "coresModel", "searching", "true", 1000);
+        scene.wait(300);
+        let holder = focused(&mut scene);
+        assert!(holder == "coresKeyboard" || holder.starts_with("key."), "the keyboard holds the focus: {holder}");
+        hold(&mut scene, "CoresSearch", &none, named, &mut report);
+        scene.pad(UiButton::Accept);
+        scene.wait(100);
+        assert_eq!(scene.property("coresModel", "searchText").chars().count(), 1, "A typed the focused key");
+        scene.pad(UiButton::Screensaver);
+        wait_for(&mut scene, "coresModel", "searching", "false", 1000);
+        scene.pad(UiButton::Options);
+        wait_for(&mut scene, "coresModel", "cardOpen", "true", 1000);
+        scene.wait(300);
+        scene.pad(UiButton::Accept);
+        wait_for(&mut scene, "coresModel", "searching", "true", 1000);
+        scene.wait(200);
+        scene.pad(UiButton::Back);
+        wait_for(&mut scene, "coresModel", "searchText", "", 1000);
+        scene.pad(UiButton::Back);
+        wait_for(&mut scene, "coresModel", "searching", "false", 1000);
+        scene.wait(300);
+
+        // Options: A on Diamond, its console's default, steps its option and keeps the page.
+        section(&mut scene, "PlayStation", UiButton::PageDown);
+        down_to(&mut scene, "Diamond");
+        scene.pad(UiButton::Accept);
+        wait_for(&mut scene, "coresModel", "cardTitle", "Diamond · Options", 1000);
+        scene.wait(300);
+        hold(&mut scene, "CoresOptions", &none, named, &mut report);
+        scene.pad(UiButton::Right);
+        scene.wait(200);
+        assert!(scene.property("coresModel", "cardRows").contains("Always yours"), "{}", scene.property("coresModel", "cardRows"));
+        scene.pad(UiButton::Back);
+        wait_for(&mut scene, "coresModel", "cardOpen", "false", 1000);
+        scene.wait(300);
+
+        // Firmware: X's page, its second row.
+        scene.pad(UiButton::Screensaver);
+        wait_for(&mut scene, "coresModel", "cardOpen", "true", 1000);
+        scene.wait(300);
+        scene.pad(UiButton::Down);
+        scene.pad(UiButton::Accept);
+        wait_for(&mut scene, "coresModel", "cardTitle", "Diamond · Firmware", 1000);
+        scene.wait(300);
+        assert!(scene.property("coresModel", "cardRows").contains("✓ Found"));
+        hold(&mut scene, "CoresFirmware", &none, named, &mut report);
+        scene.pad(UiButton::Back);
+        scene.pad(UiButton::Back);
+        wait_for(&mut scene, "coresModel", "cardOpen", "false", 1000);
+    }
+    {
+        // Roll Back: PCEE2's page, the question, Yes, and the kept build put back.
+        let mut scene = open(&mut harness, "world.json");
+        section(&mut scene, "PlayStation 2", UiButton::PageDown);
+        down_to(&mut scene, "PCEE2");
+        scene.pad(UiButton::Screensaver);
+        wait_for(&mut scene, "coresModel", "cardOpen", "true", 1000);
+        scene.wait(300);
+        let rows: serde_json::Value = serde_json::from_str(&scene.property("coresModel", "cardRows")).unwrap();
+        let at = rows.as_array().unwrap().iter().position(|r| r["label"] == "Roll Back…").expect("Roll Back… on PCEE2's page");
+        for _ in 0..at {
+            scene.pad(UiButton::Down);
+        }
+        scene.wait(100);
+        scene.pad(UiButton::Accept);
+        wait_for(&mut scene, "coresModel", "questionTitle", "Roll Back PCEE2?", 1000);
+        scene.wait(300);
+        scene.pad(UiButton::Down);
+        scene.pad(UiButton::Accept);
+        wait_for(&mut scene, "coresModel", "summary", "Rolled back PCEE2 to the build of 24 October 2026.", 3000);
     }
     assert!(report.is_empty(), "{}", report.join("\n"));
 }

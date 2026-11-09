@@ -49,6 +49,8 @@ pub mod qobject {
         #[qproperty(QString, rows, READ, NOTIFY)]
         #[qproperty(i32, current, READ, NOTIFY)]
         #[qproperty(QString, search_text, cxx_name = "searchText", READ, NOTIFY)]
+        /// The search box takes words from the docked keyboard.
+        #[qproperty(bool, searching, READ, NOTIFY)]
         #[qproperty(QString, search_hint, cxx_name = "searchHint", READ, CONSTANT)]
         #[qproperty(QString, apply_label, cxx_name = "applyLabel", READ, CONSTANT)]
         #[qproperty(QString, pane_title, cxx_name = "paneTitle", READ, NOTIFY)]
@@ -97,6 +99,10 @@ pub mod qobject {
         /// The screen's declared action by its key: X's page, Select's List card, Start's plan.
         #[qinvokable]
         fn act(self: Pin<&mut ToolModel>, key: &QString);
+        /// The docked keyboard closed, its words kept.
+        #[qinvokable]
+        #[cxx_name = "endSearch"]
+        fn end_search(self: Pin<&mut ToolModel>);
         /// Start, or a click on Apply: the plan.
         #[qinvokable]
         fn apply(self: Pin<&mut ToolModel>);
@@ -118,10 +124,14 @@ pub mod qobject {
         /// The running job's events taken, as the screen's timer asks.
         #[qinvokable]
         fn poll(self: Pin<&mut ToolModel>);
-        /// The card over the screen closed, so the list takes the keys back.
+        /// A card or the docked keyboard over the screen closed, so the list takes the keys back.
         #[qsignal]
-        #[cxx_name = "cardClosed"]
-        fn card_closed(self: Pin<&mut ToolModel>);
+        #[cxx_name = "listFocused"]
+        fn list_focused(self: Pin<&mut ToolModel>);
+        /// The docked keyboard opened over the screen, so it takes the keys.
+        #[qsignal]
+        #[cxx_name = "searchOpened"]
+        fn search_opened(self: Pin<&mut ToolModel>);
         /// A destination of the host's, by its key (a console's settings, its firmware).
         #[qsignal]
         #[cxx_name = "hostAsked"]
@@ -150,6 +160,7 @@ pub struct ToolModelRust {
     rows: QString,
     current: i32,
     search_text: QString,
+    searching: bool,
     search_hint: QString,
     apply_label: QString,
     pane_title: QString,
@@ -199,6 +210,7 @@ impl Default for ToolModelRust {
             rows: QString::from("[]"),
             current: -1,
             search_text: QString::default(),
+            searching: false,
             search_hint: QString::from(crate::tools::SEARCH_HINT),
             apply_label: QString::from(crate::tools::APPLY_LABEL),
             pane_title: QString::default(),
@@ -352,6 +364,13 @@ impl qobject::ToolModel {
         });
     }
 
+    pub fn end_search(self: Pin<&mut Self>) {
+        self.with(move |t| {
+            t.end_search();
+            None
+        });
+    }
+
     pub fn apply(self: Pin<&mut Self>) {
         self.with(move |t| {
             t.apply();
@@ -438,6 +457,7 @@ impl qobject::ToolModel {
         ));
         let current = tool.focus().map_or(-1, |at| at as i32);
         let search_text = QString::from(tool.search());
+        let searching = tool.searching();
         let pane = tool.pane();
         let sentences = text(&Value::Array(pane.sentences.iter().map(|s| json!({ "words": s.words, "tone": s.tone as i32 })).collect()));
         let bar = tool.bar();
@@ -478,6 +498,9 @@ impl qobject::ToolModel {
         put!(self, rows, rows, rows_changed);
         put!(self, current, current, current_changed);
         put!(self, search_text, search_text, search_text_changed);
+        let typed = self.searching && !searching;
+        let opened = !self.searching && searching;
+        put!(self, searching, searching, searching_changed);
         put!(self, pane_title, QString::from(pane.title.as_str()), pane_title_changed);
         put!(self, pane_caption, QString::from(pane.caption.as_str()), pane_caption_changed);
         put!(self, sentences, sentences, sentences_changed);
@@ -496,8 +519,11 @@ impl qobject::ToolModel {
         put!(self, card_pane_muted, pane_muted, card_pane_muted_changed);
         let closed = self.card_open && card.is_none();
         put!(self, card_open, card.is_some(), card_open_changed);
-        if closed {
-            self.as_mut().card_closed();
+        if closed || typed {
+            self.as_mut().list_focused();
+        }
+        if opened {
+            self.as_mut().search_opened();
         }
         match question {
             Some(q) => {

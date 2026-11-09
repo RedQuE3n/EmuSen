@@ -1208,7 +1208,12 @@ ES-DE themes through the tab yet (stage 4's hosting piece); a stored id naming o
 **Switching.** `used(folder)` sets the window's `theme`: an EmuSen package's folder, or empty for the reference. The
 chosen theme's host is a `Loader` whose item is made only while the theme is neither empty nor the reference's folder,
 so with the reference chosen the window holds the reference's host alone. Switching between two themes reloads the one
-host (its engine before is destroyed first, §3.5.1); choosing the reference destroys the host.
+host (its engine before is destroyed first, §3.5.1); choosing the reference destroys the host. A host made at run time has heard nothing yet, so its folder is set only once
+the `Loader`'s item is whole (`status === Loader.Ready`), and on each new engine `ThemeHost.qml` hands the feed the
+library, the session and the grid as they stand, beside `attach()`; and since a `Loader` is a focus scope, it takes the
+focus while one of the theme's screens is to hold it (`takesFocus`). Both were found by `theme_feed.rs`, which sets the
+theme after the library has been read: without the first the theme saw no consoles, without the second its Home never
+held the focus.
 
 **New references** (house rules): `emusen-qt-models` on `emusen-theme-manifest`, `emusen-theme-check` and `emusen-esde`,
 the three Qt-free crates whose library it calls; `emusen-qt`'s `ReferenceTheme` calls `emusen-theme-host`'s

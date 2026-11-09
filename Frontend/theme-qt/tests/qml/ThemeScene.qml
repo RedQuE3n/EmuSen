@@ -25,6 +25,7 @@ Window {
         required property int group
         required property int groupIndex
         required property int groupSize
+        required property int groupStart
     }
     component PlaceRow: Item {
         required property string key

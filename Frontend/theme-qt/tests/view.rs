@@ -36,7 +36,8 @@ fn qt_3_2_each_list_has_the_api_s_roles_and_no_other() {
             "libretro",
             "group",
             "groupIndex",
-            "groupSize"
+            "groupSize",
+            "groupStart"
         ]
     );
     assert_eq!(view::PLACE_ROLES, ["key", "name", "kind", "line", "attention", "count", "available"]);
@@ -82,7 +83,7 @@ fn qt_3_2_the_library_s_lists_over_the_real_clients() {
     assert!(!text(&nes[7]).is_empty(), "the body is the world the kit's Body draws");
     assert_eq!(text(&nes[9]), "emusen", "the engine's kind");
     assert_eq!(nes[5], Cell::Whole(1));
-    assert_eq!(nes[12..], [Cell::Whole(0), Cell::Whole(0), Cell::Whole(1)], "the one console is its maker's group alone");
+    assert_eq!(nes[12..], [Cell::Whole(0), Cell::Whole(0), Cell::Whole(1), Cell::Whole(0)], "the one console is its maker's group alone, with none before it");
 
     let places = view::places(v, &view::lines_of(common::HOME_LINES), &[]);
     assert!(places.iter().all(|r| r.len() == view::PLACE_ROLES.len()));
@@ -123,8 +124,11 @@ fn qt_3_2_a_console_s_group_is_its_maker_s_in_order_of_first_appearance() {
     let makers = ["Nintendo", "Sega", "Nintendo", "", "Sony", "", "Sega", "Nintendo"];
     assert_eq!(
         view::maker_groups(&makers),
-        [(0, 0, 3), (1, 0, 2), (0, 1, 3), (2, 0, 1), (3, 0, 1), (4, 0, 1), (1, 1, 2), (0, 2, 3)],
-        "the ordinal, the place within and the size; an unknown maker is a group of its own"
+        [(0, 0, 3, 0), (1, 0, 2, 3), (0, 1, 3, 0), (2, 0, 1, 5), (3, 0, 1, 6), (4, 0, 1, 7), (1, 1, 2, 3), (0, 2, 3, 0)],
+        "the ordinal, the place within, the size and the consoles of the groups before; an unknown maker is a group of its own"
     );
+    let mut places: Vec<i32> = view::maker_groups(&makers).iter().map(|&(_, index, _, start)| start + index).collect();
+    places.sort_unstable();
+    assert_eq!(places, (0..8).collect::<Vec<_>>(), "start + index places each console once in maker order");
     assert!(view::maker_groups(&[]).is_empty());
 }

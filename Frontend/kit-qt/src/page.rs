@@ -1,4 +1,4 @@
-//! `PageLayout`: kit-core's page frame places on Qt, as rectangles a page binds to (EmuSen_Kit.md §7.40).
+//! `PageLayout`: kit-core's page frame places on Qt, as rectangles a page binds to (EmuSen_Kit.md §7.44).
 
 use core::pin::Pin;
 

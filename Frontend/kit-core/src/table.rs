@@ -1,5 +1,5 @@
 //! A table's columns kept inside its width (`FitsWidth`, LunaP §204): content columns at their words' width, fill columns
-//! sharing the rest by weight, nothing ever past the table's right edge, so no table scrolls sideways (EmuSen_Kit.md §7.39).
+//! sharing the rest by weight, nothing ever past the table's right edge, so no table scrolls sideways (EmuSen_Kit.md §7.43).
 
 /// How a column takes its width.
 #[derive(Clone, Copy, Debug, PartialEq)]

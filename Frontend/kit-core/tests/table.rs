@@ -1,4 +1,4 @@
-// FitsWidth: a table's columns stay inside its width at every width, held to the Cores recording's cells (EmuSen_Kit.md §7.39).
+// FitsWidth: a table's columns stay inside its width at every width, held to the Cores recording's cells (EmuSen_Kit.md §7.43).
 
 use emusen_kit_core::table::{ColumnWidth, TableMeasures, fit_columns, room};
 

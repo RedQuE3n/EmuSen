@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
 
-// A page on the frame: the hero across the top under the OnArt gradient, the cover over its foot, the title, facts, actions and section strip beside it, and the content below as tiles or rows, all from the host's models; it knows no game (EmuSen_Kit.md §7.40).
+// A page on the frame: the hero across the top under the OnArt gradient, the cover over its foot, the title, facts, actions and section strip beside it, and the content below as tiles or rows, all from the host's models; it knows no game (EmuSen_Kit.md §7.44).
 Kit.Frame {
     id: root
     property url hero

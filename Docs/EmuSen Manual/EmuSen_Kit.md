@@ -361,7 +361,7 @@ ways in:
   close. The player's A/B swap is applied once, in `PadRouter` (§7.4); the walk's own `set_swap_accept_back` stays off,
   so the fact has one owner.
 - **The pointer.** `Walkable.qml`, the module's first component, is the §1.7 declaration made once: an `Item` with a
-  `HoverHandler` calling `controller.hover(item, hovered)` and one `TapHandler` for the left, right and back buttons
+  `HoverHandler` calling `controller.hoverAt(item, hovered, at)` (a pointer that has not moved focuses nothing, §7.39; `hover(item, hovered)`, unguarded, stays for any other caller) and one `TapHandler` for the left, right and back buttons
   calling `controller.click(item, button)`. Rust maps Qt's button to kit-core's `PointerButton` (`qt_keys`), asks
   `intent` and acts: `Focus` gives the item the active focus (`QQuickItem::forceActiveFocus`, called through cxx-qt's
   `extern "C++Qt"` without glue); `Activate` focuses the item and then offers Accept through the same `offer`, so a
@@ -956,6 +956,50 @@ the first difference at line 14). The put-back is held by `spec.rs` (a second wa
 before). Three more seeded faults, each reverted: no put-back failed `spec.rs`'s second walk; selections never written
 failed `style.rs` (the tab and the choice at 1, not 0; the menu scene's list puts itself back when a row takes the focus,
 so `spec.rs` could not see it); the remembered focus not given back failed `style.rs` (the combo box's focus false).
+
+**A delegate made again stands for the one the tree read** (2026-11-09). theme-audit's `many` state, a console of 9,000
+games, found every theme's rows unreachable at every size after the first, and a plain `ListView` of 9,000 walkable rows
+the same (`qt-test`'s `LongListScene.qml`). The cause was the walk's bookkeeping, not the views: the tree names items by
+their `QObject`'s address, and a view deletes a delegate scrolled out of it (past its cache) and makes another when it
+scrolls back. At 1280 × 800 the walk's Down from the last row it had built scrolled the list by a row, the first row's
+delegate was deleted, and the put-back's scroll made a new one. At the next size the tree's first row, the focus, was that
+new delegate, read last; by the time the walk reached it, Down from the last row had deleted and remade it again, so
+focusing it by its old address found nothing and the walk skipped it silently: no edge from the focus, every row
+unreachable (measured: 15 rows, 56 presses recorded, none from `row.0`). A freed address can also be taken by the next
+delegate made, so the old number could name the wrong row. And a focus scope's remembered item was given back by an
+address that no longer existed, which is how a theme's screen came to hold the focus on the list's content item.
+
+The walk now keeps, beside the tree, the object standing for each of its items (`walk_by`'s `live`). Each read of the
+tree marks the items it reads (a dynamic property, `harnessRead`); after a put-back, when the window holds an item with
+no mark (`harness_made_since`), or the focus had landed on no item the walk knew, the tree is read again and each of the
+first reading's items is found in it: the same object if its type, objectName and box are still the same, else the
+unclaimed item that has them (`Tree::found_in`, to half a pixel, the put-back having scrolled the views back). The
+put-back then runs again through those objects, so a scope's focus is given back to the row made again. Landings are
+read through the same objects, and a focus on no element of the tree (a row the list made as it scrolled) lands on none,
+recorded `none`, where it had been read as the list's content item and held to the pointer rule. `Scene::focus` finds a
+focused item made again in the tree's item's place the same way.
+
+Held to by `qt-test/tests/longlist.rs`: at each of the five sizes the first row holds the focus, the walk reaches every
+row on the screen, a click reaches each element the walk reaches, and the walk puts the focus back on the first row. Before the change it failed at 1920 × 1200 with nine rows
+unreachable. The S6 probe (that list in a theme package, `theme-audit --states many`) went from five sizes of reach
+findings in each variant to none, and from 46 s to 19 s. Cost, measured 2026-11-09 at a load of 7 to 8 on 16 threads:
+the gallery's gate 67.0 and 68.7 s against 60.9 s with the re-reading taken out, nearly all of it the carousel, whose
+every step makes a card. Two seeded faults, each reverted: the re-reading taken out failed `longlist.rs` at 1920 × 1200
+(nine rows unreachable); a landing on no element read as the list's content item failed it at 1280 × 800 (the content
+item covered, held to the pointer rule).
+
+**An element that slides is still itself** (2026-11-09). The program's acceptance test failed on the reference theme's
+Choose a console once the re-reading above was in: the pad reached neither the shelves nor two consoles at 1280 × 800 and
+one console at every other size, and at 1920 × 1200 the focused console's engine line was not shown. The orbits' consoles
+are a `Repeater`'s, never made again, but each press turns the orbits (a `Behavior` on each console's angle, the reel's
+length), and the focused console's covers are made again for each focus, so the walk read the tree again while the
+consoles were still sliding back. `found_in` kept an object as itself only while its box was unchanged, so a console
+mid-slide stood for nothing, the walk focused nothing for it and recorded no press from it, and a scope's focus was given
+back to nothing. An object still alive and still of its type and objectName is now itself wherever it has moved
+(`found_in`, `same_as`); the box is asked only of an item made again in another's place. Held to by `qt-test/tests/shift.rs`
+over `ShiftScene.qml`: six walkables in a row, the focused one growing over 300 ms so the rest slide, and marks made again
+for each focus; every Right lands on the next and the pad reaches all six. The box asked of the same object, seeded, failed
+it (no press recorded from tile 1); the acceptance test passed with the change on WiseMan c0a6358ab.
 
 ### 7.12 The pad's glyphs (stage 0, the rest, step 2; 2026-11-08)
 
@@ -2145,7 +2189,265 @@ the software backend and on Vulkan (the RX 6800); the fixed one passes on both, 
 `fade.rs` still passes on both. Seeded faults, each reverted, each a fault in the test: `layer.enabled: root.fading` as
 before, and the `Binding` not delayed.
 
-### 7.39 The tool screen (stage 5, piece B; 2026-11-09)
+### 7.36 A held clock, a held press and drawn covers in the harness (stage 3, theme-audit's states; 2026-11-09)
+
+theme-audit records a theme's splash at a stated time and a screen with A held (`man theme-check`, STATES), so the harness
+(`emusen-qt-test`) gained three verbs, each the framework's own mechanism.
+
+- **`Scene::hold_clock(Some(ms))`** replaces Qt's animation driver with one whose `elapsed()` is a number the harness sets
+  (`QAnimationDriver`, the documented way to drive Qt's animation timer; `cpp/harness.cpp`'s `HeldClock`). The first hold
+  installs it at 0; each later one moves it to `ms` 16 ms at a time, calling `advance()` and processing events at each step,
+  as a display's frames would, so a `Behavior` or a `FrameAnimation` that a step starts runs from its own time rather than
+  being jumped over. `None` uninstalls it, which leaves Qt's default timer driver in place, not a threaded render loop's own:
+  a caller holds the clock last. Every `QAbstractAnimation` and `FrameAnimation` is held; a `Timer` is not. Under a held clock
+  nothing settles, so `rest()` must not be called (a running animation never ends); the audit waits a frame instead.
+  The clock is the `Harness`'s, a field holding the C++ object (`harness_clock_hold` gives it, `harness_clock_move` moves it,
+  dropping it uninstalls it), not a static of `harness.cpp` (changed 2026-11-09: the house rules forbid a mutable static used
+  as a wire). The harness is the owner because the driver Qt replaces is its application's (`QUnifiedTimer` is the
+  thread's), and one harness is one application; the field is declared before the application, so it is let go first. A
+  second hold moves the one clock rather than installing another: seeded, a fresh clock at every hold failed
+  `qt_3_7_a_splash_is_held_at_1_3_and_5_s_and_judged_at_each` on Qt's own words, "animation driver already installed" and
+  "trying to uninstall a driver that is not installed".
+  The same two lines came from Horizon's GPU run on 2026-11-09, once a hold, from another cause: a threaded render loop
+  (Qt Quick's on Vulkan, or the software one under `QSG_RENDER_LOOP=threaded`) installs its own animation driver, so Qt
+  refused the held clock (the first line), every timed state was read on the render loop's clock instead, and letting the
+  clock go uninstalled a driver Qt had never taken (the second); offscreen under a threaded loop the run then crashed.
+  theme-audit, the program that holds the clock, now sets `QSG_RENDER_LOOP=basic` before Qt starts, whatever the
+  environment asks, so the held clock is the one driver installed, once a hold, and let go once. The harness itself sets no
+  render loop: its other users (the program's Vulkan acceptance test) run on Qt's choice. Held to by theme-audit's
+  `qt_3_7_a_held_clock_logs_nothing_where_the_environment_asks_for_a_threaded_render_loop`, the splash fixture's three
+  timed states under `QSG_RENDER_LOOP=threaded`: their findings alone, no warning line and nothing on standard error. Seeded,
+  the setting taken out failed it on both lines.
+- **`Scene::key_hold(key, down)`**, `QTest::keyPress` or `keyRelease` alone: a press held, as a theme's pressed look reads it
+  (`Keys.onPressed` without the release).
+- **`covers::draw`**, moved from the program's tests (`qt-app/tests/common`), which re-export it: covers drawn by one Qt Quick
+  window resized to each box and grabbed, a flat colour, a white rim and the words. theme-audit draws the synthetic library's
+  covers with it, so the two keep one drawing.
+
+Proof, measured 2026-11-09: theme-audit's `state-splash` fixture, a wordmark past the right edge from 2.5 s to 3.5 s, is
+found at 3 s alone and its pictures at 1 s and 5 s are equal and differ from 3 s's (`qt_3_7_a_splash_is_held_at_1_3_and_5_s_and_judged_at_each`);
+`state-pressed`'s row grown by a held Return overlaps its neighbour in the pressed state alone.
+
+### 7.37 A on a walkable: the element's own handler hears it first (2026-11-09)
+
+A `Walkable` answered Return and Enter with `Keys.onReturnPressed` and `Keys.onEnterPressed`. Qt's `Keys` treats a key
+with a handler of its own as accepted before the handler runs, and emits the general `pressed` only for a key still not
+accepted after it (Qt's `QQuickKeysAttached::keyPressed`), so a theme's `Keys.onPressed` written on a `Walkable` itself
+never heard A; one written on a focused child did. Found by theme-audit's `pressed` state on 2026-11-09: Meridian's rail
+entry widens its bar to 6 while A is held (`RailEntry.qml`, `Keys.onPressed` on the entry, which passes the key on) and
+never did.
+
+The walkable's Return handler now emits the element's own `pressed` first, with the key not accepted, so every
+`Keys.onPressed` on the element hears A; if none of them takes it (accepts it), the walkable activates. Either way the
+key ends accepted, so A never reaches the items around the element: the frame answers a Return that reaches it as the
+pad's A, which on the big screen opens the content's detail (kit-core's walk), and Meridian's handler, written to let
+"the press still reach Walkable's own handler", sets the key not accepted. Enter is sent through the same handler. A
+key the walkable does not act on is not accepted and goes on as before. The handler is three statements of QML, not
+logic moved into a model: it is the order of two of Qt's own signals.
+
+Held to by `qt-test/tests/walkable.rs` over `WalkableKeysScene.qml`, with Return, Enter and the pad's A: a plain
+walkable activates once a press; one whose `Keys.onPressed` passes A on hears it and activates once; one whose handler
+takes A does not activate; none lets A reach the item around them, which still hears a key no one acts on. Two seeded
+faults, each reverted: the old handlers failed it (the passing handler heard nothing); the key left as the theme's
+handler left it failed it (A reached the item around, twice).
+
+### 7.38 A declined place, and words mid-fade, under the contrast rule (theme-audit; 2026-11-09)
+
+**A declined place.** The harness has exempted a disabled control's words since §7.10 (`enabled` false), as WCAG 2.2's
+1.4.3 exempts "text or images of text that are part of an inactive user interface component" (https://www.w3.org/TR/WCAG22/,
+read 2026-11-09). A place the host declines is not disabled in Qt's sense: the pad still walks to it, so a theme draws it
+dim (every theme at 38%) with `enabled` true, and theme-audit's `disabled` state held its words to 4.5:1 (S6's survey:
+Meridian, Constellation and Orrery 20 lines each, the Scraper's name and line at 1.8 to 3.2:1). Decided 2026-11-09: such a
+place is exempt, and nothing else is. theme-audit finds the declined places by the name a reader hears (`place_name`, the
+state's keys), and exempts the words under each only when it is drawn apart from its offered look: the place's box is read
+on a grid (`grid`, about 10,000 points, a design unit apart or less), declined and then offered through the theme's own
+surface (`Library.show_declined`, which changes the rows in place, so the delegates and the focus on the place stay), and
+some point must change by 3:1 (kit-core's `STATE_CHANGE`, `changed_share`), the ratio WCAG 2.2's 2.4.13 asks "between
+the same pixels in the focused and unfocused states". A place drawn as if offered keeps the rule and is a finding of its
+own. 2.4.13's area, "a 2 CSS pixel thick perimeter of the unfocused component", is not asked, and why: words dimmed to 38%
+change about 2% of a 480 × 56 row, where the ring is 7.9%, so the area would name every theme's dim look as no look; it is
+written for a focus indicator, which must be found, not for a state that is read on the place itself. Any changed point
+is weak against a design that changes one dot; the grid's spacing and the two pictures differing in nothing else (the
+same focus, the views at rest) keep stray pixels out.
+
+**Words mid-fade.** A held clock (§7.36) reads the splash at 1, 3 and 5 s, and S6 found every theme's caption at 5 s
+(2.05 to 2.30:1) mid-fade. Contrast is judged at rest, and the harness can read honestly whether a text is moving, not
+where it will rest: a `Behavior`'s target value is Qt's private, and a theme's own time property drives the rest. So a
+text is skipped while its opacity changes: the clock is held a frame (16 ms) before the stated time, the tree read, then
+held at the time and read again, and a text whose ink, its colour with its opacity, differs between the two is not judged
+in that state (`changing`, `rested` in theme-audit). The same text at rest at any other time is judged.
+
+Held to by theme-audit's tests over two fixtures, each with its seeded faults reverted. `state-declined`: Home's places
+as rows, the declined row's words at 38% and the last row's (Power, offered) at 38%; in the default and the `disabled`
+state, at every size and variant, Power alone is found. The declined picture compared with itself (nothing changes)
+failed it (the Scraper drawn as if offered and found low); every text exempted failed it (Power no longer found).
+`state-fade`: a caption fading to rest at 0.3 between 0.5 and 1.5 s, a title fading in to full between 4.5 and 5.5 s;
+only the caption, at 3 s, at 5 s and in the default, is found. No text skipped failed it (the caption found at 1 s); every
+text skipped failed it (the caption not found at 3 s).
+
+### 7.39 A walkable focused inside a view becomes its current item; the pointer focuses by moving (2026-11-09)
+
+A `ListView` or `GridView` moves its keys from its `currentIndex`, not from the item holding the focus. The pointer
+focuses a walkable directly (§7.3, `Walkable`'s `HoverHandler`), and so does theme-audit's walk, so a cell hovered in a
+theme's grid held the focus while the view's current item stayed where it was, and Right went on from that one. Found by
+theme-audit's `many` state on 2026-11-09 in every theme (`EmuSen_Qt.md` §3.7.2): each grid's cells unreached past the first
+row's first, every cell's Right landing on cell 1 and Down on cell 5. The kit's `MenuPanel` had made its row current on
+focus since §7.8, and Orrery's orbit cover did the same for itself; the themes' grids did not.
+
+**The walkable makes itself current.** Decided 2026-11-09: the kit owns this once, an extension of `Walkable`, so every
+theme's grid and strip has it without a line of its own. When a walkable takes the active focus it calls the singleton
+`ViewCurrent.take(item)` (`current.rs`), which looks up the item's parents for the first standing directly in an item
+view's `contentItem` (the delegate: the walkable itself, or an item it stands in, as Horizon's cover stands in its slot)
+and sets the view's `currentIndex` to `indexAt` that delegate's centre. A view is an item view when Qt's own class says so
+(`QObject::inherits("QQuickItemView")`, the base of `ListView` and `GridView`), so a `PathView` or a `Flickable` with a
+`currentIndex` is never moved; the kit's `Carousel` is itself the walkable. A walkable in no item view, or over no delegate
+(a header), changes nothing, and nor does the view's own current item: a view gives the focus to the delegate it makes
+current before placing it, so its box says nothing yet (a strip that made its eighth item at x 0 read it as item 0, and
+Right from item 6 landed on item 0). What the view does with its current item follows unchanged: a `highlightRangeMode`
+turns the strip or the orbit to it, as Orrery's line already chose. `MenuPanel`'s own line is removed. *C++ part*: one
+function in `cpp/kit_glue.cpp`, `make_current` [own, because an item's parents, `inherits` and `QMetaObject::invokeMethod`
+for `indexAt` have no Rust binding in cxx-qt-lib, and the kit's QML holds no functions (`qml-rules`)].
+
+**The pointer focuses by moving.** A view that turns to its current item moves other items under a pointer that stays
+still, and Qt delivers a hover to each item that comes under it. With the walkable making itself current, the strip
+then ran on: hovering a strip's fifth item turned the strip, the seventh came under the pointer and took the focus, the
+strip turned again, and it stopped at its end (measured on 2026-11-09 in `GridScene.qml`: the focus at item 7 of 8 within
+300 ms). The same hover moved the focus off the item a key had chosen whenever a key turned the strip under a resting
+pointer. `FrameController` now keeps where the pointer was last seen over a walkable (`hoverAt(item, hovered, at)`, beside the unguarded `hover(item, hovered)` it keeps, and
+`pointerMoved(at)`, the scene position from the `HoverHandler`'s point; Qt sets the point before it reports `hovered`),
+and an element coming under the pointer at that same place takes no focus. A pointer that moves gives the focus as before.
+
+**The walk settles a turning view.** theme-audit's walk focuses each element and puts back what the press moved, then
+waits for the views to rest (`Scene::settle`). Qt's `moving` reports a flick or a drag, not a view turning to its current
+item, so the walk read Horizon's strip mid-turn after the put-back, lost its first cover (found by its box, which had not
+yet come back) and recorded no press from it: every cover unreached at most sizes. `harness_turning` [own, in
+`qt-test/cpp/harness.cpp`, for the same reason] reads a view as turning while its highlight follows its current item and
+stands off it, until three frames pass without the highlight moving (a theme may place its delegates itself, as Orrery's
+orbit does, where the highlight rests off them); the settle waits on it.
+
+Held to by `qt-test/tests/grid.rs` over `GridScene.qml`: a grid of ten walkable cells, five a row, and a strip of thirty
+that turns its current item into a band, whose walkables stand inside each delegate's `FocusScope`. The pointer rests on
+a cell or an item and the pad presses: Right from cell 7 lands on 8 (`currentIndex` 8), Down from cell 3 on 8, Left from
+cell 9 on 8; Right from the strip's item 4 on 5, Left from item 3 on 2 after the strip turned; each hovered item keeps
+the focus while the strip turns under the pointer; Right six times from item 2 lands on item 8, through items the strip
+made. Then the walk over the same scene: every strip item's Right lands on the next, and the last read's on none; the walk
+puts the strip back; a settle after focusing item 5 leaves the strip at rest. Five seeded faults, each reverted and each
+failing it: the walkable's line removed (Right from cell 7 on cell 1); the view's own current item not excepted (Right six
+times landed on item 1); the walkable's own delegate alone looked at (Right from item 4 on item 1); the pointer's place
+not kept (hovering item 4 left the focus on item 8); the settle not waiting on a turn (contentX 121 when settled, 470 half
+a second later). theme-audit's `many` over the five themes on 2026-11-09 (the reference package and Meridian from this
+tree, Horizon, Constellation and Orrery from their branches' copies kept for the survey): no reach finding left, where
+each had 70 or 80; with the walkable's line removed, Meridian's 70 came back.
+
+### 7.40 The settings frame (stage 5, piece A; 2026-11-09)
+
+Screen 6 of `EmuSen_Interface.md` §4, as LunaP's `SettingsLayout` drew it for the C# Settings (`EmuSen_BigPicture.md`
+§52, LunaP §213): the strip of sections at the top, rows of a label and a value down the left, and a pane at the right
+with one slot for a preview over the focused row's sentence. Weighed as `EmuSen_Qt.md` §1.3 asks, it is an extension of
+the kit, a new type over the existing `Frame`: no existing type takes a second job, and the frame knows nothing of
+settings. A host hands it rows as a list model and is told what the player did; which setting a row is, and what a step
+or a choice means, stay the host's (`SettingsModel` of stage 5's piece D).
+
+- **The measures are kit-core's** (`settings::frame`, `SETTINGS`), derived from the big screen's spacing where the two
+  agree: the strip at the safe area's top (64, 40), as high as a control (44), names 8 apart with 16 of padding; the rows
+  and the pane from 108 (the strip, then the pane gutter of 24); the pane 416 × 578 with an inset of 24, its slot 368
+  wide, 12 below the slot and 8 between lines; the pane 64 from the right edge and the rows filling what is left before
+  a gap of 32, so 704 wide at 1280 and 846.2 at 1422.2 (1920 × 1080 and 1280 × 720 on the canvas of 800); ten whole
+  rows of 54 beside the pane. These are LunaP's constants and Mistress's recorded boxes (`SettingsSound-1280x800.spec`,
+  `SettingsDisplay-1280x800.spec`), held to them by `tests/settings.rs`.
+- **The walk is kit-core's** (`settings::rows`, `RowWalk`): Up and Down move the focus and stop at the ends; the window
+  of ten moves only when the focus leaves it, a row at a time (LunaP's `KeepRowShown`); the wheel moves the window to a
+  whole row and leaves the focus; Left and Right step a value (`Steps`) or a slider (§7.42) and are kept on any other
+  row; A chooses a row, which is the host's to act on, open or ask about; a row a host marks `held` (a value the engine
+  holds, `EmuSen_BigPicture.md` §52.5 item 2) takes neither; the shoulders step the strip's sections, wrapping, while no
+  page is open under the section, and are declined, so the host's, under a trail (the console page's LB and RB, §52.4);
+  B, Start and the rest are declined to the frame. A row's kind is `Kit.RowKinds` (`Action`, `Steps`, `Opens`, `Asks`,
+  `Slider`, `Choice`), a number in the model's `kind` role.
+- **`SettingsLayout`** (kit-qt `settings.rs`) puts the measures and the walk on Qt: the measures as constant
+  properties, `paneLeft` and `rowsWidth` from the canvas's `width`, the walk's `current`, `first`, `marked`, `count` and
+  the focused row's `sentence`, `sections`, `section` and `trailShown` from the frame; it reads the roles `kind`, `held`,
+  `marked`, `sentence`, `minimum`, `maximum`, `step` and `amount` from any list model through `item_model::role_texts`,
+  and raises `stepped`, `slid`, `chosen` and `sectionChosen`.
+- **`SettingsFrame.qml`** is a `Frame` with its navigation hidden, so the frame's controller, router, keys, pointer and
+  help bar are the ones every screen has. The strip is Qt Quick Controls' `TabButton`s in the style (§7.8), each as wide
+  as its upper-cased name in Caption with its padding; it draws the `trail` instead while pages are open, the last
+  chosen. The rows are a `ListView` with a `DelegateChooser` on `kind`: a `MenuRow` with its ◂ ▸ or ▸ marks (§7.21), a
+  `ChoiceRow` (§7.41) or a `SliderRow` (§7.42). A press the frame's walk declines reaches the focused row as a key and
+  goes up to the rows' scope, which hands it to the walk; hovering a row focuses it, so the walk follows Qt's focus, and
+  a click is A there (§7.3). The view's own current index is cleared, so it never moves the focus to a row of its own
+  choosing as its model changes; the walk reads the model after the view has its rows, and again whenever the model
+  says its rows changed. The pane is SurfaceRaised with the tile radius; its slot (`preview`) holds what the host puts
+  there, a picture of 368 × 276, a meter of 16 or the two variants of 160 as LunaP drew them, and its `lines` slot what
+  the host adds under the sentence.
+- **Found and fixed on the way: a `MenuRow`'s marks past a clip.** On the software backend a `Shape` wholly past its clip
+  is painted unclipped (§7.34), so the eleventh row of a list showed its ◂ ▸ marks 26 units below the window
+  (2026-11-09, `settings-frame-Dark-1280x800.png`, the label clipped and the marks not). The marks are now held to their
+  clip as `Body`'s shapes are, through `InsideClips`; no other drawing of a `MenuRow` changes.
+
+**Where it differs from Mistress**, each named: the chosen name's underline is the style's 4 units (`barWidth`), where
+`SectionTab` drew 3; the names are set in the style's face, since `Tokens` has no family yet (§7.7), so DISPLAY's tab is
+about 111 units wide where Mistress's is 104; the help bar is the kit's, 58 on the foot (§4 of `EmuSen_Interface.md`),
+where Mistress's band is 98 from 702; a held row's value is drawn as any other, and an `Asks` row draws no `…`, both
+waiting for the host's words in piece D. The desktop form (a source list, rows of 48, search) is stage 6's, and the
+card's pages are piece D's on this frame.
+
+**Held to**: kit-core's `tests/settings.rs` (12: the measures at 1280 and at 1422.2, the ends, the window, Left and
+Right by kind, a held row, the page of choices, a long page's mark in view, the declined presses, the kinds' numbers,
+the shoulders, a slider's grid); kit-gallery's `settings_gate.rs` (the frame with a picture, a meter and the two
+variants, the page of choices and the page of sliders, at 1280 × 800, 1920 × 1200, 1920 × 1080 and 1280 × 720, dark and
+the variants light: fit, pad reach, pointer reach, no chrome, names, palette, contrast; the strip, rows and pane at
+Mistress's boxes at both 16:10 sizes; no mark drawn below the window) and `settings_walk.rs` (the pad through the
+router's queue and the pointer: the window by one at the eleventh row and the list's offset with it, a value stepped, a
+page's row chosen, a held row neither chosen nor stepped, the pane's sentence, the shoulders wrapping, B to the host;
+resting, clicking, the wheel to a whole row, a tab, a right click as B). The gallery's states are `SettingsGallery.qml`,
+a scene of the gallery module beside `Gallery.qml`, with its models as a host would hand them. Rule Q: `SettingsLayout`
+and `RowKinds` are additions to the registry and `SettingsFrame`, `ChoiceRow` and `SliderRow` to the `qmldir`; nothing
+was removed or changed (`CHANGELOG-kit.md`). The harness gained `Scene::drag` (QTest's press, eight moves and release,
+§7.9). Measured on 2026-11-09 with six seeded faults, each reverted and each caught: the window moving one row late
+(kit-core's window test), A on a choice leaving the mark (the page of choices test), a slider's step taken from the floor
+rather than the nearest step (the grid test), the rows' box one row too tall (the gate, Mistress's boxes), the `MenuRow`
+fix undone (the gate, a mark below the window at 748,674), and a slider's pad step not raised (the walk test).
+
+### 7.41 The page of choices (stage 5, piece A; 2026-11-09)
+
+A page for one row whose value is one of a few, such as a console's Engine (`EmuSen_BigPicture.md` §52.4; the same
+value as Cores' Make Default), drawn on the settings frame under the trail of the pages above it. Its rows are of kind
+`Choice` and one of them carries the model's `marked`: the page opens with the focus on the choice in force, and in its
+window on a long page; A, or a click, chooses the focused one, the mark moving to it at once and `chosen` raised for the
+host, whose rows, read again, are the mark's owner; B is the frame's, so the host closes the page keeping what was
+chosen (Mistress's line: "A chooses; B keeps what was chosen", a host's words in the `lines` slot). `ChoiceRow.qml` is a
+`MenuRow` whose words stand 32 from its edges, the choice in force marked by a dot of 10 in Accent centred in that
+inset, and heard as checked by a reader. Mistress marked it with a `●` before the value's words; the dot is a drawn
+mark, as the style's other marks are (§7.8).
+
+**Held to**: kit-core's page of choices and long page tests, the gallery's `choices` state through the gate, and the walk
+test (opened on Venus (C#), the shoulders left to the host, A on VenusRT moving the one mark to the first row, a click on
+Snes9x moving it again).
+
+### 7.42 The slider row (stage 5, piece A; 2026-11-09)
+
+A row with a slider, for a shader's levers and a crop's edges (`EmuSen_Interface.md` §16.2, `EmuSen_BigPicture.md` §52.5
+item 1). Mistress stepped these as values and typed them under A; the slider row keeps both, Left and Right through the
+walk and A for the host's prompt, and adds the pointer's drag.
+
+- **The step is kit-core's** (`settings::slider`, `SliderRange`): Left and Right move the amount by the row's `step`,
+  on the grid of steps counted from the range's `minimum` (an amount off the grid steps onto the nearest grid point
+  first) and inside the range, a range given high to low taken low to high; a row with no step takes a hundredth of
+  its range (`STEPS_WITHOUT_A_STEP`); at an end, or on a held row, the press is kept and nothing is raised. The walk
+  keeps the amount it gave until the host's rows are read again, so two quick presses take two steps.
+- **`SliderRow.qml`** is a `WholeRow`: the label over 40% of its width in Row, Qt Quick Controls' `Slider` in the style
+  (§7.8) filling the middle, and the host's words for the value in Muted, 104 wide and right-aligned so the slider does
+  not move as they change. The slider takes no focus of its own: the row holds it, and the pad's Left and Right are the
+  walk's. The slider's `stepSize` is the row's step with `snapMode` always, so a drag snaps to the same grid; a drag
+  raises `slid` with the amount, and the frame raises it with the row. A held row's slider is disabled, and neither the
+  pad nor a drag moves it.
+
+**Held to**: kit-core's slider tests (Left and Right without a step, the grid, the maximum held, an amount off the grid, a
+held slider, a range given high to low, no number); the gallery's `slider` state through the gate, and the walk test (two
+Rights and a Left by 0.5, a drag of the second row to its end giving 25 and its words `25.0%`, the held row left as it
+was by a drag and a press, though the pointer focused it).
+
+### 7.43 The tool screen (stage 5, piece B; 2026-11-09)
 
 The tool screen is the big-screen form of `ManagerLayout` that `EmuSen_Interface.md` §15.2 specifies and §15.9 lists as
 the kit's to gain: a header row with the tool's facts, a section strip with the search box at its right, a columned list
@@ -2162,7 +2464,7 @@ of 18, a line of words, then the controls) above the content's foot; the pane 16
 the bar's foot. The content's foot is the safe area's foot less a help bar's height, 702 at 800 high, where both C#
 recordings end it. The frame's own band has stood flush on the foot, 742 to 800, since 2026-11-05 (§7.1 of
 `EmuSen_Qt.md`), so 40 units lie between the bar and the band; moving the foot to the band would add a ninth row and
-part from the recording, which is a question for the tester (§7.41). At 1280 × 800 the places are the recording's to the
+part from the recording, which is a question for the tester (§7.45). At 1280 × 800 the places are the recording's to the
 unit: header 64,40 1152 × 48, strip 64,100 912 × 44, search 976,100 240 × 44, list 64,160 691 × 432 (eight rows), bar
 64,592 691 × 110, pane 771,160 445 × 542. At 16:9 the design is 1,422.2 wide and the extra width goes to the list and the
 pane in their shares, as §15.2 says.
@@ -2204,7 +2506,7 @@ scrolling pane with faded edges; `summary` and `summaryTone`, `progress` (below 
 `applyEnabled`, `meter` and `meterWords`; the signals `activated(index)` (A or a click on a row) and `applied()`. The
 strip is `SectionStrip`: the frame's own `sections` and `selectedSection`, so the shoulders step them, drawn as tabs in
 Caption upper case, the chosen one strong over the accent bar, only whole names shown, a click choosing one. The apply
-control is an `ActionButton` with the Start glyph (`Pad.Menu`), the shared action button of §7.40.
+control is an `ActionButton` with the Start glyph (`Pad.Menu`), the shared action button of §7.44.
 
 **The walk.** The list holds the focus; Up from its first row reaches the search, Down from its last row and Right from
 any row reach the apply control, and Up or Left from it return to the list; Down from the search returns to the list. A
@@ -2218,7 +2520,7 @@ an unmarked row, and a marked row says its mark in Accent in its status (the gal
 159 wide where Mistress's is 170, its words' own width; the strip's tabs are 44 tall with the bar under the chosen one,
 as the recording draws them, but the gaps between them are the kit's TabButton's.
 
-### 7.40 The page frame (stage 5, piece B; 2026-11-09)
+### 7.44 The page frame (stage 5, piece B; 2026-11-09)
 
 The page frame is one screen for one thing, `EmuSen_Interface.md` §2.5 and §4 screen 3 (a game's page, its five sections
 and their deeper pages, §18.2): a hero across the top under the OnArt gradient, the cover over the hero's foot, the title,
@@ -2229,12 +2531,12 @@ facts, actions and section strip beside the cover, and the content below as tile
 the hero 0,0 across the screen and 360 high; the cover at 64,180, 268 high and as wide as its shape gives (201 for 3:4),
 never wider than 240, the column beside it less the pane gap; the column at 336 (the safe area's left plus 272) holding
 the title at 226, the facts at 286, the actions 44 high at 328 and the strip 44 high at 396, each to the safe area's
-right; the content from 64,464 to the content's foot of §7.39, 238 high, in which rows show four whole rows of 54. Tiles
+right; the content from 64,464 to the content's foot of §7.43, 238 high, in which rows show four whole rows of 54. Tiles
 are pictures of 200 × 150, 24 apart, their label at 162 below the picture's top and their line at 190. §4.3 gives the
 cover as 240 × 300; the recording draws 201 × 268, and the recording is the oracle.
 
 **On Qt.** `PageLayout` puts the places on Qt, with the tile's measures as constants. `PageFrame.qml` is a `Frame` laid
-out as §7.39's tool screen is, for the same reason: the hero runs edge to edge, which no content area could hold. Its
+out as §7.43's tool screen is, for the same reason: the hero runs edge to edge, which no content area could hold. Its
 properties: `hero` and `cover` (pictures), `coverAspect`, `coverName` (what a reader hears for the cover), `title`,
 `facts`; `actionModel` (roles `label`, `value`, `button`, the pad button whose glyph leads the words or below zero for
 none, and `filled`, the screen's main action in the accent); `tileModel` (roles `label`, `line`, `picture`) or
@@ -2256,7 +2558,7 @@ marks are piece G's, with the slots it steps.
 cells are 8 to 21; the hero has no picture in the gallery, so its gradient is drawn over Void; the cover has no shadow
 yet (§5.4's raised shadow is not a token).
 
-### 7.41 What the tool screen and the page frame are held to, and what is open (2026-11-09)
+### 7.45 What the tool screen and the page frame are held to, and what is open (2026-11-09)
 
 **kit-core** (`tests/table.rs` 7, `tests/tool.rs` 4, `tests/page.rs` 3): the Cores recording's cells, a fill reaching the
 trail, fills sharing by weight after their least, wide words giving way to a fill's least, a room under the leasts, content

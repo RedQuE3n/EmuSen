@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
 
-// The gallery's screens: the tool screen with a tool's rows, and the page frame with tiles and with rows, the gate run on each at the four sizes (EmuSen_Kit.md §7.39, §7.40).
+// The gallery's screens: the tool screen with a tool's rows, and the page frame with tiles and with rows, the gate run on each at the four sizes (EmuSen_Kit.md §7.43, §7.44).
 Window {
     id: scene
     objectName: "scene"

@@ -1,5 +1,5 @@
 //! `ColumnFit`: a table's columns fitted to its width from any list model, kit-core's FitsWidth on Qt; the words are
-//! measured in the cells' own font (EmuSen_Kit.md §7.39).
+//! measured in the cells' own font (EmuSen_Kit.md §7.43).
 
 use core::pin::Pin;
 

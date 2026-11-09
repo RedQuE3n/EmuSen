@@ -1,5 +1,5 @@
 //! `Tones`: the colour a screen's words are drawn in, named by what they say, so a host's model hands a tone and never a
-//! colour (EmuSen_Kit.md §7.39).
+//! colour (EmuSen_Kit.md §7.43).
 
 #[cxx_qt::bridge]
 pub mod ffi {

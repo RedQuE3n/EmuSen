@@ -35,3 +35,24 @@ bool pass_key(QQuickItem* item, int key, int modifiers)
     }
     return false;
 }
+
+void make_current(QQuickItem* item)
+{
+    for (QQuickItem* delegate = item; delegate != nullptr; delegate = delegate->parentItem()) {
+        QQuickItem* content = delegate->parentItem();
+        QQuickItem* view = content != nullptr ? content->parentItem() : nullptr;
+        if (view == nullptr || !view->inherits("QQuickItemView") || view->property("contentItem").value<QQuickItem*>() != content) {
+            continue;
+        }
+        // The view's own current item, focused as the view makes it, is not yet placed, so its box says nothing.
+        if (view->property("currentItem").value<QQuickItem*>() != delegate) {
+            int index = -1;
+            const QPointF centre = delegate->position() + QPointF(delegate->width() / 2, delegate->height() / 2);
+            QMetaObject::invokeMethod(view, "indexAt", Q_RETURN_ARG(int, index), Q_ARG(qreal, centre.x()), Q_ARG(qreal, centre.y()));
+            if (index >= 0) {
+                view->setProperty("currentIndex", index);
+            }
+        }
+        return;
+    }
+}

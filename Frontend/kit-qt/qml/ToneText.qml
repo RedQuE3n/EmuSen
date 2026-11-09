@@ -1,7 +1,7 @@
 import QtQuick
 import EmuSen.Kit as Kit
 
-// Words in a tone: the token the tone names, so a model hands what its words say and never a colour (EmuSen_Kit.md §7.39).
+// Words in a tone: the token the tone names, so a model hands what its words say and never a colour (EmuSen_Kit.md §7.43).
 Text {
     id: root
     property int tone: Kit.Tones.Text

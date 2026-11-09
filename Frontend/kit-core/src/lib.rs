@@ -11,6 +11,7 @@ pub mod layout;
 pub mod motion;
 pub mod notice;
 pub mod orbits;
+pub mod settings;
 pub mod sound;
 pub mod tokens;
 pub mod wheels;

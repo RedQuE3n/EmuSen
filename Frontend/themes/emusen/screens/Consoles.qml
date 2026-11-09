@@ -420,14 +420,15 @@ ThemeScreen {
                             readonly property bool turning: layout.turning[label.index] ?? false
                             objectName: "makerLabel." + label.index
                             visible: layout.orbitShown[label.index] ?? false
-                            opacity: layout.focusedOrbit === label.index ? 1 : 0.7
+                            // The focused orbit's maker brighter than the rest, by ink rather than opacity, so the rest keep 4.5:1 over the crowd.
+                            readonly property color ink: layout.focusedOrbit === label.index ? Tokens.text : Tokens.muted
                             x: (layout.labelRights[label.index] ?? 0) - width
                             y: layout.labelTops[label.index] ?? 0
                             height: 20
                             spacing: 5
                             Text {
                                 text: layout.labels[label.index] ?? ""
-                                color: Tokens.muted
+                                color: label.ink
                                 font.family: faces.condensed
                                 font.weight: Font.Medium
                                 font.pixelSize: 17
@@ -439,7 +440,7 @@ ThemeScreen {
                             Text {
                                 visible: label.turning
                                 text: Words.between
-                                color: Tokens.muted
+                                color: label.ink
                                 font.family: faces.condensed
                                 font.weight: Font.Medium
                                 font.pixelSize: 17
@@ -449,7 +450,7 @@ ThemeScreen {
                             Text {
                                 visible: label.turning
                                 text: layout.sizes[label.index] ?? 0
-                                color: Tokens.muted
+                                color: label.ink
                                 font.family: faces.condensed
                                 font.weight: Font.Medium
                                 font.pixelSize: 17

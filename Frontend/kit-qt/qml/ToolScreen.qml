@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import EmuSen.Kit as Kit
 
-// A tool on the frame: the header row with its facts, the section strip with search, the columned list kept inside its width, the apply bar with its meter, and the pane spanning the list and the bar, all from the host's models; it knows no tool (EmuSen_Kit.md §7.39).
+// A tool on the frame: the header row with its facts, the section strip with search, the columned list kept inside its width, the apply bar with its meter, and the pane spanning the list and the bar, all from the host's models; it knows no tool (EmuSen_Kit.md §7.43).
 Kit.Frame {
     id: root
     property string title

@@ -1,4 +1,4 @@
-// The tool screen's places held to the Cores recording, and the pane spanning the list and the bar at every size (EmuSen_Kit.md §7.39).
+// The tool screen's places held to the Cores recording, and the pane spanning the list and the bar at every size (EmuSen_Kit.md §7.43).
 
 use emusen_kit_core::audit::Rect;
 use emusen_kit_core::tool::{ToolGeometry, ToolLayout, tool_layout};

@@ -1,6 +1,6 @@
 //! The page frame's places: a hero across the top under the OnArt gradient, the cover over its foot, the title, facts,
 //! actions and section strip beside the cover, and the content below, as tiles or rows (EmuSen_Interface.md §2.5, §4.3;
-//! EmuSen_Kit.md §7.40). It names no game: a host hands it the screen's size and the cover's shape.
+//! EmuSen_Kit.md §7.44). It names no game: a host hands it the screen's size and the cover's shape.
 
 use crate::audit::Rect;
 use crate::tokens::{Form, Spacing, spacing};

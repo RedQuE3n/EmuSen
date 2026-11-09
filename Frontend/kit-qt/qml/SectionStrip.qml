@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import EmuSen.Kit as Kit
 
-// A screen's section strip: the frame's sections in Caption upper case, the chosen one strong over the accent bar, only whole names drawn; a click chooses one as the shoulders step them (EmuSen_Kit.md §7.39).
+// A screen's section strip: the frame's sections in Caption upper case, the chosen one strong over the accent bar, only whole names drawn; a click chooses one as the shoulders step them (EmuSen_Kit.md §7.43).
 ListView {
     id: root
     required property Kit.FrameController controller

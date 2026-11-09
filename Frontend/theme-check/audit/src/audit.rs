@@ -1,34 +1,40 @@
 //! The loaded audits (man theme-check): each screen a package lists placed through the theme host in an engine of its own,
 //! its views fed the synthetic library, then held at the gate's five sizes in both variants to kit-core's fit, pad reach,
-//! pointer reach, no-chrome and contrast rules, and once to stillness under reduced motion. One line per finding.
+//! pointer reach, no-chrome, name and contrast rules, and once to stillness under reduced motion; then in each state a run names
+//! (man theme-check, STATES), fed through the same surfaces. One line per finding.
 
 use core::pin::Pin;
 use std::collections::HashSet;
 use std::path::Path;
 
 use cxx_qt::QObject;
-use emusen_kit_core::audit::{self, contrast, fit, no_chrome, pad_reach, pointer_reach, reached, Fault, Rect};
+use emusen_kit_core::audit::{self, contrast, fit, named, no_chrome, pad_reach, pointer_reach, reached, Fault, Rect};
 use emusen_kit_core::input::{ElementId, UiButton, WalkForm};
 use emusen_kit_core::tokens::Variant;
 use emusen_kit_qt::kinds;
 use emusen_kit_qt::tokens::qobject::Tokens;
 use emusen_qt_test::ffi::ffi::harness_messages;
-use emusen_qt_test::harness::{edges, palette, Measures, SETTLE_MS, SIZES};
+use emusen_qt_test::harness::{edges, palette, Landing, Measures, Step, SETTLE_MS, SIZES};
 use emusen_qt_test::spec::{self, Header};
 use emusen_qt_test::tree::Tree;
 use emusen_qt_test::{Harness, Scene};
 use emusen_theme_manifest::Screen;
-use emusen_qt_models::library::{Kind, LibraryView};
+use emusen_qt_models::library::{Kind, LibraryView, ALL};
 use emusen_qt_models::words;
 use emusen_theme_qt::browse::facts_of;
 use emusen_theme_qt::host;
+use emusen_theme_qt::session::SessionFacts;
 use emusen_theme_qt::view as theme_view;
 
 use crate::catalogue::Entry;
+use crate::states::{State, DEFAULT};
 use crate::world::Synthetic;
 
 /// The scene, written beside the synthetic library and loaded from there.
 const SCENE: &str = include_str!("../qml/Audit.qml");
+
+/// Qt's key code for Return, which a theme's Walkable answers as A.
+const RETURN: i32 = 0x0100_0004;
 
 /// Qt's key codes for the four directions, which the kit's `Frame` answers as the pad's (EmuSen_Qt.md §1.7) and `KeyNavigation` natively.
 fn key_of(button: UiButton) -> i32 {
@@ -148,21 +154,30 @@ fn place(scene: &mut Scene<'_>, folder: &str, screen: Screen) -> Result<u64, Str
     root.id.parse().map_err(|_| "the screen's number".to_owned())
 }
 
-/// The views fed as the program's host feeds them, the kit's tokens set to the big screen with reduced motion on.
-fn feed(screen: u64, library: &Synthetic, view: &LibraryView, overrides: &[(bool, String, String)], section: Option<&str>) -> Result<(), String> {
-    host::library(object(screen)).ok_or("EmuSen.Theme's Library is not in the theme's engine")?.show(view, &library.home_lines);
-    // The Games screen's section as the program's showBrowse gives it: the named one, else the first console's.
-    let first = view.rows.rows().iter().find(|r| r.kind == Some(Kind::Console)).map(|r| r.key.clone());
+/// What the host feeds a placed screen beside the library: the session, the places it declines, and whether motion is reduced.
+struct Fed<'a> {
+    session: &'a SessionFacts,
+    declined: &'a [&'a str],
+    reduced: bool,
+}
+
+/// The views fed as the program's host feeds them, the kit's tokens set to the big screen, with reduced motion on but for a held clock.
+fn feed(screen: u64, library: &Synthetic, view: &LibraryView, fed: &Fed<'_>, overrides: &[(bool, String, String)], section: Option<&str>) -> Result<(), String> {
+    let mut theme = host::library(object(screen)).ok_or("EmuSen.Theme's Library is not in the theme's engine")?;
+    theme.as_mut().show_declined(&fed.declined.iter().map(|d| (*d).to_owned()).collect::<Vec<_>>());
+    theme.as_mut().show(view, &library.home_lines(view));
+    // The Games screen's section as the program's showBrowse gives it: the named one, else the first console's, else the All shelf.
+    let first = view.rows.rows().iter().find(|r| r.kind == Some(Kind::Console)).map(|r| r.key.clone()).or(Some(ALL.to_owned()));
     if let Some(key) = section.map(str::to_owned).or(first) {
         let mut browse = host::browse(object(screen)).ok_or("no Browse")?;
         browse.as_mut().show_games(theme_view::games_of(view, &key, words::now()));
         browse.as_mut().show(&facts_of(view, &key, "", 0, (false, false, false), false));
     }
-    host::session(object(screen)).ok_or("no Session")?.show(&library.session);
+    host::session(object(screen)).ok_or("no Session")?.show(fed.session);
     host::device(object(screen)).ok_or("no Device")?.show(&library.device);
     let mut kit = tokens(screen).ok_or("the kit's Tokens are not in the theme's engine")?;
     kit.as_mut().set_form(kinds::form_of(WalkForm::BigScreen));
-    kit.as_mut().set_reduced_motion(true);
+    kit.as_mut().set_reduced_motion(fed.reduced);
     host::set_token_overrides(object(screen), overrides);
     Ok(())
 }
@@ -188,6 +203,22 @@ struct Pass<'a> {
     variants: &'a [Variant],
     label: &'a str,
     consoles: Option<&'a [String]>,
+    /// The name of the element the pad walks the focus to before the state is judged.
+    focus: Option<&'a str>,
+    /// A held press of A on the focus while the state is judged.
+    press: bool,
+    /// The animation clock is held, so nothing moves and the picture is taken without waiting for rest.
+    held: bool,
+    /// Under a held clock, the texts whose ink changed over the frame before it: mid-change, so not judged for contrast.
+    moving: Option<&'a HashSet<String>>,
+    /// The places the host declines, by key and by the name a reader hears: exempt from the words' contrast when drawn apart.
+    declined: &'a [(&'a str, String)],
+}
+
+impl<'a> Pass<'a> {
+    fn plain(variants: &'a [Variant], label: &'a str, consoles: Option<&'a [String]>) -> Pass<'a> {
+        Pass { variants, label, consoles, focus: None, press: false, held: false, moving: None, declined: &[] }
+    }
 }
 
 /// Every state of one placed screen in a pass: the rules at each size in each variant, recorded into `state` when it is named.
@@ -206,10 +237,42 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             tree.root.mark_data(&words::is_fixed);
             // What lies behind each text as drawn, pictures and translucent fills included, before the walk moves anything.
             scene.sample_behind(&mut tree, f64::from(w), f64::from(h));
+            if let Some(moving) = pass.moving {
+                rested(&mut tree, moving);
+            }
             let focus = scene.focus(&tree).map(ElementId);
             // The crowd's reach is the sweep's; every element on the screen is still held to the pointer.
             let walk = if pass.consoles.is_some() { Vec::new() } else { scene.walk_by(&tree, |s, button| s.key(key_of(button), 0)) };
             let walked = edges(&walk);
+            // A state's focus and held press are put on after the walk, and the screen judged and recorded as they leave it.
+            if let Some(name) = pass.focus {
+                walk_to(scene, &tree, &walk, name);
+            }
+            if pass.press {
+                scene.key_hold(RETURN, true);
+            }
+            // Reach and pointer are the walk's tree's, whose numbers the walk's edges name; the rest are judged on what is shown.
+            let mut held_tree = (pass.focus.is_some() || pass.press).then(|| {
+                if !pass.held {
+                    scene.rest();
+                }
+                let mut shown = scene.tree();
+                shown.root.mark_data(&words::is_fixed);
+                scene.sample_behind(&mut shown, f64::from(w), f64::from(h));
+                if let Some(moving) = pass.moving {
+                    rested(&mut shown, moving);
+                }
+                shown
+            });
+            let measures = Measures::of(WalkForm::BigScreen, f64::from(h));
+            if !pass.declined.is_empty() {
+                let judged = held_tree.as_mut().unwrap_or(&mut tree);
+                for words in declined_places(scene, id, judged, pass.declined, (f64::from(w), f64::from(h))) {
+                    lines.add(screen, "contrast", &format!("{w}x{h} {name}: {words}"));
+                }
+            }
+            let seen = held_tree.as_ref().unwrap_or(&tree);
+            let shown = scene.focus(seen).map(ElementId);
             // The splash is watched, not operated: nothing on it is clicked, whatever stands at its centre.
             let pointed: HashSet<ElementId> = if screen == Screen::Splash {
                 HashSet::new()
@@ -218,20 +281,20 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             } else {
                 reached(focus, &walked)
             };
-            let measures = Measures::of(WalkForm::BigScreen, f64::from(h));
             let panel = Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
             let smallest = measures.floor * audit::DESKTOP_CAPS * measures.unit;
             let reach = if pass.consoles.is_some() { Vec::new() } else { pad_reach(&tree.root, focus, &walked) };
             let found = [
-                ("fit", fit(&tree.root, panel, measures.slack, smallest)),
-                ("reach", reach),
-                ("pointer", pointer_reach(&tree.root, &pointed)),
-                ("chrome", no_chrome(&tree.root, WalkForm::BigScreen)),
-                ("contrast", contrast(&tree.root)),
+                ("fit", fit(&seen.root, panel, measures.slack, smallest), seen),
+                ("reach", reach, &tree),
+                ("pointer", pointer_reach(&tree.root, &pointed), &tree),
+                ("chrome", no_chrome(&seen.root, WalkForm::BigScreen), seen),
+                ("name", named(&seen.root), seen),
+                ("contrast", contrast(&seen.root), seen),
             ];
-            for (kind, faults) in found {
+            for (kind, faults, judged) in found {
                 for fault in faults {
-                    let who: Vec<String> = items(&fault).into_iter().map(|i| described(&tree, i)).collect();
+                    let who: Vec<String> = items(&fault).into_iter().map(|i| described(judged, i)).collect();
                     lines.add(screen, kind, &format!("{w}x{h} {name}: {fault} ({})", who.join("; ")));
                 }
             }
@@ -240,9 +303,13 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
                 let declared = palette(variant);
                 let header =
                     Header { state: &file, case: title(screen), kind: "menu", width: w, height: h, measures, palette: &declared };
-                let _ = std::fs::write(dir.join(format!("{file}.spec")), spec::write(&tree, &tree.root, &header, focus.map(|f| f.0), &walk));
-                // The walk's last put-back moved the focus home, so whatever that started ends before the picture.
-                scene.rest();
+                let _ = std::fs::write(dir.join(format!("{file}.spec")), spec::write(seen, &seen.root, &header, shown.map(|f| f.0), &walk));
+                // The walk's last put-back moved the focus home, so whatever that started ends before the picture; a held clock moves nothing.
+                if pass.held {
+                    scene.wait(100);
+                } else {
+                    scene.rest();
+                }
                 let picture = dir.join(format!("{file}.png"));
                 scene.grab(&picture.display().to_string());
                 if let Some(fault) = misfit(&picture, (w as u32, h as u32)) {
@@ -252,8 +319,48 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             if let Some(missed) = pass.consoles.and_then(|all| swept(scene, all, (f64::from(w), f64::from(h)))) {
                 lines.add(screen, "reach", &format!("{w}x{h} {name}: {missed}"));
             }
+            if pass.press {
+                scene.key_hold(RETURN, false);
+                if !pass.held {
+                    scene.rest();
+                }
+            }
         }
     }
+}
+
+/// Walks the focus by the pad, along the walk's own presses, to the element a reader hears as `name`; false when no walk leads there.
+fn walk_to(scene: &mut Scene<'_>, tree: &Tree, walk: &[Step], name: &str) -> bool {
+    let Some(start) = scene.focus(tree) else { return false };
+    let target = (0..tree.nodes.len() as u32).find(|&i| tree.nodes[i as usize].operable && spoken(tree, i) == name);
+    let Some(target) = target else { return false };
+    // Breadth first over the walk's presses, each element reached by its fewest.
+    let mut came: std::collections::HashMap<u32, (u32, UiButton)> = std::collections::HashMap::new();
+    let mut queue = std::collections::VecDeque::from([start]);
+    while let Some(at) = queue.pop_front() {
+        if at == target {
+            break;
+        }
+        for step in walk.iter().filter(|s| s.from == at) {
+            if let Landing::At(to) = step.to {
+                if to != start && !came.contains_key(&to) {
+                    came.insert(to, (at, step.button));
+                    queue.push_back(to);
+                }
+            }
+        }
+    }
+    let mut presses = Vec::new();
+    let mut at = target;
+    while at != start {
+        let Some(&(from, button)) = came.get(&at) else { return false };
+        presses.push(button);
+        at = from;
+    }
+    for button in presses.into_iter().rev() {
+        scene.key(key_of(button), 0);
+    }
+    true
 }
 
 /// What Qt logged since the last call, the theme's engine's warnings among them (it writes them to the log as well as to the host).
@@ -362,9 +469,24 @@ fn panic_words(payload: &(dyn std::any::Any + Send)) -> String {
     payload.downcast_ref::<String>().cloned().or_else(|| payload.downcast_ref::<&str>().map(|s| (*s).to_owned())).unwrap_or_default()
 }
 
-/// The findings of the package at `folder` (named `shown` in the lines), its screens loaded in turn.
+/// What one run of the audit is asked: the recordings' folder, a catalogue, the Games screen's section and the states.
+pub struct Asked<'a> {
+    pub state: Option<&'a Path>,
+    pub catalogue: Option<(&'a str, &'a [Entry])>,
+    pub section: Option<&'a str>,
+    pub states: Vec<&'static State>,
+}
+
+/// Places a screen afresh and feeds it; the host's words, a line each, when it cannot.
+fn placed(scene: &mut Scene<'_>, folder: &str, screen: Screen, feeding: impl FnOnce(u64) -> Result<(), String>) -> Result<u64, String> {
+    let id = place(scene, folder, screen)?;
+    feeding(id).map(|_| id)
+}
+
+/// The findings of the package at `folder` (named `shown` in the lines), its screens loaded in turn in each state asked.
 /// With a catalogue (`man theme-check`, --catalogue), Choose a console alone is placed over it, its states labelled by its name.
-pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(&str, &[Entry])>, section: Option<&str>) -> Result<Vec<String>, String> {
+pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Vec<String>, String> {
+    let (state, section) = (asked.state, asked.section);
     let shown = shown.trim_end_matches('/');
     let text = std::fs::read_to_string(folder.join("theme.json")).map_err(|e| format!("{shown}/theme.json: {e}"))?;
     let mut lines = Lines { shown, out: Vec::new(), at: String::new() };
@@ -375,58 +497,206 @@ pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(
     if let Some(dir) = state {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
-    let real = std::fs::canonicalize(folder).map_err(|e| format!("{shown}: {e}"))?;
-    let library = crate::world::make(catalogue.map(|(_, entries)| entries))?;
-    let file = library.world.root.join("Audit.qml");
-    std::fs::write(&file, SCENE).map_err(|e| format!("the scene: {e}"))?;
+    let real = std::fs::canonicalize(folder).map_err(|e| format!("{shown}: {e}"))?.display().to_string();
     std::panic::set_hook(Box::new(|_| {}));
     let mut harness = Harness::new();
+    let library = crate::world::make(&mut harness, asked.catalogue.map(|(_, entries)| entries))?;
+    let file = library.world.root.join("Audit.qml");
+    std::fs::write(&file, SCENE).map_err(|e| format!("the scene: {e}"))?;
     let mut scene = harness.load(&format!("file://{}", file.display()), 1280, 800);
-    if let (Some((name, _)), Some((view, names))) = (catalogue, library.catalogue.as_ref()) {
+    // The covers' folder, the one a theme may show pictures from, as the program's start reads it from the settings.
+    scene.set_property("host", "coverStores", &library.media.display().to_string());
+    let overrides = package.colour_overrides();
+    let both = [Variant::Dark, Variant::Light];
+    if let (Some((name, _)), Some((view, names))) = (asked.catalogue, library.catalogue.as_ref()) {
         let screen = Screen::Consoles;
         logged();
         let label = format!(", {name}");
-        let pass = Pass { variants: &[Variant::Dark, Variant::Light], label: &label, consoles: Some(names) };
-        match place(&mut scene, &real.display().to_string(), screen).and_then(|id| feed(id, &library, view, &package.colour_overrides(), section).map(|_| id)) {
+        let pass = Pass::plain(&both, &label, Some(names));
+        let session = library.session(view, None)?;
+        let fed = Fed { session: &session, declined: &[], reduced: true };
+        match placed(&mut scene, &real, screen, |id| feed(id, &library, view, &fed, &overrides, section)) {
             Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
             Ok(id) => lines.guarded(screen, |lines| states(&mut scene, screen, id, &pass, state, lines)),
         }
         logged().iter().for_each(|w| lines.add(screen, "warning", w));
         return Ok(lines.out);
     }
-    for screen in Screen::ALL.into_iter().filter(|s| package.screens.contains(s)) {
-        logged();
-        let id = match place(&mut scene, &real.display().to_string(), screen) {
-            Ok(id) => id,
-            Err(words) => {
-                words.lines().for_each(|w| lines.add(screen, "load", w));
-                continue;
-            }
-        };
-        if let Err(words) = feed(id, &library, &library.view, &package.colour_overrides(), section) {
-            lines.add(screen, "load", &words);
+    for asked_state in &asked.states {
+        let screens: Vec<Screen> = Screen::ALL.into_iter().filter(|s| package.screens.contains(s) && asked_state.screens.contains(s)).collect();
+        if screens.is_empty() {
             continue;
         }
-        let both = Pass { variants: &[Variant::Dark, Variant::Light], label: "", consoles: None };
-        lines.guarded(screen, |lines| {
-            lines.at = "1280x800, judged still under reduced motion".to_owned();
-            scene.resize(1280, 800);
-            if let Some(words) = still(&mut scene) {
-                lines.add(screen, "motion", &words);
+        let view = library.shaped(asked_state.library)?;
+        let session = library.session(&view, asked_state.game)?;
+        let default = asked_state.name == DEFAULT;
+        let label = if default { String::new() } else { format!(", {}", asked_state.name) };
+        // The element a state walks the focus to is the place a reader hears by its name.
+        let focus = asked_state.focus.and_then(|key| place_name(&view, key));
+        for screen in screens {
+            logged();
+            match asked_state.clock {
+                Some(ms) => held(&mut scene, &real, screen, (&library, &view, &session), ms, &label, (state, section, &overrides), &mut lines),
+                None => {
+                    let fed = Fed { session: &session, declined: asked_state.declined, reduced: true };
+                    let declined: Vec<(&str, String)> = asked_state.declined.iter().filter_map(|&key| place_name(&view, key).map(|name| (key, name))).collect();
+                    let pass = Pass { focus: focus.as_deref(), press: asked_state.press, declined: &declined, ..Pass::plain(&both, &label, None) };
+                    match placed(&mut scene, &real, screen, |id| feed(id, &library, &view, &fed, &overrides, section)) {
+                        Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
+                        Ok(id) => lines.guarded(screen, |lines| {
+                            if default {
+                                lines.at = "1280x800, judged still under reduced motion".to_owned();
+                                scene.resize(1280, 800);
+                                if let Some(words) = still(&mut scene) {
+                                    lines.add(screen, "motion", &words);
+                                }
+                            }
+                            states(&mut scene, screen, id, &pass, state, lines);
+                        }),
+                    }
+                    if default && screen == Screen::Consoles {
+                        // Placed afresh over the crowd, as the program shows Choose a console once the library holds 120 consoles.
+                        let crowd = Pass::plain(&[Variant::Dark], ", 120 consoles", Some(&library.crowd_names));
+                        match placed(&mut scene, &real, screen, |id| feed(id, &library, &library.crowd, &fed, &overrides, section)) {
+                            Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
+                            Ok(id) => lines.guarded(screen, |lines| states(&mut scene, screen, id, &crowd, state, lines)),
+                        }
+                    }
+                }
             }
-            states(&mut scene, screen, id, &both, state, lines);
-        });
-        if screen == Screen::Consoles {
-            // Placed afresh over the crowd, as the program shows Choose a console once the library holds 120 consoles.
-            let crowd = Pass { variants: &[Variant::Dark], label: ", 120 consoles", consoles: Some(&library.crowd_names) };
-            match place(&mut scene, &real.display().to_string(), screen).and_then(|id| feed(id, &library, &library.crowd, &package.colour_overrides(), section).map(|_| id)) {
-                Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
-                Ok(id) => lines.guarded(screen, |lines| states(&mut scene, screen, id, &crowd, state, lines)),
-            }
+            logged().iter().for_each(|w| lines.add(screen, "warning", w));
         }
-        logged().iter().for_each(|w| lines.add(screen, "warning", w));
     }
     Ok(lines.out)
+}
+
+/// A place's name as Home's list gives it, by its key.
+fn place_name(view: &LibraryView, key: &str) -> Option<String> {
+    use emusen_theme_qt::view::Cell;
+    theme_view::places(view, &[], &[]).into_iter().find_map(|row| match (row.first(), row.get(1)) {
+        (Some(Cell::Text(k)), Some(Cell::Text(name))) if k == key => Some(name.clone()),
+        _ => None,
+    })
+}
+
+/// A screen with its animation clock held `ms` after it is placed, motion allowed: placed afresh in each variant, since a
+/// change of variant animates its colours, then judged and recorded at the five sizes as every state is.
+#[allow(clippy::too_many_arguments)]
+fn held(
+    scene: &mut Scene<'_>,
+    folder: &str,
+    screen: Screen,
+    (library, view, session): (&Synthetic, &LibraryView, &SessionFacts),
+    ms: i64,
+    label: &str,
+    (state, section, overrides): (Option<&Path>, Option<&str>, &[(bool, String, String)]),
+    lines: &mut Lines<'_>,
+) {
+    for variant in [Variant::Dark, Variant::Light] {
+        scene.hold_clock(Some(0));
+        let fed = Fed { session, declined: &[], reduced: false };
+        let id = placed(scene, folder, screen, |id| {
+            feed(id, library, view, &fed, overrides, section)?;
+            let mut kit = tokens(id).ok_or("the kit's Tokens are not in the theme's engine")?;
+            kit.as_mut().set_variant(if variant == Variant::Dark { kinds::Variant::Dark } else { kinds::Variant::Light });
+            Ok(())
+        });
+        match id {
+            Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
+            Ok(id) => {
+                // Contrast is judged at rest: a text whose ink changes over the frame before the held time is mid-change.
+                scene.hold_clock(Some(ms - FRAME_MS));
+                let before = scene.tree();
+                scene.hold_clock(Some(ms));
+                let moving = changing(&before, &scene.tree());
+                let pass = Pass { held: true, moving: Some(&moving), ..Pass::plain(std::slice::from_ref(&variant), label, None) };
+                lines.guarded(screen, |lines| states(scene, screen, id, &pass, state, lines));
+            }
+        }
+        scene.hold_clock(None);
+    }
+}
+
+/// Each declined place on the screen, by the name a reader hears, drawn apart from its offered look: its words are left out
+/// of the contrast rule, as WCAG's 1.4.3 exempts an inactive component's. Apart is a point of its box whose colour changes by
+/// 3:1 between the place declined and the place offered, the focus on it in both (man theme-check). A place drawn as if
+/// offered keeps the rule and is a finding, in words, a line each.
+fn declined_places(scene: &mut Scene<'_>, screen: u64, tree: &mut Tree, declined: &[(&str, String)], size: (f64, f64)) -> Vec<String> {
+    let places: Vec<u32> = tree.operable().into_iter().filter(|&i| declined.iter().any(|(_, name)| *name == spoken(tree, i))).collect();
+    if places.is_empty() {
+        return Vec::new();
+    }
+    let grids: Vec<Vec<(f64, f64)>> = places.iter().map(|&i| grid(&tree.nodes[i as usize], size)).collect();
+    let points: Vec<(f64, f64)> = grids.concat();
+    let was = scene.colours_at(&points);
+    let offered = |keys: &[String]| host::library(object(screen)).map(|mut library| library.as_mut().show_declined(keys));
+    if offered(&[]).is_none() {
+        return vec!["EmuSen.Theme's Library is not in the theme's engine".to_owned()];
+    }
+    scene.rest();
+    let enabled = scene.colours_at(&points);
+    offered(&declined.iter().map(|(key, _)| (*key).to_owned()).collect::<Vec<_>>());
+    scene.rest();
+    let mut words = Vec::new();
+    let mut at = 0;
+    for (&place, points) in places.iter().zip(&grids) {
+        let span = at..at + points.len();
+        at = span.end;
+        if audit::changed_share(&was[span.clone()], &enabled[span]) > 0.0 {
+            for index in tree.under(place) {
+                tree.not_judged(index);
+            }
+        } else {
+            let place = described(tree, ElementId(place));
+            words.push(format!("a declined place drawn as if offered: no point of it changes by {}:1 from its offered look ({place})", audit::STATE_CHANGE));
+        }
+    }
+    words
+}
+
+/// Points over an item's box inside the window, about ten thousand at most and at least a pixel apart: a design unit apart
+/// or less at the five sizes for a place up to 480 by 56, finer than a word's stroke.
+fn grid(node: &emusen_qt_test::tree::Node, (width, height): (f64, f64)) -> Vec<(f64, f64)> {
+    let (x0, y0) = (node.x.max(0.0), node.y.max(0.0));
+    let (x1, y1) = ((node.x + node.w).min(width), (node.y + node.h).min(height));
+    if x1 <= x0 || y1 <= y0 {
+        return Vec::new();
+    }
+    let step = ((x1 - x0) * (y1 - y0) / 10_000.0).sqrt().max(1.0);
+    let mut points = Vec::new();
+    let mut y = y0 + step / 2.0;
+    while y < y1 {
+        let mut x = x0 + step / 2.0;
+        while x < x1 {
+            points.push((x, y));
+            x += step;
+        }
+        y += step;
+    }
+    points
+}
+
+/// A display's frame, the step a held clock moves by.
+const FRAME_MS: i64 = 16;
+
+/// The texts whose ink, its colour with its opacity, differs between two readings of one screen.
+fn changing(before: &Tree, after: &Tree) -> HashSet<String> {
+    let inks: std::collections::HashMap<&str, (f64, Option<&String>)> =
+        before.nodes.iter().filter(|n| n.text.is_some()).map(|n| (n.id.as_str(), (n.opacity, n.ink.as_ref()))).collect();
+    after
+        .nodes
+        .iter()
+        .filter(|n| inks.get(n.id.as_str()).is_some_and(|&(opacity, ink)| opacity != n.opacity || ink != n.ink.as_ref()))
+        .map(|n| n.id.clone())
+        .collect()
+}
+
+/// Leaves the texts mid-change out of the contrast rule.
+fn rested(tree: &mut Tree, moving: &HashSet<String>) {
+    let mid: Vec<u32> = (0..tree.nodes.len() as u32).filter(|&i| moving.contains(&tree.nodes[i as usize].id)).collect();
+    for index in mid {
+        tree.not_judged(index);
+    }
 }
 
 #[cfg(test)]

@@ -140,7 +140,3 @@ and the console screens' maker groups are added, each after the members it joins
 - **`CoverTile.drawnScale`** (2026-11-09): the scale a cover is drawn at, the tile's own `scale` unless set by a theme
   that scales an ancestor; the generated card's title keeps its size on the screen under it, so it stays at or above
   the legibility floor (`EmuSen_Kit.md` §7.29). Found by Orrery's far covers, drawn at 0.8.
-- **Not in the theme API: the kit's tool screen and page frame** (2026-11-09). `EmuSen.Kit` gains, additions only in
-  its registry, `ToolLayout`, `PageLayout`, `ColumnFit`, the `Tones` namespace, and `ToolScreen`, `PageFrame`,
-  `SectionStrip`, `ActionButton` and `ToneText` (`EmuSen_Kit.md` §7.39–§7.41). `EmuSen.Theme` re-exports none of them,
-  since a theme never styles a tool or a game's page (`EmuSen_Qt.md` §3.1); its registry is unchanged.

@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
 
-// An action on the frame: the pad's glyph where it has one, its word and its value, filled in the accent where it is the screen's main action, ringed when focused; a click or A is the action (EmuSen_Kit.md §7.40).
+// An action on the frame: the pad's glyph where it has one, its word and its value, filled in the accent where it is the screen's main action, ringed when focused; a click or A is the action (EmuSen_Kit.md §7.44).
 Kit.Walkable {
     id: root
     property string label

@@ -1,6 +1,6 @@
 // The tool screen and the page frame on the gallery: the fit audit, pad reach, pointer reach and no chrome at the four fit
 // sizes in both variants, the pane spanning the list and the bar and the columns inside the list as drawn, and the walk
-// between the parts (EmuSen_Kit.md §7.39, §7.40). The grabs and recordings are saved beside the gallery's for a look.
+// between the parts (EmuSen_Kit.md §7.43, §7.44). The grabs and recordings are saved beside the gallery's for a look.
 
 use std::path::PathBuf;
 

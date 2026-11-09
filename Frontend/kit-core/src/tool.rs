@@ -1,5 +1,5 @@
 //! The tool screen's places: a header row of facts, a section strip with search, the list in whole rows, the apply bar
-//! under it, and the pane beside both, spanning the list and the bar (EmuSen_Interface.md §15.2, §15.9; EmuSen_Kit.md §7.39).
+//! under it, and the pane beside both, spanning the list and the bar (EmuSen_Interface.md §15.2, §15.9; EmuSen_Kit.md §7.43).
 //! It names no tool: a host hands it the screen's size and lays its own content into the places it gives back.
 
 use crate::audit::Rect;

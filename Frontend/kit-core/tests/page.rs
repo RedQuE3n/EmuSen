@@ -1,4 +1,4 @@
-// The page frame's places held to the game page recording at 1280 x 800, and inside the screen at 16:9 (EmuSen_Kit.md §7.40).
+// The page frame's places held to the game page recording at 1280 x 800, and inside the screen at 16:9 (EmuSen_Kit.md §7.44).
 
 use emusen_kit_core::audit::Rect;
 use emusen_kit_core::page::{PageGeometry, page_layout};

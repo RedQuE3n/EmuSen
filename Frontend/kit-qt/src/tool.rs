@@ -1,4 +1,4 @@
-//! `ToolLayout`: kit-core's tool screen places on Qt, as rectangles a screen binds to (EmuSen_Kit.md §7.39).
+//! `ToolLayout`: kit-core's tool screen places on Qt, as rectangles a screen binds to (EmuSen_Kit.md §7.43).
 
 use core::pin::Pin;
 

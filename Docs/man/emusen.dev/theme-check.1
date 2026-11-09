@@ -243,6 +243,10 @@ THE LOADED STEP
     no Vulkan instance, and its OpenGL window draws only its first size
     when grown (a 1920 x 1200 picture came out drawn in its lower left
     1280 x 800 alone, the rest black or stale; measured 2026-11-09).
+    Either way theme-audit sets QSG_RENDER_LOOP to basic, whatever the
+    environment says: a threaded render loop installs an animation
+    driver of its own, which the held clock of the timed states would
+    have to replace (EmuSen_Kit.md 7.36).
 
     --catalogue FILE (theme-audit alone) places Choose a console once,
     over the synthetic library with FILE's consoles in place of its own,

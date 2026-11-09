@@ -2186,6 +2186,16 @@ theme-audit records a theme's splash at a stated time and a screen with A held (
   second hold moves the one clock rather than installing another: seeded, a fresh clock at every hold failed
   `qt_3_7_a_splash_is_held_at_1_3_and_5_s_and_judged_at_each` on Qt's own words, "animation driver already installed" and
   "trying to uninstall a driver that is not installed".
+  The same two lines came from Horizon's GPU run on 2026-11-09, once a hold, from another cause: a threaded render loop
+  (Qt Quick's on Vulkan, or the software one under `QSG_RENDER_LOOP=threaded`) installs its own animation driver, so Qt
+  refused the held clock (the first line), every timed state was read on the render loop's clock instead, and letting the
+  clock go uninstalled a driver Qt had never taken (the second); offscreen under a threaded loop the run then crashed.
+  theme-audit, the program that holds the clock, now sets `QSG_RENDER_LOOP=basic` before Qt starts, whatever the
+  environment asks, so the held clock is the one driver installed, once a hold, and let go once. The harness itself sets no
+  render loop: its other users (the program's Vulkan acceptance test) run on Qt's choice. Held to by theme-audit's
+  `qt_3_7_a_held_clock_logs_nothing_where_the_environment_asks_for_a_threaded_render_loop`, the splash fixture's three
+  timed states under `QSG_RENDER_LOOP=threaded`: their findings alone, no warning line and nothing on standard error. Seeded,
+  the setting taken out failed it on both lines.
 - **`Scene::key_hold(key, down)`**, `QTest::keyPress` or `keyRelease` alone: a press held, as a theme's pressed look reads it
   (`Keys.onPressed` without the release).
 - **`covers::draw`**, moved from the program's tests (`qt-app/tests/common`), which re-export it: covers drawn by one Qt Quick

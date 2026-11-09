@@ -61,6 +61,8 @@ fn main() {
         return;
     }
     let options = options(&args);
+    // The held clock replaces Qt's animation driver, which a threaded render loop installs as its own (EmuSen_Kit.md §7.36).
+    std::env::set_var("QSG_RENDER_LOOP", "basic");
     // On the GPU, Vulkan in a compositor of the run's own, its scale 1 whatever the desktop's (man theme-check).
     let compositor = options.as_ref().is_ok_and(|o| o.gpu).then(|| {
         std::env::set_var("QT_QUICK_BACKEND", "rhi");

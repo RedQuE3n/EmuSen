@@ -259,6 +259,21 @@ fn qt_3_7_a_splash_is_held_at_1_3_and_5_s_and_judged_at_each() {
 }
 
 #[test]
+fn qt_3_7_a_held_clock_logs_nothing_where_the_environment_asks_for_a_threaded_render_loop() {
+    let out = Command::new(PROGRAM)
+        .env("QSG_RENDER_LOOP", "threaded")
+        .arg("--states")
+        .arg("splash-1s,splash-3s,splash-5s")
+        .arg(themes().join("state-splash"))
+        .output()
+        .expect("theme-audit runs");
+    let (stdout, stderr) = (String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    assert_eq!(out.status.code(), Some(1), "{stdout}{stderr}");
+    assert!(stdout.lines().all(|l| l.contains("state-splash/screens/Splash.qml:1 fit ") && l.contains(", splash-3s: ")), "the held states' findings alone, no warning: {stdout}");
+    assert!(!stderr.contains("QUnifiedTimer") && !stderr.contains("driver"), "the held clock installed and uninstalled once a hold, quietly: {stderr}");
+}
+
+#[test]
 fn qt_3_7_a_declined_place_drawn_apart_is_exempt_and_a_dim_offered_one_is_not() {
     let (out, status) = audit_states("state-declined", "default,disabled", None);
     assert_eq!(status, 1, "{out}");

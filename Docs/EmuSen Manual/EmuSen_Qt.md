@@ -1035,7 +1035,10 @@ recordings at 1280 × 800 and 1920 × 1200, dark and light, within two units. Si
 `~/.cache/emusen/tmp/qt-s3/compare/orrery/`. Three faults were seeded and caught, each reverted: a light accent of
 #E0A070 (the static step's contrast, 2.23:1); the motes resting on battery and under reduced motion (the stillness rule, 125 frames swapped in 2 s); Right
 along the wheel walking Left (the 120 consoles' sweep heard 2). Not proved offscreen: the splash at 1, 3 and 5 s (the audit records its finished
-frame only), the bells, which no striker rings yet, and the canvases' catalogues beyond the audit's own crowd.
+frame only) and the bells, which no striker rings yet. Of the canvases' catalogues, `one-console`, `empty`, `long`,
+`eleven` and `n30` read clean; `n120` and `maker40` were not run to the end, the audit's own crowd (120 consoles, 40
+under one maker) passing in their place. The dial's edges fade through the kit's `EdgeFade`: faded by opacity, a stop's
+name at the edge read 2.08:1 in `n30`.
 
 ### 3.5 Loading and the sandbox
 

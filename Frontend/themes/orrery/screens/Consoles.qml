@@ -487,7 +487,6 @@ ThemeScreen {
                                 y: 8
                                 width: 136
                                 height: 76
-                                opacity: layout.scrolls ? Math.max(0, Math.min(1, Math.min(shelf.centre - dial.contentX + 22, dial.width - shelf.centre + dial.contentX + 22) / 40)) : 1
                                 onActivated: Actions.openPlace(shelf.key)
                                 onActiveFocusChanged: if (shelf.activeFocus) root.focused = shelf
                                 Rectangle {
@@ -566,7 +565,6 @@ ThemeScreen {
                                 y: 8
                                 width: 136
                                 height: 76
-                                opacity: layout.scrolls ? Math.max(0, Math.min(1, Math.min(stop.centre - dial.contentX + 22, dial.width - stop.centre + dial.contentX + 22) / 40)) : 1
                                 onActivated: if (stop.upItem) stop.upItem.forceActiveFocus()
                                 onActiveFocusChanged: if (stop.activeFocus) root.focused = stop
                                 DialWheel {
@@ -618,6 +616,14 @@ ThemeScreen {
                                 }
                             }
                         }
+                    }
+                    // The dial's edges fade 40 into the sky where it runs on past them.
+                    EdgeFade {
+                        source: dial
+                        fadeLeft: dial.fadeLeft
+                        fadeRight: dial.fadeRight
+                        length: 40
+                        backdrop: root.light ? "#F0E6D4" : "#10163A"
                     }
                     Track {
                         objectName: "dialTrack"

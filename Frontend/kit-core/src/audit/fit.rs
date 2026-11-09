@@ -112,10 +112,11 @@ fn words(item: &Item, ancestors: &[&Item], slack: f64, smallest: f64, faults: &m
     if text.ellipsis && !text.data {
         faults.push(Fault::Ellipsis { item: item.id });
     }
-    if text.width > item.rect.w + slack {
+    let (own_w, own_h) = text.own.unwrap_or((item.rect.w, item.rect.h));
+    if text.width > own_w + slack {
         faults.push(Fault::RunsPastItsBox { item: item.id });
     }
-    if text.height > item.rect.h + slack {
+    if text.height > own_h + slack {
         faults.push(Fault::CutAtFoot { item: item.id });
     }
     let excepted = SMALL_TEXT_EXCEPTIONS.iter().any(|(name, _)| item.name == *name);

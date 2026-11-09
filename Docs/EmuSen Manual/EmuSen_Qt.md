@@ -965,6 +965,22 @@ section's cover shape, and as many rows show as end above 580. The splash places
 5. Continue's mark in the rail is `Marks.crescent`; an unknown maker's heading is a rule with no words.
 6. The day moon is drawn at 25%, not 50%: at 50% it reads as a disc over the heads at the right edge.
 7. A shelf's band shows its own first three covers (`firstOf`), not the three most recent across consoles.
+8. Two kit defects show in the software recordings and are queued for the kit (2026-11-08): a Shape inside a clipping
+   Flickable is painted past the clip on the software backend (a rail row cut by the edge shows its world above the rail),
+   and CoverTile's generated card writes its title in `TextStrong`, near-black on the card in the light variant. The rail's
+   fade is a layer effect, kept off on the software backend, where it draws nothing.
+
+**Proof, measured 2026-11-08** (offscreen, the software backend). `theme-check` reads the package `ok` in both steps: the
+three screens and the splash at the five sizes in dark and light, Choose a console over the audit's 120 consoles, and over
+the canvases' catalogues `one-console`, `empty`, `long`, `eleven` and `n30` (`maker40` and `n120` not yet run to the end:
+the audit's own crowd, 120 consoles with 40 under one maker, passes in their place). The three
+`Testing/themes/meridian-*.mockup.spec`, written by hand from the spec's tables and the canvases, hold the recordings at
+1280 × 800 and 1920 × 1200 within two units. Side-by-sides with the spec's renders are kept in
+`~/.cache/emusen/tmp/qt-s3/compare/meridian/`. Three faults were seeded and caught, each reverted: a light accent of
+#5FD0B5 (the static step's contrast, 1.88:1); consoles placed by `groupIndex` alone (the sweep over `eleven` heard none of
+its consoles); Down no longer stepping the rail (the sweep over `one-console` missed its console). Not proved offscreen:
+the splash at 1, 3 and 5 s (the audit records its finished frame only), the grid's rows for a tall and a square console
+(the synthetic library's consoles are all wide), and the bells, which no striker rings yet.
 
 ### 3.5 Loading and the sandbox
 

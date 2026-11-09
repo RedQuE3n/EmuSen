@@ -214,6 +214,14 @@ pub unsafe extern "C" fn emusen_cheats_prune_plan(db: *const Database, request_d
 /// As `emusen_cheats_parse`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_cheats_prune_apply(request_data: *const u8, request_len: usize, out: *mut u8, len: usize) -> i64 {
+    thread_local! {
+        static WAITING: crate::reply::Waiting = const { std::cell::RefCell::new(None) };
+    }
+    let key = match unsafe { crate::reply::text(request_data, request_len, |s, w| fail(s, w)) } {
+        Ok(k) => k,
+        Err(s) => return s as i64,
+    };
+    // Done once: the length query applies the plan and the fill takes its answer - see EmuSen_RustPlatform.md §47.25.
     let run = || -> Result<String, i32> {
         let r = request(request_data, request_len)?;
         let Some(Value::Array(items)) = r.get("removing") else { return Err(fail(status::PARSE, "the request has no removing")) };
@@ -225,5 +233,31 @@ pub unsafe extern "C" fn emusen_cheats_prune_apply(request_data: *const u8, requ
         let (removed, failed) = prune::apply(&db, &removing);
         Ok(compact(&object(vec![("removed", Value::from(removed)), ("failed", Value::Array(failed.into_iter().map(|s| Value::String(String::from(s))).collect()))])))
     };
-    answer(run(), out, len)
+    unsafe { crate::reply::answer(&WAITING, 0, key, out, len, run, |s| s) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The length query applies the plan and the fill takes that answer, so each folder is removed once and said removed (EmuSen_RustPlatform.md §47.25).
+    #[test]
+    fn a_prune_applied_by_length_then_fill_removes_once_and_says_so() {
+        let dir = std::env::temp_dir().join(format!("emusen-platform-prune-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for system in ["Keep", "Drop"] {
+            std::fs::create_dir_all(dir.join(system)).unwrap();
+            std::fs::write(dir.join(system).join("a.cht"), b"cheats = 0").unwrap();
+        }
+        let drop = dir.join("Drop").to_string_lossy().into_owned();
+        let request = serde_json::json!({ "directory": dir.to_string_lossy(), "removing": [{ "system": "Drop", "path": drop }] }).to_string();
+        let call = |out: *mut u8, len: usize| unsafe { emusen_cheats_prune_apply(request.as_ptr(), request.len(), out, len) };
+        let length = call(std::ptr::null_mut(), 0);
+        assert!(length > 0);
+        let mut out = vec![0u8; length as usize];
+        assert_eq!(call(out.as_mut_ptr(), out.len()), length);
+        assert_eq!(String::from_utf8(out).unwrap(), r#"{"removed":1,"failed":[]}"#);
+        assert!(!dir.join("Drop").exists() && dir.join("Keep/a.cht").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }

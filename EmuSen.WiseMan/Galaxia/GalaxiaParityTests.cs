@@ -385,8 +385,11 @@ namespace EmuSen.WiseMan.Galaxia
             string header = File.ReadAllText(Path.Combine(Repo, "Platform", "include", "emusen_platform.h"));
             foreach (string export in GalaxiaNative.Exports) Assert.Contains(export + "(", header);
             Assert.Contains("emusen_platform_abi_version(", header);
+            // Interface 45's settings rows serve the Qt front end, which the C# half never calls (EmuSen_RustPlatform.md §52).
+            string[] frontEndOnly = { "emusen_galaxia_settings_rows" };
+            foreach (string export in frontEndOnly) Assert.Contains(export + "(", header);
             int declared = System.Text.RegularExpressions.Regex.Matches(header, @"^\w+ \*?emusen_(galaxia|platform)_\w+\(", System.Text.RegularExpressions.RegexOptions.Multiline).Count;
-            Assert.Equal(GalaxiaNative.Exports.Length + 1, declared);
+            Assert.Equal(GalaxiaNative.Exports.Length + 1 + frontEndOnly.Length, declared);
             Assert.Contains($"#define EMUSEN_PLATFORM_ABI_VERSION {PlatformLibrary.InterfaceVersion}u", header);
         }
     }

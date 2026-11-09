@@ -28,6 +28,7 @@ pub mod package_zip;
 pub mod rom_hash;
 pub mod saves;
 pub mod setting_folders;
+pub mod settings_rows;
 pub mod stores;
 pub mod text_file;
 pub mod tree;

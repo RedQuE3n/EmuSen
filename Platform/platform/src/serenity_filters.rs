@@ -139,7 +139,7 @@ fn filter_json(f: &Filter) -> Value {
     ])
 }
 
-/// The catalog: `{"filters": [...], "screens": [...], "owed": [...], "televisions": [...], "reduce": the reducing pass's GLSL}`; see the header.
+/// The catalog: `{"filters": [...], "screens": [...], "owed": [...], "televisions": [...], "crop": {...}, "reduce": the reducing pass's GLSL}`; see the header.
 ///
 /// # Safety
 /// `out` valid for `cap` bytes, or null.
@@ -163,6 +163,7 @@ pub unsafe extern "C" fn emusen_serenity_filters(out: *mut u8, cap: usize) -> i6
         ("screens", Value::Array(screens)),
         ("owed", Value::Array(owed)),
         ("televisions", Value::Array(screens::televisions().into_iter().map(|s| Value::String(String::from(s))).collect())),
+        ("crop", object(vec![("television", Value::from(screens::TELEVISION_OVERSCAN.to_bits())), ("most_at_an_edge", Value::from(screens::MOST_AT_AN_EDGE.to_bits()))])),
         ("reduce", Value::String(String::from(glsl::REDUCE))),
     ]);
     unsafe { out_json(&document, out, cap) }
@@ -314,6 +315,8 @@ mod tests {
             let described = described(doc).unwrap();
             assert_eq!((described.passes.len(), described.settings.len(), described.rows_once), (filter.passes.len(), filter.settings.len(), filter.rows_once), "{}", filter.key);
         }
+        let bits = |k: &str| catalog["crop"][k].as_u64().map(f64::from_bits);
+        assert_eq!((bits("television"), bits("most_at_an_edge")), (Some(0.07), Some(0.25)), "the crop's limits, as PictureCrop's");
 
         let root = std::env::temp_dir().join(format!("emusen-filters-{}", std::process::id())).to_string_lossy().into_owned();
         let crt = br#"{"key":"CRT"}"#;

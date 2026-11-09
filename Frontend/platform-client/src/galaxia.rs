@@ -1,5 +1,5 @@
 //! Galaxia through the platform library: where the tree's directories and Galaxia's files are, a config file's path,
-//! and the config models (the player's settings) as the documents Galaxia binds. A model crosses as JSON and stays
+//! the config models (the player's settings) as the documents Galaxia binds, the saved cheat lists' names, and the front end's own settings rows. A model crosses as JSON and stays
 //! Galaxia's: its fields are not restated here, so a model has one owner.
 
 use crate::error::Result;
@@ -74,6 +74,35 @@ impl Platform {
         let document = to_json(document);
         let n = unsafe { self.lib.emusen_galaxia_model_save(model, c, cl, file.as_ptr(), file.len(), document.as_ptr(), document.len()) };
         self.status(n.into()).map(drop)
+    }
+
+    /// The saved cheat lists by name, in the order Galaxia lists them.
+    pub fn cheat_names(&self) -> Result<Vec<String>> {
+        let bytes = self.read(|o, l| unsafe { self.lib.emusen_galaxia_cheat_names(o, l) })?.unwrap_or_default();
+        Ok(bytes.split(|b| *b == 0).filter(|n| !n.is_empty()).map(|n| String::from_utf8_lossy(n).into_owned()).collect())
+    }
+
+    /// Whether a cheat list may have this name; it is checked, never rewritten.
+    pub fn cheat_name_valid(&self, name: &str) -> Result<bool> {
+        self.status(unsafe { self.lib.emusen_galaxia_cheat_name_valid(name.as_ptr(), name.len()) }.into()).map(|n| n == 1)
+    }
+
+    /// A game's own cheat list as a front end keeps it: its name and its category, the file `<name>.json` there; none
+    /// for a path with no usable name.
+    pub fn cheat_game_list(&self, console: Option<&str>, rom_path: &str) -> Result<Option<(String, String)>> {
+        let (c, cl) = text(console);
+        let bytes = self.read(|o, l| unsafe { self.lib.emusen_galaxia_cheat_game_list(c, cl, rom_path.as_ptr(), rom_path.len(), o, l) })?;
+        Ok(bytes.map(|b| {
+            let mut parts = b.split(|b| *b == 0).map(|p| String::from_utf8_lossy(p).into_owned());
+            (parts.next().unwrap_or_default(), parts.next().unwrap_or_default())
+        }))
+    }
+
+    /// The front end's own settings rows (since 45): `{"AppSettings": [...], "GraphicsConfig": [...],
+    /// "GraphicsConfig.Consoles": [...]}`, each row in the settings schema's shape, the rows Galaxia's to describe.
+    pub fn settings_rows(&self) -> Result<Value> {
+        let bytes = self.read(|o, l| unsafe { self.lib.emusen_galaxia_settings_rows(o, l) })?.unwrap_or_default();
+        json("settings_rows", &bytes)
     }
 
     /// A new instance of a model, every field at its initial value.

@@ -1,0 +1,5 @@
+#!/bin/bash
+# The handheld's own KWin, run with its own Qt: the bundled Qt's libraries (box.sh's QT_BUNDLE_LIBS) are for the programs
+# built against them, so they are taken off the library path before KWin starts. See ../README.md.
+unset LD_LIBRARY_PATH
+exec /usr/bin/kwin_wayland "$@"

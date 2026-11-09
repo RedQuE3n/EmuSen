@@ -29,6 +29,13 @@ emusen-qt-play = { path = "../qt-play" }
 emusen-theme-host = { path = "../theme-host" }
 # The settings read before the window opens (Moonrise on or off), through the platform library.
 emusen-platform-client = { path = "../platform-client" }
+# The gates' in-process pad (gate_pad.rs), absent from every build without the feature (EmuSen_Qt.md §9.3.6).
+emusen-qt-test = { workspace = true, optional = true }
+emusen-kit-core = { workspace = true, optional = true }
+
+[features]
+# Off by default and never in a player's build: the pad the start-up gates press, fed from a FIFO.
+gate-pad = ["dep:emusen-qt-test", "dep:emusen-kit-core"]
 
 [dev-dependencies]
 emusen-crystal-client = { path = "../crystal-client" }

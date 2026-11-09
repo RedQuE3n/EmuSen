@@ -1,6 +1,6 @@
 #!/usr/bin/python3 -I
 """The memory of a program started by run.sh, sampled every 0.5 s: the process named <comm> at or below <pid> (a wrapper
-such as bwrap may stand between), one line each: wall-clock time, VmRSS and RssAnon in KiB. See README.md.
+such as bwrap may stand between, or env may have become it), one line each: wall-clock time, VmRSS and RssAnon in KiB. See README.md.
 
 Usage: rss.py <out.tsv> <pid> <comm>
 """
@@ -24,6 +24,11 @@ def children():
 
 
 def find():
+    try:
+        if open(f"/proc/{root}/comm").read().strip() == comm:
+            return root
+    except OSError:
+        pass
     table, todo = children(), [root]
     while todo:
         pid = todo.pop()

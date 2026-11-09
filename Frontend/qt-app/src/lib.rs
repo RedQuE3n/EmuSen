@@ -8,6 +8,8 @@ extern crate emusen_qt_models;
 extern crate emusen_qt_play;
 extern crate emusen_theme_host;
 
+#[cfg(feature = "gate-pad")]
+pub mod gate_pad;
 pub mod start;
 
 /// Where the program's window lives in the resource system.

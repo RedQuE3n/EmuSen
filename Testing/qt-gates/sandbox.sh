@@ -18,7 +18,9 @@ roms=${ROMS:-/home/red/Documents/Roms}
 mkdir -p "$root/lib" "$root/home/etc/EmuSen" "$root/hh/config" "$root/hh/data" "$root/hh/cache"
 cp -a --reflink=auto "$tree/lib/EmuSen" "$root/lib/EmuSen"
 cp -a "$tree/.dianashroot" "$root/.dianashroot"
-cp -a --reflink=auto "$bins/emusen-qt" "$bins/emusen-qt-play" "$root/lib/EmuSen/"
+cp -a --reflink=auto "$bins/emusen-qt" "$root/lib/EmuSen/"
+[ -e "$bins/emusen-qt-play" ] && cp -a --reflink=auto "$bins/emusen-qt-play" "$root/lib/EmuSen/"
+[ -e "$bins/qt.conf" ] && cp -a "$bins/qt.conf" "$root/lib/EmuSen/"  # the handheld's bundled Qt (../handheld/README.md)
 cat > "$root/home/etc/EmuSen/appsettings.json" <<EOF
 {
   "RomDirectory": "$roms/",

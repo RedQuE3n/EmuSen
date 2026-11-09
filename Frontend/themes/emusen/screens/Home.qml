@@ -397,7 +397,8 @@ ThemeScreen {
                                 }
                                 Text {
                                     objectName: "placeStatus." + place.index
-                                    width: place.width - 24 - (place.attention ? 24 : 0)
+                                    // To 4 units short of the tile's edge, so the longest fixed line, "Game packages", is whole (EmuSen_Qt.md §3.4.1).
+                                    width: place.width - 16 - (place.attention ? 24 : 0)
                                     text: place.line
                                     elide: Text.ElideRight
                                     color: place.attention ? Tokens.attention : Tokens.muted

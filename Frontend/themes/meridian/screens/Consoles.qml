@@ -140,181 +140,179 @@ ThemeScreen {
                         width: 280
                         height: 630
                     }
-                    Flickable {
-                        id: rail
-                        objectName: "railList"
+                    EdgeFade {
                         x: 64
                         y: 112
                         width: 280
                         height: 598
-                        clip: true
-                        contentWidth: 280
-                        boundsBehavior: Flickable.StopAtBounds
-                        contentHeight: list.childrenRect.height
-                        property bool fadeTop: rail.contentY > 0.5
-                        property bool fadeBottom: rail.contentY + rail.height < rail.contentHeight - 0.5
-                        // The software backend draws no layer effect, so there the rows are cut where the GPU fades them.
-                        layer.enabled: (rail.fadeTop || rail.fadeBottom) && GraphicsInfo.api !== GraphicsInfo.Software
-                        layer.effect: MultiEffect {
-                            maskEnabled: true
-                            maskSource: fade
-                            maskSpreadAtMin: 1
-                            maskThresholdMin: 0
-                        }
-                        Behavior on contentY {
-                            NumberAnimation {
-                                duration: Tokens.reel
-                                easing.type: Tokens.reelCurve
-                            }
-                        }
-                        Item {
-                            id: list
-                            objectName: "railContent"
-                            width: 280
-                            Keys.onUpPressed: root.railRank = Math.max(0, root.railRank - 1)
-                            Keys.onDownPressed: root.railRank = Math.min(root.lastRank, root.railRank + 1)
-                            Keys.onRightPressed: (event) => event.accepted = true
-                            Keys.onPressed: (event) => {
-                                if (event.key === Qt.Key_PageDown && root.focused) {
-                                    root.railRank = root.focused.isConsole ? Math.min(root.lastRank, 3 + root.focused.groupStart + root.focused.groupSize) : Math.min(root.lastRank, 3)
-                                    event.accepted = true
-                                } else if (event.key === Qt.Key_PageUp && root.focused && root.focused.isConsole && root.focused.groupStart > 0) {
-                                    root.toGroupHead = true
-                                    root.railRank = 3 + root.focused.groupStart - 1
-                                    event.accepted = true
+                        fadeTop: rail.fadeTop
+                        fadeBottom: rail.fadeBottom
+                        length: 24
+                        Flickable {
+                            id: rail
+                            objectName: "railList"
+                            anchors.fill: parent
+                            clip: true
+                            contentWidth: 280
+                            boundsBehavior: Flickable.StopAtBounds
+                            contentHeight: list.childrenRect.height
+                            property bool fadeTop: rail.contentY > 0.5
+                            property bool fadeBottom: rail.contentY + rail.height < rail.contentHeight - 0.5
+                            Behavior on contentY {
+                                NumberAnimation {
+                                    duration: Tokens.reel
+                                    easing.type: Tokens.reelCurve
                                 }
                             }
-                            Repeater {
-                                id: shelfEntries
-                                model: Library.shelves
-                                Entry {
-                                    id: shelf
-                                    required property int index
-                                    required key
-                                    required name
-                                    required line
-                                    required count
-                                    objectName: "entry.shelf." + shelf.index
-                                    rank: shelf.index
-                                    focus: Browse.section.length > 0 ? shelf.key === Browse.section : shelf.index === 0
-                                    x: 8
-                                    y: shelf.index * 54
-                                    spanTop: shelf.y
-                                    mark: Marks.path(shelf.key)
-                                    onActivated: Actions.openPlace(shelf.key)
-                                }
-                            }
-                            Repeater {
-                                id: consoleEntries
-                                model: Library.consoles
-                                Entry {
-                                    id: consoleEntry
-                                    required key
-                                    required name
-                                    required hue
-                                    required property string displayName
-                                    required property string maker
-                                    required property int year
-                                    required count
-                                    required property string body
-                                    required property string engineKind
-                                    required property int group
-                                    required engineName
-                                    required engineMark
-                                    required libretro
-                                    required groupStart
-                                    required groupIndex
-                                    required groupSize
-                                    readonly property int place: consoleEntry.groupStart + consoleEntry.groupIndex
-                                    objectName: "entry.console." + consoleEntry.place
-                                    isConsole: true
-                                    rank: 3 + consoleEntry.place
-                                    focus: consoleEntry.key === Browse.section
-                                    x: 8
-                                    y: 162 + (consoleEntry.group + 1) * 40 + consoleEntry.place * 54
-                                    spanTop: consoleEntry.groupIndex === 0 ? consoleEntry.y - 40 : consoleEntry.y
-                                    world: consoleEntry.body
-                                    line: Words.games(consoleEntry.count)
-                                    fullName: consoleEntry.displayName
-                                    facts: Words.facts(consoleEntry.maker, consoleEntry.year, consoleEntry.count, Words.runsOn(consoleEntry.engineName, consoleEntry.engineKind))
-                                    onChosenChanged: if (consoleEntry.chosen && root.toGroupHead) {
-                                        root.toGroupHead = false
-                                        root.railRank = 3 + consoleEntry.groupStart
+                            Item {
+                                id: list
+                                objectName: "railContent"
+                                width: 280
+                                Keys.onUpPressed: root.railRank = Math.max(0, root.railRank - 1)
+                                Keys.onDownPressed: root.railRank = Math.min(root.lastRank, root.railRank + 1)
+                                Keys.onRightPressed: (event) => event.accepted = true
+                                Keys.onPressed: (event) => {
+                                    if (event.key === Qt.Key_PageDown && root.focused) {
+                                        root.railRank = root.focused.isConsole ? Math.min(root.lastRank, 3 + root.focused.groupStart + root.focused.groupSize) : Math.min(root.lastRank, 3)
+                                        event.accepted = true
+                                    } else if (event.key === Qt.Key_PageUp && root.focused && root.focused.isConsole && root.focused.groupStart > 0) {
+                                        root.toGroupHead = true
+                                        root.railRank = 3 + root.focused.groupStart - 1
+                                        event.accepted = true
                                     }
-                                    onActivated: Actions.openConsole(consoleEntry.key)
                                 }
-                            }
-                            // Each maker's heading, before its first console: the maker upper letter-spaced with the group's size, a rule at its foot.
-                            Repeater {
-                                model: Library.consoles
-                                Item {
-                                    id: heading
-                                    required property string maker
-                                    required property int group
-                                    required property int groupIndex
-                                    required property int groupStart
-                                    required property int groupSize
-                                    objectName: "heading." + heading.group
-                                    visible: heading.groupIndex === 0 && heading.y + 40 > rail.contentY && heading.y < rail.contentY + rail.height
-                                    x: 0
-                                    y: 162 + heading.group * 40 + heading.groupStart * 54
-                                    width: 280
-                                    height: 40
-                                    // Drawn for a group's first console alone, so the other rows make no words.
-                                    Loader {
-                                        active: heading.groupIndex === 0
-                                        sourceComponent: Component {
-                                            Item {
-                                                width: 280
-                                                height: 40
-                                                Row {
-                                                    x: 16
-                                                    y: 12
-                                                    spacing: 6
-                                                    visible: heading.maker.length > 0
-                                                    Text {
-                                                        objectName: "headingMaker." + heading.group
-                                                        width: Math.min(implicitWidth, 232 - headingCount.implicitWidth - 2 * 6 - headingBetween.implicitWidth)
-                                                        text: heading.maker
-                                                        elide: Text.ElideRight
-                                                        color: Tokens.muted
-                                                        font.family: faces.condensed
-                                                        font.weight: Font.Medium
-                                                        font.pixelSize: 19
-                                                        font.letterSpacing: 2
-                                                        font.capitalization: Font.AllUppercase
-                                                        lineHeight: 22.8
-                                                        lineHeightMode: Text.FixedHeight
+                                Repeater {
+                                    id: shelfEntries
+                                    model: Library.shelves
+                                    Entry {
+                                        id: shelf
+                                        required property int index
+                                        required key
+                                        required name
+                                        required line
+                                        required count
+                                        objectName: "entry.shelf." + shelf.index
+                                        rank: shelf.index
+                                        focus: Browse.section.length > 0 ? shelf.key === Browse.section : shelf.index === 0
+                                        x: 8
+                                        y: shelf.index * 54
+                                        spanTop: shelf.y
+                                        mark: Marks.path(shelf.key)
+                                        onActivated: Actions.openPlace(shelf.key)
+                                    }
+                                }
+                                Repeater {
+                                    id: consoleEntries
+                                    model: Library.consoles
+                                    Entry {
+                                        id: consoleEntry
+                                        required key
+                                        required name
+                                        required hue
+                                        required property string displayName
+                                        required property string maker
+                                        required property int year
+                                        required count
+                                        required property string body
+                                        required property string engineKind
+                                        required property int group
+                                        required engineName
+                                        required engineMark
+                                        required libretro
+                                        required groupStart
+                                        required groupIndex
+                                        required groupSize
+                                        readonly property int place: consoleEntry.groupStart + consoleEntry.groupIndex
+                                        objectName: "entry.console." + consoleEntry.place
+                                        isConsole: true
+                                        rank: 3 + consoleEntry.place
+                                        focus: consoleEntry.key === Browse.section
+                                        x: 8
+                                        y: 162 + (consoleEntry.group + 1) * 40 + consoleEntry.place * 54
+                                        spanTop: consoleEntry.groupIndex === 0 ? consoleEntry.y - 40 : consoleEntry.y
+                                        world: consoleEntry.body
+                                        line: Words.games(consoleEntry.count)
+                                        fullName: consoleEntry.displayName
+                                        facts: Words.facts(consoleEntry.maker, consoleEntry.year, consoleEntry.count, Words.runsOn(consoleEntry.engineName, consoleEntry.engineKind))
+                                        onChosenChanged: if (consoleEntry.chosen && root.toGroupHead) {
+                                            root.toGroupHead = false
+                                            root.railRank = 3 + consoleEntry.groupStart
+                                        }
+                                        onActivated: Actions.openConsole(consoleEntry.key)
+                                    }
+                                }
+                                // Each maker's heading, before its first console: the maker upper letter-spaced with the group's size, a rule at its foot.
+                                Repeater {
+                                    model: Library.consoles
+                                    Item {
+                                        id: heading
+                                        required property string maker
+                                        required property int group
+                                        required property int groupIndex
+                                        required property int groupStart
+                                        required property int groupSize
+                                        objectName: "heading." + heading.group
+                                        visible: heading.groupIndex === 0 && heading.y + 40 > rail.contentY && heading.y < rail.contentY + rail.height
+                                        x: 0
+                                        y: 162 + heading.group * 40 + heading.groupStart * 54
+                                        width: 280
+                                        height: 40
+                                        // Drawn for a group's first console alone, so the other rows make no words.
+                                        Loader {
+                                            active: heading.groupIndex === 0
+                                            sourceComponent: Component {
+                                                Item {
+                                                    width: 280
+                                                    height: 40
+                                                    Row {
+                                                        x: 16
+                                                        y: 12
+                                                        spacing: 6
+                                                        visible: heading.maker.length > 0
+                                                        Text {
+                                                            objectName: "headingMaker." + heading.group
+                                                            width: Math.min(implicitWidth, 232 - headingCount.implicitWidth - 2 * 6 - headingBetween.implicitWidth)
+                                                            text: heading.maker
+                                                            elide: Text.ElideRight
+                                                            color: Tokens.muted
+                                                            font.family: faces.condensed
+                                                            font.weight: Font.Medium
+                                                            font.pixelSize: 19
+                                                            font.letterSpacing: 2
+                                                            font.capitalization: Font.AllUppercase
+                                                            lineHeight: 22.8
+                                                            lineHeightMode: Text.FixedHeight
+                                                        }
+                                                        Text {
+                                                            id: headingBetween
+                                                            text: Words.between
+                                                            color: Tokens.muted
+                                                            font.family: faces.condensed
+                                                            font.weight: Font.Medium
+                                                            font.pixelSize: 19
+                                                            lineHeight: 22.8
+                                                            lineHeightMode: Text.FixedHeight
+                                                        }
+                                                        Text {
+                                                            id: headingCount
+                                                            text: heading.groupSize
+                                                            color: Tokens.muted
+                                                            font.family: faces.condensed
+                                                            font.weight: Font.Medium
+                                                            font.pixelSize: 19
+                                                            font.letterSpacing: 2
+                                                            lineHeight: 22.8
+                                                            lineHeightMode: Text.FixedHeight
+                                                        }
                                                     }
-                                                    Text {
-                                                        id: headingBetween
-                                                        text: Words.between
-                                                        color: Tokens.muted
-                                                        font.family: faces.condensed
-                                                        font.weight: Font.Medium
-                                                        font.pixelSize: 19
-                                                        lineHeight: 22.8
-                                                        lineHeightMode: Text.FixedHeight
+                                                    Rectangle {
+                                                        objectName: "headingRule." + heading.group
+                                                        x: 16
+                                                        y: 39
+                                                        width: 232
+                                                        height: 1
+                                                        color: Tokens.rule
                                                     }
-                                                    Text {
-                                                        id: headingCount
-                                                        text: heading.groupSize
-                                                        color: Tokens.muted
-                                                        font.family: faces.condensed
-                                                        font.weight: Font.Medium
-                                                        font.pixelSize: 19
-                                                        font.letterSpacing: 2
-                                                        lineHeight: 22.8
-                                                        lineHeightMode: Text.FixedHeight
-                                                    }
-                                                }
-                                                Rectangle {
-                                                    objectName: "headingRule." + heading.group
-                                                    x: 16
-                                                    y: 39
-                                                    width: 232
-                                                    height: 1
-                                                    color: Tokens.rule
                                                 }
                                             }
                                         }
@@ -322,15 +320,6 @@ ThemeScreen {
                                 }
                             }
                         }
-                    }
-                    RailFade {
-                        id: fade
-                        x: rail.x
-                        y: rail.y
-                        width: rail.width
-                        height: rail.height
-                        atTop: rail.fadeTop
-                        atBottom: rail.fadeBottom
                     }
                     Track {
                         objectName: "railTrack"

@@ -130,10 +130,13 @@ and the console screens' maker groups are added, each after the members it joins
   labels, the ellipses and a walk by steps (`EmuSen_Kit.md` §7.30). The reference theme's Choose a console needs the
   makers sorted by size and each orbit's window; QML may hold neither a loop nor a list of groups. Additions only, in both
   registries.
-- **`EdgeFade`** (the kit's, by name), the same day: a scroller's faded edges, the backdrop's colour ramped over each
-  faded edge, soft and the same on every backend; the software backend draws no shader effect and so no `MultiEffect`,
-  and `MultiEffect`'s mask cuts sharply on the GPU (`EmuSen_Kit.md` §7.35). Meridian's rail faded through a `MultiEffect` kept off on the software backend,
-  where its rows were cut instead; every theme that fades a scroller needs the same. Additions only, in both registries.
+- **`EdgeFade`** (the kit's, by name), the same day: a scroller's faded edges, every theme's one fade. Meridian's rail
+  faded through a `MultiEffect` kept off on the software backend, where its rows were cut instead; every theme that fades
+  a scroller needs the same. Additions only, in both registries. Changed before release, 2026-11-09: `EdgeFade` holds
+  what it fades (its children, a scroller placed inside it) and fades it to transparency, so what lies behind shows
+  through, a picture included, on the GPU and on the software backend alike (`EmuSen_Kit.md` §7.35); `fadeTop` …
+  `fadeRight` and `length` are as they were. The first form, standing beside a `source` and ramping a `backdrop` colour
+  over it, was a fade to a colour, wrong over a picture, and no theme used it; `source` and `backdrop` are gone.
 - **`CoverTile.drawnScale`** (2026-11-09): the scale a cover is drawn at, the tile's own `scale` unless set by a theme
   that scales an ancestor; the generated card's title keeps its size on the screen under it, so it stays at or above
   the legibility floor (`EmuSen_Kit.md` §7.29). Found by Orrery's far covers, drawn at 0.8.

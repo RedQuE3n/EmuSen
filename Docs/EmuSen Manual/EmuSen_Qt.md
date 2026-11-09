@@ -1047,7 +1047,7 @@ page says ("along and back"), and hears all 120 (man theme-check).
 "Meridian" (`Frontend/themes/meridian/`, resources at `qrc:/emusen/themes/meridian/`) is the design of
 `qt-s3/final/meridian.md`: a glass rail of destinations at the left, the band showing what the focused entry holds. Written
 against `EmuSen.Theme` alone; its parts are one job each: `Backdrop` (the kit's night `Sky`, or the day gradient and moon),
-`Glass`, `RailEntry` (mark or world, name, line, the bar), `RailFade` (the viewport's mask), `Track`, `Chip` (a help kind's
+`Glass`, `RailEntry` (mark or world, name, line, the bar), `Track`, `Chip` (a help kind's
 first entry), `Faces`, `Glyph`, `EngineMark`. The kit's `Frame` carries the help bar and the actions; the rail and the band
 are placed freely, since in the big-screen form `Frame`'s navigation role is a title row across the top.
 
@@ -1071,7 +1071,8 @@ section's cover shape, and as many rows show as end above 580. The splash places
 8. Two kit defects show in the software recordings and are queued for the kit (2026-11-08): a Shape inside a clipping
    Flickable is painted past the clip on the software backend (a rail row cut by the edge shows its world above the rail),
    and CoverTile's generated card writes its title in `TextStrong`, near-black on the card in the light variant. The rail's
-   fade is a layer effect, kept off on the software backend, where it draws nothing.
+   fade was a layer effect, kept off on the software backend, where it drew nothing; since 2026-11-09 the rail fades
+   through the kit's `EdgeFade` on both backends (`EmuSen_Kit.md` §7.35).
 
 **Proof, measured 2026-11-08** (offscreen, the software backend). `theme-check` reads the package `ok` in both steps: the
 three screens and the splash at the five sizes in dark and light, Choose a console over the audit's 120 consoles, and over
@@ -1812,6 +1813,36 @@ metadata is the scraper's `metadata` read (EmuSen_Backend.md §30.3), its edit e
 chosen there and not again here; the plays are games.db's `records`. While the own look is shown the three library
 texts are `[]`, `{}` and `{}` and no game's metadata is read, so the own look's refresh costs what it did.
 
+**A system's full name (2026-11-09).** What an ES-DE theme reads as `${system.fullName}` (`ThemeSystem::variables`),
+a `system` element's default text (`Computed::SystemFullName`) and the words `systemFullname` and `fullname`
+(`scene/words.rs`) is the shelf's `full_name`, which `esde_shelves::read` takes from the systems table's
+`esde_full_name` and never from `display_name`. Its owner is the table (`Platform/systems/data/<id>.json`), and it
+reaches the Frontend through the runtime's existing `systems` call (`crystal-client`'s `SystemRow`): no new surface and
+no new dependency. The names are ES-DE's, from its published user guide, release 3.4.1, section "Supported game
+systems", column *Full name* (`USERGUIDE.md` at the tag `v3.4.1`,
+https://gitlab.com/es-de/emulationstation-de/-/blob/v3.4.1/USERGUIDE.md, read 2026-11-09); ES-DE's source and its
+`es_systems.xml` were not read. Before this the table held the project's short names for three consoles, so Artflix's
+title read SUPER NINTENDO where ES-DE 3.4.1 reads NINTENDO SNES (SUPER NINTENDO):
+
+| System | `esde_system` | `esde_full_name` (ES-DE 3.4.1) | `display_name` (the program's) |
+|---|---|---|---|
+| snes | snes | Nintendo SNES (Super Nintendo) | Super Nintendo |
+| gb | gb | Nintendo Game Boy | Game Boy |
+| gbc | gbc | Nintendo Game Boy Color | Game Boy Color |
+
+The other eleven already read as the guide's table does (Nintendo Entertainment System, Sega Genesis, Sega CD, Sega Mega
+Drive 32X, Sony PlayStation, Nintendo 64, Sega Master System, Sega SG-1000, Sony PlayStation 2, Sega Saturn, Sega
+Dreamcast). Every console the program carries is listed there. **The fallback:** a console the guide does not list
+writes `"esde_full_name": null` in its data file, and `emusen_systems::parse` reads it as the console's `display_name`,
+so the table's JSON, and with it every reader, always carries a name; a written blank, `""` included, is refused. The own
+look and every other screen of the Qt program name a console by `display_name` (`library.rs`) and are unchanged.
+Mistress (C#) reads the same field in its Big Picture: its themed systems, the interface settings' systems, the flatten
+switches and the screensaver's system line now read ES-DE's names too, as ES-DE's own screens do. Proof:
+`emusen-systems`' `every_console_s_es_de_full_name_is_es_de_3_4_1_s` (all fourteen) and
+`a_console_es_de_does_not_list_reads_its_display_name`; `emusen-qt-models`' client test
+`with_a_theme_chosen_the_real_library_s_rows_carry_their_es_de_names` holds `${system.fullName}` for the NES, the SNES
+and the Game Boy, read through the real runtime, to the guide's words.
+
 **`MediaIndex`.** One walk per refresh of each type folder, `<root>/<esde_system>/<folder>/<name>.<ext>`, ES-DE's own
 layout, under the media store and then `EsdeMediaDirectory`, the type folders taken from the scraper's `kinds` table; a
 key keeps the first file found, so the store wins as it does in the scraper's order. A game's cover is then set from
@@ -2153,7 +2184,7 @@ THEMES.md and USERGUIDE.md, settled or named:
 | The list's rows 6–8 px lower than ES-DE's | a row's name takes the face's own line height, not the list's `lineSpacing`, which is the rows' pitch |
 | Artflix's clock missing | ES-DE draws a clock "in the upper left corner" where a theme has none (UG "Display clock"); the loader adds one with THEMES.md's defaults, as it adds the help and the status |
 | Artflix's game count read "12 games available, 6 favorites" | THEMES.md's `gamecount`: "Number of favorites is printed inside brackets", from the shelf's counts: "14 games (7 favorites)" |
-| Artflix's title reads SUPER NINTENDO where ES-DE reads NINTENDO SNES (SUPER NINTENDO) | not accepted as a difference: **owed to H**. The systems table's `esde_full_name` is the project's short name, not ES-DE 3.4.1's full name, a data change in `Platform/systems/data` rather than the painter's |
+| Artflix's title reads SUPER NINTENDO where ES-DE reads NINTENDO SNES (SUPER NINTENDO) | not accepted as a difference: **settled 2026-11-09**. The systems table's `esde_full_name` held the project's short name; it now holds ES-DE 3.4.1's full name from its user guide, a data change in `Platform/systems/data` (§4.6, "A system's full name") |
 | The D-pad pair drawn as two glyphs (left lit, right lit) where ES-DE draws one cross | the kit has no glyph for an axis: **named, open** |
 | No VIEW MEDIA entry in a gamelist | the media viewer is not built; the entry would name a press that does nothing: **named, open** |
 | The help labels wider than ES-DE's | the kit's face where ES-DE uses its own (decided, design §12) |

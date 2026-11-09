@@ -1165,6 +1165,12 @@ consoles (decided 2026-11-08, so a theme survives cores being added: 40 under on
 with every element held to the pointer and the pad's reach measured by a sweep that must hear each console's name on the focus,
 inside the window.
 Anything Qt logs while a screen is shown is a finding. The kinds, the sweep and the library are in `man theme-check`.
+**Data may elide, fixed words may not** (decided 2026-11-08). kit-core's audit `Text` carries `data`, set by
+`Item::mark_data` from what a reader hears; `theme-audit` marks every text that is not one of the program's fixed words
+(`words::is_fixed`), so a title, a console's name or a line built from them may elide as a design's limits say, while a
+fixed word from `Words` that elides is a fault. Unmarked words are held as fixed, so the program's own gate is unchanged
+and a theme has no way to mark its words. Proof: kit-core's `qt_3_7_2_data_may_elide_and_fixed_words_may_not` (the same
+elided words clean as a title, a fault as a fixed word, a fault unmarked) and qt-models' `is_fixed` both ways.
 
 **What it found on the way.** Two defects of the host, each proved and fixed at its source: the engine's empty plugin path, with which
 no theme could place the kit's `Frame` (`QtQuick.Controls`' plugin not found; fixed on WiseMan 62cd4a45a), and Qt's versioned

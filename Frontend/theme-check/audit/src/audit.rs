@@ -19,6 +19,7 @@ use emusen_qt_test::tree::Tree;
 use emusen_qt_test::{Harness, Scene};
 use emusen_theme_manifest::Screen;
 use emusen_qt_models::library::LibraryView;
+use emusen_qt_models::words;
 use emusen_theme_qt::host;
 
 use crate::catalogue::Entry;
@@ -175,7 +176,9 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
         for (w, h) in SIZES {
             scene.resize(w, h);
             scene.wait(150);
-            let tree = scene.tree();
+            let mut tree = scene.tree();
+            // A title or a name may elide; the program's fixed words may not.
+            tree.root.mark_data(&words::is_fixed);
             let focus = scene.focus(&tree).map(ElementId);
             // The crowd's reach is the sweep's; every element on the screen is still held to the pointer.
             let walk = if pass.consoles.is_some() { Vec::new() } else { scene.walk_by(&tree, |s, button| s.key(key_of(button), 0)) };

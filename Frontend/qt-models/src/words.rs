@@ -72,6 +72,19 @@ pub const PLACES: &str = "PLACES";
 pub const CONTINUE_ENTRY: &str = "Continue";
 pub const RECENT_ENTRY: &str = "Recent";
 
+/// Whether `words` are one of the fixed words above or a shelf's name, which a screen must show whole; anything else it shows
+/// (a title, a console's name, a phrase counted or built from them) is data and may elide (EmuSen_Qt.md §3.7.2).
+pub fn is_fixed(words: &str) -> bool {
+    let single = [
+        TITLE, GAMES, CHOOSE_A_CONSOLE, GAMES_PATH, CONTINUE_PLAYING, RECENT, POWER_LINE, BETWEEN, SEARCH, EMUSEN_TAG, LIBRETRO_TAG,
+        FAVOURITES_LINE, NO_GAMES, NO_RECENT, NO_CONSOLES, ADD_FOLDER, PLACES, CONTINUE_ENTRY, RECENT_ENTRY,
+    ];
+    single.contains(&words)
+        || HOME_PLACES.contains(&words)
+        || HOME_TOOL_ABOUT.contains(&words)
+        || crate::library::PLACES.iter().any(|(_, name)| *name == words)
+}
+
 /// A count of games.
 pub fn games(n: usize) -> String {
     counted(n, "game", "games")

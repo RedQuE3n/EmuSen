@@ -339,3 +339,14 @@ fn the_themes_group_and_back_entries_go_where_the_canvases_put_them() {
     assert_eq!((group.0, group.2), (UiButton::PageUp, None), "the shoulders' pair, no action: the theme's walk answers it");
     assert_eq!(action_lines(Screen::Consoles), "favourites Search\nrandom Screensaver\nhome Menu\n", "the declared actions unchanged");
 }
+
+#[test]
+fn qt_3_7_2_fixed_words_are_told_from_data() {
+    use emusen_qt_models::words::{games, is_fixed, CHOOSE_A_CONSOLE, FAVOURITES_LINE};
+    for fixed in [CHOOSE_A_CONSOLE, FAVOURITES_LINE, "Recently played", "Settings", "Art and facts"] {
+        assert!(is_fixed(fixed), "{fixed} is one of the program's fixed words");
+    }
+    for data in ["Aurora Drift", "Super Nintendo", "Last: Aurora Drift", &games(795), ""] {
+        assert!(!is_fixed(data), "{data} is data");
+    }
+}

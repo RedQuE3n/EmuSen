@@ -1363,11 +1363,24 @@ by state beyond what the default already has: Horizon only `many`; Meridian `nog
 no fade at 1422 and the shelf unreached from the first focus), `empty` (Games' empty words over the heading), `many`;
 Constellation `nogame` (RECENT's label over the hero at 3840 × 2160), `many`; Orrery `long` and `nocover` (an orbit's cover
 past the orbit's clip), `disabled` (the help bar's Open over Search at 1920 × 1200), `many` (a generated card's title at 10.5
-capitals at 1280 × 720). Three findings are the rules' rather than the themes': `many`'s reach (every theme, and a plain
-`ListView` of 9,000 rows, lose the focus to the view once the window is resized, so the later sizes are unreached; the
-harness's walk over a view that recreates its delegates, still to be proved), `disabled`'s contrast (a place drawn at 38% as
-the specs ask is held to 4.5:1, which WCAG 2.1 1.4.3 does not ask of an inactive control) and the splash's contrast at 5 s
-(words fading in, read mid-fade). The reference package carries its default's findings into every state.
+capitals at 1280 × 720). Three findings were the rules' rather than the themes', and each was fixed on 2026-11-09 (`EmuSen_Kit.md` §7.11,
+§7.38): the walk lost delegates a view made again, so the plain `ListView` of 9,000 rows was unreached after the first
+size; a declined place drawn at 38% is exempt while it is drawn apart from its offered look; and words mid-fade under a
+held clock are not judged.
+
+**Again on 2026-11-09**, after those fixes and the walkable's A (`EmuSen_Kit.md` §7.37), on WiseMan d8ee3187e, every
+state, offscreen on the software backend. The `disabled` state's contrast is gone from Meridian, Constellation and Orrery,
+whose declined place is drawn apart; the reference package's is not, since its Home draws a declined place as an offered
+one (a finding of its own, "a declined place drawn as if offered"). The splash's contrast at 5 s is gone from every theme.
+Meridian's rail entry shows its pressed bar (6 wide in the `pressed` recordings, 4 otherwise). What stays in `many` is the
+themes': a grid cell (the reference package's, Meridian's and Constellation's `gridCell`, Horizon's strip) focused by
+the walk as the pointer focuses it does not become its view's current item, so the pad moves on from the cell that was
+current; the walk focuses an element as a hover does (`Walkable`'s `HoverHandler`), so a player pointing then pressing
+meets the same. By theme, beyond the default's findings: the reference package `disabled` (above) and `many`; Meridian
+`nogame` (as before) and `many`; Horizon `many`, and Qt's warnings from the kit's `EdgeFade` with no target at placing
+(`TypeError: Cannot read property 'x' of null`, every screen); Constellation `nogame` and `many`; Orrery, its contrast
+measured over the glyphs, `long` and `disabled` (fit, as before), `empty` (contrast 4.15 to 4.18:1) and the 120 consoles'
+maker stops unnamed. The reference package carries its default's findings into every state.
 
 **Not yet.** The reference package (R) has not been through it; a theme's token overrides are not applied to the theme's engine by
 the host yet, so the loaded step judges the kit's own colours; the splash's still frame is judged as every screen is, under reduced

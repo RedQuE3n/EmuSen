@@ -56,7 +56,7 @@ pub fn version_line() -> String {
 pub const EMUSEN_TAG: &str = "EMUSEN";
 pub const LIBRETRO_TAG: &str = "LIBRETRO";
 /// The Favourites place's line.
-pub const FAVOURITES_LINE: &str = "Your hearts, every console";
+pub const FAVOURITES_LINE: &str = "Hearts on every console";
 
 /// The empty states, as the themes' canvases word them: no game at all, nothing played, no console with games, and how
 /// the player adds a folder.

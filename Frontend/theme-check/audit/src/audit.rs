@@ -18,9 +18,11 @@ use emusen_qt_test::spec::{self, Header};
 use emusen_qt_test::tree::Tree;
 use emusen_qt_test::{Harness, Scene};
 use emusen_theme_manifest::Screen;
-use emusen_qt_models::library::LibraryView;
+use emusen_qt_models::library::{Kind, LibraryView};
 use emusen_qt_models::words;
+use emusen_theme_qt::browse::facts_of;
 use emusen_theme_qt::host;
+use emusen_theme_qt::view as theme_view;
 
 use crate::catalogue::Entry;
 use crate::world::Synthetic;
@@ -147,8 +149,15 @@ fn place(scene: &mut Scene<'_>, folder: &str, screen: Screen) -> Result<u64, Str
 }
 
 /// The views fed as the program's host feeds them, the kit's tokens set to the big screen with reduced motion on.
-fn feed(screen: u64, library: &Synthetic, view: &LibraryView, overrides: &[(bool, String, String)]) -> Result<(), String> {
+fn feed(screen: u64, library: &Synthetic, view: &LibraryView, overrides: &[(bool, String, String)], section: Option<&str>) -> Result<(), String> {
     host::library(object(screen)).ok_or("EmuSen.Theme's Library is not in the theme's engine")?.show(view, &library.home_lines);
+    // The Games screen's section as the program's showBrowse gives it: the named one, else the first console's.
+    let first = view.rows.rows().iter().find(|r| r.kind == Some(Kind::Console)).map(|r| r.key.clone());
+    if let Some(key) = section.map(str::to_owned).or(first) {
+        let mut browse = host::browse(object(screen)).ok_or("no Browse")?;
+        browse.as_mut().show_games(theme_view::games_of(view, &key, words::now()));
+        browse.as_mut().show(&facts_of(view, &key, "", 0, (false, false, false), false));
+    }
     host::session(object(screen)).ok_or("no Session")?.show(&library.session);
     host::device(object(screen)).ok_or("no Device")?.show(&library.device);
     let mut kit = tokens(screen).ok_or("the kit's Tokens are not in the theme's engine")?;
@@ -326,7 +335,7 @@ fn panic_words(payload: &(dyn std::any::Any + Send)) -> String {
 
 /// The findings of the package at `folder` (named `shown` in the lines), its screens loaded in turn.
 /// With a catalogue (`man theme-check`, --catalogue), Choose a console alone is placed over it, its states labelled by its name.
-pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(&str, &[Entry])>) -> Result<Vec<String>, String> {
+pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(&str, &[Entry])>, section: Option<&str>) -> Result<Vec<String>, String> {
     let shown = shown.trim_end_matches('/');
     let text = std::fs::read_to_string(folder.join("theme.json")).map_err(|e| format!("{shown}/theme.json: {e}"))?;
     let mut lines = Lines { shown, out: Vec::new(), at: String::new() };
@@ -349,7 +358,7 @@ pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(
         logged();
         let label = format!(", {name}");
         let pass = Pass { variants: &[Variant::Dark, Variant::Light], label: &label, consoles: Some(names) };
-        match place(&mut scene, &real.display().to_string(), screen).and_then(|id| feed(id, &library, view, &package.colour_overrides()).map(|_| id)) {
+        match place(&mut scene, &real.display().to_string(), screen).and_then(|id| feed(id, &library, view, &package.colour_overrides(), section).map(|_| id)) {
             Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
             Ok(id) => lines.guarded(screen, |lines| states(&mut scene, screen, id, &pass, state, lines)),
         }
@@ -365,7 +374,7 @@ pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(
                 continue;
             }
         };
-        if let Err(words) = feed(id, &library, &library.view, &package.colour_overrides()) {
+        if let Err(words) = feed(id, &library, &library.view, &package.colour_overrides(), section) {
             lines.add(screen, "load", &words);
             continue;
         }
@@ -381,7 +390,7 @@ pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(
         if screen == Screen::Consoles {
             // Placed afresh over the crowd, as the program shows Choose a console once the library holds 120 consoles.
             let crowd = Pass { variants: &[Variant::Dark], label: ", 120 consoles", consoles: Some(&library.crowd_names) };
-            match place(&mut scene, &real.display().to_string(), screen).and_then(|id| feed(id, &library, &library.crowd, &package.colour_overrides()).map(|_| id)) {
+            match place(&mut scene, &real.display().to_string(), screen).and_then(|id| feed(id, &library, &library.crowd, &package.colour_overrides(), section).map(|_| id)) {
                 Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
                 Ok(id) => lines.guarded(screen, |lines| states(&mut scene, screen, id, &crowd, state, lines)),
             }

@@ -1,0 +1,122 @@
+# maker40: the canvases' catalogue for the state maker40: 120 consoles, forty under one maker (consoles.html, 2026-11-08), one console a line:
+# maker, name, games, engine, its kind (emusen or libretro), the table's console whose look it takes. Tab-separated; man theme-check.
+Nintendo	Nintendo I	3	Venus	emusen	
+Nintendo	Nintendo II	56	Mars	emusen	
+Nintendo	Nintendo III	109	Hosted III	libretro	
+Nintendo	Nintendo IV	162	Mercury	emusen	
+Nintendo	Nintendo V	215	Diamond	emusen	
+Nintendo	Nintendo VI	268	Hosted VI	libretro	
+Nintendo	Nintendo VII	321	Endou	emusen	
+Nintendo	Nintendo VIII	374	Sapphire	emusen	
+Nintendo	Nintendo IX	427	Hosted IX	libretro	
+Nintendo	Nintendo X	480	Mars	emusen	
+Nintendo	Nintendo XI	533	Moon	emusen	
+Nintendo	Nintendo XII	586	Hosted XII	libretro	
+Nintendo	Nintendo XIII	639	Diamond	emusen	
+Nintendo	Nintendo XIV	692	Nephrite	emusen	
+Nintendo	Nintendo XV	745	Hosted XV	libretro	
+Nintendo	Nintendo XVI	798	Sapphire	emusen	
+Nintendo	Nintendo XVII	851	Venus	emusen	
+Nintendo	Nintendo XVIII	904	Hosted XVIII	libretro	
+Nintendo	Nintendo XIX	957	Moon	emusen	
+Nintendo	Nintendo XX	1010	Mercury	emusen	
+Nintendo	Nintendo XXI	1063	Hosted XXI	libretro	
+Nintendo	Nintendo XXII	1116	Nephrite	emusen	
+Nintendo	Nintendo XXIII	1169	Endou	emusen	
+Nintendo	Nintendo XXIV	22	Hosted XXIV	libretro	
+Nintendo	Nintendo XXV	75	Venus	emusen	
+Nintendo	Nintendo XXVI	128	Mars	emusen	
+Nintendo	Nintendo XXVII	181	Hosted XXVII	libretro	
+Nintendo	Nintendo XXVIII	234	Mercury	emusen	
+Nintendo	Nintendo XXIX	287	Diamond	emusen	
+Nintendo	Nintendo XXX	340	Hosted XXX	libretro	
+Nintendo	Nintendo XXXI	393	Endou	emusen	
+Nintendo	Nintendo XXXII	446	Sapphire	emusen	
+Nintendo	Nintendo XXXIII	499	Hosted XXXIII	libretro	
+Nintendo	Nintendo XXXIV	552	Mars	emusen	
+Nintendo	Nintendo XXXV	605	Moon	emusen	
+Nintendo	Nintendo XXXVI	658	Hosted XXXVI	libretro	
+Nintendo	Nintendo XXXVII	711	Diamond	emusen	
+Nintendo	Nintendo XXXVIII	764	Nephrite	emusen	
+Nintendo	Nintendo XXXIX	817	Hosted XXXIX	libretro	
+Nintendo	Nintendo XXXX	870	Sapphire	emusen	
+Sega	Sega I	134	Mars	emusen	
+Sega	Sega II	187	Hosted II	libretro	
+Sega	Sega III	240	Mercury	emusen	
+Sega	Sega IV	293	Diamond	emusen	
+Sega	Sega V	346	Hosted V	libretro	
+Sega	Sega VI	399	Endou	emusen	
+Sega	Sega VII	452	Sapphire	emusen	
+Sega	Sega VIII	505	Hosted VIII	libretro	
+Sony	Sony I	265	Hosted I	libretro	
+Sony	Sony II	318	Mercury	emusen	
+Sony	Sony III	371	Diamond	emusen	
+Sony	Sony IV	424	Hosted IV	libretro	
+Sony	Sony V	477	Endou	emusen	
+Sony	Sony VI	530	Sapphire	emusen	
+Sony	Sony VII	583	Hosted VII	libretro	
+Sony	Sony VIII	636	Mars	emusen	
+Atari	Atari I	396	Mercury	emusen	
+Atari	Atari II	449	Diamond	emusen	
+Atari	Atari III	502	Hosted III	libretro	
+Atari	Atari IV	555	Endou	emusen	
+Atari	Atari V	608	Sapphire	emusen	
+Atari	Atari VI	661	Hosted VI	libretro	
+Atari	Atari VII	714	Mars	emusen	
+Atari	Atari VIII	767	Moon	emusen	
+NEC	NEC I	527	Diamond	emusen	
+NEC	NEC II	580	Hosted II	libretro	
+NEC	NEC III	633	Endou	emusen	
+NEC	NEC IV	686	Sapphire	emusen	
+NEC	NEC V	739	Hosted V	libretro	
+NEC	NEC VI	792	Mars	emusen	
+NEC	NEC VII	845	Moon	emusen	
+SNK	SNK I	658	Hosted I	libretro	
+SNK	SNK II	711	Endou	emusen	
+SNK	SNK III	764	Sapphire	emusen	
+SNK	SNK IV	817	Hosted IV	libretro	
+SNK	SNK V	870	Mars	emusen	
+SNK	SNK VI	923	Moon	emusen	
+SNK	SNK VII	976	Hosted VII	libretro	
+Bandai	Bandai I	789	Endou	emusen	
+Bandai	Bandai II	842	Sapphire	emusen	
+Bandai	Bandai III	895	Hosted III	libretro	
+Bandai	Bandai IV	948	Mars	emusen	
+Bandai	Bandai V	1001	Moon	emusen	
+Bandai	Bandai VI	1054	Hosted VI	libretro	
+Bandai	Bandai VII	1107	Diamond	emusen	
+Microsoft	Microsoft I	920	Sapphire	emusen	
+Microsoft	Microsoft II	973	Hosted II	libretro	
+Microsoft	Microsoft III	1026	Mars	emusen	
+Microsoft	Microsoft IV	1079	Moon	emusen	
+Microsoft	Microsoft V	1132	Hosted V	libretro	
+Microsoft	Microsoft VI	1185	Diamond	emusen	
+Microsoft	Microsoft VII	38	Nephrite	emusen	
+Commodore	Commodore I	1051	Hosted I	libretro	
+Commodore	Commodore II	1104	Mars	emusen	
+Commodore	Commodore III	1157	Moon	emusen	
+Commodore	Commodore IV	10	Hosted IV	libretro	
+Commodore	Commodore V	63	Diamond	emusen	
+Commodore	Commodore VI	116	Nephrite	emusen	
+Commodore	Commodore VII	169	Hosted VII	libretro	
+Panasonic	Panasonic I	1182	Mars	emusen	
+Panasonic	Panasonic II	35	Moon	emusen	
+Panasonic	Panasonic III	88	Hosted III	libretro	
+Panasonic	Panasonic IV	141	Diamond	emusen	
+Panasonic	Panasonic V	194	Nephrite	emusen	
+Panasonic	Panasonic VI	247	Hosted VI	libretro	
+Panasonic	Panasonic VII	300	Sapphire	emusen	
+Philips	Philips I	113	Moon	emusen	
+Philips	Philips II	166	Hosted II	libretro	
+Philips	Philips III	219	Diamond	emusen	
+Philips	Philips IV	272	Nephrite	emusen	
+Philips	Philips V	325	Hosted V	libretro	
+Philips	Philips VI	378	Sapphire	emusen	
+Philips	Philips VII	431	Venus	emusen	
+Amstrad	Amstrad I	244	Hosted I	libretro	
+Amstrad	Amstrad II	297	Diamond	emusen	
+Amstrad	Amstrad III	350	Nephrite	emusen	
+Amstrad	Amstrad IV	403	Hosted IV	libretro	
+Amstrad	Amstrad V	456	Sapphire	emusen	
+Amstrad	Amstrad VI	509	Venus	emusen	
+Amstrad	Amstrad VII	562	Hosted VII	libretro	

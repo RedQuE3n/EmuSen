@@ -1,0 +1,11 @@
+{
+    "schema": 1,
+    "api": "1.0",
+    "name": "Accent",
+    "author": "The EmuSen project",
+    "licence": "GPL-3.0-or-later",
+    "variants": ["dark"],
+    "fontSizes": [1],
+    "screens": ["home"],
+    "tokens": {"dark": {"accent": "#B4442A"}}
+}

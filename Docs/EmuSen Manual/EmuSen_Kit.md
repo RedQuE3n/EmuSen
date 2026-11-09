@@ -332,6 +332,13 @@ signal is `on_accent_changed`, the same name a property `on_accent` would give i
 exactly that collision on 2026-11-07. Font families are not here: kit-core has no such token (§1.3), and the one owner
 rule says one joins kit-core first (§7.7).
 
+**A theme's colours (2026-11-08).** `Tokens` holds a table of colour overrides, each for one variant, set from Rust
+(`set_overrides`, not a QML property) and consulted before the kit's column whenever the column is computed, so a switch of
+variant takes the theme's colour for that variant. The table belongs to one engine's singleton: the program sets it on a
+theme's engine only, so the program's own engine, which draws every card, keeps the kit's colours (`EmuSen_Qt.md` §3.5.1).
+A token's `Tokens` name is kit-core's `ColourToken::property`, which theme-check reads too; a theme's colour is parsed by
+`Colour::parse`.
+
 ### 7.3 `FrameController`, and the three ways in
 
 One `FrameController` per `Frame`, over one kit-core `Walk`. Its writable properties feed the walk (`form`, `hasDetail`,

@@ -199,6 +199,11 @@ impl qobject::ThemeHost {
         self.sandbox.as_ref().map_or(std::ptr::null_mut(), sandbox_engine)
     }
 
+    /// The package's colour overrides, as `Package::colour_overrides` gives them; none while no package is loaded.
+    pub fn colour_overrides(&self) -> Vec<(bool, String, String)> {
+        self.package.as_ref().map(Package::colour_overrides).unwrap_or_default()
+    }
+
     pub fn provides(&self, role: qobject::Role) -> bool {
         self.package.as_ref().is_some_and(|p| p.screens.contains(&screen(role)))
     }

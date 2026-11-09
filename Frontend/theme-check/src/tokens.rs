@@ -63,29 +63,9 @@ pub fn registry_tokens() -> Vec<(String, TokenType)> {
     tokens
 }
 
-/// The `Tokens` property that carries each colour token; held to the registry both ways by the tests.
+/// The `Tokens` property that carries each colour token, kit-core's name for it; held to the registry both ways by the tests.
 pub fn property_of(token: ColourToken) -> &'static str {
-    use ColourToken::*;
-    match token {
-        Surface => "surface",
-        SurfaceRaised => "surfaceRaised",
-        InputSurface => "inputSurface",
-        Void => "voidFill",
-        Scrim => "scrim",
-        CaptionSurface => "captionSurface",
-        Border => "border",
-        Rule => "rule",
-        Text => "text",
-        TextStrong => "textStrong",
-        Muted => "muted",
-        Accent => "accent",
-        OnAccent => "overAccent",
-        Success => "success",
-        Attention => "attention",
-        Error => "error",
-        OnArt => "overArt",
-        OnArtScrim => "overArtScrim",
-    }
+    token.property()
 }
 
 fn kit_variant(v: Variant) -> KitVariant {
@@ -97,8 +77,7 @@ fn kit_variant(v: Variant) -> KitVariant {
 
 /// `#RRGGBB` or `#AARRGGBB`, the form the kit's tables are written in.
 fn parse_colour(text: &str) -> Option<Colour> {
-    let digits = text.strip_prefix('#')?;
-    ((digits.len() == 6 || digits.len() == 8) && digits.chars().all(|c| c.is_ascii_hexdigit())).then(|| Colour::hex(text))
+    Colour::parse(text)
 }
 
 fn type_words(t: TokenType) -> &'static str {

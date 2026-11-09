@@ -1041,6 +1041,15 @@ Home in place of the reference's and the omitted Choose a console the reference'
 shown, switching twice leaving one engine. The stub themes are plain QtQuick under `theme-host/tests/themes/` until `EmuSen.Theme`
 lands.
 
+**A theme's token overrides (2026-11-08).** `package.rs` keeps `theme.json`'s overrides as the manifest gives them, and
+`Package::colour_overrides` lists the colours (light or dark, the `Tokens` name, the value). The program's `ThemeFeed` sets
+them on the kit's `Tokens` of the theme's engine when it attaches (`emusen_theme_qt::host::set_token_overrides`, the one
+place a name and a value become a kit token and colour), and theme-audit does the same before it judges a screen. No
+override ever reaches the program's engine, which draws the cards: a theme never styles a card (§3.1). Overrides are bounded
+by theme-check's contrast floors before a theme is offered. A number or a switch override is checked by theme-check but not
+yet set on an engine. Proof: `qt-app/tests/theme.rs`, a fixture package overriding the dark accent, whose screen draws
+#B4442A while the program's tokens keep #4C9AE8.
+
 **Not yet.** The `Screen` type and the splash's `length`, `still` and `finished` (T); the Themes tab and the setting that chooses a
 theme (S); a themed Games screen opens no List card until `Actions.openListCard` exists (T, R). What the sandbox does not do is
 §3.5's paragraph above, unchanged: a theme can still spin or allocate.

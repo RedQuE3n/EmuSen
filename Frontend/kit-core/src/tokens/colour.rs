@@ -19,6 +19,12 @@ impl Colour {
         Colour { r, g, b, a }
     }
 
+    /// `#RRGGBB` or `#AARRGGBB` as a theme writes it, or nothing when it is neither.
+    pub fn parse(text: &str) -> Option<Colour> {
+        let digits = text.strip_prefix('#')?;
+        ((digits.len() == 6 || digits.len() == 8) && digits.chars().all(|c| c.is_ascii_hexdigit())).then(|| Colour::hex(text))
+    }
+
     /// Parses `#RRGGBB` or `#AARRGGBB`; a malformed string is a programming error in a token table, so it panics.
     pub const fn hex(text: &str) -> Colour {
         let bytes = text.as_bytes();

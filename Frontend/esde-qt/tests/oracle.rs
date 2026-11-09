@@ -22,25 +22,21 @@ const STATES: [(&str, &str); 2] = [("system", "system"), ("gamelist", "gamelist-
 
 /// Boxes off the C#'s, measured on 2026-11-09 and named in EmuSen_Qt.md §4.8.6: (theme, state, the spec's key), at both
 /// sizes. An entry no longer seen fails, so the list cannot outlive its findings.
-const NAMED_BOXES: [(&str, &str, &str); 18] = [
+const NAMED_BOXES: [(&str, &str, &str); 14] = [
     ("art-book-next-es-de", "system", "clock_clock"),
     ("art-book-next-es-de", "system", "systemstatus_system-status"),
     ("art-book-next-es-de", "system", "helpsystem_help-system-view"),
     ("art-book-next-es-de", "gamelist-1", "systemstatus_system-status"),
     ("art-book-next-es-de", "gamelist-1", "helpsystem_help-gamelist-view"),
-    ("artflix-revisited-es-de", "system", "systemstatus_(default)"),
     ("artflix-revisited-es-de", "system", "helpsystem_help"),
     ("artflix-revisited-es-de", "gamelist-1", "gamelistinfo_gamelistInfo"),
-    ("artflix-revisited-es-de", "gamelist-1", "systemstatus_(default)"),
     ("artflix-revisited-es-de", "gamelist-1", "helpsystem_help"),
     ("caralt-es-de", "system", "image_cover1"),
     ("caralt-es-de", "system", "image_cover2"),
     ("caralt-es-de", "system", "image_cover3"),
     ("caralt-es-de", "system", "helpsystem_help"),
-    ("caralt-es-de", "system", "systemstatus_menustatus"),
     ("caralt-es-de", "gamelist-1", "image_marquee"),
     ("caralt-es-de", "gamelist-1", "helpsystem_help"),
-    ("caralt-es-de", "gamelist-1", "systemstatus_menustatus"),
 ];
 
 /// States whose MAE is above the C# painter's, measured on 2026-11-09 and named in EmuSen_Qt.md §4.8.6: (theme, state,

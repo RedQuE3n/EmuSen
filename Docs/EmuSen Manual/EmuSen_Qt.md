@@ -2278,6 +2278,24 @@ within 0.01 on all twelve grabs); the final figures are the RX 6800's.
      9.10).
    - Seeded fault: the tint dimmed in the scene again; caught as Artflix's system view at 7.37 and 7.31, above the C#'s,
      at both sizes.
+3. **The help bar and the status, every theme**.
+   - *The help's sizes*, measured on the captures: ES-DE's help background is 56 rows high at 1280 × 800 and 85 at
+     1920 × 1200 (Art Book Next's system view, over its art), its paddings 23.3 and 35, so the element is 0.9 of
+     `fontSize` × H high (32.7 and 50), and ES-DE's icon fills it (ink 32 × 32 and 47 × 47). The kit's glyph inks 0.88 of
+     its side (kit-core's circles of radius 0.44 with their pen), so it drew 28 px of ink in a 33 px side. The element's
+     height is now 0.9 of `fontSize` × H, the background grows from it by its paddings, and the glyph's side is that
+     height over 0.88, centred on it (`HelpElement.qml`): the glyphs ink 32–33 and 48–49 px, the background covers rows
+     706–761 and 1058–1142 against ES-DE's 705–761 and 1057–1142. The label's pixel size is rounded, as a text's is.
+   - *What stays apart in the strip*, which the MAE leaves out: where a theme names no font the labels are the kit's
+     face (Art Book Next's OPTIONS 91 px against ES-DE's 79; decided, design §12); with the theme's font CarAlt's labels
+     are 5–9 % narrower than ES-DE's (MENU 20 px against 22, SCREENSAVER 52 against 57), not yet explained; and a pair
+     such as CHOOSE is two kit glyphs where ES-DE draws one left-and-right icon (CarAlt's last entry 1198–1238 against
+     1222–1236), which a kit glyph for the pair would close (EmuSen_Kit.md §7.28; a proposal, not built).
+   - *The status* is drawn per THEMES.md where it has nothing to show: an element at its `pos` and `origin`, 0 × 0, with
+     no background, as ES-DE's captures show nothing there (`paint.rs`, `StatusElement.qml`). It had not been drawn at
+     all, so Artflix's and CarAlt's status boxes (the C#'s 0 × 0 at the same place) clear.
+   - Seeded fault: the empty status not drawn again; caught as `systemstatus_*` not drawn in the eight Artflix and CarAlt
+     states.
 
 ---
 

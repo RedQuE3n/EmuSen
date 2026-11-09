@@ -1,9 +1,9 @@
 # Constellation's Figures canvas, state n120, W 1422.2: compact lines height scrolls, then each node (x y raised line left right up down), then each figure (x y width per)
 chart	1	13	2184	1
 groups	10 10 10 10 10 10 10 10 10 10 10 10
-p0	711.10	120.00	0	0	-	-	-	p1
-p1	611.10	216.00	0	0	-	p2	p0	i3
-p2	811.10	216.00	0	0	p1	-	p0	i5
+p0	711.10	120.00	0	0	-	p2	-	p1
+p1	611.10	216.00	0	0	-	p2	p0	i0
+p2	811.10	216.00	0	0	p1	-	p0	i9
 i0	324.10	332.00	1	1	-	i1	p1	i10
 i1	420.10	364.00	0	1	i0	i2	p1	i11
 i2	516.10	332.00	1	1	i1	i3	p1	i12

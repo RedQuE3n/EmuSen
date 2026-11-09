@@ -51,6 +51,9 @@ pub struct Node {
     pub text: Option<String>,
     #[serde(default)]
     pub elided: bool,
+    /// A turned item's own width and height in the scene's units, unturned.
+    #[serde(default)]
+    pub own: Option<[f64; 2]>,
     #[serde(default)]
     pub tw: f64,
     #[serde(default)]
@@ -165,7 +168,7 @@ fn item(index: u32, node: &Node) -> Item {
         item = item.fading(Edges { top: node.fade_top, bottom: node.fade_bottom, left: node.fade_left, right: node.fade_right });
     }
     if node.text.is_some() {
-        item = item.words(Text { cap_height: node.cap, width: node.tw, height: node.th, ellipsis: node.elided, data: false });
+        item = item.words(Text { cap_height: node.cap, width: node.tw, height: node.th, ellipsis: node.elided, data: false, own: node.own.map(|o| (o[0], o[1])) });
     }
     let heard = if node.heard.is_empty() { node.text.clone().unwrap_or_default() } else { node.heard.clone() };
     if !heard.is_empty() {

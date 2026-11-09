@@ -385,6 +385,24 @@ fn kit_7_10_the_ink_is_composited_and_a_spare_tenth_of_the_backdrop_may_fall_sho
 }
 
 #[test]
+fn kit_7_35_words_crossing_a_faded_edge_are_fading_out_and_not_held_to_contrast() {
+    let faint = Colour::hex("#949494");
+    let white = Colour::hex("#FFFFFF");
+    let strip = |fades: bool, x: f64| {
+        let words = Item::new(3, Kind::Words, Rect::new(x, 300.0, 200.0, 30.0)).legible(Legibility { ink: faint, size: 16.0, bold: false, behind: vec![white] });
+        Item::new(1, Kind::Panel, PANEL).child(
+            Item::new(2, Kind::Scroller, Rect::new(0.0, 200.0, 1280.0, 300.0))
+                .scrolling(Axes { horizontal: true, vertical: false })
+                .fading(Edges { left: fades, right: fades, ..Edges::default() })
+                .child(words),
+        )
+    };
+    assert!(contrast(&strip(true, 1180.0)).is_empty(), "crossing the faded right edge");
+    assert_eq!(contrast(&strip(false, 1180.0)).len(), 1, "crossing an edge that does not fade");
+    assert_eq!(contrast(&strip(true, 600.0)).len(), 1, "inside the strip, held as ever");
+}
+
+#[test]
 fn a_fault_reads_as_one_line() {
     let line = Fault::CutAtEdge { item: id(14), area: id(3), side: Side::Bottom }.to_string();
     assert_eq!(line, "cut at the Bottom edge of 3 with no fade: 14");

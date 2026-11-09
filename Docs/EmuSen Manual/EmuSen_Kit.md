@@ -173,7 +173,7 @@ it). The Qt harness of §8.1 will fill such a tree from `objectName`, `mapToScen
 | No chrome: in the big-screen and card forms no menu bar or status bar is visible | `no_chrome` | §8.1 |
 | Names a reader hears: every operable element has a non-blank one | `named` | InterfaceSpec §4.3 |
 | Palette reach: every painted colour is declared; a theme's scene and everything under it exempt | `palette_reach` | InterfaceSpec §4.4 |
-| Contrast: words drawn over what is behind them reach 4.5:1, or 3:1 for large type (24 px, or 18.66 px bold), over all but a spare tenth of what is behind them (since 2026-11-08, §7.10) | `contrast` | WCAG 2.1, 1.4.3 |
+| Contrast: words drawn over what is behind them reach 4.5:1, or 3:1 for large type (24 px, or 18.66 px bold), over all but a spare tenth of what is behind them (since 2026-11-08, §7.10); words crossing a scroller's faded edge are not held (since 2026-11-09, §7.35) | `contrast` | WCAG 2.1, 1.4.3 |
 
 `check(root, &State)` runs them all for one recorded state: its panel, form, focus, edges, declared colours, slack (a
 pixel, or a pixel and a half at a scale above one) and the capitals' floor.
@@ -1983,7 +1983,7 @@ two turned lines whose boxes cross are not an overlap, and a `StackMember`'s ite
 faults, each reverted: captions allowed under a neighbour (the stack test), stacks not told apart (the stack test),
 turned items measured by their boxes (the turned test).
 
-### 7.34 A body and a glyph cut at a clipping edge on the software backend (2026-11-08)
+### 7.34 A body and a glyph cut at a clipping edge on the software backend (2026-11-08, remade 2026-11-09)
 
 **The defect.** On the software backend a Qt Quick `Shape` is painted past a clipping ancestor, while a `Text` beside it is
 cut (first seen in §7.10, where the carousel was made not to depend on the clip; seen again in Meridian's recordings, a rail
@@ -1993,54 +1993,129 @@ scrolled by 32 and back, sampling every 4 pixels above and below the Flickable. 
 past the edges at 123 of 462 points at rest and 224 scrolled, the glyph at 73 of 396 and 133; the words at none. A row
 wholly outside the Flickable was drawn whole, and a row the scroll had moved was drawn at both places.
 
-**The fix.** On the software backend alone (`GraphicsInfo.api === GraphicsInfo.Software`) each is drawn through a layer,
-an image the software renderer does clip: `PadGlyph` on its own item; `Body` on an item that holds its shapes and reaches
-as far past the box as a ring does, `ceil(0.16 × width)` to each side with a ring and none without (kit-core's ring is
-an ellipse 64 units each side of a planet's centre with a stroke of 2.4, 15.2 past the box of 100; the moons lie inside).
-Three nearer forms were tried on 2026-11-08 and dropped: a layer cut to the box lost the ring; a layer whose
-`sourceRect` is larger than its item is scaled into the item's box, which drew the bodies at half their size; and an item
-reaching half the box past every side broke the gallery's promise that nothing under the carousel rests outside its box.
-A reach of a fraction of a pixel moved the drawing by resampling (38 pixels of 64,000 at 2%), so it is whole.
-The GPU draws no layer and is unchanged. After: no point past either edge in any of the three states; inside the Flickable the grab at rest is the same picture as before, pixel for pixel at 2% (`magick compare`, 0
-of 64,000). The test also holds the ring past the body's box. The grabs before and after, on each backend, are
-`clip-<state>-<backend>.png` written to `EMUSEN_QT_COMPARE`; `EMUSEN_QT_GPU` runs the same test on the GPU, offscreen
-through OpenGL (§7.10). On the RX 6800 that way (2026-11-09) the test passes before the fix and after, the GPU's grabs
-before and after are the same picture, and the software backend's grabs after differ from the GPU's at 0.1% of the
-pixels at 12%, the glyphs' edges.
+**The cause** (found 2026-11-09). A Shape on the software backend is a `QSGRenderNode`, painted by Qt's
+`QQuickShapeSoftwareRenderNode`, whose `render()` sets the painter's clip only when the clip region it is given is not
+empty; and the renderer gives a render node its dirty region, cut to its clip, as that region
+(`qquickshapesoftwarerenderer.cpp`, `qsgsoftwarerenderablenode.cpp` of Qt 6.11, read 2026-11-09). A Shape whose bounds lie
+wholly past its clip has an empty region, so it is painted with no clip at all, whole. A probe of the same day: a circle
+of 80 in a clipping item of 60, 20 inside it, was cut (no red past the clip); at 70, wholly past it, 4,872 pixels of it
+were drawn below. One partly inside is cut correctly. The node's bounds are its paths' bounds, widened by the stroke or a
+unit, not its item's: a circle centred on its item's top edge, the item wholly past the clip, was cut correctly.
 
-### 7.35 A fade every theme can use, and which backends draw each effect (2026-11-08)
+**The fix.** On the software backend alone, each Shape of `Body` and `PadGlyph` is not drawn while its paths' bounds,
+`Shape.boundingRect` (which holds the stroke's ink), meet no clipping ancestor's area: the kit's `InsideClips`, an item
+the size of those bounds inside the Shape, tells it so (`inside`), measured again whenever any ancestor moves, scrolls or
+scales, which `QQuickItem::ItemObservesViewport` makes Qt report as `ItemTransformHasChanged`. The bounds lie within the
+node's own, so where they meet the clip the node's region is not empty and Qt cuts it; where they do not, nothing of the
+Shape's ink lies inside the clip. C++ glue, since QML hears of no ancestor's move (`EmuSen_Qt.md` §1.4). The GPU is
+unchanged.
 
-**MultiEffect draws nothing on the software backend, by design.** Qt's documentation of `MultiEffect` describes it as
-combining its effects "into a single item and shader" (doc.qt.io/qt-6/qml-qtquick-effects-multieffect.html, read
-2026-11-08), and the software adaptation's page states that "ShaderEffect components in QtQuick 2 cannot be rendered by
-the Software adaptation" and that "any attempts to use unsupported features are ignored"
-(doc.qt.io/qt-6/qtquick-visualcanvas-adaptations-software.html, read 2026-11-08). So a layer effect, a mask among them,
-is an empty box there, as the notice's shadow was (§7.23).
+**The layer it replaces, and why it went.** From 2026-11-08 each was drawn through a layer on the software backend
+instead, which is clipped, but which is not the same picture: the layer's pixmap is rasterised on its own pixel grid
+and drawn at the item's place, snapped to the window's pixels, and it is sized to the item's size rounded, then scaled
+to it. Measured 2026-11-09 with a circle of 46 drawn plainly and through a layer: at a whole-pixel place and size 1
+pixel differed, by 3 levels; at a place of (100.37, 60.25) 42 pixels, by up to 130 levels; at a size of 46.3, 79
+pixels, by up to 235; `layer.smooth` changed nothing. Moonrise's bodies stand at such places and sizes, and
+`qt-app/tests/splash.rs` read them 202 pixels off Mistress's splash, where with the layer off they pass; the landing
+check had not run that test. So the layer was wrong, not the reference; the reference stands.
 
-**`MultiEffect`'s mask does not fade on the GPU either.** On Qt 6.11 its mask cuts sharply whatever `maskSpreadAtMin`
-says (a probe of 2026-11-08 under Horizon), and the kit's own first `EdgeFade`, a `MultiEffect` mask over a ramped mask
-item, drew no fade at all on the RX 6800 (the column's accent at the edge, measured 2026-11-09 by the fade test below).
+**What it is held to.** `qt-test/tests/clip.rs` over `ClipScene.qml`: four rows of a `Body`, a `PadGlyph` and words in a
+`Flickable` 160 high that clips, grabbed at rest, scrolled by 32 and back, sampling every 4 pixels above and below it.
+Before either fix the body was drawn past the edges at 123 of 462 points at rest and 224 scrolled, the glyph at 73 of
+396 and 133, the words at none; after, none, and the first row's ring past its body's box is drawn. And
+`qt-test/tests/phase.rs` over `PhaseScene.qml`: a ringed body with two moons at (30.37, 20.25), 46.3 square, and a glyph
+at a fractional place too, uncut inside a clipping `Flickable`, are the same picture pixel for pixel as the same under no
+clip, and the body as its shapes drawn as plain Shapes by Qt with nothing of the kit's around them. Seeded faults,
+2026-11-09, each reverted: the layer back on `Body` on the software backend, caught by the phase test (1,671 of 5,328
+pixels off the plain shapes); `InsideClips` always inside, caught by the clip test (the body past the edges at 123
+points at rest). The grabs are `clip-<state>-<backend>.png` and `phase-software.png`, written to `EMUSEN_QT_COMPARE`.
 
-**`EdgeFade`** is the kit's one fade, re-exported by `EmuSen.Theme` by name. It stands under the same parent as a
-scroller (`source`), over it, and ramps `backdrop` (the surface unless set) from clear to whole over each edge it is told
-to fade (`fadeTop` … `fadeRight`, bound to the scroller's own declarations, which the audit reads), over `length` (7 base
-units unless set): plain gradient `Rectangle`s, the kit's `EdgeRamp`, one an edge, which every backend draws alike. It is
-a fade to a colour, not to transparency: exact where what stands behind the scroller is one colour, and an approximation
-over a picture or a translucent fill, where a theme gives the colour that stands there (decided 2026-11-09 over a shader
-of the kit's own, which the software backend could not draw and which would need a shader build step the kit lacks).
+### 7.35 A fade to transparency on every backend, and which backends draw each effect (2026-11-08, remade 2026-11-09)
+
+**`EdgeFade`** is the kit's one fade, re-exported by `EmuSen.Theme` by name. A theme places the scroller inside it, and it
+fades what it holds to transparency over `length` (7 base units unless set) at each edge it is told to fade
+(`fadeTop` … `fadeRight`, bound to the scroller's own declarations, which the audit reads): each pixel keeps the share
+`clamp(d / length, 0, 1)` of its colour and alpha, `d` its distance from the faded edge, the shares of two faded edges
+multiplied at a corner, so what lies behind shows through, a picture as well as a fill. Its first form (2026-11-08)
+ramped a colour the theme named over the scroller: exact over one flat colour and wrong over anything else; the theme API
+changed before release (`CHANGELOG-theme-api.md`). One API, the backend chosen inside the kit, and two ways of drawing.
+
+**On the GPU, a shader of the kit's own.** `EdgeFade` draws what it holds into a layer and the layer through a
+`ShaderEffect` over `shaders/edge_fade.frag`, baked by Qt's `qsb` in the kit's `build.rs` into
+`qrc:/qt/qml/EmuSen/Kit/shaders/edge_fade.frag.qsb`, as `esde-qt` bakes its picture's shader (`EmuSen_Qt.md` §4.8). The
+shader multiplies the layer by the four ramps, given as fractions of the item's size. `MultiEffect`'s mask was measured
+first, since its documentation promises soft masks (doc.qt.io/qt-6/qml-qtquick-effects-multieffect.html, read 2026-11-09:
+"The alpha channel of the source item is used for masking"; `maskSpreadAtMin` "softens the transition from the
+transparent mask pixels towards opaque mask pixels by adding interpolated values between them"). A probe on the RX 6800 on
+2026-11-09, Vulkan and OpenGL in a `kwin_wayland --virtual` of its own, put a red block over stripes through seven forms
+of it: a ramp item behind `layer.enabled`, a gradient `Rectangle` as Horizon's strip had it, a `ShaderEffectSource` of
+the ramp, and a `MultiEffect` item of its own, with the thresholds and spreads at their defaults, at 1, and at both ends.
+None masked anything: the red stayed whole to the edge, where the mask's alpha was 0.05. The kit's shader in the same
+probe drew (255, 35, 35) at 86% of red over white, the value the software path gives. Qt's own effect is used where it
+works; here it does not, so the kit carries 20 lines of GLSL.
+
+**On the software backend, a painter inside the layer.** Qt's software adaptation renders no shader effect ("ShaderEffect
+components in QtQuick 2 cannot be rendered by the Software adaptation", doc.qt.io/qt-6/qtquick-visualcanvas-adaptations-software.html,
+read 2026-11-08), but it renders a layer and a `QSGRenderNode`, whose `render()` paints with the renderer's `QPainter`
+(doc.qt.io/qt-6/qsgrendernode.html, read 2026-11-09: "The software backend exposes its QPainter and saves and restores
+before and after invoking render()"). So the layer holds, last over what it fades, the kit's `EdgeMask`: a render node
+that fills each faded edge's band with a `QLinearGradient` from no alpha at the edge to whole alpha `length` in, under
+`QPainter::CompositionMode_DestinationIn`, which multiplies what the layer holds by the gradient's alpha. It is drawn
+only on the software backend and only while an edge fades. C++ glue, since cxx-qt declares no render node
+(`EmuSen_Qt.md` §1.4).
+
+**A Qt defect the software path steps around.** A software layer whose content holds any opaque node (an opaque
+`Rectangle`, an image without alpha) is drawn into a pixmap with no alpha channel, so what it leaves transparent comes out
+black. Qt 6.11's renderer asks whether its opaque nodes cover the background with `QRegion::contains(const QRect &)`,
+which is true when the region merely overlaps the rectangle (measured 2026-11-09: a region of 320 × 10 "contains"
+320 × 160), so any opaque node makes the layer opaque, and the pixmap (`QPixmap(size)`, the screen's format, `RGB32`
+offscreen) is filled with transparency, the only thing that gives it an alpha channel, only when the layer is not opaque
+(`qsgabstractsoftwarerenderer.cpp`, `qsgsoftwarepixmaprenderer.cpp`, `qsgsoftwarelayer.cpp`, read 2026-11-09). Measured
+with a probe the same day: a layer holding an opaque rectangle 10 high of 160 drew black where it held nothing, and one
+holding only translucent content drew the stripes behind. `layer.format` cannot help: the software layer's `setFormat`
+does nothing. A node is not opaque when its opacity is under 1, and a pixmap keeps its alpha channel for as long as the
+layer keeps its size; so `EdgeFade` holds what it fades at opacity 0.999 until `EdgeMask` reports (`primed`) that the
+pixmap it paints on has an alpha channel, and at 1 after. `primed` falls back to false at once, before the frame is drawn,
+when the mask's size, visibility, window or pixel ratio changes, each of which makes the layer anew. The cost is the
+first frame of a new layer drawn at 0.999: at most one level in 255 from the settled frame (measured 2026-11-09 over
+gradients, words and a picture: 43,760 pixels off by one, none by more), never black. Two nearer forms were tried and
+dropped: filling the pixmap with transparency after the frame left one frame black at every first show and resize; a
+render node placed before the content to do the same within the frame is culled by the renderer wherever opaque content
+covers it. A layer inside what `EdgeFade` holds is not primed by it.
+
+**What the audit makes of a fade.** Words crossing a scroller's faded edge are fading out there, so the contrast rule
+does not hold them, as the edge rule accepts what a faded edge cuts (§3; `kit-core` `fit::fading_out`). Found by Horizon's
+audit on 2026-11-09: the titles of the generated cards past the strip's right edge, faded toward the land, read 1.75 to
+2.12:1 where nothing faded them before.
 
 | Effect | GPU | Software backend |
 |---|---|---|
-| `MultiEffect` (shadow, blur, mask, colourize) | drawn | nothing (no shader effects) |
-| `EdgeFade` | the backdrop ramped over the edge | the same |
+| `MultiEffect` (shadow, blur, colourize) | drawn | nothing (no shader effects) |
+| `MultiEffect`'s mask | nothing (measured above) | nothing |
+| `EdgeFade` | the kit's shader over a layer | `EdgeMask` in a layer |
 | `RoundPicture` | a texture-filled rounded `Shape` | the `Image` with plain corners (§7.29) |
-| `Body`, `PadGlyph` | Shapes | Shapes through a layer, clipped (§7.34) |
+| `Body`, `PadGlyph` | Shapes | Shapes, each not drawn while wholly past its clip (§7.34) |
 | The notice's shadow (§7.23) | drawn | none |
 
-Held to by `qt-test/tests/fade.rs` over `FadeScene.qml` (a column of the accent in a clipping Flickable fading at its
-foot over the window's surface): the column's colour above the fade, the backdrop within 16 levels at the edge, and the
-middle of the fade 20 levels from both; it passes on the software backend and, with `EMUSEN_QT_GPU`, on the RX 6800
-through OpenGL (2026-11-09), where the mask form failed it.
+**What it is held to.** `qt-test/tests/fade.rs` over `FadeScene.qml`: rows of the accent with gaps, in a clipping
+`Flickable` inside an `EdgeFade` fading its foot and its right side by 40, over vertical stripes, light and dark, 5
+pixels each. Down a light column and a dark one, each of the last 28 pixels is the row's colour and the stripe's own
+mixed by the ramp, `row × k + stripe × (1 − k)` with `k = (200 − y − 0.5) / 40`, within 6 levels; its distance from the
+stripe never grows toward the edge, no two neighbours differ by more than 12 levels, and the last pixel is the stripe's
+within 6; three points of the right side's ramp the same; a gap between rows shows the stripes within 2, and a row above
+the fade its own colour within 2. Then the first frame drawn after the layer is made anew, the fade turned off and on and
+then the fade resized, each read from one grab with no frame between (`Scene::set_property_now`): the gaps the stripes
+and a row its colour, within 2. Software by default; with `EMUSEN_QT_GPU` it draws with Vulkan in a compositor of the
+test's own (`kwin_wayland --virtual`, as `theme-audit --gpu`). It passes on both (2026-11-09, the RX 6800), and the two
+backends' grabs are the same picture (`magick compare -fuzz 2%`: 0 of 120,000 pixels differ).
+
+Seeded faults, measured 2026-11-09, each reverted, each failing the test: on the software backend a hard mask (the
+ramp a step at its middle), a fade to a colour (the ramp painted over rather than multiplied), the software path off
+(`EdgeMask` never shown), the content never held under whole (the layer black between the rows), and the prime kept
+through a resize (the resized first frame black between the rows); on the GPU a hard mask (`step`) and a fade to a colour
+(`mix` toward the backdrop's colour). The audit's new exception: `kit-core`'s
+`kit_7_35_words_crossing_a_faded_edge_are_fading_out_and_not_held_to_contrast`, and the same words across an edge that
+does not fade, or inside the strip, still held.
 
 ### 7.6 Building, linking, the registry, and what it is held to
 

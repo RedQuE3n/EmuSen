@@ -196,15 +196,13 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     scene.wait(50);
     assert_eq!(focused(&mut scene), "place.0", "Start puts the focus back on Games");
 
-    // Games, the first console, the grid; Start goes Home from the grid.
-    scene.pad(UiButton::Accept);
-    scene.pad(UiButton::Accept);
+    // Games, All Games (focused by name: the first focus is the first console, EmuSen_Qt.md §3.4.2), the grid; Start goes Home.
+    all_games(&mut scene);
     wait_for(&mut scene, "screens", "shown", "Grid", 1000);
     wait_for(&mut scene, "gridCells", "count", "8", 3000);
     scene.pad(UiButton::Menu);
     wait_for(&mut scene, "screens", "shown", "Home", 1000);
-    scene.pad(UiButton::Accept);
-    scene.pad(UiButton::Accept);
+    all_games(&mut scene);
     wait_for(&mut scene, "gridCells", "count", "8", 3000);
     // Granite Choir as the full grid draws it, seventh by name: its picture, drawn, at its painted size.
     scene.wait(300);
@@ -328,4 +326,14 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     wait_for(&mut scene, "screens", "shown", "Consoles", 1000);
     assert!(report.is_empty(), "{} faults:\n{}", report.len(), report.join("\n"));
     scene.assert_quiet();
+}
+
+/// From Home's Games, Choose a console's All Games: the first place, `tile.0`, opened with A.
+fn all_games(scene: &mut Scene<'_>) {
+    scene.pad(UiButton::Accept);
+    wait_for(scene, "screens", "shown", "Consoles", 1000);
+    let tree = scene.tree();
+    let place = tree.find_named("tile.0").expect("All Games");
+    assert!(scene.focus_item(&tree, place));
+    scene.pad(UiButton::Accept);
 }

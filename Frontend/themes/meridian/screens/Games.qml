@@ -239,85 +239,74 @@ ThemeScreen {
                                 easing.type: Tokens.panCurve
                             }
                         }
-                        Flickable {
-                            id: rail
-                            objectName: "railList"
+                        EdgeFade {
                             x: 64
                             y: 112
                             width: 64
                             height: 598
-                            clip: true
-                            contentWidth: 64
-                            boundsBehavior: Flickable.StopAtBounds
-                            contentHeight: railContent.childrenRect.height
-                            property bool fadeTop: rail.contentY > 0.5
-                            property bool fadeBottom: rail.contentY + rail.height < rail.contentHeight - 0.5
-                            // The software backend draws no layer effect, so there the rows are cut where the GPU fades them.
-                            layer.enabled: (rail.fadeTop || rail.fadeBottom) && GraphicsInfo.api !== GraphicsInfo.Software
-                            layer.effect: MultiEffect {
-                                maskEnabled: true
-                                maskSource: fade
-                                maskSpreadAtMin: 1
-                                maskThresholdMin: 0
-                            }
-                            Behavior on contentY {
-                                NumberAnimation {
-                                    duration: Tokens.reel
-                                    easing.type: Tokens.reelCurve
-                                }
-                            }
-                            FocusScope {
-                                id: railContent
-                                objectName: "railContent"
-                                width: 64
-                                height: railContent.childrenRect.height
-                                // With no game to show the rail holds the focus.
-                                focus: cells.count === 0 && !Browse.searching
-                                Keys.onUpPressed: root.railRank = Math.max(0, root.railRank - 1)
-                                Keys.onDownPressed: root.railRank = Math.min(root.lastRank, root.railRank + 1)
-                                Repeater {
-                                    model: Library.shelves
-                                    Section {
-                                        id: shelf
-                                        required property int index
-                                        required key
-                                        required name
-                                        objectName: "section.shelf." + shelf.index
-                                        rank: shelf.index
-                                        focus: shelf.current || (Browse.section.length === 0 && shelf.index === 0)
-                                        y: shelf.index * 54
-                                        mark: Marks.path(shelf.key)
+                            fadeTop: rail.fadeTop
+                            fadeBottom: rail.fadeBottom
+                            length: 24
+                            Flickable {
+                                id: rail
+                                objectName: "railList"
+                                anchors.fill: parent
+                                clip: true
+                                contentWidth: 64
+                                boundsBehavior: Flickable.StopAtBounds
+                                contentHeight: railContent.childrenRect.height
+                                property bool fadeTop: rail.contentY > 0.5
+                                property bool fadeBottom: rail.contentY + rail.height < rail.contentHeight - 0.5
+                                Behavior on contentY {
+                                    NumberAnimation {
+                                        duration: Tokens.reel
+                                        easing.type: Tokens.reelCurve
                                     }
                                 }
-                                Repeater {
-                                    model: Library.consoles
-                                    Section {
-                                        id: consoleSection
-                                        required key
-                                        required name
-                                        required hue
-                                        required property string body
-                                        required property int groupStart
-                                        required property int groupIndex
-                                        readonly property int place: consoleSection.groupStart + consoleSection.groupIndex
-                                        objectName: "section.console." + consoleSection.place
-                                        isConsole: true
-                                        rank: 3 + consoleSection.place
-                                        focus: consoleSection.current
-                                        y: 162 + consoleSection.place * 54
-                                        world: consoleSection.body
+                                FocusScope {
+                                    id: railContent
+                                    objectName: "railContent"
+                                    width: 64
+                                    height: railContent.childrenRect.height
+                                    // With no game to show the rail holds the focus.
+                                    focus: cells.count === 0 && !Browse.searching
+                                    Keys.onUpPressed: root.railRank = Math.max(0, root.railRank - 1)
+                                    Keys.onDownPressed: root.railRank = Math.min(root.lastRank, root.railRank + 1)
+                                    Repeater {
+                                        model: Library.shelves
+                                        Section {
+                                            id: shelf
+                                            required property int index
+                                            required key
+                                            required name
+                                            objectName: "section.shelf." + shelf.index
+                                            rank: shelf.index
+                                            focus: shelf.current || (Browse.section.length === 0 && shelf.index === 0)
+                                            y: shelf.index * 54
+                                            mark: Marks.path(shelf.key)
+                                        }
+                                    }
+                                    Repeater {
+                                        model: Library.consoles
+                                        Section {
+                                            id: consoleSection
+                                            required key
+                                            required name
+                                            required hue
+                                            required property string body
+                                            required property int groupStart
+                                            required property int groupIndex
+                                            readonly property int place: consoleSection.groupStart + consoleSection.groupIndex
+                                            objectName: "section.console." + consoleSection.place
+                                            isConsole: true
+                                            rank: 3 + consoleSection.place
+                                            focus: consoleSection.current
+                                            y: 162 + consoleSection.place * 54
+                                            world: consoleSection.body
+                                        }
                                     }
                                 }
                             }
-                        }
-                        RailFade {
-                            id: fade
-                            x: rail.x
-                            y: rail.y
-                            width: rail.width
-                            height: rail.height
-                            atTop: rail.fadeTop
-                            atBottom: rail.fadeBottom
                         }
                         Track {
                             objectName: "railTrack"

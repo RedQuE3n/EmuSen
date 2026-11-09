@@ -31,8 +31,6 @@ pub mod qobject {
         type QStringList = cxx_qt_lib::QStringList;
         include!("cxx-qt-lib/qvector.h");
         type QVector_i32 = cxx_qt_lib::QVector<i32>;
-        include!("cxx-qt-lib/qlist.h");
-        type QList_f64 = cxx_qt_lib::QList<f64>;
     }
 
     extern "RustQt" {
@@ -58,9 +56,8 @@ pub mod qobject {
         #[qproperty(i32, preview, READ, NOTIFY)]
         #[qproperty(QString, caption, READ, NOTIFY)]
         #[qproperty(f64, meter, READ, NOTIFY)]
-        /// The text sizes' lines, or the two variants' names, and each line's scale.
+        /// The text sizes' lines, or the two variants' names; `sampleScale` gives each line's scale.
         #[qproperty(QStringList, samples, READ, NOTIFY)]
-        #[qproperty(QList_f64, sample_scales, cxx_name = "sampleScales", READ, NOTIFY)]
         /// What the settings ask of the whole program, once read: the type scale, the light variant, reduced motion.
         #[qproperty(bool, ready, READ, NOTIFY)]
         #[qproperty(f64, text_scale, cxx_name = "textScale", READ, NOTIFY)]
@@ -91,6 +88,11 @@ pub mod qobject {
         /// The settings read again.
         #[qinvokable]
         fn refresh(self: Pin<&mut SettingsModel>);
+
+        /// The scale of the sample at `index`, 1 past the samples.
+        #[qinvokable]
+        #[cxx_name = "sampleScale"]
+        fn sample_scale(self: &SettingsModel, index: i32) -> f64;
 
         /// Left (-1) or Right (+1) on a row.
         #[qinvokable]
@@ -157,7 +159,7 @@ pub struct SettingsModelRust {
     caption: QString,
     meter: f64,
     samples: QStringList,
-    sample_scales: QList<f64>,
+    sample_scales: Vec<f64>,
     ready: bool,
     text_scale: f64,
     light: bool,
@@ -195,7 +197,7 @@ impl Default for SettingsModelRust {
             caption: QString::default(),
             meter: 0.0,
             samples: QStringList::default(),
-            sample_scales: QList::default(),
+            sample_scales: Vec::new(),
             ready: false,
             text_scale: 1.0,
             light: false,
@@ -271,6 +273,10 @@ impl qobject::SettingsModel {
 
     pub fn row_count(&self, _parent: &QModelIndex) -> i32 {
         self.rows.len() as i32
+    }
+
+    pub fn sample_scale(&self, index: i32) -> f64 {
+        usize::try_from(index).ok().and_then(|i| self.sample_scales.get(i)).copied().unwrap_or(1.0)
     }
 
     pub fn refresh(mut self: Pin<&mut Self>) {
@@ -446,15 +452,12 @@ impl qobject::SettingsModel {
             self.as_mut().meter_changed();
         }
         let samples = list(pane.samples.iter().map(|(s, _)| s.clone()));
-        let mut scales = QList::<f64>::default();
-        for (_, scale) in &pane.samples {
-            scales.append(*scale);
-        }
+        let scales: Vec<f64> = pane.samples.iter().map(|(_, scale)| *scale).collect();
         if self.samples != samples || self.sample_scales != scales {
-            self.as_mut().rust_mut().samples = samples;
+            // The scales first, so the delegates the new samples make read theirs.
             self.as_mut().rust_mut().sample_scales = scales;
+            self.as_mut().rust_mut().samples = samples;
             self.as_mut().samples_changed();
-            self.as_mut().sample_scales_changed();
         }
     }
 }

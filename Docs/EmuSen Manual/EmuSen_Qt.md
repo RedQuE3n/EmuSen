@@ -3666,7 +3666,10 @@ settings.rs` (software backend): Home's Settings place opens Settings on Control
 and wrap; the six states held at the gate's five sizes (fit, pad reach, pointer reach, no chrome, names, palette,
 contrast; SettingsDisplayLight in the light variant) and recorded; Light saved and the variant applied, Text size saved
 and the type scale applied, Volume saved as 0.95; Scraping's page opened and closed by B; Themes opened and B back to
-Settings, then Home; nothing logged. `themes_tab.rs` now reaches the tab through Settings. Seeded faults, each
+Settings, then Home; nothing logged. `themes_tab.rs` now reaches the tab through Settings. `program.rs`' QML rules and
+`qmllint` hold `Settings.qml`; `qmllint` refused a `QList<f64>` property it cannot resolve, so a text size's scale is
+read through the invokable `sampleScale(index)`. The blast radius on the software backend passed: kit-qt 46,
+qt-models 78, kit-gallery 7, and emusen-qt's fifteen software test binaries. Seeded faults, each
 reverted:
 - every value written as text: the models' Sound test (and the doors' test, through Scraping's switch);
 - a console's row set on the first console alone: the models' consoles test;

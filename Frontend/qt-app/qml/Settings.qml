@@ -123,7 +123,7 @@ Kit.NormalizedCanvas {
                         elide: Text.ElideRight
                         color: Kit.Tokens.text
                         font.family: faces.regular
-                        font.pixelSize: Kit.Tokens.fontBody / Kit.Tokens.textScale * screen.settings.sampleScales[sample.index]
+                        font.pixelSize: Kit.Tokens.fontBody / Kit.Tokens.textScale * screen.settings.sampleScale(sample.index)
                     }
                 }
             }

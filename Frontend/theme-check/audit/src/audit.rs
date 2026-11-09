@@ -106,6 +106,8 @@ fn described(tree: &Tree, id: ElementId) -> String {
 struct Lines<'a> {
     shown: &'a str,
     out: Vec<String>,
+    /// Where the audit is: the size and the variant being judged, named when a state cannot be read.
+    at: String,
 }
 
 impl Lines<'_> {
@@ -113,6 +115,19 @@ impl Lines<'_> {
         let line = format!("{}/{}:1 {kind} {words}", self.shown, screen.file());
         if !self.out.contains(&line) {
             self.out.push(line);
+        }
+    }
+
+    /// Runs one pass of a screen; a panic in it (a view that never settles) is a finding of its own, naming where it stopped.
+    fn guarded(&mut self, screen: Screen, pass: impl FnOnce(&mut Self)) {
+        self.at = "placed, before its first size".to_owned();
+        if let Err(payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| pass(&mut *self))) {
+            let words = format!(
+                "{}: the audit stopped here, so this state and the rest of its pass were not judged: {}",
+                self.at,
+                panic_words(payload.as_ref())
+            );
+            self.add(screen, "stopped", &words);
         }
     }
 }
@@ -183,6 +198,7 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             kit.as_mut().set_variant(if variant == Variant::Dark { kinds::Variant::Dark } else { kinds::Variant::Light });
         }
         for (w, h) in SIZES {
+            lines.at = format!("{w}x{h} {name}");
             scene.resize(w, h);
             scene.wait(150);
             let mut tree = scene.tree();
@@ -322,7 +338,7 @@ fn panic_words(payload: &(dyn std::any::Any + Send)) -> String {
 pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(&str, &[Entry])>, section: Option<&str>) -> Result<Vec<String>, String> {
     let shown = shown.trim_end_matches('/');
     let text = std::fs::read_to_string(folder.join("theme.json")).map_err(|e| format!("{shown}/theme.json: {e}"))?;
-    let mut lines = Lines { shown, out: Vec::new() };
+    let mut lines = Lines { shown, out: Vec::new(), at: String::new() };
     let package = match emusen_theme_host::package::read(&text) {
         Ok(p) => p,
         Err(words) => return Ok(words.lines().map(|l| format!("{shown}/{l}")).collect()),
@@ -344,12 +360,7 @@ pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(
         let pass = Pass { variants: &[Variant::Dark, Variant::Light], label: &label, consoles: Some(names) };
         match place(&mut scene, &real.display().to_string(), screen).and_then(|id| feed(id, &library, view, &package.colour_overrides(), section).map(|_| id)) {
             Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
-            Ok(id) => {
-                let done = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| states(&mut scene, screen, id, &pass, state, &mut lines)));
-                if let Err(payload) = done {
-                    lines.add(screen, "audit", &panic_words(payload.as_ref()));
-                }
-            }
+            Ok(id) => lines.guarded(screen, |lines| states(&mut scene, screen, id, &pass, state, lines)),
         }
         logged().iter().for_each(|w| lines.add(screen, "warning", w));
         return Ok(lines.out);
@@ -367,26 +378,21 @@ pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(
             lines.add(screen, "load", &words);
             continue;
         }
-        scene.resize(1280, 800);
-        if let Some(words) = still(&mut scene) {
-            lines.add(screen, "motion", &words);
-        }
         let both = Pass { variants: &[Variant::Dark, Variant::Light], label: "", consoles: None };
-        let done = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| states(&mut scene, screen, id, &both, state, &mut lines)));
-        if let Err(payload) = done {
-            lines.add(screen, "audit", &panic_words(payload.as_ref()));
-        }
+        lines.guarded(screen, |lines| {
+            lines.at = "1280x800, judged still under reduced motion".to_owned();
+            scene.resize(1280, 800);
+            if let Some(words) = still(&mut scene) {
+                lines.add(screen, "motion", &words);
+            }
+            states(&mut scene, screen, id, &both, state, lines);
+        });
         if screen == Screen::Consoles {
             // Placed afresh over the crowd, as the program shows Choose a console once the library holds 120 consoles.
             let crowd = Pass { variants: &[Variant::Dark], label: ", 120 consoles", consoles: Some(&library.crowd_names) };
             match place(&mut scene, &real.display().to_string(), screen).and_then(|id| feed(id, &library, &library.crowd, &package.colour_overrides(), section).map(|_| id)) {
                 Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
-                Ok(id) => {
-                    let done = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| states(&mut scene, screen, id, &crowd, state, &mut lines)));
-                    if let Err(payload) = done {
-                        lines.add(screen, "audit", &panic_words(payload.as_ref()));
-                    }
-                }
+                Ok(id) => lines.guarded(screen, |lines| states(&mut scene, screen, id, &crowd, state, lines)),
             }
         }
         logged().iter().for_each(|w| lines.add(screen, "warning", w));

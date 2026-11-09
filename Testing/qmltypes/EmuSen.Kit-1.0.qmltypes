@@ -378,6 +378,71 @@ Module {
         }
     }
     Component {
+        file: "edge_mask.h"
+        lineNumber: 7
+        name: "EdgeMask"
+        accessSemantics: "reference"
+        prototype: "QQuickItem"
+        exports: ["EmuSen.Kit/EdgeMask 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "fadeTop"
+            type: "bool"
+            read: "fadeTop"
+            write: "setFadeTop"
+            notify: "edgesChanged"
+            index: 0
+            lineNumber: 10
+        }
+        Property {
+            name: "fadeBottom"
+            type: "bool"
+            read: "fadeBottom"
+            write: "setFadeBottom"
+            notify: "edgesChanged"
+            index: 1
+            lineNumber: 11
+        }
+        Property {
+            name: "fadeLeft"
+            type: "bool"
+            read: "fadeLeft"
+            write: "setFadeLeft"
+            notify: "edgesChanged"
+            index: 2
+            lineNumber: 12
+        }
+        Property {
+            name: "fadeRight"
+            type: "bool"
+            read: "fadeRight"
+            write: "setFadeRight"
+            notify: "edgesChanged"
+            index: 3
+            lineNumber: 13
+        }
+        Property {
+            name: "length"
+            type: "double"
+            read: "length"
+            write: "setLength"
+            notify: "edgesChanged"
+            index: 4
+            lineNumber: 14
+        }
+        Property {
+            name: "primed"
+            type: "bool"
+            read: "primed"
+            notify: "primedChanged"
+            index: 5
+            lineNumber: 16
+            isReadonly: true
+        }
+        Signal { name: "edgesChanged"; lineNumber: 35 }
+        Signal { name: "primedChanged"; lineNumber: 36 }
+    }
+    Component {
         file: "kinds.cxxqt.h"
         lineNumber: 41
         name: "Families"

@@ -152,3 +152,26 @@ fn qt_3_7_a_catalogue_records_choose_a_console_over_its_consoles_alone() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("bad.tsv: line 1: the games count"), "the line named");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn qt_3_7_a_desktop_at_125_percent_still_records_one_pixel_a_unit() {
+    let dir = std::env::temp_dir().join(format!("theme-audit-scaled-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // An offscreen screen at 120 dpi over a base of 96, a scale of 1.25, as the desktop was when its pictures came out 1600 x 1000.
+    let screen = dir.join("scaled.json");
+    std::fs::write(&screen, r#"{"screens":[{"name":"scaled","x":0,"y":0,"width":2560,"height":1600,"logicalDpi":120,"logicalBaseDpi":96,"dpr":1.25}]}"#).unwrap();
+    let file = dir.join("one.tsv");
+    std::fs::write(&file, "Sega\tGenesis\t12\tNephrite\temusen\tmd\n").unwrap();
+    let state = dir.join("state");
+    let out = Command::new(PROGRAM)
+        .env("QT_QPA_PLATFORM", format!("offscreen:configfile={}", screen.display()))
+        .arg("--state").arg(&state).arg("--catalogue").arg(&file).arg(themes().join("loaded"))
+        .output().expect("theme-audit runs");
+    let lines = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(!lines.contains(" recording "), "every picture at its state's size: {lines}");
+    assert_eq!(out.status.code(), Some(0), "{lines}");
+    let png = std::fs::read(state.join("Consoles-dark-one-1280x800.png")).expect("the recording's picture");
+    let picture = cxx_qt_lib::QImage::from_data(&png, Some("PNG")).expect("a PNG");
+    assert_eq!((picture.width(), picture.height()), (1280, 800), "one device pixel a unit");
+    let _ = std::fs::remove_dir_all(&dir);
+}

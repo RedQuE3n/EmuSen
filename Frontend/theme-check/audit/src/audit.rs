@@ -240,7 +240,11 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
                 let _ = std::fs::write(dir.join(format!("{file}.spec")), spec::write(&tree, &tree.root, &header, focus.map(|f| f.0), &walk));
                 // The walk's last put-back moved the focus home, so whatever that started ends before the picture.
                 scene.rest();
-                scene.grab(&dir.join(format!("{file}.png")).display().to_string());
+                let picture = dir.join(format!("{file}.png"));
+                scene.grab(&picture.display().to_string());
+                if let Some(fault) = misfit(&picture, (w as u32, h as u32)) {
+                    lines.add(screen, "recording", &format!("{w}x{h} {name}: {fault}"));
+                }
             }
             if let Some(missed) = pass.consoles.and_then(|all| swept(scene, all, (f64::from(w), f64::from(h)))) {
                 lines.add(screen, "reach", &format!("{w}x{h} {name}: {missed}"));
@@ -337,6 +341,19 @@ fn swept(scene: &mut Scene<'_>, consoles: &[String], size: (f64, f64)) -> Option
     })
 }
 
+/// A recorded picture whose size is not its state's, in words; None when it is the state's size or was not written.
+fn misfit(picture: &Path, size: (u32, u32)) -> Option<String> {
+    png_size(picture).filter(|&got| got != size).map(|(pw, ph)| format!("the picture is {pw}x{ph}, not the state's size"))
+}
+
+/// A PNG's width and height, from its header.
+fn png_size(path: &Path) -> Option<(u32, u32)> {
+    let head = std::fs::read(path).ok()?;
+    let word = |at: usize| head.get(at..at + 4).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]));
+    (head.get(12..16) == Some(b"IHDR")).then_some(())?;
+    Some((word(16)?, word(20)?))
+}
+
 /// The words of a panic the harness raised (a view that never settles, a window that never shows).
 fn panic_words(payload: &(dyn std::any::Any + Send)) -> String {
     payload.downcast_ref::<String>().cloned().or_else(|| payload.downcast_ref::<&str>().map(|s| (*s).to_owned())).unwrap_or_default()
@@ -407,4 +424,31 @@ pub fn run(folder: &Path, shown: &str, state: Option<&Path>, catalogue: Option<(
         logged().iter().for_each(|w| lines.add(screen, "warning", w));
     }
     Ok(lines.out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::misfit;
+
+    /// The eight-byte signature and an IHDR chunk's head: all a reader of the size looks at.
+    fn header(w: u32, h: u32) -> Vec<u8> {
+        let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
+        png.extend(w.to_be_bytes());
+        png.extend(h.to_be_bytes());
+        png.extend([8, 6, 0, 0, 0]);
+        png
+    }
+
+    #[test]
+    fn qt_3_7_a_picture_scaled_by_the_desktop_is_a_recording_finding() {
+        let dir = std::env::temp_dir().join(format!("theme-audit-misfit-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let picture = dir.join("Home-dark-1280x800.png");
+        std::fs::write(&picture, header(1600, 1000)).unwrap();
+        assert_eq!(misfit(&picture, (1280, 800)).as_deref(), Some("the picture is 1600x1000, not the state's size"));
+        std::fs::write(&picture, header(1280, 800)).unwrap();
+        assert_eq!(misfit(&picture, (1280, 800)), None, "a picture at its state's size");
+        assert_eq!(misfit(&dir.join("absent.png"), (1280, 800)), None, "no picture, no size to judge");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

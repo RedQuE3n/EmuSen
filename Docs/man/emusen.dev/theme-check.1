@@ -5,7 +5,7 @@ NAME
 
 SYNOPSIS
     theme-check [--static] [--state DIR] <folder>...
-    theme-audit [--state DIR] [--catalogue FILE] <folder>
+    theme-audit [--gpu] [--state DIR] [--catalogue FILE] [--section KEY] <folder>
 
 DESCRIPTION
     The development tool of the emusen.dev module for EmuSen theme
@@ -159,6 +159,14 @@ THE LOADED STEP
                     any finding (decided 2026-11-08: a pass that stops
                     is never silent, and the passes agree only when
                     both finish)
+        recording   with --state, a picture whose size is not its
+                    state's: the harness turns Qt's high-DPI scaling off
+                    so one device pixel is a window pixel whatever the
+                    screen's scale (a window on a desktop at 125% was
+                    grabbed at 1600 x 1000 for 1280 x 800, and an
+                    offscreen screen of 120 dpi over 96 the same,
+                    measured 2026-11-08), and a picture that still
+                    differs is a finding, not a quiet mismatch
 
     The Games screen is shown a section as the program's showBrowse
     shows one (emusen-theme-qt's browse::facts_of, the one owner of a
@@ -177,6 +185,20 @@ THE LOADED STEP
     the focus home, and a world that rises on a change of focus was
     caught half-faded (measured 2026-11-08, Horizon's Choose a console);
     a fixed wait would go stale under a theme's own longer transitions.
+
+    --gpu (theme-audit alone) draws on the GPU: Qt Quick's Vulkan
+    renderer in Wayland windows of a compositor the run starts for
+    itself (kwin_wayland --virtual at 3840 x 2160, as the program's GPU
+    tests run, emusen-qt-test's Compositor), stopped when the run ends.
+    Its scale is 1 by construction, so the desktop's own scale and
+    settings never reach a picture, and no window shows on the desk;
+    the recording finding still guards each picture's size. Without it
+    the run is offscreen on the software renderer, which draws no
+    shader effect (a layer's mask or blur). The offscreen platform was
+    not used for the GPU: it drives the RX 6800 through OpenGL but has
+    no Vulkan instance, and its OpenGL window draws only its first size
+    when grown (a 1920 x 1200 picture came out drawn in its lower left
+    1280 x 800 alone, the rest black or stale; measured 2026-11-09).
 
     --catalogue FILE (theme-audit alone) places Choose a console once,
     over the synthetic library with FILE's consoles in place of its own,
@@ -229,6 +251,7 @@ EXAMPLES
     theme-check Frontend/themes/emusen
     theme-check --static Frontend/themes/emusen
     theme-check --state /tmp/horizon Frontend/themes/horizon
+    theme-audit --gpu --state /tmp/horizon-gpu Frontend/themes/horizon
     theme-audit --state /tmp/states --catalogue Testing/themes/catalogues/n30.tsv Frontend/themes/emusen
     theme-check Frontend/theme-check/tests/themes/low-contrast
 

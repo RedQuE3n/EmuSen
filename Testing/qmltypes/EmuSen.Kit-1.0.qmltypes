@@ -402,7 +402,7 @@ Module {
     }
     Component {
         file: "figures.cxxqt.h"
-        lineNumber: 52
+        lineNumber: 50
         name: "FigureLayout"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -415,7 +415,7 @@ Module {
             write: "setWidth"
             notify: "widthChanged"
             index: 0
-            lineNumber: 57
+            lineNumber: 55
         }
         Property {
             name: "model"
@@ -425,7 +425,7 @@ Module {
             write: "setModel"
             notify: "modelChanged"
             index: 1
-            lineNumber: 58
+            lineNumber: 56
         }
         Property {
             name: "role"
@@ -434,7 +434,7 @@ Module {
             write: "setRole"
             notify: "roleChanged"
             index: 2
-            lineNumber: 59
+            lineNumber: 57
         }
         Property {
             name: "count"
@@ -442,7 +442,7 @@ Module {
             read: "getCount"
             notify: "laidOut"
             index: 3
-            lineNumber: 60
+            lineNumber: 58
             isReadonly: true
         }
         Property {
@@ -451,7 +451,7 @@ Module {
             read: "getCompact"
             notify: "laidOut"
             index: 4
-            lineNumber: 61
+            lineNumber: 59
             isReadonly: true
         }
         Property {
@@ -460,7 +460,7 @@ Module {
             read: "getBody"
             notify: "laidOut"
             index: 5
-            lineNumber: 62
+            lineNumber: 60
             isReadonly: true
         }
         Property {
@@ -469,7 +469,7 @@ Module {
             read: "getLabelWidth"
             notify: "laidOut"
             index: 6
-            lineNumber: 63
+            lineNumber: 61
             isReadonly: true
         }
         Property {
@@ -478,7 +478,7 @@ Module {
             read: "getZone"
             notify: "laidOut"
             index: 7
-            lineNumber: 64
+            lineNumber: 62
             isReadonly: true
         }
         Property {
@@ -487,7 +487,7 @@ Module {
             read: "getContentHeight"
             notify: "laidOut"
             index: 8
-            lineNumber: 65
+            lineNumber: 63
             isReadonly: true
         }
         Property {
@@ -496,7 +496,7 @@ Module {
             read: "getScrolls"
             notify: "laidOut"
             index: 9
-            lineNumber: 66
+            lineNumber: 64
             isReadonly: true
         }
         Property {
@@ -505,7 +505,7 @@ Module {
             read: "getXs"
             notify: "laidOut"
             index: 10
-            lineNumber: 67
+            lineNumber: 65
             isReadonly: true
         }
         Property {
@@ -514,7 +514,7 @@ Module {
             read: "getYs"
             notify: "laidOut"
             index: 11
-            lineNumber: 68
+            lineNumber: 66
             isReadonly: true
         }
         Property {
@@ -523,7 +523,7 @@ Module {
             read: "getRaised"
             notify: "laidOut"
             index: 12
-            lineNumber: 69
+            lineNumber: 67
             isReadonly: true
         }
         Property {
@@ -532,7 +532,7 @@ Module {
             read: "getLeft"
             notify: "laidOut"
             index: 13
-            lineNumber: 70
+            lineNumber: 68
             isReadonly: true
         }
         Property {
@@ -541,7 +541,7 @@ Module {
             read: "getRight"
             notify: "laidOut"
             index: 14
-            lineNumber: 71
+            lineNumber: 69
             isReadonly: true
         }
         Property {
@@ -550,7 +550,7 @@ Module {
             read: "getUp"
             notify: "laidOut"
             index: 15
-            lineNumber: 72
+            lineNumber: 70
             isReadonly: true
         }
         Property {
@@ -559,7 +559,7 @@ Module {
             read: "getDown"
             notify: "laidOut"
             index: 16
-            lineNumber: 73
+            lineNumber: 71
             isReadonly: true
         }
         Property {
@@ -568,7 +568,7 @@ Module {
             read: "getPrior"
             notify: "laidOut"
             index: 17
-            lineNumber: 74
+            lineNumber: 72
             isReadonly: true
         }
         Property {
@@ -577,7 +577,7 @@ Module {
             read: "getGroupOf"
             notify: "laidOut"
             index: 18
-            lineNumber: 75
+            lineNumber: 73
             isReadonly: true
         }
         Property {
@@ -586,7 +586,7 @@ Module {
             read: "getFigureXs"
             notify: "laidOut"
             index: 19
-            lineNumber: 76
+            lineNumber: 74
             isReadonly: true
         }
         Property {
@@ -595,7 +595,7 @@ Module {
             read: "getFigureYs"
             notify: "laidOut"
             index: 20
-            lineNumber: 77
+            lineNumber: 75
             isReadonly: true
         }
         Property {
@@ -604,29 +604,29 @@ Module {
             read: "getFirsts"
             notify: "laidOut"
             index: 21
-            lineNumber: 78
+            lineNumber: 76
             isReadonly: true
         }
-        Signal { name: "widthChanged"; lineNumber: 108 }
-        Signal { name: "modelChanged"; lineNumber: 109 }
-        Signal { name: "roleChanged"; lineNumber: 110 }
-        Signal { name: "laidOut"; lineNumber: 112 }
+        Signal { name: "widthChanged"; lineNumber: 106 }
+        Signal { name: "modelChanged"; lineNumber: 107 }
+        Signal { name: "roleChanged"; lineNumber: 108 }
+        Signal { name: "laidOut"; lineNumber: 110 }
         Method {
             name: "setWidth"
-            lineNumber: 84
+            lineNumber: 82
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setModel"
-            lineNumber: 86
+            lineNumber: 84
             Parameter { name: "value"; type: "QAbstractItemModel"; isPointer: true }
         }
         Method {
             name: "setRole"
-            lineNumber: 88
+            lineNumber: 86
             Parameter { name: "value"; type: "QString" }
         }
-        Method { name: "read"; lineNumber: 111 }
+        Method { name: "read"; lineNumber: 109 }
     }
     Component {
         file: "kinds.cxxqt.h"

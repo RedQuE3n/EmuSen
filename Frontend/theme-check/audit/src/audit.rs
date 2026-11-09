@@ -275,8 +275,8 @@ fn focused(scene: &mut Scene<'_>, size: (f64, f64)) -> Option<(u64, String, bool
     })
 }
 
-/// The pad's sweep of a crowded Choose a console: Up and Left until the focus stops, then each row along and back with Down
-/// between, as a player looks for one console among many. None when every console's name was heard on the focus while it
+/// The pad's sweep of a crowded Choose a console: Up and Left until the focus stops, then each row along to its right end and
+/// back to its left with Down between, as a player looks for one console among many. None when every console's name was heard on the focus while it
 /// was inside the window; else how many were and the first few that were not.
 fn swept(scene: &mut Scene<'_>, consoles: &[String], size: (f64, f64)) -> Option<String> {
     let mut heard: Vec<String> = Vec::new();
@@ -304,22 +304,23 @@ fn swept(scene: &mut Scene<'_>, consoles: &[String], size: (f64, f64)) -> Option
             presses += 1;
         }
     }
-    let mut along = UiButton::Right;
+    // Each row to both of its ends, since Down may land anywhere along the next (the orbits land nearest in x).
     loop {
-        let mut seen = Vec::new();
-        while presses < limit && press(scene, along) {
-            presses += 1;
-            let now = focused(scene, size);
-            if seen.contains(&now) {
-                break;
+        for along in [UiButton::Right, UiButton::Left] {
+            let mut seen = Vec::new();
+            while presses < limit && press(scene, along) {
+                presses += 1;
+                let now = focused(scene, size);
+                if seen.contains(&now) {
+                    break;
+                }
+                seen.push(now);
             }
-            seen.push(now);
         }
         presses += 1;
         if presses >= limit || !press(scene, UiButton::Down) {
             break;
         }
-        along = if along == UiButton::Right { UiButton::Left } else { UiButton::Right };
     }
     let missed: Vec<&String> = consoles.iter().filter(|c| !heard.contains(c)).collect();
     (!missed.is_empty()).then(|| {

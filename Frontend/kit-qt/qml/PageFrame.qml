@@ -7,7 +7,7 @@ Kit.Frame {
     id: root
     property url hero
     // The hero's clip, which plays over the hero's picture while `clipPlaying` (Kit.VideoTile); silent unless `clipMuted` is false.
-    property url clip
+    property url clipSource
     property bool clipPlaying: false
     property bool clipMuted: true
     property url cover
@@ -69,7 +69,7 @@ Kit.Frame {
                 objectName: "pageClip"
                 anchors.fill: parent
                 still: root.hero
-                source: root.clip
+                source: root.clipSource
                 playing: root.clipPlaying
                 muted: root.clipMuted
             }

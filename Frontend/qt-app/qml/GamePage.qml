@@ -33,7 +33,7 @@ Kit.NormalizedCanvas {
         helpSpacing: 40
         helpGlyphGap: 10
         hero: screen.page.hero
-        clip: screen.page.clip
+        clipSource: screen.page.clip
         // The clip plays while the page holds the focus, and stops when it loses it.
         clipPlaying: screen.visible && frame.activeFocus
         cover: screen.page.cover
@@ -66,7 +66,11 @@ Kit.NormalizedCanvas {
         }
         Connections {
             target: frame.controller
-            function onActionInvoked(key) { if (!screen.page.declared(key)) screen.acted(key) }
+            function onActionInvoked(key) { screen.page.declared(key) }
+        }
+        Connections {
+            target: screen.page
+            function onPassed(key) { screen.acted(key) }
         }
         Connections {
             target: frame.controller

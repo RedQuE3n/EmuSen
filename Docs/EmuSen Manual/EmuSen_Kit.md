@@ -2771,7 +2771,7 @@ element, so a theme never imports QtMultimedia. The kit now links Qt's Multimedi
 `QtMultimedia`.
 
 **`PageFrame`** gained, for a game's page (`EmuSen_Qt.md` §7.8):
-- the hero's clip: `clip`, `clipPlaying` and `clipMuted`, a `VideoTile` in place of the hero's picture under the OnArt
+- the hero's clip: `clipSource`, `clipPlaying` and `clipMuted` (not `clip`, which is every item's own), a `VideoTile` in place of the hero's picture under the OnArt
   gradient, its still the `hero`; `videoTile` names it;
 - words beside a picture in place of tiles or rows, as the Overview shows them: `showsText`, `contentWords`,
   `contentPicture`, the picture 388 × 222 at the content's right and the words in the rest less a gap of 24, from

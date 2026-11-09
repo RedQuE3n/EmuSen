@@ -102,9 +102,13 @@ pub mod qobject {
         #[qinvokable]
         fn step(self: Pin<&mut GamePageModel>, index: i32, by: i32);
 
-        /// A help bar's declared action the page answers itself (Y, the heart); false for one the screens answer.
+        /// A help bar's declared action: the page answers Y, the heart, itself, and passes every other on.
         #[qinvokable]
-        fn declared(self: Pin<&mut GamePageModel>, key: &QString) -> bool;
+        fn declared(self: Pin<&mut GamePageModel>, key: &QString);
+
+        /// A declared action the screens answer (Start).
+        #[qsignal]
+        fn passed(self: Pin<&mut GamePageModel>, key: QString);
 
         /// The focus moved: an action's index, else -1 and the content's index; the help bar follows it.
         #[qinvokable]
@@ -519,12 +523,12 @@ impl qobject::GamePageModel {
         self.outcome(outcome);
     }
 
-    pub fn declared(self: Pin<&mut Self>, key: &QString) -> bool {
-        if key.to_string() != crate::help::FAVOURITE {
-            return false;
+    pub fn declared(self: Pin<&mut Self>, key: &QString) {
+        if key.to_string() == crate::help::FAVOURITE {
+            self.outcome(Outcome::Changed(crate::game_page::Change::Favourite));
+        } else {
+            self.passed(key.clone());
         }
-        self.outcome(Outcome::Changed(crate::game_page::Change::Favourite));
-        true
     }
 
     pub fn focus(mut self: Pin<&mut Self>, action: i32, content: i32) {

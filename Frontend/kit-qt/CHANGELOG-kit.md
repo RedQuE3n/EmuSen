@@ -35,7 +35,7 @@ Additions, and one contract change to `PageFrame`'s action model.
   the system's FFmpeg. `EmuSen_Kit.md` §7.50.
 - **`VideoFrames`** (registry): a clip's frames drawn on the software backend, where `VideoOutput` draws nothing. §7.50.
 - **`PageLayout.pictureWidth`**, **`pictureHeight`**, **`pictureGap`** (registry): the Overview's picture. §7.50.
-- `PageFrame`: `clip`, `clipPlaying`, `clipMuted`, `videoTile`; `showsText`, `contentWords`, `contentPicture`; the
+- `PageFrame`: `clipSource`, `clipPlaying`, `clipMuted`, `videoTile`; `showsText`, `contentWords`, `contentPicture`; the
   signals `actionStepped` and `rowStepped`. `ActionButton`: `stepped`. §7.50.
 - Changed: `PageFrame`'s action model must give the roles `stepped`, `stepLeft` and `stepRight`. §7.50.
 - The module depends on `QtMultimedia`.

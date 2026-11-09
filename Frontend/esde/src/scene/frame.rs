@@ -363,7 +363,7 @@ pub struct Bar {
 pub struct TextList {
     pub first_row: usize,
     pub row_h: f64,
-    /// The height the text is centred in.
+    /// The height the text is centred in, from the row's top.
     pub band_h: f64,
     pub content_y: f64,
     pub selector: Option<Bar>,

@@ -7,6 +7,7 @@ use super::data::{Data, Game, System};
 use super::grid::GridGeometry;
 use super::mapping;
 use super::motion::{Easing, Glide, Motion, Repeat, RepeatRule, TextScroll, Time};
+use super::selector;
 use super::words;
 
 /// A rectangle in screen pixels.
@@ -52,6 +53,18 @@ pub struct ElementState {
     pub grid: Option<GridFocus>,
     /// What a text, datetime or clock says, in its letter case.
     pub text: Option<String>,
+    /// The game the element draws, an index into the system's games: the selection in a gamelist, a gameselector's pick in the system view.
+    pub game: Option<usize>,
+}
+
+/// Whether an element shows a game's media or metadata, which in the system view a gameselector gives it.
+fn uses_game(e: &Element) -> bool {
+    match e.kind() {
+        "image" | "video" => !e.list("imageType").is_empty(),
+        "text" | "datetime" => e.string("metadata").is_some(),
+        "rating" => true,
+        _ => false,
+    }
 }
 
 /// A move of the selection, for the host's sounds: its signed size, whether it was held, and its time.
@@ -79,6 +92,8 @@ pub struct SceneView {
     from_level: f64,
     to_level: f64,
     steps: Vec<Step>,
+    /// Moves of the selection so far, which vary the gameselectors' random picks.
+    navigations: u64,
 }
 
 impl SceneView {
@@ -101,6 +116,7 @@ impl SceneView {
             from_level: 1.0,
             to_level: 0.0,
             steps: vec![],
+            navigations: 0,
         };
         v.position = Glide::at(v.index() as f64);
         v.scroll = Glide::at(v.grid().map(|g| g.scroll_for(v.index())).unwrap_or(0.0));
@@ -208,6 +224,7 @@ impl SceneView {
         self.selected_at = now;
         self.changed = true;
         self.steps.push(Step { delta, held, at: now });
+        self.navigations += 1;
         true
     }
 
@@ -265,6 +282,7 @@ impl SceneView {
         self.selected_at = now;
         self.changed = true;
         self.steps.push(Step { delta, held, at: now });
+        self.navigations += 1;
         true
     }
 
@@ -397,8 +415,10 @@ impl SceneView {
         let now = self.now;
         let (w, h) = (self.data.width, self.data.height);
         let system = self.data.system();
-        // In the system view a game comes from a gameselector's pick, which the host makes; none here.
-        let game = if self.is_system_view() { None } else { self.data.game() };
+        // In the system view a game comes from a gameselector's pick (selector.rs), drawn again on each move.
+        let view = self.theme_view();
+        let seed = self.data.selection_seed ^ self.navigations;
+        let selecting = self.is_system_view() && view.of_kind("gameselector").next().is_some();
         let fade_in = if self.motion.scroll_fade_in > 0 && self.changed {
             Glide::new(self.motion.scroll_fade_in_from, 1.0, self.selected_at, self.motion.scroll_fade_in, Easing::Linear).value_at(now)
         } else {
@@ -406,8 +426,7 @@ impl SceneView {
         };
         let metadata = self.metadata.value_at(now);
         let grid = self.grid();
-        self.theme_view()
-            .elements
+        view.elements
             .iter()
             .enumerate()
             .map(|(index, e)| {
@@ -418,7 +437,18 @@ impl SceneView {
                 let rect =
                     Rect { x: pos.x as f64 * w - origin.x as f64 * bw, y: pos.y as f64 * h - origin.y as f64 * bh, width: bw, height: bh };
                 let rotation_origin = e.pair("rotationOrigin").map(|p| (p.x, p.y)).unwrap_or((0.5, 0.5));
+                let game_index = if !self.is_system_view() {
+                    self.data.game().map(|_| self.data.game_index.min(system.games.len() - 1))
+                } else if selecting {
+                    selector::game_for(e, view, system, seed)
+                } else {
+                    None
+                };
+                let game = game_index.and_then(|i| system.games.get(i));
                 let mut skipped = self.skip(e, game);
+                if skipped.is_none() && selecting && game.is_none() && uses_game(e) {
+                    skipped = Some("the gameselector's entry is empty".into());
+                }
                 let text = if skipped.is_none() { self.text_of(e, system, game) } else { None };
                 if skipped.is_none() && matches!(e.kind(), "text" | "datetime") && text.is_none() {
                     skipped = Some("nothing to show".into());
@@ -459,6 +489,7 @@ impl SceneView {
                     scroll: self.scroll_of(e, h),
                     grid: grid_focus,
                     text,
+                    game: game_index,
                 }
             })
             .collect()

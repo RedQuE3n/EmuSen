@@ -2236,6 +2236,218 @@ green; emusen-qt-test `helpbar` and `menu` green; qt-app's acceptance green. One
 check, a frame swapped in the 2 s still window with no animation running; the two runs after it passed. The theme shows a clock,
 whose minute can turn within the window: not reproduced, recorded here.
 
+#### 4.8.6 The oracle comparison and the corpus columns **[M 2026-11-09]**
+
+`tests/oracle.rs`, one GPU-tier test (Vulkan on the RX 6800 in a `kwin_wayland --virtual` of its own, the validation
+layer on, Qt's log required quiet; 51 s) and one plain test of its change detector. It shows each watched theme of
+`Testing/esde-baseline/states.tsv` in the oracle's two states (the system view at the SNES, the gamelist at its first
+game) at 1280 × 800 and 1920 × 1200, on the oracle's library, and holds the grab to ES-DE through the C# baseline:
+
+- **The picture.** The reference is ES-DE 3.4.1's capture of each state (the pinned AppImage of
+  `Testing/esde-oracle/README.md`), taken by the oracle rig on 2026-11-08 and reused, not taken again. The mean absolute
+  error over R, G and B is computed as `Testing/esde-baseline/compare.py` computes it, over every row but the help bar's
+  strip (`mae.tsv`'s rows), and the C# painter's figure is recomputed over the same pixels from its grab. Both left out
+  the clocks' boxes until `EsdeModel` could be given a time (step 4 below): the C# baseline set its clock to the
+  capture's time, while the model read the wall clock, so a clock's digits were noise of up to 0.34 (CarAlt's large
+  clock). Since then the clock is pinned to the capture's time and `mae.tsv`'s figure is held as it stands. The Qt
+  figure must not exceed the C#'s.
+- **The boxes.** Every element of the state's `.spec` is found by its name and place among elements of that name and
+  held within `mockup::UNITS` (two design units of 1280 × 800) on x, y, width and height. The spec holds a box before
+  its turn and the item tree the turned item's bounds, so a turned element (CarAlt's `gamecount`, `Syslogo`, turned 90°)
+  is held to its spec box turned by the theme's `rotation` about its `rotationOrigin`. An element the C# drew that Qt
+  does not is off; one Qt draws that the C# did not is printed, not held.
+- **The corpus columns.** `check::report`, the code of `esde-check`, over the 71 themes' XML
+  (`~/.cache/emusen/bigpicture/corpus/xml`), with five columns appended: `mae_system_1280`, `mae_gamelist_1280`,
+  `mae_system_1920`, `mae_gamelist_1920` (the held figures above) and `rects_off` (boxes off over the four states), `-`
+  for a theme outside the watched subset. It is written to the compare folder on every run, and to
+  `Testing/esde-corpus/<date>.tsv` when `EMUSEN_ESDE_CORPUS` is set. Each run is held to the last committed measure
+  (that day's too, on a re-measure): a theme that stops loading, more unknown or unsupported pairs, an undrawn kind
+  gained, a watched MAE up by more than 0.05 (two runs on 2026-11-09 differed by 0.02) or a count up by one fails.
+  `a_row_that_worsens_is_named` holds that comparison without Qt.
+
+Written for a human look to `~/.cache/emusen/tmp/qt-s4/compare/oracle/`: `qt/` (the grabs), `difference/` (pixels over 8
+levels apart with no match within a pixel, from the harness's `difference`), `oracle.tsv` (every figure, clocks in and
+out), `corpus.tsv`, and `<theme>-<state>-<W>x<H>.png`, ES-DE | C# above, Qt | difference ×4 below with the strip blue,
+made from them by `sheet.py` there (outside the repository, as the E3 sheets are).
+
+**The corpus on 2026-11-09** (`Testing/esde-corpus/2026-11-09.tsv`) against §4.4's targets:
+
+| Headline | Target | 2026-11-08b | 2026-11-09 |
+|---|---|---|---|
+| Load for all five systems | 66 of 66 held | 71 of 71 | **71 of 71** (the 66 of September among them) |
+| Drawn whole | rises from 0 as families land | 0 | **0** |
+| Use no undrawn kind | — | 61 | **45** |
+
+Every row that worsened against 2026-11-08b was read: each is a pair or kind that E3 moved from `drawn` to `later:`
+after proving it painted nothing (§4.8.5: the gameselector's 13 pairs, a GIF's timing, `fractionalRows`,
+`containerVerticalSnap`, `containerScrollSpeed`, datetime `lineSpacing`; 367 to 347 drawn). The measure of 2026-11-08b
+counted them drawn because `mapping.tsv` said so; 22 themes now count `gameselector` undrawn and 58 rows gained
+unsupported pairs. No theme stopped loading.
+
+**The watched states, measured 2026-11-09** (MAE with the strip and the clocks left out; boxes off the C#'s):
+
+| Theme | State | Qt 1280 | C# 1280 | Qt 1920 | C# 1920 | boxes off (1280, 1920) |
+|---|---|---|---|---|---|---|
+| Art Book Next | system | **2.11** | 1.06 | **1.56** | 0.34 | 3, 3 |
+| Art Book Next | gamelist | **3.77** | 2.61 | **3.48** | 2.00 | 5, 5 |
+| Artflix | system | **7.44** | 6.51 | **7.58** | 6.42 | 2, 2 |
+| Artflix | gamelist | 9.06 | 9.24 | 9.00 | 9.10 | 3, 3 |
+| CarAlt | system | **26.59** | 24.95 | 24.75 | 24.91 | 5, 5 |
+| CarAlt | gamelist | 6.38 | 16.26 | 5.90 | 16.02 | 4, 3 |
+
+Seven of twelve states are above the C# painter (bold), so the switch's picture criterion (§4.4) is **not met**. They
+and the 22 boxes off are named in the test (`NAMED_MAE`, each with today's figure plus 0.05 as its ceiling;
+`NAMED_BOXES`), so the test holds what is there: a named state that worsens fails, one that comes back under the C#'s
+fails until it is unnamed, and a named box no longer off fails. What each is, by element:
+
+| Where | Element | Seen |
+|---|---|---|
+| Art Book Next system | `image_system-logo` | its SVG drawn 701 px wide where ES-DE and the C# draw 704 (1280; 1052 against 1056 at 1920), its right edge 3–4 px short: 1.40 of the 2.11 lies in the logo's box (C# 0.46). The box is held; the picture inside it is fitted narrower |
+| Art Book Next both | `clock_clock` | 60 × 28 at 38, 38 where the C# drew 84 × 50 at 27, 25; the cause is not read yet |
+| Art Book Next gamelist | the list's rows, `datetime_releasedate`, `text_players`, `text_play-time` | the rows and the metadata about 3 px lower than ES-DE's, and each metadata text 28.3 high where the C# held 23.3, its top 2.5 units higher: the face's own line height (§4.8.5) |
+| Art Book Next gamelist | the folder's mark | the scene's link mark where ES-DE draws its arrow into a bracket (§4.8.5, open) |
+| every watched theme | `helpsystem_*` | ES-DE's words and Mistress's glyph sizes (§4.8.5), so a strip of another width and height than the C#'s; inside the strip the MAE leaves out |
+| every watched theme | `systemstatus_*` | not drawn: no device is reported (§4.8.5), as ES-DE in its sandbox shows none; the C# kept an empty box. Artflix's `(default)` status is placed at x 23 (the left), where the C# put it at the right edge; with nothing to show it draws nothing |
+| Artflix system | the carousel's other systems | drawn at full brightness where ES-DE dims the unselected logos of its vertical wheel (`carousel:verticalWheel`, drawn in part); the description larger and wrapping later; the title SUPER NINTENDO where ES-DE reads NINTENDO SNES (SUPER NINTENDO) (owed to H, §4.8.5) |
+| Artflix gamelist | `gamelistinfo_gamelistInfo` | a box 0 wide: the element reports no extent, so its words are not shown (the C# drew 86 units) |
+| CarAlt system | `image_cover1`–`cover3` | not drawn: the gameselector is later (§4.5.5); the theme's yellow band shows where ES-DE has three screenshots, most of its 24.75 |
+| CarAlt gamelist | `image_marquee`, `text_player2` | the marquee's box fitted to the picture's aspect, 320 × 120 at y 52 where the C# held its 320 × 160 at y 32; the second players' text 2.6 units narrower at 1280 only |
+
+The C# painter's own differences the Qt one does not repeat are visible as the two gamelists of CarAlt (6.4 against
+16.3: the C# tiled the screenshots, §4.8.5) and Artflix's gamelist, both now under the baseline.
+
+**The tie order.** The comparison adds no evidence on zIndex ties: CarAlt's gamelist `cover3` and `topline3` remain
+the one tie the watched states draw overlapping (§4.8.5), so ES-DE's rule is not shown and the loader keeps first
+definition.
+
+**Seeded faults**, each applied alone and reverted after its run:
+
+| Fault | Caught by |
+|---|---|
+| the element named `background` placed 3 px right (3 units at 1280 × 800) | `image_background … 3.0 off` in Art Book Next's and CarAlt's four 1280 states, and `rects_off` up in the corpus |
+| a picture's saturation halved (`values.rs`) | six states' MAE above their ceilings or the C#'s (Art Book Next's gamelist 3.77 → 8.80), and eight corpus columns up |
+| `image.color` marked `later:` in `mapping.tsv` | 70 corpus rows: unsupported up by one |
+
+**The findings closed, 2026-11-09.** Decided 2026-11-09: the switch waits on every one of the seven states above the
+C# painter, not a chosen few, and the zIndex tie keeps first definition (no new evidence). Each finding below was
+proved on the captures before it was changed, in the painter and the scene rather than the theme; the figures are the
+oracle's after each step, measured on 2026-11-09 on lavapipe (Mesa's Vulkan on the CPU, which agreed with the RX 6800
+within 0.01 on all twelve grabs); the final figures are the RX 6800's.
+
+1. **Art Book Next: the logo, the rows and the metadata.**
+   - *The logo* was not 3 px narrower in its box: `Picture.qml` asked no decode size of a picture drawn nearest, and
+     THEMES.md's `interpolation` defaults to nearest, so the SVG was rasterised at its own 264 × 65 and scaled 2.7 times
+     (blocks of 3 px along its edges at 4× zoom; Qt's `sourceSize` read 0 × 0 in a probe of the run). THEMES.md:
+     interpolation "has limited effect on scalable vector graphics (SVG) images unless rotation is applied", so a vector
+     picture is decoded at its box whatever the interpolation, which only samples it. The width asked is the box's
+     rounded, not its ceiling: 704.00002 asked 705, decoded 705 × 174 and drew it resampled into 704 × 173.3. The
+     logo's own box went from 5.08 to 2.76 (C# 3.85).
+   - *The rows* sat 7 px low: THEMES.md's selector bar "is expanded downwards" from its row, and the name is centred in
+     that band, so the band starts at the row's top rather than being centred in the pitch (`TextListView.qml`). ES-DE's
+     selected band measured rows 266–311 for the row starting at 266.67, Qt's 273–318; the first name's ink is now
+     221–242 against ES-DE's 220–241 and the C#'s 221–242.
+   - *The metadata texts* were 28.3 high where the C# held 23.3: Qt's `contentHeight` of a `Text.FixedHeight` line adds
+     the face's descent to the fixed height (23.33 measured 28.33 in a `qml` probe of Mulish at 23 px). A fixed line's
+     height is now its pitch, `px × lineSpacing` a line (one for no words), and each line holds the face's own
+     (ascent + descent) centred, the rule the C# `FontLayout` draws by (`TextBlock.qml`). The description's first line
+     moved from rows 566 to 572 (ES-DE 572), the release date's from 628 to 627 (ES-DE 626). A carousel's words wrap,
+     as the C# painter's did: on one line, `mapping.rs` found carousel `lineSpacing` 1 and 2.5 painting the same pixels.
+   - *A text's pixel size* is rounded: QML's `font.pixelSize` is an integer and truncated 23.9 to 23, which drew CarAlt's
+     second players' text 2.6 units narrower than ES-DE's ink (57 against 60 px at 1280 × 800).
+   - Art Book Next after this step: system 0.95 and 0.34 (C# 1.06, 0.34), gamelist 2.46 and 1.97 (C# 2.61, 2.00), all
+     four unnamed; the release date, players and play time boxes and CarAlt's second players' text are within two units.
+   - Seeded fault: a vector picture drawn nearest left at its own size again; caught as Art Book Next's system state at
+     2.11 and 1.56, above the C#'s, at both sizes.
+2. **Artflix: the wheel's dimming, the game count and the status.**
+   - *The other systems were dimmed twice*, not left bright: the scene darkened each unfocused slot's tint by
+     `unfocusedItemDimming` and the painter multiplied the picture by the slot's `dim` again, 0.25 for Artflix's 0.5
+     (the 90th percentile of the Game Boy logo's grey 42 where ES-DE's is 72 and the C#'s 72). THEMES.md defines one
+     dimming "for all items except the currently selected entry"; the scene now leaves the tint the theme's and the
+     painter applies `dim` once (`primary.rs`).
+   - *`gamelistInfo` was 0 wide*: its delegate never reported its extent, so the theme's `size` of `w 0.02` (`w` is not
+     a number, so the width is 0, "automatically size") kept the scene's box at 0. `InfoElement.qml` reports its row's
+     width and a line's height. It draws 79 units wide where ES-DE's ink spans 83 and the C# box 86: the counts' marks
+     are the kit's, not ES-DE's.
+   - *The `(default)` status at the left* was the comparison's: it matched boxes by name alone, and the loader names both
+     the clock and the status it adds `(default)`, so Artflix's clock (THEMES.md's clock default, x 23) was held to the
+     status's box. Boxes are now matched by the delegate that draws the kind as well as the name (`oracle.rs`); the
+     status itself drew nothing, which item 4 takes up.
+   - Artflix's system view after this step: 6.39 and 6.31 (C# 6.50, 6.41), unnamed; its gamelist 8.19 and 8.20 (C# 9.24,
+     9.10).
+   - Seeded fault: the tint dimmed in the scene again; caught as Artflix's system view at 7.37 and 7.31, above the C#'s,
+     at both sizes.
+3. **The help bar and the status, every theme**.
+   - *The help's sizes*, measured on the captures: ES-DE's help background is 56 rows high at 1280 × 800 and 85 at
+     1920 × 1200 (Art Book Next's system view, over its art), its paddings 23.3 and 35, so the element is 0.9 of
+     `fontSize` × H high (32.7 and 50), and ES-DE's icon fills it (ink 32 × 32 and 47 × 47). The kit's glyph inks 0.88 of
+     its side (kit-core's circles of radius 0.44 with their pen), so it drew 28 px of ink in a 33 px side. The element's
+     height is now 0.9 of `fontSize` × H, the background grows from it by its paddings, and the glyph's side is that
+     height over 0.88, centred on it (`HelpElement.qml`): the glyphs ink 32–33 and 48–49 px, the background covers rows
+     706–761 and 1058–1142 against ES-DE's 705–761 and 1057–1142. The label's pixel size is rounded, as a text's is.
+   - *What stays apart in the strip*, which the MAE leaves out: where a theme names no font the labels are the kit's
+     face (Art Book Next's OPTIONS 91 px against ES-DE's 79; decided, design §12); with the theme's font CarAlt's labels
+     are 5–9 % narrower than ES-DE's (MENU 20 px against 22, SCREENSAVER 52 against 57), not yet explained; and a pair
+     such as CHOOSE is two kit glyphs where ES-DE draws one left-and-right icon (CarAlt's last entry 1198–1238 against
+     1222–1236), which a kit glyph for the pair would close (EmuSen_Kit.md §7.28; a proposal, not built).
+   - *The status* is drawn per THEMES.md where it has nothing to show: an element at its `pos` and `origin`, 0 × 0, with
+     no background, as ES-DE's captures show nothing there (`paint.rs`, `StatusElement.qml`). It had not been drawn at
+     all, so Artflix's and CarAlt's status boxes (the C#'s 0 × 0 at the same place) clear.
+   - Seeded fault: the empty status not drawn again; caught as `systemstatus_*` not drawn in the eight Artflix and CarAlt
+     states.
+4. **The clock.** `EsdeModel` gains `now`, seconds since 1970 that the clock and the relative dates read, 0 for the wall
+   clock (the default), with the view's `now` alias (`model.rs`, `View.qml`; the registry gains the property, added to
+   1.0 as E3's additions were, since the module is not yet published). The oracle sets it to each capture's
+   modification time, as the C# baseline did, so both painters are held with the clocks in: the masks and the
+   `_unclocked` columns of `oracle.tsv` are gone. Art Book Next's clock reads 13:03 in ES-DE's, the C#'s and Qt's grabs.
+   With the clocks in, CarAlt's system view measures 26.01 at 1280 × 800 (C# 24.72), its ceiling now 26.06.
+   - Seeded fault: the pinned time ignored for the wall clock (09:36 on the day); caught as Art Book Next's system view at
+     1920 × 1200 at 0.41, above the C#'s 0.38.
+5. **CarAlt: the gameselector**, built from THEMES.md's `gameselector`, done last because its random picks start from
+   the time the oracle now pins. `selector.rs` has one job: a selector picks from the shown system's games, never a
+   folder or a game excluded from the counter: the `lastplayed` newest first, the `mostplayed` by play count (those
+   played), or a shuffle (`random`, the default) from the scene's seed, `allowDuplicates` filling a short shuffle with
+   repeats. An element of the system view takes its named `gameselector`, else the selector whose name sorts first (as
+   ES-DE 3.4.1 was measured to choose, EmuSen_BigPicture.md §36), and its `gameselectorEntry` clamped to the selector's
+   `gameCount`; one that shows a game's media or metadata and whose entry has no game is not rendered, as THEMES.md
+   says. Each element's game reaches the paint through `ElementState::game`, the gamelist's selection or the selector's
+   pick. The seed is `Data::selection_seed`, which the painter sets from the install's time, and each move of the
+   view's selection draws again ("refreshed every time the view is navigated"). The 13 pairs move from
+   `later:gameselector` to `drawn` (347 → 360). A game's media is cropped by `cropSize` and never tiled, so CarAlt's
+   three screenshots fill their bands as ES-DE's do. The picks themselves are random and are not ES-DE's (its capture
+   shows Lumen Garden, Juniper Vault and Ember Circuit, Qt's seed Fable of Tiles, Lumen Garden and Cobalt Harbor), so
+   the bands' colours differ by game; the figure is held as measured. `frame.rs`'s
+   `a_gameselector_gives_the_system_view_its_games_by_entry` holds each rule.
+   - CarAlt's system view after this step: 17.94 and 16.56 (C# 24.72, 24.69), unnamed, and its three covers drawn.
+   - Seeded fault: the selector's game withheld from the system view; caught as the three covers not drawn at both sizes
+     and CarAlt's system view at 26.01, above the C#'s 24.72.
+
+**The watched states after the five steps** (MAE with the clocks in and the strip left out; boxes off the C#'s; the
+RX 6800, 2026-11-09):
+
+| Theme | State | Qt 1280 | C# 1280 | Qt 1920 | C# 1920 | Qt before (1280, 1920; clocks out) | boxes off (1280, 1920) |
+|---|---|---|---|---|---|---|---|
+| Art Book Next | system | 0.99 | 1.12 | 0.37 | 0.38 | 2.11, 1.56 | 3, 3 |
+| Art Book Next | gamelist | 2.46 | 2.61 | 1.97 | 2.00 | 3.77, 3.48 | 2, 2 |
+| Artflix | system | 6.50 | 6.56 | 6.40 | 6.47 | 7.44, 7.58 | 1, 1 |
+| Artflix | gamelist | 8.30 | 9.29 | 8.27 | 9.14 | 9.06, 9.00 | 2, 2 |
+| CarAlt | system | 17.94 | 24.72 | 16.49 | 24.69 | 26.59, 24.75 | 1, 1 |
+| CarAlt | gamelist | 6.00 | 16.30 | 5.63 | 16.08 | 6.38, 5.90 | 2, 2 |
+
+Every state is at or under the C# painter's, so the picture criterion of §4.4 is met on the watched subset; `NAMED_MAE`
+is empty. Eleven boxes stay named, each explained:
+
+| Where | Element | Why it stays off the C#'s box, and the evidence |
+|---|---|---|
+| Art Book Next system | `clock_clock` | the C#'s box is the background with its paddings (84.4 × 50 at 26.7, 25); Qt's is the element, 60 × 23.3 at the theme's `pos` 38.3, 38.3, as THEMES.md says the paddings "will not have any effect on the pos and origin". ES-DE's drawn background spans 26.7–110 × 25–75: Qt's box with the paddings, and the same pixels in all three grabs |
+| Art Book Next both | `systemstatus_system-status` | the C#'s box is the paddings about an empty row (23.3 × 16.7); Qt's is the empty element at its place (1246.7, 50, 0 × 0). ES-DE draws nothing there |
+| every watched theme | `helpsystem_*` (seven) | the C#'s box holds its paddings (Art Book Next's 54.1 high) and its own entries (Artflix's gamelist 1032 wide, CarAlt's 443); Qt's is the element as above, with ES-DE's entries. Its sizes against ES-DE's are in step 3 |
+| Artflix gamelist | `gamelistinfo_gamelistInfo` | 79 units wide where the C#'s box is 86 and ES-DE's ink spans 83 (1152–1235): the counts' marks are the kit's |
+| CarAlt gamelist | `image_marquee` | Qt's box is the picture fitted to `maxSize`, 320 × 120 at y 52; ES-DE's drawn marquee spans the same 830–1170 × 52–172, where the C# held the whole 320 × 160 at y 32 |
+
+**The corpus**: the measure of the RX 6800 run is committed as `Testing/esde-corpus/2026-11-09.tsv` (a re-measure of the
+day): 71 of 71 load, none drawn whole, and 61 use no undrawn kind (45 before: the 22 themes counting `gameselector`
+undrawn no longer do); no row worsened.
+
 ---
 
 ## 5. The stable developer surface

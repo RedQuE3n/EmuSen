@@ -58,7 +58,7 @@ ElementBox {
         onMeasured: (width, height) => root.esde.measured(root.elementId, width, height)
     }
     // New words or a new face are reported even at the same extent, since the scene keys a measurement by what it shows.
-    onTextChanged: root.esde.measured(root.elementId, block.contentWidth, block.contentHeight)
-    onPxChanged: root.esde.measured(root.elementId, block.contentWidth, block.contentHeight)
-    onFontSourceChanged: root.esde.measured(root.elementId, block.contentWidth, block.contentHeight)
+    onTextChanged: root.esde.measured(root.elementId, block.contentWidth, block.laidHeight)
+    onPxChanged: root.esde.measured(root.elementId, block.contentWidth, block.laidHeight)
+    onFontSourceChanged: root.esde.measured(root.elementId, block.contentWidth, block.laidHeight)
 }

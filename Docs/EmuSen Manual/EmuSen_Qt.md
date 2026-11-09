@@ -965,6 +965,12 @@ catalogues (`--catalogue`) found the same faults. Each was the package's layout,
 2. **The grid's neighbours under the floor.** `gridPrevious`, the `·` between and `gridNext`, at 18 units, drew capitals of
    11.33 at 1280 × 720, under the floor of 11.64 (36 lines, every state that shows the grid). They are 19. Seeded back at
    18, the audit names the three at 1280 × 720 in both variants.
+3. **The full name cut at the foot.** `consoleDetailName`, at 44 units in the canvas's line box of 1 (44), is laid out by
+   Qt at Barlow Condensed's own line, 53, whatever its fixed line height, so its words ran 9 units past their box (75
+   lines: every size, every state that focuses a console, the 120 consoles). The name takes the face's line box, 53, from
+   y 611: its baseline stands one unit higher than the canvas's, so the box ends at 664, where the facts begin. Seeded
+   back (a box of 44), the audit names the name cut at the foot at every size; left at y 612, the name's box meets the
+   facts' and the audit names the overlap at 3840 × 2160, where the unit is past its slack.
 
 **Proof, measured 2026-11-08.** The acceptance test (Vulkan on the RX 6800 in its own compositor, the virtual pad, the
 canvas's library) passed on WiseMan d5edac3e5 with the old screens and on the package, and its 90 grabs, 18 states
@@ -1047,8 +1053,8 @@ canvas's own; kit-core's test holds them within 0.01 unit.
    canvas's estimated ones (318, 522, 737).
 5. After the first focus, the shown makers move only when the focus leaves them, as spec §3.1 asks; the canvas centres
    the focused maker on every press.
-6. As at stage 1, the canvas's 17-unit words fall under the floor at 1280 × 720 alone, and the full name's glyphs reach
-   past its 44-unit line box.
+6. As at stage 1, the canvas's 17-unit words fall under the floor at 1280 × 720 alone. The full name takes Barlow
+   Condensed's own line box, 53 from y 611, where the canvas's was 44 from 612 (2026-11-09, §3.4.1).
 7. A world's `Walkable` is the body's box (the ring's when focused), and the name and count hang beneath it, outside
    the `Walkable`. The canvas's node was 140 units wide and held the words too. On the steep stretches of the outer
    orbits those nodes covered their neighbours, which the fit audit read as overlaps of empty corners.

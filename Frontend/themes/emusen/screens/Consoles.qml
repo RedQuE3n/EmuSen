@@ -538,9 +538,9 @@ ThemeScreen {
                     Text {
                         objectName: "consoleDetailName"
                         x: 64
-                        y: 612
+                        // The face's own line box, 53, a unit above the canvas's 44 so it ends where the facts begin (EmuSen_Qt.md §3.4.2).
+                        y: 611
                         width: coverRow.x - 96
-                        height: 44
                         text: root.focusedTile ? root.focusedTile.fullName : ""
                         elide: Text.ElideRight
                         color: Tokens.textStrong
@@ -549,8 +549,6 @@ ThemeScreen {
                         font.pixelSize: 44
                         font.letterSpacing: 2
                         font.capitalization: Font.AllUppercase
-                        lineHeight: 44
-                        lineHeightMode: Text.FixedHeight
                     }
                     Text {
                         objectName: "consoleDetailFacts"

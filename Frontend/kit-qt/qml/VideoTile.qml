@@ -1,9 +1,8 @@
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtMultimedia
 import EmuSen.Kit as Kit
 
-// A clip over its still: the still first, the clip faded in over it the poster's delay after `playing` turns true, stopped and the still shown again when it turns false; drawn by VideoOutput on the GPU and by VideoFrames on the software backend, silent unless `muted` is false (EmuSen_Kit.md §7.50).
+// A clip over its still: the still first, the clip faded in over it the poster's delay after `playing` turns true, and the still alone again when it turns false or the clip changes; its player (VideoClip) is made only while the clip is to play; silent unless `muted` is false (EmuSen_Kit.md §7.50).
 Item {
     id: root
     property url source
@@ -12,11 +11,11 @@ Item {
     property bool playing: false
     property bool muted: true
     property real volume: 1
-    readonly property bool software: GraphicsInfo.api === GraphicsInfo.Software
-    // Whether a frame of the clip stands over the still.
-    readonly property bool showing: player.playbackState === MediaPlayer.PlayingState && (root.software ? frames.frames > 0 : player.position > 0)
-    readonly property alias player: player
-    readonly property alias frames: frames
+    // Whether the clip's player is made, and whether a frame of the clip stands over the still.
+    readonly property bool running: clipLoader.status === Loader.Ready
+    readonly property bool showing: (clipLoader.item as Kit.VideoClip)?.showing ?? false
+    // The frames the kit's sink has drawn: the software backend's, none on the GPU.
+    readonly property int frames: (clipLoader.item as Kit.VideoClip)?.frames ?? 0
     clip: true
     Image {
         objectName: "videoStill"
@@ -25,52 +24,16 @@ Item {
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
     }
-    Item {
+    // Reduced motion keeps the still (EmuSen_Interface.md §5.9).
+    Loader {
+        id: clipLoader
         objectName: "videoClip"
         anchors.fill: parent
-        opacity: root.showing ? 1 : 0
-        Behavior on opacity {
-            NumberAnimation {
-                duration: Kit.Tokens.posterFade
-            }
-        }
-        VideoOutput {
-            id: output
-            anchors.fill: parent
-            visible: !root.software
-            fillMode: VideoOutput.PreserveAspectCrop
-        }
-        Kit.VideoFrames {
-            id: frames
-            objectName: "videoFrames"
-            anchors.fill: parent
-            visible: root.software
-        }
-    }
-    MediaPlayer {
-        id: player
-        objectName: "videoPlayer"
-        loops: MediaPlayer.Infinite
-        videoOutput: root.software ? frames.videoSink : output
-        audioOutput: AudioOutput {
+        active: root.playing && root.source.toString().length > 0 && !Kit.Tokens.reducedMotion
+        sourceComponent: Kit.VideoClip {
+            source: root.source
             muted: root.muted
             volume: root.volume
         }
-    }
-    // The poster's delay, then the clip; reduced motion keeps the still (EmuSen_Interface.md §5.9).
-    Timer {
-        interval: Kit.Tokens.poster
-        running: root.playing && root.source.toString().length > 0 && !Kit.Tokens.reducedMotion
-        onTriggered: {
-            player.source = root.source
-            player.play()
-        }
-    }
-    // Stopped and cleared when it is not to play, or plays another clip: the still stands alone again.
-    onPlayingChanged: if (!root.playing) player.source = ""
-    onSourceChanged: player.source = ""
-    Connections {
-        target: player
-        function onSourceChanged() { frames.clear() }
     }
 }

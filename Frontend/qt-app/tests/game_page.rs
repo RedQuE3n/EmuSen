@@ -69,6 +69,10 @@ fn section(scene: &mut Scene<'_>, index: i32) {
 }
 
 /// The hero's colour a little under its top, where the OnArt gradient is still clear.
+fn help(screen: emusen_qt_models::help::Screen) -> String {
+    emusen_qt_models::help_model::shown_screen(screen).to_string()
+}
+
 fn hero_colour(scene: &mut Scene<'_>) -> emusen_kit_core::tokens::Colour {
     scene.colours_at(&[(640.0, 30.0)])[0].expect("the hero drawn")
 }
@@ -131,9 +135,9 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     assert!(facts.ends_with("1994 · Lantern Works · Publisher P · Never played"), "{facts}");
     assert!(scene.property("pageModel", "words").starts_with("Cobalt Harbor is a game invented"));
     assert_eq!(scene.property("pageModel", "clip"), "", "Play videos off: no clip");
+    assert_eq!(scene.property("pageClip", "running"), "false", "no clip, no player: Qt Multimedia not started");
     let mut report = Vec::new();
     // Right from Play is Resume; Right steps Resume through the four states, then reaches Favourite.
-    let help = |s: emusen_qt_models::help::Screen| emusen_qt_models::help_model::shown_screen(s).to_string();
     scene.pad(UiButton::Right);
     wait_for(&mut scene, "pageModel", "help", &help(emusen_qt_models::help::Screen::GamePageResumeSlots), 1000);
     let first = scene.property("pageModel", "actions");
@@ -155,6 +159,34 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     section(&mut scene, 1);
     assert_eq!(scene.property("pageModel", "shows"), "1");
     hold(&mut scene, "GamePageStates", &mockup::Mockup::default(), named, &mut report);
+    // X on Slot 1 asks first, No focused: A keeps the state; X again, Down to Delete, A deletes it, its picture and its record.
+    let slot1 = platform.save_path(SAVE_STATE, rom.to_str().unwrap(), None, 1).unwrap();
+    scene.pad(UiButton::Down);
+    wait_for(&mut scene, "pageModel", "help", &help(emusen_qt_models::help::Screen::GamePageLoad), 1000);
+    // The help bar's actions follow the help screen a frame later: X is Delete… once it shows.
+    scene.wait(300);
+    scene.pad(UiButton::Screensaver);
+    wait_for(&mut scene, "pageModel", "asking", "true", 1000);
+    assert_eq!(scene.property("pageModel", "questionTitle"), "Delete Slot 1?");
+    scene.wait(400);
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "pageModel", "asking", "false", 1000);
+    assert!(slot1.exists(), "No keeps the state");
+    scene.wait(300);
+    scene.pad(UiButton::Screensaver);
+    wait_for(&mut scene, "pageModel", "asking", "true", 1000);
+    scene.wait(400);
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "pageModel", "asking", "false", 1000);
+    for _ in 0..40 {
+        if !slot1.exists() {
+            break;
+        }
+        scene.wait(50);
+    }
+    assert!(!slot1.exists(), "Delete takes the state away");
+    scene.pad(UiButton::Up);
     section(&mut scene, 2);
     assert_eq!(scene.property("pageModel", "shows"), "2");
     hold(&mut scene, "GamePageOptions", &mockup::Mockup::default(), named, &mut report);
@@ -187,26 +219,44 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     assert!(still.g > 150 && still.r < 150, "the still first, the screenshot's green: {still:?}");
     wait_for(&mut scene, "videoPlayer", "playbackState", "PlayingState", 4000);
     wait_for(&mut scene, "pageClip", "showing", "true", 4000);
-    assert!(scene.property("videoFrames", "frames").parse::<i32>().unwrap_or(0) > 0, "the frames drawn by the kit's sink");
+    assert!(scene.property("pageClip", "frames").parse::<i32>().unwrap_or(0) > 0, "the frames drawn by the kit's sink");
     // The fade over the still done.
     scene.wait(1200);
     let clip = hero_colour(&mut scene);
     assert!(clip.r > 150 && clip.b > 150 && clip.g < 110, "the clip's magenta over the still: {clip:?}");
 
-    // B: the page loses the focus, and the clip stops.
+    // B: the page loses the focus, the clip stops and its player goes.
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Grid", 1000);
-    wait_for(&mut scene, "videoPlayer", "playbackState", "StoppedState", 2000);
+    wait_for(&mut scene, "pageClip", "running", "false", 2000);
 
     // The other game has no clip: its page keeps its still, and nothing plays.
     open_page(&mut scene, 1);
     assert_eq!(scene.property("pageModel", "title"), LANTERN);
     assert_eq!(scene.property("pageModel", "clip"), "");
     scene.wait(2500);
-    assert_eq!(scene.property("videoPlayer", "playbackState"), "StoppedState");
-    assert_eq!(scene.property("videoFrames", "frames"), "0");
-    scene.pad(UiButton::Back);
-    wait_for(&mut scene, "screens", "shown", "Grid", 1000);
+    assert_eq!(scene.property("pageClip", "running"), "false", "no player made for a game with no clip");
+    assert_eq!(scene.property("pageClip", "frames"), "0");
+    // Details ▸ Hide from Library asks first; Hide saves the edit and the page closes to the grid.
+    section(&mut scene, 4);
+    for _ in 0..5 {
+        scene.pad(UiButton::Down);
+        scene.wait(50);
+    }
+    let tree = scene.tree();
+    let focus = scene.focus(&tree).map(|i| tree.nodes[i as usize].heard.clone()).unwrap_or_default();
+    assert_eq!(focus, "Hide from Library", "Down reaches Details' last row");
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "pageModel", "asking", "true", 1000);
+    assert_eq!(scene.property("pageModel", "questionTitle"), format!("Hide {LANTERN}?"));
+    scene.wait(400);
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "screens", "shown", "Grid", 2000);
+    let games = Library::open(&platform, &platform.file(FILE_GAMES).unwrap(), &sqlite).unwrap();
+    let lantern = world.root.join("Roms/SNES").join(format!("{LANTERN}.sfc"));
+    let edits = games.get(&serde_json::json!({ "what": "edits", "path": lantern.to_str().unwrap() })).unwrap();
+    assert_eq!(edits["hidden"], "1", "hidden in games.db: {edits}");
     scene.assert_quiet();
     assert!(report.is_empty(), "{}", report.join("\n"));
 }

@@ -175,7 +175,8 @@ Window {
         onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
         onFocused: (game) => {
             program.inHand = game
-            if (games.rowOf(game) >= 0)
+            // Home's games are in hand too, and leave the grid's focus where it was.
+            if (screens.shown !== Screens.Home && games.rowOf(game) >= 0)
                 games.focused = games.rowOf(game)
         }
     }
@@ -214,7 +215,8 @@ Window {
             onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
             onFocused: (game) => {
                 program.inHand = game
-                if (games.rowOf(game) >= 0)
+                // Home's games are in hand too, and leave the grid's focus where it was.
+                if (screens.shown !== Screens.Home && games.rowOf(game) >= 0)
                     games.focused = games.rowOf(game)
             }
         }
@@ -415,6 +417,11 @@ Window {
         cores: library.cores
         game: screens.shown === Screens.Page ? library.gameFile(program.inHand) : ""
         onPlayed: (path, state) => program.play(path)
+        onHidden: screens.back()
+    }
+    Connections {
+        target: pageModel
+        function onHidden() { library.refresh() }
     }
     GamePage {
         objectName: "gamePage"

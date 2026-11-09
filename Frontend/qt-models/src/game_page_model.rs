@@ -63,6 +63,12 @@ pub mod qobject {
         /// The help bar's screen (HelpModel's numbers) for what `focus` names.
         #[qproperty(i32, help, READ, NOTIFY)]
         #[qproperty(QString, problem, READ, NOTIFY)]
+        /// A question asked before a change that cannot be undone, in the kit's Question's parts.
+        #[qproperty(bool, asking, READ, NOTIFY)]
+        #[qproperty(QString, question_title, cxx_name = "questionTitle", READ, NOTIFY)]
+        #[qproperty(QStringList, question_sentences, cxx_name = "questionSentences", READ, NOTIFY)]
+        #[qproperty(QStringList, question_choices, cxx_name = "questionChoices", READ, NOTIFY)]
+        #[qproperty(i32, question_back, cxx_name = "questionBack", READ, NOTIFY)]
         type GamePageModel = super::GamePageModelRust;
     }
 
@@ -109,6 +115,18 @@ pub mod qobject {
         /// A declared action the screens answer (Start).
         #[qsignal]
         fn passed(self: Pin<&mut GamePageModel>, key: QString);
+
+        /// The question answered, by the answer's index: the second makes the change asked about.
+        #[qinvokable]
+        fn answer(self: Pin<&mut GamePageModel>, index: i32);
+
+        /// The game was hidden from the library: the page closes.
+        #[qsignal]
+        fn hidden(self: Pin<&mut GamePageModel>);
+
+        /// The question was answered: the page takes the focus back from it.
+        #[qsignal]
+        fn answered(self: Pin<&mut GamePageModel>);
 
         /// The focus moved: an action's index, else -1 and the content's index; the help bar follows it.
         #[qinvokable]
@@ -241,6 +259,13 @@ pub struct GamePageModelRust {
     actions: QString,
     help: i32,
     problem: QString,
+    asking: bool,
+    question_title: QString,
+    question_sentences: QStringList,
+    question_choices: QStringList,
+    question_back: i32,
+    /// The change the question asks about.
+    pending: Option<crate::game_page::Change>,
     page: GamePage,
     file: GameFile,
     items: Vec<Item>,
@@ -274,6 +299,12 @@ impl Default for GamePageModelRust {
             actions: QString::default(),
             help: shown_screen(crate::help::Screen::GamePage),
             problem: QString::default(),
+            asking: false,
+            question_title: QString::default(),
+            question_sentences: QStringList::default(),
+            question_choices: QStringList::default(),
+            question_back: -1,
+            pending: None,
             page,
             file: GameFile::default(),
             items: Vec::new(),
@@ -485,8 +516,27 @@ impl qobject::GamePageModel {
             Outcome::Nothing => {}
             Outcome::Changed(change) => {
                 let saved = self.source.as_ref().map_or(Ok(()), |s| s.change(&self.file, &change));
+                let hid = saved.is_ok() && change == crate::game_page::Change::Hide;
                 self.as_mut().said(saved.err().unwrap_or_default());
-                self.refresh();
+                if hid {
+                    self.hidden();
+                } else {
+                    self.refresh();
+                }
+            }
+            Outcome::Ask(question, change) => {
+                let back = crate::question::back_index(&question);
+                self.as_mut().rust_mut().pending = Some(change);
+                self.as_mut().rust_mut().question_title = QString::from(question.title.as_str());
+                self.as_mut().rust_mut().question_sentences = list(question.sentences.into_iter());
+                self.as_mut().rust_mut().question_choices = list(question.choices.into_iter());
+                self.as_mut().rust_mut().question_back = back;
+                self.as_mut().question_title_changed();
+                self.as_mut().question_sentences_changed();
+                self.as_mut().question_choices_changed();
+                self.as_mut().question_back_changed();
+                self.as_mut().rust_mut().asking = true;
+                self.asking_changed();
             }
             Outcome::Play(state) => {
                 let path = QString::from(self.file.path.as_str());
@@ -524,10 +574,25 @@ impl qobject::GamePageModel {
     }
 
     pub fn declared(self: Pin<&mut Self>, key: &QString) {
-        if key.to_string() == crate::help::FAVOURITE {
-            self.outcome(Outcome::Changed(crate::game_page::Change::Favourite));
-        } else {
-            self.passed(key.clone());
+        match key.to_string().as_str() {
+            crate::help::FAVOURITE => self.outcome(Outcome::Changed(crate::game_page::Change::Favourite)),
+            crate::help::DELETE => {
+                let outcome = self.page.delete(self.focus.1);
+                self.outcome(outcome);
+            }
+            _ => self.passed(key.clone()),
+        }
+    }
+
+    pub fn answer(mut self: Pin<&mut Self>, index: i32) {
+        let pending = self.as_mut().rust_mut().pending.take();
+        if self.asking {
+            self.as_mut().rust_mut().asking = false;
+            self.as_mut().asking_changed();
+            self.as_mut().answered();
+        }
+        if let (1, Some(change)) = (index, pending) {
+            self.outcome(Outcome::Changed(change));
         }
     }
 

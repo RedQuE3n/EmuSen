@@ -162,6 +162,19 @@ impl GamePageSource for ClientSource {
                 let at = crate::words::utc(crate::words::now());
                 self.library.change(&json!({ "op": "save_edits", "path": path, "changes": { "altemulator": engine }, "at": at })).map(drop).map_err(words)
             }
+            Change::DeleteState(state) => {
+                // The state, its picture by Galaxia's name for it, and the runtime's record of it (Mistress's DeleteState).
+                let picture = self.platform.save_path(SAVE_PICTURE, state, None, 0).map_err(words)?;
+                std::fs::remove_file(state).map_err(words)?;
+                if picture.exists() {
+                    std::fs::remove_file(&picture).map_err(words)?;
+                }
+                self.runtime.state_forget(state).map_err(words)
+            }
+            Change::Hide => {
+                let at = crate::words::utc(crate::words::now());
+                self.library.change(&json!({ "op": "save_edits", "path": path, "changes": { "hidden": "1" }, "at": at })).map(drop).map_err(words)
+            }
             Change::Profile(profile) => {
                 let systems = self.runtime.systems().map_err(words)?;
                 let Some(s) = systems.iter().find(|s| Some(&s.id) == game.system.as_ref()) else { return Ok(()) };

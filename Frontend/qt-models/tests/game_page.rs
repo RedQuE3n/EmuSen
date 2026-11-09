@@ -85,6 +85,14 @@ fn qt_7_8_states_stand_slot_by_slot_with_auto_after_the_last_in_use() {
     assert_eq!(page.choose_tile(4), Outcome::Nothing, "an empty slot loads nothing");
     assert_eq!(page.help(None, 0), Screen::GamePageLoad);
     assert_eq!(page.help(None, 4), Screen::GamePageNone);
+    // X on a state asks first, No focused and B answering it, naming the state and when it was saved.
+    let Outcome::Ask(q, change) = page.delete(1) else { panic!("a question") };
+    assert_eq!(q.title, "Delete Slot 2?");
+    assert_eq!(q.sentences, ["Cobalt Harbor (Synthetic)'s Slot 2, saved yesterday, is deleted. This cannot be undone."]);
+    assert_eq!(q.choices, ["No", "Delete"]);
+    assert_eq!(q.back, Some(0));
+    assert_eq!(change, Change::DeleteState("s2".into()));
+    assert_eq!(page.delete(4), Outcome::Nothing, "an empty slot has nothing to delete");
 }
 
 #[test]
@@ -134,6 +142,8 @@ fn qt_7_8_the_overview_media_and_details() {
     assert_eq!(rows.iter().map(|r| r.label).collect::<Vec<_>>(), ["Scrape This Game", "Edit Details", "Cover art", "Open Folder", "Hide from Library"]);
     assert_eq!(rows[2].value, "Generated");
     assert_eq!(page.choose_row(0), Outcome::Door(SCRAPE));
+    let Outcome::Ask(q, change) = page.choose_row(4) else { panic!("Hide asks first") };
+    assert_eq!((q.title.as_str(), q.choices.as_slice(), change), ("Hide Cobalt Harbor (Synthetic)?", &["No".to_string(), "Hide".to_string()][..], Change::Hide));
 }
 
 #[test]

@@ -27,7 +27,9 @@ fn qt_7_8_the_clip_plays_on_vulkan_and_stops_when_the_page_loses_the_focus() {
     let platform = Platform::load(library()).unwrap();
     let gpu = std::env::var("EMUSEN_GPU_DEVICE").ok();
     let presets = std::env::temp_dir().join("qt-app-clip-gpu-presets");
-    let host = Host::new(&platform, "wayland", gpu.as_deref(), false, &presets).expect("a Vulkan device");
+    // EMUSEN_VALIDATE turns the Vulkan validation layer on, for a run that looks for what the device lacks.
+    let validate = std::env::var_os("EMUSEN_VALIDATE").is_some();
+    let host = Host::new(&platform, "wayland", gpu.as_deref(), validate, &presets).expect("a Vulkan device");
     let adoption = host.adoption();
     let world = sandbox("qt-app-clip-gpu", &[("SNES", &format!("{COBALT}.sfc"))]);
     let media = world.dir("Media");
@@ -60,16 +62,30 @@ fn qt_7_8_the_clip_plays_on_vulkan_and_stops_when_the_page_loses_the_focus() {
     wait_for(&mut scene, "pageModel", "ready", "true", 10000);
 
     let hero = |scene: &mut emusen_qt_test::Scene<'_>| scene.colours_at(&[(640.0, 30.0)])[0].expect("the hero drawn");
-    let still = hero(&mut scene);
+    // The still first: the screenshot's green, once its picture has loaded and before the poster's delay has passed.
+    let mut still = hero(&mut scene);
+    for _ in 0..12 {
+        if still.g > 150 && still.r < 150 {
+            break;
+        }
+        scene.wait(100);
+        still = hero(&mut scene);
+    }
     assert!(still.g > 150 && still.r < 150, "the still first, the screenshot's green: {still:?}");
     wait_for(&mut scene, "pageClip", "showing", "true", 5000);
     scene.wait(1200);
     let clip = hero(&mut scene);
     assert!(clip.r > 150 && clip.b > 150 && clip.g < 110, "VideoOutput draws the clip's magenta over the still: {clip:?}");
-    assert_eq!(scene.property("videoFrames", "frames"), "0", "on Vulkan the kit's sink draws nothing; VideoOutput does");
+    assert_eq!(scene.property("pageClip", "frames"), "0", "on Vulkan the kit's sink draws nothing; VideoOutput does");
 
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Grid", 2000);
-    wait_for(&mut scene, "videoPlayer", "playbackState", "StoppedState", 2000);
+    wait_for(&mut scene, "pageClip", "running", "false", 2000);
     scene.assert_quiet();
+    // The window hidden and gone before the device it adopted, as acceptance.rs ends: dropped the other way round, the
+    // render thread's frameSwapped reached the closed device's feed (a SIGSEGV in GamePicture::onSwapped, 2026-11-09).
+    assert!(scene.set_property("program", "visible", "false"));
+    scene.wait(50);
+    drop(harness);
+    drop(host);
 }

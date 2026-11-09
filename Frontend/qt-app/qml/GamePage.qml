@@ -72,9 +72,38 @@ Kit.NormalizedCanvas {
             target: screen.page
             function onPassed(key) { screen.acted(key) }
         }
+        // The question's popup held the focus; the page's walk takes it back where it was.
+        Connections {
+            target: screen.page
+            function onAnswered() { frame.forceActiveFocus() }
+        }
         Connections {
             target: frame.controller
             function onBackDeclined() { screen.backed() }
+        }
+        // Asked before deleting a state or hiding the game: No first and focused, B answers No (EmuSen_Interface.md §15.6).
+        Kit.Question {
+            id: question
+            objectName: "pageQuestion"
+            controller: frame.controller
+            title: screen.page.questionTitle
+            sentences: screen.page.questionSentences
+            choices: screen.page.questionChoices
+            backIndex: screen.page.questionBack
+            padFamily: screen.padFamily
+            titleFont: Qt.font({ family: faces.condensedRegular, pixelSize: Kit.Tokens.fontTitle })
+            bodyFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontBody })
+            captionFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontCaption })
+            rowFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontRow })
+            helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+            help: HelpModel {
+                screen: HelpModel.Question
+            }
+            onChosen: (index) => screen.page.answer(index)
+        }
+        // Opened each time it is asked; a Binding, since B closing the popup would undo a plain one.
+        Binding {
+            question.visible: screen.page.asking
         }
     }
     Faces {

@@ -4,6 +4,7 @@
 //! Game, the viewer) are doors the page names and a later piece opens.
 
 use crate::help::Screen;
+use crate::question::Question;
 use emusen_kit_core::input::UiButton;
 use emusen_platform_client::library::GameFile;
 use crate::words::BETWEEN;
@@ -25,6 +26,10 @@ pub enum Change {
     Engine(Option<String>),
     /// The controller profile the game starts with; none is the console's.
     Profile(Option<String>),
+    /// A saved state deleted, by its file, with its picture and its record.
+    DeleteState(String),
+    /// The game hidden from every library view; its file is not touched.
+    Hide,
 }
 
 /// One value of a stepped row: what is stored, none for the default, and its words.
@@ -207,6 +212,8 @@ pub enum Outcome {
     Play(Option<String>),
     /// A door to a later piece's page, by its row's key.
     Door(&'static str),
+    /// A question first; the change is made when its second answer, Yes, is chosen.
+    Ask(Question, Change),
 }
 
 /// The page over one read: the section shown and the state Resume stands on.
@@ -232,6 +239,13 @@ pub fn ago(at: i64, now: i64) -> String {
         _ if days < 14 => format!("{days} days ago"),
         _ => date(at),
     }
+}
+
+/// A question that does something cannot be undone: No first and focused, then the word for doing it; B answers No.
+fn ask(title: &str, sentence: &str, yes: &str) -> Question {
+    let mut q = crate::question::confirm(title, &[sentence]);
+    q.choices[1] = yes.to_owned();
+    q
 }
 
 /// "1 Nov 2026".
@@ -466,16 +480,33 @@ impl GamePage {
         ]
     }
 
-    /// A on a row: its door.
+    /// A on a row: Hide from Library asks first; any other row is its door.
     pub fn choose_row(&self, index: usize) -> Outcome {
         let rows = match self.content() {
             Content::Rows(rows) => rows,
             _ => return Outcome::Nothing,
         };
         match rows.get(index) {
+            Some(row) if row.key == HIDE && self.shown() == Section::Details => {
+                let sentence = "It leaves every library view until Settings lists hidden games again. Its file is not touched.";
+                Outcome::Ask(ask(&format!("Hide {}?", self.read.title), sentence, "Hide"), Change::Hide)
+            }
             Some(row) if !row.steps => Outcome::Door(row.key),
             _ => Outcome::Nothing,
         }
+    }
+
+    /// X on a state's tile: deleting it asks first, naming the state and when it was saved (Mistress's
+    /// `DeleteStateAsync`).
+    pub fn delete(&self, index: usize) -> Outcome {
+        let Content::Tiles(tiles) = self.content() else { return Outcome::Nothing };
+        if self.shown() != Section::States {
+            return Outcome::Nothing;
+        }
+        let Some(state) = tiles.get(index).and_then(|t| self.read.states.iter().find(|s| s.path == t.key)) else { return Outcome::Nothing };
+        let slot = slot_name(state.slot);
+        let sentence = format!("{}'s {slot}, saved {}, is deleted. This cannot be undone.", self.read.title, ago(state.when, self.now).to_lowercase());
+        Outcome::Ask(ask(&format!("Delete {slot}?"), &sentence, "Delete"), Change::DeleteState(state.path.clone()))
     }
 
     /// Left or Right on a row: the engine or the profile stepped, wrapping, and saved.

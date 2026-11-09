@@ -33,6 +33,7 @@ Additions, and one contract change to `PageFrame`'s action model.
 
 - **`VideoTile`** (qmldir): a clip over its still, after the poster's delay, silent unless unmuted; Qt Multimedia over
   the system's FFmpeg. `EmuSen_Kit.md` §7.50.
+- **`VideoClip`** (qmldir): VideoTile's player, made only while a clip is to play. §7.50.
 - **`VideoFrames`** (registry): a clip's frames drawn on the software backend, where `VideoOutput` draws nothing. §7.50.
 - **`PageLayout.pictureWidth`**, **`pictureHeight`**, **`pictureGap`** (registry): the Overview's picture. §7.50.
 - `PageFrame`: `clipSource`, `clipPlaying`, `clipMuted`, `videoTile`; `showsText`, `contentWords`, `contentPicture`; the

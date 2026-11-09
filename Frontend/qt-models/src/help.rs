@@ -190,7 +190,7 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
         Screen::GamePageResume => &[(UiButton::Accept, "Resume", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
         Screen::GamePageResumeSlots => &[(UiButton::Accept, "Resume", None), (UiButton::Left, "Slot", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
         Screen::GamePageFavourite => &[(UiButton::Accept, "Favourite", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
-        Screen::GamePageLoad => &[(UiButton::Accept, "Load", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageLoad => &[(UiButton::Accept, "Load", None), (UiButton::Screensaver, "Delete…", Some(DELETE)), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
         Screen::GamePageView => &[(UiButton::Accept, "View", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
         Screen::GamePageValue => &[(UiButton::Left, "Value", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
         Screen::GamePageChange => &[(UiButton::Accept, "Change", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
@@ -252,6 +252,8 @@ pub const HOME: &str = "home";
 /// The focused game's page, its heart, and a random game: actions a later stage carries out.
 pub const GAME_PAGE: &str = "gamePage";
 pub const FAVOURITE: &str = "favourite";
+/// X on a game's page's state: its deletion, asked first.
+pub const DELETE: &str = "delete";
 pub const RANDOM: &str = "random";
 
 /// The shoulders on the grid: the console before and the console after (Mistress's `StepSection`).

@@ -2786,7 +2786,9 @@ given one (`label`, EmuSen_Kit.md §7.53), so `HelpElement` gives it `GlyphLine`
 1050.0–1073.1 against ES-DE's 1051.8–1074.0 and SCREENSAVER 1156.0–1215.2 against 1157.0–1215.1; every label of the
 twelve states within a pixel of ES-DE's ink width where the face is drawn at its nominal size (below for the two that
 are not). Seeded faults: the advances left fractional (CarAlt's bar 5.9 units narrower, Art Book Next's 3.2, Artflix's
-5.5, all failing); the glyph's side at the box over 0.88 again (the system bars 9.6–17.6 units wider, failing).
+5.5, all failing); the glyph's side at the box over 0.88 again (the system bars 9.6–17.6 units wider, failing). The line reads the metrics through their own `font` in its bindings, since `advanceWidth` and `tightBoundingRect` are
+calls that Qt does not track: a first form laid out once and kept the old widths when the window's size changed, which
+`sizes.rs` caught (Artflix's help 0.23 of the width at 1920 × 1200 against 0.30 at 1280 × 800, eleven states).
 
 **4. The pair glyph** (approved by the tester 2026-11-09). ES-DE draws one icon for a pair of presses that make one
 action (Choose, the gamelist's System: a d-pad with both arrows of its axis; THEMES.md's `button_lr` and `button_ltrt`

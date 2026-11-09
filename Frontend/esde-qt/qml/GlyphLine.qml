@@ -13,16 +13,21 @@ Item {
     readonly property int base: Math.max(1, Math.round(root.px))
     readonly property real stretch: root.px / root.base
     // Each glyph with its pen, and the pen past the last as the line's width.
+    // Read through the metrics' own font, so a new size or face lays the line out again (advanceWidth is a call, not a property).
     readonly property var placed: {
+        const scale = root.px / metrics.font.pixelSize;
         let pen = 0;
         const out = [];
         for (const g of Array.from(root.text)) {
             out.push({ glyph: g, pen: pen });
-            pen += Math.round(metrics.advanceWidth(g) * root.stretch);
+            pen += Math.round(metrics.advanceWidth(g) * scale);
         }
         return { glyphs: out, width: pen };
     }
-    readonly property rect referenceBox: metrics.tightBoundingRect(root.reference)
+    readonly property rect referenceBox: {
+        const size = metrics.font.pixelSize;
+        return size > 0 ? metrics.tightBoundingRect(root.reference) : Qt.rect(0, 0, 0, 0);
+    }
     implicitWidth: root.placed.width
     implicitHeight: root.referenceBox.height * root.stretch
     FontMetrics {

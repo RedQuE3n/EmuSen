@@ -567,7 +567,18 @@ bool animating(QObject* object)
     return (object->inherits("QQuickFrameAnimation") || object->inherits("QQuickAbstractAnimation")) && object->property("running").toBool();
 }
 
-// Each running animation under an item, as "Class in name", the name its nearest named item's.
+// Whether an animation repeats without end, itself or a group it runs in: a design's resting motion, not a transition.
+bool looping(QObject* object)
+{
+    for (QObject* at = object; at != nullptr; at = at->parent()) {
+        if (at->inherits("QQuickFrameAnimation") || (at->inherits("QQuickAbstractAnimation") && at->property("loops").toInt() < 0)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Each running animation under an item, as "Class in name", the name its nearest named item's, and "looping" when it never ends.
 void runningUnder(QQuickItem* item, const QString& named, QStringList& out)
 {
     const QString here = item->objectName().isEmpty() ? named : item->objectName();
@@ -579,7 +590,7 @@ void runningUnder(QQuickItem* item, const QString& named, QStringList& out)
         inside.prepend(object);
         for (QObject* each : inside) {
             if (animating(each)) {
-                out.append(QString::fromLatin1(each->metaObject()->className()) + QLatin1String(" in ") + here);
+                out.append(QString::fromLatin1(each->metaObject()->className()) + QLatin1String(" in ") + here + (looping(each) ? QLatin1String(" looping") : QLatin1String("")));
             }
         }
     }

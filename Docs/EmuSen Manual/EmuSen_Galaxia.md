@@ -657,6 +657,13 @@ The sidecars users already have are **imported on first sight and never removed*
 
 The sidecar argument of §5.3 survives the move in one respect and not in another. It survives in that a state with no record still loads exactly as before and no core ever reads one. It does not survive in that a record no longer travels with its state: a states folder moved or copied elsewhere arrives without records, and fails towards "no record" rather than towards a wrong one.
 
+*Since 2026-11-09 (decided by the tester): a sidecar goes when the player deletes its state.* The front end's page
+deletes a state on the player's Yes and asks the runtime to forget its record; `emusen_crystal_state_forget` (crystal's
+`states::forget`) now removes the earlier build's sidecar beside it too (`states::sidecar_path`, the state's path with
+`.json`, the one owner of that name), as Mistress's `DeleteState` did, and nothing else: the state itself is the front
+end's to delete, and another state's sidecar stays. Held by crystal's `tests/state_forget.rs`; seeded, a forget that
+left the sidecar failed it.
+
 ### 5.3b The record names the engine, not the core (2026-10-04)
 
 Until 2026-10-04 the record's `Core` held `ICore.CoreName`, which names the console's core family rather than the

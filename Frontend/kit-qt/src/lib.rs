@@ -12,6 +12,7 @@ pub mod bells;
 pub mod body;
 pub mod column;
 pub mod convert;
+pub mod figures;
 pub mod frame;
 pub mod glyph;
 pub mod keyboard;

@@ -442,6 +442,9 @@ fn words_under(nodes: &[Node], children: &HashMap<&str, Vec<usize>>, index: usiz
     None
 }
 
+/// How much of an item must lie inside a clip for it to be drawn there, in pixels.
+const SLIVER: f64 = 0.5;
+
 /// The nearest clipping ancestor's box, and whether it scrolls.
 #[derive(Clone, Copy)]
 struct Clip {
@@ -462,7 +465,9 @@ fn build(nodes: &[Node], children: &HashMap<&str, Vec<usize>>, index: usize, cli
         }
     }
     if let Some(clip) = clip {
-        if clip.rect.overlap(&it.rect).is_empty() {
+        // Less than half a pixel inside is outside: a scrolled row's box meets its list's by a rounding's sliver (EmuSen_Kit.md §7.10).
+        let shown = clip.rect.overlap(&it.rect);
+        if shown.w < SLIVER || shown.h < SLIVER {
             if clip.scrolls {
                 it = it.hidden();
             } else if node.operable {

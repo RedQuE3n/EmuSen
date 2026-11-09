@@ -46,6 +46,7 @@ pub mod qobject {
         ThemesChecked,
         Settings,
         SettingsPage,
+        ToolSearch,
     }
 
     extern "RustQt" {
@@ -141,6 +142,7 @@ impl qobject::HelpModel {
             HelpScreen::ThemesChecked => Screen::ThemesChecked,
             HelpScreen::Settings => Screen::Settings,
             HelpScreen::SettingsPage => Screen::SettingsPage,
+            HelpScreen::ToolSearch => Screen::ToolSearch,
             _ => Screen::Home,
         }
     }
@@ -192,6 +194,7 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::ThemesChecked => HelpScreen::ThemesChecked,
         Screen::Settings => HelpScreen::Settings,
         Screen::SettingsPage => HelpScreen::SettingsPage,
+        Screen::ToolSearch => HelpScreen::ToolSearch,
     };
     shown.repr
 }

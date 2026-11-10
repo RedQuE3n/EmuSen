@@ -3154,15 +3154,21 @@ Still off, **[blocked]** for the tester:
 | CarAlt gamelist, `helpsystem_help`, 1280 × 800 | 3.9 | 326.7 against 330.6 |
 
 Both are rost at a fractional size with `entryRelativeScale` 0.8 (the system's labels 14.4 px, the gamelist's
-0.0144 × 800 × 0.8 = 9.22 px). Three measurements: the labels' glyphs are drawn at the size rounded up (a 2-D fit of
-"Favorites" with glyphs at 10 px: 24.6 with pens at 9.22 px, 44.0 with pens at 10, 76.2 with everything at 9.22), so the
-pens are the nominal size's; and the entries' boxes are 0.9 × 11.52 = 10.37 px, a fraction the whole-pixel rule drops at
-each of eight entries. Sizing every help label as ES-DE's own face (pens and glyphs rounded up, a space rounded down)
-closes the system bar and opens CarAlt's gamelist bars by 9.1 and 5.2 units and Artflix's at 1280 × 800 by 2.4; the
-pens at the nominal size leave the two above. What makes the last 2–4 units is not found: the icon's box (whether ES-DE
-rounds 10.37 up, as it does the glyphs) cannot be read off these captures, since rost's icons are drawn in the theme's
-colour over its own and their edges blend. A capture of CarAlt's gamelist with the help over a plain ground, or the
-tester's word, decides. The probe's measures are in `~/.cache/emusen/tmp/x2/ft/`, outside the repository.
+0.0144 × 800 × 0.8 = 9.22 px). The tester's six captures of 2026-11-09 settle the icon's box: test copies of CarAlt
+(`Testing/esde-oracle/helpcopy.py`) whose gamelist help shows four like discs (A Select, B Back, X View Media, Y
+Favorites) at full opacity at `fontSize` 0.0144, 0.0170 and 0.0190, at both sizes. The discs' centres, from the ink of
+their top and bottom rows (only a disc reaches them), step by the label plus a part that, with the entries placed at
+fractional sums and drawn at whole pixels, must lie in 22.68–23.33 px for 0.0170 at 1280 × 800, where the icon's box
+(0.9 × 13.6 = 12.24), `iconTextSpacing` (5.32) and `entrySpacing` (5.12) add to 22.68: **the icon's box is not
+rounded** (rounded up, 13, the part is 23.44; rounded down, or the whole entry's part rounded down as Artflix's bar
+shows, it is 22, both outside). At 1920 × 1200 the same fit gives 30.34–30.99 for 0.0144 (exact sum 31.22),
+34.01–34.66 for 0.0170 (34.03) and 35.34–35.98 for 0.0190 (36.19): two inside the exact sum and two below it by a
+quarter to a third of a pixel, which no rounding of the box, the spacings or the whole entry fits at once, since the
+labels' own widths at fractional sizes (each glyph's advance rounded, 9.22–18.24 px) change by a pixel between the
+models tried. So the box's rounding is settled (none), and what is left is how ES-DE carries the fractions of a bar's
+entries when the face is drawn at a fractional size: Artflix's whole-size bars drop them at each entry, CarAlt's do not.
+The painter keeps Artflix's rule, which holds seven of the nine boxes; CarAlt's two at 1280 × 800 stay **[blocked]**
+with these measures (`~/.cache/emusen/tmp/x2/ft/caps.py`, outside the repository).
 
 **Seeded faults**, each applied alone and reverted:
 

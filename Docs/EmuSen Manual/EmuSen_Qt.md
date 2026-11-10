@@ -4256,8 +4256,16 @@ of `X`, the N64's C buttons the right stick's directions `RightY-`…). The twel
 `psx.dualshock`, `sms.pad`, `sg1000.pad`; `ps2.digital` and `ps2.dualshock2` name `psx.pad`'s and `psx.dualshock`'s
 drawings with `{"same_as": …}`, one drawing for two ids). The DualShock's sticks gained their four directions as bands,
 since its declared axes make them controls. `qt-models`' build lists the folder, so a drawing added is a file and no code.
-A controller with no file (the libretro host's `retropad`, the Atari and NEC cores', a new core's) is the kit's generic
-drawing from its declared controls alone.
+A controller with no file of its own is next looked for on the console's systems, as `<system>.<controller>` (decided
+2026-11-10 by the tester): the libretro host's `retropad` on the Saturn is `saturn.retropad`, on the Dreamcast
+`dreamcast.retropad`, made from LunaP's `Saturn` and `Dreamcast` art item for item, each button region named by the RetroPad
+control the hosted cores give it as Mistress's `ControllerDiagrams` mapped them (`EmuSen_Cores.md` §4.11: the Saturn's A
+on B, B on A, C on R, X on Y, Y on X, Z on L, L and R on L2 and R2; the Dreamcast's A on B, B on A, X on Y, Y on X, the
+triggers on L2 and R2, its stick the left one's directions). Any other controller with no file (the RetroPad on another
+console, the Atari and NEC cores', a new core's) is the kit's generic drawing from its declared controls alone
+(`controllers::drawing_on`). Held to `qt-models/tests/controllers.rs` (both drawings cover their hosted cores' controls;
+another console's RetroPad is generic) and the program's `settings_drawings.rs` (fifteen controllers at the gate's sizes);
+seeded and caught there: the console's file not looked for, and the Saturn's C named by a control the core does not give.
 
 **The controls a drawing is named by** are the systems row's `controllers` (frontend API 2.1): the buttons by the core
 ABI's own names (`emusen-native`'s `Control::NAMES`, which names itself the one owner every reader reads), then up, down,

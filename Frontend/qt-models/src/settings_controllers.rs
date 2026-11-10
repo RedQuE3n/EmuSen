@@ -683,8 +683,7 @@ impl SettingsView {
         let b = self.binding.as_ref().filter(|_| matches!(self.page(), Some(Page::Bindings)))?;
         let console = self.read.consoles.console(&b.console)?;
         let controls = controllers::controls(&console.controllers);
-        let id = controllers::controller_of(&console.controllers, b.player);
-        let drawing = id.and_then(controllers::drawing).unwrap_or_default().to_owned();
+        let drawing = controllers::drawing_on(console, b.player).unwrap_or_default().to_owned();
         let choice = self.choice(&b.console, b.player, &b.profile);
         let texts = controls
             .iter()
@@ -793,7 +792,7 @@ impl SettingsView {
     pub fn binding_move(&mut self, dx: i32, dy: i32) -> bool {
         let Some(b) = self.binding.as_ref().filter(|b| !b.capturing && !b.testing) else { return false };
         let controls = self.controls_of(&b.console);
-        let file = self.read.consoles.console(&b.console).and_then(|c| controllers::controller_of(&c.controllers, b.player)).and_then(controllers::drawing);
+        let file = self.read.consoles.console(&b.console).and_then(|c| controllers::drawing_on(c, b.player));
         let (drawing, _) = emusen_kit_core::controller::drawing_for(file, &controls);
         let Some(next) = emusen_kit_core::controller::toward(&drawing, &controls, b.focus, f64::from(dx), f64::from(dy)) else { return false };
         if let Some(b) = self.binding.as_mut() {

@@ -1,6 +1,7 @@
 //! Every declared controller's drawing on the bindings page at the gate's sizes (EmuSen_Qt.md §7.7.H, the port of
 //! Mistress's `Every_consoles_bindings_page_fits`), each controller id of the in-tree cores declared by a console of a
-//! scripted world (`settings_drawings.json`), and a synthetic core's controller with no drawing drawn generic.
+//! scripted world (`settings_drawings.json`), a hosted core's RetroPad on the Saturn and the Dreamcast drawn as their
+//! consoles' pads, and a synthetic core's controller with no drawing drawn generic.
 
 mod bindings;
 mod common;
@@ -26,7 +27,7 @@ fn qt_7_7_h_every_declared_controllers_drawing_fits_and_a_controller_with_none_i
     wait_for(&mut scene, "settingsModel", "bindingsShown", "true", 1000);
     let mut report = Vec::new();
     let mut seen = Vec::new();
-    for _ in 0..13 {
+    for _ in 0..15 {
         let id = tabs(&mut scene).split(", ").nth(1).unwrap_or_default().to_lowercase();
         assert!(!seen.contains(&id), "{id} twice");
         let generic = scene.property("controllerLayout", "generic");
@@ -37,7 +38,7 @@ fn qt_7_7_h_every_declared_controllers_drawing_fits_and_a_controller_with_none_i
         scene.pad(UiButton::PageDown);
         scene.wait(200);
     }
-    assert_eq!(seen.len(), 13);
+    assert_eq!(seen.len(), 15);
     sdl.detach(pad);
     assert!(report.is_empty(), "{}", report.join("\n"));
 }

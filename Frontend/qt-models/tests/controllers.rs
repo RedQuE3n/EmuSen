@@ -148,6 +148,21 @@ fn qt_7_7_h_every_drawing_file_reads_and_covers_its_controllers_controls() {
     }
     assert_eq!(controllers::drawing("ps2.dualshock2"), controllers::drawing("psx.dualshock"), "one drawing for two ids");
     assert_eq!(controllers::drawing("test.pad"), None, "an id with no file");
+    // A hosted core's RetroPad is drawn as its console's pad where the console has one (decided 2026-11-10 by the
+    // tester): the Saturn's and the Dreamcast's, each covering the controls their hosted cores give them; any other
+    // console's RetroPad is the generic drawing.
+    let hosted: [(&str, &[u32], &[u32]); 2] =
+        [("saturn", &[0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], &[]), ("dreamcast", &[0, 1, 3, 4, 5, 6, 7, 8, 9, 12, 13], &[0, 1])];
+    for (system, buttons, axes) in hosted {
+        let c = Console { systems: vec![system.into()], controllers: pad(buttons, axes, &["retropad"]), ..Console::default() };
+        let text = controllers::drawing_on(&c, 1).unwrap_or_else(|| panic!("{system}'s RetroPad has a drawing"));
+        assert_eq!(Some(text), controllers::drawing(&format!("{system}.retropad")));
+        Drawing::parse(text).unwrap_or_else(|e| panic!("{system}: {e}"));
+        let (_, generic) = drawing_for(Some(text), &controllers::controls(&c.controllers));
+        assert!(!generic, "{system}'s drawing has a region for each control");
+    }
+    let other = Console { systems: vec!["atari2600".into()], controllers: pad(&[0, 3, 4, 5, 6, 7], &[], &["retropad"]), ..Console::default() };
+    assert_eq!(controllers::drawing_on(&other, 1), None, "another console's RetroPad is the generic drawing");
     assert_eq!(controllers::controls(&pad(&[0, 8], &[0, 1], &[])), ["B", "A", "LeftY-", "LeftY+", "LeftX-", "LeftX+"]);
 }
 

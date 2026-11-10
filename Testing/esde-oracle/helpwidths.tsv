@@ -1,0 +1,13 @@
+# A single Select label at 1280 x 800: the font size alone varies from 19.2 to 20.8 px, in 0.16-px steps.
+# entryRelativeScale stays 1 so that the measured label width can be separated from its scale (EmuSen_Qt.md §4.12.1).
+w00	0.0240	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+w01	0.0242	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+w02	0.0244	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+w03	0.0246	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+w04	0.0248	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+w05	0.0250	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+w06	0.0252	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+w07	0.0254	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+w08	0.0256	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+w09	0.0258	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+w10	0.0260	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a

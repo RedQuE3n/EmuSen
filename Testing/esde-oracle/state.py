@@ -4,11 +4,11 @@ pad (pad.py) from there, and the run's length. The system is anchored by name (S
 because a carousel's axis and the systems' order are the theme's and ES-DE's; the pad then walks the rest: "b" back to
 the system view (which proves the pad reached ES-DE), or "down" j times to gamelist entry j as ES-DE lists it, and with
 "media:<n>" then "x" (the media viewer) and "right" n times, or with "manual:<n>" then "x", "up" (the game's PDF
-manual) and "right" n times (a page each), and after it "zoom:<k>" the right shoulder k times and "pan:<m>" "right" m
-times more.
+manual) and "right" n times (a page each), and after it "zoom:<k>" the right shoulder k times, "zoom-out:<k>" the left
+shoulder k times, "pan:<m>" "right" m times, or "pan-y:<m>" "down" m times, in the order written.
 See README.md.
 
-Usage: state.py <system> system|gamelist[:<j>[:media:<n>|:manual:<n>[:zoom:<k>[:pan:<m>]]]]
+Usage: state.py <system> system|gamelist[:<j>[:media:<n>|:manual:<n>[:zoom|zoom-out|pan|pan-y:<k>]...]]
 Prints three lines: "settings Name=value...", "pad <step>...", "seconds <n>".
 """
 import sys
@@ -32,13 +32,17 @@ def state(system, view):
             words = media.split(":")
             counts = words[1::2]
             if words[0] not in ("media", "manual") or len(words) % 2 or not all(c.isdigit() for c in counts) \
-                    or words[2::2] != ["zoom", "pan"][:len(words) // 2 - 1] or (words[0] == "media" and len(words) > 2):
-                raise SystemExit(f"state.py: after the entry, media:<n> or manual:<n>[:zoom:<k>[:pan:<m>]]: {view}")
-            n, zoom, pan = (list(map(int, counts)) + [0, 0])[:3]
+                    or any(k not in ("zoom", "zoom-out", "pan", "pan-y") for k in words[2::2]) \
+                    or (words[0] == "media" and len(words) > 2):
+                raise SystemExit(f"state.py: after the entry, media:<n> or manual:<n> with zoom, zoom-out, pan or pan-y steps: {view}")
+            n = int(counts[0])
             steps += [f"tap:x wait:{VIEWER_S}"]
             if words[0] == "manual":
                 steps += [f"tap:up wait:{VIEWER_S}"]
-            steps += [f"tap:right wait:{STEP_S}"] * n + [f"tap:r wait:{STEP_S}"] * zoom + [f"tap:right wait:{STEP_S}"] * pan
+            steps += [f"tap:right wait:{STEP_S}"] * n
+            buttons = {"zoom": "r", "zoom-out": "l", "pan": "right", "pan-y": "down"}
+            for operation, count in zip(words[2::2], counts[1:]):
+                steps += [f"tap:{buttons[operation]} wait:{STEP_S}"] * int(count)
     else:
         raise SystemExit(f"state.py: not a view: {view}")
     pad = f"wait:{STARTUP_S} " + " ".join(steps) if steps else f"wait:{STARTUP_S}"

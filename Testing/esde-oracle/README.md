@@ -79,7 +79,9 @@ not cross into another network namespace), plays to SDL's dummy audio, and draws
   at sizes the watched themes do not show (EmuSen_Qt.md §4.12).
 - `helpstates.tsv` and `helpstates.sh` — the help copies of 2026-11-09 that change one property at a time from a bar
   whose every size is whole (EmuSen_Qt.md §4.12.1), each written and captured in turn at 1280 × 800, `gamelist:1`
-  (`caralt-help-<name>-es-de/gamelist-1-1280x800.png`).
+  (`caralt-help-<name>-es-de/gamelist-1-1280x800.png`). `helpstates.sh <table>` runs another table the same way:
+  `helpwidths.tsv` holds a single Select label at eleven font sizes from 19.2 to 20.8 px, which separates the label's
+  measured width from its scale.
 - `manualstates.sh` — the media viewer's PDF mode on the NES's manual game in CarAlt at both sizes (below).
 - `viewerstates.sh` — the media viewer under its settings (USERGUIDE.md, "Media viewer settings") on the NES's first
   game in CarAlt at both sizes, scanlines off, each capture named by a `TAG`.
@@ -104,8 +106,9 @@ theme's folder, the view written as given with `:` turned into `-`: `system-1280
 - **gamelist:j:media:n**: then *x*, the media viewer (1 s to open), and *right* pressed *n* times. With `SYSTEM=nes` and
   entry 0, the viewer's game and every type it shows, one capture per *n* (`nes-gamelist-0-media-<n>-<W>x<H>.png`);
   at the SNES's entry 0, *x* on the folder *Tower Set* (`gamelist-0-media-0-<W>x<H>.png`).
-- **gamelist:j:manual:n[:zoom:k[:pan:m]]**: then *x*, *up* (the game's PDF manual, 1 s to open), *right* pressed *n*
-  times (a page each), the right shoulder *k* times and *right* *m* times more. With `SYSTEM=nes` and entry 1, Cobalt
+- **gamelist:j:manual:n[:zoom|zoom-out|pan|pan-y:k]...**: then *x*, *up* (the game's PDF manual, 1 s to open), *right*
+  pressed *n* times (a page each), then each step in the order written: `zoom` the right shoulder *k* times, `zoom-out`
+  the left shoulder, `pan` *right*, `pan-y` *down*. With `SYSTEM=nes` and entry 1, Cobalt
   Harbor, whose manual `library.py` writes: three labelled pages of 600 × 800 points.
 
 The pad exists only while its steps run: it appears when ES-DE starts, presses after 4 s, and is removed about 5 s

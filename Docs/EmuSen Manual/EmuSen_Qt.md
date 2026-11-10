@@ -3269,6 +3269,31 @@ for the tester: the rule is not derived, and the two boxes stay off by 2.2 and 3
 rule. What the next captures would separate is the label's width alone: one label (`entries` a) at `entryRelativeScale`
 1 and `fontSize` from 0.024 to 0.026 in steps of 0.0002 at 800 rows, so that only the text's size moves.
 
+**The captures of 2026-11-10 and what they settle.** `helpwidths.tsv` (one Select label, `fontSize` 0.0240 to 0.0260 in
+steps of 0.0002, every other size whole) and `helpscales.tsv` (one label at `fontSize` 0.025 with `entryRelativeScale` 0.80
+to 1.00; one label at `entryRelativeScale` 0.8 at six font sizes; two at 0.8), captured with ES-DE 3.4.1, CarAlt's copies
+at 1280 × 800. The fits are `~/.cache/emusen/tmp/x4/fit3.py`, `fit4.py` and `fit5.py`, outside the repository.
+
+1. **A label's width in the bar is its glyphs' advances, each rounded half up from its exact value.** The single label's
+   disc moves at 19.84, 20.32 and 20.8 px and nowhere else (37, 38, 39, 42 px of label), and in the eleven scales of
+   `entryRelativeScale` the disc's place plus that width is 1252 in every one. HarfBuzz's 64ths were the error in every
+   rule tried before: rost's `t` at 19.8 px is 6.4944, 6.5 in 64ths; it rounds down (37 for Select, not 38), and its `S`
+   at 20.8 px, 7.5088, rounds up. 64ths rounded half down fail at 17.6 px and half up at 18.0 px. `esde-text` now
+   shapes at 65536 units to the pixel (§4.9.4).
+2. **The last label ends at the element's edge**, no entry spacing after it: the label's ink starts at
+   round(0.995 × 1280 − width) in all 18 single-label copies.
+3. **Places are carried as fractions and drawn at the nearest pixel.** With the widths of 1, every disc of `b0`–`n1` and
+   `w00`–`w10` (49 of 49) is placed by an icon box of 0.870–0.876 × `fontSize` × height / max(1, `entryRelativeScale`),
+   `iconTextSpacing` and `entrySpacing` exact, the sum drawn rounded. Artflix's whole-size bars agree: label plus 32 px
+   from disc to disc at 1280 × 800 and plus 48 at 1920 × 1200 is a box of 17.5 and 26.25 px, 0.875 of 20 and 30 px, with
+   Artflix's 3.84 + 10.66 and 5.76 + 16 px of spacing.
+4. **`entryRelativeScale` below 1 leaves the icon alone**: the disc's raster is the same in all eleven scales.
+
+**Still open, [blocked] for the tester:** at `entryRelativeScale` 0.8, CarAlt's own scale, the icon box the multi-entry
+copies need is 0.862–0.878 × `fontSize` × height at 0.0144 but 0.90–0.926 at 0.0170 and 0.899–0.916 at 0.0190 (from the
+labels' places, which no longer depend on the disc's drawing), while the drawn disc is not the layout's box (16 px of
+ink at 20 px, 15 at 16 px). No single rule of the box closes the three, so CarAlt's two bars at 1280 × 800 stay off.
+
 ### 4.13 The media viewer's PDF manual **[M 2026-11-09]**
 
 **Approved 2026-11-09 by the tester:** a game's PDF manual in the media viewer, through Qt PDF. The evidence is the user

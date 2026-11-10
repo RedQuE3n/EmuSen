@@ -318,6 +318,7 @@ name = "emusen-kit-core"
 version = "0.1.0"
 dependencies = [
  "palette",
+ "serde_json",
 ]
 
 [[package]]
@@ -345,6 +346,10 @@ dependencies = [
  "cxx-qt-lib",
  "emusen-kit-core",
 ]
+
+[[package]]
+name = "emusen-native"
+version = "0.1.0"
 
 [[package]]
 name = "emusen-platform-client"
@@ -412,6 +417,7 @@ dependencies = [
  "emusen-esde",
  "emusen-kit-core",
  "emusen-kit-qt",
+ "emusen-native",
  "emusen-platform-client",
  "emusen-qt-endymion",
  "emusen-qt-test",

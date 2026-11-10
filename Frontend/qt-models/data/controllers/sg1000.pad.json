@@ -1,0 +1,18 @@
+{
+  "name": "SG-1000 joystick",
+  "design": [1000, 560],
+  "items": [
+    {"part": {"box": [640, 16, 240, 112, 16]}, "fill": "#26262B", "stroke": "#6A6A74", "width": 4},
+    {"part": {"box": [654, 30, 212, 6, 3]}, "fill": "#B8323A"},
+    {"part": {"pill": [760, 66, 100, 42, 0]}, "fill": "#222226"},
+    {"region": "Start", "shape": {"pill": [760, 66, 82, 26, 0]}, "name": "Pause", "fill": "#4A4A53", "stroke": "#2C2C31", "width": 2, "side": "top"},
+    {"word": "PAUSE", "at": [760, 108], "size": 16, "colour": "#B8B8C2"},
+    {"part": {"path": "M 700,200 C 700,170 704,150 704,128"}, "stroke": "#6A6A74", "width": 9},
+    {"part": {"box": [80, 200, 840, 330, 30]}, "fill": "#34343A", "stroke": "#6A6A74", "width": 5},
+    {"stick": [500, 365, 62, 38, 30], "gate_fill": "#222226", "knob_fill": "#4A4A53", "edge": "#6A6A74", "band": "#55555F", "arrow": "#C4C4CC", "controls": ["Up", "Down", "Left", "Right"]},
+    {"region": "B", "shape": {"box": [36, 228, 76, 104, 18]}, "name": "1", "fill": "#B8323A", "stroke": "#772025", "width": 3},
+    {"region": "A", "shape": {"box": [888, 228, 76, 104, 18]}, "name": "2", "fill": "#B8323A", "stroke": "#772025", "width": 3},
+    {"word": "1", "at": [150, 280], "size": 30, "colour": "#B8B8C2"},
+    {"word": "2", "at": [850, 280], "size": 30, "colour": "#B8B8C2"}
+  ]
+}

@@ -23,6 +23,11 @@ fn up(button: UiButton) -> PadEvent {
     PadEvent { button, down: false }
 }
 
+/// What a tick says to the interface: its presses, the family and the count; the pads' events are the seats'.
+fn seen(tick: Tick) -> (Vec<PadEvent>, Option<PadFamily>, Option<usize>) {
+    (tick.events, tick.family, tick.connected)
+}
+
 fn pad(p: &Arc<Platform>, kind: i32, name: &str) -> SimPad {
     let pad = SimPad::new(p, None).unwrap();
     pad.set(consts::SIM_PAD_KIND, kind).unwrap();
@@ -40,7 +45,7 @@ fn every_control_gives_its_press_and_the_stick_and_triggers_past_their_threshold
     let pads = Pads::simulated(&p, &set).unwrap();
     let mut reading = Reading::default();
     let first = reading.start(&pads).unwrap();
-    assert_eq!(first, Tick { events: vec![], family: Some(PadFamily::Generic), connected: Some(1) });
+    assert_eq!(seen(first), seen(Tick { events: vec![], family: Some(PadFamily::Generic), connected: Some(1), ..Tick::default() }));
     assert!(reading.poll(&pads).unwrap().is_empty(), "nothing changed");
 
     // SDL's buttons by number, each with the press kit-core's table gives it.
@@ -124,13 +129,13 @@ fn pads_are_merged_the_last_used_gives_the_family_and_pads_come_and_go_while_rea
     // The pad last used pulled out while it holds a button: the button goes up and the family falls to the first pad read.
     nintendo.press(0, true).unwrap();
     assert_eq!(
-        reading.poll(&pads).unwrap(),
-        Tick { events: vec![down(UiButton::Accept)], family: Some(PadFamily::Nintendo), connected: None }
+        seen(reading.poll(&pads).unwrap()),
+        seen(Tick { events: vec![down(UiButton::Accept)], family: Some(PadFamily::Nintendo), connected: None, ..Tick::default() })
     );
     set.disconnect(&nintendo).unwrap();
     assert_eq!(
-        reading.poll(&pads).unwrap(),
-        Tick { events: vec![up(UiButton::Accept)], family: Some(PadFamily::PlayStation), connected: Some(1) }
+        seen(reading.poll(&pads).unwrap()),
+        seen(Tick { events: vec![up(UiButton::Accept)], family: Some(PadFamily::PlayStation), connected: Some(1), ..Tick::default() })
     );
 
     // One plugged in while reading is read; with none left the family is the generic face.
@@ -138,12 +143,12 @@ fn pads_are_merged_the_last_used_gives_the_family_and_pads_come_and_go_while_rea
     set.connect(&xbox).unwrap();
     assert_eq!(reading.poll(&pads).unwrap().connected, Some(2));
     xbox.press(3, true).unwrap();
-    assert_eq!(reading.poll(&pads).unwrap(), Tick { events: vec![down(UiButton::Search)], family: Some(PadFamily::Xbox), connected: None });
+    assert_eq!(seen(reading.poll(&pads).unwrap()), seen(Tick { events: vec![down(UiButton::Search)], family: Some(PadFamily::Xbox), connected: None, ..Tick::default() }));
     set.disconnect(&xbox).unwrap();
     set.disconnect(&sony).unwrap();
     assert_eq!(
-        reading.poll(&pads).unwrap(),
-        Tick { events: vec![up(UiButton::Search)], family: Some(PadFamily::Generic), connected: Some(0) }
+        seen(reading.poll(&pads).unwrap()),
+        seen(Tick { events: vec![up(UiButton::Search)], family: Some(PadFamily::Generic), connected: Some(0), ..Tick::default() })
     );
 }
 

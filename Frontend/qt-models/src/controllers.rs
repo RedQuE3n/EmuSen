@@ -1,0 +1,80 @@
+//! The controllers a console's engine declares, as Settings ▸ Controllers draws and binds them (EmuSen_Qt.md §7.7.H,
+//! decided 2026-11-09): the drawing that stands for a controller id, a data file of `data/controllers` named by the id;
+//! and the controls the drawing's regions are named by, the canonical controls by the core ABI's own names and each
+//! stick the console reads by its axes' names. A controller with no file is drawn as the kit's generic controller.
+
+use emusen_crystal_client::shapes::Controllers;
+use emusen_native::core::desc::{Axis, Control};
+
+include!(concat!(env!("OUT_DIR"), "/drawings.rs"));
+
+/// A controller's drawing file by its declared id, following a file that is the same drawing as another's
+/// (`{"same_as": "<id>"}`); none for an id with no file.
+pub fn drawing(id: &str) -> Option<&'static str> {
+    let text = DRAWINGS.iter().find(|(d, _)| *d == id).map(|(_, t)| *t)?;
+    let alias = serde_json::from_str::<serde_json::Value>(text).ok().and_then(|v| v["same_as"].as_str().map(str::to_owned));
+    match alias {
+        Some(other) => DRAWINGS.iter().find(|(d, _)| *d == other).map(|(_, t)| *t),
+        None => Some(text),
+    }
+}
+
+/// A canonical control's name by its number in the core ABI (`enum emusen_control`).
+pub fn control_name(number: u32) -> Option<&'static str> {
+    Control::NAMES.get(number as usize).copied()
+}
+
+fn axis_name(number: u32) -> Option<&'static str> {
+    Axis::NAMES.get(number as usize).copied()
+}
+
+/// The controls a console's pad has, as the drawing's regions are named: its buttons, then up, down, left and right of
+/// each stick it reads (`<axis>-` the way to the axis's low end), as Endymion's `PadControls.For` orders them.
+pub fn controls(c: &Controllers) -> Vec<String> {
+    let mut out: Vec<String> = c.buttons.iter().filter_map(|b| control_name(*b)).map(str::to_owned).collect();
+    for (x, y) in [("LeftX", "LeftY"), ("RightX", "RightY")] {
+        for axis in [y, x] {
+            if c.axes.iter().filter_map(|a| axis_name(*a)).any(|a| a == axis) {
+                out.push(format!("{axis}-"));
+                out.push(format!("{axis}+"));
+            }
+        }
+    }
+    out
+}
+
+/// A canonical control's number by its name.
+pub fn control_number(name: &str) -> Option<u32> {
+    Control::NAMES.iter().position(|n| *n == name).map(|i| i as u32)
+}
+
+/// Past this share of its travel a stick's direction counts as held (Mistress's `ControllerDiagrams.DirectionThreshold`).
+pub const DIRECTION_THRESHOLD: f64 = 0.5;
+
+/// Whether a stick's direction (`<axis>-` or `<axis>+`) is held on a pad's axes, by the core ABI's axis numbers.
+pub fn stick_held(control: &str, axes: &[f64]) -> bool {
+    let (axis, toward) = control.split_at(control.len().saturating_sub(1));
+    let Some(at) = Axis::NAMES.iter().position(|n| *n == axis) else { return false };
+    let value = axes.get(at).copied().unwrap_or(0.0);
+    match toward {
+        "-" => value < -DIRECTION_THRESHOLD,
+        "+" => value > DIRECTION_THRESHOLD,
+        _ => false,
+    }
+}
+
+/// Whether a control is a button, bound to a gamepad's button; a stick's direction is read from the pad's own stick.
+pub fn is_button(control: &str) -> bool {
+    Control::NAMES.contains(&control)
+}
+
+/// The controller a player's port holds, as the console's settings stand: the player's, else the first port's.
+pub fn controller_of(c: &Controllers, player: u32) -> Option<&str> {
+    let at = player.saturating_sub(1) as usize;
+    c.players.get(at).and_then(|p| p.as_deref()).or_else(|| c.players.first().and_then(|p| p.as_deref()))
+}
+
+/// How many players the console's ports hold as its settings stand, an adapter's included; one at least.
+pub fn players(c: &Controllers) -> u32 {
+    (c.players.iter().filter(|p| p.is_some()).count() as u32).max(1)
+}

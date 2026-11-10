@@ -78,6 +78,8 @@ pub const SEARCH: &str = "search";
 pub const TO_GRID: &str = "toGrid";
 /// Settings' door to the Themes tab, by its name in the screen's description.
 pub const THEMES: &str = "themes";
+/// The Pause Card's Controllers ▸ Bindings: Settings' drawing page over the card, B back to it (EmuSen_Interface.md §20.3).
+pub const CARD_BINDINGS: &str = crate::settings_controllers::CARD_BINDINGS;
 
 /// The screen shown after an ask, and the grid's row (the page a card opens at, for a card); `None` leaves both as they
 /// were.
@@ -121,6 +123,7 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Grid, Ask::Back) => Some((Shown::Consoles, None)),
         (Shown::Home | Shown::Grid | Shown::Pause | Shown::List | Shown::Search | Shown::SearchGrid, Ask::Play) => Some((Shown::Game, None)),
         (Shown::Game, Ask::Menu) => Some((Shown::Pause, None)),
+        (Shown::Pause, Ask::Act(key)) if key == CARD_BINDINGS => Some((Shown::Settings, None)),
         (Shown::Pause, Ask::Library) => Some((Shown::Home, None)),
         (Shown::Game | Shown::Pause, Ask::Closed) => Some((Shown::Home, None)),
         (Shown::Home, Ask::Place(CORES_PLACE)) => Some((Shown::Cores, None)),
@@ -183,6 +186,7 @@ pub fn step_in(themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<S
         // The cards close to the theme's view on B, Start or any of their actions, which the host carries out.
         (true, Shown::HomeCard | Shown::List, Ask::Back | Ask::Close | Ask::Act(_)) => Some((Shown::Esde, None)),
         (true, Shown::Game, Ask::Menu) => Some((Shown::Pause, None)),
+        (true, Shown::Pause, Ask::Act(key)) if key == CARD_BINDINGS => Some((Shown::Settings, None)),
         (true, Shown::Pause, Ask::Library) => Some((Shown::Esde, None)),
         (true, Shown::Game | Shown::Pause, Ask::Closed) => Some((Shown::Esde, None)),
         _ => None,
@@ -283,6 +287,8 @@ pub struct ScreensRust {
     themed: bool,
     /// The screen a game's page was opened over.
     page_origin: Shown,
+    /// Settings opened over the Pause Card, whose B returns to it.
+    over_card: bool,
 }
 
 impl Default for ScreensRust {
@@ -296,6 +302,7 @@ impl Default for ScreensRust {
             found: false,
             themed: false,
             page_origin: Shown::Home,
+            over_card: false,
         }
     }
 }
@@ -402,9 +409,14 @@ impl qobject::Screens {
         let was = shown_of(self.shown);
         let stepped = match was {
             Shown::Page => page_step(self.themed, self.page_origin, &ask).map(|s| (s, None)),
+            Shown::Settings if self.over_card && ask == Ask::Back => Some((Shown::Pause, None)),
             _ => step_in(self.themed, was, &ask),
         };
         let Some((shown, key)) = stepped else { return };
+        let over_card = was == Shown::Pause && shown == Shown::Settings;
+        if self.over_card != over_card && (over_card || shown != Shown::Settings) {
+            self.as_mut().rust_mut().over_card = over_card;
+        }
         if shown == Shown::Page && was != Shown::Page {
             self.as_mut().rust_mut().page_origin = page_origin(self.themed, was);
         }

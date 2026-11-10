@@ -4,8 +4,10 @@
 
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use emusen_platform_client::pads::{consts, Pads};
+use emusen_platform_client::pads::{consts, PadEvent, Pads};
 use emusen_platform_client::Result;
+
+use crate::seats::{Ask, Connected, Player, Seats};
 
 /// The most players a game hears (Endymion's seats).
 pub const PLAYERS: usize = 8;
@@ -44,6 +46,11 @@ struct State {
     /// The game hears nothing while the interface holds a button of its own (Guide, for its chords).
     muted: bool,
     read: Read,
+    /// The seats, kept by the reader; a page's asks waiting for its next tick; the seats as a page reads them.
+    seats: Seats,
+    asks: Vec<Ask>,
+    players: Vec<Player>,
+    connected: Vec<Connected>,
 }
 
 /// The hand-over between the pads' reader and a game: what the game wants, whether it hears the pads, the newest read.
@@ -63,6 +70,14 @@ impl GamePads {
         state.want = want;
         state.want_serial += 1;
         state.read = Read { serial: state.read.serial, ..Read::default() };
+    }
+
+    /// The game's buttons bound again from the binding files on the next tick, as after a profile or a binding changed.
+    pub fn rebind(&self) {
+        let mut state = self.state();
+        if state.want.is_some() {
+            state.want_serial += 1;
+        }
     }
 
     /// Whether the game hears the pads (running and on screen); nothing is handed over while it does not. Given back to
@@ -104,6 +119,40 @@ impl GamePads {
         self.state().read.seated
     }
 
+    /// A page's ask of the seats, done on the reader's next tick.
+    pub fn ask(&self, ask: Ask) {
+        self.state().asks.push(ask);
+    }
+
+    /// The seats as a page shows them, player 1 first.
+    pub fn players(&self) -> Vec<Player> {
+        self.state().players.clone()
+    }
+
+    /// Every pad connected, with its player and whether a button is held on it.
+    pub fn connected(&self) -> Vec<Connected> {
+        self.state().connected.clone()
+    }
+
+    /// The reader's tick for the seats: the pads opened and closed seated, the asks done, the page's view brought up to
+    /// date; whether the view changed.
+    pub fn keep_seats(&self, pads: &Pads, events: &[PadEvent]) -> Result<bool> {
+        let mut state = self.state();
+        state.seats.apply(pads, events)?;
+        for ask in std::mem::take(&mut state.asks) {
+            state.seats.ask(pads.platform(), ask)?;
+        }
+        let (players, connected) = (state.seats.players(), state.seats.connected(Some(pads)));
+        let changed = players != state.players || connected != state.connected;
+        state.players = players;
+        state.connected = connected;
+        Ok(changed)
+    }
+
+    fn seat_keys(&self) -> [Option<u64>; PLAYERS] {
+        self.state().seats.keys()
+    }
+
     /// The newest read into `out` when it is newer than `out`'s; true when it was.
     pub fn take(&self, out: &mut Read) -> bool {
         let state = self.state();
@@ -139,13 +188,13 @@ pub struct GameReading {
     want_serial: u64,
     want: Option<Want>,
     bound: [[i32; BUTTONS as usize]; PLAYERS],
-    seats: Vec<u64>,
+    seats: [Option<u64>; PLAYERS],
     read: Read,
 }
 
 impl GameReading {
-    /// One tick: the pads as the game hears them handed over, when a game wants them. Players are seated in the order the
-    /// pads were opened, player 1 alone where the first controller only is read.
+    /// One tick: the pads as the game hears them handed over, when a game wants them. Players are the seats' (EmuSen_Input.md
+    /// §8.9), player 1 alone where the first controller only is read.
     pub fn read(&mut self, pads: &Pads, game: &GamePads) -> Result<()> {
         let (serial, want, swapped) = {
             let state = game.state();
@@ -156,17 +205,20 @@ impl GameReading {
             self.want_serial = serial;
         }
         let Some(want) = &self.want else { return Ok(()) };
-        let open = pads.open()?;
-        let first_only = pads.setting(consts::SETTING_FIRST_CONTROLLER_ONLY)? != 0.0;
-        let seated = open.len().min(if first_only { 1 } else { PLAYERS });
-        let swap = swapped && seated >= 2;
-        let seat_of = |player: usize| open[if swap && player < 2 { 1 - player } else { player }];
-        if self.seats.len() != seated || (0..seated).any(|p| self.seats[p] != seat_of(p)) {
-            self.seats.clear();
-            self.seats.extend((0..seated).map(seat_of));
-            for (player, &key) in self.seats.iter().enumerate() {
-                pads.set_player_index(key, player as i32)?;
+        let mut keys = game.seat_keys();
+        if pads.setting(consts::SETTING_FIRST_CONTROLLER_ONLY)? != 0.0 {
+            keys[1..].iter_mut().for_each(|k| *k = None);
+        }
+        if swapped && keys[0].is_some() && keys[1].is_some() {
+            keys.swap(0, 1);
+        }
+        if self.seats != keys {
+            for (player, key) in keys.iter().enumerate() {
+                if let Some(key) = key {
+                    pads.set_player_index(*key, player as i32)?;
+                }
             }
+            self.seats = keys;
         }
         let players = want.ports.min(PLAYERS);
         let read = &mut self.read;
@@ -175,7 +227,8 @@ impl GameReading {
         read.axes.clear();
         read.axes.resize(players * want.axes.len(), 0.0);
         read.seated = 0;
-        for (player, &key) in self.seats.iter().enumerate().take(players) {
+        for (player, key) in self.seats.iter().enumerate().take(players) {
+            let Some(key) = *key else { continue };
             read.seated |= 1 << player;
             for button in 0..BUTTONS {
                 if pads.pressed(key, button, self.bound[player][button as usize])? {

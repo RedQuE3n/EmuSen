@@ -1,0 +1,23 @@
+{
+  "name": "N64 controller",
+  "design": [1000, 880],
+  "items": [
+    {"part": {"path": "M 500,150 C 500,110 500,60 520,4"}, "stroke": "#45454E", "width": 9},
+    {"region": "L", "shape": {"path": "M 92,196 C 110,150 170,130 262,126 L 270,158 C 190,162 136,178 116,214 Z"}, "fill": "#7A7A84", "stroke": "#45454E", "width": 3},
+    {"region": "R", "shape": {"path": "M 908,196 C 890,150 830,130 738,126 L 730,158 C 810,162 864,178 884,214 Z"}, "fill": "#7A7A84", "stroke": "#45454E", "width": 3},
+    {"region": "L2", "shape": {"path": "M 404,630 L 332,662 C 306,676 306,730 334,744 L 410,760 Z"}, "name": "Z", "behind": true, "fill": "#303038", "stroke": "#45454E", "width": 3, "caption": "Z", "caption_colour": "#C8C8D0", "caption_size": 26},
+    {"part": {"path": "M 120,200 C 150,160 250,150 500,150 C 750,150 850,160 880,200 C 930,260 960,380 945,520 C 930,660 900,760 850,790 C 800,815 745,790 725,730 C 705,660 690,600 650,575 C 630,563 615,575 610,615 C 600,710 590,820 545,850 C 520,866 480,866 455,850 C 410,820 400,710 390,615 C 385,575 370,563 350,575 C 310,600 295,660 275,730 C 255,790 200,815 150,790 C 100,760 70,660 55,520 C 40,380 70,260 120,200 Z"}, "fill": "#9A9AA4", "stroke": "#45454E", "width": 5},
+    {"part": {"circle": [205, 275, 116]}, "fill": "#85858F"},
+    {"part": {"circle": [800, 318, 132]}, "fill": "#85858F"},
+    {"dpad": [205, 275, 62, 90], "controls": ["Up", "Down", "Left", "Right"], "fill": "#303038", "arrow": "#5A5A64", "radius": 10},
+    {"round": [500, 250, 30], "region": "Start", "colour": "#C8363A"},
+    {"word": "START", "at": [500, 300], "size": 17, "colour": "#3A3A44"},
+    {"stick": [500, 470, 74, 32, 38], "gate_fill": "#4A4A53", "knob_fill": "#A8A8B1", "edge": "#45454E", "band": "#6E6E78", "arrow": "#C4C4CC", "octagonal": true, "controls": ["LeftY-", "LeftY+", "LeftX-", "LeftX+"], "names": ["Stick Up", "Stick Down", "Stick Left", "Stick Right"]},
+    {"round": [672, 336, 33], "region": "B", "colour": "#2E9A57", "caption": "B", "size": 30},
+    {"round": [742, 408, 39], "region": "A", "colour": "#3456C8", "caption": "A", "size": 34},
+    {"region": "RightY-", "shape": {"circle": [838, 244, 26]}, "name": "C Up", "fill": "#E8C230", "stroke": "#8B741C", "width": 3, "mark": {"arrow": [838, 244, 22, 0, -1]}, "mark_colour": "#685715"},
+    {"region": "RightY+", "shape": {"circle": [838, 360, 26]}, "name": "C Down", "fill": "#E8C230", "stroke": "#8B741C", "width": 3, "mark": {"arrow": [838, 360, 22, 0, 1]}, "mark_colour": "#685715"},
+    {"region": "RightX-", "shape": {"circle": [780, 302, 26]}, "name": "C Left", "fill": "#E8C230", "stroke": "#8B741C", "width": 3, "mark": {"arrow": [780, 302, 22, -1, 0]}, "mark_colour": "#685715"},
+    {"region": "RightX+", "shape": {"circle": [896, 302, 26]}, "name": "C Right", "fill": "#E8C230", "stroke": "#8B741C", "width": 3, "mark": {"arrow": [896, 302, 22, 1, 0]}, "mark_colour": "#685715"}
+  ]
+}

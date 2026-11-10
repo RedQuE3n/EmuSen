@@ -11,6 +11,7 @@ pub mod bellcache;
 pub mod bells;
 pub mod body;
 pub mod column;
+pub mod controller;
 pub mod convert;
 pub mod figures;
 pub mod frame;

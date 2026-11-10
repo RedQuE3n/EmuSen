@@ -46,6 +46,10 @@ pub mod qobject {
         /// A button of the interface went down or up on the pads read, before the player's swap: what `PadRouter.push` takes.
         #[qsignal]
         fn button(self: Pin<&mut PadReader>, button: PadButton, down: bool);
+
+        /// The seats or the pads connected changed, or a button went down or up on one (EmuSen_Input.md §8.9).
+        #[qsignal]
+        fn seats_changed(self: Pin<&mut PadReader>);
     }
 
     impl cxx_qt::Threading for PadReader {}
@@ -139,6 +143,9 @@ impl qobject::PadReader {
         };
         for event in &tick.events {
             self.as_mut().button(kinds::pad_button(event.button), event.down);
+        }
+        if tick.seats {
+            self.as_mut().seats_changed();
         }
         if let Some(family) = tick.family.map(kinds::family_of).filter(|f| *f != self.family) {
             self.as_mut().rust_mut().family = family;

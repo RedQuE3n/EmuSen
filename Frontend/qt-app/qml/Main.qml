@@ -99,8 +99,10 @@ Window {
         onlyPads: program.onlyPads
         // While Guide is held for its chords the game hears nothing, as Mistress keeps the pad from it.
         gameMuted: Kit.PadRouter.guideHeld
-        // A theme's screens hear the pad through their own engine's router (EmuSen_Qt.md §3.5.2).
-        onButton: (button, down) => program.themeHost?.holdsFocus ? program.themeHost.feed.push(button, down) : referenceHost.holdsFocus ? referenceHost.feed.push(button, down) : Kit.PadRouter.push(button, down)
+        // A theme's screens hear the pad through their own engine's router (EmuSen_Qt.md §3.5.2); while a binding listens
+        // for the pad's press, the interface hears none of it (EmuSen_Qt.md §7.7.H).
+        onButton: (button, down) => settingsModel.listeningPad ? undefined : program.themeHost?.holdsFocus ? program.themeHost.feed.push(button, down) : referenceHost.holdsFocus ? referenceHost.feed.push(button, down) : Kit.PadRouter.push(button, down)
+        onSeatsChanged: settingsModel.seatsChanged()
     }
     // Home's lines that change with the time: the status line and the paused game's facts.
     Clock {
@@ -359,8 +361,9 @@ Window {
         objectName: "settingsModel"
         platformLibrary: program.platformLibrary
         cores: library.cores
-        open: screens.shown === Screens.Settings
+        open: screens.shown === Screens.Settings || program.pauseShown
         facts: library.loading ? "" : library.settingsFacts(player.session.running ? player.session.game : "")
+        gamePads: pads.gamePads
         onDoor: (name) => screens.act(name)
         onOpenFolder: (path) => folders.open(path)
         onChooseFolder: (key, start) => folders.choose(key, start)
@@ -504,6 +507,7 @@ Window {
             anchors.fill: parent
             library: library
             session: player.session
+            settings: settingsModel
             padFamily: program.padFamily
             open: program.pauseShown
             focus: program.pauseShown

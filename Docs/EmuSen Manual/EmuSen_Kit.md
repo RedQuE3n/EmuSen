@@ -2852,3 +2852,67 @@ The module stays 1.0 (§7.6). `EmuSen.Theme` re-exports none of it.
 **Held to**: kit-gallery's screens test (the page with tiles and with rows, both variants, the four sizes) and the
 registry's comparison, and the program's game page test, which holds the clip on the software backend
 (`EmuSen_Qt.md` §7.8).
+
+### 7.62 The controller drawing (stage 5, piece H; 2026-11-09)
+
+A controller drawn from data, its regions named by the controls a host's controller declares, a label beside the drawing
+for each with a leader to its region, the focused control ringed and the held ones lit; for the bindings page of
+`EmuSen_Input.md` §10.6 and `EmuSen_Qt.md` §7.7.H. **Decided by the tester on 2026-11-09 (D2):** drawings are data keyed
+by the controller id a core declares, the regions named by the declared controls, with a generic drawing for a
+controller that has none, so consoles look like themselves and a new core needs no code. Weighed as §1.3 of
+`EmuSen_Qt.md` asks: an extension of the kit, a new type over nothing it had; the kit names no controller and no console,
+and which file stands for which controller id is the host's.
+
+- **A drawing file** (`emusen-kit-core::controller::drawing`) is JSON: `name` (what a reader calls it), `design` (its
+  own width and height) and `items`, drawn in the layers LunaP's `ControllerDiagram` drew: the regions marked `behind`,
+  the shell (`part`), each stick's gate, the regions, the marks (`mark`), the printed words (`word`), the knobs. A shape is
+  a `circle`, `box` (with a corner radius, and `ends` rounding one side only), `pill`, `path` (SVG path data, absolute
+  commands), `arcband`, `octagon`, `arrow`, `ring` (an outline, filled even-odd) or `union`, any of them `turn`ed about a
+  point. A region (`region`, the control it stands for; `name`, its words; `side`, where its label stands) is a shape,
+  or one of three helpers LunaP had: `round` (a round button, its edge its colour darkened by 35 %), `dpad` (a cross of
+  four arms with their arrows and a hub) and `stick` (a gate, its directions as bands of a ring each with an arrow, and
+  its click). A union is stroked whole before it is filled, so its seams do not show, as LunaP's `CombinedGeometry` drew.
+- **Which drawing stands for a controller** (`drawing_for`): its own file where the file reads and has a region for every
+  declared control; else the **generic drawing** (`generic`), the kit's two-stick pad with every RetroPad control
+  (`generic.json`, LunaP's `Gamepad` drawing) and each stick's directions by its axes (`LeftY-` is up), with a round
+  button under the shell for each declared control it has no place for. A region whose control is not declared is drawn
+  and has no label.
+- **The layout** (`lay_out`): each label on its region's side (the file's `side`, else left or right by the region's
+  centre); the left and right columns as wide as their widest label and standing between the rows of labels above and
+  below, which span the box; the drawing the largest that fits between, centred; the labels of a side packed in the
+  order of their regions, each as near its region's height as the others let it, 2 apart; a straight leader from each
+  region's centre to its label. `fits` is false while a label is unmeasured or a side cannot hold its labels.
+- **What is painted** (`paints`): a focused region ringed in the accent 14 wide under it, a held one filled in the accent
+  with a halo at alpha 90 and its edge the accent darkened, a direction pad's arm washed in the accent at alpha 130 rather
+  than ringed (its neighbours touch it), as LunaP drew them. `svg` writes the paints and the words as one SVG document.
+- **`ControllerLayout`** (kit-qt `controller.rs`) puts it on Qt: `drawing` (the file's text, empty for the generic one),
+  `controls`, `focused`, `held`, `width`, `height`, `labelHeight`, `accent` in; `name`, `generic`, `fits`, `place`,
+  `scale`, `designWidth`, `designHeight`, `leaders`, `focusLeader` and `picture` (the SVG in a `data:` URL) out; the
+  invokables `setLabelWidth`, `labelRect`, `labelName` and `step` (the walk, round from either end).
+- **`ControllerDrawing.qml`**: the leaders (Muted, the focused one's Accent), the picture as an `Image` of the SVG at the
+  drawing's place, and a label for each control: its region's name and the host's words for it (`texts`) in Caption,
+  measured and handed to the layout, its edge Accent and 2 wide while focused; a click on a label raises `chosen`.
+
+**Why one picture and not a `Shape` per part** (measured on 2026-11-09): the drawing's colours are the console's
+(Nintendo's red, Sony's symbols), not the palette's, and LunaP drew them inside one control the recorder never read
+(`SettingsBindings-1280x800.spec`, `ControllerDiagram` with no paints). Drawn as a `Shape` per part, the gate's palette
+rule found every part of the SNES pad's drawing outside the palette; as one SVG picture it reads none, as Mistress's
+recording has it. The SVG is drawn by Qt's own SVG image reader (`qt6-qtsvg`'s `imageformats/libqsvg.so`), which a
+build that bundles Qt must bundle too. Words printed on the shell are part of the picture and read by no one.
+
+**Held to**: kit-core's `tests/controller.rs` (7: a file's items and layers, the shapes' path data and a union stroked
+first, the focus ring, the press and the arm's wash, a drawing standing for a controller only with every declared control,
+the generic drawing from the controls alone, labels inside the box, beside the drawing and apart, the walk); the
+program's `settings_drawings.rs` (every drawing at the gate's sizes, `EmuSen_Qt.md` §7.7.H).
+
+### 7.63 The settings frame's page of content (stage 5, piece H; 2026-11-09)
+
+A page under a section that is not rows, as the bindings page's strip, drawing and caption (Mistress's
+`SettingsContent`): `SettingsFrame.pageShown` draws `pageContent` in a box of SurfaceRaised where the rows stand (the rows'
+width, the pane's height, the pane's inset), hides the rows and gives them the focus back when it closes;
+`pageSentence` is the pane's sentence meanwhile, since no row gives one. The host's content takes the keys the frame
+declines (Left, Right and A on the bindings page).
+
+**Rule Q** (§7.6): additions only. The registry gains `ControllerLayout`; the qmldir gains `ControllerDrawing`;
+`SettingsFrame` gains `pageShown`, `pageContent` and `pageSentence`. The module stays 1.0. `EmuSen.Theme` re-exports none
+of it.

@@ -50,6 +50,19 @@ pub enum Screen {
     SettingsConsole,
     /// A page of choices (EmuSen_Interface.md §18.11): A chooses, B keeps what was chosen.
     SettingsChoices,
+    /// Controllers' bindings page (EmuSen_Input.md §10.6): A rebinds, Left and Right the regions, Y resets, the shoulders
+    /// the console, X the player where the console has more than one, Select the tester, B back.
+    SettingsBindings,
+    /// The bindings page of a console of one player: no X.
+    SettingsBindingsOne,
+    /// The keyboard's page: X clears, no tester.
+    SettingsKeys,
+    /// A binding or a hotkey listening for a press: no hints, as Mistress shows none.
+    SettingsListening,
+    /// The tester: B held stops it.
+    SettingsTesting,
+    /// Controllers ▸ Hotkeys: A listens, X clears.
+    SettingsHotkeys,
     /// A game's page (EmuSen_Qt.md §7.8), by what is focused: Play, Resume (with its slots where it steps them),
     /// Favourite; a state, a picture, a stepped row, a door, a row of Details, or nothing A acts on.
     GamePage,
@@ -196,6 +209,40 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Menu, "Home", Some(HOME)),
         ],
         Screen::SettingsChoices => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None)],
+        // Mistress's BindingHints: Rebind, Region, Reset, Console, Player, Test, Back.
+        Screen::SettingsBindings => &[
+            (UiButton::Accept, "Rebind", None),
+            (UiButton::Left, "Region", None),
+            (UiButton::Search, "Reset", Some(RESET)),
+            (UiButton::PageUp, "Console", None),
+            (UiButton::Screensaver, "Player", Some(PLAYER)),
+            (UiButton::Options, "Test", Some(TEST)),
+            (UiButton::Back, "Back", None),
+        ],
+        Screen::SettingsBindingsOne => &[
+            (UiButton::Accept, "Rebind", None),
+            (UiButton::Left, "Region", None),
+            (UiButton::Search, "Reset", Some(RESET)),
+            (UiButton::PageUp, "Console", None),
+            (UiButton::Options, "Test", Some(TEST)),
+            (UiButton::Back, "Back", None),
+        ],
+        Screen::SettingsKeys => &[
+            (UiButton::Accept, "Rebind", None),
+            (UiButton::Left, "Region", None),
+            (UiButton::Search, "Reset", Some(RESET)),
+            (UiButton::PageUp, "Console", None),
+            (UiButton::Screensaver, "Clear", Some(CLEAR)),
+            (UiButton::Back, "Back", None),
+        ],
+        Screen::SettingsListening => &[],
+        Screen::SettingsTesting => &[(UiButton::Back, "Hold to stop", None)],
+        Screen::SettingsHotkeys => &[
+            (UiButton::Accept, "Change", None),
+            (UiButton::Screensaver, "Clear", Some(CLEAR)),
+            (UiButton::Back, "Back", None),
+            (UiButton::Menu, "Home", Some(HOME)),
+        ],
         // Mistress's GamePage.Hints: A's word for what is focused, Left and Right where they step, Y the heart, the
         // shoulders the sections, B and Start.
         Screen::GamePage => &[(UiButton::Accept, "Play", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
@@ -260,6 +307,11 @@ pub fn entries_with(screen: Screen, group: bool, back: bool) -> Vec<Entry> {
 
 /// Start's action away from a game and a card: Home (EmuSen_BigPicture.md §51.2, §51.3).
 pub const HOME: &str = "home";
+/// The bindings page's own actions (Mistress's HintReset, HintPlayer, HintClear, HintTest).
+pub const RESET: &str = "reset";
+pub const PLAYER: &str = "player";
+pub const CLEAR: &str = "clear";
+pub const TEST: &str = "test";
 
 /// The focused game's page, its heart, and a random game: actions a later stage carries out.
 pub const GAME_PAGE: &str = "gamePage";

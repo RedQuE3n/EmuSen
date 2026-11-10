@@ -5,7 +5,7 @@
 use emusen_kit_core::glyph::PadFamily;
 use emusen_kit_core::input::{stick_direction, PadControl, UiButton, TRIGGER_THRESHOLD};
 use emusen_kit_qt::router::PadEvent;
-use emusen_platform_client::pads::{consts, Pads};
+use emusen_platform_client::pads::{self as devices, consts, Pads};
 use emusen_platform_client::Result;
 
 const BUTTONS: usize = UiButton::ALL.len();
@@ -59,17 +59,20 @@ pub fn family_of(number: i64) -> PadFamily {
     }
 }
 
-/// What one poll changed: the buttons in the kit's order, and the family and the count of pads read when they moved.
+/// What one poll changed: the buttons in the kit's order, the family and the count of pads read when they moved, the
+/// pads opened and closed, for the seats, and whether the seats changed.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Tick {
     pub events: Vec<PadEvent>,
     pub family: Option<PadFamily>,
     pub connected: Option<usize>,
+    pub devices: Vec<devices::PadEvent>,
+    pub seats: bool,
 }
 
 impl Tick {
     pub fn is_empty(&self) -> bool {
-        self.events.is_empty() && self.family.is_none() && self.connected.is_none()
+        self.events.is_empty() && self.family.is_none() && self.connected.is_none() && !self.seats
     }
 }
 
@@ -87,19 +90,19 @@ pub struct Reading {
 impl Reading {
     /// Starts the devices and reads the pads present.
     pub fn start(&mut self, pads: &Pads) -> Result<Tick> {
-        pads.start()?;
-        rest(pads)?;
+        let mut devices = pads.start()?;
+        rest(pads, &mut devices)?;
         pads.update()?;
-        self.read(pads)
+        Ok(Tick { devices, ..self.read(pads)? })
     }
 
     /// One poll: the pads plugged in or pulled out since the last, the devices brought up to date (SDL's events pumped,
     /// as the C# poll ends), then every pad read.
     pub fn poll(&mut self, pads: &Pads) -> Result<Tick> {
-        pads.poll()?;
-        rest(pads)?;
+        let mut devices = pads.poll()?;
+        rest(pads, &mut devices)?;
         pads.update()?;
-        self.read(pads)
+        Ok(Tick { devices, ..self.read(pads)? })
     }
 
     fn read(&mut self, pads: &Pads) -> Result<Tick> {
@@ -134,6 +137,7 @@ impl Reading {
             events,
             family: (self.family != Some(family)).then_some(family),
             connected: (self.connected != Some(count)).then_some(count),
+            ..Tick::default()
         };
         self.family = Some(family);
         self.connected = Some(count);
@@ -141,10 +145,15 @@ impl Reading {
     }
 }
 
-/// The changes a start or poll had no room for, taken until none is left; the reading asks the open pads afresh.
-fn rest(pads: &Pads) -> Result<()> {
-    while !pads.take()?.is_empty() {}
-    Ok(())
+/// The changes a start or poll had no room for, taken until none is left.
+fn rest(pads: &Pads, devices: &mut Vec<devices::PadEvent>) -> Result<()> {
+    loop {
+        let more = pads.take()?;
+        if more.is_empty() {
+            return Ok(());
+        }
+        devices.extend(more);
+    }
 }
 
 /// The interface's buttons one pad holds: each control by kit-core's table, the left stick as the d-pad.

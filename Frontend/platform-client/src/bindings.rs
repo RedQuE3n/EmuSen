@@ -42,6 +42,31 @@ impl Platform {
         Ok(out)
     }
 
+    /// Which map a player (1 to 8) of a console plays with, by the profiles' rules (since interface 43): the profile in
+    /// its own spelling and the player whose map it is there, as `{"profile","mapPlayer"}`. `profile` names the profile
+    /// to look in, or none for the one that applies to `game`; a model not given is read from its file.
+    pub fn bindings_choose(
+        &self,
+        gamepad: Option<&Value>,
+        profiles: Option<&Value>,
+        console: &str,
+        player: i32,
+        game: Option<&str>,
+        profile: Option<&str>,
+    ) -> Result<Value> {
+        let (gamepad, profiles) = (gamepad.map(to_json), profiles.map(to_json));
+        let (g, gl) = crate::out::text(gamepad.as_deref());
+        let (p, pl) = crate::out::text(profiles.as_deref());
+        let (game, game_len) = crate::out::text(game);
+        let (named, named_len) = crate::out::text(profile);
+        let bytes = self
+            .read(|o, l| unsafe {
+                self.lib.emusen_endymion_bindings_choose(g, gl, p, pl, console.as_ptr(), console.len(), player, game, game_len, named, named_len, o, l)
+            })?
+            .unwrap_or_default();
+        json("bindings_choose", &bytes)
+    }
+
     /// One map at its defaults: a console's keys, a console's gamepad buttons, or the hotkeys.
     pub fn bindings_defaults(&self, which: u32) -> Result<Value> {
         let bytes = self.read(|o, l| unsafe { self.lib.emusen_endymion_bindings_defaults(which, o, l) })?.unwrap_or_default();

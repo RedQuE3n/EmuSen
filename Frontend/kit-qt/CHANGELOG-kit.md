@@ -4,6 +4,17 @@ The kit is the QML module `EmuSen.Kit` (EmuSen_Qt.md §1.4), held by rule Q (§5
 writes it, is committed under `Testing/qmltypes/` and compared on every build. A minor adds and never removes; each
 entry names what was added and the section of `EmuSen_Kit.md` that records it.
 
+## 1.0, stage 5 piece H: the controller drawing and the settings frame's page of content (2026-11-09)
+
+Additions only; no type, property, signal or invokable was removed or changed.
+
+- **`ControllerLayout`** (registry): a drawing file and the controls a host declares in; the drawing's place, scale and
+  picture, the labels' boxes and names, the leaders and the walk out. `EmuSen_Kit.md` §7.62.
+- **`ControllerDrawing`** (qmldir): the controller's picture, a label for each control with its leader, the focused one
+  ringed. §7.62.
+- **`SettingsFrame.pageShown`, `pageContent`, `pageSentence`** (qmldir): a page of content in place of the rows, and the
+  pane's sentence while it is shown. §7.63.
+
 ## 1.0, stage 5 piece E: a sentence's tone, a value beside a short label, the rows' view (2026-11-09)
 
 Additions only; no type, property, signal or invokable was removed or changed.

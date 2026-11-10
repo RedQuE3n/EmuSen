@@ -46,6 +46,11 @@ pub struct Console {
     pub values: BTreeMap<String, String>,
     pub firmware: Vec<(String, FirmwareFile)>,
     pub media: Vec<Medium>,
+    /// The console's pad as its engine declares it: the canonical controls, the axes, the most ports and each player's
+    /// controller (EmuSen_Qt.md §6.1).
+    pub controllers: emusen_crystal_client::shapes::Controllers,
+    /// Whether the console's games drive a motor (the systems table's `rumble`).
+    pub rumble: bool,
 }
 
 impl Console {
@@ -122,6 +127,10 @@ pub fn read(source: &dyn ConsoleSource) -> Result<ConsoleRead, String> {
         if let Some(c) = consoles.iter_mut().find(|c| c.console.eq_ignore_ascii_case(&console)) {
             c.systems.push(s.id.clone());
             c.starts_empty |= s.starts_empty;
+            c.rumble |= s.rumble;
+            if c.controllers.buttons.is_empty() {
+                c.controllers = s.controllers.clone();
+            }
             for e in &s.engines {
                 if !c.engines.contains(e) {
                     c.engines.push(e.clone());
@@ -138,6 +147,8 @@ pub fn read(source: &dyn ConsoleSource) -> Result<ConsoleRead, String> {
             starts_empty: s.starts_empty,
             year: if s.release_year > 0 { s.release_year } else { i32::MAX },
             firmware_name: s.firmware_name.clone().filter(|f| !f.is_empty()),
+            controllers: s.controllers.clone(),
+            rumble: s.rumble,
             ..Console::default()
         });
     }

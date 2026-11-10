@@ -1,0 +1,33 @@
+{
+  "name": "DualShock",
+  "design": [1000, 720],
+  "items": [
+    {"part": {"path": "M 500,150 C 500,110 506,60 520,4"}, "stroke": "#4E4F58", "width": 9},
+    {"region": "L2", "shape": {"box": [150, 34, 180, 38, 16]}, "fill": "#7C7D87", "stroke": "#4E4F58", "width": 3, "caption": "L2", "caption_size": 22, "caption_colour": "#E4E4EA", "side": "top"},
+    {"region": "L", "shape": {"box": [160, 86, 180, 38, 16]}, "name": "L1", "fill": "#7C7D87", "stroke": "#4E4F58", "width": 3, "caption": "L1", "caption_size": 22, "caption_colour": "#E4E4EA", "side": "top"},
+    {"region": "R2", "shape": {"box": [670, 34, 180, 38, 16]}, "fill": "#7C7D87", "stroke": "#4E4F58", "width": 3, "caption": "R2", "caption_size": 22, "caption_colour": "#E4E4EA", "side": "top"},
+    {"region": "R", "shape": {"box": [660, 86, 180, 38, 16]}, "name": "R1", "fill": "#7C7D87", "stroke": "#4E4F58", "width": 3, "caption": "R1", "caption_size": 22, "caption_colour": "#E4E4EA", "side": "top"},
+    {"part": {"path": "M 230,150 C 380,136 620,136 770,150 C 880,160 932,210 952,300 C 978,420 992,620 952,672 C 912,716 842,702 802,642 C 772,592 732,540 662,530 L 338,530 C 268,540 228,592 198,642 C 158,702 88,716 48,672 C 8,620 22,420 48,300 C 68,210 120,160 230,150 Z"}, "fill": "#B9BAC2", "stroke": "#4E4F58", "width": 5},
+    {"part": {"circle": [250, 290, 112]}, "fill": "#A3A4AD"},
+    {"region": "Up", "shape": {"box": [224, 202, 52, 66, 10]}, "fill": "#5A5B64", "stroke": "#4E4F58", "width": 2, "mark": {"arrow": [250.0, 235.0, 20, 0, -1]}, "mark_colour": "#2E2F35"},
+    {"region": "Down", "shape": {"box": [224, 312, 52, 66, 10]}, "fill": "#5A5B64", "stroke": "#4E4F58", "width": 2, "mark": {"arrow": [250.0, 345.0, 20, 0, 1]}, "mark_colour": "#2E2F35"},
+    {"region": "Left", "shape": {"box": [162, 264, 66, 52, 10]}, "fill": "#5A5B64", "stroke": "#4E4F58", "width": 2, "mark": {"arrow": [195.0, 290.0, 20, -1, 0]}, "mark_colour": "#2E2F35"},
+    {"region": "Right", "shape": {"box": [272, 264, 66, 52, 10]}, "fill": "#5A5B64", "stroke": "#4E4F58", "width": 2, "mark": {"arrow": [305.0, 290.0, 20, 1, 0]}, "mark_colour": "#2E2F35"},
+    {"part": {"circle": [750, 290, 120]}, "fill": "#A3A4AD"},
+    {"region": "X", "shape": {"circle": [750, 212, 34]}, "name": "Triangle", "fill": "#3B3C44", "stroke": "#232428", "width": 3, "mark": {"ring": [{"path": "M 750,194 L 769,226 L 731,226 Z"}, {"path": "M 750,203 L 762,222 L 738,222 Z"}]}, "mark_colour": "#3FB58A"},
+    {"region": "A", "shape": {"circle": [828, 290, 34]}, "name": "Circle", "fill": "#3B3C44", "stroke": "#232428", "width": 3, "mark": {"ring": [{"circle": [828, 290, 18]}, {"circle": [828, 290, 12]}]}, "mark_colour": "#E0505A"},
+    {"region": "B", "shape": {"circle": [750, 368, 34]}, "name": "Cross", "fill": "#3B3C44", "stroke": "#232428", "width": 3, "mark": {"union": [{"pill": [750, 368, 40, 7, 45]}, {"pill": [750, 368, 40, 7, -45]}]}, "mark_colour": "#6C8FE0"},
+    {"region": "Y", "shape": {"circle": [672, 290, 34]}, "name": "Square", "fill": "#3B3C44", "stroke": "#232428", "width": 3, "mark": {"ring": [{"box": [656, 274, 32, 32, 2]}, {"box": [662, 280, 20, 20, 1]}]}, "mark_colour": "#D88CC8"},
+    {"part": {"pill": [440, 300, 74, 32, 0]}, "fill": "#A3A4AD"},
+    {"part": {"pill": [560, 300, 74, 32, 0]}, "fill": "#A3A4AD"},
+    {"region": "Select", "shape": {"pill": [440, 300, 58, 20, 0]}, "fill": "#3A3B42"},
+    {"region": "Start", "shape": {"box": [533, 290, 54, 20, 4]}, "fill": "#3A3B42"},
+    {"word": "SELECT", "at": [440, 340], "size": 16, "colour": "#4A4B55"},
+    {"word": "START", "at": [560, 340], "size": 16, "colour": "#4A4B55"},
+    {"stick": [370, 470, 58, 40, 18], "gate_fill": "#2E2F35", "knob_fill": "#4A4B53", "edge": "#4E4F58", "band": "#6E6F79", "arrow": "#C4C5CD", "controls": ["LeftY-", "LeftY+", "LeftX-", "LeftX+"], "names": ["Left stick up", "Left stick down", "Left stick left", "Left stick right"], "click": "L3"},
+    {"stick": [630, 470, 58, 40, 18], "gate_fill": "#2E2F35", "knob_fill": "#4A4B53", "edge": "#4E4F58", "band": "#6E6F79", "arrow": "#C4C5CD", "controls": ["RightY-", "RightY+", "RightX-", "RightX+"], "names": ["Right stick up", "Right stick down", "Right stick left", "Right stick right"], "click": "R3"},
+    {"part": {"circle": [500, 506, 18]}, "fill": "#3A3B42", "stroke": "#25262A", "width": 3},
+    {"mark": {"circle": [462, 506, 7]}, "fill": "#D23A3A", "stroke": "#6E2020", "width": 2},
+    {"word": "ANALOG", "at": [500, 470], "size": 14, "colour": "#4A4B55"}
+  ]
+}

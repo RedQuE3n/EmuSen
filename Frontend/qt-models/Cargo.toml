@@ -33,6 +33,8 @@ emusen-kit-qt.workspace = true
 emusen-theme-manifest = { path = "../theme-check/manifest" }
 emusen-theme-check = { path = "../theme-check" }
 emusen-esde = { path = "../esde" }
+# The canonical controls' and axes' names, whose one owner is the core ABI's descriptors (EmuSen_Qt.md §7.7.H).
+emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }
 # The cores folder's free space for Cores' meter (statvfs), which neither client crate answers.
 libc = "0.2"
 

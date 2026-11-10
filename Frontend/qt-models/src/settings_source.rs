@@ -1,8 +1,11 @@
 //! The Settings screen's source over the platform library (EmuSen_Qt.md §7.7): Galaxia's rows and models, Serenity's
 //! catalogue and Endymion's sound devices, each through `emusen-platform-client`.
 
+use crate::bindings::{Bindings, Choice, File};
 use crate::clients::app_settings;
 use crate::settings::{Model, SettingsSource};
+use crate::settings_controllers::Chooser;
+use emusen_platform_client::bindings::consts as files;
 use emusen_platform_client::galaxia::consts::{DIR_FIRMWARE, FILE_GRAPHICS, FILE_SETTINGS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
 use emusen_platform_client::{serenity, Platform};
 use serde_json::Value;
@@ -25,6 +28,53 @@ impl ClientSettings {
     fn name(&self, which: u32) -> Result<String, String> {
         let file = self.platform.file(which).map_err(words)?;
         file.file_name().and_then(|n| n.to_str()).map(str::to_owned).ok_or_else(|| format!("{} names no file", file.display()))
+    }
+}
+
+impl ClientSettings {
+    /// Endymion's four binding models for the consoles named, and the three maps' defaults.
+    pub fn bindings(&self, consoles: &[&str]) -> Result<Bindings, String> {
+        let p = &self.platform;
+        Ok(Bindings {
+            keys: p.bindings_load(files::KEYS, consoles).map_err(words)?,
+            gamepad: p.bindings_load(files::GAMEPAD, consoles).map_err(words)?,
+            profiles: p.bindings_load(files::PROFILES, consoles).map_err(words)?,
+            hotkeys: p.bindings_load(files::HOTKEYS, consoles).map_err(words)?,
+            key_defaults: p.bindings_defaults(files::KEYS).map_err(words)?,
+            pad_defaults: p.bindings_defaults(files::GAMEPAD).map_err(words)?,
+            hotkey_defaults: p.bindings_defaults(files::HOTKEYS).map_err(words)?,
+        })
+    }
+
+    /// The binding files a change touched, saved through Endymion.
+    pub fn save_bindings(&self, bindings: &Bindings, touched: &[File]) -> Result<(), String> {
+        for file in touched {
+            let which = crate::settings::SettingsView::bindings_files(&[*file])[0];
+            self.platform.bindings_save(which, crate::settings::SettingsView::bindings_model(bindings, *file)).map_err(words)?;
+        }
+        Ok(())
+    }
+
+    /// The chooser over this platform library.
+    pub fn chooser(&self) -> std::sync::Arc<dyn Chooser> {
+        std::sync::Arc::new(Endymion(self.platform.clone()))
+    }
+}
+
+/// Endymion's `bindings_choose` over a platform library.
+struct Endymion(std::sync::Arc<Platform>);
+
+impl Chooser for Endymion {
+    fn choose(&self, gamepad: &Value, profiles: &Value, console: &str, player: u32, profile: Option<&str>, game: Option<&str>) -> Choice {
+        let answer = self.0.bindings_choose(Some(gamepad), Some(profiles), console, player as i32, game, profile).unwrap_or(Value::Null);
+        Choice {
+            profile: answer["profile"].as_str().map_or_else(|| profile.unwrap_or(crate::bindings::DEFAULT).to_owned(), str::to_owned),
+            map_player: answer["mapPlayer"].as_u64().map_or(1, |n| n as u32),
+        }
+    }
+
+    fn bound(&self, console: &str, player: u32) -> [i32; 16] {
+        self.0.bindings_bound(console, player as i32, None).unwrap_or([-1; 16])
     }
 }
 

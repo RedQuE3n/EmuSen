@@ -4195,6 +4195,86 @@ for Search, Options, Firmware, Roll Back and the harness, each reverted, each ca
 not turned by a step (the options test); a found file said as none found (the firmware test); and Roll Back sent as
 `core-update` (the roll back test).
 
+#### 7.7.H Stage 5, piece H: Controllers and the controller drawing (2026-11-09)
+
+`EmuSen_Interface.md` §16.2, §20.3; `EmuSen_Input.md` §8.9, §10.5, §10.6; the oracle is Mistress's `SettingsControllers`,
+`SettingsBindings` and `PauseCardControllers` (1280 × 800 and 1920 × 1200), with `Every_consoles_bindings_page_fits`
+ported for every declared controller.
+
+**The drawings are data** (decided by the tester on 2026-11-09, D2): one file a controller id in
+`Frontend/qt-models/data/controllers/<id>.json`, in the kit's drawing format (`EmuSen_Kit.md` §7.62), each region named by
+the canonical control the core declares for it (the Genesis pad's `A` is the region of `Y`, the PlayStation's Triangle
+of `X`, the N64's C buttons the right stick's directions `RightY-`…). The twelve files were made from LunaP's
+`ControllerDiagramArt` item for item (`snes.pad`, `nes.pad`, `gb.pad`, `n64.pad`, `md.pad3`, `md.pad6`, `psx.pad`,
+`psx.dualshock`, `sms.pad`, `sg1000.pad`; `ps2.digital` and `ps2.dualshock2` name `psx.pad`'s and `psx.dualshock`'s
+drawings with `{"same_as": …}`, one drawing for two ids). The DualShock's sticks gained their four directions as bands,
+since its declared axes make them controls. `qt-models`' build lists the folder, so a drawing added is a file and no code.
+A controller with no file (the libretro host's `retropad`, the Atari and NEC cores', a new core's) is the kit's generic
+drawing from its declared controls alone.
+
+**The controls a drawing is named by** are the systems row's `controllers` (frontend API 2.1): the buttons by the core
+ABI's own names (`emusen-native`'s `Control::NAMES`, which names itself the one owner every reader reads), then up, down,
+left and right of each stick the console reads, by the ABI's axis names (`LeftY-` is up), in Endymion's
+`PadControls.For` order. The controller a player's port holds is the row's `players[n]`.
+
+**The seats** (`qt-endymion` `seats.rs`): the pads' reader keeps the eight seats the platform interface says the host
+holds (`emusen_endymion_slots_*` through `platform-client` `seats.rs`): a pad seated as a start or a poll opens it, its seat
+kept when it goes and given back when it returns, moved and let go of as the Players page and the card ask
+(`GamePads::ask`). A running game now hears the seats (player 1 alone where the first controller only is read), where it
+heard the pads in the order they opened. `PadReader.seatsChanged` tells Settings; `GamePads::connected` gives each pad's
+name, player, SDL's buttons and axes as read, which the Players page marks, a binding listens to and the tester lights by.
+
+**The model** (`qt-models`): `bindings.rs`, Endymion's four models (`bindings_load`, `_save`, `_defaults`) changed in the
+header's shapes, a button bound by its SDL number (which Endymion reads as it reads a name), the map a player plays with
+chosen by Endymion's `bindings_choose` (wrapped in `platform-client`); `controllers.rs`, the drawings and the controls;
+`settings_controllers.rs`, the section's own rows and Players, Profiles, a profile's page, Hotkeys, the bindings page and
+the card's page, every word the description's (`controllers` in `data/settings_screen.json`, the hotkeys' names and
+order there too). `SettingsModel` gains the bindings page's drawing and strip, `listening`, `listeningPad`, `testing`,
+`sentence`, `cardControllers`, `gamePads`, and `bindingStep`, `bindingFocus`, `bindingAccept`, `act`, `heardKey`,
+`seatsChanged`, `cardAct`, `typed` and the signal `typeWords`. A key typed while a binding listens is named in the files'
+words by `qt-endymion` `keys.rs`, the one table of Qt's key numbers against them.
+
+**The screen** (`Settings.qml`): the bindings page on the settings frame's page of content (Kit §7.63): the strip of the
+player (or Keyboard) and the consoles from the one shown, whole names only; the drawing (`ControllerDrawing`, 380 high as
+Mistress's `BindingsDiagram`) with each control's binding on its label; the caption. Left and Right walk the controls, A
+listens, Y resets, X steps the player (the keyboard's page: clears), Select runs the tester, the shoulders step the
+console, B goes back or lets a listening go. While the pad's page listens, the interface hears no press of the pad
+(`Main.qml`), and nothing pressed in five seconds lets it go; while a key is listened for, a scope of its own takes the
+keys and the pad's B. A profile's name is typed on the docked keyboard. The pane begins with the control's name large
+(`preview` 5, `caption`).
+
+**The Pause Card's Game Options ▸ Controllers**: a page of Settings' one description (`game_rows`, `game_act`), drawn on
+the card from `SettingsModel.cardControllers` and acted on through `cardAct`: a row a player (two at least) seating the
+next connected pad, Profile the game's own (Endymion's `Games` member; the running game bound again at once,
+`GamePads::rebind`), Bindings opening Settings' drawing page over the card (`Screens` route `cardBindings`, B back to the
+card), Swap Players dimmed with no player 2. The card's pane draws a page's second line muted under its sentence
+(`PaneModel.muted`), as Mistress's two lines.
+
+**Compared with Mistress** (measured on 2026-11-09, the Qt recordings read by WiseMan's
+`Another_frontend_s_recordings_match_these_within_the_tolerances` on the WiseMan build of the day, no build).
+`InterfaceRules.All` found nothing in the six. Under the map of names of §7.7 (the kit's `settingsStrip`,
+`settingsList`, `settingsPane`, `settingsContent`, `settingsSentence`, `helpBar` for Mistress's `SettingsSections`,
+`SettingsRows`, `SettingsPane`, `SettingsContent`, the first `SettingsLine`, `SettingsHelpBar`; the card form's of §7.2):
+every row of `SettingsControllers` stands at Mistress's box with her label and value, the bindings page's strip
+(`SettingsContentTabs`), drawing (`BindingsDiagram`, 88,176 656 × 380) and caption (`SettingsContentCaption`) at hers, the
+pane's control name at hers, and the card's five rows at hers. **Differences that remain, each the class decided on
+2026-11-09 for §7.7 and §7.7.E:** the pane's sentence in the kit's face takes two lines where hers takes one, so the
+lines under it stand 33 units lower on Controllers and 4 to 7 on the bindings page; the card form's own boxes
+(`AdaptiveCard` 512 wide, `AdaptiveDetail`, the pane 7 units taller with the line's gap of 8 where hers is 6).
+
+**Held to** (measured on 2026-11-09). kit-core's `controller.rs` (7, Kit §7.62); `qt-models/tests/controllers.rs` (7: every
+drawing file reads and covers its controller's declared controls; the section's seats, profile and Rumble shown where a
+console's games drive a motor; Players seating, Forget and Galaxia's player rows; a profile made, renamed, chosen and
+deleted; the bindings page's drawing, a button rebound by a press, reset, player 2's own map made from player 1's, the
+shoulders, a trigger bound alone, a stick's direction, the tester; Keyboard keys and Hotkeys taking a key from each other
+and naming a clash, Reset every binding; the card's page); `qt-endymion/tests/seats.rs` (seated, kept, given back, moved,
+forgotten, a press read); the program's `settings_controllers.rs` (SettingsControllers and SettingsBindings at the gate's
+five sizes and recorded; North pressed on an SDL virtual pad binds Y and the interface hears nothing of it; Y resets;
+RB to the Sega CD's three-button pad; F2 typed binds a key; F3 a hotkey), `settings_drawings.rs` (the bindings page of
+each of the thirteen controllers, the twelve with a file and a synthetic core's `test.pad` drawn generic, at the five
+sizes: fit, pad reach, pointer reach, no chrome, names, palette, contrast) and `card_controllers.rs`
+(PauseCardControllers at the five sizes and recorded; Right seats the pad as player 2).
+
 ### 7.8 Stage 5, piece G: a game's page and its clip (2026-11-09)
 
 `EmuSen_Interface.md` §2.5, §4 screen 3, §5.9, §18.2; the oracle is Mistress's recordings `GamePage`, `GamePageStates`,

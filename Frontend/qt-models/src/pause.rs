@@ -29,6 +29,8 @@ pub enum Page {
     Drawer(usize),
     /// One of Leave's questions, on the card form's question page (`card::question`).
     Ask(Ask),
+    /// Game Options ▸ Controllers (§20.3): a page of Settings' one description (`settings_controllers::game_rows`).
+    Controllers,
 }
 
 /// Leave's questions, each asked before an end (Mistress's `LeaveRows`).
@@ -318,6 +320,9 @@ pub const OWN_DISC: &str = "ownDisc";
 pub const OTHER_DISC: &str = "otherDisc";
 pub const TRAY: &str = "tray";
 
+/// A row of Controllers' page, each found by its place on the page.
+pub const CONTROLLER: &str = "controller";
+
 /// What Swap Players says once done. Mistress names each player's pad; the pads' names do not reach the session yet.
 pub const SWAPPED: &str = "Players 1 and 2 swapped";
 
@@ -393,6 +398,8 @@ pub enum Outcome {
     SwapPlayers,
     /// A console's setting stored, a card's mode or slot; it goes in when the game next starts.
     Setting { key: String, value: String },
+    /// A row of Controllers' page stepped (`by` ±1) or chosen (`by` 0), for Settings' description to carry out.
+    Controllers { index: usize, by: i32 },
 }
 
 /// The context pane's kind.
@@ -443,11 +450,13 @@ pub struct Pane {
     pub sentence: String,
     /// The words beside a cover: the disc's name.
     pub title: String,
+    /// A muted line under the sentence (Controllers' page, as Mistress's pane's second line).
+    pub muted: String,
 }
 
 impl Pane {
     fn none() -> Pane {
-        Pane { kind: PaneKind::None, big: String::new(), tiles: Vec::new(), sentence: String::new(), title: String::new() }
+        Pane { kind: PaneKind::None, big: String::new(), tiles: Vec::new(), sentence: String::new(), title: String::new(), muted: String::new() }
     }
 
     /// The pane as plain data, the way it crosses from `PauseModel` to `PaneModel`.
@@ -457,7 +466,7 @@ impl Pane {
             .iter()
             .map(|t| json!({ "picture": t.picture, "name": t.name, "when": t.when, "ringed": t.ringed }))
             .collect();
-        json!({ "kind": self.kind.name(), "big": self.big, "tiles": tiles, "sentence": self.sentence, "title": self.title, "blank": EMPTY }).to_string()
+        json!({ "kind": self.kind.name(), "big": self.big, "tiles": tiles, "sentence": self.sentence, "title": self.title, "muted": self.muted, "blank": EMPTY }).to_string()
     }
 }
 
@@ -470,11 +479,13 @@ pub struct Card {
     pub facts: Facts,
     /// The console's games in the library, as `LibraryModel.gamesOf` lists them for the game's system.
     pub shelf: Vec<GameRow>,
+    /// Controllers' rows, as Settings' description gives them (`SettingsModel.cardControllers`).
+    pub controllers: Vec<crate::settings_controllers::GameRow>,
 }
 
 impl Default for Card {
     fn default() -> Self {
-        Card { page: Page::First, current: 0, reel: None, facts: Facts::default(), shelf: Vec::new() }
+        Card { page: Page::First, current: 0, reel: None, facts: Facts::default(), shelf: Vec::new(), controllers: Vec::new() }
     }
 }
 
@@ -531,6 +542,11 @@ impl Card {
                 rows
             }
             Page::Disc => self.disc_rows(),
+            Page::Controllers => self
+                .controllers
+                .iter()
+                .map(|r| Row { steps: r.steps, opens: r.opens, dimmed: r.dimmed, ..row(CONTROLLER, &r.label, r.value.clone()) })
+                .collect(),
             Page::Cards => self
                 .facts
                 .cards
@@ -581,6 +597,7 @@ impl Card {
             Page::Options => "Game Options".to_string(),
             Page::Disc => "Change Disc".to_string(),
             Page::Cards => "Memory Cards".to_string(),
+            Page::Controllers => "Controllers".to_string(),
             Page::Drawer(at) => self.facts.cards.media.get(at).map(|m| format!("{}s", m.title)).unwrap_or_default(),
             Page::Ask(ask) => ask.page().title,
         }
@@ -634,6 +651,15 @@ impl Card {
                 self.turn(Page::Options, 0);
                 Outcome::Shown
             }
+            CONTROLLERS if self.page == Page::Options => {
+                self.turn(Page::Controllers, 0);
+                Outcome::Shown
+            }
+            CONTROLLER if self.page == Page::Controllers => match self.controllers.get(self.current) {
+                Some(r) if r.key == crate::settings_controllers::SWAP => if r.dimmed { Outcome::Nothing } else { Outcome::SwapPlayers },
+                Some(_) => Outcome::Controllers { index: self.current, by: 0 },
+                None => Outcome::Nothing,
+            },
             MEMORY_CARDS if self.page == Page::Options => {
                 self.turn(Page::Cards, 0);
                 Outcome::Shown
@@ -691,6 +717,7 @@ impl Card {
             Some(SAVE | LOAD) => Outcome::Slot((self.facts.slot as i64 - 1 + by as i64).rem_euclid(SLOTS as i64) as u32 + 1),
             Some(SPEED) => self.step_speed(by),
             Some(MEMORY_CARD) => self.step_card(index, by),
+            Some(CONTROLLER) if self.controllers.get(index).is_some_and(|r| r.steps) => Outcome::Controllers { index, by },
             Some(MOMENT | GO_BACK | HOLD) => self.reel_moved(|r| r.step(by, held)),
             _ => Outcome::Nothing,
         }
@@ -738,6 +765,7 @@ impl Card {
             Page::Options => (Page::First, OPTIONS),
             Page::Disc => (Page::First, CHANGE_DISC),
             Page::Cards => (Page::Options, MEMORY_CARDS),
+            Page::Controllers => (Page::Options, CONTROLLERS),
             Page::Drawer(_) => (Page::Cards, MEMORY_CARD),
             Page::Ask(ask) => (Page::Leave, ask.key()),
         };
@@ -769,6 +797,11 @@ impl Card {
             (Page::First, Some(key @ (SAVE | LOAD))) => self.slots_pane(key == LOAD),
             (Page::Disc, _) => self.disc_pane(),
             (Page::Cards, _) => self.cards_pane(),
+            (Page::Controllers, _) => match self.controllers.get(self.current) {
+                // Mistress's two lines: the sentence, and the muted one under it.
+                Some(r) => Pane { kind: PaneKind::Sentence, sentence: r.sentence.clone(), muted: r.muted.clone(), ..Pane::none() },
+                None => Pane::none(),
+            },
             (Page::Drawer(_), _) => Pane { kind: PaneKind::Sentence, sentence: cards::DRAWER_CARD.to_owned(), ..Pane::none() },
             _ => Pane::none(),
         }

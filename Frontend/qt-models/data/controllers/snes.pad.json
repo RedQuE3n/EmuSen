@@ -1,0 +1,23 @@
+{
+  "name": "SNES controller",
+  "design": [1000, 500],
+  "items": [
+    {"part": {"path": "M 488,58 C 488,30 500,18 512,4"}, "stroke": "#55555F", "width": 9},
+    {"region": "L", "shape": {"arcband": [235, 265, 205, 229, 198, 282]}, "fill": "#8E8E99", "stroke": "#55555F", "width": 3},
+    {"region": "R", "shape": {"arcband": [765, 265, 205, 229, 258, 342]}, "fill": "#8E8E99", "stroke": "#55555F", "width": 3},
+    {"part": {"union": [{"circle": [235, 265, 215]}, {"circle": [765, 265, 215]}, {"path": "M 235,52 Q 500,96 765,52 L 765,478 Q 500,446 235,478 Z"}]}, "fill": "#C9C9D1", "stroke": "#55555F", "width": 5},
+    {"part": {"circle": [235, 265, 128]}, "fill": "#B4B4BE"},
+    {"part": {"box": [652, 152, 226, 226, 70], "turn": [45, 765, 265]}, "fill": "#B4B4BE"},
+    {"dpad": [235, 265, 70, 106], "controls": ["Up", "Down", "Left", "Right"], "fill": "#2C2C33", "arrow": "#5E5E69", "radius": 10},
+    {"part": {"pill": [447, 290, 86, 36, -35]}, "fill": "#B4B4BE"},
+    {"part": {"pill": [553, 290, 86, 36, -35]}, "fill": "#B4B4BE"},
+    {"region": "Select", "shape": {"pill": [447, 290, 70, 22, -35]}, "fill": "#4A4A54"},
+    {"region": "Start", "shape": {"pill": [553, 290, 70, 22, -35]}, "fill": "#4A4A54"},
+    {"word": "SELECT", "at": [440, 345], "size": 17, "colour": "#5A5A66"},
+    {"word": "START", "at": [548, 345], "size": 17, "colour": "#5A5A66"},
+    {"round": [765, 191, 38], "region": "X", "colour": "#3F5FD0", "caption": "X", "size": 32},
+    {"round": [839, 265, 38], "region": "A", "colour": "#D0413F", "caption": "A", "size": 32},
+    {"round": [765, 339, 38], "region": "B", "colour": "#E3B82E", "caption": "B", "size": 32},
+    {"round": [691, 265, 38], "region": "Y", "colour": "#3E9A58", "caption": "Y", "size": 32}
+  ]
+}

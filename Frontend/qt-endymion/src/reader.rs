@@ -60,7 +60,13 @@ impl Reader {
                         reading.start(&pads)
                     }
                 });
-                let tick = tick.and_then(|tick| game.as_ref().map_or(Ok(()), |game| game_reading.read(&pads, game)).map(|()| tick));
+                let tick = tick.and_then(|mut tick| {
+                    if let Some(game) = game.as_ref() {
+                        tick.seats = game.keep_seats(&pads, &tick.devices)?;
+                        game_reading.read(&pads, game)?;
+                    }
+                    Ok(tick)
+                });
                 let delivery = match tick {
                     Ok(tick) => {
                         started = true;

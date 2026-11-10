@@ -72,6 +72,10 @@ not cross into another network namespace), plays to SDL's dummy audio, and draws
   can see it, each run watched.
 - `state.py <system> system|gamelist[:<j>[:media:<n>]]` — a state as what reaches it: the settings, the pad's steps and the run's
   length, as three lines of text.
+- `helpcopy.py <theme-folder> <out> <name> <fontSize>` — a test copy of a theme, written outside the repository and
+  never committed as a theme, whose gamelist help shows four entries with the same disc (a, b, x, y) at full opacity at
+  the given `fontSize`, the rest unchanged; run with `THEMES=<out>`. Its captures give a help bar's spacing at sizes the
+  watched themes do not show (EmuSen_Qt.md §4.12).
 - `pick.py <run-dir> <seconds> <out.png>` — keeps the run's capture, and prints its time and its difference from the
   grab one second before, which is 0 when the picture had settled.
 

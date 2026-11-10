@@ -4339,13 +4339,10 @@ it once with the models, as the profile `bindings_choose` answers where no profi
 `DEFAULT_PROFILE`), and every page compares with that (`Bindings.default_profile`); the PROFILES model's member
 `"Default"` is the header's shape, as `"Profiles"` and `"Games"` are. A stick's direction counts as held past Endymion's
 stick deadzone (`emusen_endymion_pads_setting`, `SETTING_STICK_DEADZONE`), read by the pads' reader on each tick and
-handed over with the seats (`GamePads::stick_deadzone`), where Mistress's page held a 0.5 of its own. Two have no reader
-and are kept, each a question for the tester: a game's name in a console's profiles (`game_key`, its file's name without
-the extension), which Endymion writes and reads but no call gives, so the card's Profile row writes `"Games"` by its own
-copy (the call needed: `emusen_endymion_bindings_game_key`, or a profiles call that sets a game's profile); and the
-count of SDL's gamepad buttons (26) and its trigger axes (4 and 5), by which the pads' reader masks what a pad holds,
-since the pads' calls take one SDL button at a time (the call needed: a mask of the SDL buttons a pad holds,
-`emusen_endymion_pads_get` with a new `EMUSEN_ENDYMION_PADS_HELD`).
+handed over with the seats (`GamePads::stick_deadzone`), where Mistress's page held a 0.5 of its own. Decided
+2026-11-10 by the tester, the two that had no reader are read from Endymion since interface 47 (`EmuSen_RustPlatform.md`
+§55): a game's name in a console's profiles (`emusen_endymion_bindings_game_key`, through `Chooser::game_key`), and what a
+pad holds, SDL's buttons and the triggers past half (`EMUSEN_ENDYMION_PADS_HELD`).
 
 **Held to** (measured on 2026-11-09). kit-core's `controller.rs` (8, Kit §7.62); `qt-models/tests/controllers.rs` (8: the tester lighting a key held and the pad, a stick's push and Endymion's deadzone; every
 drawing file reads and covers its controller's declared controls; the section's seats, profile and Rumble shown where a

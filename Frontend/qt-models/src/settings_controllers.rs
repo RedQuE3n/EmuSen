@@ -40,20 +40,12 @@ pub struct Binding {
 pub trait Chooser: Send + Sync {
     fn choose(&self, gamepad: &Value, profiles: &Value, console: &str, player: u32, profile: Option<&str>, game: Option<&str>) -> Choice;
     fn bound(&self, console: &str, player: u32) -> [i32; 16];
+    /// The name a game is known by in a console's profiles, from its path: Endymion's.
+    fn game_key(&self, path: &str) -> String;
 }
 
-/// The bits a pad's triggers take beside SDL's buttons in a press listened for: the left and the right.
-pub const LEFT_TRIGGER_BIT: u32 = 1 << 30;
-pub const RIGHT_TRIGGER_BIT: u32 = 1 << 31;
-/// SDL's trigger axes, after the sticks' four (SDL_gamepad.h).
-const LEFT_TRIGGER_AXIS: usize = 4;
-const RIGHT_TRIGGER_AXIS: usize = 5;
-
-/// A pad's triggers past half their travel, as bits beside its buttons.
-pub fn trigger_bits(axes: &[f64; emusen_qt_endymion::seats::AXES]) -> u32 {
-    let past = |a: usize| axes[a] > emusen_kit_core::input::TRIGGER_THRESHOLD;
-    (if past(LEFT_TRIGGER_AXIS) { LEFT_TRIGGER_BIT } else { 0 }) | (if past(RIGHT_TRIGGER_AXIS) { RIGHT_TRIGGER_BIT } else { 0 })
-}
+/// The bits a pad's triggers take beside SDL's buttons in what it holds: Endymion's (`PADS_HELD`).
+pub use emusen_platform_client::pads::consts::{HELD_LEFT_TRIGGER as LEFT_TRIGGER_BIT, HELD_RIGHT_TRIGGER as RIGHT_TRIGGER_BIT};
 
 /// What the drawing shows: the drawing file (empty for the generic one), the controls, the words on each label, the
 /// control focused and those held, and the strip over it.
@@ -723,9 +715,8 @@ impl SettingsView {
             let by_key = self.read.bindings.key(&b.console, &control).is_some_and(|k| self.keys_held.iter().any(|h| h.eq_ignore_ascii_case(&k)));
             let by_pad = pad.is_some_and(|pad| {
                 if let Some(n) = controllers::control_number(&control) {
-                    let triggers = trigger_bits(&pad.axes);
                     let by_button = bound.get(n as usize).is_some_and(|&sdl| sdl >= 0 && pad.buttons & (1 << sdl) != 0);
-                    by_button || (control == "L2" && triggers & LEFT_TRIGGER_BIT != 0) || (control == "R2" && triggers & RIGHT_TRIGGER_BIT != 0)
+                    by_button || (control == "L2" && pad.buttons & LEFT_TRIGGER_BIT != 0) || (control == "R2" && pad.buttons & RIGHT_TRIGGER_BIT != 0)
                 } else {
                     controllers::stick_held(&control, &pad.axes, seated.deadzone)
                 }
@@ -1075,7 +1066,8 @@ impl SettingsView {
                 let at = profiles.iter().position(|p| *p == now).unwrap_or(0);
                 let next = profiles[(at as i64 + i64::from(if by == 0 { 1 } else { by })).rem_euclid(profiles.len() as i64) as usize].clone();
                 let own = (next != self.read.bindings.console_default(&console)).then_some(next.as_str());
-                Outcome::Bindings(vec![self.read.bindings.set_game_profile(&console, &game, own)])
+                let Some(key) = self.chooser.as_ref().map(|c| c.game_key(&game)) else { return Outcome::Nothing };
+                Outcome::Bindings(vec![self.read.bindings.set_game_profile(&console, &key, own)])
             }
             "gbindings" if by == 0 => {
                 self.open_card_bindings(&console);

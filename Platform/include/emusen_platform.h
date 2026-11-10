@@ -43,7 +43,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 46u
+#define EMUSEN_PLATFORM_ABI_VERSION 47u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -946,6 +946,12 @@ int64_t emusen_endymion_bindings_choose(const uint8_t *gamepad, size_t gamepad_l
                                         size_t console_len, int32_t player, const uint8_t *game, size_t game_len, const uint8_t *profile,
                                         size_t profile_len, uint8_t *out, size_t len);
 
+/*
+ * Since 47. The name a game is known by in a console's profiles (PROFILES' Games): its file's name without the extension,
+ * from its path, by the length query. Decided 2026-11-10 by the tester, so no front end keeps its own copy of the rule.
+ */
+int64_t emusen_endymion_bindings_game_key(const uint8_t *path, size_t path_len, uint8_t *out, size_t len);
+
 /* ---- Endymion: the device half (EmuSen_Audio_Sync.md, section 7; EmuSen_Input.md, sections 4 and 8) ---- */
 
 /*
@@ -1083,6 +1089,9 @@ int64_t emusen_endymion_pads_open(const emusen_endymion_pads *pads, uint64_t *ou
 #define EMUSEN_ENDYMION_PADS_LAST_RESCAN 9u  /* .NET ticks since the handle was made */
 #define EMUSEN_ENDYMION_PADS_VENDOR_PRODUCT 10u /* as SIM_PAD_VENDOR_PRODUCT; read while open, the last reading once closed; under Steam Input, the controller behind the virtual pad */
 #define EMUSEN_ENDYMION_PADS_FAMILY 11u /* since 41: the printing on the pad's buttons, EMUSEN_ENDYMION_FAMILY_*; SDL's type first, the pad's name where SDL does not know */
+#define EMUSEN_ENDYMION_PADS_HELD 12u   /* since 47: what the pad holds, a bit for each SDL_GamepadButton by its number and the HELD_*_TRIGGER bits; 0 for a pad not open */
+#define EMUSEN_ENDYMION_HELD_LEFT_TRIGGER 0x40000000u  /* PADS_HELD's bit for the left trigger past half its travel, as the game hears L2 */
+#define EMUSEN_ENDYMION_HELD_RIGHT_TRIGGER 0x80000000u /* and the right, R2 */
 
 #define EMUSEN_ENDYMION_FAMILY_GENERIC 0u     /* not known: a front end draws the buttons by position */
 #define EMUSEN_ENDYMION_FAMILY_XBOX 1u

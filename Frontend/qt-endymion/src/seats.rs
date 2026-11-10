@@ -8,7 +8,8 @@ use emusen_platform_client::seats::{Holder, Pad, Seat, PLAYERS};
 use emusen_platform_client::{Platform, Result};
 
 /// A connected pad as the Players page lists it: its key, name, the player it plays as (0 for none), whether a button
-/// is held on it, and what it holds as SDL reads it: a bit for each of SDL's gamepad buttons, and its six axes.
+/// is held on it, what it holds as Endymion's `PADS_HELD` gives it (a bit for each of SDL's gamepad buttons, and the
+/// triggers' bits), and its axes as SDL reads them.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Connected {
     pub key: u64,
@@ -19,8 +20,6 @@ pub struct Connected {
     pub axes: [f64; AXES],
 }
 
-/// SDL's gamepad buttons a pad reports, SOUTH to MISC6 (SDL_gamepad.h, SDL 3.4).
-pub const SDL_BUTTONS: i32 = 26;
 /// SDL's gamepad axes: the sticks' x and y, then the triggers.
 pub const AXES: usize = 6;
 
@@ -152,15 +151,14 @@ impl Seats {
         self.open
             .iter()
             .map(|(key, name, _)| {
-                let buttons = pads.map_or(0, |p| (0..SDL_BUTTONS).filter(|b| p.get(*key, consts::RAW_PRESSED, *b).unwrap_or(0) != 0).fold(0, |m, b| m | 1 << b));
+                let buttons = pads.map_or(0, |p| p.get(*key, consts::HELD, 0).unwrap_or(0) as u32);
                 // To a hundredth, so a stick's noise at rest is no change.
                 let axes: [f64; AXES] = std::array::from_fn(|a| pads.map_or(0.0, |p| (p.axis(*key, consts::AXIS_RAW, a as u32).unwrap_or(0.0) * 100.0).round() / 100.0));
-                let triggers = axes[4..].iter().any(|t| *t > emusen_kit_core::input::TRIGGER_THRESHOLD);
                 Connected {
                     key: *key,
                     name: name.clone(),
                     player: self.keys.iter().position(|k| *k == Some(*key)).map_or(0, |i| i + 1),
-                    pressed: buttons != 0 || triggers,
+                    pressed: buttons != 0,
                     buttons,
                     axes,
                 }

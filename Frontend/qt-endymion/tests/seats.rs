@@ -70,6 +70,13 @@ fn qt_7_7_h_pads_take_seats_keep_them_while_gone_move_and_are_let_go_of() {
     game.keep_seats(&pads, &[]).unwrap();
     let held = game.connected();
     assert!(held[0].pressed && held[0].buttons & 1 == 1, "{held:?}");
+    // A trigger past half its travel is held too, by Endymion's bit for it (PADS_HELD, since interface 47).
+    one.press(0, false).unwrap();
+    one.set_axis(5, 0.8).unwrap();
+    reading.poll(&pads).unwrap();
+    game.keep_seats(&pads, &[]).unwrap();
+    let held = game.connected();
+    assert!(held[0].pressed && held[0].buttons == consts::HELD_RIGHT_TRIGGER, "{held:?}");
 }
 
 #[test]

@@ -67,6 +67,12 @@ impl Platform {
         json("bindings_choose", &bytes)
     }
 
+    /// The name a game is known by in a console's profiles, from its path (since interface 47).
+    pub fn bindings_game_key(&self, path: &str) -> Result<String> {
+        let bytes = self.read(|o, l| unsafe { self.lib.emusen_endymion_bindings_game_key(path.as_ptr(), path.len(), o, l) })?.unwrap_or_default();
+        Ok(String::from_utf8_lossy(&bytes).into_owned())
+    }
+
     /// One map at its defaults: a console's keys, a console's gamepad buttons, or the hotkeys.
     pub fn bindings_defaults(&self, which: u32) -> Result<Value> {
         let bytes = self.read(|o, l| unsafe { self.lib.emusen_endymion_bindings_defaults(which, o, l) })?.unwrap_or_default();

@@ -58,6 +58,9 @@ impl Chooser for Rule {
         out[1] = 2; // Y on West
         out
     }
+    fn game_key(&self, path: &str) -> String {
+        std::path::Path::new(path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+    }
 }
 
 fn pad(buttons: &[u32], axes: &[u32], players: &[&str]) -> Controllers {

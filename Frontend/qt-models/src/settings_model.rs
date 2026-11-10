@@ -819,7 +819,7 @@ impl qobject::SettingsModel {
         let Some(pads) = (unsafe { emusen_qt_endymion::game::GamePads::at(self.game_pads) }) else { return };
         let seated = crate::settings_controllers::Seated { players: pads.players(), pads: pads.connected(), deadzone: pads.stick_deadzone() };
         let before = std::mem::take(&mut self.as_mut().rust_mut().pressed);
-        let now: Vec<(u64, u32)> = seated.pads.iter().map(|p| (p.key, p.buttons | crate::settings_controllers::trigger_bits(&p.axes))).collect();
+        let now: Vec<(u64, u32)> = seated.pads.iter().map(|p| (p.key, p.buttons)).collect();
         self.as_mut().rust_mut().pressed = now.clone();
         let fresh = now.iter().find_map(|(key, mask)| {
             let was = before.iter().find(|(k, _)| k == key).map_or(0, |(_, m)| *m);

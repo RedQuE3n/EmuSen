@@ -93,11 +93,12 @@ impl Bindings {
         chosen.and_then(|c| self.profiles(console).into_iter().find(|p| same(p, c))).unwrap_or_else(|| self.default_profile.clone())
     }
 
-    /// A game's own profile chosen, or the console's again for none.
+    /// A game's own profile chosen, or the console's again for none; the game by its name in the profiles (Endymion's
+    /// `game_key`).
     pub fn set_game_profile(&mut self, console: &str, game: &str, profile: Option<&str>) -> File {
         let c = entry(&mut self.profiles, console);
         let games = entry(c, "Games");
-        let key = spelling(games, game_key(game));
+        let key = spelling(games, game);
         match profile {
             Some(p) => {
                 object(games).insert(key, json!(p));
@@ -360,15 +361,6 @@ impl Bindings {
         gamepad.insert("Players".into(), json!({}));
         self.hotkeys = self.hotkey_defaults.clone();
         vec![File::Keys, File::Gamepad, File::Hotkeys]
-    }
-}
-
-/// The name a game is known by in a console's profiles: its file's name without the extension (Endymion's `game_key`).
-pub fn game_key(path: &str) -> &str {
-    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
-    match name.rfind('.') {
-        Some(dot) if dot > 0 => &name[..dot],
-        _ => name,
     }
 }
 

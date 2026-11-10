@@ -84,6 +84,10 @@ impl Chooser for Endymion {
     fn bound(&self, console: &str, player: u32) -> [i32; 16] {
         self.0.bindings_bound(console, player as i32, None).unwrap_or([-1; 16])
     }
+
+    fn game_key(&self, path: &str) -> String {
+        self.0.bindings_game_key(path).unwrap_or_default()
+    }
 }
 
 impl SettingsSource for ClientSettings {

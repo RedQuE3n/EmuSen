@@ -17,7 +17,7 @@ pub const EMUSEN_SCRAPE_BUSY: i32 = -1164;
 pub const EMUSEN_SCRAPE_IO: i32 = -1165;
 pub const EMUSEN_SCRAPE_NO_LIBRARY: i32 = -1166;
 pub const EMUSEN_SCRAPE_STORE_IN_USE: i32 = -1167;
-pub const EMUSEN_PLATFORM_ABI_VERSION: u32 = 46;
+pub const EMUSEN_PLATFORM_ABI_VERSION: u32 = 47;
 pub const EMUSEN_PLATFORM_NULL: i32 = -1;
 pub const EMUSEN_PLATFORM_BAD_STRING: i32 = -5;
 pub const EMUSEN_PLATFORM_NOT_SUPPORTED: i32 = -256;
@@ -152,6 +152,9 @@ pub const EMUSEN_ENDYMION_PADS_ANY_PRESSED: u32 = 8;
 pub const EMUSEN_ENDYMION_PADS_LAST_RESCAN: u32 = 9;
 pub const EMUSEN_ENDYMION_PADS_VENDOR_PRODUCT: u32 = 10;
 pub const EMUSEN_ENDYMION_PADS_FAMILY: u32 = 11;
+pub const EMUSEN_ENDYMION_PADS_HELD: u32 = 12;
+pub const EMUSEN_ENDYMION_HELD_LEFT_TRIGGER: u32 = 1073741824;
+pub const EMUSEN_ENDYMION_HELD_RIGHT_TRIGGER: u32 = 2147483648;
 pub const EMUSEN_ENDYMION_FAMILY_GENERIC: u32 = 0;
 pub const EMUSEN_ENDYMION_FAMILY_XBOX: u32 = 1;
 pub const EMUSEN_ENDYMION_FAMILY_PLAYSTATION: u32 = 2;
@@ -1110,6 +1113,7 @@ pub struct PlatformLibrary {
         out: *mut u8,
         len: usize,
     ) -> i64,
+    pub emusen_endymion_bindings_game_key: unsafe extern "C" fn(path: *const u8, path_len: usize, out: *mut u8, len: usize) -> i64,
     pub emusen_endymion_sdl_lend: unsafe extern "C" fn(handle: *mut ::std::os::raw::c_void) -> i32,
     pub emusen_endymion_sdl_hint: unsafe extern "C" fn(name: *const u8, name_len: usize, out: *mut u8, cap: usize) -> i64,
     pub emusen_endymion_sim_pad_new: unsafe extern "C" fn(path: *const u8, path_len: usize) -> *mut emusen_endymion_sim_pad,
@@ -1586,6 +1590,7 @@ impl PlatformLibrary {
         let emusen_endymion_bindings_defaults = unsafe { __library.get(b"emusen_endymion_bindings_defaults\0") }.map(|sym| *sym)?;
         let emusen_endymion_bindings_bound = unsafe { __library.get(b"emusen_endymion_bindings_bound\0") }.map(|sym| *sym)?;
         let emusen_endymion_bindings_choose = unsafe { __library.get(b"emusen_endymion_bindings_choose\0") }.map(|sym| *sym)?;
+        let emusen_endymion_bindings_game_key = unsafe { __library.get(b"emusen_endymion_bindings_game_key\0") }.map(|sym| *sym)?;
         let emusen_endymion_sdl_lend = unsafe { __library.get(b"emusen_endymion_sdl_lend\0") }.map(|sym| *sym)?;
         let emusen_endymion_sdl_hint = unsafe { __library.get(b"emusen_endymion_sdl_hint\0") }.map(|sym| *sym)?;
         let emusen_endymion_sim_pad_new = unsafe { __library.get(b"emusen_endymion_sim_pad_new\0") }.map(|sym| *sym)?;
@@ -1863,6 +1868,7 @@ impl PlatformLibrary {
             emusen_endymion_bindings_defaults,
             emusen_endymion_bindings_bound,
             emusen_endymion_bindings_choose,
+            emusen_endymion_bindings_game_key,
             emusen_endymion_sdl_lend,
             emusen_endymion_sdl_hint,
             emusen_endymion_sim_pad_new,
@@ -2865,6 +2871,9 @@ impl PlatformLibrary {
                 len,
             )
         }
+    }
+    pub unsafe fn emusen_endymion_bindings_game_key(&self, path: *const u8, path_len: usize, out: *mut u8, len: usize) -> i64 {
+        unsafe { (self.emusen_endymion_bindings_game_key)(path, path_len, out, len) }
     }
     pub unsafe fn emusen_endymion_sdl_lend(&self, handle: *mut ::std::os::raw::c_void) -> i32 {
         unsafe { (self.emusen_endymion_sdl_lend)(handle) }

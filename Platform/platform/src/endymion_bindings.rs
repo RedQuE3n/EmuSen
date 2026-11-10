@@ -102,6 +102,18 @@ pub unsafe extern "C" fn emusen_endymion_bindings_bound(
     bound.len() as i64
 }
 
+/// Since 47: the name a game is known by in a console's profiles, from its path, by the length query.
+///
+/// # Safety
+/// `path` must be valid for `path_len` bytes; `out` for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_endymion_bindings_game_key(path: *const u8, path_len: usize, out: *mut u8, len: usize) -> i64 {
+    match unsafe { required(path, path_len) } {
+        Ok(path) => unsafe { put(bindings::game_key(path).as_bytes(), out, len) },
+        Err(status) => status as i64,
+    }
+}
+
 /// Why a model a caller passed would not read.
 fn unread(file: File) -> impl FnOnce(String) -> i32 {
     move |words| fail(status::PARSE, format!("the {} model: {words}", file.name()))

@@ -1,6 +1,6 @@
 //! An ES-DE theme as the library's look (EmuSen_Qt.md §4.9): the program over a sandbox whose settings choose Art Book Next
-//! from the corpus, its library two synthetic NES images and a Super Nintendo shelf of one game the fixture's libretro
-//! test core plays, its information naming the Super Nintendo (no player's game and no published build is read). Moonrise
+//! from the corpus, its library two synthetic NES images and a synthetic Super Nintendo image, played by VenusRT built
+//! from this commit with its sidecar (the client fixture's; no player's game and no published build is read). Moonrise
 //! gives way to the system view; Right steps the carousel; A opens the
 //! gamelist and A on the game plays it through the ring; the chord pauses it under the Pause Card, and Back to Library is
 //! the gamelist at the same game; Start is the Home card, Select the List card, Y the favourite; a theme that is not there
@@ -11,9 +11,8 @@ mod common;
 
 use common::{sandbox, wait_for};
 
-use emusen_client_fixture::cores::{hosted, installation, libretro_entry, sha256, RING_GAME};
+use emusen_client_fixture::cores::{installation_with_snes, snes_image};
 use emusen_client_fixture::library;
-use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_kit_core::input::{PadControl, UiButton};
 use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
 use emusen_platform_client::Platform;
@@ -33,9 +32,6 @@ fn home() -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap())
 }
 
-/// The libretro test core's information as a Super Nintendo core's, so a game on that shelf opens it (systems'
-/// `snes.json`: `super_nes`).
-const SNES_INFO: &str = "display_name = \"EmuSen - Test Core\"\ncorename = \"TestCore\"\nlicense = \"GPLv3\"\nsystemid = \"super_nes\"\nsupported_extensions = \"sfc\"\n";
 
 /// Waits up to `seconds` for a condition the scene answers, letting Qt run between looks.
 fn until(scene: &mut Scene<'_>, seconds: u64, what: &str, mut done: impl FnMut(&mut Scene<'_>) -> bool) {
@@ -82,19 +78,11 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     let host = Host::new(&platform, "wayland", gpu.as_deref(), false, &std::env::temp_dir().join("qt-app-esde-presets")).expect("a Vulkan device");
     let adoption = host.adoption();
 
-    // The library: two NES images and the libretro test core's game on the Super Nintendo shelf; the installation's
-    // folder vouches for the proxy and the host, and the core is the player's, approved, as the Cores window leaves it.
+    // The library: two NES images and a Super Nintendo image the test makes; the installation's folder holds VenusRT
+    // built from this commit with its sidecar, vouched for by its manifest, as a publish leaves it.
     let world = sandbox("qt-app-esde", &[("nes", "Brass Lantern.nes"), ("nes", "Cobalt Harbor.nes")]);
-    std::fs::write(world.dir("Roms/snes").join("Aurora Drift.sfc"), RING_GAME).unwrap();
-    // SAFETY: set before any thread reads the environment; the proxy starts the runner it names.
-    unsafe { std::env::set_var("EMUSEN_CORE_RUNNER", &hosted().runner) };
-    let cores = installation(&world.dir("lib"));
-    let core = libretro_entry(&world.dir("Home/Cores"));
-    std::fs::write(core.with_extension("info"), SNES_INFO).unwrap();
-    let config = Config { cores: Some(vec![cores.to_str().unwrap().into()]), player_cores: Some(vec![world.dir("Home/Cores").to_str().unwrap().into()]), ..Config::default() };
-    let rt = Runtime::new(&Api::load(library()).unwrap(), &config).unwrap();
-    rt.core_approve(&sha256(&core)).unwrap_or_else(|e| panic!("{e}; the runtime lists {:?}", rt.cores()));
-    drop(rt);
+    std::fs::write(world.dir("Roms/snes").join("Aurora Drift.sfc"), snes_image("AURORA DRIFT")).unwrap();
+    let cores = installation_with_snes(&world.dir("lib"));
     let mut settings = platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
     let folder = theme.to_str().unwrap();
     settings["LibraryStyle"] = json!("Theme");

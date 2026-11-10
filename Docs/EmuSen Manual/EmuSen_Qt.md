@@ -2912,10 +2912,11 @@ is stage 5's.
 
 **Proof, measured on 2026-11-09.** `qt-app/tests/esde.rs`, on Vulkan in a `kwin_wayland --virtual` of its own on the
 RX 6800. The sandbox's settings choose Art Book Next from the corpus with the options of
-`Testing/esde-baseline/states.tsv`; its library is two synthetic NES images and one game on the Super Nintendo shelf
-that the client fixture's libretro test core plays through the ring, its information naming the Super Nintendo
-(`super_nes`), approved as the Cores window approves one (since 2026-11-10: the test read Super Mario World from the
-player's library and the published installation's engines, which a test may not). The start reads the pair; Moonrise gives way to the system view on the NES (release order), the own
+`Testing/esde-baseline/states.tsv`; its library is two synthetic NES images and a synthetic Super Nintendo image (a
+LoROM whose reset runs to a loop, `client_fixture::cores::snes_image`), played by VenusRT built from this commit with its
+sidecar written by the conformance runner as a publish writes it, in an installation folder its manifest vouches for
+(`installation_with_snes`; since 2026-11-10, when the test read Super Mario World from the player's library and the
+published installation's engines, which a test may not). The start reads the pair; Moonrise gives way to the system view on the NES (release order), the own
 look's three roles unmade and the chosen theme's engine not started; the theme's sounds decode through the interface
 player on SDL's dummy driver; Right steps to the Super Nintendo; A opens its gamelist; Y writes the favourite and the
 shelves' text carries it; Start opens the Home card over the theme and B closes it; Select opens the List card and B

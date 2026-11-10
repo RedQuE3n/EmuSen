@@ -2949,7 +2949,8 @@ to carry a folder's games for the selectors (an addition to the shelves' text, �
 | CarAlt system | at 1920 × 1200 the three covers (most of 16.5), the picks above; at 1280 × 800 the description and the bands' edges |
 | every other state | the texts' layout: descriptions (Artflix's 47 % of its system view, CarAlt's gamelist 43 %, Art Book Next's gamelist 32 %) wrap at other words, since ES-DE lays every text out by the rules of item 3 (Artflix's "developed by Nintendo … 1991 in North" is 508 px by ES-DE's rule and 497 by Qt's, so ES-DE wraps before "North" in its 512-px box and Qt after it) |
 
-**Boxes still off ES-DE, each [blocked]** (named nowhere; the oracle fails on them):
+**Boxes still off ES-DE, each [blocked]** (named nowhere; the oracle fails on them; six of the nine closed by §4.9–§4.10,
+the rest in §4.12):
 
 | Where | Off | Why |
 |---|---|---|
@@ -3116,6 +3117,63 @@ that state is seeded to them as the 1280 × 800 one is.
 
 **Held to**: qt-models' `a_console_s_text_carries_the_games_its_level_does_not_list_for_es_de_s_gameselectors`;
 `frame.rs`'s `a_gameselector_picks_from_the_games_inside_folders_too`; the oracle's CarAlt system view at 1920 × 1200.
+
+### 4.12 The oracle after §4.9–§4.11 **[M 2026-11-09]**
+
+**The watched states** (MAE against ES-DE, the help's strip left out; before is the committed measure of 2026-11-09,
+the RX 6800 at WiseMan 1365c2771 with piece X; after is this branch, lavapipe, 2026-11-09):
+
+| Theme | State | 1280 before | 1280 after | 1920 before | 1920 after |
+|---|---|---|---|---|---|
+| Art Book Next | system | 0.99 | MEASURE | 0.36 | MEASURE |
+| Art Book Next | gamelist | 2.46 | MEASURE | 1.97 | MEASURE |
+| Artflix | system | 4.96 | MEASURE | 4.28 | MEASURE |
+| Artflix | gamelist | 8.23 | MEASURE | 7.59 | MEASURE |
+| CarAlt | system | 7.17 | MEASURE | 16.49 | MEASURE |
+| CarAlt | gamelist | 6.01 | MEASURE | 5.63 | MEASURE |
+
+The media viewer's states (§4.10), the mean of its nine steps: 2.19 at 1280 × 800 and 2.68 at 1920 × 1200 for both themes
+(the video, title screen and screenshot 5.6–6.8 without ES-DE's scanlines, the other items 0.1–1.0); no ink off.
+
+**The help's entries at whole pixels.** Measured entry by entry on Artflix's gamelist bar, where every icon is the same
+disc: from one disc to the next is the label's width plus 32 px at 1280 × 800 (OPTIONS 97 = 65 + 32, MENU 77, SELECT 85,
+BACK 71, VIEW MEDIA 122, FAVORITES 111) and plus 48 px at 1920 × 1200 (146, 116, 130, 107, 185, 169), where the icon's
+box, `iconTextSpacing` and `entrySpacing` add to 32.5 and 48.75: the fraction dropped at every entry, never the
+alternation that places at fractional sums would give. A label stands at the icon's box plus `iconTextSpacing`, the
+fraction dropped, too. `HelpElement` gives the kit's bar those whole-pixel gaps, reports the element's width with its last
+entry whole (nothing follows it), and starts the entries at the whole pixel at or before the element's place.
+
+**The nine boxes of §4.8.7.** Closed: Art Book Next's two help bars and its clock at 1920 × 1200 (the size rule, the
+whole-pixel entries, and the clock's row of `esde-boxes.tsv` corrected, §4.9.3), Artflix's system bar at both sizes
+(kerning, the size rule), and the four gamelist bars that lacked VIEW MEDIA (§4.10) save CarAlt's at 1280 × 800.
+Still off, **[blocked]** for the tester:
+
+| Where | Off | What is known |
+|---|---|---|
+| CarAlt system, `helpsystem_help`, 1280 × 800 | 2.2 | the bar 242.5 units where ES-DE's is 244.7 |
+| CarAlt gamelist, `helpsystem_help`, 1280 × 800 | 3.9 | 326.7 against 330.6 |
+
+Both are rost at a fractional size with `entryRelativeScale` 0.8 (the system's labels 14.4 px, the gamelist's
+0.0144 × 800 × 0.8 = 9.22 px). Three measurements: the labels' glyphs are drawn at the size rounded up (a 2-D fit of
+"Favorites" with glyphs at 10 px: 24.6 with pens at 9.22 px, 44.0 with pens at 10, 76.2 with everything at 9.22), so the
+pens are the nominal size's; and the entries' boxes are 0.9 × 11.52 = 10.37 px, a fraction the whole-pixel rule drops at
+each of eight entries. Sizing every help label as ES-DE's own face (pens and glyphs rounded up, a space rounded down)
+closes the system bar and opens CarAlt's gamelist bars by 9.1 and 5.2 units and Artflix's at 1280 × 800 by 2.4; the
+pens at the nominal size leave the two above. What makes the last 2–4 units is not found: the icon's box (whether ES-DE
+rounds 10.37 up, as it does the glyphs) cannot be read off these captures, since rost's icons are drawn in the theme's
+colour over its own and their edges blend. A capture of CarAlt's gamelist with the help over a plain ground, or the
+tester's word, decides. The probe's measures are in `~/.cache/emusen/tmp/x2/ft/`, outside the repository.
+
+**Seeded faults**, each applied alone and reverted:
+
+| Fault | Caught by |
+|---|---|
+| each advance rounded down rather than to the nearest | `emusen-esde-text`'s pen and space tests |
+| the size rounded to the nearest rather than up | `qt_4_9_the_size_is_rounded_up_to_a_whole_pixel` |
+| ES-DE's own face's space rounded to the nearest | `qt_4_9_es_de_s_own_face_rounds_a_space_down` |
+| the viewer's right wrapping to the first item | `the_media_viewer_shows_a_game_s_media_in_es_de_s_order_and_stops_at_the_ends` |
+| the host's shelf text without its unlisted games | qt-models' `a_console_s_text_carries_the_games_its_level_does_not_list…` |
+| the gameselectors drawing from the listed games only | the oracle: no seed gives the 1920 × 1200 capture's picks (Rune Gate is unlisted), the run fails |
 
 ---
 

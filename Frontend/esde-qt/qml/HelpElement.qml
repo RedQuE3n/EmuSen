@@ -31,8 +31,12 @@ ElementBox {
     readonly property real heightShare: 0.9
     readonly property real lineHeight: root.px * root.heightShare
     readonly property real glyphSide: root.lineHeight * Math.min(1, 1 / Math.max(0.2, root.entryScale))
-    readonly property size extent: Qt.size(bar.implicitWidth, root.lineHeight)
+    // The element's width: the entries at their whole-pixel places, the last one whole, since nothing follows it.
+    readonly property size extent: Qt.size(bar.implicitWidth + root.glyphSide + root.iconGap - root.labelAt, root.lineHeight)
     readonly property real labelPx: root.px * Math.min(1, root.entryScale)
+    // ES-DE sets a label and the next entry at whole pixels, the fraction dropped (EmuSen_Qt.md §4.12).
+    readonly property real labelAt: Math.floor(root.glyphSide + root.iconGap)
+    readonly property real entryAt: Math.floor(root.glyphSide + root.iconGap + root.entrySpacing)
     PartsModel {
         id: parts
         scene: root.esde
@@ -52,7 +56,7 @@ ElementBox {
         visible: root.hasBackground
         x: -root.padLeft
         y: -root.padTop
-        width: bar.width + root.padLeft + root.padRight
+        width: root.extent.width + root.padLeft + root.padRight
         height: root.lineHeight + root.padTop + root.padBottom
         radius: root.backgroundRadius
         gradient: Gradient {
@@ -66,6 +70,8 @@ ElementBox {
     Kit.HelpBar {
         id: bar
         objectName: "esdeHelp"
+        // The entries start at the whole pixel at or before the element's place (EmuSen_Qt.md §4.12).
+        x: Math.floor(root.boxX) - root.boxX
         y: (root.lineHeight - bar.height) / 2
         width: implicitWidth
         height: implicitHeight
@@ -85,8 +91,8 @@ ElementBox {
             }
         }
         pairGlyph: true
-        entrySpacing: root.entrySpacing
-        glyphGap: root.iconGap
+        entrySpacing: root.entryAt - root.labelAt
+        glyphGap: root.labelAt - root.glyphSide
         labelColor: root.color
         iconColor: root.iconColor
         glyphSize: root.glyphSide

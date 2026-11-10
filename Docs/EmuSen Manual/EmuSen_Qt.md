@@ -3331,8 +3331,12 @@ hinting gives 8 and 9 at 11.52 and 13.6 and breaks the grouping): the discs' ink
 the label stands half a box, the spacing and half a disc after the disc's edge in every copy. A single label's width
 there is its glyphs' advances at the fractional size, each rounded (Select 45 to 46 px between 19.52 and 19.68 px, 21–31 px
 in the `m` copies), not at the size rounded up that ES-DE's other own-face text takes. One width stays open,
-**[blocked]** for the tester as a text question (§4.9): from 20.16 px up the space in View Media is drawn 6–8 px wide where
-its advance is 4.6–4.8 px (the gap visibly wider in `x06`–`x10`), which no rounding of the advance gives.
+**[blocked]** for the tester as a text question (§4.9): View Media alone in the own face is drawn wider than its rounded
+advances from 20.064 px up (`helpspace.tsv`'s `z` copies, `fontSize` 0.02500–0.02520 in steps of 0.00002: View's ink 34 px
+to 20.048 px and 35 from 20.064, Media's 42 to 20.112 and 43 from 20.128; the `x` copies reach 84–87 px of label where the
+rounded advances give 83–86), while the gap between the words stays 5–6 px, so the space is not the cause. The rule
+that widens it is not found; Select follows its rounded advances in every copy. The `y` copies (the label at
+`entryRelativeScale` 0.8, 15.36–16.64 px) are captured for the next fit.
 
 **The hinter (decided 2026-11-10).** harfrust and read-fonts shape and read tables but do not hint, so the hinted height
 comes from the system's FreeType, the library the captures were drawn with (FreeType 2.14.3 on Fedora 44), loaded at run

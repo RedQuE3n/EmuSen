@@ -117,3 +117,37 @@ fn qt_4_9_a_line_stands_by_its_alignment_at_whole_pixels() {
     s.align = Align::Center;
     assert_eq!(layout(&face(), &s).lines[0].x, (f64::from(101 - start.width) / 2.0).round() as i32);
 }
+
+// HarfBuzz 14.1.0's advances of the kit's body face in 64ths of a pixel at the scale round(size × 64), from
+// `hb_shape` on 2026-11-09 (EmuSen_Qt.md §4.9.4): AVATAR carries the face's A–V and V–A kerning.
+// COLLECTION at 14.4 px tells the scale 922 (921.6 rounded) from 921.
+const HARFBUZZ: [(&str, f64, &[i32]); 6] = [
+    ("Options", 26.0, &[983, 919, 539, 416, 867, 894, 764]),
+    ("AVATAR", 39.0, &[1323, 1275, 1258, 1093, 1468, 1490]),
+    ("View Media", 9.216, &[336, 147, 297, 426, 118, 412, 297, 322, 147, 301]),
+    ("Favorites", 21.6, &[663, 689, 641, 720, 502, 345, 448, 697, 634]),
+    ("Screensaver", 14.4, &[507, 462, 335, 465, 465, 495, 423, 460, 428, 465, 335]),
+    ("COLLECTION", 14.4, &[525, 545, 502, 502, 534, 496, 483, 224, 545, 608]),
+];
+
+#[test]
+fn qt_4_9_each_advance_is_harfbuzz_s_in_64ths_rounded() {
+    let f = face();
+    for (text, size, harfbuzz) in HARFBUZZ {
+        let theirs: Vec<i32> = f.shape(text, size, false).iter().map(|p| p.advance).collect();
+        let rounded: Vec<i32> = harfbuzz.iter().map(|&v| (f64::from(v) / 64.0).round() as i32).collect();
+        assert_eq!(theirs, rounded, "{text} at {size} px");
+        let own: Vec<i32> = f.shape(text, size, true).iter().map(|p| p.advance).collect();
+        let floored: Vec<i32> =
+            harfbuzz.iter().zip(text.chars()).map(|(&v, c)| if c == ' ' { v.div_euclid(64) } else { (f64::from(v) / 64.0).round() as i32 }).collect();
+        assert_eq!(own, floored, "{text} at {size} px in ES-DE's own face");
+    }
+}
+
+#[test]
+fn qt_4_9_the_rules_shape_with_harfrust_alone() {
+    let manifest = include_str!("../Cargo.toml");
+    let table = manifest.split("\n[").find(|t| t.starts_with("dependencies]")).unwrap_or_default();
+    let names: Vec<&str> = table.lines().skip(1).filter(|l| !l.starts_with('#')).filter_map(|l| l.split_once('=')).map(|(n, _)| n.trim()).collect();
+    assert_eq!(names, ["harfrust"], "the approved shaping, and through it read-fonts (EmuSen_Qt.md §4.9.4)");
+}

@@ -3,14 +3,14 @@
 //! whole size times `lineSpacing`, whole lines only in a box of fixed height, and an ellipsis where the box holds one line.
 //! Plain data in and out; the painter draws the glyphs where the layout puts them.
 
-use rustybuzz::UnicodeBuffer;
+use harfrust::{shape, Buffer, Font, ShapeOptions, ShaperFont};
 
 /// The ellipsis THEMES.md names, "(...)": three full stops.
 pub const ELLIPSIS: &str = "...";
 
-/// A font's bytes, checked to be a face rustybuzz reads.
+/// A font's face, read from its file's bytes by read-fonts and shaped by HarfRust (EmuSen_Qt.md §4.9.2).
 pub struct Face {
-    data: Vec<u8>,
+    font: Font,
 }
 
 /// A face's ascent and descent at a whole size, in pixels, both positive.
@@ -23,49 +23,45 @@ pub struct Metrics {
 impl Face {
     /// The face of a font file's bytes, or none when they hold no face.
     pub fn new(data: Vec<u8>) -> Option<Face> {
-        rustybuzz::Face::from_slice(&data, 0)?;
-        Some(Face { data })
+        let font = Font::new(data, 0)?;
+        font.metrics().hhea_line?;
+        Some(Face { font })
     }
 
-    fn with<R>(&self, f: impl FnOnce(&rustybuzz::Face) -> R) -> R {
-        f(&rustybuzz::Face::from_slice(&self.data, 0).expect("checked in new"))
-    }
-
-    /// The face's own line at a size: its ascender and descender scaled.
+    /// The face's own line at a size: its ascender and descender scaled, the typographic ones where the face asks for them.
     pub fn metrics(&self, size: f64) -> Metrics {
-        self.with(|f| {
-            let scale = size / f64::from(f.units_per_em());
-            Metrics { ascent: f64::from(f.ascender()) * scale, descent: -f64::from(f.descender()) * scale }
-        })
+        let m = self.font.metrics();
+        let line = if m.use_typo_metrics { m.typo_line.or(m.hhea_line) } else { m.hhea_line }.expect("checked in new");
+        let scale = size / f64::from(m.units_per_em);
+        Metrics { ascent: line.ascender.to_f64() * scale, descent: -line.descender.to_f64() * scale }
     }
 
     /// Each cluster of `text` shaped at `size` with the face's kerning, and its advance: the sum of its glyphs' advances,
-    /// each rounded to a whole pixel (§4.9.1, 2); in ES-DE's own face (`own`) a space's is rounded down (§4.9.1, 3).
+    /// each in HarfBuzz's 64ths of a pixel rounded to a whole pixel (§4.9.1, 2); in ES-DE's own face (`own`) a space's is
+    /// rounded down (§4.9.1, 3).
     pub fn shape(&self, text: &str, size: f64, own: bool) -> Vec<Piece> {
         if text.is_empty() {
             return vec![];
         }
-        self.with(|f| {
-            let scale = size / f64::from(f.units_per_em());
-            let mut buffer = UnicodeBuffer::new();
-            buffer.push_str(text);
-            buffer.guess_segment_properties();
-            let shaped = rustybuzz::shape(f, &[], buffer);
-            let mut pieces: Vec<(usize, i32)> = vec![];
-            for (info, pos) in shaped.glyph_infos().iter().zip(shaped.glyph_positions()) {
-                let start = info.cluster as usize;
-                let exact = f64::from(pos.x_advance) * scale;
-                let space = text[start..].starts_with(' ');
-                let advance = if own && space { exact.floor() } else { exact.round() } as i32;
-                match pieces.last_mut() {
-                    Some(last) if last.0 == start => last.1 += advance,
-                    _ => pieces.push((start, advance)),
-                }
+        let shaper = ShaperFont::new(&self.font).with_scale((size * 64.0).round() as i32);
+        let mut buffer = Buffer::new();
+        buffer.push_str(text);
+        buffer.guess_segment_properties();
+        shape(&shaper, &mut buffer, ShapeOptions::new()).expect("a buffer with its segment's properties shapes");
+        let mut pieces: Vec<(usize, i32)> = vec![];
+        for (info, pos) in buffer.glyph_infos().iter().zip(buffer.glyph_positions()) {
+            let start = info.cluster as usize;
+            let exact = f64::from(pos.x_advance) / 64.0;
+            let space = text[start..].starts_with(' ');
+            let advance = if own && space { exact.floor() } else { exact.round() } as i32;
+            match pieces.last_mut() {
+                Some(last) if last.0 == start => last.1 += advance,
+                _ => pieces.push((start, advance)),
             }
-            pieces.sort_by_key(|p| p.0);
-            let ends: Vec<usize> = pieces.iter().skip(1).map(|p| p.0).chain([text.len()]).collect();
-            pieces.iter().zip(ends).map(|(&(start, advance), end)| Piece { text: text[start..end].to_owned(), advance }).collect()
-        })
+        }
+        pieces.sort_by_key(|p| p.0);
+        let ends: Vec<usize> = pieces.iter().skip(1).map(|p| p.0).chain([text.len()]).collect();
+        pieces.iter().zip(ends).map(|(&(start, advance), end)| Piece { text: text[start..end].to_owned(), advance }).collect()
     }
 }
 

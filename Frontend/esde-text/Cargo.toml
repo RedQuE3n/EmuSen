@@ -11,5 +11,6 @@ publish.workspace = true
 name = "emusen_esde_text"
 
 [dependencies]
-# MIT. HarfBuzz's shaping in Rust, the shaping ES-DE does with HarfBuzz; through it ttf-parser (MIT) reads the tables.
-rustybuzz = "0.20"
+# MIT. HarfBuzz's shaping in Rust, matching HarfBuzz 15.0's, at HarfBuzz's 64ths of a pixel; through it read-fonts
+# (MIT or Apache-2.0) reads the tables. Approved 2026-11-09 by the tester on the proof of EmuSen_Qt.md §4.9.4.
+harfrust = "=0.15.0"

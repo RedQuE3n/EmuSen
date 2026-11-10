@@ -3027,9 +3027,10 @@ set of rules is the defect the house rules name. The evaluation:
 - **A component of its own** is chosen: the crate `emusen-esde-text` (`Frontend/esde-text`), one job, ES-DE's text rules
   over a face: the size, the shaping and the pens, the line breaking, the pitch, the whole lines and the ellipsis. Plain
   data in (a face's bytes, the words, the size, the box, `lineSpacing`, wrap and ellipsis) and out (lines of glyphs at
-  whole-pixel pens), no Qt, testable alone. Its two dependencies are new to the tree and are stated here: `rustybuzz`
-  (MIT, HarfBuzz's shaping algorithm in Rust, the shaping ES-DE does with HarfBuzz) and through it `ttf-parser` (MIT,
-  the font tables). A framework rather than hand-written shaping, as the house rules ask.
+  whole-pixel pens), no Qt, testable alone. Its dependency is `harfrust` (MIT, HarfBuzz's shaping in Rust) and through
+  it `read-fonts` (MIT or Apache-2.0, the font tables), approved 2026-11-09 by the tester on the proof of §4.9.4; it
+  replaced `rustybuzz` and `ttf-parser`, whose shaping the proof found off HarfBuzz's. A framework rather than
+  hand-written shaping, as the house rules ask.
 - The painter's side stays a painter's: `TextLayout`, an `EsdeModel`-free QML type of `EmuSen.Esde` that asks the crate for a
   layout, and `GlyphText.qml`, which draws one glyph per pen with Qt's `Text` at the whole size nearest, scaled to the
   layout's size (a theme's face at 14.4 px is drawn at 14 and scaled by 14.4 / 14, as `GlyphLine` drew it before).
@@ -3041,17 +3042,47 @@ set of rules is the defect the house rules name. The evaluation:
 
 #### 4.9.3 As built, and the oracle **[M 2026-11-09]**
 
-`emusen-esde-text` is `whole` (the size rule), `Face::shape` (HarfBuzz's clusters through rustybuzz, each advance
-rounded, a space rounded down in ES-DE's own face) and `layout` (paragraphs at line breaks, greedy breaking at spaces
+`emusen-esde-text` is `whole` (the size rule), `Face::shape` (HarfBuzz's clusters through HarfRust at HarfBuzz's scale,
+each advance in 64ths rounded, a space rounded down in ES-DE's own face) and `layout` (paragraphs at line breaks, greedy breaking at spaces
 with a long word broken where it overflows, trailing spaces out of a line's width, the pitch, whole lines only when the
 box has a height, one line and an ellipsis when it holds one, each line's place by its alignment rounded). Its tests
-(`tests/rules.rs`, 8) hold each rule of §4.9.1 on the kit's body face. `TextLayout` is a list model of the glyphs, reset
+(`tests/rules.rs`, 10) hold each rule of §4.9.1 on the kit's body face, the advances to a table of HarfBuzz's, and the
+crate's one dependency to `harfrust`. `TextLayout` is a list model of the glyphs, reset
 only when they change, so a binding's settling does not rebuild the words.
 
 The 2026-11-08 capture of Art Book Next's clock at 1920 × 1200 had been measured 63.86 units wide in
 `esde-boxes.tsv`; its background's right edge is column 167 on every row from 54 to 94 (the 1280 × 800 capture's is
 110, as written), so the box is 61.19 units, and Qt's 61.3 is within it. The row is corrected; the clock's glyphs in
 ES-DE's capture stand at 0, 21, 42, 50, 71 px, Mulish at 35 px, as Qt's do.
+
+#### 4.9.4 Which shaping: the proof of 2026-11-09
+
+ES-DE shapes with the system's HarfBuzz at the scale of its size in 64ths of a pixel (§4.9.1), and rounds each advance.
+Whatever shapes for the painter must give HarfBuzz's advances to the 64th, or a pen moves a pixel where a 64th rounds
+the other way. The proof: 263 strings (the help labels of ES-DE and the viewer in three letter cases, the oracle
+library's titles, file names, descriptions, developers, publishers, genres, dates and counts, and the SNES system
+descriptions the three watched themes carry, in eight languages), in ten faces (Akrobat Regular, SemiBold and Bold;
+the kit's Barlow; Art Book Next's Mulish Light and Medium and Changa One; Artflix's Exo 2 Regular and Bold Condensed;
+CarAlt's rost), at ES-DE's ten sizes (39, 26, 35, 30, 29, 20, 23.33, 21.6, 14.4 and 9.216 px), each shaped by
+Fedora 44's HarfBuzz 14.1.0 through its C interface (the reference) and by each candidate. Strings a face lacks a
+glyph for were left out (660), leaving 25,640 strings and 1,420,650 glyphs. A string's pens are the rounded advances
+summed, a space in ES-DE's own face rounded down.
+
+| Candidate | Glyphs equal to HarfBuzz's | Most off | Strings with identical pens |
+|---|---|---|---|
+| Qt 6.11.2, `QFont` without hinting at `setPointSizeF`, `QTextLayout`'s glyph runs differenced | 447,123 | 131/64 px | 17,052 |
+| Qt laid out at the em (pixel size = units per em) and scaled as HarfBuzz scales | 1,378,403 | 132/64 px | 25,341 |
+| `rustybuzz` 0.20, its font units times the size (the crate until this proof) | — | 1.18/64 px | 24,080 |
+| **HarfRust 0.15.0 at HarfBuzz's scale** | **1,420,650** | **0** | **25,640** |
+
+Qt fails for two reasons. A `QFont`'s engine is made at its pixel size rounded to a whole pixel (the glyph runs' raw
+font is 23, 22, 14 and 9 px for 23.33, 21.6, 14.4 and 9.216), so none of the 568,260 glyphs at the fractional sizes
+matches. At whole sizes, 405,255 glyphs are a 64th off (Qt truncates FreeType's linear advance where HarfBuzz rounds
+its own scaling), and Cyrillic in Exo 2 is shaped as runs of its own script, up to two pixels off. `rustybuzz` scales
+the summed font units once where HarfBuzz scales each advance and each kerning value, so 1,560 strings' pens differ.
+HarfRust, which follows HarfBuzz 15.0 and its rounding, matches every glyph. **Approved 2026-11-09 by the tester:**
+HarfRust and read-fonts replace `rustybuzz` and `ttf-parser`; their licences (MIT; MIT or Apache-2.0) and those of
+their dependencies (MIT, Apache-2.0, Zlib or Unicode-3.0) allow the project's GPL-3.0-or-later.
 
 ### 4.10 ES-DE's media viewer **[M 2026-11-09]**
 

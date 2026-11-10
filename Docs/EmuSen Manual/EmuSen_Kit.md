@@ -2946,3 +2946,12 @@ scene that plays no clip:
    conversion on the GPU; it then converts on the CPU, the path the software tier needs. The `offscreen` platform the
    tests run on offers no OpenGL to make one. The frames are drawn (the program's test reads the clip's magenta). It is
    Qt's own fallback, harmless, and left in `QT_INTERNAL`.
+
+**Each content view holds its model only while it is shown (2026-11-10).** `tileModel` and `rowModel` were aliases of
+the two lists' models, and a game's page gives both the same model, so the hidden list made delegates for every section
+too: seven media tiles as seven rows, the ones past its four visible rows made asynchronously in its cache buffer. A
+section change resets the model; a reset that lands while those are still being made has Qt cancel them by indices
+past the new count, and it logs `DelegateModel::cancel: index out range 6 4` (and 5), which failed qt-app's game page
+test in 2 of 14 runs. The tiles' list now takes `tileModel` while tiles are shown and the rows' list `rowModel` while
+rows are, null otherwise; the hidden list makes nothing. qt-app's game page test steps Media's scrolled tiles and
+Details' rows six times at 16 ms and holds Qt silent; with the aliases it logs the two lines on the first run.

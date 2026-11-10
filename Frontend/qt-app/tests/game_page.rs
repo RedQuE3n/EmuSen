@@ -282,6 +282,20 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     assert_eq!(standard(&platform), serde_json::Value::Null, "and the game's own is what is saved");
     section(&mut scene, 3);
     hold(&mut scene, "GamePageMedia", &mockup::Mockup::default(), nothing_named, &mut report);
+    // Media's tiles and Details' rows at once, three times, the tiles scrolled: a section's items come while the last
+    // one's are still being made, and Qt logs nothing.
+    for _ in 0..3 {
+        scene.pad(UiButton::Down);
+        for _ in 0..6 {
+            scene.pad(UiButton::Right);
+        }
+        scene.pad(UiButton::PageDown);
+        scene.wait(16);
+        scene.pad(UiButton::PageUp);
+        scene.wait(16);
+    }
+    scene.wait(300);
+    scene.pad(UiButton::Up);
     section(&mut scene, 4);
     hold(&mut scene, "GamePageDetails", &mockup::Mockup::default(), nothing_named, &mut report);
     // Open Folder: the program's one folder action, given the folder holding the game's file, caught as its URL.

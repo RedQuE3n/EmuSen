@@ -528,13 +528,18 @@ impl qobject::GamePageModel {
             Outcome::Nothing => {}
             Outcome::Changed(change) => {
                 let saved = self.source.as_ref().map_or(Ok(()), |s| s.change(&self.file, &change));
-                let hid = saved.is_ok() && change == crate::game_page::Change::Hide;
+                let ok = saved.is_ok();
+                let hid = ok && change == crate::game_page::Change::Hide;
                 self.as_mut().said(saved.err().unwrap_or_default());
                 if hid {
                     self.hidden();
-                } else {
-                    self.refresh();
+                    return;
                 }
+                if ok {
+                    self.as_mut().rust_mut().page.changed(&change);
+                    self.as_mut().shown(false);
+                }
+                self.refresh();
             }
             Outcome::Ask(question, change) => self.ask(question, Pending::Change(change)),
             Outcome::Play(Some(state)) => self.play_from(state),

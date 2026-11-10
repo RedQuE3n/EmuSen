@@ -66,6 +66,17 @@ fn reads(scene: &mut Scene<'_>, words: &str) -> bool {
     scene.tree().nodes.iter().any(|n| n.visible && n.text.as_deref() == Some(words))
 }
 
+/// Whether `words` come on the screen within two seconds: a row's value is read from the library after the row is shown.
+fn comes_to_read(scene: &mut Scene<'_>, words: &str) -> bool {
+    for _ in 0..40 {
+        if reads(scene, words) {
+            return true;
+        }
+        scene.wait(50);
+    }
+    false
+}
+
 /// A state's file, saved `ago` seconds before now.
 fn state(platform: &Platform, kind: u32, rom: &Path, slot: i32, ago: u64) {
     let file = platform.save_path(kind, rom.to_str().unwrap(), None, slot).unwrap();
@@ -238,9 +249,9 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     hold(&mut scene, "GamePageOptions", &mockup::Mockup::default(), nothing_named, &mut report);
     // The television standard, offered for a television's console: the game's own, stepped to NTSC and saved in games.db,
     // then back; the package's state in Mistress's words.
-    assert!(reads(&mut scene, "Not a package"), "the package's state");
+    assert!(comes_to_read(&mut scene, "Not a package"), "the package's state");
     down_to(&mut scene, "Television standard");
-    assert!(reads(&mut scene, "The game's"));
+    assert!(comes_to_read(&mut scene, "The game's"), "the game's own standard");
     let standard = |platform: &std::sync::Arc<Platform>| {
         let games = Library::open(platform, &platform.file(FILE_GAMES).unwrap(), &sqlite).unwrap();
         games.get(&serde_json::json!({ "what": "standard", "path": rom.to_str().unwrap() })).unwrap()["value"].clone()
@@ -301,7 +312,7 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     let focused = scene.focus(&tree).map(|i| tree.nodes[i as usize].heard.clone());
     assert_eq!(focused.as_deref(), Some("Play"), "the page opens on Play");
     section(&mut scene, 3);
-    assert!(reads(&mut scene, "Screenshot 1"), "the player's screenshot in Media");
+    assert!(comes_to_read(&mut scene, "Screenshot 1"), "the player's screenshot in Media");
     // The shoulder to Details with the focus on a tile: the focus goes on to Details' first row, which is shown.
     scene.pad(UiButton::Down);
     move_to(&mut scene, UiButton::Left, "Screenshot 1");

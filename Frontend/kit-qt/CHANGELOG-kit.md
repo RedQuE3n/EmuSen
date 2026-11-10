@@ -10,6 +10,9 @@ Additions only; no type, property, signal or invokable was removed or changed.
 
 - **`ControllerLayout`** (registry): a drawing file and the controls a host declares in; the drawing's place, scale and
   picture, the labels' boxes and names, the leaders and the walk out. `EmuSen_Kit.md` §7.62.
+- **`ControllerLayout.texts`, `labelWords` (told by `worded`), `labelBoxes`; `accent` a colour** (registry): each label's words and box as
+  properties a delegate binds, so `ControllerDrawing` keeps the QML rules (no function, nothing done on completion, no
+  words of its own) and qmllint takes the token's colour. §7.62.
 - **`ControllerLayout.pushes`** (registry): how far each control is pushed, in the controls' order; a stick's knob
   stands where its directions push it (kit-core's `controller::knob`). §7.62.
 - **`ControllerDrawing`** (qmldir): the controller's picture, a label for each control with its leader, the focused one

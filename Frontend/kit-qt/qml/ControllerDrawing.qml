@@ -12,7 +12,7 @@ Item {
     // The controls the host's controller declares, in the order the walk takes them.
     property alias controls: layout.controls
     // What each control's label says beside its name, in the controls' order.
-    property list<string> texts
+    property alias texts: layout.texts
     property alias focused: layout.focused
     property alias held: layout.held
     // How far each control is pushed, 0 to 1, in the controls' order: a stick's directions move its knob.
@@ -29,7 +29,7 @@ Item {
         objectName: "controllerLayout"
         width: root.width
         height: root.height
-        labelHeight: Math.ceil(probe.implicitHeight) + 2 * root.inset
+        labelHeight: Math.ceil(probe.height) + 2 * root.inset
         accent: Kit.Tokens.accent
     }
     Binding {
@@ -41,10 +41,8 @@ Item {
     // A label's border and the space inside it.
     readonly property real inset: 2
     readonly property real padding: 6
-    Text {
+    FontMetrics {
         id: probe
-        visible: false
-        text: "Ag"
         font.pixelSize: Kit.Tokens.fontCaption
     }
 
@@ -85,11 +83,20 @@ Item {
 
     Repeater {
         model: root.controls.length
+        // A label is measured as it is made and again whenever its words change; the layout places it by its width.
+        onItemAdded: (index, item) => layout.setLabelWidth(index, item.implicitWidth)
         delegate: Rectangle {
             id: label
             required property int index
             readonly property bool focusedLabel: label.index === layout.focused
+            readonly property list<real> boxes: layout.labelBoxes
             objectName: "controllerLabel"
+            x: label.boxes.length > 4 * label.index ? label.boxes[4 * label.index] : 0
+            y: label.boxes.length > 4 * label.index ? label.boxes[4 * label.index + 1] : 0
+            width: label.boxes.length > 4 * label.index ? label.boxes[4 * label.index + 2] : 0
+            height: label.boxes.length > 4 * label.index ? label.boxes[4 * label.index + 3] : 0
+            implicitWidth: Math.ceil(words.implicitWidth) + 2 * (root.inset + root.padding)
+            onImplicitWidthChanged: layout.setLabelWidth(label.index, label.implicitWidth)
             visible: label.width > 0
             radius: Kit.Tokens.rowRadius
             color: Kit.Tokens.inputSurface
@@ -97,30 +104,14 @@ Item {
             border.width: label.focusedLabel ? 2 : 1
             Accessible.role: Accessible.Button
             Accessible.name: words.text
-            function place() {
-                const box = layout.labelRect(label.index)
-                label.x = box.x
-                label.y = box.y
-                label.width = box.width
-                label.height = box.height
-                label.name = layout.labelName(label.index)
-            }
-            property string name
-            Component.onCompleted: label.place()
-            Connections {
-                target: layout
-                function onLaidOut() { label.place() }
-            }
             Text {
                 id: words
                 objectName: "controllerLabelWords"
                 x: root.inset + root.padding
                 anchors.verticalCenter: parent.verticalCenter
-                text: label.name + (label.index < root.texts.length && root.texts[label.index].length > 0 ? "  " + root.texts[label.index] : "")
+                text: label.index < layout.labelWords.length ? layout.labelWords[label.index] : ""
                 color: label.focusedLabel ? Kit.Tokens.textStrong : Kit.Tokens.text
                 font.pixelSize: Kit.Tokens.fontCaption
-                onImplicitWidthChanged: layout.setLabelWidth(label.index, Math.ceil(words.implicitWidth) + 2 * (root.inset + root.padding))
-                Component.onCompleted: layout.setLabelWidth(label.index, Math.ceil(words.implicitWidth) + 2 * (root.inset + root.padding))
             }
             TapHandler {
                 onTapped: root.chosen(label.index)

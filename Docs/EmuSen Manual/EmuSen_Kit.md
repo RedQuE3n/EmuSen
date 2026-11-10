@@ -2989,12 +2989,16 @@ and which file stands for which controller id is the host's.
   controls in their order.
 - **`ControllerLayout`** (kit-qt `controller.rs`) puts it on Qt: `drawing` (the file's text, empty for the generic one),
   `controls`, `focused`, `held`, `pushes` (how far each control is pushed, 0 to 1, in the controls' order: a stick's
-  directions place its knob), `width`, `height`, `labelHeight`, `accent` in; `name`, `generic`, `fits`, `place`,
+  directions place its knob), `texts`, `width`, `height`, `labelHeight`, `accent` (a colour) in; `labelWords` (each
+  label's region name and text) and `labelBoxes` (each label's x, y, width and height in turn), which a label binds, `name`, `generic`, `fits`, `place`,
   `scale`, `designWidth`, `designHeight`, `leaders`, `focusLeader` and `picture` (the SVG in a `data:` URL) out; the
   invokables `setLabelWidth`, `labelRect`, `labelName` and `step` (the walk, round from either end).
 - **`ControllerDrawing.qml`**: the leaders (Muted, the focused one's Accent), the picture as an `Image` of the SVG at the
   drawing's place, and a label for each control: its region's name and the host's words for it (`texts`) in Caption,
-  measured and handed to the layout, its edge Accent and 2 wide while focused; a click on a label raises `chosen`.
+  measured and handed to the layout as it is made (`Repeater.itemAdded`) and whenever its width changes, its edge
+  Accent and 2 wide while focused; a click on a label raises `chosen`. Decided 2026-11-10: the labels bind the layout's
+  properties rather than place themselves, since the QML rules (§7.9) allow no function and nothing done on completion,
+  and qmllint (§7.6) found the token's colour bound to a string.
 
 **Why one picture and not a `Shape` per part** (measured on 2026-11-09): the drawing's colours are the console's
 (Nintendo's red, Sony's symbols), not the palette's, and LunaP drew them inside one control the recorder never read

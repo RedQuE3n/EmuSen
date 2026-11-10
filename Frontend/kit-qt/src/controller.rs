@@ -5,7 +5,7 @@
 use core::pin::Pin;
 
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QList, QRectF, QString, QStringList};
+use cxx_qt_lib::{QColor, QList, QRectF, QString, QStringList, QVariant};
 use emusen_kit_core::controller::{data_url, drawing_for, knob, lay_out, layout, paints, svg, walk, Drawing, Laid, Lit};
 
 #[cxx_qt::bridge]
@@ -19,6 +19,10 @@ pub mod qobject {
         type QRectF = cxx_qt_lib::QRectF;
         include!("cxx-qt-lib/qlist.h");
         type QList_f64 = cxx_qt_lib::QList<f64>;
+        include!("cxx-qt-lib/qcolor.h");
+        type QColor = cxx_qt_lib::QColor;
+        include!("cxx-qt-lib/qvariant.h");
+        type QVariant = cxx_qt_lib::QVariant;
     }
 
     #[auto_cxx_name]
@@ -34,7 +38,9 @@ pub mod qobject {
         #[qproperty(f64, width)]
         #[qproperty(f64, height)]
         #[qproperty(f64, label_height)]
-        #[qproperty(QString, accent)]
+        #[qproperty(QColor, accent)]
+        /// What each label says beside its control's name, in the controls' order.
+        #[qproperty(QStringList, texts)]
         #[qproperty(QString, name, READ, NOTIFY = laid_out)]
         #[qproperty(bool, generic, READ, NOTIFY = laid_out)]
         #[qproperty(bool, fits, READ, NOTIFY = laid_out)]
@@ -44,6 +50,9 @@ pub mod qobject {
         #[qproperty(f64, design_height, READ, NOTIFY = laid_out)]
         #[qproperty(QString, leaders, READ, NOTIFY = laid_out)]
         #[qproperty(QString, focus_leader, READ, NOTIFY = laid_out)]
+        /// Each label's words (its region's name, then its text) and its box as x, y, width and height in turn.
+        #[qproperty(QStringList, label_words, READ, NOTIFY = worded)]
+        #[qproperty(QVariant, label_boxes, READ, NOTIFY = laid_out)]
         /// The drawing as a picture, an SVG document in a `data:` URL, drawn at `place`.
         #[qproperty(QString, picture, READ, NOTIFY = painted)]
         type ControllerLayout = super::ControllerLayoutRust;
@@ -54,6 +63,10 @@ pub mod qobject {
         /// The place, the labels and the leaders changed.
         #[qsignal]
         fn laid_out(self: Pin<&mut ControllerLayout>);
+
+        /// The labels' words changed: the drawing's names or the host's texts, never a layout alone.
+        #[qsignal]
+        fn worded(self: Pin<&mut ControllerLayout>);
 
         /// What is painted changed: the focus, the held controls or the accent.
         #[qsignal]
@@ -88,7 +101,8 @@ pub struct ControllerLayoutRust {
     width: f64,
     height: f64,
     label_height: f64,
-    accent: QString,
+    accent: QColor,
+    texts: QStringList,
     name: QString,
     generic: bool,
     fits: bool,
@@ -98,6 +112,8 @@ pub struct ControllerLayoutRust {
     design_height: f64,
     leaders: QString,
     focus_leader: QString,
+    label_words: QStringList,
+    label_boxes: QVariant,
     picture: QString,
     read: Drawing,
     names: Vec<String>,
@@ -116,7 +132,8 @@ impl Default for ControllerLayoutRust {
             width: 0.0,
             height: 0.0,
             label_height: 30.0,
-            accent: QString::from("#4C9AE8"),
+            accent: QColor::from_rgb(0x4C, 0x9A, 0xE8),
+            texts: QStringList::default(),
             name: QString::default(),
             generic: true,
             fits: false,
@@ -126,6 +143,8 @@ impl Default for ControllerLayoutRust {
             design_height: 0.0,
             leaders: QString::default(),
             focus_leader: QString::default(),
+            label_words: QStringList::default(),
+            label_boxes: QVariant::default(),
             picture: QString::default(),
             read: Drawing::default(),
             names: Vec::new(),
@@ -154,6 +173,7 @@ impl cxx_qt::Initialize for qobject::ControllerLayout {
         self.as_mut().on_held_changed(|l| l.paint()).release();
         self.as_mut().on_pushes_changed(|l| l.paint()).release();
         self.as_mut().on_accent_changed(|l| l.paint()).release();
+        self.as_mut().on_texts_changed(|l| l.word()).release();
     }
 }
 
@@ -176,13 +196,30 @@ impl qobject::ControllerLayout {
             r.design_height = drawing.height;
             r.read = drawing;
         }
+        self.as_mut().word();
         self.lay();
+    }
+
+    /// Each label's words, its region's name then the host's text for it, told only when they change.
+    fn word(mut self: Pin<&mut Self>) {
+        let texts = strings(&self.texts);
+        let words = self.names.iter().enumerate().map(|(i, n)| match texts.get(i).filter(|t| !t.is_empty()) {
+            Some(t) => format!("{n}  {t}"),
+            None => n.clone(),
+        });
+        let words: QList<QString> = words.map(|w| QString::from(w.as_str())).collect();
+        let words = QStringList::from(&words);
+        if words != self.label_words {
+            self.as_mut().rust_mut().label_words = words;
+            self.as_mut().worded();
+        }
     }
 
     fn lay(mut self: Pin<&mut Self>) {
         let controls = strings(&self.controls);
         let laid = lay_out(&self.read, &controls, &self.widths, self.label_height, self.width, self.height);
         let focus_leader = usize::try_from(self.focused).map(|i| laid.leader(i)).unwrap_or_default();
+        let boxes: QList<f64> = laid.labels.iter().flat_map(|b| [b.x, b.y, b.w, b.h]).collect();
         {
             let mut r = self.as_mut().rust_mut();
             r.place = QRectF::new(laid.drawing.x, laid.drawing.y, laid.drawing.w, laid.drawing.h);
@@ -190,6 +227,7 @@ impl qobject::ControllerLayout {
             r.fits = laid.fits;
             r.leaders = QString::from(laid.leaders.as_str());
             r.focus_leader = QString::from(focus_leader.as_str());
+            r.label_boxes = QVariant::from(&boxes);
             r.laid = laid;
         }
         self.as_mut().laid_out();
@@ -200,7 +238,7 @@ impl qobject::ControllerLayout {
         let controls = strings(&self.controls);
         let held = strings(&self.held);
         let focused = at(&controls, self.focused).cloned();
-        let accent = self.accent.to_string();
+        let accent = format!("#{:02X}{:02X}{:02X}", self.accent.red(), self.accent.green(), self.accent.blue());
         let drawing = &self.read;
         let lit = |i: usize| {
             let control = &drawing.regions[i].control;

@@ -4,7 +4,7 @@ namespace EmuSen.Crystal.Client.Contract
     public static class CrystalAbi
     {
         public const uint Major = 2u;
-        public const uint Minor = 0u;
+        public const uint Minor = 1u;
         public const uint Version = (Major << 16) | Minor;
         public const int NoEngine = -1109;
         public const int Firmware = -1110;

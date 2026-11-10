@@ -52,8 +52,9 @@ impl fmt::Display for Finding {
 }
 
 /// The modules a view may import (EmuSen_Qt.md §1.3, §2); a prefix match, so `QtQuick.Controls.impl` is QtQuick's.
-pub const ALLOWED_IMPORTS: [&str; 7] =
-    ["QtQuick", "QtQuick.Controls", "QtQuick.Templates", "QtQuick.Layouts", "QtQuick.Shapes", "QtQml", "EmuSen."];
+/// QtMultimedia for the kit's VideoTile (EmuSen_Qt.md §1.8.9); a theme still may not import it.
+pub const ALLOWED_IMPORTS: [&str; 8] =
+    ["QtQuick", "QtQuick.Controls", "QtQuick.Templates", "QtQuick.Layouts", "QtQuick.Shapes", "QtQml", "EmuSen.", "QtMultimedia"];
 
 /// Imports never allowed, even under an allowed prefix. QtQml.Models is allowed for its DelegateChooser (decided
 /// 2026-11-08); its ListModel stays a finding by the rows rule.
@@ -64,7 +65,7 @@ pub const THEME_IMPORTS: [&str; 6] =
     ["QtQuick", "QtQuick.Layouts", "QtQuick.Effects", "QtQuick.Shapes", "QtQuick.Controls", "EmuSen.Theme"];
 
 /// Bindings whose string is a name, a path or a colour rather than words: never findings.
-const NAMED_BINDINGS: [&str; 12] = [
+const NAMED_BINDINGS: [&str; 13] = [
     "objectName",
     "role",
     "font.family",
@@ -77,6 +78,7 @@ const NAMED_BINDINGS: [&str; 12] = [
     "Accessible.role",
     "placeholderText",
     "sequence",
+    "contextType",
 ];
 
 /// How the check reads a file: as a view, or as a fixture (a test scene, the gallery) whose words, rows and literals stand in for models.

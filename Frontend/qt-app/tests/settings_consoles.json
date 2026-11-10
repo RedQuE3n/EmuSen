@@ -1,0 +1,570 @@
+{
+ "systems": [
+  {
+   "id": "32x",
+   "name": "Sega 32X",
+   "console": "32X",
+   "display_name": "32X",
+   "release_year": 1994,
+   "firmware_name": "32X BIOS",
+   "engines": [],
+   "starts_empty": false
+  },
+  {
+   "id": "dreamcast",
+   "name": "Sega Dreamcast",
+   "console": "Dreamcast",
+   "display_name": "Dreamcast",
+   "release_year": 1998,
+   "firmware_name": "Dreamcast BIOS",
+   "engines": [],
+   "starts_empty": true
+  },
+  {
+   "id": "gb",
+   "name": "Game Boy",
+   "console": "GB",
+   "display_name": "Game Boy",
+   "release_year": 1989,
+   "firmware_name": "Game Boy boot ROM",
+   "engines": [
+    "MercuryRT (Rust)"
+   ],
+   "starts_empty": false
+  },
+  {
+   "id": "gbc",
+   "name": "Game Boy Color",
+   "console": "GBC",
+   "display_name": "Game Boy Color",
+   "release_year": 1998,
+   "firmware_name": "Game Boy Color boot ROM",
+   "engines": [
+    "MercuryRT (Rust)"
+   ],
+   "starts_empty": false
+  },
+  {
+   "id": "mcd",
+   "name": "Sega CD / Mega-CD",
+   "console": "Sega CD",
+   "display_name": "Sega CD",
+   "release_year": 1991,
+   "firmware_name": "Sega CD BIOS",
+   "engines": [
+    "Nephrite"
+   ],
+   "starts_empty": true
+  },
+  {
+   "id": "md",
+   "name": "Sega Genesis / Mega Drive",
+   "console": "Genesis",
+   "display_name": "Genesis",
+   "release_year": 1988,
+   "firmware_name": null,
+   "engines": [
+    "Nephrite"
+   ],
+   "starts_empty": false
+  },
+  {
+   "id": "n64",
+   "name": "Nintendo 64",
+   "console": "N64",
+   "display_name": "Nintendo 64",
+   "release_year": 1996,
+   "firmware_name": null,
+   "engines": [
+    "MarsRT (Rust)"
+   ],
+   "starts_empty": false
+  },
+  {
+   "id": "nes",
+   "name": "Nintendo Entertainment System",
+   "console": "NES",
+   "display_name": "NES",
+   "release_year": 1983,
+   "firmware_name": "Famicom Disk System BIOS",
+   "engines": [
+    "MoonRT (Rust)"
+   ],
+   "starts_empty": false
+  },
+  {
+   "id": "ps2",
+   "name": "Sony PlayStation 2",
+   "console": "PlayStation 2",
+   "display_name": "PlayStation 2",
+   "release_year": 2000,
+   "firmware_name": "PlayStation 2 BIOS",
+   "engines": [],
+   "starts_empty": true
+  },
+  {
+   "id": "psx",
+   "name": "Sony PlayStation",
+   "console": "PlayStation",
+   "display_name": "PlayStation",
+   "release_year": 1994,
+   "firmware_name": "PlayStation BIOS",
+   "engines": [
+    "Diamond"
+   ],
+   "starts_empty": true
+  },
+  {
+   "id": "saturn",
+   "name": "Sega Saturn",
+   "console": "Saturn",
+   "display_name": "Saturn",
+   "release_year": 1994,
+   "firmware_name": "Saturn BIOS",
+   "engines": [],
+   "starts_empty": true
+  },
+  {
+   "id": "sg1000",
+   "name": "Sega SG-1000",
+   "console": "SG-1000",
+   "display_name": "SG-1000",
+   "release_year": 1983,
+   "firmware_name": null,
+   "engines": [
+    "Endou"
+   ],
+   "starts_empty": false
+  },
+  {
+   "id": "sms",
+   "name": "Sega Master System / Mark III",
+   "console": "Master System",
+   "display_name": "Master System",
+   "release_year": 1985,
+   "firmware_name": "Master System BIOS",
+   "engines": [
+    "Endou"
+   ],
+   "starts_empty": false
+  },
+  {
+   "id": "snes",
+   "name": "Super Nintendo Entertainment System",
+   "console": "SNES",
+   "display_name": "Super Nintendo",
+   "release_year": 1990,
+   "firmware_name": null,
+   "engines": [
+    "VenusRT (Rust)"
+   ],
+   "starts_empty": false
+  }
+ ],
+ "cores": [],
+ "schema": {
+  "GB": [
+   {
+    "key": "Engine",
+    "label": "Engine",
+    "hint": "Which implementation runs the console. Takes effect when a game is next loaded.",
+    "kind": "choice",
+    "default": "MercuryRT (Rust)",
+    "choices": [
+     "MercuryRT (Rust)"
+    ],
+    "choice_labels": [],
+    "group": null,
+    "note": null,
+    "shown_with": null
+   }
+  ],
+  "GBC": [
+   {
+    "key": "Engine",
+    "label": "Engine",
+    "hint": "Which implementation runs the console. Takes effect when a game is next loaded.",
+    "kind": "choice",
+    "default": "MercuryRT (Rust)",
+    "choices": [
+     "MercuryRT (Rust)"
+    ],
+    "choice_labels": [],
+    "group": null,
+    "note": null,
+    "shown_with": null
+   }
+  ],
+  "Sega CD": [
+   {
+    "key": "Engine",
+    "label": "Engine",
+    "hint": "Which implementation runs the console. Takes effect when a game is next loaded.",
+    "kind": "choice",
+    "default": "Nephrite",
+    "choices": [
+     "Nephrite"
+    ],
+    "choice_labels": [],
+    "group": null,
+    "note": null,
+    "shown_with": null
+   }
+  ],
+  "Genesis": [
+   {
+    "key": "Engine",
+    "label": "Engine",
+    "hint": "Which implementation runs the console. Takes effect when a game is next loaded.",
+    "kind": "choice",
+    "default": "Nephrite",
+    "choices": [
+     "Nephrite"
+    ],
+    "choice_labels": [],
+    "group": null,
+    "note": null,
+    "shown_with": null
+   }
+  ],
+  "N64": [
+   {
+    "key": "Engine",
+    "label": "Engine",
+    "hint": "Which implementation runs the console. Takes effect when a game is next loaded.",
+    "kind": "choice",
+    "default": "MarsRT (Rust)",
+    "choices": [
+     "MarsRT (Rust)"
+    ],
+    "choice_labels": [],
+    "group": null,
+    "note": null,
+    "shown_with": null
+   }
+  ],
+  "NES": [
+   {
+    "key": "Engine",
+    "label": "Engine",
+    "hint": "Which implementation runs the console. Takes effect when a game is next loaded.",
+    "kind": "choice",
+    "default": "MoonRT (Rust)",
+    "choices": [
+     "MoonRT (Rust)"
+    ],
+    "choice_labels": [],
+    "group": null,
+    "note": null,
+    "shown_with": null
+   }
+  ],
+  "PlayStation": [
+   {
+    "key": "Engine",
+    "label": "Engine",
+    "hint": "Which implementation runs the console. Takes effect when a game is next loaded.",
+    "kind": "choice",
+    "default": "Diamond",
+    "choices": [
+     "Diamond"
+    ],
+    "choice_labels": [],
+    "group": null,
+    "note": null,
+    "shown_with": null
+   },
+   {
+    "key": "FirmwarePreference",
+    "label": "Firmware",
+    "hint": "Automatic uses your own firmware where it is found, and the open replacement otherwise.",
+    "kind": "choice",
+    "default": "auto",
+    "choices": [
+     "auto",
+     "replacement",
+     "own"
+    ],
+    "choice_labels": [
+     "Automatic",
+     "Open replacement",
+     "Own firmware"
+    ],
+    "group": null,
+    "note": null,
+    "shown_with": null
+   },
+   {
+    "key": "Cards",
+    "label": "Memory Card",
+    "hint": "Per game: each game keeps its own, as before. Shared: one card in each slot, used by every game.",
+    "kind": "choice",
+    "default": "shared",
+    "choices": [
+     "game",
+     "shared",
+     "named"
+    ],
+    "choice_labels": [
+     "Per game",
+     "Shared",
+     "Named"
+    ],
+    "group": null,
+    "note": null,
+    "shown_with": null
+   },
+   {
+    "key": "Card1",
+    "label": "Memory Card: Slot 1",
+    "hint": "Which card is here under Named.",
+    "kind": "choice",
+    "default": "Card 1",
+    "choices": [
+     "Card 1",
+     "Card 2"
+    ],
+    "choice_labels": [],
+    "group": null,
+    "note": null,
+    "shown_with": {
+     "key": "Cards",
+     "value": "named"
+    }
+   },
+   {
+    "key": "Card2",
+    "label": "Memory Card: Slot 2",
+    "hint": "Which card is here under Named.",
+    "kind": "choice",
+    "default": "Card 2",
+    "choices": [
+     "Card 1",
+     "Card 2"
+    ],
+    "choice_labels": [],
+    "group": null,
+    "note": null,
+    "shown_with": {
+     "key": "Cards",
+     "value": "named"
+    }
+   }
+  ],
+  "SG-1000": [
+   {
+    "key": "Engine",
+    "label": "Engine",
+    "hint": "Which implementation runs the console. Takes effect when a game is next loaded.",
+    "kind": "choice",
+    "default": "Endou",
+    "choices": [
+     "Endou"
+    ],
+    "choice_labels": [],
+    "group": null,
+    "note": null,
+    "shown_with": null
+   }
+  ],
+  "Master System": [
+   {
+    "key": "Engine",
+    "label": "Engine",
+    "hint": "Which implementation runs the console. Takes effect when a game is next loaded.",
+    "kind": "choice",
+    "default": "Endou",
+    "choices": [
+     "Endou"
+    ],
+    "choice_labels": [],
+    "group": null,
+    "note": null,
+    "shown_with": null
+   }
+  ],
+  "SNES": [
+   {
+    "key": "Engine",
+    "label": "Engine",
+    "hint": "Which implementation runs the console. Takes effect when a game is next loaded.",
+    "kind": "choice",
+    "default": "VenusRT (Rust)",
+    "choices": [
+     "VenusRT (Rust)"
+    ],
+    "choice_labels": [],
+    "group": null,
+    "note": null,
+    "shown_with": null
+   },
+   {
+    "key": "sa1_catch_up",
+    "label": "SA-1 catch-up",
+    "hint": "How often the SA-1 is brought level with the S-CPU.",
+    "kind": "choice",
+    "default": "instruction",
+    "choices": [
+     "instruction",
+     "line"
+    ],
+    "choice_labels": [
+     "After every S-CPU instruction (exact)",
+     "Once a scanline (fast)"
+    ],
+    "group": null,
+    "note": null,
+    "shown_with": null
+   }
+  ]
+ },
+ "settings": {},
+ "firmware": {
+  "psx": [
+   {
+    "label": "PlayStation BIOS (Japan)",
+    "file": "scph5500.bin",
+    "required": false,
+    "status": "not_needed",
+    "need": "bios"
+   },
+   {
+    "label": "PlayStation BIOS (USA)",
+    "file": "scph5501.bin",
+    "required": false,
+    "status": "not_needed",
+    "need": "bios"
+   },
+   {
+    "label": "PlayStation BIOS (Europe)",
+    "file": "scph5502.bin",
+    "required": false,
+    "status": "not_needed",
+    "need": "bios"
+   }
+  ],
+  "snes": [
+   {
+    "label": "DSP-1",
+    "file": "dsp1.rom",
+    "required": true,
+    "status": "missing",
+    "need": "file:dsp1.rom"
+   },
+   {
+    "label": "DSP-2",
+    "file": "dsp2.rom",
+    "required": true,
+    "status": "missing",
+    "need": "file:dsp2.rom"
+   }
+  ]
+ },
+ "overview": [
+  {
+   "label": "PlayStation BIOS (USA)",
+   "file": "scph5501.bin",
+   "size": 524288,
+   "present": false,
+   "wrong_size": false,
+   "effect": "accuracy",
+   "cost": "Most games start and save as on a console. A few that read the BIOS's own code differ.",
+   "found_in": null,
+   "wrong_size_in": null
+  }
+ ],
+ "cards": {
+  "PlayStation": [
+   {
+    "medium": "psx.card",
+    "title": "Memory Card",
+    "noun": "Card",
+    "noun_in_text": "card",
+    "extension": ".mcr",
+    "kind": "removable",
+    "capacity": 15,
+    "unit": "block",
+    "mode": "shared",
+    "mode_key": "Cards",
+    "next_name": "Card 3",
+    "import_due": false,
+    "slots": [
+     {
+      "label": "Slot 1",
+      "name": "Card 1",
+      "path": "/saves/PlayStation/Cards/Card 1.mcr"
+     },
+     {
+      "label": "Slot 2",
+      "name": "Card 2",
+      "path": "/saves/PlayStation/Cards/Card 2.mcr"
+     }
+    ],
+    "cards": [
+     {
+      "path": "/saves/PlayStation/Cards/Card 1.mcr",
+      "name": "Card 1",
+      "label": "Card 1",
+      "games_own": false,
+      "held_by": null
+     },
+     {
+      "path": "/saves/PlayStation/Cards/Card 2.mcr",
+      "name": "Card 2",
+      "label": "Card 2",
+      "games_own": false,
+      "held_by": "Amber Saga"
+     }
+    ]
+   }
+  ]
+ },
+ "opened": {
+  "/saves/PlayStation/Cards/Card 1.mcr": {
+   "exists": true,
+   "length": 131072,
+   "formatted": true,
+   "free": 11,
+   "problem": null,
+   "saves": [
+    {
+     "id": "BASLUS-00067",
+     "title": "DRACULA X CHRONICLE SAVE",
+     "units": 1,
+     "game": null,
+     "damaged": false
+    },
+    {
+     "id": "BESLES-01234",
+     "title": "Tomb Raider II, Venice, a long title",
+     "units": 3,
+     "game": null,
+     "damaged": false
+    }
+   ]
+  },
+  "/saves/PlayStation/Cards/Card 2.mcr": {
+   "exists": true,
+   "length": 131072,
+   "formatted": true,
+   "free": 11,
+   "problem": null,
+   "saves": [
+    {
+     "id": "BASLUS-00067",
+     "title": "DRACULA X CHRONICLE SAVE",
+     "units": 1,
+     "game": null,
+     "damaged": false
+    },
+    {
+     "id": "BESLES-01234",
+     "title": "Tomb Raider II, Venice, a long title",
+     "units": 3,
+     "game": null,
+     "damaged": false
+    }
+   ]
+  }
+ }
+}

@@ -62,3 +62,34 @@ pub const OWED: &[(&str, &str)] = &[
 pub fn televisions() -> Vec<&'static str> {
     ALL.iter().filter(|s| s.kind == Kind::Television && s.profile == s.console).map(|s| s.console).collect()
 }
+
+/// How far past the glass a television's raster reached, as a share of the glass: Sony's figure for normal scan
+/// (EmuSen_Serenity.md §2.10). A television's crop hides `(1 - 1 / (1 + this)) / 2` at each edge.
+pub const TELEVISION_OVERSCAN: f64 = 0.07;
+
+/// The most a crop may hide at one edge, so that half the picture is always left.
+pub const MOST_AT_AN_EDGE: f64 = 0.25;
+
+/// Whether a console's picture had an overscan to crop: a television's did, an attachment's by its host's screen; an LCD showed every pixel.
+pub fn overscans(console: &str) -> bool {
+    ALL.iter().any(|s| s.console == console && s.kind == Kind::Television)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The C# values, `PictureCrop.TelevisionOverscan`, `PictureCrop.MostAtAnEdge` and `ConsoleCrop.HasOverscan`, read on 2026-11-09.
+    #[test]
+    fn the_crop_limits_and_the_consoles_with_an_overscan_are_the_csharp_ones() {
+        assert_eq!((TELEVISION_OVERSCAN, MOST_AT_AN_EDGE), (0.07, 0.25));
+        let edge = (1.0 - 1.0 / (1.0 + TELEVISION_OVERSCAN)) / 2.0;
+        assert!((edge - 0.032710280373831724).abs() < 1e-15, "PictureCrop.Television's edge: {edge}");
+        let with: Vec<&str> = ALL.iter().map(|s| s.console).filter(|c| overscans(c)).collect();
+        let csharp = ["NES", "SNES", "Genesis", "Sega CD", "32X", "N64", "PlayStation", "PlayStation 2", "Master System", "SG-1000"];
+        assert_eq!(with, csharp);
+        for none in ["GB", "GBC", "Saturn", "Dreamcast", "nes", "Unknown"] {
+            assert!(!overscans(none), "{none}");
+        }
+    }
+}

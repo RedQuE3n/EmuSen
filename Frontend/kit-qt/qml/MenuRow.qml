@@ -52,6 +52,7 @@ Kit.Walkable {
         color: root.sectionEnd ? Kit.Tokens.border : Kit.Tokens.rule
     }
     Text {
+        id: labelText
         objectName: "label"
         text: root.label
         color: root.activeFocus ? Kit.Tokens.textStrong : Kit.Tokens.text
@@ -65,13 +66,15 @@ Kit.Walkable {
     }
     Shape {
         objectName: "before"
-        visible: root.steps
+        // The software backend paints a Shape wholly past its clip unclipped, so there it is not drawn while wholly past (EmuSen_Kit.md §7.34, §7.40).
+        visible: root.steps && (GraphicsInfo.api !== GraphicsInfo.Software || beforeShown.inside)
         width: root.stepMark.width
         height: root.stepMark.height
         anchors.right: valueText.left
         anchors.rightMargin: root.markGap
         anchors.verticalCenter: parent.verticalCenter
         preferredRendererType: Shape.CurveRenderer
+        Kit.InsideClips { id: beforeShown; anchors.fill: parent }
         ShapePath {
             strokeWidth: -1
             fillColor: Kit.Tokens.muted
@@ -87,6 +90,10 @@ Kit.Walkable {
         text: root.value
         color: Kit.Tokens.muted
         font: root.labelFont
+        // What the label leaves of the row, and at least half of it, a long value (a folder's path) cut at its start so its end shows (EmuSen_Kit.md §7.46, §7.50).
+        width: Math.min(valueText.implicitWidth, Math.max(root.width / 2, root.width - root.inset * 2 - labelText.implicitWidth - Kit.Tokens.base * 2
+            - (root.steps ? root.stepMark.width + root.markGap : 0) - (root.steps || root.opens ? root.afterMark.width + root.markGap : 0)))
+        elide: Text.ElideLeft
         anchors.right: after.visible ? after.left : parent.right
         anchors.rightMargin: after.visible ? root.markGap : root.inset
         anchors.verticalCenter: parent.verticalCenter
@@ -94,13 +101,14 @@ Kit.Walkable {
     Shape {
         id: after
         objectName: "after"
-        visible: root.steps || root.opens
+        visible: (root.steps || root.opens) && (GraphicsInfo.api !== GraphicsInfo.Software || afterShown.inside)
         width: root.afterMark.width
         height: root.afterMark.height
         anchors.right: parent.right
         anchors.rightMargin: root.inset
         anchors.verticalCenter: parent.verticalCenter
         preferredRendererType: Shape.CurveRenderer
+        Kit.InsideClips { id: afterShown; anchors.fill: parent }
         ShapePath {
             strokeWidth: -1
             fillColor: Kit.Tokens.muted

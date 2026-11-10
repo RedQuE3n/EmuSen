@@ -8,3 +8,6 @@ bool send_key(int key, int modifiers);
 
 // Offers a key press and release to each ancestor of an item in turn until one accepts the press; true if one did.
 bool pass_key(QQuickItem* item, int key, int modifiers);
+
+// Makes the delegate holding the item its ListView's or GridView's current item, unless it is already; nothing outside one.
+void make_current(QQuickItem* item);

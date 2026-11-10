@@ -71,8 +71,11 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted() {
     assert!(mapping::is_mapped("helpsystem", "textColorDimmed"));
     assert_eq!(mapping::status("video", "delay"), Some(&Mapped::Later("video".into())));
     assert!(!mapping::is_mapped("carousel", "itemLinearScale"));
-    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 347);
-    assert!(!mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"), "the gameselector waits for its family; sound is played");
+    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 360);
+    assert!(
+        mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"),
+        "the gameselector picks the system view's games; sound is played"
+    );
 }
 
 #[test]
@@ -389,4 +392,88 @@ fn only_a_picture_named_by_path_tiles() {
     };
     assert_eq!(fit("path"), Fit::Tile);
     assert_eq!(fit("typed"), Fit::Fill, "THEMES.md: tile can only be used when path has been set");
+}
+
+// The system view's pictures and words of a game as a gameselector picks them (THEMES.md, gameselector; EmuSen_Qt.md §4.8.6).
+fn selected(t: &Synth, selector: &str, seed: u64, prepare: impl Fn(&mut Data)) -> Stage {
+    let covers: String = (0..8)
+        .map(|i| format!("<image name=\"g{i}\"><pos>0 0</pos><cropSize>0.1 0.1</cropSize><tile>true</tile><imageType>screenshot</imageType><gameselectorEntry>{i}</gameselectorEntry></image>"))
+        .collect();
+    let mut s = stage(t, &format!("{CAROUSEL}</carousel>{selector}{covers}<text name=\"title\"><metadata>name</metadata><gameselectorEntry>1</gameselectorEntry></text>"), "", "system", 0);
+    let mut data = s.current.data.clone();
+    for system in &mut data.systems {
+        for g in &mut system.games {
+            g.media.insert("screenshot".into(), format!("/shots/{}.png", g.name));
+        }
+    }
+    data.selection_seed = seed;
+    prepare(&mut data);
+    s.restart(data, "system", 0);
+    s
+}
+
+fn shown(f: &Frame) -> Vec<String> {
+    (0..8)
+        .filter_map(|i| f.elements.iter().find(|p| p.name == format!("g{i}")))
+        .map(|p| match &p.paint {
+            Paint::Picture(pic) => pic.source.trim_start_matches("/shots/").trim_end_matches(".png").to_owned(),
+            other => panic!("{other:?}"),
+        })
+        .collect()
+}
+
+#[test]
+fn a_gameselector_gives_the_system_view_its_games_by_entry() {
+    let t = Synth::new();
+    // A shuffle of the six games, none twice; entries past them are not rendered; the same seed draws the same.
+    let random = "<gameselector name=\"pick\"><gameCount>8</gameCount></gameselector>";
+    let f = selected(&t, random, 7, |_| {}).frame();
+    let names = shown(&f);
+    assert_eq!(names.len(), 6, "entries 6 and 7 have no game: {names:?}");
+    assert_eq!(names.iter().collect::<BTreeSet<_>>().len(), 6, "{names:?}");
+    assert_eq!(shown(&selected(&t, random, 7, |_| {}).frame()), names);
+    assert_ne!(shown(&selected(&t, random, 8, |_| {}).frame()), names, "another seed, another shuffle");
+    let Paint::Picture(p) = &placed(&f, "g0").paint else { panic!() };
+    assert_eq!(p.fit, Fit::Cover, "a game's media is cropped, never tiled");
+    let Paint::Text(title) = &placed(&f, "title").paint else { panic!() };
+    assert_eq!(title.text, names[1]);
+    // Each move of the carousel draws again.
+    let mut s = selected(&t, random, 7, |_| {});
+    s.current.step(1, 0);
+    s.advance(ms(2000.0));
+    assert_ne!(shown(&s.frame()), names);
+    // allowDuplicates fills every entry.
+    let duplicates = "<gameselector name=\"pick\"><gameCount>8</gameCount><allowDuplicates>true</allowDuplicates></gameselector>";
+    assert_eq!(shown(&selected(&t, duplicates, 7, |_| {}).frame()).len(), 8);
+    // The last played, newest first; the most played; an entry past gameCount clamps to its last.
+    let last = "<gameselector name=\"pick\"><selection>lastplayed</selection><gameCount>2</gameCount></gameselector>";
+    let f = selected(&t, last, 0, |d| {
+        d.systems[1].games[3].last_played = Some(DateTime::new(2026, 1, 2, 0, 0, 0));
+        d.systems[1].games[1].last_played = Some(DateTime::new(2026, 1, 1, 0, 0, 0));
+    })
+    .frame();
+    assert_eq!(
+        shown(&f),
+        [
+            "Dune Relay",
+            "Brass Lantern",
+            "Brass Lantern",
+            "Brass Lantern",
+            "Brass Lantern",
+            "Brass Lantern",
+            "Brass Lantern",
+            "Brass Lantern"
+        ]
+    );
+    let most = "<gameselector name=\"pick\"><selection>mostplayed</selection><gameCount>3</gameCount></gameselector>";
+    let f = selected(&t, most, 0, |d| d.systems[1].games[4].play_count = 5).frame();
+    assert_eq!(shown(&f), ["Ember Circuit"], "one played game: the other entries are not rendered");
+    // A named selector, else the one whose name sorts first.
+    let two = "<gameselector name=\"b\"><selection>mostplayed</selection></gameselector><gameselector name=\"a\"><selection>lastplayed</selection></gameselector>";
+    let f = selected(&t, two, 0, |d| {
+        d.systems[1].games[4].play_count = 5;
+        d.systems[1].games[2].last_played = Some(DateTime::new(2026, 1, 1, 0, 0, 0));
+    })
+    .frame();
+    assert_eq!(shown(&f)[0], "Cobalt Harbor");
 }

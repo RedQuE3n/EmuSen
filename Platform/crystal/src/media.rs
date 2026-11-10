@@ -294,7 +294,18 @@ pub struct ByExtension<'d> {
 impl Media for ByExtension<'_> {
     fn medium_of(&self, file: &str) -> Option<Medium> {
         let extension = Path::new(file).extension()?.to_string_lossy();
-        declared(self.discovery).into_iter().filter(|(_, e)| e.trim_start_matches('.').eq_ignore_ascii_case(&extension)).find_map(|(id, _)| Medium::by_id(&id))
+        declared(self.discovery).into_iter().filter(|(_, e)| e.trim_start_matches('.').eq_ignore_ascii_case(&extension)).find_map(|(id, _)| Medium::by_id(&id).or_else(|| self.engine_medium(&id)))
+    }
+}
+
+impl ByExtension<'_> {
+    /// A medium only an engine declares, for a console the systems table does not list: its words as the console's
+    /// media give them (`media_of`), with no format module, so a new card is a blank file its game formats.
+    fn engine_medium(&self, id: &str) -> Option<Medium> {
+        self.discovery.found().iter().flat_map(|c| info::systems(&c.sidecar.info_json)).find_map(|s| {
+            let m = media_of(&s.id, Some(&s)).into_iter().find(|m| m.id == id)?;
+            Some(Medium { id: m.id, title: m.title, noun: m.noun, module: None })
+        })
     }
 }
 
@@ -323,6 +334,7 @@ pub fn list_json(j: &mut Json, tree: &Tree, m: &SaveMedium, stored: &dyn Fn(&str
         .str("medium", &m.id)
         .str("title", &m.title)
         .str("noun", &m.noun)
+        .str("noun_in_text", &emusen_savemedia::in_text(&m.noun))
         .str("extension", &m.extension)
         .str("kind", if m.is_console() { "console" } else { "removable" });
     match m.entry.as_ref().and_then(|e| e.module) {

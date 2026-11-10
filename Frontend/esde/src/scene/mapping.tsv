@@ -193,8 +193,8 @@ image	gameOverridePath	later:picture
 image	default	drawn
 image	imageType	drawn
 image	metadataElement	drawn
-image	gameselector	later:gameselector
-image	gameselectorEntry	later:gameselector
+image	gameselector	drawn
+image	gameselectorEntry	drawn
 image	tile	drawn
 image	scaleFactor	later:picture
 image	tileSize	drawn
@@ -230,8 +230,8 @@ video	default	later:video
 video	defaultImage	drawn
 video	imageType	drawn
 video	metadataElement	drawn
-video	gameselector	later:gameselector
-video	gameselectorEntry	later:gameselector
+video	gameselector	drawn
+video	gameselectorEntry	drawn
 video	iterationCount	later:video
 video	onIterationsDone	later:video
 video	audio	later:video
@@ -321,8 +321,8 @@ text	defaultValue	drawn
 text	systemNameSuffix	drawn
 text	letterCaseSystemNameSuffix	drawn
 text	metadataElement	drawn
-text	gameselector	later:gameselector
-text	gameselectorEntry	later:gameselector
+text	gameselector	drawn
+text	gameselectorEntry	drawn
 text	container	drawn
 text	containerType	drawn
 text	containerVerticalSnap	later:container
@@ -351,8 +351,8 @@ datetime	rotationOrigin	drawn
 datetime	stationary	later:stationary
 datetime	metadata	drawn
 datetime	defaultValue	drawn
-datetime	gameselector	later:gameselector
-datetime	gameselectorEntry	later:gameselector
+datetime	gameselector	drawn
+datetime	gameselectorEntry	drawn
 datetime	fontPath	drawn
 datetime	fontSize	drawn
 datetime	horizontalAlignment	drawn
@@ -390,8 +390,8 @@ rating	rotation	drawn
 rating	rotationOrigin	drawn
 rating	stationary	later:stationary
 rating	hideIfZero	drawn
-rating	gameselector	later:gameselector
-rating	gameselectorEntry	later:gameselector
+rating	gameselector	drawn
+rating	gameselectorEntry	drawn
 rating	interpolation	later:picture
 rating	color	drawn
 rating	filledPath	drawn
@@ -400,9 +400,9 @@ rating	overlay	drawn
 rating	opacity	drawn
 rating	visible	drawn
 rating	zIndex	drawn
-gameselector	selection	later:gameselector
-gameselector	gameCount	later:gameselector
-gameselector	allowDuplicates	later:gameselector
+gameselector	selection	drawn
+gameselector	gameCount	drawn
+gameselector	allowDuplicates	drawn
 helpsystem	pos	drawn
 helpsystem	posDimmed	accepted
 helpsystem	origin	drawn

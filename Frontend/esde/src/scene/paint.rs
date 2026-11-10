@@ -479,9 +479,7 @@ fn status(e: &Element, ctx: &Ctx) -> Option<Draft> {
             items.push(StatusItem { icon: None, text: Some(format!("{level}%")) });
         }
     }
-    if items.is_empty() {
-        return None;
-    }
+    // With nothing to show the element still stands at its place, an empty row with no background (THEMES.md, systemstatus).
     let bg = color(e, "backgroundColor", 0);
     let paint = Paint::Status(Status {
         items,

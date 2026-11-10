@@ -7,6 +7,10 @@ const G: OrbitGeometry = OrbitGeometry::REFERENCE;
 /// The canvas's eleven consoles by maker, and its three places' centres (x 338, 542, 757 at 1280).
 const ELEVEN: [&str; 11] = ["N", "N", "N", "N", "N", "Sega", "Sega", "Sega", "Sega", "Sony", "Sony"];
 const PLACES: [f64; 3] = [338.0, 542.0, 757.0];
+/// The test's own bodies, the canvas's: a world 72 at rest and 96 focused, its ring 7 about it; a theme draws its own.
+const RESTING: f64 = 72.0;
+const FOCUSED: f64 = 96.0;
+const RING: f64 = 7.0;
 
 fn near(a: f64, b: f64) -> bool {
     (a - b).abs() < 0.01
@@ -152,9 +156,10 @@ fn a_focused_world_on_the_inner_orbit_keeps_its_ring_below_the_places_at_the_fiv
                     continue;
                 }
                 inner += 1;
-                assert!(w.shown && w.y - 55.0 >= 140.0, "focused {focus} at {width}: its ring's top at {}", w.y - 55.0);
+                let ring_top = w.y - FOCUSED / 2.0 - RING;
+                assert!(w.shown && ring_top >= 140.0, "focused {focus} at {width}: its ring's top at {ring_top}");
                 for shown in l.worlds.iter().filter(|o| o.shown && l.orbits[o.orbit].slot == 0) {
-                    assert!(shown.y - 36.0 >= 142.0, "a resting world's top at {}", shown.y - 36.0);
+                    assert!(shown.y - RESTING / 2.0 >= 142.0, "a resting world's top at {}", shown.y - RESTING / 2.0);
                 }
             }
         }

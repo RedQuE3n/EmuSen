@@ -1,0 +1,3 @@
+# many: the state many, a console holding 9,000 games (man theme-check, STATES), one console a line:
+# maker, name, games, engine, its kind (emusen or libretro), the table's console whose look it takes. Tab-separated; man theme-check.
+Nintendo	Super Nintendo	9000	Venus	emusen	snes

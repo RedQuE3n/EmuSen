@@ -35,6 +35,15 @@ void VideoFrames::clear()
     update();
 }
 
+void VideoFrames::setFitted(bool fitted)
+{
+    if (m_fitted == fitted)
+        return;
+    m_fitted = fitted;
+    update();
+    Q_EMIT fittedChanged();
+}
+
 QSGNode* VideoFrames::updatePaintNode(QSGNode* old, UpdatePaintNodeData*)
 {
     if (m_image.isNull() || window() == nullptr) {
@@ -51,12 +60,20 @@ QSGNode* VideoFrames::updatePaintNode(QSGNode* old, UpdatePaintNodeData*)
         node->setTexture(window()->createTextureFromImage(m_image));
         m_fresh = false;
     }
-    // Cropped to fill, as a hero's picture is (Image.PreserveAspectCrop).
     const QSizeF size = m_image.size();
-    const qreal scale = std::max(width() / size.width(), height() / size.height());
-    const QSizeF shown(width() / scale, height() / scale);
-    node->setSourceRect(QRectF(QPointF((size.width() - shown.width()) / 2, (size.height() - shown.height()) / 2), shown));
-    node->setRect(QRectF(0, 0, width(), height()));
+    if (m_fitted) {
+        // Fitted inside, as a media viewer's video is (Image.PreserveAspectFit).
+        const qreal scale = std::min(width() / size.width(), height() / size.height());
+        const QSizeF drawn(size.width() * scale, size.height() * scale);
+        node->setSourceRect(QRectF(QPointF(0, 0), size));
+        node->setRect(QRectF(QPointF((width() - drawn.width()) / 2, (height() - drawn.height()) / 2), drawn));
+    } else {
+        // Cropped to fill, as a hero's picture is (Image.PreserveAspectCrop).
+        const qreal scale = std::max(width() / size.width(), height() / size.height());
+        const QSizeF shown(width() / scale, height() / scale);
+        node->setSourceRect(QRectF(QPointF((size.width() - shown.width()) / 2, (size.height() - shown.height()) / 2), shown));
+        node->setRect(QRectF(0, 0, width(), height()));
+    }
     node->setFiltering(QSGTexture::Linear);
     return node;
 }

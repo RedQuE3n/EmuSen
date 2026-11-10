@@ -850,7 +850,18 @@ pub fn listing_json(shelf: &Shelf, listing: &Listing) -> Value {
         },
         "letters": listing.letters.iter().map(|(l, i)| json!([l, i])).collect::<Vec<_>>(),
         "games": listing.entries.iter().map(|g| entry_json(shelf, g)).collect::<Vec<_>>(),
+        "unlisted": unlisted(shelf, listing),
     })
+}
+
+/// A console's games that the listing's level does not show (inside its folders, or outside the folder open), whole: ES-DE's gameselectors draw from
+/// every game of the system (EmuSen_Qt.md §4.11).
+fn unlisted(shelf: &Shelf, listing: &Listing) -> Vec<Value> {
+    if shelf.kind != Kind::Regular {
+        return Vec::new();
+    }
+    let listed: std::collections::HashSet<&str> = listing.entries.iter().map(|g| g.file.as_str()).collect();
+    shelf.games.iter().filter(|g| !g.folder && !listed.contains(g.file.as_str())).map(EsdeGame::to_json).collect()
 }
 
 /// An entry of a listing: a console's game as its whole row; a collection's game by its file alone, its row the one

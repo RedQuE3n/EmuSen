@@ -30,13 +30,14 @@ fn system() -> Vec<Prompt> {
     ]
 }
 
-// The gamelist's; X's media viewer is not built, so its entry is left out.
+// The gamelist's; X opens the media viewer (viewer.rs), on a folder too, where it opens nothing.
 fn gamelist() -> Vec<Prompt> {
     vec![
         p("back", "Options", PadButton::Select, "button_back_{1}"),
         p("start", "Menu", PadButton::Start, "button_start_{1}"),
         p("a", "Select", PadButton::South, "button_a_{0}"),
         p("b", "Back", PadButton::East, "button_b_{0}"),
+        p("x", "View media", PadButton::West, "button_x_{0}"),
         p("y", "Favorites", PadButton::North, "button_y_{0}"),
     ]
 }

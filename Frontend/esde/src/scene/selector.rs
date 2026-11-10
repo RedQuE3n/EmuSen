@@ -22,21 +22,24 @@ impl Mix {
     }
 }
 
-/// The games one selector picks, as indices into the system's games: the last played, the most played, or a shuffle by
-/// `seed`, never a folder or a game excluded from the counter; `allowDuplicates` fills a short shuffle with repeats.
+/// The games one selector picks, as `System::any_game` numbers them, the unlisted ones among them, as ES-DE draws
+/// from every game of the system: the last played, the most played, or a shuffle by `seed`, never a folder or a game
+/// excluded from the counter; `allowDuplicates` fills a short shuffle with repeats.
 pub fn pick(e: &Element, system: &System, seed: u64) -> Vec<usize> {
     let count = e.uint("gameCount").unwrap_or(1).clamp(1, 30) as usize;
-    let mut pool: Vec<usize> = (0..system.games.len()).filter(|&i| !system.games[i].folder && !system.games[i].not_counted).collect();
+    let every = system.games.len() + system.unlisted.len();
+    let game = |i: usize| system.any_game(i).expect("in range");
+    let mut pool: Vec<usize> = (0..every).filter(|&i| !game(i).folder && !game(i).not_counted).collect();
     match e.string("selection") {
         Some("lastplayed") => {
-            pool.retain(|&i| system.games[i].last_played.is_some());
-            pool.sort_by(|a, b| system.games[*b].last_played.cmp(&system.games[*a].last_played));
+            pool.retain(|&i| game(i).last_played.is_some());
+            pool.sort_by(|a, b| game(*b).last_played.cmp(&game(*a).last_played));
             pool.truncate(count);
             pool
         }
         Some("mostplayed") => {
-            pool.retain(|&i| system.games[i].play_count > 0);
-            pool.sort_by(|a, b| system.games[*b].play_count.cmp(&system.games[*a].play_count));
+            pool.retain(|&i| game(i).play_count > 0);
+            pool.sort_by(|a, b| game(*b).play_count.cmp(&game(*a).play_count));
             pool.truncate(count);
             pool
         }

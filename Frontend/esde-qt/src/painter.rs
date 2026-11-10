@@ -42,7 +42,7 @@ pub fn systems(cache: &ThemeCache, settings: &Settings, shelves: Vec<Shelf>, pre
         .filter_map(|s| {
             let system = s.system?;
             let theme = cache.theme(&settings.theme, &system, &choices, presence.get(&system.name));
-            Some(System { stars: s.stars, favorites_on_top: s.favorites_on_top, counts: s.counts, ..System::new(system, theme, s.games) })
+            Some(System { stars: s.stars, favorites_on_top: s.favorites_on_top, counts: s.counts, unlisted: s.unlisted, ..System::new(system, theme, s.games) })
         })
         .collect()
 }
@@ -215,6 +215,21 @@ impl Painter {
         let grid = self.primary_kind() == Some("grid");
         let gamelist = self.view() == "gamelist";
         let quick = self.settings.quick_select.clone();
+        if let Some(viewer) = self.stage.as_mut()?.viewer.as_mut() {
+            // USERGUIDE.md, "Game media viewer": left and right browse, the triggers jump, up, down and the shoulders are
+            // the manual's, and any other button closes it.
+            let moved = match button {
+                UiButton::Left | UiButton::Right => viewer.browse(if button == UiButton::Left { -1 } else { 1 }),
+                UiButton::First | UiButton::Last => viewer.jump(button == UiButton::Last),
+                UiButton::Up | UiButton::Down | UiButton::PageUp | UiButton::PageDown => false,
+                _ => {
+                    self.stage.as_mut()?.viewer = None;
+                    false
+                }
+            };
+            self.refresh();
+            return moved.then_some(Action::Cue("navigate"));
+        }
         let action = match button {
             UiButton::Up | UiButton::Down | UiButton::Left | UiButton::Right => {
                 let along = matches!(button, UiButton::Up | UiButton::Down) == vertical || grid;
@@ -258,6 +273,7 @@ impl Painter {
                 current.jump(if button == UiButton::First { -n } else { n }, now).then_some(Action::Cue("navigate"))
             }
             UiButton::Search if gamelist => self.game_file().map(Action::Favourite),
+            UiButton::Screensaver if gamelist => self.stage.as_mut()?.open_viewer().then_some(Action::Cue("select")),
             UiButton::Menu => Some(Action::Menu),
             UiButton::Options => Some(Action::Options),
             _ => None,

@@ -19,6 +19,8 @@ use emusen_qt_test::tree::Node;
 use emusen_qt_test::{Harness, Scene};
 
 const SIZES: [(i32, i32); 2] = [(1280, 800), (1920, 1200)];
+/// The themes the media viewer was captured over (Testing/esde-oracle/README.md); the viewer is ES-DE's, not the theme's.
+const VIEWER_THEMES: [&str; 2] = ["caralt-es-de", "artflix-revisited-es-de"];
 const STATES: [(&str, &str); 2] = [("system", "system"), ("gamelist", "gamelist-1")];
 
 /// Boxes off ES-DE's that the tester has named: (theme, state, the spec's key), at both sizes. Empty since 2026-11-09
@@ -54,6 +56,19 @@ fn mae(a: &[[u8; 3]], b: &[[u8; 3]], w: i32, strip: (i32, i32)) -> f64 {
         n += 3;
     }
     total as f64 / n.max(1) as f64
+}
+
+/// The bounds of the pixels between rows `rows` whose brightest channel stands over `over`: x0, y0, x1, y1.
+fn ink(p: &[[u8; 3]], w: i32, rows: (i32, i32), over: u8) -> [i32; 4] {
+    let mut b = [i32::MAX, i32::MAX, -1, -1];
+    for y in rows.0..rows.1 {
+        for x in 0..w {
+            if p[(y * w + x) as usize].iter().copied().max().unwrap_or(0) > over {
+                b = [b[0].min(x), b[1].min(y), b[2].max(x), b[3].max(y)];
+            }
+        }
+    }
+    b
 }
 
 /// ES-DE's boxes measured on its captures where the C# scene's is not ES-DE's: (theme, state, width, key) → box in design units.
@@ -97,7 +112,7 @@ fn seed_for(settings: &str, texts: &(String, String, String), w: i32, h: i32, pi
                 let (kind, name) = key.split_once('_').unwrap();
                 view.find(kind, name)
                     .and_then(|e| emusen_esde::scene::selector::game_for(e, view, system, *seed))
-                    .is_some_and(|i| system.games[i].name == *game)
+                    .is_some_and(|i| system.any_game(i).is_some_and(|g| g.name == *game))
             })
         })
         .unwrap_or_else(|| panic!("no seed picks {picks:?}"))
@@ -232,7 +247,7 @@ fn worsened(old: &str, new: &str) -> Vec<String> {
         if was.get("loads").map(String::as_str) == Some("yes") && now["loads"] != "yes" {
             out.push(format!("{theme}: no longer loads"));
         }
-        for c in ["unknown", "unsupported", "mae_system_1280", "mae_gamelist_1280", "mae_system_1920", "mae_gamelist_1920", "rects_off"] {
+        for c in ["unknown", "unsupported", "mae_system_1280", "mae_gamelist_1280", "mae_system_1920", "mae_gamelist_1920", "rects_off", "mae_viewer_1280", "mae_viewer_1920", "viewer_off"] {
             if let (Some(a), Some(b)) = (num(was, c), num(now, c)) {
                 // MAE moves by up to 0.02 between runs (measured on 2026-11-09); a count by one.
                 if b > a + if c.starts_with("mae") { 0.05 } else { 0.5 } {
@@ -348,6 +363,61 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
         }
         watched.entry(theme.clone()).or_default().insert("rects_off".to_owned(), off_count.to_string());
     }
+    // ES-DE's media viewer on the NES's first game, every item in turn and one right past the last, and X on the SNES's folder (EmuSen_Qt.md §4.10).
+    let viewer_texts = common::oracle_texts(&["nes"]);
+    for (theme, variant, scheme, font) in common::watched().into_iter().filter(|w| VIEWER_THEMES.contains(&w.0.as_str())) {
+        let folder = common::corpus().join(&theme);
+        let (choices, _) = common::choices_of(&variant, &scheme, &font);
+        let mut off_count = 0;
+        for (w, h) in SIZES {
+            let unit = f64::from(w) / 1280.0;
+            for n in 0..=8 {
+                let name = format!("nes-gamelist-0-media-{n}-{w}x{h}");
+                let at = format!("{theme} {name}");
+                let capture = oracle.join(&theme).join(format!("{name}.png"));
+                assert!(scene.set_property("view", "defaultFont", &face.to_string_lossy()));
+                common::install(&mut scene, &folder, &choices, "gamelist", &viewer_texts, w, h);
+                scene.pad(emusen_kit_core::input::UiButton::Screensaver);
+                for _ in 0..n {
+                    scene.pad(emusen_kit_core::input::UiButton::Right);
+                }
+                // The first item is the video, a still held four seconds and encoded with H.264's noise (Testing/esde-oracle/library.py).
+                if !common::settle_within(&mut scene, &scratch.0, if n == 0 { 8 } else { 0 }) {
+                    failures.push(format!("{at}: the picture did not settle in 10 s"));
+                }
+                let qt_png = out.join("qt").join(format!("{theme}-{name}.png"));
+                assert!(scene.grab(&qt_png.to_string_lossy()));
+                let (_, _, esde) = pixels(&capture).unwrap_or_else(|| panic!("ES-DE's capture {}: Testing/esde-oracle/README.md", capture.display()));
+                let (_, _, qtp) = pixels(&qt_png).unwrap();
+                let strip = emusen_esde::scene::Viewer::strip(f64::from(h)) as i32;
+                for (what, a, b) in [
+                    ("help", ink(&esde, w, (0, strip), 100), ink(&qtp, w, (0, strip), 100)),
+                    ("item", ink(&esde, w, (strip + 1, h), 10), ink(&qtp, w, (strip + 1, h), 10)),
+                ] {
+                    let d = (0..4).map(|i| f64::from((a[i] - b[i]).abs()) / unit).fold(0.0, f64::max);
+                    if d > mockup::UNITS {
+                        off_count += 1;
+                        failures.push(format!("{at}: the {what}'s ink {b:?} against ES-DE's {a:?}, {d:.1} off"));
+                    }
+                }
+                let m = mae(&esde, &qtp, w, (0, 0));
+                table.push(format!("{theme}\tviewer-{n}\t{w}x{h}\t{m:.2}\t-\t-"));
+                eprintln!("{}", table.last().unwrap());
+                let column = format!("mae_viewer_{w}");
+                let row = watched.entry(theme.clone()).or_default();
+                let sum = row.get(&column).and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) + m / 9.0;
+                row.insert(column, format!("{sum:.2}"));
+            }
+            // X on the folder Tower Set, entry 0 of the SNES's gamelist, opens nothing.
+            common::install(&mut scene, &folder, &choices, "gamelist", &texts, w, h);
+            scene.pad(emusen_kit_core::input::UiButton::Screensaver);
+            scene.wait(300);
+            if scene.tree().nodes.iter().any(|n| n.visible && n.name == "element-strip") {
+                failures.push(format!("{theme} {w}x{h}: X on the folder opened the media viewer"));
+            }
+        }
+        watched.entry(theme.clone()).or_default().insert("viewer_off".to_owned(), off_count.to_string());
+    }
     scene.assert_quiet();
     for (i, seen) in boxes_seen.iter().enumerate() {
         if !seen {
@@ -359,7 +429,7 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
     // The corpus measure with the watched columns, held against the last committed one (today's too, when a re-measure).
     let corpus = PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/emusen/bigpicture/corpus/xml");
     let report = check::report(&[corpus], &check::SYSTEMS, Table::Summary);
-    let columns = ["mae_system_1280", "mae_gamelist_1280", "mae_system_1920", "mae_gamelist_1920", "rects_off"];
+    let columns = ["mae_system_1280", "mae_gamelist_1280", "mae_system_1920", "mae_gamelist_1920", "rects_off", "mae_viewer_1280", "mae_viewer_1920", "viewer_off"];
     let measure: Vec<String> = report
         .text
         .lines()
@@ -412,7 +482,7 @@ fn fell(old: &str, new: &str) -> Vec<String> {
     let mut out = vec![];
     for (theme, now) in &new {
         let Some(was) = old.get(theme) else { continue };
-        for c in ["mae_system_1280", "mae_gamelist_1280", "mae_system_1920", "mae_gamelist_1920"] {
+        for c in ["mae_system_1280", "mae_gamelist_1280", "mae_system_1920", "mae_gamelist_1920", "mae_viewer_1280", "mae_viewer_1920"] {
             let num = |r: &BTreeMap<String, String>| r.get(c).and_then(|v| v.parse::<f64>().ok());
             if let (Some(a), Some(b)) = (num(was), num(now)) {
                 if b < a - 0.05 {

@@ -4969,8 +4969,18 @@ Module {
             lineNumber: 15
             isReadonly: true
         }
-        Signal { name: "framesChanged"; lineNumber: 25 }
-        Method { name: "clear"; lineNumber: 22 }
+        Property {
+            name: "fitted"
+            type: "bool"
+            read: "fitted"
+            write: "setFitted"
+            notify: "fittedChanged"
+            index: 2
+            lineNumber: 17
+        }
+        Signal { name: "framesChanged"; lineNumber: 29 }
+        Signal { name: "fittedChanged"; lineNumber: 30 }
+        Method { name: "clear"; lineNumber: 26 }
     }
     Component {
         file: "current.cxxqt.h"

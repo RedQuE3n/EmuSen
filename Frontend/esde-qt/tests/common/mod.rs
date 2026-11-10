@@ -198,8 +198,18 @@ fn json_text(text: &str) -> String {
     format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-const ORACLE_TYPES: [(&str, &str); 5] =
-    [("covers", "cover"), ("screenshots", "screenshot"), ("titlescreens", "titlescreen"), ("marquees", "marquee"), ("miximages", "miximage")];
+// library.py's type folders: the five every game has, and the four only the media viewer's game has (its NES's first).
+const ORACLE_TYPES: [(&str, &str); 9] = [
+    ("covers", "cover"),
+    ("screenshots", "screenshot"),
+    ("titlescreens", "titlescreen"),
+    ("marquees", "marquee"),
+    ("miximages", "miximage"),
+    ("videos", "video"),
+    ("backcovers", "backcover"),
+    ("fanart", "fanart"),
+    ("custom", "custom"),
+];
 
 /// The oracle library as `esdeShelves`, `esdeMedia` and `esdePresence` in ES-DE's order (`order`, the systems as ES-DE
 /// shows them): folders on top, then favourites, then the rest, each by name, as its settings have it (FoldersOnTop,
@@ -211,15 +221,15 @@ pub fn oracle_texts(order: &[&str]) -> (String, String, String) {
         let full = &full_name(system);
         let xml = std::fs::read_to_string(root.join("gamelists").join(system).join("gamelist.xml")).unwrap();
         let mut rows: Vec<(u8, String, String)> = vec![];
+        // The games inside folders, which the top level does not list and ES-DE's gameselectors draw from (EmuSen_Qt.md §4.11).
+        let mut unlisted: Vec<String> = vec![];
         // ES-DE counts every game of the system, those inside folders too (its captures: 14 games, 7 favourites).
         let every: Vec<&str> = xml.split("<game>").skip(1).filter_map(|b| b.split("</game>").next()).collect();
         let favourites = every.iter().filter(|b| tag(b, "favorite") == Some("true")).count();
         for (open, close, folder) in [("<folder>", "</folder>", true), ("<game>", "</game>", false)] {
             for block in xml.split(open).skip(1).filter_map(|b| b.split(close).next()) {
                 let path = unescape(tag(block, "path").unwrap().trim_start_matches("./"));
-                if path.contains('/') {
-                    continue;
-                }
+                let folder_path = path.rsplit_once('/').map(|(f, _)| f.to_owned());
                 let name = unescape(tag(block, "name").unwrap_or(&path));
                 let mut f = vec![
                     format!("\"file\":{}", json_text(&path)),
@@ -253,6 +263,12 @@ pub fn oracle_texts(order: &[&str]) -> (String, String, String) {
                 for (from, to) in [("favorite", "favourite"), ("completed", "completed"), ("hidemetadata", "hide_metadata")] {
                     f.push(format!("\"{to}\":{}", flag(from)));
                 }
+                if let Some(folder_path) = folder_path {
+                    f[0] = format!("\"file\":{}", json_text(path.rsplit('/').next().unwrap()));
+                    f.push(format!("\"folder_path\":{}", json_text(&folder_path)));
+                    unlisted.push(format!("{{{}}}", f.join(",")));
+                    continue;
+                }
                 let rank = if folder { 0 } else if flag("favorite") { 1 } else { 2 };
                 rows.push((rank, name.to_lowercase(), format!("{{{}}}", f.join(","))));
             }
@@ -260,21 +276,34 @@ pub fn oracle_texts(order: &[&str]) -> (String, String, String) {
         rows.sort();
         let games: Vec<String> = rows.into_iter().map(|(_, _, r)| r).collect();
         shelves.push(format!(
-            "{{\"name\":\"{system}\",\"full_name\":{},\"theme\":\"{system}\",\"kind\":\"regular\",\"stars\":true,\"favourites_on_top\":true,\"counts\":{{\"games\":{n},\"favorites\":{favourites},\"shown\":{n}}},\"games\":[{}]}}",
+            "{{\"name\":\"{system}\",\"full_name\":{},\"theme\":\"{system}\",\"kind\":\"regular\",\"stars\":true,\"favourites_on_top\":true,\"counts\":{{\"games\":{n},\"favorites\":{favourites},\"shown\":{n}}},\"games\":[{}],\"unlisted\":[{}]}}",
             json_text(full),
             games.join(","),
+            unlisted.join(","),
             n = every.len()
         ));
         let (mut kinds, mut present) = (vec![], vec![]);
         for (folder, kind) in ORACLE_TYPES {
             let dir = root.join("downloaded_media").join(system).join(folder);
-            let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-            // Files only: a folder's own media sit in a subfolder of the same name, which is not a picture.
-            let mut files: Vec<PathBuf> = entries.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.is_file()).collect();
+            // Every file below the type's folder, named by its path below it less the extension, as the host's index names it.
+            let mut files: Vec<PathBuf> = vec![];
+            let mut todo = vec![dir.clone()];
+            while let Some(d) = todo.pop() {
+                for p in std::fs::read_dir(&d).into_iter().flatten().flatten().map(|e| e.path()) {
+                    if p.is_dir() {
+                        todo.push(p);
+                    } else {
+                        files.push(p);
+                    }
+                }
+            }
             files.sort();
             let named: Vec<String> = files
                 .iter()
-                .map(|p| format!("{}:{}", json_text(&p.file_stem().unwrap().to_string_lossy()), json_text(&p.to_string_lossy())))
+                .map(|p| {
+                    let below = p.strip_prefix(&dir).unwrap().with_extension("");
+                    format!("{}:{}", json_text(&below.to_string_lossy()), json_text(&p.to_string_lossy()))
+                })
                 .collect();
             if !named.is_empty() {
                 present.push(format!("\"{kind}\""));
@@ -315,12 +344,17 @@ pub fn compare_dir() -> PathBuf {
 
 /// Waits until two grabs 300 ms apart are the same picture (pictures decode on a thread of their own); false after 10 s.
 pub fn settle_picture(scene: &mut Scene<'_>, scratch: &Path) -> bool {
+    settle_within(scene, scratch, 0)
+}
+
+/// As `settle_picture`, the grabs alike within `levels`: a playing video's frames of one still differ by its encoding's noise.
+pub fn settle_within(scene: &mut Scene<'_>, scratch: &Path, levels: i32) -> bool {
     let shot = scratch.join("settle.png").to_string_lossy().into_owned();
     for _ in 0..33 {
         until(scene, "the view at rest", |s| s.property("esdeModel", "moving") == "false");
         assert!(scene.grab(&shot));
         scene.wait(300);
-        if scene.difference(&shot, 0, 0, &[], "") == Some(0) {
+        if scene.difference(&shot, levels, 0, &[], "") == Some(0) {
             return true;
         }
     }

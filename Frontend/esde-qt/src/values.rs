@@ -112,6 +112,7 @@ pub fn paint_kind(p: &Placed, primary: Option<&Primary>) -> &'static str {
         Paint::Help(_) => "help",
         Paint::Info(_) => "info",
         Paint::Status(_) => "status",
+        Paint::Clip(_) => "clip",
         Paint::Primary { .. } => match primary.map(|p| &p.layout) {
             Some(Layout::Carousel(_)) => "carousel",
             Some(Layout::TextList(_)) => "textlist",
@@ -151,6 +152,10 @@ pub fn element(p: &Placed, primary: Option<&Primary>, role: &str) -> V {
             _ => None,
         },
         Paint::Badges(_) => None,
+        Paint::Clip(source) => match role {
+            "source" => Some(url(&Some(source.clone()))),
+            _ => None,
+        },
         Paint::Help(x) => match role {
             "fontSource" => Some(url(&x.font.file)),
             "ownFace" => Some(V::B(x.font.own)),

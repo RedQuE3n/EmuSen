@@ -373,9 +373,9 @@ fn the_help_follows_es_de_s_order_and_the_player_s_switches() {
     assert_eq!(labels(&s), ["MENU", "SELECT", "SCREENSAVER", "CHOOSE", "RANDOM"]);
     let mut s = stage(&t, "", help, "gamelist", 0);
     s.current.data.help.random_games = true;
-    assert_eq!(labels(&s), ["OPTIONS", "MENU", "SELECT", "BACK", "FAVORITES", "SYSTEM", "RANDOM"]);
+    assert_eq!(labels(&s), ["OPTIONS", "MENU", "SELECT", "BACK", "VIEW MEDIA", "FAVORITES", "SYSTEM", "RANDOM"]);
     s.current.data.help.quick_select = "disabled".into();
-    assert_eq!(labels(&s), ["OPTIONS", "MENU", "SELECT", "BACK", "FAVORITES", "RANDOM"]);
+    assert_eq!(labels(&s), ["OPTIONS", "MENU", "SELECT", "BACK", "VIEW MEDIA", "FAVORITES", "RANDOM"]);
 }
 
 #[test]
@@ -476,4 +476,65 @@ fn a_gameselector_gives_the_system_view_its_games_by_entry() {
     })
     .frame();
     assert_eq!(shown(&f)[0], "Cobalt Harbor");
+}
+
+// ES-DE's media viewer (USERGUIDE.md, "Game media viewer"; EmuSen_Qt.md §4.10).
+#[test]
+fn the_media_viewer_shows_a_game_s_media_in_es_de_s_order_and_stops_at_the_ends() {
+    let t = Synth::new();
+    let mut s = stage(&t, "", "<helpsystem name=\"h\"/>", "gamelist", 0);
+    let mut data = s.current.data.clone();
+    let game = &mut data.systems[1].games[0];
+    for kind in ["custom", "screenshot", "video", "cover", "marquee", "fanart"] {
+        game.media.insert(kind.to_owned(), format!("/m/{kind}"));
+    }
+    data.systems[1].games[1].folder = true;
+    s.restart(data.clone(), "gamelist", 0);
+    assert!(s.open_viewer());
+    let v = s.viewer.clone().unwrap();
+    let kinds: Vec<&str> = v.entries.iter().map(|e| e.kind.as_str()).collect();
+    assert_eq!(kinds, ["video", "cover", "screenshot", "fanart", "custom"], "ES-DE's order; a marquee is not shown");
+    let item = |s: &Stage| placed(&s.frame(), "item").paint.clone();
+    assert_eq!(item(&s), Paint::Clip("/m/video".into()), "the video first, played");
+    let viewer = s.viewer.as_mut().unwrap();
+    assert!(!viewer.browse(-1), "left at the first stays");
+    assert!(viewer.jump(true));
+    assert!(!viewer.browse(1), "right at the last stays");
+    assert!(viewer.jump(false) && viewer.browse(1));
+    let Paint::Picture(p) = item(&s) else { panic!("a picture") };
+    assert_eq!((p.source.as_str(), p.fit), ("/m/cover", Fit::Contain));
+    let f = s.frame();
+    let (strip, it) = (placed(&f, "strip"), placed(&f, "item"));
+    assert_eq!((strip.h, it.y, it.h), (Viewer::strip(H), Viewer::strip(H), H - Viewer::strip(H)), "the item fills the screen below the strip");
+    assert!(f.elements.last().is_some_and(|e| e.name == "help"), "the help is drawn last, over the strip");
+    let Paint::Help(h) = &placed(&f, "help").paint else { panic!() };
+    assert_eq!(h.entries.iter().map(|e| e.label.as_str()).collect::<Vec<_>>(), ["BROWSE", "FIRST", "LAST"]);
+    assert!(h.font.own, "ES-DE's own face");
+    s.switch(0);
+    assert!(s.viewer.is_none(), "leaving the gamelist closes it");
+    data.game_index = 1;
+    s.restart(data.clone(), "gamelist", 0);
+    assert!(!s.open_viewer(), "a folder opens nothing");
+    data.game_index = 2;
+    s.restart(data, "gamelist", 0);
+    assert!(!s.open_viewer(), "a game with no media opens nothing");
+}
+
+// ES-DE's gameselectors draw from every game of the system, those its list's level does not show among them (EmuSen_Qt.md §4.11).
+#[test]
+fn a_gameselector_picks_from_the_games_inside_folders_too() {
+    let t = Synth::new();
+    let random = "<gameselector name=\"pick\"><gameCount>8</gameCount></gameselector>";
+    let inside = |d: &mut Data| {
+        for name in ["Quartz Spire", "Rune Gate"] {
+            let mut g = Game::new(name, &format!("{name}.nes"));
+            g.media.insert("screenshot".into(), format!("/shots/{name}.png"));
+            d.systems[1].unlisted.push(g);
+        }
+        d.systems[1].games[1].folder = true;
+    };
+    let names = shown(&selected(&t, random, 7, inside).frame());
+    assert_eq!(names.len(), 7, "five games and the two inside, the folder never: {names:?}");
+    assert!(names.contains(&"Rune Gate".to_owned()) && names.contains(&"Quartz Spire".to_owned()), "{names:?}");
+    assert!(!names.contains(&"Brass Lantern".to_owned()), "a folder is not picked");
 }

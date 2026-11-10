@@ -15,6 +15,8 @@ pub struct Shelf {
     pub stars: bool,
     pub favorites_on_top: bool,
     pub counts: Option<Counts>,
+    /// The games the listed level does not show: inside its folders, or outside the folder open (EmuSen_Qt.md §4.11).
+    pub unlisted: Vec<Game>,
 }
 
 /// The ES-DE view's settings: the theme folder, the choices stored for it, and the interface's switches.
@@ -232,7 +234,8 @@ pub fn shelves(shelves_text: &str, media_text: &str) -> Vec<Shelf> {
                 filtered: flag(c, "filtered"),
                 in_folder: flag(c, "in_folder"),
             });
-            Shelf { system, games, stars: flag(s, "stars"), favorites_on_top: flag(s, "favourites_on_top"), counts }
+            let unlisted = s.get("unlisted").and_then(Value::as_array).into_iter().flatten().map(|g| game_of(g, &media)).collect();
+            Shelf { system, games, stars: flag(s, "stars"), favorites_on_top: flag(s, "favourites_on_top"), counts, unlisted }
         })
         .collect()
 }

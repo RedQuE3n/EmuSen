@@ -2893,3 +2893,14 @@ resource path QML loads it from). The kit stays the face's one owner; nothing el
 
 **Held to**: `emusen-esde-text`'s tests read the same file, and the ES-DE painter's `TextLayout` lays a theme without a
 font out on these bytes.
+
+### 7.61 A video tile fitted, and started at once (stage 4, X2; 2026-11-09)
+
+ES-DE's media viewer plays a game's video fitted inside the screen and at once (EmuSen_Qt.md §4.10), where a hero's
+tile crops its clip to fill and waits the poster's delay. `VideoTile` gains `fillMode` (`Image.PreserveAspectCrop` by
+default, as before; `Image.PreserveAspectFit` fits the clip and the still inside the tile) and `delay` (the poster's
+delay by default; 0 starts at once), which `VideoClip` takes on; `VideoFrames`, the software backend's sink, gains
+`fitted`. An addition: the defaults keep every tile as it was.
+
+**Held to**: the ES-DE oracle's media viewer states (the video's ink within two units of ES-DE's at both sizes), and the
+kit's own tests of the tile (unchanged defaults).

@@ -102,6 +102,10 @@ Item {
                 roleValue: ElementModel.Grid
                 GridElement { esde: esde }
             }
+            DelegateChoice {
+                roleValue: ElementModel.Clip
+                ClipElement { esde: esde }
+            }
         }
     }
     Item {

@@ -46,6 +46,8 @@ pub enum Paint {
     Help(Help),
     Info(Info),
     Status(Status),
+    /// A video file played, fitted to the box (the media viewer's, EmuSen_Qt.md §4.10).
+    Clip(String),
     /// The view's primary element, drawn from `Frame::primary` (or `leaving_primary` when true).
     Primary {
         leaving: bool,

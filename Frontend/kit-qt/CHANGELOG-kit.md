@@ -4,6 +4,16 @@ The kit is the QML module `EmuSen.Kit` (EmuSen_Qt.md §1.4), held by rule Q (§5
 writes it, is committed under `Testing/qmltypes/` and compared on every build. A minor adds and never removes; each
 entry names what was added and the section of `EmuSen_Kit.md` that records it.
 
+## 1.0, stage 4 piece X2: the body face as bytes, and a fitted clip started at once (2026-11-09)
+
+Additions; every default keeps a tile as it was.
+
+- **`fonts::BODY`**, **`fonts::BODY_URL`** (Rust): the body face's bytes and its resource path, for a component that lays
+  words out itself. `EmuSen_Kit.md` §7.60.
+- **`VideoTile.fillMode`**, **`VideoTile.delay`**, **`VideoClip.fillMode`**, **`VideoClip.delay`** (qmldir): fitted
+  inside the tile, and started without the poster's delay. §7.61.
+- **`VideoFrames.fitted`** (registry): the software backend's frames fitted inside the item. §7.61.
+
 ## 1.0, stage 5 piece E: a sentence's tone, a value beside a short label, the rows' view (2026-11-09)
 
 Additions only; no type, property, signal or invokable was removed or changed.

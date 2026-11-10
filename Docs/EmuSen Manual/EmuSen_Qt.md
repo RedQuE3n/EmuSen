@@ -3030,10 +3030,92 @@ set of rules is the defect the house rules name. The evaluation:
   (MIT, HarfBuzz's shaping algorithm in Rust, the shaping ES-DE does with HarfBuzz) and through it `ttf-parser` (MIT,
   the font tables). A framework rather than hand-written shaping, as the house rules ask.
 - The painter's side stays a painter's: `TextLayout`, an `EsdeModel`-free QML type of `EmuSen.Esde` that asks the crate for a
-  layout, and `GlyphText.qml`, which draws one glyph per pen with Qt's `Text` at the whole size. `TextBlock` and the help
-  bar's labels draw through it, so every text, list row, carousel and grid label, date, clock and help label of an
-  ES-DE theme has one owner of its rules. The kit's body face, drawn where a theme names no font and Akrobat is not
-  installed, reaches the crate as bytes from its owner, `emusen_kit_qt::body::FACE`.
+  layout, and `GlyphText.qml`, which draws one glyph per pen with Qt's `Text` at the whole size nearest, scaled to the
+  layout's size (a theme's face at 14.4 px is drawn at 14 and scaled by 14.4 / 14, as `GlyphLine` drew it before).
+  `TextBlock` and the help bar's labels draw through it, so every text, list row, carousel and grid label, date, clock
+  and help label of an ES-DE theme has one owner of its rules. The kit's body face, drawn where a theme names no font
+  and Akrobat is not installed, reaches the crate as bytes from its owner, `emusen_kit_qt::fonts::BODY` (EmuSen_Kit.md
+  §7.60). Whether a face is ES-DE's own is the scene's fact (the theme named no `fontPath`): its records carry a `Face`,
+  the file and `own`, the role `ownFace`.
+
+#### 4.9.3 As built, and the oracle **[M 2026-11-09]**
+
+`emusen-esde-text` is `whole` (the size rule), `Face::shape` (HarfBuzz's clusters through rustybuzz, each advance
+rounded, a space rounded down in ES-DE's own face) and `layout` (paragraphs at line breaks, greedy breaking at spaces
+with a long word broken where it overflows, trailing spaces out of a line's width, the pitch, whole lines only when the
+box has a height, one line and an ellipsis when it holds one, each line's place by its alignment rounded). Its tests
+(`tests/rules.rs`, 8) hold each rule of §4.9.1 on the kit's body face. `TextLayout` is a list model of the glyphs, reset
+only when they change, so a binding's settling does not rebuild the words.
+
+The 2026-11-08 capture of Art Book Next's clock at 1920 × 1200 had been measured 63.86 units wide in
+`esde-boxes.tsv`; its background's right edge is column 167 on every row from 54 to 94 (the 1280 × 800 capture's is
+110, as written), so the box is 61.19 units, and Qt's 61.3 is within it. The row is corrected; the clock's glyphs in
+ES-DE's capture stand at 0, 21, 42, 50, 71 px, Mulish at 35 px, as Qt's do.
+
+### 4.10 ES-DE's media viewer **[M 2026-11-09]**
+
+**Approved 2026-11-09 by the tester:** ES-DE's VIEW MEDIA, as USERGUIDE.md ("Game media viewer") describes it, so the
+gamelist's help lists it where ES-DE's does. The evidence is the user guide and 40 captures of ES-DE 3.4.1 taken on
+2026-11-09 with the oracle rig (`Testing/esde-oracle`, `gamelist:<j>:media:<n>`), CarAlt and Artflix at both sizes:
+the viewer's game at each of its nine steps, and X on the SNES's folder.
+
+**What the captures show.** The viewer is ES-DE's own, the same over both themes:
+
+- *The help*, a strip across the top, 0x222222, 32 px high at 1280 × 800 and 49 at 1920 × 1200, with BROWSE (the d-pad's
+  left and right), FIRST (the left trigger) and LAST (the right trigger) centred in it, words and icons 0xAAAAAA, the
+  words ES-DE's own face at 0.03 of the height (BROWSE, FIRST, LAST ink 73, 46, 40 px at 24 px and 109, 68, 59 at
+  36 px, as FreeType draws Akrobat at those sizes). The strip's height is 1.35 times the words' size, rounded (32.4 and
+  48.6), measured at the two sizes; the user guide gives no rule for it.
+- *The item*, fitted inside the screen below the strip, centred, on black: the 512 × 448 screenshot 878 × 768 at
+  y 32 (1280 × 800), the 1280 × 720 fan art the full width at y 56, centred in 32–800.
+- *The order*, video, cover, back cover, title screen, screenshot, fan art, miximage, custom, the user guide's list; right
+  at the last stays on it (the ninth step shows the custom picture again). The video plays at once.
+- *A folder*: X on Tower Set opens nothing, though the help lists VIEW MEDIA there too.
+- *Scanlines* over the video, the title screen and the screenshot (the user guide's "Render scanlines" settings, on by
+  default): a brightness that rises and falls by about ±10 % with a period of about 4.5 rows at 1280 × 800 and 5.3 at
+  1920 × 1200, tied neither to the picture's rows nor to the screen's height alone. **[blocked]**, below.
+
+**The form.** The rules are the scene's, a module of one job, `scene::viewer` (the items of a game in ES-DE's order,
+browse and jump with their stops, the records over the screen); the stage holds the open viewer and draws its records
+above the view (`Stage::open_viewer`, closed by a change of view); the painter maps the buttons (left and right browse,
+the triggers jump, up, down and the shoulders, the manual's, do nothing, any other button closes; X opens it in the
+gamelist). The records are the existing primitives (two fills, a picture, the help element drawn by `HelpElement` in
+ES-DE's own face) and one new paint, `Paint::Clip`, a video drawn by `ClipElement.qml` through the kit's `VideoTile`, the
+one decoder, which gains `fillMode` and `delay` (EmuSen_Kit.md §7.61) so a clip can be fitted and start at once.
+`help.rs` lists View media (X) between Back and Favorites, as both themes' captures do.
+
+**Held to**: `frame.rs`'s `the_media_viewer_shows_a_game_s_media_in_es_de_s_order_and_stops_at_the_ends`; the oracle
+(below), which opens the viewer on the NES's first game in CarAlt and Artflix at both sizes, steps it nine times, and
+holds the help's ink and the item's ink to the capture's within two units, the whole picture's error in the corpus
+columns `mae_viewer_1280` and `mae_viewer_1920` (the mean of the nine), and X on the SNES's folder to open nothing.
+
+**[blocked], for the tester:**
+
+- *The scanlines.* ES-DE draws them by a shader whose law the captures do not give: the period is not the source's rows
+  (no correlation with the row phase at either size) and is not one fraction of the height (4.5 and 5.3 px). Drawing a
+  sine of a fitted period would be a fitted constant per size. The viewer's video, title screen and screenshot show
+  without them: their error is 5.6–6.8 against 0.1–1.0 for the other items.
+- *PDF manuals* (up for the manual, the shoulders to zoom): the oracle library has no manual and no capture shows the
+  mode, and Qt PDF is not among the stack's modules. Building it needs a capture and the module's approval.
+- *The viewer's settings* (help at the top, at the bottom or off; the media types in the help; keep videos running;
+  stretch videos; scanlines; blur): the defaults are drawn. Offering them needs rows in the settings, another screen's
+  piece.
+
+### 4.11 A system's games inside folders **[M 2026-11-09]**
+
+ES-DE's gameselectors draw from every game of the system: CarAlt's system view at 1920 × 1200 shows Rune Gate, a game
+inside the folder Tower Set (§4.8.7). The painter's system held only the level its list shows. **Approved 2026-11-09 by
+the tester:** the library's rows carry those games. A shelf of `esdeShelves` gains `unlisted`, the console's games the
+listing's level does not show (inside its folders, or outside the folder open), whole, as the host writes them
+(`gamelists::listing_json`; a collection carries none). `System::unlisted` holds them and `System::any_game` numbers the
+listed games and then these, the numbering `selector::pick` draws from (a folder and an uncounted game still never),
+so the shown views, the counts and the list are unchanged. The oracle's library gives the SNES's two games in Tower Set
+as `unlisted` with their media (the type folders read at every depth, as the host's index reads them), and
+`Testing/esde-baseline/picks.tsv` records the 1920 × 1200 capture's picks (Juniper Vault, Hollow Comet, Rune Gate), so
+that state is seeded to them as the 1280 × 800 one is.
+
+**Held to**: qt-models' `a_console_s_text_carries_the_games_its_level_does_not_list_for_es_de_s_gameselectors`;
+`frame.rs`'s `a_gameselector_picks_from_the_games_inside_folders_too`; the oracle's CarAlt system view at 1920 × 1200.
 
 ---
 

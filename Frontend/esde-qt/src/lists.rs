@@ -51,6 +51,7 @@ pub mod qobject {
         Carousel,
         TextList,
         Grid,
+        Clip,
     }
 
     #[auto_cxx_name]
@@ -193,6 +194,7 @@ fn paint_number(kind: &str) -> i32 {
         "carousel" => PaintKind::Carousel,
         "textlist" => PaintKind::TextList,
         "grid" => PaintKind::Grid,
+        "clip" => PaintKind::Clip,
         _ => PaintKind::None,
     }
     .repr

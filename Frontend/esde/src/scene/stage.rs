@@ -8,6 +8,7 @@ use super::draw::{Drawn, Measures};
 use super::frame::{Frame, Paint, Row, Rows};
 use super::motion::{Glide, Time};
 use super::view::{ElementState, SceneView};
+use super::viewer::Viewer;
 
 /// One view on the screen at a time: its elements and its vertical shift in pixels.
 pub struct Layer {
@@ -22,6 +23,8 @@ pub struct Stage {
     slide: Glide,
     direction: f64,
     measures: Measures,
+    /// ES-DE's media viewer over the gamelist, while it is open.
+    pub viewer: Option<Viewer>,
 }
 
 // The elements that stay on the screen while the views pan.
@@ -31,7 +34,14 @@ fn overlay(kind: &str) -> bool {
 
 impl Stage {
     pub fn new(data: Data, view: &str, now: Time) -> Self {
-        Stage { current: SceneView::new(data, view, now), leaving: None, slide: Glide::at(0.0), direction: 0.0, measures: Measures::new() }
+        Stage {
+            current: SceneView::new(data, view, now),
+            leaving: None,
+            slide: Glide::at(0.0),
+            direction: 0.0,
+            measures: Measures::new(),
+            viewer: None,
+        }
     }
 
     /// A new view over new data that keeps the painter's measurements, as a reload, a resize or another system asks (EmuSen_Qt.md §4.8.5).
@@ -44,8 +54,15 @@ impl Stage {
         self.leaving.is_some() || self.current.is_moving()
     }
 
+    /// Opens the media viewer on the gamelist's game, as ES-DE's X does; nothing on a folder or a game with no media.
+    pub fn open_viewer(&mut self) -> bool {
+        self.viewer = (self.current.view == "gamelist").then(|| self.current.data.game().and_then(Viewer::of)).flatten();
+        self.viewer.is_some()
+    }
+
     /// Opens the other view with the current selection: the gamelist from the system view, or back.
     pub fn switch(&mut self, now: Time) {
+        self.viewer = None;
         let to_gamelist = self.current.view == "system";
         let profile = &self.current.data.system().theme.transitions;
         let animation = if to_gamelist { profile.system_to_gamelist } else { profile.gamelist_to_system };
@@ -118,6 +135,9 @@ impl Stage {
             }
             d
         }));
+        if let Some(viewer) = &self.viewer {
+            all.extend(viewer.placed(&self.current.data, measures).into_iter().map(|placed| Drawn { content: placed.id, placed, wait: None }));
+        }
         (all, frame)
     }
 

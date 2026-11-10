@@ -62,7 +62,7 @@ impl SceneView {
         let mut primary_out = None;
         for s in self.frame().into_iter().filter(|s| s.skipped.is_none()) {
             let e = &elements[s.index];
-            let ctx = Ctx { game: s.game.and_then(|i| ctx.system.games.get(i)), ..ctx };
+            let ctx = Ctx { game: s.game.and_then(|i| ctx.system.any_game(i)), ..ctx };
             let id = id_of(&self.view, e);
             let mut placed = Placed {
                 id,

@@ -9,6 +9,9 @@ Item {
     property url source
     property bool muted: true
     property real volume: 1
+    // VideoTile's fill and delay (EmuSen_Kit.md §7.61).
+    property int fillMode: Image.PreserveAspectCrop
+    property int delay: Kit.Tokens.poster
     readonly property bool software: GraphicsInfo.api === GraphicsInfo.Software
     readonly property bool showing: player.playbackState === MediaPlayer.PlayingState && (root.software ? frames.frames > 0 : player.position > 0)
     readonly property int frames: frames.frames
@@ -22,12 +25,13 @@ Item {
         id: output
         anchors.fill: parent
         visible: !root.software
-        fillMode: VideoOutput.PreserveAspectCrop
+        fillMode: root.fillMode === Image.PreserveAspectFit ? VideoOutput.PreserveAspectFit : VideoOutput.PreserveAspectCrop
     }
     Kit.VideoFrames {
         id: frames
         objectName: "videoFrames"
         anchors.fill: parent
+        fitted: root.fillMode === Image.PreserveAspectFit
         visible: root.software
     }
     MediaPlayer {
@@ -42,7 +46,7 @@ Item {
     }
     // The poster's delay, then the clip (EmuSen_Interface.md §5.9).
     Timer {
-        interval: Kit.Tokens.poster
+        interval: Math.max(1, root.delay)
         running: true
         onTriggered: {
             player.source = root.source

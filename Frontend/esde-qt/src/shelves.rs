@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use emusen_esde::loader::{Choices, MediaPresence, SystemKind, ThemeSystem};
-use emusen_esde::scene::{Counts, DateTime, DeviceStatus, Game};
+use emusen_esde::scene::{Counts, DateTime, DeviceStatus, Game, HelpPlace, ViewerSettings};
 use serde_json::Value;
 
 /// One shelf of the shelves' text, without its theme: the system it is, its games and its list's facts.
@@ -33,6 +33,8 @@ pub struct Settings {
     pub random: String,
     /// X starts the screensaver from the system view (ES-DE's Enable screensaver controls).
     pub screensaver_controls: bool,
+    /// The media viewer's settings (ES-DE's Media viewer settings).
+    pub viewer: ViewerSettings,
 }
 
 impl Default for Settings {
@@ -47,6 +49,7 @@ impl Default for Settings {
             startup_view: "system".into(),
             random: "games".into(),
             screensaver_controls: true,
+            viewer: ViewerSettings::default(),
         }
     }
 }
@@ -90,6 +93,14 @@ pub fn settings(text_in: &str) -> Settings {
         startup_view: text(&i, "StartupView").unwrap_or(d.startup_view),
         random: v.get("collections").and_then(|c| text(c, "RandomEntryButton")).unwrap_or(d.random),
         screensaver_controls: on("ScreensaverControls", d.screensaver_controls),
+        viewer: ViewerSettings {
+            help: text(&i, "MediaViewerHelpPrompts").map_or(d.viewer.help, |w| HelpPlace::of(&w)),
+            show_types: on("MediaViewerShowTypes", d.viewer.show_types),
+            keep_video_running: on("MediaViewerKeepVideoRunning", d.viewer.keep_video_running),
+            stretch_videos: on("MediaViewerStretchVideos", d.viewer.stretch_videos),
+            blur: on("MediaViewerVideoBlur", d.viewer.blur),
+            audio: on("MediaViewerVideoAudio", d.viewer.audio),
+        },
     }
 }
 

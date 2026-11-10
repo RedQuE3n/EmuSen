@@ -54,6 +54,11 @@ impl Stage {
         self.leaving.is_some() || self.current.is_moving()
     }
 
+    /// The page count of the open viewer's manual, as the painter read it; whether it changed.
+    pub fn manual_pages(&mut self, pages: usize) -> bool {
+        self.viewer.as_mut().is_some_and(|v| v.set_pages(pages))
+    }
+
     /// Opens the media viewer on the gamelist's game, as ES-DE's X does; nothing on a folder or a game with no media.
     pub fn open_viewer(&mut self) -> bool {
         self.viewer = (self.current.view == "gamelist").then(|| self.current.data.game().and_then(Viewer::of)).flatten();

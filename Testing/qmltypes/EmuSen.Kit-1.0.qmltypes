@@ -4978,9 +4978,19 @@ Module {
             index: 2
             lineNumber: 17
         }
-        Signal { name: "framesChanged"; lineNumber: 29 }
-        Signal { name: "fittedChanged"; lineNumber: 30 }
-        Method { name: "clear"; lineNumber: 26 }
+        Property {
+            name: "stretched"
+            type: "bool"
+            read: "stretched"
+            write: "setStretched"
+            notify: "stretchedChanged"
+            index: 3
+            lineNumber: 19
+        }
+        Signal { name: "framesChanged"; lineNumber: 33 }
+        Signal { name: "fittedChanged"; lineNumber: 34 }
+        Signal { name: "stretchedChanged"; lineNumber: 35 }
+        Method { name: "clear"; lineNumber: 30 }
     }
     Component {
         file: "current.cxxqt.h"

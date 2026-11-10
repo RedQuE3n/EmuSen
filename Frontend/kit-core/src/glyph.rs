@@ -327,6 +327,8 @@ enum Pair {
     Axis(PadControl, PadControl),
     /// The two shoulders, or the two triggers.
     Sides { trigger: bool },
+    /// The whole d-pad, named by Up with Left: its four directions as one.
+    Pad,
 }
 
 fn pair_of(a: PadControl, b: PadControl) -> Option<Pair> {
@@ -336,11 +338,13 @@ fn pair_of(a: PadControl, b: PadControl) -> Option<Pair> {
         (Up, Down) | (Down, Up) => Some(Pair::Axis(Up, Down)),
         (LeftShoulder, RightShoulder) | (RightShoulder, LeftShoulder) => Some(Pair::Sides { trigger: false }),
         (LeftTrigger, RightTrigger) | (RightTrigger, LeftTrigger) => Some(Pair::Sides { trigger: true }),
+        (Up, Left) | (Left, Up) => Some(Pair::Pad),
         _ => None,
     }
 }
 
-/// One glyph for two controls pressed for one action: a d-pad axis is the plus with both of its directions marked, and
+/// One glyph for two controls pressed for one action: a d-pad axis is the plus with both of its directions marked, Up
+/// with Left the whole d-pad with all four marked, and
 /// the two shoulders or the two triggers are their two bodies side by side, unlettered, the same in every family. None
 /// for any other two, which a bar draws as two glyphs (EmuSen_Kit.md §7.54).
 pub fn paired(a: PadControl, b: PadControl, style: GlyphStyle) -> Option<Glyph> {
@@ -353,6 +357,12 @@ pub fn paired(a: PadControl, b: PadControl, style: GlyphStyle) -> Option<Glyph> 
                 letter: None,
             },
             Pair::Sides { trigger } => Glyph { marks: sides(trigger).into_iter().map(|s| stroked(s, THIN)).collect(), letter: None },
+            Pair::Pad => Glyph {
+                marks: std::iter::once(stroked(plus(DPAD_ARM / 2.0, DPAD_REACH), THIN))
+                    .chain([PadControl::Up, PadControl::Down, PadControl::Left, PadControl::Right].map(|c| solid(dpad_arm(c))))
+                    .collect(),
+                letter: None,
+            },
         },
     })
 }

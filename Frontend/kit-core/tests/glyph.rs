@@ -166,12 +166,12 @@ fn kit_7_28_an_unknown_pad_is_lettered_as_an_xbox_pad_in_the_filled_set_only() {
     }
 }
 
-// EmuSen_Kit.md §7.54: a d-pad axis, the shoulders or the triggers as one glyph, in either order and both sets; no other two.
+// EmuSen_Kit.md §7.54, §7.70: a d-pad axis, the whole d-pad (Up with Left), the shoulders or the triggers as one glyph, in either order and both sets; no other two.
 #[test]
 fn kit_7_54_a_pair_pressed_for_one_action_is_one_glyph() {
     use PadControl::{Down, Left, LeftShoulder, LeftTrigger, Right, RightShoulder, RightTrigger, South, Up};
     for style in GlyphStyle::ALL {
-        for (a, b) in [(Left, Right), (Up, Down), (LeftShoulder, RightShoulder), (LeftTrigger, RightTrigger)] {
+        for (a, b) in [(Left, Right), (Up, Down), (Up, Left), (LeftShoulder, RightShoulder), (LeftTrigger, RightTrigger)] {
             let g = glyph::paired(a, b, style).unwrap_or_else(|| panic!("{style:?} {a:?}+{b:?} has a pair glyph"));
             assert_eq!(glyph::paired(b, a, style), Some(g.clone()), "{style:?} {a:?}+{b:?}: the order does not matter");
             assert!(g.letter.is_none(), "{style:?} {a:?}+{b:?}: unlettered");
@@ -184,7 +184,7 @@ fn kit_7_54_a_pair_pressed_for_one_action_is_one_glyph() {
             }
             assert_ne!(g, glyph::styled(PadFamily::Xbox, a, style), "{style:?} {a:?}+{b:?}: not the single control's glyph");
         }
-        for (a, b) in [(Left, Up), (South, Left), (Left, Left), (LeftShoulder, RightTrigger)] {
+        for (a, b) in [(Right, Up), (South, Left), (Left, Left), (LeftShoulder, RightTrigger)] {
             assert!(glyph::paired(a, b, style).is_none(), "{style:?} {a:?}+{b:?} is no pair");
         }
     }
@@ -194,4 +194,8 @@ fn kit_7_54_a_pair_pressed_for_one_action_is_one_glyph() {
     let right = glyph::styled(PadFamily::Xbox, Right, GlyphStyle::Filled);
     assert_eq!(axis.marks[0].points, left.marks[0].points);
     assert_eq!(axis.marks[0].holes, [left.marks[0].holes[0].clone(), right.marks[0].holes[0].clone()]);
+    // The whole d-pad is the same plus with all four tips' arrows cut.
+    let pad = glyph::paired(Up, Left, GlyphStyle::Filled).unwrap();
+    assert_eq!(pad.marks[0].points, left.marks[0].points);
+    assert_eq!(pad.marks[0].holes.len(), 4);
 }

@@ -11,7 +11,7 @@ Item {
     property bool playing: false
     property bool muted: true
     property real volume: 1
-    // How the clip and the still meet the tile: cropped to fill it (the default) or fitted inside it; and how long after
+    // How the clip and the still meet the tile: cropped to fill it (the default), fitted inside it or stretched to it; and how long after
     // `playing` the clip starts, the poster's delay by default (EmuSen_Kit.md §7.61).
     property int fillMode: Image.PreserveAspectCrop
     property int delay: Kit.Tokens.poster

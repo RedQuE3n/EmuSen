@@ -118,6 +118,7 @@ fn arrow(control: PadControl) -> Vec<Point> {
 pub(super) fn paired(pair: Pair) -> Glyph {
     match pair {
         Pair::Axis(a, b) => body(plus(DPAD_HALF, DPAD_REACH), vec![arrow(a), arrow(b)]),
+        Pair::Pad => body(plus(DPAD_HALF, DPAD_REACH), [PadControl::Up, PadControl::Down, PadControl::Left, PadControl::Right].map(arrow).to_vec()),
         Pair::Sides { trigger } => {
             Glyph { marks: sides(trigger).into_iter().map(|points| Mark { points, filled: true, stroke: 0.0, cut: false, holes: Vec::new() }).collect(), letter: None }
         }

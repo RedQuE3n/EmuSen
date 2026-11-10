@@ -198,8 +198,8 @@ fn json_text(text: &str) -> String {
     format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-// library.py's type folders: the five every game has, and the four only the media viewer's game has (its NES's first).
-const ORACLE_TYPES: [(&str, &str); 9] = [
+// library.py's type folders: the five every game has, the four only the media viewer's game has (its NES's first), and the manual of its NES's third.
+const ORACLE_TYPES: [(&str, &str); 10] = [
     ("covers", "cover"),
     ("screenshots", "screenshot"),
     ("titlescreens", "titlescreen"),
@@ -209,6 +209,7 @@ const ORACLE_TYPES: [(&str, &str); 9] = [
     ("backcovers", "backcover"),
     ("fanart", "fanart"),
     ("custom", "custom"),
+    ("manuals", "manual"),
 ];
 
 /// The oracle library as `esdeShelves`, `esdeMedia` and `esdePresence` in ES-DE's order (`order`, the systems as ES-DE
@@ -409,7 +410,13 @@ pub fn choices_of(variant: &str, scheme: &Option<String>, font: &str) -> (String
 
 /// The painter's settings for a watched theme's view: the theme, its choices, the clock shown and the view to start in.
 pub fn install_settings(folder: &Path, choices: &str, view: &str) -> String {
-    settings(folder, &format!("\"DisplayClock\":true,\"StartupView\":\"{view}\"")).replacen('{', &format!("{{\"choices\":{{{choices}}},"), 1)
+    interface_settings(folder, choices, view, "")
+}
+
+/// The same with more of the interface's settings, `"Key":value` members, as the media viewer's are given.
+pub fn interface_settings(folder: &Path, choices: &str, view: &str, more: &str) -> String {
+    let more = if more.is_empty() { String::new() } else { format!(",{more}") };
+    settings(folder, &format!("\"DisplayClock\":true,\"StartupView\":\"{view}\"{more}")).replacen('{', &format!("{{\"choices\":{{{choices}}},"), 1)
 }
 
 /// A watched theme's view installed afresh at `w` × `h` on the oracle's texts, the clock shown; waits until it is themed.
@@ -418,7 +425,13 @@ pub fn install_settings(folder: &Path, choices: &str, view: &str) -> String {
 pub const HELD_NOW: &str = "1793966400";
 
 pub fn install(scene: &mut Scene<'_>, folder: &Path, choices: &str, view: &str, texts: &(String, String, String), w: i32, h: i32) {
-    let text = install_settings(folder, choices, view);
+    install_with(scene, folder, choices, view, texts, w, h, "");
+}
+
+/// `install` with more of the interface's settings (`interface_settings`).
+#[allow(clippy::too_many_arguments)]
+pub fn install_with(scene: &mut Scene<'_>, folder: &Path, choices: &str, view: &str, texts: &(String, String, String), w: i32, h: i32, more: &str) {
+    let text = interface_settings(folder, choices, view, more);
     assert!(scene.set_property("view", "shelves", "[]"));
     until(scene, "the view emptied", |s| s.property("esdeModel", "themed") == "false");
     scene.resize(w, h);

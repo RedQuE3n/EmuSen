@@ -5,6 +5,7 @@ typeinfo plugin.qmltypes
 depends QtQuick
 depends QtQuick.Shapes
 depends QtQml.Models
+depends QtQuick.Pdf
 depends EmuSen.Kit
 prefer :/qt/qml/EmuSen/Esde/
 Picture 1.0 qml/Picture.qml
@@ -26,3 +27,4 @@ View 1.0 qml/View.qml
 GlyphLine 1.0 qml/GlyphLine.qml
 GlyphText 1.0 qml/GlyphText.qml
 ClipElement 1.0 qml/ClipElement.qml
+ManualElement 1.0 qml/ManualElement.qml

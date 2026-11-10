@@ -25,13 +25,14 @@ Item {
         id: output
         anchors.fill: parent
         visible: !root.software
-        fillMode: root.fillMode === Image.PreserveAspectFit ? VideoOutput.PreserveAspectFit : VideoOutput.PreserveAspectCrop
+        fillMode: root.fillMode === Image.Stretch ? VideoOutput.Stretch : root.fillMode === Image.PreserveAspectFit ? VideoOutput.PreserveAspectFit : VideoOutput.PreserveAspectCrop
     }
     Kit.VideoFrames {
         id: frames
         objectName: "videoFrames"
         anchors.fill: parent
         fitted: root.fillMode === Image.PreserveAspectFit
+        stretched: root.fillMode === Image.Stretch
         visible: root.software
     }
     MediaPlayer {

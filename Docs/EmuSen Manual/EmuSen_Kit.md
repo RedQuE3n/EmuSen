@@ -2904,3 +2904,18 @@ delay by default; 0 starts at once), which `VideoClip` takes on; `VideoFrames`, 
 
 **Held to**: the ES-DE oracle's media viewer states (the video's ink within two units of ES-DE's at both sizes), and the
 kit's own tests of the tile (unchanged defaults).
+
+### 7.70 The whole d-pad as one glyph, and a video tile stretched (stage 4, X3; 2026-11-09)
+
+ES-DE's media viewer names its pan, when a manual is zoomed, by the whole d-pad (EmuSen_Qt.md §4.13), and may stretch
+its video to the screen (§4.14). Two additions, the defaults unchanged:
+
+- `glyph::paired` takes Up with Left (either order) as the whole d-pad: the plus with all four directions marked, an
+  arrow cut into each tip when filled and each arm filled when outlined. Up with Left was no pair before, so no bar's
+  glyph changes; the other two directions with each other stay none (Right with Up is still refused).
+- `VideoTile`'s `fillMode` takes `Image.Stretch`: `VideoClip` gives the GPU tier's `VideoOutput.Stretch`, and
+  `VideoFrames`, the software backend's sink, gains `stretched`, the frame drawn to the whole item.
+
+**Held to**: kit-core's `kit_7_54_a_pair_pressed_for_one_action_is_one_glyph` (the whole d-pad among the pairs, its
+plus the single direction's with four arrows cut); the ES-DE oracle's `stretch` states, the video's ink within two units
+of ES-DE's.

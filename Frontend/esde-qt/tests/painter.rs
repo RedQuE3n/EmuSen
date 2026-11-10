@@ -257,4 +257,13 @@ fn a_help_entry_s_place_is_the_kit_button_that_draws_there_under_the_swap() {
     }
     let (up, down) = help_buttons(PadButton::DpadUpDown, true, false);
     assert_eq!((Button::ALL[up as usize], Button::ALL[down as usize]), (Button::Up, Button::Down));
+    // The media viewer's pairs (EmuSen_Qt.md §4.13): the shoulders, the triggers, and the whole d-pad as Up with Left.
+    for (place, first, second) in [
+        (PadButton::LeftShoulder, PadControl::LeftShoulder, PadControl::RightShoulder),
+        (PadButton::LeftTrigger, PadControl::LeftTrigger, PadControl::RightTrigger),
+        (PadButton::Dpad, PadControl::Up, PadControl::Left),
+    ] {
+        let (a, b) = help_buttons(place, true, false);
+        assert_eq!((Button::ALL[a as usize].control(false), Button::ALL[b as usize].control(false)), (first, second), "{place:?}");
+    }
 }

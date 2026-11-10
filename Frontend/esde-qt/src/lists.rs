@@ -52,6 +52,7 @@ pub mod qobject {
         TextList,
         Grid,
         Clip,
+        Page,
     }
 
     #[auto_cxx_name]
@@ -195,6 +196,7 @@ fn paint_number(kind: &str) -> i32 {
         "textlist" => PaintKind::TextList,
         "grid" => PaintKind::Grid,
         "clip" => PaintKind::Clip,
+        "page" => PaintKind::Page,
         _ => PaintKind::None,
     }
     .repr

@@ -113,6 +113,7 @@ pub fn paint_kind(p: &Placed, primary: Option<&Primary>) -> &'static str {
         Paint::Info(_) => "info",
         Paint::Status(_) => "status",
         Paint::Clip(_) => "clip",
+        Paint::Page(_) => "page",
         Paint::Primary { .. } => match primary.map(|p| &p.layout) {
             Some(Layout::Carousel(_)) => "carousel",
             Some(Layout::TextList(_)) => "textlist",
@@ -152,8 +153,16 @@ pub fn element(p: &Placed, primary: Option<&Primary>, role: &str) -> V {
             _ => None,
         },
         Paint::Badges(_) => None,
-        Paint::Clip(source) => match role {
-            "source" => Some(url(&Some(source.clone()))),
+        Paint::Clip(c) => match role {
+            "source" => Some(url(&Some(c.source.clone()))),
+            "stretch" => Some(V::B(c.stretch)),
+            "audio" => Some(V::B(c.audio)),
+            "blur" => Some(V::N(c.blur)),
+            _ => None,
+        },
+        Paint::Page(p) => match role {
+            "source" => Some(url(&Some(p.source.clone()))),
+            "pageIndex" => Some(V::N(p.page as f64)),
             _ => None,
         },
         Paint::Help(x) => match role {
@@ -462,7 +471,7 @@ pub fn part(p: &Paint, i: usize, role: &str, swap: bool) -> V {
 }
 
 /// Every role name the element model answers, in role order.
-pub const ELEMENT_ROLES: [&str; 108] = [
+pub const ELEMENT_ROLES: [&str; 112] = [
     "elementId", "paint", "name", "boxX", "boxY", "boxWidth", "boxHeight", "turn", "originX", "originY", "alpha",
     "source", "fit", "cropX", "cropY", "tileWidth", "tileHeight", "tileRight", "tileBottom", "tint", "tintEnd", "gradientVertical",
     "saturation", "radius", "nearest", "frame",
@@ -477,9 +486,10 @@ pub const ELEMENT_ROLES: [&str; 108] = [
     "primaryColor", "secondaryColor", "selectedColor", "selectedSecondaryColor", "margin", "markerWidth",
     "columns", "itemWidth", "itemHeight", "pitchX", "pitchY", "marginX", "marginY", "itemScale", "focusFrom", "fromLevel", "toLevel",
     "progress", "unfocusedOpacity", "unfocusedSaturation", "unfocusedDim", "imageScale", "hasSelectedTint", "selectedTint", "ownFace",
+    "pageIndex", "stretch", "audio", "blur",
 ];
 
-/// The grid's roles past the element list's first 108.
+/// The grid's roles past the element list's first 112.
 pub const GRID_ROLES: [&str; 9] = [
     "backgroundSource", "backgroundScale", "selectorSource", "selectorScale", "selectorRadius", "selectorOnTop", "selectorInMiddle",
     "selectedItemBackground", "textRadius",

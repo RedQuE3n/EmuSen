@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use emusen_esde::fonts;
 use emusen_esde::loader::{self, Choices, MediaPresence, Theme, ThemeSystem};
-use emusen_esde::scene::{Data, DateTime, DeviceStatus, Frame, HelpContext, Layout, PadButton, Row, Rows, Stage, System, Time};
+use emusen_esde::scene::{Data, DateTime, DeviceStatus, Frame, HelpContext, Key, Layout, PadButton, Row, Rows, Stage, System, Time};
 
 use emusen_kit_core::input::{PadControl, UiButton};
 
@@ -110,6 +110,7 @@ impl Painter {
         data.show_clock = self.settings.show_clock;
         data.show_help = self.settings.show_help;
         data.scroll_overlay = self.settings.scroll_overlay;
+        data.viewer = self.settings.viewer;
         data.swap = self.swap;
         data.status = self.device;
         data.help = HelpContext {
@@ -216,13 +217,21 @@ impl Painter {
         let gamelist = self.view() == "gamelist";
         let quick = self.settings.quick_select.clone();
         if let Some(viewer) = self.stage.as_mut()?.viewer.as_mut() {
-            // USERGUIDE.md, "Game media viewer": left and right browse, the triggers jump, up, down and the shoulders are
-            // the manual's, and any other button closes it.
-            let moved = match button {
-                UiButton::Left | UiButton::Right => viewer.browse(if button == UiButton::Left { -1 } else { 1 }),
-                UiButton::First | UiButton::Last => viewer.jump(button == UiButton::Last),
-                UiButton::Up | UiButton::Down | UiButton::PageUp | UiButton::PageDown => false,
-                _ => {
+            // The viewer's keys (scene::viewer::Key); any other button closes it.
+            let key = match button {
+                UiButton::Left => Some(Key::Left),
+                UiButton::Right => Some(Key::Right),
+                UiButton::Up => Some(Key::Up),
+                UiButton::Down => Some(Key::Down),
+                UiButton::First => Some(Key::First),
+                UiButton::Last => Some(Key::Last),
+                UiButton::PageUp => Some(Key::ZoomOut),
+                UiButton::PageDown => Some(Key::ZoomIn),
+                _ => None,
+            };
+            let moved = match key.and_then(|k| viewer.press(k)) {
+                Some(moved) => moved,
+                None => {
                     self.stage.as_mut()?.viewer = None;
                     false
                 }
@@ -340,6 +349,14 @@ impl Painter {
         changed
     }
 
+    pub fn manual_pages(&mut self, pages: usize) -> bool {
+        let changed = self.stage.as_mut().is_some_and(|s| s.manual_pages(pages));
+        if changed {
+            self.refresh();
+        }
+        changed
+    }
+
     pub fn rows(&self, rows: Rows) -> Vec<Row> {
         self.stage.as_ref().and_then(|s| s.rows(rows)).unwrap_or_default()
     }
@@ -362,11 +379,15 @@ pub fn help_buttons(place: PadButton, pair: bool, swap: bool) -> (i32, i32) {
         PadButton::Select => PadControl::Select,
         PadButton::Start => PadControl::Start,
         PadButton::StickClick => PadControl::LeftStick,
+        PadButton::Dpad => PadControl::Up,
     };
     let number = |c: PadControl| c.press().map_or(-1, |b| b.swapped(swap).index() as i32);
     let second = match (place, pair) {
         (PadButton::DpadUpDown, true) => number(PadControl::Down),
         (PadButton::DpadLeftRight, true) => number(PadControl::Right),
+        (PadButton::LeftShoulder, true) => number(PadControl::RightShoulder),
+        (PadButton::LeftTrigger, true) => number(PadControl::RightTrigger),
+        (PadButton::Dpad, true) => number(PadControl::Left),
         _ => -1,
     };
     (number(control), second)

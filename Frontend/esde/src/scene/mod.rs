@@ -22,4 +22,4 @@ pub use frame::*;
 pub use motion::{ms, Easing, Glide, Motion, RepeatRule, TextScroll, Time};
 pub use stage::{Layer, Stage};
 pub use view::{ElementState, GridFocus, Rect, SceneView, Step};
-pub use viewer::Viewer;
+pub use viewer::{HelpPlace, Key, ManualView, Viewer, ViewerSettings};

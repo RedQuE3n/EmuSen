@@ -71,6 +71,10 @@ pub mod qobject {
         /// The painter's measurement of an element, by the `id` role's text.
         #[qinvokable]
         fn measured(self: Pin<&mut EsdeModel>, id: &QString, w: f64, h: f64);
+        /// The page count of the media viewer's manual, as the painter's PDF document read it.
+        #[qinvokable]
+        #[cxx_name = "manualPages"]
+        fn manual_pages(self: Pin<&mut EsdeModel>, pages: i32);
         /// Reads the theme folder again, as an update on disk asks.
         #[qinvokable]
         fn reload(self: Pin<&mut EsdeModel>);
@@ -275,6 +279,13 @@ impl qobject::EsdeModel {
         let changed = self.shared.try_borrow_mut().is_ok_and(|mut p| p.measured(id, w, h));
         if changed {
             // Published from the event loop: a measurement arrives while a list is signalling its rows.
+            let _ = self.qt_thread().queue(|m| m.publish());
+        }
+    }
+
+    pub fn manual_pages(self: Pin<&mut Self>, pages: i32) {
+        let changed = self.shared.try_borrow_mut().is_ok_and(|mut p| p.manual_pages(pages.max(0) as usize));
+        if changed {
             let _ = self.qt_thread().queue(|m| m.publish());
         }
     }

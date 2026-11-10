@@ -3127,11 +3127,8 @@ columns `mae_viewer_1280` and `mae_viewer_1920` (the mean of the nine), and X on
   (no correlation with the row phase at either size) and is not one fraction of the height (4.5 and 5.3 px). Drawing a
   sine of a fitted period would be a fitted constant per size. The viewer's video, title screen and screenshot show
   without them: their error is 5.6–6.8 against 0.1–1.0 for the other items.
-- *PDF manuals* (up for the manual, the shoulders to zoom): the oracle library has no manual and no capture shows the
-  mode, and Qt PDF is not among the stack's modules. Building it needs a capture and the module's approval.
-- *The viewer's settings* (help at the top, at the bottom or off; the media types in the help; keep videos running;
-  stretch videos; scanlines; blur): the defaults are drawn. Offering them needs rows in the settings, another screen's
-  piece.
+- *PDF manuals* and *the viewer's settings*: built since (§4.13, §4.14). The scanlines are not wanted (the tester,
+  2026-11-09) and are not offered.
 
 ### 4.11 A system's games inside folders **[M 2026-11-09]**
 
@@ -3258,6 +3255,68 @@ part as above, gives 17.35–17.48 px for the states at 20 px and 0.849–0.887,
 for the tester: the rule is not derived, and the two boxes stay off by 2.2 and 3.9 units. The painter keeps Artflix's
 rule. What the next captures would separate is the label's width alone: one label (`entries` a) at `entryRelativeScale`
 1 and `fontSize` from 0.024 to 0.026 in steps of 0.0002 at 800 rows, so that only the text's size moves.
+
+### 4.13 The media viewer's PDF manual **[M 2026-11-09]**
+
+**Approved 2026-11-09 by the tester:** a game's PDF manual in the media viewer, through Qt PDF. The evidence is the user
+guide ("Game media viewer") and 16 captures of ES-DE 3.4.1 taken on 2026-11-09
+(`Testing/esde-oracle/manualstates.sh`), CarAlt at both sizes, on the NES's Cobalt Harbor, to which `library.py` gives a
+manual of three labelled pages of 600 × 800 points.
+
+**What the captures show.**
+
+- *The media's help with a manual*: BROWSE, PDF MANUAL (the d-pad's up and down), FIRST, LAST.
+- *Up opens the manual* at its first page, fitted inside the screen below the strip and centred (576 × 768 at x 352,
+  1280 × 800; 863 × 1150 at 1920 × 1200). The help is BROWSE, GAME MEDIA, FIRST, LAST, ZOOM (the two shoulders), and the
+  strip's left holds PAGE 1 OF 3 in the help's face and colour, its pen at a hundredth of the screen's width (ink at 15
+  and 22 px). Right turns the page and stays on the last (manual:3 is manual:2).
+- *A zoom step* (the right shoulder) adds half the screen's height to the page's height, about the area's centre: the
+  page is 876 and 1176 px wide after one and two steps at 1280 × 800 (1313 and 1763 at 1920 × 1200), the fitted width
+  plus 300 (450) a step. The help is then PAN (the whole d-pad), RESET (the triggers), ZOOM.
+- *A pan step* moves the page an eighth of the screen's width: two rights at zoom 2 move its right edge from 1227 to 907
+  (1841 to 1361), past the page's own edge, which is not held.
+
+With a single page size and the 16:10 screens, a zoom step of half the height and one of 0.234 of the width agree, as
+do a pan step of an eighth of the width and a fifth of the height; the height and the width are the ones held. The
+vertical pan step, the most zoom steps and the left shoulder's zoom out are not captured; the left shoulder steps back
+as the right steps on, and the vertical pan takes the horizontal's step.
+
+**The form.** The rules are the viewer's, in `scene::viewer`: `Viewer::press` takes the viewer's keys (`Key`, the
+painter's buttons mapped to left, right, up, down, first, last, zoom out and in) and returns whether the view changed,
+or none for a button that closes it; `ManualView` is the page, the zoom steps and the pan; the page's box is placed from
+the page's size in points, which the painter measures, and the page count, which it reports (`Stage::manual_pages`).
+One new paint, `Paint::Page`, a file's page drawn by `ManualElement.qml` through Qt PDF's `PdfDocument` and
+`PdfPageImage` (the QML module `QtQuick.Pdf`, no C++ headers). The PAN glyph is the kit's whole d-pad (EmuSen_Kit.md
+§7.70); the pairs of shoulders and triggers are the kit's pair glyphs.
+
+**Held to**: `frame.rs`'s `the_media_viewer_shows_a_game_s_pdf_manual_paged_zoomed_and_panned`, on records; the oracle,
+which walks the 16 states in CarAlt and holds the help's and the page's ink to the capture's within two units, the
+whole picture's error in `oracle.tsv`.
+
+### 4.14 The media viewer's settings **[M 2026-11-09]**
+
+**Approved 2026-11-09 by the tester:** the viewer's settings as the user guide lists them ("Media viewer settings"),
+in our Settings, without the scanlines. They are keys of `BigPictureInterface` with ES-DE's defaults (ES-DE writes them in
+`es_settings.xml`): `MediaViewerHelpPrompts` (top), `MediaViewerShowTypes` (off), `MediaViewerKeepVideoRunning` (on),
+`MediaViewerStretchVideos` (off), `MediaViewerVideoBlur` (off) and `MediaViewerVideoAudio` (on, the user guide's "Play
+audio for media viewer videos"). Their rows are data (EmuSen_Galaxia.md §3.15.1), on the page Media viewer that the
+Library section opens after Hidden games. The evidence is 14 captures of 2026-11-09 (`viewerstates.sh`), CarAlt at both sizes,
+the scanlines off in each so that only the setting differs.
+
+- *Help prompts at the bottom*: the strip at the screen's foot, the item fitted in the screen above it. *Disabled*: no
+  strip, the item fitted in the whole screen.
+- *Display media types*: the shown type's words at the strip's left where the manual's page words stand (VIDEO,
+  SCREENSHOT, …, the user guide's list in capitals).
+- *Stretch videos*: the video fills the screen below the strip.
+- *Blur*: a horizontal Gaussian over the video. Fitted to the plain capture convolved and the blurred one (a box, a
+  triangle or a Gaussian, each centred or shifted, with a gain): a Gaussian of 2.5 px at 1280 × 800 and 3.7 px at
+  1920 × 1200, gain 1.000, mean squared error 0.19 and 0.12 of a level; a 512th of the screen's width at both.
+- *Keep videos running* and *audio* do not show in a still capture: the video plays on, unseen, while a picture is
+  shown (its record stays, at no opacity), or with the setting off it stops and starts again on return; audio off mutes
+  it.
+
+**Held to**: `frame.rs`'s `the_media_viewer_follows_the_player_s_viewer_settings`; `settings_rows`' one-row test, which
+names the six keys; the oracle's seven settings states in CarAlt at both sizes.
 
 ---
 

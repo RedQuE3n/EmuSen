@@ -46,12 +46,31 @@ pub enum Paint {
     Help(Help),
     Info(Info),
     Status(Status),
-    /// A video file played, fitted to the box (the media viewer's, EmuSen_Qt.md §4.10).
-    Clip(String),
+    /// A video file played in the box (the media viewer's, EmuSen_Qt.md §4.10).
+    Clip(Clip),
+    /// A page of a PDF file drawn to the box (the media viewer's manual, EmuSen_Qt.md §4.13).
+    Page(Page),
     /// The view's primary element, drawn from `Frame::primary` (or `leaving_primary` when true).
     Primary {
         leaving: bool,
     },
+}
+
+/// The media viewer's video under the player's settings: stretched to the box or fitted inside it, with its sound or
+/// without, and its horizontal blur's Gaussian sigma in pixels, 0 for none (USERGUIDE.md, "Media viewer settings").
+#[derive(Clone, Debug, PartialEq)]
+pub struct Clip {
+    pub source: String,
+    pub stretch: bool,
+    pub audio: bool,
+    pub blur: f64,
+}
+
+/// A PDF file's page, counted from 0.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Page {
+    pub source: String,
+    pub page: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -211,6 +230,8 @@ pub enum PadButton {
     Select,
     Start,
     StickClick,
+    /// The whole d-pad, its four directions as one (the viewer's pan).
+    Dpad,
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -106,6 +106,10 @@ Item {
                 roleValue: ElementModel.Clip
                 ClipElement { esde: esde }
             }
+            DelegateChoice {
+                roleValue: ElementModel.Page
+                ManualElement { esde: esde }
+            }
         }
     }
     Item {

@@ -418,6 +418,84 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
         }
         watched.entry(theme.clone()).or_default().insert("viewer_off".to_owned(), off_count.to_string());
     }
+    // The viewer's manual on the NES's third game (entry 1) and its settings on the first, in CarAlt (EmuSen_Qt.md §4.13, §4.14).
+    {
+        use emusen_kit_core::input::UiButton::{Down, PageDown, Right, Screensaver, Up};
+        let (theme, variant, scheme, font) = common::watched().into_iter().find(|w| w.0 == "caralt-es-de").expect("CarAlt is watched");
+        let folder = common::corpus().join(&theme);
+        let (choices, _) = common::choices_of(&variant, &scheme, &font);
+        let manual: [(&str, &[emusen_kit_core::input::UiButton]); 8] = [
+            ("media-0", &[]),
+            ("manual-0", &[Up]),
+            ("manual-1", &[Up, Right]),
+            ("manual-2", &[Up, Right, Right]),
+            ("manual-3", &[Up, Right, Right, Right]),
+            ("manual-0-zoom-1", &[Up, PageDown]),
+            ("manual-0-zoom-2", &[Up, PageDown, PageDown]),
+            ("manual-0-zoom-2-pan-2", &[Up, PageDown, PageDown, Right, Right]),
+        ];
+        let settings: [(&str, usize, &str); 7] = [
+            ("types0", 0, "\"MediaViewerShowTypes\":true"),
+            ("types4", 4, "\"MediaViewerShowTypes\":true"),
+            ("bottom", 0, "\"MediaViewerHelpPrompts\":\"bottom\""),
+            ("nohelp", 4, "\"MediaViewerHelpPrompts\":\"disabled\""),
+            ("stretch", 0, "\"MediaViewerStretchVideos\":true"),
+            ("blur", 0, "\"MediaViewerVideoBlur\":true"),
+            ("plain", 0, ""),
+        ];
+        let states = manual
+            .iter()
+            .map(|(n, presses)| (format!("nes-gamelist-1-{n}"), 1, presses.to_vec(), "", "top"))
+            .chain(settings.iter().map(|(tag, n, more)| {
+                let place = if more.contains("bottom") { "bottom" } else if more.contains("disabled") { "off" } else { "top" };
+                (format!("nes-gamelist-0-media-{n}-{tag}"), 0, vec![Right; *n], *more, place)
+            }));
+        for (name0, entry, presses, more, place) in states.collect::<Vec<_>>() {
+            for (w, h) in SIZES {
+                let unit = f64::from(w) / 1280.0;
+                let name = format!("{name0}-{w}x{h}");
+                let at = format!("{theme} {name}");
+                let capture = oracle.join(&theme).join(format!("{name}.png"));
+                assert!(scene.set_property("view", "defaultFont", &face.to_string_lossy()));
+                common::install_with(&mut scene, &folder, &choices, "gamelist", &viewer_texts, w, h, more);
+                for _ in 0..entry {
+                    scene.pad(Down);
+                }
+                scene.wait(300);
+                scene.pad(Screensaver);
+                for b in &presses {
+                    scene.pad(*b);
+                    scene.wait(100);
+                }
+                if !common::settle_within(&mut scene, &scratch.0, if name0.contains("media-0") { 8 } else { 2 }) {
+                    failures.push(format!("{at}: the picture did not settle in 10 s"));
+                }
+                let qt_png = out.join("qt").join(format!("{theme}-{name}.png"));
+                assert!(scene.grab(&qt_png.to_string_lossy()));
+                let (_, _, esde) = pixels(&capture).unwrap_or_else(|| panic!("ES-DE's capture {}: Testing/esde-oracle/README.md", capture.display()));
+                let (_, _, qtp) = pixels(&qt_png).unwrap();
+                let strip = emusen_esde::scene::Viewer::strip(f64::from(h)) as i32;
+                let (help_rows, item_rows) = match place {
+                    "bottom" => ((h - strip, h), (0, h - strip - 1)),
+                    "off" => ((0, 0), (0, h)),
+                    _ => ((0, strip), (strip + 1, h)),
+                };
+                let mut parts = vec![("item", ink(&esde, w, item_rows, 10), ink(&qtp, w, item_rows, 10))];
+                if place != "off" {
+                    parts.push(("help", ink(&esde, w, help_rows, 100), ink(&qtp, w, help_rows, 100)));
+                }
+                for (what, a, b) in parts {
+                    let d = (0..4).map(|i| f64::from((a[i] - b[i]).abs()) / unit).fold(0.0, f64::max);
+                    if d > mockup::UNITS {
+                        failures.push(format!("{at}: the {what}'s ink {b:?} against ES-DE's {a:?}, {d:.1} off"));
+                    }
+                }
+                let m = mae(&esde, &qtp, w, (0, 0));
+                table.push(format!("{theme}\t{name0}\t{w}x{h}\t{m:.2}\t-\t-"));
+                eprintln!("{}", table.last().unwrap());
+            }
+        }
+    }
     scene.assert_quiet();
     for (i, seen) in boxes_seen.iter().enumerate() {
         if !seen {

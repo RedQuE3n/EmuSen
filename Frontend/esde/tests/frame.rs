@@ -495,7 +495,8 @@ fn the_media_viewer_shows_a_game_s_media_in_es_de_s_order_and_stops_at_the_ends(
     let kinds: Vec<&str> = v.entries.iter().map(|e| e.kind.as_str()).collect();
     assert_eq!(kinds, ["video", "cover", "screenshot", "fanart", "custom"], "ES-DE's order; a marquee is not shown");
     let item = |s: &Stage| placed(&s.frame(), "item").paint.clone();
-    assert_eq!(item(&s), Paint::Clip("/m/video".into()), "the video first, played");
+    let clip = Clip { source: "/m/video".into(), stretch: false, audio: true, blur: 0.0 };
+    assert_eq!(placed(&s.frame(), "video").paint, Paint::Clip(clip), "the video first, played");
     let viewer = s.viewer.as_mut().unwrap();
     assert!(!viewer.browse(-1), "left at the first stays");
     assert!(viewer.jump(true));
@@ -518,6 +519,111 @@ fn the_media_viewer_shows_a_game_s_media_in_es_de_s_order_and_stops_at_the_ends(
     data.game_index = 2;
     s.restart(data, "gamelist", 0);
     assert!(!s.open_viewer(), "a game with no media opens nothing");
+}
+
+// The manual's mode, as ES-DE 3.4.1's captures of 2026-11-09 show it (EmuSen_Qt.md §4.13).
+#[test]
+fn the_media_viewer_shows_a_game_s_pdf_manual_paged_zoomed_and_panned() {
+    let t = Synth::new();
+    let mut s = stage(&t, "", "<helpsystem name=\"h\"/>", "gamelist", 0);
+    let mut data = s.current.data.clone();
+    let game = &mut data.systems[1].games[0];
+    game.media.insert("screenshot".into(), "/m/shot".into());
+    game.media.insert("manual".into(), "/m/manual.pdf".into());
+    s.restart(data, "gamelist", 0);
+    assert!(s.open_viewer());
+    let labels = |s: &Stage| {
+        let f = s.frame();
+        let Paint::Help(h) = &placed(&f, "help").paint else { panic!() };
+        h.entries.iter().map(|e| e.label.clone()).collect::<Vec<_>>()
+    };
+    assert_eq!(labels(&s), ["BROWSE", "PDF MANUAL", "FIRST", "LAST"], "a game with a manual offers it");
+    let press = |s: &mut Stage, k: Key| s.viewer.as_mut().unwrap().press(k);
+    assert_eq!(press(&mut s, Key::Up), Some(true));
+    assert_eq!(labels(&s), ["BROWSE", "GAME MEDIA", "FIRST", "LAST", "ZOOM"]);
+    let Paint::Page(p) = placed(&s.frame(), "item").paint.clone() else { panic!("the manual's page") };
+    assert_eq!((p.source.as_str(), p.page), ("/m/manual.pdf", 0));
+    assert!(s.frame().elements.iter().all(|e| e.name != "left"), "no page words before the painter has counted the pages");
+    assert!(s.manual_pages(3));
+    let words = |s: &Stage| match &placed(&s.frame(), "left").paint {
+        Paint::Text(t) => t.text.clone(),
+        _ => panic!(),
+    };
+    assert_eq!(words(&s), "PAGE 1 OF 3");
+    assert_eq!(press(&mut s, Key::Left), Some(false), "the first page stays");
+    assert_eq!(press(&mut s, Key::Last), Some(true));
+    assert_eq!(press(&mut s, Key::Right), Some(false), "the last page stays");
+    assert_eq!(words(&s), "PAGE 3 OF 3");
+    assert_eq!(press(&mut s, Key::First), Some(true));
+    // The page's size in points, as the painter reads it: 600 x 800, fitted to the screen below the strip.
+    let strip = Viewer::strip(H);
+    let id = placed(&s.frame(), "item").id;
+    assert!(s.measured(id, 600.0, 800.0));
+    let page = |s: &Stage| {
+        let f = s.frame();
+        let p = placed(&f, "item");
+        (p.x, p.y, p.w, p.h)
+    };
+    let fit = (H - strip) / 800.0;
+    let (x, y, w, h) = page(&s);
+    assert!(close(w, 600.0 * fit) && close(h, H - strip) && close(y, strip) && close(x, (W - w) / 2.0), "{:?}", page(&s));
+    assert_eq!(press(&mut s, Key::ZoomIn), Some(true));
+    assert_eq!(labels(&s), ["PAN", "RESET", "ZOOM"]);
+    let (x1, y1, w1, h1) = page(&s);
+    assert!(close(h1, (fit + 0.5 * H / 800.0) * 800.0) && close(x1 + w1 / 2.0, W / 2.0) && close(y1 + h1 / 2.0, strip + (H - strip) / 2.0), "a step is half the screen's height more, centred");
+    assert_eq!(press(&mut s, Key::Right), Some(true), "zoomed, right pans");
+    assert!(close(page(&s).0, x1 - W / 8.0), "an eighth of the screen's width a step");
+    assert_eq!(words(&s), "PAGE 1 OF 3", "panning turns no page");
+    assert_eq!(press(&mut s, Key::Last), Some(true), "a trigger resets the view");
+    assert_eq!(page(&s), (x, y, w, h));
+    assert_eq!(press(&mut s, Key::ZoomIn), Some(true));
+    assert_eq!(press(&mut s, Key::ZoomOut), Some(true));
+    assert_eq!(press(&mut s, Key::Right), Some(true), "zoomed out entirely, right turns the page again");
+    assert_eq!(words(&s), "PAGE 2 OF 3");
+    assert_eq!(press(&mut s, Key::Down), Some(true), "down returns to the media");
+    assert_eq!(labels(&s), ["BROWSE", "PDF MANUAL", "FIRST", "LAST"]);
+    assert!(matches!(placed(&s.frame(), "item").paint, Paint::Picture(_)));
+}
+
+// The player's viewer settings (USERGUIDE.md, "Media viewer settings"), as the captures of 2026-11-09 show each (EmuSen_Qt.md §4.14).
+#[test]
+fn the_media_viewer_follows_the_player_s_viewer_settings() {
+    let t = Synth::new();
+    let mut s = stage(&t, "", "<helpsystem name=\"h\"/>", "gamelist", 0);
+    let mut data = s.current.data.clone();
+    for kind in ["video", "screenshot"] {
+        data.systems[1].games[0].media.insert(kind.to_owned(), format!("/m/{kind}"));
+    }
+    let open = |s: &mut Stage, data: &Data, settings: ViewerSettings| {
+        let mut d = data.clone();
+        d.viewer = settings;
+        s.restart(d, "gamelist", 0);
+        assert!(s.open_viewer());
+    };
+    let strip = Viewer::strip(H);
+    let base = ViewerSettings::default();
+    open(&mut s, &data, ViewerSettings { help: HelpPlace::Bottom, ..base });
+    let f = s.frame();
+    assert!(close(placed(&f, "strip").y, H - strip) && close(placed(&f, "video").y, 0.0) && close(placed(&f, "video").h, H - strip), "the strip at the bottom");
+    open(&mut s, &data, ViewerSettings { help: HelpPlace::Off, ..base });
+    let f = s.frame();
+    assert!(f.elements.iter().all(|e| e.name != "strip" && e.name != "help") && close(placed(&f, "video").h, H), "no help, the whole screen");
+    open(&mut s, &data, ViewerSettings { show_types: true, ..base });
+    let left = |s: &Stage| match &placed(&s.frame(), "left").paint {
+        Paint::Text(t) => t.text.clone(),
+        _ => panic!(),
+    };
+    assert_eq!(left(&s), "VIDEO");
+    s.viewer.as_mut().unwrap().press(Key::Right);
+    assert_eq!(left(&s), "SCREENSHOT");
+    let video = placed(&s.frame(), "video").clone();
+    assert_eq!(video.opacity, 0.0, "the video runs on, unseen, while a picture is shown");
+    open(&mut s, &data, ViewerSettings { keep_video_running: false, stretch_videos: true, audio: false, blur: true, ..base });
+    let f = s.frame();
+    let Paint::Clip(c) = &placed(&f, "video").paint else { panic!() };
+    assert!(c.stretch && !c.audio && close(c.blur, W / 512.0), "the blur's sigma is a 512th of the width");
+    s.viewer.as_mut().unwrap().press(Key::Right);
+    assert!(s.frame().elements.iter().all(|e| e.name != "video"), "not kept running: the video stops on a picture");
 }
 
 // ES-DE's gameselectors draw from every game of the system, those its list's level does not show among them (EmuSen_Qt.md §4.11).

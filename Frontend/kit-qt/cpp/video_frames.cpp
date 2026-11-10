@@ -44,6 +44,15 @@ void VideoFrames::setFitted(bool fitted)
     Q_EMIT fittedChanged();
 }
 
+void VideoFrames::setStretched(bool stretched)
+{
+    if (m_stretched == stretched)
+        return;
+    m_stretched = stretched;
+    update();
+    Q_EMIT stretchedChanged();
+}
+
 QSGNode* VideoFrames::updatePaintNode(QSGNode* old, UpdatePaintNodeData*)
 {
     if (m_image.isNull() || window() == nullptr) {
@@ -61,7 +70,11 @@ QSGNode* VideoFrames::updatePaintNode(QSGNode* old, UpdatePaintNodeData*)
         m_fresh = false;
     }
     const QSizeF size = m_image.size();
-    if (m_fitted) {
+    if (m_stretched) {
+        // Stretched to the item, as a media viewer's video may be (Image.Stretch).
+        node->setSourceRect(QRectF(QPointF(0, 0), size));
+        node->setRect(QRectF(0, 0, width(), height()));
+    } else if (m_fitted) {
         // Fitted inside, as a media viewer's video is (Image.PreserveAspectFit).
         const qreal scale = std::min(width() / size.width(), height() / size.height());
         const QSizeF drawn(size.width() * scale, size.height() * scale);

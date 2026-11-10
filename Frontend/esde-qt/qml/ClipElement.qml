@@ -1,17 +1,27 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Kit as Kit
 import EmuSen.Esde
 
-// A video played fitted to its box at once, with its sound, as ES-DE's media viewer plays a game's video (EmuSen_Qt.md §4.10); the kit's tile and its one decoder.
+// A video played at once in its box, fitted or stretched, with its sound or without, and blurred across by the sigma the scene gives, as ES-DE's media viewer plays a game's video under its settings (EmuSen_Qt.md §4.10, §4.14); the kit's tile and its one decoder.
 ElementBox {
     id: root
     required property url source
+    required property bool stretch
+    required property bool audio
+    required property real blur
     Kit.VideoTile {
         anchors.fill: parent
         source: root.source
         playing: true
-        muted: false
-        fillMode: Image.PreserveAspectFit
+        muted: !root.audio
+        fillMode: root.stretch ? Image.Stretch : Image.PreserveAspectFit
         delay: 0
+        layer.enabled: root.blur > 0
+        layer.effect: ShaderEffect {
+            property real sigma: root.blur
+            property real texel: 1 / Math.max(1, root.width)
+            fragmentShader: "qrc:/emusen/esde/hblur.frag.qsb"
+        }
     }
 }

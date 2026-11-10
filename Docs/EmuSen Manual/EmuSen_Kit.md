@@ -2905,3 +2905,44 @@ that and still a sixteenth darker, so the shadow is soft, besides the gate it al
 **Seeded faults**, each reverted, each caught: the cover's shadow hidden (the gallery, every page state); the canvas's
 blur set to none, a hard-edged shadow (the gallery's softness check, which the first form of the check, the darkening
 alone, let through, so the check was strengthened); the theme mirror missing `shadowBlur` (`theme-qt`'s surface test).
+
+### 7.58 The walk presses on through a stepped action; the page frame's focus; Qt Multimedia's two messages (stage 5, piece G2; 2026-11-09)
+
+**The walk and a stepped action.** The gate's walk (`emusen-qt-test`'s `walk_by`, §7.11) pressed each direction once
+from each element. On a game's page Right on Resume steps its state and keeps the focus, so the walk recorded Resume →
+Right as no move, and Favourite, which Right reaches from Resume only past its last state (LunaP's `MoveInActions`,
+§7.53), was named unreached by the pad: a finding piece G named for the tester rather than fixed. The walk now presses
+on as a player does: while a press leaves the focus where it was and the element declares a stepped value (the kit's
+`ActionButton.stepped`, read by its name), it presses the same direction again, at most 64 times, and records where the
+focus finally lands. An action that steps no further passes the press to the frame's navigation, so the walk ends at
+the neighbour; one that wraps would end at the bound, as before, standing still. What the presses stepped is the host's
+value, which the walk does not put back; a later press from the same action steps back the other way first. The
+program's game page test holds the five states with no finding named (`EmuSen_Qt.md` §7.8).
+
+**The page frame's focus** (`PageFrame`, two defects found by the program's game page test on 2026-11-09). (1) A page
+opened on another game kept the focus where the last page left it: closed from Details by Hide from Library, the next
+page opened on its Overview with the focus in the rows' list, hidden, so Down and Left and Right moved through a list
+no one saw (the tree read the focus on an invisible `MenuRow`). LunaP's page opens with the focus on its main action;
+the frame gains the signal `focusFirstAction()`, which the program's page emits when its game changes; and `contentKindChanged()`, emitted as the kind changes. (2) A section of another kind
+chosen with the focus in the content (tiles to rows, rows to tiles, either to words) left the focus in the list now
+hidden. LunaP's `FillContent` hands the focus on to the new content's first item, or to the actions where there is no
+item; the frame now does the same when `showsTiles` or `showsText` changes with the focus in a list. The program's test
+holds both: A on a state after Hide reaches the state, and the shoulder from a Media tile lands on Details' first row,
+shown.
+
+**Qt Multimedia's two messages** (`QT_INTERNAL`, §7.14), traced on 2026-11-09 under gdb on the theme-qt `qml` test, a
+scene that plays no clip:
+1. `WARNING: QApplication was not created in the main() thread.` is QtCore's, from `QCoreApplicationPrivate`'s
+   constructor when the thread making the application is not the one Qt holds as the main thread. A hardware watchpoint
+   on `QCoreApplicationPrivate::theMainThreadId` found it set before `main`, by `libQt6Multimedia.so.6`'s load-time
+   initializer (`SymbolsResolverImpl::instance`, which makes a `QLibrary`, a `QObject`, so Qt adopts the loading thread,
+   the process's main thread). The harness then makes the application on the thread libtest runs the test on. Every
+   test binary that links the kit (which links Qt Multimedia since §7.53) logs it once, whether or not it plays a clip;
+   the program makes its application on `main` and never does. Stopping it needs the application made on the process's
+   main thread: each Qt test target built with `harness = false` and a runner of its own, a change to every crate's
+   tests. Proposed to the tester; the line stays in `QT_INTERNAL` until then.
+2. `ThreadLocalRhiHolder::ensureRhi(...): No RHI backend. Using CPU conversion.` is Qt Multimedia's, logged once per
+   thread by `QVideoFrame::toImage` (the kit's `VideoFrames`) when no RHI can be made on the converting thread for a
+   conversion on the GPU; it then converts on the CPU, the path the software tier needs. The `offscreen` platform the
+   tests run on offers no OpenGL to make one. The frames are drawn (the program's test reads the clip's magenta). It is
+   Qt's own fallback, harmless, and left in `QT_INTERNAL`.

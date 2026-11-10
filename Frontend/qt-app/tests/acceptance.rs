@@ -13,7 +13,7 @@ use emusen_client_fixture::{image, library};
 use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_kit_core::input::UiButton;
 use emusen_qt::MAIN_URL;
-use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS};
+use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS, SAVE_STATE};
 use emusen_platform_client::library::Library;
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt_models::clients::ClientSource;
@@ -583,6 +583,22 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     assert!(scene.set_property("game", "game", ""));
     until(&mut scene, "the game closed again", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Home");
     until(&mut scene, "Continue gone", |s| !shown(s, "continueHeading"));
+
+    // A state chosen on a game's page is the start's answer (EmuSen_Qt.md §7.8): named with the game, the slot saved
+    // above loads, no Resume question is asked, and the game plays.
+    let slot1 = platform.save_path(SAVE_STATE, cobalt.to_str().unwrap(), None, 1).unwrap();
+    assert!(slot1.exists(), "the runtime's slot 1 is Galaxia's: {}", slot1.display());
+    assert!(scene.set_property("session", "startState", slot1.to_str().unwrap()));
+    assert!(scene.set_property("game", "game", cobalt.to_str().unwrap()));
+    until(&mut scene, "the game started from the state", |s| s.property("session", "running") == "true" && s.property("session", "paused") == "false");
+    assert_eq!(scene.property("session", "resumeAsked"), "false", "choosing the state was the answer");
+    assert_eq!(scene.property("session", "startState"), "", "taken by the start");
+    let before = scene.frames();
+    scene.wait(500);
+    assert!(scene.frames() - before > 10, "the game drawn from its state: {} frames in 0.5 s", scene.frames() - before);
+    assert!(!scene.property("session", "notice").starts_with("Could not"), "{}", scene.property("session", "notice"));
+    assert!(scene.set_property("game", "game", ""));
+    until(&mut scene, "the game closed once more", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Home");
 
     // Power: the Home card at its Power page, then Quit EmuSen...'s question, each held as Mistress's HomeCardPower and
     // HomeCardQuit; B twice closes it.

@@ -10,6 +10,15 @@ never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
   kit token, so the mirror gains them too. `RaisedShadow`, the kit's item that casts it for the page frame, is not
   re-exported.
 
+## 1.0, an addition: `Words.now` (2026-11-09)
+
+Decided 2026-11-09 by the tester.
+
+- **`Words.now`** (added, a number): the time `ago`, `pausedFacts` and `pausedAgo` say their phrases against, in seconds
+  since 1970; 0, the default, is the wall clock. The program sets it from its clock, which follows the wall clock unless
+  a test holds it, so a theme's time phrases are held with the program's own (`EmuSen_Qt.md` §7.8). A theme reads it and
+  never writes it; the moment a game paused (`Session.pausedSince`) is read from the same clock.
+
 ## 1.0, an addition (2026-11-09)
 
 - **`Tokens.textSize`** (added, read-only): the text size by the word the setting stores, beside `textScale`, as the

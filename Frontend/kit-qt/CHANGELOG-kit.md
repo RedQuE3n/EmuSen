@@ -17,6 +17,14 @@ every earlier one, so no earlier property's index in the registry moved.
 - `PageFrame`'s cover casts it; `NoticeLayer`'s `shadowOpacity` and `shadowRadius` default to the tokens and its offset
   and colour are theirs, so what it draws is unchanged. §7.55.
 
+## 1.0, stage 5 piece G2: the page frame's focus (2026-11-09)
+
+Additions only; no type, property, signal or invokable was removed or changed.
+
+- **`PageFrame.focusFirstAction()`** (qmldir, a signal a host emits): the focus on the first action, as a page opens.
+- **`PageFrame.contentKindChanged()`** (qmldir, a signal): the content's kind changed; with the focus in the content it
+  goes on to the list now shown, on its first item, or to the actions where words are shown. §7.58.
+
 ## 1.0, stage 5 piece E: a sentence's tone, a value beside a short label, the rows' view (2026-11-09)
 
 Additions only; no type, property, signal or invokable was removed or changed.

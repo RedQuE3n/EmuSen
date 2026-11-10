@@ -30,8 +30,17 @@ fn dependencies(manifest: &str) -> Vec<String> {
 #[test]
 fn qt_4_8_the_painter_names_no_client_and_no_runtime() {
     let names = dependencies(MANIFEST);
-    assert_eq!(names, ["cxx", "cxx-qt", "cxx-qt-lib", "emusen-esde", "serde_json", "emusen-kit-qt", "emusen-kit-core"], "the painter's dependencies are its design's (EmuSen_Qt.md §4.8)");
-    for (crate_dir, manifest) in [("esde", include_str!("../../esde/Cargo.toml")), ("kit-qt", include_str!("../../kit-qt/Cargo.toml"))] {
+    // emusen-esde-text, ES-DE's text rules, since 2026-11-09 (EmuSen_Qt.md §4.9.2).
+    assert_eq!(
+        names,
+        ["cxx", "cxx-qt", "cxx-qt-lib", "emusen-esde", "emusen-esde-text", "serde_json", "emusen-kit-qt", "emusen-kit-core"],
+        "the painter's dependencies are its design's (EmuSen_Qt.md §4.8)"
+    );
+    for (crate_dir, manifest) in [
+        ("esde", include_str!("../../esde/Cargo.toml")),
+        ("esde-text", include_str!("../../esde-text/Cargo.toml")),
+        ("kit-qt", include_str!("../../kit-qt/Cargo.toml")),
+    ] {
         for name in dependencies(manifest) {
             assert!(
                 !["client", "crystal", "platform", "models", "play", "endymion"].iter().any(|w| name.contains(w)),

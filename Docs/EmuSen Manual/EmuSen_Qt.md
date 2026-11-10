@@ -3125,12 +3125,12 @@ the RX 6800 at WiseMan 1365c2771 with piece X; after is this branch, lavapipe, 2
 
 | Theme | State | 1280 before | 1280 after | 1920 before | 1920 after |
 |---|---|---|---|---|---|
-| Art Book Next | system | 0.99 | MEASURE | 0.36 | MEASURE |
-| Art Book Next | gamelist | 2.46 | MEASURE | 1.97 | MEASURE |
-| Artflix | system | 4.96 | MEASURE | 4.28 | MEASURE |
-| Artflix | gamelist | 8.23 | MEASURE | 7.59 | MEASURE |
-| CarAlt | system | 7.17 | MEASURE | 16.49 | MEASURE |
-| CarAlt | gamelist | 6.01 | MEASURE | 5.63 | MEASURE |
+| Art Book Next | system | 0.99 | 0.98 | 0.36 | 0.37 |
+| Art Book Next | gamelist | 2.46 | 2.06 | 1.97 | 1.82 |
+| Artflix | system | 4.96 | 4.27 | 4.28 | 4.26 |
+| Artflix | gamelist | 8.23 | 8.10 | 7.59 | 7.60 |
+| CarAlt | system | 7.17 | 7.07 | 16.49 | 6.94 |
+| CarAlt | gamelist | 6.01 | 5.64 | 5.63 | 5.12 |
 
 The media viewer's states (§4.10), the mean of its nine steps: 2.19 at 1280 × 800 and 2.68 at 1920 × 1200 for both themes
 (the video, title screen and screenshot 5.6–6.8 without ES-DE's scanlines, the other items 0.1–1.0); no ink off.

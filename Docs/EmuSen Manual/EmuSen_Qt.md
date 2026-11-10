@@ -2333,6 +2333,12 @@ painter calls `esdeEnter(shelf, entry)` and `esdeLeave(shelf)`, and `esdeSearch(
 9,000 games first took 10.6 ms, every game's row written again in all games and favourites and each description
 carried; with the collections listing files and the description given on demand, 0.77 ms, under the 2 ms gate.
 
+**Measured again on 2026-11-10**, after §4.9's texts grew with the metadata (the shelves 6.4 MB, the media index 2.2 MB
+at 9,000 games): 5.2–7.7 ms, the land gate red. Timed by phase, the comparisons took under 1 µs, the read's move in
+10 µs, and making the four texts QStrings (UTF-8 to UTF-16, 8.6 MB) 5.4 ms. The QStrings are now made on the thread
+that read them (`esde_texts.rs`; Qt's implicitly shared classes pass between threads by an atomic count, Qt 6
+"Implicit Sharing"), and the GUI thread moves in the ones that changed: 16–19 µs in four runs of the test alone.
+
 **Proof.** `tests/gamelists.rs` re-expresses the rule cases of Mistress's `GamelistOptionsTests` (sorts, sort names,
 filters, letters, random, names, collection order and grouping, last played, a grouped collection's folder) and adds
 folders entered, left and walked up, a link, flatten, folders not on top, a grouped collection entered with its own

@@ -4,6 +4,7 @@
 // The one unsafe verb takes the engine QML owns; the contract is cxx's. An audit takes the gate's eight facts at once rather than a struct of its own.
 #![allow(clippy::missing_safety_doc, clippy::too_many_arguments)]
 
+pub mod checkout;
 pub mod compositor;
 pub mod covers;
 pub mod ffi;

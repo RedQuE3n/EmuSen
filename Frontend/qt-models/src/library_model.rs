@@ -2,6 +2,7 @@
 //! Qt. A refresh runs off the GUI thread and comes back through qt_thread().queue, the one way in.
 
 use crate::clients::ClientSource;
+use crate::esde_texts::EsdeTexts;
 use crate::library::{refresh, refresh_with, splash_worlds, LibrarySource, LibraryView, Refreshed};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
@@ -363,7 +364,8 @@ impl qobject::LibraryModel {
         let (qt, gamelists) = (self.qt_thread(), self.view.gamelists.clone());
         std::thread::spawn(move || {
             let refreshed = refresh_with(source.as_ref(), &gamelists);
-            let _ = qt.queue(move |model| model.apply(None, refreshed));
+            let texts = texts_of(&refreshed);
+            let _ = qt.queue(move |model| model.apply(None, refreshed, texts));
         });
     }
 
@@ -417,7 +419,8 @@ impl qobject::LibraryModel {
         let (qt, path, gamelists) = (self.qt_thread(), path.to_string(), self.view.gamelists.clone());
         std::thread::spawn(move || {
             let refreshed = source.started(&path).and_then(|()| refresh_with(source.as_ref(), &gamelists));
-            let _ = qt.queue(move |model| model.apply(None, refreshed));
+            let texts = texts_of(&refreshed);
+            let _ = qt.queue(move |model| model.apply(None, refreshed, texts));
         });
     }
 
@@ -426,7 +429,8 @@ impl qobject::LibraryModel {
         let (qt, path, gamelists) = (self.qt_thread(), path.to_string(), self.view.gamelists.clone());
         std::thread::spawn(move || {
             let refreshed = source.toggle_favourite(&path).and_then(|()| refresh_with(source.as_ref(), &gamelists));
-            let _ = qt.queue(move |model| model.apply(None, refreshed));
+            let texts = texts_of(&refreshed);
+            let _ = qt.queue(move |model| model.apply(None, refreshed, texts));
         });
     }
 
@@ -515,19 +519,21 @@ impl qobject::LibraryModel {
             return;
         }
         let (qt, base, gamelists) = (self.qt_thread(), self.view.esde_state.base.clone(), self.view.gamelists.clone());
+        let settings = self.view.esde_settings.clone();
         std::thread::spawn(move || {
             let (esde, state) = crate::esde_shelves::build(base, &gamelists);
-            let _ = qt.queue(move |model| model.apply_esde(esde, state));
+            let texts = EsdeTexts::of(&settings, &esde);
+            let _ = qt.queue(move |model| model.apply_esde(esde, state, texts));
         });
     }
 
     /// A rewrite's texts applied on the GUI thread, each announced when it changed.
-    fn apply_esde(mut self: Pin<&mut Self>, esde: crate::esde_shelves::Esde, state: crate::esde_shelves::EsdeState) {
+    fn apply_esde(mut self: Pin<&mut Self>, esde: crate::esde_shelves::Esde, state: crate::esde_shelves::EsdeState, texts: EsdeTexts) {
         let old = &self.view.esde;
         let changed = [false, old.shelves != esde.shelves, old.media != esde.media, old.presence != esde.presence];
         self.as_mut().rust_mut().view.esde = esde;
         self.as_mut().rust_mut().view.esde_state = state;
-        self.publish_esde(changed);
+        self.publish_esde(changed, Some(texts));
     }
 
     /// Opens the clients once the platform library is named, then refreshes, off the GUI thread.
@@ -554,19 +560,21 @@ impl qobject::LibraryModel {
                         let themed = source.settings().is_ok_and(|s| crate::esde_shelves::settings_of(&s).themed);
                         if themed {
                             let (first, shown) = (refresh(&crate::library::FirstLook(source.as_ref())), source.clone());
-                            let _ = qt.queue(move |model| model.apply(Some(shown), first));
+                            let texts = texts_of(&first);
+                            let _ = qt.queue(move |model| model.apply(Some(shown), first, texts));
                         }
                         let refreshed = refresh(source.as_ref());
                         (Some(source), refreshed)
                     }
                     Err(words) => (None, Err(words)),
                 };
-            let _ = qt.queue(move |model| model.apply(source, refreshed));
+            let texts = texts_of(&refreshed);
+            let _ = qt.queue(move |model| model.apply(source, refreshed, texts));
         });
     }
 
     /// A refresh's answer applied on the GUI thread: the rows reset with the selection kept, the properties published.
-    fn apply(mut self: Pin<&mut Self>, source: Option<Arc<dyn LibrarySource>>, refreshed: Refreshed) {
+    fn apply(mut self: Pin<&mut Self>, source: Option<Arc<dyn LibrarySource>>, refreshed: Refreshed, texts: Option<EsdeTexts>) {
         if source.is_some() {
             self.as_mut().rust_mut().source = source;
         }
@@ -586,30 +594,32 @@ impl qobject::LibraryModel {
         if rows_change {
             self.as_mut().end_reset_model();
         }
-        self.as_mut().publish_esde(changed);
+        self.as_mut().publish_esde(changed, texts);
         self.as_mut().show_loading(false);
         self.publish();
     }
 
     /// The ES-DE view's texts that changed and whether it is shown, announced after a refresh and never on a step, since
     /// the shelves' text grows with the library.
-    fn publish_esde(mut self: Pin<&mut Self>, changed: [bool; 4]) {
-        let [settings, shelves, media, presence] = changed;
-        if settings {
-            self.as_mut().rust_mut().esde_settings = QString::from(self.view.esde_settings.text.as_str());
-            self.as_mut().esde_settings_changed();
-        }
-        if shelves {
-            self.as_mut().rust_mut().esde_shelves = QString::from(self.view.esde.shelves.as_str());
-            self.as_mut().esde_shelves_changed();
-        }
-        if media {
-            self.as_mut().rust_mut().esde_media = QString::from(self.view.esde.media.as_str());
-            self.as_mut().esde_media_changed();
-        }
-        if presence {
-            self.as_mut().rust_mut().esde_presence = QString::from(self.view.esde.presence.as_str());
-            self.as_mut().esde_presence_changed();
+    fn publish_esde(mut self: Pin<&mut Self>, changed: [bool; 4], texts: Option<EsdeTexts>) {
+        // The texts were made QStrings where they were read; the GUI thread only moves in the ones that changed.
+        if let Some(EsdeTexts([settings, shelves, media, presence])) = texts {
+            if changed[0] {
+                self.as_mut().rust_mut().esde_settings = settings;
+                self.as_mut().esde_settings_changed();
+            }
+            if changed[1] {
+                self.as_mut().rust_mut().esde_shelves = shelves;
+                self.as_mut().esde_shelves_changed();
+            }
+            if changed[2] {
+                self.as_mut().rust_mut().esde_media = media;
+                self.as_mut().esde_media_changed();
+            }
+            if changed[3] {
+                self.as_mut().rust_mut().esde_presence = presence;
+                self.as_mut().esde_presence_changed();
+            }
         }
         let themed = self.view.esde_settings.themed;
         if self.themed != themed {
@@ -687,4 +697,9 @@ impl qobject::LibraryModel {
             self.problem_changed();
         }
     }
+}
+
+/// A refresh's ES-DE texts as QStrings, made on the thread that read them.
+fn texts_of(refreshed: &Refreshed) -> Option<EsdeTexts> {
+    refreshed.as_ref().ok().map(|read| EsdeTexts::of(&read.esde_settings, &read.esde))
 }

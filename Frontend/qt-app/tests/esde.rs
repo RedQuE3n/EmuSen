@@ -1,7 +1,7 @@
 //! An ES-DE theme as the library's look (EmuSen_Qt.md §4.9): the program over a sandbox whose settings choose Art Book Next
 //! from the corpus, its library two synthetic NES images and a real Super Nintendo game read in place from the player's
 //! library (`EMUSEN_ESDE_GAME`, else Super Mario World), its engines the published installation's (`EMUSEN_ESDE_CORES`,
-//! else `out/linux-x64/Mistress/lib/EmuSen`). Moonrise gives way to the system view; Right steps the carousel; A opens the
+//! else the main checkout's `out/linux-x64/Mistress/lib/EmuSen`, found from a worktree too). Moonrise gives way to the system view; Right steps the carousel; A opens the
 //! gamelist and A on the game plays it through the ring; the chord pauses it under the Pause Card, and Back to Library is
 //! the gamelist at the same game; Start is the Home card, Select the List card, Y the favourite; a theme that is not there
 //! gives way to the own look with a notice; nothing is logged. On Vulkan in a compositor of the test's own, as the
@@ -67,7 +67,7 @@ fn choose_row(scene: &mut Scene<'_>, words: &str) {
 fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() {
     let theme = home().join(".cache/emusen/bigpicture/corpus/whole").join(THEME);
     let game = named_or("EMUSEN_ESDE_GAME", home().join("Documents/Roms/SNES/SMW.smc"));
-    let cores = named_or("EMUSEN_ESDE_CORES", emusen_qt_test::lint::frontend().join("../../out/linux-x64/Mistress/lib/EmuSen"));
+    let cores = named_or("EMUSEN_ESDE_CORES", emusen_qt_test::checkout::installed_engines());
     for (what, path) in [("the theme", &theme), ("the game", &game), ("the installation's engines", &cores)] {
         assert!(path.exists(), "{what} at {}", path.display());
     }

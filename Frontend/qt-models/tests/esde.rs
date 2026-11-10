@@ -5,6 +5,7 @@
 use emusen_crystal_client::shapes::SystemRow;
 use emusen_platform_client::library::GameFile;
 use emusen_qt_models::esde_shelves::{metadata_of, names_of, Metadata, settings_of, theme_key, MediaIndex, Plays};
+use emusen_qt_models::esde_texts::EsdeTexts;
 use emusen_qt_models::library::{refresh, Engine, FirstLook, LibrarySource, LibraryView};
 use emusen_qt_models::screens::{step, step_in, Ask, Shown};
 use serde_json::{json, Value};
@@ -327,14 +328,21 @@ fn the_gui_thread_s_part_of_a_refresh_stays_under_two_milliseconds_at_nine_thous
     for _ in 0..3 {
         let mut view = LibraryView::empty();
         let read = read.clone();
+        // The QStrings are made on the reading thread (esde_texts.rs).
+        let EsdeTexts(texts) = EsdeTexts::of(&read.esde_settings, &read.esde);
+        let mut published: [cxx_qt_lib::QString; 4] = Default::default();
         let started = std::time::Instant::now();
-        // What LibraryModel.apply does on the GUI thread: compare, move the read in, make the changed texts QStrings.
+        // What LibraryModel.apply does on the GUI thread: compare, move the read in, move in the changed texts.
         let changed = [read.esde_settings.text != view.esde_settings.text, read.esde.shelves != view.esde.shelves, read.esde.media != view.esde.media, read.esde.presence != view.esde.presence];
         view.apply(Ok(read));
-        let texts = [&view.esde_settings.text, &view.esde.shelves, &view.esde.media, &view.esde.presence];
-        let made: Vec<cxx_qt_lib::QString> = texts.iter().zip(changed).filter(|(_, c)| *c).map(|(t, _)| cxx_qt_lib::QString::from(t.as_str())).collect();
+        for ((slot, text), c) in published.iter_mut().zip(texts).zip(changed) {
+            if c {
+                *slot = text;
+            }
+        }
         best = best.min(started.elapsed());
-        assert_eq!(made.len(), 4);
+        assert_eq!(changed, [true; 4]);
+        assert_eq!(published[1].to_string(), view.esde.shelves, "the moved-in text is the shelves' read");
     }
     eprintln!("the GUI thread's part at 9,000 games: {best:?}");
     assert!(best < std::time::Duration::from_millis(2), "{best:?}");

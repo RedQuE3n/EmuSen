@@ -7,7 +7,9 @@
 use crate::consoles::{self, Console, ConsoleRead};
 use crate::tools::Tone;
 use crate::{cards, firmware, schema, words};
+use emusen_kit_core::glyph::PadFamily;
 use emusen_kit_core::settings::RowKind;
+use emusen_qt_endymion::game::PadSettings;
 use emusen_kit_core::tokens::text_scale_of;
 use serde_json::{json, Value};
 
@@ -990,6 +992,40 @@ impl SettingsView {
     /// Whether reduced motion is chosen; System reads as full motion, as the program's start does.
     pub fn reduced_motion(&self) -> bool {
         self.applies_as("reduced_motion")
+    }
+
+    /// Whether A and B, and X and Y, trade places in the menus (Swap A and B in menus).
+    pub fn swap_buttons(&self) -> bool {
+        self.applies_as("swap_buttons")
+    }
+
+    /// The help bar's pad family chosen by Controller type; none for Automatic, which follows the pad last pressed.
+    pub fn controller_family(&self) -> Option<PadFamily> {
+        let chosen = self.applied("controller_type")?;
+        // The setting's choices are the kit's family names, so no table of them is kept here.
+        PadFamily::ALL.into_iter().find(|f| format!("{f:?}") == chosen)
+    }
+
+    /// Whether a pad's coming and going raises a notice (Controller notices).
+    pub fn controller_notices(&self) -> bool {
+        self.applies_as("controller_notices")
+    }
+
+    /// Whether the controllers' motors run where a game drives them (Rumble).
+    pub fn rumble(&self) -> bool {
+        self.applies_as("rumble")
+    }
+
+    /// The settings the pads act on: Only the first controller, Left stick as the D-pad, Stick deadzone, Mirror player 1
+    /// to player 2; none until the settings are read.
+    pub fn pad_settings(&self) -> Option<PadSettings> {
+        let deadzone = self.applied("stick_deadzone")?.parse().ok()?;
+        Some(PadSettings {
+            first_controller_only: self.applies_as("first_controller_only"),
+            stick_as_dpad: self.applies_as("stick_as_dpad"),
+            stick_deadzone: deadzone,
+            mirror: self.applies_as("mirror"),
+        })
     }
 }
 

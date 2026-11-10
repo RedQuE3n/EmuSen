@@ -52,9 +52,14 @@ pub fn tabs(scene: &mut Scene<'_>) -> String {
 
 /// Settings opened on Controllers from Home's place, the virtual pad read and seated.
 pub fn open_settings(scene: &mut Scene<'_>, world: &str, pad: u32) {
+    open_settings_reading(scene, world, &pad.to_string());
+}
+
+/// Settings opened so, the pads of these SDL ids read (one connected at the start, the rest to come).
+pub fn open_settings_reading(scene: &mut Scene<'_>, world: &str, pads: &str) {
     assert!(scene.set_property("program", "splash", "false"));
     assert!(scene.set_property("settingsModel", "world", world));
-    assert!(scene.set_property("program", "onlyPads", &pad.to_string()));
+    assert!(scene.set_property("program", "onlyPads", pads));
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
     wait_for(scene, "library", "loading", "false", 10000);
     wait_for(scene, "settingsModel", "ready", "true", 5000);

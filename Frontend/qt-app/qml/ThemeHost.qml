@@ -20,6 +20,7 @@ Item {
     property alias controllers: feed.controllers
     property alias family: feed.family
     property alias reducedMotion: feed.reducedMotion
+    property alias swap: feed.swap
     // Whether a shown screen takes the keys: not while the splash holds them.
     property bool inputs: true
     // Whether each role's slot is made: the reference's only where the chosen theme does not draw that role.

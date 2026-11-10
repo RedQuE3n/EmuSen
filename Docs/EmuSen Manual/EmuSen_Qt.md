@@ -4331,10 +4331,8 @@ every row of Galaxia's Controllers group (Swap A and B, Guide chords, Controller
 Controller notices, On-screen keyboard, Left stick as the D-pad, Stick deadzone, Mirror player 1 to player 2) shown and
 saved, the bindings page (the strip, the drawing, a press listened for with its five seconds, Y reset, X the player or
 clear, the shoulders, the directions over the drawing, the conflict line), the tester, and the card's Controllers page.
-Not built, each a question for the tester since it reaches past these pages: what those saved rows change outside them.
-In this program no pad setting reaches the pads or the router (swap, controller type, only the first controller, stick
-as the D-pad, stick deadzone, mirror), Rumble drives no motor, no notice tells of a pad coming or going, and the
-on-screen keyboard row picks nothing (Steam's keyboard has no call here). Guide chords alone are read, at the start.
+What those saved rows change outside these pages is §7.7.H3's; the on-screen keyboard row still picks nothing (Steam's
+keyboard has no call here), and Guide chords are read at the start alone.
 
 **Facts read from their owners** (2026-11-10). The profile every console has is named by Endymion: the source reads
 it once with the models, as the profile `bindings_choose` answers where no profile exists (Endymion's
@@ -4363,6 +4361,61 @@ it, a short B stays, B held a second leaves, Escape leaves), `settings_drawings.
 each of the thirteen controllers, the twelve with a file and a synthetic core's `test.pad` drawn generic, at the five
 sizes: fit, pad reach, pointer reach, no chrome, names, palette, contrast) and `card_controllers.rs`
 (PauseCardControllers at the five sizes and recorded; Right seats the pad as player 2).
+
+#### 7.7.H3 Stage 5, piece H3: the controller settings take effect (2026-11-10)
+
+Decided 2026-11-10: what Mistress's Controllers settings did, the program does, with no new dependency. Each row is
+applied where its fact is owned, as Mistress's `SaveApp` and `TrackControllers` applied them, read through the platform
+client:
+
+| Row | Owner | How it reaches its owner | Mistress |
+|---|---|---|---|
+| Swap A and B in menus | the kit's `PadRouter` | `SettingsModel.swapButtons` bound to `Kit.PadRouter.swapAcceptBack`; each theme engine's router through `ThemeFeed.swap` | `PadHints.Swapped`, `PadHeldOn`'s swap |
+| Controller type | the help bar's family | `SettingsModel.controllerFamily` (-1 for Automatic) chooses `program.padFamily` over the pad last used | `HelpFamily` |
+| Only the first controller | Endymion's pads | `SETTING_FIRST_CONTROLLER_ONLY`: the menus read one pad (`FRONTEND_COUNT`), the game player 1 alone | `TrackControllers` |
+| Left stick as the D-pad | Endymion's pads | `SETTING_STICK_AS_DPAD` | `SaveApp("stickdpad")` |
+| Stick deadzone | Endymion's pads | `SETTING_STICK_DEADZONE`, which the tester's threshold also reads | `SaveApp("deadzone")` |
+| Mirror player 1 to player 2 | the game's router | `Read.mirror`, set on Endymion's router (`ROUTER_MIRROR_PLAYER1_TO_PLAYER2`) by `GameInput` | `ApplyKeys` |
+| Rumble | the session | the frame loop hands each port's levels (`emusen_crystal_input_rumble`) to the reader, which drives each seated player's pad; the switch mid-game is `SessionModel.rumble`, `emusen_crystal_input_rumble_switch` | `PassRumbleLevels`, `SaveApp("rumble")` |
+| Controller notices | the window's notices | `PadReader.notice`, raised over a game too where `SettingsModel.controllerNotices` is on | `OnPadChanged` |
+
+**The values** are read from Galaxia's model by the description's `applies` (`data/settings_screen.json`), as text size,
+the variant and reduced motion are; nothing restates a default. Controller type's choices are the kit's family names, so
+the choice is matched against `PadFamily` itself. The four settings the pads act on cross to the reader as one
+`PadSettings`, settled on the pads' hand-over (`GamePads::settle`) each time the settings are read or saved, and set on
+Endymion's pads at the reader's next tick (`apply_settings`), before the poll, so the poll that follows already reads by
+them.
+
+**The motors.** After each frame `GameInput` reads its ports' levels and hands them over (`GamePads::drive`, a fixed
+array, nothing allocated); the reader gives each seated player's pad its port's levels (the swap of players and Only the
+first controller apply, as to the buttons): a level held is sent every tick, which SDL's 100 ms keeps running, and a
+level gone to zero is sent once. While the game does not hold the pad (the Pause Card, a menu) every pad is given zero
+once, so the motor stops at once rather than within 100 ms. The runtime's gate (§9.2 of `EmuSen_Input.md`) is unchanged:
+a console whose row says no motor gives zero.
+
+**The notices** are Mistress's words (`EmuSen_Input.md` §8.13.5), in `qt-endymion` `notices.rs`, made by the seats as a
+pad is seated or its seat kept (`Seats::apply` tells each `Came`); the pads present at the start are not announced.
+Two of Mistress's variants need rules this program's seats do not have (the handheld's built-in controls and the first
+pad pressed taking player 1, §8.13): where player 1 has no pad the notice gives the Swap Players sentence.
+
+**The test core** gained two image modes for this: a payload beginning `MOTOR_CONSOLE` (0x64) reports `n64`, a console
+whose games drive a motor, so the runtime's gate opens by the table and a test runs from the core's motor to the pad;
+one beginning `TWO_PADS` (0x22) gives port 1 a controller, so the session has two ports and the router's mirror shows
+in port 1's presence (RAM's `ABSENT` byte), which with one port it cannot.
+`qt-test`'s SDL virtual pads record the last rumble SDL gives them (`VirtualPad::rumble`, the descriptor's `Rumble`
+callback).
+
+**Held to** (measured on 2026-11-10). `qt-endymion/tests/settings.rs` (2: the three Endymion settings set and heard by
+the menus and the game, the mirror handed over; the notices' words as pads come and go, none at the start);
+`qt-models/tests/controller_settings.rs` (3: the core's motor on the simulated pad frame by frame, stopped while the
+game does not hold the pad and by the switch mid-game; none for a console with no motor; the mirror giving port 1 a
+controller); the program's `settings_effects.rs` (one test of six cases in turn, one Qt and one SDL, SDL virtual pads: Swap's South leaving Settings, Controller type's
+family on the help bar and the themes, Only the first controller's second pad unread, a notice where on and none where
+off, the deadzone stepped down lighting the tester's stick, Rumble reaching the session) and `rumble_gpu.rs` (on
+Vulkan: the game's motor on the virtual pad, stopped under the card and by the switch). Seeded and caught, each
+reverted: the three Endymion settings each left unset, the notice's rule for player 1 inverted, the mirror never set on
+the router, a motor's stop never sent, the swap left unbound, Controller type ignored, and the switch never reaching the
+runtime. qt-app's `acceptance.rs` on the RX 6800 passed (798 s).
 
 #### 7.7.K Cores' Update All…, and the cover's raised shadow (stage 5, piece K; 2026-11-09)
 

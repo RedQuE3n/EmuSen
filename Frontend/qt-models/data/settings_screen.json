@@ -11,7 +11,15 @@
   "applies": {
     "text_size": "AppSettings TextSize",
     "light": ["AppSettings Appearance", "light"],
-    "reduced_motion": ["AppSettings ReducedMotion", "on"]
+    "reduced_motion": ["AppSettings ReducedMotion", "on"],
+    "swap_buttons": ["AppSettings SwapPadButtons", true],
+    "controller_type": "AppSettings ControllerType",
+    "controller_notices": ["AppSettings ControllerNotifications", true],
+    "first_controller_only": ["AppSettings FirstControllerOnly", true],
+    "stick_as_dpad": ["AppSettings AnalogStickAsDpad", true],
+    "stick_deadzone": "AppSettings StickDeadzone",
+    "mirror": ["AppSettings MirrorPlayer1ToPlayer2", true],
+    "rumble": ["AppSettings Rumble", true]
   },
   "sections": [
     {

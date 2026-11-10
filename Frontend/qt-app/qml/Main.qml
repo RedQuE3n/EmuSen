@@ -35,8 +35,11 @@ Window {
     property string coresWorld
     // The splash keeps the focus, and every press, until it has faded, so the press that skipped it is never a screen's.
     readonly property bool splashShown: program.splash && (!moonrise.done || moonrise.opacity > 0)
-    // The own look's screens draw a generic pad's glyphs as the Xbox pad's lettered ones, as Mistress does.
-    readonly property int padFamily: pads.family === Kit.Families.Generic ? Kit.Families.Xbox : pads.family
+    // The help bar's family: Controller type's, or with Automatic the pad last used; a generic pad's glyphs drawn as the Xbox pad's lettered ones, as Mistress does.
+    readonly property int padFamily: {
+        const family = settingsModel.controllerFamily >= 0 ? settingsModel.controllerFamily : pads.family
+        return family === Kit.Families.Generic ? Kit.Families.Xbox : family
+    }
     readonly property bool gameShown: screens.shown === Screens.Game
     readonly property bool pauseShown: screens.shown === Screens.Pause
     // The chosen theme's host while one is made.
@@ -112,6 +115,25 @@ Window {
         // for the pad's press, the interface hears none of it, and while the tester runs, only its B and the releases (EmuSen_Qt.md §7.7.H).
         onButton: (button, down) => settingsModel.listeningPad ? undefined : settingsModel.testing ? (settingsModel.testerButton(button, down, Kit.PadRouter.swapAcceptBack) ? Kit.PadRouter.push(button, down) : undefined) : program.themeHost?.holdsFocus ? program.themeHost.feed.push(button, down) : referenceHost.holdsFocus ? referenceHost.feed.push(button, down) : Kit.PadRouter.push(button, down)
         onSeatsChanged: settingsModel.seatsChanged()
+        // A pad come or gone, told where Controller notices is on, over a game too (EmuSen_Input.md §8.13.5).
+        onNotice: (words) => {
+            if (settingsModel.controllerNotices)
+                notices.raise(words, false, true)
+        }
+    }
+    // Swap A and B in menus, once Settings has read the settings; the tester and the help bar's glyphs read the router's (EmuSen_Qt.md §7.7.H3).
+    Binding {
+        target: Kit.PadRouter
+        property: "swapAcceptBack"
+        value: settingsModel.swapButtons
+        when: settingsModel.ready
+    }
+    // Rumble turned while a game runs reaches it at once.
+    Binding {
+        target: player.session
+        property: "rumble"
+        value: settingsModel.rumble
+        when: settingsModel.ready
     }
     // Home's lines that change with the time: the status line and the paused game's facts.
     Clock {
@@ -175,6 +197,7 @@ Window {
         controllers: pads.connected
         family: program.padFamily
         reducedMotion: program.reducedMotion
+        swap: Kit.PadRouter.swapAcceptBack
         inputs: !program.splashShown
         homeWanted: !(program.themeHost?.home ?? false)
         consolesWanted: !(program.themeHost?.consoles ?? false)
@@ -216,6 +239,7 @@ Window {
             controllers: pads.connected
             family: program.padFamily
             reducedMotion: program.reducedMotion
+            swap: Kit.PadRouter.swapAcceptBack
             inputs: !program.splashShown
             splashShown: program.splashShown
             splashLayer: splashLayer

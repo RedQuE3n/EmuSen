@@ -76,6 +76,12 @@ pub mod qobject {
         #[qproperty(QString, text_size, cxx_name = "textSize", READ, NOTIFY)]
         #[qproperty(bool, light, READ, NOTIFY)]
         #[qproperty(bool, reduced_motion, cxx_name = "reducedMotion", READ, NOTIFY)]
+        /// And of the pads (EmuSen_Qt.md §7.7.H3): Swap A and B in menus, Controller type's family (Kit.Families; -1 for
+        /// Automatic), Controller notices and Rumble; the rest the pads' hand-over is given (`gamePads`).
+        #[qproperty(bool, swap_buttons, cxx_name = "swapButtons", READ, NOTIFY)]
+        #[qproperty(i32, controller_family, cxx_name = "controllerFamily", READ, NOTIFY)]
+        #[qproperty(bool, controller_notices, cxx_name = "controllerNotices", READ, NOTIFY)]
+        #[qproperty(bool, rumble, READ, NOTIFY)]
         /// The help bar's screen (HelpModel's numbers).
         #[qproperty(i32, help, READ, NOTIFY)]
         /// The pads' hand-over (`PadReader.gamePads`), whose seats the Players page shows and changes (EmuSen_Qt.md §7.7.H).
@@ -311,6 +317,10 @@ pub struct SettingsModelRust {
     text_size: QString,
     light: bool,
     reduced_motion: bool,
+    swap_buttons: bool,
+    controller_family: i32,
+    controller_notices: bool,
+    rumble: bool,
     help: i32,
     problem: QString,
     view: SettingsView,
@@ -377,6 +387,10 @@ impl Default for SettingsModelRust {
             text_size: QString::default(),
             light: false,
             reduced_motion: false,
+            swap_buttons: false,
+            controller_family: -1,
+            controller_notices: false,
+            rumble: false,
             help: shown_screen(Screen::Settings),
             problem: QString::default(),
             rows: view.rows(),
@@ -431,7 +445,12 @@ impl cxx_qt::Initialize for qobject::SettingsModel {
                 model.shown(true);
             })
             .release();
-        self.as_mut().on_game_pads_changed(|model| model.seats_changed()).release();
+        self.as_mut()
+            .on_game_pads_changed(|mut model| {
+                model.as_mut().settle_pads();
+                model.seats_changed();
+            })
+            .release();
         self.on_focused_changed(|model| model.pane()).release();
     }
 }
@@ -671,9 +690,37 @@ impl qobject::SettingsModel {
             self.as_mut().rust_mut().reduced_motion = reduced;
             self.as_mut().reduced_motion_changed();
         }
+        let (swap, notices, rumble) = (self.view.swap_buttons(), self.view.controller_notices(), self.view.rumble());
+        let family = self.view.controller_family().map_or(-1, |f| emusen_kit_qt::kinds::family_of(f).repr);
+        if self.swap_buttons != swap {
+            self.as_mut().rust_mut().swap_buttons = swap;
+            self.as_mut().swap_buttons_changed();
+        }
+        if self.controller_family != family {
+            self.as_mut().rust_mut().controller_family = family;
+            self.as_mut().controller_family_changed();
+        }
+        if self.controller_notices != notices {
+            self.as_mut().rust_mut().controller_notices = notices;
+            self.as_mut().controller_notices_changed();
+        }
+        if self.rumble != rumble {
+            self.as_mut().rust_mut().rumble = rumble;
+            self.as_mut().rumble_changed();
+        }
+        self.as_mut().settle_pads();
         if !self.ready {
             self.as_mut().rust_mut().ready = true;
             self.ready_changed();
+        }
+    }
+
+    /// The settings the pads act on handed to the pads' reader, once read (Mistress's `SaveApp`: deadzone, stickdpad, mirror).
+    fn settle_pads(self: Pin<&mut Self>) {
+        let Some(settings) = self.view.pad_settings() else { return };
+        // SAFETY: the address is PadReader.gamePads, whose reader outlives the screens.
+        if let Some(pads) = unsafe { emusen_qt_endymion::game::GamePads::at(self.game_pads) } {
+            pads.settle(settings);
         }
     }
 

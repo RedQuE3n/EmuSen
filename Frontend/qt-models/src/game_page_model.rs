@@ -139,6 +139,11 @@ pub mod qobject {
         /// A door to a later piece's page, by its row's key.
         #[qsignal]
         fn door(self: Pin<&mut GamePageModel>, key: QString);
+
+        /// The folder holding the game's file, for the program's one folder action (`Folders.open`).
+        #[qsignal]
+        #[cxx_name = "openFolder"]
+        fn open_folder(self: Pin<&mut GamePageModel>, path: QString);
     }
 
     unsafe extern "RustQt" {
@@ -239,6 +244,13 @@ fn items(content: &Content) -> Vec<Item> {
     }
 }
 
+/// What a Yes to the page's question does: a change saved, or the game started from a state.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Pending {
+    Change(crate::game_page::Change),
+    Play(String),
+}
+
 pub struct GamePageModelRust {
     platform_library: QString,
     cores: QString,
@@ -264,8 +276,8 @@ pub struct GamePageModelRust {
     question_sentences: QStringList,
     question_choices: QStringList,
     question_back: i32,
-    /// The change the question asks about.
-    pending: Option<crate::game_page::Change>,
+    /// What the question asks about.
+    pending: Option<Pending>,
     page: GamePage,
     file: GameFile,
     items: Vec<Item>,
@@ -524,26 +536,52 @@ impl qobject::GamePageModel {
                     self.refresh();
                 }
             }
-            Outcome::Ask(question, change) => {
-                let back = crate::question::back_index(&question);
-                self.as_mut().rust_mut().pending = Some(change);
-                self.as_mut().rust_mut().question_title = QString::from(question.title.as_str());
-                self.as_mut().rust_mut().question_sentences = list(question.sentences.into_iter());
-                self.as_mut().rust_mut().question_choices = list(question.choices.into_iter());
-                self.as_mut().rust_mut().question_back = back;
-                self.as_mut().question_title_changed();
-                self.as_mut().question_sentences_changed();
-                self.as_mut().question_choices_changed();
-                self.as_mut().question_back_changed();
-                self.as_mut().rust_mut().asking = true;
-                self.asking_changed();
-            }
-            Outcome::Play(state) => {
+            Outcome::Ask(question, change) => self.ask(question, Pending::Change(change)),
+            Outcome::Play(Some(state)) => self.play_from(state),
+            Outcome::Play(None) => {
                 let path = QString::from(self.file.path.as_str());
-                self.played(path, QString::from(state.unwrap_or_default().as_str()));
+                self.played(path, QString::default());
             }
             Outcome::Door(key) => self.door(QString::from(key)),
+            Outcome::OpenFolder => {
+                let folder = std::path::Path::new(&self.file.path).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+                self.open_folder(QString::from(folder.as_str()));
+            }
         }
+    }
+
+    /// The question form opened on `question`, its Yes doing `pending`.
+    fn ask(mut self: Pin<&mut Self>, question: crate::question::Question, pending: Pending) {
+        let back = crate::question::back_index(&question);
+        self.as_mut().rust_mut().pending = Some(pending);
+        self.as_mut().rust_mut().question_title = QString::from(question.title.as_str());
+        self.as_mut().rust_mut().question_sentences = list(question.sentences.into_iter());
+        self.as_mut().rust_mut().question_choices = list(question.choices.into_iter());
+        self.as_mut().rust_mut().question_back = back;
+        self.as_mut().question_title_changed();
+        self.as_mut().question_sentences_changed();
+        self.as_mut().question_choices_changed();
+        self.as_mut().question_back_changed();
+        self.as_mut().rust_mut().asking = true;
+        self.asking_changed();
+    }
+
+    /// The game started from a state, asking first where the state was saved from another copy of the game; the
+    /// runtime's record and the game's hash are read off the GUI thread.
+    fn play_from(self: Pin<&mut Self>, state: String) {
+        let (source, file) = (self.source.clone(), self.file.clone());
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            let other = source.map_or(Ok(None), |s| s.other_copy(&file, &state));
+            let _ = thread.queue(move |mut model| {
+                let name = std::path::Path::new(&file.path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                match other {
+                    Ok(Some(saved_from)) => model.ask(crate::game_page::other_copy_question(&saved_from, &name), Pending::Play(state)),
+                    Ok(None) => model.played(QString::from(file.path.as_str()), QString::from(state.as_str())),
+                    Err(words) => model.as_mut().said(words),
+                }
+            });
+        });
     }
 
     pub fn act(self: Pin<&mut Self>, index: i32) {
@@ -591,8 +629,13 @@ impl qobject::GamePageModel {
             self.as_mut().asking_changed();
             self.as_mut().answered();
         }
-        if let (1, Some(change)) = (index, pending) {
-            self.outcome(Outcome::Changed(change));
+        match (index, pending) {
+            (1, Some(Pending::Change(change))) => self.outcome(Outcome::Changed(change)),
+            (1, Some(Pending::Play(state))) => {
+                let path = QString::from(self.file.path.as_str());
+                self.played(path, QString::from(state.as_str()));
+            }
+            _ => {}
         }
     }
 

@@ -39,6 +39,11 @@ pub const CLOCK: (&str, &str) = ("clock", "time");
 /// `PathView.StrictlyEnforceRange`: the current item held in the highlight range, so the offset follows the current index.
 const STRICTLY_ENFORCE_RANGE: f64 = 2.0;
 
+/// The kit's property an action declares a value Left and Right step with (`ActionButton.stepped`), and the most
+/// presses the walk makes on through one (EmuSen_Kit.md §7.58).
+const STEPPED: &str = "stepped";
+const STEPS_PRESSED: usize = 64;
+
 /// Messages Qt logs of its own accord that no code of ours causes, each with its reason (EmuSen_Kit.md §7.14).
 pub const QT_INTERNAL: [(&str, &str); 2] = [
     // Qt Multimedia converting a clip's frame to a picture where there is no RHI, the software backend's path (EmuSen_Kit.md §7.50).
@@ -325,6 +330,15 @@ impl Scene<'_> {
                 return Some(index);
             }
             at = now.nodes.iter().position(|n| n.id == now.nodes[at].parent)?;
+        }
+    }
+
+    /// Where a press from `from` landed: another element, the same one, or none of the tree's.
+    fn landing(&mut self, tree: &Tree, live: &[u64], from: u32) -> Landing {
+        match self.landed(tree, live) {
+            Some(to) if to == from => Landing::Same,
+            Some(to) => Landing::At(to),
+            None => Landing::Lost,
         }
     }
 
@@ -622,12 +636,15 @@ impl Scene<'_> {
                 self.wait(5);
                 press(self, button);
                 // A focus on no item the walk knows is found by reading the tree, which marks what it reads as read.
+                let mut to = self.landing(tree, &live, from);
+                // A stepped action keeps the focus while it steps its value; the pad presses on, as a player does, until it moves.
+                let mut more = STEPS_PRESSED;
+                while to == Landing::Same && more > 0 && ffi::harness_get(self.window(), id, &QString::from(STEPPED)) == 1.0 {
+                    press(self, button);
+                    to = self.landing(tree, &live, from);
+                    more -= 1;
+                }
                 let mut read = !live.contains(&ffi::harness_focus(self.window()));
-                let to = match self.landed(tree, &live) {
-                    Some(to) if to == from => Landing::Same,
-                    Some(to) => Landing::At(to),
-                    None => Landing::Lost,
-                };
                 steps.push(Step { from, button, to });
                 // Items made since the tree was read stand for the tree's own once found; a scope's focus is then given back to them.
                 for _ in 0..3 {

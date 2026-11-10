@@ -136,6 +136,7 @@ pub(crate) fn get(lib: &Library, r: &Value) -> Result<String, Error> {
         "members" => json!(records::members(&*lib.db()?, integer(r, "id")?)?),
         "collections_of" => json!(records::collections_of(&*lib.db()?, &text(r, "path")?)?),
         "crop" => crop_value(records::crop(&*lib.db()?, &text(r, "path")?)?),
+        "standard" => json!({ "value": records::standard(&*lib.db()?, &text(r, "path")?)?, "values": records::STANDARDS }),
         "cover_lookup" => json!(records::cover_lookup(&*lib.db()?, &text(r, "path")?)?),
         "known_hash" => json!(records::known_hash(&*lib.db()?, &text(r, "path")?, integer(r, "bytes")?, integer(r, "modified")?)?),
         "path_by_hash" => json!(records::path_by_hash(&*lib.db()?, &text(r, "md5")?)?),
@@ -219,6 +220,7 @@ pub(crate) fn change(lib: &Library, r: &Value) -> Result<String, Error> {
             records::set_crop(db, &path()?, crop)?
         }
         "clear_crop" => records::clear_crop(db, &path()?)?,
+        "set_standard" => records::set_standard(db, &path()?, text_or_none(r, "standard")?.as_deref(), &at(r)?)?,
         "save_edits" => records::save_edits(db, &path()?, &changes(r)?, &at(r)?)?,
         "clear_edits" => records::clear_edits(db, &path()?)?,
         "create_collection" => {

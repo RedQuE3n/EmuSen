@@ -82,6 +82,7 @@ Item {
         objectName: "feed." + themed.objectName
         host: host
         clock: themed.clock.time
+        now: themed.clock.now
         onPlayed: (game) => themed.played(game)
         onResumed: themed.resumed()
         onPlaceChosen: (index) => themed.screens.place(index)

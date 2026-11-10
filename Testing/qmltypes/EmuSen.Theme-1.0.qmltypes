@@ -758,7 +758,7 @@ Module {
     }
     Component {
         file: "words.cxxqt.h"
-        lineNumber: 15
+        lineNumber: 23
         name: "ThemeWords"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -771,7 +771,7 @@ Module {
             type: "QString"
             read: "getTitle"
             index: 0
-            lineNumber: 21
+            lineNumber: 29
             isReadonly: true
             isPropertyConstant: true
         }
@@ -780,7 +780,7 @@ Module {
             type: "QString"
             read: "getGamesHeading"
             index: 1
-            lineNumber: 22
+            lineNumber: 30
             isReadonly: true
             isPropertyConstant: true
         }
@@ -789,7 +789,7 @@ Module {
             type: "QString"
             read: "getChooseAConsole"
             index: 2
-            lineNumber: 23
+            lineNumber: 31
             isReadonly: true
             isPropertyConstant: true
         }
@@ -798,7 +798,7 @@ Module {
             type: "QString"
             read: "getGamesPath"
             index: 3
-            lineNumber: 24
+            lineNumber: 32
             isReadonly: true
             isPropertyConstant: true
         }
@@ -807,7 +807,7 @@ Module {
             type: "QString"
             read: "getContinuePlaying"
             index: 4
-            lineNumber: 25
+            lineNumber: 33
             isReadonly: true
             isPropertyConstant: true
         }
@@ -816,7 +816,7 @@ Module {
             type: "QString"
             read: "getRecent"
             index: 5
-            lineNumber: 26
+            lineNumber: 34
             isReadonly: true
             isPropertyConstant: true
         }
@@ -825,7 +825,7 @@ Module {
             type: "QString"
             read: "getBetween"
             index: 6
-            lineNumber: 27
+            lineNumber: 35
             isReadonly: true
             isPropertyConstant: true
         }
@@ -834,7 +834,7 @@ Module {
             type: "QString"
             read: "getSearch"
             index: 7
-            lineNumber: 28
+            lineNumber: 36
             isReadonly: true
             isPropertyConstant: true
         }
@@ -843,7 +843,7 @@ Module {
             type: "QString"
             read: "getEmusenTag"
             index: 8
-            lineNumber: 29
+            lineNumber: 37
             isReadonly: true
             isPropertyConstant: true
         }
@@ -852,7 +852,7 @@ Module {
             type: "QString"
             read: "getLibretroTag"
             index: 9
-            lineNumber: 30
+            lineNumber: 38
             isReadonly: true
             isPropertyConstant: true
         }
@@ -861,7 +861,7 @@ Module {
             type: "QString"
             read: "getNoGames"
             index: 10
-            lineNumber: 31
+            lineNumber: 39
             isReadonly: true
             isPropertyConstant: true
         }
@@ -870,7 +870,7 @@ Module {
             type: "QString"
             read: "getNoRecent"
             index: 11
-            lineNumber: 32
+            lineNumber: 40
             isReadonly: true
             isPropertyConstant: true
         }
@@ -879,7 +879,7 @@ Module {
             type: "QString"
             read: "getNoConsoles"
             index: 12
-            lineNumber: 33
+            lineNumber: 41
             isReadonly: true
             isPropertyConstant: true
         }
@@ -888,7 +888,7 @@ Module {
             type: "QString"
             read: "getAddFolder"
             index: 13
-            lineNumber: 34
+            lineNumber: 42
             isReadonly: true
             isPropertyConstant: true
         }
@@ -897,7 +897,7 @@ Module {
             type: "QString"
             read: "getPlaces"
             index: 14
-            lineNumber: 35
+            lineNumber: 43
             isReadonly: true
             isPropertyConstant: true
         }
@@ -906,7 +906,7 @@ Module {
             type: "QString"
             read: "getContinueEntry"
             index: 15
-            lineNumber: 36
+            lineNumber: 44
             isReadonly: true
             isPropertyConstant: true
         }
@@ -915,29 +915,39 @@ Module {
             type: "QString"
             read: "getRecentEntry"
             index: 16
-            lineNumber: 37
+            lineNumber: 45
             isReadonly: true
             isPropertyConstant: true
         }
+        Property {
+            name: "now"
+            type: "double"
+            read: "getNow"
+            notify: "nowChanged"
+            index: 17
+            lineNumber: 46
+            isReadonly: true
+        }
+        Signal { name: "nowChanged"; lineNumber: 69 }
         Method {
             name: "games"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 59
+            lineNumber: 70
             Parameter { name: "count"; type: "int" }
         }
         Method {
             name: "ago"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 60
+            lineNumber: 71
             Parameter { name: "at"; type: "double" }
         }
         Method {
             name: "pausedFacts"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 61
+            lineNumber: 72
             Parameter { name: "console"; type: "QString" }
             Parameter { name: "paused_since"; type: "double" }
         }
@@ -945,7 +955,7 @@ Module {
             name: "facts"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 62
+            lineNumber: 73
             Parameter { name: "maker"; type: "QString" }
             Parameter { name: "year"; type: "int" }
             Parameter { name: "count"; type: "int" }
@@ -955,7 +965,7 @@ Module {
             name: "runsOn"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 63
+            lineNumber: 74
             Parameter { name: "engine_name"; type: "QString" }
             Parameter { name: "engine_kind"; type: "QString" }
         }
@@ -963,7 +973,7 @@ Module {
             name: "statusLine"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 64
+            lineNumber: 75
             Parameter { name: "controllers"; type: "int" }
             Parameter { name: "clock"; type: "QString" }
         }
@@ -971,14 +981,14 @@ Module {
             name: "splashCaption"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 65
+            lineNumber: 76
             Parameter { name: "consoles"; type: "int" }
         }
         Method {
             name: "summary"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 66
+            lineNumber: 77
             Parameter { name: "consoles"; type: "int" }
             Parameter { name: "games"; type: "int" }
         }
@@ -986,7 +996,7 @@ Module {
             name: "pausedAgo"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 67
+            lineNumber: 78
             Parameter { name: "paused_since"; type: "double" }
         }
     }

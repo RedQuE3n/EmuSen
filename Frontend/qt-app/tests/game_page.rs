@@ -1,14 +1,16 @@
-//! A game's page in the program (EmuSen_Qt.md §7.8): X on the grid opens it, the shoulders step its five sections, an
-//! engine stepped is saved, Y turns the heart, B returns to the grid; the five states Mistress recorded are held at the
-//! gate's sizes and recorded; and the hero's clip, a clip this test writes itself, plays after the still, stops when
-//! the page loses the focus, and a game with no clip keeps its still.
+//! A game's page in the program (EmuSen_Qt.md §7.8): X on the grid opens it, the shoulders step its five sections, the
+//! television standard stepped is saved, Open Folder gives the folder's URL, Y turns the heart, B returns to the grid;
+//! the five states Mistress recorded are held at the gate's sizes, the pad reaching every action, and recorded; the
+//! player's own screenshot is listed in Media; the hero's clip, a clip this test writes itself, plays after the still,
+//! stops when the page loses the focus, and a game with no clip keeps its still; a hidden game leaves the grid; and a
+//! state chosen is the one the game starts from.
 
 mod common;
 
 use common::{draw_covers, hold, sandbox, wait_for, write_clip};
 use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
-use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS, SAVE_RESUME_STATE, SAVE_STATE};
+use emusen_platform_client::galaxia::consts::{DIR_SCREENSHOTS, FILE_GAMES, MODEL_APP_SETTINGS, SAVE_RESUME_STATE, SAVE_STATE};
 use emusen_platform_client::library::Library;
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt::MAIN_URL;
@@ -19,12 +21,49 @@ use std::time::{Duration, SystemTime};
 const COBALT: &str = "Cobalt Harbor (Synthetic)";
 const LANTERN: &str = "Lantern Bay (Synthetic)";
 
-/// The gate's finding this screen names for the tester: Favourite, which Right reaches from Resume only once Resume has stepped through its
-/// states (LunaP's `MoveInActions`), where the walk presses each direction once (held below, EmuSen_Qt.md §7.8).
-fn named(fault: &str, tree: &emusen_qt_test::tree::Tree, _size: (i32, i32)) -> bool {
-    let item = fault.rsplit(": ").next().and_then(|n| n.parse::<usize>().ok()).and_then(|i| tree.nodes.get(i));
-    let favourite = fault.contains("the pad does not reach") && item.is_some_and(|n| n.ty.starts_with("ActionButton") && n.heard == "Favourite");
-    favourite
+/// No finding is named for the tester: the gate holds every state whole.
+fn nothing_named(_: &str, _: &emusen_qt_test::tree::Tree, _: (i32, i32)) -> bool {
+    false
+}
+
+/// The focus moved by `button` until it is on the item heard as `heard`.
+fn move_to(scene: &mut Scene<'_>, button: UiButton, heard: &str) {
+    let mut seen = Vec::new();
+    for _ in 0..10 {
+        let tree = scene.tree();
+        let now = scene.focus(&tree).map(|i| tree.nodes[i as usize].heard.clone()).unwrap_or_default();
+        if now == heard {
+            return;
+        }
+        seen.push(now);
+        scene.pad(button);
+        scene.wait(80);
+    }
+    panic!("{button:?} never reached {heard}: {seen:?}");
+}
+
+/// The question opened, its enter transition done, and its first answer holding the focus, so a press is the question's
+/// however long it took to open.
+fn answers_focused(scene: &mut Scene<'_>) {
+    for _ in 0..120 {
+        if scene.property("pageQuestion", "opened") == "true" {
+            let tree = scene.tree();
+            if scene.focus(&tree).is_some_and(|i| tree.nodes[i as usize].name == "answer.0") {
+                return;
+            }
+        }
+        scene.wait(25);
+    }
+    panic!("the question never opened with its first answer focused");
+}
+
+fn down_to(scene: &mut Scene<'_>, row: &str) {
+    move_to(scene, UiButton::Down, row);
+}
+
+/// Whether a text on the screen reads `words`.
+fn reads(scene: &mut Scene<'_>, words: &str) -> bool {
+    scene.tree().nodes.iter().any(|n| n.visible && n.text.as_deref() == Some(words))
 }
 
 /// A state's file, saved `ago` seconds before now.
@@ -54,14 +93,20 @@ fn open_page(scene: &mut Scene<'_>, index: usize) {
     scene.wait(300);
 }
 
-/// The section by its index, through the right shoulder.
+/// The section by its index, through the right shoulder, each press waited for before the next, so none overshoots.
 fn section(scene: &mut Scene<'_>, index: i32) {
     for _ in 0..5 {
-        if scene.property("pageModel", "section") == index.to_string() {
+        let now = scene.property("pageModel", "section");
+        if now == index.to_string() {
             break;
         }
         scene.pad(UiButton::PageDown);
-        scene.wait(100);
+        for _ in 0..40 {
+            if scene.property("pageModel", "section") != now {
+                break;
+            }
+            scene.wait(25);
+        }
     }
     assert_eq!(scene.property("pageModel", "section"), index.to_string());
     scene.wait(200);
@@ -153,28 +198,30 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
         scene.wait(50);
     }
     wait_for(&mut scene, "pageModel", "help", &help(emusen_qt_models::help::Screen::GamePage), 1000);
-    hold(&mut scene, "GamePage", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "GamePage", &mockup::Mockup::default(), nothing_named, &mut report);
 
     section(&mut scene, 1);
     assert_eq!(scene.property("pageModel", "shows"), "1");
-    hold(&mut scene, "GamePageStates", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "GamePageStates", &mockup::Mockup::default(), nothing_named, &mut report);
     // X on Slot 1 asks first, No focused: A keeps the state; X again, Down to Delete, A deletes it, its picture and its record.
     let slot1 = platform.save_path(SAVE_STATE, rom.to_str().unwrap(), None, 1).unwrap();
     scene.pad(UiButton::Down);
+    scene.wait(200);
+    move_to(&mut scene, UiButton::Left, "Slot 1");
     wait_for(&mut scene, "pageModel", "help", &help(emusen_qt_models::help::Screen::GamePageLoad), 1000);
     // The help bar's actions follow the help screen a frame later: X is Delete… once it shows.
     scene.wait(300);
     scene.pad(UiButton::Screensaver);
     wait_for(&mut scene, "pageModel", "asking", "true", 1000);
     assert_eq!(scene.property("pageModel", "questionTitle"), "Delete Slot 1?");
-    scene.wait(400);
+    answers_focused(&mut scene);
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "pageModel", "asking", "false", 1000);
     assert!(slot1.exists(), "No keeps the state");
     scene.wait(300);
     scene.pad(UiButton::Screensaver);
     wait_for(&mut scene, "pageModel", "asking", "true", 1000);
-    scene.wait(400);
+    answers_focused(&mut scene);
     scene.pad(UiButton::Down);
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "pageModel", "asking", "false", 1000);
@@ -188,11 +235,44 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     scene.pad(UiButton::Up);
     section(&mut scene, 2);
     assert_eq!(scene.property("pageModel", "shows"), "2");
-    hold(&mut scene, "GamePageOptions", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "GamePageOptions", &mockup::Mockup::default(), nothing_named, &mut report);
+    // The television standard, offered for a television's console: the game's own, stepped to NTSC and saved in games.db,
+    // then back; the package's state in Mistress's words.
+    assert!(reads(&mut scene, "Not a package"), "the package's state");
+    down_to(&mut scene, "Television standard");
+    assert!(reads(&mut scene, "The game's"));
+    let standard = |platform: &std::sync::Arc<Platform>| {
+        let games = Library::open(platform, &platform.file(FILE_GAMES).unwrap(), &sqlite).unwrap();
+        games.get(&serde_json::json!({ "what": "standard", "path": rom.to_str().unwrap() })).unwrap()["value"].clone()
+    };
+    scene.pad(UiButton::Right);
+    wait_for(&mut scene, "pageModel", "ready", "true", 1000);
+    for _ in 0..40 {
+        if reads(&mut scene, "NTSC") {
+            break;
+        }
+        scene.wait(50);
+    }
+    assert!(reads(&mut scene, "NTSC"), "the row reads the standard saved");
+    assert_eq!(standard(&platform), "ntsc");
+    scene.pad(UiButton::Left);
+    for _ in 0..40 {
+        if reads(&mut scene, "The game's") {
+            break;
+        }
+        scene.wait(50);
+    }
+    assert_eq!(standard(&platform), serde_json::Value::Null, "the game's own again");
     section(&mut scene, 3);
-    hold(&mut scene, "GamePageMedia", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "GamePageMedia", &mockup::Mockup::default(), nothing_named, &mut report);
     section(&mut scene, 4);
-    hold(&mut scene, "GamePageDetails", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "GamePageDetails", &mockup::Mockup::default(), nothing_named, &mut report);
+    // Open Folder: the program's one folder action, given the folder holding the game's file, caught as its URL.
+    assert!(scene.set_property("folders", "catching", "true"));
+    down_to(&mut scene, "Open Folder");
+    scene.pad(UiButton::Accept);
+    let url = emusen_qt_models::folders::url_of(rom.parent().unwrap().to_str().unwrap());
+    wait_for(&mut scene, "folders", "caught", &url, 1000);
 
     // Y turns the heart on, saved in games.db.
     let hearted = scene_actions_with(&mut scene, "♥");
@@ -200,6 +280,37 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     wait_for(&mut scene, "pageModel", "actions", &hearted, 2000);
 
     // B returns to the grid, the focus on the same game.
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "screens", "shown", "Grid", 1000);
+
+    // The player's own screenshot, named as the program names one in Galaxia's folder, leads Media.
+    let shots = platform.directory(DIR_SCREENSHOTS).unwrap().unwrap();
+    std::fs::create_dir_all(&shots).unwrap();
+    std::fs::copy(&pictures[0].0, shots.join(emusen_qt_models::screenshots::name(rom.to_str().unwrap(), "2026-11-09", "14.03.11.251"))).unwrap();
+    scene.pad(UiButton::Screensaver);
+    wait_for(&mut scene, "screens", "shown", "Page", 2000);
+    wait_for(&mut scene, "pageModel", "ready", "true", 10000);
+    // Left on Favourite, the page opens again on Play, as Mistress's does.
+    move_to(&mut scene, UiButton::Right, "Favourite");
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "screens", "shown", "Grid", 1000);
+    scene.pad(UiButton::Screensaver);
+    wait_for(&mut scene, "screens", "shown", "Page", 2000);
+    scene.wait(300);
+    let tree = scene.tree();
+    let focused = scene.focus(&tree).map(|i| tree.nodes[i as usize].heard.clone());
+    assert_eq!(focused.as_deref(), Some("Play"), "the page opens on Play");
+    section(&mut scene, 3);
+    assert!(reads(&mut scene, "Screenshot 1"), "the player's screenshot in Media");
+    // The shoulder to Details with the focus on a tile: the focus goes on to Details' first row, which is shown.
+    scene.pad(UiButton::Down);
+    move_to(&mut scene, UiButton::Left, "Screenshot 1");
+    scene.pad(UiButton::PageDown);
+    wait_for(&mut scene, "pageModel", "section", "4", 1000);
+    scene.wait(200);
+    let tree = scene.tree();
+    let focused = scene.focus(&tree).map(|i| (tree.nodes[i as usize].heard.clone(), tree.nodes[i as usize].visible));
+    assert_eq!(focused, Some(("Scrape This Game".to_string(), true)), "the focus on the list shown");
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Grid", 1000);
 
@@ -248,7 +359,7 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "pageModel", "asking", "true", 1000);
     assert_eq!(scene.property("pageModel", "questionTitle"), format!("Hide {LANTERN}?"));
-    scene.wait(400);
+    answers_focused(&mut scene);
     scene.pad(UiButton::Down);
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "screens", "shown", "Grid", 2000);
@@ -256,6 +367,28 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     let lantern = world.root.join("Roms/SNES").join(format!("{LANTERN}.sfc"));
     let edits = games.get(&serde_json::json!({ "what": "edits", "path": lantern.to_str().unwrap() })).unwrap();
     assert_eq!(edits["hidden"], "1", "hidden in games.db: {edits}");
+    // Hidden, the game leaves the grid, as it leaves Mistress's every view.
+    wait_for(&mut scene, "gridGames", "count", "1", 5000);
+
+    // A state chosen on the page is the one the game starts from: the session is named it as the game is started.
+    open_page(&mut scene, 0);
+    assert_eq!(scene.property("pageModel", "title"), COBALT);
+    section(&mut scene, 1);
+    scene.pad(UiButton::Down);
+    scene.wait(200);
+    move_to(&mut scene, UiButton::Left, "Slot 1");
+    move_to(&mut scene, UiButton::Right, "Slot 2");
+    wait_for(&mut scene, "pageModel", "help", &help(emusen_qt_models::help::Screen::GamePageLoad), 1000);
+    scene.pad(UiButton::Accept);
+    let slot2 = platform.save_path(SAVE_STATE, rom.to_str().unwrap(), None, 2).unwrap();
+    for _ in 0..40 {
+        if scene.property("session", "startState") == slot2.to_str().unwrap() {
+            break;
+        }
+        scene.wait(50);
+    }
+    let said = (scene.property("pageModel", "problem"), scene.property("screens", "shown"), scene.property("launch", "asking"));
+    assert_eq!(scene.property("session", "startState"), slot2.to_str().unwrap(), "the state named for the start: {said:?}");
     scene.assert_quiet();
     assert!(report.is_empty(), "{}", report.join("\n"));
 }

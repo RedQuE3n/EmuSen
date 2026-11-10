@@ -136,6 +136,12 @@ impl Library {
         serde_json::from_value(answer).map_err(|e| Error::Shape { call: "games", words: e.to_string() })
     }
 
+    /// What a dump is, {"path", "record": false, ...}: its MD5 from the hash cache while the file is unchanged, else read.
+    pub fn identity(&self, request: &Value) -> Result<Value> {
+        let request = to_json(request);
+        self.call("identity", &request, |r, rl, o, l| unsafe { self.platform.lib.emusen_library_identity(self.handle.as_ptr(), r, rl, o, l) })
+    }
+
     /// One read, {"what": ...}, as the header lists them.
     pub fn get(&self, request: &Value) -> Result<Value> {
         let request = to_json(request);

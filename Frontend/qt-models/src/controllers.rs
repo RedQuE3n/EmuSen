@@ -51,20 +51,25 @@ pub fn control_number(name: &str) -> Option<u32> {
 /// How far a stick's direction (`<axis>-` or `<axis>+`) is pushed on a pad's axes, 0 to 1, by the core ABI's axis
 /// numbers; 0 for a control that is not a stick's direction.
 pub fn stick_push(control: &str, axes: &[f64]) -> f64 {
-    let (axis, toward) = control.split_at(control.len().saturating_sub(1));
-    let Some(at) = Axis::NAMES.iter().position(|n| *n == axis) else { return 0.0 };
-    let value = axes.get(at).copied().unwrap_or(0.0);
-    match toward {
-        "-" => (-value).clamp(0.0, 1.0),
-        "+" => value.clamp(0.0, 1.0),
-        _ => 0.0,
-    }
+    let Some((axis, toward)) = stick_way(control) else { return 0.0 };
+    (f64::from(toward) * axes.get(axis as usize).copied().unwrap_or(0.0)).clamp(0.0, 1.0)
 }
 
 /// Whether a stick's direction is held: pushed past `threshold` of its travel, the stick deadzone past which Endymion
 /// hears a stick as a direction.
 pub fn stick_held(control: &str, axes: &[f64], threshold: f64) -> bool {
     stick_push(control, axes) > threshold
+}
+
+/// A stick's direction (`<axis>-` or `<axis>+`) as the core's axis number and its way, -1 toward the low end.
+pub fn stick_way(control: &str) -> Option<(u32, i32)> {
+    let (axis, toward) = control.split_at(control.len().saturating_sub(1));
+    let at = Axis::NAMES.iter().position(|n| *n == axis)? as u32;
+    match toward {
+        "-" => Some((at, -1)),
+        "+" => Some((at, 1)),
+        _ => None,
+    }
 }
 
 /// Whether a control is a button, bound to a gamepad's button; a stick's direction is read from the pad's own stick.

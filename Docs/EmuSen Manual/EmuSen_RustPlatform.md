@@ -4594,3 +4594,14 @@ front end's alone. Held to Endymion's `held_is_every_sdl_button_by_its_bit_and_t
 platform client's `platform.rs` (a path with dots, a Windows path, a name that begins with its dot) and `qt-endymion`'s
 `seats.rs` (a trigger held is the held mask's bit). Seeded and caught: the key keeping its extension (`platform.rs`) and
 the right trigger's bit dropped (`seats.rs`).
+
+**Each control's word** (interface 47, decided 2026-11-10 by the tester). The Qt bindings page names controls as the core
+does, a button by its name and a stick's direction by its axis and way (`LeftY-`), while the binding files name the
+directions `LeftStickUp` and the rest, so Keyboard keys showed no key for a stick's direction and would have written a
+new one under the drawing's name. `emusen_endymion_bindings_controls(out, len)` answers each `PadControl` in order with
+its word and the `PadButton` it is, or the `PadAxis` it pushes and which way (`bindings::controls`, from the vocabulary
+and `pad::directions`); the page finds a control's word by it (`file_control`) for the key shown, listened for, cleared,
+reset, lit by the tester and named in a clash, as Mistress's page did with `PadControl` itself. Held to Endymion's
+`bindings` unit test, the client's `platform.rs` and `qt-models`' `controllers.rs` (Left stick up shown bound to I and
+bound to K under `LeftStickUp`, never under `LeftY-`). Seeded and caught there: the drawing's names used as the files'
+words, and a stick's way reversed in Endymion.

@@ -114,6 +114,16 @@ pub unsafe extern "C" fn emusen_endymion_bindings_game_key(path: *const u8, path
     }
 }
 
+/// Since 47: each PadControl's word in the binding files with the button it is or the stick's axis and way, as a JSON
+/// array, by the length query.
+///
+/// # Safety
+/// `out` must be valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_endymion_bindings_controls(out: *mut u8, len: usize) -> i64 {
+    unsafe { put(bindings::controls().to_string().as_bytes(), out, len) }
+}
+
 /// Why a model a caller passed would not read.
 fn unread(file: File) -> impl FnOnce(String) -> i32 {
     move |words| fail(status::PARSE, format!("the {} model: {words}", file.name()))

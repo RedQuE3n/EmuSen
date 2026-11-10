@@ -1114,6 +1114,7 @@ pub struct PlatformLibrary {
         len: usize,
     ) -> i64,
     pub emusen_endymion_bindings_game_key: unsafe extern "C" fn(path: *const u8, path_len: usize, out: *mut u8, len: usize) -> i64,
+    pub emusen_endymion_bindings_controls: unsafe extern "C" fn(out: *mut u8, len: usize) -> i64,
     pub emusen_endymion_sdl_lend: unsafe extern "C" fn(handle: *mut ::std::os::raw::c_void) -> i32,
     pub emusen_endymion_sdl_hint: unsafe extern "C" fn(name: *const u8, name_len: usize, out: *mut u8, cap: usize) -> i64,
     pub emusen_endymion_sim_pad_new: unsafe extern "C" fn(path: *const u8, path_len: usize) -> *mut emusen_endymion_sim_pad,
@@ -1591,6 +1592,7 @@ impl PlatformLibrary {
         let emusen_endymion_bindings_bound = unsafe { __library.get(b"emusen_endymion_bindings_bound\0") }.map(|sym| *sym)?;
         let emusen_endymion_bindings_choose = unsafe { __library.get(b"emusen_endymion_bindings_choose\0") }.map(|sym| *sym)?;
         let emusen_endymion_bindings_game_key = unsafe { __library.get(b"emusen_endymion_bindings_game_key\0") }.map(|sym| *sym)?;
+        let emusen_endymion_bindings_controls = unsafe { __library.get(b"emusen_endymion_bindings_controls\0") }.map(|sym| *sym)?;
         let emusen_endymion_sdl_lend = unsafe { __library.get(b"emusen_endymion_sdl_lend\0") }.map(|sym| *sym)?;
         let emusen_endymion_sdl_hint = unsafe { __library.get(b"emusen_endymion_sdl_hint\0") }.map(|sym| *sym)?;
         let emusen_endymion_sim_pad_new = unsafe { __library.get(b"emusen_endymion_sim_pad_new\0") }.map(|sym| *sym)?;
@@ -1869,6 +1871,7 @@ impl PlatformLibrary {
             emusen_endymion_bindings_bound,
             emusen_endymion_bindings_choose,
             emusen_endymion_bindings_game_key,
+            emusen_endymion_bindings_controls,
             emusen_endymion_sdl_lend,
             emusen_endymion_sdl_hint,
             emusen_endymion_sim_pad_new,
@@ -2874,6 +2877,9 @@ impl PlatformLibrary {
     }
     pub unsafe fn emusen_endymion_bindings_game_key(&self, path: *const u8, path_len: usize, out: *mut u8, len: usize) -> i64 {
         unsafe { (self.emusen_endymion_bindings_game_key)(path, path_len, out, len) }
+    }
+    pub unsafe fn emusen_endymion_bindings_controls(&self, out: *mut u8, len: usize) -> i64 {
+        unsafe { (self.emusen_endymion_bindings_controls)(out, len) }
     }
     pub unsafe fn emusen_endymion_sdl_lend(&self, handle: *mut ::std::os::raw::c_void) -> i32 {
         unsafe { (self.emusen_endymion_sdl_lend)(handle) }

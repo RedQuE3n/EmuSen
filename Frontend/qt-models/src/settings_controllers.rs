@@ -42,6 +42,28 @@ pub trait Chooser: Send + Sync {
     fn bound(&self, console: &str, player: u32) -> [i32; 16];
     /// The name a game is known by in a console's profiles, from its path: Endymion's.
     fn game_key(&self, path: &str) -> String;
+    /// Each control's word in the binding files, with the button it is or the stick's axis and way: Endymion's.
+    fn controls(&self) -> &[ControlWord];
+}
+
+/// A control as the binding files name it (`emusen_endymion_bindings_controls`): its word, and the core's button it is
+/// or the axis a stick's direction pushes and which way.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ControlWord {
+    pub word: String,
+    pub button: Option<u32>,
+    pub axis: Option<u32>,
+    pub toward: i32,
+}
+
+impl ControlWord {
+    /// Endymion's answer read into words; an entry with no word is passed over.
+    pub fn read(answer: &Value) -> Vec<ControlWord> {
+        let number = |e: &Value, k: &str| e[k].as_u64().map(|n| n as u32);
+        answer.as_array().into_iter().flatten().filter_map(|e| {
+            Some(ControlWord { word: e["word"].as_str()?.to_owned(), button: number(e, "button"), axis: number(e, "axis"), toward: e["toward"].as_i64().unwrap_or(0) as i32 })
+        }).collect()
+    }
 }
 
 /// The bits a pad's triggers take beside SDL's buttons in what it holds: Endymion's (`PADS_HELD`).
@@ -598,7 +620,7 @@ impl SettingsView {
                 lines.push(format!("{} {}", self.cw("listening_mark"), fill(&self.cw("listen_key"), &[("control", &name)])));
                 tones.push(Tone::Attention);
             } else {
-                lines.push(self.read.bindings.key(&b.console, &control).map_or_else(|| self.cw("no_key"), |k| fill(&self.cw("bound_key"), &[("key", &k)])));
+                lines.push(self.read.bindings.key(&b.console, &self.file_control(&control)).map_or_else(|| self.cw("no_key"), |k| fill(&self.cw("bound_key"), &[("key", &k)])));
                 tones.push(Tone::Text);
                 muted.push(self.cw("keys_muted"));
             }
@@ -634,8 +656,19 @@ impl SettingsView {
         Pane { preview: Preview::Heading, caption: name, sentence, lines, muted, tones, ..Pane::default() }
     }
 
+    /// The word the binding files give a control the drawing names by the core's button or a stick's way (Endymion's
+    /// `bindings_controls`); the control's own name where Endymion names no such control.
+    fn file_control(&self, control: &str) -> String {
+        let words = self.chooser.as_ref().map_or(&[][..], |c| c.controls());
+        let found = match controllers::control_number(control) {
+            Some(n) => words.iter().find(|w| w.button == Some(n)),
+            None => controllers::stick_way(control).and_then(|(axis, toward)| words.iter().find(|w| w.axis == Some(axis) && w.toward == toward)),
+        };
+        found.map_or_else(|| control.to_owned(), |w| w.word.clone())
+    }
+
     fn conflict_words(&self, console: &str) -> Option<String> {
-        let controls: Vec<(String, String)> = self.controls_of(console).into_iter().map(|c| (c.clone(), self.control_words(&c))).collect();
+        let controls: Vec<(String, String)> = self.controls_of(console).into_iter().map(|c| (self.file_control(&c), self.control_words(&c))).collect();
         let found = self.read.bindings.conflicts(console, &controls, &|a| self.action_words(a));
         if found.is_empty() {
             return None;
@@ -657,7 +690,7 @@ impl SettingsView {
             .iter()
             .map(|c| {
                 if b.keys {
-                    self.read.bindings.key(&b.console, c).unwrap_or_default()
+                    self.read.bindings.key(&b.console, &self.file_control(c)).unwrap_or_default()
                 } else if controllers::is_button(c) {
                     self.read.bindings.bound(&b.console, &choice, c).map(|w| pad_words(&w)).unwrap_or_default()
                 } else {
@@ -712,7 +745,7 @@ impl SettingsView {
         };
         let mut held = Vec::new();
         for control in self.controls_of(&b.console) {
-            let by_key = self.read.bindings.key(&b.console, &control).is_some_and(|k| self.keys_held.iter().any(|h| h.eq_ignore_ascii_case(&k)));
+            let by_key = self.read.bindings.key(&b.console, &self.file_control(&control)).is_some_and(|k| self.keys_held.iter().any(|h| h.eq_ignore_ascii_case(&k)));
             let by_pad = pad.is_some_and(|pad| {
                 if let Some(n) = controllers::control_number(&control) {
                     let by_button = bound.get(n as usize).is_some_and(|&sdl| sdl >= 0 && pad.buttons & (1 << sdl) != 0);
@@ -811,12 +844,18 @@ impl SettingsView {
         let Some(control) = self.focused_control() else { return Outcome::Nothing };
         let Some(b) = self.binding.clone().filter(|b| !b.capturing) else { return Outcome::Nothing };
         match action {
-            crate::help::RESET if b.keys => Outcome::Bindings(vec![self.read.bindings.reset_key(&b.console, &control)]),
+            crate::help::RESET if b.keys => {
+                let word = self.file_control(&control);
+                Outcome::Bindings(vec![self.read.bindings.reset_key(&b.console, &word)])
+            }
             crate::help::RESET if controllers::is_button(&control) => {
                 let choice = self.choice(&b.console, b.player, &b.profile);
                 Outcome::Bindings(vec![self.read.bindings.reset_button(&b.console, b.player, &choice, &control)])
             }
-            crate::help::CLEAR if b.keys => Outcome::Bindings(vec![self.read.bindings.clear_key(&b.console, &control)]),
+            crate::help::CLEAR if b.keys => {
+                let word = self.file_control(&control);
+                Outcome::Bindings(vec![self.read.bindings.clear_key(&b.console, &word)])
+            }
             crate::help::PLAYER if !b.keys => {
                 let players = self.players_of(&b.console);
                 if let Some(page) = self.binding.as_mut() {
@@ -869,7 +908,10 @@ impl SettingsView {
             page.capturing = false;
         }
         match key {
-            Some(k) => Outcome::Bindings(self.read.bindings.rebind_key(&b.console, &control, k)),
+            Some(k) => {
+                let word = self.file_control(&control);
+                Outcome::Bindings(self.read.bindings.rebind_key(&b.console, &word, k))
+            }
             None => Outcome::Shown,
         }
     }

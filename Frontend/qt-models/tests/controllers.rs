@@ -10,7 +10,7 @@ use emusen_qt_models::bindings::{Bindings, Choice, File};
 use emusen_qt_models::consoles::{Console, ConsoleRead};
 use emusen_qt_models::controllers;
 use emusen_qt_models::settings::{self, Model, Outcome, Page, Preview, SettingsSource, SettingsView};
-use emusen_qt_models::settings_controllers::{Chooser, Seated};
+use emusen_qt_models::settings_controllers::{Chooser, ControlWord, Seated};
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -60,6 +60,14 @@ impl Chooser for Rule {
     }
     fn game_key(&self, path: &str) -> String {
         std::path::Path::new(path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+    }
+    /// Endymion's own words, from the platform library built from this commit.
+    fn controls(&self) -> &[ControlWord] {
+        static WORDS: std::sync::OnceLock<Vec<ControlWord>> = std::sync::OnceLock::new();
+        WORDS.get_or_init(|| {
+            let platform = emusen_platform_client::Platform::load(emusen_client_fixture::library()).unwrap();
+            ControlWord::read(&platform.bindings_controls().unwrap())
+        })
     }
 }
 
@@ -313,6 +321,27 @@ fn qt_7_7_h_keyboard_keys_and_hotkeys_take_a_key_from_each_other_and_name_a_clas
     assert_eq!(view.read.bindings.hotkey("FastForward").as_deref(), Some("Tab"));
     assert_eq!(view.read.bindings.key("SNES", "B").as_deref(), Some("Z"));
     assert_eq!(view.read.bindings.profiles("SNES"), ["Standard", "Couch"]);
+}
+
+#[test]
+fn qt_7_7_h_keyboard_keys_shows_and_binds_a_sticks_directions_by_the_files_words() {
+    let mut view = view();
+    view.read.bindings.keys["PlayStation"]["LeftStickUp"] = json!("I");
+    view.choose_section(0);
+    view.choose(index(&view, "keys"));
+    // To the PlayStation, whose DualShock's sticks are controls; Left stick up is bound to I in the file's words.
+    assert!(view.binding_shoulder(1));
+    let drawn = view.drawn().unwrap();
+    let up = drawn.controls.iter().position(|c| c == "LeftY-").expect("the left stick's up");
+    assert_eq!(drawn.texts[up], "I");
+    assert!(view.binding_focus(up));
+    assert_eq!(view.pane(0).lines[0], "Bound to the key I.", "the pane names its key");
+    assert!(view.binding_accept());
+    assert_eq!(view.heard_key(Some("K")), Outcome::Bindings(vec![File::Keys]));
+    assert_eq!(view.read.bindings.key("PlayStation", "LeftStickUp").as_deref(), Some("K"), "written under the file's word");
+    assert_eq!(view.read.bindings.key("PlayStation", "LeftY-"), None, "never under the drawing's");
+    assert_eq!(view.binding_act("clear"), Outcome::Bindings(vec![File::Keys]));
+    assert_eq!(view.read.bindings.key("PlayStation", "LeftStickUp"), None);
 }
 
 #[test]

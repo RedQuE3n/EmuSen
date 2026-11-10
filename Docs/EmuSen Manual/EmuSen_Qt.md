@@ -4342,7 +4342,8 @@ stick deadzone (`emusen_endymion_pads_setting`, `SETTING_STICK_DEADZONE`), read 
 handed over with the seats (`GamePads::stick_deadzone`), where Mistress's page held a 0.5 of its own. Decided
 2026-11-10 by the tester, the two that had no reader are read from Endymion since interface 47 (`EmuSen_RustPlatform.md`
 §55): a game's name in a console's profiles (`emusen_endymion_bindings_game_key`, through `Chooser::game_key`), and what a
-pad holds, SDL's buttons and the triggers past half (`EMUSEN_ENDYMION_PADS_HELD`).
+pad holds, SDL's buttons and the triggers past half (`EMUSEN_ENDYMION_PADS_HELD`). Keyboard keys finds the files' word for each control by Endymion's
+`emusen_endymion_bindings_controls`, so a stick's directions show and take their keys as Mistress's page did.
 
 **Held to** (measured on 2026-11-09). kit-core's `controller.rs` (8, Kit §7.62); `qt-models/tests/controllers.rs` (8: the tester lighting a key held and the pad, a stick's push and Endymion's deadzone; every
 drawing file reads and covers its controller's declared controls; the section's seats, profile and Rumble shown where a

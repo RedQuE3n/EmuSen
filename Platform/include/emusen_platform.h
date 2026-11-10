@@ -952,6 +952,14 @@ int64_t emusen_endymion_bindings_choose(const uint8_t *gamepad, size_t gamepad_l
  */
 int64_t emusen_endymion_bindings_game_key(const uint8_t *path, size_t path_len, uint8_t *out, size_t len);
 
+/*
+ * Since 47. Each PadControl as the binding files name it, in PadControl's order, by the length query, as
+ * [{"word":"B","button":0},...,{"word":"LeftStickUp","axis":1,"toward":-1},...]: a button's PadButton, or the PadAxis a
+ * stick's direction pushes and which way (-1 toward the axis's low end). Decided 2026-11-10 by the tester, so a page
+ * naming controls by the core's buttons and axes finds the word a file binds a key to.
+ */
+int64_t emusen_endymion_bindings_controls(uint8_t *out, size_t len);
+
 /* ---- Endymion: the device half (EmuSen_Audio_Sync.md, section 7; EmuSen_Input.md, sections 4 and 8) ---- */
 
 /*

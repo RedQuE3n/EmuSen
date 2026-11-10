@@ -73,6 +73,12 @@ impl Platform {
         Ok(String::from_utf8_lossy(&bytes).into_owned())
     }
 
+    /// Each PadControl's word in the binding files, with the button it is or the stick's axis and way (since interface 47).
+    pub fn bindings_controls(&self) -> Result<Value> {
+        let bytes = self.read(|o, l| unsafe { self.lib.emusen_endymion_bindings_controls(o, l) })?.unwrap_or_default();
+        json("bindings_controls", &bytes)
+    }
+
     /// One map at its defaults: a console's keys, a console's gamepad buttons, or the hotkeys.
     pub fn bindings_defaults(&self, which: u32) -> Result<Value> {
         let bytes = self.read(|o, l| unsafe { self.lib.emusen_endymion_bindings_defaults(which, o, l) })?.unwrap_or_default();

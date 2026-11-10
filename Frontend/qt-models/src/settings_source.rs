@@ -4,7 +4,7 @@
 use crate::bindings::{Bindings, Choice, File};
 use crate::clients::app_settings;
 use crate::settings::{Model, SettingsSource};
-use crate::settings_controllers::Chooser;
+use crate::settings_controllers::{Chooser, ControlWord};
 use emusen_platform_client::bindings::consts as files;
 use emusen_platform_client::galaxia::consts::{DIR_FIRMWARE, FILE_GRAPHICS, FILE_SETTINGS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
 use emusen_platform_client::{serenity, Platform};
@@ -58,7 +58,8 @@ impl ClientSettings {
 
     /// The chooser over this platform library.
     pub fn chooser(&self) -> std::sync::Arc<dyn Chooser> {
-        std::sync::Arc::new(Endymion(self.platform.clone()))
+        let controls = self.platform.bindings_controls().map(|a| ControlWord::read(&a)).unwrap_or_default();
+        std::sync::Arc::new(Endymion(self.platform.clone(), controls))
     }
 }
 
@@ -70,7 +71,7 @@ fn default_profile(p: &Platform) -> Result<String, String> {
 }
 
 /// Endymion's `bindings_choose` over a platform library.
-struct Endymion(std::sync::Arc<Platform>);
+struct Endymion(std::sync::Arc<Platform>, Vec<ControlWord>);
 
 impl Chooser for Endymion {
     fn choose(&self, gamepad: &Value, profiles: &Value, console: &str, player: u32, profile: Option<&str>, game: Option<&str>) -> Choice {
@@ -87,6 +88,10 @@ impl Chooser for Endymion {
 
     fn game_key(&self, path: &str) -> String {
         self.0.bindings_game_key(path).unwrap_or_default()
+    }
+
+    fn controls(&self) -> &[ControlWord] {
+        &self.1
     }
 }
 

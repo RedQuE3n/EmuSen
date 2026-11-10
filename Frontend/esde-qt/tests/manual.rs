@@ -1,6 +1,8 @@
 //! The media viewer's PDF manual on the GPU tier (EmuSen_Qt.md §4.13): a manual the test writes, two pages of flat
 //! colour, one upright and one across, opened with up, paged, zoomed and drawn through Qt PDF.
 
+mod common;
+
 use std::path::{Path, PathBuf};
 
 use cxx_qt_lib::QImage;
@@ -117,7 +119,9 @@ fn a_game_s_pdf_manual_opens_with_up_and_pages_zooms_and_draws_through_qt_pdf() 
     std::fs::write(&manual, pdf(&[((600, 800), (1.0, 0.0, 0.0)), ((800, 600), (0.0, 0.0, 1.0))])).unwrap();
     let mut harness = Harness::new();
     let mut scene = harness.load(SCENE, W, H);
-    let media = format!("{{\"nes\":{{\"manual\":{{\"nes-0000\":\"{}\"}}}}}}", manual.display());
+    let shot = root.join("shot.bmp");
+    common::bmp(&shot, 64, 56, |_, _| [0, 160, 0]);
+    let media = format!("{{\"nes\":{{\"manual\":{{\"nes-0000\":\"{}\"}},\"screenshot\":{{\"nes-0000\":\"{}\"}}}}}}", manual.display(), shot.display());
     assert!(scene.set_property("view", "media", &media));
     let settings = format!("{{\"theme\":\"{}\",\"interface\":{{\"DisplayClock\":false,\"StartupView\":\"gamelist\"}}}}", root.join("theme").display());
     assert!(scene.set_property("view", "settings", &settings));
@@ -126,10 +130,10 @@ fn a_game_s_pdf_manual_opens_with_up_and_pages_zooms_and_draws_through_qt_pdf() 
     until(&mut scene, "the theme loaded", |s| s.property("esdeModel", "themed") == "true");
     until(&mut scene, "the gamelist", |s| s.property("esdeModel", "view") == "gamelist");
 
-    // X opens the viewer on a game whose only medium is its manual; up opens the manual at its first page.
+    // X opens the viewer on a game with a screenshot and a manual; up opens the manual at its first page.
     scene.pad(UiButton::Screensaver);
     scene.wait(200);
-    assert_eq!(words(&mut scene, "element-help"), "PDFMANUAL", "a game with a manual and no other media offers it");
+    assert_eq!(words(&mut scene, "element-help"), "BROWSEPDFMANUALFIRSTLAST", "a game with a manual offers it");
     scene.pad(UiButton::Up);
     until(&mut scene, "the pages counted", |s| words(s, "element-left") == "PAGE1OF2");
     assert_eq!(words(&mut scene, "element-help"), "BROWSEGAMEMEDIAFIRSTLASTZOOM", "the manual's help");

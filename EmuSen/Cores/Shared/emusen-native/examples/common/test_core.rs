@@ -158,6 +158,13 @@ pub const HELD_CHEATS: u8 = 0xC4;
 /// its state, longer than a frame, so that a host's rule for a snapshot longer than a frame can be held through its API.
 pub const SLOW_SNAPSHOT: u8 = 0x5D;
 pub const SLOW_SNAPSHOT_MS: u64 = 40;
+/// Not a fault, since 2026-11-10: an image whose payload begins with `MOTOR_CONSOLE` reports `MOTOR_SYSTEM`, a console
+/// whose games drive a motor, so a host's rumble gate opens by the systems table (EmuSen_Input.md §9.2).
+pub const MOTOR_CONSOLE: u8 = 0x64;
+pub const MOTOR_SYSTEM: &str = "n64";
+/// Not a fault, since 2026-11-10: an image whose payload begins with `TWO_PADS` has a controller in port 1 as well, so a
+/// host's routing of a second port (its presence in RAM's `ABSENT` byte) can be seen.
+pub const TWO_PADS: u8 = 0x22;
 /// The test core's one unit (since 1.13): the timer, its count and the frames it has run.
 pub const TIMER_UNIT: u32 = 256;
 /// RAM's byte whose bit n says port n has no controller (`PRESENCE`, since 1.13), kept in the state as a console keeps it.
@@ -263,6 +270,8 @@ pub struct TestCore {
     interrupted: i64,
     /// `HELPER`: the second processor listed.
     helper: bool,
+    /// Port 1 holds a controller too (`TWO_PADS`).
+    two_pads: bool,
     /// `HELD_CHEATS`: whether every fourth frame holds the cheats, and whether the last frame did.
     holds: bool,
     cheats_held: bool,
@@ -360,10 +369,11 @@ impl TestCore {
             unlogged_interrupts: body.first() == Some(&UNLOGGED_INTERRUPT),
             interrupted: -1,
             helper: body.first() == Some(&HELPER),
+            two_pads: body.first() == Some(&TWO_PADS),
             holds: body.first() == Some(&HELD_CHEATS),
             cheats_held: false,
             reads: std::cell::Cell::new(0),
-            system: "test",
+            system: if body.first() == Some(&MOTOR_CONSOLE) { MOTOR_SYSTEM } else { "test" },
             old_host: faults() & FAULT_OLD_HOST_UNANSWERED != 0 && r.host_abi_version == (1 << 16) | 99,
         };
         m.draw();
@@ -381,7 +391,7 @@ impl TestCore {
                 Video { base_width: 8, base_height: 4, max_width: 16, max_height: 4, aspect: (4, 3), formats: vec![pixel::RGBA8888] }
             },
             audio: Audio { rate: self.rate, channels: vec!["Tone".into()] },
-            ports: vec![Port { port: 0, controller: Some("test.pad".into()) }, Port { port: 1, controller: None }],
+            ports: vec![Port { port: 0, controller: Some("test.pad".into()) }, Port { port: 1, controller: self.two_pads.then(|| "test.pad".into()) }],
             spaces: vec![Space { cheats: true, ..Space::new(0, "RAM") }, Space { read_only: true, byte_order: (TEST_CAPABILITIES != 0).then(|| if faults() & FAULT_BYTE_ORDER_MISSPELT != 0 { "Big" } else { BYTE_ORDER_BIG }), ..Space::new(1, "ROM") }],
             processors: std::iter::once(Processor { id: 0, name: "Counter".into(), pc_bits: 8, registers: vec![("F".into(), 64)], code_space: None })
                 .chain(self.helper.then(|| Processor { id: 1, name: "Helper".into(), pc_bits: 8, registers: Vec::new(), code_space: None }))

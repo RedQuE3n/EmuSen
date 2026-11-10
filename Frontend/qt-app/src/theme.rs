@@ -201,6 +201,8 @@ pub enum Carried {
     Acted(String),
     Focused(String),
     Selected(i32),
+    /// A game's page: the game taken in hand, then its page opened (EmuSen_Qt.md §7.8).
+    Page(String),
 }
 
 /// The signal an action becomes, `suspended` being the game a session holds and `rows` the library's rows' keys; none
@@ -209,7 +211,7 @@ pub fn carried(action: &Action, suspended: Option<&str>, rows: &[&str]) -> Optio
     Some(match action {
         Action::Play(key) if suspended == Some(key.as_str()) => Carried::Resumed,
         Action::Play(key) => Carried::Played(key.clone()),
-        Action::OpenPage(_) => Carried::Acted(help::GAME_PAGE.into()),
+        Action::OpenPage(key) => Carried::Page(key.clone()),
         Action::Favourite(_) => Carried::Acted(help::FAVOURITE.into()),
         Action::Random(_) => Carried::Acted(help::RANDOM.into()),
         Action::OpenConsole(key) => Carried::Opened(key.clone()),
@@ -252,6 +254,10 @@ impl ActionSink for Sink {
             Carried::Acted(key) => feed.as_mut().acted(QString::from(key.as_str())),
             Carried::Focused(game) => feed.as_mut().focused(QString::from(game.as_str())),
             Carried::Selected(index) => feed.as_mut().selected(index),
+            Carried::Page(game) => {
+                feed.as_mut().focused(QString::from(game.as_str()));
+                feed.as_mut().acted(QString::from(help::GAME_PAGE));
+            }
         }
         true
     }

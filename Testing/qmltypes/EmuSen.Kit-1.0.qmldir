@@ -4,6 +4,7 @@ classname EmuSen_Kit_plugin
 typeinfo plugin.qmltypes
 depends QtQuick
 depends QtQuick.Shapes
+depends QtMultimedia
 prefer :/qt/qml/EmuSen/Kit/
 Walkable 1.0 qml/Walkable.qml
 Body 1.0 qml/Body.qml
@@ -35,3 +36,5 @@ ToolScreen 1.0 qml/ToolScreen.qml
 PageFrame 1.0 qml/PageFrame.qml
 ToneText 1.0 qml/ToneText.qml
 ActionButton 1.0 qml/ActionButton.qml
+VideoTile 1.0 qml/VideoTile.qml
+VideoClip 1.0 qml/VideoClip.qml

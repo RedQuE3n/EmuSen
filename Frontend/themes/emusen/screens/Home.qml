@@ -126,6 +126,8 @@ ThemeScreen {
                         activeFocusOnTab: Session.hasGame
                         Accessible.name: Words.continuePlaying
                         onActivated: if (Session.hasGame) Actions.play(Session.key)
+                        // The game in hand, whose page X opens.
+                        onActiveFocusChanged: if (continuePlaying.activeFocus && Session.hasGame) Actions.focus(Session.key)
                         KeyNavigation.down: root.firstShelf ?? root.firstPlace
                         Rectangle {
                             objectName: "continuePanel"
@@ -283,6 +285,7 @@ ThemeScreen {
                                         return
                                     root.shelfRow = cover.index
                                     root.shelfCover = cover
+                                    Actions.focus(cover.key)
                                 }
                                 KeyNavigation.left: cover.index > 0 ? shelf.itemAt(cover.index - 1) : null
                                 KeyNavigation.right: shelf.count > cover.index + 1 ? shelf.itemAt(cover.index + 1) : null
@@ -397,7 +400,8 @@ ThemeScreen {
                                 }
                                 Text {
                                     objectName: "placeStatus." + place.index
-                                    width: place.width - 24 - (place.attention ? 24 : 0)
+                                    // To 4 units short of the tile's edge, so the longest fixed line, "Game packages", is whole (EmuSen_Qt.md §3.4.1).
+                                    width: place.width - 16 - (place.attention ? 24 : 0)
                                     text: place.line
                                     elide: Text.ElideRight
                                     color: place.attention ? Tokens.attention : Tokens.muted

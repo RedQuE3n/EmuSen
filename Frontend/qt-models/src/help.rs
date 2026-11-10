@@ -46,6 +46,22 @@ pub enum Screen {
     SettingsPage,
     /// A tool's search with the keyboard docked: Type, Delete, Space and Done (EmuSen_Interface.md §15.2).
     ToolSearch,
+    /// A console's page under Consoles: the shoulders step to the console before or after it.
+    SettingsConsole,
+    /// A page of choices (EmuSen_Interface.md §18.11): A chooses, B keeps what was chosen.
+    SettingsChoices,
+    /// A game's page (EmuSen_Qt.md §7.8), by what is focused: Play, Resume (with its slots where it steps them),
+    /// Favourite; a state, a picture, a stepped row, a door, a row of Details, or nothing A acts on.
+    GamePage,
+    GamePageResume,
+    GamePageResumeSlots,
+    GamePageFavourite,
+    GamePageLoad,
+    GamePageView,
+    GamePageValue,
+    GamePageChange,
+    GamePageChoose,
+    GamePageNone,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -172,6 +188,26 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Search, "Space", Some("space")),
             (UiButton::Screensaver, "Done", Some("done")),
         ],
+        Screen::SettingsConsole => &[
+            (UiButton::Accept, "Change", None),
+            (UiButton::Left, "Value", None),
+            (UiButton::PageUp, "Console", None),
+            (UiButton::Back, "Back", None),
+            (UiButton::Menu, "Home", Some(HOME)),
+        ],
+        Screen::SettingsChoices => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None)],
+        // Mistress's GamePage.Hints: A's word for what is focused, Left and Right where they step, Y the heart, the
+        // shoulders the sections, B and Start.
+        Screen::GamePage => &[(UiButton::Accept, "Play", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageResume => &[(UiButton::Accept, "Resume", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageResumeSlots => &[(UiButton::Accept, "Resume", None), (UiButton::Left, "Slot", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageFavourite => &[(UiButton::Accept, "Favourite", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageLoad => &[(UiButton::Accept, "Load", None), (UiButton::Screensaver, "Delete…", Some(DELETE)), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageView => &[(UiButton::Accept, "View", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageValue => &[(UiButton::Left, "Value", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageChange => &[(UiButton::Accept, "Change", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageChoose => &[(UiButton::Accept, "Choose", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageNone => &[PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
     }
 }
 
@@ -182,6 +218,11 @@ pub const CHECK: &str = "check";
 /// themes' help bars, EmuSen_Qt.md §3.2): no action, since the walk and the theme answer them.
 pub const GROUP: Entry = (UiButton::PageUp, "Group", None);
 pub const BACK: Entry = (UiButton::Back, "Back", None);
+
+/// A game's page's shared entries: Y the heart, the shoulders the sections (the frame steps them), Start Home.
+const PAGE_HEART: Entry = (UiButton::Search, "Favourite", Some(FAVOURITE));
+const PAGE_SECTION: Entry = (UiButton::PageUp, "Section", None);
+const PAGE_HOME: Entry = (UiButton::Menu, "Home", Some(HOME));
 
 /// Where the group entry goes in a screen's bar, after the entries that act on the focused item; none where the shoulders
 /// already mean something (the grid's Console, the search's Move to grid) or the screen has no row of groups.
@@ -223,6 +264,8 @@ pub const HOME: &str = "home";
 /// The focused game's page, its heart, and a random game: actions a later stage carries out.
 pub const GAME_PAGE: &str = "gamePage";
 pub const FAVOURITE: &str = "favourite";
+/// X on a game's page's state: its deletion, asked first.
+pub const DELETE: &str = "delete";
 pub const RANDOM: &str = "random";
 
 /// The shoulders on the grid: the console before and the console after (Mistress's `StepSection`).

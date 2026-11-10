@@ -337,7 +337,7 @@ and about a second when nothing changed.
 
 One job: turn the client crates' answers into Qt's model and property types for QML, and turn QML's actions into client
 calls. One `#[cxx_qt::bridge]` QObject per screen or shared role, as `EmuSen_Interface.md` names them: `LibraryModel`
-(consoles with games, the places, shelves, a console's games, collections, search), `GameModel` (one game's page),
+(consoles with games, the places, shelves, a console's games, collections, search), `GamePageModel` (one game's page; `GameModel` is the grid's list, decided 2026-11-09, §7.8),
 `SessionModel` (the running game: paused, rewind, states, discs, speed), `DeviceModel` (controllers, clock, battery,
 network, output), `CoresModel`, `SettingsModel` (the six sections, derived from the schema, §6.3), `ScraperModel`,
 `PackagesModel`, `CheatsModel`, `FirmwareModel`. Rows are `QAbstractListModel` subclasses (`#[base = QAbstractListModel]`,
@@ -774,6 +774,51 @@ swapchain: a render pass after the present (`WRITE_AFTER_PRESENT`) and a barrier
 The same test without the grab gives none. The tests therefore require no finding up to the grab and after it, and around
 the grab allow only those two (`assert_qt_grab_only`), which name `vkQueuePresentKHR` and `vkAcquireNextImageKHR`.
 
+#### 1.8.9 The clip's decoder: Qt Multimedia over the system's FFmpeg **[M 2026-11-09]**
+
+A game's page plays its clip on the hero (decided 2026-11-09 by the tester, for stage 5; `EmuSen_Interface.md` §5.9),
+and the ES-DE engine's `video` element (§4.2, §11 Q5) is the same need: a short gameplay clip, decoded and drawn in a
+rectangle, looped, usually silent. One decoder serves both if it lives in the kit, which both already import.
+
+**What the clips are.** ScreenScraper's `video-normalized` files, the ones EmuSen's scraper fetches and ES-DE's themes
+ask for (`EmuSen_BigPicture.md` §5.5): MP4 with H.264 video and AAC sound, small and of low resolution. The media
+store's lookup also takes `.mkv`, `.avi`, `.wmv`, `.mov` and `.webm` for a video (`Platform/scrape/src/kinds.rs`), the
+names a player's own ES-DE media folder may hold.
+
+**The candidates.**
+
+| | Licence | Codecs here | Software backend | New to the tree |
+|---|---|---|---|---|
+| (a) Qt Multimedia from QML alone: `MediaPlayer` into `VideoOutput` | Qt Multimedia LGPL-3.0 or GPL-3.0; FFmpeg as the system builds it | everything the system's FFmpeg decodes | plays, **draws nothing** | a runtime QML import |
+| (b) as (a), with a sink of the kit's own drawing the frames where `VideoOutput` cannot | the same | the same | drawn | the Multimedia module linked by the kit, and its headers to build |
+| (c) a Rust decoder (`ffmpeg-next` over libav*) into a texture | FFmpeg's; the crate's MIT/Apache | the same | drawn | a crate, FFmpeg's headers, the most code |
+| (d) LibVLC | LGPL-2.1+ | VLC's own | through a callback, as (c) | bindings, a second media stack |
+
+Measured on the desktop on 2026-11-09: `qt6-qtmultimedia` 6.11.2 (Fedora; `LGPL-3.0-only OR GPL-3.0-only WITH
+Qt-GPL-exception-1.0`) is installed; its FFmpeg plugin (`plugins/multimedia/libffmpegmediaplugin.so`) links the system's
+`libavformat.so.62`, `libavcodec.so.62`, `libswscale.so.9` and `libswresample.so.6`, FFmpeg 8.1.3, here RPM Fusion's
+build, which Qt reports as "FFmpeg version 8.1.3 GPL version 3 or later" (configured `--enable-gpl --enable-version3
+--enable-libx264 --enable-libopenh264`). Fedora's own build, `ffmpeg-free`, is LGPL and decodes H.264 through Cisco's
+OpenH264, which is also installed. A clip of 64 × 48 frames written by a test as a YUV4MPEG2 stream played through
+`MediaPlayer` on both scene-graph backends (state Playing, the position advancing), but under the software adaptation
+(`QT_QUICK_BACKEND=software`, and the `offscreen` platform, which is always software) `VideoOutput` drew nothing: a grab
+of the window was the colour behind it, on both `grabToImage` and `QQuickWindow::grabWindow`. The software backend is the
+test tier (§8.1) and the fallback where there is no Vulkan (§1.8), so (a) alone fails "drawn on both backends".
+
+**Decided 2026-11-09 by the tester: (b).** `EmuSen.Kit.VideoTile` (`EmuSen_Kit.md` §7.50): `MediaPlayer` decodes;
+on an RHI backend `VideoOutput` draws, Qt's own path, with no copy through the CPU; on the software backend the kit's
+`VideoFrames` (`kit-qt/cpp/video_frames.*`, the Multimedia module's `QVideoSink`, each frame converted by
+`QVideoFrame::toImage` and drawn as an image node) draws the same frames. The decoder is Qt's and the system's; nothing
+was downloaded, and no decoder of our own was written. Building the kit now needs `qt6-qtmultimedia-devel` (installed by
+the tester on 2026-11-09). The ES-DE engine's `video` element takes the same `VideoTile` when it is mapped (§4.3), so
+one decoder serves the page and the themes, and a theme never imports QtMultimedia (§3.5's sandbox refuses it).
+
+**What is not settled, and where it goes.** The licence of what is bundled (§9.2): a bundle carrying this desktop's
+FFmpeg carries a GPL build and owes its source; an LGPL build would be `ffmpeg-free`; the choice is stage 7's. The
+handheld: whether SteamOS's image carries Qt Multimedia and which FFmpeg it links is **not measured** (owed with the
+handheld's next measurement, §9.3); the AppImage bundles Qt's Multimedia plugin either way. The cost of decoding there is
+`EmuSen_BigPicture.md`'s P5 (under 5% of one core for a `video-normalized` clip), still to be measured on the Legion Go S.
+
 ### 1.9 Homes for the front-end logic still in C#
 
 The survey of the remaining C# (2026-11-07) lists front-end logic that needs a Rust owner. Each is given one layer here,
@@ -966,7 +1011,7 @@ example.
 author, licence, `api` 1.0, the dark and light variants, `fontSizes` 1 and 1.3, the screens `home`, `consoles` and
 `games`, no token override, no cue file, and three previews, `assets/previews/`, the package's own screens over the
 synthetic library at 640 × 400), `screens/Home.qml`, `Consoles.qml` and `Games.qml`, and `parts/` (`Faces`, the
-three Barlow faces from the kit's fonts; `Glyph`, a mark of `Marks` drawn in one ink; `EngineMark`; `CoverFan`). It is
+four Barlow faces from the kit's fonts; `Glyph`, a mark of `Marks` drawn in one ink; `EngineMark`; `CoverFan`). It is
 written against `EmuSen.Theme` alone, every shown word from `Words`, `Help` or a row, and is compiled into the program's
 resources by `qt-app/themes.qrc` at `qrc:/emusen/themes/emusen/` (`emusen_qt::REFERENCE_THEME`, read in QML as
 `ReferenceTheme.folder`); the host loads it as it loads any theme. A file added to the package is added to that list.
@@ -1013,21 +1058,66 @@ focused game's name and facts) take the dark variant's inks by day, through one 
 dark variant's colours, since a theme sees only the variant in force. Continue's panel and the places' tiles are panels:
 dark glass at 55% and 50% by night as before, light at 94% by day, their words the variant's own. The light variant had
 failed contrast almost everywhere (S7's survey of 2026-11-09: 530 lines on Home and 350 on the grid, words at 1.04 to
-3.1:1 over the night). Choose a console keeps its paper by day (`EmuSen_Interface.md` §24.4), which held its words
-already. Over the 120 consoles in the dark variant, an orbit's maker other than the focused one was drawn at 70% and read
+3.1:1 over the night). Choose a console kept its paper by day until it too followed the dark world (below). Over the 120 consoles in the dark variant, an orbit's maker other than the focused one was drawn at 70% and read
 3.44:1; it is now told apart by ink, `muted` beside the focused orbit's `text`, at full opacity. With no game suspended,
 the top's title and facts stand on the world beside the shelf's game rather than on Continue's panel, and take the
 world's inks; the shelf's caption moved down 6 units, clear of the focused cover's ring, which crossed it at 1280 × 720.
 
 Proof, measured 2026-11-09 offscreen on the software backend: `theme-audit --states all` over the package, both variants,
 every size: no contrast finding left (S7's survey: 1,309 lines, of them 530 on Home and 350 on the grid in light, and the
-maker labels' in dark). What stays is the fit rule's, as before and in both variants alike: a place's status line cut with
-an ellipsis at 1280 × 800 ("Game packa…"), the grid's neighbours past their row, and on Choose a console the focused
-console's name cut at the foot and, over 120 consoles, counts and engine tags under the capitals' floor at 1280 × 720.
+maker labels' in dark). What stayed was the fit rule's, the same in both variants, and is mended below (the fit at
+every size).
 Two seeded faults, each reverted: `Night` reading the variant's own tokens by day (30 low-contrast lines in `nogame`'s
 light variant); Continue's panel at 55% by day (its heading and facts low at every size). The acceptance test passes with
 the change (the maker labels were its 3.44:1). The side-by-sides, before left and after right, light, 1280 × 800 (Home,
 Home with no game, the grid, the grid empty, Choose a console): `~/.cache/emusen/tmp/qt-s3-kg/compare/*-side.png`.
+
+**The fit at every size** (2026-11-09). On WiseMan 57cd94128, offscreen on the software backend, `theme-audit --states
+all` over the package found 326 lines, every one the fit rule's and each the same in both variants, and the canvases'
+catalogues (`--catalogue`) found the same faults. Each was the package's layout, not the kit's, and is mended there:
+1. **A place's line cut with an ellipsis.** `placeStatus.2`, the Packages place's "Game packages", a fixed word
+   (`words::is_fixed`), was elided at every size in every state that draws the places (90 lines). Qt sets it 133.3 units
+   wide in Barlow at 20, and the line's box was 126, the tile's 150 less 12 each side. The line now runs to 4 units short
+   of the tile's right edge (134); its left edge stays with the name's. The other fixed lines are 107.5 ("Art and
+   facts"), 123.3, 101.7 and 32.6 wide (measured 2026-11-09 with Qt's `qml`). The acceptance test's exception for the
+   places' lines holds the same rule now: a line built from data may elide (Settings' "Dark · 60% sound" does), a fixed
+   word may not; with the old exception gone it named only Settings' line. Seeded back (the line 126 wide), the audit
+   names `placeStatus.2` cut with an ellipsis at every size in both variants.
+2. **The grid's neighbours under the floor.** `gridPrevious`, the `·` between and `gridNext`, at 18 units, drew capitals of
+   11.33 at 1280 × 720, under the floor of 11.64 (36 lines, every state that shows the grid). They are 19. Seeded back at
+   18, the audit names the three at 1280 × 720 in both variants.
+3. **The full name cut at the foot.** `consoleDetailName`, at 44 units in the canvas's line box of 1 (44), is laid out by
+   Qt at Barlow Condensed's own line, 53, whatever its fixed line height, so its words ran 9 units past their box (75
+   lines: every size, every state that focuses a console, the 120 consoles). The name takes the face's line box, 53, from
+   y 611: its baseline stands one unit higher than the canvas's, so the box ends at 664, where the facts begin. Seeded
+   back (a box of 44), the audit names the name cut at the foot at every size; left at y 612, the name's box meets the
+   facts' and the audit names the overlap at 3840 × 2160, where the unit is past its slack.
+4. **The small words at 1280 × 720.** The worlds' counts, the maker labels with their counts, and the foot's engine name
+   and tag, at 17 units, drew capitals of 10.72 at 1280 × 720 (101 lines, the 120 consoles' among them). They are 19, the
+   smallest whole size over the floor there (18.48 units; Qt's `font.pixelSize` is whole). Their line boxes are 22.8; a
+   maker label grows upward, its foot where the layout's 20-unit box ends, since grown downward the inner orbit's label
+   met its first world (the audit named the label "Sony" over that world at every size, a seeded fault); the tag's box is 24.
+   The counts take Barlow Condensed, so at 19 they are no wider than the canvas's 17 in Barlow: "480 games" is 70.7
+   units against 78.1. In Barlow at 19 (87.3) a count and its engine mark reached the next world's box on the steep
+   stretch of one maker's 40 consoles, and the maker40 catalogue named it at 1280 × 720, 1920 × 1080 and 3840 × 2160
+   (72 lines, none before). Seeded back (the counts at 17), the audit names every count at 1280 × 720.
+
+**What the look gains.** The fixes change the look as well as the fit, each by the least that fits. The counts, the maker
+labels and the engine line are 12% larger at every size, the neighbours 6%, though only 1280 × 720 put them under the
+floor: words sized for each window would copy the floor into the theme, and the tester's decision for Horizon (§3.4.3,
+2026-11-08: the floor holds with no exception, and every small text is 19) applies here as written. The counts take the
+condensed face the names and labels use, in its regular weight. "Game packages" is drawn whole where the accepted render
+cut it, the full name stands a unit higher, and a focused planet grows to 88 rather than 96 (§3.4.2's eighth difference).
+
+**Proof** (measured 2026-11-09, offscreen on the software backend unless named). `theme-audit --states all` over the
+package: no line (326 before). `--catalogue`: no line in any of the canvases' seven catalogues. n120 loses the overlaps it
+had at 16:9 (24 lines a size), where a count in Barlow at 17 and its engine mark met the next world's box; n30, long and
+eleven lose the focused NES's over Master System's count, mended by the focused body's size (§3.4.2's eighth
+difference). The acceptance test passes (Vulkan on the RX 6800) with three of its named differences
+gone: the 17- and 18-unit words at 1280 × 720, the full name's line box and the places' lines cut, the last now only a
+data line's. Nothing outside the package and the acceptance test changed, so the other four themes' findings are as they
+were. The side-by-sides, before left and after right (Home in both variants and Choose a console at 1280 × 800, the grid,
+Choose a console and the 120 consoles at 1280 × 720): `~/.cache/emusen/tmp/qt-s3-fit/compare/*-side.png`.
 
 **Proof, measured 2026-11-08.** The acceptance test (Vulkan on the RX 6800 in its own compositor, the virtual pad, the
 canvas's library) passed on WiseMan d5edac3e5 with the old screens and on the package, and its 90 grabs, 18 states
@@ -1063,17 +1153,17 @@ are unchanged.
   - the worlds;
   - the foot: the full name, the facts, the engine line, and three covers.
 - `parts/CoverRow.qml`, new: three covers whole at the console's shape, no taller than 100 and no wider than 150, 12 apart.
-- `parts/EngineLine.qml`, new: the mark, the engine's name and its tag. By day the hue is darkened to 30% lightness, so
-  the words hold 4.5:1 on the paper, as the canvas has it.
-- `parts/EngineMark.qml`: libretro's badge is now drawn in the ink it is given, as the canvas draws it, so the badge after
-  a world's count is Muted by day. It was a fixed light grey.
+- `parts/EngineLine.qml`, new: the mark, the engine's name and its tag, in the console's hue on the night in both
+  variants (until 2026-11-09 darkened by day to 30% lightness to hold 4.5:1 on the paper).
+- `parts/EngineMark.qml`: libretro's badge is now drawn in the ink it is given, as the canvas draws it. It was a fixed
+  light grey.
 - `parts/CoverFan.qml` is gone. Nothing else used it.
 
 **The layout is data.** The positions come from the kit's `OrbitLayout` (`EmuSen_Kit.md` §7.30), fed `Library.consoles`
 with `role: "group"` and `labelRole: "maker"`. The theme draws each world at (centre + rx cos θ, ry sin θ):
 - θ moves on Reel, so a turning orbit carries its worlds along the arc;
 - the radii move on Pan, so the orbits scroll radially;
-- the body's size (72, or 96 focused) moves on Quick;
+- the body's size (72, or 88 focused) moves on Quick;
 - a world's opacity moves on Fade, so worlds fade as they enter and leave a window or the three shown orbits.
 
 Nothing is placed by name, and the screen holds any count from 0 to 120. `qml-rules` treats a binding whose name ends in
@@ -1089,9 +1179,15 @@ Nothing is placed by name, and the screen holds any count from 0 to 120. `qml-ru
 - The first focus is the console last opened, else the first console in the table, else the first shelf when there is no
   console.
 
-**Night and day.** At night: the kit's `Sky`, its stars still, and the glow at the focused world in its hue. By day there
-is no sky and no glow. The paper is `Tokens.surface`, the orbit lines are ink #1F2A44 at 28%, and the discs are white at
-60% with a 14% edge.
+**Night and day.** In both variants: the kit's `Sky`, its stars still, and the glow at the focused world in its hue. The
+world stays dark by day, as Home's and the grid's do (decided 2026-11-09 by the tester, `EmuSen_Interface.md` §24.4): the
+words on it take `parts/Night.qml`'s inks, the orbit lines, the discs and the engine's hues are the night's, and the help
+bar and the covers are the variant's own. Until then the light variant drew the canvas's paper: `Tokens.surface`, no sky
+and no glow, the orbit lines in ink #1F2A44 at 28%, the discs white at 60% with a 14% edge, and the engine's hue
+darkened. Proof, measured 2026-11-09 offscreen on the software backend: `theme-audit --states all` over the package, both
+variants, finds no line; every software test of `qt-app` passes. Seeded back (the screen's words in the variant's own
+inks), the audit over eleven finds 33 low-contrast lines at every size in light. The side-by-sides of the light Choose a console, the
+paper left and the night right: `~/.cache/emusen/tmp/qt-s3-fit/compare/Consoles-light-*-paper-night.png`.
 
 **Named differences from the canvas**, each seen beside its render. Under each catalogue the worlds' points are the
 canvas's own; kit-core's test holds them within 0.01 unit.
@@ -1110,16 +1206,21 @@ canvas's own; kit-core's test holds them within 0.01 unit.
    canvas's estimated ones (318, 522, 737).
 5. After the first focus, the shown makers move only when the focus leaves them, as spec §3.1 asks; the canvas centres
    the focused maker on every press.
-6. As at stage 1, the canvas's 17-unit words fall under the floor at 1280 × 720 alone, and the full name's glyphs reach
-   past its 44-unit line box.
-7. A world's `Walkable` is the body's box (the ring's when focused), and the name and count hang beneath it, outside
-   the `Walkable`. The canvas's node was 140 units wide and held the words too. On the steep stretches of the outer
+6. The canvas's 17-unit words (the counts, the maker labels and the engine line) are 19, since at 17 they fell under the
+   floor at 1280 × 720; the counts are in Barlow Condensed, no wider than the canvas's, and a label's line grows upward
+   from the layout's 20-unit box. The full name takes Barlow
+   Condensed's own line box, 53 from y 611, where the canvas's was 44 from 612 (2026-11-09, §3.4.1).
+7. A world's `Walkable` is the body's box, the ring drawn 7 units about it when focused, and the name and count hang
+   beneath it, outside the `Walkable`. The canvas's node was 140 units wide and held the words too. On the steep stretches of the outer
    orbits those nodes covered their neighbours, which the fit audit read as overlaps of empty corners.
-8. Two of the canvas's own boxes still touch, and the fit audit names both:
-   - The focused NES's body box reaches 0.7 unit into the line box of Master System's count. The disc's edge stays
-     11 units clear of the words.
-   - A turning orbit's label sits by its window's last world. The two boxes meet at 16:9, where the outer orbit
-     holds ten.
+8. The focused body is 88 units, where the canvas drew 96 (2026-11-09), and the `Walkable` is the body's box rather than
+   the ring's. At 96, with the ring's box as the `Walkable`, the focused world's box reached into the count of the world
+   on the orbit inside it: the focused NES's into Master System's count, 10 units at 1280 × 800, in the canvases'
+   eleven, n30 and long, at every size (one line in n30, six a size in each variant in the others). The drawn ring stayed
+   clear of the words; the boxes did not. At 88 the body's box ends 0.45 unit below that count's line box, and its own
+   name still starts a unit under the ring, as at 96. Seeded back (96), the audit names the overlap over eleven at
+   every size in both variants. The second meeting the audit named on 2026-11-08, a turning
+   orbit's label by its window's last world at 16:9, is named in no catalogue on 2026-11-09.
 9. The inner orbit's window ends at y 197, not 178 (decided 2026-11-08), so it holds 2 worlds, not 3. At 178 a
    focused world at its end grew its ring to y 123, into the places row (which ends at 140). The audit over the 120
    consoles found it, and the canvas's own numbers do the same. A turning orbit shows its whole capacity, with the
@@ -3956,10 +4057,10 @@ and the text sizes' lines at hers. **Differences that remain, each for the teste
   `Off`): the library's collections and the runtime's log switch are not read here yet (pieces M and the shell's).
 - Display ▸ CRT shader's caption reads "The last game · Off CRT", since the sandbox has played nothing, where Mistress's
   fixture names its game; the box follows the words.
-- Not built in this piece, each a door that goes nowhere yet: Shader levers and Shaders (piece J), the folder rows'
-  prompt, Cheats, Compressed discs (pieces I and L), Logging and Shell, and the Scraping page's doors (Member account,
+- Not built in this piece, each a door that goes nowhere yet: Shader levers and Shaders (piece J), Cheats, Compressed discs (pieces I and L), Logging and Shell, and the Scraping page's doors (Member account,
   Resume, Cancel, Status, Scraper; piece M) and the Collections page's own (piece M). Controllers holds its keys' rows
-  only, its doors being piece H's, and Consoles is empty until piece E. Light or dark's `System` reads as dark and
+  only, its doors being piece H's. Consoles and the folder rows were built with piece E
+  (§7.7.E). Light or dark's `System` reads as dark and
   Reduced motion's `System` as full motion, since the desktop's preference has no Rust reader yet (§7.1). Volume under
   Steam's Game Mode, which Mistress turns into a sentence about the device's quick menu, is a row like any other here.
 
@@ -3989,6 +4090,149 @@ reverted:
 - `MenuRow`'s value cap taken out: the program's test, the ROM folder's label past its clip at every size;
 - the preview's height read from its items' `visible`, which is false while the slot is empty, so it stays empty (the
   meter was never drawn until this was found): the program's test, the meter not drawn.
+
+#### 7.7.E Stage 5, piece E: Consoles and a console's pages (2026-11-09)
+
+`EmuSen_Interface.md` §18.10, §18.11; `EmuSen_BigPicture.md` §52.4; the oracle is Mistress's `SettingsConsoles`,
+`SettingsConsolePage`, `SettingsEngine`, `SettingsFirmware` and `SettingsMemoryCards` (1280 × 800 and 1920 × 1200), the
+`MemoryCards*` recordings read for their words.
+
+**A console's page is derived from what its engines declare** (§6.2 item 5, §6.3): no code names a console or a core.
+- **The list** (`consoles.rs`, plain Rust over a `ConsoleSource`): every console the runtime's `systems` names, each once
+  by its first system, those an engine runs first, then by release year and name; one no engine runs is listed held,
+  `Not supported yet`. Its pane is Mistress's `ConsolePane`: the games (`LibraryModel.settingsFacts` now counts each
+  system's), the engine, the firmware in one line, the CRT's tier and the first choice of the console's own, and what
+  every game of the console shares. The schema, each key's value (`settings_get`), each system's `firmware_status`, the
+  firmware overview and the card manager's list are read off the GUI thread each time Settings opens.
+- **The page** is the description's (`settings_screen.json`, `consoles.page`, the screen's own words in `consoles.words`):
+  Engine, Firmware, Memory cards, then `*`, the schema's every other row that its `shown_with` lets mean something,
+  each group under a heading (a held row of words, Mistress's `group:` rows), then the picture's rows: CRT profile,
+  Shader levers (held until the CRT is chosen), Crop overscan and Picture shape for a console whose Serenity screen is a
+  television, Screen (the catalogue's filters for every console and those naming it) for any other, and Reset this
+  console. A row of the schema is drawn by its kind through `schema.rs` (`shown`, `stepped`: a switch On or Off, a choice
+  by its label, a count within its range), and stored through the runtime's `settings_set` at the console's scope. The
+  keys the page draws in rows of its own (the description's `schema` keys, and each medium's mode and slots by the card
+  manager's `mode_key`) are left out of `*`. Reset forgets every declared key and the console's own entries of
+  GraphicsConfig. LB and RB step the page to the console before or after it among those an engine runs.
+- **Engine** is the runtime's console setting `Engine`, the value Cores' Make Default writes; Left and Right step it in
+  place and A opens it as the kit's page of choices (Kit §7.41): each engine with `Default` on the one in force (the
+  kit draws the dot Mistress wrote as `●`) and `✓ Installed` on the others; A chooses and returns, B keeps what was
+  chosen. An engine is named as the other screens name it (`clients::engine_shown`).
+- **Firmware** (`firmware.rs`, the one owner of a console's firmware needs and their words, shared with Cores' Firmware
+  page, §7.7.F, whose rows are now one a need with the same value words, its panes keeping their file lines): files
+  meeting the same need are one row, named by the systems table's `firmware_name` (the PlayStation's three regional
+  BIOS files are `PlayStation BIOS`); its value `✓ Found · SCPH-1001`, `⚠ Not found`, `Not found`, `Only some games` or
+  `Not needed` by whether the console starts empty; its pane says what runs and what the overview says of each file.
+  Then the schema's `FirmwarePreference` worded as §18.10 words it (`In use when none is found`, `Always`, `Never`),
+  Folder (AppSettings' FirmwareDirectory, else `EmuSen's folder`), Use EmuSen's folder alone (held while no folder is
+  set), Open EmuSen's folder and Check again (the consoles read again).
+- **Memory cards** (`cards.rs`, one description for Settings and the Pause Card): over `cards_op`'s list, the mode, a
+  row a slot, the drawer's cards (a page of its own), the saves on them (a door to the card manager's window, not built
+  on Qt) and a new card (`CARDS_NEW` at the drawer's folder, the list's `next_name`). A slot is stepped through its
+  schema row while the mode is Named and is held otherwise, since the mode places the card (its `shown_with`). The Pause
+  Card's Game Options ▸ Memory Cards draws the same rows, slots first (Mistress's `GameCardRows`), Cards opening the
+  drawer's page there too, from the facts
+  `SessionModel` reads for the running console; a step is stored through the session at the console's scope and goes
+  in when the game next starts.
+
+**Open Folder** (decided 2026-11-09): `Folders` (`folders.rs`) is the program's one action that shows a folder in the
+system's file manager, a `file:` URL (`QUrl::fromLocalFile`) opened by `QDesktopServices`; it is offered everywhere,
+Steam's Game Mode included, where the player can switch to another window. Settings raises `openFolder` with a path and
+the program hands it to `Folders`; Firmware's Open EmuSen's folder is one user, and Cores' Firmware page, which left
+it out, now ends with Open Folder on the firmware folder (the tool asks its host with `folder:` and the path). The
+runtime's `Engine` key has one owner in the front end (`consoles::ENGINE_KEY`, which Cores and the library's engine line
+read), and a schema row's words and steps one (`schema.rs`, which Cores' Options reads). A
+test sets `catching`, which hands the `file` scheme to the object through `QDesktopServices::setUrlHandler`, Qt's own
+interception, so the URL is read and no file manager starts.
+
+**Folder rows open the system's folder dialog** (decided 2026-11-09): the ROM folder, the artwork folder, the ES-DE
+media and theme folders and Firmware's Folder each name their key (`"folder": "AppSettings RomDirectory"`); A asks
+`Folders.choose`, beside Open Folder in the same owner, which opens the program's QtQuick.Dialogs `FolderDialog`, the
+system's own through the desktop portal where there is one, at the folder the row holds; the folder chosen goes back as
+a local path for the key and is saved through the row's model (`SettingsModel.setFolder`, AppSettings), and Cancel saves
+nothing. A test sets `catching`, reads the request (`asked`, `waiting`) and answers it (`answer`, `cancel`), so no
+dialog opens.
+
+**B returns to the row that opened the page**, as Mistress's pages do: the model answers the row (`back`) and the
+screen focuses it through the walk. Found on the way and fixed where it lived, in the kit's settings frame (Kit §7.51):
+the rows' `ListView` set a current index of its own when rows arrived in it empty, and focused that row after the
+host's focus.
+
+**For the recordings**, `SettingsModel.world` names a file holding the consoles' world in place of the runtime's, as
+Cores' does (`qt-app/tests/settings_consoles.json`: the systems table's consoles, the ten engines Mistress's recording
+lists, the Super Nintendo's SA-1 row, the PlayStation's BIOS and cards). The schema and the values the runtime gives
+are proved separately, over the real runtime.
+
+**Compared with Mistress** (measured on 2026-11-09, the Qt recordings read by WiseMan's
+`Another_frontend_s_recordings_match_these_within_the_tolerances` on the WiseMan build of the day, no build).
+`InterfaceRules.All` found nothing in the ten. Under the map of names of §7.7, every row of the five states stands at
+Mistress's box with her label and value, at both sizes, and every pane line has her words. **Decided by the tester on
+2026-11-09:** the pane's sentence keeps the kit's face (Kit §7.40), so the lines under it stand 6 to 14 units lower than
+hers and the engine's sentence on the console page takes four lines where hers takes three; and Engine's chosen value
+keeps the kit's drawn dot beside `Default` (Kit §7.41) where Mistress wrote `● Default`.
+
+**Built on the tester's rulings of 2026-11-09:**
+- **The firmware lines' tints.** A console's firmware line is Success where nothing is wanting and Attention where every
+  game needs a file not found, as Mistress's `FirmwareLine` tinted it; a need's pane line Success when found, Attention
+  when wanting, and a file of the wrong size in Attention. `firmware.rs` gives each line its tone (`tools::Tone`, the
+  kit's `Tones` in their order); `SettingsModel.sentenceTone` and `lineTone(index)` hand them to the kit's sentence
+  (`SettingsFrame.sentenceTone`, Kit §7.52) and to the screen's lines (`ToneText`).
+- **A row the engine holds is drawn held**, as Mistress's `Locked`: the schema's `locked` (named by frontend API 2.1,
+  `EmuSen_RustPlatform.md` §54) is read by the client, the row is the kit's `held` and takes no step, and its note is its
+  pane's sentence; Cores' Options page takes no step on it either.
+- **A core's own card is a page** for a console the systems table does not list (the runtime's fix, §54 there), and the
+  card manager's `noun_in_text` words "New card" and "2 cards", so the front end no longer re-cases the noun.
+- **The card manager** behind Saves on the cards (`settings_saves.rs`, Mistress's Memory Cards window on the frame):
+  the medium's page holds the Card row, stepped through the drawer's cards and the games' own, its pane Mistress's
+  words (the mode and each slot's card, `N save(s), F of C blocks free.`, the format module's problem, or that the card
+  is not made yet, and `In use by …` for a card a running game holds); a row per save (its title, `N block(s)`,
+  `· damaged`), and Import Every Game's Saves (held on a game's own card, or one in use). A save's page holds Copy or
+  move to (stepped through the other cards), Copy Save, Move Save and Delete Save…, which asks first (No, Yes): a
+  question Mistress's window did not ask, kept by the tester's decision of 2026-11-09; Move and Delete are held while a game holds the card. Each change goes through `cards_op`
+  (`CARDS_COPY`, `_MOVE`, `_DELETE`, `_IMPORT`); its words are said under the page, the cards are read again, and after a
+  move or a delete the save's pages close. Each card's saves are read with `CARDS_OPEN` as the consoles are. A card
+  or a target stepped reads the rows again in place, the focus kept (`Outcome::Shown`): the gate's pad reach found two
+  save rows unreachable when the step made the page's rows anew.
+- Not built here: the Custom crop page and the console's Shader levers (piece J's by the stage plan) and the running
+  game's crop named in Crop overscan's pane (piece J).
+
+**Held to** (measured on 2026-11-09). `qt-models/tests/consoles.rs` (7, no Qt, over a fake runtime): the list's order,
+panes and a held console; a synthetic core's declared rows each by its kind under its group's heading, stepped within
+the declaration, and a row added to the declaration shown with no code; Engine as a page of choices writing `Engine`;
+Firmware's need, words, preference, folders and Open Folder; Memory cards' rows, held slots, a new card, the drawer, and
+the page leaving the media's and the firmware's keys to their pages; the shoulders and a reset; the Pause Card's Memory
+Cards over the same description through the facts' plain data, its drawer's page and B back to the Cards row. `qt-models/tests/consoles_client.rs` (2, the platform
+library of this commit): the crystal test core approved as a player's core is a console whose page is its declaration,
+its boot ROM `⚠ Not found`, and a step stored through the runtime reads back; the libretro test core's options, read
+from a running session, are a page with its five categories as headings in its order and its options as rows.
+`qt-app/tests/settings_consoles.rs` (software backend): the five states held at the gate's five sizes (fit, pad reach,
+pointer reach, no chrome, names, palette, contrast) and recorded; RB to the PlayStation; Open EmuSen's folder giving
+Galaxia's firmware folder's `file:` URL to the caught handler; B on Firmware back on the Firmware row; Library ▸ ROM
+folder asking the dialog at the stored folder, Cancel saving nothing and a folder chosen saved and shown; nothing
+logged. `qt-models/tests/settings.rs` gained the folder rows' request and save, `qt-models/tests/cores.rs` Cores'
+Firmware page by need with Open Folder. The rulings' work is held to by: the models' tones on the list's and the
+Super Nintendo's firmware lines; a synthetic declaration's held row refusing its step with its note in the pane; the
+card manager's test (the card's words and saves, Import's request, Copy and Move to the other card, Delete's question,
+No and Yes, the words said and the pages closed, a game's own card with Import held); the client test's crystal test
+core listing its own card with `noun_in_text` and a new card made in its drawer, and the hosted core's held
+`tc_deinterlace` drawn held with its note; and the program's test: the Super Nintendo's firmware sentence in Success,
+the card manager's states `MemoryCardsPlayStation`, `MemoryCardsPlayStationHeld` and `MemoryCardsDelete` held at the
+gate's five sizes and recorded. Seeded faults, each reverted:
+- Engine's choice written under another key: the models' Engine test;
+- firmware files grouped by file rather than by need: the models' Firmware test;
+- a slot steppable whatever the mode: the models' Memory cards test;
+- the media's keys left in the page's `*`: the models' Memory cards test, once it held the PlayStation page's rows (it
+  was not caught before; the assertion was added);
+- a reset forgetting every console's picture: the models' reset test;
+- `MenuRow`'s value held to half its row again (Kit §7.50): the program's test, SA-1 catch-up cut at all five sizes;
+- Open Folder given the folder's parent: the program's test, the caught URL;
+- the rows' view's current index left to Qt (Kit §7.51): the program's test, B on Firmware ending on the first row;
+- the dialog's Cancel answered as a choice of no folder: the program's test, the ROM folder saved blank;
+- a row the engine holds drawn steppable: the models' synthetic-core test;
+- Delete Save sent without its question: the models' card manager test;
+- the noun re-cased from `noun` rather than read from `noun_in_text`: the models' Pause Card test (`1 Card`);
+- the frame's `sentenceTone` left unbound: the program's test, the firmware sentence in the text's colour;
+- the runtime's fallback to an engine's own system taken out: the client test, the core's card not listed.
 
 #### 7.7.F Cores on the tool screen, the approval at first launch and the firmware question (stage 5, piece F; 2026-11-09)
 
@@ -4046,8 +4290,9 @@ up and nothing opens. C#'s picker installed the chosen file with `firmware_insta
 form (stage 6). No core the project builds marks firmware required, so the question is held by tests over words and
 answers, and over the fixture by its absence.
 
-**Not offered, for the tester:** `Open Folder`, since the big screen has no file manager (the desktop form's, stage 6),
-and `Update All…`, which C# did not build either.
+**Not offered, for the tester:** `Open Folder` on a core's page, and `Update All…`, which C# did not build either.
+Decided 2026-11-09 by the tester, after this was written: Open Folder is offered everywhere, Game Mode included, as the
+program's one action (§7.7.E); the Firmware page now ends with it.
 
 **The recordings' world.** Mistress's five Cores recordings are made over a scripted world
 (`WindowFitAuditTests.CoresWindow.cs`: three of EmuSen's cores, a player's core waiting for approval, PCEE2 approved under
@@ -4113,6 +4358,146 @@ for Search, Options, Firmware, Roll Back and the harness, each reverted, each ca
 (an empty overlap) back (`culled.rs`); the List card's Search not docking the keyboard (`cores.rs`' search test); a switch
 not turned by a step (the options test); a found file said as none found (the firmware test); and Roll Back sent as
 `core-update` (the roll back test).
+
+### 7.8 Stage 5, piece G: a game's page and its clip (2026-11-09)
+
+`EmuSen_Interface.md` §2.5, §4 screen 3, §5.9, §18.2; the oracle is Mistress's recordings `GamePage`, `GamePageStates`,
+`GamePageOptions`, `GamePageMedia` and `GamePageDetails` (1280 × 800 and 1920 × 1200); behaviour and words from
+Mistress's `Pages/GamePage`, `GamePageHost`, `Views/GamePageView` and `MainWindow.GamePage`.
+
+**Decided 2026-11-09:** the page's model is `GamePageModel`; `GameModel` stays the grid's list (§1.2 corrected).
+**Decided 2026-11-09 by the tester:** the page plays the game's clip in stage 5, not a still alone; the decoder is §1.8.9's.
+
+**The model** (`emusen-qt-models`, one job a file). `game_page.rs`, plain Rust: the `GamePageSource` a read and a change
+go through (the client crates, or a test's fake), one `Read` of the game, and `GamePage` over it: the facts line (console
+· year · developer · publisher, where it differs · time played · last played, Mistress's words), the actions (Play, Resume
+with the state it stands on, Favourite with its heart), the five sections, each section's content (the Overview's words
+and picture; States as eight slots with the automatic state after the last slot in use, before the empty ones, the
+state Resume loads marked; Options as Engine, Controller profile, Cheats, Display crop and Package; Media as the
+scraper's pictures and clip; Details as Scrape This Game, Edit Details, Cover art, Open Folder and Hide from Library),
+what each press asks (`Outcome`: a change saved, the game started from a state or not, a door, a question asked
+first), and the help bar by what is focused. Two changes ask first, in the question form with No focused and B
+answering No, as Mistress's page does: X on a state (`Delete Slot 2?`, naming when it was saved; Yes deletes the
+state, its picture by Galaxia's `SAVE_PICTURE` and the runtime's record of it, `emusen_crystal_state_forget`), and
+Details ▸ Hide from Library (Yes saves the game's `hidden` edit in games.db and the page closes). The slots' count is the Pause Card's (`pause::SLOTS`), one owner. `game_page_source.rs`, the source over
+the client crates, needs no session: the title and facts from the scraper's metadata (edits first), the record from
+games.db, the pictures and the clip from the media store and the ES-DE folder, the states by **Galaxia's save paths**
+(`EMUSEN_GALAXIA_SAVE_STATE` per slot, `SAVE_RESUME_STATE`, the package's kinds for a packaged game, each state's picture
+by `SAVE_PICTURE`; when it was saved is its file's time), which was enough: no frontend-API minor was asked for. The
+engines are the console's from the systems table, named from the runtime's cores and stored as the game's
+`altemulator` edit (Mistress's `SetEngine`); the profiles are Endymion's, by the game's file name; the cheats are the
+game's saved list (`emusen_galaxia_cheat_game_list` and the cheat file model); the crop is offered where Serenity's
+catalogue gives the console a television's screen, and reads `This game's` where games.db holds a crop. Settings ▸
+Display ▸ Play videos off gives no clip. `game_page_model.rs`, the bridge: `GamePageModel`, the content as a list model
+with the roles the kit's page frame reads (`label`, `value`, `line`, `picture`, `steps`, `opens`, `marked`, `key`) and
+the rest as properties, read off the GUI thread over clients it opens once and keeps; and `PageActionModel`, the
+actions as the frame's action list, from `GamePageModel.actions` as plain data, as `GameModel` takes its games. The help
+bar has ten new screens, `GamePage` to `GamePageNone` (`help.rs`, appended). `LibraryModel.gameFile(path)` gives the
+page the scan's record of the game (its system and package).
+
+**The screen** (`qt-app/qml/GamePage.qml`): the kit's `PageFrame` over the two models; Y is the page's own (the heart,
+`declared`), every other declared action the screens'. **Routes** (`screens.rs`): X on Home, the grid or the search's
+covers (`gamePage`), the Home card's Selected game, and a theme's `Actions.openPage(key)` (carried as the game taken in
+hand, then the page) open the page on the game in hand, which the theme's focus names (`Actions.focus`; the reference
+theme's Home now names its Continue and shelf games too); B returns to the screen it was opened over, or under a card to
+the library's screen; Start goes to the library's screen; a game started goes to the game.
+
+**The clip** (§1.8.9; `EmuSen_Kit.md` §7.50): the hero is a `VideoTile` whose still is the hero's picture; while the page
+holds the focus the clip plays after the poster's delay and fades in, looped; when the page loses the focus (B, Start,
+a card over it) its player goes and the still stands alone. The player is made only while a clip is to play, so the
+program starts Qt Multimedia only for a page with a clip. It is silent: §5.9 gives the hero no sound, and no setting gives it
+one. Reduced motion and Play videos off keep the still.
+
+**Compared with Mistress** (measured on 2026-11-09). The Qt recordings were read by WiseMan's `SpecDocument.Parse`
+through `Another_frontend_s_recordings_match_these_within_the_tolerances` (the WiseMan build of the same day, no
+build). As in §7.7, `InterfaceSpec.Compare` matches by name, and the kit's parts carry the kit's names (`pageTitle`,
+`pageFacts`, `pageCover`, `pageHero`, `pageSections`, `pageActions`, `helpBar`) where Avalonia's were `PageTitle`,
+`PageFacts`, `PageCover`, `PagePoster`, `PageSections`, `PageActions` and `PageHelpBar`, and its actions, rows and tiles
+none, so it lists them missing and extra. The parts were then compared under that map of names (actions, rows and tiles
+by their words), two design units the tolerance, at both sizes: the strip, the actions' row, the cover's place and
+height, the Overview's words and picture, every row of Details, the States' and Media's tiles' pictures stand at
+Mistress's places with her words. **Differences that remain, each for the tester:**
+- The clip: the recordings hold a still, as Mistress's page never played one. Here the states were held with Play videos
+  off, so they hold the still too; the clip is held by the test below.
+- The cover is 240 wide where Mistress's is 201: the systems table gives the Super Nintendo a landscape box (`cover_aspect`
+  0.73, height over width), so the kit's frame draws it at its widest, 240; Mistress's fixture found no descriptor for
+  its game and fell back to 3:4. The console's name reads `Super Nintendo` (the table's display name) where hers reads
+  `SNES`.
+- The title and the facts are boxes across the column (880 wide, 60 and 30 high) where hers fit their words (368 × 53,
+  509 × 27); the words start at her places. The kit's, `EmuSen_Kit.md` §7.44, as are the actions' widths (Play 122 where
+  hers is 115, Resume 349 where hers is 357, Favourite 220 at 831 where hers is 205 at 832) and the help bar at 742 (her
+  band at 702), §7.40 and §7.45's open decision.
+- The Overview's words are a box of the content's height (238) where hers fits its lines (106).
+- A tile's box is the picture, its two lines and the ring's room (457 to 709, 252 high) where hers is the picture
+  (150); the picture stands at hers, 64,464, 200 × 150, and its lines at 626 and 654 as hers. The Auto tile's second line
+  takes 52 where hers takes 48 (the platform's face). WiseMan's rules read the fifth slot, crossing the list's right
+  edge, as past its clip: the kit fades that edge, which its rules do not read.
+- Favourite is reached from Resume by Right only after Resume has stepped through its states (LunaP's `MoveInActions`,
+  as Mistress's page does), and the walk presses each direction once, so the gate's pad reach and WiseMan's both name it
+  unreached. The test holds the condition: Right from Play is Resume, Right steps its states, then reaches Favourite, and
+  Left comes back.
+- Options holds no Cheats row (the test's game has no saved cheats; the row and its count are held by the models' test)
+  and no Television standard row (not built: the standard's store is the C# `GameRecords`, with no Rust reader yet), so
+  Display crop stands second where hers stands third. Package reads `Linked` or `Not a package` only; its layers are
+  piece I's page.
+- Media lists the clip as a tile (the test's game has one); Mistress's fixture had none, so her Marquee stands third.
+  Media has no player's own screenshots: Mistress's `MediaLibrary.Screenshots` has no Rust reader yet.
+- Cover art reads `Its own` or `Generated`, without `· 8 to choose from`: the covers to choose from are piece I's page.
+- States has no Delete… (X) and loads no state at the game's start: A on a state, and Resume, start the game, and the
+  resume question of §18.3 offers the automatic state. Loading a chosen state at the start needs the session to start
+  from a state, which `SessionModel` does not yet; Delete… asks the question form, piece I's with the page's deeper pages.
+- The doors (Cheats, Display crop, Package, Scrape This Game, Edit Details, Cover art, Open Folder, Hide from Library,
+  and A on a picture) go nowhere yet: pieces I and J.
+
+**Held to** (measured on 2026-11-09). `qt-models/tests/game_page.rs` (6, no Qt): the facts line and the actions as
+Mistress's; Resume stepping its states and letting the focus move on at either end; the states slot by slot with Auto
+after the last in use and the resumed state marked; Options' rows, the engine stepped and wrapping, the doors, a single
+engine named and not stepped; the Overview, Media's tiles and Details' rows; the routes into the page from Home, the grid,
+the search's covers, the Home card and an ES-DE theme's view, and B back to each. `qt-app/tests/game_page.rs` (software
+backend): a scratch tree with two Super Nintendo games, one with Mistress's fixture's facts as games.db edits, four
+states saved by Galaxia's paths, pictures drawn by the harness in the ES-DE media folder and a clip; X on the grid opens
+the page on its Overview with the facts and the description; Right reaches Resume, steps it, and reaches Favourite; the
+five states held at the gate's five sizes (fit, pad reach, pointer reach, no chrome, names, palette, contrast) and
+recorded; Y turns the heart and saves it; B returns to the grid. Then with Play videos on, **the clip**: the test writes a
+clip itself, 64 × 48 frames of one colour (magenta) for two seconds as a YUV4MPEG2 stream, the simplest a test can write
+by hand, under the `.mkv` name the media store looks for (FFmpeg finds the format by its content), and never a game's
+media; the hero shows the still (the screenshot's green) first, then the player plays, the kit's sink draws frames, and
+the hero shows the clip's magenta; B, and the player goes; the other game, with no clip, keeps its still and makes no
+player; X on Slot 1 asks, No keeps it and Delete deletes it; the other game's Hide from Library asks, and Hide saves the
+edit and returns to the grid; nothing logged but the two messages Qt Multimedia gives on the software tier, now in the
+harness's list of Qt's own (`QT_INTERNAL`). `qt-app/tests/clip_gpu.rs` holds **the clip on Vulkan** (measured
+2026-11-09 on the RX 6800, in the test's own compositor, the window adopting Serenity's device): the still first, then
+`VideoOutput` draws the clip's magenta and the kit's sink draws nothing, and B removes the player. Its first run crashed
+in `GamePicture::onSwapped` on the render thread after its last assertion: the test dropped the device before the
+window, whose `frameSwapped` then reached the closed device's feed (its backtrace under gdb); it now hides the window and
+drops the harness before the device, as `acceptance.rs` ends. `acceptance.rs` on the merged tree ran its states about
+1.3 times slower than an earlier run of the same day on the reference theme alone (about 600 s, the machine under other builds' load)
+and ran past its 600 s watch, a hang detector; the watch is now 1200 s (decided 2026-11-09), and splitting acceptance by
+screen group is a separate job. With the watch at 1200 s it ran to its end and found two defects, both fixed
+(decided 2026-11-09): **a hidden card's words rewrote themselves.** Under Home with a game suspended, the Home card,
+hidden, rewrote its pane's caption ("Paused N minutes ago") as the paused minute turned over, so the window swapped a
+frame with nothing visible changed (`assert_still("Home over the suspended game")`): wasted work on the handheld, and
+against the idle gate (§9.3.2). `CardModel` now reads its facts only while it is shown, and reads them afresh as it
+opens; the cards test holds both, a hidden card's new facts swapping no frame and the card shown reading them current.
+**A state depended on the wall clock.** `Clock` gained `now`, the time it reads (0, the default, the wall clock), and
+`acceptance.rs` holds it at one instant (`common::HELD_NOW`), as esde-qt's tests hold `EsdeModel.now`. The moment a game
+pauses stays the wall clock's, since the session and a theme's `Words` read it too, so a held clock holds only how it
+is said: holding it there as well put the pause days before the wall clock's now, and the reference theme's Continue,
+which `Words.pausedFacts` words against the wall clock, said `Paused 3 days ago`. A theme's `Words` still read the wall
+clock; holding them needs a `now` of their own on theme-qt's `Words`, an addition to the theme API (Rule T), proposed
+to the tester and not built. Seeded faults, each reverted:
+- Resume stepping past either end, so the focus never moves on: the models' Resume test;
+- the automatic state after the first slot rather than the last in use: the models' States test;
+- B on the page going to the library's screen rather than where it was opened: the models' routes test;
+- the clip left playing when `playing` turns false: the program's test, the player still playing after B;
+- the kit's sink drawing nothing on the software backend: the program's test, the hero still the screenshot's green;
+- the actions' list left with no current item when its model fills: the program's test, Right from Play reaching
+  nothing.
+- Delete made without asking: the models' States test;
+- the clip's player kept while the page has not the focus: the program's test, the player still made after B;
+- a hidden card reading its new facts: the cards test, 2 frames swapped under Home;
+- the clock ignoring its held instant: the cards test, the clock reading the wall clock's time;
+- crystal's forget leaving the earlier build's sidecar: crystal's `state_forget` test.
 
 ---
 
@@ -4227,6 +4612,11 @@ On the distribution's Qt: Fedora 44's 6.11.2 (`qt6-qtbase-devel`, `qt6-qtdeclara
   every request still gated by the player's action. On SteamOS the Flatpak is what Discover installs and updates, which
   is the route a player without a terminal has; the AppImage is the route for a player who wants one folder. Building the
   Flatpak is stage 7 and needs its own go; nothing of its SDK is installed now.
+- **FFmpeg in a bundle** (noted 2026-11-09, §1.8.9). Qt Multimedia decodes through the system's FFmpeg. A bundle that
+  carries the desktop's FFmpeg carries RPM Fusion's GPL-3.0-or-later build (with x264), which a GPL-3 program may ship
+  with its source offered; an LGPL build would be Fedora's `ffmpeg-free`, which decodes H.264 through OpenH264. Which one
+  the AppImage carries, and whether the Flatpak takes the runtime's codecs extension, is **left open for stage 7**. Qt
+  Multimedia on the handheld (SteamOS's image) is **not measured** and is owed.
 - **Not SteamOS's own Qt.** Measured 2026-11-07 on the handheld (SteamOS 3.9.5, build 20261023.100): `qt6-base`
   6.11.1-1 and `qt6-declarative` 6.11.1-3 in `/usr/lib`, with the `wayland` and `xcb` platform plugins and the Basic,
   Fusion, Material, Universal, Imagine and FluentWinUI3 styles; glibc 2.43; ICU 78.3 (the desktop's Qt links ICU 77).
@@ -4873,6 +5263,8 @@ end. The questions are kept as asked, with their recommendations, as the record 
    Rust dependency on the runtime crates? Recommended: the headers, for the audit and the interchangeable front ends.
 5. **[decision] Video in themes.** Qt Multimedia with an LGPL FFmpeg bundled, or a Rust decoder into a texture?
    Recommended: Qt Multimedia, behind the kit's `VideoTile` so a theme never imports it.
+   *Built 2026-11-09 for the game's page, over the system's FFmpeg, with a sink of the kit's own on the software backend
+   (§1.8.9); the licence of the FFmpeg bundled is stage 7's (§9.2).*
 6. **[decision] Lottie animations in ES-DE themes.** Qt's Lottie module is GPL-only in the open edition; a Rust Lottie
    renderer (rlottie bindings or a pure-Rust crate) into a texture is the alternative. Recommended: defer; no watched
    theme uses one (`EmuSen_BigPicture.md` §3), and the corpus will say when it matters.

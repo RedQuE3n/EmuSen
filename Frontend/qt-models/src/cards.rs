@@ -1,0 +1,313 @@
+//! A console's memory cards as rows, the one description Settings ▸ Consoles ▸ <console> ▸ Memory cards and the Pause
+//! Card's Game Options ▸ Memory Cards share (EmuSen_Interface.md §18.5, §18.10; EmuSen_Qt.md §7.7.E). The media, their
+//! mode, slots and drawer are the card manager's (`cards_op`'s list, EmuSen_SaveMedia.md §6); the mode and the slots are
+//! the schema's rows keyed as the list names them, so nothing here knows a console.
+
+use crate::schema;
+use emusen_crystal_client::shapes::SettingRow;
+use serde::Deserialize;
+use serde_json::Value;
+
+/// One medium of a console as the card manager lists it.
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
+#[serde(default)]
+pub struct Medium {
+    pub medium: String,
+    pub title: String,
+    pub noun: String,
+    /// The noun as a sentence writes it, as the card manager words it ("card").
+    pub noun_in_text: String,
+    pub extension: String,
+    pub kind: String,
+    /// The units a card holds and their name, where a format module reads the medium; none where none does.
+    pub capacity: Option<u64>,
+    pub unit: Option<String>,
+    pub mode: String,
+    pub mode_key: String,
+    pub slots: Vec<Slot>,
+    pub cards: Vec<Card>,
+    pub next_name: String,
+    /// Each card's listing as the card manager opens it, by its path (`CARDS_OPEN`).
+    #[serde(skip)]
+    pub opened: Vec<(String, Opened)>,
+}
+
+/// A card as the card manager opens it: whether its file exists, its length, whether it is formatted, the units free, a
+/// problem reading it, and its saves.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Opened {
+    pub exists: bool,
+    pub length: u64,
+    pub formatted: bool,
+    pub free: u64,
+    pub problem: Option<String>,
+    pub saves: Vec<Save>,
+}
+
+/// A save on a card.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Save {
+    pub id: String,
+    pub title: String,
+    pub units: u64,
+    pub game: Option<String>,
+    pub damaged: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Slot {
+    pub label: String,
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Card {
+    pub path: String,
+    pub name: String,
+    pub label: String,
+    pub games_own: bool,
+    pub held_by: Option<String>,
+}
+
+impl Medium {
+    /// The medium as the card manager lists it, for a model that hands it on.
+    pub fn to_json(&self) -> Value {
+        let slots: Vec<Value> = self.slots.iter().map(|s| serde_json::json!({ "label": s.label, "name": s.name, "path": s.path })).collect();
+        let cards: Vec<Value> = self
+            .cards
+            .iter()
+            .map(|c| serde_json::json!({ "path": c.path, "name": c.name, "label": c.label, "games_own": c.games_own, "held_by": c.held_by }))
+            .collect();
+        serde_json::json!({ "medium": self.medium, "title": self.title, "noun": self.noun, "noun_in_text": self.noun_in_text, "extension": self.extension, "kind": self.kind,
+                            "mode": self.mode, "mode_key": self.mode_key, "slots": slots, "cards": cards, "next_name": self.next_name })
+    }
+
+    /// The cards in the drawer: the medium's own files, not a game's.
+    pub fn drawer(&self) -> Vec<&Card> {
+        self.cards.iter().filter(|c| !c.games_own).collect()
+    }
+
+    /// Whether a format module reads the medium, so its saves are listed.
+    pub fn readable(&self) -> bool {
+        self.capacity.is_some()
+    }
+
+    /// A card's listing, where it was opened.
+    pub fn opened(&self, path: &str) -> Option<&Opened> {
+        self.opened.iter().find(|(p, _)| p == path).map(|(_, o)| o)
+    }
+
+    /// The card the first slot holds under a shared or named mode, where it is one of the cards; else the first card
+    /// (Mistress's `AssignedCard`).
+    pub fn first_card(&self) -> Option<&Card> {
+        let assigned = matches!(self.mode.as_str(), "shared" | "named").then(|| self.slots.first()).flatten();
+        assigned.and_then(|slot| self.cards.iter().find(|c| c.path == slot.path)).or(self.cards.first())
+    }
+
+    /// The mode in words, and which card each slot holds under it (Mistress's `ModeText`).
+    pub fn mode_text(&self) -> String {
+        if !matches!(self.mode.as_str(), "shared" | "named") {
+            return "Per game: each game keeps its own.".to_owned();
+        }
+        let slots: Vec<String> = self.slots.iter().map(|s| format!("{} in {}", s.name, s.label)).collect();
+        format!("{}: {}.", if self.mode == "shared" { "Shared" } else { "Named" }, slots.join(", "))
+    }
+
+    /// What a card holds, in Mistress's window's words: the mode, then the saves and the units free, why it cannot be
+    /// read, or that it does not exist yet; and that a running game holds it.
+    pub fn about(&self, card: &Card) -> String {
+        let mode = self.mode_text();
+        let unit = self.unit.clone().unwrap_or_default();
+        let mut words = match (self.opened(&card.path), self.capacity) {
+            (None, _) => format!("{mode} No card of this medium is in the drawer or a game's yet."),
+            (Some(o), None) => format!("{mode} {} bytes. No format module reads this medium yet, so its saves are not listed; a new card can still be made.", crate::words::grouped(o.length as usize)),
+            (Some(o), Some(capacity)) if o.formatted => format!("{mode} {} save(s), {} of {capacity} {unit}s free.", o.saves.len(), o.free),
+            (Some(o), Some(_)) => format!("{mode} {}", o.problem.clone().unwrap_or_default()),
+        };
+        if let Some(holder) = &card.held_by {
+            words.push_str(&format!(" In use by {holder}, which is running: its saves can be looked at, and changed when the game is closed."));
+        }
+        words
+    }
+
+    /// A save's line on its card: its title, its units and whether it is damaged.
+    pub fn save_value(&self, save: &Save) -> String {
+        let unit = self.unit.clone().unwrap_or_default();
+        format!("{} {unit}(s){}", save.units, if save.damaged { "  ·  damaged" } else { "" })
+    }
+
+    /// The noun inside a sentence ("card"), the card manager's words for it.
+    pub fn noun_in_text(&self) -> String {
+        self.noun_in_text.clone()
+    }
+
+    /// "2 cards": the drawer counted in the medium's noun.
+    pub fn counted(&self) -> String {
+        let noun = self.noun_in_text();
+        crate::words::counted(self.drawer().len(), &noun, &format!("{noun}s"))
+    }
+
+    /// The file a new card is made at: the drawer's folder, the first name no card has, the medium's extension.
+    pub fn new_card_path(&self) -> Option<String> {
+        let folder = self.slots.iter().find_map(|s| std::path::Path::new(&s.path).parent())?;
+        Some(folder.join(format!("{}{}", self.next_name, self.extension)).to_string_lossy().into_owned())
+    }
+}
+
+/// The card manager's list, read; an answer it did not give is no media.
+pub fn media(list: &Value) -> Vec<Medium> {
+    serde_json::from_value(list.clone()).unwrap_or_default()
+}
+
+/// What a card on a drawer's page is, as Mistress's page says it.
+pub const DRAWER_CARD: &str = "A card in the drawer.";
+
+/// What a row of the page is.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Part {
+    /// The medium's mode, its schema row by the list's `mode_key`.
+    Mode,
+    /// A slot's card, its schema row the one shown with the mode's Named.
+    Slot(usize),
+    /// The drawer's cards, a page of its own.
+    Drawer,
+    /// The saves on the cards, a door to the card manager's window.
+    Saves,
+    /// A new card made in the drawer.
+    New,
+}
+
+/// A row of the page as both screens draw it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Row {
+    pub id: String,
+    pub medium: String,
+    pub part: Part,
+    pub label: String,
+    pub value: String,
+    pub steps: bool,
+    pub opens: bool,
+    pub asks: bool,
+    /// A slot whose card the mode places, which the slot's row does not choose.
+    pub held: bool,
+    /// The schema's key the row steps, where it steps one.
+    pub key: Option<String>,
+}
+
+/// The rows' schema: the mode's row and each slot's, by the medium's keys.
+pub struct Keys<'a> {
+    pub mode: Option<&'a SettingRow>,
+    pub slots: Vec<&'a SettingRow>,
+}
+
+/// The schema's rows of a medium: the mode by its key, then the rows shown with the mode, in order, as its slots.
+pub fn keys<'a>(medium: &Medium, schema: &'a [SettingRow]) -> Keys<'a> {
+    Keys {
+        mode: schema.iter().find(|r| r.key == medium.mode_key),
+        slots: schema.iter().filter(|r| r.shown_with.as_ref().is_some_and(|w| w.key == medium.mode_key)).collect(),
+    }
+}
+
+/// The page's rows: Settings' as the mode, the slots, the drawer, the saves and a new card (§18.10); in a game the slots
+/// first, then the mode and the drawer (Mistress's `GameCardRows`). `value` reads a key as the console holds it.
+pub fn rows(media: &[Medium], schema: &[SettingRow], value: &dyn Fn(&str) -> String, game: bool) -> Vec<Row> {
+    let mut out = Vec::new();
+    for m in media {
+        let keys = keys(m, schema);
+        let row = |part: Part, id: String, label: String| Row { id, medium: m.medium.clone(), part, label, value: String::new(), steps: false, opens: false, asks: false, held: false, key: None };
+        let mode = keys.mode.map(|r| Row {
+            value: schema::shown(r, &value(&r.key)),
+            steps: true,
+            key: Some(r.key.clone()),
+            ..row(Part::Mode, format!("mode:{}", m.medium), "Mode".to_owned())
+        });
+        let slots: Vec<Row> = m
+            .slots
+            .iter()
+            .enumerate()
+            .map(|(at, slot)| {
+                let key = keys.slots.get(at);
+                let placed = key.is_some_and(|r| schema::applies(r, value));
+                Row {
+                    value: slot.name.clone(),
+                    steps: placed,
+                    held: !placed,
+                    key: key.map(|r| r.key.clone()),
+                    ..row(Part::Slot(at), format!("slot:{}:{at}", m.medium), slot.label.clone())
+                }
+            })
+            .collect();
+        let drawer = Row { value: m.counted(), opens: true, ..row(Part::Drawer, format!("cards:{}", m.medium), "Cards".to_owned()) };
+        if game {
+            out.extend(slots);
+            out.extend(mode);
+            out.push(drawer);
+        } else {
+            out.extend(mode);
+            out.extend(slots);
+            out.push(drawer);
+            out.push(Row { opens: true, ..row(Part::Saves, format!("saves:{}", m.medium), "Saves on the cards".to_owned()) });
+            out.push(Row { value: "…".to_owned(), asks: true, ..row(Part::New, format!("new:{}", m.medium), format!("New {}", m.noun_in_text())) });
+        }
+    }
+    out
+}
+
+/// The pane of a row: the mode's words, a slot's card, or what the row does.
+pub fn pane(media: &[Medium], row: &Row, schema: &[SettingRow], value: &dyn Fn(&str) -> String, console: &str, game: bool) -> crate::firmware::Words {
+    let Some(m) = media.iter().find(|m| m.medium == row.medium) else { return Default::default() };
+    let said = |line: String, muted: Option<String>| crate::firmware::Words { lines: vec![line], muted: muted.into_iter().collect(), tones: Vec::new() };
+    match row.part {
+        Part::Mode => mode_pane(m, schema, value, console),
+        Part::Slot(_) if game => said(format!("{} is in {}.", row.value, row.label), Some("Left and Right choose another card; it goes in when the game next starts.".to_owned())),
+        Part::Slot(at) => said(keys(m, schema).slots.get(at).and_then(|r| r.hint.clone()).unwrap_or_else(|| "The card in this slot when a game starts.".to_owned()), None),
+        Part::Drawer => said(format!("Every {} in the drawer, and the saves on each.", m.noun_in_text()), None),
+        Part::Saves => said(format!("Each {}'s saves, copied, moved or deleted.", m.noun_in_text()), None),
+        Part::New => said(format!("A blank {} in the drawer, named for you.", m.noun_in_text()), None),
+    }
+}
+
+/// The mode's words: what Shared means, and the drawer counted (Mistress's `CardsPane`).
+pub fn mode_pane(m: &Medium, schema: &[SettingRow], value: &dyn Fn(&str) -> String, console: &str) -> crate::firmware::Words {
+    let mode = keys(m, schema).mode.map_or_else(|| m.mode.clone(), |r| schema::shown(r, &value(&r.key)));
+    let noun = m.noun_in_text();
+    crate::firmware::Words {
+        lines: vec![format!("{mode}: every {console} game sees the same {noun}s when they are shared, as the console did; per game gives each game its own.")],
+        muted: vec![format!("{} in the drawer", m.counted())],
+        tones: Vec::new(),
+    }
+}
+
+/// The drawer's page: a row a card, and which game holds it now.
+pub fn drawer_rows(m: &Medium) -> Vec<Row> {
+    m.drawer()
+        .into_iter()
+        .map(|c| Row {
+            id: format!("card:{}", c.path),
+            medium: m.medium.clone(),
+            part: Part::Drawer,
+            label: c.label.clone(),
+            value: c.held_by.as_ref().map(|h| format!("in {h}")).unwrap_or_default(),
+            steps: false,
+            opens: false,
+            asks: false,
+            held: false,
+            key: None,
+        })
+        .collect()
+}
+
+/// Left or Right on a row that steps: its key and the value one step on.
+pub fn step(row: &Row, schema: &[SettingRow], value: &dyn Fn(&str) -> String, by: i32) -> Option<(String, String)> {
+    if !row.steps {
+        return None;
+    }
+    let key = row.key.as_ref()?;
+    let r = schema.iter().find(|r| &r.key == key)?;
+    schema::stepped(r, &value(key), by).map(|v| (key.clone(), v))
+}

@@ -418,6 +418,7 @@ dependencies = [
  "emusen-theme-check",
  "emusen-theme-manifest",
  "libc",
+ "serde",
  "serde_json",
 ]
 

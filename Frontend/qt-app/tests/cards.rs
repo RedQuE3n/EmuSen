@@ -157,6 +157,36 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     }
     let mut report = Vec::new();
 
+    // A hidden card's words wait for it to show (EmuSen_Qt.md §7.8): its facts changed under Home (a paused game's minute
+    // turning over did it in acceptance) swap no frame, and the card shown reads them current. Then the facts as the
+    // window gives them, and the card closed.
+    // The clock held: its time is the held instant's, not the wall clock's (acceptance holds it so).
+    assert!(scene.set_property("clock", "now", common::HELD_NOW));
+    assert_eq!(scene.property("clock", "time"), "12:00", "the clock reads the held instant");
+    let given = scene.property("homeCardModel", "facts");
+    scene.assert_still("Home");
+    let before = scene.frames();
+    let mut facts: serde_json::Value = serde_json::from_str(&given).unwrap();
+    // A suspended game paused a minute ago, which the hidden card's first page draws as its Continue row and caption,
+    // and Steam's Game Mode, which Power's rows show once it opens.
+    facts["suspended"] = serde_json::json!("Echo Forge (Synthetic)");
+    facts["paused"] = serde_json::json!("Super Nintendo · Paused 1 minute ago");
+    facts["gameMode"] = serde_json::json!(true);
+    assert!(scene.set_property("homeCardModel", "facts", &facts.to_string()));
+    scene.wait(500);
+    assert_eq!(scene.frames() - before, 0, "the hidden Home card's new facts swapped a frame");
+    for _ in 0..6 {
+        scene.pad(UiButton::Right);
+    }
+    scene.pad(UiButton::Accept);
+    settle(&mut scene);
+    assert_eq!(rows(&mut scene), ["Quit EmuSen..."], "shown, the card reads the facts it was given while hidden");
+    scene.pad(UiButton::Back);
+    settle(&mut scene);
+    assert!(scene.set_property("homeCardModel", "facts", &given));
+    scene.pad(UiButton::Menu);
+    scene.wait(50);
+
     // Home's Power place opens the Home card at Power, with Home as the way back (HomeCardPower).
     for _ in 0..6 {
         scene.pad(UiButton::Right);
@@ -337,3 +367,4 @@ fn all_games(scene: &mut Scene<'_>) {
     assert!(scene.focus_item(&tree, place));
     scene.pad(UiButton::Accept);
 }
+

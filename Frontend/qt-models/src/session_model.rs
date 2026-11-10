@@ -147,6 +147,11 @@ pub mod qobject {
         #[cxx_name = "swapPlayers"]
         fn swap_players(self: Pin<&mut SessionModel>);
 
+        /// A setting of the running console stored, for its games from the next start; the card's facts read again.
+        #[qinvokable]
+        #[cxx_name = "setConsoleSetting"]
+        fn set_console_setting(self: Pin<&mut SessionModel>, key: &QString, value: &QString);
+
         /// Guide held with `button` over the running game (`PadRouter.guideChord`): pause.rs's `guide_chord` says what it asks.
         #[qinvokable]
         #[cxx_name = "guideChord"]
@@ -495,6 +500,7 @@ impl qobject::SessionModel {
                 picture: if s.exists { picture_of(&s.path).unwrap_or_default() } else { String::new() },
             })
             .collect();
+        facts.cards = card_facts(&runtime, session, &info.console);
         let text = QString::from(facts.to_json().as_str());
         if self.card_facts != text {
             self.as_mut().rust_mut().card_facts = text;
@@ -660,6 +666,18 @@ impl qobject::SessionModel {
         });
     }
 
+    fn set_console_setting(mut self: Pin<&mut Self>, key: &QString, value: &QString) {
+        let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
+        let set = runtime.settings_set(session, emusen_crystal_client::Scope::Console, None, &key.to_string(), Some(&value.to_string()));
+        if let Err(e) = set {
+            self.as_mut().rust_mut().notice_attention = true;
+            self.as_mut().notice_attention_changed();
+            self.as_mut().rust_mut().notice = QString::from(format!("{key} was not changed: {e}").as_str());
+            self.as_mut().notice_changed();
+        }
+        self.read_card_facts();
+    }
+
     fn swap_players(mut self: Pin<&mut Self>) {
         // SAFETY: as in `game_input`.
         let swapped = unsafe { GamePads::at(self.pads) }.is_some_and(|pads| pads.swap_players());
@@ -717,4 +735,16 @@ impl qobject::SessionModel {
             self.resume();
         }
     }
+}
+
+/// The running console's cards for Game Options ▸ Memory Cards: the card manager's list, the session's schema rows of
+/// the media's keys, and the values the console holds for them.
+fn card_facts(runtime: &Runtime, session: u32, console: &str) -> pause::CardFacts {
+    use emusen_crystal_client::Scope;
+    let list = runtime.cards_op(emusen_crystal_client::consts::CARDS_LIST, &serde_json::json!({ "console": console })).ok().flatten().unwrap_or_default();
+    let media = crate::cards::media(&list);
+    let schema = runtime.settings_schema(session, None, None).unwrap_or_default();
+    let schema: Vec<_> = schema.into_iter().filter(|r| media.iter().any(|m| r.key == m.mode_key || r.shown_with.as_ref().is_some_and(|w| w.key == m.mode_key))).collect();
+    let values = schema.iter().filter_map(|r| Some((r.key.clone(), runtime.settings_get(session, Scope::Console, None, &r.key).ok().flatten()?))).collect();
+    pause::CardFacts { console: console.to_owned(), media, schema, values }
 }

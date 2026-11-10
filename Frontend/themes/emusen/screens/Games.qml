@@ -125,7 +125,7 @@ ThemeScreen {
                             text: Browse.previous
                             color: night.muted
                             font.family: faces.regular
-                            font.pixelSize: 18
+                            font.pixelSize: 19
                         }
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
@@ -133,7 +133,7 @@ ThemeScreen {
                             text: Words.between
                             color: night.muted
                             font.family: faces.regular
-                            font.pixelSize: 18
+                            font.pixelSize: 19
                         }
                         Text {
                             objectName: "gridNext"
@@ -141,7 +141,7 @@ ThemeScreen {
                             text: Browse.next
                             color: night.muted
                             font.family: faces.regular
-                            font.pixelSize: 18
+                            font.pixelSize: 19
                         }
                         PadGlyph {
                             objectName: "gridNextShoulder"

@@ -41,6 +41,11 @@ fn words(e: impl std::fmt::Display) -> String {
 }
 
 impl ClientSource {
+    /// The sources-alone scraper, for a game's metadata and media; none where it could not open.
+    pub fn scraper(&self) -> Option<&ScrapeService> {
+        self.scraper.as_ref().map(|(_, s)| s)
+    }
+
     /// The scan's request: the player's ROM folder, the shelves' systems, and the packages and compressed folders.
     pub fn scan_request(&self) -> Result<ScanRequest, String> {
         let settings = app_settings(&self.platform)?;
@@ -206,7 +211,7 @@ impl LibrarySource for ClientSource {
         let mut out = Vec::new();
         for s in systems {
             // The runtime's Setting(console, "Engine"): the stored choice, else the engine row's default.
-            let chosen = self.runtime.settings_get(0, Scope::Console, Some(&s.id), "Engine").map_err(words)?;
+            let chosen = self.runtime.settings_get(0, Scope::Console, Some(&s.id), crate::consoles::ENGINE_KEY).map_err(words)?;
             let Some(id) = chosen.filter(|c| !c.is_empty()).or_else(|| s.engines.first().cloned()) else { continue };
             out.push((s.id.clone(), engine_shown(&id, &cores)));
         }

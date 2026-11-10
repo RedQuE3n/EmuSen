@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Dialogs
 import EmuSen.Kit as Kit
 import EmuSen.Models
 import EmuSen.Endymion
@@ -42,6 +43,8 @@ Window {
     readonly property ThemeHost themeHost: chosenTheme.item as ThemeHost
     // Why the reference is shown in place of the theme the settings choose, said once the splash has gone.
     property string themeWords
+    // The game in hand, whose page X opens: the one the theme's focus is on, else the grid's focused game.
+    property string inHand
     // A game chosen: asked about where its core waits for approval or its firmware is missing, then recorded as started,
     // opened (resumed where it is the one suspended) and shown.
     signal play(string path)
@@ -171,7 +174,12 @@ Window {
             screens.play()
         }
         onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
-        onFocused: (game) => games.focused = games.rowOf(game)
+        onFocused: (game) => {
+            program.inHand = game
+            // Home's games are in hand too, and leave the grid's focus where it was.
+            if (screens.shown !== Screens.Home && games.rowOf(game) >= 0)
+                games.focused = games.rowOf(game)
+        }
     }
     // The chosen EmuSen theme's screens over the reference's, each where the theme provides it and has not failed; the host and
     // its engine are made only while a theme other than the reference is chosen (EmuSen_Qt.md §3.5.2, §9.3.5).
@@ -206,7 +214,12 @@ Window {
                 screens.play()
             }
             onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
-            onFocused: (game) => games.focused = games.rowOf(game)
+            onFocused: (game) => {
+                program.inHand = game
+                // Home's games are in hand too, and leave the grid's focus where it was.
+                if (screens.shown !== Screens.Home && games.rowOf(game) >= 0)
+                    games.focused = games.rowOf(game)
+            }
         }
     }
     // The grid's search: its words, which the keyboard types and the grid's model narrows by, the field over the one row of
@@ -345,9 +358,26 @@ Window {
         id: settingsModel
         objectName: "settingsModel"
         platformLibrary: program.platformLibrary
+        cores: library.cores
         open: screens.shown === Screens.Settings
         facts: library.loading ? "" : library.settingsFacts(player.session.running ? player.session.game : "")
         onDoor: (name) => screens.act(name)
+        onOpenFolder: (path) => folders.open(path)
+        onChooseFolder: (key, start) => folders.choose(key, start)
+    }
+    // The program's folder actions (EmuSen_Qt.md §7.7.E): one shown in the system's file manager, one chosen in the
+    // system's own folder dialog (through the desktop portal where there is one), whose answer the row's model saves.
+    Folders {
+        id: folders
+        objectName: "folders"
+        onDialogAsked: folderDialog.open()
+        onChosen: (key, path) => settingsModel.setFolder(key, path)
+    }
+    FolderDialog {
+        id: folderDialog
+        currentFolder: folders.dialogFolder
+        onAccepted: folders.accepted(folderDialog.selectedFolder)
+        onRejected: folders.rejected()
     }
     Settings {
         objectName: "settings"
@@ -387,6 +417,8 @@ Window {
         cores: library.cores
         world: program.coresWorld
         open: screens.shown === Screens.Cores
+        // Open Folder on a firmware page, through the program's one action for it (EmuSen_Qt.md §7.7.E).
+        onOpenFolder: (path) => folders.open(path)
     }
     Cores {
         objectName: "cores"
@@ -395,6 +427,30 @@ Window {
         padFamily: program.padFamily
         inputs: visible && !program.splashShown
         onBacked: screens.back()
+    }
+    // A game's page, from X on Home and the grid, a theme's openPage and the Home card's Selected game (EmuSen_Qt.md §7.8);
+    // its doors open later pieces' pages.
+    GamePageModel {
+        id: pageModel
+        objectName: "pageModel"
+        platformLibrary: program.platformLibrary
+        cores: library.cores
+        game: screens.shown === Screens.Page ? library.gameFile(program.inHand) : ""
+        onPlayed: (path, state) => program.play(path)
+        onHidden: screens.back()
+    }
+    Connections {
+        target: pageModel
+        function onHidden() { library.refresh() }
+    }
+    GamePage {
+        objectName: "gamePage"
+        visible: screens.shown === Screens.Page
+        page: pageModel
+        padFamily: program.padFamily
+        inputs: visible && !program.splashShown
+        onBacked: screens.back()
+        onActed: (key) => screens.act(key)
     }
     // The Home card over Home, opened at Power by its place (EmuSen_Interface.md §2.3; EmuSen_BigPicture.md §51.2).
     Kit.NormalizedCanvas {

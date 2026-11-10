@@ -2,6 +2,7 @@
 //! or page shown, with the roles the kit's settings frame reads, and the focused row's pane as properties. A read runs
 //! off the GUI thread and comes back through qt_thread().queue; a change is saved through Galaxia's model at once.
 
+use crate::consoles_source::{ClientConsoles, ScriptedConsoles};
 use crate::help::Screen;
 use crate::help_model::shown_screen;
 use crate::settings::{self, Outcome, Preview, SettingsView};
@@ -39,6 +40,10 @@ pub mod qobject {
         #[qml_element]
         /// The platform library, through which the settings are read and saved.
         #[qproperty(QString, platform_library, cxx_name = "platformLibrary")]
+        /// The runtime's cores folder, as the library's; empty for the installation's own.
+        #[qproperty(QString, cores)]
+        /// A file holding the consoles' world in place of the runtime's, as the recordings script theirs; empty for the runtime.
+        #[qproperty(QString, world)]
         /// Whether Settings is shown: the settings are read each time it opens.
         #[qproperty(bool, open)]
         /// The program's facts a pane names, as LibraryModel.settingsFacts writes them.
@@ -52,6 +57,8 @@ pub mod qobject {
         #[qproperty(i32, focused)]
         #[qproperty(QStringList, pane_lines, cxx_name = "paneLines", READ, NOTIFY)]
         #[qproperty(QStringList, pane_muted, cxx_name = "paneMuted", READ, NOTIFY)]
+        /// The tone (Kit.Tones) of the focused row's sentence; `lineTone` gives each further line's.
+        #[qproperty(i32, sentence_tone, cxx_name = "sentenceTone", READ, NOTIFY)]
         /// The pane's preview: 0 none, 1 the game's picture, 2 a meter, 3 the two variants, 4 the text sizes.
         #[qproperty(i32, preview, READ, NOTIFY)]
         #[qproperty(QString, caption, READ, NOTIFY)]
@@ -90,6 +97,11 @@ pub mod qobject {
         #[qinvokable]
         fn refresh(self: Pin<&mut SettingsModel>);
 
+        /// The tone (Kit.Tones) of the pane's further line at `index`, the text's past the tones the pane gives.
+        #[qinvokable]
+        #[cxx_name = "lineTone"]
+        fn line_tone(self: &SettingsModel, index: i32) -> i32;
+
         /// The scale of the sample at `index`, 1 past the samples.
         #[qinvokable]
         #[cxx_name = "sampleScale"]
@@ -114,6 +126,29 @@ pub mod qobject {
         /// B on a section: Settings is left.
         #[qsignal]
         fn left(self: Pin<&mut SettingsModel>);
+
+        /// LB (-1) or RB (+1) on a console's page: the console before or after it; false elsewhere.
+        #[qinvokable]
+        fn shoulder(self: Pin<&mut SettingsModel>, by: i32) -> bool;
+
+        /// A page closed: the row that opened it is focused again.
+        #[qsignal]
+        fn refocus(self: Pin<&mut SettingsModel>, row: i32);
+
+        /// A folder row's key (`Model Key`) to choose a folder for in the system's dialog, starting at `start`.
+        #[qsignal]
+        #[cxx_name = "chooseFolder"]
+        fn choose_folder(self: Pin<&mut SettingsModel>, key: QString, start: QString);
+
+        /// The folder chosen for a folder row's key, saved at once.
+        #[qinvokable]
+        #[cxx_name = "setFolder"]
+        fn set_folder(self: Pin<&mut SettingsModel>, key: &QString, path: &QString);
+
+        /// A folder to show in the system's file manager, through the program's one action for it.
+        #[qsignal]
+        #[cxx_name = "openFolder"]
+        fn open_folder(self: Pin<&mut SettingsModel>, path: QString);
     }
 
     unsafe extern "RustQt" {
@@ -148,6 +183,8 @@ pub mod qobject {
 
 pub struct SettingsModelRust {
     platform_library: QString,
+    cores: QString,
+    world: QString,
     open: bool,
     facts: QString,
     sections: QStringList,
@@ -156,6 +193,8 @@ pub struct SettingsModelRust {
     focused: i32,
     pane_lines: QStringList,
     pane_muted: QStringList,
+    sentence_tone: i32,
+    line_tones: Vec<i32>,
     preview: i32,
     caption: QString,
     meter: f64,
@@ -186,6 +225,8 @@ impl Default for SettingsModelRust {
         let view = SettingsView::new();
         SettingsModelRust {
             platform_library: QString::default(),
+            cores: QString::default(),
+            world: QString::default(),
             open: false,
             facts: QString::default(),
             sections: list(view.sections().into_iter()),
@@ -194,6 +235,8 @@ impl Default for SettingsModelRust {
             focused: 0,
             pane_lines: QStringList::default(),
             pane_muted: QStringList::default(),
+            sentence_tone: 0,
+            line_tones: Vec::new(),
             preview: 0,
             caption: QString::default(),
             meter: 0.0,
@@ -258,7 +301,7 @@ impl qobject::SettingsModel {
             SENTENCE => text(&self.view.pane(index.row() as usize).sentence),
             KIND => QVariant::from(&(emusen_kit_core::settings::RowKind::ALL.iter().position(|k| *k == row.kind).unwrap_or(0) as i32)),
             HELD => QVariant::from(&row.held),
-            MARKED => QVariant::from(&false),
+            MARKED => QVariant::from(&row.marked),
             KEY => text(&row.id),
             _ => QVariant::default(),
         }
@@ -276,6 +319,10 @@ impl qobject::SettingsModel {
         self.rows.len() as i32
     }
 
+    pub fn line_tone(&self, index: i32) -> i32 {
+        usize::try_from(index).ok().and_then(|i| self.line_tones.get(i)).copied().unwrap_or(0)
+    }
+
     pub fn sample_scale(&self, index: i32) -> f64 {
         usize::try_from(index).ok().and_then(|i| self.sample_scales.get(i)).copied().unwrap_or(1.0)
     }
@@ -288,8 +335,16 @@ impl qobject::SettingsModel {
         let asked = self.asked.wrapping_add(1);
         self.as_mut().rust_mut().asked = asked;
         let thread = self.qt_thread();
+        let (cores, world) = (self.cores.to_string(), self.world.to_string());
         std::thread::spawn(move || {
-            let read = ClientSettings::open(&library).and_then(|source| settings::read(&source));
+            let read = ClientSettings::open(&library).and_then(|source| settings::read(&source)).and_then(|mut read| {
+                read.consoles = if world.is_empty() {
+                    crate::consoles::read(&ClientConsoles::open(&library, &cores)?)?
+                } else {
+                    crate::consoles::read(&ScriptedConsoles::open(&world)?)?
+                };
+                Ok(read)
+            });
             let _ = thread.queue(move |mut model| {
                 if model.asked != asked {
                     return;
@@ -318,11 +373,29 @@ impl qobject::SettingsModel {
     }
 
     pub fn back(mut self: Pin<&mut Self>) {
-        if self.as_mut().rust_mut().view.back() {
-            self.shown(true);
-        } else {
-            self.left();
+        match self.as_mut().rust_mut().view.back() {
+            Some(row) => {
+                self.as_mut().shown(true);
+                self.refocus(row as i32);
+            }
+            None => self.left(),
         }
+    }
+
+    pub fn set_folder(mut self: Pin<&mut Self>, key: &QString, path: &QString) {
+        if path.is_empty() {
+            return;
+        }
+        let outcome = self.as_mut().rust_mut().view.set_folder(&key.to_string(), &path.to_string());
+        self.outcome(outcome);
+    }
+
+    pub fn shoulder(mut self: Pin<&mut Self>, by: i32) -> bool {
+        let stepped = self.as_mut().rust_mut().view.shoulder(by);
+        if stepped {
+            self.shown(true);
+        }
+        stepped
     }
 
     fn read_if_named(self: Pin<&mut Self>) {
@@ -341,7 +414,41 @@ impl qobject::SettingsModel {
                 self.shown(false);
             }
             Outcome::Opened => self.shown(true),
+            Outcome::Shown => self.shown(false),
             Outcome::Door(name) => self.door(QString::from(name.as_str())),
+            Outcome::OpenFolder(path) => self.open_folder(QString::from(path.as_str())),
+            Outcome::ChooseFolder { key, start } => self.choose_folder(QString::from(key.as_str()), QString::from(start.as_str())),
+            Outcome::Set { .. } | Outcome::NewCard(_) | Outcome::Cards { .. } if !self.world.is_empty() => self.shown(false),
+            Outcome::Cards { op, args } => {
+                let (done, words) = match ClientConsoles::open(&self.platform_library.to_string(), &self.cores.to_string()) {
+                    Ok(c) => c.cards_change(op, &args),
+                    Err(e) => (false, e),
+                };
+                self.as_mut().rust_mut().view.cards_said(op, done, words);
+                self.as_mut().shown(true);
+                self.refresh();
+            }
+            Outcome::Set { console, key, value } => {
+                let set = ClientConsoles::open(&self.platform_library.to_string(), &self.cores.to_string()).and_then(|c| c.set(&console, &key, value.as_deref()));
+                let failed = set.is_err();
+                self.as_mut().said(set.err().unwrap_or_default());
+                self.as_mut().shown(false);
+                // The engine chosen changes the schema the page draws, and a refusal leaves the stored value as it was.
+                if failed || key == crate::consoles::ENGINE_KEY {
+                    self.refresh();
+                }
+            }
+            Outcome::NewCard(path) => {
+                let made = ClientConsoles::open(&self.platform_library.to_string(), &self.cores.to_string()).and_then(|c| c.new_card(&path));
+                self.as_mut().said(made.err().unwrap_or_default());
+                self.refresh();
+            }
+            Outcome::Reread => self.refresh(),
+            Outcome::All(all) => {
+                for one in all {
+                    self.as_mut().outcome(one);
+                }
+            }
         }
     }
 
@@ -411,7 +518,7 @@ impl qobject::SettingsModel {
             self.as_mut().rust_mut().trail = trail;
             self.as_mut().trail_changed();
         }
-        let help = shown_screen(if self.view.page_open() { Screen::SettingsPage } else { Screen::Settings });
+        let help = shown_screen(self.view.help());
         if self.help != help {
             self.as_mut().rust_mut().help = help;
             self.as_mut().help_changed();
@@ -422,8 +529,19 @@ impl qobject::SettingsModel {
     /// The focused row's pane.
     fn pane(mut self: Pin<&mut Self>) {
         let pane = self.view.pane(self.focused.max(0) as usize);
+        // The kit's Tones are numbered in the order tools::Tone lists them.
+        let tones: Vec<i32> = pane.tones.iter().map(|t| *t as i32).collect();
+        let sentence_tone = tones.first().copied().unwrap_or(0);
+        if self.sentence_tone != sentence_tone {
+            self.as_mut().rust_mut().sentence_tone = sentence_tone;
+            self.as_mut().sentence_tone_changed();
+        }
+        // The lines' tones before the lines, so the delegates the new lines make read theirs.
+        let line_tones: Vec<i32> = tones.iter().skip(1).copied().collect();
+        let lines_changed = self.line_tones != line_tones;
+        self.as_mut().rust_mut().line_tones = line_tones;
         let lines = list(pane.lines.into_iter());
-        if self.pane_lines != lines {
+        if self.pane_lines != lines || lines_changed {
             self.as_mut().rust_mut().pane_lines = lines;
             self.as_mut().pane_lines_changed();
         }

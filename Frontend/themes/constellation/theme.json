@@ -1,0 +1,11 @@
+{
+    "schema": 1,
+    "api": "1.0",
+    "name": "Constellation",
+    "author": "The EmuSen project",
+    "licence": "GPL-3.0-or-later",
+    "variants": ["dark", "light"],
+    "fontSizes": [1, 1.3],
+    "screens": ["home", "consoles", "games", "splash"],
+    "tokens": {"dark": {"accent": "#E4C66A"}, "light": {"accent": "#1F2A44"}}
+}

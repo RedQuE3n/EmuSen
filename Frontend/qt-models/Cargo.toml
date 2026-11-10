@@ -15,7 +15,7 @@ name = "emusen_qt_models"
 cxx.workspace = true
 cxx-qt.workspace = true
 cxx-qt-lib.workspace = true
-# A source's JSON reads (the library's records), and the texts written straight from the rows.
+# A source's JSON reads (the library's records), the texts written straight from the rows, and the card manager's list read as records (cards.rs).
 serde.workspace = true
 serde_json.workspace = true
 # The frontend API and the platform library, the only ways to the back end (EmuSen_Qt.md §1.1).
@@ -32,6 +32,8 @@ emusen-kit-qt.workspace = true
 emusen-theme-manifest = { path = "../theme-check/manifest" }
 emusen-theme-check = { path = "../theme-check" }
 emusen-esde = { path = "../esde" }
+# The cores folder's free space for Cores' meter (statvfs), which neither client crate answers.
+libc = "0.2"
 
 [build-dependencies]
 cxx-qt-build.workspace = true

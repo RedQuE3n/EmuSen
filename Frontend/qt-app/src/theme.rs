@@ -42,6 +42,8 @@ pub mod qobject {
         #[qproperty(QString, clock)]
         /// Reduced motion, as the window binds the kit's tokens.
         #[qproperty(bool, reduced_motion, cxx_name = "reducedMotion")]
+        /// The program's clock's time, in seconds since 1970, 0 for the wall clock: the theme's `Words.now`.
+        #[qproperty(i64, now)]
         type ThemeFeed = super::ThemeFeedRust;
     }
 
@@ -156,6 +158,7 @@ pub struct ThemeFeedRust {
     family: i32,
     clock: QString,
     reduced_motion: bool,
+    now: i64,
     /// The feed as the sink sees it, emptied when the feed goes, so a sink that outlives it takes nothing.
     me: Rc<Cell<*mut qobject::ThemeFeed>>,
 }
@@ -171,6 +174,7 @@ impl Default for ThemeFeedRust {
             family: 0,
             clock: QString::default(),
             reduced_motion: false,
+            now: 0,
             me: Rc::new(Cell::new(std::ptr::null_mut())),
         }
     }
@@ -201,6 +205,8 @@ pub enum Carried {
     Acted(String),
     Focused(String),
     Selected(i32),
+    /// A game's page: the game taken in hand, then its page opened (EmuSen_Qt.md §7.8).
+    Page(String),
 }
 
 /// The signal an action becomes, `suspended` being the game a session holds and `rows` the library's rows' keys; none
@@ -209,7 +215,7 @@ pub fn carried(action: &Action, suspended: Option<&str>, rows: &[&str]) -> Optio
     Some(match action {
         Action::Play(key) if suspended == Some(key.as_str()) => Carried::Resumed,
         Action::Play(key) => Carried::Played(key.clone()),
-        Action::OpenPage(_) => Carried::Acted(help::GAME_PAGE.into()),
+        Action::OpenPage(key) => Carried::Page(key.clone()),
         Action::Favourite(_) => Carried::Acted(help::FAVOURITE.into()),
         Action::Random(_) => Carried::Acted(help::RANDOM.into()),
         Action::OpenConsole(key) => Carried::Opened(key.clone()),
@@ -252,6 +258,10 @@ impl ActionSink for Sink {
             Carried::Acted(key) => feed.as_mut().acted(QString::from(key.as_str())),
             Carried::Focused(game) => feed.as_mut().focused(QString::from(game.as_str())),
             Carried::Selected(index) => feed.as_mut().selected(index),
+            Carried::Page(game) => {
+                feed.as_mut().focused(QString::from(game.as_str()));
+                feed.as_mut().acted(QString::from(help::GAME_PAGE));
+            }
         }
         true
     }
@@ -271,6 +281,11 @@ impl cxx_qt::Initialize for qobject::ThemeFeed {
         self.as_mut().on_family_changed(|feed| feed.feed_device()).release();
         self.as_mut().on_clock_changed(|feed| feed.feed_device()).release();
         self.as_mut().on_reduced_motion_changed(|feed| feed.feed_motion()).release();
+        self.as_mut().on_now_changed(|feed| {
+            feed.feed_words();
+            feed.feed_browse();
+        })
+        .release();
     }
 }
 
@@ -351,7 +366,7 @@ impl qobject::ThemeFeed {
         let open = (section.searching, section.typing, section.list_open);
         let searched = !games.search().is_empty();
         let facts = facts_of(library.view(), &section.key, &games.count_line().to_string(), *games.focused(), open, searched);
-        let rows = view::games(library.view(), games.rows(), words::now());
+        let rows = view::games(library.view(), games.rows(), self.at());
         let Some(engine) = self.engine() else { return };
         if let Some(mut browse) = host::browse(engine) {
             browse.as_mut().show_games(rows);
@@ -363,6 +378,17 @@ impl qobject::ThemeFeed {
         let facts = DeviceFacts { controllers: self.controllers, family: self.family, clock: self.clock.to_string(), ..DeviceFacts::default() };
         if let Some(device) = self.engine().and_then(host::device) {
             device.show(&facts);
+        }
+    }
+
+    /// Now, held or the wall clock's.
+    fn at(&self) -> i64 {
+        if self.now > 0 { self.now } else { words::now() }
+    }
+
+    fn feed_words(&self) {
+        if let Some(words) = self.engine().and_then(host::words) {
+            words.show_now(self.now as f64);
         }
     }
 
@@ -386,6 +412,7 @@ impl qobject::ThemeFeed {
         if let Some(actions) = self.engine().and_then(host::actions) {
             actions.set_sink(Some(Box::new(sink)));
         }
+        self.feed_words();
         self.feed_motion();
         self.feed_tokens();
         self.feed_device();

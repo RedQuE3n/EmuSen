@@ -55,20 +55,14 @@ impl SceneView {
     /// The view's drawn elements in drawing order and its primary element's layout, at the view's time.
     pub fn draw(&self, measures: &Measures, leaving: bool) -> (Vec<Drawn>, Option<Primary>) {
         let data = &self.data;
-        let ctx = Ctx {
-            view: &self.view,
-            data,
-            system: data.system(),
-            game: if self.view == "system" { None } else { data.game() },
-            w: data.width,
-            h: data.height,
-        };
+        let ctx = Ctx { view: &self.view, data, system: data.system(), game: None, w: data.width, h: data.height };
         let since = self.now() - self.selected_at();
         let elements = &self.theme_view().elements;
         let mut out = vec![];
         let mut primary_out = None;
         for s in self.frame().into_iter().filter(|s| s.skipped.is_none()) {
             let e = &elements[s.index];
+            let ctx = Ctx { game: s.game.and_then(|i| ctx.system.games.get(i)), ..ctx };
             let id = id_of(&self.view, e);
             let mut placed = Placed {
                 id,

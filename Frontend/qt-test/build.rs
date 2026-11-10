@@ -17,6 +17,13 @@ fn main() {
                 "qml/ClipScene.qml",
                 "qml/PhaseScene.qml",
                 "qml/FadeScene.qml",
+                "qml/FadeResizeScene.qml",
+                "qml/LongListScene.qml",
+                "qml/WalkableKeysScene.qml",
+                "qml/GridScene.qml",
+                "qml/ShiftScene.qml",
+                "qml/OrbitScene.qml",
+                "qml/PolishScene.qml",
             ])
             .depend("QtQuick")
             .depend("QtQuick.Shapes")

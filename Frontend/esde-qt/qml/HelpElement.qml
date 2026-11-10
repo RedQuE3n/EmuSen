@@ -24,9 +24,12 @@ ElementBox {
     required property real padBottom
     property int family: Kit.Families.Generic
     // THEMES.md: fontSize sets the text and the icons; entryRelativeScale above 1 shrinks the icons, below 1 the text.
-    // The icon's side over the font's size, measured on ES-DE 3.4.1's captures (EmuSen_Qt.md §4.8.5).
-    readonly property real iconShare: 0.9
-    readonly property real glyphSide: root.px * root.iconShare * Math.min(1, 1 / Math.max(0.2, root.entryScale))
+    // The element's height over the font's size, which ES-DE's icon fills, and the kit glyph's ink over its side (EmuSen_Qt.md §4.8.6).
+    readonly property real heightShare: 0.9
+    readonly property real inkShare: 0.88
+    readonly property real lineHeight: root.px * root.heightShare
+    readonly property real glyphSide: root.lineHeight / root.inkShare * Math.min(1, 1 / Math.max(0.2, root.entryScale))
+    readonly property size extent: Qt.size(bar.implicitWidth, root.lineHeight)
     readonly property real labelPx: root.px * Math.min(1, root.entryScale)
     PartsModel {
         id: parts
@@ -48,7 +51,7 @@ ElementBox {
         x: -root.padLeft
         y: -root.padTop
         width: bar.width + root.padLeft + root.padRight
-        height: bar.height + root.padTop + root.padBottom
+        height: root.lineHeight + root.padTop + root.padBottom
         radius: root.backgroundRadius
         gradient: Gradient {
             orientation: root.backgroundVertical ? Gradient.Vertical : Gradient.Horizontal
@@ -56,20 +59,20 @@ ElementBox {
             GradientStop { position: 1; color: root.backgroundEnd }
         }
     }
-    // The bar's own extent is the element's size: the scene places it by its origin once measured (EmuSen_Qt.md §4.8.5).
+    // The bar's width and the line's height are the element's size, the bar centred on the line: the scene places it by its origin once measured (EmuSen_Qt.md §4.8.5).
+    onExtentChanged: root.esde.measured(root.elementId, root.extent.width, root.extent.height)
     Kit.HelpBar {
         id: bar
         objectName: "esdeHelp"
+        y: (root.lineHeight - bar.height) / 2
         width: implicitWidth
         height: implicitHeight
-        onImplicitWidthChanged: root.esde.measured(root.elementId, bar.implicitWidth, bar.implicitHeight)
-        onImplicitHeightChanged: root.esde.measured(root.elementId, bar.implicitWidth, bar.implicitHeight)
         model: parts
         fitted: true
         ruled: false
         family: root.family
         glyphStyle: root.filled ? Kit.GlyphStyles.Filled : Kit.GlyphStyles.Outlined
-        labelFont: Qt.font({ family: face.status === FontLoader.Ready ? face.font.family : body.font.family, pixelSize: root.labelPx })
+        labelFont: Qt.font({ family: face.status === FontLoader.Ready ? face.font.family : body.font.family, pixelSize: Math.round(root.labelPx) })
         entrySpacing: root.entrySpacing
         glyphGap: root.iconGap
         labelColor: root.color

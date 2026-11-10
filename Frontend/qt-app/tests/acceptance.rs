@@ -13,10 +13,11 @@ use emusen_client_fixture::{image, library};
 use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_kit_core::input::UiButton;
 use emusen_qt::MAIN_URL;
-use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS};
+use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS, SAVE_STATE};
 use emusen_platform_client::library::Library;
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt_models::clients::ClientSource;
+use emusen_qt_models::words;
 use emusen_qt_play::host::{Adoption, Host};
 use emusen_qt_test::compositor::Compositor;
 use emusen_qt_test::virtual_pad::Sdl;
@@ -30,17 +31,16 @@ use std::path::{Path, PathBuf};
 const COUNTED: [&str; 7] = ["tile.", "consoleBody.", "consoleName.", "consoleCount.", "consoleRing.", "rowCover.", "makerLabel."];
 
 /// A fault explained by a difference named in EmuSen_Qt.md §7.1 step 4 and §3.4.2: the orbit line and the places' glass
-/// edge in the canvas's own ink, the canvas's 17- and 18-unit words under the floor at 1280 x 720 alone, the focused
-/// console's name in the canvas's line box of 1, a place's line too long for its tile (cut as the accepted render cuts it),
-/// and the focused shelf cover's name, whose glyph box the focus
+/// edge in the canvas's own ink, a place's line built from data (a fixed word such as "Game packages" may not elide, as
+/// theme-audit holds it), and the focused shelf cover's name, whose glyph box the focus
 /// ring's foot reaches at 1280 x 720 alone, where Mistress's render puts both (2 units under the shelf's covers).
 fn named_difference(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
-    let item = |n: &str| n.trim().trim_end_matches(':').parse::<usize>().ok().and_then(|i| tree.nodes.get(i)).map_or("", |n| n.name.as_str());
+    let node = |n: &str| n.trim().trim_end_matches(':').parse::<usize>().ok().and_then(|i| tree.nodes.get(i));
+    let item = |n: &str| node(n).map_or("", |n| n.name.as_str());
+    let said = |n: &str| node(n).and_then(|n| n.text.as_deref()).unwrap_or("");
     let after = |key: &str| fault.split(key).nth(1).map(|r| r.split_whitespace().next().unwrap_or(""));
     after("palette on ").is_some_and(|i| item(i).starts_with("orbit.") || item(i).starts_with("placeDisc."))
-        || (size == (1280, 720) && fault.contains("too small to read"))
-        || after("cut at the foot: ").is_some_and(|i| item(i) == "consoleDetailName")
-        || after("ellipsis: ").is_some_and(|i| item(i).starts_with("placeStatus."))
+        || after("ellipsis: ").is_some_and(|i| item(i).starts_with("placeStatus.") && !words::is_fixed(said(i)))
         || (size == (1280, 720) && after("low contrast: ").is_some_and(|i| item(i) == "shelfTitle"))
 }
 
@@ -293,7 +293,8 @@ fn approved_test_core(world: &emusen_client_fixture::World, cores: &Path) {
 #[test]
 fn each_screen_matches_its_mockup_and_passes_the_gate() {
     let kwin = Compositor::start(3840, 2160);
-    kwin.watch(600);
+    // A hang detector, not a gate: the run's own length grew past 600 s under load (EmuSen_Qt.md §7.8).
+    kwin.watch(1200);
     std::env::set_var("QT_QUICK_BACKEND", "rhi");
     std::env::set_var("QSG_RHI_BACKEND", "vulkan");
     std::env::set_var("QSG_RENDER_LOOP", "threaded");
@@ -309,6 +310,9 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     let pad = sdl.attach("EmuSen Test Xbox Pad", 0x045e, 0x028e);
     let mut scene = harness.load_prepared(MAIN_URL, 1280, 800, |window| unsafe { adoption.adopt(window.cast()) }.expect("Qt adopts the device"));
     assert!(scene.set_property("program", "splash", "false"));
+    // The clock held at one instant, so no state depends on the minute it is read in: a paused game's "Paused N minutes
+    // ago" turning over under Home once failed assert_still (EmuSen_Qt.md §7.8).
+    assert!(scene.set_property("clock", "now", common::HELD_NOW));
     assert!(scene.set_property("program", "onlyPads", &pad.id.to_string()));
     assert!(scene.set_property("program", "feed", &host.feed.address().to_string()));
     assert!(scene.set_property("library", "cores", cores.to_str().unwrap()));
@@ -397,6 +401,23 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     scene.assert_still("the List card in place");
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Grid", 1000);
+
+    // X: the first game's page, its cover casting the raised shadow on Vulkan (EmuSen_Kit.md §7.55): the frame 6 units
+    // under the cover's foot an eighth darker than 40 units beside it; B back to the grid.
+    scene.pad(UiButton::Screensaver);
+    wait_for(&mut scene, "screens", "shown", "Page", 2000);
+    wait_for(&mut scene, "pageModel", "ready", "true", 10000);
+    scene.wait(400);
+    let tree = scene.tree();
+    let cover = &tree.nodes[tree.find_named("pageCover").expect("the page's cover") as usize];
+    let foot = cover.y + cover.h + 6.0 * cover.scale;
+    let colours = scene.colours_at(&[(cover.x + cover.w / 2.0, foot), (cover.x - 40.0 * cover.scale, foot)]);
+    let (under, beside) = (colours[0].expect("under the cover"), colours[1].expect("beside the cover"));
+    let sum = |c: emusen_kit_core::tokens::Colour| u32::from(c.r) + u32::from(c.g) + u32::from(c.b);
+    eprintln!("the cover's shadow on Vulkan: {under:?} under it, {beside:?} beside it");
+    assert!(sum(under) * 8 <= sum(beside) * 7, "the cover's shadow: {under:?} under it, {beside:?} beside it");
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "screens", "shown", "Grid", 2000);
 
     // Cobalt Harbor played on the test core (the sandbox has no Super Nintendo core, so its file becomes the test core's
     // image, which no shelf of the library holds), then the menu chord: the Pause Card over the paused game.
@@ -562,6 +583,22 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     assert!(scene.set_property("game", "game", ""));
     until(&mut scene, "the game closed again", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Home");
     until(&mut scene, "Continue gone", |s| !shown(s, "continueHeading"));
+
+    // A state chosen on a game's page is the start's answer (EmuSen_Qt.md §7.8): named with the game, the slot saved
+    // above loads, no Resume question is asked, and the game plays.
+    let slot1 = platform.save_path(SAVE_STATE, cobalt.to_str().unwrap(), None, 1).unwrap();
+    assert!(slot1.exists(), "the runtime's slot 1 is Galaxia's: {}", slot1.display());
+    assert!(scene.set_property("session", "startState", slot1.to_str().unwrap()));
+    assert!(scene.set_property("game", "game", cobalt.to_str().unwrap()));
+    until(&mut scene, "the game started from the state", |s| s.property("session", "running") == "true" && s.property("session", "paused") == "false");
+    assert_eq!(scene.property("session", "resumeAsked"), "false", "choosing the state was the answer");
+    assert_eq!(scene.property("session", "startState"), "", "taken by the start");
+    let before = scene.frames();
+    scene.wait(500);
+    assert!(scene.frames() - before > 10, "the game drawn from its state: {} frames in 0.5 s", scene.frames() - before);
+    assert!(!scene.property("session", "notice").starts_with("Could not"), "{}", scene.property("session", "notice"));
+    assert!(scene.set_property("game", "game", ""));
+    until(&mut scene, "the game closed once more", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Home");
 
     // Power: the Home card at its Power page, then Quit EmuSen...'s question, each held as Mistress's HomeCardPower and
     // HomeCardQuit; B twice closes it.

@@ -9,10 +9,49 @@
         <file alias="parts/EngineMark.qml">../themes/emusen/parts/EngineMark.qml</file>
         <file alias="parts/Faces.qml">../themes/emusen/parts/Faces.qml</file>
         <file alias="parts/Glyph.qml">../themes/emusen/parts/Glyph.qml</file>
+        <file alias="parts/Night.qml">../themes/emusen/parts/Night.qml</file>
         <file alias="screens/Consoles.qml">../themes/emusen/screens/Consoles.qml</file>
         <file alias="screens/Games.qml">../themes/emusen/screens/Games.qml</file>
         <file alias="screens/Home.qml">../themes/emusen/screens/Home.qml</file>
         <file alias="theme.json">../themes/emusen/theme.json</file>
+    </qresource>
+    <qresource prefix="/emusen/themes/constellation">
+        <file alias="parts/Backdrop.qml">../themes/constellation/parts/Backdrop.qml</file>
+        <file alias="parts/ChartBody.qml">../themes/constellation/parts/ChartBody.qml</file>
+        <file alias="parts/ChartLine.qml">../themes/constellation/parts/ChartLine.qml</file>
+        <file alias="parts/ChartNode.qml">../themes/constellation/parts/ChartNode.qml</file>
+        <file alias="parts/ChartPointer.qml">../themes/constellation/parts/ChartPointer.qml</file>
+        <file alias="parts/Chip.qml">../themes/constellation/parts/Chip.qml</file>
+        <file alias="parts/Connector.qml">../themes/constellation/parts/Connector.qml</file>
+        <file alias="parts/ConsoleKey.qml">../themes/constellation/parts/ConsoleKey.qml</file>
+        <file alias="parts/EngineMark.qml">../themes/constellation/parts/EngineMark.qml</file>
+        <file alias="parts/Faces.qml">../themes/constellation/parts/Faces.qml</file>
+        <file alias="parts/Glass.qml">../themes/constellation/parts/Glass.qml</file>
+        <file alias="parts/Glyph.qml">../themes/constellation/parts/Glyph.qml</file>
+        <file alias="parts/Star.qml">../themes/constellation/parts/Star.qml</file>
+        <file alias="screens/Consoles.qml">../themes/constellation/screens/Consoles.qml</file>
+        <file alias="screens/Games.qml">../themes/constellation/screens/Games.qml</file>
+        <file alias="screens/Home.qml">../themes/constellation/screens/Home.qml</file>
+        <file alias="screens/Splash.qml">../themes/constellation/screens/Splash.qml</file>
+        <file alias="theme.json">../themes/constellation/theme.json</file>
+    </qresource>
+    <qresource prefix="/emusen/themes/horizon">
+        <file alias="parts/Backdrop.qml">../themes/horizon/parts/Backdrop.qml</file>
+        <file alias="parts/Cover.qml">../themes/horizon/parts/Cover.qml</file>
+        <file alias="parts/EngineMark.qml">../themes/horizon/parts/EngineMark.qml</file>
+        <file alias="parts/Faces.qml">../themes/horizon/parts/Faces.qml</file>
+        <file alias="parts/Glyph.qml">../themes/horizon/parts/Glyph.qml</file>
+        <file alias="parts/HorizonLine.qml">../themes/horizon/parts/HorizonLine.qml</file>
+        <file alias="parts/Lift.qml">../themes/horizon/parts/Lift.qml</file>
+        <file alias="parts/PlaceDisc.qml">../themes/horizon/parts/PlaceDisc.qml</file>
+        <file alias="parts/Strip.qml">../themes/horizon/parts/Strip.qml</file>
+        <file alias="parts/StripItem.qml">../themes/horizon/parts/StripItem.qml</file>
+        <file alias="parts/World.qml">../themes/horizon/parts/World.qml</file>
+        <file alias="screens/Consoles.qml">../themes/horizon/screens/Consoles.qml</file>
+        <file alias="screens/Games.qml">../themes/horizon/screens/Games.qml</file>
+        <file alias="screens/Home.qml">../themes/horizon/screens/Home.qml</file>
+        <file alias="screens/Splash.qml">../themes/horizon/screens/Splash.qml</file>
+        <file alias="theme.json">../themes/horizon/theme.json</file>
     </qresource>
     <qresource prefix="/emusen/themes/meridian">
         <file alias="parts/Backdrop.qml">../themes/meridian/parts/Backdrop.qml</file>
@@ -28,5 +67,23 @@
         <file alias="screens/Home.qml">../themes/meridian/screens/Home.qml</file>
         <file alias="screens/Splash.qml">../themes/meridian/screens/Splash.qml</file>
         <file alias="theme.json">../themes/meridian/theme.json</file>
+    </qresource>
+    <qresource prefix="/emusen/themes/orrery">
+        <file alias="parts/Backdrop.qml">../themes/orrery/parts/Backdrop.qml</file>
+        <file alias="parts/Chip.qml">../themes/orrery/parts/Chip.qml</file>
+        <file alias="parts/DialWheel.qml">../themes/orrery/parts/DialWheel.qml</file>
+        <file alias="parts/EngineMark.qml">../themes/orrery/parts/EngineMark.qml</file>
+        <file alias="parts/Faces.qml">../themes/orrery/parts/Faces.qml</file>
+        <file alias="parts/Glyph.qml">../themes/orrery/parts/Glyph.qml</file>
+        <file alias="parts/Moon.qml">../themes/orrery/parts/Moon.qml</file>
+        <file alias="parts/Orbit.qml">../themes/orrery/parts/Orbit.qml</file>
+        <file alias="parts/OrbitCover.qml">../themes/orrery/parts/OrbitCover.qml</file>
+        <file alias="parts/Track.qml">../themes/orrery/parts/Track.qml</file>
+        <file alias="parts/WheelNode.qml">../themes/orrery/parts/WheelNode.qml</file>
+        <file alias="screens/Consoles.qml">../themes/orrery/screens/Consoles.qml</file>
+        <file alias="screens/Games.qml">../themes/orrery/screens/Games.qml</file>
+        <file alias="screens/Home.qml">../themes/orrery/screens/Home.qml</file>
+        <file alias="screens/Splash.qml">../themes/orrery/screens/Splash.qml</file>
+        <file alias="theme.json">../themes/orrery/theme.json</file>
     </qresource>
 </RCC>

@@ -332,6 +332,10 @@ Decided 2026-11-02 by the tester (§11, decisions 11 to 14) and built here.
   (`EMUSEN_PLATFORM_ABI_VERSION`), and a key added is read by name, so the version stays 31. Checked for the other
   places a console is named: the library's sidebar, the themed systems, Setup, the scraper and the launch screen show
   the shelves' ES-DE name (`esde_full_name`, `Sony PlayStation`) and were left as they are (§10's question below).
+  *2026-11-09:* `esde_full_name` is ES-DE 3.4.1's full name, from its user guide's table of supported systems, for
+  ES-DE themes; three changed (`Nintendo SNES (Super Nintendo)`, `Nintendo Game Boy`, `Nintendo Game Boy Color`), and a
+  console the guide does not list writes `null`, read as its `display_name` (EmuSen_Qt.md §4.6). `display_name` is
+  unchanged.
 - **Makers.** The table already holds `manufacturer` and `release_year`. Cores orders the consoles by maker in the
   order the table first names them (Nintendo, Sega, Sony), within a maker by `release_year`, the table's order breaking
   a tie (the 32X and the Saturn, both 1994); within a console the default first, then the installed cores that can run,

@@ -106,7 +106,7 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Equal(pack.Entry.Extensions, row.Extensions);
             Assert.Equal((pack.Entry.Console, pack.Entry.Manufacturer, pack.Entry.ReleaseYear, pack.Entry.CoverAspect), (row.Console, facts.Manufacturer, facts.ReleaseYear, row.CoverAspect));
             LibraryShelf shelf = RuntimeCatalog.Shelves.First(s => s.Core.Console == "SNES");
-            Assert.Equal(("snes", "Super Nintendo"), (shelf.EsdeSystem, shelf.EsdeFullName));
+            Assert.Equal(("snes", "Nintendo SNES (Super Nintendo)"), (shelf.EsdeSystem, shelf.EsdeFullName));
         }
     }
 }

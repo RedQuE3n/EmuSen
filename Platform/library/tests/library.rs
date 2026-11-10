@@ -177,3 +177,24 @@ fn each_game_names_its_folder_below_the_console_folder_and_a_1_2_reader_reads_th
     assert_eq!((old.status.as_str(), old.roots.clone(), old.games.len()), ("ok", vec![t.at("roms")], 3));
     assert_eq!(old.games[0], Game12 { path: t.at("roms/nes/RPG/Square/Deep.nes"), system: Some("nes".into()), package: None });
 }
+
+#[test]
+fn a_games_television_standard_is_read_set_refused_outside_the_two_and_kept_by_clear() {
+    let Some(sqlite) = sqlite() else {
+        return;
+    };
+    let t = Temp::new("standard");
+    let lib = Library::open(sqlite, &t.at("lib/games.db")).unwrap();
+    let game = t.at("roms/snes/Game.sfc");
+    let read = |lib: &Library| -> serde_json::Value { serde_json::from_str(&lib.get_request(&serde_json::json!({ "what": "standard", "path": game }).to_string()).unwrap()).unwrap() };
+    let set = |lib: &Library, standard: serde_json::Value| lib.change_request(&serde_json::json!({ "op": "set_standard", "path": game, "standard": standard }).to_string());
+    assert_eq!(read(&lib), serde_json::json!({ "value": null, "values": ["ntsc", "pal"] }), "the game's own until one is chosen");
+    set(&lib, "pal".into()).unwrap();
+    assert_eq!(read(&lib)["value"], "pal");
+    assert!(set(&lib, "secam".into()).is_err(), "a standard outside the two is refused");
+    assert_eq!(read(&lib)["value"], "pal", "and nothing is written");
+    lib.change_request(&serde_json::json!({ "op": "clear_edits", "path": game }).to_string()).unwrap();
+    assert_eq!(read(&lib)["value"], "pal", "the editor's Clear keeps the player's choice");
+    set(&lib, serde_json::Value::Null).unwrap();
+    assert_eq!(read(&lib)["value"], serde_json::Value::Null, "null follows the game again");
+}

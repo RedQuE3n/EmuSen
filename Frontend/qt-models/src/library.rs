@@ -20,6 +20,10 @@ pub trait LibrarySource: Send + Sync {
     fn games(&self) -> Result<Vec<GameFile>, String>;
     /// The paths of `games` that are favourites.
     fn favourites(&self, games: &[GameFile]) -> Result<Vec<String>, String>;
+    /// The paths of `games` the player hid from the library (games.db's `hidden` edit); a source with no records hides none.
+    fn hidden(&self, _games: &[GameFile]) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
+    }
     /// The paths of `games` that have been played, the most recent first.
     fn recent(&self, games: &[GameFile]) -> Result<Vec<String>, String>;
     /// The engine each system runs now, by system id: the player's stored choice, else the console's default
@@ -159,6 +163,9 @@ pub const PLACE_HEADINGS: [&str; 3] = ["All", "Favourites", "Recent"];
 pub const RECENT: &str = "recent";
 /// Every game's key.
 pub const ALL: &str = "all";
+
+/// The setting that lists hidden games with the rest (`AppSettings.ShowHiddenGames`).
+pub const SHOW_HIDDEN: &str = "ShowHiddenGames";
 
 /// The favourites' key, which Choose a console's Y opens as a place.
 pub const FAVOURITES: &str = "favourites";
@@ -477,7 +484,13 @@ pub fn refresh(source: &dyn LibrarySource) -> Refreshed {
 /// One refresh, each gamelist listed with the choices the player made of it.
 pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists) -> Refreshed {
     let systems = source.systems()?;
-    let games = source.games()?;
+    let mut games = source.games()?;
+    let settings = source.settings()?;
+    // A hidden game leaves every view until Settings lists hidden games again (Mistress's `Listed`).
+    if !settings.get(SHOW_HIDDEN).and_then(serde_json::Value::as_bool).unwrap_or(false) {
+        let hidden: HashSet<String> = source.hidden(&games)?.into_iter().collect();
+        games.retain(|g| !hidden.contains(&g.path));
+    }
     let favourites = source.favourites(&games)?;
     let recent = source.recent(&games)?;
     let engines = source.engines(&systems)?;
@@ -485,7 +498,6 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists) -> Refres
     let played_games: Vec<GameFile> = games.iter().filter(|g| recent.contains(&g.path)).cloned().collect();
     let heroes = source.media(&systems, &played_games, &HERO)?;
     let played = source.played(&games)?;
-    let settings = source.settings()?;
     let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings };
     let shelves = source.shelves()?;
     let mut shelved: Vec<SystemRow> = systems.clone();

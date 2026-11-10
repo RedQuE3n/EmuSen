@@ -45,9 +45,10 @@ Item {
     readonly property bool fitted: root.fit === Picture.Fit.Contain || root.fit === Picture.Fit.Cover
     readonly property real paintedWidth: root.fitted ? image.implicitWidth * root.paintScale : root.width
     readonly property real paintedHeight: root.fitted ? image.implicitHeight * root.paintScale : root.height
-    // A raster is never decoded larger than its own size or the box; Qt's aspect modes would scale it up (EmuSen_Qt.md §4.8.1).
-    readonly property bool vector: /\.svgz?$/i.test(root.source.toString())
     readonly property bool tiled: root.fit === Picture.Fit.Tile
+    // A vector picture is drawn at its box's size whatever the interpolation, which only samples it (EmuSen_Qt.md §4.8.6).
+    readonly property bool vector: /\.svgz?$/i.test(String(root.source))
+    readonly property bool ownSize: root.nearest && !root.vector
     readonly property real tileW: root.tileWidth > 0 ? root.tileWidth : Math.max(1, image.implicitWidth)
     readonly property real tileH: root.tileHeight > 0 ? root.tileHeight : Math.max(1, image.implicitHeight)
     readonly property real boxAspect: root.width / Math.max(1, root.height)
@@ -63,11 +64,12 @@ Item {
         source: root.source
         asynchronous: true
         cache: true
-        smooth: !root.nearest
+        smooth: !root.ownSize
+        // A raster is never decoded larger than its own size or the box; Qt's aspect modes would scale it up (EmuSen_Qt.md §4.8.1).
         fillMode: !root.vector ? Image.Stretch : root.fit === Picture.Fit.Contain ? Image.PreserveAspectFit : root.fit === Picture.Fit.Cover ? Image.PreserveAspectCrop : Image.Stretch
         // A vector contained or covered, and any picture covered, asks only a width, keeping the aspect the scene measures (EmuSen_Qt.md §4.8.5).
-        sourceSize.width: root.nearest ? 0 : root.tiled ? root.tileWidth : Math.ceil((root.fit === Picture.Fit.Cover ? Math.max(root.width, 2 * root.height) : root.width) * root.sourceScale)
-        sourceSize.height: root.nearest || root.fit === Picture.Fit.Cover || (root.vector && root.fit === Picture.Fit.Contain) ? 0 : root.tiled ? root.tileHeight : Math.ceil(root.height * root.sourceScale)
+        sourceSize.width: root.ownSize ? 0 : root.tiled ? root.tileWidth : Math.round((root.fit === Picture.Fit.Cover ? Math.max(root.width, 2 * root.height) : root.width) * root.sourceScale)
+        sourceSize.height: root.ownSize || root.fit === Picture.Fit.Cover || (root.vector && root.fit === Picture.Fit.Contain) ? 0 : root.tiled ? root.tileHeight : Math.ceil(root.height * root.sourceScale)
     }
     ShaderEffect {
         readonly property var source: image

@@ -37,6 +37,9 @@ pub mod qobject {
         #[qproperty(QString, engine)]
         #[qproperty(u64, pads)]
         #[qproperty(QString, game, READ, WRITE = set_game, NOTIFY)]
+        /// The saved state the next game named starts from, by its file, as a game's page asks (EmuSen_Qt.md §7.8);
+        /// taken by that start, and given to the open game when it is the one named. Empty starts as Resume says.
+        #[qproperty(QString, start_state, cxx_name = "startState")]
         #[qproperty(bool, running, READ, NOTIFY)]
         #[qproperty(bool, paused, READ, NOTIFY)]
         /// Whether the open game's sound reaches a player.
@@ -147,6 +150,11 @@ pub mod qobject {
         #[cxx_name = "swapPlayers"]
         fn swap_players(self: Pin<&mut SessionModel>);
 
+        /// A setting of the running console stored, for its games from the next start; the card's facts read again.
+        #[qinvokable]
+        #[cxx_name = "setConsoleSetting"]
+        fn set_console_setting(self: Pin<&mut SessionModel>, key: &QString, value: &QString);
+
         /// Guide held with `button` over the running game (`PadRouter.guideChord`): pause.rs's `guide_chord` says what it asks.
         #[qinvokable]
         #[cxx_name = "guideChord"]
@@ -163,6 +171,7 @@ pub struct SessionModelRust {
     engine: QString,
     pads: u64,
     game: QString,
+    start_state: QString,
     running: bool,
     paused: bool,
     sounding: bool,
@@ -178,6 +187,8 @@ pub struct SessionModelRust {
     resume_subject: QString,
     /// The setting Resume while the opened game is held for it, until the runtime says whether it was left off.
     holding: Option<resume::Setting>,
+    /// The state the opened game is held to start from, until the runtime has opened it.
+    from_state: Option<String>,
     /// The session the card's pictures are read from, shared with the picture provider.
     shown: Shown,
     /// Read again at each pause, so a picture's address names the pause it was read in.
@@ -203,6 +214,7 @@ impl Default for SessionModelRust {
             engine: QString::default(),
             pads: 0,
             game: QString::default(),
+            start_state: QString::default(),
             running: false,
             paused: false,
             sounding: false,
@@ -217,6 +229,7 @@ impl Default for SessionModelRust {
             resume_asked: false,
             resume_subject: QString::default(),
             holding: None,
+            from_state: None,
             shown: Shown::default(),
             serial: 0,
             served: false,
@@ -293,6 +306,8 @@ impl qobject::SessionModel {
             }
         }
         let Some(runtime) = self.runtime.clone() else { return };
+        // A core approved, installed or made default since the last game, by Cores or the launch's question, is listed (EmuSen_Qt.md §7.7).
+        let _ = runtime.rescan();
         let pads = match self.as_mut().game_input() {
             Ok(pads) => pads,
             Err(words) => return self.as_mut().set_problem(QString::from(&words)),
@@ -312,11 +327,15 @@ impl qobject::SessionModel {
         };
         let engine = (!self.engine.is_empty()).then(|| self.engine.to_string());
         let device = std::ptr::NonNull::new(device.as_ptr().cast_mut());
+        // A state chosen is the start's answer: the Resume question is not asked (Mistress's `PlayFromPageAsync`).
+        let from_state = Some(std::mem::take(&mut self.as_mut().rust_mut().start_state).to_string()).filter(|s| !s.is_empty());
         let setting = self.as_mut().resume_setting();
-        let holding = (setting != resume::Setting::Never).then_some(setting);
+        let holding = (from_state.is_none() && setting != resume::Setting::Never).then_some(setting);
         self.as_mut().rust_mut().holding = holding;
+        let held = holding.is_some() || from_state.is_some();
+        self.as_mut().rust_mut().from_state = from_state;
         self.as_mut().set_resume_subject(QString::from(&resume::subject(&path.to_string())));
-        let session = Session::start(runtime, path.to_string(), engine, device, handoff, GameIo { pads, sound }, clock, holding.is_some(), report);
+        let session = Session::start(runtime, path.to_string(), engine, device, handoff, GameIo { pads, sound }, clock, held, report);
         self.as_mut().set_sounding(sounding);
         self.as_mut().rust_mut().session = Some(session);
         self.as_mut().set_problem(QString::from(unsounded.as_deref().unwrap_or_default()));
@@ -332,6 +351,12 @@ impl qobject::SessionModel {
 
     /// Where the opened game was left off decides its start: from the beginning, there without asking, or the question.
     fn left_off(mut self: Pin<&mut Self>, session: u32) {
+        if let Some(state) = self.as_mut().rust_mut().from_state.take() {
+            if !self.paused {
+                self.as_mut().rust_mut().resume_waiting = true;
+            }
+            return self.start_from(state);
+        }
         let Some(setting) = self.as_mut().rust_mut().holding else { return };
         let exists = self.runtime.as_ref().and_then(|r| r.state_slots(session).ok()).is_some_and(|slots| slots.iter().any(|s| s.slot == 0 && s.exists));
         match resume::start(setting, exists) {
@@ -356,6 +381,23 @@ impl qobject::SessionModel {
         } else if std::mem::take(&mut self.as_mut().rust_mut().resume_waiting) {
             self.resume();
         }
+    }
+
+    /// The open game loaded from a saved state by its file: the runtime's slot whose file it is, the resume state's
+    /// as slot 0; a resume waits for it.
+    fn start_from(self: Pin<&mut Self>, state: String) {
+        self.job(move |runtime, session| {
+            let slots = runtime.state_slots(session).map_err(|e| format!("Could not load the state, started from the beginning: {e}"))?;
+            let Some(slot) = slots.iter().find(|s| s.path == state).map(|s| s.slot) else {
+                return Err("Could not load the state, started from the beginning: it is not one of this game's".to_string());
+            };
+            let loaded = if slot == 0 { runtime.resume_load(session) } else { runtime.state_slot_load(session, slot) };
+            match loaded {
+                Ok(true) => Ok(String::new()),
+                Ok(false) => Err("Could not load the state, started from the beginning: it is gone".to_string()),
+                Err(e) => Err(format!("Could not load the state, started from the beginning: {e}")),
+            }
+        });
     }
 
     fn answer_resume(mut self: Pin<&mut Self>, index: i32) {
@@ -390,13 +432,9 @@ impl qobject::SessionModel {
     /// The cores folder a host names, else the runtime's own default (emusen_crystal.h, the config's `cores`); the
     /// player's cores folder Galaxia's either way, which a named folder would otherwise leave unscanned (EmuSen_Qt.md §1.8.7).
     fn runtime_config(self: Pin<&mut Self>) -> Result<Config, String> {
-        if self.cores.is_empty() {
-            return Ok(Config::default());
-        }
-        let cores = vec![self.cores.to_string()];
+        let cores = self.cores.to_string();
         let platform = self.platform()?;
-        let player = platform.directory(galaxia::consts::DIR_CORES).map_err(|e| e.to_string())?;
-        Ok(Config { cores: Some(cores), player_cores: Some(player.into_iter().map(|p| p.to_string_lossy().into_owned()).collect()), ..Config::default() })
+        crate::clients::runtime_config(&platform, &cores)
     }
 
     /// The game's side of the pads a `PadReader` hands over, when one is named by its `gamePads`; the router is made on the
@@ -446,6 +484,10 @@ impl qobject::SessionModel {
             self.as_mut().rust_mut().game = path;
             self.as_mut().game_changed();
             self.start_named();
+        } else if !self.start_state.is_empty() && self.opened.is_some() {
+            // The game named is the one open: the state chosen is loaded into it.
+            let state = std::mem::take(&mut self.as_mut().rust_mut().start_state).to_string();
+            self.start_from(state);
         }
     }
 
@@ -497,6 +539,7 @@ impl qobject::SessionModel {
                 picture: if s.exists { picture_of(&s.path).unwrap_or_default() } else { String::new() },
             })
             .collect();
+        facts.cards = card_facts(&runtime, session, &info.console);
         let text = QString::from(facts.to_json().as_str());
         if self.card_facts != text {
             self.as_mut().rust_mut().card_facts = text;
@@ -505,7 +548,7 @@ impl qobject::SessionModel {
     }
 
     fn resume(mut self: Pin<&mut Self>) {
-        if self.jobs > 0 || self.holding.is_some() {
+        if self.jobs > 0 || self.holding.is_some() || self.from_state.is_some() {
             self.as_mut().rust_mut().resume_waiting = true;
             return;
         }
@@ -528,6 +571,7 @@ impl qobject::SessionModel {
         drop(self.as_mut().rust_mut().session.take());
         self.as_mut().rust_mut().opened = None;
         self.as_mut().rust_mut().holding = None;
+        self.as_mut().rust_mut().from_state = None;
         self.as_mut().set_resume_asked(false);
         self.as_mut().set_running(false);
         self.as_mut().set_paused(false);
@@ -615,10 +659,9 @@ impl qobject::SessionModel {
         let folder = self.as_mut().platform().ok().and_then(|p| p.directory(emusen_platform_client::galaxia::consts::DIR_SCREENSHOTS).ok().flatten());
         let Some(folder) = folder else { return self.set_problem(QString::from("No screenshots folder.")) };
         let game = self.game.to_string();
-        let stem = std::path::Path::new(&game).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         let now = QDateTime::current_date_time();
-        let stamp = format!("{} {}", now.date().format(&QString::from("yyyy-MM-dd")), now.time().format(&QString::from("HH.mm.ss.zzz")));
-        let path = folder.join(format!("{stem} {stamp}.png"));
+        let (date, time) = (now.date().format(&QString::from(crate::screenshots::DATE)), now.time().format(&QString::from(crate::screenshots::TIME)));
+        let path = folder.join(crate::screenshots::name(&game, &date.to_string(), &time.to_string()));
         self.job(move |runtime, session| {
             let saved = std::fs::create_dir_all(path.parent().unwrap_or(&path)).is_ok() && pictures::save_now(runtime, session, &path.to_string_lossy());
             if saved { Ok("Screenshot saved".to_string()) } else { Err(format!("Screenshot failed: {}", path.display())) }
@@ -660,6 +703,18 @@ impl qobject::SessionModel {
             Ok(()) => Ok("The disc is out".to_string()),
             Err(e) => Err(format!("Eject Disc failed: {e}")),
         });
+    }
+
+    fn set_console_setting(mut self: Pin<&mut Self>, key: &QString, value: &QString) {
+        let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
+        let set = runtime.settings_set(session, emusen_crystal_client::Scope::Console, None, &key.to_string(), Some(&value.to_string()));
+        if let Err(e) = set {
+            self.as_mut().rust_mut().notice_attention = true;
+            self.as_mut().notice_attention_changed();
+            self.as_mut().rust_mut().notice = QString::from(format!("{key} was not changed: {e}").as_str());
+            self.as_mut().notice_changed();
+        }
+        self.read_card_facts();
     }
 
     fn swap_players(mut self: Pin<&mut Self>) {
@@ -719,4 +774,16 @@ impl qobject::SessionModel {
             self.resume();
         }
     }
+}
+
+/// The running console's cards for Game Options ▸ Memory Cards: the card manager's list, the session's schema rows of
+/// the media's keys, and the values the console holds for them.
+fn card_facts(runtime: &Runtime, session: u32, console: &str) -> pause::CardFacts {
+    use emusen_crystal_client::Scope;
+    let list = runtime.cards_op(emusen_crystal_client::consts::CARDS_LIST, &serde_json::json!({ "console": console })).ok().flatten().unwrap_or_default();
+    let media = crate::cards::media(&list);
+    let schema = runtime.settings_schema(session, None, None).unwrap_or_default();
+    let schema: Vec<_> = schema.into_iter().filter(|r| media.iter().any(|m| r.key == m.mode_key || r.shown_with.as_ref().is_some_and(|w| w.key == m.mode_key))).collect();
+    let values = schema.iter().filter_map(|r| Some((r.key.clone(), runtime.settings_get(session, Scope::Console, None, &r.key).ok().flatten()?))).collect();
+    pause::CardFacts { console: console.to_owned(), media, schema, values }
 }

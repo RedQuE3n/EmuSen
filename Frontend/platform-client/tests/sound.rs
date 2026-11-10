@@ -1,4 +1,4 @@
-//! The interface player and the game player with SDL3 lent, on SDL's dummy audio driver so that no sound reaches the speakers. SDL is lent
+//! The interface player, the game player and its devices with SDL3 lent, on SDL's dummy audio driver so that no sound reaches the speakers. SDL is lent
 //! once a process, so this is a binary of its own with one test.
 
 use emusen_client_fixture::{World, library};
@@ -56,4 +56,15 @@ fn a_remembered_sound_and_a_games_sound_play_once_sdl_is_lent() {
     game.reset().unwrap();
     game.submit(&tone, 32000).unwrap();
     assert_eq!(game.sample_rate().unwrap(), 32000, "a new rate reopens the device");
+
+    // The devices by name; a name no device has plays the system default, as does none.
+    let devices = p.audio_devices().unwrap();
+    assert!(devices.iter().all(|d| !d.is_empty()), "{devices:?}");
+    if let Some(first) = devices.first() {
+        assert!(game.set_device(Some(first)).unwrap(), "{first} is a device");
+    }
+    assert!(!game.set_device(Some("no such device")).unwrap(), "the default plays where no device has the name");
+    assert!(game.set_device(None).unwrap());
+    game.submit(&tone, 32000).unwrap();
+    assert!(game.available().unwrap(), "the default device reopened");
 }

@@ -9,6 +9,7 @@ QtObject {
     readonly property int form: Kit.Tokens.form
     readonly property int variant: Kit.Tokens.variant
     readonly property real textScale: Kit.Tokens.textScale
+    readonly property string textSize: Kit.Tokens.textSize
     readonly property bool reducedMotion: Kit.Tokens.reducedMotion
     readonly property color surface: Kit.Tokens.surface
     readonly property color surfaceRaised: Kit.Tokens.surfaceRaised
@@ -56,6 +57,11 @@ QtObject {
     readonly property real barWidth: Kit.Tokens.barWidth
     readonly property real tileScale: Kit.Tokens.tileScale
     readonly property real hoverBorder: Kit.Tokens.hoverBorder
+    readonly property color shadowColor: Kit.Tokens.shadowColor
+    readonly property real shadowOpacity: Kit.Tokens.shadowOpacity
+    readonly property real shadowOffsetX: Kit.Tokens.shadowOffsetX
+    readonly property real shadowOffsetY: Kit.Tokens.shadowOffsetY
+    readonly property real shadowBlur: Kit.Tokens.shadowBlur
     readonly property int instant: Kit.Tokens.instant
     readonly property int quick: Kit.Tokens.quick
     readonly property int enter: Kit.Tokens.enter

@@ -55,7 +55,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CRYSTAL_MAJOR 2u
-#define EMUSEN_CRYSTAL_MINOR 0u
+#define EMUSEN_CRYSTAL_MINOR 1u
 #define EMUSEN_CRYSTAL_VERSION ((EMUSEN_CRYSTAL_MAJOR << 16) | EMUSEN_CRYSTAL_MINOR)
 
 /* ---- Statuses (EmuSen_Backend.md section 3.2). The session service's keep their numbers and names; these follow. -- */
@@ -457,7 +457,9 @@ int32_t emusen_crystal_resume_load(emusen_crystal_runtime *rt, uint32_t session)
  * "group"}]: the console's settings, the engine's choice among them as key "Engine", for the named engine or the one
  * the console runs; an absent console is the session's. Since 1.1 a row whose core words the value chosen has "note",
  * that sentence as the console's stored values stand or null when it says nothing, and every row has "shown_with",
- * {"key","value"} where the row means something only while another key holds that value, else null (section 14.13). */
+ * {"key","value"} where the row means something only while another key holds that value, else null (section 14.13). Every
+ * row has "locked", true where the running engine holds the row's value, its note saying why (written since 2.0, named
+ * here at 2.1). */
 int64_t emusen_crystal_settings_schema(emusen_crystal_runtime *rt, uint32_t session, const uint8_t *console,
                                        size_t console_len, const uint8_t *engine, size_t engine_len, uint8_t *out, size_t len);
 
@@ -523,7 +525,8 @@ int64_t emusen_crystal_cards_op(emusen_crystal_runtime *rt, uint32_t op, const u
                                           * since 1.1 also "kind" ("removable"|"console"), "capacity" and "unit" (null where no format module
                                           * reads the medium), "mode" ("game"|"shared"|"named") and its settings key "mode_key", "slots":[{"label",
                                           * "name","path"}] as the mode places them, "next_name" (the first name no card has) and "import_due"
-                                          * (the games' own saves wait for the shared card's first import) - section 14.13 */
+                                          * (the games' own saves wait for the shared card's first import) - section 14.13; since 2.1 "noun_in_text", the noun as a
+ * sentence writes it, and the media of a console outside the systems table, its engine's own system's */
 #define EMUSEN_CRYSTAL_CARDS_OPEN      1u /* reads. {"path"} -> {"medium","exists","length","formatted","free","problem","saves":[{"id","title","units","game","damaged"}]}; ABSENT for a file of no medium */
 #define EMUSEN_CRYSTAL_CARDS_COPY      2u /* changes. {"from","save","to"}: a save by its id or its place from 1 */
 #define EMUSEN_CRYSTAL_CARDS_MOVE      3u /* changes. {"from","save","to"} */

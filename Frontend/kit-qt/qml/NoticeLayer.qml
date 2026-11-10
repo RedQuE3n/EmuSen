@@ -10,9 +10,9 @@ Item {
     property font labelFont: Qt.font({ pixelSize: Kit.Tokens.fontBody })
     // The glyph's box in design units.
     property real glyphSize: Kit.Tokens.base * 5
-    // The shadow's darkness and blur, §5.4's.
-    property real shadowOpacity: 0.5
-    property real shadowRadius: 24
+    // The shadow's darkness and blur, §5.4's raised shadow from the tokens.
+    property real shadowOpacity: Kit.Tokens.shadowOpacity
+    property real shadowRadius: Kit.Tokens.shadowBlur
     Connections {
         target: root.model
         function onRaised() { hold.restart() }
@@ -41,9 +41,10 @@ Item {
         visible: card.visible
         opacity: card.opacity
         shadowEnabled: true
-        shadowColor: "#000000"
+        shadowColor: Kit.Tokens.shadowColor
         shadowOpacity: root.shadowOpacity
-        shadowVerticalOffset: 8
+        shadowHorizontalOffset: Kit.Tokens.shadowOffsetX
+        shadowVerticalOffset: Kit.Tokens.shadowOffsetY
         blurMax: root.shadowRadius
         shadowBlur: 1
     }

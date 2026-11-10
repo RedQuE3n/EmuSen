@@ -11,6 +11,11 @@ ElementBox {
     required property color background
     required property int hAlign
     required property int vAlign
+    // gamelistinfo has no lineSpacing of its own, so a line is a text's at THEMES.md's default.
+    readonly property real lineSpacing: 1.5
+    // Reported as the words' extent, for a size the theme left at 0 (EmuSen_Qt.md §4.8.6).
+    readonly property size extent: Qt.size(items.width, root.px * root.lineSpacing)
+    onExtentChanged: root.esde.measured(root.elementId, root.extent.width, root.extent.height)
     PartsModel {
         id: parts
         scene: root.esde
@@ -47,6 +52,7 @@ ElementBox {
                     text: item.text
                     fontSource: root.fontSource
                     px: root.px
+                    lineSpacing: root.lineSpacing
                     color: root.color
                     vAlign: root.vAlign
                 }

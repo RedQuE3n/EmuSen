@@ -4,6 +4,7 @@
 #endif
 #include "harness.h"
 
+#include <QtCore/QAbstractAnimation>
 #include <QtCore/QCoreApplication>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
@@ -146,6 +147,7 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
     const double opacity = parentOpacity * item->opacity();
     const bool control = item->inherits("QQuickControl");
     const bool handlers = hasPointerHandler(item);
+    item->setProperty("harnessRead", true); // read once, so an item made since (a delegate made again) is told apart
     QJsonObject node;
     node["id"] = QString::number(idOf(item));
     node["parent"] = QString::number(parent);
@@ -275,6 +277,15 @@ QQuickItem* itemOf(QObject& window, std::uint64_t id)
     return w != nullptr ? find(w->contentItem(), id) : nullptr;
 }
 
+bool madeSince(QQuickItem* item)
+{
+    if (!item->property("harnessRead").isValid()) {
+        return true;
+    }
+    const QList<QQuickItem*> children = item->childItems();
+    return std::any_of(children.begin(), children.end(), madeSince);
+}
+
 // Every text at no opacity, or back at the opacity it had, so a grab shows what is behind the words.
 void hideWords(QQuickItem* item, bool hidden)
 {
@@ -375,10 +386,46 @@ void harness_resize(QObject& window, int width, int height)
     }
 }
 
+bool harness_made_since(QObject& window)
+{
+    QQuickWindow* w = quick(window);
+    return w != nullptr && madeSince(w->contentItem());
+}
+
+// Qt's item views move their highlight to the current item by an animation of their own, which `moving` does not report.
+bool harness_turning(QObject& window, std::uint64_t id)
+{
+    QQuickItem* view = itemOf(window, id);
+    auto* highlight = view != nullptr && view->property("highlightFollowsCurrentItem").toBool() ? view->property("highlightItem").value<QQuickItem*>() : nullptr;
+    auto* current = view != nullptr ? view->property("currentItem").value<QQuickItem*>() : nullptr;
+    if (highlight == nullptr || current == nullptr || highlight->position() == current->position()) {
+        if (view != nullptr) {
+            view->setProperty("harnessHighlightAt", QVariant());
+        }
+        return false;
+    }
+    // Off its item, the highlight rests once three frames pass without moving it: a view may place its delegates itself.
+    const std::uint64_t frame = harness_frames(window);
+    const QVariant seen = view->property("harnessHighlightAt");
+    if (!seen.isValid() || seen.toPointF() != highlight->position()) {
+        view->setProperty("harnessHighlightAt", highlight->position());
+        view->setProperty("harnessHighlightFrame", QVariant::fromValue<qulonglong>(frame));
+    }
+    if (frame < view->property("harnessHighlightFrame").toULongLong() + 3) {
+        quick(window)->update();
+        return true;
+    }
+    return false;
+}
+
 QString harness_tree(QObject& window)
 {
     QJsonArray nodes;
     if (QQuickWindow* w = quick(window)) {
+        // Read as the next frame draws it: a positioner lays out at the polish before a frame (EmuSen_Kit.md §7.49).
+        if (QQuickTest::qIsPolishScheduled(w)) {
+            QQuickTest::qWaitForPolish(w, 1000);
+        }
         dump(w->contentItem(), 0, 1.0, nodes);
     }
     return QString::fromUtf8(QJsonDocument(nodes).toJson(QJsonDocument::Compact));
@@ -402,6 +449,36 @@ void harness_key(QObject& window, int key, int modifiers)
 {
     if (QQuickWindow* w = quick(window)) {
         QTest::keyClick(w, static_cast<Qt::Key>(key), Qt::KeyboardModifiers::fromInt(modifiers));
+    }
+}
+
+void harness_key_hold(QObject& window, int key, bool down)
+{
+    if (QQuickWindow* w = quick(window)) {
+        if (down) {
+            QTest::keyPress(w, static_cast<Qt::Key>(key));
+        } else {
+            QTest::keyRelease(w, static_cast<Qt::Key>(key));
+        }
+    }
+}
+
+HeldClock::~HeldClock() { uninstall(); }
+
+std::unique_ptr<HeldClock> harness_clock_hold()
+{
+    auto clock = std::make_unique<HeldClock>();
+    clock->install();
+    return clock;
+}
+
+void harness_clock_move(HeldClock& clock, std::int64_t ms)
+{
+    // A frame's step at a time, as a display would move it, so what a step starts runs from its own time.
+    while (clock.at < ms) {
+        clock.at = std::min(ms, clock.at + 16);
+        clock.advance();
+        QCoreApplication::processEvents();
     }
 }
 
@@ -509,6 +586,14 @@ bool harness_set_property(QObject& root, const QString& object_name, const QStri
 {
     QObject* object = root.objectName() == object_name ? &root : root.findChild<QObject*>(object_name);
     return object != nullptr && QQmlProperty(object, property, qmlContext(object)).write(QVariant(value));
+}
+
+// Deletes a named object at once, as a window's teardown deletes what it holds (EmuSen_Kit.md §7.48).
+bool harness_destroy(QObject& root, const QString& object_name)
+{
+    QObject* object = root.findChild<QObject*>(object_name);
+    delete object;
+    return object != nullptr;
 }
 
 namespace {
@@ -637,4 +722,18 @@ QString harness_running(QObject& window)
     }
     out.removeDuplicates();
     return out.join(QLatin1Char('\n'));
+}
+
+void harness_drag(QObject& window, double x0, double y0, double x1, double y1)
+{
+    QQuickWindow* w = quick(window);
+    if (w == nullptr) {
+        return;
+    }
+    const auto at = [&](double t) { return QPoint(static_cast<int>(x0 + (x1 - x0) * t), static_cast<int>(y0 + (y1 - y0) * t)); };
+    QTest::mousePress(w, Qt::LeftButton, Qt::NoModifier, at(0));
+    for (int step = 1; step <= 8; ++step) {
+        QTest::mouseMove(w, at(step / 8.0), 10);
+    }
+    QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier, at(1));
 }

@@ -5,7 +5,9 @@ NAME
 
 SYNOPSIS
     theme-check [--static] [--state DIR] <folder>...
-    theme-audit [--gpu] [--state DIR] [--catalogue FILE] [--section KEY] <folder>
+    theme-audit [--gpu] [--state DIR] [--states LIST] [--catalogue FILE]
+                [--section KEY] <folder>
+    theme-audit --list-states
 
 DESCRIPTION
     The development tool of the emusen.dev module for EmuSen theme
@@ -156,9 +158,38 @@ THE LOADED STEP
                     (decided 2026-11-08: its focus is the screen itself,
                     and what stands at its centre is the design's)
         chrome      desktop chrome on the big screen
+        name        an operable element with no name a reader hears
+                    (Accessible.name, else the words under it;
+                    EmuSen_InterfaceSpec.md §4.3, kit-core's named), as a
+                    Continue entry drawn with no game, or a tile whose
+                    title is drawn only beside its cover
         contrast    words under 4.5:1 (3:1 large) against what the
                     grab shows behind them, in that state's variant
-                    and size; the line gives the ratio and the text
+                    and size; the line gives the ratio and the text.
+                    Two kinds of words are not judged. A place the
+                    host declines (available false), found by the
+                    name a reader hears, is an inactive component,
+                    whose words WCAG 2.2's 1.4.3 exempts ("Text or
+                    images of text that are part of an inactive user
+                    interface component ... have no contrast
+                    requirement"; https://www.w3.org/TR/WCAG22/,
+                    read 2026-11-09), but only while it is drawn
+                    apart from its offered look: the place is read
+                    declined, then offered (Library.show_declined,
+                    the focus on it both times), on a grid of points
+                    a design unit apart or less, and some point must
+                    change by 3:1, the ratio 2.4.13 asks between the
+                    same pixels of two states; else the line reads
+                    "a declined place drawn as if offered" and its
+                    words stay judged. 2.4.13's area (a perimeter 2
+                    CSS pixels thick) is not asked: words dimmed to
+                    38% in a 480 x 56 row change about 2% of it, the
+                    ring 7.9%. No other dim words are exempt. Under a
+                    held clock (the splash states), contrast is
+                    judged at rest: a text whose ink, its colour with
+                    its opacity, changed over the frame before the
+                    held time (16 ms) is mid-change and not judged;
+                    a text resting faint is still a finding.
         motion      a screen not still under reduced motion
         load        the host could not place the screen: the engine's
                     and the sandbox's words, a line each
@@ -212,6 +243,10 @@ THE LOADED STEP
     no Vulkan instance, and its OpenGL window draws only its first size
     when grown (a 1920 x 1200 picture came out drawn in its lower left
     1280 x 800 alone, the rest black or stale; measured 2026-11-09).
+    Either way theme-audit sets QSG_RENDER_LOOP to basic, whatever the
+    environment says: a threaded render loop installs an animation
+    driver of its own, which the held clock of the timed states would
+    have to replace (EmuSen_Kit.md 7.36).
 
     --catalogue FILE (theme-audit alone) places Choose a console once,
     over the synthetic library with FILE's consoles in place of its own,
@@ -249,6 +284,66 @@ THE LOADED STEP
     its rows out as tall as they are, and with 120 consoles runs off
     every size. A package takes about 80 s, most of it the crowd.
 
+STATES
+    --states LIST records the states LIST names, comma-separated, or all
+    of them for all; without it the run is the default alone. A state
+    is fed through the theme's own surfaces as the program feeds them
+    (Library.show with the places the host declines, Browse, Session,
+    Device, the kit's Tokens), never by editing the theme's files, and
+    each screen it names that the package lists is placed afresh and
+    judged as the default is: the rules above at the five sizes in both
+    variants, the recording and its size. Lines and recordings carry
+    the state's name (Home-dark-nogame-1280x800). The list's one owner
+    is the audit's states.rs; theme-audit --list-states prints it, a
+    line a state (name, screens, words, tab-separated), and a test holds
+    this section to it. One run for every state, since each run builds
+    the synthetic library, draws its covers and starts Qt once.
+
+    The default library's games have covers (decided 2026-11-09, so the
+    default is the canvases' and nocover a state of its own): each a
+    flat colour with its console and title, drawn by Qt Quick into an
+    ES-DE media folder that the host is given as the theme's cover
+    store, as the program's start gives it (emusen-qt-test's covers).
+
+    default     the synthetic library with Fable of Tiles suspended;
+                the splash finished under reduced motion; Choose a
+                console again over 120 consoles
+    nogame      Home with no game to continue
+    empty       Home, Consoles and Games over Testing/themes/catalogues/
+                empty.tsv: no console and no game; Games shows the
+                All shelf
+    one-console the synthetic library's NES games alone, one suspended
+    one-game    Games over one-game.tsv: a console holding one game
+    many        Games over many.tsv: a console holding 9,000 games
+    nocover     the default library with no cover
+    norecent    the same games never played and none hearted, no game
+                suspended
+    long        a ninth game whose title is too long for any place,
+                played last and suspended
+    pressed     Return held on the first focus, which a Walkable
+                answers as A, while the state is judged and recorded
+    disabled    Home with the Scraper declined by the host (its row's
+                available false) and the focus walked to it by the
+                pad along the walk's own presses; its words are held
+                to contrast only if it is drawn as if offered
+                (contrast, above)
+    splash-1s   the splash with motion allowed and every animation's
+                clock held 1 s after it is placed
+    splash-3s   the same at 3 s
+    splash-5s   the same at 5 s
+
+    The capacity states (n30, n120, maker40) are --catalogue's. A held
+    clock is the harness's (EmuSen_Kit.md §7.36): Qt's animation driver
+    replaced by one moved only by the audit, a frame's 16 ms at a time
+    from the placing, so a theme's splash is held as it is written and
+    the theme API gains nothing. Under it the screen is placed afresh in
+    each variant, since a change of variant animates colours that a held
+    clock would never finish, and is recorded without waiting for rest.
+    A Timer is not an animation and is not held. Letting the clock go
+    leaves Qt's default driver in place of a threaded render loop's own,
+    so the held states run last. The reference theme has no Splash.qml
+    and no splash states: its splash is Moonrise, the kit's.
+
 EXIT STATUS
     0 for no finding, 1 for one or more, 2 when it could not run (no
     folder given, a folder missing, an option unknown, theme-audit not
@@ -266,6 +361,8 @@ EXAMPLES
     theme-check --state /tmp/horizon Frontend/themes/horizon
     theme-audit --gpu --state /tmp/horizon-gpu Frontend/themes/horizon
     theme-audit --state /tmp/states --catalogue Testing/themes/catalogues/n30.tsv Frontend/themes/emusen
+    theme-audit --states all --state /tmp/states Frontend/themes/meridian
+    theme-audit --states nogame,splash-3s Frontend/themes/meridian
     theme-audit Frontend/theme-check/tests/themes/dim-picture
 
         .../dim-picture/screens/Home.qml:1 contrast 1280x800 dark: low

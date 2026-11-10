@@ -44,7 +44,7 @@ pub fn settings_of(settings: &Value) -> EsdeSettings {
         "choices": choices,
         "interface": object(settings.get("BigPictureInterface")),
         "collections": object(settings.get("BigPictureCollections")),
-        "show_hidden": settings.get("ShowHiddenGames").and_then(Value::as_bool).unwrap_or(false),
+        "show_hidden": settings.get(crate::library::SHOW_HIDDEN).and_then(Value::as_bool).unwrap_or(false),
     });
     EsdeSettings { themed: style == "Theme" && !theme.trim().is_empty(), text: out.to_string() }
 }
@@ -348,7 +348,7 @@ impl EsdeState {
 /// The ES-DE view's reads for a refresh: each shelf of `shelved` with games, its games the library's less the hidden
 /// unless the player shows them, each with the scraper's metadata, games.db's plays and its folder.
 pub fn read(source: &dyn LibrarySource, shelved: &[SystemRow], catalog: &Catalog, settings: &Value) -> Result<Base, String> {
-    let show_hidden = settings.get("ShowHiddenGames").and_then(Value::as_bool).unwrap_or(false);
+    let show_hidden = settings.get(crate::library::SHOW_HIDDEN).and_then(Value::as_bool).unwrap_or(false);
     let collections = Settings::from_json(settings.get("BigPictureCollections").unwrap_or(&Value::Null));
     let metadata: HashMap<String, Metadata> = source.metadata(&catalog.games)?.into_iter().collect();
     let plays: HashMap<String, Plays> = source.plays(&catalog.games)?.into_iter().collect();
@@ -471,7 +471,7 @@ struct Facts<'a> {
 fn game_of_file(g: &GameFile, s: &SystemRow, f: &Facts) -> EsdeGame {
     let value = |key: &str| f.metadata.and_then(|m| m.get(key)).map(String::as_str);
     let text = |key: &str| value(key).map(str::to_owned);
-    let flag = |key: &str| value(key) == Some("1");
+    let flag = |key: &str| value(key) == Some(crate::edits::YES);
     EsdeGame {
         name: value("name").map_or_else(|| title_of(&g.path), str::to_owned),
         file: g.path.clone(),
@@ -493,11 +493,11 @@ fn game_of_file(g: &GameFile, s: &SystemRow, f: &Facts) -> EsdeGame {
         completed: flag("completed"),
         kid_game: flag("kidgame"),
         broken: flag("broken"),
-        hidden: flag("hidden"),
+        hidden: flag(crate::edits::HIDDEN),
         not_counted: flag("nogamecount"),
         hide_metadata: flag("hidemetadata"),
         controller: text("controller"),
-        emulator: text("altemulator"),
+        emulator: text(crate::edits::ALT_EMULATOR),
         manual: f.manual,
         folder_path: g.folder.clone(),
         ..EsdeGame::default()

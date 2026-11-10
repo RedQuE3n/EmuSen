@@ -279,9 +279,11 @@ pub fn write(records: Option<&StateRecords>, state_path: &str, r: &StateRecord) 
     }
 }
 
-/// A state's record forgotten, from its package and from states.db.
+/// A state's record forgotten, as when the player deletes the state: from its package, the sidecar an earlier build
+/// wrote beside it, and states.db (EmuSen_Galaxia.md §5.3a).
 pub fn forget(records: Option<&StateRecords>, state_path: &str) -> Result<(), Refused> {
-    if let Some(at) = emusen_galaxia::saves::package_record_path(state_path) {
+    let package = emusen_galaxia::saves::package_record_path(state_path);
+    for at in package.into_iter().chain([sidecar_path(state_path)]) {
         match std::fs::remove_file(&at) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -325,9 +327,14 @@ pub fn write_package_copy(copy: &str, r: &StateRecord) -> Result<(), String> {
     write_packaged(&at, copy, r).map_err(|(_, words)| words)
 }
 
+/// Where an earlier build wrote a state's record, `StateRecord.SidecarPathFor`: the state's path with `.json`.
+pub fn sidecar_path(state_path: &str) -> std::path::PathBuf {
+    Path::new(state_path).with_extension("json")
+}
+
 /// The sidecar an earlier build wrote, `StateRecord.ReadSidecar`: none for no sidecar or one that does not bind.
 pub fn read_sidecar(state_path: &str) -> Option<StateRecord> {
-    bind(parse_file(&Path::new(state_path).with_extension("json"))?)
+    bind(parse_file(&sidecar_path(state_path))?)
 }
 
 fn parse_file(at: &Path) -> Option<KeptRecord> {

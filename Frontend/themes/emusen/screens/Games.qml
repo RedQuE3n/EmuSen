@@ -68,7 +68,7 @@ ThemeScreen {
                             y: 7.2
                             text: Words.gamesPath
                             font.letterSpacing: 2
-                            color: Tokens.muted
+                            color: night.muted
                             font.family: faces.regular
                             font.pixelSize: 20
                             lineHeight: 24
@@ -85,7 +85,7 @@ ThemeScreen {
                         Text {
                             objectName: "gridTitle"
                             text: Browse.heading
-                            color: Tokens.textStrong
+                            color: night.textStrong
                             font.family: faces.condensed
                             font.weight: Font.Medium
                             font.pixelSize: 32
@@ -98,7 +98,7 @@ ThemeScreen {
                             objectName: "gridCount"
                             y: 7.2
                             text: Browse.countLine
-                            color: Tokens.muted
+                            color: night.muted
                             font.family: faces.regular
                             font.pixelSize: 20
                             lineHeight: 24
@@ -123,25 +123,25 @@ ThemeScreen {
                             objectName: "gridPrevious"
                             anchors.verticalCenter: parent.verticalCenter
                             text: Browse.previous
-                            color: Tokens.muted
+                            color: night.muted
                             font.family: faces.regular
-                            font.pixelSize: 18
+                            font.pixelSize: 19
                         }
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             visible: Browse.previous.length > 0 && Browse.next.length > 0
                             text: Words.between
-                            color: Tokens.muted
+                            color: night.muted
                             font.family: faces.regular
-                            font.pixelSize: 18
+                            font.pixelSize: 19
                         }
                         Text {
                             objectName: "gridNext"
                             anchors.verticalCenter: parent.verticalCenter
                             text: Browse.next
-                            color: Tokens.muted
+                            color: night.muted
                             font.family: faces.regular
-                            font.pixelSize: 18
+                            font.pixelSize: 19
                         }
                         PadGlyph {
                             objectName: "gridNextShoulder"
@@ -213,7 +213,7 @@ ThemeScreen {
                         width: root.width - 128
                         text: root.focusedCell ? root.focusedCell.title : ""
                         elide: Text.ElideRight
-                        color: Tokens.textStrong
+                        color: night.textStrong
                         font.family: faces.condensed
                         font.weight: Font.Medium
                         font.pixelSize: 32
@@ -229,7 +229,7 @@ ThemeScreen {
                         width: root.width - 128
                         text: root.focusedCell ? root.focusedCell.facts : ""
                         elide: Text.ElideRight
-                        color: Tokens.muted
+                        color: night.muted
                         font.family: faces.regular
                         font.pixelSize: 22
                         lineHeight: 26.4
@@ -239,6 +239,9 @@ ThemeScreen {
             }
             Faces {
                 id: faces
+            }
+            Night {
+                id: night
             }
         }
     }

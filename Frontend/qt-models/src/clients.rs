@@ -41,6 +41,11 @@ fn words(e: impl std::fmt::Display) -> String {
 }
 
 impl ClientSource {
+    /// The sources-alone scraper, for a game's metadata and media; none where it could not open.
+    pub fn scraper(&self) -> Option<&ScrapeService> {
+        self.scraper.as_ref().map(|(_, s)| s)
+    }
+
     /// The scan's request: the player's ROM folder, the shelves' systems, and the packages and compressed folders.
     pub fn scan_request(&self) -> Result<ScanRequest, String> {
         let settings = app_settings(&self.platform)?;
@@ -92,6 +97,12 @@ impl LibrarySource for ClientSource {
         let records = self.library.get(&json!({ "what": "records" })).map_err(words)?;
         let favourite = |g: &&GameFile| records.get(&g.path).and_then(|r| r.get("favourite")).and_then(Value::as_bool).unwrap_or(false);
         Ok(games.iter().filter(favourite).map(|g| g.path.clone()).collect())
+    }
+
+    fn hidden(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
+        let edits = self.library.get(&json!({ "what": "all_edits" })).map_err(words)?;
+        let hidden = |g: &&GameFile| edits.get(&g.path).is_some_and(|e| crate::edits::flag(e, crate::edits::HIDDEN));
+        Ok(games.iter().filter(hidden).map(|g| g.path.clone()).collect())
     }
 
     fn recent(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
@@ -213,7 +224,7 @@ impl LibrarySource for ClientSource {
         let mut out = Vec::new();
         for s in systems {
             // The runtime's Setting(console, "Engine"): the stored choice, else the engine row's default.
-            let chosen = self.runtime.settings_get(0, Scope::Console, Some(&s.id), "Engine").map_err(words)?;
+            let chosen = self.runtime.settings_get(0, Scope::Console, Some(&s.id), crate::consoles::ENGINE_KEY).map_err(words)?;
             let Some(id) = chosen.filter(|c| !c.is_empty()).or_else(|| s.engines.first().cloned()) else { continue };
             out.push((s.id.clone(), engine_shown(&id, &cores)));
         }
@@ -283,4 +294,18 @@ fn lexical(path: &std::path::Path) -> String {
         }
     }
     out.to_string_lossy().into_owned()
+}
+
+/// The runtime's configuration a program's models share: the cores folder a test or a build names, with the player's
+/// own from Galaxia beside it; the runtime's defaults with none named.
+pub fn runtime_config(platform: &Platform, cores: &str) -> Result<emusen_crystal_client::Config, String> {
+    if cores.is_empty() {
+        return Ok(emusen_crystal_client::Config::default());
+    }
+    let player = platform.directory(emusen_platform_client::galaxia::consts::DIR_CORES).map_err(words)?;
+    Ok(emusen_crystal_client::Config {
+        cores: Some(vec![cores.to_owned()]),
+        player_cores: Some(player.into_iter().map(|p| p.to_string_lossy().into_owned()).collect()),
+        ..emusen_crystal_client::Config::default()
+    })
 }

@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Dialogs
 import EmuSen.Kit as Kit
 import EmuSen.Models
 import EmuSen.Endymion
@@ -31,6 +32,8 @@ Window {
     property list<string> coverStores
     // The pads the reader opens, by SDL id, where a test names its own; empty for every pad.
     property string onlyPads
+    // A file holding Cores' world in place of the back end's, as the recordings script theirs; empty for the back end.
+    property string coresWorld
     // The splash keeps the focus, and every press, until it has faded, so the press that skipped it is never a screen's.
     readonly property bool splashShown: program.splash && (!moonrise.done || moonrise.opacity > 0)
     // The own look's screens draw a generic pad's glyphs as the Xbox pad's lettered ones, as Mistress does.
@@ -51,13 +54,33 @@ Window {
     readonly property bool esdeLook: program.esdeWanted && !program.esdeFailed
     // The splash waits for the look it gives way to: the own look's at once, the theme's once it has loaded or failed.
     readonly property bool lookSettled: !program.esdeWanted || program.esdeFailed || (program.esdeView?.scene.themed ?? false)
-    // A game chosen: recorded as started, opened (resumed where it is the one suspended) and shown.
+    // The game in hand, whose page X opens: the one the theme's focus is on, else the grid's focused game.
+    property string inHand
+    // A game chosen: asked about where its core waits for approval or its firmware is missing, then recorded as started,
+    // opened (resumed where it is the one suspended) and shown.
     signal play(string path)
     onPlay: (path) => {
-        library.started(path)
-        player.game = path
-        player.session.resume()
-        screens.play()
+        player.session.startState = ""
+        launch.prepare(path)
+    }
+    // A game chosen with a saved state to start from, by its file: a game's page's Resume or state (EmuSen_Qt.md §7.8).
+    signal playFrom(string path, string state)
+    onPlayFrom: (path, state) => {
+        player.session.startState = state
+        launch.prepare(path)
+    }
+    LaunchModel {
+        id: launch
+        objectName: "launch"
+        platformLibrary: program.platformLibrary
+        cores: library.cores
+        onReady: (path) => {
+            library.started(path)
+            player.game = path
+            player.session.resume()
+            screens.play()
+        }
+        onNoticeChanged: if (launch.notice.length > 0) notices.raise(launch.notice, false, true)
     }
     Screens {
         id: screens
@@ -67,10 +90,23 @@ Window {
         themed: program.esdeLook
         onQuit: Qt.quit()
     }
+    // Reduced motion as the start read it until Settings has read the settings, then as they say; the text size, which
+    // the kit's tokens scale by, and the variant as they say (EmuSen_Qt.md §7.7).
     Binding {
         target: Kit.Tokens
         property: "reducedMotion"
-        value: program.reducedMotion
+        value: settingsModel.ready ? settingsModel.reducedMotion : program.reducedMotion
+    }
+    Binding {
+        target: Kit.Tokens
+        property: "textSize"
+        value: settingsModel.textSize
+    }
+    Binding {
+        target: Kit.Tokens
+        property: "variant"
+        value: settingsModel.light ? Kit.Variants.Light : Kit.Variants.Dark
+        when: settingsModel.ready
     }
     LibraryModel {
         id: library
@@ -159,7 +195,12 @@ Window {
             screens.play()
         }
         onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
-        onFocused: (game) => games.focused = games.rowOf(game)
+        onFocused: (game) => {
+            program.inHand = game
+            // Home's games are in hand too, and leave the grid's focus where it was.
+            if (screens.shown !== Screens.Home && games.rowOf(game) >= 0)
+                games.focused = games.rowOf(game)
+        }
     }
     // The chosen EmuSen theme's screens over the reference's, each where the theme provides it and has not failed; the host and
     // its engine are made only while a theme other than the reference is chosen (EmuSen_Qt.md §3.5.2, §9.3.5).
@@ -194,7 +235,12 @@ Window {
                 screens.play()
             }
             onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
-            onFocused: (game) => games.focused = games.rowOf(game)
+            onFocused: (game) => {
+                program.inHand = game
+                // Home's games are in hand too, and leave the grid's focus where it was.
+                if (screens.shown !== Screens.Home && games.rowOf(game) >= 0)
+                    games.focused = games.rowOf(game)
+            }
         }
     }
     // The ES-DE theme's view in place of Home, Choose a console and the grid while it is the library's look, in window pixels;
@@ -386,8 +432,44 @@ Window {
             onActed: (key) => screens.act(key)
         }
     }
-    // The Themes tab, reached from the Home card's Settings row until Settings is built (EmuSen_Qt.md §3.8): Use stores a
-    // theme's id and the chosen theme's host switches at once.
+    // Settings, from Home's Settings place and the Home card's Settings row (EmuSen_Qt.md §7.7); its Library ▸ Themes opens
+    // the Themes tab.
+    SettingsModel {
+        id: settingsModel
+        objectName: "settingsModel"
+        platformLibrary: program.platformLibrary
+        cores: library.cores
+        open: screens.shown === Screens.Settings
+        facts: library.loading ? "" : library.settingsFacts(player.session.running ? player.session.game : "")
+        onDoor: (name) => screens.act(name)
+        onOpenFolder: (path) => folders.open(path)
+        onChooseFolder: (key, start) => folders.choose(key, start)
+    }
+    // The program's folder actions (EmuSen_Qt.md §7.7.E): one shown in the system's file manager, one chosen in the
+    // system's own folder dialog (through the desktop portal where there is one), whose answer the row's model saves.
+    Folders {
+        id: folders
+        objectName: "folders"
+        onDialogAsked: folderDialog.open()
+        onChosen: (key, path) => settingsModel.setFolder(key, path)
+    }
+    FolderDialog {
+        id: folderDialog
+        currentFolder: folders.dialogFolder
+        onAccepted: folders.accepted(folderDialog.selectedFolder)
+        onRejected: folders.rejected()
+    }
+    Settings {
+        objectName: "settings"
+        visible: screens.shown === Screens.Settings
+        settings: settingsModel
+        padFamily: program.padFamily
+        inputs: visible && !program.splashShown
+        onBacked: screens.back()
+        onActed: (key) => screens.act(key)
+    }
+    // The Themes tab, under Settings ▸ Library ▸ Themes (EmuSen_Qt.md §3.8): Use stores a theme's id and the chosen
+    // theme's host switches at once.
     ThemesModel {
         id: themesModel
         objectName: "themesModel"
@@ -401,6 +483,51 @@ Window {
         objectName: "themes"
         visible: screens.shown === Screens.Themes
         themes: themesModel
+        padFamily: program.padFamily
+        inputs: visible && !program.splashShown
+        onBacked: screens.back()
+        onActed: (key) => screens.act(key)
+    }
+    // Cores on the tool screen, from Home's place (EmuSen_Interface.md §15; EmuSen_Qt.md §7.7).
+    ToolModel {
+        id: coresModel
+        objectName: "coresModel"
+        tool: ToolModel.Cores
+        platformLibrary: program.platformLibrary
+        cores: library.cores
+        world: program.coresWorld
+        open: screens.shown === Screens.Cores
+        // Open Folder on a firmware page, through the program's one action for it (EmuSen_Qt.md §7.7.E).
+        onOpenFolder: (path) => folders.open(path)
+    }
+    Cores {
+        objectName: "cores"
+        visible: screens.shown === Screens.Cores
+        tool: coresModel
+        padFamily: program.padFamily
+        inputs: visible && !program.splashShown
+        onBacked: screens.back()
+    }
+    // A game's page, from X on Home and the grid, a theme's openPage and the Home card's Selected game (EmuSen_Qt.md §7.8);
+    // its doors open later pieces' pages.
+    GamePageModel {
+        id: pageModel
+        objectName: "pageModel"
+        platformLibrary: program.platformLibrary
+        cores: library.cores
+        game: screens.shown === Screens.Page ? library.gameFile(program.inHand) : ""
+        onPlayed: (path, state) => state.length > 0 ? program.playFrom(path, state) : program.play(path)
+        onHidden: screens.back()
+        onOpenFolder: (path) => folders.open(path)
+    }
+    Connections {
+        target: pageModel
+        function onHidden() { library.refresh() }
+    }
+    GamePage {
+        objectName: "gamePage"
+        visible: screens.shown === Screens.Page
+        page: pageModel
         padFamily: program.padFamily
         inputs: visible && !program.splashShown
         onBacked: screens.back()
@@ -512,6 +639,44 @@ Window {
         }
         Faces {
             id: resumeFaces
+        }
+    }
+    // The questions before a game opens: its core's approval, then the firmware it needs (EmuSen_Qt.md §7.7).
+    Kit.NormalizedCanvas {
+        id: launchCanvas
+        objectName: "launchCanvas"
+        visible: launch.asking
+        Kit.Frame {
+            id: launchFrame
+            anchors.fill: parent
+            form: Kit.Forms.BigScreen
+            surfaceDrawn: false
+            helpShown: false
+            focus: launch.asking
+            controller.navigationShown: false
+            Kit.Question {
+                id: launchQuestion
+                objectName: "launchQuestion"
+                controller: launchFrame.controller
+                title: launch.title
+                sentences: launch.sentences
+                caption: launch.caption
+                choices: launch.choices
+                backIndex: launch.backIndex
+                padFamily: program.padFamily
+                titleFont: Qt.font({ family: resumeFaces.condensedRegular, pixelSize: Kit.Tokens.fontTitle })
+                bodyFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontBody })
+                captionFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontCaption })
+                rowFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontRow })
+                helpFont: Qt.font({ family: resumeFaces.regular, pixelSize: 20 })
+                help: HelpModel {
+                    screen: launch.help
+                }
+                onChosen: (index) => launch.answer(index)
+            }
+            Binding {
+                launchQuestion.visible: launch.asking
+            }
         }
     }
     // The session's notices (saved, loaded, the screenshot, what failed), at the top right over everything; over running

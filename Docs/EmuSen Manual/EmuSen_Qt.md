@@ -4128,7 +4128,7 @@ answers, and over the fixture by its absence.
 
 **Not offered, for the tester:** `Open Folder` on a core's page, and `Update All…`, which C# did not build either.
 Decided 2026-11-09 by the tester, after this was written: Open Folder is offered everywhere, Game Mode included, as the
-program's one action (§7.7.E); the Firmware page now ends with it.
+program's one action (§7.7.E); the Firmware page now ends with it. Update All… is to be built; it is, in §7.7.K.
 
 **The recordings' world.** Mistress's five Cores recordings are made over a scripted world
 (`WindowFitAuditTests.CoresWindow.cs`: three of EmuSen's cores, a player's core waiting for approval, PCEE2 approved under
@@ -4194,6 +4194,46 @@ for Search, Options, Firmware, Roll Back and the harness, each reverted, each ca
 (an empty overlap) back (`culled.rs`); the List card's Search not docking the keyboard (`cores.rs`' search test); a switch
 not turned by a step (the options test); a found file said as none found (the firmware test); and Roll Back sent as
 `core-update` (the roll back test).
+
+#### 7.7.K Cores' Update All…, and the cover's raised shadow (stage 5, piece K; 2026-11-09)
+
+`EmuSen_Interface.md` §15.5 (the List card's `Check for Updates`, `Update All…`, `Verify All`) and §5.4;
+`EmuSen_Cores.md` §5.4 and §6.2. Decided 2026-11-09 by the tester: build Update All…, which C# never had, so no C#
+screen is replaced and no C# behaviour is left out.
+
+**Update All…** is a row of the List card, between Check for Updates and Verify, offered where any core has an update
+(the rows whose marks include `update`, `plan::with_updates`, so the one owner of what can be updated is the marks of
+§7.7.F). A asks the plan in the question form: `Update <name>?` for one core, as a plan of one update is titled, else
+`Update <n> cores?`; the plan's own sentences for every core with an update, in the list's order (`Update Snes9x,
+Beetle PSX; the build installed now is kept for Roll Back.`, then that each core is checked and nothing downloaded runs
+until it is approved); No first and focused, B No. Yes runs the core tool's existing `core-update` naming those cores,
+one job as a plan's updates are (`plan::steps`), pulled and drained on the screen's timer like every other job: the
+rows say `Updating…`, the apply bar `Updating Snes9x, Beetle PSX…` with its progress, then each core's bytes, and at the
+end the plan's own outcome (`Installed Beetle PSX. Nothing downloaded runs until you approve it.`), the hashes the job
+drops revoked through the runtime. Nothing is offered while it runs, and the question is not asked while another job
+runs. The marks the player made are left as they were. A plan, Roll Back and Update All now share one way to run their
+jobs (`Cores::run`). No job was added: `core-update` already updates every core it names.
+
+**The cover's raised shadow.** The page frame's cover casts §5.4's shadow through the kit's new token and
+`RaisedShadow` (`EmuSen_Kit.md` §7.55), on the GPU through `MultiEffect` and on the software backend through Qt's
+`Canvas`. `MenuCard` and the notice read the token's offset and colour where they had written them.
+
+**The recordings' world** gains the core tool's `core-update` (`qt-models/tests/cores/world.json`): Beetle PSX's update,
+downloaded, installed and done. No recorded state reaches it, since `CoresRunning`'s install never ends.
+
+**Held to** (measured on 2026-11-09). `qt-models/tests/cores.rs` adds 2 (Update All asked over a world with two updates,
+its title, sentences and answers, No running nothing, Yes starting one `core-update` naming both, the rows, the bar and
+the help bar while it runs and its outcome; one update titled by its name, and the row not offered with no update) and
+holds the List card's rows with it; `qt-app/tests/cores.rs` walks the List card to Update All… by the pad, holds the plan
+as `CoresUpdateAll` at the five sizes through the gate, answers Yes and waits for the update's end, before Roll Back.
+The five recorded states it writes are byte for byte the recordings piece F compared with Mistress's (every `.spec` of
+`Cores`, `CoresDetail`, `CoresPlan`, `CoresRunning` and `CoresNoCatalogue` at the five sizes), so that comparison and its
+named differences stand unchanged. `acceptance.rs` on the RX 6800 now opens the first game's page from the grid and
+holds its cover's shadow on Vulkan (`EmuSen_Kit.md` §7.55); it passed in 699 s. The rest of qt-app's tests, kit-core,
+kit-qt, qt-models, theme-qt, kit-gallery, esde-qt and the testing module on the software backend, all passing.
+
+**Seeded faults**, each reverted, each caught: Update All planning every libretro core rather than those with an update
+(both Update All tests); its Yes sending `core-rm` (the two-update test); No running the update as Yes does (the same).
 
 ### 7.8 Stage 5, piece G: a game's page and its clip (2026-11-09)
 

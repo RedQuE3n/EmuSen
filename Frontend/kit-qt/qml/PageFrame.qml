@@ -81,6 +81,14 @@ Kit.Frame {
                 }
             }
         }
+        // The cover is raised over the hero's foot, so it casts §5.4's shadow (EmuSen_Kit.md §7.55).
+        Kit.RaisedShadow {
+            x: places.cover.x
+            y: places.cover.y
+            width: places.cover.width
+            height: places.cover.height
+            radius: Kit.Tokens.rowRadius
+        }
         Rectangle {
             objectName: "pageCover"
             x: places.cover.x

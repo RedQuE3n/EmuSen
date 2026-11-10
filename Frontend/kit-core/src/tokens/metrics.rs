@@ -1,4 +1,4 @@
-use super::Form;
+use super::{Colour, Form};
 
 /// The type scale for one form: each role's size in that form's units (EmuSen_Interface.md §5.2).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -54,6 +54,17 @@ pub struct FocusMarks {
     pub bar_width: f64,
     pub tile_scale: f64,
     pub hover_border: f64,
+}
+
+/// The one shadow a raised surface casts: its colour and opacity, its offset and its blur, the same in both forms' units
+/// (EmuSen_Interface.md §5.4).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Shadow {
+    pub colour: Colour,
+    pub opacity: f64,
+    pub offset_x: f64,
+    pub offset_y: f64,
+    pub blur: f64,
 }
 
 /// The largest text scale a player may choose.
@@ -112,6 +123,8 @@ const DESKTOP_SPACING: Spacing = Spacing {
 
 const FOCUS_MARKS: FocusMarks = FocusMarks { ring_thickness: 3.0, ring_offset: 4.0, bar_width: 4.0, tile_scale: 1.06, hover_border: 1.0 };
 
+const RAISED_SHADOW: Shadow = Shadow { colour: Colour::rgb(0, 0, 0), opacity: 0.5, offset_x: 0.0, offset_y: 8.0, blur: 24.0 };
+
 /// A text scale as the kit keeps it: 1 to 1.3, and 1 for anything that is not a number.
 pub fn clamp_text_scale(scale: f64) -> f64 {
     if scale.is_finite() { scale.clamp(1.0, MAX_TEXT_SCALE) } else { 1.0 }
@@ -147,6 +160,11 @@ pub const fn spacing(form: Form) -> Spacing {
 /// A form's focus marks.
 pub const fn focus_marks(_form: Form) -> FocusMarks {
     FOCUS_MARKS
+}
+
+/// A form's raised shadow, cast by a focused tile, a card's open edge and a page's cover.
+pub const fn raised_shadow(_form: Form) -> Shadow {
+    RAISED_SHADOW
 }
 
 /// A section heading's size until the header role replaces it: the desktop's Strong, the menus' 28 on the big screen.

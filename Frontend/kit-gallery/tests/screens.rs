@@ -1,11 +1,11 @@
 // The tool screen and the page frame on the gallery: the fit audit, pad reach, pointer reach and no chrome at the four fit
 // sizes in both variants, the pane spanning the list and the bar and the columns inside the list as drawn, and the walk
-// between the parts (EmuSen_Kit.md §7.43, §7.44). The grabs and recordings are saved beside the gallery's for a look.
+// between the parts (EmuSen_Kit.md §7.43, §7.44), and the page's cover casting the raised shadow (§7.55). The grabs and recordings are saved beside the gallery's for a look.
 
 use std::path::PathBuf;
 
 use emusen_kit_core::input::{UiButton, WalkForm};
-use emusen_kit_core::tokens::Variant;
+use emusen_kit_core::tokens::{Colour, Variant};
 use emusen_kit_gallery::SCREENS_URL;
 use emusen_qt_test::harness::{edges, palette, Measures, SIZES};
 use emusen_qt_test::lint::{frontend, qmllint, rules};
@@ -64,6 +64,25 @@ fn cells_inside(tree: &Tree) -> Vec<String> {
         }
     }
     faults
+}
+
+/// The cover's raised shadow as drawn: the frame 6 units under the cover's foot darker by an eighth or more than the same
+/// frame 40 units to the cover's left, beyond the shadow's reach; and soft, so 6 units past the offset shape's foot it is
+/// lighter than that and still a sixteenth darker than the clear frame (EmuSen_Interface.md §5.4, EmuSen_Kit.md §7.55).
+fn shadow_cast(scene: &mut Scene<'_>, tree: &Tree, name: &str) -> Vec<String> {
+    let c = &tree.nodes[tree.find_named("pageCover").expect("the cover") as usize];
+    let (foot, past) = (c.y + c.h + 6.0 * c.scale, c.y + c.h + 14.0 * c.scale);
+    let colours = scene.colours_at(&[(c.x + c.w / 2.0, foot), (c.x + c.w / 2.0, past), (c.x - 40.0 * c.scale, foot)]);
+    let sum = |c: Colour| u32::from(c.r) + u32::from(c.g) + u32::from(c.b);
+    eprintln!("{name}: under the cover {:?}, past the shape {:?}, beside it {:?}", colours[0], colours[1], colours[2]);
+    match (colours[0], colours[1], colours[2]) {
+        (Some(under), Some(soft), Some(clear))
+            if sum(under) * 8 <= sum(clear) * 7 && sum(under) < sum(soft) && sum(soft) * 16 <= sum(clear) * 15 =>
+        {
+            Vec::new()
+        }
+        (under, soft, clear) => vec![format!("no soft shadow under the cover: {under:?} under it, {soft:?} past it, {clear:?} beside it")],
+    }
 }
 
 /// The scene's walk between the parts, from where each press starts, by names in the tree.
@@ -127,7 +146,8 @@ fn qt_5_b_the_tool_screen_and_the_page_frame_on_the_gallery() {
                 let mut tree = scene.tree();
                 let focus = scene.focus(&tree);
                 let name = format!("{screen_name}-{variant:?}-{w}x{h}");
-                let mut faults = if screen == 0 { pane_spans(&tree).into_iter().chain(cells_inside(&tree)).collect() } else { Vec::new() };
+                let mut faults =
+                    if screen == 0 { pane_spans(&tree).into_iter().chain(cells_inside(&tree)).collect() } else { shadow_cast(&mut scene, &tree, &name) };
                 if variant == Variant::Dark && (w, h) == (1280, 800) {
                     faults.extend(walks(&mut scene, screen));
                     tree = scene.tree();

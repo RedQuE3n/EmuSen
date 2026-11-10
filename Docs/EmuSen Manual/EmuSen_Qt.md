@@ -3303,6 +3303,37 @@ glyph's bearing, to a tenth of a pixel) gives per-entry parts that a share of `f
 the height of its hinted S at the label's size each fit within 2–4 %, none exactly. The patch is kept outside the
 repository (`~/.cache/emusen/tmp/x4/help-carried.patch`).
 
+**The icon's box, from the reference 'S' (measured 2026-11-10 on the captures above).** In rost the box steps from
+17.05–17.10 to 18.37–18.55 px between `fontSize` × height 20.16 and 20.32 and is flat on each side; the disc's ink steps
+from 16 to 17 px at the same place. The one measure of the face that steps there is the height of its `S` hinted at the
+help's size (FreeType 2.14.3, default load, CFF hinter): 14 px up to 20.24, 15 from 20.32; unhinted it slides (14.11 to
+14.22). The rule that places the label pens of 50 of rost's 53 multi-entry copies (`v`, `u`, `b0`–`n1`, `p`, `q`, `r`,
+the older 0144–0190 copies at 1920 × 1200):
+
+1. the icon's box is 1.25 × the hinted `S` height at `fontSize` × height (10, 12.5, 13.75, 15, 17.5, 18.75, 20 px for
+   `S` 8, 10, 11, 12, 14, 15, 16), whatever `entryRelativeScale` below 1 is;
+2. the bar's sum (labels' widths, boxes, spacings) is laid back from the element's right edge and its start rounded to
+   the nearest pixel; from there each part is carried as a fraction and drawn at the nearest pixel.
+
+The fractional fits of before (0.870–0.876 × `fontSize` × height, 17.05–17.10) took the start unrounded; with it rounded,
+17.5 and 18.75 lie inside the intervals (17.17–17.52, 18.38–18.77). The start rounded up instead misses 12 copies, left
+unrounded 40. Artflix's whole-size bars agree (17.5 and 26.25 px at 20 and 30 px). The three misses: `v06`, where
+View Media's `d` is 7.4995 px and ES-DE's bar needs it rounded up (a width question, §4.9.4, not the box); `i1`
+(`entryRelativeScale` 1.04), whose box is 16.38–16.55, not 1.25 × an integer, so a scale above 1 shrinks the box by a
+rule still open; and `r0144d`, whose spacings are CarAlt's own (`entrySpacing` 0.004, `iconTextSpacing` 0.00406–0.00413
+fits) and agrees once they are read from the theme. The scripts are `~/.cache/emusen/tmp/x5/e.py`, `e2.py`, `e4.py`,
+outside the repository.
+
+**Still open, [blocked] for the tester.** (a) ES-DE's own face: its discs group as the bytecode-hinted `S` of Akrobat at
+the fractional size predicts (11, 11, 13, 13, 13, 15 px for 9, 9, 10, 10, 10, 12), but its labels' widths in the bar's sum
+fit no rule tried, so the box cannot be read from its pens yet; the captures that separate it are single labels in the own
+face (`~/.cache/emusen/tmp/x5/helpown.tsv`, 33 copies, with rost at `entryRelativeScale` 1.02–1.20 for the case above 1).
+(b) A hinted glyph height needs a font hinter that the tree does not have: harfrust and read-fonts shape and read tables
+but do not hint. The candidates are skrifa (MIT or Apache-2.0, the same fontations project as read-fonts, with CFF and
+TrueType hinting written to match FreeType), FreeType itself through a binding (FTL or GPLv2, the library ES-DE draws
+with), or Qt's own FreeType through `QRawFont` with full hinting (no new library, but the help's places would be
+computed on the Qt side rather than in `help.rs`). None is used until the tester chooses.
+
 ### 4.13 The media viewer's PDF manual **[M 2026-11-09]**
 
 **Approved 2026-11-09 by the tester:** a game's PDF manual in the media viewer, through Qt PDF. The evidence is the user

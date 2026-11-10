@@ -115,8 +115,15 @@ impl Viewer {
         if game.folder {
             return None;
         }
-        let entries: Vec<Entry> =
+        let mut entries: Vec<Entry> =
             ORDER.iter().filter_map(|k| game.media.get(*k).map(|s| Entry { kind: (*k).to_owned(), source: s.clone() })).collect();
+        // With no video the screenshot stands first, where the video would (EmuSen_Qt.md §4.10).
+        if !game.media.contains_key("video") {
+            if let Some(at) = entries.iter().position(|e| e.kind == "screenshot") {
+                let shot = entries.remove(at);
+                entries.insert(0, shot);
+            }
+        }
         let manual = game.media.get(MANUAL).cloned();
         (!entries.is_empty() || manual.is_some()).then_some(Viewer { entries, index: 0, manual, reading: None, pages: 0 })
     }

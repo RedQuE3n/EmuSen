@@ -513,6 +513,15 @@ fn the_media_viewer_shows_a_game_s_media_in_es_de_s_order_and_stops_at_the_ends(
     assert!(h.font.own, "ES-DE's own face");
     s.switch(0);
     assert!(s.viewer.is_none(), "leaving the gamelist closes it");
+    let no_video = &mut data.systems[1].games[0].media;
+    no_video.remove("video");
+    no_video.insert("titlescreen".into(), "/m/titlescreen".into());
+    no_video.insert("miximage".into(), "/m/miximage".into());
+    s.restart(data.clone(), "gamelist", 0);
+    assert!(s.open_viewer());
+    let kinds: Vec<String> = s.viewer.as_ref().unwrap().entries.iter().map(|e| e.kind.clone()).collect();
+    assert_eq!(kinds, ["screenshot", "cover", "titlescreen", "fanart", "miximage", "custom"], "with no video the screenshot leads");
+    s.switch(0);
     data.game_index = 1;
     s.restart(data.clone(), "gamelist", 0);
     assert!(!s.open_viewer(), "a folder opens nothing");

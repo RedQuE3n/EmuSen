@@ -3102,6 +3102,9 @@ the viewer's game at each of its nine steps, and X on the SNES's folder.
   y 32 (1280 × 800), the 1280 × 720 fan art the full width at y 56, centred in 32–800.
 - *The order*, video, cover, back cover, title screen, screenshot, fan art, miximage, custom, the user guide's list; right
   at the last stays on it (the ninth step shows the custom picture again). The video plays at once.
+- *A game with no video* opens on its screenshot, which then stands first in its place: NES's Cobalt Harbor (cover,
+  title screen, screenshot, marquee, miximage, a manual) shows screenshot, cover, title screen, miximage, and stays on
+  the miximage (captures `nes-gamelist-1-media-0..4`, ES-DE 3.4.1, 2026-11-10).
 - *A folder*: X on Tower Set opens nothing, though the help lists VIEW MEDIA there too.
 - *Scanlines* over the video, the title screen and the screenshot (the user guide's "Render scanlines" settings, on by
   default): a brightness that rises and falls by about ±10 % with a period of about 4.5 rows at 1280 × 800 and 5.3 at

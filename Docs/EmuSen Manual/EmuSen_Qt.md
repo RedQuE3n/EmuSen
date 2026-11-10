@@ -3294,6 +3294,15 @@ copies need is 0.862–0.878 × `fontSize` × height at 0.0144 but 0.90–0.926 
 labels' places, which no longer depend on the disc's drawing), while the drawn disc is not the layout's box (16 px of
 ink at 20 px, 15 at 16 px). No single rule of the box closes the three, so CarAlt's two bars at 1280 × 800 stay off.
 
+**Tried on the oracle, 2026-11-10, and set aside.** The entries placed by esde-qt itself (each part at the nearest
+pixel of its carried place, a box of 0.875 × `fontSize` × height) closed CarAlt's gamelist bar at 1280 × 800 and left
+its system bar 2.0 off, but opened Art Book Next's help bars (3.9–4.2 units) and the viewer's help in Akrobat at
+1920 × 1200 (2.7–4.7 units, narrower than ES-DE's), which the committed rule holds. The box is not one share of the font
+size across faces. `helppairs.tsv` (14 copies) measured from the labels' pens (each label's ink edge less its first
+glyph's bearing, to a tenth of a pixel) gives per-entry parts that a share of `fontSize`, the face's line height, or
+the height of its hinted S at the label's size each fit within 2–4 %, none exactly. The patch is kept outside the
+repository (`~/.cache/emusen/tmp/x4/help-carried.patch`).
+
 ### 4.13 The media viewer's PDF manual **[M 2026-11-09]**
 
 **Approved 2026-11-09 by the tester:** a game's PDF manual in the media viewer, through Qt PDF. The evidence is the user

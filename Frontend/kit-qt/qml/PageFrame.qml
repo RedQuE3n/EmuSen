@@ -42,6 +42,28 @@ Kit.Frame {
     // Left or Right on a row that steps.
     signal rowStepped(int index, int by)
     controller.navigationShown: false
+    // Asked when a page opens, or opens on another game: the focus on the first action, as LunaP's page opens (EmuSen_Kit.md §7.58).
+    signal focusFirstAction()
+    onFocusFirstAction: {
+        actionList.currentIndex = 0
+        actionList.focus = true
+    }
+    // The content's kind changed with the focus in it: the focus to the list now shown, on its first item, or to the
+    // actions where words are shown, as LunaP's FillContent hands it on (EmuSen_Kit.md §7.58).
+    signal contentKindChanged()
+    onShowsTilesChanged: root.contentKindChanged()
+    onShowsTextChanged: root.contentKindChanged()
+    onContentKindChanged: {
+        if (!tileList.activeFocus && !rowList.activeFocus)
+            return
+        if (root.showsText) {
+            actionList.forceActiveFocus()
+            return
+        }
+        const list = root.showsTiles ? tileList : rowList
+        list.currentIndex = 0
+        list.forceActiveFocus()
+    }
     Kit.PageLayout {
         id: places
         width: root.width
@@ -80,6 +102,14 @@ Kit.Frame {
                     GradientStop { position: 1; color: Kit.Tokens.overArtScrim }
                 }
             }
+        }
+        // The cover is raised over the hero's foot, so it casts §5.4's shadow (EmuSen_Kit.md §7.55).
+        Kit.RaisedShadow {
+            x: places.cover.x
+            y: places.cover.y
+            width: places.cover.width
+            height: places.cover.height
+            radius: Kit.Tokens.rowRadius
         }
         Rectangle {
             objectName: "pageCover"

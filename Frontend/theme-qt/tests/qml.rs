@@ -152,6 +152,20 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
         "No games yet|Nothing played yet|No consoles have games yet|Settings › Library adds a folder|PLACES|Continue|Recent"
     );
     assert!(scene.property("scene", "paused").starts_with("Paused "), "pausedAgo from the models' words");
+    // Words.now holds the time the phrases are said against, as the program's held clock sets it (decided 2026-11-09).
+    host::words(within(window)).unwrap().show_now(1_000_000.0);
+    host::session(within(window)).unwrap().show(&SessionFacts {
+        has_game: true,
+        key: "/roms/Synthetic.nes".into(),
+        title: "Synthetic".into(),
+        console_id: "nes".into(),
+        console: "Nintendo Entertainment System".into(),
+        hue: 0.0,
+        paused_since: 1_000_000 - 180,
+        played: 60,
+    });
+    scene.wait(20);
+    assert_eq!(scene.property("scene", "paused"), "Paused 3 minutes ago", "said against Words.now, not the wall clock");
     assert_eq!(scene.property("scene", "rungs"), "3", "the ladder's count, with no striker too");
     assert!(scene.property("scene", "gameActions").contains("previous PageUp"), "the frame declares the help's actions");
 

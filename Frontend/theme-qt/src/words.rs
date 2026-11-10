@@ -1,6 +1,7 @@
 //! `Words`, every word a theme may show that no row carries (EmuSen_Qt.md §3.2; §1.3 bans words in QML): the labels of
 //! the three screens and the counted and timed phrases, each from emusen-qt-models' words.rs, none written here.
 
+use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
 use emusen_qt_models::words;
 
@@ -32,6 +33,9 @@ pub mod qobject {
         #[qproperty(QString, places, READ, CONSTANT)]
         #[qproperty(QString, continue_entry, cxx_name = "continueEntry", READ, CONSTANT)]
         #[qproperty(QString, recent_entry, cxx_name = "recentEntry", READ, CONSTANT)]
+        /// The time the timed phrases are said against, in seconds since 1970; 0, the default, is the wall clock. The
+        /// program sets it from its clock, which a test holds (decided 2026-11-09 by the tester); a theme only reads it.
+        #[qproperty(f64, now, READ, NOTIFY)]
         type ThemeWords = super::ThemeWordsRust;
     }
 
@@ -89,6 +93,7 @@ pub struct ThemeWordsRust {
     places: QString,
     continue_entry: QString,
     recent_entry: QString,
+    now: f64,
 }
 
 impl Default for ThemeWordsRust {
@@ -111,6 +116,7 @@ impl Default for ThemeWordsRust {
             places: QString::from(words::PLACES),
             continue_entry: QString::from(words::CONTINUE_ENTRY),
             recent_entry: QString::from(words::RECENT_ENTRY),
+            now: 0.0,
         }
     }
 }
@@ -120,16 +126,29 @@ fn said(text: String) -> QString {
 }
 
 impl qobject::ThemeWords {
+    /// The host's: the time the phrases are said against, 0 for the wall clock.
+    pub fn show_now(mut self: core::pin::Pin<&mut Self>, now: f64) {
+        if self.now != now {
+            self.as_mut().rust_mut().now = now;
+            self.now_changed();
+        }
+    }
+
+    /// Now, held or the wall clock's.
+    fn at(&self) -> i64 {
+        if self.now > 0.0 { self.now as i64 } else { words::now() }
+    }
+
     pub fn games(&self, count: i32) -> QString {
         said(words::games(count.max(0) as usize))
     }
 
     pub fn ago(&self, at: f64) -> QString {
-        said(words::ago(at as i64, words::now()))
+        said(words::ago(at as i64, self.at()))
     }
 
     pub fn paused_facts(&self, console: &QString, paused_since: f64) -> QString {
-        said(words::paused_facts(&console.to_string(), paused_since as i64, words::now()))
+        said(words::paused_facts(&console.to_string(), paused_since as i64, self.at()))
     }
 
     pub fn facts(&self, maker: &QString, year: i32, count: i32, runs_on: &QString) -> QString {
@@ -153,7 +172,7 @@ impl qobject::ThemeWords {
     }
 
     pub fn paused_ago(&self, paused_since: f64) -> QString {
-        said(words::paused_ago(paused_since as i64, words::now()))
+        said(words::paused_ago(paused_since as i64, self.at()))
     }
 
     pub fn splash_caption(&self, consoles: i32) -> QString {

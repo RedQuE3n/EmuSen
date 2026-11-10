@@ -99,6 +99,12 @@ impl LibrarySource for ClientSource {
         Ok(games.iter().filter(favourite).map(|g| g.path.clone()).collect())
     }
 
+    fn hidden(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
+        let edits = self.library.get(&json!({ "what": "all_edits" })).map_err(words)?;
+        let hidden = |g: &&GameFile| edits.get(&g.path).is_some_and(|e| crate::edits::flag(e, crate::edits::HIDDEN));
+        Ok(games.iter().filter(hidden).map(|g| g.path.clone()).collect())
+    }
+
     fn recent(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
         let paths: Vec<String> = games.iter().map(|g| g.path.clone()).collect();
         self.library.recent(u32::MAX, &paths).map_err(words)

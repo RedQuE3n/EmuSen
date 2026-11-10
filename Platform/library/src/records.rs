@@ -11,6 +11,9 @@ use emusen_sqlite::{Bound, Connection, Row};
 pub const COVER_FROM: &str = "coverfrom";
 pub const TELEVISION_STANDARD: &str = "tvstandard";
 
+/// The television standards a game's picture may be drawn for, as `TELEVISION_STANDARD` stores them (EmuSen_CRT.md §26).
+pub const STANDARDS: [&str; 2] = ["ntsc", "pal"];
+
 /// What the library remembers of one game: the C# `GameRecord`, its time as the text it was stored as.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Record {
@@ -313,6 +316,19 @@ pub fn save_edits(db: &Connection, path: &str, changes: &[(String, Option<String
 /// The editor's Clear: the cover borrowed from another game and the television standard chosen stay.
 pub fn clear_edits(db: &Connection, path: &str) -> Result<(), Error> {
     write(db, path, &format!("DELETE FROM game_edit WHERE path = $path AND field NOT IN ('{COVER_FROM}', '{TELEVISION_STANDARD}')"), None)
+}
+
+/// The standard the player chose for the game's picture; none where it follows the game.
+pub fn standard(db: &Connection, path: &str) -> Result<Option<String>, Error> {
+    Ok(edits(db, path)?.into_iter().find(|(field, value)| field == TELEVISION_STANDARD && !value.is_empty()).map(|(_, value)| value))
+}
+
+/// The standard chosen for the game, or none to follow it; a value not among `STANDARDS` is refused.
+pub fn set_standard(db: &Connection, path: &str, standard: Option<&str>, at: &str) -> Result<(), Error> {
+    if let Some(s) = standard.filter(|s| !STANDARDS.contains(s)) {
+        return Err(Error::BadRequest(format!("{s} is not a television standard; they are {}.", STANDARDS.join(" and "))));
+    }
+    save_edits(db, path, &[(TELEVISION_STANDARD.to_string(), standard.map(str::to_string))], at)
 }
 
 /// None for a game with no crop of its own.

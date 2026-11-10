@@ -28,6 +28,7 @@ Item {
     }
     NumberAnimation { property: "opacity"; duration: Kit.Tokens.quick }
     ShaderEffect { fragmentShader: "qrc:/emusen/esde/picture.frag.qsb"; vertexShader: "qrc:/emusen/esde/picture.vert.qsb" }
+    Canvas { contextType: "2d" }
     text: model[control.textRole]
 }
 "##;

@@ -72,6 +72,11 @@ Kit.NormalizedCanvas {
             target: screen.page
             function onPassed(key) { screen.acted(key) }
         }
+        // A game's page opens with the focus on Play, wherever the last page left it (Mistress's `GamePage`).
+        Connections {
+            target: screen.page
+            function onGameChanged() { frame.focusFirstAction() }
+        }
         // The question's popup held the focus; the page's walk takes it back where it was.
         Connections {
             target: screen.page

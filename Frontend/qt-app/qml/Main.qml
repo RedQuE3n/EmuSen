@@ -48,7 +48,16 @@ Window {
     // A game chosen: asked about where its core waits for approval or its firmware is missing, then recorded as started,
     // opened (resumed where it is the one suspended) and shown.
     signal play(string path)
-    onPlay: (path) => launch.prepare(path)
+    onPlay: (path) => {
+        player.session.startState = ""
+        launch.prepare(path)
+    }
+    // A game chosen with a saved state to start from, by its file: a game's page's Resume or state (EmuSen_Qt.md §7.8).
+    signal playFrom(string path, string state)
+    onPlayFrom: (path, state) => {
+        player.session.startState = state
+        launch.prepare(path)
+    }
     LaunchModel {
         id: launch
         objectName: "launch"
@@ -439,8 +448,9 @@ Window {
         platformLibrary: program.platformLibrary
         cores: library.cores
         game: screens.shown === Screens.Page ? library.gameFile(program.inHand) : ""
-        onPlayed: (path, state) => program.play(path)
+        onPlayed: (path, state) => state.length > 0 ? program.playFrom(path, state) : program.play(path)
         onHidden: screens.back()
+        onOpenFolder: (path) => folders.open(path)
     }
     Connections {
         target: pageModel

@@ -15,6 +15,27 @@ Additions only; no type, property, signal or invokable was removed or changed.
 - **`SettingsFrame.pageShown`, `pageContent`, `pageSentence`** (qmldir): a page of content in place of the rows, and the
   pane's sentence while it is shown. §7.63.
 
+## 1.0, stage 5 piece K: the raised shadow as a token, and the item that casts it (2026-11-09)
+
+Additions only; no type, property, signal or invokable was removed or changed. The new properties are declared after
+every earlier one, so no earlier property's index in the registry moved.
+
+- **`Tokens.shadowColor`, `shadowOpacity`, `shadowOffsetX`, `shadowOffsetY`, `shadowBlur`** (registry): the one shadow of
+  `EmuSen_Interface.md` §5.4, black at 50%, offset 0,8, blur 24, from kit-core's `tokens::raised_shadow`. `EmuSen_Kit.md`
+  §7.55.
+- **`RaisedShadow`** (qmldir): the shadow cast by a raised shape of the item's box and `radius`, through `MultiEffect` on
+  the GPU and Qt's `Canvas` on the software backend. §7.55.
+- `PageFrame`'s cover casts it; `NoticeLayer`'s `shadowOpacity` and `shadowRadius` default to the tokens and its offset
+  and colour are theirs, so what it draws is unchanged. §7.55.
+
+## 1.0, stage 5 piece G2: the page frame's focus (2026-11-09)
+
+Additions only; no type, property, signal or invokable was removed or changed.
+
+- **`PageFrame.focusFirstAction()`** (qmldir, a signal a host emits): the focus on the first action, as a page opens.
+- **`PageFrame.contentKindChanged()`** (qmldir, a signal): the content's kind changed; with the focus in the content it
+  goes on to the list now shown, on its first item, or to the actions where words are shown. §7.58.
+
 ## 1.0, stage 5 piece E: a sentence's tone, a value beside a short label, the rows' view (2026-11-09)
 
 Additions only; no type, property, signal or invokable was removed or changed.

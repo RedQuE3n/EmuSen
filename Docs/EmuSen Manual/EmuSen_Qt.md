@@ -1362,6 +1362,53 @@ its consoles); Down no longer stepping the rail (the sweep over `one-console` mi
 the splash at 1, 3 and 5 s (the audit records its finished frame only), the grid's rows for a tall and a square console
 (the synthetic library's consoles are all wide), and the bells, which no striker rings yet.
 
+#### 3.4.5 Constellation as built **[M 2026-11-09]**
+
+"Constellation" (`Frontend/themes/constellation/`, resources at `qrc:/emusen/themes/constellation/`) is the design of
+`qt-s3/final/constellation.md`: Home a star chart whose lines are the pad's walk, Choose a console the makers as figures
+(the kit's `FigureLayout`, `EmuSen_Kit.md` §7.31), Games a grid joined by connectors. Written against `EmuSen.Theme` alone;
+its parts are one job each: `Backdrop`, `ChartNode` (a node's place and walk), `ChartBody`, `ChartPointer`, `ChartLine`,
+`Star`, `Connector`, `ConsoleKey`, `Chip`, `Glass`, `Glyph`, `EngineMark`, `Faces`.
+
+**Named differences from the spec**, each decided or measured on 2026-11-08 and 2026-11-09:
+1. Small words are 19 units, not 17 (the audit's legibility floor at 1280 × 720, decided).
+2. The chart's lines by day are at the canvas's 10% and 45% (the spec's prose says 35% and 60%).
+3. The splash's points follow maker order without the 24-unit gap across a maker (a dashed segment marks it); past 24
+   consoles the pitch shrinks to keep three rows, and the segments shorten so the line ends by 4.6 s (decided 2026-11-09).
+4. The day sky's stars are the theme's own; the kit's `Sky` draws the night's.
+5. Games' connectors are measured on the painted covers, the focused one as scaled 1.06 about its centre.
+6. A console's label sits at the edge of its body's 96-unit box (4 further out than the canvas), and **the focused body's
+   label steps 8 further out** over Quick, clear of the focus ring, which reaches 7 past the box (110 about the 96 body, 94
+   about the 80). Where it crossed the ring the count read 1.98 to 3.45:1 by night and 2.23 to 3.24:1 by day, and the
+   crowd's name 1.44:1 (measured 2026-11-09). So that a raised label on the chart's first line or a lowered one on its last
+   still lies inside it, the chart's viewport reaches 8 past the layout's 96 … 564 at each end (88 … 572), the layout's
+   points kept where they were. The chart stands inside the kit's `EdgeFade` (`EmuSen_Kit.md` §7.35) and fades 24 at an
+   edge it runs past, on both backends; its earlier `MultiEffect` mask drew no fade on the GPU and was kept off on the
+   software backend, so a row at the edge was cut.
+7. **RECENT gives way to the focus**: centred at 823 while the block holds the focus, clear of its ring (to 811), else at
+   819, clear of a focused cover scaled 1.06 (from 830.6), where the spec centres it at 820. The 32-unit gap holds a
+   22.8-unit line with either one but not both; at 820 the block's ring ran under the word (1.98:1 by night, 2.23:1 by
+   day) and a focused cover overlapped it at 3840 × 2160. A line of 19 instead ran the word past its foot.
+8. All games' name sits beside its star where the compact tier's chart top would cut it.
+9. The walk's two departures in the kit: Right from the Pointers' apex, and a lone Pointer's Down to the next line's ends.
+
+**Proof, measured 2026-11-08** (offscreen, the software backend, before the audit's contrast rule). `theme-check` reads the
+package `ok` in both steps and `qmllint` is clean: the three screens and the splash at the five sizes in both variants and
+Choose a console over the audit's 120 consoles, and over the catalogues `eleven`, `one-console`, `n30`, `n120`, `maker40`,
+`long` and `empty`, hold no finding. The three `Testing/themes/constellation-*.mockup.spec`, written by hand from the spec and
+the canvases, hold the recordings within two units (Home 30 of 30 boxes, Choose a console 23 of 23 over `eleven`, Games 8 of
+8). Side-by-sides with the canvases' renders (Home, Choose a console and Games at 1280 × 800 and 1920 × 1200, both
+variants) are kept in `~/.cache/emusen/tmp/qt-s3/compare/constellation/`. Faults seeded and caught, each reverted: the labels
+back inside the body's box (overlap, over `eleven`); a place's line at 17 (too small at 1280 × 720); the chart's bottom fade
+dropped (cut at its foot, over `n120`). Dropping a body's `KeyNavigation.right` was not caught: the walk still reaches every
+node by its other edges.
+
+**Measured 2026-11-09**, offscreen with the contrast rule and every state of §3.7.2 (`theme-audit --states all`): no
+finding once differences 6 and 7 are in, but `many`'s reach, which is the rule's and every theme's (§3.7.2). Faults seeded and caught, each reverted: the chart at the layout's 96 … 564 with the
+label's step (the focused NES's name cut at the chart's top at every size in both variants, `pressed`); the label without
+its step and RECENT at 820 (the contrast findings of 6 and 7, the default state). Not yet proved: the splash at 1, 3 and 5 s
+on the GPU.
+
 #### 3.4.6 Orrery as built **[M 2026-11-09]**
 
 "Orrery" (`Frontend/themes/orrery/`, resources at `qrc:/emusen/themes/orrery/`) is the design of `qt-s3/final/orrery.md`:
@@ -4128,7 +4175,7 @@ answers, and over the fixture by its absence.
 
 **Not offered, for the tester:** `Open Folder` on a core's page, and `Update All…`, which C# did not build either.
 Decided 2026-11-09 by the tester, after this was written: Open Folder is offered everywhere, Game Mode included, as the
-program's one action (§7.7.E); the Firmware page now ends with it.
+program's one action (§7.7.E); the Firmware page now ends with it. Update All… is to be built; it is, in §7.7.K.
 
 **The recordings' world.** Mistress's five Cores recordings are made over a scripted world
 (`WindowFitAuditTests.CoresWindow.cs`: three of EmuSen's cores, a player's core waiting for approval, PCEE2 approved under
@@ -4275,6 +4322,46 @@ each of the thirteen controllers, the twelve with a file and a synthetic core's 
 sizes: fit, pad reach, pointer reach, no chrome, names, palette, contrast) and `card_controllers.rs`
 (PauseCardControllers at the five sizes and recorded; Right seats the pad as player 2).
 
+#### 7.7.K Cores' Update All…, and the cover's raised shadow (stage 5, piece K; 2026-11-09)
+
+`EmuSen_Interface.md` §15.5 (the List card's `Check for Updates`, `Update All…`, `Verify All`) and §5.4;
+`EmuSen_Cores.md` §5.4 and §6.2. Decided 2026-11-09 by the tester: build Update All…, which C# never had, so no C#
+screen is replaced and no C# behaviour is left out.
+
+**Update All…** is a row of the List card, between Check for Updates and Verify, offered where any core has an update
+(the rows whose marks include `update`, `plan::with_updates`, so the one owner of what can be updated is the marks of
+§7.7.F). A asks the plan in the question form: `Update <name>?` for one core, as a plan of one update is titled, else
+`Update <n> cores?`; the plan's own sentences for every core with an update, in the list's order (`Update Snes9x,
+Beetle PSX; the build installed now is kept for Roll Back.`, then that each core is checked and nothing downloaded runs
+until it is approved); No first and focused, B No. Yes runs the core tool's existing `core-update` naming those cores,
+one job as a plan's updates are (`plan::steps`), pulled and drained on the screen's timer like every other job: the
+rows say `Updating…`, the apply bar `Updating Snes9x, Beetle PSX…` with its progress, then each core's bytes, and at the
+end the plan's own outcome (`Installed Beetle PSX. Nothing downloaded runs until you approve it.`), the hashes the job
+drops revoked through the runtime. Nothing is offered while it runs, and the question is not asked while another job
+runs. The marks the player made are left as they were. A plan, Roll Back and Update All now share one way to run their
+jobs (`Cores::run`). No job was added: `core-update` already updates every core it names.
+
+**The cover's raised shadow.** The page frame's cover casts §5.4's shadow through the kit's new token and
+`RaisedShadow` (`EmuSen_Kit.md` §7.55), on the GPU through `MultiEffect` and on the software backend through Qt's
+`Canvas`. `MenuCard` and the notice read the token's offset and colour where they had written them.
+
+**The recordings' world** gains the core tool's `core-update` (`qt-models/tests/cores/world.json`): Beetle PSX's update,
+downloaded, installed and done. No recorded state reaches it, since `CoresRunning`'s install never ends.
+
+**Held to** (measured on 2026-11-09). `qt-models/tests/cores.rs` adds 2 (Update All asked over a world with two updates,
+its title, sentences and answers, No running nothing, Yes starting one `core-update` naming both, the rows, the bar and
+the help bar while it runs and its outcome; one update titled by its name, and the row not offered with no update) and
+holds the List card's rows with it; `qt-app/tests/cores.rs` walks the List card to Update All… by the pad, holds the plan
+as `CoresUpdateAll` at the five sizes through the gate, answers Yes and waits for the update's end, before Roll Back.
+The five recorded states it writes are byte for byte the recordings piece F compared with Mistress's (every `.spec` of
+`Cores`, `CoresDetail`, `CoresPlan`, `CoresRunning` and `CoresNoCatalogue` at the five sizes), so that comparison and its
+named differences stand unchanged. `acceptance.rs` on the RX 6800 now opens the first game's page from the grid and
+holds its cover's shadow on Vulkan (`EmuSen_Kit.md` §7.55); it passed in 699 s. The rest of qt-app's tests, kit-core,
+kit-qt, qt-models, theme-qt, kit-gallery, esde-qt and the testing module on the software backend, all passing.
+
+**Seeded faults**, each reverted, each caught: Update All planning every libretro core rather than those with an update
+(both Update All tests); its Yes sending `core-rm` (the two-update test); No running the update as Yes does (the same).
+
 ### 7.8 Stage 5, piece G: a game's page and its clip (2026-11-09)
 
 `EmuSen_Interface.md` §2.5, §4 screen 3, §5.9, §18.2; the oracle is Mistress's recordings `GamePage`, `GamePageStates`,
@@ -4349,21 +4436,15 @@ Mistress's places with her words. **Differences that remain, each for the tester
   takes 52 where hers takes 48 (the platform's face). WiseMan's rules read the fifth slot, crossing the list's right
   edge, as past its clip: the kit fades that edge, which its rules do not read.
 - Favourite is reached from Resume by Right only after Resume has stepped through its states (LunaP's `MoveInActions`,
-  as Mistress's page does), and the walk presses each direction once, so the gate's pad reach and WiseMan's both name it
-  unreached. The test holds the condition: Right from Play is Resume, Right steps its states, then reaches Favourite, and
-  Left comes back.
-- Options holds no Cheats row (the test's game has no saved cheats; the row and its count are held by the models' test)
-  and no Television standard row (not built: the standard's store is the C# `GameRecords`, with no Rust reader yet), so
-  Display crop stands second where hers stands third. Package reads `Linked` or `Not a package` only; its layers are
-  piece I's page.
+  as Mistress's page does). Piece G2: the gate's walk now presses on through a stepped action as the pad does
+  (`EmuSen_Kit.md` §7.58), so the pad reaches Favourite and no finding is named.
+- Options holds no Cheats row (the test's game has no saved cheats; the row and its count are held by the models' test).
+  Piece G2 built the Television standard row and Package's every state (below).
 - Media lists the clip as a tile (the test's game has one); Mistress's fixture had none, so her Marquee stands third.
-  Media has no player's own screenshots: Mistress's `MediaLibrary.Screenshots` has no Rust reader yet.
+  Piece G2 lists the player's own screenshots first (below).
 - Cover art reads `Its own` or `Generated`, without `· 8 to choose from`: the covers to choose from are piece I's page.
-- States has no Delete… (X) and loads no state at the game's start: A on a state, and Resume, start the game, and the
-  resume question of §18.3 offers the automatic state. Loading a chosen state at the start needs the session to start
-  from a state, which `SessionModel` does not yet; Delete… asks the question form, piece I's with the page's deeper pages.
-- The doors (Cheats, Display crop, Package, Scrape This Game, Edit Details, Cover art, Open Folder, Hide from Library,
-  and A on a picture) go nowhere yet: pieces I and J.
+- The doors (Cheats, Display crop, Package, Scrape This Game, Edit Details, Cover art, and A on a picture) go nowhere
+  yet: pieces I and J. Open Folder and Hide from Library act (piece G2, below; piece G).
 
 **Held to** (measured on 2026-11-09). `qt-models/tests/game_page.rs` (6, no Qt): the facts line and the actions as
 Mistress's; Resume stepping its states and letting the focus move on at either end; the states slot by slot with Auto
@@ -4399,9 +4480,8 @@ opens; the cards test holds both, a hidden card's new facts swapping no frame an
 `acceptance.rs` holds it at one instant (`common::HELD_NOW`), as esde-qt's tests hold `EsdeModel.now`. The moment a game
 pauses stays the wall clock's, since the session and a theme's `Words` read it too, so a held clock holds only how it
 is said: holding it there as well put the pause days before the wall clock's now, and the reference theme's Continue,
-which `Words.pausedFacts` words against the wall clock, said `Paused 3 days ago`. A theme's `Words` still read the wall
-clock; holding them needs a `now` of their own on theme-qt's `Words`, an addition to the theme API (Rule T), proposed
-to the tester and not built. Seeded faults, each reverted:
+which `Words.pausedFacts` words against the wall clock, said `Paused 3 days ago`. Piece G2 gave theme-qt's `Words` a `now` of
+its own (decided 2026-11-09 by the tester) and made the pause's moment the clock's, §7.8.1. Seeded faults, each reverted:
 - Resume stepping past either end, so the focus never moves on: the models' Resume test;
 - the automatic state after the first slot rather than the last in use: the models' States test;
 - B on the page going to the library's screen rather than where it was opened: the models' routes test;
@@ -4414,6 +4494,77 @@ to the tester and not built. Seeded faults, each reverted:
 - a hidden card reading its new facts: the cards test, 2 frames swapped under Home;
 - the clock ignoring its held instant: the cards test, the clock reading the wall clock's time;
 - crystal's forget leaving the earlier build's sidecar: crystal's `state_forget` test.
+
+#### 7.8.1 Piece G2: the rest of the page (2026-11-09)
+
+What piece G left, each built from its one owner, with no interface of the runtime's changed:
+
+- **A chosen state at the start**, as Mistress's `PlayFromPageAsync`. The frontend API already serves it: after
+  `emusen_crystal_open`, `state_slots` names each slot's file (slot 0 the resume state's), and `state_slot_load` or
+  `resume_load` loads it. `SessionModel` gains `startState`, the state the next start takes: the game is held as the
+  Resume question holds it, the runtime's slot whose file is the chosen one is loaded once the session opens, and the
+  game is let go with no Resume question (choosing the state was the answer); a game already open and named again loads
+  it in place. Before it starts, the page reads the state's record (`state_record`'s `rom_md5`) and the game's MD5
+  (`emusen_library_identity`, the hash cache first) off the GUI thread and, where they differ, asks Mistress's
+  `A Different Copy of the Game` question, Cancel focused. The program's `playFrom(path, state)` names the state; `play`
+  clears it. Measured 2026-11-09: the runtime's slot 1 file is Galaxia's `SAVE_STATE` path, which the page lists.
+- **The television standard row**, offered where Serenity's catalogue gives the console a television's screen (the
+  crop's offer, Mistress's `StandardOffered`): the game's own, NTSC, PAL, stepped and saved at once. The standard is the
+  games.db edit `tvstandard`, whose owner is the library crate (`records::TELEVISION_STANDARD`, the values
+  `records::STANDARDS`); the library gains the read `standard` and the change `set_standard`, its minor 1.4
+  (`EmuSen_Backend.md` §28.4), so the front end names neither the field nor the values. A standard's words are its value
+  in capitals. The Qt program draws through the plain preset with no CRT filter yet, so nothing applies the choice to
+  the picture: that is the screen filter's port.
+- **The player's own screenshots in Media**, first and numbered (`Screenshot 1`, the newest first), as Mistress's
+  `MediaLibrary.Screenshots` reads them: Galaxia's screenshots folder, a picture named `<the game's stem> <yyyy-MM-dd
+  HH.mm.ss.zzz>.png`. The name has one owner, `qt-models/src/screenshots.rs`, which `SessionModel.screenshot` writes it
+  through and the page reads it back by.
+- **Hide from Library takes effect in the own look**: `LibrarySource.hidden` reads games.db's `hidden` edits
+  (`all_edits`) and a refresh leaves a hidden game out of every place, the grid, the shelves, the favourites, the
+  recently played and the consoles' counts, unless Settings lists hidden games (`ShowHiddenGames`), as Mistress's
+  `Listed`. The edit's name and its value have one owner in the program, `qt-models/src/edits.rs`.
+- **Package's full states** in Mistress's words: `Not a package`, `Linked`, `Self-contained`, `Changed: plays as a plain
+  game` (a package claims the game in Galaxia's claim index, but the scan did not find the game its game: its file is
+  not the dump recorded), each with ` · N layers` where it has patches. The mode and the patches are the library tool's
+  `pkg-ls` answer for the package's folder, so the program reads no manifest itself. **Scrape This Game** reads `A run is
+  going` while the scrape service's progress says `running`, and A waits, as Mistress's row is disabled.
+- **Open Folder** asks the program's one folder action (`Folders.open`, §7.7.E) for the folder holding the game's file;
+  the test catches its `file:` URL.
+- **`Words.now`** on theme-qt's `Words` (decided 2026-11-09 by the tester; `CHANGELOG-theme-api.md`): the program's
+  `ThemeFeed.now` follows `Clock.now`, so a theme's time phrases are held with the program's. The moment a game pauses is
+  now the clock's too, held or not, so a held clock says `Paused just now` rather than a pause days from it.
+
+**Held to** (measured 2026-11-09): the library's `tests/library.rs` (the standard read, set, a value refused, kept by
+Clear); qt-models' `game_page.rs` (the standard row stepped and wrapping, every package state's words, the player's
+screenshots first and numbered, a run going, Open Folder, the different copy's question) and `library.rs` (a hidden game
+leaving every place, back when listed); theme-qt's `qml.rs` (`pausedAgo` said against `Words.now`) and the registry;
+qt-app's `game_page.rs` on the software backend: the five states held with no finding named, `Not a package`, the
+standard stepped to NTSC and saved and back, Open Folder's URL caught, the player's screenshot in Media, the hidden game
+leaving the grid, A on Slot 2 naming the session's `startState`, the page opening again on Play after it was left on
+Favourite, and the shoulder from a Media tile landing on Details' first row; and `acceptance.rs` on Vulkan: the game
+started from the slot saved earlier, no Resume question, the game drawn.
+
+**Compared with Mistress** as piece G compared them (WiseMan's build of the day, no build): Options now stands as hers,
+Engine, then Display crop and Television standard at her places less the Cheats row her fixture had; the walk records
+Resume → Right → Favourite. The one rule finding is piece G's, the fifth slot read as past its clip where the kit fades
+the edge (§7.8, for the tester). A state whose record the runtime cannot read is not known, as Mistress's
+`StateRecordsOnApi.Read` answers, so no question is asked: the program's first run of A on a state found the test's
+states, written by hand, with no record, and the read failed.
+
+The program's test waits on the page rather than on the clock where piece G's waited a fixed time: the shoulder waits
+for each section to change before the next press (under load, two presses within 100 ms skipped a section), and A on a
+question waits for the popup to have opened with its first answer focused (pressed during its enter transition, A did
+nothing). Once on 2026-11-09 (the blast radius's run, under other builds' load) the gate named three States tiles at 1920 × 1200
+unreached: the walk's Right from Slot 3 landed on a delegate the list made as it scrolled, which the walk read as no
+element; every other run, before and after, held every tile reached.
+
+Seeded faults, each reverted:
+- the refresh keeping hidden games: the models' library test, the Game Boy's games still counted;
+- `Words` ignoring `now`: theme-qt's qml test, `Paused 20755 days ago`;
+- `set_standard` taking any value: the library's standard test;
+- the walk pressing once: the program's page test, the gate naming Favourite unreached at both sizes;
+- the page not opening on Play: the program's page test, the focus still on Favourite;
+- the page's state not handed to the session: the program's page test, `startState` empty with the game shown.
 
 ---
 

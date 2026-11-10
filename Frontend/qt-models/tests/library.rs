@@ -19,6 +19,9 @@ struct Fake {
     engines: Vec<(String, Engine)>,
     /// The media store's files, by path and type.
     media: Vec<(String, String, String)>,
+    /// The games hidden in games.db, and the player's settings.
+    hidden: Vec<String>,
+    settings: serde_json::Value,
     fail: Mutex<Option<String>>,
 }
 
@@ -32,11 +35,17 @@ impl LibrarySource for Fake {
             None => Ok(self.games.lock().unwrap().clone()),
         }
     }
-    fn favourites(&self, _: &[GameFile]) -> Result<Vec<String>, String> {
-        Ok(self.favourites.clone())
+    fn favourites(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
+        Ok(self.favourites.iter().filter(|p| games.iter().any(|g| &g.path == *p)).cloned().collect())
     }
-    fn recent(&self, _: &[GameFile]) -> Result<Vec<String>, String> {
-        Ok(self.recent.clone())
+    fn recent(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
+        Ok(self.recent.iter().filter(|p| games.iter().any(|g| &g.path == *p)).cloned().collect())
+    }
+    fn hidden(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
+        Ok(self.hidden.iter().filter(|p| games.iter().any(|g| &g.path == *p)).cloned().collect())
+    }
+    fn settings(&self) -> Result<serde_json::Value, String> {
+        Ok(self.settings.clone())
     }
     fn engines(&self, _: &[SystemRow]) -> Result<Vec<(String, Engine)>, String> {
         Ok(self.engines.clone())
@@ -349,4 +358,16 @@ fn qt_3_7_2_fixed_words_are_told_from_data() {
     for data in ["Aurora Drift", "Super Nintendo", "Last: Aurora Drift", &games(795), ""] {
         assert!(!is_fixed(data), "{data} is data");
     }
+}
+
+#[test]
+fn qt_7_8_g2_a_hidden_game_leaves_every_place_until_settings_lists_hidden_games() {
+    let mut source = fake();
+    source.hidden = vec!["/roms/gb/0".into(), "/roms/gb/1".into()];
+    let rows = refresh(&source).unwrap().rows;
+    let seen: Vec<(&str, usize)> = rows.iter().map(|r| (r.key.as_str(), r.count)).collect();
+    assert_eq!(seen, [("all", 3), ("favourites", 0), ("recent", 3), ("nes", 3)], "the Game Boy's two games hidden, its console leaves too");
+    source.settings = serde_json::json!({ "ShowHiddenGames": true });
+    let rows = refresh(&source).unwrap().rows;
+    assert_eq!(rows.iter().map(|r| r.count).collect::<Vec<_>>(), [5, 1, 4, 3, 2], "listed again with the rest");
 }

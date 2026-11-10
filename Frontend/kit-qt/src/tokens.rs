@@ -109,6 +109,11 @@ pub mod qobject {
         #[qproperty(i32, breath_period, READ, NOTIFY)]
         #[qproperty(f64, breath_low, READ, NOTIFY)]
         #[qproperty(bool, breathes, READ, NOTIFY)]
+        #[qproperty(QColor, shadow_color, READ, NOTIFY)]
+        #[qproperty(f64, shadow_opacity, READ, NOTIFY)]
+        #[qproperty(f64, shadow_offset_x, READ, NOTIFY)]
+        #[qproperty(f64, shadow_offset_y, READ, NOTIFY)]
+        #[qproperty(f64, shadow_blur, READ, NOTIFY)]
         type Tokens = super::TokensRust;
     }
 
@@ -177,6 +182,11 @@ pub struct TokensRust {
     bar_width: f64,
     tile_scale: f64,
     hover_border: f64,
+    shadow_color: QColor,
+    shadow_opacity: f64,
+    shadow_offset_x: f64,
+    shadow_offset_y: f64,
+    shadow_blur: f64,
     instant: i32,
     quick: i32,
     enter: i32,
@@ -261,6 +271,11 @@ impl Default for TokensRust {
             bar_width: 0.0,
             tile_scale: 1.0,
             hover_border: 0.0,
+            shadow_color: QColor::default(),
+            shadow_opacity: 0.0,
+            shadow_offset_x: 0.0,
+            shadow_offset_y: 0.0,
+            shadow_blur: 0.0,
             instant: 0,
             quick: 0,
             enter: 0,
@@ -342,6 +357,11 @@ impl TokensRust {
         self.bar_width = c.focus.bar_width;
         self.tile_scale = c.focus.tile_scale;
         self.hover_border = c.focus.hover_border;
+        self.shadow_color = qcolor(c.shadow.colour);
+        self.shadow_opacity = c.shadow.opacity;
+        self.shadow_offset_x = c.shadow.offset_x;
+        self.shadow_offset_y = c.shadow.offset_y;
+        self.shadow_blur = c.shadow.blur;
         self.instant = c.duration(M::Instant);
         self.quick = c.duration(M::Quick);
         self.enter = c.duration(M::Enter);
@@ -458,6 +478,11 @@ impl qobject::Tokens {
         self.as_mut().bar_width_changed();
         self.as_mut().tile_scale_changed();
         self.as_mut().hover_border_changed();
+        self.as_mut().shadow_color_changed();
+        self.as_mut().shadow_opacity_changed();
+        self.as_mut().shadow_offset_x_changed();
+        self.as_mut().shadow_offset_y_changed();
+        self.as_mut().shadow_blur_changed();
         self.as_mut().instant_changed();
         self.as_mut().quick_changed();
         self.as_mut().enter_changed();

@@ -767,14 +767,44 @@ impl Cores {
         if self.job.is_some() {
             return;
         }
+        let step = plan::Step { request: json!({ "op": "core-rollback", "cores": [stem] }), doing: "Rolling back", rows: vec![row.key.clone()] };
+        self.run(vec![step], Some(row.key));
+    }
+
+    /// A confirmed plan's jobs run in order, the earlier run's outcomes and notice cleared.
+    fn run(&mut self, steps: Vec<plan::Step>, acted_on: Option<String>) {
         self.outcomes.clear();
         self.installed.clear();
         self.notice = None;
-        self.acted_on = Some(row.key.clone());
-        self.steps = vec![plan::Step { request: json!({ "op": "core-rollback", "cores": [stem] }), doing: "Rolling back", rows: vec![row.key] }].into();
-        self.step_count = 1;
+        self.acted_on = acted_on;
+        self.step_count = steps.len();
+        self.steps = steps.into();
         self.steps_done = 0;
         self.next_step();
+    }
+
+    /// Update All's question, none while a job runs or where no core has an update (EmuSen_Interface.md §15.5).
+    fn update_all_question(&self) -> Option<crate::question::Question> {
+        let rows = plan::with_updates(&self.rows);
+        if self.job.is_some() || rows.is_empty() {
+            return None;
+        }
+        let update = plan::update_mark();
+        let pairs: Vec<(&Core, &Mark)> = rows.iter().map(|r| (*r, &update)).collect();
+        Some(crate::tools::plan_question(&plan::update_all_title(&rows), &plan::sentences(&pairs)))
+    }
+
+    /// Every core with an update updated by the core tool's `core-update`, one job as a plan's updates are.
+    fn update_all(&mut self) {
+        if self.job.is_some() {
+            return;
+        }
+        let update = plan::update_mark();
+        let rows = plan::with_updates(&self.rows);
+        let pairs: Vec<(&Core, &Mark)> = rows.iter().map(|r| (*r, &update)).collect();
+        let steps = plan::steps(&pairs);
+        let first = rows.first().map(|r| r.key.clone());
+        self.run(steps, first);
     }
 }
 
@@ -811,6 +841,7 @@ pub const FOLDER: &str = "folder";
 pub const OPEN_FOLDER: &str = "folder:";
 pub const VERIFY: &str = "verify";
 pub const CHECK: &str = "check";
+pub const UPDATE_ALL: &str = "update-all";
 pub const DETAILS: &str = "details";
 const MARK: &str = "mark:";
 const UNMARK: &str = "unmark";
@@ -987,8 +1018,14 @@ impl Source for Cores {
         rows
     }
 
+    /// Check for Updates, Update All… where a core has one, and Verify (EmuSen_Interface.md §15.5).
     fn list_rows(&self) -> Vec<CardRow> {
-        vec![CardRow::new(CHECK, "Check for Updates"), CardRow::new(VERIFY, "Verify")]
+        let mut rows = vec![CardRow::new(CHECK, "Check for Updates")];
+        if !plan::with_updates(&self.rows).is_empty() {
+            rows.push(CardRow::new(UPDATE_ALL, "Update All…"));
+        }
+        rows.push(CardRow::new(VERIFY, "Verify"));
+        rows
     }
 
     fn marks_for(&self, key: &str) -> Vec<Mark> {
@@ -1008,14 +1045,7 @@ impl Source for Cores {
     fn apply(&mut self, marked: &[(String, Mark)]) {
         let pairs: Vec<(&Core, &Mark)> = marked.iter().filter_map(|(k, m)| Some((self.row(k)?, m))).collect();
         let steps = plan::steps(&pairs);
-        self.outcomes.clear();
-        self.installed.clear();
-        self.notice = None;
-        self.acted_on = marked.first().map(|(k, _)| k.clone());
-        self.step_count = steps.len();
-        self.steps = steps.into();
-        self.steps_done = 0;
-        self.next_step();
+        self.run(steps, marked.first().map(|(k, _)| k.clone()));
     }
 
     fn act(&mut self, action: &str, key: Option<&str>, section: &str) -> Effect {
@@ -1029,6 +1059,7 @@ impl Source for Cores {
                 self.verify();
                 Effect::Done
             }
+            (UPDATE_ALL, _) => self.update_all_question().map_or(Effect::Done, |q| Effect::Ask(q, UPDATE_ALL.to_owned())),
             (APPROVE, Some(row)) => match self.hash_of(&row) {
                 Some(sha) => Effect::Ask(approval::question(&self.asking(&row, sha)), format!("{APPROVE}:{}", row.key)),
                 None => {
@@ -1057,6 +1088,12 @@ impl Source for Cores {
     }
 
     fn answer(&mut self, asked: &str, yes: bool) {
+        if asked == UPDATE_ALL {
+            if yes {
+                self.update_all();
+            }
+            return;
+        }
         if let Some(key) = asked.strip_prefix(&format!("{ROLL_BACK}:")) {
             if yes {
                 self.roll_back(key);

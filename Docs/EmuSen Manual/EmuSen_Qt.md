@@ -3280,9 +3280,10 @@ manual of three labelled pages of 600 × 800 points.
   (1841 to 1361), past the page's own edge, which is not held.
 
 With a single page size and the 16:10 screens, a zoom step of half the height and one of 0.234 of the width agree, as
-do a pan step of an eighth of the width and a fifth of the height; the height and the width are the ones held. The
-vertical pan step, the most zoom steps and the left shoulder's zoom out are not captured; the left shoulder steps back
-as the right steps on, and the vertical pan takes the horizontal's step.
+do a pan step of an eighth of the width and a fifth of the height; the height and the width are the ones held. Captured
+on 2026-11-10: two downs at zoom 2 move the page up 320 px (479 at 1920 × 1200), the horizontal's step, and the left
+shoulder after two zoom steps gives the box of one step (202–1077, 304–1616), so it steps back as the right steps on. The
+most zoom steps are not captured.
 
 **The form.** The rules are the viewer's, in `scene::viewer`: `Viewer::press` takes the viewer's keys (`Key`, the
 painter's buttons mapped to left, right, up, down, first, last, zoom out and in) and returns whether the view changed,

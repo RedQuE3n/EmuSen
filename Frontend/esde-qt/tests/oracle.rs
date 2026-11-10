@@ -420,12 +420,16 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
     }
     // The viewer's manual on the NES's third game (entry 1) and its settings on the first, in CarAlt (EmuSen_Qt.md §4.13, §4.14).
     {
-        use emusen_kit_core::input::UiButton::{Down, PageDown, Right, Screensaver, Up};
+        use emusen_kit_core::input::UiButton::{Down, PageDown, PageUp, Right, Screensaver, Up};
         let (theme, variant, scheme, font) = common::watched().into_iter().find(|w| w.0 == "caralt-es-de").expect("CarAlt is watched");
         let folder = common::corpus().join(&theme);
         let (choices, _) = common::choices_of(&variant, &scheme, &font);
-        let manual: [(&str, &[emusen_kit_core::input::UiButton]); 8] = [
+        let manual: [(&str, &[emusen_kit_core::input::UiButton]); 14] = [
             ("media-0", &[]),
+            ("media-1", &[Right]),
+            ("media-2", &[Right, Right]),
+            ("media-3", &[Right, Right, Right]),
+            ("media-4", &[Right, Right, Right, Right]),
             ("manual-0", &[Up]),
             ("manual-1", &[Up, Right]),
             ("manual-2", &[Up, Right, Right]),
@@ -433,6 +437,8 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
             ("manual-0-zoom-1", &[Up, PageDown]),
             ("manual-0-zoom-2", &[Up, PageDown, PageDown]),
             ("manual-0-zoom-2-pan-2", &[Up, PageDown, PageDown, Right, Right]),
+            ("manual-0-zoom-2-pan-y-2", &[Up, PageDown, PageDown, Down, Down]),
+            ("manual-0-zoom-2-zoom-out-1", &[Up, PageDown, PageDown, PageUp]),
         ];
         let settings: [(&str, usize, &str); 7] = [
             ("types0", 0, "\"MediaViewerShowTypes\":true"),
@@ -451,7 +457,9 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
                 (format!("nes-gamelist-0-media-{n}-{tag}"), 0, vec![Right; *n], *more, place)
             }));
         for (name0, entry, presses, more, place) in states.collect::<Vec<_>>() {
-            for (w, h) in SIZES {
+            // The game with no video was captured at 1280 x 800 alone, its order being the same at every size.
+            let only_small = ["media-1", "media-2", "media-3", "media-4"].iter().any(|m| name0.ends_with(m));
+            for (w, h) in SIZES.into_iter().filter(|s| !only_small || s.0 == 1280) {
                 let unit = f64::from(w) / 1280.0;
                 let name = format!("{name0}-{w}x{h}");
                 let at = format!("{theme} {name}");

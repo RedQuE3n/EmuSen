@@ -582,6 +582,11 @@ fn the_media_viewer_shows_a_game_s_pdf_manual_paged_zoomed_and_panned() {
     assert!(close(h1, (fit + 0.5 * H / 800.0) * 800.0) && close(x1 + w1 / 2.0, W / 2.0) && close(y1 + h1 / 2.0, strip + (H - strip) / 2.0), "a step is half the screen's height more, centred");
     assert_eq!(press(&mut s, Key::Right), Some(true), "zoomed, right pans");
     assert!(close(page(&s).0, x1 - W / 8.0), "an eighth of the screen's width a step");
+    assert_eq!(press(&mut s, Key::Down), Some(true), "zoomed, down pans");
+    assert!(close(page(&s).1, y1 - W / 8.0), "down moves the page up by the same step");
+    assert_eq!(press(&mut s, Key::ZoomIn), Some(true));
+    assert_eq!(press(&mut s, Key::ZoomOut), Some(true));
+    assert!(close(page(&s).3, h1), "the left shoulder steps the zoom back by one step");
     assert_eq!(words(&s), "PAGE 1 OF 3", "panning turns no page");
     assert_eq!(press(&mut s, Key::Last), Some(true), "a trigger resets the view");
     assert_eq!(page(&s), (x, y, w, h));

@@ -28,8 +28,6 @@ pub mod qobject {
         type QModelIndex = cxx_qt_lib::QModelIndex;
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
-        include!("cxx-qt-lib/qlist.h");
-        type QList_f64 = cxx_qt_lib::QList<f64>;
         include!("cxx-qt-lib/qstringlist.h");
         type QStringList = cxx_qt_lib::QStringList;
         include!("cxx-qt-lib/qvector.h");
@@ -97,7 +95,7 @@ pub mod qobject {
         #[qproperty(bool, testing, READ, NOTIFY = drawn)]
         /// The tester: how far each control is pushed (the drawing's knobs), whether the interface's B is held to leave
         /// it, and how long it is held to leave.
-        #[qproperty(QList_f64, drawing_pushes, cxx_name = "drawingPushes", READ, NOTIFY = drawn)]
+        #[qproperty(QVariant, drawing_pushes, cxx_name = "drawingPushes", READ, NOTIFY = drawn)]
         #[qproperty(bool, tester_back, cxx_name = "testerBack", READ, NOTIFY = drawn)]
         #[qproperty(i32, tester_hold_ms, cxx_name = "testerHoldMs", READ, NOTIFY = drawn)]
         /// The Pause Card's Game Options ▸ Controllers rows, as plain data for `PauseModel.controllers` (EmuSen_Interface.md §20.3).
@@ -252,10 +250,11 @@ pub mod qobject {
         fn released_key(self: Pin<&mut SettingsModel>, key: i32, modifiers: i32) -> bool;
 
         /// A button of the interface down or up on the pads while the tester runs, before the player's swap (`swap`):
-        /// whether it is B, held to leave the tester.
+        /// whether it is B, held to leave the tester. True for a release, which the router still hears, so that no
+        /// button stays held there.
         #[qinvokable]
         #[cxx_name = "testerButton"]
-        fn tester_button(self: Pin<&mut SettingsModel>, button: PadButton, down: bool, swap: bool);
+        fn tester_button(self: Pin<&mut SettingsModel>, button: PadButton, down: bool, swap: bool) -> bool;
     }
 
     unsafe extern "RustQt" {
@@ -325,7 +324,7 @@ pub struct SettingsModelRust {
     drawing_texts: QStringList,
     drawing_focus: i32,
     drawing_held: QStringList,
-    drawing_pushes: QList<f64>,
+    drawing_pushes: QVariant,
     tester_back: bool,
     tester_hold_ms: i32,
     binding_tabs: QStringList,
@@ -390,7 +389,7 @@ impl Default for SettingsModelRust {
             drawing_texts: QStringList::default(),
             drawing_focus: -1,
             drawing_held: QStringList::default(),
-            drawing_pushes: QList::default(),
+            drawing_pushes: QVariant::from(&QList::<f64>::default()),
             tester_back: false,
             tester_hold_ms: 0,
             binding_tabs: QStringList::default(),
@@ -739,7 +738,7 @@ impl qobject::SettingsModel {
         r.drawing_texts = list(d.texts.into_iter());
         r.drawing_focus = d.focus;
         r.drawing_held = list(d.held.into_iter());
-        r.drawing_pushes = d.pushes.iter().copied().collect();
+        r.drawing_pushes = QVariant::from(&d.pushes.iter().copied().collect::<QList<f64>>());
         r.tester_back = r.tester_back && testing;
         r.tester_hold_ms = hold;
         r.binding_tabs = list(d.tabs.into_iter());
@@ -873,13 +872,14 @@ impl qobject::SettingsModel {
         true
     }
 
-    pub fn tester_button(mut self: Pin<&mut Self>, button: qobject::PadButton, down: bool, swap: bool) {
+    pub fn tester_button(mut self: Pin<&mut Self>, button: qobject::PadButton, down: bool, swap: bool) -> bool {
         let back = emusen_kit_qt::kinds::ui_button(button).map(|b| b.swapped(swap)) == Some(emusen_kit_core::input::UiButton::Back);
         let held = back && down && self.view.testing();
         if back && self.tester_back != held {
             self.as_mut().rust_mut().tester_back = held;
             self.as_mut().drawn();
         }
+        !down
     }
 
     /// The focused row's pane.

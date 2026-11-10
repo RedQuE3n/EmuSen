@@ -4322,6 +4322,20 @@ for `tester_hold_ms` (1000, the description's, Mistress's `TestExitHold`) leaves
 button being tried (`testerButton` with the router's swap, `testerBack`, a `Timer` of `testerHoldMs`); Escape leaves it
 at once. Leaving clears what was held and puts the knobs at rest.
 
+**Mistress's Controllers pages against these** (listed on 2026-11-10 from `SettingsScreen.Sections.cs`,
+`.Controllers.cs`, `.Keys.cs`, `.Game.cs`, `SettingsView.cs` and `MainWindow.Settings.cs`). Built: Players (seats, a
+pad's player stepped, a kept seat forgotten, a held button marking its row), Controller bindings, Profiles (the console
+chosen, a profile opened, made, renamed, chosen to start games, deleted, the one every console has held), Rumble shown
+where a console's games drive a motor, Keyboard keys, Hotkeys (listening, clearing, clashes named), Reset every binding,
+every row of Galaxia's Controllers group (Swap A and B, Guide chords, Controller type, Only the first controller,
+Controller notices, On-screen keyboard, Left stick as the D-pad, Stick deadzone, Mirror player 1 to player 2) shown and
+saved, the bindings page (the strip, the drawing, a press listened for with its five seconds, Y reset, X the player or
+clear, the shoulders, the directions over the drawing, the conflict line), the tester, and the card's Controllers page.
+Not built, each a question for the tester since it reaches past these pages: what those saved rows change outside them.
+In this program no pad setting reaches the pads or the router (swap, controller type, only the first controller, stick
+as the D-pad, stick deadzone, mirror), Rumble drives no motor, no notice tells of a pad coming or going, and the
+on-screen keyboard row picks nothing (Steam's keyboard has no call here). Guide chords alone are read, at the start.
+
 **Facts read from their owners** (2026-11-10). The profile every console has is named by Endymion: the source reads
 it once with the models, as the profile `bindings_choose` answers where no profile exists (Endymion's
 `DEFAULT_PROFILE`), and every page compares with that (`Bindings.default_profile`); the PROFILES model's member

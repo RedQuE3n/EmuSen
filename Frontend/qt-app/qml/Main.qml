@@ -110,7 +110,7 @@ Window {
         gameMuted: Kit.PadRouter.guideHeld
         // A theme's screens hear the pad through their own engine's router (EmuSen_Qt.md §3.5.2); while a binding listens
         // for the pad's press, the interface hears none of it, and while the tester runs, only its B and the releases (EmuSen_Qt.md §7.7.H).
-        onButton: (button, down) => settingsModel.listeningPad ? undefined : settingsModel.testing ? (settingsModel.testerButton(button, down, Kit.PadRouter.swapAcceptBack), down ? undefined : Kit.PadRouter.push(button, false)) : program.themeHost?.holdsFocus ? program.themeHost.feed.push(button, down) : referenceHost.holdsFocus ? referenceHost.feed.push(button, down) : Kit.PadRouter.push(button, down)
+        onButton: (button, down) => settingsModel.listeningPad ? undefined : settingsModel.testing ? (settingsModel.testerButton(button, down, Kit.PadRouter.swapAcceptBack) ? Kit.PadRouter.push(button, down) : undefined) : program.themeHost?.holdsFocus ? program.themeHost.feed.push(button, down) : referenceHost.holdsFocus ? referenceHost.feed.push(button, down) : Kit.PadRouter.push(button, down)
         onSeatsChanged: settingsModel.seatsChanged()
     }
     // Home's lines that change with the time: the status line and the paused game's facts.

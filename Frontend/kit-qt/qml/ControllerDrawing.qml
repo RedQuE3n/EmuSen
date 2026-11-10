@@ -16,7 +16,7 @@ Item {
     property alias focused: layout.focused
     property alias held: layout.held
     // How far each control is pushed, 0 to 1, in the controls' order: a stick's directions move its knob.
-    property alias pushes: layout.pushes
+    property list<real> pushes
     readonly property alias layout: layout
     // A label chosen by the pointer, by its control's place among the controls.
     signal chosen(int index)
@@ -31,6 +31,11 @@ Item {
         height: root.height
         labelHeight: Math.ceil(probe.implicitHeight) + 2 * root.inset
         accent: Kit.Tokens.accent
+    }
+    Binding {
+        target: layout
+        property: "pushes"
+        value: root.pushes
     }
 
     // A label's border and the space inside it.

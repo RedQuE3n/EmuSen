@@ -2,7 +2,9 @@
 """The oracle's synthetic library: empty ROM files, ES-DE gamelists and a downloaded_media tree of flat-hue labelled
 PNGs, written under <out> and listed as plain data (library.tsv, media.tsv). The games, metadata, picture sizes and
 colours are those of the WiseMan fixture SyntheticLibrary, so ES-DE, the C# painter and the Qt painter read one library;
-the SNES system adds a folder with a folder link and one game with hidden metadata (EmuSen_BigPicture.md 31.1).
+the SNES system adds a folder with a folder link and one game with hidden metadata (EmuSen_BigPicture.md 31.1). The
+media viewer's game, the NES's first, has every type the viewer shows: a video (a still picture held for four seconds,
+encoded by ffmpeg), a back cover, fan art and a custom picture besides the five types every game has.
 Nothing is read from a real library. Existing files are kept, so a second run changes nothing. See README.md.
 
 Usage: library.py <out>
@@ -12,6 +14,7 @@ Usage: library.py <out>
   <out>/library.tsv, <out>/media.tsv          what was written, one row each
 """
 import os
+import subprocess
 import sys
 from datetime import datetime
 from xml.sax.saxutils import escape
@@ -23,6 +26,8 @@ TITLES = ["Aurora Drift", "Brass Lantern", "Cobalt Harbor", "Dune Relay", "Ember
           "Hollow Comet", "Ivory Signal", "Juniper Vault", "Kestrel Run", "Lumen Garden"]
 GENRES = ["Platform", "Puzzle", "Racing", "Role playing", "Shooter", "Sports"]
 MEDIA = {"covers": (600, 800), "screenshots": (512, 448), "titlescreens": (512, 448), "marquees": (800, 300), "miximages": (640, 480)}
+# The types only the media viewer's game has (USERGUIDE.md, "Game media viewer"), kept off the SNES the watched states show.
+VIEWER_GAME, VIEWER_MEDIA = ("nes", 0), {"videos": (512, 448), "backcovers": (600, 800), "fanart": (1280, 720), "custom": (640, 480)}
 FOLDER, FOLDER_GAMES, HIDDEN = "Tower Set", ["Quartz Spire", "Rune Gate"], "Lumen Garden"
 DESCRIPTION = ("{t} is a game invented for EmuSen's tests. It has no story and no pictures of its own; every image shown for it is a "
                "flat colour with its name written on it. This second sentence is here so that the description is long enough to "
@@ -58,6 +63,15 @@ def games(system, ext):
             g["path"] = f"{FOLDER}/{g['path']}"
             listed.append(g)
     return listed
+
+
+def video(path, size, rgb, text):
+    """A still labelled picture held for four seconds as H.264, so a capture of the playing video is the same at any time."""
+    still = os.path.splitext(path)[0] + ".still.png"
+    label(still, size, rgb, text)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-loop", "1", "-i", still, "-t", "4", "-r", "30", "-c:v", "libx264", "-pix_fmt",
+                    "yuv420p", "-threads", "1", "-an", path], check=True)
+    os.remove(still)
 
 
 def label(path, size, rgb, text):
@@ -99,14 +113,15 @@ def main(out):
             if not os.path.exists(rom):
                 open(rom, "wb").close()
             lib_rows.append("\t".join([system, g["path"], g["name"]] + [g[k] or "false" for k in ("favorite", "completed", "hidemetadata")]))
-            for folder, size in MEDIA.items():
+            types = dict(MEDIA, **(VIEWER_MEDIA if (system, g["index"]) == VIEWER_GAME else {}))
+            for folder, size in types.items():
                 stem = os.path.splitext(g["path"])[0]
-                picture = os.path.join(out, "downloaded_media", system, folder, stem + ".png")
+                picture = os.path.join(out, "downloaded_media", system, folder, stem + (".mp4" if folder == "videos" else ".png"))
                 rgb = colour(g["index"], folder)
                 media_rows.append("\t".join([system, folder, os.path.relpath(picture, out), *map(str, size), *map(str, rgb)]))
                 if not os.path.exists(picture):
                     os.makedirs(os.path.dirname(picture), exist_ok=True)
-                    label(picture, size, rgb, f"{system} {folder}\n{g['name']}\n{size[0]}x{size[1]}")
+                    (video if folder == "videos" else label)(picture, size, rgb, f"{system} {folder}\n{g['name']}\n{size[0]}x{size[1]}")
         listing = os.path.join(out, "gamelists", system, "gamelist.xml")
         os.makedirs(os.path.dirname(listing), exist_ok=True)
         with open(listing, "w", encoding="utf-8") as f:

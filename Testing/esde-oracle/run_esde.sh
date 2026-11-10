@@ -3,11 +3,12 @@
 # home of its own under ~/.cache/emusen/esde-oracle, with no network and the synthetic library, walked to one state by
 # the pad and grabbed at full size. ES-DE runs inside bwrap: the root read-only, the run's home the only place written,
 # its own network and PID namespaces, so stopping it by PID stops all of it. See README.md.
-# Usage: run_esde.sh <theme> system|gamelist[:<j>] <W> <H>
+# Usage: run_esde.sh <theme> system|gamelist[:<j>[:media:<n>]] <W> <H>
 #   VARIANT, SCHEME, FONT_SIZE (medium), ASPECT (from W x H when exact: 16:10, 16:9, 4:3), SYSTEM (snes)
 #   THEMES   the folder holding <theme> (~/.cache/emusen/bigpicture/corpus/whole)
 #   DRY=1    write the library, the home and the settings, print the command, start nothing
-# Output: ~/.cache/emusen/esde-oracle/<theme>/<view>-<W>x<H>.png; the run's logs in runs/<theme>-<view>-<W>x<H>/.
+# Output: ~/.cache/emusen/esde-oracle/<theme>/[<system>-]<view>-<W>x<H>.png (the system named when not snes, every ':' a
+# '-'); the run's logs in runs/<theme>-<name>/. The pad is a uinput pad (pad.py), refused while Steam runs.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
 [ $# -eq 4 ] || { sed -n '6,10p' "$0"; exit 2; }
@@ -34,7 +35,8 @@ if [ -z "${DRY:-}" ]; then
 fi
 
 python3 -I "$here/library.py" "$oracle/library" || exit 1
-name=${view/:/-}
+name=${view//:/-}
+[ "${SYSTEM:-snes}" = snes ] || name=$SYSTEM-$name
 run=$oracle/runs/$theme-$name-${W}x$H
 home=$run/home
 rm -rf "$run"
@@ -64,19 +66,20 @@ command=("${sandbox[@]}" "$tree/AppRun" --home "$home" --resolution "$W" "$H" --
 if [ -n "${DRY:-}" ]; then
   echo "settings: $home/ES-DE/settings/es_settings.xml"
   echo "pad: $pad"
-  echo "command: WIDTH=$W HEIGHT=$H FULL=1 INTERVAL=1000 PAD=\"$pad\" bash $here/../qt-gates/run.sh $run $seconds $(printf '%q ' "${command[@]}")"
+  echo "command: WIDTH=$W HEIGHT=$H FULL=1 INTERVAL=1000 PAD=\"$pad\" UINPUT_PAD=$here/pad.py bash $here/../qt-gates/run.sh $run $seconds $(printf '%q ' "${command[@]}")"
   exit 0
 fi
 
 links=$("${sandbox[@]}" /bin/cat /proc/net/dev | awk -F: 'NR > 2 && $1 !~ /^ *lo$/ {print $1}' | tr -d ' \n')
 [ -z "$links" ] || { echo "run_esde.sh: the sandbox reaches the network through $links; refused"; exit 1; }
+pgrep -x steam > /dev/null && { echo "run_esde.sh: Steam is running and would read the uinput pad; close Steam first"; exit 1; }
 if [ ! -x "$tree/AppRun" ]; then
   rm -rf "$oracle/bin/$pinned.part"; mkdir -p "$oracle/bin/$pinned.part"
   (cd "$oracle/bin/$pinned.part" && "$appimage" --appimage-extract > /dev/null) || { echo "run_esde.sh: extraction failed"; exit 1; }
   mv "$oracle/bin/$pinned.part" "$oracle/bin/$pinned"
 fi
 
-WIDTH=$W HEIGHT=$H FULL=1 INTERVAL=1000 PAD=$pad bash "$here/../qt-gates/run.sh" "$run" "$seconds" "${command[@]}"
+WIDTH=$W HEIGHT=$H FULL=1 INTERVAL=1000 PAD=$pad UINPUT_PAD=$here/pad.py bash "$here/../qt-gates/run.sh" "$run" "$seconds" "${command[@]}"
 cp "$home/ES-DE/logs/es_log.txt" "$run/es_log.txt" 2>/dev/null
 status=0
 python3 -I "$here/pick.py" "$run" "$seconds" "$oracle/$theme/$name-${W}x$H.png" || status=1

@@ -186,8 +186,22 @@ impl Default for CardModelRust {
 impl cxx_qt::Initialize for qobject::CardModel {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().on_card_changed(|model| model.read()).release();
-        self.as_mut().on_shown_changed(|model| if model.shown { model.open() }).release();
-        self.on_facts_changed(|model| model.read()).release();
+        self.as_mut()
+            .on_shown_changed(|mut model| {
+                if model.shown {
+                    model.as_mut().read();
+                    model.open();
+                }
+            })
+            .release();
+        // A hidden card's words wait for it to show: rewritten while hidden, they made the window swap a frame with
+        // nothing visible changed (the paused game's minute, under Home; EmuSen_Qt.md §7.8).
+        self.on_facts_changed(|model| {
+            if model.shown {
+                model.read();
+            }
+        })
+        .release();
     }
 }
 

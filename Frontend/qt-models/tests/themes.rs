@@ -125,14 +125,22 @@ fn the_id_stored_is_the_setting_s_or_the_reference_s() {
 }
 
 #[test]
-fn settings_opens_the_themes_tab_from_home_and_the_home_card_and_b_goes_home() {
-    use emusen_qt_models::screens::{step, Ask, Shown, POWER_PLACE, SETTINGS_PLACE};
+fn settings_opens_from_home_and_the_home_card_and_holds_the_themes_tab_under_it() {
+    use emusen_qt_models::screens::{step, step_in, Ask, Shown, POWER_PLACE, SETTINGS_PLACE, THEMES};
     let act = |key: &str| Ask::Act(key.to_owned());
-    assert_eq!(step(Shown::Home, &Ask::Place(SETTINGS_PLACE)), Some((Shown::Themes, None)), "Home's Settings place");
-    assert_eq!(step(Shown::HomeCard, &act("settings")), Some((Shown::Themes, None)), "the Home card's Settings row");
+    assert_eq!(step(Shown::Home, &Ask::Place(SETTINGS_PLACE)), Some((Shown::Settings, None)), "Home's Settings place");
+    assert_eq!(step(Shown::HomeCard, &act("settings")), Some((Shown::Settings, None)), "the Home card's Settings row");
     assert_eq!(step(Shown::Home, &Ask::Place(POWER_PLACE)).map(|s| s.0), Some(Shown::HomeCard), "Power unchanged");
-    assert_eq!(step(Shown::Themes, &Ask::Back), Some((Shown::Home, None)));
+    assert_eq!(step(Shown::Settings, &act(THEMES)), Some((Shown::Themes, None)), "Library ▸ Themes");
+    assert_eq!(step(Shown::Settings, &Ask::Back), Some((Shown::Home, None)));
+    assert_eq!(step(Shown::Settings, &act("home")), Some((Shown::Home, None)));
+    assert_eq!(step(Shown::Settings, &act("cheats")), None, "a door of a later piece goes nowhere yet");
+    assert_eq!(step(Shown::Themes, &Ask::Back), Some((Shown::Settings, None)), "B goes back to Settings");
     assert_eq!(step(Shown::Themes, &act("home")), Some((Shown::Home, None)));
     assert_eq!(step(Shown::Themes, &act("check")), None, "Check is the tab's own");
     assert_eq!(step(Shown::Themes, &Ask::Play), None);
+    // Over an ES-DE theme the card's row opens Settings too, and leaving it returns to the theme's view.
+    assert_eq!(step_in(true, Shown::HomeCard, &act("settings")), Some((Shown::Settings, None)));
+    assert_eq!(step_in(true, Shown::Settings, &Ask::Back), Some((Shown::Esde, None)));
+    assert_eq!(step_in(true, Shown::Themes, &Ask::Back), Some((Shown::Settings, None)));
 }

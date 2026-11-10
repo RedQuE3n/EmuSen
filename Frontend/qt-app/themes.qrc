@@ -9,6 +9,7 @@
         <file alias="parts/EngineMark.qml">../themes/emusen/parts/EngineMark.qml</file>
         <file alias="parts/Faces.qml">../themes/emusen/parts/Faces.qml</file>
         <file alias="parts/Glyph.qml">../themes/emusen/parts/Glyph.qml</file>
+        <file alias="parts/Night.qml">../themes/emusen/parts/Night.qml</file>
         <file alias="screens/Consoles.qml">../themes/emusen/screens/Consoles.qml</file>
         <file alias="screens/Games.qml">../themes/emusen/screens/Games.qml</file>
         <file alias="screens/Home.qml">../themes/emusen/screens/Home.qml</file>
@@ -66,5 +67,23 @@
         <file alias="screens/Home.qml">../themes/meridian/screens/Home.qml</file>
         <file alias="screens/Splash.qml">../themes/meridian/screens/Splash.qml</file>
         <file alias="theme.json">../themes/meridian/theme.json</file>
+    </qresource>
+    <qresource prefix="/emusen/themes/orrery">
+        <file alias="parts/Backdrop.qml">../themes/orrery/parts/Backdrop.qml</file>
+        <file alias="parts/Chip.qml">../themes/orrery/parts/Chip.qml</file>
+        <file alias="parts/DialWheel.qml">../themes/orrery/parts/DialWheel.qml</file>
+        <file alias="parts/EngineMark.qml">../themes/orrery/parts/EngineMark.qml</file>
+        <file alias="parts/Faces.qml">../themes/orrery/parts/Faces.qml</file>
+        <file alias="parts/Glyph.qml">../themes/orrery/parts/Glyph.qml</file>
+        <file alias="parts/Moon.qml">../themes/orrery/parts/Moon.qml</file>
+        <file alias="parts/Orbit.qml">../themes/orrery/parts/Orbit.qml</file>
+        <file alias="parts/OrbitCover.qml">../themes/orrery/parts/OrbitCover.qml</file>
+        <file alias="parts/Track.qml">../themes/orrery/parts/Track.qml</file>
+        <file alias="parts/WheelNode.qml">../themes/orrery/parts/WheelNode.qml</file>
+        <file alias="screens/Consoles.qml">../themes/orrery/screens/Consoles.qml</file>
+        <file alias="screens/Games.qml">../themes/orrery/screens/Games.qml</file>
+        <file alias="screens/Home.qml">../themes/orrery/screens/Home.qml</file>
+        <file alias="screens/Splash.qml">../themes/orrery/screens/Splash.qml</file>
+        <file alias="theme.json">../themes/orrery/theme.json</file>
     </qresource>
 </RCC>

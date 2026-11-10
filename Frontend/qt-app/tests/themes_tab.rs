@@ -1,4 +1,4 @@
-//! The Themes tab in the program (EmuSen_Qt.md §3.8): reached from Home's Settings place, a theme checked before Use is
+//! The Themes tab in the program (EmuSen_Qt.md §3.8): reached through Settings ▸ Library ▸ Themes, a theme checked before Use is
 //! offered, Use storing the theme's id and switching the chosen theme's host at once, one engine however often it switches,
 //! and none once the reference is chosen again.
 
@@ -85,11 +85,21 @@ fn qt_3_8_the_themes_tab_checks_uses_and_switches_the_chosen_theme_s_host() {
         scene.wait(50);
     }
 
-    // Home's Settings place opens the tab on the EmuSen kind, the reference first and in use.
+    // Home's Settings place opens Settings, whose Library ▸ Themes opens the tab on the EmuSen kind, the reference first
+    // and in use (EmuSen_Qt.md §7.7).
     for _ in 0..5 {
         scene.pad(UiButton::Right);
     }
     assert_eq!(focused(&mut scene), "place.5");
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "screens", "shown", "Settings", 2000);
+    for _ in 0..4 {
+        scene.pad(UiButton::PageDown);
+    }
+    wait_for(&mut scene, "settingsModel", "section", "4", 1000);
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Down);
+    wait_for(&mut scene, "settingsModel", "focused", "2", 1000);
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "screens", "shown", "Themes", 2000);
     wait_for(&mut scene, "themesModel", "name", "EmuSen", 5000);
@@ -150,7 +160,9 @@ fn qt_3_8_the_themes_tab_checks_uses_and_switches_the_chosen_theme_s_host() {
     scene.pad(UiButton::Down);
     wait_for(&mut scene, "themesModel", "name", "Fixture clean", 2000);
 
-    // B goes Home.
+    // B goes back to Settings, and B there goes Home.
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "screens", "shown", "Settings", 2000);
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Home", 2000);
     assert!(report.is_empty(), "{}", report.join("\n"));

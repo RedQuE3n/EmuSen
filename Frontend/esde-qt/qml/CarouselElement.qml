@@ -127,6 +127,7 @@ ElementBox {
                 fontSource: root.fontSource
                 px: root.px
                 lineSpacing: root.lineSpacing
+                wrap: true
                 color: Qt.rgba(root.color.r * slot.dim, root.color.g * slot.dim, root.color.b * slot.dim, root.color.a)
                 hAlign: TextBlock.Align.Center
                 hasBackground: root.itemBackground.a > 0

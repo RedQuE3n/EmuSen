@@ -1,6 +1,6 @@
 //! Serenity's device and chain, as far as the game picture needs them (EmuSen_Qt.md §1.8): a device made with the
 //! extensions a host's renderer adopts it with, its raw handles, a built-in filter written as a preset and built as a
-//! chain, the frame advanced and the picture drawn in place.
+//! chain, the frame advanced and the picture drawn in place; a preset file read and its parameters merged.
 
 use crate::error::Result;
 use crate::platform::Platform;
@@ -118,10 +118,35 @@ pub fn builtin_preset(platform: &Platform, key: &str, console: Option<&str>, roo
             cap,
         )
     })?;
-    let path = path.unwrap_or_default();
-    Ok(platform
-        .read(|out, cap| unsafe { platform.lib.emusen_serenity_preset_load(path.as_ptr(), path.len(), out, cap) })?
-        .unwrap_or_default())
+    preset_text(platform, &String::from_utf8_lossy(&path.unwrap_or_default()))
+}
+
+/// A `.slangp` preset read through its `#reference` chain, as the document a chain is built from.
+fn preset_text(platform: &Platform, path: &str) -> Result<Vec<u8>> {
+    Ok(platform.read(|out, cap| unsafe { platform.lib.emusen_serenity_preset_load(path.as_ptr(), path.len(), out, cap) })?.unwrap_or_default())
+}
+
+/// Serenity's catalogue (`emusen_serenity_filters`): the filters with their settings, the screens with their kinds, and
+/// the crop's limits, as the header describes the document.
+pub fn catalogue(platform: &Platform) -> Result<serde_json::Value> {
+    let bytes = platform.read(|out, cap| unsafe { platform.lib.emusen_serenity_filters(out, cap) })?.unwrap_or_default();
+    crate::out::json("serenity_filters", &bytes)
+}
+
+/// A `.slangp` preset read through its `#reference` chain: `{"path", "passes", "textures", "parameters"}`, a float as its
+/// 32 bits; a read that fails is a document too, `{"fail", "message", ...}`, as the header gives it.
+pub fn preset_load(platform: &Platform, path: &str) -> Result<serde_json::Value> {
+    crate::out::json("serenity_preset_load", &preset_text(platform, path)?)
+}
+
+/// The parameters the passes declare, merged, the first declaration winning and the overrides' values as defaults:
+/// `{"sources": [[parameter, ...], ...], "overrides": [[id, bits], ...]}` in.
+pub fn parameters_merge(platform: &Platform, input: &serde_json::Value) -> Result<serde_json::Value> {
+    let input = crate::out::to_json(input);
+    let bytes = platform
+        .read(|out, cap| unsafe { platform.lib.emusen_serenity_parameters_merge(input.as_ptr(), input.len(), out, cap) })?
+        .unwrap_or_default();
+    crate::out::json("serenity_parameters_merge", &bytes)
 }
 
 /// A preset built on a device. One thread at a time; it holds its device.

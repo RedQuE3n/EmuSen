@@ -49,15 +49,15 @@ ThemeScreen {
             width: 40
             height: 40
             radius: 20
-            color: root.day ? Qt.rgba(1, 1, 1, 0.6) : Qt.rgba(38 / 255, 38 / 255, 43 / 255, 0.5)
+            color: Qt.rgba(38 / 255, 38 / 255, 43 / 255, 0.5)
             border.width: 1
-            border.color: root.day ? Qt.rgba(31 / 255, 42 / 255, 68 / 255, 0.14) : Qt.rgba(140 / 255, 150 / 255, 220 / 255, 0.18)
+            border.color: Qt.rgba(140 / 255, 150 / 255, 220 / 255, 0.18)
             Glyph {
                 anchors.centerIn: parent
                 width: 22
                 height: 22
                 path: Marks.path(place.key)
-                ink: Tokens.textStrong
+                ink: night.textStrong
             }
         }
         Rectangle {
@@ -79,7 +79,7 @@ ThemeScreen {
             height: 40
             verticalAlignment: Text.AlignVCenter
             text: place.name
-            color: Tokens.textStrong
+            color: night.textStrong
             font.family: faces.condensed
             font.weight: Font.Medium
             font.pixelSize: 24
@@ -117,8 +117,8 @@ ThemeScreen {
         property real angle: layout.angles[node.index] ?? Math.PI / 2
         readonly property real cx: layout.centre + node.rx * Math.cos(node.angle)
         readonly property real cy: node.ry * Math.sin(node.angle)
-        // The body's height: 96 focused, 72 at rest and while pressed.
-        property real size: node.lit && !press.active ? 96 : 72
+        // The body's height: 88 focused, so its box clears the words of the orbit inside (EmuSen_Qt.md §3.4.2), 72 at rest and while pressed.
+        property real size: node.lit && !press.active ? 88 : 72
         objectName: "world." + node.index
         focus: Browse.section.length > 0 ? node.key === Browse.section : node.index === 0
         visible: node.shown || node.opacity > 0
@@ -153,12 +153,12 @@ ThemeScreen {
             Accessible.name: node.name
             Accessible.description: Words.games(node.count)
             focus: true
-            // The body's box, and the ring's when focused.
+            // The body's box; the ring is drawn 7 about it.
             readonly property real margin: node.lit ? 7 : 0
             x: (node.width - width) / 2
             y: node.above - height / 2
-            width: node.size + 2 * hit.margin
-            height: node.size + 2 * hit.margin
+            width: node.size
+            height: node.size
             onActiveFocusChanged: {
                 if (!hit.activeFocus)
                     return
@@ -183,12 +183,12 @@ ThemeScreen {
                 height: node.size
                 width: node.size * drawn.tileWidth / Math.max(1, drawn.tileHeight)
                 x: (hit.width - width) / 2
-                y: hit.margin
             }
             Rectangle {
                 objectName: "consoleRing." + node.index
                 visible: node.lit
                 anchors.fill: parent
+                anchors.margins: -hit.margin
                 radius: width / 2
                 color: "transparent"
                 border.color: Tokens.accent
@@ -200,13 +200,13 @@ ThemeScreen {
                 Glyph {
                     required property var modelData
                     objectName: "consoleSparkle"
-                    x: modelData[0] < 0 ? hit.margin - 4 - width : hit.width - hit.margin
-                    y: hit.margin + modelData[1] * node.size
+                    x: modelData[0] < 0 ? -4 - width : hit.width
+                    y: modelData[1] * node.size
                     width: modelData[2]
                     height: modelData[2]
                     path: Marks.sparkle
                     filled: true
-                    ink: Tokens.textStrong
+                    ink: night.textStrong
                 }
             }
         }
@@ -218,7 +218,7 @@ ThemeScreen {
             width: Math.min(implicitWidth, 140)
             text: node.name
             elide: Text.ElideRight
-            color: Tokens.textStrong
+            color: night.textStrong
             font.family: faces.condensed
             font.weight: Font.Medium
             font.pixelSize: 20
@@ -231,16 +231,17 @@ ThemeScreen {
             id: countRow
             x: (node.width - width) / 2
             y: node.above + node.size / 2 + 32
-            height: 20.4
+            height: 22.8
             spacing: 6
             Text {
                 objectName: "consoleCount." + node.index
                 anchors.verticalCenter: parent.verticalCenter
                 text: Words.games(node.count)
-                color: Tokens.muted
-                font.family: faces.regular
-                font.pixelSize: 17
-                lineHeight: 20.4
+                color: night.muted
+                // 19 units, the smallest whole size over the capitals' floor at 1280 x 720, condensed to stay as wide as the canvas's 17 (EmuSen_Qt.md §3.4.1).
+                font.family: faces.condensedRegular
+                font.pixelSize: 19
+                lineHeight: 22.8
                 lineHeightMode: Text.FixedHeight
             }
             // The engine's mark in the console's hue, a Scene as the world's body is (EmuSen_Qt.md §3.4.2).
@@ -253,7 +254,7 @@ ThemeScreen {
                     anchors.fill: parent
                     mark: node.engineMark
                     libretro: node.libretro
-                    ink: node.libretro ? (root.day ? "#5F5F5F" : "#A9A9B2") : Qt.hsla(node.hue / 360, root.day ? 0.6 : 0.5, root.day ? 0.3 : 0.72, 1)
+                    ink: node.libretro ? "#A9A9B2" : Qt.hsla(node.hue / 360, 0.5, 0.72, 1)
                 }
             }
         }
@@ -268,8 +269,6 @@ ThemeScreen {
             focus: true
             // Canvas units to pixels, for the covers' decoded size.
             readonly property real pixelScale: canvas.unit
-            // Day: no sky and no glow, the paper's surface (EmuSen_Interface.md §24.4).
-            readonly property bool day: Tokens.variant === Tokens.Light
             // The focused item, a shelf or a console, and the first shelf (All games), whose count is every game.
             property var focusedTile: null
             property var allGames: null
@@ -290,17 +289,10 @@ ThemeScreen {
                 target: layout
                 function onJumped(index) { (index < shelfTiles.count ? shelfTiles.itemAt(index) : consoleTiles.itemAt(index - shelfTiles.count)).forceActiveFocus() }
             }
-            Rectangle {
-                objectName: "consolesPaper"
-                anchors.fill: parent
-                visible: root.day
-                color: Tokens.surface
-            }
             Sky {
                 id: sky
                 objectName: "consolesSky"
                 anchors.fill: parent
-                visible: !root.day
                 glowHue: root.focusedTile && root.focusedTile.planet ? root.focusedTile.hue : -1
                 glowX: root.focusedTile && root.focusedTile.planet ? root.focusedTile.cx / root.width : 0.5
                 glowY: root.focusedTile && root.focusedTile.planet ? root.focusedTile.cy / root.height : 0.5
@@ -335,7 +327,7 @@ ThemeScreen {
                         x: 64
                         y: 40
                         text: Words.gamesHeading
-                        color: Tokens.textStrong
+                        color: night.textStrong
                         font.family: faces.condensed
                         font.weight: Font.Medium
                         font.pixelSize: 32
@@ -348,7 +340,7 @@ ThemeScreen {
                         x: title.x + title.contentWidth + 20
                         y: 52
                         text: Words.chooseAConsole
-                        color: Tokens.muted
+                        color: night.muted
                         font.family: faces.regular
                         font.pixelSize: 20
                         lineHeight: 24
@@ -359,7 +351,7 @@ ThemeScreen {
                         x: root.width - 64 - width
                         y: 52
                         text: Words.summary(Library.consoles.count, root.allGames ? root.allGames.count : 0)
-                        color: Tokens.muted
+                        color: night.muted
                         font.family: faces.regular
                         font.pixelSize: 20
                         lineHeight: 24
@@ -397,7 +389,7 @@ ThemeScreen {
                                 }
                                 ShapePath {
                                     fillColor: "transparent"
-                                    strokeColor: root.day ? Qt.rgba(31 / 255, 42 / 255, 68 / 255, 0.28) : Qt.rgba(140 / 255, 150 / 255, 220 / 255, 0.32)
+                                    strokeColor: Qt.rgba(140 / 255, 150 / 255, 220 / 255, 0.32)
                                     strokeWidth: 1
                                     PathAngleArc {
                                         centerX: layout.centre
@@ -420,41 +412,43 @@ ThemeScreen {
                             readonly property bool turning: layout.turning[label.index] ?? false
                             objectName: "makerLabel." + label.index
                             visible: layout.orbitShown[label.index] ?? false
-                            opacity: layout.focusedOrbit === label.index ? 1 : 0.7
+                            // The focused orbit's maker brighter than the rest, by ink rather than opacity, so the rest keep 4.5:1 over the crowd.
+                            readonly property color ink: layout.focusedOrbit === label.index ? night.text : night.muted
                             x: (layout.labelRights[label.index] ?? 0) - width
-                            y: layout.labelTops[label.index] ?? 0
-                            height: 20
+                            // The 19-unit line grows upward, its foot where the layout's 20-unit box ends (EmuSen_Qt.md §3.4.2).
+                            y: (layout.labelTops[label.index] ?? 0) + 20 - height
+                            height: 22.8
                             spacing: 5
                             Text {
                                 text: layout.labels[label.index] ?? ""
-                                color: Tokens.muted
+                                color: label.ink
                                 font.family: faces.condensed
                                 font.weight: Font.Medium
-                                font.pixelSize: 17
+                                font.pixelSize: 19
                                 font.letterSpacing: 2
                                 font.capitalization: Font.AllUppercase
-                                lineHeight: 20
+                                lineHeight: 22.8
                                 lineHeightMode: Text.FixedHeight
                             }
                             Text {
                                 visible: label.turning
                                 text: Words.between
-                                color: Tokens.muted
+                                color: label.ink
                                 font.family: faces.condensed
                                 font.weight: Font.Medium
-                                font.pixelSize: 17
-                                lineHeight: 20
+                                font.pixelSize: 19
+                                lineHeight: 22.8
                                 lineHeightMode: Text.FixedHeight
                             }
                             Text {
                                 visible: label.turning
                                 text: layout.sizes[label.index] ?? 0
-                                color: Tokens.muted
+                                color: label.ink
                                 font.family: faces.condensed
                                 font.weight: Font.Medium
-                                font.pixelSize: 17
+                                font.pixelSize: 19
                                 font.letterSpacing: 2
-                                lineHeight: 20
+                                lineHeight: 22.8
                                 lineHeightMode: Text.FixedHeight
                             }
                         }
@@ -476,7 +470,7 @@ ThemeScreen {
                                     width: 3
                                     height: 3
                                     radius: 1.5
-                                    color: Tokens.muted
+                                    color: night.muted
                                 }
                             }
                         }
@@ -498,7 +492,7 @@ ThemeScreen {
                                     width: 3
                                     height: 3
                                     radius: 1.5
-                                    color: Tokens.muted
+                                    color: night.muted
                                 }
                             }
                         }
@@ -528,7 +522,7 @@ ThemeScreen {
                         width: root.width
                         horizontalAlignment: Text.AlignHCenter
                         text: Words.noConsoles
-                        color: Tokens.muted
+                        color: night.muted
                         font.family: faces.regular
                         font.pixelSize: 22
                         lineHeight: 26.4
@@ -537,19 +531,17 @@ ThemeScreen {
                     Text {
                         objectName: "consoleDetailName"
                         x: 64
-                        y: 612
+                        // The face's own line box, 53, a unit above the canvas's 44 so it ends where the facts begin (EmuSen_Qt.md §3.4.2).
+                        y: 611
                         width: coverRow.x - 96
-                        height: 44
                         text: root.focusedTile ? root.focusedTile.fullName : ""
                         elide: Text.ElideRight
-                        color: Tokens.textStrong
+                        color: night.textStrong
                         font.family: faces.condensed
                         font.weight: Font.Medium
                         font.pixelSize: 44
                         font.letterSpacing: 2
                         font.capitalization: Font.AllUppercase
-                        lineHeight: 44
-                        lineHeightMode: Text.FixedHeight
                     }
                     Text {
                         objectName: "consoleDetailFacts"
@@ -558,7 +550,7 @@ ThemeScreen {
                         width: coverRow.x - 96
                         text: root.focusedTile ? root.focusedTile.facts : ""
                         elide: Text.ElideRight
-                        color: Tokens.muted
+                        color: night.muted
                         font.family: faces.regular
                         font.pixelSize: 22
                         lineHeight: 26.4
@@ -589,6 +581,10 @@ ThemeScreen {
             }
             Faces {
                 id: faces
+            }
+            // The world is the night in both variants, its words the dark variant's inks (decided 2026-11-09).
+            Night {
+                id: night
             }
         }
     }

@@ -52,6 +52,7 @@ MenuCard {
         onInsertAsked: (path) => root.session.insertDisc(path)
         onEjectAsked: root.session.ejectDisc()
         onSwapAsked: root.session.swapPlayers()
+        onSettingAsked: (key, value) => root.session.setConsoleSetting(key, value)
     }
     GameModel {
         id: games

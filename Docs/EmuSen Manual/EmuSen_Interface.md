@@ -2069,9 +2069,13 @@ left, as the mockup has it.
 ### 24.4 What does not change
 
 The game page keeps its art header; ES-DE themes and the desktop form are untouched. With the light variant chosen
-(Settings ▸ Display), the three screens keep the day's surfaces: no sky, opaque raised tiles and the theme's surface;
-Choose a console is drawn the same way in light, without the sky. Whether the light variant should have a day sky of its
-own is a question for the tester.
+(Settings ▸ Display), the three screens keep the day's surfaces: no sky, opaque raised tiles and the theme's surface.
+Whether the light variant should have a day sky of its own is a question for the tester.
+
+**Decided 2026-11-09 by the tester:** in the reference theme's light variant, Choose a console follows the dark world
+with light words, as Home and Games do: its night sky and glow stay, its words take the dark variant's inks, and the paper
+it had by day is gone (`EmuSen_Qt.md` §3.4.1, §3.4.2). This replaces "Choose a console is drawn the same way in light,
+without the sky".
 
 ### 24.5 Tests, measured on 2026-11-05
 

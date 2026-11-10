@@ -1,5 +1,6 @@
 //! Endymion's game player: a game's sound to SDL's playback device, steered by a rate control of its own, as the C#
-//! front end's `AudioPlayer` plays it (EmuSen_Audio_Sync.md §7). It needs SDL lent first.
+//! front end's `AudioPlayer` plays it (EmuSen_Audio_Sync.md §7), on the system default or a device SDL lists by name.
+//! It needs SDL lent first.
 
 use crate::error::Result;
 use crate::platform::Platform;
@@ -93,6 +94,18 @@ impl GameSound {
         self.platform.status(n.into()).map(|_| state.total_input_frames)
     }
 
+    /// The device the game plays on, by a name `Platform::audio_devices` gave; none for the system default. An open
+    /// device reopens at its rate and the rate control starts over. False where no device has the name and the default plays.
+    pub fn set_device(&mut self, name: Option<&str>) -> Result<bool> {
+        let (n, nl) = crate::out::text(name);
+        let set = unsafe { self.platform.lib.emusen_endymion_audio_device_set(self.audio.as_ptr(), self.rate.as_ptr(), n, nl) };
+        match self.platform.status(set.into()) {
+            Ok(_) => Ok(true),
+            Err(e) if crate::error::absent(&e) => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+
     /// The volume, 0 to 1, carried across a reopen.
     pub fn set_volume(&self, volume: f32) -> Result<()> {
         self.platform.status(unsafe { self.platform.lib.emusen_endymion_audio_set_volume(self.audio.as_ptr(), volume) }.into()).map(drop)
@@ -100,6 +113,14 @@ impl GameSound {
 
     fn get(&self, which: u32) -> Result<i64> {
         self.platform.status(unsafe { self.platform.lib.emusen_endymion_audio_get(self.audio.as_ptr(), which) })
+    }
+}
+
+impl Platform {
+    /// SDL's playback devices by name, in SDL's order; none where SDL's audio does not start.
+    pub fn audio_devices(&self) -> Result<Vec<String>> {
+        let bytes = self.read(|o, l| unsafe { self.lib.emusen_endymion_audio_device_list(o, l) })?.unwrap_or_default();
+        Ok(bytes.split(|b| *b == 0).filter(|n| !n.is_empty()).map(|n| String::from_utf8_lossy(n).into_owned()).collect())
     }
 }
 

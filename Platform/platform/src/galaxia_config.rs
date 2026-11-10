@@ -1,4 +1,4 @@
-//! Galaxia's C layer, second half: config files, the models, the cheat lists, the error log and the suggestion text.
+//! Galaxia's C layer, second half: config files, the models, the cheat lists, the front end's settings rows, the error log and the suggestion text.
 
 use crate::{diagnostics_rewind, diagnostics_waiting, fail, join_nul, put, report, required, status, text};
 use emusen_galaxia::config::{self, Loaded};
@@ -318,6 +318,18 @@ pub unsafe extern "C" fn emusen_galaxia_suggest(what: u32, typed: *const u8, typ
         }
     };
     answer(result(), out, len)
+}
+
+/// The front end's own settings rows, `frontend_settings.json` as committed, once it reads as rows (EmuSen_Galaxia.md §3.15).
+///
+/// # Safety
+/// `out` must be valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_settings_rows(out: *mut u8, len: usize) -> i64 {
+    match emusen_galaxia::settings_rows::rows() {
+        Ok(_) => unsafe { put(emusen_galaxia::settings_rows::TEXT.as_bytes(), out, len) },
+        Err(words) => fail(status::PARSE, words.clone()) as i64,
+    }
 }
 
 #[cfg(test)]

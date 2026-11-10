@@ -1,0 +1,62 @@
+#include "video_frames.h"
+
+#include <QtMultimedia/QVideoFrame>
+#include <QtMultimedia/QVideoSink>
+#include <QtQuick/QQuickWindow>
+#include <QtQuick/QSGImageNode>
+#include <QtQuick/QSGTexture>
+
+VideoFrames::VideoFrames(QQuickItem* parent)
+    : QQuickItem(parent)
+    , m_sink(new QVideoSink(this))
+{
+    setFlag(ItemHasContents, true);
+    connect(m_sink, &QVideoSink::videoFrameChanged, this, &VideoFrames::take);
+}
+
+void VideoFrames::take(const QVideoFrame& frame)
+{
+    if (!frame.isValid()) {
+        return;
+    }
+    m_image = frame.toImage();
+    m_fresh = true;
+    ++m_frames;
+    Q_EMIT framesChanged();
+    update();
+}
+
+void VideoFrames::clear()
+{
+    m_image = QImage();
+    m_fresh = true;
+    m_frames = 0;
+    Q_EMIT framesChanged();
+    update();
+}
+
+QSGNode* VideoFrames::updatePaintNode(QSGNode* old, UpdatePaintNodeData*)
+{
+    if (m_image.isNull() || window() == nullptr) {
+        delete old;
+        return nullptr;
+    }
+    auto* node = static_cast<QSGImageNode*>(old);
+    if (node == nullptr) {
+        node = window()->createImageNode();
+        node->setOwnsTexture(true);
+        m_fresh = true;
+    }
+    if (m_fresh) {
+        node->setTexture(window()->createTextureFromImage(m_image));
+        m_fresh = false;
+    }
+    // Cropped to fill, as a hero's picture is (Image.PreserveAspectCrop).
+    const QSizeF size = m_image.size();
+    const qreal scale = std::max(width() / size.width(), height() / size.height());
+    const QSizeF shown(width() / scale, height() / scale);
+    node->setSourceRect(QRectF(QPointF((size.width() - shown.width()) / 2, (size.height() - shown.height()) / 2), shown));
+    node->setRect(QRectF(0, 0, width(), height()));
+    node->setFiltering(QSGTexture::Linear);
+    return node;
+}

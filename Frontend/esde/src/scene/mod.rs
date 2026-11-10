@@ -11,6 +11,7 @@ pub mod mapping;
 pub mod motion;
 pub mod paint;
 pub mod primary;
+pub mod selector;
 pub mod stage;
 pub mod view;
 pub mod words;

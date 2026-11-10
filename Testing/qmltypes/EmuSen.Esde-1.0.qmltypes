@@ -67,7 +67,7 @@ Module {
     }
     Component {
         file: "model.cxxqt.h"
-        lineNumber: 222
+        lineNumber: 231
         name: "EsdeModel"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -80,7 +80,7 @@ Module {
             write: "setSettings"
             notify: "settingsChanged"
             index: 0
-            lineNumber: 227
+            lineNumber: 236
         }
         Property {
             name: "shelves"
@@ -89,7 +89,7 @@ Module {
             write: "setShelves"
             notify: "shelvesChanged"
             index: 1
-            lineNumber: 228
+            lineNumber: 237
         }
         Property {
             name: "media"
@@ -98,7 +98,7 @@ Module {
             write: "setMedia"
             notify: "mediaChanged"
             index: 2
-            lineNumber: 229
+            lineNumber: 238
         }
         Property {
             name: "presence"
@@ -107,7 +107,7 @@ Module {
             write: "setPresence"
             notify: "presenceChanged"
             index: 3
-            lineNumber: 230
+            lineNumber: 239
         }
         Property {
             name: "width"
@@ -116,7 +116,7 @@ Module {
             write: "setWidth"
             notify: "widthChanged"
             index: 4
-            lineNumber: 231
+            lineNumber: 240
         }
         Property {
             name: "height"
@@ -125,7 +125,7 @@ Module {
             write: "setHeight"
             notify: "heightChanged"
             index: 5
-            lineNumber: 232
+            lineNumber: 241
         }
         Property {
             name: "swap"
@@ -134,7 +134,7 @@ Module {
             write: "setSwap"
             notify: "swapChanged"
             index: 6
-            lineNumber: 233
+            lineNumber: 242
         }
         Property {
             name: "device"
@@ -143,15 +143,24 @@ Module {
             write: "setDevice"
             notify: "deviceChanged"
             index: 7
-            lineNumber: 234
+            lineNumber: 243
+        }
+        Property {
+            name: "now"
+            type: "qlonglong"
+            read: "getNow"
+            write: "setNow"
+            notify: "nowChanged"
+            index: 8
+            lineNumber: 244
         }
         Property {
             name: "themed"
             type: "bool"
             read: "getThemed"
             notify: "themedChanged"
-            index: 8
-            lineNumber: 235
+            index: 9
+            lineNumber: 245
             isReadonly: true
         }
         Property {
@@ -159,8 +168,8 @@ Module {
             type: "QString"
             read: "getProblem"
             notify: "problemChanged"
-            index: 9
-            lineNumber: 236
+            index: 10
+            lineNumber: 246
             isReadonly: true
         }
         Property {
@@ -168,8 +177,8 @@ Module {
             type: "QString"
             read: "getView"
             notify: "viewChanged"
-            index: 10
-            lineNumber: 237
+            index: 11
+            lineNumber: 247
             isReadonly: true
         }
         Property {
@@ -177,8 +186,8 @@ Module {
             type: "bool"
             read: "getMoving"
             notify: "movingChanged"
-            index: 11
-            lineNumber: 238
+            index: 12
+            lineNumber: 248
             isReadonly: true
         }
         Property {
@@ -186,8 +195,8 @@ Module {
             type: "int"
             read: "getNextChangeMs"
             notify: "nextChangeMsChanged"
-            index: 12
-            lineNumber: 239
+            index: 13
+            lineNumber: 249
             isReadonly: true
         }
         Property {
@@ -195,8 +204,8 @@ Module {
             type: "int"
             read: "getRevision"
             notify: "revisionChanged"
-            index: 13
-            lineNumber: 240
+            index: 14
+            lineNumber: 250
             isReadonly: true
         }
         Property {
@@ -204,8 +213,8 @@ Module {
             type: "QString"
             read: "getLetters"
             notify: "lettersChanged"
-            index: 14
-            lineNumber: 241
+            index: 15
+            lineNumber: 251
             isReadonly: true
         }
         Property {
@@ -213,8 +222,8 @@ Module {
             type: "QString"
             read: "getLettersMark"
             notify: "lettersMarkChanged"
-            index: 15
-            lineNumber: 242
+            index: 16
+            lineNumber: 252
             isReadonly: true
         }
         Property {
@@ -222,8 +231,8 @@ Module {
             type: "double"
             read: "getLettersPx"
             notify: "lettersPxChanged"
-            index: 16
-            lineNumber: 243
+            index: 17
+            lineNumber: 253
             isReadonly: true
         }
         Property {
@@ -231,125 +240,131 @@ Module {
             type: "double"
             read: "getLettersOpacity"
             notify: "lettersOpacityChanged"
-            index: 17
-            lineNumber: 244
+            index: 18
+            lineNumber: 254
             isReadonly: true
         }
-        Signal { name: "settingsChanged"; lineNumber: 275 }
-        Signal { name: "shelvesChanged"; lineNumber: 276 }
-        Signal { name: "mediaChanged"; lineNumber: 277 }
-        Signal { name: "presenceChanged"; lineNumber: 278 }
-        Signal { name: "widthChanged"; lineNumber: 279 }
-        Signal { name: "heightChanged"; lineNumber: 280 }
-        Signal { name: "swapChanged"; lineNumber: 281 }
-        Signal { name: "deviceChanged"; lineNumber: 282 }
-        Signal { name: "themedChanged"; lineNumber: 283 }
-        Signal { name: "problemChanged"; lineNumber: 284 }
-        Signal { name: "viewChanged"; lineNumber: 285 }
-        Signal { name: "movingChanged"; lineNumber: 286 }
-        Signal { name: "nextChangeMsChanged"; lineNumber: 287 }
-        Signal { name: "revisionChanged"; lineNumber: 288 }
-        Signal { name: "lettersChanged"; lineNumber: 289 }
-        Signal { name: "lettersMarkChanged"; lineNumber: 290 }
-        Signal { name: "lettersPxChanged"; lineNumber: 291 }
-        Signal { name: "lettersOpacityChanged"; lineNumber: 292 }
+        Signal { name: "settingsChanged"; lineNumber: 287 }
+        Signal { name: "shelvesChanged"; lineNumber: 288 }
+        Signal { name: "mediaChanged"; lineNumber: 289 }
+        Signal { name: "presenceChanged"; lineNumber: 290 }
+        Signal { name: "widthChanged"; lineNumber: 291 }
+        Signal { name: "heightChanged"; lineNumber: 292 }
+        Signal { name: "swapChanged"; lineNumber: 293 }
+        Signal { name: "deviceChanged"; lineNumber: 294 }
+        Signal { name: "nowChanged"; lineNumber: 295 }
+        Signal { name: "themedChanged"; lineNumber: 296 }
+        Signal { name: "problemChanged"; lineNumber: 297 }
+        Signal { name: "viewChanged"; lineNumber: 298 }
+        Signal { name: "movingChanged"; lineNumber: 299 }
+        Signal { name: "nextChangeMsChanged"; lineNumber: 300 }
+        Signal { name: "revisionChanged"; lineNumber: 301 }
+        Signal { name: "lettersChanged"; lineNumber: 302 }
+        Signal { name: "lettersMarkChanged"; lineNumber: 303 }
+        Signal { name: "lettersPxChanged"; lineNumber: 304 }
+        Signal { name: "lettersOpacityChanged"; lineNumber: 305 }
         Signal {
             name: "played"
-            lineNumber: 301
+            lineNumber: 314
             Parameter { name: "path"; type: "QString" }
         }
         Signal {
             name: "favourite"
-            lineNumber: 302
+            lineNumber: 315
             Parameter { name: "path"; type: "QString" }
         }
-        Signal { name: "menu"; lineNumber: 303 }
-        Signal { name: "options"; lineNumber: 304 }
+        Signal { name: "menu"; lineNumber: 316 }
+        Signal { name: "options"; lineNumber: 317 }
         Signal {
             name: "cued"
-            lineNumber: 305
+            lineNumber: 318
             Parameter { name: "name"; type: "QString" }
         }
         Method {
             name: "setSettings"
-            lineNumber: 250
+            lineNumber: 260
             Parameter { name: "value"; type: "QString" }
         }
         Method {
             name: "setShelves"
-            lineNumber: 252
+            lineNumber: 262
             Parameter { name: "value"; type: "QString" }
         }
         Method {
             name: "setMedia"
-            lineNumber: 254
-            Parameter { name: "value"; type: "QString" }
-        }
-        Method {
-            name: "setPresence"
-            lineNumber: 256
-            Parameter { name: "value"; type: "QString" }
-        }
-        Method {
-            name: "setWidth"
-            lineNumber: 258
-            Parameter { name: "value"; type: "double" }
-        }
-        Method {
-            name: "setHeight"
-            lineNumber: 260
-            Parameter { name: "value"; type: "double" }
-        }
-        Method {
-            name: "setSwap"
-            lineNumber: 262
-            Parameter { name: "value"; type: "bool" }
-        }
-        Method {
-            name: "setDevice"
             lineNumber: 264
             Parameter { name: "value"; type: "QString" }
         }
         Method {
+            name: "setPresence"
+            lineNumber: 266
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setWidth"
+            lineNumber: 268
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setHeight"
+            lineNumber: 270
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setSwap"
+            lineNumber: 272
+            Parameter { name: "value"; type: "bool" }
+        }
+        Method {
+            name: "setDevice"
+            lineNumber: 274
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setNow"
+            lineNumber: 276
+            Parameter { name: "value"; type: "qlonglong" }
+        }
+        Method {
             name: "tick"
-            lineNumber: 293
+            lineNumber: 306
             Parameter { name: "ms"; type: "double" }
         }
         Method {
             name: "pressed"
-            lineNumber: 294
+            lineNumber: 307
             Parameter { name: "button"; type: "int" }
             Parameter { name: "repeat"; type: "bool" }
             Parameter { name: "jump"; type: "int" }
         }
         Method {
             name: "released"
-            lineNumber: 295
+            lineNumber: 308
             Parameter { name: "button"; type: "int" }
         }
         Method {
             name: "hover"
-            lineNumber: 296
+            lineNumber: 309
             Parameter { name: "row"; type: "int" }
         }
         Method {
             name: "tap"
-            lineNumber: 297
+            lineNumber: 310
             Parameter { name: "row"; type: "int" }
         }
         Method {
             name: "wheel"
-            lineNumber: 298
+            lineNumber: 311
             Parameter { name: "notches"; type: "int" }
         }
         Method {
             name: "measured"
-            lineNumber: 299
+            lineNumber: 312
             Parameter { name: "id"; type: "QString" }
             Parameter { name: "w"; type: "double" }
             Parameter { name: "h"; type: "double" }
         }
-        Method { name: "reload"; lineNumber: 300 }
+        Method { name: "reload"; lineNumber: 313 }
     }
     Component {
         file: "marks.cxxqt.h"

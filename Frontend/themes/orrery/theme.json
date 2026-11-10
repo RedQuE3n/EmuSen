@@ -1,0 +1,11 @@
+{
+    "schema": 1,
+    "api": "1.0",
+    "name": "Orrery",
+    "author": "The EmuSen project",
+    "licence": "GPL-3.0-or-later",
+    "variants": ["dark", "light"],
+    "fontSizes": [1, 1.3],
+    "screens": ["home", "consoles", "games", "splash"],
+    "tokens": {"dark": {"accent": "#E0A070"}, "light": {"accent": "#8A4B12", "text": "#2A2118", "muted": "#5A4B3C"}}
+}

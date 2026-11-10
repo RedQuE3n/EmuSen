@@ -51,6 +51,7 @@ struct State {
     asks: Vec<Ask>,
     players: Vec<Player>,
     connected: Vec<Connected>,
+    stick_deadzone: f64,
 }
 
 /// The hand-over between the pads' reader and a game: what the game wants, whether it hears the pads, the newest read.
@@ -134,6 +135,11 @@ impl GamePads {
         self.state().connected.clone()
     }
 
+    /// Endymion's stick deadzone at the newest tick: past it a stick is heard as a direction.
+    pub fn stick_deadzone(&self) -> f64 {
+        self.state().stick_deadzone
+    }
+
     /// The reader's tick for the seats: the pads opened and closed seated, the asks done, the page's view brought up to
     /// date; whether the view changed.
     pub fn keep_seats(&self, pads: &Pads, events: &[PadEvent]) -> Result<bool> {
@@ -143,7 +149,9 @@ impl GamePads {
             state.seats.ask(pads.platform(), ask)?;
         }
         let (players, connected) = (state.seats.players(), state.seats.connected(Some(pads)));
-        let changed = players != state.players || connected != state.connected;
+        let deadzone = pads.setting(consts::SETTING_STICK_DEADZONE)?;
+        let changed = players != state.players || connected != state.connected || deadzone != state.stick_deadzone;
+        state.stick_deadzone = deadzone;
         state.players = players;
         state.connected = connected;
         Ok(changed)

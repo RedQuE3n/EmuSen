@@ -71,3 +71,17 @@ fn qt_7_7_h_pads_take_seats_keep_them_while_gone_move_and_are_let_go_of() {
     let held = game.connected();
     assert!(held[0].pressed && held[0].buttons & 1 == 1, "{held:?}");
 }
+
+#[test]
+fn qt_7_7_h_the_stick_threshold_is_endymion_s_stick_deadzone() {
+    let _world = World::new("endymion-deadzone");
+    let p = Platform::load(library()).unwrap();
+    let set = SimSet::new(&p).unwrap();
+    let pads = Pads::simulated(&p, &set).unwrap();
+    let game = GamePads::default();
+    game.keep_seats(&pads, &[]).unwrap();
+    assert_eq!(game.stick_deadzone(), pads.setting(consts::SETTING_STICK_DEADZONE).unwrap(), "read from the pads, not restated");
+    pads.set_setting(consts::SETTING_STICK_DEADZONE, 0.3).unwrap();
+    assert!(game.keep_seats(&pads, &[]).unwrap(), "a new deadzone is a change the page hears");
+    assert_eq!(game.stick_deadzone(), 0.3);
+}

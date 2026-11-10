@@ -4309,6 +4309,19 @@ pane's control name at hers, and the card's five rows at hers. **Differences tha
 lines under it stand 33 units lower on Controllers and 4 to 7 on the bindings page; the card form's own boxes
 (`AdaptiveCard` 512 wide, `AdaptiveDetail`, the pane 7 units taller with the line's gap of 8 where hers is 6).
 
+**Facts read from their owners** (2026-11-10). The profile every console has is named by Endymion: the source reads
+it once with the models, as the profile `bindings_choose` answers where no profile exists (Endymion's
+`DEFAULT_PROFILE`), and every page compares with that (`Bindings.default_profile`); the PROFILES model's member
+`"Default"` is the header's shape, as `"Profiles"` and `"Games"` are. A stick's direction counts as held past Endymion's
+stick deadzone (`emusen_endymion_pads_setting`, `SETTING_STICK_DEADZONE`), read by the pads' reader on each tick and
+handed over with the seats (`GamePads::stick_deadzone`), where Mistress's page held a 0.5 of its own. Two have no reader
+and are kept, each a question for the tester: a game's name in a console's profiles (`game_key`, its file's name without
+the extension), which Endymion writes and reads but no call gives, so the card's Profile row writes `"Games"` by its own
+copy (the call needed: `emusen_endymion_bindings_game_key`, or a profiles call that sets a game's profile); and the
+count of SDL's gamepad buttons (26) and its trigger axes (4 and 5), by which the pads' reader masks what a pad holds,
+since the pads' calls take one SDL button at a time (the call needed: a mask of the SDL buttons a pad holds,
+`emusen_endymion_pads_get` with a new `EMUSEN_ENDYMION_PADS_HELD`).
+
 **Held to** (measured on 2026-11-09). kit-core's `controller.rs` (7, Kit §7.62); `qt-models/tests/controllers.rs` (7: every
 drawing file reads and covers its controller's declared controls; the section's seats, profile and Rumble shown where a
 console's games drive a motor; Players seating, Forget and Galaxia's player rows; a profile made, renamed, chosen and

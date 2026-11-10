@@ -82,6 +82,7 @@ fn bindings() -> Bindings {
         key_defaults,
         pad_defaults,
         hotkey_defaults,
+        default_profile: "Default".into(),
     }
 }
 
@@ -100,6 +101,7 @@ fn view() -> SettingsView {
     view.seats = Seated {
         players: vec![Player { player: 1, pad: Some("Simulated pad".into()), kept: false }],
         pads: vec![Connected { key: 7, name: "Simulated pad".into(), player: 1, ..Connected::default() }],
+        deadzone: 0.5,
     };
     view
 }

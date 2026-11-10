@@ -4,7 +4,7 @@
 //! `data/settings_screen.json`); the seats are the pads' reader's; the bindings are Endymion's models (`bindings.rs`),
 //! a map chosen by Endymion's `bindings_choose`.
 
-use crate::bindings::{pad_words, Bindings, Choice, File, DEFAULT};
+use crate::bindings::{pad_words, Bindings, Choice, File};
 use crate::consoles::Console;
 use crate::controllers;
 use crate::settings::{Outcome, Page, Pane, Preview, Row, SettingsView};
@@ -18,6 +18,8 @@ use serde_json::{json, Value};
 pub struct Seated {
     pub players: Vec<Player>,
     pub pads: Vec<Connected>,
+    /// Endymion's stick deadzone, past which a stick's direction is held.
+    pub deadzone: f64,
 }
 
 /// The bindings page's state: the console, the profile and player whose bindings it shows, the control focused, and
@@ -217,7 +219,7 @@ impl SettingsView {
             Some("bindings" | "keys") => return row(label(), String::new(), RowKind::Opens, self.pad_console().is_none()),
             Some("profiles") => {
                 let console = self.pad_console();
-                let value = console.as_ref().map_or_else(|| DEFAULT.to_owned(), |c| self.read.bindings.console_default(c));
+                let value = console.as_ref().map_or_else(|| self.read.bindings.default_profile.clone(), |c| self.read.bindings.console_default(c));
                 return row(label(), value, RowKind::Opens, console.is_none());
             }
             Some("hotkeys") => return row(label(), String::new(), RowKind::Opens, false),
@@ -246,7 +248,7 @@ impl SettingsView {
             return row(self.cw("new_label"), String::new(), RowKind::Asks, false);
         }
         if let Some((console, profile)) = self.profile_page() {
-            let is_default = profile == DEFAULT;
+            let is_default = *profile == self.read.bindings.default_profile;
             let chosen = self.read.bindings.console_default(&console) == profile;
             for (key, words, kind, held, value) in [
                 ("pbindings", "pbindings_label", RowKind::Opens, false, String::new()),
@@ -363,7 +365,7 @@ impl SettingsView {
         if let Some((console, profile)) = self.profile_page() {
             let names = [("console", self.console_name(&console)), ("profile", profile.clone())];
             let names: Vec<(&str, &str)> = names.iter().map(|(k, v)| (*k, v.as_str())).collect();
-            let is_default = profile == DEFAULT;
+            let is_default = *profile == self.read.bindings.default_profile;
             for (key, words) in [
                 ("pbindings", "pbindings_hint"),
                 ("pdefault", "pdefault_hint"),
@@ -464,7 +466,7 @@ impl SettingsView {
             if entry["pdefault"] == true {
                 return Some(Outcome::Bindings(vec![self.read.bindings.choose_default(&console, &profile)]));
             }
-            if profile == DEFAULT {
+            if *profile == self.read.bindings.default_profile {
                 return Some(Outcome::Nothing);
             }
             if entry["prename"] == true {
@@ -606,7 +608,7 @@ impl SettingsView {
             format!("{console} · {} · {name}", self.cw("keyboard_tab"))
         } else {
             let player = (b.player > 1).then(|| fill(&self.cw("player"), &[("n", &b.player.to_string())]));
-            let profile = (b.profile != DEFAULT).then(|| b.profile.clone());
+            let profile = (b.profile != self.read.bindings.default_profile).then(|| b.profile.clone());
             let place: Vec<String> = [Some(console.clone()), profile, player, Some(name.clone())].into_iter().flatten().collect();
             if !controllers::is_button(&control) {
                 lines.push(self.cw("stick_line"));
@@ -701,7 +703,7 @@ impl SettingsView {
     }
 
     /// What the tester lights: the page's player's pad as the game would hear it, a canonical button by its bound
-    /// gamepad button, L2 and R2 by their triggers past half, and a stick's directions past the threshold.
+    /// gamepad button, L2 and R2 by their triggers past half, and a stick's directions past Endymion's stick deadzone.
     pub fn held_from(&self, seated: &Seated) -> Vec<String> {
         let (Some(b), Some(chooser)) = (self.binding.as_ref().filter(|b| b.testing), self.chooser.as_ref()) else { return Vec::new() };
         let key = seated.players.iter().find(|p| p.player == b.player as usize).and_then(|_| seated.pads.iter().find(|p| p.player == b.player as usize));
@@ -715,7 +717,7 @@ impl SettingsView {
                 let by_trigger = (control == "L2" && triggers & LEFT_TRIGGER_BIT != 0) || (control == "R2" && triggers & RIGHT_TRIGGER_BIT != 0);
                 by_button || by_trigger
             } else {
-                controllers::stick_held(&control, &pad.axes)
+                controllers::stick_held(&control, &pad.axes, seated.deadzone)
             };
             if lit {
                 held.push(control);

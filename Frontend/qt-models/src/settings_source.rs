@@ -43,6 +43,7 @@ impl ClientSettings {
             key_defaults: p.bindings_defaults(files::KEYS).map_err(words)?,
             pad_defaults: p.bindings_defaults(files::GAMEPAD).map_err(words)?,
             hotkey_defaults: p.bindings_defaults(files::HOTKEYS).map_err(words)?,
+            default_profile: default_profile(p)?,
         })
     }
 
@@ -61,6 +62,13 @@ impl ClientSettings {
     }
 }
 
+/// The profile every console has, as Endymion names it: the one `bindings_choose` answers where no profile exists.
+fn default_profile(p: &Platform) -> Result<String, String> {
+    let none = serde_json::json!({});
+    let answer = p.bindings_choose(Some(&none), Some(&none), "", 1, None, None).map_err(words)?;
+    answer["profile"].as_str().map(str::to_owned).ok_or_else(|| format!("bindings_choose named no profile: {answer}"))
+}
+
 /// Endymion's `bindings_choose` over a platform library.
 struct Endymion(std::sync::Arc<Platform>);
 
@@ -68,7 +76,7 @@ impl Chooser for Endymion {
     fn choose(&self, gamepad: &Value, profiles: &Value, console: &str, player: u32, profile: Option<&str>, game: Option<&str>) -> Choice {
         let answer = self.0.bindings_choose(Some(gamepad), Some(profiles), console, player as i32, game, profile).unwrap_or(Value::Null);
         Choice {
-            profile: answer["profile"].as_str().map_or_else(|| profile.unwrap_or(crate::bindings::DEFAULT).to_owned(), str::to_owned),
+            profile: answer["profile"].as_str().map_or_else(|| profile.unwrap_or_default().to_owned(), str::to_owned),
             map_player: answer["mapPlayer"].as_u64().map_or(1, |n| n as u32),
         }
     }

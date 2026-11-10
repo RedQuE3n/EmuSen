@@ -48,17 +48,15 @@ pub fn control_number(name: &str) -> Option<u32> {
     Control::NAMES.iter().position(|n| *n == name).map(|i| i as u32)
 }
 
-/// Past this share of its travel a stick's direction counts as held (Mistress's `ControllerDiagrams.DirectionThreshold`).
-pub const DIRECTION_THRESHOLD: f64 = 0.5;
-
-/// Whether a stick's direction (`<axis>-` or `<axis>+`) is held on a pad's axes, by the core ABI's axis numbers.
-pub fn stick_held(control: &str, axes: &[f64]) -> bool {
+/// Whether a stick's direction (`<axis>-` or `<axis>+`) is held on a pad's axes, by the core ABI's axis numbers: past
+/// `threshold` of its travel, the stick deadzone past which Endymion hears a stick as a direction.
+pub fn stick_held(control: &str, axes: &[f64], threshold: f64) -> bool {
     let (axis, toward) = control.split_at(control.len().saturating_sub(1));
     let Some(at) = Axis::NAMES.iter().position(|n| *n == axis) else { return false };
     let value = axes.get(at).copied().unwrap_or(0.0);
     match toward {
-        "-" => value < -DIRECTION_THRESHOLD,
-        "+" => value > DIRECTION_THRESHOLD,
+        "-" => value < -threshold,
+        "+" => value > threshold,
         _ => false,
     }
 }

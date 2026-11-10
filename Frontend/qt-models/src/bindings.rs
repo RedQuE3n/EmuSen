@@ -6,10 +6,8 @@
 
 use serde_json::{json, Map, Value};
 
-/// The profile every console has: the maps of gamepadbindings.json (Endymion's `DEFAULT_PROFILE`, emusen_platform.h).
-pub const DEFAULT: &str = "Default";
-
-/// The four models and the three maps' defaults, as `bindings_load` and `bindings_defaults` give them.
+/// The four models and the three maps' defaults, as `bindings_load` and `bindings_defaults` give them, and the name of
+/// the profile every console has (the maps of gamepadbindings.json), as `bindings_choose` names it for no profiles.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Bindings {
     pub keys: Value,
@@ -19,6 +17,7 @@ pub struct Bindings {
     pub key_defaults: Value,
     pub pad_defaults: Value,
     pub hotkey_defaults: Value,
+    pub default_profile: String,
 }
 
 /// Which map a player plays with, as Endymion's `bindings_choose` answers: the profile in its own spelling and the
@@ -81,9 +80,9 @@ fn text(v: Option<&Value>) -> Option<String> {
 impl Bindings {
     /// A console's named profiles, Default first.
     pub fn profiles(&self, console: &str) -> Vec<String> {
-        let mut out = vec![DEFAULT.to_owned()];
+        let mut out = vec![self.default_profile.clone()];
         if let Some(named) = get(&self.profiles, console).and_then(|c| get(c, "Profiles")).and_then(Value::as_object) {
-            out.extend(named.keys().filter(|k| !same(k, DEFAULT)).cloned());
+            out.extend(named.keys().filter(|k| !same(k, &self.default_profile)).cloned());
         }
         out
     }
@@ -91,7 +90,7 @@ impl Bindings {
     /// The profile a console's games start with.
     pub fn console_default(&self, console: &str) -> String {
         let chosen = get(&self.profiles, console).and_then(|c| get(c, "Default")).and_then(Value::as_str);
-        chosen.and_then(|c| self.profiles(console).into_iter().find(|p| same(p, c))).unwrap_or_else(|| DEFAULT.to_owned())
+        chosen.and_then(|c| self.profiles(console).into_iter().find(|p| same(p, c))).unwrap_or_else(|| self.default_profile.clone())
     }
 
     /// A game's own profile chosen, or the console's again for none.
@@ -113,7 +112,7 @@ impl Bindings {
     /// Starts every game of the console with this profile.
     pub fn choose_default(&mut self, console: &str, profile: &str) -> File {
         let c = entry(&mut self.profiles, console);
-        object(c).insert("Default".into(), if same(profile, DEFAULT) { Value::Null } else { json!(profile) });
+        object(c).insert("Default".into(), if same(profile, &self.default_profile) { Value::Null } else { json!(profile) });
         File::Profiles
     }
 
@@ -165,7 +164,7 @@ impl Bindings {
 
     /// A profile's maps by player, as a new profile copies them: Default's are the console's and its players'.
     fn maps(&self, console: &str, profile: &str) -> Value {
-        if same(profile, DEFAULT) {
+        if same(profile, &self.default_profile) {
             let mut out = json!({ "1": get(&self.gamepad, "Consoles").and_then(|c| get(c, console)).cloned().unwrap_or_else(|| self.pad_defaults.clone()) });
             if let Some(players) = get(&self.gamepad, "Players").and_then(|p| get(p, console)).and_then(Value::as_object) {
                 for (player, map) in players {
@@ -179,7 +178,7 @@ impl Bindings {
 
     /// The map a choice of Endymion's names (`bindings_choose`: the profile and the player whose map it is there).
     pub fn pad_map(&self, console: &str, choice: &Choice) -> Value {
-        if same(&choice.profile, DEFAULT) {
+        if same(&choice.profile, &self.default_profile) {
             if choice.map_player > 1 {
                 if let Some(own) = get(&self.gamepad, "Players").and_then(|p| get(p, console)).and_then(|c| get(c, &choice.map_player.to_string())) {
                     return own.clone();
@@ -195,7 +194,7 @@ impl Bindings {
     fn own(&mut self, console: &str, player: u32, choice: &Choice) -> (&mut Value, File) {
         let start = self.pad_map(console, choice);
         let profile = choice.profile.as_str();
-        if same(profile, DEFAULT) {
+        if same(profile, &self.default_profile) {
             let (place, name) = if player > 1 { (entry(entry(&mut self.gamepad, "Players"), console), player.to_string()) } else { (entry(&mut self.gamepad, "Consoles"), console.to_owned()) };
             let key = spelling(place, &name);
             let map = object(place).entry(key).or_insert(start);

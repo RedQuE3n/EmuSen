@@ -265,7 +265,8 @@ fn a_console_s_text_carries_the_games_its_level_does_not_list_for_es_de_s_gamese
     assert!(text["unlisted"].as_array().unwrap().iter().all(|g| g["folder_path"].as_str().is_some_and(|p| !p.is_empty())));
     assert!(lists.enter(&shelf, &top.entries[1]));
     let tower = lists.listing(&shelf, &links, &Settings::default());
-    let unlisted: Vec<&str> = listing_json(&shelf, &tower)["unlisted"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
+    let text = listing_json(&shelf, &tower);
+    let unlisted: Vec<&str> = text["unlisted"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap()).collect();
     assert_eq!(unlisted, ["Top", "Fav", "Deep", "Uncounted"], "inside a folder, the games outside it");
 }
 

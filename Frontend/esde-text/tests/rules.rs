@@ -39,6 +39,11 @@ fn qt_4_9_each_pen_is_the_sum_of_the_shaped_advances_rounded() {
         pen += p.advance;
     }
     assert_eq!(l.width, pen);
+    // Each advance is the shaped one rounded: the face's at 10000 px scaled down, to the nearest pixel.
+    let fine = f.shape("SCREENSAVER", 10000.0, true);
+    for (p, q) in pieces.iter().zip(&fine) {
+        assert_eq!(p.advance, (f64::from(q.advance) * 39.0 / 10000.0).round() as i32, "{}", p.text);
+    }
     // The face's kerning is applied: A before V stands closer than A alone advances, where the face kerns the pair.
     let alone = f.shape("A", 39.0, true)[0].advance;
     let paired = f.shape("AV", 39.0, true)[0].advance;

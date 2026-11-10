@@ -1,0 +1,13 @@
+# The help-copy states of 2026-11-09 that separate how ES-DE carries a help bar's fractions (EmuSen_Qt.md §4.12.1).
+# CarAlt's copy at 1280 x 800, gamelist:1. b0 has every size whole (text 20 px, icon 18, iconTextSpacing 5, entrySpacing 8);
+# each other state changes one thing from b0 or from t1. name, fontSize, then helpcopy.py's property=value list.
+b0	0.025	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625
+t1	0.025	entryRelativeScale=0.99	iconTextSpacing=0.00390625	entrySpacing=0.00625
+t2	0.025	entryRelativeScale=0.975	iconTextSpacing=0.00390625	entrySpacing=0.00625
+t3	0.025	entryRelativeScale=0.96	iconTextSpacing=0.00390625	entrySpacing=0.00625
+i1	0.025	entryRelativeScale=1.04	iconTextSpacing=0.00390625	entrySpacing=0.00625
+s1	0.025	entryRelativeScale=1	iconTextSpacing=0.004296875	entrySpacing=0.00625
+s2	0.025	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.006640625
+l1	0.025	entryRelativeScale=0.99	iconTextSpacing=0.00390625	entrySpacing=0.00625	letterCase=uppercase
+l2	0.025	entryRelativeScale=0.99	iconTextSpacing=0.00390625	entrySpacing=0.00625	letterCase=lowercase
+n1	0.025	entryRelativeScale=0.99	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a,b

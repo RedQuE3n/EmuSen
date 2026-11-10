@@ -4,7 +4,8 @@ PNGs, written under <out> and listed as plain data (library.tsv, media.tsv). The
 colours are those of the WiseMan fixture SyntheticLibrary, so ES-DE, the C# painter and the Qt painter read one library;
 the SNES system adds a folder with a folder link and one game with hidden metadata (EmuSen_BigPicture.md 31.1). The
 media viewer's game, the NES's first, has every type the viewer shows: a video (a still picture held for four seconds,
-encoded by ffmpeg), a back cover, fan art and a custom picture besides the five types every game has.
+encoded by ffmpeg), a back cover, fan art and a custom picture besides the five types every game has. The manual's game,
+the NES's third (Cobalt Harbor, entry 1 of its list, favourites first), has a PDF manual of three labelled pages.
 Nothing is read from a real library. Existing files are kept, so a second run changes nothing. See README.md.
 
 Usage: library.py <out>
@@ -28,6 +29,8 @@ GENRES = ["Platform", "Puzzle", "Racing", "Role playing", "Shooter", "Sports"]
 MEDIA = {"covers": (600, 800), "screenshots": (512, 448), "titlescreens": (512, 448), "marquees": (800, 300), "miximages": (640, 480)}
 # The types only the media viewer's game has (USERGUIDE.md, "Game media viewer"), kept off the SNES the watched states show.
 VIEWER_GAME, VIEWER_MEDIA = ("nes", 0), {"videos": (512, 448), "backcovers": (600, 800), "fanart": (1280, 720), "custom": (640, 480)}
+# The manual's game and its pages' size in points (USERGUIDE.md, "Game media viewer": up shows the PDF manual).
+MANUAL_GAME, MANUAL_PAGES, MANUAL_SIZE = ("nes", 2), 3, (600, 800)
 FOLDER, FOLDER_GAMES, HIDDEN = "Tower Set", ["Quartz Spire", "Rune Gate"], "Lumen Garden"
 DESCRIPTION = ("{t} is a game invented for EmuSen's tests. It has no story and no pictures of its own; every image shown for it is a "
                "flat colour with its name written on it. This second sentence is here so that the description is long enough to "
@@ -84,6 +87,17 @@ def label(path, size, rgb, text):
     image.save(path)
 
 
+def manual(path, size, rgb, text):
+    """A PDF of MANUAL_PAGES labelled flat-hue pages, each page's hue stepped, at 72 dpi so a pixel is a point."""
+    pages = []
+    for k in range(MANUAL_PAGES):
+        page = os.path.splitext(path)[0] + f".{k}.png"
+        label(page, size, tuple((c + 40 * k) % 256 for c in rgb), f"{text}\npage {k + 1} of {MANUAL_PAGES}")
+        pages.append(Image.open(page).convert("RGB"))
+        os.remove(page)
+    pages[0].save(path, "PDF", save_all=True, append_images=pages[1:], resolution=72.0)
+
+
 GAME_KEYS = ["path", "name", "desc", "developer", "publisher", "genre", "players", "releasedate", "playcount", "rating",
              "lastplayed", "favorite", "completed", "hidemetadata"]
 
@@ -114,14 +128,17 @@ def main(out):
                 open(rom, "wb").close()
             lib_rows.append("\t".join([system, g["path"], g["name"]] + [g[k] or "false" for k in ("favorite", "completed", "hidemetadata")]))
             types = dict(MEDIA, **(VIEWER_MEDIA if (system, g["index"]) == VIEWER_GAME else {}))
+            if (system, g["index"]) == MANUAL_GAME:
+                types["manuals"] = MANUAL_SIZE
             for folder, size in types.items():
                 stem = os.path.splitext(g["path"])[0]
-                picture = os.path.join(out, "downloaded_media", system, folder, stem + (".mp4" if folder == "videos" else ".png"))
+                ext = {"videos": ".mp4", "manuals": ".pdf"}.get(folder, ".png")
+                picture = os.path.join(out, "downloaded_media", system, folder, stem + ext)
                 rgb = colour(g["index"], folder)
                 media_rows.append("\t".join([system, folder, os.path.relpath(picture, out), *map(str, size), *map(str, rgb)]))
                 if not os.path.exists(picture):
                     os.makedirs(os.path.dirname(picture), exist_ok=True)
-                    (video if folder == "videos" else label)(picture, size, rgb, f"{system} {folder}\n{g['name']}\n{size[0]}x{size[1]}")
+                    {"videos": video, "manuals": manual}.get(folder, label)(picture, size, rgb, f"{system} {folder}\n{g['name']}\n{size[0]}x{size[1]}")
         listing = os.path.join(out, "gamelists", system, "gamelist.xml")
         os.makedirs(os.path.dirname(listing), exist_ok=True)
         with open(listing, "w", encoding="utf-8") as f:

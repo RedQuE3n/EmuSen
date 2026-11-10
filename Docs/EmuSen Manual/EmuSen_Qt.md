@@ -3212,6 +3212,53 @@ with these measures (`~/.cache/emusen/tmp/x2/ft/caps.py`, outside the repository
 | the host's shelf text without its unlisted games | qt-models' `a_console_s_text_carries_the_games_its_level_does_not_list…` |
 | the gameselectors drawing from the listed games only | the oracle: no seed gives the 1920 × 1200 capture's picks (Rune Gate is unlisted), the run fails |
 
+#### 4.12.1 The help bar's fractions: the one-variable captures of 2026-11-09 **[M 2026-11-09]**
+
+CarAlt's two bars at 1280 × 800 (rost at 14.4 and 9.22 px) are the last two boxes of §4.8.7. To separate the rule by
+which ES-DE carries a bar's fractions, ten help copies (`Testing/esde-oracle/helpstates.tsv`, run by `helpstates.sh`)
+change one thing at a time from a bar whose sizes are all whole: `b0`, `fontSize` 0.025 at 800 rows (text 20 px),
+`entryRelativeScale` 1, `iconTextSpacing` 5 px and `entrySpacing` 8 px; `t1`, `t2`, `t3` the text at 19.8, 19.5 and
+19.2 px (`entryRelativeScale` 0.99, 0.975, 0.96, which keeps the icons); `i1` the icons smaller (1.04); `s1`
+`iconTextSpacing` 5.5 px; `s2` `entrySpacing` 8.5 px; `l1`, `l2` `t1` in capitals and in lower case; `n1` `t1` with two
+entries. Captured with ES-DE 3.4.1 on 2026-11-09. Each disc's and label's ink was read from the columns (a run of ink split
+at gaps of 4 px or more), the disc's first column being its box's left edge:
+
+| State | Disc lefts | Disc to disc | Label ink starts after its disc by |
+|---|---|---|---|
+| b0 | 962, 1031, 1092, 1193 | 69, 61, 101 | 23 each |
+| t1 | 966, 1034, 1094, 1194 | 68, 60, 100 | 23 each |
+| t2 | 968, 1036, 1096, 1195 | 68, 60, 99 | 23 each |
+| t3 | 971, 1039, 1098, 1197 | 68, 59, 99 | 23 each |
+| i1 | 965, 1033, 1094, 1193 | 68, 61, 99 | 22, 23, 21, 23 |
+| s1 | 960, 1029, 1091, 1192 | 69, 62, 101 | 23, 24, 23, 24 |
+| s2 | 960, 1029, 1091, 1192 | 69, 62, 101 | 23, 24, 23, 24 |
+| l1 | 950, 1022, 1085, 1190 | 72, 63, 105 | 23 each |
+| l2 | 968, 1036, 1095, 1194 | 68, 59, 99 | 23 each |
+| n1 | 1154, 1222 | 68 | 23 each |
+
+What they settle:
+
+1. **Fractions are carried, not dropped at each entry.** `s1` and `s2` add half a pixel to each entry in different
+   places and give the same discs, 1.5 px more over three entries than `b0` (231 to 232), and both step their labels 23,
+   24, 23, 24 behind their discs: places summed as fractions and drawn at whole pixels.
+2. **A label's ink is drawn at its rounded pens at the fractional size** (§4.9.1): `t1` to `t3` draw Select's glyphs
+   at the same columns as `b0`, since every advance rounds alike at 19.2–20 px.
+3. **The disc is 18 px wide at 20 px whatever `entryRelativeScale` below 1 is**, as THEMES.md says, and 17 at 1.04.
+
+What they do not settle: the label's width in the bar's sum. At whole size (`b0`) the disc-to-disc steps less 31 px
+(18 + 5 + 8) are 38, 30 and 70 for Select, Back and View Media, HarfBuzz's fractional sums floored (38.88, 30.59, 70.23);
+at 19.8 px they are 37, 29 and 69 where those sums are 38.48, 30.30 and 69.52, and in capitals 41, 32 and 74 against
+39.75, 32.81 and 73.89. No rule tried places every disc of the ten states: the label as its rounded pens, its
+fractional sum, or that sum floored, rounded or ceiled; the icon box exact, floored, rounded or ceiled; each part
+snapped or the fractions carried and drawn at the floor or the nearest; the start snapped any of the four ways
+(`~/.cache/emusen/tmp/x3/helpfit.py`, `helpfit2.py`, `pitchfit.py`, outside the repository). The best leaves 16 of the
+38 discs a pixel or two off, all in the states whose text is scaled down. A fit of the icon box alone, every other
+part as above, gives 17.35–17.48 px for the states at 20 px and 0.849–0.887, 0.899–0.931 and 0.863–0.891 of
+`fontSize` × height for the earlier copies at 0.0144, 0.0170 and 0.0190 at 1920 × 1200, which do not meet. **[blocked]**
+for the tester: the rule is not derived, and the two boxes stay off by 2.2 and 3.9 units. The painter keeps Artflix's
+rule. What the next captures would separate is the label's width alone: one label (`entries` a) at `entryRelativeScale`
+1 and `fontSize` from 0.024 to 0.026 in steps of 0.0002 at 800 rows, so that only the text's size moves.
+
 ---
 
 ## 5. The stable developer surface

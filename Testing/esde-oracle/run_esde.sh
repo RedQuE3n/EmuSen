@@ -6,12 +6,13 @@
 # Usage: run_esde.sh <theme> system|gamelist[:<j>[:media:<n>]] <W> <H>
 #   VARIANT, SCHEME, FONT_SIZE (medium), ASPECT (from W x H when exact: 16:10, 16:9, 4:3), SYSTEM (snes)
 #   THEMES   the folder holding <theme> (~/.cache/emusen/bigpicture/corpus/whole)
+#   ESDE_SETTINGS  more settings, "Name=value ...", each a settings.py name; TAG  a word after the capture's name
 #   DRY=1    write the library, the home and the settings, print the command, start nothing
 # Output: ~/.cache/emusen/esde-oracle/<theme>/[<system>-]<view>-<W>x<H>.png (the system named when not snes, every ':' a
 # '-'); the run's logs in runs/<theme>-<name>/. The pad is a uinput pad (pad.py), refused while Steam runs.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
-[ $# -eq 4 ] || { sed -n '6,10p' "$0"; exit 2; }
+[ $# -eq 4 ] || { sed -n '6,11p' "$0"; exit 2; }
 theme=$1; view=$2; W=$3; H=$4
 appimage=${ESDE_APPIMAGE:-$HOME/.cache/emusen/bigpicture/esde/ES-DE_x64.AppImage}
 oracle=$HOME/.cache/emusen/esde-oracle
@@ -37,6 +38,7 @@ fi
 python3 -I "$here/library.py" "$oracle/library" || exit 1
 name=${view//:/-}
 [ "${SYSTEM:-snes}" = snes ] || name=$SYSTEM-$name
+[ -z "${TAG:-}" ] || name=$name-$TAG
 run=$oracle/runs/$theme-$name-${W}x$H
 home=$run/home
 rm -rf "$run"
@@ -45,7 +47,7 @@ ln -s "$themes/$theme" "$home/ES-DE/themes/$theme"
 cp -r "$oracle/library/gamelists" "$home/ES-DE/gamelists"
 mapfile -t walk < <(python3 -I "$here/state.py" "${SYSTEM:-snes}" "$view") || exit 1
 [ ${#walk[@]} -eq 3 ] || exit 1
-read -r -a state_settings <<< "${walk[0]#settings }"
+read -r -a state_settings <<< "${walk[0]#settings } ${ESDE_SETTINGS:-}"
 pad=${walk[1]#pad }
 seconds=${walk[2]#seconds }
 python3 -I "$here/settings.py" "$home/ES-DE/settings/es_settings.xml" "ROMDirectory=$oracle/library/roms/" \

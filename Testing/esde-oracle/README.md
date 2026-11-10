@@ -72,10 +72,18 @@ not cross into another network namespace), plays to SDL's dummy audio, and draws
   can see it, each run watched.
 - `state.py <system> system|gamelist[:<j>[:media:<n>]]` — a state as what reaches it: the settings, the pad's steps and the run's
   length, as three lines of text.
-- `helpcopy.py <theme-folder> <out> <name> <fontSize>` — a test copy of a theme, written outside the repository and
-  never committed as a theme, whose gamelist help shows four entries with the same disc (a, b, x, y) at full opacity at
-  the given `fontSize`, the rest unchanged; run with `THEMES=<out>`. Its captures give a help bar's spacing at sizes the
-  watched themes do not show (EmuSen_Qt.md §4.12).
+- `helpcopy.py <theme-folder> <out> <name> <fontSize> [property=value...]` — a test copy of a theme, written outside
+  the repository and never committed as a theme, whose gamelist help shows four entries with the same disc (a, b, x, y)
+  at full opacity at the given `fontSize`, and any of `entryRelativeScale`, `entrySpacing`, `iconTextSpacing`,
+  `letterCase` and `entries` given, the rest unchanged; run with `THEMES=<out>`. Its captures give a help bar's spacing
+  at sizes the watched themes do not show (EmuSen_Qt.md §4.12).
+- `helpstates.tsv` and `helpstates.sh` — the help copies of 2026-11-09 that change one property at a time from a bar
+  whose every size is whole (EmuSen_Qt.md §4.12.1), each written and captured in turn at 1280 × 800, `gamelist:1`
+  (`caralt-help-<name>-es-de/gamelist-1-1280x800.png`).
+- `manualstates.sh` — the media viewer's PDF mode on the NES's manual game in CarAlt at both sizes (below).
+- `viewerstates.sh` — the media viewer under its settings (USERGUIDE.md, "Media viewer settings") on the NES's first
+  game in CarAlt at both sizes, scanlines off, each capture named by a `TAG`.
+  `run_esde.sh` takes `ESDE_SETTINGS` ("Name=value ...", names `settings.py` knows) and `TAG` (added to the name).
 - `pick.py <run-dir> <seconds> <out.png>` — keeps the run's capture, and prints its time and its difference from the
   grab one second before, which is 0 when the picture had settled.
 
@@ -96,6 +104,9 @@ theme's folder, the view written as given with `:` turned into `-`: `system-1280
 - **gamelist:j:media:n**: then *x*, the media viewer (1 s to open), and *right* pressed *n* times. With `SYSTEM=nes` and
   entry 0, the viewer's game and every type it shows, one capture per *n* (`nes-gamelist-0-media-<n>-<W>x<H>.png`);
   at the SNES's entry 0, *x* on the folder *Tower Set* (`gamelist-0-media-0-<W>x<H>.png`).
+- **gamelist:j:manual:n[:zoom:k[:pan:m]]**: then *x*, *up* (the game's PDF manual, 1 s to open), *right* pressed *n*
+  times (a page each), the right shoulder *k* times and *right* *m* times more. With `SYSTEM=nes` and entry 1, Cobalt
+  Harbor, whose manual `library.py` writes: three labelled pages of 600 × 800 points.
 
 The pad exists only while its steps run: it appears when ES-DE starts, presses after 4 s, and is removed about 5 s
 after it appeared, since any program reading pads on the desk (Steam among them) sees it too. ES-DE draws its first

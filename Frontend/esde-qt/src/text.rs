@@ -132,7 +132,7 @@ thread_local! {
 }
 
 /// The face of a font file, read once; none when the file holds none.
-fn face_of(path: &str) -> Option<Rc<Face>> {
+pub(crate) fn face_of(path: &str) -> Option<Rc<Face>> {
     FACES.with(|faces| {
         faces
             .borrow_mut()

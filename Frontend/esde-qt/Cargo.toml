@@ -18,6 +18,8 @@ cxx-qt-lib.workspace = true
 emusen-esde = { path = "../esde" }
 # ES-DE's text rules over a face (EmuSen_Qt.md §4.9), laid out for TextLayout.
 emusen-esde-text = { path = "../esde-text" }
+# The system's FreeType loaded at run time for the help icon's hinted reference glyph, the library ES-DE draws with (EmuSen_Qt.md §4.12.1).
+libloading = "0.8"
 # The library's texts (EmuSen_Qt.md §4.6) read as JSON.
 serde_json.workspace = true
 # The kit's QML module (the body face, the help bar, the pad router) and its conversions to Qt's types.

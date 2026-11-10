@@ -3307,32 +3307,46 @@ repository (`~/.cache/emusen/tmp/x4/help-carried.patch`).
 17.05–17.10 to 18.37–18.55 px between `fontSize` × height 20.16 and 20.32 and is flat on each side; the disc's ink steps
 from 16 to 17 px at the same place. The one measure of the face that steps there is the height of its `S` hinted at the
 help's size (FreeType 2.14.3, default load, CFF hinter): 14 px up to 20.24, 15 from 20.32; unhinted it slides (14.11 to
-14.22). The rule that places the label pens of 50 of rost's 53 multi-entry copies (`v`, `u`, `b0`–`n1`, `p`, `q`, `r`,
-the older 0144–0190 copies at 1920 × 1200):
+14.22). The rule that places the label pens of 56 of rost's 57 multi-entry copies (`v`, `u`, `b0`–`n1`, `p`, `q`, `r`,
+`i1`, the `g` copies of `helpown.tsv`, the older 0144–0190 copies at 1920 × 1200):
 
 1. the icon's box is 1.25 × the hinted `S` height at `fontSize` × height (10, 12.5, 13.75, 15, 17.5, 18.75, 20 px for
-   `S` 8, 10, 11, 12, 14, 15, 16), whatever `entryRelativeScale` below 1 is;
-2. the bar's sum (labels' widths, boxes, spacings) is laid back from the element's right edge and its start rounded to
-   the nearest pixel; from there each part is carried as a fraction and drawn at the nearest pixel.
+   `S` 8, 10, 11, 12, 14, 15, 16), whatever `entryRelativeScale` below 1 is, and divided by `entryRelativeScale` above 1
+   (17.16, 16.83, 16.20, 15.63, 14.58 px at 1.02, 1.04, 1.08, 1.12, 1.20, the `g` copies);
+2. the bar's sum (labels' widths, boxes, spacings) is the element's width, rounded to a whole pixel; the element is
+   laid back from its right edge and its start rounded to the nearest pixel; from there each part is carried as a
+   fraction and drawn at the nearest pixel.
 
 The fractional fits of before (0.870–0.876 × `fontSize` × height, 17.05–17.10) took the start unrounded; with it rounded,
-17.5 and 18.75 lie inside the intervals (17.17–17.52, 18.38–18.77). The start rounded up instead misses 12 copies, left
-unrounded 40. Artflix's whole-size bars agree (17.5 and 26.25 px at 20 and 30 px). The three misses: `v06`, where
-View Media's `d` is 7.4995 px and ES-DE's bar needs it rounded up (a width question, §4.9.4, not the box); `i1`
-(`entryRelativeScale` 1.04), whose box is 16.38–16.55, not 1.25 × an integer, so a scale above 1 shrinks the box by a
-rule still open; and `r0144d`, whose spacings are CarAlt's own (`entrySpacing` 0.004, `iconTextSpacing` 0.00406–0.00413
-fits) and agrees once they are read from the theme. The scripts are `~/.cache/emusen/tmp/x5/e.py`, `e2.py`, `e4.py`,
-outside the repository.
+17.5 and 18.75 lie inside the intervals (17.17–17.52, 18.38–18.77). Of the anchorings tried, the start rounded from an
+unrounded width misses `g104`, `g120` and `i1` (the last label a pixel left), the start rounded up 16, left unrounded
+40; a whole width misses none but `v06`, where View Media's `d` is 7.4995 px and ES-DE's bar needs it rounded up (a width
+question, §4.9.4, not the box). Artflix's whole-size bars agree (17.5 and 26.25 px at 20 and 30 px). `r0144d`'s spacings
+are CarAlt's own (`entrySpacing` 0.004, `iconTextSpacing` 0.00406–0.00413 fits) and it is left out of the count. The
+scripts are `~/.cache/emusen/tmp/x5/e.py`, `anchor.py`, `g.py`, `own.py`, outside the repository.
 
-**Still open, [blocked] for the tester.** (a) ES-DE's own face: its discs group as the bytecode-hinted `S` of Akrobat at
-the fractional size predicts (11, 11, 13, 13, 13, 15 px for 9, 9, 10, 10, 10, 12), but its labels' widths in the bar's sum
-fit no rule tried, so the box cannot be read from its pens yet; the captures that separate it are single labels in the own
-face (`~/.cache/emusen/tmp/x5/helpown.tsv`, 33 copies, with rost at `entryRelativeScale` 1.02–1.20 for the case above 1).
-(b) A hinted glyph height needs a font hinter that the tree does not have: harfrust and read-fonts shape and read tables
-but do not hint. The candidates are skrifa (MIT or Apache-2.0, the same fontations project as read-fonts, with CFF and
-TrueType hinting written to match FreeType), FreeType itself through a binding (FTL or GPLv2, the library ES-DE draws
-with), or Qt's own FreeType through `QRawFont` with full hinting (no new library, but the help's places would be
-computed on the Qt side rather than in `help.rs`). None is used until the tester chooses.
+**ES-DE's own face (the `o`, `x` and `m` copies of `helpown.tsv`, captured 2026-11-10).** Its icon follows the same rule
+with Akrobat's `S` hinted by the bytecode interpreter at the fractional size (9, 9, 10, 10, 10, 12 px at 11.52–16 px; light
+hinting gives 8 and 9 at 11.52 and 13.6 and breaks the grouping): the discs' ink is 11, 11, 13, 13, 13 and 15 px and
+the label stands half a box, the spacing and half a disc after the disc's edge in every copy. A single label's width
+there is its glyphs' advances at the fractional size, each rounded (Select 45 to 46 px between 19.52 and 19.68 px, 21–31 px
+in the `m` copies), not at the size rounded up that ES-DE's other own-face text takes. One width stays open,
+**[blocked]** for the tester as a text question (§4.9): from 20.16 px up the space in View Media is drawn 6–8 px wide where
+its advance is 4.6–4.8 px (the gap visibly wider in `x06`–`x10`), which no rounding of the advance gives.
+
+**The hinter (decided 2026-11-10).** harfrust and read-fonts shape and read tables but do not hint, so the hinted height
+comes from the system's FreeType, the library the captures were drawn with (FreeType 2.14.3 on Fedora 44), loaded at run
+time as the platform client loads SQLite, with no crate of its own: `esde-qt`'s `hinted.rs` is its one owner and makes
+the one call measured, `FT_Set_Char_Size(face, 0, round(px × 64), 72, 72)`, `FT_Load_Char(face, 'S', FT_LOAD_DEFAULT)`,
+the slot's `metrics.height` over 64 (`emusen_esde::fonts::REFERENCE` the glyph; the kit's body face read from its bytes).
+Without `libfreetype.so.6` the painter's `problem` says so in words and the icons take no room; nothing else stands in.
+Qt's own FreeType through `QRawFont` with full hinting was tried first and set aside: it gives rost's `S` 14 px from 20.32
+to 20.64 px where FreeType's default load gives 15 and the captures `v07`–`v09` and `u07`–`u09` need 15 (a box of 18.75);
+its Akrobat heights agreed. Everything else is `help.rs`'s arithmetic in Rust: the box is `BOX_OVER_REFERENCE` (1.25)
+times that height, divided by `entryRelativeScale` above 1; the entries' places are carried from 0 and the width
+rounded; `HelpElement` rounds the bar's start (`barStart`) and draws each part at the nearest pixel from it.
+`tests/hinted.rs` pins the heights of rost at its 22 measured sizes and of Akrobat at its 17; `hinted.rs`'s unit tests
+hold the missing library's words and the body face; `help.rs`'s unit test pins copies `v05`'s and `g104`'s four pens.
 
 ### 4.13 The media viewer's PDF manual **[M 2026-11-09]**
 

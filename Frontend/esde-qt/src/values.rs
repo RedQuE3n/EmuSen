@@ -175,6 +175,7 @@ pub fn element(p: &Placed, primary: Option<&Primary>, role: &str) -> V {
             "iconGap" => Some(V::N(x.icon_gap)),
             "entryScale" => Some(V::N(x.scale)),
             "filled" => Some(V::B(x.filled_glyphs)),
+            "barWidth" => Some(V::N(crate::help::places(x).width)),
             _ => background(&x.background, role),
         },
         Paint::Info(x) => match role {
@@ -453,6 +454,8 @@ pub fn part(p: &Paint, i: usize, role: &str, swap: bool) -> V {
                 "pair" => V::I(pair),
                 "label" => V::S(e.label.clone()),
                 "icon" => url(&e.icon),
+                "start" => V::N(crate::help::places(x).starts[i]),
+                "labelStart" => V::N(crate::help::places(x).labels[i]),
                 _ => V::None,
             }
         }),
@@ -472,7 +475,7 @@ pub fn part(p: &Paint, i: usize, role: &str, swap: bool) -> V {
 }
 
 /// Every role name the element model answers, in role order.
-pub const ELEMENT_ROLES: [&str; 113] = [
+pub const ELEMENT_ROLES: [&str; 114] = [
     "elementId", "paint", "name", "boxX", "boxY", "boxWidth", "boxHeight", "turn", "originX", "originY", "alpha",
     "source", "fit", "cropX", "cropY", "tileWidth", "tileHeight", "tileRight", "tileBottom", "tint", "tintEnd", "gradientVertical",
     "saturation", "radius", "nearest", "frame",
@@ -480,7 +483,7 @@ pub const ELEMENT_ROLES: [&str; 113] = [
     "hasBackground", "background", "backgroundEnd", "backgroundVertical", "backgroundRadius", "padLeft", "padTop", "padRight", "padBottom",
     "scrolling", "scrollVertical", "scrollX", "repeatAt", "scrollY", "scrollOpacity",
     "value", "filledSource", "filledMark", "unfilledSource", "unfilledMark", "overlay",
-    "iconColor", "entrySpacing", "iconGap", "entryScale", "filled", "iconHeight", "textScale",
+    "iconColor", "entrySpacing", "iconGap", "entryScale", "filled", "barWidth", "iconHeight", "textScale",
     "leaving", "selected", "alignX", "alignY", "itemBackground",
     "firstRow", "rowHeight", "bandHeight", "contentY", "hasSelector", "selectorX", "selectorY", "selectorW", "selectorH", "selectorColor",
     "hasSelectedBackground", "selectedBackground", "selectedBackgroundRadius", "selectedBackgroundLeft", "selectedBackgroundRight",
@@ -503,8 +506,8 @@ pub const SLOT_ROLES: [&str; 22] = [
     "saturation", "tint", "reflected", "reflectionOpacity", "reflectionFalloff", "text", "image", "marker", "folder",
 ];
 
-pub const PART_ROLES: [&str; 34] = [
-    "button", "pair", "label", "icon", "mark", "text", "source",
+pub const PART_ROLES: [&str; 36] = [
+    "button", "pair", "label", "icon", "start", "labelStart", "mark", "text", "source",
     "cellX", "cellY", "cellW", "cellH",
     "iconSource", "iconMark", "iconX", "iconY", "iconW", "iconH", "iconTint",
     "controller", "controllerSource", "controllerMark", "controllerX", "controllerY", "controllerW", "controllerH", "controllerTint",

@@ -192,7 +192,11 @@ impl qobject::EsdeModel {
         if load != self.load {
             return;
         }
-        let problem = QString::from(painter::problem(&systems).as_str());
+        let mut problem = painter::problem(&systems);
+        if problem.is_empty() && !systems.is_empty() {
+            problem = crate::hinted::ready().err().unwrap_or_default();
+        }
+        let problem = QString::from(problem.as_str());
         let (w, h) = (self.width, self.height);
         {
             let mut p = self.shared.borrow_mut();

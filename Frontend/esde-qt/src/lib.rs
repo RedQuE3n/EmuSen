@@ -13,6 +13,8 @@ macro_rules! publish {
 }
 
 pub mod base;
+pub mod help;
+pub mod hinted;
 pub mod lists;
 pub mod marks;
 pub mod model;

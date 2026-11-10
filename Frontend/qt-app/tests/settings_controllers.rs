@@ -40,7 +40,7 @@ fn qt_7_7_h_controllers_the_bindings_page_keys_and_hotkeys_hold_their_states_and
     wait_for(&mut scene, "settingsModel", "bindingsShown", "true", 1000);
     assert_eq!(tabs(&mut scene), "PLAYER 1, SUPER NINTENDO, SEGA CD, PLAYSTATION");
     assert_eq!(scene.property("controllerLayout", "generic"), "false", "the SNES pad's own drawing");
-    scene.pad(UiButton::Right);
+    scene.pad(UiButton::Left);
     wait_for(&mut scene, "settingsModel", "drawingFocus", "1", 1000);
     assert_eq!(scene.property("settingsModel", "caption"), "Y");
     assert_eq!(sentence(&mut scene), "Super Nintendo · Y");

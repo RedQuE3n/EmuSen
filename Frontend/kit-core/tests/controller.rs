@@ -171,3 +171,15 @@ fn kit_7_62_a_stick_s_knob_stands_where_its_directions_push_it() {
     assert_eq!(emusen_kit_core::controller::knob(stick, &push), (0.75, 0.5));
     assert_eq!(emusen_kit_core::controller::knob(stick, &|_| 0.0), (0.0, 0.0), "at rest with nothing pushed");
 }
+
+#[test]
+fn kit_7_62_a_direction_moves_to_the_nearest_declared_control_that_way() {
+    let d = Drawing::parse(PAD).unwrap();
+    let controls = names(&["Right", "B", "A", "L"]);
+    let toward = emusen_kit_core::controller::toward;
+    assert_eq!(toward(&d, &controls, 0, 1.0, 0.0), Some(1), "past Start, which the host does not declare, to B");
+    assert_eq!(toward(&d, &controls, 1, 1.0, 0.0), Some(2));
+    assert_eq!(toward(&d, &controls, 2, 1.0, 0.0), None, "nothing lies right of A");
+    assert_eq!(toward(&d, &controls, 1, 0.0, -1.0), Some(3), "up from B is the shoulder");
+    assert_eq!(toward(&d, &controls, 2, -1.0, 0.0), Some(1));
+}

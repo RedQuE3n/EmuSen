@@ -4283,7 +4283,9 @@ words by `qt-endymion` `keys.rs`, the one table of Qt's key numbers against them
 
 **The screen** (`Settings.qml`): the bindings page on the settings frame's page of content (Kit §7.63): the strip of the
 player (or Keyboard) and the consoles from the one shown, whole names only; the drawing (`ControllerDrawing`, 380 high as
-Mistress's `BindingsDiagram`) with each control's binding on its label; the caption. Left and Right walk the controls, A
+Mistress's `BindingsDiagram`) with each control's binding on its label; the caption. Each direction moves to the nearest
+declared control that way on the drawing (kit-core's `controller::toward`, LunaP's `Neighbour` scoring, regions no
+control declares passed over, nothing done where nothing lies that way), as Mistress's `MoveBinding` did; A
 listens, Y resets, X steps the player (the keyboard's page: clears), Select runs the tester, the shoulders step the
 console, B goes back or lets a listening go. While the pad's page listens, the interface hears no press of the pad
 (`Main.qml`), and nothing pressed in five seconds lets it go; while a key is listened for, a scope of its own takes the

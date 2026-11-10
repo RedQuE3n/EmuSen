@@ -228,6 +228,41 @@ pub fn words(drawing: &Drawing) -> Vec<Word> {
     out
 }
 
+/// The region nearest region `from` a way (`dx`, `dy`, one of the four directions), as LunaP's `Neighbour` chose it:
+/// among the regions whose centres lie more than 6 ahead, the least distance plus the offset across, the offset counted
+/// five times where it is more than half again the distance ahead.
+pub fn neighbour(drawing: &Drawing, from: usize, dx: f64, dy: f64) -> Option<usize> {
+    let (ox, oy) = drawing.regions.get(from)?.shape.bounds().centre();
+    let mut best: Option<(f64, usize)> = None;
+    for (i, r) in drawing.regions.iter().enumerate().filter(|(i, _)| *i != from) {
+        let (cx, cy) = r.shape.bounds().centre();
+        let (x, y) = (cx - ox, cy - oy);
+        let along = x * dx + y * dy;
+        if along <= 6.0 {
+            continue;
+        }
+        let across = (x * dy - y * dx).abs();
+        let score = (along * along + across * across).sqrt() + if across > along * 1.5 { 5.0 } else { 1.0 } * across;
+        if best.is_none_or(|(b, _)| score < b) {
+            best = Some((score, i));
+        }
+    }
+    best.map(|(_, i)| i)
+}
+
+/// The control a direction moves the focus to from control `at`, as Mistress's bindings page moved it: the neighbours
+/// hopped, at most 32, until one stands for a declared control; none where nothing lies that way.
+pub fn toward(drawing: &Drawing, controls: &[String], at: usize, dx: f64, dy: f64) -> Option<usize> {
+    let mut region = (*shown(drawing, controls).get(at)?)?;
+    for _ in 0..32 {
+        region = neighbour(drawing, region, dx, dy)?;
+        if let Some(found) = controls.iter().position(|c| *c == drawing.regions[region].control) {
+            return Some(found);
+        }
+    }
+    None
+}
+
 /// The next control the walk focuses from `at` among `count`, by `by`, round from either end.
 pub fn walk(at: usize, by: i32, count: usize) -> usize {
     if count == 0 {

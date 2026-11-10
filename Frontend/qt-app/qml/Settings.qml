@@ -199,7 +199,8 @@ Kit.NormalizedCanvas {
             function onActionInvoked(key) { screen.settings.act(key) }
         }
         // The bindings page (EmuSen_Input.md §10.6): the strip of the player and the consoles, the controller drawn with
-        // each control's binding, and the caption under it; Left and Right walk the controls and A listens.
+        // each control's binding, and the caption under it; the directions move to the nearest control that way on the
+        // drawing, as Mistress's page did, and A listens.
         pageContent: FocusScope {
             id: bindings
             objectName: "bindingsPage"
@@ -209,8 +210,9 @@ Kit.NormalizedCanvas {
             // The page holds the focus, a control's label the pointer's: a click on the page keeps the focus here.
             TapHandler {}
             Keys.onPressed: (event) => {
-                if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) {
-                    screen.settings.bindingStep(event.key === Qt.Key_Right ? 1 : -1)
+                if (event.key === Qt.Key_Left || event.key === Qt.Key_Right || event.key === Qt.Key_Up || event.key === Qt.Key_Down) {
+                    screen.settings.bindingMove(event.key === Qt.Key_Right ? 1 : event.key === Qt.Key_Left ? -1 : 0,
+                                                event.key === Qt.Key_Down ? 1 : event.key === Qt.Key_Up ? -1 : 0)
                     event.accepted = true
                 } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                     screen.settings.bindingAccept()

@@ -764,11 +764,17 @@ impl SettingsView {
         true
     }
 
-    /// Left or Right on the bindings page: the control before or after, round from either end.
-    pub fn binding_step(&mut self, by: i32) -> bool {
-        let count = self.binding.as_ref().map(|b| self.controls_of(&b.console).len()).unwrap_or(0);
-        let Some(b) = self.binding.as_mut().filter(|b| !b.capturing && !b.testing) else { return false };
-        b.focus = emusen_kit_core::controller::walk(b.focus, by, count);
+    /// A direction on the bindings page (`dx`, `dy`, one of the four): the nearest declared control that way on the
+    /// drawing, as Mistress's page moved; false, and the focus kept, where nothing lies that way.
+    pub fn binding_move(&mut self, dx: i32, dy: i32) -> bool {
+        let Some(b) = self.binding.as_ref().filter(|b| !b.capturing && !b.testing) else { return false };
+        let controls = self.controls_of(&b.console);
+        let file = self.read.consoles.console(&b.console).and_then(|c| controllers::controller_of(&c.controllers, b.player)).and_then(controllers::drawing);
+        let (drawing, _) = emusen_kit_core::controller::drawing_for(file, &controls);
+        let Some(next) = emusen_kit_core::controller::toward(&drawing, &controls, b.focus, f64::from(dx), f64::from(dy)) else { return false };
+        if let Some(b) = self.binding.as_mut() {
+            b.focus = next;
+        }
         true
     }
 

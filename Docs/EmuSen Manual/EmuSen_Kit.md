@@ -2982,6 +2982,11 @@ and which file stands for which controller id is the host's.
 - **A stick's knob** (`knob`) stands where its directions push it, each axis -1 to 1: right less left, down less up, each
   direction's push held to 0 to 1, times the stick's travel from its centre, as LunaP's `SetStick` placed it. With
   nothing pushed it is at rest.
+- **A direction** (`neighbour`, `toward`): the region nearest a region a way is, among those whose centres lie more than 6
+  ahead, the one of least distance plus offset across, the offset counted five times where it is more than half again
+  the distance ahead (LunaP's `Neighbour`); `toward` hops such neighbours, at most 32, to the first that stands for a
+  declared control, and gives none where nothing lies that way. The walk (`walk`) remains for a host that steps the
+  controls in their order.
 - **`ControllerLayout`** (kit-qt `controller.rs`) puts it on Qt: `drawing` (the file's text, empty for the generic one),
   `controls`, `focused`, `held`, `pushes` (how far each control is pushed, 0 to 1, in the controls' order: a stick's
   directions place its knob), `width`, `height`, `labelHeight`, `accent` in; `name`, `generic`, `fits`, `place`,
@@ -2998,7 +3003,7 @@ rule found every part of the SNES pad's drawing outside the palette; as one SVG 
 recording has it. The SVG is drawn by Qt's own SVG image reader (`qt6-qtsvg`'s `imageformats/libqsvg.so`), which a
 build that bundles Qt must bundle too. Words printed on the shell are part of the picture and read by no one.
 
-**Held to**: kit-core's `tests/controller.rs` (8: a stick's knob placed by its directions' pushes; a file's items and layers, the shapes' path data and a union stroked
+**Held to**: kit-core's `tests/controller.rs` (9: a direction to the nearest declared control that way; a stick's knob placed by its directions' pushes; a file's items and layers, the shapes' path data and a union stroked
 first, the focus ring, the press and the arm's wash, a drawing standing for a controller only with every declared control,
 the generic drawing from the controls alone, labels inside the box, beside the drawing and apart, the walk); the
 program's `settings_drawings.rs` (every drawing at the gate's sizes, `EmuSen_Qt.md` §7.7.H).

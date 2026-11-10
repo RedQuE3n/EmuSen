@@ -220,10 +220,10 @@ pub mod qobject {
         #[cxx_name = "seatsChanged"]
         fn seats_changed(self: Pin<&mut SettingsModel>);
 
-        /// Left (-1) or Right (+1) on the bindings page: the control before or after.
+        /// A direction on the bindings page (`dx`, `dy`): the nearest control that way on the drawing.
         #[qinvokable]
-        #[cxx_name = "bindingStep"]
-        fn binding_step(self: Pin<&mut SettingsModel>, by: i32);
+        #[cxx_name = "bindingMove"]
+        fn binding_move(self: Pin<&mut SettingsModel>, dx: i32, dy: i32);
 
         /// A control of the bindings page focused by the pointer.
         #[qinvokable]
@@ -795,8 +795,8 @@ impl qobject::SettingsModel {
         self.shown(false);
     }
 
-    pub fn binding_step(mut self: Pin<&mut Self>, by: i32) {
-        if self.as_mut().rust_mut().view.binding_step(by) {
+    pub fn binding_move(mut self: Pin<&mut Self>, dx: i32, dy: i32) {
+        if self.as_mut().rust_mut().view.binding_move(dx, dy) {
             self.shown(false);
         }
     }

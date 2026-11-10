@@ -5,6 +5,9 @@
 
 use harfrust::{shape, Buffer, Font, ShapeOptions, ShaperFont};
 
+/// The shaper's units in a pixel: fine enough that an advance's rounding is the exact value's (§4.12.1).
+const FINE: f64 = 65536.0;
+
 /// The ellipsis THEMES.md names, "(...)": three full stops.
 pub const ELLIPSIS: &str = "...";
 
@@ -37,13 +40,13 @@ impl Face {
     }
 
     /// Each cluster of `text` shaped at `size` with the face's kerning, and its advance: the sum of its glyphs' advances,
-    /// each in HarfBuzz's 64ths of a pixel rounded to a whole pixel (§4.9.1, 2); in ES-DE's own face (`own`) a space's is
-    /// rounded down (§4.9.1, 3).
+    /// each rounded to a whole pixel from its exact value, not from 64ths of a pixel, which round 6.4944 up as 6.5
+    /// (§4.9.1, 2; §4.12.1); in ES-DE's own face (`own`) a space's is rounded down (§4.9.1, 3).
     pub fn shape(&self, text: &str, size: f64, own: bool) -> Vec<Piece> {
         if text.is_empty() {
             return vec![];
         }
-        let shaper = ShaperFont::new(&self.font).with_scale((size * 64.0).round() as i32);
+        let shaper = ShaperFont::new(&self.font).with_scale((size * FINE).round() as i32);
         let mut buffer = Buffer::new();
         buffer.push_str(text);
         buffer.guess_segment_properties();
@@ -51,7 +54,7 @@ impl Face {
         let mut pieces: Vec<(usize, i32)> = vec![];
         for (info, pos) in buffer.glyph_infos().iter().zip(buffer.glyph_positions()) {
             let start = info.cluster as usize;
-            let exact = f64::from(pos.x_advance) / 64.0;
+            let exact = f64::from(pos.x_advance) / FINE;
             let space = text[start..].starts_with(' ');
             let advance = if own && space { exact.floor() } else { exact.round() } as i32;
             match pieces.last_mut() {

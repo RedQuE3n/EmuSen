@@ -118,29 +118,27 @@ fn qt_4_9_a_line_stands_by_its_alignment_at_whole_pixels() {
     assert_eq!(layout(&face(), &s).lines[0].x, (f64::from(101 - start.width) / 2.0).round() as i32);
 }
 
-// HarfBuzz 14.1.0's advances of the kit's body face in 64ths of a pixel at the scale round(size × 64), from
-// `hb_shape` on 2026-11-09 (EmuSen_Qt.md §4.9.4): AVATAR carries the face's A–V and V–A kerning.
-// COLLECTION at 14.4 px tells the scale 922 (921.6 rounded) from 921.
-const HARFBUZZ: [(&str, f64, &[i32]); 6] = [
-    ("Options", 26.0, &[983, 919, 539, 416, 867, 894, 764]),
-    ("AVATAR", 39.0, &[1323, 1275, 1258, 1093, 1468, 1490]),
-    ("View Media", 9.216, &[336, 147, 297, 426, 118, 412, 297, 322, 147, 301]),
-    ("Favorites", 21.6, &[663, 689, 641, 720, 502, 345, 448, 697, 634]),
-    ("Screensaver", 14.4, &[507, 462, 335, 465, 465, 495, 423, 460, 428, 465, 335]),
-    ("COLLECTION", 14.4, &[525, 545, 502, 502, 534, 496, 483, 224, 545, 608]),
+// The kit's body face's advances, from HarfBuzz 14.1.0's `hb_shape` at a scale of 65536 to the pixel on 2026-11-10, each
+// rounded half up from its exact value (EmuSen_Qt.md §4.12.1), and in ES-DE's own face a space rounded down. AVATAR
+// carries the face's A-V and V-A kerning; COLLECTION at 14.4 px has I and N at 3.4992 and 9.4896, which 64ths of a pixel
+// make 3.5 and 9.5 and round up.
+const ADVANCES: [(&str, f64, &[i32], &[i32]); 6] = [
+    ("Options", 26.0, &[15, 14, 8, 7, 14, 14, 12], &[15, 14, 8, 7, 14, 14, 12]),
+    ("AVATAR", 39.0, &[21, 20, 20, 17, 23, 23], &[21, 20, 20, 17, 23, 23]),
+    ("View Media", 9.216, &[5, 2, 5, 7, 2, 6, 5, 5, 2, 5], &[5, 2, 5, 7, 1, 6, 5, 5, 2, 5]),
+    ("Favorites", 21.6, &[10, 11, 10, 11, 8, 5, 7, 11, 10], &[10, 11, 10, 11, 8, 5, 7, 11, 10]),
+    ("Screensaver", 14.4, &[8, 7, 5, 7, 7, 8, 7, 7, 7, 7, 5], &[8, 7, 5, 7, 7, 8, 7, 7, 7, 7, 5]),
+    ("COLLECTION", 14.4, &[8, 9, 8, 8, 8, 8, 8, 3, 9, 9], &[8, 9, 8, 8, 8, 8, 8, 3, 9, 9]),
 ];
 
 #[test]
-fn qt_4_9_each_advance_is_harfbuzz_s_in_64ths_rounded() {
+fn qt_4_12_each_advance_is_its_exact_value_rounded() {
     let f = face();
-    for (text, size, harfbuzz) in HARFBUZZ {
+    for (text, size, whole, own) in ADVANCES {
         let theirs: Vec<i32> = f.shape(text, size, false).iter().map(|p| p.advance).collect();
-        let rounded: Vec<i32> = harfbuzz.iter().map(|&v| (f64::from(v) / 64.0).round() as i32).collect();
-        assert_eq!(theirs, rounded, "{text} at {size} px");
-        let own: Vec<i32> = f.shape(text, size, true).iter().map(|p| p.advance).collect();
-        let floored: Vec<i32> =
-            harfbuzz.iter().zip(text.chars()).map(|(&v, c)| if c == ' ' { v.div_euclid(64) } else { (f64::from(v) / 64.0).round() as i32 }).collect();
-        assert_eq!(own, floored, "{text} at {size} px in ES-DE's own face");
+        assert_eq!(theirs, whole, "{text} at {size} px");
+        let mine: Vec<i32> = f.shape(text, size, true).iter().map(|p| p.advance).collect();
+        assert_eq!(mine, own, "{text} at {size} px in ES-DE's own face");
     }
 }
 

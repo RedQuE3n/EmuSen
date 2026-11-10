@@ -3058,6 +3058,9 @@ ES-DE's capture stand at 0, 21, 42, 50, 71 px, Mulish at 35 px, as Qt's do.
 #### 4.9.4 Which shaping: the proof of 2026-11-09
 
 ES-DE shapes with the system's HarfBuzz at the scale of its size in 64ths of a pixel (§4.9.1), and rounds each advance.
+**Corrected 2026-11-10 (§4.12.1):** the advance ES-DE rounds is the exact one, not its 64ths: rost's `t` at 19.8 px
+(6.4944, 416/64 = 6.5 in 64ths) rounds to 6, and its `S` at 20.8 px (7.5088) to 8, as the help captures' places
+require; `esde-text` shapes at 65536 units to the pixel. The comparison below holds the shapers to HarfBuzz, which stands.
 Whatever shapes for the painter must give HarfBuzz's advances to the 64th, or a pen moves a pixel where a 64th rounds
 the other way. The proof: 263 strings (the help labels of ES-DE and the viewer in three letter cases, the oracle
 library's titles, file names, descriptions, developers, publishers, genres, dates and counts, and the SNES system

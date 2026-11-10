@@ -19,6 +19,9 @@ Kit.NormalizedCanvas {
         function onLeft() { screen.backed() }
         // B closed a page: the row that opened it is focused again, as Mistress's pages return.
         function onRefocus(row) { frame.layout.focusRow(row) }
+        // A declared action the page did not take is the screens' (Start, Home).
+        function onPassed(key) { screen.acted(key) }
+        function onTypeWords(start) { typist.setText(start, start.length) }
     }
     // The shoulders the frame declines under a trail: on a console's page, the console before or after it; on the
     // bindings page, the console's controller before or after it.
@@ -193,10 +196,7 @@ Kit.NormalizedCanvas {
         }
         Connections {
             target: frame.controller
-            function onActionInvoked(key) {
-                if (!screen.settings.act(key))
-                    screen.acted(key)
-            }
+            function onActionInvoked(key) { screen.settings.act(key) }
         }
         // The bindings page (EmuSen_Input.md §10.6): the strip of the player and the consoles, the controller drawn with
         // each control's binding, and the caption under it; Left and Right walk the controls and A listens.
@@ -285,10 +285,7 @@ Kit.NormalizedCanvas {
         Connections {
             target: Kit.PadRouter
             enabled: listener.activeFocus
-            function onPressed(button) {
-                if (button === Kit.Pad.Back)
-                    screen.settings.back()
-            }
+            function onPressed(button) { screen.settings.padPressed(button) }
         }
         Timer {
             interval: 8
@@ -306,23 +303,9 @@ Kit.NormalizedCanvas {
     // A profile's name typed on the docked keyboard, as the page asks (EmuSen_Qt.md §7.7.H): Done gives it to the page.
     Kit.KeyboardModel {
         id: typist
-        onClosed: {
-            screen.typing = false
-            screen.settings.typed(typist.text)
-        }
+        onClosed: screen.settings.typed(typist.text)
     }
-    property bool typing: false
-    property string typingTitle
-    property string typingPrompt
-    Connections {
-        target: screen.settings
-        function onTypeWords(title, prompt, start) {
-            screen.typingTitle = title
-            screen.typingPrompt = prompt
-            typist.setText(start, start.length)
-            screen.typing = true
-        }
-    }
+    readonly property bool typing: screen.settings.typing
     Kit.Frame {
         id: typeFrame
         objectName: "settingsTyping"
@@ -344,13 +327,13 @@ Kit.NormalizedCanvas {
         Column {
             spacing: frame.layout.lineGap
             Text {
-                text: screen.typingTitle
+                text: screen.settings.typingTitle
                 color: Kit.Tokens.textStrong
                 font.family: faces.regular
                 font.pixelSize: Kit.Tokens.fontTitle
             }
             Text {
-                text: screen.typingPrompt
+                text: screen.settings.typingPrompt
                 color: Kit.Tokens.muted
                 font.family: faces.regular
                 font.pixelSize: Kit.Tokens.fontBody

@@ -33,7 +33,7 @@ fn the_game_hears_the_pad_through_the_players_bindings_and_not_the_press_that_ga
     let pad = SimPad::new(&platform, None).unwrap();
     set.connect(&pad).unwrap();
     let pads = Pads::simulated(&platform, &set).unwrap();
-    pads.start().unwrap();
+    let opened = pads.start().unwrap();
 
     let game = world.game("game.tst", &[1, 2, 3, 4]);
     let path = game.to_str().unwrap();
@@ -44,6 +44,8 @@ fn the_game_hears_the_pad_through_the_players_bindings_and_not_the_press_that_ga
     assert!(bound >= 0, "A is bound for {console}");
 
     let hand = Arc::new(GamePads::default());
+    // The seats, kept as the pads' reader keeps them (EmuSen_Qt.md §7.7.H): the pad opened is player 1.
+    hand.keep_seats(&pads, &opened).unwrap();
     let mut reading = GameReading::default();
     let mut input = GameInput::new(hand.clone(), &platform).unwrap();
     input.start(&rt, session, path).unwrap();
@@ -55,8 +57,9 @@ fn the_game_hears_the_pad_through_the_players_bindings_and_not_the_press_that_ga
     };
     let mut run = |frames: usize, input: &mut GameInput, reading: &mut GameReading| {
         for _ in 0..frames {
-            pads.poll().unwrap();
+            let events = pads.poll().unwrap();
             pads.update().unwrap();
+            hand.keep_seats(&pads, &events).unwrap();
             reading.read(&pads, &hand).unwrap();
             input.frame(&rt, session).unwrap();
             rt.frame(session, &mut info).unwrap();

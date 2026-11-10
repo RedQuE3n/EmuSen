@@ -32,6 +32,9 @@ pub mod qobject {
         type QStringList = cxx_qt_lib::QStringList;
         include!("cxx-qt-lib/qvector.h");
         type QVector_i32 = cxx_qt_lib::QVector<i32>;
+        include!("emusen-kit-qt/src/kinds.cxxqt.h");
+        #[namespace = "Pad"]
+        type PadButton = emusen_kit_qt::kinds::ffi::PadButton;
     }
 
     extern "RustQt" {
@@ -92,6 +95,10 @@ pub mod qobject {
         #[qproperty(bool, testing, READ, NOTIFY = drawn)]
         /// The Pause Card's Game Options ▸ Controllers rows, as plain data for `PauseModel.controllers` (EmuSen_Interface.md §20.3).
         #[qproperty(QString, card_controllers, cxx_name = "cardControllers", READ, NOTIFY = drawn)]
+        /// A page's question waiting for typed words: whether one is, its title and its prompt.
+        #[qproperty(bool, typing, READ, NOTIFY = asked)]
+        #[qproperty(QString, typing_title, cxx_name = "typingTitle", READ, NOTIFY = asked)]
+        #[qproperty(QString, typing_prompt, cxx_name = "typingPrompt", READ, NOTIFY = asked)]
         /// Why a read or a save failed, in the platform's words; empty when it did not.
         #[qproperty(QString, problem, READ, NOTIFY)]
         type SettingsModel = super::SettingsModelRust;
@@ -173,11 +180,24 @@ pub mod qobject {
         #[qsignal]
         fn drawn(self: Pin<&mut SettingsModel>);
 
-        /// Words to type for a page (a profile's name): the question's title, prompt and the words it starts with;
-        /// `typed` answers.
+        /// Words to type for a page (a profile's name), starting with `start`; `typing`, `typingTitle` and
+        /// `typingPrompt` say the question, and `typed` answers.
         #[qsignal]
         #[cxx_name = "typeWords"]
-        fn type_words(self: Pin<&mut SettingsModel>, title: QString, prompt: QString, start: QString);
+        fn type_words(self: Pin<&mut SettingsModel>, start: QString);
+
+        /// The question's words changed.
+        #[qsignal]
+        fn asked(self: Pin<&mut SettingsModel>);
+
+        /// A declared action the page did not take, for the screens (Start, Home).
+        #[qsignal]
+        fn passed(self: Pin<&mut SettingsModel>, key: QString);
+
+        /// A pad's button while a key is listened for: B lets the listening go.
+        #[qinvokable]
+        #[cxx_name = "padPressed"]
+        fn pad_pressed(self: Pin<&mut SettingsModel>, button: PadButton);
 
         /// A row of the card's Controllers page stepped (`by` ±1) or chosen (`by` 0).
         #[qinvokable]
@@ -208,10 +228,10 @@ pub mod qobject {
         #[cxx_name = "bindingAccept"]
         fn binding_accept(self: Pin<&mut SettingsModel>);
 
-        /// One of the help bar's declared actions on the bindings page or Hotkeys (reset, player, clear, test); true
-        /// when the page took it.
+        /// One of the help bar's declared actions on the bindings page or Hotkeys (reset, player, clear, test); one the
+        /// page does not take is `passed` on.
         #[qinvokable]
-        fn act(self: Pin<&mut SettingsModel>, key: &QString) -> bool;
+        fn act(self: Pin<&mut SettingsModel>, key: &QString);
 
         /// A key pressed while a press is listened for, by Qt's number and modifiers: bound, or Escape cancelling;
         /// true when it was taken.
@@ -293,8 +313,11 @@ pub struct SettingsModelRust {
     listening_pad: bool,
     testing: bool,
     card_controllers: QString,
+    typing: bool,
+    typing_title: QString,
+    typing_prompt: QString,
     /// The page's question waiting for typed words.
-    typing: Option<crate::settings_controllers::Typed>,
+    typed_for: Option<crate::settings_controllers::Typed>,
     /// Each pad's buttons at the last read of the seats, so a press listened for is the one newly down.
     pressed: Vec<(u64, u32)>,
 }
@@ -352,7 +375,10 @@ impl Default for SettingsModelRust {
             listening_pad: false,
             testing: false,
             card_controllers: QString::default(),
-            typing: None,
+            typing: false,
+            typing_title: QString::default(),
+            typing_prompt: QString::default(),
+            typed_for: None,
             pressed: Vec::new(),
         }
     }
@@ -581,8 +607,15 @@ impl qobject::SettingsModel {
                 }
             }
             Outcome::Type { title, prompt, start, typed } => {
-                self.as_mut().rust_mut().typing = Some(typed);
-                self.type_words(QString::from(title.as_str()), QString::from(prompt.as_str()), QString::from(start.as_str()));
+                {
+                    let mut r = self.as_mut().rust_mut();
+                    r.typed_for = Some(typed);
+                    r.typing = true;
+                    r.typing_title = QString::from(title.as_str());
+                    r.typing_prompt = QString::from(prompt.as_str());
+                }
+                self.as_mut().asked();
+                self.type_words(QString::from(start.as_str()));
             }
             Outcome::All(all) => {
                 for one in all {
@@ -700,7 +733,9 @@ impl qobject::SettingsModel {
     }
 
     pub fn typed(mut self: Pin<&mut Self>, words: &QString) {
-        let Some(typed) = self.as_mut().rust_mut().typing.take() else { return };
+        let Some(typed) = self.as_mut().rust_mut().typed_for.take() else { return };
+        self.as_mut().rust_mut().typing = false;
+        self.as_mut().asked();
         let outcome = self.as_mut().rust_mut().view.typed(&typed, &words.to_string());
         self.outcome(outcome);
     }
@@ -751,19 +786,27 @@ impl qobject::SettingsModel {
         }
     }
 
-    pub fn act(mut self: Pin<&mut Self>, key: &QString) -> bool {
-        let key = key.to_string();
+    pub fn act(mut self: Pin<&mut Self>, key: &QString) {
+        let words = key.to_string();
         let outcome = if self.view.binding_open() {
-            self.as_mut().rust_mut().view.binding_act(&key)
-        } else if key == crate::help::CLEAR {
+            self.as_mut().rust_mut().view.binding_act(&words)
+        } else if words == crate::help::CLEAR {
             let focused = self.focused.max(0) as usize;
             self.as_mut().rust_mut().view.clear_hotkey(focused)
         } else {
-            return false;
+            Outcome::Nothing
         };
-        let taken = outcome != Outcome::Nothing;
+        if outcome == Outcome::Nothing {
+            self.passed(key.clone());
+            return;
+        }
         self.outcome(outcome);
-        taken
+    }
+
+    pub fn pad_pressed(self: Pin<&mut Self>, button: qobject::PadButton) {
+        if emusen_kit_qt::kinds::ui_button(button) == Some(emusen_kit_core::input::UiButton::Back) {
+            self.back();
+        }
     }
 
     pub fn heard_key(mut self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool {

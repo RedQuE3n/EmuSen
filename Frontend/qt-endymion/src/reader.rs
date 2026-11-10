@@ -53,7 +53,8 @@ impl Reader {
             let mut failed: Option<String> = None;
             while !thread_shared.stop.load(Ordering::Acquire) {
                 let only = thread_shared.only.lock().map(|mut only| only.take()).unwrap_or(None);
-                let tick = only.map_or(Ok(()), |ids| pads.show_only(ids.as_deref())).and_then(|()| {
+                let settled = game.as_ref().map_or(Ok(()), |game| game.apply_settings(&pads));
+                let tick = settled.and_then(|()| only.map_or(Ok(()), |ids| pads.show_only(ids.as_deref()))).and_then(|()| {
                     if started {
                         reading.poll(&pads)
                     } else {
@@ -63,6 +64,11 @@ impl Reader {
                 let tick = tick.and_then(|mut tick| {
                     if let Some(game) = game.as_ref() {
                         tick.seats = game.keep_seats(&pads, &tick.devices)?;
+                        // The pads present at the start are not announced, as Mistress's are not.
+                        tick.notices = game.notices();
+                        if !started {
+                            tick.notices.clear();
+                        }
                         game_reading.read(&pads, game)?;
                     }
                     Ok(tick)

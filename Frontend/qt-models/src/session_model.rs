@@ -36,6 +36,9 @@ pub mod qobject {
         #[qproperty(QString, cores)]
         #[qproperty(QString, engine)]
         #[qproperty(u64, pads)]
+        /// The player's Rumble switch as Settings binds it, which a running game takes at once (EmuSen_Input.md §9.7); a game
+        /// opened reads the setting itself, so the value before Settings has read it acts on nothing.
+        #[qproperty(bool, rumble, READ, WRITE = set_rumble, NOTIFY)]
         #[qproperty(QString, game, READ, WRITE = set_game, NOTIFY)]
         /// The saved state the next game named starts from, by its file, as a game's page asks (EmuSen_Qt.md §7.8);
         /// taken by that start, and given to the open game when it is the one named. Empty starts as Resume says.
@@ -69,6 +72,9 @@ pub mod qobject {
 
         #[cxx_name = "setFeed"]
         fn set_feed(self: Pin<&mut SessionModel>, feed: u64);
+
+        #[cxx_name = "setRumble"]
+        fn set_rumble(self: Pin<&mut SessionModel>, on: bool);
 
         /// The game named by its path: naming one opens it, as `open` does; an empty name closes it.
         #[cxx_name = "setGame"]
@@ -170,6 +176,7 @@ pub struct SessionModelRust {
     cores: QString,
     engine: QString,
     pads: u64,
+    rumble: bool,
     game: QString,
     start_state: QString,
     running: bool,
@@ -213,6 +220,7 @@ impl Default for SessionModelRust {
             cores: QString::default(),
             engine: QString::default(),
             pads: 0,
+            rumble: false,
             game: QString::default(),
             start_state: QString::default(),
             running: false,
@@ -461,6 +469,21 @@ impl qobject::SessionModel {
             self.as_mut().rust_mut().platform = Some(platform);
         }
         self.platform.clone().ok_or_else(|| "no platform library".to_string())
+    }
+
+    fn set_rumble(mut self: Pin<&mut Self>, on: bool) {
+        if self.rumble == on {
+            return;
+        }
+        self.as_mut().rust_mut().rumble = on;
+        self.as_mut().rumble_changed();
+        let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
+        if let Err(e) = runtime.input_rumble_switch(session, on) {
+            self.as_mut().rust_mut().notice_attention = true;
+            self.as_mut().notice_attention_changed();
+            self.as_mut().rust_mut().notice = QString::from(format!("Rumble was not changed in the game: {e}").as_str());
+            self.as_mut().notice_changed();
+        }
     }
 
     fn set_platform_library(mut self: Pin<&mut Self>, path: QString) {

@@ -1249,6 +1249,8 @@ Built in U6's wiring step, as §9.6 recommended and the tester decided on 2026-1
   integration test's mid-game turn (`crystal/tests/rumble.rs`); `SettingsWiringTests` (the row from the table, the switch
   saved; the frame loop's levels reaching the simulated pad and a stop sent once); `CrystalHeaderTests` holds the export to
   the header.
+- **The Qt program** (2026-11-10) does the same through its pads' reader, `EmuSen_Qt.md` §7.7.H3, and stops a motor
+  at once when a menu takes the pad rather than within 100 ms.
 
 ## 10. Controller profiles (2026-11-03)
 

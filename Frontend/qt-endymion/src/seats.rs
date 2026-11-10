@@ -32,6 +32,14 @@ pub struct Player {
     pub kept: bool,
 }
 
+/// A pad that came or went at a poll: its name, the player it took or whose seat is kept for it (0 for none).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Came {
+    pub name: String,
+    pub player: usize,
+    pub connected: bool,
+}
+
 /// What a page asks of the seats, done by the reader on its next tick.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Ask {
@@ -60,8 +68,8 @@ fn pad_of(pads: &Pads, key: u64) -> Result<(Pad, String)> {
 
 impl Seats {
     /// The pads a start or a poll opened and closed: an opened pad takes its seat by Endymion's rules, a closed one's seat
-    /// is kept for it.
-    pub fn apply(&mut self, pads: &Pads, events: &[PadEvent]) -> Result<bool> {
+    /// is kept for it; each told in `came`.
+    pub fn apply(&mut self, pads: &Pads, events: &[PadEvent], came: &mut Vec<Came>) -> Result<bool> {
         let mut changed = false;
         for event in events {
             if event.opened {
@@ -74,16 +82,20 @@ impl Seats {
                 if player > 0 {
                     self.seats[player - 1] = Seat::Open(pad);
                     self.keys[player - 1] = Some(event.key);
-                    self.names[player - 1] = name;
+                    self.names[player - 1] = name.clone();
                 }
+                came.push(Came { name, player, connected: true });
             } else {
+                let name = self.open.iter().find(|(k, _, _)| *k == event.key).map(|(_, n, _)| n.clone()).unwrap_or_default();
                 self.open.retain(|(k, _, _)| *k != event.key);
-                if let Some(i) = self.keys.iter().position(|k| *k == Some(event.key)) {
+                let seat = self.keys.iter().position(|k| *k == Some(event.key));
+                if let Some(i) = seat {
                     if let Seat::Open(pad) = std::mem::take(&mut self.seats[i]) {
                         self.seats[i] = Seat::Closed(pad);
                     }
                     self.keys[i] = None;
                 }
+                came.push(Came { name, player: seat.map_or(0, |i| i + 1), connected: false });
             }
             changed = true;
         }

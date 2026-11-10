@@ -60,7 +60,7 @@ pub fn family_of(number: i64) -> PadFamily {
 }
 
 /// What one poll changed: the buttons in the kit's order, the family and the count of pads read when they moved, the
-/// pads opened and closed, for the seats, and whether the seats changed.
+/// pads opened and closed, for the seats, whether the seats changed, and the notices of pads that came or went.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Tick {
     pub events: Vec<PadEvent>,
@@ -68,11 +68,12 @@ pub struct Tick {
     pub connected: Option<usize>,
     pub devices: Vec<devices::PadEvent>,
     pub seats: bool,
+    pub notices: Vec<String>,
 }
 
 impl Tick {
     pub fn is_empty(&self) -> bool {
-        self.events.is_empty() && self.family.is_none() && self.connected.is_none() && !self.seats
+        self.events.is_empty() && self.family.is_none() && self.connected.is_none() && !self.seats && self.notices.is_empty()
     }
 }
 

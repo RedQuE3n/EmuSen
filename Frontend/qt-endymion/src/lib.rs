@@ -9,6 +9,7 @@ extern crate emusen_kit_qt;
 pub mod bell_player;
 pub mod game;
 pub mod keys;
+pub mod notices;
 pub mod pad_reader;
 pub mod reader;
 pub mod reading;

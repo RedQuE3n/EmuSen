@@ -7,7 +7,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use emusen_platform_client::pads::{consts, PadEvent, Pads};
 use emusen_platform_client::Result;
 
-use crate::seats::{Ask, Connected, Player, Seats};
+use crate::notices;
+use crate::seats::{Ask, Came, Connected, Player, Seats};
 
 /// The most players a game hears (Endymion's seats).
 pub const PLAYERS: usize = 8;
@@ -25,7 +26,8 @@ pub struct Want {
     pub axes: Vec<u32>,
 }
 
-/// One read as the game hears it: a mask by PadButton and the read axes for each player read, and the players seated.
+/// One read as the game hears it: a mask by PadButton and the read axes for each player read, the players seated, and
+/// whether player 1 also plays as player 2 (Mirror player 1 to player 2, the router's to apply).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Read {
     pub serial: u64,
@@ -33,7 +35,21 @@ pub struct Read {
     pub held: [u16; PLAYERS],
     pub axes: Vec<f64>,
     pub seated: u32,
+    pub mirror: bool,
 }
+
+/// The player's Controllers settings the pads act on (EmuSen_Qt.md §7.7.H3): the first three Endymion's, set on the pads
+/// by the reader; the mirror the game's router's.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PadSettings {
+    pub first_controller_only: bool,
+    pub stick_as_dpad: bool,
+    pub stick_deadzone: f64,
+    pub mirror: bool,
+}
+
+/// A port's two motor levels, strong then weak, 0 to 65535.
+pub type Motors = (u16, u16);
 
 #[derive(Default)]
 struct State {
@@ -52,6 +68,13 @@ struct State {
     players: Vec<Player>,
     connected: Vec<Connected>,
     stick_deadzone: f64,
+    /// Settings waiting for the reader's next tick; the mirror as last settled.
+    settings: Option<PadSettings>,
+    mirror: bool,
+    /// Each port's motors as the game last drove them.
+    motors: [Motors; PLAYERS],
+    /// The pads that came and went, in the notices' words, until the reader takes them.
+    notices: Vec<String>,
 }
 
 /// The hand-over between the pads' reader and a game: what the game wants, whether it hears the pads, the newest read.
@@ -70,6 +93,7 @@ impl GamePads {
         let mut state = self.state();
         state.want = want;
         state.want_serial += 1;
+        state.motors = [(0, 0); PLAYERS];
         state.read = Read { serial: state.read.serial, ..Read::default() };
     }
 
@@ -79,6 +103,28 @@ impl GamePads {
         if state.want.is_some() {
             state.want_serial += 1;
         }
+    }
+
+    /// The player's settings, set on the pads at the reader's next tick (Mistress's `ApplyKeys` and `SaveApp`).
+    pub fn settle(&self, settings: PadSettings) {
+        let mut state = self.state();
+        state.mirror = settings.mirror;
+        state.settings = Some(settings);
+    }
+
+    /// The reader's tick for the settings: any settled since the last set on Endymion's pads.
+    pub fn apply_settings(&self, pads: &Pads) -> Result<()> {
+        let Some(s) = self.state().settings.take() else { return Ok(()) };
+        pads.set_setting(consts::SETTING_FIRST_CONTROLLER_ONLY, f64::from(u8::from(s.first_controller_only)))?;
+        pads.set_setting(consts::SETTING_STICK_AS_DPAD, f64::from(u8::from(s.stick_as_dpad)))?;
+        pads.set_setting(consts::SETTING_STICK_DEADZONE, s.stick_deadzone)
+    }
+
+    /// The game's motors after a frame, port 0 first; the reader drives each player's pad by its port's (EmuSen_Input.md §9.7).
+    pub fn drive(&self, motors: &[Motors]) {
+        let mut state = self.state();
+        state.motors = [(0, 0); PLAYERS];
+        state.motors.iter_mut().zip(motors).for_each(|(m, l)| *m = *l);
     }
 
     /// Whether the game hears the pads (running and on screen); nothing is handed over while it does not. Given back to
@@ -115,6 +161,11 @@ impl GamePads {
         true
     }
 
+    /// The notices of pads that came and went since the last taken (EmuSen_Input.md §8.13.5).
+    pub fn notices(&self) -> Vec<String> {
+        std::mem::take(&mut self.state().notices)
+    }
+
     /// The players seated at the newest read, a bit each.
     pub fn seated(&self) -> u32 {
         self.state().read.seated
@@ -144,7 +195,10 @@ impl GamePads {
     /// date; whether the view changed.
     pub fn keep_seats(&self, pads: &Pads, events: &[PadEvent]) -> Result<bool> {
         let mut state = self.state();
-        state.seats.apply(pads, events)?;
+        let mut came: Vec<Came> = Vec::new();
+        state.seats.apply(pads, events, &mut came)?;
+        let first = state.seats.keys()[0].is_some();
+        state.notices.extend(came.iter().map(|c| notices::said(c, first)));
         for ask in std::mem::take(&mut state.asks) {
             state.seats.ask(pads.platform(), ask)?;
         }
@@ -198,15 +252,17 @@ pub struct GameReading {
     bound: [[i32; BUTTONS as usize]; PLAYERS],
     seats: [Option<u64>; PLAYERS],
     read: Read,
+    /// The motor levels last sent each player's pad.
+    sent: [Motors; PLAYERS],
 }
 
 impl GameReading {
     /// One tick: the pads as the game hears them handed over, when a game wants them. Players are the seats' (EmuSen_Input.md
     /// §8.9), player 1 alone where the first controller only is read.
     pub fn read(&mut self, pads: &Pads, game: &GamePads) -> Result<()> {
-        let (serial, want, swapped) = {
+        let (serial, want, swapped, mirror, owned, motors) = {
             let state = game.state();
-            (state.want_serial, (state.want_serial != self.want_serial).then(|| state.want.clone()), state.swapped)
+            (state.want_serial, (state.want_serial != self.want_serial).then(|| state.want.clone()), state.swapped, state.mirror, state.owned, state.motors)
         };
         if let Some(want) = want {
             self.bind(pads, want)?;
@@ -229,8 +285,10 @@ impl GameReading {
             self.seats = keys;
         }
         let players = want.ports.min(PLAYERS);
+        drive(pads, &self.seats, &mut self.sent, players, if owned { motors } else { [(0, 0); PLAYERS] })?;
         let read = &mut self.read;
         read.players = players;
+        read.mirror = mirror;
         read.held = [0; PLAYERS];
         read.axes.clear();
         read.axes.resize(players * want.axes.len(), 0.0);
@@ -275,4 +333,19 @@ impl GameReading {
         self.want = want;
         Ok(())
     }
+}
+
+/// Each seated player's pad given its port's motors: a level held sent every tick, within SDL's 100 ms, and a level gone
+/// to zero sent once (Mistress's `PassRumbleLevels`).
+fn drive(pads: &Pads, seats: &[Option<u64>; PLAYERS], sent: &mut [Motors; PLAYERS], players: usize, motors: [Motors; PLAYERS]) -> Result<()> {
+    for (player, key) in seats.iter().enumerate() {
+        let level = if player < players { motors[player] } else { (0, 0) };
+        if let Some(key) = *key {
+            if level != (0, 0) || sent[player] != (0, 0) {
+                pads.rumble(key, level.0, level.1)?;
+            }
+        }
+        sent[player] = level;
+    }
+    Ok(())
 }

@@ -50,6 +50,10 @@ pub mod qobject {
         /// The seats or the pads connected changed, or a button went down or up on one (EmuSen_Input.md §8.9).
         #[qsignal]
         fn seats_changed(self: Pin<&mut PadReader>);
+
+        /// A pad came or went, in the notice's words (EmuSen_Input.md §8.13.5); the pads present at the start say nothing.
+        #[qsignal]
+        fn notice(self: Pin<&mut PadReader>, words: QString);
     }
 
     impl cxx_qt::Threading for PadReader {}
@@ -146,6 +150,9 @@ impl qobject::PadReader {
         }
         if tick.seats {
             self.as_mut().seats_changed();
+        }
+        for words in &tick.notices {
+            self.as_mut().notice(QString::from(words.as_str()));
         }
         if let Some(family) = tick.family.map(kinds::family_of).filter(|f| *f != self.family) {
             self.as_mut().rust_mut().family = family;

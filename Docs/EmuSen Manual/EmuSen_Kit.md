@@ -24,6 +24,7 @@ until stage 8 retires it, and is not edited for this; a change to a token is mad
 | Type, both forms | §5.2 | `tokens::type_scale(Form, text_scale)` |
 | Spacing, both forms | §5.3 | `tokens::spacing(Form)` |
 | Focus marks | §5.4 | `tokens::focus_marks(Form)` |
+| The raised shadow (added 2026-11-09, §7.55) | §5.4 | `tokens::raised_shadow(Form)` |
 | Motion durations, curves, reduced motion, the idle breath | §5.5, LunaP §206.5 | `motion::MotionToken`, `motion::Curve`, `motion::breath_opacity` |
 | Text scale 1 to 1.3, rounding to the half unit | LunaP §214.1 | `tokens::clamp_text_scale`, in `type_scale` |
 | The section heading's 28 and the 5% safe area | LunaP §206.2, §206.4 | `tokens::header_size`, `tokens::safe_area_of` |
@@ -67,8 +68,8 @@ scale flooring rather than rounding failed the LunaP §214.1 test.
 
 `emusen_kit_core::tokens`: `Form`, `Variant`, `ColourToken` (18 names), `Colour` (sRGB with straight alpha; `hex`,
 `hsl`, `over`, `contrast`), `colour`, `contrast_pairs`, `on_art_over`, `TypeScale`, `Spacing`, `Insets`, `FocusMarks`,
-`type_scale`, `spacing`, `focus_marks`, `header_size`, `safe_area_of`, `clamp_text_scale`, `MAX_TEXT_SCALE`,
-`SAFE_AREA_FRACTION`, `TEXT_FLOOR`, `GRAPHIC_FLOOR`. `emusen_kit_core::motion`: `MotionToken`, `Curve`, the breath's
+`Shadow`, `type_scale`, `spacing`, `focus_marks`, `raised_shadow`, `header_size`, `safe_area_of`, `clamp_text_scale`,
+`MAX_TEXT_SCALE`, `SAFE_AREA_FRACTION`, `TEXT_FLOOR`, `GRAPHIC_FLOOR`. `emusen_kit_core::motion`: `MotionToken`, `Curve`, the breath's
 constants, `breathes`, `breath_opacity`. The versioning rule is `EmuSen_Qt.md` §5's R: a `cargo public-api` baseline
 once the crate is consumed.
 
@@ -2555,8 +2556,8 @@ marks are piece G's, with the slots it steps.
 
 **Compared with the recordings** (read 2026-11-09), named: the title and facts are in the platform's sans serif, 60 and
 30 high where Barlow's are 53 and 27; the actions are the kit's action buttons, 16 inside their edges, where Mistress's
-cells are 8 to 21; the hero has no picture in the gallery, so its gradient is drawn over Void; the cover has no shadow
-yet (§5.4's raised shadow is not a token).
+cells are 8 to 21; the hero has no picture in the gallery, so its gradient is drawn over Void. The cover had no shadow
+until §5.4's raised shadow became a token (§7.55).
 
 ### 7.45 What the tool screen and the page frame are held to, and what is open (2026-11-09)
 
@@ -2595,7 +2596,7 @@ unchanged.
   recordings, and move the foot to the band (one more row on the tool screen) once stage 8 retires them, as one change
   in `tool::content_foot`.
 - **[routine]** A stepped action's ◂ ▸ and its stepping (Resume's slots) are piece G's.
-- **[routine]** The cover's raised shadow waits for a shadow token (§5.4).
+- The cover's raised shadow waited for a shadow token (§5.4); built 2026-11-09 (§7.55).
 
 **Found by Cores, the first screen on it** (stage 5, piece F; 2026-11-09; `EmuSen_Qt.md` §7.7.F). Three defects the
 gallery's still models could not show, each fixed in `ToolScreen.qml` with no change to the registry:
@@ -2852,3 +2853,55 @@ The module stays 1.0 (§7.6). `EmuSen.Theme` re-exports none of it.
 **Held to**: kit-gallery's screens test (the page with tiles and with rows, both variants, the four sizes) and the
 registry's comparison, and the program's game page test, which holds the clip on the software backend
 (`EmuSen_Qt.md` §7.8).
+
+### 7.55 The raised shadow as a token, and `RaisedShadow` on both backends (stage 5, piece K; 2026-11-09)
+
+`EmuSen_Interface.md` §5.4 gives the interface one shadow: on a focused tile and on a card's open edge, offset 0,8, blur
+24, black at 50%. It was not a token, so each drawer wrote it as its own literals (`NoticeLayer`'s 0.5, 24 and 8,
+`MenuCard`'s offset of 8 and black), and the page frame's cover drew none (§7.44).
+
+**The token.** kit-core's `tokens::raised_shadow(Form)` gives a `Shadow` (`colour`, `opacity`, `offset_x`, `offset_y`,
+`blur`), the same in both forms' units, as the focus marks are. `Tokens` shows it as `shadowColor`, `shadowOpacity`,
+`shadowOffsetX`, `shadowOffsetY` and `shadowBlur`, declared after every earlier property so that no earlier index in the
+registry moves; the theme API's `Tokens` mirrors them (`CHANGELOG-theme-api.md`), as `theme-qt/tests/surface.rs`
+requires of every kit token. A minor under rule Q (`CHANGELOG-kit.md`): additions only, the module still 1.0.
+
+**Its drawers read it.** `NoticeLayer`'s `shadowOpacity` and `shadowRadius` default to `shadowOpacity` and `shadowBlur`,
+and its offset and colour are the tokens', so the notice draws what it drew. `MenuCard`'s offset and colour are the
+tokens'; its darkness of 90% and radius of 48 stay its own, being Mistress's panel shadow as measured on 2026-11-02
+(`EmuSen_Qt.md` §7.2), a different fact from §5.4's.
+
+**`RaisedShadow`** (qmldir) is the shadow a raised shape casts: an item with the shape's box and corner `radius`, placed
+under the shape. On the GPU it is `MultiEffect` over a hidden caster of the shape, with the tokens as its shadow's colour,
+opacity, offsets and `blurMax`, as the notice and the cards cast theirs. The software backend renders no shader effect
+(§7.35), so there Qt's own `Canvas` casts it: its 2D context paints the shape with the tokens as `shadowColor` (the
+colour at `shadowOpacity`), `shadowBlur`, `shadowOffsetX` and `shadowOffsetY`, through `QPainter`, into a canvas reaching
+twice the blur and the larger offset past the shape, so no part of the shadow is cut. Qt's mechanism rather than a render
+node of the kit's own (`EdgeMask`, §7.35), since this one draws as asked on the software backend. The shape itself is
+drawn in the shadow's colour under the raised item, which covers it. `qml-rules` takes `contextType` as a name, not words,
+as it takes `fragmentShader`.
+
+**The cover casts it.** `PageFrame` places a `RaisedShadow` at the cover's box with the cover's `rowRadius`, under the
+cover, so a game's page (`EmuSen_Qt.md` §7.8) shows its cover raised over the hero's foot.
+
+**Measured** (2026-11-09, the gallery on the software backend). Under the cover, 6 units below its foot and so 2 units
+inside the offset shape's foot, the light variant's frame (243) reads 176, 27.6% darker; the dark variant's (27, 27, 30)
+reads (20, 20, 22). A Gaussian of σ = blur ÷ 2 = 12, the canvas's definition of `shadowBlur`, predicts 0.5 · Φ(2 ⁄ 12) =
+28.3% at that point; the measurement is within 0.7 points of it. 6 units past the offset shape's foot it predicts
+0.5 · Φ(−6 ⁄ 12) = 15.4%, 243 to 205.5; the frame reads 205. 40 units beside the cover the frame is untouched. The
+GPU's `MultiEffect` blurs by its own mipmap levels up to `blurMax`, not a stated σ, so its falloff is not the canvas's;
+that difference between the backends is in Qt's two mechanisms, each given the same token. On Vulkan (the RX 6800,
+`qt-app`'s `acceptance.rs` on a game's page, 2026-11-09) the same point of the dark frame reads (18, 18, 20) against
+(27, 27, 30) beside the cover, 33% darker where the canvas gives 26%.
+
+**Held to:** kit-core's `tests/tokens.rs` (the raised shadow in both forms); kit-qt's `tests/column.rs` (the column's
+shadow is kit-core's in both forms) and `tests/qmltypes.rs` (the registry and the qmldir, committed); `theme-qt`'s
+`tests/surface.rs` (the mirror holds every kit token); `qml-rules`' `tests/rules.rs` (`contextType` a name); and
+kit-gallery's `tests/screens.rs`, which now also holds the cover's shadow in both page states, both variants and the four
+fit sizes: the frame under the cover at least an eighth darker than beside it, and 6 units past the shape lighter than
+that and still a sixteenth darker, so the shadow is soft, besides the gate it already ran; and `qt-app`'s
+`acceptance.rs`, which opens the first game's page from the grid on Vulkan and holds the same eighth (passed in 699 s).
+
+**Seeded faults**, each reverted, each caught: the cover's shadow hidden (the gallery, every page state); the canvas's
+blur set to none, a hard-edged shadow (the gallery's softness check, which the first form of the check, the darkening
+alone, let through, so the check was strengthened); the theme mirror missing `shadowBlur` (`theme-qt`'s surface test).

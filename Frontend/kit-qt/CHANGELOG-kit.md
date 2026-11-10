@@ -4,6 +4,19 @@ The kit is the QML module `EmuSen.Kit` (EmuSen_Qt.md §1.4), held by rule Q (§5
 writes it, is committed under `Testing/qmltypes/` and compared on every build. A minor adds and never removes; each
 entry names what was added and the section of `EmuSen_Kit.md` that records it.
 
+## 1.0, stage 5 piece K: the raised shadow as a token, and the item that casts it (2026-11-09)
+
+Additions only; no type, property, signal or invokable was removed or changed. The new properties are declared after
+every earlier one, so no earlier property's index in the registry moved.
+
+- **`Tokens.shadowColor`, `shadowOpacity`, `shadowOffsetX`, `shadowOffsetY`, `shadowBlur`** (registry): the one shadow of
+  `EmuSen_Interface.md` §5.4, black at 50%, offset 0,8, blur 24, from kit-core's `tokens::raised_shadow`. `EmuSen_Kit.md`
+  §7.55.
+- **`RaisedShadow`** (qmldir): the shadow cast by a raised shape of the item's box and `radius`, through `MultiEffect` on
+  the GPU and Qt's `Canvas` on the software backend. §7.55.
+- `PageFrame`'s cover casts it; `NoticeLayer`'s `shadowOpacity` and `shadowRadius` default to the tokens and its offset
+  and colour are theirs, so what it draws is unchanged. §7.55.
+
 ## 1.0, stage 5 piece E: a sentence's tone, a value beside a short label, the rows' view (2026-11-09)
 
 Additions only; no type, property, signal or invokable was removed or changed.

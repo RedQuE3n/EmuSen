@@ -5,7 +5,7 @@ use std::time::Duration;
 use emusen_kit_core::motion::{BREATH_DELAY, BREATH_LOW, BREATH_PERIOD, Curve, MotionToken, REDUCED_FADE, breath_opacity, breathes};
 use emusen_kit_core::tokens::{
     Colour, ColourToken, Form, GRAPHIC_FLOOR, Insets, MAX_TEXT_SCALE, TEXT_FLOOR, Variant, clamp_text_scale, colour, contrast_pairs,
-    focus_marks, header_size, on_art_over, safe_area_of, spacing, text_scale_of, type_scale,
+    focus_marks, header_size, on_art_over, raised_shadow, safe_area_of, spacing, text_scale_of, type_scale,
 };
 
 fn close(a: f64, b: f64, within: f64) -> bool {
@@ -190,6 +190,14 @@ fn interface_5_4_the_focus_marks() {
     for form in Form::ALL {
         let f = focus_marks(form);
         assert_eq!((f.ring_thickness, f.ring_offset, f.bar_width, f.tile_scale, f.hover_border), (3.0, 4.0, 4.0, 1.06, 1.0));
+    }
+}
+
+#[test]
+fn interface_5_4_the_one_raised_shadow_offset_0_8_blur_24_black_at_50() {
+    for form in Form::ALL {
+        let s = raised_shadow(form);
+        assert_eq!((s.colour.to_hex(), s.opacity, s.offset_x, s.offset_y, s.blur), ("#000000".to_owned(), 0.5, 0.0, 8.0, 24.0));
     }
 }
 

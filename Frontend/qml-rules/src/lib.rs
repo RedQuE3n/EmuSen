@@ -65,7 +65,7 @@ pub const THEME_IMPORTS: [&str; 6] =
     ["QtQuick", "QtQuick.Layouts", "QtQuick.Effects", "QtQuick.Shapes", "QtQuick.Controls", "EmuSen.Theme"];
 
 /// Bindings whose string is a name, a path or a colour rather than words: never findings.
-const NAMED_BINDINGS: [&str; 12] = [
+const NAMED_BINDINGS: [&str; 13] = [
     "objectName",
     "role",
     "font.family",
@@ -78,6 +78,7 @@ const NAMED_BINDINGS: [&str; 12] = [
     "Accessible.role",
     "placeholderText",
     "sequence",
+    "contextType",
 ];
 
 /// How the check reads a file: as a view, or as a fixture (a test scene, the gallery) whose words, rows and literals stand in for models.

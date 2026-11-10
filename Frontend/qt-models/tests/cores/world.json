@@ -1,5 +1,5 @@
 {
- "note": "Mistress's recordings' world (WindowFitAuditTests.CoresWindow.cs): the runtime's three cores of EmuSen's own, a player's core waiting for approval and PCEE2 approved under libretro/; the core tool's listing, a fetch refused offline, and an install that runs and does not end. PCEE2's options, the PlayStation's firmware found and a build of PCEE2 kept for Roll Back are added for Qt's pages, which Mistress's recordings do not hold.",
+ "note": "Mistress's recordings' world (WindowFitAuditTests.CoresWindow.cs): the runtime's three cores of EmuSen's own, a player's core waiting for approval and PCEE2 approved under libretro/; the core tool's listing, a fetch refused offline, and an install that runs and does not end. PCEE2's options, the PlayStation's firmware found a build of PCEE2 kept for Roll Back and an update that ends are added for Qt's pages, which Mistress's recordings do not hold.",
  "systems": [
   {
    "id": "snes",
@@ -309,6 +309,44 @@
      "event": "done",
      "op": "core-rollback",
      "counts": {},
+     "catalogue": "2026-10-31"
+    }
+   ],
+   "ends": true
+  },
+  "core-update": {
+   "events": [
+    {
+     "event": "plan",
+     "stem": "mednafen_psx",
+     "from": "https://buildbot.libretro.com/nightly/linux/x86_64/latest/mednafen_psx_libretro.so.zip",
+     "build": "2026-10-31",
+     "crc32": "5b1e07c2"
+    },
+    {
+     "event": "progress",
+     "stem": "mednafen_psx",
+     "step": "download",
+     "bytes": 8388608,
+     "total": 8388608
+    },
+    {
+     "event": "installed",
+     "stem": "mednafen_psx",
+     "sha256": "7777777777777777777777777777777777777777777777777777777777777777",
+     "build": "2026-10-31",
+     "previous": "8888888888888888888888888888888888888888888888888888888888888888",
+     "revoke": [],
+     "tested": {
+      "match": "none"
+     }
+    },
+    {
+     "event": "done",
+     "op": "core-update",
+     "counts": {
+      "installed": 1
+     },
      "catalogue": "2026-10-31"
     }
    ],

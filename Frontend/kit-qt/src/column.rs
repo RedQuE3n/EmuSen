@@ -1,7 +1,7 @@
 //! One column of tokens as the `Tokens` singleton shows it: every value computed by kit-core for a form, a variant, a text scale and reduced motion (EmuSen_Kit.md §7.2).
 
 use emusen_kit_core::motion::{breathes, Curve, MotionToken, BREATH_DELAY, BREATH_LOW, BREATH_PERIOD};
-use emusen_kit_core::tokens::{self, Colour, ColourToken, FocusMarks, Form, Spacing, TypeScale, Variant};
+use emusen_kit_core::tokens::{self, Colour, ColourToken, FocusMarks, Form, Shadow, Spacing, TypeScale, Variant};
 
 /// QEasingCurve::Type's number for a kit-core curve, so QML binds `easing.type` to a token.
 pub fn easing_type(curve: Curve) -> i32 {
@@ -24,6 +24,7 @@ pub struct Column {
     pub header: f64,
     pub spacing: Spacing,
     pub focus: FocusMarks,
+    pub shadow: Shadow,
     pub durations: [i32; 8],
     pub fades: [i32; 8],
     pub curves: [i32; 8],
@@ -45,6 +46,7 @@ impl Column {
             header: tokens::header_size(form, text_scale),
             spacing: tokens::spacing(form),
             focus: tokens::focus_marks(form),
+            shadow: tokens::raised_shadow(form),
             durations,
             fades,
             curves,

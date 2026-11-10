@@ -38,3 +38,4 @@ ToneText 1.0 qml/ToneText.qml
 ActionButton 1.0 qml/ActionButton.qml
 VideoTile 1.0 qml/VideoTile.qml
 VideoClip 1.0 qml/VideoClip.qml
+RaisedShadow 1.0 qml/RaisedShadow.qml

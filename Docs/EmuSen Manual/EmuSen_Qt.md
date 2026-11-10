@@ -1362,6 +1362,53 @@ its consoles); Down no longer stepping the rail (the sweep over `one-console` mi
 the splash at 1, 3 and 5 s (the audit records its finished frame only), the grid's rows for a tall and a square console
 (the synthetic library's consoles are all wide), and the bells, which no striker rings yet.
 
+#### 3.4.5 Constellation as built **[M 2026-11-09]**
+
+"Constellation" (`Frontend/themes/constellation/`, resources at `qrc:/emusen/themes/constellation/`) is the design of
+`qt-s3/final/constellation.md`: Home a star chart whose lines are the pad's walk, Choose a console the makers as figures
+(the kit's `FigureLayout`, `EmuSen_Kit.md` §7.31), Games a grid joined by connectors. Written against `EmuSen.Theme` alone;
+its parts are one job each: `Backdrop`, `ChartNode` (a node's place and walk), `ChartBody`, `ChartPointer`, `ChartLine`,
+`Star`, `Connector`, `ConsoleKey`, `Chip`, `Glass`, `Glyph`, `EngineMark`, `Faces`.
+
+**Named differences from the spec**, each decided or measured on 2026-11-08 and 2026-11-09:
+1. Small words are 19 units, not 17 (the audit's legibility floor at 1280 × 720, decided).
+2. The chart's lines by day are at the canvas's 10% and 45% (the spec's prose says 35% and 60%).
+3. The splash's points follow maker order without the 24-unit gap across a maker (a dashed segment marks it); past 24
+   consoles the pitch shrinks to keep three rows, and the segments shorten so the line ends by 4.6 s (decided 2026-11-09).
+4. The day sky's stars are the theme's own; the kit's `Sky` draws the night's.
+5. Games' connectors are measured on the painted covers, the focused one as scaled 1.06 about its centre.
+6. A console's label sits at the edge of its body's 96-unit box (4 further out than the canvas), and **the focused body's
+   label steps 8 further out** over Quick, clear of the focus ring, which reaches 7 past the box (110 about the 96 body, 94
+   about the 80). Where it crossed the ring the count read 1.98 to 3.45:1 by night and 2.23 to 3.24:1 by day, and the
+   crowd's name 1.44:1 (measured 2026-11-09). So that a raised label on the chart's first line or a lowered one on its last
+   still lies inside it, the chart's viewport reaches 8 past the layout's 96 … 564 at each end (88 … 572), the layout's
+   points kept where they were. The chart stands inside the kit's `EdgeFade` (`EmuSen_Kit.md` §7.35) and fades 24 at an
+   edge it runs past, on both backends; its earlier `MultiEffect` mask drew no fade on the GPU and was kept off on the
+   software backend, so a row at the edge was cut.
+7. **RECENT gives way to the focus**: centred at 823 while the block holds the focus, clear of its ring (to 811), else at
+   819, clear of a focused cover scaled 1.06 (from 830.6), where the spec centres it at 820. The 32-unit gap holds a
+   22.8-unit line with either one but not both; at 820 the block's ring ran under the word (1.98:1 by night, 2.23:1 by
+   day) and a focused cover overlapped it at 3840 × 2160. A line of 19 instead ran the word past its foot.
+8. All games' name sits beside its star where the compact tier's chart top would cut it.
+9. The walk's two departures in the kit: Right from the Pointers' apex, and a lone Pointer's Down to the next line's ends.
+
+**Proof, measured 2026-11-08** (offscreen, the software backend, before the audit's contrast rule). `theme-check` reads the
+package `ok` in both steps and `qmllint` is clean: the three screens and the splash at the five sizes in both variants and
+Choose a console over the audit's 120 consoles, and over the catalogues `eleven`, `one-console`, `n30`, `n120`, `maker40`,
+`long` and `empty`, hold no finding. The three `Testing/themes/constellation-*.mockup.spec`, written by hand from the spec and
+the canvases, hold the recordings within two units (Home 30 of 30 boxes, Choose a console 23 of 23 over `eleven`, Games 8 of
+8). Side-by-sides with the canvases' renders (Home, Choose a console and Games at 1280 × 800 and 1920 × 1200, both
+variants) are kept in `~/.cache/emusen/tmp/qt-s3/compare/constellation/`. Faults seeded and caught, each reverted: the labels
+back inside the body's box (overlap, over `eleven`); a place's line at 17 (too small at 1280 × 720); the chart's bottom fade
+dropped (cut at its foot, over `n120`). Dropping a body's `KeyNavigation.right` was not caught: the walk still reaches every
+node by its other edges.
+
+**Measured 2026-11-09**, offscreen with the contrast rule and every state of §3.7.2 (`theme-audit --states all`): no
+finding once differences 6 and 7 are in, but `many`'s reach, which is the rule's and every theme's (§3.7.2). Faults seeded and caught, each reverted: the chart at the layout's 96 … 564 with the
+label's step (the focused NES's name cut at the chart's top at every size in both variants, `pressed`); the label without
+its step and RECENT at 820 (the contrast findings of 6 and 7, the default state). Not yet proved: the splash at 1, 3 and 5 s
+on the GPU.
+
 #### 3.4.6 Orrery as built **[M 2026-11-09]**
 
 "Orrery" (`Frontend/themes/orrery/`, resources at `qrc:/emusen/themes/orrery/`) is the design of `qt-s3/final/orrery.md`:
@@ -4128,7 +4175,7 @@ answers, and over the fixture by its absence.
 
 **Not offered, for the tester:** `Open Folder` on a core's page, and `Update All…`, which C# did not build either.
 Decided 2026-11-09 by the tester, after this was written: Open Folder is offered everywhere, Game Mode included, as the
-program's one action (§7.7.E); the Firmware page now ends with it.
+program's one action (§7.7.E); the Firmware page now ends with it. Update All… is to be built; it is, in §7.7.K.
 
 **The recordings' world.** Mistress's five Cores recordings are made over a scripted world
 (`WindowFitAuditTests.CoresWindow.cs`: three of EmuSen's cores, a player's core waiting for approval, PCEE2 approved under
@@ -4194,6 +4241,46 @@ for Search, Options, Firmware, Roll Back and the harness, each reverted, each ca
 (an empty overlap) back (`culled.rs`); the List card's Search not docking the keyboard (`cores.rs`' search test); a switch
 not turned by a step (the options test); a found file said as none found (the firmware test); and Roll Back sent as
 `core-update` (the roll back test).
+
+#### 7.7.K Cores' Update All…, and the cover's raised shadow (stage 5, piece K; 2026-11-09)
+
+`EmuSen_Interface.md` §15.5 (the List card's `Check for Updates`, `Update All…`, `Verify All`) and §5.4;
+`EmuSen_Cores.md` §5.4 and §6.2. Decided 2026-11-09 by the tester: build Update All…, which C# never had, so no C#
+screen is replaced and no C# behaviour is left out.
+
+**Update All…** is a row of the List card, between Check for Updates and Verify, offered where any core has an update
+(the rows whose marks include `update`, `plan::with_updates`, so the one owner of what can be updated is the marks of
+§7.7.F). A asks the plan in the question form: `Update <name>?` for one core, as a plan of one update is titled, else
+`Update <n> cores?`; the plan's own sentences for every core with an update, in the list's order (`Update Snes9x,
+Beetle PSX; the build installed now is kept for Roll Back.`, then that each core is checked and nothing downloaded runs
+until it is approved); No first and focused, B No. Yes runs the core tool's existing `core-update` naming those cores,
+one job as a plan's updates are (`plan::steps`), pulled and drained on the screen's timer like every other job: the
+rows say `Updating…`, the apply bar `Updating Snes9x, Beetle PSX…` with its progress, then each core's bytes, and at the
+end the plan's own outcome (`Installed Beetle PSX. Nothing downloaded runs until you approve it.`), the hashes the job
+drops revoked through the runtime. Nothing is offered while it runs, and the question is not asked while another job
+runs. The marks the player made are left as they were. A plan, Roll Back and Update All now share one way to run their
+jobs (`Cores::run`). No job was added: `core-update` already updates every core it names.
+
+**The cover's raised shadow.** The page frame's cover casts §5.4's shadow through the kit's new token and
+`RaisedShadow` (`EmuSen_Kit.md` §7.55), on the GPU through `MultiEffect` and on the software backend through Qt's
+`Canvas`. `MenuCard` and the notice read the token's offset and colour where they had written them.
+
+**The recordings' world** gains the core tool's `core-update` (`qt-models/tests/cores/world.json`): Beetle PSX's update,
+downloaded, installed and done. No recorded state reaches it, since `CoresRunning`'s install never ends.
+
+**Held to** (measured on 2026-11-09). `qt-models/tests/cores.rs` adds 2 (Update All asked over a world with two updates,
+its title, sentences and answers, No running nothing, Yes starting one `core-update` naming both, the rows, the bar and
+the help bar while it runs and its outcome; one update titled by its name, and the row not offered with no update) and
+holds the List card's rows with it; `qt-app/tests/cores.rs` walks the List card to Update All… by the pad, holds the plan
+as `CoresUpdateAll` at the five sizes through the gate, answers Yes and waits for the update's end, before Roll Back.
+The five recorded states it writes are byte for byte the recordings piece F compared with Mistress's (every `.spec` of
+`Cores`, `CoresDetail`, `CoresPlan`, `CoresRunning` and `CoresNoCatalogue` at the five sizes), so that comparison and its
+named differences stand unchanged. `acceptance.rs` on the RX 6800 now opens the first game's page from the grid and
+holds its cover's shadow on Vulkan (`EmuSen_Kit.md` §7.55); it passed in 699 s. The rest of qt-app's tests, kit-core,
+kit-qt, qt-models, theme-qt, kit-gallery, esde-qt and the testing module on the software backend, all passing.
+
+**Seeded faults**, each reverted, each caught: Update All planning every libretro core rather than those with an update
+(both Update All tests); its Yes sending `core-rm` (the two-update test); No running the update as Yes does (the same).
 
 ### 7.8 Stage 5, piece G: a game's page and its clip (2026-11-09)
 

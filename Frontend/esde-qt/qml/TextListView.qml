@@ -26,6 +26,7 @@ ElementBox {
     required property color selectedColor
     required property color selectedSecondaryColor
     required property url fontSource
+    required property bool ownFace
     required property real px
     required property real lineSpacing
     required property real margin
@@ -99,6 +100,7 @@ ElementBox {
                 height: root.bandHeight
                 text: line.text
                 fontSource: root.fontSource
+                ownFace: root.ownFace
                 px: root.px
                 lineSpacing: 0
                 hAlign: root.hAlign

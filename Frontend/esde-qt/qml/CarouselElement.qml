@@ -15,6 +15,7 @@ ElementBox {
     required property color backgroundEnd
     required property bool backgroundVertical
     required property url fontSource
+    required property bool ownFace
     required property real px
     required property real lineSpacing
     required property color color
@@ -125,6 +126,7 @@ ElementBox {
                 visible: !slot.pictured
                 text: slot.text
                 fontSource: root.fontSource
+                ownFace: root.ownFace
                 px: root.px
                 lineSpacing: root.lineSpacing
                 wrap: true

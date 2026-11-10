@@ -92,17 +92,6 @@ pub mod qobject {
     impl cxx_qt::Initialize for EsdeModel {}
 }
 
-// A read-only property set from Rust: the field changed and its signal raised, only when the value differs.
-macro_rules! publish {
-    ($m:expr, $field:ident, $signal:ident, $value:expr) => {{
-        let value = $value;
-        if $m.$field != value {
-            $m.as_mut().rust_mut().$field = value;
-            $m.as_mut().$signal();
-        }
-    }};
-}
-
 /// The painter shared with the list models of the same view, on the GUI thread only.
 pub type Shared = Rc<RefCell<Painter>>;
 

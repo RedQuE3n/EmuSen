@@ -129,6 +129,7 @@ Item {
             visible: esde.lettersMark.length === 0
             text: esde.letters
             px: esde.lettersPx
+            ownFace: true
             color: Qt.rgba(1, 1, 1, 1)
             hAlign: TextBlock.Align.Center
         }

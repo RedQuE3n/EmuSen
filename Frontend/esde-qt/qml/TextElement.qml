@@ -6,6 +6,7 @@ ElementBox {
     id: root
     required property string text
     required property url fontSource
+    required property bool ownFace
     required property real px
     required property color color
     required property int hAlign
@@ -33,6 +34,7 @@ ElementBox {
         anchors.fill: parent
         text: root.text
         fontSource: root.fontSource
+        ownFace: root.ownFace
         px: root.px
         color: root.color
         hAlign: root.hAlign

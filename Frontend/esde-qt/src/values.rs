@@ -152,7 +152,8 @@ pub fn element(p: &Placed, primary: Option<&Primary>, role: &str) -> V {
         },
         Paint::Badges(_) => None,
         Paint::Help(x) => match role {
-            "fontSource" => Some(url(&x.font)),
+            "fontSource" => Some(url(&x.font.file)),
+            "ownFace" => Some(V::B(x.font.own)),
             "px" => Some(V::N(x.px)),
             "color" => Some(V::C(x.label_color)),
             "iconColor" => Some(V::C(x.icon_color)),
@@ -163,7 +164,8 @@ pub fn element(p: &Placed, primary: Option<&Primary>, role: &str) -> V {
             _ => background(&x.background, role),
         },
         Paint::Info(x) => match role {
-            "fontSource" => Some(url(&x.font)),
+            "fontSource" => Some(url(&x.font.file)),
+            "ownFace" => Some(V::B(x.font.own)),
             "px" => Some(V::N(x.px)),
             "color" => Some(V::C(x.color)),
             "background" => Some(V::C(x.background)),
@@ -173,7 +175,8 @@ pub fn element(p: &Placed, primary: Option<&Primary>, role: &str) -> V {
         },
         Paint::Status(x) => match role {
             "iconHeight" => Some(V::N(x.height)),
-            "fontSource" => Some(url(&x.font)),
+            "fontSource" => Some(url(&x.font.file)),
+            "ownFace" => Some(V::B(x.font.own)),
             "textScale" => Some(V::N(x.text_scale)),
             "color" => Some(V::C(x.color)),
             "entrySpacing" => Some(V::N(x.entry_spacing)),
@@ -209,7 +212,8 @@ fn picture(q: &emusen_esde::scene::Picture, role: &str) -> Option<V> {
 fn text(t: &emusen_esde::scene::Text, role: &str) -> Option<V> {
     Some(match role {
         "text" => V::S(t.text.clone()),
-        "fontSource" => url(&t.font),
+        "fontSource" => url(&t.font.file),
+        "ownFace" => V::B(t.font.own),
         "px" => V::N(t.px),
         "color" => V::C(t.color),
         "hAlign" => V::I(h(t.h_align)),
@@ -242,7 +246,8 @@ fn layout(pr: &Primary, role: &str) -> Option<V> {
             "background" => V::C(c.background.map_or(CLEAR, |t| t.color)),
             "backgroundEnd" => V::C(c.background.map_or(CLEAR, |t| t.end)),
             "backgroundVertical" => V::B(c.background.is_some_and(|t| t.vertical)),
-            "fontSource" => url(&c.text.font),
+            "fontSource" => url(&c.text.font.file),
+        "ownFace" => V::B(c.text.font.own),
             "px" => V::N(c.text.px),
             "lineSpacing" => V::N(c.text.line_spacing),
             "color" => V::C(c.text.color),
@@ -272,7 +277,8 @@ fn layout(pr: &Primary, role: &str) -> Option<V> {
                 "secondaryColor" => V::C(t.secondary_color),
                 "selectedColor" => V::C(t.selected_color),
                 "selectedSecondaryColor" => V::C(t.selected_secondary_color),
-                "fontSource" => url(&t.font),
+                "fontSource" => url(&t.font.file),
+        "ownFace" => V::B(t.font.own),
                 "px" => V::N(t.px),
                 "lineSpacing" => V::N(t.line_spacing),
                 "margin" => V::N(t.margin),
@@ -319,7 +325,8 @@ fn layout(pr: &Primary, role: &str) -> Option<V> {
             "selectorRadius" => V::N(g.selector_radius),
             "selectorOnTop" => V::B(g.selector_layer == "top"),
             "selectorInMiddle" => V::B(g.selector_layer == "middle"),
-            "fontSource" => url(&g.text.font),
+            "fontSource" => url(&g.text.font.file),
+        "ownFace" => V::B(g.text.font.own),
             "px" => V::N(g.text.px),
             "lineSpacing" => V::N(g.text.line_spacing),
             "color" => V::C(g.text.color),
@@ -450,7 +457,7 @@ pub fn part(p: &Paint, i: usize, role: &str, swap: bool) -> V {
 }
 
 /// Every role name the element model answers, in role order.
-pub const ELEMENT_ROLES: [&str; 107] = [
+pub const ELEMENT_ROLES: [&str; 108] = [
     "elementId", "paint", "name", "boxX", "boxY", "boxWidth", "boxHeight", "turn", "originX", "originY", "alpha",
     "source", "fit", "cropX", "cropY", "tileWidth", "tileHeight", "tileRight", "tileBottom", "tint", "tintEnd", "gradientVertical",
     "saturation", "radius", "nearest", "frame",
@@ -464,10 +471,10 @@ pub const ELEMENT_ROLES: [&str; 107] = [
     "hasSelectedBackground", "selectedBackground", "selectedBackgroundRadius", "selectedBackgroundLeft", "selectedBackgroundRight",
     "primaryColor", "secondaryColor", "selectedColor", "selectedSecondaryColor", "margin", "markerWidth",
     "columns", "itemWidth", "itemHeight", "pitchX", "pitchY", "marginX", "marginY", "itemScale", "focusFrom", "fromLevel", "toLevel",
-    "progress", "unfocusedOpacity", "unfocusedSaturation", "unfocusedDim", "imageScale", "hasSelectedTint", "selectedTint",
+    "progress", "unfocusedOpacity", "unfocusedSaturation", "unfocusedDim", "imageScale", "hasSelectedTint", "selectedTint", "ownFace",
 ];
 
-/// The grid's roles past the element list's first 107.
+/// The grid's roles past the element list's first 108.
 pub const GRID_ROLES: [&str; 9] = [
     "backgroundSource", "backgroundScale", "selectorSource", "selectorScale", "selectorRadius", "selectorOnTop", "selectorInMiddle",
     "selectedItemBackground", "textRadius",

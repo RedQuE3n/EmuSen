@@ -1,54 +1,43 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import EmuSen.Esde
 
-// One line of words as ES-DE draws it: each glyph at a whole-pixel pen, advanced by its advance rounded, at the size unrounded, the 'S' centred on the line (EmuSen_Qt.md §4.8.7).
+// One line of words as ES-DE draws a help label: laid out by its text rules (EmuSen_Qt.md §4.9), the 'S' centred on the line (§4.8.7).
 Item {
     id: root
     property string text
     property color color
     // The character the line is centred by, the scene's (EsdeModel.reference).
     property string reference
+    // The theme's font file, empty for the kit's body face, and the family Qt loaded from it.
+    property url fontSource
     property string family
     property real px: 12
-    readonly property int base: Math.max(1, Math.round(root.px))
-    readonly property real stretch: root.px / root.base
-    // Each glyph with its pen, and the pen past the last as the line's width.
-    // Read through the metrics' own font, so a new size or face lays the line out again (advanceWidth is a call, not a property).
-    readonly property var placed: {
-        const scale = root.px / metrics.font.pixelSize;
-        let pen = 0;
-        const out = [];
-        for (const g of Array.from(root.text)) {
-            out.push({ glyph: g, pen: pen });
-            pen += Math.round(metrics.advanceWidth(g) * scale);
-        }
-        return { glyphs: out, width: pen };
-    }
-    readonly property rect referenceBox: {
-        const size = metrics.font.pixelSize;
-        return size > 0 ? metrics.tightBoundingRect(root.reference) : Qt.rect(0, 0, 0, 0);
-    }
-    implicitWidth: root.placed.width
+    // ES-DE's own face, which it draws at a whole size (EmuSen_Qt.md §4.9.1).
+    property bool ownFace
+    readonly property real stretch: laid.size > 0 ? laid.size / metrics.font.pixelSize : 1
+    readonly property rect referenceBox: metrics.font.pixelSize > 0 ? metrics.tightBoundingRect(root.reference) : Qt.rect(0, 0, 0, 0)
+    implicitWidth: laid.contentWidth
     implicitHeight: root.referenceBox.height * root.stretch
+    TextLayout {
+        id: laid
+        font: root.fontSource
+        text: root.text
+        px: root.px
+        ownFace: root.ownFace
+    }
     FontMetrics {
         id: metrics
         font.family: root.family
-        font.pixelSize: root.base
+        font.pixelSize: Math.max(1, Math.round(laid.size))
         font.kerning: false
         font.hintingPreference: Font.PreferNoHinting
     }
-    Repeater {
-        model: root.placed.glyphs
-        Text {
-            id: glyph
-            required property var modelData
-            x: glyph.modelData.pen
-            y: (-root.referenceBox.y - glyph.baselineOffset) * root.stretch
-            transformOrigin: Item.TopLeft
-            scale: root.stretch
-            text: glyph.modelData.glyph
-            color: root.color
-            font: metrics.font
-        }
+    GlyphText {
+        // The reference's top on the line's top: its baseline below by the reference's ascent.
+        y: -root.referenceBox.y * root.stretch - Math.round(laid.baseline)
+        laid: laid
+        family: root.family
+        color: root.color
     }
 }

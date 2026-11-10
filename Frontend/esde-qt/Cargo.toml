@@ -16,6 +16,8 @@ cxx-qt.workspace = true
 cxx-qt-lib.workspace = true
 # The scene and its marks, plain data with no Qt (EmuSen_Qt.md §4.5).
 emusen-esde = { path = "../esde" }
+# ES-DE's text rules over a face (EmuSen_Qt.md §4.9), laid out for TextLayout.
+emusen-esde-text = { path = "../esde-text" }
 # The library's texts (EmuSen_Qt.md §4.6) read as JSON.
 serde_json.workspace = true
 # The kit's QML module (the body face, the help bar, the pad router) and its conversions to Qt's types.

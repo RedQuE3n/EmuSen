@@ -13,6 +13,7 @@ pub mod body;
 pub mod column;
 pub mod convert;
 pub mod figures;
+pub mod fonts;
 pub mod frame;
 pub mod glyph;
 pub mod item_model;

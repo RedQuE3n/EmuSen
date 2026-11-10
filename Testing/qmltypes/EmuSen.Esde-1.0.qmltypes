@@ -687,4 +687,251 @@ Module {
             Parameter { name: "value"; type: "bool" }
         }
     }
+    Component {
+        file: "text.cxxqt.h"
+        lineNumber: 160
+        name: "TextLayout"
+        accessSemantics: "reference"
+        prototype: "QAbstractListModel"
+        exports: ["EmuSen.Esde/TextLayout 1.0"]
+        exportMetaObjectRevisions: [256]
+        Enum {
+            name: "GlyphRole"
+            isScoped: true
+            type: "int"
+            lineNumber: 181
+            values: ["Glyph", "Pen", "LineTop"]
+        }
+        Property {
+            name: "font"
+            type: "QUrl"
+            read: "getFont"
+            write: "setFont"
+            notify: "fontChanged"
+            index: 0
+            lineNumber: 165
+        }
+        Property {
+            name: "text"
+            type: "QString"
+            read: "getText"
+            write: "setText"
+            notify: "textChanged"
+            index: 1
+            lineNumber: 166
+        }
+        Property {
+            name: "px"
+            type: "double"
+            read: "getPx"
+            write: "setPx"
+            notify: "pxChanged"
+            index: 2
+            lineNumber: 167
+        }
+        Property {
+            name: "ownFace"
+            type: "bool"
+            read: "getOwnFace"
+            write: "setOwnFace"
+            notify: "ownFaceChanged"
+            index: 3
+            lineNumber: 168
+        }
+        Property {
+            name: "boxWidth"
+            type: "double"
+            read: "getBoxWidth"
+            write: "setBoxWidth"
+            notify: "boxWidthChanged"
+            index: 4
+            lineNumber: 169
+        }
+        Property {
+            name: "boxHeight"
+            type: "double"
+            read: "getBoxHeight"
+            write: "setBoxHeight"
+            notify: "boxHeightChanged"
+            index: 5
+            lineNumber: 170
+        }
+        Property {
+            name: "lineSpacing"
+            type: "double"
+            read: "getLineSpacing"
+            write: "setLineSpacing"
+            notify: "lineSpacingChanged"
+            index: 6
+            lineNumber: 171
+        }
+        Property {
+            name: "wrap"
+            type: "bool"
+            read: "getWrap"
+            write: "setWrap"
+            notify: "wrapChanged"
+            index: 7
+            lineNumber: 172
+        }
+        Property {
+            name: "ellipsis"
+            type: "bool"
+            read: "getEllipsis"
+            write: "setEllipsis"
+            notify: "ellipsisChanged"
+            index: 8
+            lineNumber: 173
+        }
+        Property {
+            name: "align"
+            type: "int"
+            read: "getAlign"
+            write: "setAlign"
+            notify: "alignChanged"
+            index: 9
+            lineNumber: 174
+        }
+        Property {
+            name: "size"
+            type: "double"
+            read: "getSize"
+            notify: "sizeChanged"
+            index: 10
+            lineNumber: 175
+            isReadonly: true
+        }
+        Property {
+            name: "pitch"
+            type: "double"
+            read: "getPitch"
+            notify: "pitchChanged"
+            index: 11
+            lineNumber: 176
+            isReadonly: true
+        }
+        Property {
+            name: "baseline"
+            type: "double"
+            read: "getBaseline"
+            notify: "baselineChanged"
+            index: 12
+            lineNumber: 177
+            isReadonly: true
+        }
+        Property {
+            name: "contentWidth"
+            type: "double"
+            read: "getContentWidth"
+            notify: "contentWidthChanged"
+            index: 13
+            lineNumber: 178
+            isReadonly: true
+        }
+        Property {
+            name: "contentHeight"
+            type: "double"
+            read: "getContentHeight"
+            notify: "contentHeightChanged"
+            index: 14
+            lineNumber: 179
+            isReadonly: true
+        }
+        Property {
+            name: "lineCount"
+            type: "int"
+            read: "getLineCount"
+            notify: "lineCountChanged"
+            index: 15
+            lineNumber: 180
+            isReadonly: true
+        }
+        Signal { name: "fontChanged"; lineNumber: 217 }
+        Signal { name: "textChanged"; lineNumber: 218 }
+        Signal { name: "pxChanged"; lineNumber: 219 }
+        Signal { name: "ownFaceChanged"; lineNumber: 220 }
+        Signal { name: "boxWidthChanged"; lineNumber: 221 }
+        Signal { name: "boxHeightChanged"; lineNumber: 222 }
+        Signal { name: "lineSpacingChanged"; lineNumber: 223 }
+        Signal { name: "wrapChanged"; lineNumber: 224 }
+        Signal { name: "ellipsisChanged"; lineNumber: 225 }
+        Signal { name: "alignChanged"; lineNumber: 226 }
+        Signal { name: "sizeChanged"; lineNumber: 227 }
+        Signal { name: "pitchChanged"; lineNumber: 228 }
+        Signal { name: "baselineChanged"; lineNumber: 229 }
+        Signal { name: "contentWidthChanged"; lineNumber: 230 }
+        Signal { name: "contentHeightChanged"; lineNumber: 231 }
+        Signal { name: "lineCountChanged"; lineNumber: 232 }
+        Method {
+            name: "setFont"
+            lineNumber: 192
+            Parameter { name: "value"; type: "QUrl" }
+        }
+        Method {
+            name: "setText"
+            lineNumber: 194
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setPx"
+            lineNumber: 196
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setOwnFace"
+            lineNumber: 198
+            Parameter { name: "value"; type: "bool" }
+        }
+        Method {
+            name: "setBoxWidth"
+            lineNumber: 200
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setBoxHeight"
+            lineNumber: 202
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setLineSpacing"
+            lineNumber: 204
+            Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setWrap"
+            lineNumber: 206
+            Parameter { name: "value"; type: "bool" }
+        }
+        Method {
+            name: "setEllipsis"
+            lineNumber: 208
+            Parameter { name: "value"; type: "bool" }
+        }
+        Method {
+            name: "setAlign"
+            lineNumber: 210
+            Parameter { name: "value"; type: "int" }
+        }
+        Method {
+            name: "data"
+            type: "QVariant"
+            isMethodConstant: true
+            lineNumber: 233
+            Parameter { name: "index"; type: "QModelIndex" }
+            Parameter { name: "role"; type: "int" }
+        }
+        Method {
+            name: "roleNames"
+            type: "QHash_i32_QByteArray"
+            isMethodConstant: true
+            lineNumber: 234
+        }
+        Method {
+            name: "rowCount"
+            type: "int"
+            isMethodConstant: true
+            lineNumber: 235
+            Parameter { name: "parent"; type: "QModelIndex" }
+        }
+    }
 }

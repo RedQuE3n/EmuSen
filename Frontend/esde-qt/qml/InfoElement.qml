@@ -6,6 +6,7 @@ import EmuSen.Esde
 ElementBox {
     id: root
     required property url fontSource
+    required property bool ownFace
     required property real px
     required property color color
     required property color background
@@ -53,6 +54,7 @@ ElementBox {
                     height: root.height
                     text: item.text
                     fontSource: root.fontSource
+                    ownFace: root.ownFace
                     px: root.px
                     lineSpacing: root.lineSpacing
                     color: root.color

@@ -7,6 +7,7 @@ import EmuSen.Esde
 ElementBox {
     id: root
     required property url fontSource
+    required property bool ownFace
     required property real px
     required property color color
     required property color iconColor
@@ -76,6 +77,8 @@ ElementBox {
         labelFont: Qt.font({ family: root.faceName, pixelSize: Math.round(root.labelPx) })
         label: Component {
             GlyphLine {
+                fontSource: face.status === FontLoader.Ready ? root.fontSource : ""
+                ownFace: root.ownFace
                 family: root.faceName
                 reference: root.esde ? root.esde.reference : ""
                 px: root.labelPx

@@ -7,6 +7,7 @@ ElementBox {
     id: root
     required property real iconHeight
     required property url fontSource
+    required property bool ownFace
     required property real textScale
     required property color color
     required property real entrySpacing
@@ -63,6 +64,7 @@ ElementBox {
                     visible: item.text.length > 0
                     text: item.text
                     fontSource: root.fontSource
+                    ownFace: root.ownFace
                     px: root.iconHeight * root.textScale
                     color: root.color
                 }

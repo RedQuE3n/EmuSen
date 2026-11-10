@@ -53,8 +53,11 @@ pub(super) fn existing(path: Option<&ThemePath>) -> Option<String> {
 }
 
 /// An element's face: the theme's `fontPath`, else ES-DE's default face where the host found one.
-pub(super) fn face_of(e: &Element, data: &Data) -> Option<String> {
-    existing(e.path("fontPath")).or_else(|| data.default_font.clone())
+pub(super) fn face_of(e: &Element, data: &Data) -> Face {
+    match existing(e.path("fontPath")) {
+        Some(file) => Face { file: Some(file), own: false },
+        None => Face { file: data.default_font.clone(), own: true },
+    }
 }
 
 pub(super) fn color(e: &Element, property: &str, default: u32) -> Color {

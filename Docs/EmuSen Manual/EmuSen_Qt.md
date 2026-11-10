@@ -2964,6 +2964,77 @@ the last table and on nothing else; kit-core's `glyph` (7 tests, the pair's amon
 reverted: six caught as written above (the pair glyph off, the fractional advances, the glyph's side, the info gap, no
 default face, the filled axis cut at one tip), and one, the info marks square, not caught and replaced.
 
+### 4.9 ES-DE's text rules: `emusen-esde-text` **[M 2026-11-09]**
+
+**Decided 2026-11-09 by the tester:** ES-DE's text layout is built as a component of its own, after the evaluation below,
+and applied to every text the painter draws. The rules were measured first (2026-11-09, on the captures of
+2026-11-08 and the faces ES-DE drew them with: its own Akrobat, and each theme's files).
+
+#### 4.9.1 The rules, measured
+
+ES-DE 3.4.1's AppImage leaves FreeType and HarfBuzz out and takes the system's (its `es-de` names `libfreetype.so.6` and
+`libharfbuzz.so.0`, and its `usr/lib` holds neither), so the captures were drawn by Fedora 44's FreeType 2.14.3 and
+HarfBuzz 14.1.0, the libraries a probe can call directly. The probe (`~/.cache/emusen/tmp/x2/ft/`, outside the
+repository) rasterises a word with FreeType and shapes it with HarfBuzz, and holds each glyph's ink, each word's ink
+width and each line's rows to the capture.
+
+1. **ES-DE's own face is drawn at its size rounded up to a whole pixel; a theme's face at its size as given.** ES-DE's own
+   face is the one it draws where the theme names no `fontPath` (Akrobat, §4.8.7). Art Book Next's help labels (25.67 px
+   at 1280 × 800, 38.499997 at 1920 × 1200: 0.04583333 × H × 0.7) ink MENU, SELECT, SCREENSAVER and CHOOSE 53, 67, 133,
+   74 px and 80, 103, 201, 111 px wide; FreeType at 26 px gives 53, 68, 134, 73, at 39 px 79, 103, 201, 112, and at
+   38.5 px 79, 99, 195, 109. Artflix's description (`fontSize` 0.024, 19.2 and 28.8 px) has a pitch of 22 and 32 px
+   with `lineSpacing` 1.1 (item 3), so 20 and 29 px: rounded up, as 19.2 rounded would be 19. The size is taken in
+   FreeType's 64ths of a pixel first, the fraction dropped: the theme's 0.02916667 × 1200 is 35.000004 px, and Art Book
+   Next's release date in its own Mulish inks 191 px, 35 px's width (36 px gives 198). A theme's face is not rounded:
+   Mulish's "None" at 23.33 px (0.02916667 × 800) inks 54 px, 23.33 px's pens (24 px gives 56), and CarAlt's rost at
+   21.6 px stands at 21.6 px's pens (0, 8, 15, 23, 30, 37, 46, 53, 60, 68, 75 for "Screensaver"; 22 px would end 69, 76).
+   The "2.6 % above nominal for TrueType faces" of §4.8.7 was this rule seen on Akrobat, and on the clock's box, which
+   was measured 2.7 units too wide (below).
+2. **Each glyph stands at a whole-pixel pen, advanced by its shaped advance rounded**, the face's kerning applied (HarfBuzz
+   shaping). Matched glyph by glyph at 39 px, SCREENSAVER's pens are 0, 18, 37, 56, 74, 92, 113, 131, 148, 166, 184 and
+   CHOOSE's 0, 19, 40, 60, 80, 97, as the rounded advances give; the summed advances rounded give 0, 18, 36, 55, 73 … and
+   are ruled out, at every size (CHOOSE would need 39.22–39.23 px and SCREENSAVER 39.41–39.50). A 2-D fit of rendered
+   lines to the captures agrees: SCREENSAVER 501 against 692, CHOOSE 248 against 362, Art Book Next's description line in
+   Mulish at 30 px 1.7 against 442 (summed of 0 to 1 per pixel over the line). Kerning shows in Exo 2: SCREENSAVER 102 px
+   of ink in ES-DE, 103 without the A–V pair, and FAVORITES two pixels narrower with its pairs.
+3. **In ES-DE's own face a space's advance is rounded down.** Artflix's description in Akrobat at 29 px puts its third
+   line's 13 words at 0, 65, 150, 182, 207, 255, 338, 444, 468, 522, 553, 603 and 645 px; words of rounded advances
+   joined by 6-px spaces give each within a pixel, and 7-px spaces (6.64 rounded) drift a pixel a word, to 656. That
+   line's ink is 762 px, inside the 768-px box, where 7-px spaces make it 776 and break it a word earlier. The 2-D fit:
+   6-px spaces 1317 against 3238 at 29 px, and 4-px spaces against 5 (4.58 rounded) 1410 against 1644 at 20 px. A theme's
+   face rounds its space as any glyph: Mulish's 7.66 px space at 30 px is 8 in the fit of 1.7 above. Why ES-DE's own face
+   differs is not shown by the captures; the rule is held as measured.
+4. **A line's pitch is the size drawn times `lineSpacing`**, each line's place rounded. Artflix's system description
+   at 1920 × 1200 is 28.8 px nominal: its capitals' tops stand on rows 359, 391, 423 and 455, a pitch of 32, which
+   29 × 1.1 = 31.9 gives (0, 32, 64, 96 rounded) and 28.8 × 1.1 = 31.68 does not (0, 32, 63, 95); at 1280 × 800 on 241,
+   263, 285 and 307, a pitch of 22, 20 × 1.1. The face's own line (ascender + descender at that size) is centred in it, as
+   §4.8.6 found: the first baseline is 25 px below the element's top, (31.9 − 36.2) / 2 + 27.2.
+5. **A text box of fixed height shows whole lines only.** The same description's box is 216 px high, 6.75 pitches, and
+   ES-DE shows six lines, the last whole, without an ellipsis, though the text goes on. A box one line high (THEMES.md:
+   "`h` <= `fontSize`") is cut with an ellipsis, "(...)", three full stops.
+
+#### 4.9.2 Which form, and why
+
+The painter laid text out with Qt's own `Text` (fractional advances at the integer size, Qt's line breaking and
+eliding) and the help labels with `GlyphLine`, a second set of rules in QML. Neither is ES-DE's, and two owners of one
+set of rules is the defect the house rules name. The evaluation:
+
+- *An extension of an existing surface* (more properties on `TextBlock`, the rules in its JavaScript) is refused: QML
+  is layout only (§1.3), and line breaking and ellipsis are words built in QML.
+- *A module of the scene* (`emusen_esde::scene`) is refused: the rules need a font's advances and kerning, so the scene
+  would read font files, a second job for a component whose fence (§4.2, `tests/fence.rs`) holds it to the XML reader.
+- **A component of its own** is chosen: the crate `emusen-esde-text` (`Frontend/esde-text`), one job, ES-DE's text rules
+  over a face: the size, the shaping and the pens, the line breaking, the pitch, the whole lines and the ellipsis. Plain
+  data in (a face's bytes, the words, the size, the box, `lineSpacing`, wrap and ellipsis) and out (lines of glyphs at
+  whole-pixel pens), no Qt, testable alone. Its two dependencies are new to the tree and are stated here: `rustybuzz`
+  (MIT, HarfBuzz's shaping algorithm in Rust, the shaping ES-DE does with HarfBuzz) and through it `ttf-parser` (MIT,
+  the font tables). A framework rather than hand-written shaping, as the house rules ask.
+- The painter's side stays a painter's: `TextLayout`, an `EsdeModel`-free QML type of `EmuSen.Esde` that asks the crate for a
+  layout, and `GlyphText.qml`, which draws one glyph per pen with Qt's `Text` at the whole size. `TextBlock` and the help
+  bar's labels draw through it, so every text, list row, carousel and grid label, date, clock and help label of an
+  ES-DE theme has one owner of its rules. The kit's body face, drawn where a theme names no font and Akrobat is not
+  installed, reaches the crate as bytes from its owner, `emusen_kit_qt::body::FACE`.
+
 ---
 
 ## 5. The stable developer surface

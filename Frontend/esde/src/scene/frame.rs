@@ -122,11 +122,19 @@ pub struct Scroll {
     pub opacity: f64,
 }
 
+/// A text's face: the theme's font file, else ES-DE's own face where the player has it (none: the painter's body face),
+/// and whether it is ES-DE's own, which ES-DE draws at its size rounded up to a whole pixel (EmuSen_Qt.md §4.9.1).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Face {
+    pub file: Option<String>,
+    pub own: bool,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Text {
     /// Already in its letter case.
     pub text: String,
-    pub font: Option<String>,
+    pub font: Face,
     pub px: f64,
     pub color: Color,
     pub h_align: HAlign,
@@ -217,7 +225,7 @@ pub struct HelpEntry {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Help {
     pub entries: Vec<HelpEntry>,
-    pub font: Option<String>,
+    pub font: Face,
     pub px: f64,
     pub label_color: Color,
     pub icon_color: Color,
@@ -238,7 +246,7 @@ pub struct InfoItem {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Info {
     pub items: Vec<InfoItem>,
-    pub font: Option<String>,
+    pub font: Face,
     pub px: f64,
     pub color: Color,
     pub background: Color,
@@ -257,7 +265,7 @@ pub struct Status {
     pub items: Vec<StatusItem>,
     /// The icons' height; a theme's icon file keeps its own width for that height.
     pub height: f64,
-    pub font: Option<String>,
+    pub font: Face,
     /// The percentage's size over the height.
     pub text_scale: f64,
     pub color: Color,
@@ -303,7 +311,7 @@ pub struct Primary {
 /// Text set in an item: font, size, colour and background.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ItemText {
-    pub font: Option<String>,
+    pub font: Face,
     pub px: f64,
     pub line_spacing: f64,
     pub color: Color,
@@ -373,7 +381,7 @@ pub struct TextList {
     pub secondary_color: Color,
     pub selected_color: Color,
     pub selected_secondary_color: Color,
-    pub font: Option<String>,
+    pub font: Face,
     pub px: f64,
     pub line_spacing: f64,
     pub margin: f64,

@@ -24,3 +24,4 @@ TextListView 1.0 qml/TextListView.qml
 GridElement 1.0 qml/GridElement.qml
 View 1.0 qml/View.qml
 GlyphLine 1.0 qml/GlyphLine.qml
+GlyphText 1.0 qml/GlyphText.qml

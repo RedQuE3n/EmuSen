@@ -2882,3 +2882,14 @@ under `Testing/qmltypes` (`PadGlyphMarks.pair`, `paired`); the ES-DE oracle, whe
 views now span ES-DE's widths (CarAlt's Choose inks 1221–1237 as ES-DE's does). Measured on 2026-11-09 with two seeded
 faults, each reverted: the filled axis cut at one tip failed kit-core's test ("not the single control's glyph"), and
 `pairGlyph` left off in the ES-DE painter failed the oracle (the four system bars 22.3–40.9 units wider than ES-DE's).
+
+### 7.60 The body face as bytes (stage 4, X2; 2026-11-09)
+
+The ES-DE painter lays a theme's words out by ES-DE's rules in a component of its own, `emusen-esde-text`
+(EmuSen_Qt.md §4.9), which reads a face's bytes rather than asking Qt. Where a theme names no font and ES-DE's own face
+is not installed, the words are the kit's body face, so the kit gives that face to Rust as well as to QML:
+`emusen_kit_qt::fonts::BODY` (Barlow Regular's bytes, the same file `fonts/Fonts.qrc` carries) and `BODY_URL` (the
+resource path QML loads it from). The kit stays the face's one owner; nothing else names the file.
+
+**Held to**: `emusen-esde-text`'s tests read the same file, and the ES-DE painter's `TextLayout` lays a theme without a
+font out on these bytes.

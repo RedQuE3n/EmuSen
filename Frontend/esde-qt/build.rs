@@ -4,7 +4,7 @@ use std::process::Command;
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 
 // EmuSen.Esde 1.0, the painter's module (EmuSen_Qt.md §4.8); its .qmltypes is the module's surface.
-const ESDE_FILES: [&str; 17] = [
+const ESDE_FILES: [&str; 18] = [
     "qml/Picture.qml",
     "qml/Mark.qml",
     "qml/TextBlock.qml",
@@ -22,6 +22,7 @@ const ESDE_FILES: [&str; 17] = [
     "qml/GridElement.qml",
     "qml/View.qml",
     "qml/GlyphLine.qml",
+    "qml/GlyphText.qml",
 ];
 
 /// Qt's shader baker over the picture's fragment shader, into a resource the module carries at qrc:/emusen/esde/.
@@ -47,7 +48,7 @@ fn main() {
         QmlModule::new("EmuSen.Esde").version(1, 0).qml_files(ESDE_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtQml.Models").depend("EmuSen.Kit"),
     )
     .qrc(shaders)
-    .files(["src/base.rs", "src/marks.rs", "src/model.rs", "src/lists.rs"])
+    .files(["src/base.rs", "src/marks.rs", "src/model.rs", "src/lists.rs", "src/text.rs"])
     .qt_module("Quick")
     .build()
     .export();

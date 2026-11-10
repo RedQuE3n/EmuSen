@@ -1,0 +1,15 @@
+[package]
+name = "emusen-esde-text"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# ES-DE's text rules over a face (EmuSen_Qt.md §4.9): the whole size, the shaped and rounded pens, the line breaking, the
+# pitch, the whole lines and the ellipsis. Plain data in and out, no Qt; the painter draws what it lays out.
+[lib]
+name = "emusen_esde_text"
+
+[dependencies]
+# MIT. HarfBuzz's shaping in Rust, the shaping ES-DE does with HarfBuzz; through it ttf-parser (MIT) reads the tables.
+rustybuzz = "0.20"

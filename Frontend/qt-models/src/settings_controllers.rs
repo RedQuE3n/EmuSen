@@ -64,6 +64,8 @@ pub struct Drawn {
     pub texts: Vec<String>,
     pub focus: i32,
     pub held: Vec<String>,
+    /// How far each control is pushed, 0 to 1, in the controls' order; empty while the tester does not run.
+    pub pushes: Vec<f64>,
     pub tabs: Vec<String>,
     pub caption: String,
     /// What a reader calls the drawing.
@@ -525,6 +527,9 @@ impl SettingsView {
         if b.capturing || b.testing {
             b.capturing = false;
             b.testing = false;
+            self.held.clear();
+            self.pushes.clear();
+            self.keys_held.clear();
             return Some(true);
         }
         None
@@ -679,6 +684,7 @@ impl SettingsView {
             texts,
             focus: if b.testing { -1 } else { b.focus as i32 },
             held: self.held.clone(),
+            pushes: if b.testing { self.pushes.clone() } else { Vec::new() },
             tabs,
             caption: self.cw("caption"),
             name: String::new(),
@@ -702,28 +708,60 @@ impl SettingsView {
         self.heard_pad(Some(down.trailing_zeros() as i32), None)
     }
 
-    /// What the tester lights: the page's player's pad as the game would hear it, a canonical button by its bound
-    /// gamepad button, L2 and R2 by their triggers past half, and a stick's directions past Endymion's stick deadzone.
+    /// What the tester lights: a control whose key is held on the keyboard, and the page's player's pad as the game
+    /// would hear it, a canonical button by its bound gamepad button, L2 and R2 by their triggers past half, and a
+    /// stick's directions past Endymion's stick deadzone.
     pub fn held_from(&self, seated: &Seated) -> Vec<String> {
-        let (Some(b), Some(chooser)) = (self.binding.as_ref().filter(|b| b.testing), self.chooser.as_ref()) else { return Vec::new() };
-        let key = seated.players.iter().find(|p| p.player == b.player as usize).and_then(|_| seated.pads.iter().find(|p| p.player == b.player as usize));
-        let Some(pad) = key else { return Vec::new() };
-        let bound = chooser.bound(&b.console, b.player);
-        let triggers = trigger_bits(&pad.axes);
+        let Some(b) = self.binding.as_ref().filter(|b| b.testing) else { return Vec::new() };
+        let pad = self.tester_pad(seated, b.player);
+        let bound = match (pad, self.chooser.as_ref()) {
+            (Some(_), Some(chooser)) => chooser.bound(&b.console, b.player),
+            _ => [-1; 16],
+        };
         let mut held = Vec::new();
         for control in self.controls_of(&b.console) {
-            let lit = if let Some(n) = controllers::control_number(&control) {
-                let by_button = bound.get(n as usize).is_some_and(|&sdl| sdl >= 0 && pad.buttons & (1 << sdl) != 0);
-                let by_trigger = (control == "L2" && triggers & LEFT_TRIGGER_BIT != 0) || (control == "R2" && triggers & RIGHT_TRIGGER_BIT != 0);
-                by_button || by_trigger
-            } else {
-                controllers::stick_held(&control, &pad.axes, seated.deadzone)
-            };
-            if lit {
+            let by_key = self.read.bindings.key(&b.console, &control).is_some_and(|k| self.keys_held.iter().any(|h| h.eq_ignore_ascii_case(&k)));
+            let by_pad = pad.is_some_and(|pad| {
+                if let Some(n) = controllers::control_number(&control) {
+                    let triggers = trigger_bits(&pad.axes);
+                    let by_button = bound.get(n as usize).is_some_and(|&sdl| sdl >= 0 && pad.buttons & (1 << sdl) != 0);
+                    by_button || (control == "L2" && triggers & LEFT_TRIGGER_BIT != 0) || (control == "R2" && triggers & RIGHT_TRIGGER_BIT != 0)
+                } else {
+                    controllers::stick_held(&control, &pad.axes, seated.deadzone)
+                }
+            });
+            if by_key || by_pad {
                 held.push(control);
             }
         }
         held
+    }
+
+    /// How far the tester sees each control pushed, in the controls' order: a stick's directions by the page's player's
+    /// stick, so the drawing's knob stands where the stick does; every other control 0.
+    pub fn pushes_from(&self, seated: &Seated) -> Vec<f64> {
+        let Some(b) = self.binding.as_ref().filter(|b| b.testing) else { return Vec::new() };
+        let pad = self.tester_pad(seated, b.player);
+        self.controls_of(&b.console).iter().map(|c| pad.map_or(0.0, |p| controllers::stick_push(c, &p.axes))).collect()
+    }
+
+    /// The pad seated as a player, if one is connected there.
+    fn tester_pad<'a>(&self, seated: &'a Seated, player: u32) -> Option<&'a Connected> {
+        seated.pads.iter().find(|p| p.player == player as usize)
+    }
+
+    /// A key down or up on the keyboard while the tester runs, by the binding files' word for it: what is held then.
+    pub fn tester_key(&mut self, word: &str, down: bool) -> bool {
+        if !self.testing() {
+            return false;
+        }
+        self.keys_held.retain(|k| !k.eq_ignore_ascii_case(word));
+        if down {
+            self.keys_held.push(word.to_owned());
+        }
+        let seated = self.seats.clone();
+        self.held = self.held_from(&seated);
+        true
     }
 
     /// Left or Right on the bindings page: the control before or after, round from either end.
@@ -794,6 +832,8 @@ impl SettingsView {
                     page.testing = !page.testing;
                 }
                 self.held.clear();
+                self.pushes.clear();
+                self.keys_held.clear();
                 Outcome::Shown
             }
             _ => Outcome::Nothing,
@@ -854,6 +894,11 @@ impl SettingsView {
     /// Whether the pad's page listens for a gamepad's button.
     pub fn listening_pad(&self) -> bool {
         self.binding.as_ref().is_some_and(|b| b.capturing && !b.keys && matches!(self.page(), Some(Page::Bindings)))
+    }
+
+    /// How long B is held to leave the tester, since a short press of B is a button being tried.
+    pub fn tester_hold_ms(&self) -> i32 {
+        self.description_at(&["controllers", "tester_hold_ms"]).as_i64().map_or(0, |ms| ms as i32)
     }
 
     /// Whether the tester runs.

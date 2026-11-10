@@ -9,7 +9,7 @@ pub mod layout;
 pub mod shape;
 
 pub use drawing::{Drawing, Part, Region, Side, Stick, Word};
-pub use layout::{data_url, lay_out, paints, svg, walk, words, Laid, Lit, Paint};
+pub use layout::{data_url, knob, lay_out, paints, svg, walk, words, Laid, Lit, Paint};
 pub use shape::{Bounds, Shape};
 
 /// The generic controller's own drawing: a two-stick pad with every RetroPad control, as libretro names them, and

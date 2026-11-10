@@ -427,7 +427,7 @@ Module {
     }
     Component {
         file: "controller.cxxqt.h"
-        lineNumber: 104
+        lineNumber: 113
         name: "ControllerLayout"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -440,7 +440,7 @@ Module {
             write: "setDrawing"
             notify: "drawingChanged"
             index: 0
-            lineNumber: 109
+            lineNumber: 118
         }
         Property {
             name: "controls"
@@ -449,7 +449,7 @@ Module {
             write: "setControls"
             notify: "controlsChanged"
             index: 1
-            lineNumber: 110
+            lineNumber: 119
         }
         Property {
             name: "focused"
@@ -458,7 +458,7 @@ Module {
             write: "setFocused"
             notify: "focusedChanged"
             index: 2
-            lineNumber: 111
+            lineNumber: 120
         }
         Property {
             name: "held"
@@ -467,7 +467,16 @@ Module {
             write: "setHeld"
             notify: "heldChanged"
             index: 3
-            lineNumber: 112
+            lineNumber: 121
+        }
+        Property {
+            name: "pushes"
+            type: "QList_f64"
+            read: "getPushes"
+            write: "setPushes"
+            notify: "pushesChanged"
+            index: 4
+            lineNumber: 122
         }
         Property {
             name: "width"
@@ -475,8 +484,8 @@ Module {
             read: "getWidth"
             write: "setWidth"
             notify: "widthChanged"
-            index: 4
-            lineNumber: 113
+            index: 5
+            lineNumber: 123
         }
         Property {
             name: "height"
@@ -484,8 +493,8 @@ Module {
             read: "getHeight"
             write: "setHeight"
             notify: "heightChanged"
-            index: 5
-            lineNumber: 114
+            index: 6
+            lineNumber: 124
         }
         Property {
             name: "labelHeight"
@@ -493,8 +502,8 @@ Module {
             read: "getLabelHeight"
             write: "setLabelHeight"
             notify: "labelHeightChanged"
-            index: 6
-            lineNumber: 115
+            index: 7
+            lineNumber: 125
         }
         Property {
             name: "accent"
@@ -502,16 +511,16 @@ Module {
             read: "getAccent"
             write: "setAccent"
             notify: "accentChanged"
-            index: 7
-            lineNumber: 116
+            index: 8
+            lineNumber: 126
         }
         Property {
             name: "name"
             type: "QString"
             read: "getName"
             notify: "laidOut"
-            index: 8
-            lineNumber: 117
+            index: 9
+            lineNumber: 127
             isReadonly: true
         }
         Property {
@@ -519,8 +528,8 @@ Module {
             type: "bool"
             read: "getGeneric"
             notify: "laidOut"
-            index: 9
-            lineNumber: 118
+            index: 10
+            lineNumber: 128
             isReadonly: true
         }
         Property {
@@ -528,8 +537,8 @@ Module {
             type: "bool"
             read: "getFits"
             notify: "laidOut"
-            index: 10
-            lineNumber: 119
+            index: 11
+            lineNumber: 129
             isReadonly: true
         }
         Property {
@@ -537,8 +546,8 @@ Module {
             type: "QRectF"
             read: "getPlace"
             notify: "laidOut"
-            index: 11
-            lineNumber: 120
+            index: 12
+            lineNumber: 130
             isReadonly: true
         }
         Property {
@@ -546,8 +555,8 @@ Module {
             type: "double"
             read: "getScale"
             notify: "laidOut"
-            index: 12
-            lineNumber: 121
+            index: 13
+            lineNumber: 131
             isReadonly: true
         }
         Property {
@@ -555,8 +564,8 @@ Module {
             type: "double"
             read: "getDesignWidth"
             notify: "laidOut"
-            index: 13
-            lineNumber: 122
+            index: 14
+            lineNumber: 132
             isReadonly: true
         }
         Property {
@@ -564,8 +573,8 @@ Module {
             type: "double"
             read: "getDesignHeight"
             notify: "laidOut"
-            index: 14
-            lineNumber: 123
+            index: 15
+            lineNumber: 133
             isReadonly: true
         }
         Property {
@@ -573,8 +582,8 @@ Module {
             type: "QString"
             read: "getLeaders"
             notify: "laidOut"
-            index: 15
-            lineNumber: 124
+            index: 16
+            lineNumber: 134
             isReadonly: true
         }
         Property {
@@ -582,8 +591,8 @@ Module {
             type: "QString"
             read: "getFocusLeader"
             notify: "laidOut"
-            index: 16
-            lineNumber: 125
+            index: 17
+            lineNumber: 135
             isReadonly: true
         }
         Property {
@@ -591,63 +600,69 @@ Module {
             type: "QString"
             read: "getPicture"
             notify: "painted"
-            index: 17
-            lineNumber: 126
+            index: 18
+            lineNumber: 136
             isReadonly: true
         }
-        Signal { name: "drawingChanged"; lineNumber: 157 }
-        Signal { name: "controlsChanged"; lineNumber: 158 }
-        Signal { name: "focusedChanged"; lineNumber: 159 }
-        Signal { name: "heldChanged"; lineNumber: 160 }
-        Signal { name: "widthChanged"; lineNumber: 161 }
-        Signal { name: "heightChanged"; lineNumber: 162 }
-        Signal { name: "labelHeightChanged"; lineNumber: 163 }
-        Signal { name: "accentChanged"; lineNumber: 164 }
-        Signal { name: "laidOut"; lineNumber: 169 }
-        Signal { name: "painted"; lineNumber: 170 }
+        Signal { name: "drawingChanged"; lineNumber: 169 }
+        Signal { name: "controlsChanged"; lineNumber: 170 }
+        Signal { name: "focusedChanged"; lineNumber: 171 }
+        Signal { name: "heldChanged"; lineNumber: 172 }
+        Signal { name: "pushesChanged"; lineNumber: 173 }
+        Signal { name: "widthChanged"; lineNumber: 174 }
+        Signal { name: "heightChanged"; lineNumber: 175 }
+        Signal { name: "labelHeightChanged"; lineNumber: 176 }
+        Signal { name: "accentChanged"; lineNumber: 177 }
+        Signal { name: "laidOut"; lineNumber: 182 }
+        Signal { name: "painted"; lineNumber: 183 }
         Method {
             name: "setDrawing"
-            lineNumber: 132
+            lineNumber: 142
             Parameter { name: "value"; type: "QString" }
         }
         Method {
             name: "setControls"
-            lineNumber: 134
+            lineNumber: 144
             Parameter { name: "value"; type: "QStringList" }
         }
         Method {
             name: "setFocused"
-            lineNumber: 136
+            lineNumber: 146
             Parameter { name: "value"; type: "int" }
         }
         Method {
             name: "setHeld"
-            lineNumber: 138
+            lineNumber: 148
             Parameter { name: "value"; type: "QStringList" }
         }
         Method {
+            name: "setPushes"
+            lineNumber: 150
+            Parameter { name: "value"; type: "QList_f64" }
+        }
+        Method {
             name: "setWidth"
-            lineNumber: 140
+            lineNumber: 152
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setHeight"
-            lineNumber: 142
+            lineNumber: 154
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setLabelHeight"
-            lineNumber: 144
+            lineNumber: 156
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setAccent"
-            lineNumber: 146
+            lineNumber: 158
             Parameter { name: "value"; type: "QString" }
         }
         Method {
             name: "setLabelWidth"
-            lineNumber: 165
+            lineNumber: 178
             Parameter { name: "index"; type: "int" }
             Parameter { name: "width"; type: "double" }
         }
@@ -655,21 +670,21 @@ Module {
             name: "labelRect"
             type: "QRectF"
             isMethodConstant: true
-            lineNumber: 166
+            lineNumber: 179
             Parameter { name: "index"; type: "int" }
         }
         Method {
             name: "labelName"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 167
+            lineNumber: 180
             Parameter { name: "index"; type: "int" }
         }
         Method {
             name: "step"
             type: "int"
             isMethodConstant: true
-            lineNumber: 168
+            lineNumber: 181
             Parameter { name: "by"; type: "int" }
         }
     }

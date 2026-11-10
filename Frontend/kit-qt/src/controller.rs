@@ -5,8 +5,8 @@
 use core::pin::Pin;
 
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QRectF, QString, QStringList};
-use emusen_kit_core::controller::{data_url, drawing_for, lay_out, layout, paints, svg, walk, Drawing, Laid, Lit};
+use cxx_qt_lib::{QList, QRectF, QString, QStringList};
+use emusen_kit_core::controller::{data_url, drawing_for, knob, lay_out, layout, paints, svg, walk, Drawing, Laid, Lit};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -17,6 +17,8 @@ pub mod qobject {
         type QStringList = cxx_qt_lib::QStringList;
         include!("cxx-qt-lib/qrectf.h");
         type QRectF = cxx_qt_lib::QRectF;
+        include!("cxx-qt-lib/qlist.h");
+        type QList_f64 = cxx_qt_lib::QList<f64>;
     }
 
     #[auto_cxx_name]
@@ -27,6 +29,8 @@ pub mod qobject {
         #[qproperty(QStringList, controls)]
         #[qproperty(i32, focused)]
         #[qproperty(QStringList, held)]
+        /// How far each control is pushed, 0 to 1, in the controls' order: a stick's directions place its knob.
+        #[qproperty(QList_f64, pushes)]
         #[qproperty(f64, width)]
         #[qproperty(f64, height)]
         #[qproperty(f64, label_height)]
@@ -80,6 +84,7 @@ pub struct ControllerLayoutRust {
     controls: QStringList,
     focused: i32,
     held: QStringList,
+    pushes: QList<f64>,
     width: f64,
     height: f64,
     label_height: f64,
@@ -107,6 +112,7 @@ impl Default for ControllerLayoutRust {
             controls: QStringList::default(),
             focused: -1,
             held: QStringList::default(),
+            pushes: QList::default(),
             width: 0.0,
             height: 0.0,
             label_height: 30.0,
@@ -146,6 +152,7 @@ impl cxx_qt::Initialize for qobject::ControllerLayout {
         self.as_mut().on_label_height_changed(|l| l.lay()).release();
         self.as_mut().on_focused_changed(|l| l.lay()).release();
         self.as_mut().on_held_changed(|l| l.paint()).release();
+        self.as_mut().on_pushes_changed(|l| l.paint()).release();
         self.as_mut().on_accent_changed(|l| l.paint()).release();
     }
 }
@@ -199,7 +206,10 @@ impl qobject::ControllerLayout {
             let control = &drawing.regions[i].control;
             Lit { focused: focused.as_ref() == Some(control), held: held.contains(control) }
         };
-        let painted = paints(drawing, &lit, &|_| (0.0, 0.0), &accent);
+        let pushes: Vec<f64> = self.pushes.iter().copied().collect();
+        let push = |control: &str| controls.iter().position(|c| c == control).and_then(|i| pushes.get(i)).copied().unwrap_or(0.0);
+        let knobs = |k: usize| drawing.sticks.get(k).map_or((0.0, 0.0), |s| knob(s, &push));
+        let painted = paints(drawing, &lit, &knobs, &accent);
         let picture = if drawing.width > 0.0 { data_url("image/svg+xml;utf8", &svg(drawing, &painted)) } else { String::new() };
         self.as_mut().rust_mut().picture = QString::from(picture.as_str());
         self.as_mut().painted();

@@ -329,3 +329,34 @@ fn qt_7_7_h_the_cards_controllers_page_seats_chooses_the_games_profile_and_opens
     assert_eq!(view.drawn().unwrap().tabs[1], "Super Nintendo");
     assert_eq!(view.back(), None, "B from the card's drawing leaves Settings");
 }
+
+#[test]
+fn qt_7_7_h_the_tester_lights_keys_and_pad_moves_the_sticks_and_holds_b_a_second() {
+    let mut view = view();
+    view.choose_section(0);
+    view.choose(index(&view, "bindings"));
+    view.binding_shoulder(1);
+    assert_eq!(view.drawn().unwrap().tabs[1], "PlayStation");
+    assert!(!view.tester_key("X", true), "a key is the tester's only while it runs");
+    assert_eq!(view.binding_act("test"), Outcome::Shown);
+    assert_eq!(view.tester_hold_ms(), 1000, "B held a second leaves, as Mistress's TestExitHold");
+    // A key held lights the control it is bound to on the console's keyboard map, and lets it go when released.
+    assert!(view.tester_key("x", true));
+    assert_eq!(view.held, ["A"]);
+    assert!(view.tester_key("X", false));
+    assert!(view.held.is_empty());
+    // The left stick pushed right and up: its knob stands there, and up and right light past Endymion's deadzone.
+    let mut seated = view.seats.clone();
+    seated.pads[0].axes = [0.75, -0.25, 0.0, 0.0, 0.0, 0.0];
+    view.held = view.held_from(&seated);
+    view.pushes = view.pushes_from(&seated);
+    let drawn = view.drawn().unwrap();
+    let push = |c: &str| drawn.pushes[drawn.controls.iter().position(|x| x == c).unwrap()];
+    assert_eq!((push("LeftX+"), push("LeftX-"), push("LeftY-"), push("LeftY+")), (0.75, 0.0, 0.25, 0.0));
+    assert_eq!(view.held, ["LeftX+"], "up at a quarter is under the deadzone");
+    seated.deadzone = 0.2;
+    assert_eq!(view.held_from(&seated), ["LeftY-", "LeftX+"], "the deadzone is Endymion's, not a number of the page's");
+    // Stopped, nothing is held or pushed and the knobs are at rest.
+    assert!(view.back_taken() && !view.testing());
+    assert!(view.held.is_empty() && view.pushes.is_empty() && view.drawn().unwrap().pushes.is_empty());
+}

@@ -257,6 +257,7 @@ Kit.NormalizedCanvas {
                 texts: screen.settings.drawingTexts
                 focused: screen.settings.drawingFocus
                 held: screen.settings.drawingHeld
+                pushes: screen.settings.drawingPushes
                 onChosen: (index) => screen.settings.bindingFocus(index)
             }
             Text {
@@ -276,12 +277,14 @@ Kit.NormalizedCanvas {
         }
     }
     // A key while a binding of the keyboard or a hotkey listens: the press listened for, Escape or the pad's B letting
-    // it go (EmuSen_Input.md §10.6). The frame hears nothing meanwhile.
+    // it go (EmuSen_Input.md §10.6); while the tester runs, the keys held, and Escape stopping it. The frame hears
+    // nothing meanwhile.
     FocusScope {
         id: listener
         objectName: "settingsListener"
-        focus: screen.inputs && screen.settings.listening && !screen.settings.listeningPad
+        focus: screen.inputs && (screen.settings.testing || screen.settings.listening && !screen.settings.listeningPad)
         Keys.onPressed: (event) => event.accepted = screen.settings.heardKey(event.key, event.modifiers)
+        Keys.onReleased: (event) => event.accepted = !event.isAutoRepeat && screen.settings.releasedKey(event.key, event.modifiers)
         Connections {
             target: Kit.PadRouter
             enabled: listener.activeFocus
@@ -293,6 +296,13 @@ Kit.NormalizedCanvas {
             running: listener.activeFocus && Kit.PadRouter.clockRunning && Kit.PadRouter.pending
             onTriggered: Kit.PadRouter.pump()
         }
+    }
+    // B held for the tester's hold leaves it, since a short press of B is a button being tried.
+    Timer {
+        objectName: "testerHold"
+        interval: screen.settings.testerHoldMs
+        running: screen.settings.testing && screen.settings.testerBack
+        onTriggered: screen.settings.back()
     }
     // Nothing pressed on the pad in five seconds leaves the binding as it was (Mistress's words on the pane).
     Timer {

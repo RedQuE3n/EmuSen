@@ -28,6 +28,8 @@ pub mod qobject {
         type QModelIndex = cxx_qt_lib::QModelIndex;
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qlist.h");
+        type QList_f64 = cxx_qt_lib::QList<f64>;
         include!("cxx-qt-lib/qstringlist.h");
         type QStringList = cxx_qt_lib::QStringList;
         include!("cxx-qt-lib/qvector.h");
@@ -93,6 +95,11 @@ pub mod qobject {
         #[qproperty(bool, listening, READ, NOTIFY = drawn)]
         #[qproperty(bool, listening_pad, cxx_name = "listeningPad", READ, NOTIFY = drawn)]
         #[qproperty(bool, testing, READ, NOTIFY = drawn)]
+        /// The tester: how far each control is pushed (the drawing's knobs), whether the interface's B is held to leave
+        /// it, and how long it is held to leave.
+        #[qproperty(QList_f64, drawing_pushes, cxx_name = "drawingPushes", READ, NOTIFY = drawn)]
+        #[qproperty(bool, tester_back, cxx_name = "testerBack", READ, NOTIFY = drawn)]
+        #[qproperty(i32, tester_hold_ms, cxx_name = "testerHoldMs", READ, NOTIFY = drawn)]
         /// The Pause Card's Game Options ▸ Controllers rows, as plain data for `PauseModel.controllers` (EmuSen_Interface.md §20.3).
         #[qproperty(QString, card_controllers, cxx_name = "cardControllers", READ, NOTIFY = drawn)]
         /// A page's question waiting for typed words: whether one is, its title and its prompt.
@@ -238,6 +245,17 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "heardKey"]
         fn heard_key(self: Pin<&mut SettingsModel>, key: i32, modifiers: i32) -> bool;
+
+        /// A key let go while the tester runs; true when it was taken.
+        #[qinvokable]
+        #[cxx_name = "releasedKey"]
+        fn released_key(self: Pin<&mut SettingsModel>, key: i32, modifiers: i32) -> bool;
+
+        /// A button of the interface down or up on the pads while the tester runs, before the player's swap (`swap`):
+        /// whether it is B, held to leave the tester.
+        #[qinvokable]
+        #[cxx_name = "testerButton"]
+        fn tester_button(self: Pin<&mut SettingsModel>, button: PadButton, down: bool, swap: bool);
     }
 
     unsafe extern "RustQt" {
@@ -307,6 +325,9 @@ pub struct SettingsModelRust {
     drawing_texts: QStringList,
     drawing_focus: i32,
     drawing_held: QStringList,
+    drawing_pushes: QList<f64>,
+    tester_back: bool,
+    tester_hold_ms: i32,
     binding_tabs: QStringList,
     binding_caption: QString,
     listening: bool,
@@ -369,6 +390,9 @@ impl Default for SettingsModelRust {
             drawing_texts: QStringList::default(),
             drawing_focus: -1,
             drawing_held: QStringList::default(),
+            drawing_pushes: QList::default(),
+            tester_back: false,
+            tester_hold_ms: 0,
             binding_tabs: QStringList::default(),
             binding_caption: QString::default(),
             listening: false,
@@ -706,6 +730,7 @@ impl qobject::SettingsModel {
         let shown = drawn.is_some();
         let d = drawn.unwrap_or_default();
         let (listening, listening_pad, testing) = (self.view.listening(), self.view.listening_pad(), self.view.testing());
+        let hold = self.view.tester_hold_ms();
         let card = serde_json::Value::Array(self.view.game_rows().iter().map(|g| g.to_json()).collect()).to_string();
         let mut r = self.as_mut().rust_mut();
         r.bindings_shown = shown;
@@ -714,6 +739,9 @@ impl qobject::SettingsModel {
         r.drawing_texts = list(d.texts.into_iter());
         r.drawing_focus = d.focus;
         r.drawing_held = list(d.held.into_iter());
+        r.drawing_pushes = d.pushes.iter().copied().collect();
+        r.tester_back = r.tester_back && testing;
+        r.tester_hold_ms = hold;
         r.binding_tabs = list(d.tabs.into_iter());
         r.binding_caption = QString::from(d.caption.as_str());
         r.listening = listening;
@@ -752,11 +780,12 @@ impl qobject::SettingsModel {
             let down = mask & !was;
             (down != 0).then_some(down)
         });
-        let held = self.view.held_from(&seated);
+        let (held, pushes) = (self.view.held_from(&seated), self.view.pushes_from(&seated));
         {
             let mut r = self.as_mut().rust_mut();
             r.view.seats = seated;
             r.view.held = held;
+            r.view.pushes = pushes;
         }
         if let (true, Some(down)) = (self.view.listening_pad(), fresh) {
             let outcome = self.as_mut().rust_mut().view.heard_down(down);
@@ -810,6 +839,9 @@ impl qobject::SettingsModel {
     }
 
     pub fn heard_key(mut self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool {
+        if self.view.testing() {
+            return self.tester_key(key, modifiers, true);
+        }
         if !self.view.listening() || self.view.listening_pad() {
             return false;
         }
@@ -820,6 +852,34 @@ impl qobject::SettingsModel {
         };
         self.outcome(outcome);
         true
+    }
+
+    pub fn released_key(self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool {
+        self.view.testing() && self.tester_key(key, modifiers, false)
+    }
+
+    /// A key down or up while the tester runs: Escape stops it, any other key lights what it is bound to.
+    fn tester_key(mut self: Pin<&mut Self>, key: i32, modifiers: i32, down: bool) -> bool {
+        match emusen_qt_endymion::keys::heard(key, modifiers) {
+            emusen_qt_endymion::keys::Heard::Nothing => {}
+            emusen_qt_endymion::keys::Heard::Escape if down => self.as_mut().back(),
+            emusen_qt_endymion::keys::Heard::Escape => {}
+            emusen_qt_endymion::keys::Heard::Key(word) => {
+                if self.as_mut().rust_mut().view.tester_key(word, down) {
+                    self.shown(false);
+                }
+            }
+        }
+        true
+    }
+
+    pub fn tester_button(mut self: Pin<&mut Self>, button: qobject::PadButton, down: bool, swap: bool) {
+        let back = emusen_kit_qt::kinds::ui_button(button).map(|b| b.swapped(swap)) == Some(emusen_kit_core::input::UiButton::Back);
+        let held = back && down && self.view.testing();
+        if back && self.tester_back != held {
+            self.as_mut().rust_mut().tester_back = held;
+            self.as_mut().drawn();
+        }
     }
 
     /// The focused row's pane.

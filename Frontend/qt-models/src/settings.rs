@@ -198,8 +198,11 @@ pub struct SettingsView {
     pub seats: crate::settings_controllers::Seated,
     /// Endymion's choice of a player's map, over the platform library.
     pub chooser: Option<std::sync::Arc<dyn crate::settings_controllers::Chooser>>,
-    /// The controls the tester sees held.
+    /// The controls the tester sees held, how far each is pushed (a stick's directions), and the keys held, by the
+    /// binding files' words.
     pub held: Vec<String>,
+    pub pushes: Vec<f64>,
+    pub keys_held: Vec<String>,
     pub(crate) stepped_console: Option<String>,
     pub(crate) binding: Option<crate::settings_controllers::Binding>,
     /// The hotkey whose row listens for a key.
@@ -294,6 +297,8 @@ impl SettingsView {
             seats: Default::default(),
             chooser: None,
             held: Vec::new(),
+            pushes: Vec::new(),
+            keys_held: Vec::new(),
             stepped_console: None,
             binding: None,
             listening: None,

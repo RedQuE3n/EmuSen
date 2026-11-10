@@ -4309,6 +4309,17 @@ pane's control name at hers, and the card's five rows at hers. **Differences tha
 lines under it stand 33 units lower on Controllers and 4 to 7 on the bindings page; the card form's own boxes
 (`AdaptiveCard` 512 wide, `AdaptiveDetail`, the pane 7 units taller with the line's gap of 8 where hers is 6).
 
+**The input tester** (2026-11-10), as Mistress's `PollTester`, `LightBindings` and `BindingAxis` ran it: Select on the
+pad's bindings page starts it. A control lights while its key is held on the keyboard (the console's keyboard map, the
+key named in the files' words by `keys.rs`), and while the page's player's pad holds it as the game would hear it: a
+button by its bound gamepad button, L2 and R2 by their triggers past half, a stick's direction past Endymion's stick
+deadzone. Each stick's knob stands where the player's stick is (`drawingPushes`, the kit's `ControllerLayout.pushes`,
+Kit §7.62). The interface hears nothing of the pad meanwhile (`Main.qml` hands the tester its presses and the router only
+the releases) and nothing of the keyboard (the listener's scope takes the keys, `heardKey` and `releasedKey`). B held
+for `tester_hold_ms` (1000, the description's, Mistress's `TestExitHold`) leaves it, since a short press of B is a
+button being tried (`testerButton` with the router's swap, `testerBack`, a `Timer` of `testerHoldMs`); Escape leaves it
+at once. Leaving clears what was held and puts the knobs at rest.
+
 **Facts read from their owners** (2026-11-10). The profile every console has is named by Endymion: the source reads
 it once with the models, as the profile `bindings_choose` answers where no profile exists (Endymion's
 `DEFAULT_PROFILE`), and every page compares with that (`Bindings.default_profile`); the PROFILES model's member
@@ -4322,15 +4333,17 @@ count of SDL's gamepad buttons (26) and its trigger axes (4 and 5), by which the
 since the pads' calls take one SDL button at a time (the call needed: a mask of the SDL buttons a pad holds,
 `emusen_endymion_pads_get` with a new `EMUSEN_ENDYMION_PADS_HELD`).
 
-**Held to** (measured on 2026-11-09). kit-core's `controller.rs` (7, Kit §7.62); `qt-models/tests/controllers.rs` (7: every
+**Held to** (measured on 2026-11-09). kit-core's `controller.rs` (8, Kit §7.62); `qt-models/tests/controllers.rs` (8: the tester lighting a key held and the pad, a stick's push and Endymion's deadzone; every
 drawing file reads and covers its controller's declared controls; the section's seats, profile and Rumble shown where a
 console's games drive a motor; Players seating, Forget and Galaxia's player rows; a profile made, renamed, chosen and
 deleted; the bindings page's drawing, a button rebound by a press, reset, player 2's own map made from player 1's, the
 shoulders, a trigger bound alone, a stick's direction, the tester; Keyboard keys and Hotkeys taking a key from each other
-and naming a clash, Reset every binding; the card's page); `qt-endymion/tests/seats.rs` (seated, kept, given back, moved,
+and naming a clash, Reset every binding; the card's page); `qt-endymion/tests/seats.rs` (the stick deadzone read from the pads; seated, kept, given back, moved,
 forgotten, a press read); the program's `settings_controllers.rs` (SettingsControllers and SettingsBindings at the gate's
 five sizes and recorded; North pressed on an SDL virtual pad binds Y and the interface hears nothing of it; Y resets;
-RB to the Sega CD's three-button pad; F2 typed binds a key; F3 a hotkey), `settings_drawings.rs` (the bindings page of
+RB to the Sega CD's three-button pad; F2 typed binds a key; F3 a hotkey), `settings_tester.rs` (South on an SDL virtual
+pad lights B and starts no listening, X held lights A, the stick's knob moves under the deadzone and right lights past
+it, a short B stays, B held a second leaves, Escape leaves), `settings_drawings.rs` (the bindings page of
 each of the thirteen controllers, the twelve with a file and a synthetic core's `test.pad` drawn generic, at the five
 sizes: fit, pad reach, pointer reach, no chrome, names, palette, contrast) and `card_controllers.rs`
 (PauseCardControllers at the five sizes and recorded; Right seats the pad as player 2).

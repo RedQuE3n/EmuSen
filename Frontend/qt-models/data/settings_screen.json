@@ -182,6 +182,7 @@
   },
   "controllers": {
     "seats_shown": 4,
+    "tester_hold_ms": 1000,
     "words": {
       "players_value": "{set} of {count} set",
       "player": "Player {n}",

@@ -155,3 +155,19 @@ fn kit_7_62_a_full_column_does_not_climb_into_the_row_above() {
     let below = laid.labels.iter().zip(&laid.sides).filter(|(_, s)| **s == Side::Left).all(|(b, _)| b.y >= 32.0);
     assert!(!laid.fits || below, "a column that fits stands below the row above: {:?}", laid.labels);
 }
+
+#[test]
+fn kit_7_62_a_stick_s_knob_stands_where_its_directions_push_it() {
+    let controls = names(&["A", "LeftY-", "LeftY+", "LeftX-", "LeftX+"]);
+    let drawing = generic(&controls);
+    let stick = drawing.sticks.first().expect("the generic drawing's left stick");
+    let push = |c: &str| match c {
+        "LeftX+" => 0.75,
+        "LeftY-" => 0.5,
+        "LeftY+" => 2.0,
+        _ => 0.0,
+    };
+    // Right less left, down less up, each push held to 0 to 1.
+    assert_eq!(emusen_kit_core::controller::knob(stick, &push), (0.75, 0.5));
+    assert_eq!(emusen_kit_core::controller::knob(stick, &|_| 0.0), (0.0, 0.0), "at rest with nothing pushed");
+}

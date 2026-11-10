@@ -2979,8 +2979,12 @@ and which file stands for which controller id is the host's.
 - **What is painted** (`paints`): a focused region ringed in the accent 14 wide under it, a held one filled in the accent
   with a halo at alpha 90 and its edge the accent darkened, a direction pad's arm washed in the accent at alpha 130 rather
   than ringed (its neighbours touch it), as LunaP drew them. `svg` writes the paints and the words as one SVG document.
+- **A stick's knob** (`knob`) stands where its directions push it, each axis -1 to 1: right less left, down less up, each
+  direction's push held to 0 to 1, times the stick's travel from its centre, as LunaP's `SetStick` placed it. With
+  nothing pushed it is at rest.
 - **`ControllerLayout`** (kit-qt `controller.rs`) puts it on Qt: `drawing` (the file's text, empty for the generic one),
-  `controls`, `focused`, `held`, `width`, `height`, `labelHeight`, `accent` in; `name`, `generic`, `fits`, `place`,
+  `controls`, `focused`, `held`, `pushes` (how far each control is pushed, 0 to 1, in the controls' order: a stick's
+  directions place its knob), `width`, `height`, `labelHeight`, `accent` in; `name`, `generic`, `fits`, `place`,
   `scale`, `designWidth`, `designHeight`, `leaders`, `focusLeader` and `picture` (the SVG in a `data:` URL) out; the
   invokables `setLabelWidth`, `labelRect`, `labelName` and `step` (the walk, round from either end).
 - **`ControllerDrawing.qml`**: the leaders (Muted, the focused one's Accent), the picture as an `Image` of the SVG at the
@@ -2994,7 +2998,7 @@ rule found every part of the SNES pad's drawing outside the palette; as one SVG 
 recording has it. The SVG is drawn by Qt's own SVG image reader (`qt6-qtsvg`'s `imageformats/libqsvg.so`), which a
 build that bundles Qt must bundle too. Words printed on the shell are part of the picture and read by no one.
 
-**Held to**: kit-core's `tests/controller.rs` (7: a file's items and layers, the shapes' path data and a union stroked
+**Held to**: kit-core's `tests/controller.rs` (8: a stick's knob placed by its directions' pushes; a file's items and layers, the shapes' path data and a union stroked
 first, the focus ring, the press and the arm's wash, a drawing standing for a controller only with every declared control,
 the generic drawing from the controls alone, labels inside the box, beside the drawing and apart, the walk); the
 program's `settings_drawings.rs` (every drawing at the gate's sizes, `EmuSen_Qt.md` §7.7.H).

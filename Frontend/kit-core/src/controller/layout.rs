@@ -2,7 +2,7 @@
 //! walked, where the drawing stands and at what scale, where each label stands beside it with its leader, and what
 //! is painted in which colour as the focus and the held controls change.
 
-use super::drawing::{Drawing, Side, Word};
+use super::drawing::{Drawing, Side, Stick, Word};
 use super::shape::{darken, n, with_alpha, Bounds, Shape};
 
 /// The space between a column of labels and the drawing, and between two labels.
@@ -156,6 +156,13 @@ fn painted(out: &mut Vec<Paint>, shape: &Shape, fill: Option<String>, stroke: Op
     } else {
         out.extend(parts.into_iter().map(|p| Paint { path: p, fill: fill.clone(), stroke: stroke.clone(), width }));
     }
+}
+
+/// Where a stick's knob is drawn, each axis from -1 to 1: right less left and down less up, each direction's push (0 to
+/// 1, by its control) as `push` gives it, as LunaP's `SetStick` placed it.
+pub fn knob(stick: &Stick, push: &dyn Fn(&str) -> f64) -> (f64, f64) {
+    let at = |i: usize| stick.ways.get(i).map_or(0.0, |w| push(w).clamp(0.0, 1.0));
+    (at(3) - at(2), at(1) - at(0))
 }
 
 /// What a region looks like now: whether it is the one focused and whether it is held.

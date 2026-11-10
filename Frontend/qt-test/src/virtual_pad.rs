@@ -32,7 +32,7 @@ const SDL_JOYSTICK_TYPE_GAMEPAD: u16 = 1;
 const GAMEPAD_AXES: u16 = 6;
 const GAMEPAD_BUTTONS: u16 = 26;
 
-/// SDL3, the same library the platform library is lent, with the calls that attach, press and detach a virtual pad.
+/// SDL3, the same library the platform library is lent, with the calls that attach, press, move and detach a virtual pad.
 pub struct Sdl {
     lib: libloading::Library,
 }
@@ -96,6 +96,13 @@ impl Sdl {
         let set: libloading::Symbol<unsafe extern "C" fn(*mut c_void, i32, bool) -> bool> =
             unsafe { self.lib.get(b"SDL_SetJoystickVirtualButton") }.unwrap();
         assert!(unsafe { set(pad.joystick, button, down) });
+    }
+
+    /// An axis of the pad moved, SDL's sixteen bits (the sticks -32768 to 32767, the triggers 0 to 32767).
+    pub fn axis(&self, pad: &VirtualPad, axis: i32, value: i16) {
+        let set: libloading::Symbol<unsafe extern "C" fn(*mut c_void, i32, i16) -> bool> =
+            unsafe { self.lib.get(b"SDL_SetJoystickVirtualAxis") }.unwrap();
+        assert!(unsafe { set(pad.joystick, axis, value) });
     }
 
     pub fn detach(&self, pad: VirtualPad) {

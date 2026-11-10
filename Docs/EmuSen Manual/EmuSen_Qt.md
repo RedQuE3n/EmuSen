@@ -2336,8 +2336,10 @@ carried; with the collections listing files and the description given on demand,
 **Measured again on 2026-11-10**, after §4.9's texts grew with the metadata (the shelves 6.4 MB, the media index 2.2 MB
 at 9,000 games): 5.2–7.7 ms, the land gate red. Timed by phase, the comparisons took under 1 µs, the read's move in
 10 µs, and making the four texts QStrings (UTF-8 to UTF-16, 8.6 MB) 5.4 ms. The QStrings are now made on the thread
-that read them (`esde_texts.rs`; Qt's implicitly shared classes pass between threads by an atomic count, Qt 6
-"Implicit Sharing"), and the GUI thread moves in the ones that changed: 16–19 µs in four runs of the test alone.
+that read them (`esde_texts.rs`). The type is sent between threads by one `unsafe impl Send`: each QString is made by
+the reading thread and moved whole into the model, no reference kept, and Qt's implicitly shared classes count their
+sharing atomically and may be passed between threads (Qt 6, "Implicit Sharing"); the GUI thread moves in the ones that
+changed: 16–19 µs in four runs of the test alone.
 
 **Proof.** `tests/gamelists.rs` re-expresses the rule cases of Mistress's `GamelistOptionsTests` (sorts, sort names,
 filters, letters, random, names, collection order and grouping, last played, a grouped collection's folder) and adds
@@ -2909,10 +2911,11 @@ two bells (`QUICK_SELECT`). With NavigationSounds off nothing plays. Volume foll
 is stage 5's.
 
 **Proof, measured on 2026-11-09.** `qt-app/tests/esde.rs`, on Vulkan in a `kwin_wayland --virtual` of its own on the
-RX 6800, run inside `bwrap` with the ROM library bound read-only. The sandbox's settings choose Art Book Next from the
-corpus with the options of `Testing/esde-baseline/states.tsv`; its library is two synthetic NES images and Super Mario
-World linked from the player's library and read in place; its engines are the published installation's (VenusRT for the
-Super Nintendo). The start reads the pair; Moonrise gives way to the system view on the NES (release order), the own
+RX 6800. The sandbox's settings choose Art Book Next from the corpus with the options of
+`Testing/esde-baseline/states.tsv`; its library is two synthetic NES images and one game on the Super Nintendo shelf
+that the client fixture's libretro test core plays through the ring, its information naming the Super Nintendo
+(`super_nes`), approved as the Cores window approves one (since 2026-11-10: the test read Super Mario World from the
+player's library and the published installation's engines, which a test may not). The start reads the pair; Moonrise gives way to the system view on the NES (release order), the own
 look's three roles unmade and the chosen theme's engine not started; the theme's sounds decode through the interface
 player on SDL's dummy driver; Right steps to the Super Nintendo; A opens its gamelist; Y writes the favourite and the
 shelves' text carries it; Start opens the Home card over the theme and B closes it; Select opens the List card and B

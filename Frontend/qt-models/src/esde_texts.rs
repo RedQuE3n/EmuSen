@@ -8,7 +8,7 @@ use crate::esde_shelves::{Esde, EsdeSettings};
 /// The settings', shelves', media index's and presence's texts as QStrings, in that order.
 pub struct EsdeTexts(pub [QString; 4]);
 
-// Qt's implicitly shared classes are reentrant and pass between threads by an atomic count (Qt 6, "Implicit Sharing").
+// Sound: each QString is made here and moved whole, no copy kept, and Qt's implicit sharing counts atomically (EmuSen_Qt.md §4.9).
 unsafe impl Send for EsdeTexts {}
 
 impl EsdeTexts {

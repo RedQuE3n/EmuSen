@@ -1,7 +1,7 @@
 //! An ES-DE theme as the library's look (EmuSen_Qt.md §4.9): the program over a sandbox whose settings choose Art Book Next
-//! from the corpus, its library two synthetic NES images and a real Super Nintendo game read in place from the player's
-//! library (`EMUSEN_ESDE_GAME`, else Super Mario World), its engines the published installation's (`EMUSEN_ESDE_CORES`,
-//! else the main checkout's `out/linux-x64/Mistress/lib/EmuSen`, found from a worktree too). Moonrise gives way to the system view; Right steps the carousel; A opens the
+//! from the corpus, its library two synthetic NES images and a Super Nintendo shelf of one game the fixture's libretro
+//! test core plays, its information naming the Super Nintendo (no player's game and no published build is read). Moonrise
+//! gives way to the system view; Right steps the carousel; A opens the
 //! gamelist and A on the game plays it through the ring; the chord pauses it under the Pause Card, and Back to Library is
 //! the gamelist at the same game; Start is the Home card, Select the List card, Y the favourite; a theme that is not there
 //! gives way to the own look with a notice; nothing is logged. On Vulkan in a compositor of the test's own, as the
@@ -11,7 +11,9 @@ mod common;
 
 use common::{sandbox, wait_for};
 
+use emusen_client_fixture::cores::{hosted, installation, libretro_entry, sha256, RING_GAME};
 use emusen_client_fixture::library;
+use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_kit_core::input::{PadControl, UiButton};
 use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
 use emusen_platform_client::Platform;
@@ -31,9 +33,9 @@ fn home() -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap())
 }
 
-fn named_or(variable: &str, default: PathBuf) -> PathBuf {
-    std::env::var_os(variable).map(PathBuf::from).unwrap_or(default)
-}
+/// The libretro test core's information as a Super Nintendo core's, so a game on that shelf opens it (systems'
+/// `snes.json`: `super_nes`).
+const SNES_INFO: &str = "display_name = \"EmuSen - Test Core\"\ncorename = \"TestCore\"\nlicense = \"GPLv3\"\nsystemid = \"super_nes\"\nsupported_extensions = \"sfc\"\n";
 
 /// Waits up to `seconds` for a condition the scene answers, letting Qt run between looks.
 fn until(scene: &mut Scene<'_>, seconds: u64, what: &str, mut done: impl FnMut(&mut Scene<'_>) -> bool) {
@@ -66,11 +68,7 @@ fn choose_row(scene: &mut Scene<'_>, words: &str) {
 #[test]
 fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() {
     let theme = home().join(".cache/emusen/bigpicture/corpus/whole").join(THEME);
-    let game = named_or("EMUSEN_ESDE_GAME", home().join("Documents/Roms/SNES/SMW.smc"));
-    let cores = named_or("EMUSEN_ESDE_CORES", emusen_qt_test::checkout::installed_engines());
-    for (what, path) in [("the theme", &theme), ("the game", &game), ("the installation's engines", &cores)] {
-        assert!(path.exists(), "{what} at {}", path.display());
-    }
+    assert!(theme.exists(), "the theme at {}", theme.display());
     // Set before SDL is first loaded: the interface player and the game play to no speaker.
     unsafe { std::env::set_var("SDL_AUDIODRIVER", "dummy") };
     let kwin = Compositor::start(3840, 2160);
@@ -84,10 +82,19 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     let host = Host::new(&platform, "wayland", gpu.as_deref(), false, &std::env::temp_dir().join("qt-app-esde-presets")).expect("a Vulkan device");
     let adoption = host.adoption();
 
-    // The library: two NES images and the real game, linked into the sandbox's folder and read where it lies.
+    // The library: two NES images and the libretro test core's game on the Super Nintendo shelf; the installation's
+    // folder vouches for the proxy and the host, and the core is the player's, approved, as the Cores window leaves it.
     let world = sandbox("qt-app-esde", &[("nes", "Brass Lantern.nes"), ("nes", "Cobalt Harbor.nes")]);
-    let snes = world.dir("Roms/snes").join("Super Mario World.smc");
-    std::os::unix::fs::symlink(&game, &snes).unwrap();
+    std::fs::write(world.dir("Roms/snes").join("Aurora Drift.sfc"), RING_GAME).unwrap();
+    // SAFETY: set before any thread reads the environment; the proxy starts the runner it names.
+    unsafe { std::env::set_var("EMUSEN_CORE_RUNNER", &hosted().runner) };
+    let cores = installation(&world.dir("lib"));
+    let core = libretro_entry(&world.dir("Home/Cores"));
+    std::fs::write(core.with_extension("info"), SNES_INFO).unwrap();
+    let config = Config { cores: Some(vec![cores.to_str().unwrap().into()]), player_cores: Some(vec![world.dir("Home/Cores").to_str().unwrap().into()]), ..Config::default() };
+    let rt = Runtime::new(&Api::load(library()).unwrap(), &config).unwrap();
+    rt.core_approve(&sha256(&core)).unwrap_or_else(|e| panic!("{e}; the runtime lists {:?}", rt.cores()));
+    drop(rt);
     let mut settings = platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
     let folder = theme.to_str().unwrap();
     settings["LibraryStyle"] = json!("Theme");

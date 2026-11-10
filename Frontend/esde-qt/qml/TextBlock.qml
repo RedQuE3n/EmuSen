@@ -23,6 +23,8 @@ Item {
     property real lineSpacing: 1.5
     property bool wrap: false
     property bool ellipsis: false
+    // A vertical container keeps every line, so what overflows its box is measured before it first scrolls.
+    property bool everyLine: false
     property bool hasBackground: false
     property color background
     property color backgroundEnd: root.background
@@ -59,7 +61,7 @@ Item {
         ownFace: root.ownFace
         // A scrolling line is laid out whole; a vertical scroll keeps every line.
         boxWidth: root.scrolling && !root.scrollVertical ? 0 : root.width
-        boxHeight: root.scrolling ? 0 : root.height
+        boxHeight: root.scrolling || root.everyLine ? 0 : root.height
         lineSpacing: root.lineSpacing
         wrap: root.wrap
         ellipsis: root.ellipsis && !root.scrolling
@@ -90,7 +92,7 @@ Item {
     }
     Item {
         anchors.fill: parent
-        clip: root.scrolling
+        clip: root.scrolling || root.everyLine
         opacity: root.scrollOpacity
         GlyphText {
             id: words

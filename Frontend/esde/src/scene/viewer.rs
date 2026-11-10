@@ -263,6 +263,7 @@ impl Viewer {
             line_spacing: 0.0,
             wrap: false,
             ellipsis: false,
+            every_line: false,
             background,
             scroll: None,
         };

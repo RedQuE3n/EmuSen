@@ -2589,6 +2589,13 @@ green; emusen-qt-test `helpbar` and `menu` green; qt-app's acceptance green. One
 check, a frame swapped in the 2 s still window with no animation running; the two runs after it passed. The theme shows a clock,
 whose minute can turn within the window: not reproduced, recorded here.
 
+**The vertical container's measure, found 2026-11-10.** `text.containerStartDelay` and `text.containerResetDelay` painted
+the same pixels at both values since the text was laid out by `esde-text` (§4.9): a text that is not yet scrolling was
+laid out to its box's height, whole lines only, so it never measured taller than its box and never began to scroll. A
+vertical container's text (`every_line`, the role `everyLine`) is now laid out with every line and clipped to its box,
+so what overflows is measured before its first scroll; both cases differ again on the RX 6800, and the horizontal
+container's gap case still does.
+
 #### 4.8.6 The oracle comparison and the corpus columns **[M 2026-11-09]**
 
 `tests/oracle.rs`, one GPU-tier test (Vulkan on the RX 6800 in a `kwin_wayland --virtual` of its own, the validation

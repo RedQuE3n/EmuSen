@@ -14,6 +14,7 @@ ElementBox {
     required property real lineSpacing
     required property bool wrap
     required property bool ellipsis
+    required property bool everyLine
     required property bool hasBackground
     required property color background
     required property color backgroundEnd
@@ -42,6 +43,7 @@ ElementBox {
         lineSpacing: root.lineSpacing
         wrap: root.wrap
         ellipsis: root.ellipsis
+        everyLine: root.everyLine
         hasBackground: root.hasBackground
         background: root.background
         backgroundEnd: root.backgroundEnd

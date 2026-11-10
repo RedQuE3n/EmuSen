@@ -235,6 +235,7 @@ fn text(t: &emusen_esde::scene::Text, role: &str) -> Option<V> {
         "lineSpacing" => V::N(t.line_spacing),
         "wrap" => V::B(t.wrap),
         "ellipsis" => V::B(t.ellipsis),
+        "everyLine" => V::B(t.every_line),
         _ => return background(&t.background, role).or_else(|| scroll(&t.scroll, role)),
     })
 }
@@ -471,11 +472,11 @@ pub fn part(p: &Paint, i: usize, role: &str, swap: bool) -> V {
 }
 
 /// Every role name the element model answers, in role order.
-pub const ELEMENT_ROLES: [&str; 112] = [
+pub const ELEMENT_ROLES: [&str; 113] = [
     "elementId", "paint", "name", "boxX", "boxY", "boxWidth", "boxHeight", "turn", "originX", "originY", "alpha",
     "source", "fit", "cropX", "cropY", "tileWidth", "tileHeight", "tileRight", "tileBottom", "tint", "tintEnd", "gradientVertical",
     "saturation", "radius", "nearest", "frame",
-    "text", "fontSource", "px", "color", "hAlign", "vAlign", "lineSpacing", "wrap", "ellipsis",
+    "text", "fontSource", "px", "color", "hAlign", "vAlign", "lineSpacing", "wrap", "ellipsis", "everyLine",
     "hasBackground", "background", "backgroundEnd", "backgroundVertical", "backgroundRadius", "padLeft", "padTop", "padRight", "padBottom",
     "scrolling", "scrollVertical", "scrollX", "repeatAt", "scrollY", "scrollOpacity",
     "value", "filledSource", "filledMark", "unfilledSource", "unfilledMark", "overlay",

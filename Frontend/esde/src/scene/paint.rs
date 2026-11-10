@@ -219,6 +219,7 @@ fn text(e: &Element, said: String, scroll: Option<TextScroll>, ctx: &Ctx) -> Dra
         wrap: size.0 > 0.0 && !clock,
         // An auto-sized text grows to its words, so it is never cut short (a 0 box would elide them all).
         ellipsis: !clock && size.0 > 0.0,
+        every_line: false,
         background: if clock {
             padded(e, ctx, tint(e, "backgroundColor", "backgroundColorEnd", "backgroundGradientType"))
         } else {
@@ -234,6 +235,7 @@ fn text(e: &Element, said: String, scroll: Option<TextScroll>, ctx: &Ctx) -> Dra
         t.ellipsis = false;
         if vertical {
             t.v_align = VAlign::Top;
+            t.every_line = true;
         } else {
             t.wrap = false;
         }

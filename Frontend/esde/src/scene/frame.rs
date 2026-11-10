@@ -163,6 +163,8 @@ pub struct Text {
     pub line_spacing: f64,
     pub wrap: bool,
     pub ellipsis: bool,
+    /// A vertical container: laid out with every line, past its box, so the scroll can measure what overflows.
+    pub every_line: bool,
     pub background: Option<Background>,
     /// None before the painter has measured the text, and when it fits.
     pub scroll: Option<Scroll>,

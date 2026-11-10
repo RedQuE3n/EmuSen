@@ -3018,6 +3018,13 @@ Mistress's system view in `side-mistress/`. **A limit of the comparison:** Mistr
 reached only by a pad or the keyboard, and the gates admit no input device and no synthetic input outside the program,
 so Mistress's side shows its system view alone.
 
+**Two names the program links twice, measured 2026-11-10.** With `emusen-esde-qt` in `emusen-qt`, its list model and
+qt-models' are both `RowsModel` and both crates bake a `Shaders.qrc`: the first collides at link time, and the second
+does not, Qt naming a resource's initialiser after its file, so one crate's shaders shadowed the other's (the kit's
+EdgeFade logged its shader missing in qt-app's acceptance). The ES-DE module's list model is `EsdeRowsModel` in Rust and
+C++, still `RowsModel` in QML (the registry's C++ name changes, its exports do not), and its resource is
+`EsdeShaders.qrc`.
+
 ---
 
 ## 5. The stable developer surface

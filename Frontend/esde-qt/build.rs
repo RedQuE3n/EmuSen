@@ -34,7 +34,8 @@ fn baked_shader() -> PathBuf {
     let baked = out.join("picture.frag.qsb");
     let status = Command::new(qsb).args(["--qt6", "-o"]).arg(&baked).arg("shaders/picture.frag").status().expect("qsb runs");
     assert!(status.success(), "qsb failed on shaders/picture.frag");
-    let qrc = out.join("Shaders.qrc");
+    // Named for the crate: Qt names a resource's initialiser after its file, and the kit's Shaders.qrc links into the same program.
+    let qrc = out.join("EsdeShaders.qrc");
     std::fs::write(&qrc, "<RCC>\n  <qresource prefix=\"/emusen/esde\">\n    <file>picture.frag.qsb</file>\n  </qresource>\n</RCC>\n")
         .expect("the shader's resource file");
     qrc

@@ -402,6 +402,61 @@ Module {
         }
     }
     Component {
+        file: "lists.cxxqt.h"
+        lineNumber: 262
+        name: "EsdeRowsModel"
+        accessSemantics: "reference"
+        prototype: "QAbstractListModel"
+        exports: ["EmuSen.Esde/RowsModel 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "scene"
+            type: "EsdeModel"
+            isPointer: true
+            read: "getScene"
+            write: "setScene"
+            notify: "sceneChanged"
+            index: 0
+            lineNumber: 267
+        }
+        Property {
+            name: "revision"
+            type: "int"
+            read: "getRevision"
+            write: "setRevision"
+            notify: "revisionChanged"
+            index: 1
+            lineNumber: 268
+        }
+        Property {
+            name: "leaving"
+            type: "bool"
+            read: "getLeaving"
+            write: "setLeaving"
+            notify: "leavingChanged"
+            index: 2
+            lineNumber: 269
+        }
+        Signal { name: "sceneChanged"; lineNumber: 280 }
+        Signal { name: "revisionChanged"; lineNumber: 281 }
+        Signal { name: "leavingChanged"; lineNumber: 282 }
+        Method {
+            name: "setScene"
+            lineNumber: 275
+            Parameter { name: "value"; type: "EsdeModel"; isPointer: true }
+        }
+        Method {
+            name: "setRevision"
+            lineNumber: 277
+            Parameter { name: "value"; type: "int" }
+        }
+        Method {
+            name: "setLeaving"
+            lineNumber: 279
+            Parameter { name: "value"; type: "bool" }
+        }
+    }
+    Component {
         file: "marks.cxxqt.h"
         lineNumber: 52
         name: "MarkShapes"
@@ -551,61 +606,6 @@ Module {
             name: "setElement"
             lineNumber: 352
             Parameter { name: "value"; type: "QString" }
-        }
-    }
-    Component {
-        file: "lists.cxxqt.h"
-        lineNumber: 262
-        name: "RowsModel"
-        accessSemantics: "reference"
-        prototype: "QAbstractListModel"
-        exports: ["EmuSen.Esde/RowsModel 1.0"]
-        exportMetaObjectRevisions: [256]
-        Property {
-            name: "scene"
-            type: "EsdeModel"
-            isPointer: true
-            read: "getScene"
-            write: "setScene"
-            notify: "sceneChanged"
-            index: 0
-            lineNumber: 267
-        }
-        Property {
-            name: "revision"
-            type: "int"
-            read: "getRevision"
-            write: "setRevision"
-            notify: "revisionChanged"
-            index: 1
-            lineNumber: 268
-        }
-        Property {
-            name: "leaving"
-            type: "bool"
-            read: "getLeaving"
-            write: "setLeaving"
-            notify: "leavingChanged"
-            index: 2
-            lineNumber: 269
-        }
-        Signal { name: "sceneChanged"; lineNumber: 280 }
-        Signal { name: "revisionChanged"; lineNumber: 281 }
-        Signal { name: "leavingChanged"; lineNumber: 282 }
-        Method {
-            name: "setScene"
-            lineNumber: 275
-            Parameter { name: "value"; type: "EsdeModel"; isPointer: true }
-        }
-        Method {
-            name: "setRevision"
-            lineNumber: 277
-            Parameter { name: "value"; type: "int" }
-        }
-        Method {
-            name: "setLeaving"
-            lineNumber: 279
-            Parameter { name: "value"; type: "bool" }
         }
     }
     Component {

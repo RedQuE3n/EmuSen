@@ -2964,7 +2964,7 @@ at the same game, the view holding the pad again; the game closed, the view stay
 read again, gives way to Home with the loader's words ("no theme.xml for …") as a notice; Qt logs nothing. 12.7 s and
 11.8 s. One line follows the test's result at the process's exit, `QObject::~QObject: Timers cannot be stopped from
 another thread`, after the harness has stopped listening. It is not explained, and no one has ruled on it: it is
-listed for the tester, not accepted. `start.rs` (9), the cues' two rules
+listed for the tester and waits on her. `start.rs` (9), the cues' two rules
 (`cues::tests`), platform-client's `sound` (a WAV of 24 kHz mono decoded to 4,800 frames of 48 kHz stereo float, a
 missing file none), and the offscreen tests the change reaches (program, screens, start, splash, cards, theme,
 theme_feed, themes_tab; qt-models' library, esde, gamelists, qml, themes) green.
@@ -2975,7 +2975,7 @@ theme_feed, themes_tab; qt-models' library, esde, gamelists, qml, themes) green.
 | the reference's Home made under an ES-DE theme | `esde.rs`: `home.reference` active |
 | the theme's file never played, the kit's cue always | `cues::tests::the_themes_file_plays_where_it_gave_one_else_the_kits_cue` |
 
-**Not built, each listed for the tester to rule on (none is accepted).** What each would take, read from the tree on
+**Not built, each listed for the tester, waiting on her ruling.** What each would take, read from the tree on
 2026-11-11; none is built:
 
 | ES-DE element the view does not draw, or open line | Where it stands | What building it takes |

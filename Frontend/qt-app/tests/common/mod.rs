@@ -107,7 +107,16 @@ pub fn hold_walking(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, nam
         }
         assert!(scene.grab(&out().join(format!("{name}.png")).display().to_string()), "grab {name}");
         scene.sample_behind(&mut tree, f64::from(w), f64::from(h));
-        let walk = scene.walk_pressing(&tree, buttons, |s, button| s.pad(button));
+        theme_words(&mut tree.root);
+        // What the screen showed and held before each press, kept beside the grab (EmuSen_Kit.md §7.103).
+        let mut presses = Vec::new();
+        let walk = scene.walk_pressing(&tree, buttons, |s, button| {
+            let at = s.focus(&tree).map_or_else(|| "none".to_owned(), |i| tree.nodes[i as usize].name.clone());
+            let (shown, keys) = (s.property("screens", "shown"), s.property("coresModel", "searchKeys"));
+            presses.push(format!("shown={shown} coresKeys={keys} focus={at} press={button:?}"));
+            s.pad(button);
+        });
+        std::fs::write(out().join(format!("{name}.presses.txt")), presses.join("\n")).unwrap();
         let walked = edges(&walk);
         let declared = palette(variant);
         let header = Header {
@@ -140,6 +149,16 @@ pub fn hold_walking(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, nam
     }
     scene.resize(1280, 800);
     scene.wait(100);
+}
+
+/// The theme's screen judged as theme-audit judges it: its words that are no fixed word of the host's are data, which
+/// may elide (R-20261111-44, EmuSen_Qt.md §3.7.2); words outside the theme host are the program's own, held whole.
+fn theme_words(item: &mut emusen_kit_core::audit::Item) {
+    if item.name == "reference" {
+        item.mark_data(&emusen_qt_models::words::is_fixed);
+        return;
+    }
+    item.children.iter_mut().for_each(theme_words);
 }
 
 #[allow(unused_imports)]

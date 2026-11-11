@@ -359,7 +359,7 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     let tree = scene.tree();
     scene.focus_item(&tree, first);
     let mut consoles_mockup = mockup_of("Consoles");
-    // Same screen file as theme-audit's eleven-console test (theme.rs's qt_3_4_2 test); not the same catalogue or host: Kit §7.104.
+    // COUNTED needs the canvas's eleven consoles, which theme-audit's qt_3_4_2 test holds on this screen's file (theme.rs); this library shelves three.
     consoles_mockup.elements.retain(|e| !COUNTED.iter().any(|c| e.name.starts_with(c)));
     hold(&mut scene, "Consoles", &consoles_mockup, &mut excuses, &mut report);
 
@@ -532,6 +532,11 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     scene.wait(400);
     hold(&mut scene, "Home", &mockup_of("Home"), &mut excuses, &mut report);
     scene.assert_still("Home over the suspended game");
+    // A scene's colours are listed with their ruling and fail nothing; held again with a table that accepts no class, each is a finding (Kit §7.102).
+    assert!(excuses.listed().iter().any(|l| l.starts_with("Home-1280x800: accepted by R-20261111-39: ")), "{:?}", excuses.listed());
+    let mut refused = Vec::new();
+    hold(&mut scene, "HomeAcceptingNothing", &mockup::Mockup::default(), &mut Excuses::none().accepting(&[]), &mut refused);
+    assert!(refused.iter().any(|l| l.contains("gate: a colour outside the palette in a scene: ")), "{refused:?}");
 
     // Continue resumes the game; closed, Home has no Continue again and the shelf leads with it.
     scene.pad(UiButton::Accept);

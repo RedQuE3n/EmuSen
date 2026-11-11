@@ -1685,9 +1685,9 @@ frame's sheet rule (as `Sheet` does) is the fix; owed to stage 5, whose settings
 - **The shoulders without sections.** The walk stepped its sections on LB and RB in every form but the card's, and
   with no sections it declined them, so a screen could not declare a shoulder (`EmuSen_Qt.md` §7.6: the search's Move
   to grid). Now a walk with no sections offers the shoulders to the declared actions like any other button; a walk
-  with sections keeps them. An extension under rule Q: no surface changes, and a screen that declares no shoulder sees
+  with sections keeps them, except a shoulder the screen declares an enabled action on (since 2026-11-11, §7.103). An extension under rule Q: no surface changes, and a screen that declares no shoulder sees
   no difference. Held to kit-core's `tests/input.rs` (both shoulders reaching a declared `toGrid` with no sections; a
-  walk with sections still stepping them past a declared shoulder).
+  walk with sections still stepping them on a shoulder it declares nothing on).
 - **The pointer resting.** `Scene::hover` (qt-test, `harness_hover`, Qt Test's `mouseMove`) moves the pointer to a point
   and leaves it there, nothing pressed, so a test reaches what a hover does without a click's A. *C++ part*: one
   function in `cpp/harness.cpp` [own, because the harness's pointer is Qt Test's, which has no Rust binding]. Found by
@@ -3096,7 +3096,13 @@ held within 0.001.
 `No RHI backend. Using CPU conversion.` is: the tester accepted it on the software backend only (R-20261111-41, 2026-11-11). On the GPU an RHI is there to convert on, so the same line means the clip's frames took the CPU path and fails the
 test. `Harness::software()` asks Qt for the scene graph backend in use (`QQuickWindow::sceneGraphBackend()`, settled once the first window is made), and
 `assert_quiet` filters by it; `qt_internal(message, software)` is the rule, held both ways by `tests/internal.rs`. The
-main-thread warning stays filtered on every backend, as §7.58 says.
+main-thread warning stays filtered on every backend, as §7.58 says. The tester holds that line (R-20261111-42, 2026-11-11, held and not accepted)
+until it is proven whose it is. Read on 2026-11-11: its words are in `libQt6Core.so.6` once and in no other Qt library
+here, nor in any source of ours but `QT_INTERNAL` and its test, which only match it; §7.58's trace of 2026-11-09 has
+QtCore print it from `QCoreApplicationPrivate`'s constructor when qt-test's `Harness` makes the application on the
+thread libtest runs a test on, after Qt Multimedia's load-time initializer has adopted the process's main thread. So the
+words are Qt's, and the call that makes Qt print them is the harness's; the program, which makes its application on
+`main`, never prints it. It stays in `QT_INTERNAL`, with no row in the accepted table, for the tester's ruling.
 
 ### 7.102 The rules' exemptions reported item by item (repair piece DC-A; 2026-11-11)
 
@@ -3161,11 +3167,33 @@ sees each shoulder's press land, measured 2026-11-11 on the software backend (`c
 A screen whose shoulders step sections (Settings, Cores) is walked by the four directions alone, since a section step
 leaves the state the walk judges.
 
-**Cores' search, a finding that stands.** With the keyboard docked over Cores (`CoresSearch`) the keyboard takes every
-press; the search box and the four rows above it are reached only by X, which ends the search. The blanket "the pad
-does not reach, while the keyboard is up" is removed, so `cores.rs` fails with five unreached items at each size until
-the tester rules between the shoulders taking the focus to the list, as the grid's search does, and the docked keyboard
-as a modal state, the screen behind a backdrop.
+**Cores' search (third pass, 2026-11-11).** The tester ruled that in Cores' search, with the keyboard docked, the
+shoulders move the focus between the keys and the list, as the games search does (R-20261111-31), and that the gate's
+walk may press the shoulders on the search screens and count that as reach (R-20261111-32). The rule has one owner,
+qt-models' `screens::search_shoulder(on_keys, key)`: from the keys `toGrid` gives the focus to the results, from the
+results `previous` or `next` gives it back, and nothing else moves it. The games search's `step` reads it for `Search`
+and `SearchGrid`; Cores' `Tool::shoulder` reads it for its own `on_keys`, which the List card's Search sets and the
+pointer moves (`keysFocused`, as `Screens::keysFocused` does for the grid). The tool's help on the keys declares the
+shoulders as `toGrid` ("Move to list", the right shoulder unnamed, as the games search's bar draws "Move to grid"), and
+while the rows hold the focus the tool declares its shoulders `previous` and `next` (`Tool::action_lines`). Cores' rows
+are a sectioned frame, whose shoulders stepped the sections before any action, so the kit's walk now gives a shoulder to
+the section strip only where the screen declares no enabled action on it (kit-core `Walk::press`); no screen declared a
+shoulder action beside sections before. The card that closes as the search opens no longer hands the focus to the list.
+`cores.rs` holds `CoresSearch` with `WITH_SHOULDERS` and no excuse, then presses RB (a row focused, the keyboard docked,
+the section unchanged) and LB (the keys again).
+
+**What the walk presses from (third pass).** The reader of the second pass suspected that a press of the walk could
+start from a state no player can be in: `put_back` restores the views and the focus but not the screens' state, so after
+RB the next item's presses might start with `SearchGrid` shown while the focus is forced onto a key. `hold_walking` now
+writes, beside each state's grab, `<state>.presses.txt`: the screen shown, Cores' `searchKeys`, the focused item and the
+button, before every press. Read on 2026-11-11 for `CoresSearch`: the focus forced onto the list's search box or a row
+sets `searchKeys` false and onto the keyboard true before the press, through the pointer path, so every press starts from
+the state the focus says. Cores' `keysFocused` changes the model at once, not after the event as its other calls do:
+queued, the walk's put-back of the keyboard's scope reported the keys after the walk had forced the focus onto a row, the
+model took the focus back to the keys, and Down from the first row was recorded as reaching the keyboard (the three rows
+below it unreached; seen 2026-11-11). The grid's search keeps its state the same way (`GalleryKeyboard` tells `Screens`
+of its active focus); its `GamesSearch` log of the same day holds 12 presses, none from `SearchGrid` with the focus on a
+key nor from `Search` with it on a cover.
 
 ### 7.104 The mockups held: Choose a console over the canvas's consoles, and the themes' screens (repair piece DC-A; 2026-11-11)
 
@@ -3190,8 +3218,11 @@ program's own gate still compares none of the seven console classes; that stands
 **A test that runs a program checks that it ran.** theme-audit's tests read only its stdout, so a run that could not
 load its package, or stopped before a state, printed no mockup line and passed. theme-audit now writes, on stderr, a
 line a screen it judged (`held Consoles in 10 states, 2 against its mockup`; man theme-check), counting a state only
-once every rule has judged it. Every test in `theme-check/audit/tests/audit.rs` runs it through `Ran`, which fails on a
-signal and, where the run should judge, on any status but 0 or 1, and each checks the count of the screen it is about:
+once every rule has judged it. Every test in `theme-check/audit/tests/audit.rs` that runs the program directly runs it
+through `Ran`, which fails on a signal and, where the run should judge, on any status but 0 or 1, and where it judges a
+screen checks that screen's count (the states list's test judges none, and the QML rules' test runs no program). Three go through theme-check's `run_with` instead and hold no count: the loaded fixture's run
+through both steps, the static findings' test, and the second half of the unsettled test, each of which reads
+theme-check's own output and status (corrected in the third pass, 2026-11-11). Of those that count:
 the eleven-console test wants Choose a console in 10 states, 2 against the canvas; each built-in theme its three
 screens against their mockups twice; a pass that stops, none. The stand-ins for theme-audit in theme-check's,
 qt-models' and qt-app's tests check that `chmod` succeeded, and the two that expect "nothing found" check that the
@@ -3246,3 +3277,20 @@ the glass edge #2E8C96DC outside the palette (`placeDisc.0` to `.2`), Home's `pl
 the exemptions of §7.102 (65 scene colours on Choose a console, five on Home, and words in the spare tenth); the three
 named differences it had excused before are no longer excused, and the shelf title's contrast at 1280 × 720 no longer
 occurs.
+
+**The acceptance run's two findings (third pass, 2026-11-11).** (1) Home's `placeStatus.5` is the Settings place's line,
+"Dark · 60% sound", built from two settings (`words::settings_line`, as the C#'s own look built it). theme-audit judges a
+theme's words as data unless they are one of the host's fixed words (`words::is_fixed`, through kit-core's `mark_data`),
+and data may elide (EmuSen_Qt.md §3.7.2; accepted 2026-11-11, R-20261111-44); the program's gate read every elided word
+as fixed, so it named the line where theme-audit, on the same screen file, did not. `hold` now marks the words inside the
+theme host (`reference`) as theme-audit does, and only there: the program's own screens keep every elided word a
+finding (Settings' ROM folder is still named, by its excuse, R-20261111-36). The line still elides at 1280 × 720, as data,
+and is no longer a finding. (2) The colour on `placeDisc.0` to `.2` is printed `#2E8C96DC`, kit-core's `#AARRGGBB`: alpha
+0x2E (0.18) over (140, 150, 220). It is a literal of the reference theme, the disc's border in
+`Frontend/themes/emusen/screens/Consoles.qml` (`border.color: Qt.rgba(140 / 255, 150 / 255, 220 / 255, 0.18)`), the
+same on every place's disc; it is no console's colour and no token. It is not exempted: the acceptance run names it
+until the tester rules on it. The seven counted classes `acceptance.rs` leaves out of its Consoles comparison
+(`COUNTED`) need the canvas's eleven consoles; the acceptance library shelves three consoles, and theme-audit's
+`qt_3_4_2` test holds them on the same screen file over the catalogue `eleven` (the line's comment says so). Held: the
+acceptance test lists Home's scene colours as accepted by R-20261111-39 and, holding Home again with a table that
+accepts nothing (`Excuses::accepting(&[])`), finds them as findings.

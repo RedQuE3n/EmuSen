@@ -210,13 +210,15 @@ pub struct Tool<S> {
     asked: Option<(Question, Asked)>,
     /// The search box takes words from the docked keyboard, as the List card's Search asks.
     searching: bool,
+    /// While searching, whether the keys hold the focus rather than the rows.
+    on_keys: bool,
     /// A plan was applied and its jobs run: the marks go when they end.
     applied: bool,
 }
 
 impl<S: Source> Tool<S> {
     pub fn new(source: S) -> Tool<S> {
-        Tool { source, section: 0, filter: 0, sort: 0, search: String::new(), focused: None, marks: Vec::new(), cards: Vec::new(), asked: None, searching: false, applied: false }
+        Tool { source, section: 0, filter: 0, sort: 0, search: String::new(), focused: None, marks: Vec::new(), cards: Vec::new(), asked: None, searching: false, on_keys: false, applied: false }
     }
 
     /// The rows shown: the section's, passing the filter and the search, in the sort's order.
@@ -362,9 +364,12 @@ impl<S: Source> Tool<S> {
         entries
     }
 
-    /// The screen's actions as the kit's frame reads them, `key Button` a line, whether or not the bar names them now.
-    pub fn action_lines() -> String {
-        [(MORE, UiButton::Screensaver), (LIST, UiButton::Options), (APPLY, UiButton::Menu)].iter().map(|(k, b)| format!("{k} {b:?}\n")).collect()
+    /// The screen's actions as the kit's frame reads them, `key Button` a line, whether or not the bar names them now; while
+    /// a search's rows hold the focus, the shoulders are the search's, back to the keys.
+    pub fn action_lines(&self) -> String {
+        let shoulders = [(crate::help::PREVIOUS, UiButton::PageUp), (crate::help::NEXT, UiButton::PageDown)];
+        let search = if self.searching && !self.on_keys { &shoulders[..] } else { &[] };
+        [(MORE, UiButton::Screensaver), (LIST, UiButton::Options), (APPLY, UiButton::Menu)].iter().chain(search).map(|(k, b)| format!("{k} {b:?}\n")).collect()
     }
 
     /// A on a row: its action, which may ask, mark or turn to the host.
@@ -485,6 +490,7 @@ impl<S: Source> Tool<S> {
             (Card::List, SEARCH) => {
                 self.cards.clear();
                 self.searching = true;
+                self.on_keys = true;
                 None
             }
             (Card::List, action) => {
@@ -514,6 +520,30 @@ impl<S: Source> Tool<S> {
     /// Whether the search box takes words from the docked keyboard.
     pub fn searching(&self) -> bool {
         self.searching
+    }
+
+    /// While searching, whether the keys hold the focus.
+    pub fn search_keys(&self) -> bool {
+        self.searching && self.on_keys
+    }
+
+    /// A shoulder's action while searching: the focus between the keys and the rows, by the search's one rule
+    /// (`screens::search_shoulder`); false when it is no such move.
+    pub fn shoulder(&mut self, key: &str) -> bool {
+        match crate::screens::search_shoulder(self.on_keys, key).filter(|_| self.searching) {
+            Some(keys) => {
+                self.on_keys = keys;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// While searching, the focus moved to the keys or the rows by the pointer.
+    pub fn focus_keys(&mut self, keys: bool) {
+        if self.searching {
+            self.on_keys = keys;
+        }
     }
 
     /// The docked keyboard closed, its words kept.

@@ -253,10 +253,11 @@ fn lunap_202_4_the_shoulders_step_the_sections_wrapping_and_select_section_raise
     none.set_actions(WalkAction::from_lines("toGrid PageUp\ntoGrid PageDown\n"));
     assert!(none.press(UiButton::PageDown) && none.press(UiButton::PageUp));
     assert_eq!(none.take_events(), vec![WalkEvent::ActionInvoked("toGrid".into()), WalkEvent::ActionInvoked("toGrid".into())]);
+    // With sections, a shoulder the screen declares is its own, as Cores' rows declare theirs while searching (EmuSen_Kit.md §7.103); the other steps them.
     let mut walk = frame(WalkForm::BigScreen);
     walk.set_actions(WalkAction::from_lines("toGrid PageDown\n"));
-    assert!(walk.press(UiButton::PageDown));
-    assert_eq!(walk.take_events(), vec![WalkEvent::SectionChosen("settings".into())], "sections keep the shoulders");
+    assert!(walk.press(UiButton::PageDown) && walk.press(UiButton::PageUp));
+    assert_eq!(walk.take_events(), vec![WalkEvent::ActionInvoked("toGrid".into()), WalkEvent::SectionChosen("games".into())]);
 }
 
 #[test]

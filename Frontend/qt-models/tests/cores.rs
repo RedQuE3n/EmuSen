@@ -320,6 +320,37 @@ fn the_list_card_s_search_docks_the_keyboard_and_its_words_narrow_the_list() {
 }
 
 #[test]
+fn the_search_s_shoulders_move_the_focus_between_the_keys_and_the_rows_as_the_games_search_s_do() {
+    use emusen_qt_models::screens::{search_shoulder, TO_GRID};
+    // R-20261111-31: one rule for both searches; from the keys toGrid, from the results either shoulder's action.
+    assert_eq!(search_shoulder(true, TO_GRID), Some(false));
+    assert_eq!((search_shoulder(false, "previous"), search_shoulder(false, "next")), (Some(true), Some(true)));
+    assert_eq!((search_shoulder(true, "next"), search_shoulder(false, TO_GRID)), (None, None));
+    let (mut tool, _) = opened(WORLD);
+    assert!(!tool.shoulder(TO_GRID), "no search, no move");
+    tool.list();
+    tool.card_choose(0);
+    assert!(tool.search_keys(), "the search opens on the keys");
+    assert!(!tool.action_lines().contains("PageUp"), "the keys' shoulders are the keyboard's help's");
+    assert!(tool.shoulder(TO_GRID) && !tool.search_keys() && tool.searching(), "RB: the rows, the keyboard still docked");
+    assert!(tool.action_lines().contains("previous PageUp\nnext PageDown\n"), "{}", tool.action_lines());
+    let section = tool.section_key();
+    assert!(tool.shoulder("previous") && tool.search_keys(), "LB: the keys again");
+    assert_eq!(tool.section_key(), section, "the section kept");
+    tool.focus_keys(false);
+    assert!(!tool.search_keys(), "the pointer on a row");
+    tool.end_search();
+    assert!(!tool.search_keys() && !tool.action_lines().contains("PageUp"));
+    let keys: Vec<(String, String)> = emusen_qt_models::help::entries(emusen_qt_models::help::Screen::ToolSearch)
+        .iter()
+        .chain(emusen_qt_models::help::unnamed(emusen_qt_models::help::Screen::ToolSearch))
+        .filter_map(|(b, _, k)| k.map(|k| (format!("{b:?}"), k.to_owned())))
+        .filter(|(b, _)| b.starts_with("Page"))
+        .collect();
+    assert_eq!(keys, [("PageUp".to_owned(), TO_GRID.to_owned()), ("PageDown".to_owned(), TO_GRID.to_owned())]);
+}
+
+#[test]
 fn options_are_the_engine_s_settings_stepped_and_stored_for_its_console() {
     let (mut tool, _) = opened(WORLD);
     focus_on(&mut tool, "PCEE2");

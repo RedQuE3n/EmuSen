@@ -19,7 +19,8 @@ Kit.NormalizedCanvas {
         property bool backdrop: screen.tool.cardOpen || screen.tool.asking
         anchors.fill: parent
         form: Kit.Forms.BigScreen
-        focus: screen.inputs && !screen.tool.cardOpen && !screen.tool.searching
+        // While searching, the rows hold the keys once a shoulder has given them the focus (R-20261111-31).
+        focus: screen.inputs && !screen.tool.cardOpen && !screen.tool.searchKeys
         padFamily: screen.padFamily
         // The question draws its own help bar over the screen's.
         helpShown: !screen.tool.asking && !screen.tool.searching && !screen.tool.cardOpen
@@ -78,6 +79,7 @@ Kit.NormalizedCanvas {
             target: screen.tool
             function onListFocused() { frame.forceActiveFocus() }
             function onSearchOpened() { searchFrame.forceActiveFocus() }
+            function onSearchKeysChanged() { if (screen.tool.searching && !screen.tool.searchKeys) frame.forceActiveFocus() }
         }
         Connections {
             target: frame.controller
@@ -126,7 +128,9 @@ Kit.NormalizedCanvas {
         anchors.fill: parent
         visible: screen.tool.searching
         surfaceDrawn: false
-        focus: screen.inputs && screen.tool.searching
+        focus: screen.inputs && screen.tool.searchKeys
+        // Its help stands while the keys hold the focus, as the grid's search's does (EmuSen_Qt.md §7.6).
+        helpShown: screen.tool.searchKeys
         padFamily: screen.padFamily
         helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
         helpSpacing: 40
@@ -135,9 +139,18 @@ Kit.NormalizedCanvas {
         help: HelpModel {
             screen: HelpModel.ToolSearch
         }
+        // The keyboard's own actions, and the screen's: the shoulders to the rows.
         Connections {
             target: searchFrame.controller
             function onActionInvoked(key) { typist.act(key) }
+        }
+        Connections {
+            target: searchFrame.controller
+            function onActionInvoked(key) { screen.tool.act(key) }
+        }
+        Connections {
+            target: screen.tool
+            function onSearchKeysChanged() { if (screen.tool.searchKeys) searchFrame.forceActiveFocus() }
         }
         Item {
             x: -searchFrame.safeX
@@ -151,6 +164,7 @@ Kit.NormalizedCanvas {
                 y: 398
                 width: screen.width
                 focus: true
+                onActiveFocusChanged: if (screen.tool.searching && keyboard.activeFocus !== screen.tool.searchKeys) screen.tool.keysFocused(keyboard.activeFocus)
                 labelFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontBody })
             }
         }

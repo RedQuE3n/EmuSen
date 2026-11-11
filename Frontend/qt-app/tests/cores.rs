@@ -4,9 +4,11 @@
 
 mod common;
 
-use common::{hold, sandbox, wait_for};
+use common::{hold, hold_walking, sandbox, wait_for};
 use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
+use emusen_kit_core::tokens::Variant;
+use emusen_qt_test::harness::WITH_SHOULDERS;
 use emusen_qt::MAIN_URL;
 use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::{mockup, Scene};
@@ -148,7 +150,28 @@ fn qt_7_7_cores_walks_into_mistress_s_five_recorded_states() {
         scene.wait(300);
         let holder = focused(&mut scene);
         assert!(holder == "coresKeyboard" || holder.starts_with("key."), "the keyboard holds the focus: {holder}");
-        hold(&mut scene, "CoresSearch", &none, &mut excuses, &mut report);
+        // The gate's walk presses the shoulders too, which move the focus between the keys and the rows (R-20261111-31, -32).
+        hold_walking(&mut scene, "CoresSearch", &none, &mut excuses, &mut report, Variant::Dark, &WITH_SHOULDERS);
+        wait_for(&mut scene, "coresModel", "searchKeys", "true", 1000);
+        // The right shoulder gives the rows the focus, the keyboard staying docked; the left gives it back to the keys.
+        scene.pad(UiButton::PageDown);
+        wait_for(&mut scene, "coresModel", "searchKeys", "false", 1000);
+        scene.wait(100);
+        let row = focused(&mut scene);
+        assert!(row != "coresKeyboard" && !row.starts_with("key."), "a row holds the focus: {row}");
+        assert_eq!(scene.property("coresKeyboard", "visible"), "true", "the keyboard stays docked");
+        assert_eq!(scene.property("coresModel", "searching"), "true");
+        let shelf = scene.property("coresModel", "section");
+        scene.pad(UiButton::PageUp);
+        wait_for(&mut scene, "coresModel", "searchKeys", "true", 1000);
+        scene.wait(100);
+        let holder = focused(&mut scene);
+        assert!(holder == "coresKeyboard" || holder.starts_with("key."), "the keys hold the focus again: {holder}");
+        assert_eq!(scene.property("coresModel", "section"), shelf, "the shoulder moved the focus, not the section");
+        // The walk left the current key where its presses took it; Up to the top row, of letters and digits, then A types it.
+        for _ in 0..5 {
+            scene.pad(UiButton::Up);
+        }
         scene.pad(UiButton::Accept);
         scene.wait(100);
         assert_eq!(scene.property("coresModel", "searchText").chars().count(), 1, "A typed the focused key");

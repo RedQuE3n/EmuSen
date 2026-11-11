@@ -74,8 +74,18 @@ pub const CORES_PLACE: usize = 4;
 /// The grid's List card and the search, by the actions that open them.
 pub const LIST: &str = "list";
 pub const SEARCH: &str = "search";
-/// A shoulder on the keyboard: the focus to the covers, while there are any.
+/// A shoulder on the keyboard: the focus to the results (the covers, a tool's rows), while there are any.
 pub const TO_GRID: &str = "toGrid";
+
+/// The rule of a search with its keyboard docked (EmuSen_Qt.md §7.6, R-20261111-31): the shoulders move the focus between
+/// the keys and the results, the keyboard staying docked; whether the keys hold the focus after `key`, none if no move.
+pub fn search_shoulder(on_keys: bool, key: &str) -> Option<bool> {
+    match (on_keys, key) {
+        (true, TO_GRID) => Some(false),
+        (false, k) if k == PREVIOUS || k == NEXT => Some(true),
+        _ => None,
+    }
+}
 /// Settings' door to the Themes tab, by its name in the screen's description.
 pub const THEMES: &str = "themes";
 
@@ -108,8 +118,8 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         // The keyboard closed, by X keeping the words or by B on an empty field: the grid.
         (Shown::Search, Ask::Back) => Some((Shown::Grid, None)),
         // The shoulders move the focus between the keyboard and the covers, the keyboard staying docked.
-        (Shown::Search, Ask::Act(key)) if key == TO_GRID => Some((Shown::SearchGrid, None)),
-        (Shown::SearchGrid, Ask::Act(key)) if key == PREVIOUS || key == NEXT => Some((Shown::Search, None)),
+        (Shown::Search, Ask::Act(key)) if search_shoulder(true, key) == Some(false) => Some((Shown::SearchGrid, None)),
+        (Shown::SearchGrid, Ask::Act(key)) if search_shoulder(false, key) == Some(true) => Some((Shown::Search, None)),
         (Shown::Search, Ask::Keys(false)) => Some((Shown::SearchGrid, None)),
         (Shown::SearchGrid, Ask::Keys(true)) => Some((Shown::Search, None)),
         // From the covers B is the grid's: the search cleared first (GameModel), then Choose a console.

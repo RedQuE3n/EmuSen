@@ -198,8 +198,13 @@ THE LOADED STEP
                     at a scroller's faded edge, and words under the
                     floor that SMALL_TEXT_EXCEPTIONS names. A scene's
                     colour outside the palette is not one: no palette
-                    rule runs over a theme. Each is a finding until
-                    the tester rules on it.
+                    rule runs over a theme. An exemption of a class
+                    the tester has accepted (kit-core's ACCEPTED,
+                    EmuSen_Kit.md 7.102) is not a line here: it goes
+                    to stderr as "theme-audit: accepted by <ruling>:
+                    <file> <size> <variant>: <words>" and fails
+                    nothing. Only an exemption of a class with no
+                    ruling is an exempted line, and a finding.
         motion      a screen not still under reduced motion
         load        the host could not place the screen: the engine's
                     and the sandbox's words, a line each

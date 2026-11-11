@@ -92,6 +92,7 @@ fn main() {
             audited.lines.iter().for_each(|l| println!("{l}"));
             // What was held, so a caller can tell a screen judged and clean from one never judged (man theme-check).
             audited.held.iter().for_each(|l| eprintln!("theme-audit: {l}"));
+            audited.accepted.iter().for_each(|l| eprintln!("theme-audit: {l}"));
             i32::from(!audited.lines.is_empty())
         }
         Err(words) => {

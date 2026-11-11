@@ -1,6 +1,6 @@
 // EmuSen_Kit.md §7.102: every item a rule's exemption lets pass is reported by itself, and only where the strict rule fails it.
 
-use emusen_kit_core::audit::{Axes, Edges, Exempted, Item, Kind, Legibility, Rect, Text, exempted};
+use emusen_kit_core::audit::{ACCEPTED, Axes, Class, Edges, Exempted, Item, Kind, Legibility, Rect, SMALL_TEXT_EXCEPTIONS, Text, accepted, exempted};
 use emusen_kit_core::input::ElementId;
 use emusen_kit_core::tokens::{Colour, ColourToken, Variant, colour};
 
@@ -84,4 +84,40 @@ fn kit_7_100_a_finding_names_its_kind_and_its_items_apart_from_its_numbers() {
     let spare = Exempted::Spare { item: ElementId(6), worst: 3.0, needed: 4.5 };
     assert_eq!((spare.kind(), spare.item()), ("low contrast in the spare tenth", ElementId(6)));
     assert!(spare.to_string().starts_with(spare.kind()));
+}
+
+#[test]
+fn kit_7_102_the_table_holds_the_classes_the_tester_accepted_and_no_other() {
+    let rows: Vec<(Class, &str)> = ACCEPTED.iter().map(|a| (a.class, a.ruling)).collect();
+    assert_eq!(
+        rows,
+        [
+            (Class::RomFolderCutAtStart, "R-20261111-36"),
+            (Class::SpareTenth, "R-20261111-37"),
+            (Class::FadedEdge, "R-20261111-38"),
+            (Class::SceneColour, "R-20261111-39"),
+            (Class::MoonriseCaption, "R-20261111-40"),
+            (Class::CpuConversionLine, "R-20261111-41"),
+            (Class::DimmedAndMoving, "R-20261111-43"),
+            (Class::DataWordsElided, "R-20261111-44"),
+            (Class::BridgeDuplicates, "R-20261111-46"),
+        ]
+    );
+    assert!(ACCEPTED.iter().all(|a| !a.covers.is_empty()), "each row says what it covers");
+}
+
+#[test]
+fn kit_7_102_each_exemption_is_of_its_class_and_accepted_by_its_ruling() {
+    let id = ElementId(1);
+    let found = [
+        (Exempted::Spare { item: id, worst: 3.0, needed: 4.5 }, "R-20261111-37"),
+        (Exempted::Fading { item: id, ratio: 2.0, needed: 4.5 }, "R-20261111-38"),
+        (Exempted::Scene { item: id, colour: Colour::hex("#2E8C96") }, "R-20261111-39"),
+        (Exempted::SmallText { item: id, capitals: 10.0, class: SMALL_TEXT_EXCEPTIONS[0].1 }, "R-20261111-40"),
+    ];
+    for (e, ruling) in found {
+        assert_eq!(e.accepted_in(&ACCEPTED).map(|a| a.ruling), Some(ruling), "{e}");
+        assert_eq!(accepted(e.class()).map(|a| a.ruling), Some(ruling));
+        assert_eq!(e.accepted_in(&[]), None, "a table without its class accepts nothing");
+    }
 }

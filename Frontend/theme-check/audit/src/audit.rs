@@ -92,12 +92,15 @@ struct Lines<'a> {
     at: String,
     /// Each screen judged, with how many states were judged in full and how many of those against its mockup.
     held: Vec<(Screen, usize, usize)>,
+    /// Each exemption of a class the tester's ruling accepts, with its ruling: listed, not a finding.
+    accepted: Vec<String>,
 }
 
-/// What a run found, and what it held: a line a screen, `held <Screen> in N states, M against its mockup`.
+/// What a run found, what it held (`held <Screen> in N states, M against its mockup`) and what a ruling accepted.
 pub struct Audited {
     pub lines: Vec<String>,
     pub held: Vec<String>,
+    pub accepted: Vec<String>,
 }
 
 impl Lines<'_> {
@@ -114,7 +117,14 @@ impl Lines<'_> {
 
     fn audited(self) -> Audited {
         let held = self.held.iter().map(|(s, n, m)| format!("held {} in {n} states, {m} against its mockup", title(*s))).collect();
-        Audited { lines: self.out, held }
+        Audited { lines: self.out, held, accepted: self.accepted }
+    }
+
+    fn accept(&mut self, screen: Screen, ruling: &str, words: &str) {
+        let line = format!("accepted by {ruling}: {}/{} {words}", self.shown, screen.file());
+        if !self.accepted.contains(&line) {
+            self.accepted.push(line);
+        }
     }
 
     fn add(&mut self, screen: Screen, kind: &str, words: &str) {
@@ -310,9 +320,13 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
                     lines.add(screen, kind, &format!("{w}x{h} {name}: {fault} ({})", who.join("; ")));
                 }
             }
-            // What an exemption let pass, each item by itself; no palette rule runs over a theme, so no scene colour is one.
+            // What an exemption let pass, each item by itself: listed with its ruling where one accepts its class, else a finding (EmuSen_Kit.md §7.102).
             for exempted in audit::exempted(&seen.root, None, smallest) {
-                lines.add(screen, "exempted", &format!("{w}x{h} {name}: {exempted} ({})", described(seen, exempted.item())));
+                let words = format!("{w}x{h} {name}: {exempted} ({})", described(seen, exempted.item()));
+                match exempted.accepted_in(&audit::ACCEPTED) {
+                    Some(a) => lines.accept(screen, a.ruling, &words),
+                    None => lines.add(screen, "exempted", &words),
+                }
             }
             lines.judged(screen, mocked.is_some());
             if let Some(dir) = state {
@@ -514,10 +528,10 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
     let (state, section) = (asked.state, asked.section);
     let shown = shown.trim_end_matches('/');
     let text = std::fs::read_to_string(folder.join("theme.json")).map_err(|e| format!("{shown}/theme.json: {e}"))?;
-    let mut lines = Lines { shown, out: Vec::new(), at: String::new(), held: Vec::new() };
+    let mut lines = Lines { shown, out: Vec::new(), at: String::new(), held: Vec::new(), accepted: Vec::new() };
     let package = match emusen_theme_host::package::read(&text) {
         Ok(p) => p,
-        Err(words) => return Ok(Audited { lines: words.lines().map(|l| format!("{shown}/{l}")).collect(), held: Vec::new() }),
+        Err(words) => return Ok(Audited { lines: words.lines().map(|l| format!("{shown}/{l}")).collect(), held: Vec::new(), accepted: Vec::new() }),
     };
     if let Some(dir) = state {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;

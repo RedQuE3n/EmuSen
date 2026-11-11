@@ -3063,9 +3063,18 @@ An excuse used once is not stale however many findings it excused at its sizes; 
 `SMALL_TEXT_EXCEPTIONS` (kit-core `fit.rs`) is a list a gate uses rather than a test's, so it is held by qt-test's
 `SmallText`: a gate notes each named small text its exemptions let pass, and when it ends, an entry that let nothing
 pass in any state fails the gate as a stale excuse does. The gallery's gate (`kit-gallery/tests/gate.rs`), the one
-that draws Moonrise, keeps one. The program's tests do not, since no state they hold draws Moonrise's caption. The
-entry says "decided 2026-11-08"; the tester's ruling given for this piece says the floor holds with no exception. Both
-stand as written, for the tester.
+that draws Moonrise, keeps one. The program's tests do not, since no state they hold draws Moonrise's caption. Each
+entry names its item and the accepted class that lets it pass (third pass): the one entry, `moonriseCaption`, is of the
+class Moonrise's caption, which the tester accepted on 2026-11-11 (R-20261111-40) until a new splash replaces Moonrise,
+so the gallery's gate lists it and passes (§7.102).
+
+**An excuse's second item, and what an excuse does not fix (third pass, 2026-11-11).** The pair's other item was matched
+by its name alone, so an excuse of `title` over `value` excused title's overlap with every row's `value`. `Excuse` gains
+`with_words`, and each item of a pair is told as the first is: by its name, and where the name is shared, by words its
+own words hold; with none given, a shared name excuses nothing and the stale line says so. Held by `qt-test/tests/
+excuse.rs`'s pair test (two rows' `value`, either way round). An excuse fixes no amount: one that names a finding's kind
+and item excuses that finding at any ratio, capitals or colour, a later worsening of the same item included. Nothing in
+this pass changes that.
 
 **What the blankets had been excusing,** measured 2026-11-11 with every excuse removed on the software backend: at
 1280 × 720 nothing in the Home and List cards, Settings, Settings ▸ Consoles or the Themes tab is under the floor any
@@ -3075,7 +3084,7 @@ search's reach) and below:
 
 | Test | Finding | Item | Status |
 |---|---|---|---|
-| `settings.rs` | cut with an ellipsis | `value` holding `/Roms` (the ROM folder's path, cut at its start) | named, no ruling |
+| `settings.rs` | cut with an ellipsis | `value` holding `/Roms` (the ROM folder's path, cut at its start) | accepted 2026-11-11, R-20261111-36 |
 
 `esde-qt/tests/sizes.rs` held every box sized by its words (a help bar, a status row, a text) within 4 % of its extent
 across the sizes of one aspect ratio, by its class; that tolerance named no item and is removed, so every element is
@@ -3084,8 +3093,7 @@ held within 0.001.
 ### 7.101 Qt Multimedia's CPU conversion is Qt's own on the software backend alone (repair piece DC-A; 2026-11-11)
 
 `QT_INTERNAL` (§7.14, §7.58) now says of each message whether it is Qt's own only on the software backend.
-`No RHI backend. Using CPU conversion.` is: the tester decided on 2026-11-09 that it is ignored on the software backend
-only. On the GPU an RHI is there to convert on, so the same line means the clip's frames took the CPU path and fails the
+`No RHI backend. Using CPU conversion.` is: the tester accepted it on the software backend only (R-20261111-41, 2026-11-11). On the GPU an RHI is there to convert on, so the same line means the clip's frames took the CPU path and fails the
 test. `Harness::software()` asks Qt for the scene graph backend in use (`QQuickWindow::sceneGraphBackend()`, settled once the first window is made), and
 `assert_quiet` filters by it; `qt_internal(message, software)` is the rule, held both ways by `tests/internal.rs`. The
 main-thread warning stays filtered on every backend, as §7.58 says.
@@ -3109,7 +3117,37 @@ unchanged.
 No exemption was removed or added. Measured 2026-11-11 on the software backend: the gallery's gate fails with 1,082
 such lines over its 91 states, 1,070 of them scene colours (28 a state on the menu page in four of its form and
 variant pairs, 17 a state on Moonrise's page in six) and 12 Moonrise's caption under the floor by `SMALL_TEXT_EXCEPTIONS` (three sizes, both
-variants, the big screen and the card); each waits on the tester's ruling.
+variants, the big screen and the card).
+
+**Accepted classes (third pass, 2026-11-11).** The tester accepted each of these classes on 2026-11-11, and kit-core
+holds them in one table, `audit::ACCEPTED` (`audit/accepted.rs`), beside `exempted`: a row a class, with the ruling's id
+in the rulings log and one line on what it covers. Adding a row is the tester's; kit-core's test holds the table to
+exactly these rows.
+
+| Class | Ruling | Covers |
+|---|---|---|
+| `RomFolderCutAtStart` | R-20261111-36 | the ROM folder's path cut at its start so the folder's name shows, the pane giving it whole |
+| `SpareTenth` | R-20261111-37 | a tenth of the samples behind words failing the contrast rule |
+| `FadedEdge` | R-20261111-38 | words under their contrast where they cross a scroller's faded edge |
+| `SceneColour` | R-20261111-39 | colours painted inside a theme's scene, outside the palette rule |
+| `MoonriseCaption` | R-20261111-40 | Moonrise's caption under the text floor, until a new splash replaces Moonrise |
+| `CpuConversionLine` | R-20261111-41 | Qt Multimedia's CPU-conversion log line on the software backend |
+| `DimmedAndMoving` | R-20261111-43 | dimmed (declined) places exempt from contrast, and moving words not judged |
+| `DataWordsElided` | R-20261111-44 | data words, such as a game's title, cut with an ellipsis |
+| `BridgeDuplicates` | R-20261111-46 | the 22 duplicate-code pairs of the cxx-qt bridges in `dupes.accept` |
+
+`Exempted::class` gives each exemption its class: the spare tenth, a faded edge and a scene's colour by their kind, and
+a named small text by the class its `SMALL_TEXT_EXCEPTIONS` entry gives. Every gate sorts a state's exemptions by the
+table: one whose class has a row is listed with its ruling (`accepted by R-20261111-39: a colour outside the palette in
+a scene: …`) and fails nothing; one whose class has none is a finding, as before. The program's `hold` sorts through its
+`Excuses`, which hold the table (kit-core's, or a test's own through `Excuses::accepting`) and keep every line accepted
+(`Excuses::listed`); the gallery's three gates sort through qt-test's `excuse::sort` and write the accepted lines to
+`accepted.txt` beside the grabs; theme-audit writes each to stderr as `theme-audit: accepted by …` and only the others
+to stdout, so only they fail a check. The rows for the classes no exemption carries are where the other places cite
+their ruling: Settings' ROM folder excuse (R-20261111-36), `QT_INTERNAL`'s CPU line (R-20261111-41). Held by kit-core's
+`exempted.rs` (the table's rows; each exemption's class and ruling; a table without the class accepts nothing),
+qt-test's `excuse.rs` (an accepted class listed with its ruling, an unlisted one a finding, a test's own table), and
+theme-audit's fixture `small-caption` (the caption listed with R-20261111-40, the run clean).
 
 ### 7.103 The gate's walk presses a screen's own shoulders (repair piece DC-A; 2026-11-11)
 

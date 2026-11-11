@@ -1,5 +1,6 @@
 //! What the rules let pass by an exemption, item by item, so a test names each one it accepts (EmuSen_Kit.md §7.102).
 
+use super::accepted::{Accepted, Class, accepted_in};
 use super::fit::{CAPS_SLACK, SMALL_TEXT_EXCEPTIONS, fading_out};
 use super::rules::{CONTRAST_SPARE, declared_colour, ratios};
 use super::tree::{Item, Kind};
@@ -16,8 +17,8 @@ pub enum Exempted {
     Fading { item: ElementId, ratio: f64, needed: f64 },
     /// A colour outside the palette painted inside a theme's scene.
     Scene { item: ElementId, colour: Colour },
-    /// Words under the capitals' floor that `SMALL_TEXT_EXCEPTIONS` names.
-    SmallText { item: ElementId, capitals: f64 },
+    /// Words under the capitals' floor that `SMALL_TEXT_EXCEPTIONS` names, with the class its entry gives.
+    SmallText { item: ElementId, capitals: f64, class: Class },
 }
 
 impl Exempted {
@@ -29,6 +30,21 @@ impl Exempted {
             Exempted::Scene { .. } => "a colour outside the palette in a scene",
             Exempted::SmallText { .. } => "too small to read, a named exception",
         }
+    }
+
+    /// The class of finding it is, as the table of accepted classes names it.
+    pub fn class(&self) -> Class {
+        match self {
+            Exempted::Spare { .. } => Class::SpareTenth,
+            Exempted::Fading { .. } => Class::FadedEdge,
+            Exempted::Scene { .. } => Class::SceneColour,
+            Exempted::SmallText { class, .. } => *class,
+        }
+    }
+
+    /// The row of `table` that accepts it; none, and it is a finding.
+    pub fn accepted_in(&self, table: &'static [Accepted]) -> Option<&'static Accepted> {
+        accepted_in(table, self.class())
     }
 
     /// The one item it let pass.
@@ -46,7 +62,7 @@ impl fmt::Display for Exempted {
             Exempted::Spare { item, worst, needed } => write!(f, "{kind}: {} at {worst:.2}:1, needs {needed}:1", item.0),
             Exempted::Fading { item, ratio, needed } => write!(f, "{kind}: {} at {ratio:.2}:1, needs {needed}:1", item.0),
             Exempted::Scene { item, colour } => write!(f, "{kind}: {} {}", item.0, colour.to_hex()),
-            Exempted::SmallText { item, capitals } => write!(f, "{kind}: {} with capitals of {capitals:.2}", item.0),
+            Exempted::SmallText { item, capitals, .. } => write!(f, "{kind}: {} with capitals of {capitals:.2}", item.0),
         }
     }
 }
@@ -74,9 +90,9 @@ pub fn exempted(root: &Item, declared: Option<&[Colour]>, smallest: f64) -> Vec<
             && item.is_drawn()
             && smallest > 0.0
             && text.cap_height < smallest - CAPS_SLACK
-            && SMALL_TEXT_EXCEPTIONS.iter().any(|(name, _)| item.name == *name)
+            && let Some((_, class)) = SMALL_TEXT_EXCEPTIONS.iter().find(|(name, _)| item.name == *name)
         {
-            out.push(Exempted::SmallText { item: item.id, capitals: text.cap_height });
+            out.push(Exempted::SmallText { item: item.id, capitals: text.cap_height, class: *class });
         }
     });
     out

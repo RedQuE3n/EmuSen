@@ -1,3 +1,4 @@
+use super::accepted::Class;
 use super::tree::{Item, Kind, Rect};
 use super::{Fault, Side};
 
@@ -13,9 +14,8 @@ pub const CAPS_SLACK: f64 = 0.05 * DESKTOP_CAPS;
 /// A scrolling area must show two rows of 42 design pixels.
 pub const TWO_ROWS: f64 = 84.0;
 
-/// Words the capitals' floor does not hold, each by its item's name with the reason (EmuSen_Kit.md §7.10).
-pub const SMALL_TEXT_EXCEPTIONS: [(&str, &str); 1] =
-    [("moonriseCaption", "Moonrise's caption at the approved draft's 15 units: the draft is the splash's oracle, decided 2026-11-08")];
+/// Words the capitals' floor does not hold, each by its item's name with the accepted class that lets it pass (EmuSen_Kit.md §7.102).
+pub const SMALL_TEXT_EXCEPTIONS: [(&str, Class); 1] = [("moonriseCaption", Class::MoonriseCaption)];
 
 /// The floor on a big screen: the capitals Inter draws at 16 design pixels, 11.64.
 pub fn smallest_capitals() -> f64 {

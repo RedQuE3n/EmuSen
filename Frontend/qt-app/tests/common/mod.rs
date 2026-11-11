@@ -126,7 +126,8 @@ pub fn hold_walking(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, nam
                 .iter()
                 .map(|f| Finding::gate(f, &tree.nodes)),
         );
-        faults.extend(scene.exempted(&tree, WalkForm::BigScreen, variant, f64::from(h)).iter().map(|e| Finding::exempted(e, &tree.nodes)));
+        let refused = named.sort(&name, &scene.exempted(&tree, WalkForm::BigScreen, variant, f64::from(h)));
+        faults.extend(refused.iter().map(|e| Finding::exempted(e, &tree.nodes)));
         faults.retain(|f| !named.excuses(f, (w, h)));
         let notes = out().join(format!("{name}.faults.txt"));
         if faults.is_empty() {

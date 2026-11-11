@@ -54,7 +54,7 @@ pub const WITH_SHOULDERS: [UiButton; 6] = [UiButton::Up, UiButton::Down, UiButto
 /// software backend (EmuSen_Kit.md §7.14, §7.101).
 pub const QT_INTERNAL: [(&str, &str, bool); 2] = [
     // Qt Multimedia converting a clip's frame to a picture where there is no RHI, the software backend's path (EmuSen_Kit.md §7.50).
-    ("No RHI backend. Using CPU conversion.", "Qt Multimedia on the software backend, decided 2026-11-09", true),
+    ("No RHI backend. Using CPU conversion.", "Qt Multimedia on the software backend, accepted by R-20261111-41", true),
     // QtCore's, once Qt Multimedia starts in a process whose application was made on a test runner's thread; the program makes it on main.
     ("QApplication was not created in the main() thread", "the test runner's thread", false),
 ];

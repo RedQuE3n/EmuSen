@@ -442,3 +442,16 @@ fn qt_3_4_2_choose_a_console_over_the_canvas_s_eleven_consoles_is_its_mockup() {
     let found: Vec<&str> = ran.out.lines().filter(|l| l.contains(" mockup ")).collect();
     assert!(found.is_empty(), "{} differences from the canvas:\n{}", found.len(), found.join("\n"));
 }
+
+#[test]
+fn kit_7_102_an_exemption_of_an_accepted_class_is_listed_with_its_ruling_and_fails_nothing() {
+    let ran = audit("small-caption");
+    assert_eq!(ran.held("Home").0, 10, "{}", ran.err);
+    assert_eq!((ran.out.as_str(), ran.status), ("", 0), "{}", ran.err);
+    let listed: Vec<&str> = ran.err.lines().filter(|l| l.starts_with("theme-audit: accepted by ")).collect();
+    assert_eq!(listed.len(), 10, "the caption at five sizes in both variants: {}", ran.err);
+    assert!(
+        listed.iter().all(|l| l.starts_with("theme-audit: accepted by R-20261111-40: ") && l.contains("small-caption/screens/Home.qml") && l.contains("moonriseCaption")),
+        "{listed:?}"
+    );
+}

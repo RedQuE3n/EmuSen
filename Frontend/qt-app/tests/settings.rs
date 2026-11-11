@@ -26,8 +26,9 @@ const ROM_FOLDER_CUT: Excuse = Excuse {
     item: "value",
     with: "",
     words: "/Roms",
+    with_words: "",
     size: None,
-    why: "EmuSen_Qt.md §7.7, no ruling",
+    why: "R-20261111-36: the path cut at its start, the pane giving it whole (EmuSen_Qt.md §7.7)",
 };
 
 fn stored(platform: &Platform, key: &str) -> serde_json::Value {

@@ -3,7 +3,7 @@
 
 use crate::mockup::Difference;
 use crate::tree::Node;
-use emusen_kit_core::audit::{Exempted, Fault, SMALL_TEXT_EXCEPTIONS};
+use emusen_kit_core::audit::{ACCEPTED, Accepted, Exempted, Fault, SMALL_TEXT_EXCEPTIONS};
 use emusen_kit_core::input::ElementId;
 
 /// One finding a test does not count.
@@ -18,6 +18,8 @@ pub struct Excuse {
     pub with: &'static str,
     /// Words the item's own words hold; needed where its name is shared by others (a row's `value`).
     pub words: &'static str,
+    /// Words the other item's own words hold, as `words` is for the first.
+    pub with_words: &'static str,
     /// The window size it holds at; every size when `None`.
     pub size: Option<(i32, i32)>,
     /// Why, and who decided it and when, or `no ruling`.
@@ -88,39 +90,99 @@ pub enum Verdict {
     Names,
 }
 
-/// Whether `excuse` names `finding`: the same kind, the same items (both of a pair, either way round), its words if given.
+/// Whether one item is the one an excuse names by `name` and `words`.
+fn tells(item: &Named, name: &str, words: &str) -> Verdict {
+    if item.name != name {
+        return Verdict::Other;
+    }
+    if words.is_empty() {
+        return if item.shared { Verdict::Ambiguous } else { Verdict::Names };
+    }
+    if item.text.as_deref().is_some_and(|t| t.contains(words)) { Verdict::Names } else { Verdict::Other }
+}
+
+/// Whether `excuse` names `finding`: the same kind, the same items (both of a pair, either way round, each held to its
+/// name and words alike), its words if given.
 pub fn names(excuse: &Excuse, finding: &Finding) -> Verdict {
     if excuse.finding != finding.kind {
         return Verdict::Other;
     }
-    let got: Vec<&str> = finding.items.iter().map(|n| n.name.as_str()).collect();
-    let same = match (excuse.with, got.as_slice()) {
-        ("", [a]) => *a == excuse.item,
-        (with, [a, b]) if !with.is_empty() => (*a == excuse.item && *b == with) || (*a == with && *b == excuse.item),
-        _ => false,
+    let both = |a: Verdict, b: Verdict| match (a, b) {
+        (Verdict::Names, Verdict::Names) => Verdict::Names,
+        (Verdict::Other, _) | (_, Verdict::Other) => Verdict::Other,
+        _ => Verdict::Ambiguous,
     };
-    let Some(item) = finding.items.iter().find(|n| same && n.name == excuse.item) else { return Verdict::Other };
-    if excuse.words.is_empty() {
-        return if item.shared { Verdict::Ambiguous } else { Verdict::Names };
+    match (excuse.with, finding.items.as_slice()) {
+        ("", [a]) => tells(a, excuse.item, excuse.words),
+        (with, [a, b]) if !with.is_empty() => {
+            let forward = both(tells(a, excuse.item, excuse.words), tells(b, with, excuse.with_words));
+            let back = both(tells(b, excuse.item, excuse.words), tells(a, with, excuse.with_words));
+            match (forward, back) {
+                (Verdict::Names, _) | (_, Verdict::Names) => Verdict::Names,
+                (Verdict::Ambiguous, _) | (_, Verdict::Ambiguous) => Verdict::Ambiguous,
+                _ => Verdict::Other,
+            }
+        }
+        _ => Verdict::Other,
     }
-    if item.text.as_deref().is_some_and(|t| t.contains(excuse.words)) { Verdict::Names } else { Verdict::Other }
+}
+
+/// One state's exemptions sorted by a table of accepted classes: the line of each it accepts, with its ruling, and each
+/// it does not, which is a finding (EmuSen_Kit.md §7.102).
+pub fn sort(exempted: &[Exempted], table: &'static [Accepted]) -> (Vec<String>, Vec<Exempted>) {
+    let mut accepted = Vec::new();
+    let mut refused = Vec::new();
+    for e in exempted {
+        match e.accepted_in(table) {
+            Some(a) => accepted.push(format!("accepted by {}: {e}", a.ruling)),
+            None => refused.push(e.clone()),
+        }
+    }
+    (accepted, refused)
 }
 
 /// A test's excuses, how often each excused a finding, and how often one met its finding on an item it could not tell
-/// from others; dropped with one unused, the test fails.
-#[derive(Debug, Default)]
+/// from others; dropped with one unused, the test fails. It holds the table of accepted classes its exemptions are
+/// sorted by, and lists each it accepted.
+#[derive(Debug)]
 pub struct Excuses {
     list: Vec<(Excuse, usize, usize)>,
+    table: &'static [Accepted],
+    listed: Vec<String>,
+}
+
+impl Default for Excuses {
+    fn default() -> Excuses {
+        Excuses { list: Vec::new(), table: &ACCEPTED, listed: Vec::new() }
+    }
 }
 
 impl Excuses {
     pub fn new(list: &[Excuse]) -> Excuses {
-        Excuses { list: list.iter().cloned().map(|e| (e, 0, 0)).collect() }
+        Excuses { list: list.iter().cloned().map(|e| (e, 0, 0)).collect(), table: &ACCEPTED, listed: Vec::new() }
     }
 
     /// No excuse: every finding counts.
     pub fn none() -> Excuses {
         Excuses::default()
+    }
+
+    /// The same, its exemptions sorted by `table` in place of kit-core's `ACCEPTED`.
+    pub fn accepting(mut self, table: &'static [Accepted]) -> Excuses {
+        self.table = table;
+        self
+    }
+
+    /// One state's exemptions: those the table accepts are listed under `state`, the others returned as findings.
+    pub fn sort(&mut self, state: &str, exempted: &[Exempted]) -> Vec<Exempted> {
+        let (accepted, refused) = sort(exempted, self.table);
+        self.listed.extend(accepted.into_iter().map(|l| format!("{state}: {l}")));
+        refused
+    }
+
+    /// Every exemption accepted so far, each with its state and its ruling.
+    pub fn listed(&self) -> &[String] {
+        &self.listed
     }
 
     /// Whether one of the excuses names this finding at this size; the first that does is counted used.

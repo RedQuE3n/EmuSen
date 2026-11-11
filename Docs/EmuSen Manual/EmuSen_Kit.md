@@ -2968,3 +2968,12 @@ model back with the new content. No list is attached to the model across a reset
 reset brings and whatever order the host announces it in. The cache buffer stays Qt's default, so what is drawn while
 scrolling is unchanged. qt-app's game page test scrolls States' tiles and turns to Options and back three times at
 16 ms, then holds Qt silent. Before the change it logged `index out range 7 4` on its first run.
+
+**A model replaced in the middle of its reset (2026-11-11).** Each list's `settled` flag went false on its model's
+`modelAboutToBeReset` and true on its `modelReset`; a model replaced between the two never sent the second to the frame,
+whose `Connections` had moved to the new model, so that list kept no model for good. Where the replacement is made from
+inside the old model's signal, the moved `Connections` still heard that signal after the change, so setting the flag on
+the change alone was undone at once (measured: the frame handed the new model, its list holding none). The frame now
+settles a replaced model once the old one's signal is done (`Qt.callLater` on `tileModelChanged` and
+`rowModelChanged`). `kit-gallery/tests/page_frame.rs` hands the frame another model from inside the keyboard model's
+reset and reads the tile list showing it; without the two lines it holds none.

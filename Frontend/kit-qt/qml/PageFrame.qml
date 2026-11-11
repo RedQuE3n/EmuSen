@@ -70,6 +70,9 @@ Kit.Frame {
         property bool tiles: true
         property bool rows: true
     }
+    // A model replaced while it reset never ends that reset here: the new one is settled once the old one's signal is done.
+    onTileModelChanged: Qt.callLater(() => settled.tiles = true)
+    onRowModelChanged: Qt.callLater(() => settled.rows = true)
     Connections {
         target: root.tileModel
         ignoreUnknownSignals: true

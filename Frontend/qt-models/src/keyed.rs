@@ -40,14 +40,15 @@ impl<T: Keyed> KeyedRows<T> {
 
     /// The rows replaced: the selection follows its key; where the key is gone it stays at its index, clamped to the
     /// last row; with no selection before, the first row is selected.
-    pub fn replace(&mut self, rows: Vec<T>) {
+    pub fn replace(&mut self, rows: Vec<T>) -> Vec<T> {
         let key = self.selected_key().map(str::to_owned);
         let before = self.selected;
-        self.rows = rows;
+        let old = std::mem::replace(&mut self.rows, rows);
         self.selected = match (key, before) {
             _ if self.rows.is_empty() => None,
             (Some(key), Some(at)) => Some(self.rows.iter().position(|r| r.key() == key).unwrap_or(at.min(self.rows.len() - 1))),
             _ => Some(0),
         };
+        old
     }
 }

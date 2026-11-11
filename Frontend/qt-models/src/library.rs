@@ -439,7 +439,6 @@ pub struct Read {
 /// One refresh's answer, or the words for why it could not.
 pub type Refreshed = Result<Read, String>;
 
-/// One refresh of a source, run off the GUI thread, every gamelist as it first lists.
 /// A source's first read for an ES-DE theme: the systems, the games and the player's records without the metadata, the
 /// plays or the media, which the whole read brings after it, so the theme's view is shown first (EmuSen_Qt.md §4.9).
 pub struct FirstLook<'a>(pub &'a dyn LibrarySource);
@@ -477,6 +476,7 @@ impl LibrarySource for FirstLook<'_> {
     }
 }
 
+/// One refresh of a source, run off the GUI thread, every gamelist as it first lists.
 pub fn refresh(source: &dyn LibrarySource) -> Refreshed {
     refresh_with(source, &Gamelists::default())
 }
@@ -569,18 +569,29 @@ impl LibraryView {
 
     /// A refresh's answer applied: new rows with the selection kept, or the rows kept and the problem's words shown.
     pub fn apply(&mut self, refreshed: Refreshed) {
+        drop(self.swap_in(refreshed));
+    }
+
+    /// `apply`, handing back what the read replaced, so the GUI thread can drop it elsewhere (EmuSen_Qt.md §4.9).
+    pub fn swap_in(&mut self, refreshed: Refreshed) -> Option<Read> {
+        use std::mem::replace;
         match refreshed {
             Ok(read) => {
-                self.rows.replace(read.rows);
-                self.systems = read.systems;
-                self.catalog = read.catalog;
-                self.lists = read.lists;
-                self.esde_settings = read.esde_settings;
-                self.esde = read.esde;
-                self.esde_state = read.esde_state;
                 self.problem.clear();
+                Some(Read {
+                    rows: self.rows.replace(read.rows),
+                    systems: replace(&mut self.systems, read.systems),
+                    catalog: replace(&mut self.catalog, read.catalog),
+                    lists: replace(&mut self.lists, read.lists),
+                    esde_settings: replace(&mut self.esde_settings, read.esde_settings),
+                    esde: replace(&mut self.esde, read.esde),
+                    esde_state: replace(&mut self.esde_state, read.esde_state),
+                })
             }
-            Err(words) => self.problem = words,
+            Err(words) => {
+                self.problem = words;
+                None
+            }
         }
     }
 }

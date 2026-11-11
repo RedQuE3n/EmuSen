@@ -3116,6 +3116,17 @@ read install nothing and are the model's `problem` in their words ("The library'
 media presence text that does not read is now said too ("The library's media presence could not be read"), where
 `shelves::presence` had read it as no media at all with no word. An empty presence text is still no media.
 
+**The ES-DE test's checks that could not fail (2026-11-11).** A sort or Favourites answers the first entry, and the
+load keeps the selected index, so with the selection already on the first entry the checks that the view selects the
+entry the act answered passed with the List card's `select` calls removed. The test now moves the selection to the
+second entry before the sort, and to Brass Lantern (the second) before Favourites, so each check needs the act's
+selection; the order check reads both names' places and fails when either is missing from the tree, where a missing
+name had read as the bottom of the screen. Two fixed waits on absence went: Moonrise's `done` is a binding and is read
+as `finished` turns, and the step taken with NavigationSounds off is held by A's sound after it being the only one
+counted, the sounds being rung in order on the GUI thread. In the kit's gallery, the swapped tile model is waited for
+until the frame shows it. Seeded on 2026-11-11: the List card under the theme acting without selecting, the program's
+ES-DE test failing on the selection.
+
 **The shelves' row, written in one crate and read in another (2026-11-11).** qt-models writes each game's row
 (`esde_shelves::RowText`, a collection's member by its file) and esde-qt read it (`shelves::Row`): two hand-kept
 schemas of one text. The reader read every field with a default and the whole text with `unwrap_or_default`, so one

@@ -129,7 +129,7 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     // The splash skipped before the library is named: finished, Moonrise still stands, the theme not yet drawn.
     scene.pad(UiButton::Accept);
     until(&mut scene, 5, "the splash skipped", |s| s.property("moonrise", "finished") == "true");
-    scene.wait(100);
+    // `done` is a binding, so it is read as `finished` turns: no wait is needed for it to have gone true.
     assert_eq!(scene.property("moonrise", "done"), "false", "Moonrise stays while the theme is not drawn");
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
 
@@ -250,11 +250,13 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     scene.pad(UiButton::Left);
     wait_for(&mut scene, "esdeModel", "shelf", "nes", 1000);
     until(&mut scene, 5, "the step at rest", |s| s.property("esdeModel", "moving") == "false");
-    scene.wait(300);
     assert_eq!(rings(&mut scene), before, "no sound with NavigationSounds off");
     assert!(scene.set_property("program", "navigationSounds", "true"));
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "esdeModel", "view", "gamelist", 1000);
+    // The sounds are rung in order on the GUI thread, so a ring of the step taken with them off would be counted before A's.
+    until(&mut scene, 3, "the select sound", |s| rings(s) > before);
+    assert_eq!(rings(&mut scene), before + 1, "A's sound alone: the step taken with NavigationSounds off rang nothing");
     until(&mut scene, 5, "the slide at rest", |s| s.property("esdeModel", "moving") == "false");
     let nes = |s: &mut Scene<'_>| -> Vec<String> {
         let shelves: serde_json::Value = serde_json::from_str(&s.property("library", "esdeShelves")).unwrap();
@@ -263,6 +265,9 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     };
     assert_eq!(nes(&mut scene), ["Brass Lantern", "Cobalt Harbor"]);
     assert_eq!(scene.property("esdeModel", "selected"), "0");
+    // Down to the second entry, so that the sort's answer, the first entry, is a selection the act has to make.
+    scene.pad(UiButton::Down);
+    until(&mut scene, 5, "the second entry selected", |s| s.property("esdeModel", "selected") == "1" && s.property("esdeModel", "moving") == "false");
     let own = (scene.property("gridGames", "listFacts"), scene.property("gridGames", "focused"), scene.property("gridGames", "count"));
     assert!(!own.0.is_empty() && !own.2.is_empty(), "the own grid read by its name: {own:?}");
     // Select, Down to Sort, A steps it to name, descending: the new order shown, the selection on the first entry the act answered.
@@ -274,13 +279,17 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     scene.pad(UiButton::Back);
     until(&mut scene, 5, "the List card closed to the theme", |s| s.property("screens", "shown") == "Esde" && s.property("listCardCanvas", "visible") == "false");
     until(&mut scene, 5, "the view at rest on the new order", |s| s.property("esdeModel", "moving") == "false");
-    assert_eq!(scene.property("esdeModel", "selected"), "0", "the entry the act answered");
+    assert_eq!(scene.property("esdeModel", "selected"), "0", "the entry the act answered, moved to from the second");
     let tree = scene.tree();
-    let top = |name: &str| tree.nodes.iter().filter(|n| n.visible && n.text.as_deref() == Some(name)).map(|n| n.y).fold(f64::MAX, f64::min);
-    assert!(top("Cobalt Harbor") < top("Brass Lantern"), "the view lists Cobalt Harbor first");
-    // Y makes Cobalt Harbor a favourite; Filter, Favourites leaves it alone in the gamelist.
+    let top = |name: &str| tree.nodes.iter().filter(|n| n.visible && n.text.as_deref() == Some(name)).map(|n| n.y).reduce(f64::min);
+    let (cobalt, brass) = (top("Cobalt Harbor"), top("Brass Lantern"));
+    assert!(matches!((cobalt, brass), (Some(c), Some(b)) if c < b), "the view lists both, Cobalt Harbor first: {cobalt:?} {brass:?}");
+    // Y makes Cobalt Harbor a favourite; Down to Brass Lantern; Filter, Favourites leaves Cobalt Harbor alone in the
+    // gamelist, the selection moved back to it by the act.
     scene.pad(UiButton::Search);
     until(&mut scene, 10, "the favourite read again", |s| s.property("library", "esdeShelves").matches("\"favourite\":true").count() >= 2);
+    scene.pad(UiButton::Down);
+    until(&mut scene, 5, "Brass Lantern selected", |s| s.property("esdeModel", "selected") == "1" && s.property("esdeModel", "moving") == "false");
     scene.pad(UiButton::Options);
     until(&mut scene, 5, "the List card in place", |s| s.property("screens", "shown") == "List" && s.property("listCardCanvas", "slide") == "0");
     scene.pad(UiButton::Down);
@@ -288,7 +297,8 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     scene.pad(UiButton::Accept);
     choose_row(&mut scene, "Favourites");
     until(&mut scene, 10, "the favourites alone", |s| nes(s) == ["Cobalt Harbor"] && s.property("screens", "shown") == "Esde");
-    assert_eq!(scene.property("esdeModel", "selected"), "0");
+    until(&mut scene, 5, "the view at rest on the favourites", |s| s.property("esdeModel", "moving") == "false");
+    assert_eq!(scene.property("esdeModel", "selected"), "0", "the entry the act answered, moved to from the second");
     assert_eq!((scene.property("gridGames", "listFacts"), scene.property("gridGames", "focused"), scene.property("gridGames", "count")), own, "the own look's listing untouched");
 
     // A sounds text that does not read is said as a notice.

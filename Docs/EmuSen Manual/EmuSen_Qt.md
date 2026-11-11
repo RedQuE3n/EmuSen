@@ -3298,6 +3298,7 @@ box, `iconTextSpacing` and `entrySpacing` add to 32.5 and 48.75: the fraction dr
 alternation that places at fractional sums would give. A label stands at the icon's box plus `iconTextSpacing`, the
 fraction dropped, too. `HelpElement` gives the kit's bar those whole-pixel gaps, reports the element's width with its last
 entry whole (nothing follows it), and starts the entries at the whole pixel at or before the element's place.
+Superseded on 2026-11-11 by ES-DE's own rule, read in its source (§4.12.4).
 
 **The nine boxes of §4.8.7.** Closed: Art Book Next's two help bars and its clock at 1920 × 1200 (the size rule, the
 whole-pixel entries, and the clock's row of `esde-boxes.tsv` corrected, §4.9.3), Artflix's system bar at both sizes
@@ -3598,6 +3599,10 @@ rounded; `HelpElement` rounds the bar's start (`barStart`) and draws each part a
 `tests/hinted.rs` pins the heights of rost at its 22 measured sizes and of Akrobat at its 17; `hinted.rs`'s unit tests
 hold the missing library's words and the body face; `help.rs`'s unit test pins copies `v05`'s and `g104`'s four pens.
 
+**Superseded on 2026-11-11 (§4.12.4).** The library is linked, not loaded; the size is truncated, not rounded; the
+height is the rendered bitmap's rows, not the metrics; the row is no longer 0.9 × the size; the width is not rounded and
+keeps its trailing spacing; and the start is ES-DE's two roundings, not `Math.round` of the box. Each from ES-DE's source.
+
 #### 4.12.2 Art Book Next's three help rows, re-measured **[M 2026-11-11]**
 
 Decided 2026-11-11 by the tester (R-20261111-49): the two Art Book Next rows of `Testing/esde-baseline/esde-boxes.tsv`
@@ -3636,63 +3641,75 @@ since a container's words are still laid out whole and measured. Held by `frame.
 `a_vertical_container_of_fixed_height_shows_whole_rows_unless_the_theme_turns_the_snap_off` and the mapping case
 `text.containerVerticalSnap` (a 0.3 × 0.2 container whose third row is cut, true against false).
 
-#### 4.12.4 What is open: two bars at 1280 × 800, and the painter's loader **[M 2026-11-11]**
+#### 4.12.4 The help strip by ES-DE 3.4.1's own rule **[M 2026-11-11]**
 
-The oracle of 2026-11-11 (RX 6800, after §4.12.2 and §4.12.3) fails on two help bars, both at 1280 × 800; every other
-box is within its two units.
+Decided 2026-11-11 by the tester (R-20261111-80): ES-DE's source may be read, never copied, and what is learned is
+cited. Every rule below was read in ES-DE's tag `v3.4.1` (MIT; files under `es-core/src/`) and is written here and in the
+code in the project's own words. The two help boxes that failed at 1280 × 800 are fixed, not excepted (R-20261111-71);
+the painter is held to ES-DE 3.4.1, not to the C# painter (R-20261111-77).
 
-| Box | Ours | ES-DE's | Off |
-|---|---|---|---|
-| Art Book Next system, `helpsystem_help-system-view` | 360.5, 717.0, 559.0 × 33.0 | 358.1, 716.1, 564.2 × 33.2 | 5.2 |
-| Artflix gamelist, `helpsystem_help` | 269.0, 768.0, 742.0 × 18.0 | 267.9, 768.0, 744.2 × 18.0 | 2.2 |
+**The rule.** f32 throughout, as ES-DE computes it; "round" is half away from zero.
 
-**Art Book Next.** ES-DE's discs are 32 columns of ink at 1280 × 800 and 47 at 1920 × 1200; the box rule of §4.12.1
-(1.25 times the reference S hinted at the label's size) gives 32.5 and 51.25, so 29 and 47 columns. Akrobat SemiBold's
-hinted S is 26 px from 36 to 37.75 px and 28 px from 38 to 39.25 px, so the 1280 disc fits an S hinted at 38–39 px, or
-a box proportional to the size (51.25 ÷ 55 × 36.67 = 34.2). Ruled out: the S at the label's size rounded up (37 px, 26),
-the box rounded up or down (33, 32: 30 and 29 columns). The captures of 2026-11-11 (rows `x8a1`–`x8a5` of
-`~/.cache/emusen/tmp/x8/captures.tsv`: CarAlt's help copy in ES-DE's own face, one entry, `entryRelativeScale` 1, at
-1280 × 800; the control `x8ctl` equals `k00`'s capture but for the clock) give ES-DE's disc, its widest row with
-sub-pixel edges (`disc8.py`), against each rule's disc (58/64 of the box):
+1. *The font's size* (`resources/Font.cpp`, `Font::getFromTheme` and `Font::Font`; `resources/Font.h`, `getSmallFont`;
+   `components/HelpComponent.h`, the constructor's default font). A theme's `fontSize` × the screen's height, clamped to
+   0.001–1.5 heights; without one, 0.035 × the shorter side. The font then clamps it to 3 px – 1.5 heights. It is not
+   rounded. `emusen_esde::scene::help::font_px`.
+2. *What FreeType is given* (`Font.cpp`, `FontFace::FontFace`): `FT_Set_Char_Size(face, 0, trunc(size × 64), 0, 0)`,
+   the 26.6 height cut by the integer cast at the default 72 dpi. `esde-qt`'s `hinted::char_size`.
+3. *The letter height* (`Font.cpp`, `Font::Font` and `Font::getGlyph`): the rows of the `S` bitmap after
+   `FT_Load_Char(…, FT_LOAD_RENDER)`, whole pixels. `hinted::rows`.
+4. *The row and the icon* (`components/HelpComponent.cpp`, `applyTheme` and `updateGrid`): the row is 1.25 × that
+   letter height, taken at the size before `entryRelativeScale` (clamped to 0.2–3), unrounded. Below a scale of 1 the
+   labels are drawn at size × scale and the icon is the row; at 1 or above the labels keep the size and the icon is
+   the row ÷ scale. `help::row_height`, `help::icon_box`, `help::label_px`.
+5. *The spacings* (`HelpComponent.cpp`, `applyTheme`): `entrySpacing` and `iconTextSpacing` clamped to 0–0.04, defaults
+   0.00833 and 0.00416, × the screen's width, unrounded. `scene::help::spacing_px`.
+6. *The grid's width* (`HelpComponent.cpp`, `updateGrid`): the sum over the entries of icon + label + `iconTextSpacing`
+   + `entrySpacing`, the spacing after the last entry included; each label's width is already whole (each glyph's
+   advance rounded, §4.9). Each part's place is the sum of those before it (`components/ComponentGrid.cpp`,
+   `getColWidth`, `updateCellComponent`). `help::places`; `HelpElement` reports this width and the row as its measure.
+7. *The place* (`HelpComponent.cpp`, `updateGrid`; `GuiComponent.cpp`, `getTransform`): pos × the screen (ES-DE's
+   default (0.012, 0.9515) where the theme sets none), x moved by `entrySpacing` × origin.x; the drawn top left is
+   round(that place) + round(−origin × the grid's size), two roundings. Each part is drawn at round(top left + its
+   place). `scene::help::top_left`, applied by the scene's `draw` to a help once measured.
+8. *The strip seen* (`HelpComponent.cpp`, `render`): the background runs from the top left less its paddings, the
+   grid's width less one `entrySpacing` plus the paddings wide. The element's box is that strip, the grid less its
+   trailing spacing.
 
-| fontSize (px) | ES-DE's disc | hinted S, its box, its disc | proportional box, its disc |
-|---|---|---|---|
-| 0.0425 (34.0) | 26.36 | 23, 28.75, 26.05 | 31.7, 28.7 |
-| 0.0450 (36.0) | 29.86 | 26, 32.5, 29.45 | 33.6, 30.4 |
-| 0.04583333 (36.67) | 30.71 | 26, 32.5, 29.45 | 34.2, 31.0 |
-| 0.0475 (38.0) | 31.67 | 28, 35, 31.7 | 35.4, 32.1 |
-| 0.0490 (39.2) | 31.67 | 28, 35, 31.7 | 36.5, 33.1 |
+Vertical orientation (ES-DE's width-based sizes) is not handled: the scene has no orientation. The dimmed variants
+(`*Dimmed`) are counted as not drawn (R-20261111-75, §4.5.5). How the icon and the label are centred in the row
+and the label's height (1.5 × the largest glyph) were read and not changed.
 
-The equal discs at 38 and 39.2 px and the 34 px disc rule out a box proportional to the size; the hinted S fits four
-sizes within 0.41 px and misses 36.67 px, Art Book Next's own size at 1280 × 800, by 1.26 (no Akrobat weight hints S
-to 27 there: Regular, SemiBold and Bold give 26). Unproven.
+**Art Book Next, system view, 1280 × 800** (`fontSize` 0.04583333, `entryRelativeScale` 0.7, `entrySpacing` 0.015625,
+`iconTextSpacing` 0.00651042, pos 0.5 0.9375, origin 0.5 1, Akrobat SemiBold, the prompts MENU, SELECT, SCREENSAVER,
+CHOOSE): 0.04583333 × 800 in f32 is 36.666664 px; × 64 is 2346.67, truncated to 2346, where FreeType 2.14.3 renders the
+`S` 27 rows (rounded, 2347, it renders 26: the cause of the old 559 against 564). The row is 33.75; the labels are 25.67
+px (56, 69, 135 and 76 px wide); the grid is 4 × 33.75 + 336 + 4 × 8.33 + 4 × 20 = 584.33; the top left is round(640 +
+10) + round(−292.17) = 358 and round(750) + round(−33.75) = 716; the strip is 564.33 wide. ES-DE's box measures 358.10,
+716.14, 564.24 (§4.12.2). At 1920 × 1200 both the truncated and the rounded size render 41 rows (3519 and 3520).
 
-**Artflix.** ES-DE's bar starts one pixel left of ours at 1280 × 800 in both views, every part in the same place
-relative to its start; at 1920 × 1200 the starts agree. The candidates of `~/.cache/emusen/tmp/x7/boxes-table.md`
-(the width rounded before or after halving, floored, the exact label widths, the spacing or the box rounded up in the
-width alone) each miss one of the four bars. The captures of 2026-11-11 (`~/.cache/emusen/tmp/x8/captures-artflix.tsv`,
-`helpcopy.py`'s `file=default.xml`: Artflix's help alone with one entry, origin 0.5, at 1280 × 800; the control `x8ctl`,
-the theme unchanged, draws the help as the committed `gamelist-1-1280x800.png` does, whose generated media's colours,
-clock and console mark are older) give ES-DE's start, the disc's left edge less half of what the box leaves around it:
+**Artflix, gamelist, 1280 × 800.** The row of `Testing/esde-baseline/esde-boxes.tsv` (x 267.90, w 744.20) took its width
+by mirroring its left edge about 640. Measured on the capture (`gamelist-1-1280x800.png`, its committed hash) on
+2026-11-11: the strip's last glyph, RANDOM's M in Exo 2 Regular Condensed at 20 px, rendered as ES-DE renders it
+(bitmap_left 1, 13 columns, 14 rows), matches the capture's columns 997–1009 in all 14 rows; its pen is therefore 996,
+and its rounded advance (14.26 → 14) ends the label, and the strip, at **1010**. ES-DE's width is 1010 − 267.90 = 742.10,
+not 744.20; by the rule above the strip starts at 268 and is 742.35 wide. The method and figures are in
+`~/.cache/emusen/tmp/x9/artflix-row.md` (outside the repository). The row is not changed here: correcting it is the
+tester's to rule, as R-20261111-49 was.
 
-| Entry, size | ES-DE's start | bar width, rounded advances | floor(640 − W ÷ 2) | bar width, exact advances | floor(640 − W ÷ 2) |
-|---|---|---|---|---|---|
-| SELECT, 20 px | 602 | 74.34 | 602 | 75.78 | 602 |
-| BACK, 20 px | 609 | 60.34 | 609 | 60.54 | 609 |
-| SELECT, 30 px | 584 | 112.09 | 583 | 111.75 | 584 |
-| BACK, 30 px | 595 | 89.09 | 595 | 88.89 | 595 |
+**What is still not known.** The FreeType inside the captured ES-DE build was not checked; the probes used Fedora's
+2.14.3. That it reproduces the 27-row `S` at 2346/64 and RANDOM's M to the pixel supports alike hinting; it is not
+proof. HarfBuzz's own rounding to 1/256 px was not read. No capture exists for the clamps, the default size's base or
+the default place: each is held by a unit test from the rule (`frame.rs`'s
+`the_help_s_size_spacings_and_scale_are_es_de_s_in_f32_with_its_clamps` and
+`the_help_strip_is_placed_by_es_de_s_rule_from_its_grid`, `scene::help`'s unit test).
 
-Ours, `round(640 − round(W) ÷ 2)`, is 603, 610, 584 and 595. The start floored from the width with exact advances fits
-all four, and gives 266 for the theme's own gamelist bar at 1280 × 800, where ES-DE's is 268; with rounded advances
-it misses SELECT at 30 px. No rule fits every bar measured. Unproven.
-
-**The painter's loader.** esde-qt's lint `qt_4_8_the_painter_names_no_client_and_no_runtime` holds the painter's
-dependencies to a list without `libloading`, which `hinted.rs` brought in on 2026-11-10 to reach the system's FreeType
-at run time. The need is the hinter's: harfrust and read-fonts do not hint, and Qt's `QRawFont` with full hinting gives
-other heights. Measured on 2026-11-11 over 10–80 px in quarter pixels (1,124 sizes; `ft.c` and `m.cpp` in the evidence
-folder): Qt and FreeType's default load disagree at 171 sizes, rost (CFF) by a pixel at 49 sizes from 10.25 px up, and
-Akrobat SemiBold, Akrobat Regular and Ubuntu Condensed at 31–58 sizes, all above 64 px, where Qt stops hinting. The
-lint's list is the tester's to change; it stays failing until then.
+**The painter's loader.** Decided 2026-11-11 (R-20261111-72): FreeType's hinter is reached by linking the system's
+library, the one Qt already loads. `esde-qt`'s `build.rs` links `libfreetype.so.6` by that name (`rustc-link-lib` with
+the `+verbatim` modifier) and adds the folder `pkg-config --libs-only-L freetype2` names where pkg-config knows the
+library; building needs only the run-time library installed, no development package. `libloading` has left esde-qt
+and the lint `qt_4_8_the_painter_names_no_client_and_no_runtime` passes unchanged. `hinted.rs` declares the five
+FreeType calls it makes and reads the face and glyph slot through `#[repr(C)]` prefixes of `freetype.h`'s records.
 
 ### 4.13 The media viewer's PDF manual **[M 2026-11-09]**
 

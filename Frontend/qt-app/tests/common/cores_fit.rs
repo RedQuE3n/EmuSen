@@ -31,6 +31,8 @@ pub struct Cell {
     pub given: f64,
     pub takes: f64,
     pub cut: bool,
+    /// The whole list a cell that gives way holds beside its words, and the width it takes in the cell's units.
+    pub whole: Option<(String, f64)>,
 }
 
 /// The world and the cores folder esde.rs holds Cores over: VenusRT, the client fixture's console core approved.
@@ -78,6 +80,8 @@ pub fn cells(scene: &mut Scene<'_>, held: &str, report: &mut Vec<String>) -> Vec
         let texts: Vec<_> = tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("ToneText") && inside(n)).cloned().collect();
         for n in texts {
             let id: u64 = n.id.parse().unwrap();
+            let held = tree.nodes.iter().find(|c| c.parent == n.id && !c.visible && c.text.as_deref().is_some_and(|t| !t.is_empty())).cloned();
+            let whole = held.map(|c| (c.text.clone().unwrap_or_default(), scene.number(c.id.parse().unwrap(), "implicitWidth")));
             out.push(Cell {
                 size,
                 x: scene.number(id, "x"),
@@ -86,6 +90,7 @@ pub fn cells(scene: &mut Scene<'_>, held: &str, report: &mut Vec<String>) -> Vec
                 given: scene.number(id, "width"),
                 takes: scene.number(id, "implicitWidth"),
                 cut: n.elided,
+                whole,
             });
         }
     }
@@ -147,10 +152,19 @@ pub fn both_looks(scene: &mut Scene<'_>, world: &World, cores: &std::path::Path,
 }
 
 /// Every way the list's words fail to fit, at every size: a cell cut, a cell given less than its words take, the status
-/// column given other than its widest words (rounded up, as `ColumnFit` measures them), and a core of several consoles
-/// read as neither its whole list nor its first and a count (EmuSen_Kit.md §7.106, decided 2026-11-11).
+/// column given other than its widest words (rounded up, as `ColumnFit` measures them), a core of several consoles
+/// read as neither its whole list nor its first and a count, and a cell that gives way showing its first and a count
+/// where its whole list fits or its whole list where it does not (EmuSen_Kit.md §7.106, decided 2026-11-11).
 pub fn misfits(cells: &[Cell], several: &[(&str, &str)]) -> Vec<String> {
     let mut out = Vec::new();
+    for c in cells {
+        if let Some((whole, takes)) = &c.whole {
+            let fits = *takes <= c.given + 0.01;
+            if fits != (c.words == *whole) {
+                out.push(format!("{:?}: \"{whole}\" takes {takes:.2} of {:.2} and the cell reads \"{}\"", c.size, c.given, c.words));
+            }
+        }
+    }
     for c in cells.iter().filter(|c| c.cut || c.takes > c.given + 0.01) {
         out.push(format!("{:?}: \"{}\" takes {:.2} and is given {:.2}{}", c.size, c.words, c.takes, c.given, if c.cut { ", cut" } else { "" }));
     }
@@ -178,4 +192,25 @@ pub fn table(look: &str, cells: &[Cell]) -> String {
         .map(|c| format!("{look}\t{}x{}\t{}\t{}\t{:.2}\t{:.2}\t{}", c.size.0, c.size.1, c.words, c.face, c.given, c.takes, c.cut))
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Both sides of giving way are held where the run meets them: `whole` read whole at a size whose room holds it, and its
+/// first and a count, `short`, at a size whose room does not; and each core of one console, `one`, read whole at every
+/// size (EmuSen_Kit.md §7.106).
+pub fn both_sides(cells: &[Cell], whole: &str, short: &str, one: &[&str]) -> Vec<String> {
+    let mut out = Vec::new();
+    let read = |words: &str| cells.iter().filter(|c| c.words == words).map(|c| c.size).collect::<Vec<_>>();
+    if read(whole).is_empty() {
+        out.push(format!("\"{whole}\" is read whole at no size"));
+    }
+    if read(short).is_empty() {
+        out.push(format!("\"{short}\" is read at no size"));
+    }
+    for console in one {
+        let at = read(console);
+        for size in SIZES.iter().filter(|s| !at.contains(s)) {
+            out.push(format!("{size:?}: \"{console}\" is not read whole"));
+        }
+    }
+    out
 }

@@ -67,10 +67,26 @@ fn cells_inside(tree: &Tree) -> Vec<String> {
 }
 
 /// The console column gives way (EmuSen_Kit.md §7.106): the core of twenty consoles shows its first and a count, the core
-/// of four its whole list or its first and a count, and no row's console words are cut.
+/// of four its whole list or its first and a count, no row's console words are cut, and each cell that gives way shows
+/// its whole list exactly where the list fits the cell; the pane's caption names all twenty, whole.
 fn console_gives_way(tree: &Tree) -> Vec<String> {
     let shown = |words: &str| tree.nodes.iter().any(|n| n.visible && n.text.as_deref() == Some(words) && !n.elided);
     let mut faults = Vec::new();
+    for n in tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("ToneText")) {
+        let held = tree.nodes.iter().find(|c| c.parent == n.id && !c.visible && c.text.as_deref().is_some_and(|t| !t.is_empty()));
+        if let Some(whole) = held {
+            let fits = whole.w <= n.w + 0.01;
+            if fits != (n.text == whole.text) {
+                faults.push(format!("\"{}\" takes {:.1} of {:.1} and the cell reads {:?}", whole.text.as_deref().unwrap_or_default(), whole.w, n.w, n.text));
+            }
+        }
+    }
+    let (px, _, pw, _) = rect(tree, "toolPane");
+    let caption = tree.nodes.iter().find(|n| n.visible && n.text.as_deref().is_some_and(|t| t.starts_with("From libretro's buildbot")));
+    match caption {
+        Some(c) if c.text.as_deref().is_some_and(|t| t.ends_with("WonderSwan, WonderSwan Color")) && !c.elided && c.x + c.w <= px + pw + SLACK => {}
+        other => faults.push(format!("the pane's caption does not name the twenty consoles whole inside the pane: {other:?}")),
+    }
     if !shown("Atari 2600 +19") {
         faults.push("the core of twenty consoles does not read \"Atari 2600 +19\"".to_owned());
     }

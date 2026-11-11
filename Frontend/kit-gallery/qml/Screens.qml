@@ -46,6 +46,7 @@ Window {
                 ListElement { core: "Sapphire"; console: "PlayStation 2"; consoleShort: "PlayStation 2"; status: "Built in"; statusTone: 1 }
                 ListElement { core: "Genesis Plus GX"; console: "Genesis, Sega CD, Master System, SG-1000"; consoleShort: "Genesis +3"; status: "Installed"; statusTone: 4 }
                 ListElement { core: "ares"; console: "Atari 2600, ColecoVision, Game Boy, Game Boy Color, Game Boy Advance, Game Gear, Genesis, Master System, 32X, Sega CD, MSX, Neo Geo Pocket, NES, Nintendo 64, PC Engine, PlayStation, SG-1000, Super Nintendo, WonderSwan, WonderSwan Color"; consoleShort: "Atari 2600 +19"; status: "Available"; statusTone: 1 }
+                ListElement { core: "SameBoy"; console: "Game Boy, Game Boy Color"; consoleShort: "Game Boy +1"; status: "Available"; statusTone: 1 }
                 ListElement { core: "Extra PS2 Core"; console: "PlayStation 2"; consoleShort: "PlayStation 2"; status: "To approve"; statusTone: 5 }
                 ListElement { core: "LRPS2"; console: "PlayStation 2"; consoleShort: "PlayStation 2"; status: "Available"; statusTone: 1 }
                 ListElement { core: "Diamond"; console: "PlayStation"; consoleShort: "PlayStation"; status: "Default"; statusTone: 0 }
@@ -55,12 +56,12 @@ Window {
                 ListElement { core: "Snes9x"; console: "Super Nintendo"; consoleShort: "Super Nintendo"; status: "install"; statusTone: 3 }
                 ListElement { core: "bsnes"; console: "Super Nintendo"; consoleShort: "Super Nintendo"; status: "Available"; statusTone: 1 }
             }
-            paneTitle: "LRPS2"
-            paneCaption: "From libretro's buildbot · PlayStation 2"
+            // The core of twenty consoles, its pane's caption naming every one (EmuSen_Kit.md §7.106).
+            paneTitle: "ares"
+            paneCaption: "From libretro's buildbot · Atari 2600, ColecoVision, Game Boy, Game Boy Color, Game Boy Advance, Game Gear, Genesis, Master System, 32X, Sega CD, MSX, Neo Geo Pocket, NES, Nintendo 64, PC Engine, PlayStation, SG-1000, Super Nintendo, WonderSwan, WonderSwan Color"
             sentences: ListModel {
-                ListElement { words: "Runs PlayStation 2 games through EmuSen's libretro host, in a sandbox of its own."; tone: 0 }
-                ListElement { words: "By the PCSX2 Team, under the GPLv3. Nightly build of 31 October 2026."; tone: 0 }
-                ListElement { words: "Needs a PlayStation 2 BIOS of your own, which EmuSen never downloads."; tone: 0 }
+                ListElement { words: "Runs the games of twenty consoles through EmuSen's libretro host, in a sandbox of its own."; tone: 0 }
+                ListElement { words: "By the ares team, under the ISC licence. Nightly build of 31 October 2026."; tone: 0 }
                 ListElement { words: "Not tested by EmuSen."; tone: 1 }
             }
             summary: "1 marked: install Snes9x"

@@ -5,7 +5,7 @@
 
 mod common;
 
-use common::cores_fit::{both_looks, misfits, table, world};
+use common::cores_fit::{both_looks, both_sides, misfits, table, world};
 use common::out;
 use emusen_client_fixture::library;
 use emusen_platform_client::Platform;
@@ -39,6 +39,10 @@ fn qt_7_9_cores_list_holds_every_word_whole_or_gives_way_on_vulkan() {
     let several = [("Genesis, Sega CD, Master System, SG-1000", "Genesis +3"), ("Game Boy, Game Boy Color", "Game Boy +1")];
     let misfits: Vec<String> = misfits(&own, &several).into_iter().chain(misfits(&themed, &several)).collect();
     assert!(misfits.is_empty(), "{misfits:#?}");
+    // Both sides of giving way: two consoles whole where their room holds them and their first and a count where it does
+    // not, in each look; a core of one console whole everywhere.
+    let sides: Vec<String> = [&own, &themed].iter().flat_map(|cells| both_sides(cells, "Game Boy, Game Boy Color", "Game Boy +1", &["NES", "Super Nintendo"])).collect();
+    assert!(sides.is_empty(), "{sides:#?}");
     scene.assert_quiet();
     assert!(scene.set_property("program", "visible", "false"));
     scene.wait(50);

@@ -3105,6 +3105,13 @@ the reader takes and a hand-written text gives (`esde-qt/tests/mapping.rs`), is 
 library marks no game as in a custom collection yet. A text that leaves out `counts` still has the view count the games
 itself.
 
+**The start's properties in the test (2026-11-11).** The window's initial properties are one function, `start::initial`,
+which `main.rs` calls and adds the device's feed and the gate's pad to; the qt-test harness loads a scene with a map of
+initial properties (`Harness::load_initial`, QQmlApplicationEngine's `setInitialProperties`, cleared after the load), and
+`esde.rs` makes the window with `start::initial` of the start it read, the platform library left out so the test names
+the cores folder first. The test reads `esdeChosen` as the start set it, no longer setting it itself, and checks that
+Moonrise gives way only with the theme drawn: at the first turn its `done` holds, the view is `themed` (`lookSettled`).
+
 **Errors passed over, each answered (2026-11-11).** `gamelists::write_listing`'s `let _ = serde_json::to_writer`
 writes plain fields into a `Vec`, where serde_json fails only on a map with keys that are not strings or a `Serialize`
 that errors, neither of which the borrowed rows have. `esde_shelves::build`'s `String::from_utf8(..).unwrap_or_default()`

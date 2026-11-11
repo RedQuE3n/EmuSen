@@ -10,6 +10,7 @@
 mod common;
 
 use common::{sandbox, wait_for};
+use cxx_qt_lib::QString;
 
 use emusen_client_fixture::cores::{installation_with_snes, snes_image};
 use emusen_client_fixture::library;
@@ -99,8 +100,11 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
 
     let sdl = Sdl::open();
     let pad = sdl.attach("EmuSen Test Xbox Pad", 0x045e, 0x028e);
-    let mut scene = harness.load_prepared(MAIN_URL, 1280, 800, |window| unsafe { adoption.adopt(window.cast()) }.expect("Qt adopts the device"));
-    assert!(scene.set_property("program", "esdeChosen", "true"));
+    // The window made with the start's own initial properties, as main.rs makes it; the library named after the cores.
+    let mut initial = start::initial(&read);
+    assert!(initial.remove(&QString::from("platformLibrary")));
+    let mut scene = harness.load_initial(MAIN_URL, 1280, 800, &initial, |window| unsafe { adoption.adopt(window.cast()) }.expect("Qt adopts the device"));
+    assert_eq!(scene.property("program", "esdeChosen"), "true", "the start's choice, as main.rs hands it in");
     assert!(scene.set_property("program", "onlyPads", &pad.id.to_string()));
     assert!(scene.set_property("program", "feed", &host.feed.address().to_string()));
     assert!(scene.set_property("library", "cores", cores.to_str().unwrap()));
@@ -108,6 +112,16 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
 
     // Moonrise, then the theme's system view in place of Home, the first system selected; the own look's screens unmade.
     wait_for(&mut scene, "library", "loading", "false", 20000);
+    // Moonrise goes only once the theme is drawn (`lookSettled`): never with the theme still loading behind it.
+    let mut settled = None;
+    for _ in 0..1250 {
+        if scene.property("moonrise", "done") == "true" {
+            settled = Some(scene.property("esdeModel", "themed"));
+            break;
+        }
+        scene.wait(16);
+    }
+    assert_eq!(settled.as_deref(), Some("true"), "Moonrise gave way with the theme drawn");
     until(&mut scene, 20, "Moonrise giving way to the theme", |s| s.property("moonrise", "visible") == "false");
     assert_eq!(scene.property("screens", "shown"), "Esde");
     assert_eq!((scene.property("esdeModel", "view"), scene.property("esdeModel", "problem")), ("system".into(), String::new()));

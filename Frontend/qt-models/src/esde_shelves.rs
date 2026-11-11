@@ -7,7 +7,8 @@ use crate::gamelists::{write_listing, Collection, Counts, Gamelists, Settings, S
 use crate::library::{title_of, Catalog, LibrarySource};
 use emusen_crystal_client::shapes::SystemRow;
 use emusen_platform_client::library::GameFile;
-use serde::Serialize;
+use emusen_esde::shelves::GameRow;
+use std::borrow::Cow;
 use serde_json::{json, Map, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::Path;
@@ -203,13 +204,13 @@ pub struct EsdeGame {
 
 impl EsdeGame {
     /// The row as the shelves' text carries it: every field but the description, which `description_of` gives on demand.
-    pub fn row(&self) -> RowText<'_> {
-        RowText::of(self, false)
+    pub fn row(&self) -> GameRow<'_> {
+        self.row_of(false)
     }
 
     /// The row with its description, as a collection's folder entry carries its own.
-    pub fn row_whole(&self) -> RowText<'_> {
-        RowText::of(self, true)
+    pub fn row_whole(&self) -> GameRow<'_> {
+        self.row_of(true)
     }
 
     /// An entry read back from its text, as the painter hands one in to be entered.
@@ -218,82 +219,46 @@ impl EsdeGame {
         let flag = |key: &str| v.get(key).and_then(Value::as_bool).unwrap_or(false);
         EsdeGame { name: text("name"), file: text("file"), folder: flag("folder"), folder_path: text("folder_path"), is_collection: flag("is_collection"), ..EsdeGame::default() }
     }
-}
 
-/// A game's row in the shelves' text, borrowed from it and written straight into the text, never made a tree first
-/// (EmuSen_Qt.md §4.9); the keys in the order a JSON object's sorted map gave them.
-#[derive(Serialize)]
-pub struct RowText<'a> {
-    alt_emulator: bool,
-    broken: bool,
-    completed: bool,
-    controller: &'a Option<String>,
-    custom_sort_name: &'a Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    description: Option<&'a Option<String>>,
-    developer: &'a Option<String>,
-    emulator: &'a Option<String>,
-    esde_full_name: &'a str,
-    esde_system: &'a str,
-    face: &'a Option<String>,
-    favourite: bool,
-    file: &'a str,
-    folder: bool,
-    folder_link: &'a Option<String>,
-    folder_path: &'a str,
-    genre: &'a Option<String>,
-    hidden: bool,
-    hide_metadata: bool,
-    is_collection: bool,
-    kid_game: bool,
-    last_played: i64,
-    manual: bool,
-    name: &'a str,
-    not_counted: bool,
-    play_count: i64,
-    play_time: i64,
-    players: &'a Option<String>,
-    publisher: &'a Option<String>,
-    rating: Option<f64>,
-    release_date: &'a Option<String>,
-    sort_name: &'a Option<String>,
-}
-
-impl<'a> RowText<'a> {
-    fn of(g: &'a EsdeGame, whole: bool) -> RowText<'a> {
-        RowText {
-            alt_emulator: g.emulator.is_some(),
-            broken: g.broken,
-            completed: g.completed,
-            controller: &g.controller,
-            custom_sort_name: &g.custom_sort_name,
-            description: whole.then_some(&g.description),
-            developer: &g.developer,
-            emulator: &g.emulator,
-            esde_full_name: &g.esde_full_name,
-            esde_system: &g.esde_system,
-            face: &g.face,
-            favourite: g.favourite,
-            file: &g.file,
-            folder: g.folder,
-            folder_link: &g.folder_link,
-            folder_path: &g.folder_path,
-            genre: &g.genre,
-            hidden: g.hidden,
-            hide_metadata: g.hide_metadata,
-            is_collection: g.is_collection,
-            kid_game: g.kid_game,
-            last_played: g.last_played,
-            manual: g.manual,
-            name: &g.name,
-            not_counted: g.not_counted,
-            play_count: g.play_count,
-            play_time: g.play_time,
-            players: &g.players,
-            publisher: &g.publisher,
-            rating: g.rating,
-            release_date: &g.release_date,
-            sort_name: &g.sort_name,
+    // The shelves' row, borrowed (emusen-esde's `shelves`, the schema both sides keep).
+    fn row_of(&self, whole: bool) -> GameRow<'_> {
+        fn text(t: &Option<String>) -> Option<Cow<'_, str>> {
+            t.as_deref().map(Cow::Borrowed)
+        }
+        GameRow {
+            alt_emulator: self.emulator.is_some(),
+            broken: self.broken,
+            completed: self.completed,
+            controller: text(&self.controller),
+            custom_sort_name: text(&self.custom_sort_name),
+            description: if whole { text(&self.description) } else { None },
+            developer: text(&self.developer),
+            emulator: text(&self.emulator),
+            esde_full_name: Cow::Borrowed(&self.esde_full_name),
+            esde_system: Cow::Borrowed(&self.esde_system),
+            face: text(&self.face),
+            favourite: self.favourite,
+            file: Cow::Borrowed(&self.file),
+            folder: self.folder,
+            folder_link: text(&self.folder_link),
+            folder_path: Cow::Borrowed(&self.folder_path),
+            genre: text(&self.genre),
+            hidden: self.hidden,
+            hide_metadata: self.hide_metadata,
+            in_collection: false,
+            is_collection: self.is_collection,
+            kid_game: self.kid_game,
+            last_played: self.last_played,
+            manual: self.manual,
+            name: Cow::Borrowed(&self.name),
+            not_counted: self.not_counted,
+            play_count: self.play_count,
+            play_time: self.play_time,
+            players: text(&self.players),
+            publisher: text(&self.publisher),
+            rating: self.rating,
+            release_date: text(&self.release_date),
+            sort_name: text(&self.sort_name),
         }
     }
 }

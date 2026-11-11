@@ -3019,7 +3019,7 @@ software scene graph, 12 s after the start:
 |---|---|---|
 | The carousel's nine system pictures, 454 × 1080, each decoded at 1,281 × 3,047 (15.6 MB) because Qt scales a raster up under `PreserveAspectFit` (§4.8.1) | 134 MiB, and the first picture waiting on their smooth scaling | a raster's hidden `Image` stretches, which Qt scales down only: 2 MB each |
 | The own look's library copied whole into the reference host's feed at each publish (`ThemeLibrary::show` cloned the `LibraryView`, the 6.6 MB shelves text, the ES-DE state and the thirteen list texts with it), although the reference's screens are not made under an ES-DE theme | 22 MiB live, and the clones' churn | the feed copies the rows, the systems and the catalog, all its views read (`theme-qt` `view.rs`) |
-| The shelves text built as a `serde_json::Value` tree of every listing (43 MiB at the refresh's peak) and the own look's thirteen lists likewise, each game cloned into its list first | the refresh thread's arena held 116 MiB of which 36 in use: glibc keeps a thread's arena at its peak | each row is serialised straight from the game it borrows (`RowText`, `ListingText`, `games::RowText`), the keys in the order the sorted map wrote them: the 6.6 MB text is byte-identical on the 9,007 games, and every list read back equal |
+| The shelves text built as a `serde_json::Value` tree of every listing (43 MiB at the refresh's peak) and the own look's thirteen lists likewise, each game cloned into its list first | the refresh thread's arena held 116 MiB of which 36 in use: glibc keeps a thread's arena at its peak | each row is serialised straight from the game it borrows (`RowText`, `ListingText`, `games::RowText`; since 2026-11-11 the shelves' are `emusen_esde::shelves`' `GameRow` and `ShelfText`, below), the keys in the order the sorted map wrote them: the 6.6 MB text is byte-identical on the 9,007 games, and every list read back equal |
 | The gamelists' sort compared names by allocating two `Vec<char>` per comparison (30 MiB of churn a refresh) | none live; 15 ms of the first read | the same comparison over the characters as they are read |
 
 Offscreen idle went 532 → 298 MiB (anonymous 409 → 175; glibc's arenas 393 MiB mapped with 268 in use → 175 with 123),
@@ -3078,19 +3078,32 @@ media index): 3.9 µs, under the 2 ms gate, and checks that the shelves' copy sh
 conversion back on the GUI thread (a seeded fault) the check fails.
 
 **The shelves' row, written in one crate and read in another (2026-11-11).** qt-models writes each game's row
-(`esde_shelves::RowText`, a collection's member by its file) and esde-qt reads it (`shelves::Row`): two hand-kept
+(`esde_shelves::RowText`, a collection's member by its file) and esde-qt read it (`shelves::Row`): two hand-kept
 schemas of one text. The reader read every field with a default and the whole text with `unwrap_or_default`, so one
 field of another type emptied every shelf with no word: `play_count` and `play_time` are games.db's `i64` where written
 and were `u64` where read, and a negative count (games.db allows one) read as no library at all, the view then taken for
 an empty library and the own look shown with no notice. A single owner of the row would be a type in `emusen-esde`,
-the crate both depend on, which has no `serde` today; adding it is a dependency the tester decides, so it is not made
-here. What is made: the reader names every key the writer writes and refuses any other (`deny_unknown_fields`, the
+the crate both depend on, which had no `serde`; it was made next (below). First made: the reader names every key the writer writes and refuses any other (`deny_unknown_fields`, the
 keys the view does not show named and passed over), takes the plays as `i64` (below zero read as none), and returns
 the words why a text does not read, which `EsdeModel` makes its `problem`, so the host gives way to the own look with
 the words as a notice rather than an empty view. `qt-app/tests/esde_rows.rs`, where the program links both crates,
 writes a library through qt-models' read (a game with every field the scraper and games.db give, a game with negative
 plays) and reads it through esde-qt's: every field the view shows as written, and a renamed key, a field of another
 type and a media index that does not read each an error.
+
+**The shelves' text has one owner (2026-11-11).** `serde` in `emusen-esde` was allowed on 2026-11-11 (a dependency the
+Frontend workspace already holds, at the same version), and the text's schema moved there: `emusen_esde::shelves`
+holds `ShelfText` (a shelf, its counts as `CountsText`, its games), `GameRow` (a game's row or a folder entry's) and
+`Entry` (a row, or a collection's member by its file, system and sort name, which reads back as a row with no name).
+qt-models' `write_listing` and `EsdeGame::row` fill them borrowed (`Cow`, no copy of a game's text), and esde-qt's
+`shelves` reads the same types owned; every type refuses a key it does not name, so a key renamed on one side is an
+error on the other, never a field read as absent. `emusen-esde`'s fence (`tests/fence.rs`) names the crates its tree
+may hold: quick-xml with memchr, serde with its derive, and serde_json for its tests. `esde/tests/shelves.rs` writes a
+shelf and reads it back equal (a member as a row with no name, negative plays kept) and a renamed key or a field of
+another type is an error; `esde_rows.rs` holds the two crates to it where the program links them. `in_collection`, which
+the reader takes and a hand-written text gives (`esde-qt/tests/mapping.rs`), is written `false` by qt-models: the
+library marks no game as in a custom collection yet. A text that leaves out `counts` still has the view count the games
+itself.
 
 **Errors passed over, each answered (2026-11-11).** `gamelists::write_listing`'s `let _ = serde_json::to_writer`
 writes plain fields into a `Vec`, where serde_json fails only on a map with keys that are not strings or a `Serialize`

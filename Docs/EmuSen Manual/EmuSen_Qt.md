@@ -3591,6 +3591,24 @@ rounded; `HelpElement` rounds the bar's start (`barStart`) and draws each part a
 `tests/hinted.rs` pins the heights of rost at its 22 measured sizes and of Akrobat at its 17; `hinted.rs`'s unit tests
 hold the missing library's words and the body face; `help.rs`'s unit test pins copies `v05`'s and `g104`'s four pens.
 
+#### 4.12.2 Art Book Next's three help rows, re-measured **[M 2026-11-11]**
+
+Decided 2026-11-11 by the tester (R-20261111-49): the two Art Book Next rows of `Testing/esde-baseline/esde-boxes.tsv`
+that were derived wrongly are corrected to the measured values, and the real difference that then shows stays failing
+until it is fixed. Measured on the committed captures (`edge3.py`, `ink.py`, outside the repository); y and h unchanged.
+
+| Row | Was | Now | Derivation |
+|---|---|---|---|
+| system, 1920 × 1200 (`system-1920x1200.png`) | x 357.18, w 562.89 | x 356.08, w 567.82 | the panel's edges by the coverage of its edge column on rows 1075, 1100 and 1125: 509.125–1410.85 px, ÷ 1.5 = 339.42–940.57 units; less the theme's `backgroundHorizontalPadding`, 0.01302083 × 1280 = 16.667 units, each side: x = 339.42 + 16.667, w = 601.15 − 33.333 |
+| system, 1280 × 800 (`system-1280x800.png`) | x 359.22, w 559.78 | x 358.10, w 564.24 | the same on rows 725–745: 341.43–939.0 units; x = 341.43 + 16.667, w = 597.57 − 33.333 |
+| gamelist, 1920 × 1200 (`gamelist-1-1920x1200.png`) | x 60.00, w 371.47 | x 58.33, w 375.31 | no panel to read (its colour is the backdrop's): x the theme's `pos` 0.04557292 × 1280 (origin 0); the right edge SELECT's T, whose ink ends in column 649 at 70/152 coverage (649.46 px), plus T's right bearing at its rounded advance in Akrobat SemiBold at 55 px (advance 417/1000 → 23 px, xMax 400/1000 → 22.0 px: 1.0 px): (650.46 − 87.5) ÷ 1.5 |
+
+The old system rows took 17.78 units off the left and 20.0 off the right, which put the bar's centre at 957.9 px against
+the theme's `pos` 0.5 and `origin` 0.5; the old gamelist row took the first disc's ink (column 90) for the element's
+edge. With the rows as measured, the system bar at 1920 × 1200 and the gamelist bar are within a unit of ours (568.0
+and 374.7). Art Book Next's system bar at 1280 × 800 is 2.6 units narrower than ES-DE's: its discs are 32 columns of
+ink against our 29 (§4.12.3).
+
 ### 4.13 The media viewer's PDF manual **[M 2026-11-09]**
 
 **Approved 2026-11-09 by the tester:** a game's PDF manual in the media viewer, through Qt PDF. The evidence is the user

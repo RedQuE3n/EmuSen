@@ -3343,6 +3343,17 @@ where it can, it runs in full and fails on a wrong count. The library job runs i
 log shows which happened. To run it where it counts: `cd Platform && cargo test --profile test-checked -p emusen-dev-module
 --lib hwcount -- --nocapture` on a host whose `/proc/sys/kernel/perf_event_paranoid` is 2 or lower.
 
+**SQLite for the platform's tests.** The tests of `emusen-library` (five in `tests/library.rs`) open a database through
+`emusen_sqlite::for_tests`, which loads the file named by `EMUSEN_SQLITE`, else the `e_sqlite3` of the NuGet cache in
+`$HOME`. A runner has no NuGet cache, so on the run of 2026-11-11 (`43072535496`) all five failed with "no e_sqlite3
+could be loaded", in the library job's Test step and in the shared job's "Test the platform workspace" step. Both steps
+are `continue-on-error`, so the shared job reported success over the same five failures. Each job now has a step,
+"SQLite for the tests", before them: on Linux it installs `libsqlite3-0` if the image lacks it and sets `EMUSEN_SQLITE`
+to `libsqlite3.so.0`; on macOS it sets `libsqlite3.dylib`. Measured on 2026-11-11 on a desktop: five of five fail with
+the NuGet cache out of reach and `EMUSEN_SQLITE` unset, and five of five pass with `EMUSEN_SQLITE=libsqlite3.so.0`. The
+WiseMan job's "The libraries beside the tests" step failed only because that Test step stopped the library job before
+its upload, so `emusen_platform` was never downloaded; `ls` on a missing library still stops that step.
+
 ## 32. Interface 14, 2026-10-17: the save media's format modules, and the packs' code after them
 
 With the backend's step B3 (`EmuSen_Backend.md` §13), `emusen-systems` gained the packs' code and the library its C

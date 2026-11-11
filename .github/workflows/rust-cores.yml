@@ -116,6 +116,18 @@ jobs:
             (cd "$crate" && cargo test --profile test-checked $features)
           done
 
+      # The tests that open a database load SQLite from EMUSEN_SQLITE, and a runner has no NuGet cache to find one in: the system's, by its name, installed if the image lacks it (Platform/sqlite/src/lib.rs, for_tests). Windows has none to name and is paused.
+      - name: SQLite for the tests
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux)
+              ldconfig -p | grep -q 'libsqlite3.so.0 ' || sudo apt-get install -y libsqlite3-0
+              echo "EMUSEN_SQLITE=libsqlite3.so.0" >> "$GITHUB_ENV"
+              ;;
+            macOS) echo "EMUSEN_SQLITE=libsqlite3.dylib" >> "$GITHUB_ENV" ;;
+          esac
+
       # The platform's crates: their own rules with no .NET present, the header against the exports, and the header as C99 and C++17. Not yet a gate, as nothing of the platform's is until Galaxia's own (EmuSen_RustPlatform.md §3.9, §10.6): a failure here is reported and does not stop the cores.
       - name: Test the platform workspace
         continue-on-error: true
@@ -380,6 +392,18 @@ jobs:
         with:
           workspaces: '${{ matrix.crate.dir }} -> target'
           key: ${{ matrix.crate.name }}-${{ matrix.platform.rid }}
+
+      # The tests that open a database load SQLite from EMUSEN_SQLITE, and a runner has no NuGet cache to find one in: the system's, by its name, installed if the image lacks it (Platform/sqlite/src/lib.rs, for_tests). Windows has none to name and is paused.
+      - name: SQLite for the tests
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux)
+              ldconfig -p | grep -q 'libsqlite3.so.0 ' || sudo apt-get install -y libsqlite3-0
+              echo "EMUSEN_SQLITE=libsqlite3.so.0" >> "$GITHUB_ENV"
+              ;;
+            macOS) echo "EMUSEN_SQLITE=libsqlite3.dylib" >> "$GITHUB_ENV" ;;
+          esac
 
       # The crate's own suite; the games and the corpus skip without their files. MarsRT's block tests run compiled code, which is the check on each platform's JIT rules.
       - name: Test

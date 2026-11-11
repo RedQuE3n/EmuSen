@@ -123,3 +123,16 @@ fn tools_cores_and_themes_open_their_screens_and_b_comes_back_to_where_the_card_
     assert_eq!(step_in(true, Shown::Themes, &Ask::Back), Some((Shown::Settings, None)));
     assert_eq!(tool_back(false, Some(Shown::Home), Shown::Cores, &Ask::Back), Some(Shown::Home));
 }
+
+#[test]
+fn qt_7_9_lists_the_home_card_cannot_read_are_said_under_its_rows() {
+    let home = pages_of(home_card::CARD).unwrap();
+    let (startable, tools, unread) = home_card::read_lists(&serde_json::to_string(&startable()).unwrap(), "{}");
+    assert_eq!((startable.len(), tools, unread.as_str()), (2, json!({}), ""), "read whole, nothing said");
+    let (startable, tools, unread) = home_card::read_lists("[{\"console\":", "not json");
+    assert!(startable.is_empty() && tools.is_null());
+    assert!(unread.starts_with("The consoles that start with no disc could not be read: "), "{unread}");
+    assert!(unread.contains(" The tools' lines could not be read: "), "{unread}");
+    let f: Value = serde_json::from_str(&Facts { unread: unread.clone(), ..Facts::default() }.to_json()).unwrap();
+    assert_eq!(home.page(home_card::FIRST, &f).footer, unread, "said under the first page's rows");
+}

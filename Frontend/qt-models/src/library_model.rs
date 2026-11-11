@@ -422,6 +422,7 @@ impl qobject::LibraryModel {
 
     pub fn home_card_facts(&self, suspended: &QString, console: &QString, paused: &QString, game_mode: bool, startable: &QString, tools: &QString) -> QString {
         let suspended = suspended.to_string();
+        let (startable, tools, unread) = crate::home_card::read_lists(&startable.to_string(), &tools.to_string());
         let facts = crate::home_card::Facts {
             suspended: if !suspended.is_empty() {
                 crate::library::title_of(&suspended)
@@ -432,8 +433,9 @@ impl qobject::LibraryModel {
             },
             paused: paused.to_string(),
             game_mode,
-            startable: serde_json::from_str(&startable.to_string()).unwrap_or_default(),
-            tools: serde_json::from_str(&tools.to_string()).unwrap_or(serde_json::Value::Null),
+            startable,
+            tools,
+            unread,
             ..crate::home_card::Facts::default()
         };
         QString::from(facts.to_json().as_str())

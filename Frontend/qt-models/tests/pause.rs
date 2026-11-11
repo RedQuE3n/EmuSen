@@ -247,7 +247,7 @@ fn row(path: &str, title: &str, cover: &str) -> emusen_qt_models::library::GameR
 
 /// A game of two discs, the first in, with another game of its console in the library.
 fn two_discs() -> Card {
-    let discs = DiscFacts { count: 2, index: Some(0), can_change: true, lid_open: false };
+    let discs = DiscFacts { count: 2, index: Some(0), unread: false, can_change: true, lid_open: false };
     let facts = Facts { path: "/g/Basalt Run.cue".into(), system: "tst".into(), discs, ..Facts::default() };
     let shelf = vec![row("/g/Amber Coast.cue", "Amber Coast", "file:///c/amber.png"), row("/g/Basalt Run.cue", "Basalt Run", "file:///c/basalt.png")];
     Card { facts, shelf, ..Card::default() }
@@ -294,10 +294,18 @@ fn change_disc_lists_the_games_discs_the_consoles_others_and_the_tray() {
     assert_eq!(c.back(), Outcome::Shown);
     assert_eq!((c.page, c.current), (Page::First, 5), "B back to Change Disc's row");
     let mut single = two_discs();
-    single.facts.discs = DiscFacts { count: 1, index: None, can_change: true, lid_open: true };
+    single.facts.discs = DiscFacts { count: 1, index: None, unread: false, can_change: true, lid_open: true };
     single.choose(at(&single, "Change Disc"));
     let rows: Vec<String> = single.rows().into_iter().map(|r| format!("{}|{}", r.label, r.value)).collect();
     assert_eq!(rows, ["Basalt Run|", "Amber Coast|"], "a single disc by the game's name, no tray with none in");
+    // An index the runtime gave that this program cannot read: no disc said to be in, each said not known, the tray offered.
+    let mut unread = two_discs();
+    unread.facts.discs = DiscFacts { count: 2, index: None, unread: true, can_change: true, lid_open: false };
+    let unread = card(Facts::from_json(&unread.facts.to_json()));
+    let mut unread = Card { shelf: two_discs().shelf, ..unread };
+    unread.choose(at(&unread, "Change Disc"));
+    let rows: Vec<String> = unread.rows().into_iter().map(|r| format!("{}|{}", r.label, r.value)).collect();
+    assert_eq!(rows, ["Basalt Run (Disc 1)|Not known", "Basalt Run (Disc 2)|Not known", "Amber Coast|", "Open the tray|"]);
     assert_eq!(Facts::from_json(&two_discs().facts.to_json()), two_discs().facts, "the drive crosses as plain data");
 }
 

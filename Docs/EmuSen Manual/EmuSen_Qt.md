@@ -4747,12 +4747,15 @@ titled by the library's title of the game, had none for a console.
 
 The client fixture's console core (`console_core`, the platform's `crystal_console_core` example: emusen-native's v1
 test core under `AS_PLAYSTATION`, its one system the table's `psx`, which it starts empty) is what a console is started
-on in the tests. Under `AS_PLAYSTATION` its pad has B and Start besides A, and it draws its picture blue while a button
-of its pad is held, so a test sees a press reach the console in a grab of the window. Held by qt-models' `start_console`
-and `home_card_acts`, and on the GPU by qt-app's `console` (the own look: the List card's page held at the five sizes,
-the pointer and then the pad starting the console; each time its picture found drawn on a grab of the window, B and
-Start each held turning it blue and let go turning it back while the program stays on the console's screen, the Pause
-Card, Quit Game back to Home) and `esde` (the Home card's row by the pad and by the pointer, the PlayStation gamelist's
+on in the tests. Under `AS_PLAYSTATION` its pad has B and Start besides A, and it draws its picture's blue by the
+button held (`PRESSED_BLUES`: A 0x40, Turbo 0x60, B 0xFF, Start 0xA0), so a test sees in a grab of the window which
+button reached the console; until 2026-11-11 any button drew it full, which proved a press and not which. Held by
+qt-models' `start_console` and `home_card_acts`, and on the GPU by qt-app's `console` (the own look: the List card's
+page held at the five sizes, the pointer and then the pad starting the console; Start's Home card, its Start Console
+row by the pad and then by the pointer; Back to Library and the Home card's Continue naming the console's session, held
+at the five sizes, and resuming it. Each time the console's picture is found drawn on a grab of the window, and B and
+Start, each held, turn it blue, B bluer than Start, and let go turn it back, while the program stays on the console's
+screen; the Pause Card; Quit Game back to Home) and `esde` (the Home card's row by the pad and by the pointer, the PlayStation gamelist's
 Select row by the pointer, each to the console's screen proven the same way and Quit Game back to the theme, and the
 Home card's Continue naming and resuming the console's session, held at the five sizes).
 
@@ -4762,13 +4765,20 @@ however many consoles the library had listed since (found on 2026-11-11 by `cons
 showing none). The consoles that start empty and the tools' summaries are now arguments (`library.startable`,
 `library.toolSummaries`), so the card follows them.
 
-Not built, for the tester: the own look's Home card opens only at Power (Home's Power place), where B closes it, so its
-first page, with its Continue and its Start Console, is not reached in the own look at all (held by qt-app's `cards`);
-Mistress opened it with the pad's menu over the library. The own look reaches Start Console through the List card only.
-Whether Start opens the Home card over the own look's screens is a change to what the player sees. And the own look's
-Home shows a suspended game's Continue through the theme feed's `showSession`, which names a game by its path; a
-console's session has none, so the own look's Home offers no Continue for it, where Mistress's did. Naming it there is a
-change to the theme API.
+**Start on Home opens the Home card at its first page** (decided 2026-11-11). Until then the own look's card opened only
+at Power, from Home's Power place, where B closes it, so its first page, with Continue and Start Console, was not
+reached in the own look. Mistress's Start, read in her source: on Choose a console and on the games screen it went Home
+(`ConsolesPadCommand`, `OwnScreenPadCommand`: `ShowHome`); on Home, the desktop's Home opened the pad's menu at its
+first page (`OpenPadMenu`), and the big screen's moved the focus to Home's start (`FocusStart`); on the classic library
+list, `OpenPadMenu`. The program keeps Start on Choose a console, the grid and the search going Home, and Start on Home
+now opens the card at its first page (`screens::step`, `home_card::FIRST`) where it took the focus back to Games; Home's
+`homeAgain` count, which only that did, is gone. B on the first page closes the card to Home, and Home's Power place
+still opens it at Power. Held by qt-models' `cards`, qt-app's `cards` (Start on Home, the first page's rows, B back) and
+`console` (above).
+
+Not built, for the tester: the own look's Home shows a suspended game's Continue through the theme feed's
+`showSession`, which names a game by its path; a console's session has none, so the own look's Home screen offers no
+Continue for it, where Mistress's did (the Home card's Continue does). Naming it there is a change to the theme API.
 
 **3. Tools ▸ Cores and ▸ Themes.** In both looks the Home card's Cores and Themes rows open Cores and the Themes tab
 (`screens::card_act`). B comes back to where the card was opened, the library's screen, the card having closed as it
@@ -4812,8 +4822,15 @@ happen in the program, since nothing the front end passes makes the call fail.
   `ABSENT`, which platform-client reads as none, and the path it writes is `to_string_lossy`'s, always UTF-8.
 - Start Console's firmware line where the runtime cannot say ("⚠ EmuSen's runtime could not say whether you have it:
   …") is new: Mistress's pane showed nothing there. Listed for the tester, as what the player sees.
-- Only the runtime's -1 (its `disc_index` with the drive empty) reads as an empty drive; any other index below zero is
-  an answer crystal-client cannot read (`shapes::Discs`, `an_empty_drive_is_no_index`).
+- Only the runtime's -1 (its `disc_index` with the drive empty) reads as an empty drive. Any other index below zero is
+  not read, and the rest of the session's answer still is: `shapes::Discs` has no index and keeps the one written
+  (`unread_index`), and the Pause Card's Change Disc says "Not known" on each of the game's own discs and offers the
+  tray (`pause::UNREAD_DISC`). Until 2026-11-11 such an index failed the whole `session_info` read and with it the
+  session. Held by `an_empty_drive_is_no_index` and qt-models' `pause`.
+- The Home card's lists of consoles that start empty and of the tools' lines, which the program writes itself: one that
+  cannot be read is said under the first page's rows ("The consoles that start with no disc could not be read: …",
+  "The tools' lines could not be read: …"; `home_card::read_lists`), as the List card says a console it cannot read,
+  where until 2026-11-11 it was read as none. Held by qt-models' `home_card_acts`.
 - A console a theme's gamelist's facts name and that cannot be read is said under the List card's rows ("The console
   this list starts could not be read: …", `list_card::console_unread`) rather than its row dropped unsaid.
 - The firmware statuses `present` and `missing` have one owner, crystal-client's `FirmwareFile::PRESENT` and `MISSING`,
@@ -4853,35 +4870,47 @@ end the scraper's `metadata::FIELDS`.
 (overlaps of the theme's items with the card's rows, and the theme's colours outside the kit's palette). The view was
 drawn and enabled under every card and screen over it, so the theme's items were reachable there. It now declares
 itself a backdrop whenever another screen is shown and is disabled there (`esdeLoader.backdrop`), as the own look's
-screens are under a card (ThemeHost's slots). Held on 2026-11-11 with no finding at the five sizes: the Home card over
-the suspended game and over the console's session, the Themes tab, and the PlayStation gamelist's Select menu.
+screens are under a card (ThemeHost's slots). Decided 2026-11-11: the ES-DE view as a backdrop under cards and other
+screens stands. Held on 2026-11-11 with no finding at the five sizes: the Home card over the suspended game and over the
+console's session, the Themes tab, and the PlayStation gamelist's Select menu.
 
-Cores over the theme is held too and is not clean. On 2026-11-11 it gave 55 findings: 50 words cut with an ellipsis
-(ten a size) and 5 the section strip's wheel (one a size). The cause given then, that `ColumnFit`'s `QFontMetricsF`
-measure differs from the words as Vulkan draws them, was a guess, and it is wrong. qt-app's `cores_fit` (software) and
-`cores_fit_gpu` (Vulkan) hold Cores over the same world in the own look and under the theme, and read each cell's width
-and its words' `implicitWidth` as laid out. The two backends gave the same numbers to the hundredth, in both looks, and
-the own look gives the same 50 cuts; at 1280 × 800, in design units, the Barlow face at the row's size:
+**Cores' console column gives way** (decided 2026-11-11). Cores over the theme gave 55 findings on 2026-11-11: 50 words
+cut with an ellipsis (ten a size) and 5 the section strip's wheel (one a size), and the own look the same 50 cuts. qt-app's
+`cores_fit` (software) and `cores_fit_gpu` (Vulkan) read each cell's width and its words' `implicitWidth` as laid out;
+the two backends gave the same numbers to the hundredth. At 1280 × 800, in design units, the Barlow face at the row's
+size, the list's room is 595 (691 less the lead, the trail and two gaps):
 
-| Words | Column | Takes | Given |
-|---|---|---|---|
-| ● Default (the status column's widest) | Status | 107.27 | 77.14 |
-| Available | Status | 98.23 | 77.14 |
-| Genesis, Sega CD, Master System, SG-1000 (Genesis Plus GX) | Console | 458.09 | 327.86 |
-| Mupen64Plus-Next | Core (fill, least 190) | 208.48 | 190.00 |
+| Words | Column | Takes | Given before | Given now |
+|---|---|---|---|---|
+| ● Default (the status column's widest) | Status | 107.27 | 77.14 | 108 |
+| Genesis, Sega CD, Master System, SG-1000 (Genesis Plus GX) | Console | 458.09 | 327.86 | 278, so "Genesis +3" |
+| Game Boy, Game Boy Color (SameBoy) | Console | 291.36 | 327.86 | 278, so "Game Boy +1" |
+| Mupen64Plus-Next | Core (fill, least 190) | 208.48 | 190 | 209 |
 
-Each content column was given 0.714 of its widest words as drawn, rounded up (77.14 = 108 × 0.714; 327.86 = 459 ×
-0.714), at every size: `ColumnFit` measures right. The list's room at 1280 × 800 is 595 (691 less the lead, the trail
-and two gaps), and the core column's least (190) and the two content columns (459 and 108) need 757; `fit_columns`
-(EmuSen_Kit.md §7.43) then gives every content column the same share of the rest, which cuts the short status words
-too, and the core column's least of 190 (Interface §15.2's measure of `Mupen64Plus-Next`) is under the 208.48 the name
-takes at this face and size. At 1920 × 1200 the share is the same; at 1920 × 1080, 1280 × 720 and 3840 × 2160 it is
-0.866 (93.52 for the status column), and the same words are cut. Which column
-gives way, or how a core's several consoles are worded in the list (Mistress joined them all, as here), is what the
-player sees: for the tester. The hold stays in esde.rs, failing with these 50 findings (measured on 2026-11-11).
+`ColumnFit` measured the columns right: each content column was given 0.714 of its widest words, rounded up. The core
+column's least (190, Interface §15.2's measure of `Mupen64Plus-Next`) and the two content columns (459 and 108) needed
+757, so `fit_columns` scaled every content column into the rest and cut the short status words too, and the core's name
+at its least of 190 was under the 208.48 it takes in this face. Now the console column gives way first (EmuSen_Kit.md
+§7.106): it takes its whole words where the room holds them beside the status words and the core column's least or
+words, whichever is larger, and otherwise what is left, never less than its widest short words. A row whose whole list
+does not fit the width given shows its first console and a count ("Genesis +3"); a core of one console shows its name.
+The status words and the core's names are never cut at the gate's sizes. The wording has one owner, Cores' model
+(`words::first_console`, beside `words::consoles`), which gives each console cell both words (`Words::giving_way`); the
+column declares that it gives way (`Column::gives_way`), and the kit's `ToolScreen` picks the words by the width laid out.
+The order is the core's, as Mistress's `CoreRow.ConsolesOf` kept it: its systems in the order it declares them, each
+console once (`row::Consoles::of`). The pane's caption lists them all. At 1920 × 1080, 1280 × 720 and 3840 × 2160 the
+room holds every whole list.
 
-The strip's wheel was the kit's: fixed there (EmuSen_Kit.md §7.105), and esde.rs and both `cores_fit` tests find no wheel
-finding since.
+Two measures were wrong besides, each fixed in the kit. `ColumnFit` measured words with `QFontMetricsF`, which disagrees
+with `Text`'s design-metric layout by up to half a unit; and a fill column had no measure of its words, so nothing kept
+`Mupen64Plus-Next` whole (EmuSen_Kit.md §7.106). The strip's wheel was the kit's too (§7.105): it moves the strip only
+where the names run past it, and the strip is not dragged, as it never was before this piece.
+
+`cores_fit` and `cores_fit_gpu` now fail on any finding the gate gives on Cores in either look at any size, not the
+wheel's alone, and on any cell given less than its words take, a status column given other than its widest words, or a
+core of several consoles read as neither its whole list nor its first console and a count; on 2026-11-11 both passed
+with no finding. kit-core's `table`, kit-gallery's `screens` (one console, four and twenty, the four fit sizes, both
+variants) and qt-models' `cores` (the wording, twenty consoles in the core's order) hold the rest.
 
 **The game page's States hold.** qt-app's `game_page` failed at GamePageStates ("the pad does not reach" the State
 tiles) intermittently on this branch. It fails on WiseMan's base too, and the branch this piece sits on has since

@@ -226,22 +226,35 @@ pub struct Port {
 }
 
 /// The session's discs; `index` is none with no disc in the drive, which the runtime writes as -1 (a console started
-/// empty, a disc taken out).
+/// empty, a disc taken out). Any other index below zero is not read: `index` is none and `unread_index` holds it, and
+/// the rest of the answer is read as written.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
-#[serde(default)]
+#[serde(from = "DiscsAnswer")]
 pub struct Discs {
     pub count: u32,
-    #[serde(deserialize_with = "index_in_drive")]
     pub index: Option<u32>,
+    pub unread_index: Option<i64>,
     pub can_change: bool,
     pub lid_open: bool,
 }
 
-/// The runtime's -1 (its `disc_index` with the drive empty) is no index; any other value below zero is not read.
-fn index_in_drive<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Option<u32>, D::Error> {
-    match Option::<i64>::deserialize(d)? {
-        None | Some(EMPTY_DRIVE) => Ok(None),
-        Some(i) => u32::try_from(i).map(Some).map_err(|_| serde::de::Error::custom(format!("a disc index of {i}"))),
+/// The discs as the runtime writes them, before the index is read.
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct DiscsAnswer {
+    count: u32,
+    index: Option<i64>,
+    can_change: bool,
+    lid_open: bool,
+}
+
+impl From<DiscsAnswer> for Discs {
+    fn from(a: DiscsAnswer) -> Discs {
+        let read = match a.index {
+            None | Some(EMPTY_DRIVE) => Ok(None),
+            Some(i) => u32::try_from(i).map(Some).map_err(|_| i),
+        };
+        Discs { count: a.count, index: read.unwrap_or(None), unread_index: read.err(), can_change: a.can_change, lid_open: a.lid_open }
     }
 }
 
@@ -540,6 +553,8 @@ mod tests {
         assert_eq!(read(r#"{"count":0,"index":-1}"#), None);
         assert_eq!(read(r#"{"count":2,"index":1}"#), Some(1));
         assert_eq!(read(r#"{"count":0}"#), None);
-        assert!(serde_json::from_str::<Discs>(r#"{"count":1,"index":-2}"#).is_err(), "only the runtime's -1 is an empty drive");
+        let other = serde_json::from_str::<Discs>(r#"{"count":2,"index":-2,"can_change":true}"#).expect("the rest of the answer read");
+        assert_eq!((other.index, other.unread_index, other.count, other.can_change), (None, Some(-2), 2, true), "only the runtime's -1 is an empty drive");
+        assert_eq!(serde_json::from_str::<Discs>(r#"{"count":0,"index":-1}"#).unwrap().unread_index, None);
     }
 }

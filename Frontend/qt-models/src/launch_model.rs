@@ -103,8 +103,7 @@ impl qobject::LaunchModel {
         let platform = Platform::load(&library).map_err(|e| e.to_string())?;
         let config = crate::clients::runtime_config(&platform, &self.cores.to_string())?;
         let runtime = Api::load(&library).map_err(|e| e.to_string()).and_then(|api| crate::clients::runtime(&api, &config))?.0;
-        // With no folder set the question says where in general words; a folder that cannot be read is said too (§7.9),
-        // though Galaxia fails the call only for a folder number it lacks (`emusen_galaxia_directory`): unreachable.
+        // An unset folder is said in general words, an unreadable one said too (EmuSen_Qt.md §7.9, item 5).
         let folder = match platform.directory(DIR_FIRMWARE) {
             Ok(folder) => folder.map(|d| d.display().to_string()),
             Err(e) => {
@@ -164,8 +163,7 @@ impl qobject::LaunchModel {
         let queue = self.qt_thread();
         std::thread::spawn(move || {
             let engine = launch::engine_of(&runtime, &path);
-            // The platform fails this only for an empty path or a null runtime (`emusen_crystal_firmware_needed`), which
-            // no launch passes: the failure's words are said, but no player's launch makes them (EmuSen_Qt.md §7.9).
+            // A failed check is said, never read as none needed (EmuSen_Qt.md §7.9, item 5).
             let needs = runtime.firmware_needed(&path, engine.as_deref()).map(|n| n.into_iter().filter(|n| n.required).collect()).map_err(|e| e.to_string());
             let _ = queue.queue(move |model| model.firmware_checked(serial, needs));
         });

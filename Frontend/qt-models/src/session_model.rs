@@ -365,9 +365,7 @@ impl qobject::SessionModel {
             }
         }
         let Some(runtime) = self.runtime.clone() else { return };
-        // A core approved, installed or made default since the last game, by Cores or the launch's question, is listed (EmuSen_Qt.md §7.7);
-        // where the listing fails the game opens on what was listed before, and the player is told (§7.9). The platform
-        // fails the call only for a null runtime (`emusen_crystal_rescan`), which a made `Runtime` never holds: unreachable.
+        // Cores changed since the last game are listed; a failed listing is said and the game opens (EmuSen_Qt.md §7.7, §7.9).
         let unlisted = runtime.rescan().err().map(|e| format!("The engines could not be listed again, so one approved or installed since the last game may not be used: {e}"));
         let pads = match self.as_mut().game_input() {
             Ok(pads) => pads,

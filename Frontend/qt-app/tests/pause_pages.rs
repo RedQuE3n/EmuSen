@@ -173,7 +173,7 @@ fn the_pane_follows_the_row_and_the_reel_turns_in_place() {
 
 /// A game of two discs, the first in, beside another game of its console in the library.
 fn disc_facts() -> String {
-    let discs = DiscFacts { count: 2, index: Some(0), can_change: true, lid_open: false };
+    let discs = DiscFacts { count: 2, index: Some(0), unread: false, can_change: true, lid_open: false };
     Facts { path: "/games/Cobalt Harbor (Synthetic).tst".into(), system: "tst".into(), discs, ..Facts::default() }.to_json()
 }
 

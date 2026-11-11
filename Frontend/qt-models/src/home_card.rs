@@ -1,7 +1,7 @@
 //! The Home card's pages (EmuSen_Interface.md §2.3; EmuSen_Qt.md §7.1, stage 2): Mistress's `HomeRows`, `ToolRows` and
 //! `PowerRows` in her words, made from the card's facts, and what each row does. On the big screen's own look the card
-//! opens at Power from Home's place (EmuSen_BigPicture.md §51.2); its first page and Tools are the card's over a theme
-//! and on the desktop, which emusen-qt draws from stage 3 and 6.
+//! opens at Power from Home's place (EmuSen_BigPicture.md §51.2) and at its first page by Start on Home (EmuSen_Qt.md
+//! §7.9); over a theme Start opens it at its first page.
 
 use crate::card::{end_section_before, question, Choice, Page, Pages, Pane, Row};
 use serde_json::{json, Value};
@@ -73,6 +73,23 @@ pub struct Facts {
     pub game_mode: bool,
     /// The tools' summaries by key (`scraper`, `packages`, `library`, `cores`, `cheats`): `brief`, `sentence`, `attention`.
     pub tools: Value,
+    /// Words under the first page's rows where the consoles or the tools' summaries could not be read.
+    pub unread: String,
+}
+
+/// The consoles that start empty and the tools' summaries from the library's words for them, and the words said where
+/// either cannot be read, as the List card says a console it cannot read (EmuSen_Qt.md §7.9).
+pub fn read_lists(startable: &str, tools: &str) -> (Vec<Startable>, Value, String) {
+    let mut unread = Vec::new();
+    let startable = serde_json::from_str(startable).unwrap_or_else(|why| {
+        unread.push(format!("The consoles that start with no disc could not be read: {why}"));
+        Vec::new()
+    });
+    let tools = serde_json::from_str(tools).unwrap_or_else(|why| {
+        unread.push(format!("The tools' lines could not be read: {why}"));
+        Value::Null
+    });
+    (startable, tools, unread.join(" "))
 }
 
 impl Facts {
@@ -80,7 +97,7 @@ impl Facts {
         json!({
             "suspended": self.suspended, "paused": self.paused, "inHand": self.in_hand, "inHandConsole": self.in_hand_console,
             "inHandCover": self.in_hand_cover, "inHandFavourite": self.in_hand_favourite, "search": self.search,
-            "startable": self.startable, "gameMode": self.game_mode, "tools": self.tools,
+            "startable": self.startable, "gameMode": self.game_mode, "tools": self.tools, "unread": self.unread,
         })
         .to_string()
     }
@@ -99,6 +116,7 @@ impl Facts {
             startable: v.get("startable").cloned().and_then(|s| serde_json::from_value(s).ok()).unwrap_or_default(),
             game_mode: flag("gameMode"),
             tools: v.get("tools").cloned().unwrap_or(Value::Null),
+            unread: words("unread"),
         }
     }
 }
@@ -168,7 +186,7 @@ fn first_page(f: &Facts) -> Page {
     let power_at = rows.len();
     rows.push(Row::new(POWER, "Power").opens());
     end_section_before(&mut rows, power_at);
-    Page { title: TITLE.to_owned(), breadcrumb: String::new(), rows, footer: String::new() }
+    Page { title: TITLE.to_owned(), breadcrumb: String::new(), rows, footer: f.unread.clone() }
 }
 
 fn tools_page(f: &Facts) -> Page {

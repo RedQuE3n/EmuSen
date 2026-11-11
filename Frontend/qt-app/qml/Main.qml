@@ -289,6 +289,12 @@ Window {
         sounds: program.esdeView?.scene.sounds ?? ""
         on: program.navigationSounds
     }
+    // A sound of the theme's that did not open or play, said once the splash has gone.
+    Timer {
+        interval: Kit.Tokens.fade
+        running: !program.splashShown && program.esdeLook && cues.problem.length > 0
+        onTriggered: notices.raise(cues.problem, true, false)
+    }
     // Why the ES-DE theme gave way to the own look, said once the splash has gone.
     Timer {
         interval: Kit.Tokens.fade
@@ -392,8 +398,9 @@ Window {
             card: CardModel.List
             shown: screens.shown === Screens.List
             facts: program.esdeLook ? library.esdeListFacts(program.esdeView?.scene.shelf ?? "", program.esdeView?.scene.selected ?? 0) : games.listFacts
-            onActed: (key) => games.focused = games.listAct(key)
-            onStayed: (key) => games.focused = games.listAct(key)
+            // Under an ES-DE theme the own grid is hidden and acted on by nothing; the theme's gamelist is acted on below.
+            onActed: (key) => { if (!program.esdeLook) games.focused = games.listAct(key) }
+            onStayed: (key) => { if (!program.esdeLook) games.focused = games.listAct(key) }
             onClosed: screens.close()
         }
         Connections {

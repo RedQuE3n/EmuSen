@@ -42,6 +42,11 @@ fn until(scene: &mut Scene<'_>, seconds: u64, what: &str, mut done: impl FnMut(&
     }
 }
 
+/// How many sounds the interface player was asked to play.
+fn rings(scene: &mut Scene<'_>) -> i32 {
+    scene.property("cues", "rings").parse().unwrap()
+}
+
 /// The words of the item holding the focus.
 fn focused_words(scene: &mut Scene<'_>) -> String {
     let tree = scene.tree();
@@ -112,20 +117,34 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
         assert_eq!(scene.property(slot, "active"), "false", "the own look's {slot} is not made");
     }
     until(&mut scene, 10, "the theme's sounds decoded", |s| s.property("cues", "problem").is_empty() && s.property("esdeModel", "sounds").contains("select"));
+    // Each sound the view asks for is played: the theme's file where it gave one, else the kit's cue (cues.rs).
+    let sounds: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&scene.property("esdeModel", "sounds")).unwrap();
+    let themed: Vec<String> = sounds.keys().cloned().collect();
+    let key = |name: &str| emusen_qt::cues::key_of(name, &themed).unwrap();
+    let heard = |s: &mut Scene<'_>, name: &str, before: i32| {
+        until(s, 3, &format!("the {name} sound"), |s| rings(s) > before);
+        assert_eq!(s.property("cues", "rung"), key(name), "the {name} sound");
+    };
 
     // Right steps the carousel; A opens the gamelist on the game.
+    let before = rings(&mut scene);
     scene.pad(UiButton::Right);
     wait_for(&mut scene, "esdeModel", "shelf", "snes", 1000);
+    heard(&mut scene, "systembrowse", before);
     until(&mut scene, 5, "the step at rest", |s| s.property("esdeModel", "moving") == "false");
+    let before = rings(&mut scene);
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "esdeModel", "view", "gamelist", 1000);
+    heard(&mut scene, "select", before);
     until(&mut scene, 5, "the slide at rest", |s| s.property("esdeModel", "moving") == "false");
     let selected = scene.property("esdeModel", "selected");
 
     // Y turns the game a favourite through the library.
     assert!(!scene.property("library", "esdeShelves").contains("\"favourite\":true"));
+    let before = rings(&mut scene);
     scene.pad(UiButton::Search);
     until(&mut scene, 10, "the favourite written and read again", |s| s.property("library", "esdeShelves").contains("\"favourite\":true"));
+    heard(&mut scene, "favorite", before);
 
     // Start opens the Home card over the theme and B closes it; Select opens the List card and B closes it.
     scene.pad(UiButton::Menu);
@@ -140,8 +159,10 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     assert_eq!((scene.property("esdeModel", "view"), scene.property("esdeModel", "selected")), ("gamelist".into(), selected.clone()));
 
     // A on the game plays it through the ring, its first picture drawn.
+    let before = rings(&mut scene);
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "screens", "shown", "Game", 2000);
+    heard(&mut scene, "launch", before);
     until(&mut scene, 20, "the game running", |s| {
         let problem = s.property("session", "problem");
         assert!(problem.is_empty() || problem.starts_with("The game plays without sound"), "the session: {problem}");
@@ -169,8 +190,73 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
         "the gamelist at the same game"
     );
     assert_eq!(scene.property("esde", "activeFocus"), "true", "the theme takes the pad again");
-    assert!(scene.set_property("game", "game", ""));
+    // A on the suspended game resumes it; the chord, Leave, Quit Game and Yes close it, and the theme comes back.
+    scene.pad(UiButton::Accept);
+    until(&mut scene, 10, "the game resumed", |s| s.property("screens", "shown") == "Game" && s.property("session", "paused") == "false");
+    scene.run_pad_clock();
+    sdl.press(&pad, guide, true);
+    until(&mut scene, 10, "the chord pausing the game again", |s| s.property("screens", "shown") == "Pause");
+    sdl.press(&pad, guide, false);
+    until(&mut scene, 5, "the card in place", |s| s.property("cardCanvas", "slide") == "0");
+    choose_row(&mut scene, "Leave");
+    wait_for(&mut scene, "pause", "title", "Leave", 1000);
+    choose_row(&mut scene, "Quit Game");
+    choose_row(&mut scene, "Yes");
     until(&mut scene, 10, "the game closed to the theme", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Esde");
+
+    // The List card under the theme acts on the theme's gamelist alone: B to the systems, Left to the NES, A on its gamelist.
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "esdeModel", "view", "system", 2000);
+    until(&mut scene, 5, "the slide at rest", |s| s.property("esdeModel", "moving") == "false");
+    // With NavigationSounds off a step plays nothing.
+    assert!(scene.set_property("program", "navigationSounds", "false"));
+    let before = rings(&mut scene);
+    scene.pad(UiButton::Left);
+    wait_for(&mut scene, "esdeModel", "shelf", "nes", 1000);
+    until(&mut scene, 5, "the step at rest", |s| s.property("esdeModel", "moving") == "false");
+    scene.wait(300);
+    assert_eq!(rings(&mut scene), before, "no sound with NavigationSounds off");
+    assert!(scene.set_property("program", "navigationSounds", "true"));
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "esdeModel", "view", "gamelist", 1000);
+    until(&mut scene, 5, "the slide at rest", |s| s.property("esdeModel", "moving") == "false");
+    let nes = |s: &mut Scene<'_>| -> Vec<String> {
+        let shelves: serde_json::Value = serde_json::from_str(&s.property("library", "esdeShelves")).unwrap();
+        let shelf = shelves.as_array().unwrap().iter().find(|x| x["name"] == "nes").unwrap().clone();
+        shelf["games"].as_array().unwrap().iter().map(|g| g["name"].as_str().unwrap_or_default().to_owned()).collect()
+    };
+    assert_eq!(nes(&mut scene), ["Brass Lantern", "Cobalt Harbor"]);
+    assert_eq!(scene.property("esdeModel", "selected"), "0");
+    let own = (scene.property("games", "listFacts"), scene.property("games", "focused"), scene.property("games", "count"));
+    // Select, Down to Sort, A steps it to name, descending: the new order shown, the selection on the first entry the act answered.
+    scene.pad(UiButton::Options);
+    until(&mut scene, 5, "the List card in place", |s| s.property("screens", "shown") == "List" && s.property("listCardCanvas", "slide") == "0");
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Accept);
+    until(&mut scene, 10, "the gamelist sorted again", |s| nes(s) == ["Cobalt Harbor", "Brass Lantern"]);
+    scene.pad(UiButton::Back);
+    until(&mut scene, 5, "the List card closed to the theme", |s| s.property("screens", "shown") == "Esde" && s.property("listCardCanvas", "visible") == "false");
+    until(&mut scene, 5, "the view at rest on the new order", |s| s.property("esdeModel", "moving") == "false");
+    assert_eq!(scene.property("esdeModel", "selected"), "0", "the entry the act answered");
+    let tree = scene.tree();
+    let top = |name: &str| tree.nodes.iter().filter(|n| n.visible && n.text.as_deref() == Some(name)).map(|n| n.y).fold(f64::MAX, f64::min);
+    assert!(top("Cobalt Harbor") < top("Brass Lantern"), "the view lists Cobalt Harbor first");
+    // Y makes Cobalt Harbor a favourite; Filter, Favourites leaves it alone in the gamelist.
+    scene.pad(UiButton::Search);
+    until(&mut scene, 10, "the favourite read again", |s| s.property("library", "esdeShelves").matches("\"favourite\":true").count() >= 2);
+    scene.pad(UiButton::Options);
+    until(&mut scene, 5, "the List card in place", |s| s.property("screens", "shown") == "List" && s.property("listCardCanvas", "slide") == "0");
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Accept);
+    choose_row(&mut scene, "Favourites");
+    until(&mut scene, 10, "the favourites alone", |s| nes(s) == ["Cobalt Harbor"] && s.property("screens", "shown") == "Esde");
+    assert_eq!(scene.property("esdeModel", "selected"), "0");
+    assert_eq!((scene.property("games", "listFacts"), scene.property("games", "focused"), scene.property("games", "count")), own, "the own look's listing untouched");
+
+    // A sounds text that does not read is said as a notice.
+    assert!(scene.set_property("cues", "sounds", "{"));
+    until(&mut scene, 5, "the sounds' problem as a notice", |s| s.property("notices", "words").contains("sounds could not be read"));
 
     // A theme that is not there gives way to the own look, with the loader's words as a notice.
     settings["BigPictureTheme"] = json!(world.root.join("no-such-theme").to_str().unwrap());
@@ -180,6 +266,20 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     until(&mut scene, 20, "the own look in place of the missing theme", |s| s.property("screens", "shown") == "Home");
     assert!(scene.property("esdeModel", "problem").contains("theme.xml"), "{}", scene.property("esdeModel", "problem"));
     wait_for(&mut scene, "notices", "shown", "true", 3000);
+
+    // The theme again, then an empty library: a load with nothing to show gives way to the own look, with no problem.
+    settings["BigPictureTheme"] = json!(folder);
+    platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
+    assert!(scene.set_property("library", "platformLibrary", ""));
+    assert!(scene.set_property("library", "platformLibrary", library().to_str().unwrap()));
+    until(&mut scene, 20, "the theme back", |s| s.property("screens", "shown") == "Esde");
+    for (folder, file) in [("nes", "Brass Lantern.nes"), ("nes", "Cobalt Harbor.nes"), ("snes", "Aurora Drift.sfc")] {
+        std::fs::remove_file(world.dir(&format!("Roms/{folder}")).join(file)).unwrap();
+    }
+    assert!(scene.set_property("library", "platformLibrary", ""));
+    assert!(scene.set_property("library", "platformLibrary", library().to_str().unwrap()));
+    until(&mut scene, 20, "the own look in place of the empty theme", |s| s.property("screens", "shown") == "Home");
+    assert_eq!((scene.property("esdeModel", "themed"), scene.property("esdeModel", "problem")), ("false".into(), String::new()));
 
     scene.assert_quiet();
     sdl.detach(pad);

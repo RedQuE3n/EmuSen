@@ -2922,7 +2922,7 @@ neither `LibraryStyle` nor `BigPictureTheme`; Mistress's Settings remain where t
 | Moonrise | waits for the look it gives way to: `done` also needs `lookSettled` (the own look, or the view themed or failed), so the splash never fades onto an empty window while the theme loads |
 | The pad | the view takes the focus while `Screens.Esde` is shown and the splash has gone; the router is pumped by a `Timer` while it holds the focus, as a `Frame`'s is; PadReader's presses reach it through the router as they reach the reference's screens |
 | The signals | `played` → the window's `play` (recorded, opened, the game's screen); `favourite` → `LibraryModel.toggleFavourite` (games.db's `toggle_favourite`, then the library read again; the shelves' text carries the heart); `menu` → `Screens.home()` (the Home card at its first page); `options` → `Screens.list()` (the List card); `cued` → `EsdeCues.play(name, view)` |
-| The List card | under the theme it reads `esdeListFacts(shelf, selected)` and acts through `esdeListAct`, the view selecting the entry the act answers (`EsdeModel.select`) |
+| The List card | under the theme it reads `esdeListFacts(shelf, selected)` and acts through `esdeListAct`, the view selecting the entry the act answers (`EsdeModel.select`); the hidden own grid's `listAct` runs only under the own look (until 2026-11-11 a sort or Favourites under the theme also sorted or filtered the own grid). A sort or a filter answers the first entry: the view selects row 0 at once, and the rewritten shelves' load keeps the selected index, so the selection is the first entry of the new order |
 | A failure | the model's `problem` raised as a notice once the splash has gone, the own look shown |
 
 **Additions to surfaces** (rule Q, reviewed, additions only): `EsdeModel.shelf`, `selected`, `sounds` (read-only) and
@@ -2943,7 +2943,10 @@ asks the count with no buffer and the rest is taken, since what does not fit wai
 favourite are the host's own. A name the theme lacks falls back as Mistress's `NavigationSounds` does: scroll Move,
 systembrowse Section, select Choose, back Back, favorite Favourite, launch Launch, and quick system select the kit's own
 two bells (`QUICK_SELECT`). With NavigationSounds off nothing plays. Volume follows the player's default; the setting
-is stage 5's.
+is stage 5's. Each sound played is told by `rung` (its key) and `rings` (a count), read-only, which the test reads; a
+sounds text that does not read, or a theme file that does not decode or is not kept, is said in `problem` and the
+other sounds kept (until 2026-11-11 one file's failure lost them all and a malformed text was taken as none), and
+`problem` is raised as a notice once the splash has gone, as the view's own problem is.
 
 **Proof, measured on 2026-11-09.** `qt-app/tests/esde.rs`, on Vulkan in a `kwin_wayland --virtual` of its own on the
 RX 6800. The sandbox's settings choose Art Book Next from the corpus with the options of
@@ -2960,7 +2963,8 @@ chord on the virtual pad pauses it under the Pause Card, and Leave, Back to Libr
 at the same game, the view holding the pad again; the game closed, the view stays; a `BigPictureTheme` naming no folder,
 read again, gives way to Home with the loader's words ("no theme.xml for …") as a notice; Qt logs nothing. 12.7 s and
 11.8 s. One line follows the test's result at the process's exit, `QObject::~QObject: Timers cannot be stopped from
-another thread`, after the harness has stopped listening: **named, open**. `start.rs` (9), the cues' two rules
+another thread`, after the harness has stopped listening. It is not explained, and no one has ruled on it: it is
+listed for the tester, not accepted. `start.rs` (9), the cues' two rules
 (`cues::tests`), platform-client's `sound` (a WAV of 24 kHz mono decoded to 4,800 frames of 48 kHz stereo float, a
 missing file none), and the offscreen tests the change reaches (program, screens, start, splash, cards, theme,
 theme_feed, themes_tab; qt-models' library, esde, gamelists, qml, themes) green.
@@ -2971,11 +2975,12 @@ theme_feed, themes_tab; qt-models' library, esde, gamelists, qml, themes) green.
 | the reference's Home made under an ES-DE theme | `esde.rs`: `home.reference` active |
 | the theme's file never played, the kit's cue always | `cues::tests::the_themes_file_plays_where_it_gave_one_else_the_kits_cue` |
 
-**Named differences and what is left.** Entering a folder from the view (the painter's `played` names a folder entry;
+**Not built, each listed for the tester to rule on (none is accepted).** Entering a folder from the view (the painter's `played` names a folder entry;
 `esdeEnter` and `esdeLeave` are not yet called by the host), a game's description (`esdeDescription`, which the
 painter does not ask for), the device's indicators (`device` unbound, so none is drawn, as before a host reports), and
 the player's swap (`swap` unbound, as the program binds it nowhere yet). The List card's facts are read when its shelf or
-selection changes, not after an act rewrites the shelves while it stays open. ES-DE's full system names
+selection changes, not after an act rewrites the shelves while it stays open (a Sort, which keeps the card open, is
+then said with its old words until the selection moves). ES-DE's full system names
 ("Nintendo SNES (Super Nintendo)") are a change to the systems table's `esde_full_name`, not made here.
 
 **The gates at the player's library's scale, measured on 2026-11-09.** `Testing/qt-gates/sandbox.sh`'s sandbox (the
@@ -3022,7 +3027,7 @@ and on the GPU 685 → 306 MiB (552 → 172), under Mistress's 402 (201). The fi
 (systems 55 on the platform library's first call, the scan 107, the gamelists' listing and the text 30), from 280; the
 whole read 745 ms, from 875. The gates' sandbox and Art Book Next as before.
 
-Re-run after the pass: `qt-app/tests/esde.rs` on the GPU (15.6 s, the one line at exit still the named
+Re-run after the pass: `qt-app/tests/esde.rs` on the GPU (15.6 s, the one line at exit still the
 `QObject::~QObject` one), and `esde-qt`'s `primitives`, `view`, `sizes`, `mapping` (3) and `motion` on the GPU, the
 shelves parser having changed; offscreen, `qt-models`' library, esde, gamelists, clients, cards and qml, `theme-qt`'s
 three and `esde-qt`'s lint, qmltypes and painter.
@@ -3061,7 +3066,8 @@ two reads of a start), which is the platform library's and Mistress's alike. The
 view, gamelist, Home card over the theme and Pause Card over a game are in `~/.cache/emusen/qt-s4-h-gates/runs/side-qt/`;
 Mistress's system view in `side-mistress/`. **A limit of the comparison:** Mistress's Home card and Pause Card are
 reached only by a pad or the keyboard, and the gates admit no input device and no synthetic input outside the program,
-so Mistress's side shows its system view alone.
+so Mistress's side shows its system view alone. Whether Mistress's cards may be reached for the comparison with a pad
+is the tester's to decide; until then the cards are not compared.
 
 **The view's load off the GUI thread, measured on 2026-11-11.** `EsdeModel.load` turned its four QStrings back into Rust
 text on the GUI thread before starting its thread (UTF-16 to UTF-8, 8.6 MB at 9,007 games), after every publish: the
@@ -3085,6 +3091,13 @@ the words as a notice rather than an empty view. `qt-app/tests/esde_rows.rs`, wh
 writes a library through qt-models' read (a game with every field the scraper and games.db give, a game with negative
 plays) and reads it through esde-qt's: every field the view shows as written, and a renamed key, a field of another
 type and a media index that does not read each an error.
+
+**Errors passed over, each answered (2026-11-11).** `gamelists::write_listing`'s `let _ = serde_json::to_writer`
+writes plain fields into a `Vec`, where serde_json fails only on a map with keys that are not strings or a `Serialize`
+that errors, neither of which the borrowed rows have. `esde_shelves::build`'s `String::from_utf8(..).unwrap_or_default()`
+reads back bytes serde_json wrote, which are UTF-8 by construction. `games::to_json`'s `"[]"` on error is the same plain
+rows. Each `let _ = qt.queue(..)` (`LibraryModel`, `EsdeCues`, `EsdeModel`) drops the answer only where the object
+has been destroyed, when there is no one left to tell. The sounds' text and files are now said (above).
 
 **Two names the program links twice, measured 2026-11-10.** With `emusen-esde-qt` in `emusen-qt`, its list model and
 qt-models' are both `RowsModel` and both crates bake a `Shaders.qrc`: the first collides at link time, and the second
@@ -5366,11 +5379,11 @@ Art Book Next over the player's 9,007 games in `sandbox.sh`'s sandbox, `emusen-q
 RX 6800 in a `kwin_wayland --virtual` of its own at 1920 × 1200, warm (`gates.sh warm` first) and with the other
 builders' work paused (load average 2.8). Mistress's figures are its published build on the same theme and library.
 
-| Gate | emusen-qt, two rounds | Mistress, same theme | Met |
+| Gate | emusen-qt, two rounds (2026-11-09) | Mistress, same theme | As read |
 |---|---|---|---|
-| Idle RSS 10 s after the window (anonymous) | 306, 305 MiB (172, 172) | 402 MiB (201) | yes |
-| First press answered from the start | 0.861, 0.934 s | gate 0.95 s | yes, by 16 ms in the slower round |
-| The gamelist, Down held 24.4 s, the worst frame | 35.9 ms (median 16.7 ms, 1,389 frames) | 96.8 ms (its grid, §9.3.1) | yes |
+| Idle RSS 10 s after the window (anonymous) | 306, 305 MiB (172, 172) | 402 MiB (201) | under Mistress's on 2026-11-09; not read again since |
+| First press answered from the start | 0.861, 0.934 s | gate 0.95 s | under the gate in both rounds, by 16 ms in the slower; not read again since 2026-11-11's changes to the GUI thread's part of a refresh and of the view's load (§4.7, §4.9), which needs a quiet run |
+| The gamelist, Down held 24.4 s, the worst frame | 35.9 ms (median 16.7 ms, 1,389 frames) | 96.8 ms (its grid, §9.3.1) | under Mistress's on 2026-11-09; not read again since |
 
 The causes found and fixed, the cold page cache's cost (about 0.8 s on the first read after a reboot, Mistress's
 alike) and what load does to the figures are in §4.9.

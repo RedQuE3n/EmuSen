@@ -8,8 +8,10 @@ use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
 use emusen_platform_client::Platform;
 use emusen_kit_core::input::WalkForm;
 use emusen_kit_core::tokens::Variant;
-use emusen_qt_test::harness::{edges, palette, Measures, SIZES};
+use emusen_kit_core::input::UiButton;
+use emusen_qt_test::harness::{edges, palette, Measures, DIRECTIONS, SIZES};
 use emusen_qt_test::spec::{self, Header};
+use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::{mockup, Scene};
 use std::path::PathBuf;
 
@@ -77,19 +79,22 @@ pub fn out() -> PathBuf {
     dir
 }
 
-/// A test's differences named for the tester, which a held state does not count as faults: the fault, the tree, the size.
 #[allow(dead_code)]
-pub type Named = fn(&str, &emusen_qt_test::tree::Tree, (i32, i32)) -> bool;
-
-#[allow(dead_code)]
-/// Holds one state: the mockup where the size is the canvas's or its 1.5 times, the gate at every size, the spec and the grab.
-pub fn hold(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, named: Named, report: &mut Vec<String>) {
+/// Holds one state: the mockup where the size is the canvas's or its 1.5 times, the gate at every size, the spec and the grab;
+/// a finding the test's excuses name is not counted (EmuSen_Kit.md §7.100).
+pub fn hold(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, named: &mut Excuses, report: &mut Vec<String>) {
     hold_in(scene, screen, m, named, report, Variant::Dark);
 }
 
 #[allow(dead_code)]
 /// As `hold`, the state drawn in a variant of its own, its palette and contrast judged in it.
-pub fn hold_in(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, named: Named, report: &mut Vec<String>, variant: Variant) {
+pub fn hold_in(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, named: &mut Excuses, report: &mut Vec<String>, variant: Variant) {
+    hold_walking(scene, screen, m, named, report, variant, &DIRECTIONS);
+}
+
+#[allow(dead_code)]
+/// As `hold_in`, the gate's walk pressing `buttons` from every item: the shoulders too where the screen declares them.
+pub fn hold_walking(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, named: &mut Excuses, report: &mut Vec<String>, variant: Variant, buttons: &[UiButton]) {
     for (w, h) in SIZES {
         scene.resize(w, h);
         scene.wait(150);
@@ -102,7 +107,7 @@ pub fn hold_in(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, named: N
         }
         assert!(scene.grab(&out().join(format!("{name}.png")).display().to_string()), "grab {name}");
         scene.sample_behind(&mut tree, f64::from(w), f64::from(h));
-        let walk = scene.walk(&tree);
+        let walk = scene.walk_pressing(&tree, buttons, |s, button| s.pad(button));
         let walked = edges(&walk);
         let declared = palette(variant);
         let header = Header {
@@ -121,7 +126,8 @@ pub fn hold_in(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, named: N
                 .iter()
                 .map(|f| format!("gate: {f}")),
         );
-        faults.retain(|f| !named(f, &tree, (w, h)));
+        faults.extend(scene.exempted(&tree, WalkForm::BigScreen, variant, f64::from(h)).iter().map(|f| format!("gate: {f}")));
+        faults.retain(|f| !named.excuses(f, &tree.nodes, (w, h)));
         let notes = out().join(format!("{name}.faults.txt"));
         if faults.is_empty() {
             let _ = std::fs::remove_file(&notes);

@@ -8,6 +8,7 @@ use common::{hold, sandbox, wait_for};
 use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
 use emusen_qt::MAIN_URL;
+use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::{mockup, Scene};
 
 const WORLDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../qt-models/tests/cores");
@@ -15,13 +16,6 @@ const WORLDS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../qt-models/tests/co
 fn focused(scene: &mut Scene<'_>) -> String {
     let tree = scene.tree();
     scene.focus(&tree).map(|i| tree.nodes[i as usize].name.clone()).unwrap_or_default()
-}
-
-/// The differences the tester has been told of, which a held state does not count as faults (EmuSen_Qt.md §7.7).
-fn named(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
-    // The docked keyboard takes every press itself while it is up, as the grid's search's does (cards.rs).
-    let typing = tree.nodes.iter().any(|n| n.name == "coresKeyboard" && n.visible);
-    (size == (1280, 720) && fault.contains("too small to read")) || (typing && fault.contains("the pad does not reach"))
 }
 
 /// The program on Home with Cores' world named, then Cores opened from its place.
@@ -93,6 +87,7 @@ fn qt_7_7_cores_walks_into_mistress_s_five_recorded_states() {
     let _world = sandbox("qt-app-cores", &[("NES", "One.nes")]);
     let mut harness = emusen_qt_test::Harness::new();
     let mut report = Vec::new();
+    let mut excuses = Excuses::none();
     let none = mockup::Mockup::default();
     {
         let mut scene = open(&mut harness, "world.json");
@@ -101,13 +96,13 @@ fn qt_7_7_cores_walks_into_mistress_s_five_recorded_states() {
         down_to(&mut scene, "LRPS2");
         assert_eq!(scene.property("coresModel", "facts").matches("words").count(), 5);
         assert_eq!(scene.property("coresModel", "meterWords"), "/Cores 51 MB · 410 GB free");
-        hold(&mut scene, "Cores", &none, named, &mut report);
+        hold(&mut scene, "Cores", &none, &mut excuses, &mut report);
 
         // CoresDetail: All, the core waiting for approval focused, A asking to approve it.
         section(&mut scene, "All", UiButton::PageUp);
         down_to(&mut scene, "Extra PS2 Core");
         assert!(scene.property("coresModel", "help").contains("Approve…"));
-        hold(&mut scene, "CoresDetail", &none, named, &mut report);
+        hold(&mut scene, "CoresDetail", &none, &mut excuses, &mut report);
 
         // CoresPlan: LRPS2 marked to install and Beetle PSX to update on X's pages, then Start's plan.
         section(&mut scene, "PlayStation 2", UiButton::PageDown);
@@ -123,7 +118,7 @@ fn qt_7_7_cores_walks_into_mistress_s_five_recorded_states() {
         wait_for(&mut scene, "coresModel", "asking", "true", 1000);
         assert_eq!(scene.property("coresModel", "questionTitle"), "Apply 2 changes?");
         scene.wait(400);
-        hold(&mut scene, "CoresPlan", &none, named, &mut report);
+        hold(&mut scene, "CoresPlan", &none, &mut excuses, &mut report);
 
         // CoresRunning: Yes, and the install runs and does not end.
         scene.pad(UiButton::Down);
@@ -132,7 +127,7 @@ fn qt_7_7_cores_walks_into_mistress_s_five_recorded_states() {
         wait_for(&mut scene, "coresModel", "summary", "Installing LRPS2: 18 MB of 41 MB", 2000);
         assert_eq!(scene.property("coresModel", "busy"), "true");
         scene.wait(400);
-        hold(&mut scene, "CoresRunning", &none, named, &mut report);
+        hold(&mut scene, "CoresRunning", &none, &mut excuses, &mut report);
 
         // B goes Home.
         scene.pad(UiButton::Back);
@@ -142,7 +137,7 @@ fn qt_7_7_cores_walks_into_mistress_s_five_recorded_states() {
         // CoresNoCatalogue: the runtime's four cores, and the fetch's refusal said.
         let mut scene = open(&mut harness, "no-catalogue.json");
         assert_eq!(scene.property("coresModel", "summary"), "Buildbot.libretro.com could not be reached.");
-        hold(&mut scene, "CoresNoCatalogue", &none, named, &mut report);
+        hold(&mut scene, "CoresNoCatalogue", &none, &mut excuses, &mut report);
 
         // Search: Select's List card, its first row docks the keyboard; A types, X keeps the words, B deletes and closes.
         scene.pad(UiButton::Options);
@@ -153,7 +148,7 @@ fn qt_7_7_cores_walks_into_mistress_s_five_recorded_states() {
         scene.wait(300);
         let holder = focused(&mut scene);
         assert!(holder == "coresKeyboard" || holder.starts_with("key."), "the keyboard holds the focus: {holder}");
-        hold(&mut scene, "CoresSearch", &none, named, &mut report);
+        hold(&mut scene, "CoresSearch", &none, &mut excuses, &mut report);
         scene.pad(UiButton::Accept);
         scene.wait(100);
         assert_eq!(scene.property("coresModel", "searchText").chars().count(), 1, "A typed the focused key");
@@ -177,7 +172,7 @@ fn qt_7_7_cores_walks_into_mistress_s_five_recorded_states() {
         scene.pad(UiButton::Accept);
         wait_for(&mut scene, "coresModel", "cardTitle", "Diamond · Options", 1000);
         scene.wait(300);
-        hold(&mut scene, "CoresOptions", &none, named, &mut report);
+        hold(&mut scene, "CoresOptions", &none, &mut excuses, &mut report);
         scene.pad(UiButton::Right);
         scene.wait(200);
         assert!(scene.property("coresModel", "cardRows").contains("Yours"), "{}", scene.property("coresModel", "cardRows"));
@@ -194,7 +189,7 @@ fn qt_7_7_cores_walks_into_mistress_s_five_recorded_states() {
         wait_for(&mut scene, "coresModel", "cardTitle", "Diamond · Firmware", 1000);
         scene.wait(300);
         assert!(scene.property("coresModel", "cardRows").contains("✓ Found"));
-        hold(&mut scene, "CoresFirmware", &none, named, &mut report);
+        hold(&mut scene, "CoresFirmware", &none, &mut excuses, &mut report);
         scene.pad(UiButton::Back);
         scene.pad(UiButton::Back);
         wait_for(&mut scene, "coresModel", "cardOpen", "false", 1000);
@@ -214,7 +209,7 @@ fn qt_7_7_cores_walks_into_mistress_s_five_recorded_states() {
         scene.pad(UiButton::Accept);
         wait_for(&mut scene, "coresModel", "questionTitle", "Update Beetle PSX?", 1000);
         scene.wait(400);
-        hold(&mut scene, "CoresUpdateAll", &none, named, &mut report);
+        hold(&mut scene, "CoresUpdateAll", &none, &mut excuses, &mut report);
         scene.pad(UiButton::Down);
         scene.pad(UiButton::Accept);
         wait_for(&mut scene, "coresModel", "summary", "Installed Beetle PSX. Nothing downloaded runs until you approve it.", 3000);

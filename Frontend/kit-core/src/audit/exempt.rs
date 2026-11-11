@@ -1,0 +1,62 @@
+//! What the rules let pass by an exemption, item by item, so a test names each one it accepts (EmuSen_Kit.md §7.102).
+
+use super::fit::{CAPS_SLACK, SMALL_TEXT_EXCEPTIONS, fading_out};
+use super::rules::{CONTRAST_SPARE, declared_colour, ratios};
+use super::tree::{Item, Kind};
+use crate::input::ElementId;
+use crate::tokens::Colour;
+use std::fmt;
+
+/// One item a rule did not hold to it, and the exemption that let it pass.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Exempted {
+    /// Words under their contrast over their worst samples that pass over all but `CONTRAST_SPARE` of them.
+    Spare { item: ElementId, worst: f64, needed: f64 },
+    /// Words under their contrast that cross a scroller's faded edge.
+    Fading { item: ElementId, ratio: f64, needed: f64 },
+    /// A colour outside the palette painted inside a theme's scene.
+    Scene { item: ElementId, colour: Colour },
+    /// Words under the capitals' floor that `SMALL_TEXT_EXCEPTIONS` names.
+    SmallText { item: ElementId, capitals: f64 },
+}
+
+impl fmt::Display for Exempted {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Exempted::Spare { item, worst, needed } => write!(f, "low contrast in the spare tenth: {} at {worst:.2}:1, needs {needed}:1", item.0),
+            Exempted::Fading { item, ratio, needed } => write!(f, "low contrast at a faded edge: {} at {ratio:.2}:1, needs {needed}:1", item.0),
+            Exempted::Scene { item, colour } => write!(f, "a colour outside the palette in a scene: {} {}", item.0, colour.to_hex()),
+            Exempted::SmallText { item, capitals } => write!(f, "too small to read, a named exception: {} with capitals of {capitals:.2}", item.0),
+        }
+    }
+}
+
+/// Every item the contrast, palette and floor rules let pass by an exemption, over one state.
+pub fn exempted(root: &Item, declared: &[Colour], smallest: f64) -> Vec<Exempted> {
+    let mut out = Vec::new();
+    root.visit(&mut |item, ancestors| {
+        if let Some((ratios, needed)) = item.legibility.as_ref().and_then(ratios) {
+            let spare = ratios[((ratios.len() as f64) * CONTRAST_SPARE).floor() as usize];
+            if fading_out(item, ancestors) && spare < needed {
+                out.push(Exempted::Fading { item: item.id, ratio: spare, needed });
+            } else if ratios[0] < needed && spare >= needed {
+                out.push(Exempted::Spare { item: item.id, worst: ratios[0], needed });
+            }
+        }
+        if item.scene || ancestors.iter().any(|a| a.scene) {
+            for colour in item.paints.iter().filter(|c| !declared_colour(c, declared)) {
+                out.push(Exempted::Scene { item: item.id, colour: *colour });
+            }
+        }
+        if let Some(text) = item.text
+            && item.kind == Kind::Words
+            && item.is_drawn()
+            && smallest > 0.0
+            && text.cap_height < smallest - CAPS_SLACK
+            && SMALL_TEXT_EXCEPTIONS.iter().any(|(name, _)| item.name == *name)
+        {
+            out.push(Exempted::SmallText { item: item.id, capitals: text.cap_height });
+        }
+    });
+    out
+}

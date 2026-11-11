@@ -12,16 +12,11 @@ use emusen_kit_core::tokens::Variant;
 use emusen_platform_client::galaxia::consts::DIR_FIRMWARE;
 use emusen_platform_client::Platform;
 use emusen_qt::MAIN_URL;
+use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::{mockup, Scene};
 
-/// The gate's findings this screen names for the tester, as Settings names them (`settings.rs`): the help bar's words
-/// under the floor at 1280 × 720.
 fn stored(platform: &Platform, key: &str) -> serde_json::Value {
     platform.model_load(emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap()[key].clone()
-}
-
-fn named(fault: &str, _: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
-    size == (1280, 720) && fault.contains("too small to read")
 }
 
 /// The pane's sentence, which names the console a page is of.
@@ -65,6 +60,7 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     }
     wait_for(&mut scene, "settingsModel", "section", "3", 1000);
     let mut report = Vec::new();
+    let mut excuses = Excuses::none();
 
     // The list, on the Super Nintendo as Mistress's recording is.
     for _ in 0..5 {
@@ -73,13 +69,13 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     wait_for(&mut scene, "settingsModel", "focused", "5", 1000);
     scene.wait(200);
     assert_eq!(scene.property("settingsSentence", "text"), "Super Nintendo · 5 games · engine VenusRT (Rust)");
-    hold(&mut scene, "SettingsConsoles", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "SettingsConsoles", &mockup::Mockup::default(), &mut excuses, &mut report);
 
     // Its page: the engine, firmware, cards, the core's own row, then the picture's rows.
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "settingsModel", "help", "20", 1000);
     assert!(sentence(&mut scene).starts_with("VenusRT (Rust), the Super Nintendo's engine"), "{}", sentence(&mut scene));
-    hold(&mut scene, "SettingsConsolePage", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "SettingsConsolePage", &mockup::Mockup::default(), &mut excuses, &mut report);
     // The firmware line in Success, as Mistress tinted it: the kit's sentence in the tone the model gives.
     scene.pad(UiButton::Down);
     wait_for(&mut scene, "settingsModel", "focused", "1", 1000);
@@ -94,7 +90,7 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "settingsModel", "help", "21", 1000);
     assert_eq!(sentence(&mut scene), "VenusRT (Rust) runs every Super Nintendo game.");
-    hold(&mut scene, "SettingsEngine", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "SettingsEngine", &mockup::Mockup::default(), &mut excuses, &mut report);
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "settingsModel", "help", "20", 1000);
 
@@ -109,7 +105,7 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     open_row(&mut scene, 1);
     wait_for(&mut scene, "settingsModel", "help", "18", 1000);
     assert!(sentence(&mut scene).starts_with("No PlayStation BIOS of your own"), "{}", sentence(&mut scene));
-    hold(&mut scene, "SettingsFirmware", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "SettingsFirmware", &mockup::Mockup::default(), &mut excuses, &mut report);
     assert!(scene.set_property("folders", "catching", "true"));
     for _ in 0..4 {
         scene.pad(UiButton::Down);
@@ -131,7 +127,7 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     scene.pad(UiButton::Accept);
     scene.wait(200);
     assert!(sentence(&mut scene).starts_with("Shared: every PlayStation game"), "{}", sentence(&mut scene));
-    hold(&mut scene, "SettingsMemoryCards", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "SettingsMemoryCards", &mockup::Mockup::default(), &mut excuses, &mut report);
 
     // Saves on the cards: the card manager, as Mistress's Memory Cards window; the card in use by a running game.
     for _ in 0..4 {
@@ -142,7 +138,7 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     wait_for(&mut scene, "settingsModel", "focused", "0", 1000);
     scene.wait(200);
     assert_eq!(sentence(&mut scene), "Shared: Card 1 in Slot 1, Card 2 in Slot 2. 2 save(s), 11 of 15 blocks free.");
-    hold(&mut scene, "MemoryCardsPlayStation", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "MemoryCardsPlayStation", &mockup::Mockup::default(), &mut excuses, &mut report);
     // The gate's walk leaves the card where it found it or a step on, so Right steps until the held card shows.
     let in_use = "In use by Amber Saga, which is running: its saves can be looked at, and changed when the game is closed.";
     for _ in 0..2 {
@@ -153,7 +149,7 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
         scene.wait(200);
     }
     assert!(sentence(&mut scene).ends_with(in_use), "{}", sentence(&mut scene));
-    hold(&mut scene, "MemoryCardsPlayStationHeld", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "MemoryCardsPlayStationHeld", &mockup::Mockup::default(), &mut excuses, &mut report);
     // A save's page and the question before Delete, which No closes.
     while sentence(&mut scene).ends_with(in_use) {
         scene.pad(UiButton::Left);
@@ -170,7 +166,7 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     scene.pad(UiButton::Accept);
     scene.wait(200);
     assert_eq!(sentence(&mut scene), "Delete DRACULA X CHRONICLE SAVE from Card 1? It cannot be brought back.");
-    hold(&mut scene, "MemoryCardsDelete", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "MemoryCardsDelete", &mockup::Mockup::default(), &mut excuses, &mut report);
     scene.pad(UiButton::Accept);
     scene.wait(200);
     scene.pad(UiButton::Back);

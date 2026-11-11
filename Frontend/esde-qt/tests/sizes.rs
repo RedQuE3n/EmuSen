@@ -12,12 +12,8 @@ use emusen_kit_core::input::UiButton;
 use emusen_qt_test::harness::SIZES;
 use emusen_qt_test::{Harness, Scene};
 
-// A box and whether the painter sized it by its laid-out words (a help bar, a status row, an auto-sized text).
-type Boxes = BTreeMap<String, ((f64, f64, f64, f64), bool)>;
-
-// The share of a measured extent that text layout may differ by between sizes: each run's advance is rounded to whole
-// pixels and hinted at its own size, so a 14 px help bar is not exactly two thirds of a 21 px one (EmuSen_Qt.md §4.8.5).
-const WORDS: f64 = 0.04;
+// Each element's box as a fraction of the window; a box sized by its words is held as tightly as any other (EmuSen_Kit.md §7.100).
+type Boxes = BTreeMap<String, (f64, f64, f64, f64)>;
 
 // Every drawn element's box as a fraction of the window, keyed by its name and its place among elements of that name.
 fn fractions(scene: &mut Scene<'_>, w: f64, h: f64) -> Boxes {
@@ -25,8 +21,7 @@ fn fractions(scene: &mut Scene<'_>, w: f64, h: f64) -> Boxes {
     let mut out = Boxes::new();
     for n in scene.tree().nodes.iter().filter(|n| n.visible && n.name.starts_with("element-")) {
         let k = seen.entry(n.name.clone()).or_default();
-        let worded = ["HelpElement", "StatusElement", "TextElement"].iter().any(|c| n.cls.contains(c));
-        out.insert(format!("{}#{k}", n.name), ((n.x / w, n.y / h, n.w / w, n.h / h), worded));
+        out.insert(format!("{}#{k}", n.name), (n.x / w, n.y / h, n.w / w, n.h / h));
         *k += 1;
     }
     out
@@ -136,12 +131,8 @@ fn the_watched_themes_hold_at_the_five_sizes() {
                         for (name, b) in &boxes {
                             match held.get(name) {
                                 None => failures.push(format!("{at}: {name} drawn here but not at {first}")),
-                                Some((a, worded)) => {
-                                    let (b, _) = b;
-                                    let words = |extent: f64| if *worded { WORDS * extent } else { 0.0 };
-                                    let off = [(b.0 - a.0, a.2), (b.1 - a.1, a.3), (b.2 - a.2, a.2), (b.3 - a.3, a.3)]
-                                        .iter()
-                                        .fold(0.0f64, |m, (d, extent)| m.max(d.abs() - words(*extent)));
+                                Some(a) => {
+                                    let off = [b.0 - a.0, b.1 - a.1, b.2 - a.2, b.3 - a.3].iter().fold(0.0f64, |m, d| m.max(d.abs()));
                                     if off > 0.001 {
                                         failures.push(format!("{at}: {name} {b:.4?} against {a:.4?} at {first}, {off:.4} off"));
                                     }

@@ -1,5 +1,6 @@
 //! The interface's rules as checks over an abstract item tree, with no toolkit behind it (EmuSen_InterfaceSpec.md §4, EmuSen_Qt.md §8.1, EmuSen_Kit.md §3).
 
+mod exempt;
 mod fit;
 mod reach;
 mod rules;
@@ -7,6 +8,7 @@ mod tree;
 
 use std::fmt;
 
+pub use exempt::{Exempted, exempted};
 pub use fit::{CAPS_SLACK, DESKTOP_CAPS, SMALL_TEXT_EXCEPTIONS, SMALLEST_TEXT, TWO_ROWS, fit, smallest_capitals};
 pub use reach::{Edge, pad_reach, pointer_reach, reached};
 pub use rules::{CONTRAST_SPARE, LARGE_BOLD_TEXT, LARGE_TEXT, STATE_CHANGE, changed_share, contrast, named, no_chrome, palette_reach};

@@ -44,6 +44,12 @@ const STRICTLY_ENFORCE_RANGE: f64 = 2.0;
 const STEPPED: &str = "stepped";
 const STEPS_PRESSED: usize = 64;
 
+/// The presses the gate's walk makes from every operable item.
+pub const DIRECTIONS: [UiButton; 4] = [UiButton::Up, UiButton::Down, UiButton::Left, UiButton::Right];
+
+/// The walk's presses on a screen whose shoulders are its own declared actions, as the search's keys and covers are.
+pub const WITH_SHOULDERS: [UiButton; 6] = [UiButton::Up, UiButton::Down, UiButton::Left, UiButton::Right, UiButton::PageUp, UiButton::PageDown];
+
 /// Messages Qt logs of its own accord that no code of ours causes, each with its reason and whether it is Qt's only on the
 /// software backend (EmuSen_Kit.md §7.14, §7.101).
 pub const QT_INTERNAL: [(&str, &str, bool); 2] = [
@@ -634,13 +640,19 @@ impl Scene<'_> {
     }
 
     /// The walk with each press made by `press`: a real pad's, where `walk` pushes into the router's queue.
-    pub fn walk_by(&mut self, tree: &Tree, mut press: impl FnMut(&mut Self, UiButton)) -> Vec<Step> {
+    pub fn walk_by(&mut self, tree: &Tree, press: impl FnMut(&mut Self, UiButton)) -> Vec<Step> {
+        self.walk_pressing(tree, &DIRECTIONS, press)
+    }
+
+    /// The walk over `buttons`: the four directions, and the shoulders on a screen that declares them as its own actions
+    /// (EmuSen_Kit.md §7.27, §7.103).
+    pub fn walk_pressing(&mut self, tree: &Tree, buttons: &[UiButton], mut press: impl FnMut(&mut Self, UiButton)) -> Vec<Step> {
         let mut steps = Vec::new();
         // The object standing for each of the tree's items: a view deletes a delegate scrolled out of it and makes another
         // when it scrolls back, so a press can leave the tree's numbers naming nothing, or a new item at a freed address.
         let mut live = tree.ids.clone();
         for from in tree.operable() {
-            for button in [UiButton::Up, UiButton::Down, UiButton::Left, UiButton::Right] {
+            for &button in buttons {
                 let id = live[from as usize];
                 if id == 0 || !ffi::harness_focus_item(self.window(), id) {
                     continue;
@@ -735,6 +747,12 @@ impl Scene<'_> {
             smallest: measures.floor * audit::DESKTOP_CAPS * measures.unit,
         };
         audit::check(root, &state)
+    }
+
+    /// What the audit's rules let pass by an exemption over one state, each item by item (EmuSen_Kit.md §7.102).
+    pub fn exempted(&self, tree: &Tree, form: WalkForm, variant: Variant, height: f64) -> Vec<audit::Exempted> {
+        let measures = Measures::of(form, height);
+        audit::exempted(&tree.root, &palette(variant), measures.floor * audit::DESKTOP_CAPS * measures.unit)
     }
 }
 

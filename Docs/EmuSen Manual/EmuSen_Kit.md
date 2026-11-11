@@ -2953,6 +2953,38 @@ scene that plays no clip:
    tests run on offers no OpenGL to make one. The frames are drawn (the program's test reads the clip's magenta). It is
    Qt's own fallback, harmless, and left in `QT_INTERNAL`.
 
+### 7.100 An excuse names its one item and fails when it excuses nothing (repair piece DC-A; 2026-11-11)
+
+**The defect.** A review of 2026-11-11 found the program's tests excusing findings by a blanket: `named()` in five test
+files dropped every "too small to read" at 1280 × 720, whatever the item, and Cores dropped every "the pad does not
+reach" while its keyboard was docked. The tester's decision of 2026-11-08 (the floor holds with no exception, every
+small text is 19) left no room for the first; and nothing could notice when an excuse had outlived its cause, since a
+predicate that matches nothing passes as quietly as one that matches.
+
+**The surface.** `emusen_qt_test::excuse` holds one `Excuse` a finding: the finding's words (`low contrast`, `cut with
+an ellipsis`, a mockup's `Y`), the objectName of the one item it excuses, words that item's own words hold where its
+name is shared (a row's `value`), the size it holds at or every size, and why, with who decided it and when, or "no
+ruling". A test's `Excuses` counts each use; `hold` (qt-app's `tests/common`) leaves out a finding only when an excuse
+names it. When the `Excuses` is dropped, at the end of the test, any excuse that excused nothing fails the test as
+stale, naming it. `Excuses::none()` is a test with no excuse. An item is found from the gate's finding by the first
+number after the finding's words (both numbers of an overlap, or of a limit and what passes it), and from a mockup's
+finding by the element's name before them; a ratio, a height or capitals are never read as items
+(`tests/excuse.rs`).
+
+**What the blankets had been excusing,** measured 2026-11-11 with every excuse removed on the software backend: at
+1280 × 720 nothing in the Home and List cards, Settings, Settings ▸ Consoles or the Themes tab is under the floor any
+more, so each of those five blankets was already stale. The cards' "words under a card's scrim" contrast excuse
+excused nothing either: a backdrop is a panel to the rules and its words are not judged. What stood is in §7.103 (the
+search's reach) and below:
+
+| Test | Finding | Item | Status |
+|---|---|---|---|
+| `settings.rs` | cut with an ellipsis | `value` holding `/Roms` (the ROM folder's path, cut at its start) | named, no ruling |
+
+`esde-qt/tests/sizes.rs` held every box sized by its words (a help bar, a status row, a text) within 4 % of its extent
+across the sizes of one aspect ratio, by its class; that tolerance named no item and is removed, so every element is
+held within 0.001.
+
 ### 7.101 Qt Multimedia's CPU conversion is Qt's own on the software backend alone (repair piece DC-A; 2026-11-11)
 
 `QT_INTERNAL` (§7.14, §7.58) now says of each message whether it is Qt's own only on the software backend.
@@ -2961,3 +2993,33 @@ only. On the GPU an RHI is there to convert on, so the same line means the clip'
 test. `Harness::software()` asks Qt for the scene graph backend in use (`QQuickWindow::sceneGraphBackend()`, settled once the first window is made), and
 `assert_quiet` filters by it; `qt_internal(message, software)` is the rule, held both ways by `tests/internal.rs`. The
 main-thread warning stays filtered on every backend, as §7.58 says.
+
+### 7.102 The rules' exemptions reported item by item (repair piece DC-A; 2026-11-11)
+
+Four of the audit's rules let some items pass by an exemption that named no item: words that reach their contrast over
+all but `CONTRAST_SPARE` (a tenth) of what is behind them; words crossing a scroller's faded edge, not held to contrast
+at all (§7.35); colours painted inside a theme's `Scene`, not held to the palette (InterfaceSpec §4.4); and the words
+`SMALL_TEXT_EXCEPTIONS` names under the floor (§7.10). `audit::exempted(root, declared, smallest)` lists every item an
+exemption let pass in one state, as `Exempted` (`low contrast in the spare tenth`, `low contrast at a faded edge`, `a
+colour outside the palette in a scene`, `too small to read, a named exception`), and only where the strict rule would
+have failed it. `Scene::exempted` runs it with the gate's palette and floor, and the program's `hold` counts each line
+as a finding of the gate, so a test accepts one only by an `Excuse` naming its item. The rules themselves are
+unchanged; theme-audit and the gallery do not yet report the exemptions (see the report table of DC-A).
+
+### 7.103 The gate's walk presses a screen's own shoulders (repair piece DC-A; 2026-11-11)
+
+The gate's walk pressed the four directions from every operable item, so on the grid's search, where LB and RB are the
+screen's declared actions taking the focus between the keys and the covers (EmuSen_Qt.md §7.6), the covers were "not
+reached" from the keys and the keys from the covers, and the cards test excused every unreached cover and the keyboard
+by name prefix. `Scene::walk_pressing(tree, buttons, press)` walks any set of presses; `walk_by` is it over
+`DIRECTIONS`, and `WITH_SHOULDERS` adds PageUp and PageDown for a screen whose shoulders are its own actions. qt-app's
+`hold_walking` holds a state with it, and `GamesSearch` and `GamesSearchGrid` are held so, with no excuse: the gate
+sees each shoulder's press land, measured 2026-11-11 on the software backend (`cards.rs` passes with `Excuses::none()`).
+A screen whose shoulders step sections (Settings, Cores) is walked by the four directions alone, since a section step
+leaves the state the walk judges.
+
+**Cores' search, a finding that stands.** With the keyboard docked over Cores (`CoresSearch`) the keyboard takes every
+press; the search box and the four rows above it are reached only by X, which ends the search. The blanket "the pad
+does not reach, while the keyboard is up" is removed, so `cores.rs` fails with five unreached items at each size until
+the tester rules between the shoulders taking the focus to the list, as the grid's search does, and the docked keyboard
+as a modal state, the screen behind a backdrop.

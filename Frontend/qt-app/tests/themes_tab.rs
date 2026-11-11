@@ -10,6 +10,7 @@ use emusen_kit_core::input::UiButton;
 use emusen_platform_client::galaxia::consts::{DIR_THEMES, MODEL_APP_SETTINGS};
 use emusen_platform_client::Platform;
 use emusen_qt::MAIN_URL;
+use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::{mockup, Scene};
 use std::path::Path;
 
@@ -30,10 +31,6 @@ fn copy(from: &Path, to: &Path) {
 fn focused(scene: &mut Scene<'_>) -> String {
     let tree = scene.tree();
     scene.focus(&tree).map(|i| tree.nodes[i as usize].name.clone()).unwrap_or_default()
-}
-
-fn named(fault: &str, _tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
-    size == (1280, 720) && fault.contains("too small to read")
 }
 
 /// The id the settings file holds.
@@ -107,7 +104,8 @@ fn qt_3_8_the_themes_tab_checks_uses_and_switches_the_chosen_theme_s_host() {
     assert_eq!(scene.property("themesModel", "usable"), "false");
     scene.wait(300);
     let mut report = Vec::new();
-    hold(&mut scene, "ThemesTab", &mockup::Mockup::default(), named, &mut report);
+    let mut excuses = Excuses::none();
+    hold(&mut scene, "ThemesTab", &mockup::Mockup::default(), &mut excuses, &mut report);
 
     // A package is checked before Use is offered; Use stores its id and its host is made at once.
     check_next(&mut scene, "Fixture clean");

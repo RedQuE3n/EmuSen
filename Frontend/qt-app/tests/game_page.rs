@@ -14,17 +14,13 @@ use emusen_platform_client::galaxia::consts::{DIR_SCREENSHOTS, FILE_GAMES, MODEL
 use emusen_platform_client::library::Library;
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt::MAIN_URL;
+use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::{mockup, Scene};
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
 const COBALT: &str = "Cobalt Harbor (Synthetic)";
 const LANTERN: &str = "Lantern Bay (Synthetic)";
-
-/// No finding is named for the tester: the gate holds every state whole.
-fn nothing_named(_: &str, _: &emusen_qt_test::tree::Tree, _: (i32, i32)) -> bool {
-    false
-}
 
 /// The focus moved by `button` until it is on the item heard as `heard`.
 fn move_to(scene: &mut Scene<'_>, button: UiButton, heard: &str) {
@@ -192,6 +188,7 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     assert_eq!(scene.property("pageModel", "clip"), "", "Play videos off: no clip");
     assert_eq!(scene.property("pageClip", "running"), "false", "no clip, no player: Qt Multimedia not started");
     let mut report = Vec::new();
+    let mut excuses = Excuses::none();
     // Right from Play is Resume; Right steps Resume through the four states, then reaches Favourite.
     scene.pad(UiButton::Right);
     wait_for(&mut scene, "pageModel", "help", &help(emusen_qt_models::help::Screen::GamePageResumeSlots), 1000);
@@ -209,11 +206,11 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
         scene.wait(50);
     }
     wait_for(&mut scene, "pageModel", "help", &help(emusen_qt_models::help::Screen::GamePage), 1000);
-    hold(&mut scene, "GamePage", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "GamePage", &mockup::Mockup::default(), &mut excuses, &mut report);
 
     section(&mut scene, 1);
     assert_eq!(scene.property("pageModel", "shows"), "1");
-    hold(&mut scene, "GamePageStates", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "GamePageStates", &mockup::Mockup::default(), &mut excuses, &mut report);
     // X on Slot 1 asks first, No focused: A keeps the state; X again, Down to Delete, A deletes it, its picture and its record.
     let slot1 = platform.save_path(SAVE_STATE, rom.to_str().unwrap(), None, 1).unwrap();
     scene.pad(UiButton::Down);
@@ -246,7 +243,7 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     scene.pad(UiButton::Up);
     section(&mut scene, 2);
     assert_eq!(scene.property("pageModel", "shows"), "2");
-    hold(&mut scene, "GamePageOptions", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "GamePageOptions", &mockup::Mockup::default(), &mut excuses, &mut report);
     // The television standard, offered for a television's console: the game's own, stepped to NTSC and saved in games.db,
     // then back; the package's state in Mistress's words.
     assert!(comes_to_read(&mut scene, "Not a package"), "the package's state");
@@ -275,9 +272,9 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     }
     assert_eq!(standard(&platform), serde_json::Value::Null, "the game's own again");
     section(&mut scene, 3);
-    hold(&mut scene, "GamePageMedia", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "GamePageMedia", &mockup::Mockup::default(), &mut excuses, &mut report);
     section(&mut scene, 4);
-    hold(&mut scene, "GamePageDetails", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "GamePageDetails", &mockup::Mockup::default(), &mut excuses, &mut report);
     // Open Folder: the program's one folder action, given the folder holding the game's file, caught as its URL.
     assert!(scene.set_property("folders", "catching", "true"));
     down_to(&mut scene, "Open Folder");

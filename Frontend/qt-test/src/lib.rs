@@ -6,6 +6,7 @@
 
 pub mod compositor;
 pub mod covers;
+pub mod excuse;
 pub mod ffi;
 pub mod harness;
 pub mod lint;

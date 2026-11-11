@@ -11,6 +11,7 @@ use emusen_kit_core::tokens::Variant;
 use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
 use emusen_platform_client::Platform;
 use emusen_qt::MAIN_URL;
+use emusen_qt_test::excuse::{Excuse, Excuses};
 use emusen_qt_test::{mockup, Scene};
 
 fn focused(scene: &mut Scene<'_>) -> String {
@@ -18,15 +19,15 @@ fn focused(scene: &mut Scene<'_>) -> String {
     scene.focus(&tree).map(|i| format!("{} {}", tree.nodes[i as usize].ty, tree.nodes[i as usize].name)).unwrap_or_default()
 }
 
-/// The gate's findings this screen names for the tester: the help bar's words under the floor at 1280 × 720, as the
-/// Themes tab and the grid name them; and a folder's path longer than half its row, cut at its start so the folder's
-/// own name shows, which the pane gives whole once the row is focused (held below; EmuSen_Qt.md §7.7). Any other value
-/// cut on its row stays a finding.
-fn named(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
-    let item = fault.rsplit(": ").next().and_then(|n| n.parse::<usize>().ok()).and_then(|i| tree.nodes.get(i));
-    let path_cut = fault.contains("cut with an ellipsis") && item.is_some_and(|n| n.name == "value" && n.text.as_deref().is_some_and(|t| t.starts_with('/')));
-    path_cut || (size == (1280, 720) && fault.contains("too small to read"))
-}
+/// The gate's finding this screen names for the tester: the ROM folder's path, longer than half its row, cut at its start
+/// so the folder's own name shows, which the pane gives whole once the row is focused (held below; EmuSen_Qt.md §7.7).
+const ROM_FOLDER_CUT: Excuse = Excuse {
+    finding: "cut with an ellipsis",
+    item: "value",
+    words: "/Roms",
+    size: None,
+    why: "EmuSen_Qt.md §7.7, no ruling",
+};
 
 fn stored(platform: &Platform, key: &str) -> serde_json::Value {
     platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap()[key].clone()
@@ -75,29 +76,30 @@ fn qt_7_7_settings_opens_from_home_steps_saves_and_holds_its_states() {
     wait_for(&mut scene, "screens", "shown", "Settings", 2000);
     assert_eq!(scene.property("settingsModel", "section"), "0");
     let mut report = Vec::new();
+    let mut excuses = Excuses::new(&[ROM_FOLDER_CUT]);
 
     reach(&mut scene, 2, 0);
     assert_eq!(scene.property("settingsModel", "preview"), "2", "Volume's pane holds its meter");
     assert_eq!(scene.property("SettingsMeter", "visible"), "true", "and draws it");
-    hold(&mut scene, "SettingsSound", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "SettingsSound", &mockup::Mockup::default(), &mut excuses, &mut report);
     reach(&mut scene, 4, 0);
-    hold(&mut scene, "SettingsLibrary", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "SettingsLibrary", &mockup::Mockup::default(), &mut excuses, &mut report);
     // The ROM folder's path, cut at its start on the row, is whole in the pane once the row is focused: the named cut's
     // condition.
     let roms = world.root.join("Roms").display().to_string();
     assert!(scene.property("settingsSentence", "text").contains(&roms), "the pane names {roms} whole");
     reach(&mut scene, 5, 0);
-    hold(&mut scene, "SettingsEmuSen", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "SettingsEmuSen", &mockup::Mockup::default(), &mut excuses, &mut report);
     // The shoulders wrap from EmuSen to Controllers, then on to Display.
     reach(&mut scene, 1, 5);
     assert_eq!(scene.property("settingsModel", "preview"), "4", "Text size's pane holds a line at each size");
-    hold(&mut scene, "SettingsTextSize", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "SettingsTextSize", &mockup::Mockup::default(), &mut excuses, &mut report);
     for _ in 0..4 {
         scene.pad(UiButton::Up);
     }
     wait_for(&mut scene, "settingsModel", "focused", "1", 1000);
     assert_eq!(scene.property("settingsModel", "caption"), "The last game · Off CRT", "the CRT's pane names its picture");
-    hold(&mut scene, "SettingsDisplay", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "SettingsDisplay", &mockup::Mockup::default(), &mut excuses, &mut report);
 
     // Light or dark stepped to Light: saved, and the whole program drawn in the light variant at once.
     for _ in 0..8 {
@@ -108,7 +110,7 @@ fn qt_7_7_settings_opens_from_home_steps_saves_and_holds_its_states() {
     wait_for(&mut scene, "settingsModel", "light", "true", 1000);
     assert_eq!(stored(&platform, "Appearance"), "light");
     scene.wait(200);
-    hold_in(&mut scene, "SettingsDisplayLight", &mockup::Mockup::default(), named, &mut report, Variant::Light);
+    hold_in(&mut scene, "SettingsDisplayLight", &mockup::Mockup::default(), &mut excuses, &mut report, Variant::Light);
     scene.pad(UiButton::Left);
     wait_for(&mut scene, "settingsModel", "light", "false", 1000);
 

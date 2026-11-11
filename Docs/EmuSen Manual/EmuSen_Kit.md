@@ -2955,3 +2955,17 @@ past the new count, and it logs `DelegateModel::cancel: index out range 6 4` (an
 test in 2 of 14 runs. The tiles' list now takes `tileModel` while tiles are shown and the rows' list `rowModel` while
 rows are, null otherwise; the hidden list makes nothing. qt-app's game page test steps Media's scrolled tiles and
 Details' rows six times at 16 ms and holds Qt silent; with the aliases it logs the two lines on the first run.
+
+### 7.105 The section strip moves by the wheel; the harness reads an item's number (repair DC-B; 2026-11-11)
+
+`SectionStrip` (§7.43) was a horizontal `ListView` with `interactive: false`. Where a screen lists more sections than
+the strip holds, as Cores does over a world of fourteen engines, the gate's pointer reach found its wheel leaving it
+still (EmuSen_Qt.md §7.9: five findings, one a size, measured on 2026-11-11 on the software backend and on Vulkan alike).
+Making it interactive alone does not move it: a horizontal `ListView` takes no turn of an upright wheel (measured with
+kit-gallery's `strip`: `contentX` 0 before and after three notches). The strip is now interactive, held at its ends
+(`Flickable.StopAtBounds`), and a `WheelHandler` moves its names along by the wheel's turn, horizontal or upright,
+within `originX` and the content's end. Held by kit-gallery's `strip` (`StripScene.qml`, thirteen names in a 600-unit
+strip: three notches move it, and pointer reach finds no still scroller).
+
+qt-test's `Scene::number` reads a number property of a tree's item by its id, as the harness's own settle already did,
+so a test can read an item's `implicitWidth`, `contentX` or `x` where it has no objectName.

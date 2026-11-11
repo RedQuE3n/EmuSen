@@ -3063,6 +3063,14 @@ Mistress's system view in `side-mistress/`. **A limit of the comparison:** Mistr
 reached only by a pad or the keyboard, and the gates admit no input device and no synthetic input outside the program,
 so Mistress's side shows its system view alone.
 
+**The view's load off the GUI thread, measured on 2026-11-11.** `EsdeModel.load` turned its four QStrings back into Rust
+text on the GUI thread before starting its thread (UTF-16 to UTF-8, 8.6 MB at 9,007 games), after every publish: the
+copy the library's side had moved off (§4.7) was still made on this side. The GUI thread now hands the load's thread
+shared copies (`LoadTexts::of`, Qt's implicit sharing, sent by the same reasoning as `esde_texts.rs`), and the thread
+reads them as text. `esde-qt/tests/load.rs` times that part at the library's scale (a 6.6 MB shelves text, a 2.2 MB
+media index): 3.9 µs, under the 2 ms gate, and checks that the shelves' copy shares the property's data; with the
+conversion back on the GUI thread (a seeded fault) the check fails.
+
 **Two names the program links twice, measured 2026-11-10.** With `emusen-esde-qt` in `emusen-qt`, its list model and
 qt-models' are both `RowsModel` and both crates bake a `Shaders.qrc`: the first collides at link time, and the second
 does not, Qt naming a resource's initialiser after its file, so one crate's shaders shadowed the other's (the kit's

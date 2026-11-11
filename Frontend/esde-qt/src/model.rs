@@ -105,6 +105,25 @@ macro_rules! publish {
     }};
 }
 
+/// The four texts a load reads, as the GUI thread hands them to the load's thread: each QString shared, not copied, and
+/// turned into Rust text on that thread (EmuSen_Qt.md §4.9).
+pub struct LoadTexts(pub [QString; 4]);
+
+// Sound: the copies are made here and moved whole, and Qt's implicit sharing counts atomically (EmuSen_Qt.md §4.7).
+unsafe impl Send for LoadTexts {}
+
+impl LoadTexts {
+    /// The GUI thread's part: four shared copies, megabytes or not.
+    pub fn of(texts: [&QString; 4]) -> LoadTexts {
+        LoadTexts(texts.map(QString::clone))
+    }
+
+    /// The texts as Rust text, on the load's thread.
+    pub fn read(self) -> [String; 4] {
+        self.0.map(|t| t.to_string())
+    }
+}
+
 /// The painter shared with the list models of the same view, on the GUI thread only.
 pub type Shared = Rc<RefCell<Painter>>;
 
@@ -194,12 +213,12 @@ impl qobject::EsdeModel {
         if w <= 0 || h <= 0 || self.settings.is_empty() {
             return;
         }
-        let texts = [&self.settings, &self.shelves, &self.media, &self.presence].map(|t| t.to_string());
+        let texts = LoadTexts::of([&self.settings, &self.shelves, &self.media, &self.presence]);
         let (qt, cache) = (self.qt_thread(), self.cache.clone());
         let load = self.load + 1;
         self.as_mut().rust_mut().load = load;
         std::thread::spawn(move || {
-            let [settings_text, shelves_text, media_text, presence_text] = texts;
+            let [settings_text, shelves_text, media_text, presence_text] = texts.read();
             let settings = shelves::settings(&settings_text);
             let found = painter::systems(&cache, &settings, shelves::shelves(&shelves_text, &media_text), &shelves::presence(&presence_text), w, h);
             let _ = qt.queue(move |model| model.install(load, settings, found));

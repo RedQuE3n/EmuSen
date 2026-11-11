@@ -2975,10 +2975,18 @@ theme_feed, themes_tab; qt-models' library, esde, gamelists, qml, themes) green.
 | the reference's Home made under an ES-DE theme | `esde.rs`: `home.reference` active |
 | the theme's file never played, the kit's cue always | `cues::tests::the_themes_file_plays_where_it_gave_one_else_the_kits_cue` |
 
-**Not built, each listed for the tester to rule on (none is accepted).** Entering a folder from the view (the painter's `played` names a folder entry;
-`esdeEnter` and `esdeLeave` are not yet called by the host), a game's description (`esdeDescription`, which the
-painter does not ask for), the device's indicators (`device` unbound, so none is drawn, as before a host reports), and
-the player's swap (`swap` unbound, as the program binds it nowhere yet). The List card's facts are read when its shelf or
+**Not built, each listed for the tester to rule on (none is accepted).** What each would take, read from the tree on
+2026-11-11; none is built:
+
+| ES-DE element the view does not draw, or open line | Where it stands | What building it takes |
+|---|---|---|
+| Entering a folder | the painter's `played` names a folder entry as it names a game; `LibraryModel.esdeEnter` and `esdeLeave` exist and are called by no host | in the host, `played` on a folder entry calls `esdeEnter(shelf, entry)` and B inside a folder `esdeLeave`, the view selecting the entry the rewritten shelves answer as the List card's acts do; a test that enters and leaves a folder on a library with one. QML wiring and one test |
+| A game's description | console rows carry none (`GameRow.description` left out, 6.6 MB kept off the text); `LibraryModel.esdeDescription(file)` gives one on demand; the painter never asks | the painter asks for the selected game's description when a theme has a description element, off the GUI thread, and hands it to the scene as the game's; a test that a theme's `md_description` reads it. A painter change in esde-qt and its wiring |
+| The device's indicators | `EsdeModel.device` is unbound in `Main.qml`, so no battery, controller or network mark is drawn | a device-status source: the platform library reports none to the front end today, so this is a new surface (battery, pads, network) proposed to the tester first, then bound |
+| The swap (A and B exchanged) | `EsdeModel.swap` is unbound; the program has no setting that swaps them | a setting of the player's (ES-DE's own is in its menu), read by the start, bound to the view and the router alike; the setting is the tester's to decide first |
+| `QObject::~QObject: Timers cannot be stopped from another thread` at the program's test's exit | logged after the harness stops listening, in `esde.rs` and `game_page.rs` alike; not explained | finding the object whose timer outlives its thread at exit (a probe that logs each `QObject` with a timer at the process's end); fixed where it lives once found |
+
+The List card's facts are read when its shelf or
 selection changes, not after an act rewrites the shelves while it stays open (a Sort, which keeps the card open, is
 then said with its old words until the selection moves). ES-DE's full system names
 ("Nintendo SNES (Super Nintendo)") are a change to the systems table's `esde_full_name`, not made here.

@@ -167,10 +167,16 @@ fn buttons() -> Vec<Button> {
     buttons
 }
 
-/// The picture's blue under `AS_PLAYSTATION`: full while any button of the first pad is held, so a host sees a press
-/// reach the console in the picture; none otherwise, and none for every other build.
+/// The picture's blue under `AS_PLAYSTATION`, by the button of the first pad held, so a host sees which button reaches
+/// the console in the picture: A 0x40, Turbo 0x60, B 0xFF, Start 0xA0, the highest bit held telling; none with none
+/// held, and none for every other build.
+pub const PRESSED_BLUES: [u8; 4] = [0x40, 0x60, 0xFF, 0xA0];
+
 fn pressed_blue(pad: u32) -> u8 {
-    if faults() & AS_PLAYSTATION != 0 && pad != 0 { 0xFF } else { 0 }
+    if faults() & AS_PLAYSTATION == 0 {
+        return 0;
+    }
+    (0..PRESSED_BLUES.len()).rev().find(|bit| pad & (1 << bit) != 0).map_or(0, |bit| PRESSED_BLUES[bit])
 }
 /// The status of that fault, a core's own code that no text names.
 pub const STATUS_OLD_HOST: i32 = -1999;

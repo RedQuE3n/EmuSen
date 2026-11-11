@@ -6,7 +6,7 @@
 
 mod common;
 
-use common::console::{choose_row, until};
+use common::console::{choose_row, grid_ready, row_focused, until};
 use common::{approved_console_core, sandbox, wait_for};
 
 use emusen_client_fixture::library;
@@ -55,7 +55,7 @@ fn grid(scene: &mut Scene<'_>) {
     assert!(scene.focus_item(&tree, all));
     scene.pad(UiButton::Accept);
     wait_for(scene, "screens", "shown", "Grid", 1000);
-    scene.wait(300);
+    grid_ready(scene);
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn qt_7_9_a_console_that_fails_to_start_gives_way_to_the_library_and_a_page_read
     mode(&settings_file, 0o000);
     let mut first = String::new();
     for again in [false, true] {
-        scene.wait(300);
+        grid_ready(&mut scene);
         scene.pad(UiButton::Screensaver);
         wait_for(&mut scene, "screens", "shown", "Page", 2000);
         let words = said(&mut scene, "The game's page could not be read: ");
@@ -111,14 +111,14 @@ fn qt_7_9_a_console_that_fails_to_start_gives_way_to_the_library_and_a_page_read
     until(&mut scene, 5, "the List card in place", |s| s.property("screens", "shown") == "List" && s.property("listCardCanvas", "slide") == "0");
     choose_row(&mut scene, "Start Console");
     until(&mut scene, 5, "Start Console's page", |s| s.property("listCardModel", "page") == emusen_qt_models::list_card::START_CONSOLE);
-    scene.wait(300);
+    row_focused(&mut scene, "PlayStation");
     choose_row(&mut scene, "PlayStation");
     let words = said(&mut scene, "Failed to start PlayStation: ");
     assert_eq!(scene.property("notices", "attention"), "true");
     until(&mut scene, 5, "the library's screen", |s| s.property("screens", "shown") == "Home" && s.property("session", "running") == "false");
-    scene.wait(300);
-    assert_eq!(scene.property("screens", "shown"), "Home", "no game's screen after the failure: {words}");
+    // Still Home once the notice has gone, seconds later: no game's screen follows the failure.
     wait_for(&mut scene, "notices", "shown", "false", 6000);
+    assert_eq!(scene.property("screens", "shown"), "Home", "no game's screen after the failure: {words}");
 
     // Under an ES-DE theme: Start's Home card, its Start Console, A on the PlayStation; the theme is shown again.
     let mut settings = platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
@@ -134,11 +134,11 @@ fn qt_7_9_a_console_that_fails_to_start_gives_way_to_the_library_and_a_page_read
     until(&mut scene, 5, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
     choose_row(&mut scene, "Start Console");
     until(&mut scene, 5, "Start Console's page", |s| s.property("homeCardModel", "page") == emusen_qt_models::home_card::START_CONSOLE);
-    scene.wait(300);
+    row_focused(&mut scene, "PlayStation");
     choose_row(&mut scene, "PlayStation");
     let words = said(&mut scene, "Failed to start PlayStation: ");
     until(&mut scene, 5, "the theme's screen", |s| s.property("screens", "shown") == "Esde" && s.property("session", "running") == "false");
-    scene.wait(300);
+    wait_for(&mut scene, "notices", "shown", "false", 6000);
     assert_eq!(scene.property("screens", "shown"), "Esde", "no game's screen after the failure: {words}");
     assert_eq!(scene.property("esde", "activeFocus"), "true", "the theme takes the pad again");
     scene.assert_quiet();

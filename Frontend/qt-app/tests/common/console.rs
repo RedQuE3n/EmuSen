@@ -59,16 +59,18 @@ fn seen(scene: &mut Scene<'_>, points: &[(f64, f64)]) -> Vec<[u8; 3]> {
     scene.colours_at(points).into_iter().flatten().map(|c| [c.r, c.g, c.b]).collect()
 }
 
-/// The blue the grab finds over the picture, on average: the client fixture's console core draws it full while a
-/// button of its pad is held, and none otherwise (emusen-native's test core under `AS_PLAYSTATION`).
+/// The blue the grab finds over the picture, on average: the client fixture's console core draws it by the button of its
+/// pad held, B the most and Start less, and none with none held (emusen-native's test core under `AS_PLAYSTATION`,
+/// its `PRESSED_BLUES`).
 fn blue(scene: &mut Scene<'_>, points: &[(f64, f64)]) -> f64 {
     let seen = seen(scene, points);
     seen.iter().map(|c| f64::from(c[2])).sum::<f64>() / seen.len().max(1) as f64
 }
 
 /// The console's screen up, its picture drawn on the window as a grab reads it (more than one colour, not black), and
-/// the pad the console's: B and Start, each held on the pad, reach the console, whose picture turns blue while it is
-/// held and back when it is let go, and not the program, which stays on the console's screen unpaused.
+/// the pad the console's: B and Start, each held on the pad, reach the console as themselves, its picture turning blue
+/// while each is held (B bluer than Start, as the core draws them) and back when it is let go, and not the program,
+/// which stays on the console's screen unpaused.
 pub fn console_owns_the_pad(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, console: &str) {
     until(scene, 20, "the console running", |s| {
         let problem = s.property("session", "problem");
@@ -84,15 +86,26 @@ pub fn console_owns_the_pad(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, 
     });
     until(scene, 5, "the console owning the pad", |s| s.pad_chord_only());
     scene.run_pad_clock();
+    let mut held = Vec::new();
     for control in [PadControl::East, PadControl::Start] {
         let button = emusen_qt_endymion::reading::sdl_button(control).unwrap();
         let before = blue(scene, &points);
         sdl.press(pad, button, true);
         until(scene, 5, &format!("{control:?} held reaching the console's picture (blue {before:.0} before)"), |s| blue(s, &points) > before + 60.0);
+        let mut last = -1.0;
+        until(scene, 5, &format!("{control:?}'s blue steady"), |s| {
+            let now = blue(s, &points);
+            let steady = (now - last).abs() < 1.0;
+            last = now;
+            steady
+        });
+        held.push(last);
         sdl.press(pad, button, false);
         until(scene, 5, &format!("{control:?} let go in the console's picture"), |s| blue(s, &points) < before + 20.0);
         assert_eq!((scene.property("screens", "shown"), scene.property("session", "paused")), ("Game".into(), "false".into()), "{control:?} is the console's");
     }
+    // B (0xFF) is drawn bluer than Start (0xA0), and either bluer than A (0x40): each button reached the core as itself.
+    assert!(held[0] > held[1] + 40.0, "B's blue {:.0} and Start's {:.0}: the core told them apart", held[0], held[1]);
 }
 
 /// The chord's Pause Card over the console, named as Mistress named its session.
@@ -105,4 +118,43 @@ pub fn pause(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, named: &str) {
     sdl.press(pad, guide, false);
     until(scene, 5, "the card in place", |s| s.property("cardCanvas", "slide") == "0");
     assert!(scene.tree().nodes.iter().any(|n| n.visible && n.text.as_deref() == Some(named)), "the Pause Card names {named}");
+}
+
+/// The grid in place: its covers listed and holding the focus.
+pub fn grid_ready(scene: &mut Scene<'_>) {
+    until(scene, 5, "the grid's covers holding the focus", |s| s.property("gridCells", "count") != "0" && s.property("gridCells", "activeFocus") == "true");
+}
+
+/// A card's page in place: its focused row reads `words`.
+pub fn row_focused(scene: &mut Scene<'_>, words: &str) {
+    until(scene, 5, &format!("the focus on the row {words}"), |s| focused_words(s).starts_with(words));
+}
+
+/// Whether the shown card has a row whose label reads `label`.
+pub fn row_shown(scene: &mut Scene<'_>, label: &str) -> bool {
+    let tree = scene.tree();
+    tree.nodes
+        .iter()
+        .filter(|n| n.visible && n.ty.starts_with("MenuRow"))
+        .any(|r| tree.nodes.iter().any(|n| n.parent == r.id && n.name == "label" && n.text.as_deref() == Some(label)))
+}
+
+/// The chord's Pause Card over the console named `named`, Leave, Quit Game and Yes: the session closed and `to` shown.
+pub fn quit_game(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, named: &str, to: &str) {
+    pause(scene, sdl, pad, named);
+    choose_row(scene, "Leave");
+    until(scene, 5, "the Leave page", |s| s.property("pause", "title") == "Leave" && row_shown(s, "Quit Game"));
+    choose_row(scene, "Quit Game");
+    until(scene, 5, "Quit Game's question", |s| row_shown(s, "Yes"));
+    choose_row(scene, "Yes");
+    until(scene, 10, &format!("Quit Game closing the console to {to}"), |s| s.property("session", "running") == "false" && s.property("screens", "shown") == to);
+}
+
+/// The chord's Pause Card over the console named `named`, Leave and Back to Library: the session suspended and `to` shown.
+pub fn back_to_library(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, named: &str, to: &str) {
+    pause(scene, sdl, pad, named);
+    choose_row(scene, "Leave");
+    until(scene, 5, "the Leave page", |s| s.property("pause", "title") == "Leave" && row_shown(s, "Back to Library"));
+    choose_row(scene, "Back to Library");
+    until(scene, 5, &format!("Back to Library showing {to}"), |s| s.property("screens", "shown") == to && s.property("cardCanvas", "visible") == "false");
 }

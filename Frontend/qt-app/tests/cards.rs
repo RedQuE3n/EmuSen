@@ -6,6 +6,8 @@
 
 mod common;
 
+use common::console::until;
+
 use common::{draw_covers, hold, sandbox, wait_for};
 use emusen_client_fixture::library;
 use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
@@ -184,8 +186,9 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     scene.pad(UiButton::Back);
     settle(&mut scene);
     assert!(scene.set_property("homeCardModel", "facts", &given));
-    scene.pad(UiButton::Menu);
-    scene.wait(50);
+    let tree = scene.tree();
+    let games = tree.find_named("place.0").expect("Home's Games");
+    assert!(scene.focus_item(&tree, games));
 
     // Home's Power place opens the Home card at Power, with Home as the way back (HomeCardPower).
     for _ in 0..6 {
@@ -221,10 +224,18 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     settle(&mut scene);
     assert_eq!(scene.property("screens", "shown"), "Home");
     wait_for(&mut scene, "home", "activeFocus", "true", 1000);
-    // Start on Home takes the focus back to where Home starts.
+    // Start on Home opens the Home card at its first page (decided 2026-11-11), Continue's or Start Console's row first
+    // where either is offered and the library's rows here; B closes it to Home.
     scene.pad(UiButton::Menu);
-    scene.wait(50);
-    assert_eq!(focused(&mut scene), "place.0", "Start puts the focus back on Games");
+    until(&mut scene, 5, "Start's Home card", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
+    assert_eq!(scene.property("homeCardModel", "page"), emusen_qt_models::home_card::FIRST, "the card's first page");
+    assert!(rows(&mut scene).iter().any(|r| r == "Tools"), "the first page's rows: {:?}", rows(&mut scene));
+    scene.pad(UiButton::Back);
+    until(&mut scene, 5, "B closing the card to Home", |s| s.property("screens", "shown") == "Home");
+    wait_for(&mut scene, "home", "activeFocus", "true", 1000);
+    let tree = scene.tree();
+    let games = tree.find_named("place.0").expect("Home's Games");
+    assert!(scene.focus_item(&tree, games));
 
     // Games, All Games (focused by name: the first focus is the first console, EmuSen_Qt.md §3.4.2), the grid; Start goes Home.
     all_games(&mut scene);

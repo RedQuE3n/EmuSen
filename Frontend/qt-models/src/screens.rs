@@ -17,7 +17,8 @@ pub enum Shown {
     Game,
     /// The Pause Card over the paused game.
     Pause,
-    /// The Home card over Home, opened at its Power page by Home's place (EmuSen_BigPicture.md §51.2).
+    /// The Home card over Home, opened at its Power page by Home's place (EmuSen_BigPicture.md §51.2) and at its first
+    /// page by Start on Home.
     HomeCard,
     /// The List card over the grid (EmuSen_Interface.md §18.1).
     List,
@@ -88,8 +89,8 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Home, Ask::Place(POWER_PLACE)) => Some((Shown::HomeCard, Some(crate::home_card::POWER.to_owned()))),
         (Shown::Home | Shown::Grid | Shown::SearchGrid | Shown::HomeCard, Ask::Act(key)) if key == GAME_PAGE => Some((Shown::Page, None)),
         (Shown::Home, Ask::Act(key)) if key == SEARCH => Some((Shown::Search, Some(crate::library::ALL.to_owned()))),
-        // Start on Home stays on Home, which takes the focus back to where it starts.
-        (Shown::Home, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
+        // Start on Home opens the Home card at its first page, as Mistress's Start did over Home (decided 2026-11-11).
+        (Shown::Home, Ask::Act(key)) if key == HOME => Some((Shown::HomeCard, Some(crate::home_card::FIRST.to_owned()))),
         (Shown::Consoles | Shown::Grid | Shown::Search | Shown::SearchGrid, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
         (Shown::HomeCard, Ask::Back | Ask::Close) => Some((Shown::Home, None)),
         (Shown::HomeCard, Ask::Act(key)) if key == crate::home_card::SETTINGS => Some((Shown::Settings, None)),
@@ -247,8 +248,6 @@ pub mod qobject {
         #[qproperty(Screen, shown, READ, NOTIFY)]
         #[qproperty(QString, key, READ, NOTIFY)]
         #[qproperty(bool, game_running, cxx_name = "gameRunning")]
-        /// Counts the times Home is asked for while it shows, so Home takes the focus back to where it starts.
-        #[qproperty(i32, home_again, cxx_name = "homeAgain", READ, NOTIFY)]
         /// The page the Home card opens at, by its key.
         #[qproperty(QString, page, READ, NOTIFY)]
         /// Whether the grid shows a game, so the keyboard's shoulders have covers to move to.
@@ -319,7 +318,6 @@ pub struct ScreensRust {
     key: QString,
     /// Whether the program's game runs: a game that starts is shown, and when it stops its screen gives way to Home.
     game_running: bool,
-    home_again: i32,
     page: QString,
     found: bool,
     themed: bool,
@@ -335,7 +333,6 @@ impl Default for ScreensRust {
             shown: Screen::Home,
             key: QString::default(),
             game_running: false,
-            home_again: 0,
             page: QString::default(),
             found: false,
             themed: false,
@@ -493,11 +490,6 @@ impl qobject::Screens {
             }
         }
         let screen = screen_of(shown);
-        if self.shown == Screen::Home && screen == Screen::Home {
-            let again = self.home_again.wrapping_add(1);
-            self.as_mut().rust_mut().home_again = again;
-            self.as_mut().home_again_changed();
-        }
         if self.shown != screen {
             self.as_mut().rust_mut().shown = screen;
             self.as_mut().shown_changed();

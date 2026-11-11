@@ -118,7 +118,7 @@ fn start_and_the_cards_follow_mistress_routes() {
     assert_eq!(step(Shown::Home, &Ask::Place(POWER_PLACE)), Some((Shown::HomeCard, Some("power".into()))), "Power opens the Home card at Power");
     assert_eq!(step(Shown::HomeCard, &Ask::Back), Some((Shown::Home, None)));
     assert_eq!(step(Shown::HomeCard, &Ask::Close), Some((Shown::Home, None)));
-    assert_eq!(step(Shown::Home, &act("home")), Some((Shown::Home, None)), "Start on Home stays, taking the focus back");
+    assert_eq!(step(Shown::Home, &act("home")), Some((Shown::HomeCard, Some(emusen_qt_models::home_card::FIRST.to_owned()))), "Start on Home opens the Home card at its first page");
     assert_eq!(step(Shown::Grid, &act("home")), Some((Shown::Home, None)), "Start on the grid goes Home");
     assert_eq!(step(Shown::Consoles, &act("home")), Some((Shown::Home, None)));
     assert_eq!(step(Shown::Grid, &act("list")), Some((Shown::List, None)), "Select opens the List card");

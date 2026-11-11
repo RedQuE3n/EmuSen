@@ -13,7 +13,7 @@
 
 mod common;
 
-use common::console::{console_owns_the_pad, pause, row_centre};
+use common::console::{console_owns_the_pad, pause, quit_game, row_centre, row_focused};
 use common::{approved_console_core, hold, sandbox, wait_for};
 
 use emusen_client_fixture::cores::{installation_with_snes, snes_image};
@@ -251,17 +251,11 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     until(&mut scene, 5, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
     choose_row(&mut scene, "Start Console");
     until(&mut scene, 5, "Start Console's page", |s| s.property("homeCardModel", "page") == emusen_qt_models::home_card::START_CONSOLE);
-    scene.wait(300);
+    row_focused(&mut scene, "PlayStation");
     choose_row(&mut scene, "PlayStation");
     console_owns_the_pad(&mut scene, &sdl, &pad, "PlayStation");
     assert_eq!(scene.property("esde", "visible"), "false", "the theme hidden under the console");
-    pause(&mut scene, &sdl, &pad, "PlayStation (no disc)");
-    choose_row(&mut scene, "Leave");
-    wait_for(&mut scene, "pause", "title", "Leave", 1000);
-    choose_row(&mut scene, "Quit Game");
-    scene.wait(300);
-    choose_row(&mut scene, "Yes");
-    until(&mut scene, 10, "Quit Game closing the console to the theme", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Esde");
+    quit_game(&mut scene, &sdl, &pad, "PlayStation (no disc)", "Esde");
 
     // Start Console by the pointer: the Home card's row clicked, then the PlayStation's; Quit Game to the theme again.
     scene.pad(UiButton::Menu);
@@ -269,17 +263,11 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     let (x, y) = row_centre(&mut scene, "Start Console");
     scene.click(x, y);
     until(&mut scene, 5, "Start Console's page", |s| s.property("homeCardModel", "page") == emusen_qt_models::home_card::START_CONSOLE);
-    scene.wait(300);
+    row_focused(&mut scene, "PlayStation");
     let (x, y) = row_centre(&mut scene, "PlayStation");
     scene.click(x, y);
     console_owns_the_pad(&mut scene, &sdl, &pad, "PlayStation");
-    pause(&mut scene, &sdl, &pad, "PlayStation (no disc)");
-    choose_row(&mut scene, "Leave");
-    wait_for(&mut scene, "pause", "title", "Leave", 1000);
-    choose_row(&mut scene, "Quit Game");
-    scene.wait(300);
-    choose_row(&mut scene, "Yes");
-    until(&mut scene, 10, "Quit Game closing the console to the theme", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Esde");
+    quit_game(&mut scene, &sdl, &pad, "PlayStation (no disc)", "Esde");
 
     // The PlayStation's gamelist: Select's menu leads with Start PlayStation With No Disc, which the pointer chooses.
     scene.pad(UiButton::Back);
@@ -316,13 +304,7 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     hold(&mut scene, "EsdeHomeCardContinueConsole", &mockup::Mockup::default(), nothing_named, &mut report);
     scene.pad(UiButton::Accept);
     until(&mut scene, 5, "Continue resuming the console", |s| s.property("screens", "shown") == "Game" && s.property("session", "paused") == "false");
-    pause(&mut scene, &sdl, &pad, "PlayStation (no disc)");
-    choose_row(&mut scene, "Leave");
-    wait_for(&mut scene, "pause", "title", "Leave", 1000);
-    choose_row(&mut scene, "Quit Game");
-    scene.wait(300);
-    choose_row(&mut scene, "Yes");
-    until(&mut scene, 10, "Quit Game closing the console to the theme", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Esde");
+    quit_game(&mut scene, &sdl, &pad, "PlayStation (no disc)", "Esde");
     assert!(report.is_empty(), "{} faults:\n{}", report.len(), report.join("\n"));
 
     // A theme that is not there gives way to the own look, with the loader's words as a notice.

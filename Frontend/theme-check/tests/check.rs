@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use emusen_kit_core::tokens::ColourToken;
+use emusen_kit_core::tokens::{ColourToken, Shadow};
 use emusen_theme_check::{run, run_with};
 use emusen_theme_check::tokens::{TokenType, property_of, registry_tokens};
 
@@ -137,8 +137,9 @@ fn rule_q_every_colour_token_names_a_read_only_colour_of_the_registry_and_back()
     assert!(registry.len() > 60, "the registry's Tokens were read: {}", registry.len());
     assert!(!registry.iter().any(|(n, _)| n == "form" || n == "variant"), "the switches are not tokens");
     let colours: Vec<&str> = registry.iter().filter(|(_, t)| *t == TokenType::Colour).map(|(n, _)| n.as_str()).collect();
-    let named: Vec<&str> = ColourToken::ALL.iter().map(|t| property_of(*t)).collect();
-    assert_eq!(colours, named, "the colour tokens, in the registry's order");
+    let mut named: Vec<&str> = ColourToken::ALL.iter().map(|t| property_of(*t)).collect();
+    named.push(Shadow::COLOUR_PROPERTY);
+    assert_eq!(colours, named, "the palette's colour tokens and the raised shadow's, in the registry's order");
 }
 
 /// A stand-in for theme-audit: a script that answers for the package named last, and leaves a mark that it ran.

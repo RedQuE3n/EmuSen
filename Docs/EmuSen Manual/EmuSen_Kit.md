@@ -2906,6 +2906,12 @@ that and still a sixteenth darker, so the shadow is soft, besides the gate it al
 blur set to none, a hard-edged shadow (the gallery's softness check, which the first form of the check, the darkening
 alone, let through, so the check was strengthened); the theme mirror missing `shadowBlur` (`theme-qt`'s surface test).
 
+**Rule Q and the shadow's colour** (2026-11-11). `shadowColor` is a colour property of the kit's `Tokens` after the
+palette's, so theme-check's rule-Q test, which held the registry's colours to `ColourToken::ALL` alone, failed from the
+day the token landed (seen 2026-11-11; theme-check is outside the workspace and no landing ran it). The name is kit-core's
+now, `Shadow::COLOUR_PROPERTY`, and the test holds the registry's colour tokens to the palette's and the shadow's, in the
+registry's order. A theme may override it as any colour token.
+
 ### 7.58 The walk presses on through a stepped action; the page frame's focus; Qt Multimedia's two messages (stage 5, piece G2; 2026-11-09)
 
 **The walk and a stepped action.** The gate's walk (`emusen-qt-test`'s `walk_by`, §7.11) pressed each direction once

@@ -16,10 +16,14 @@ Kit.NormalizedCanvas {
     // The focus as the help bar reads it: an action's index, else -1 and the content's index.
     readonly property int actionFocused: frame.actionView.activeFocus ? frame.actionView.currentIndex : -1
     readonly property int contentFocused: frame.showsTiles ? frame.tileView.currentIndex : frame.rowView.currentIndex
-    // Told after the change's own call is done, never inside the model's reset that moved it (EmuSen_Qt.md §7.8.1).
-    onActionFocusedChanged: Qt.callLater(screen.tellFocus)
-    onContentFocusedChanged: Qt.callLater(screen.tellFocus)
-    function tellFocus() { screen.page.focus(screen.actionFocused, screen.contentFocused) }
+    onActionFocusedChanged: focusTold.restart()
+    onContentFocusedChanged: focusTold.restart()
+    // Told on the next turn of the event loop, never inside the model's reset that moved it (EmuSen_Qt.md §7.8.1).
+    Timer {
+        id: focusTold
+        interval: 0
+        onTriggered: screen.page.focus(screen.actionFocused, screen.contentFocused)
+    }
     PageActionModel {
         id: actions
         actions: screen.page.actions

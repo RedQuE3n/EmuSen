@@ -4803,7 +4803,8 @@ Mistress's and this piece keeps Mistress's.
 into `GamePageModel.focus` from inside `GamePageModel`'s own `begin_reset_model`, a second `&mut` to an object whose
 method is still running. The page now refuses such a call (`focus` asserts it is not within its reset, which aborts the
 process from an FFI call), and on the branch as it was the page test aborted there ("the focus told from inside the
-page's own reset"). `GamePage.qml` now tells the focus through `Qt.callLater`, after the change's own call has returned,
+page's own reset"). `GamePage.qml` now tells the focus from a zero-interval `Timer` restarted by each change, on the next turn of the
+event loop (the QML rules forbid `Qt.callLater`),
 and the test runs through. The page test's waits that guarded a value wait for it (the tiles holding the focus, the
 actions changed, the help declaring X as Delete…, the question gone from the screen); the 500 ms after two steps of the
 television standard stays a fixed wait, since the two saves end where they began and leave no value to wait for.

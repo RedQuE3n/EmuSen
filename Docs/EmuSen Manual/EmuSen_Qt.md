@@ -3421,15 +3421,6 @@ theme face's rule, `own` false). Where the SemiBold is absent the help takes the
 says so once. The icon's box follows the face it is drawn in: SemiBold's hinted `S` is Regular's at every measured
 size but 23 and 36 px (17 against 16, 26 against 25), the latter the viewer's help at 1920 × 1200.
 
-**The glyph drawn the size of its box (measured 2026-11-11, `discs.py`, `icons.py`).** Of 150 single-label copies in
-both faces, the disc's ink is 0.875 × the icon's box (1.25 × the hinted `S`, divided by `entryRelativeScale` above 1)
-plus one or two columns of edge, the SVG's disc being 56 of its 64 units; and the box holds with SemiBold's `S` (equal to
-Regular's at every measured size but 23 and 36 px) and with Exo2's (14 and 21 px at 20 and 30 px, the 17.5 and 26.25 px
-Artflix's bars need). The oracle of 2026-11-11 (the help in SemiBold) placed every label of Art Book Next's gamelist bar
-at 1920 × 1200 within a pixel of ES-DE's while its discs were 43 px of ink to ES-DE's 47: `HelpElement` drew the glyph
-at 0.9 × the font's size (49.5 px) rather than at its box (51.25 px). It now draws each glyph the size of its entry's
-box, the part before the gap.
-
 **The advance's rounding, re-proved with SemiBold (`fixed.py`, pens re-read with SemiBold's rasters, `refit.py`).** Of
 the 93 copies: each advance exact and rounded half up, 90; the same in f32 arithmetic, 90; FreeType's fixed point (the
 16.16 scale of the size in 26.6, `FT_MulFix`, then `(x + 32) >> 6`) with the size rounded, floored or ceiled to 64ths,

@@ -31,6 +31,19 @@
 
 namespace {
 
+// An enabled wheel handler of the item's own, or of a flickable's content item, which takes a flickable's declared handlers, moves it as a flickable's wheel would (EmuSen_Kit.md §7.105).
+bool wheel_handled(const QQuickItem* item)
+{
+    const QObject* content = item->property("contentItem").value<QObject*>();
+    for (const QObject* holder : {static_cast<const QObject*>(item), content}) {
+        for (const QObject* child : holder ? holder->children() : QObjectList()) {
+            if (child->inherits("QQuickWheelHandler") && child->property("enabled").toBool())
+                return true;
+        }
+    }
+    return false;
+}
+
 QQuickWindow* quick(QObject& window) { return qobject_cast<QQuickWindow*>(&window); }
 
 std::uint64_t idOf(const QObject* object) { return reinterpret_cast<std::uintptr_t>(object); }
@@ -229,7 +242,7 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
         const auto extent = [item](const char* size, const char* before, const char* after) { return item->property(size).toDouble() + item->property(before).toDouble() + item->property(after).toDouble(); };
         node["sv"] = direction != 1 && extent("contentHeight", "topMargin", "bottomMargin") > item->height() + 0.5; // Qt scrolls over its margins too
         node["sh"] = direction != 2 && extent("contentWidth", "leftMargin", "rightMargin") > item->width() + 0.5;
-        node["wheel"] = item->property("interactive").toBool();
+        node["wheel"] = item->property("interactive").toBool() || wheel_handled(item);
         node["ch"] = item->property("contentHeight").toDouble() * unit.height();
     }
     if (item->inherits("QQuickPathView")) {

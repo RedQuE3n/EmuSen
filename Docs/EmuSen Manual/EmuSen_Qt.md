@@ -3153,7 +3153,9 @@ name had read as the bottom of the screen. Two fixed waits on absence went: Moon
 as `finished` turns, and the step taken with NavigationSounds off is held by A's sound after it being the only one
 counted, the sounds being rung in order on the GUI thread. In the kit's gallery, the swapped tile model is waited for
 until the frame shows it. Seeded on 2026-11-11: the List card under the theme acting without selecting, the program's
-ES-DE test failing on the selection.
+ES-DE test failing on the selection. That fault stops at the sort's check, so the Favourites check was seeded on its own
+on 2026-11-11: the library's Favourites act answering the selection it was handed in place of the first entry, the sort
+untouched; the test passed the sort's check and failed the Favourites one, the selection read "1" over one entry.
 
 **The shelves' row, written in one crate and read in another (2026-11-11).** qt-models writes each game's row
 (`esde_shelves::RowText`, a collection's member by its file) and esde-qt read it (`shelves::Row`): two hand-kept

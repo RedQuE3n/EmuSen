@@ -10,9 +10,27 @@ use serde_json::Value;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
+/// A library the host has loaded and lends for the runtime's life (`emusen_crystal_config.sqlite`): its loader's handle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LentLibrary(NonNull<std::ffi::c_void>);
+
+// A loader's handle, never closed, which the runtime reads from any thread.
+unsafe impl Send for LentLibrary {}
+unsafe impl Sync for LentLibrary {}
+
+impl LentLibrary {
+    /// # Safety
+    /// `handle` is a loader's handle (`dlopen`'s) that stays loaded for the life of every runtime made with it.
+    pub unsafe fn from_handle(handle: *mut std::ffi::c_void) -> Option<LentLibrary> {
+        NonNull::new(handle).map(LentLibrary)
+    }
+}
+
 /// How a runtime is made; `None` for a directory list is the implementation's default.
 #[derive(Clone, Debug, Default)]
 pub struct Config {
+    /// The host's SQLite, lent so the runtime keeps its state records (states.db); with none their calls are refused.
+    pub sqlite: Option<LentLibrary>,
     /// Cores still in development are listed.
     pub development: bool,
     /// The cores directories, scanned in order.
@@ -78,7 +96,7 @@ impl Runtime {
         let raw_config = raw::emusen_crystal_config {
             size: std::mem::size_of::<raw::emusen_crystal_config>() as u32,
             flags: if config.development { raw::EMUSEN_CRYSTAL_CONFIG_DEVELOPMENT } else { 0 },
-            sqlite: std::ptr::null_mut(),
+            sqlite: config.sqlite.map_or(std::ptr::null_mut(), |l| l.0.as_ptr()),
             cores: c,
             cores_len: cl,
             player_cores: p,

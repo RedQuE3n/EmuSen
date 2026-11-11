@@ -4750,6 +4750,18 @@ an ES-DE theme does; how long that takes on a large library is not measured yet.
 
 **6.** `Ask::Place`'s and `Ask::Act`'s comments no longer say Games is the only place built.
 
+**7. The runtimes keep their state records.** Item 1's notices showed a failure every Delete State had met unseen:
+"The state could not be deleted: no SQLite was lent to this runtime, so it keeps no records of states". Every runtime
+the program made passed `emusen_crystal_config.sqlite` as null (crystal-client's `Runtime::new`), though the C ABI has
+carried the lend since 1.2, so the runtime kept no states.db: Delete State removed the files and was then refused. Now
+crystal-client's `Config.sqlite` carries a `LentLibrary` (a loader's handle, lent for the runtime's life), and
+qt-models lends the one SQLite the front end already loads through platform-client's `Lent`
+(`clients::lent_sqlite`, `clients::with_sqlite`) in `runtime_config` and `ClientSource::open`, which every runtime of
+the program is made through. platform-client's `Lent::handle` became public for it: crystal-client does not depend on
+platform-client, so the handle has to cross as a raw pointer, and only the loader's handle is what the C field takes.
+Held by qt-models' `runtime_records` (a runtime made without the lend is refused; each of the models' configurations
+forgets a state's record).
+
 **Not built here, each for the tester:** the Start Console page's firmware line (Mistress's `FirmwareLine`: the library
 view does not read firmware needs); its A word "Start" in the help bar; the console session's Continue row and name
 (Mistress's `ConsoleSessionName`); Start Console in an ES-DE gamelist's Select menu (Mistress's `AddStartConsoleOption`);

@@ -10,7 +10,7 @@
 
 mod common;
 
-use common::console::{back_to_library, choose_row, console_owns_the_pad, focused_words, grid_ready, pause, quit_game, row_centre, row_focused, until};
+use common::console::{back_to_library, choose_row, console_owns_the_pad, focused_words, grid_ready, pause, quit_game, row_centre, row_focused, row_shown, until};
 use common::{approved_console_core, hold, sandbox, wait_for};
 
 use emusen_client_fixture::library;
@@ -90,6 +90,8 @@ fn qt_7_9_start_console_starts_a_console_whose_screen_owns_the_pad() {
 
     // Start on Home opens the Home card at its first page; its Start Console row by the pad, A on the PlayStation.
     home_card(&mut scene);
+    let labels: Vec<String> = scene.tree().nodes.iter().filter(|n| n.visible && n.name == "label").filter_map(|n| n.text.clone()).collect();
+    assert!(row_shown(&mut scene, "Start Console"), "the first page offers Start Console: {labels:?}; startable {}", scene.property("library", "startable"));
     choose_row(&mut scene, "Start Console");
     until(&mut scene, 5, "Start Console's page", |s| s.property("homeCardModel", "page") == emusen_qt_models::home_card::START_CONSOLE);
     row_focused(&mut scene, "PlayStation");
@@ -160,4 +162,8 @@ fn home_card(scene: &mut emusen_qt_test::Scene<'_>) {
     scene.pad(UiButton::Menu);
     until(scene, 5, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
     assert_eq!(scene.property("homeCardModel", "page"), emusen_qt_models::home_card::FIRST, "Start opens its first page");
+    until(scene, 5, "the card holding the focus", |s| {
+        let (card, home) = (s.property("homeCardCanvas", "activeFocus"), s.property("home", "activeFocus"));
+        card == "true" && home == "false"
+    });
 }

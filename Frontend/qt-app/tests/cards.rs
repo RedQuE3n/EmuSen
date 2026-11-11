@@ -230,6 +230,8 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     until(&mut scene, 5, "Start's Home card", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
     assert_eq!(scene.property("homeCardModel", "page"), emusen_qt_models::home_card::FIRST, "the card's first page");
     assert!(rows(&mut scene).iter().any(|r| r == "Tools"), "the first page's rows: {:?}", rows(&mut scene));
+    let first = rows(&mut scene)[0].clone();
+    until(&mut scene, 5, &format!("the focus on the first row, {first}"), |s| common::console::focused_words(s).starts_with(first.split(" | ").next().unwrap_or_default()));
     scene.pad(UiButton::Back);
     until(&mut scene, 5, "B closing the card to Home", |s| s.property("screens", "shown") == "Home");
     wait_for(&mut scene, "home", "activeFocus", "true", 1000);

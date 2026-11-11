@@ -68,8 +68,8 @@ fn blue(scene: &mut Scene<'_>, points: &[(f64, f64)]) -> f64 {
 }
 
 /// The console's screen up, its picture drawn on the window as a grab reads it (more than one colour, not black), and
-/// the pad the console's: B and Start, each held on the pad, reach the console as themselves, its picture turning blue
-/// while each is held (B bluer than Start, as the core draws them) and back when it is let go, and not the program,
+/// the pad the console's: B, A and Start (the RetroPad's, South, East and Start), each held on the pad, reach the console
+/// as themselves, its picture turning blue while each is held (B bluer than Start, Start than A, as the core draws them) and back when it is let go, and not the program,
 /// which stays on the console's screen unpaused.
 pub fn console_owns_the_pad(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, console: &str) {
     until(scene, 20, "the console running", |s| {
@@ -87,25 +87,28 @@ pub fn console_owns_the_pad(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, 
     until(scene, 5, "the console owning the pad", |s| s.pad_chord_only());
     scene.run_pad_clock();
     let mut held = Vec::new();
-    for control in [PadControl::East, PadControl::Start] {
+    for control in [PadControl::South, PadControl::East, PadControl::Start] {
         let button = emusen_qt_endymion::reading::sdl_button(control).unwrap();
         let before = blue(scene, &points);
         sdl.press(pad, button, true);
         until(scene, 5, &format!("{control:?} held reaching the console's picture (blue {before:.0} before)"), |s| blue(s, &points) > before + 60.0);
-        let mut last = -1.0;
+        // Steady: ten reads in a row, a few frames apart, agree within one step.
+        let (mut last, mut same) = (-1.0, 0);
         until(scene, 5, &format!("{control:?}'s blue steady"), |s| {
             let now = blue(s, &points);
-            let steady = (now - last).abs() < 1.0;
+            same = if (now - last).abs() < 1.0 { same + 1 } else { 0 };
             last = now;
-            steady
+            same >= 10
         });
         held.push(last);
         sdl.press(pad, button, false);
         until(scene, 5, &format!("{control:?} let go in the console's picture"), |s| blue(s, &points) < before + 20.0);
         assert_eq!((scene.property("screens", "shown"), scene.property("session", "paused")), ("Game".into(), "false".into()), "{control:?} is the console's");
     }
-    // B (0xFF) is drawn bluer than Start (0xA0), and either bluer than A (0x40): each button reached the core as itself.
-    assert!(held[0] > held[1] + 40.0, "B's blue {:.0} and Start's {:.0}: the core told them apart", held[0], held[1]);
+    // The RetroPad's B is the bottom face and its A the right one: South reaches the core's B (0xFF), East its A (0x40),
+    // and Start its Start (0xA0), each drawn apart, so each button reached the core as itself.
+    let (b, a, start) = (held[0], held[1], held[2]);
+    assert!(b > start + 40.0 && start > a + 40.0, "blues: B (South) {b:.0}, A (East) {a:.0}, Start {start:.0}: the core told them apart");
 }
 
 /// The chord's Pause Card over the console, named as Mistress named its session.
@@ -130,13 +133,13 @@ pub fn row_focused(scene: &mut Scene<'_>, words: &str) {
     until(scene, 5, &format!("the focus on the row {words}"), |s| focused_words(s).starts_with(words));
 }
 
-/// Whether the shown card has a row whose label reads `label`.
+/// Whether the shown card has a row whose label begins `label` ("Quit Game" for "Quit Game...").
 pub fn row_shown(scene: &mut Scene<'_>, label: &str) -> bool {
     let tree = scene.tree();
     tree.nodes
         .iter()
         .filter(|n| n.visible && n.ty.starts_with("MenuRow"))
-        .any(|r| tree.nodes.iter().any(|n| n.parent == r.id && n.name == "label" && n.text.as_deref() == Some(label)))
+        .any(|r| tree.nodes.iter().any(|n| n.parent == r.id && n.name == "label" && n.text.as_deref().is_some_and(|t| t.starts_with(label))))
 }
 
 /// The chord's Pause Card over the console named `named`, Leave, Quit Game and Yes: the session closed and `to` shown.

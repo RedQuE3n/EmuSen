@@ -3071,6 +3071,21 @@ reads them as text. `esde-qt/tests/load.rs` times that part at the library's sca
 media index): 3.9 µs, under the 2 ms gate, and checks that the shelves' copy shares the property's data; with the
 conversion back on the GUI thread (a seeded fault) the check fails.
 
+**The shelves' row, written in one crate and read in another (2026-11-11).** qt-models writes each game's row
+(`esde_shelves::RowText`, a collection's member by its file) and esde-qt reads it (`shelves::Row`): two hand-kept
+schemas of one text. The reader read every field with a default and the whole text with `unwrap_or_default`, so one
+field of another type emptied every shelf with no word: `play_count` and `play_time` are games.db's `i64` where written
+and were `u64` where read, and a negative count (games.db allows one) read as no library at all, the view then taken for
+an empty library and the own look shown with no notice. A single owner of the row would be a type in `emusen-esde`,
+the crate both depend on, which has no `serde` today; adding it is a dependency the tester decides, so it is not made
+here. What is made: the reader names every key the writer writes and refuses any other (`deny_unknown_fields`, the
+keys the view does not show named and passed over), takes the plays as `i64` (below zero read as none), and returns
+the words why a text does not read, which `EsdeModel` makes its `problem`, so the host gives way to the own look with
+the words as a notice rather than an empty view. `qt-app/tests/esde_rows.rs`, where the program links both crates,
+writes a library through qt-models' read (a game with every field the scraper and games.db give, a game with negative
+plays) and reads it through esde-qt's: every field the view shows as written, and a renamed key, a field of another
+type and a media index that does not read each an error.
+
 **Two names the program links twice, measured 2026-11-10.** With `emusen-esde-qt` in `emusen-qt`, its list model and
 qt-models' are both `RowsModel` and both crates bake a `Shaders.qrc`: the first collides at link time, and the second
 does not, Qt naming a resource's initialiser after its file, so one crate's shaders shadowed the other's (the kit's

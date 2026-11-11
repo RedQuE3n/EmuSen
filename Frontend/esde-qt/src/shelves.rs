@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use emusen_esde::loader::{Choices, MediaPresence, SystemKind, ThemeSystem};
 use emusen_esde::scene::{Counts, DateTime, DeviceStatus, Game};
+use serde::de::IgnoredAny;
 use serde_json::Value;
 
 /// One shelf of the shelves' text, without its theme: the system it is, its games and its list's facts.
@@ -142,9 +143,11 @@ fn media_of(media: &Value, system: &str, folder_path: &str, file: &str) -> BTree
     out
 }
 
-/// A game's row as the shelves' text carries it, read straight into its fields: a missing or null field is its default.
+/// A game's row as the shelves' text carries it (qt-models' `RowText` and a collection's member), read straight into its
+/// fields: a missing or null field is its default, a key it does not name is an error, so the two never drift apart
+/// unseen (EmuSen_Qt.md §4.9). The keys the view does not show are named and passed over.
 #[derive(Clone, Default, serde::Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct Row {
     file: Option<String>,
     name: Option<String>,
@@ -158,8 +161,8 @@ struct Row {
     release_date: Option<String>,
     last_played: Option<i64>,
     rating: Option<f64>,
-    play_time: Option<u64>,
-    play_count: Option<u64>,
+    play_time: Option<i64>,
+    play_count: Option<i64>,
     favourite: Option<bool>,
     completed: Option<bool>,
     folder: Option<bool>,
@@ -174,10 +177,15 @@ struct Row {
     folder_link: Option<String>,
     is_collection: Option<bool>,
     in_collection: Option<bool>,
+    custom_sort_name: Option<IgnoredAny>,
+    esde_full_name: Option<IgnoredAny>,
+    face: Option<IgnoredAny>,
+    hidden: Option<IgnoredAny>,
+    sort_name: Option<IgnoredAny>,
 }
 
 #[derive(Default, serde::Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct CountsRow {
     games: Option<u64>,
     favorites: Option<u64>,
@@ -187,7 +195,7 @@ struct CountsRow {
 }
 
 #[derive(Default, serde::Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct ShelfRow {
     name: Option<String>,
     full_name: Option<String>,
@@ -197,6 +205,12 @@ struct ShelfRow {
     favourites_on_top: Option<bool>,
     counts: Option<CountsRow>,
     games: Vec<Row>,
+    collection_id: Option<IgnoredAny>,
+    folder: Option<IgnoredAny>,
+    key: Option<IgnoredAny>,
+    letters: Option<IgnoredAny>,
+    sort: Option<IgnoredAny>,
+    system: Option<IgnoredAny>,
 }
 
 // A text field as the scene reads it: none where empty.
@@ -220,8 +234,8 @@ fn game_of(v: &Row, media: &Value) -> Game {
         release_date: some(&v.release_date).and_then(|d| date(&d)),
         last_played: (last > 0).then(|| from_unix(last)),
         rating: v.rating.map(|r| r as f32),
-        play_time_seconds: v.play_time,
-        play_count: v.play_count.unwrap_or(0) as u32,
+        play_time_seconds: v.play_time.map(|s| u64::try_from(s).unwrap_or(0)),
+        play_count: v.play_count.map_or(0, |n| u32::try_from(n).unwrap_or(if n < 0 { 0 } else { u32::MAX })),
         favorite: on(v.favourite),
         completed: on(v.completed),
         folder: on(v.folder),
@@ -243,10 +257,11 @@ fn game_of(v: &Row, media: &Value) -> Game {
 
 /// `esdeShelves` with `esdeMedia`: each shelf's system and games; a collection's game by its file alone takes the row its
 /// console's shelf carries (EmuSen_Qt.md §4.6). The text is read straight into rows, never into a tree of values, since
-/// at a library's scale the tree was 150 MiB for a 6.6 MB text (§4.9).
-pub fn shelves(shelves_text: &str, media_text: &str) -> Vec<Shelf> {
-    let list: Vec<ShelfRow> = serde_json::from_str(shelves_text).unwrap_or_default();
-    let media: Value = serde_json::from_str(media_text).unwrap_or(Value::Null);
+/// at a library's scale the tree was 150 MiB for a 6.6 MB text (§4.9). A text that does not read is the words why, which
+/// the model shows, never an empty library.
+pub fn shelves(shelves_text: &str, media_text: &str) -> Result<Vec<Shelf>, String> {
+    let list: Vec<ShelfRow> = serde_json::from_str(shelves_text).map_err(|e| format!("The library's shelves could not be read: {e}"))?;
+    let media: Value = serde_json::from_str(media_text).map_err(|e| format!("The library's media index could not be read: {e}"))?;
     let mut whole: BTreeMap<&str, &Row> = BTreeMap::new();
     for g in list.iter().flat_map(|s| &s.games).filter(|g| g.name.is_some()) {
         if let Some(file) = g.file.as_deref().filter(|f| !f.is_empty()) {
@@ -256,7 +271,8 @@ pub fn shelves(shelves_text: &str, media_text: &str) -> Vec<Shelf> {
     let system_of = |s: &ShelfRow, kind: SystemKind| Some(ThemeSystem::of_kind(&some(&s.name)?, &some(&s.full_name)?, &some(&s.theme)?, kind));
     let systems: BTreeMap<String, ThemeSystem> =
         list.iter().filter_map(|s| Some((some(&s.name)?, system_of(s, SystemKind::Regular)?))).collect();
-    list.iter()
+    Ok(list
+        .iter()
         .map(|s| {
             let kind = match s.kind.as_deref() {
                 Some("auto") => SystemKind::AutoCollection,
@@ -285,7 +301,7 @@ pub fn shelves(shelves_text: &str, media_text: &str) -> Vec<Shelf> {
             let on = |f: Option<bool>| f.unwrap_or(false);
             Shelf { system: system_of(s, kind), games, stars: on(s.stars), favorites_on_top: on(s.favourites_on_top), counts }
         })
-        .collect()
+        .collect())
 }
 
 /// `esdePresence`: the media types some game of each shelf has, for the variant triggers.

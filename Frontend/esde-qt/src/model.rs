@@ -220,16 +220,24 @@ impl qobject::EsdeModel {
         std::thread::spawn(move || {
             let [settings_text, shelves_text, media_text, presence_text] = texts.read();
             let settings = shelves::settings(&settings_text);
-            let found = painter::systems(&cache, &settings, shelves::shelves(&shelves_text, &media_text), &shelves::presence(&presence_text), w, h);
+            let found = shelves::shelves(&shelves_text, &media_text).map(|s| painter::systems(&cache, &settings, s, &shelves::presence(&presence_text), w, h));
             let _ = qt.queue(move |model| model.install(load, settings, found));
         });
     }
 
-    fn install(mut self: Pin<&mut Self>, load: u64, settings: Settings, systems: Vec<System>) {
+    // A text that did not read installs nothing and is the problem, so the host shows its words.
+    fn install(mut self: Pin<&mut Self>, load: u64, settings: Settings, found: Result<Vec<System>, String>) {
         if load != self.load {
             return;
         }
-        let problem = QString::from(painter::problem(&systems).as_str());
+        let (systems, problem) = match found {
+            Ok(systems) => {
+                let problem = painter::problem(&systems);
+                (systems, problem)
+            }
+            Err(words) => (Vec::new(), words),
+        };
+        let problem = QString::from(problem.as_str());
         let (w, h) = (self.width, self.height);
         {
             let mut p = self.shared.borrow_mut();

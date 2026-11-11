@@ -256,8 +256,8 @@ fn items(content: &Content) -> Vec<Item> {
 #[derive(Debug, PartialEq, Eq)]
 enum ContentChange {
     Reset,
-    /// The first and last rows whose words or marks changed.
-    InPlace(usize, usize),
+    /// Each run of neighbouring rows whose words, picture or mark changed, first and last; unchanged rows in none.
+    InPlace(Vec<(usize, usize)>),
     None,
 }
 
@@ -265,11 +265,14 @@ fn content_change(old: &[Item], new: &[Item], turned: bool) -> ContentChange {
     if turned || old.len() != new.len() || old.iter().zip(new).any(|(a, b)| a.key != b.key) {
         return ContentChange::Reset;
     }
-    let differs = |(a, b): (&Item, &Item)| a != b;
-    match (old.iter().zip(new).position(differs), old.iter().zip(new).rposition(differs)) {
-        (Some(first), Some(last)) => ContentChange::InPlace(first, last),
-        _ => ContentChange::None,
+    let mut runs: Vec<(usize, usize)> = Vec::new();
+    for (i, _) in old.iter().zip(new).enumerate().filter(|(_, (a, b))| a != b) {
+        match runs.last_mut() {
+            Some((_, last)) if *last + 1 == i => *last = i,
+            _ => runs.push((i, i)),
+        }
     }
+    if runs.is_empty() { ContentChange::None } else { ContentChange::InPlace(runs) }
 }
 
 #[cfg(test)]
@@ -284,11 +287,32 @@ mod tests {
     fn a_mark_moved_between_the_same_tiles_is_heard_in_place() {
         let old = [tile("s1", true), tile("s2", false), tile("s3", false)];
         let new = [tile("s1", false), tile("s2", true), tile("s3", false)];
-        assert_eq!(content_change(&old, &new, false), ContentChange::InPlace(0, 1));
+        assert_eq!(content_change(&old, &new, false), ContentChange::InPlace(vec![(0, 1)]));
         assert_eq!(content_change(&old, &old, false), ContentChange::None);
         assert_eq!(content_change(&old, &new, true), ContentChange::Reset, "a turned section is reset");
         assert_eq!(content_change(&old, &new[..2], false), ContentChange::Reset, "a tile fewer is reset");
         assert_eq!(content_change(&old, &[tile("s1", true), tile("s3", false), tile("s2", false)], false), ContentChange::Reset, "others in order");
+    }
+
+    #[test]
+    fn only_the_rows_that_changed_are_told_in_place_and_others_reset() {
+        let old = [tile("s1", false), tile("s2", false), tile("s3", false), tile("s4", false)];
+        let worded = |i: usize, f: &dyn Fn(&mut Item)| {
+            let mut new = old.clone();
+            f(&mut new[i]);
+            new
+        };
+        let label = worded(2, &|t| t.label = "Slot 3, saved again".into());
+        assert_eq!(content_change(&old, &label, false), ContentChange::InPlace(vec![(2, 2)]), "a label alone");
+        let picture = worded(1, &|t| t.picture = "file:///states/s2.png".into());
+        assert_eq!(content_change(&old, &picture, false), ContentChange::InPlace(vec![(1, 1)]), "a picture alone");
+        let apart = [tile("s1", true), tile("s2", false), tile("s3", false), tile("s4", true)];
+        assert_eq!(content_change(&old, &apart, false), ContentChange::InPlace(vec![(0, 0), (3, 3)]), "two rows apart, the rows between untold");
+        assert_eq!(content_change(&[], &[], false), ContentChange::None, "empty to empty");
+        assert_eq!(content_change(&[], &old, false), ContentChange::Reset, "empty to some");
+        assert_eq!(content_change(&old, &[], false), ContentChange::Reset, "some to empty");
+        let replaced = worded(1, &|t| t.key = "s9".into());
+        assert_eq!(content_change(&old, &replaced, false), ContentChange::Reset, "one key replaced at the same count");
     }
 }
 
@@ -540,11 +564,13 @@ impl qobject::GamePageModel {
                 self.as_mut().end_reset_model();
             }
             // The same items with new words or marks: in place, so each delegate and the list's focus stay (EmuSen_Qt.md §7.8.1).
-            ContentChange::InPlace(first, last) => {
+            ContentChange::InPlace(runs) => {
                 self.as_mut().rust_mut().items = items;
                 let root = QModelIndex::default();
-                let (first, last) = (self.index(first as i32, 0, &root), self.index(last as i32, 0, &root));
-                self.as_mut().data_changed(&first, &last, &cxx_qt_lib::QVector::<i32>::default());
+                for (first, last) in runs {
+                    let (first, last) = (self.index(first as i32, 0, &root), self.index(last as i32, 0, &root));
+                    self.as_mut().data_changed(&first, &last, &cxx_qt_lib::QVector::<i32>::default());
+                }
             }
             ContentChange::None => {}
         }

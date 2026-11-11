@@ -4736,7 +4736,13 @@ reproduced. With the rows' delegates made too, as before, the addresses did not 
 `content_change` now resets only when the section turned or the items' keys differ in count or order. Otherwise it
 announces `dataChanged` over the rows that changed, so each delegate and the list's current item stay. It is held by
 the models' unit test `a_mark_moved_between_the_same_tiles_is_heard_in_place`; qt-app's page test then holds every
-States tile reached at every size, and the focus back on Slot 3 after a step of Resume.
+States tile reached at every size, and the focus back on Slot 3 after a step of Resume. Since 2026-11-11 the change
+is told run by run: one `dataChanged` for each run of neighbouring rows that changed, so a row between two changed
+ones is not told (it had been, the range spanning first to last). `only_the_rows_that_changed_are_told_in_place_and_others_reset`
+covers a label alone, a picture alone, two rows apart, empty to empty (nothing), empty to some and some to empty
+(reset), and one key replaced at the same count (reset). These test the decision; that the list hears exactly those
+`dataChanged` calls is not tested at the model's Qt level, which needs a page read from a world with saved states
+outside qt-app's GPU test, and is not built.
 
 Seeded faults, each reverted:
 - the refresh keeping hidden games: the models' library test, the Game Boy's games still counted;

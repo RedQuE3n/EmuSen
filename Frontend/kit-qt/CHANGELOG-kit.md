@@ -4,6 +4,15 @@ The kit is the QML module `EmuSen.Kit` (EmuSen_Qt.md §1.4), held by rule Q (§5
 writes it, is committed under `Testing/qmltypes/` and compared on every build. A minor adds and never removes; each
 entry names what was added and the section of `EmuSen_Kit.md` that records it.
 
+## 1.0, stage 4 piece H: a model's reset told to a view without QML state (2026-11-11)
+
+Additions only; no type, property, signal or invokable was removed or changed.
+
+- **`ResetGate`** (registry): `model` (a list model) and `settled`, false from the model's `modelAboutToBeReset` to its
+  `modelReset`; a model handed over is settled and the old one is no longer heard. `EmuSen_Kit.md` §7.58.
+- `PageFrame`'s two lists hold their models through two of them in place of its QML flags, `Connections` and
+  `Qt.callLater`, which the QML rules forbid; what it shows is unchanged. §7.58.
+
 ## 1.0, stage 5 piece K: the raised shadow as a token, and the item that casts it (2026-11-09)
 
 Additions only; no type, property, signal or invokable was removed or changed. The new properties are declared after

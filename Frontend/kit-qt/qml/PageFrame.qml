@@ -65,25 +65,13 @@ Kit.Frame {
         list.forceActiveFocus()
     }
     // Each list lets its model go while the model resets, so no delegate is in flight across another section's content (EmuSen_Kit.md §7.58).
-    QtObject {
-        id: settled
-        property bool tiles: true
-        property bool rows: true
+    Kit.ResetGate {
+        id: tileGate
+        model: root.tileModel ?? null
     }
-    // A model replaced while it reset never ends that reset here: the new one is settled once the old one's signal is done.
-    onTileModelChanged: Qt.callLater(() => settled.tiles = true)
-    onRowModelChanged: Qt.callLater(() => settled.rows = true)
-    Connections {
-        target: root.tileModel
-        ignoreUnknownSignals: true
-        function onModelAboutToBeReset() { settled.tiles = false }
-        function onModelReset() { settled.tiles = true }
-    }
-    Connections {
-        target: root.rowModel
-        ignoreUnknownSignals: true
-        function onModelAboutToBeReset() { settled.rows = false }
-        function onModelReset() { settled.rows = true }
+    Kit.ResetGate {
+        id: rowGate
+        model: root.rowModel ?? null
     }
     Kit.PageLayout {
         id: places
@@ -272,7 +260,7 @@ Kit.Frame {
                 // A model that fills after the view was made leaves it with no current item, so no delegate would take the focus.
                 onCountChanged: if (currentIndex < 0 && count > 0) currentIndex = 0
                 objectName: "pageTiles"
-                model: root.showsTiles && !root.showsText && settled.tiles ? root.tileModel : null
+                model: root.showsTiles && !root.showsText && tileGate.settled ? root.tileModel : null
                 anchors.fill: parent
                 leftMargin: root.ringRoom
                 rightMargin: root.ringRoom
@@ -364,7 +352,7 @@ Kit.Frame {
                 // A model that fills after the view was made leaves it with no current item, so no delegate would take the focus.
                 onCountChanged: if (currentIndex < 0 && count > 0) currentIndex = 0
                 objectName: "pageRows"
-                model: !root.showsTiles && !root.showsText && settled.rows ? root.rowModel : null
+                model: !root.showsTiles && !root.showsText && rowGate.settled ? root.rowModel : null
                 anchors.fill: parent
                 clip: true
                 keyNavigationEnabled: true

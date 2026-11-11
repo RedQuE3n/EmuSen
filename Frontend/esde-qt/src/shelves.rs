@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use emusen_esde::loader::{Choices, MediaPresence, SystemKind, ThemeSystem};
 use emusen_esde::scene::{Counts, DateTime, DeviceStatus, Game};
+use emusen_esde::shelves::{GameRow, ShelfText, Text};
 use serde_json::Value;
 
 /// One shelf of the shelves' text, without its theme: the system it is, its games and its list's facts.
@@ -53,24 +54,29 @@ fn text(v: &Value, key: &str) -> Option<String> {
     v.get(key).and_then(Value::as_str).filter(|s| !s.is_empty()).map(str::to_owned)
 }
 
-fn flag(v: &Value, key: &str) -> bool {
-    v.get(key).and_then(Value::as_bool).unwrap_or(false)
-}
-
 /// A stored choice by Mistress's key (`Variant`, `ColorScheme`, …), or its lower-camel form.
 fn choice(v: &Value, key: &str) -> Option<String> {
     let lower = format!("{}{}", key[..1].to_lowercase(), &key[1..]);
     text(v, key).or_else(|| text(v, &lower))
 }
 
-/// `esdeSettings` as `esde_shelves::settings_of` writes it; a text that does not read gives the defaults.
-pub fn settings(text_in: &str) -> Settings {
-    let v: Value = serde_json::from_str(text_in).unwrap_or(Value::Null);
+/// One rule for the view's four texts and the device's: no text is the default (the property's own, before the host sets
+/// it), and a text that does not read is the words why, never read as the default (EmuSen_Qt.md §4.9).
+fn read(text_in: &str, what: &str) -> Result<Value, String> {
+    match text_in.trim() {
+        "" => Ok(Value::Null),
+        text => serde_json::from_str(text).map_err(|e| format!("{what} could not be read: {e}")),
+    }
+}
+
+/// `esdeSettings` as `esde_shelves::settings_of` writes it; no text gives the defaults.
+pub fn settings(text_in: &str) -> Result<Settings, String> {
+    let v = read(text_in, "The view's settings")?;
     let c = v.get("choices").cloned().unwrap_or(Value::Null);
     let i = v.get("interface").cloned().unwrap_or(Value::Null);
     let on = |key: &str, default: bool| i.get(key).and_then(Value::as_bool).unwrap_or(default);
     let d = Settings::default();
-    Settings {
+    Ok(Settings {
         theme: text(&v, "theme").unwrap_or_default(),
         choices: Choices {
             variant: choice(&c, "Variant"),
@@ -88,21 +94,21 @@ pub fn settings(text_in: &str) -> Settings {
         startup_view: text(&i, "StartupView").unwrap_or(d.startup_view),
         random: v.get("collections").and_then(|c| text(c, "RandomEntryButton")).unwrap_or(d.random),
         screensaver_controls: on("ScreensaverControls", d.screensaver_controls),
-    }
+    })
 }
 
 /// The device's status as the host writes it, `{"wifi":true,"battery":80,"charging":false}`: a key left out is a radio
-/// or battery the device lacks, and an empty text shows no indicator at all.
-pub fn device(text_in: &str) -> DeviceStatus {
-    let v: Value = serde_json::from_str(text_in).unwrap_or(Value::Null);
+/// or battery the device lacks, and no text shows no indicator at all.
+pub fn device(text_in: &str) -> Result<DeviceStatus, String> {
+    let v = read(text_in, "The device's status")?;
     let radio = |key: &str| v.get(key).and_then(Value::as_bool);
-    DeviceStatus {
+    Ok(DeviceStatus {
         bluetooth: radio("bluetooth"),
         wifi: radio("wifi"),
         cellular: radio("cellular"),
         battery_percent: v.get("battery").and_then(Value::as_u64).map(|b| b.min(100) as u8),
         charging: radio("charging").unwrap_or(false),
-    }
+    })
 }
 
 /// A date of the metadata's `yyyy-MM-dd` (or `yyyyMMddTHHmmss`) form.
@@ -146,104 +152,98 @@ fn media_of(media: &Value, system: &str, folder_path: &str, file: &str) -> BTree
     out
 }
 
-fn game_of(v: &Value, media: &Value) -> Game {
-    let file = text(v, "file").unwrap_or_default();
-    let name = text(v, "name").unwrap_or_else(|| file.clone());
-    let system = text(v, "esde_system").unwrap_or_default();
-    let folder_path = text(v, "folder_path").unwrap_or_default();
-    let count = |key: &str| v.get(key).and_then(Value::as_u64).unwrap_or(0);
-    let last = v.get("last_played").and_then(Value::as_i64).unwrap_or(0);
+// A text field as the scene reads it: none where empty.
+fn some(t: &Option<Text>) -> Option<String> {
+    t.as_deref().filter(|s| !s.is_empty()).map(str::to_owned)
+}
+
+fn game_of(v: &GameRow, media: &Value) -> Game {
+    let file = v.file.to_string();
+    let name = if v.name.is_empty() { file.clone() } else { v.name.to_string() };
+    let last = v.last_played;
     Game {
-        description: text(v, "description"),
-        developer: text(v, "developer"),
-        publisher: text(v, "publisher"),
-        genre: text(v, "genre"),
-        players: text(v, "players"),
-        release_date: text(v, "release_date").and_then(|d| date(&d)),
+        description: some(&v.description),
+        developer: some(&v.developer),
+        publisher: some(&v.publisher),
+        genre: some(&v.genre),
+        players: some(&v.players),
+        release_date: some(&v.release_date).and_then(|d| date(&d)),
         last_played: (last > 0).then(|| from_unix(last)),
-        rating: v.get("rating").and_then(Value::as_f64).map(|r| r as f32),
-        play_time_seconds: v.get("play_time").and_then(Value::as_u64),
-        play_count: count("play_count") as u32,
-        favorite: flag(v, "favourite"),
-        completed: flag(v, "completed"),
-        folder: flag(v, "folder"),
-        kid_game: flag(v, "kid_game"),
-        broken: flag(v, "broken"),
-        emulator: text(v, "emulator"),
-        hide_metadata: flag(v, "hide_metadata"),
-        not_counted: flag(v, "not_counted"),
-        media: media_of(media, &system, &folder_path, &file),
-        controller: text(v, "controller"),
-        manual: flag(v, "manual"),
-        alt_emulator: flag(v, "alt_emulator"),
-        folder_link: text(v, "folder_link"),
-        is_collection: flag(v, "is_collection"),
-        in_collection: flag(v, "in_collection"),
+        rating: v.rating.map(|r| r as f32),
+        play_time_seconds: Some(u64::try_from(v.play_time).unwrap_or(0)),
+        play_count: u32::try_from(v.play_count).unwrap_or(if v.play_count < 0 { 0 } else { u32::MAX }),
+        favorite: v.favourite,
+        completed: v.completed,
+        folder: v.folder,
+        kid_game: v.kid_game,
+        broken: v.broken,
+        emulator: some(&v.emulator),
+        hide_metadata: v.hide_metadata,
+        not_counted: v.not_counted,
+        media: media_of(media, &v.esde_system, &v.folder_path, &file),
+        controller: some(&v.controller),
+        manual: v.manual,
+        alt_emulator: v.alt_emulator,
+        folder_link: some(&v.folder_link),
+        is_collection: v.is_collection,
+        in_collection: v.in_collection,
         ..Game::new(&name, &file)
     }
 }
 
 /// `esdeShelves` with `esdeMedia`: each shelf's system and games; a collection's game by its file alone takes the row its
-/// console's shelf carries (EmuSen_Qt.md §4.6).
-pub fn shelves(shelves_text: &str, media_text: &str) -> Vec<Shelf> {
-    let all: Value = serde_json::from_str(shelves_text).unwrap_or(Value::Null);
-    let media: Value = serde_json::from_str(media_text).unwrap_or(Value::Null);
-    let list = all.as_array().cloned().unwrap_or_default();
-    let mut whole: BTreeMap<String, Value> = BTreeMap::new();
-    for shelf in &list {
-        for g in shelf.get("games").and_then(Value::as_array).into_iter().flatten() {
-            if g.get("name").is_some() {
-                if let Some(file) = text(g, "file") {
-                    whole.entry(file).or_insert_with(|| g.clone());
-                }
-            }
-        }
+/// console's shelf carries (EmuSen_Qt.md §4.6). The text is read straight into rows, never into a tree of values, since
+/// at a library's scale the tree was 150 MiB for a 6.6 MB text (§4.9). A text that does not read is the words why, which
+/// the model shows, never an empty library; no shelves text is no shelves, and no media index text no media (a host that
+/// gives none).
+pub fn shelves(shelves_text: &str, media_text: &str) -> Result<Vec<Shelf>, String> {
+    let list: Vec<ShelfText> = match shelves_text.trim() {
+        "" => Vec::new(),
+        text => serde_json::from_str(text).map_err(|e| format!("The library's shelves could not be read: {e}"))?,
+    };
+    let media = read(media_text, "The library's media index")?;
+    let mut whole: BTreeMap<&str, &GameRow> = BTreeMap::new();
+    for g in list.iter().flat_map(|s| &s.games).filter(|g| g.is_whole() && !g.file.is_empty()) {
+        whole.entry(&g.file).or_insert(g);
     }
-    let systems: BTreeMap<String, ThemeSystem> = list
+    let named = |t: &str| (!t.is_empty()).then(|| t.to_owned());
+    let system_of = |s: &ShelfText, kind: SystemKind| Some(ThemeSystem::of_kind(&named(&s.name)?, &named(&s.full_name)?, &named(&s.theme)?, kind));
+    let systems: BTreeMap<String, ThemeSystem> =
+        list.iter().filter_map(|s| Some((named(&s.name)?, system_of(s, SystemKind::Regular)?))).collect();
+    Ok(list
         .iter()
-        .filter_map(|s| Some((text(s, "name")?, ThemeSystem::new(&text(s, "name")?, &text(s, "full_name")?, &text(s, "theme")?))))
-        .collect();
-    list.iter()
         .map(|s| {
-            let kind = match text(s, "kind").as_deref() {
-                Some("auto") => SystemKind::AutoCollection,
-                Some("custom") => SystemKind::CustomCollection,
+            let kind = match &*s.kind {
+                "auto" => SystemKind::AutoCollection,
+                "custom" => SystemKind::CustomCollection,
                 _ => SystemKind::Regular,
             };
-            let system = (|| Some(ThemeSystem::of_kind(&text(s, "name")?, &text(s, "full_name")?, &text(s, "theme")?, kind)))();
             let games = s
-                .get("games")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
+                .games
+                .iter()
                 .map(|g| {
-                    let row = if g.get("name").is_some() { g } else { text(g, "file").and_then(|f| whole.get(&f)).unwrap_or(g) };
+                    let row = if g.is_whole() { g } else { whole.get(&*g.file).copied().unwrap_or(g) };
                     let mut game = game_of(row, &media);
                     if kind != SystemKind::Regular {
-                        game.source = text(row, "esde_system").and_then(|n| systems.get(&n).cloned());
+                        game.source = systems.get(&*row.esde_system).cloned();
                     }
                     game
                 })
                 .collect();
-            let counts = s.get("counts").map(|c| Counts {
-                games: c.get("games").and_then(Value::as_u64).unwrap_or(0) as usize,
-                favorites: c.get("favorites").and_then(Value::as_u64).unwrap_or(0) as usize,
-                shown: c.get("shown").and_then(Value::as_u64).unwrap_or(0) as usize,
-                filtered: flag(c, "filtered"),
-                in_folder: flag(c, "in_folder"),
-            });
-            Shelf { system, games, stars: flag(s, "stars"), favorites_on_top: flag(s, "favourites_on_top"), counts }
+            let counts = s.counts.map(|c| Counts { games: c.games, favorites: c.favorites, shown: c.shown, filtered: c.filtered, in_folder: c.in_folder });
+            Shelf { system: system_of(s, kind), games, stars: s.stars, favorites_on_top: s.favourites_on_top, counts }
         })
-        .collect()
+        .collect())
 }
 
-/// `esdePresence`: the media types some game of each shelf has, for the variant triggers.
-pub fn presence(text_in: &str) -> BTreeMap<String, MediaPresence> {
-    let v: Value = serde_json::from_str(text_in).unwrap_or(Value::Null);
+/// `esdePresence`: the media types some game of each shelf has, for the variant triggers; no text is no media, and a text
+/// that does not read is said in the words returned.
+pub fn presence(text_in: &str) -> Result<BTreeMap<String, MediaPresence>, String> {
+    let v = read(text_in, "The library's media presence")?;
     let mut out = BTreeMap::new();
     for (shelf, types) in v.as_object().into_iter().flatten() {
         let types: Vec<&str> = types.as_array().into_iter().flatten().filter_map(Value::as_str).collect();
         out.insert(shelf.clone(), MediaPresence::of(&types));
     }
-    out
+    Ok(out)
 }

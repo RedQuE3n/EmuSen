@@ -591,6 +591,19 @@ impl GamePage {
         Outcome::Ask(ask(&format!("Delete {slot}?"), &sentence, "Delete"), Change::DeleteState(state.path.clone()))
     }
 
+    /// A change saved, taken into the page's facts at once, so the next step steps from it rather than from the facts read
+    /// before it; the read that follows the save confirms them (EmuSen_Qt.md §7.8).
+    pub fn changed(&mut self, change: &Change) {
+        let r = &mut self.read;
+        match change {
+            Change::Favourite => r.favourite = !r.favourite,
+            Change::Engine(v) => r.engine = v.clone(),
+            Change::Profile(v) => r.profile = v.clone(),
+            Change::Standard(v) => r.standard = v.clone(),
+            Change::DeleteState(_) | Change::Hide => {}
+        }
+    }
+
     /// Left or Right on a row: the engine, the profile or the standard stepped, wrapping, and saved.
     pub fn step_row(&self, index: usize, by: i32) -> Outcome {
         let Content::Rows(rows) = self.content() else { return Outcome::Nothing };

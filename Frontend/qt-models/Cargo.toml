@@ -15,10 +15,9 @@ name = "emusen_qt_models"
 cxx.workspace = true
 cxx-qt.workspace = true
 cxx-qt-lib.workspace = true
-# A source's JSON reads (the library's records).
-serde_json.workspace = true
-# The card manager's list read as records (cards.rs).
+# A source's JSON reads (the library's records), the texts written straight from the rows, and the card manager's list read as records (cards.rs).
 serde.workspace = true
+serde_json.workspace = true
 # The frontend API and the platform library, the only ways to the back end (EmuSen_Qt.md §1.1).
 emusen-crystal-client = { path = "../crystal-client" }
 emusen-platform-client = { path = "../platform-client" }

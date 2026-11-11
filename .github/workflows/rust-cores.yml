@@ -250,7 +250,8 @@ jobs:
   # Windows is checked as x86_64-pc-windows-gnu with MinGW-w64, the C toolchain ring's build script needs; x86_64-pc-windows-msvc checks the crates without C. Apple's target is checked on the Mac mini, whose Xcode builds ring.
   portable:
     name: Compiles for ${{ matrix.target }}
-    if: vars.EMUSEN_ALL_PLATFORMS != 'on'
+    # Off until the C# is retired (decided 2026-11-11): Unix-only code does not compile for these targets, listed in EmuSen_RustPlatform.md section 31.1; delete the leading false to bring the job back.
+    if: false && vars.EMUSEN_ALL_PLATFORMS != 'on'
     # Apple Silicon jobs of a working branch run on the project's Mac mini; main, tags and EMUSEN_MAC_RUNNER=off take GitHub's (EmuSen_RustPlatform.md §29).
     runs-on: ${{ matrix.os == 'macos-latest' && vars.EMUSEN_MAC_RUNNER != 'off' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') && fromJSON('["self-hosted", "macOS", "ARM64", "emusen-mac"]') || matrix.os }}
     strategy:
@@ -386,6 +387,11 @@ jobs:
         run: cargo test --profile test-checked --target ${{ matrix.platform.target }}
 
       # Diamond's machine and its two layers beside its library, each its own crate with its own suite; the renderer's tests stand down without a Vulkan device.
+      # hwcount's one test counts a program's instructions and stands down, saying so, where the host gives no counters (EmuSen_DianaSh.md section 13.17); the line is printed here so the log shows which happened.
+      - name: The hardware counters (hwcount)
+        if: matrix.crate.name == 'emusen_platform' && matrix.platform.test == true
+        run: cargo test --profile test-checked --target ${{ matrix.platform.target }} -p emusen-dev-module --lib hwcount::tests::a_program_is_counted_between_its_two_lines -- --nocapture
+
       - name: Test Diamond's machine and layers
         if: matrix.crate.name == 'diamond' && matrix.platform.test == true
         shell: bash

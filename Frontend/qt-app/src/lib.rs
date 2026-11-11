@@ -2,6 +2,7 @@
 //! window opens.
 
 // The modules the scene imports register through their crates' initializers; a crate that only names them must link them.
+extern crate emusen_esde_qt;
 extern crate emusen_kit_qt;
 extern crate emusen_qt_endymion;
 extern crate emusen_qt_models;
@@ -11,6 +12,7 @@ extern crate emusen_theme_qt;
 
 #[cfg(feature = "gate-pad")]
 pub mod gate_pad;
+pub mod cues;
 pub mod start;
 pub mod theme;
 

@@ -39,6 +39,11 @@ emusen-serenity = { path = "../../../../Platform/serenity" }
 # The platform library's frontend API and Serenity exports, through which the ring is lent and drawn as Mistress does.
 emusen-platform = { path = "../../../../Platform/platform" }
 
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true
+
 [profile.release]
 panic = "abort"
 

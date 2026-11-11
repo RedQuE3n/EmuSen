@@ -6,7 +6,7 @@ use emusen_platform_client::library::GameFile;
 use emusen_qt_models::clients::engine_shown;
 use emusen_qt_models::games::{from_json, to_json};
 use emusen_qt_models::help::{action_lines, entries, Screen};
-use emusen_qt_models::library::{games_of, refresh, title_of, without_port_mark, Engine, Kind, LibrarySource, LibraryView};
+use emusen_qt_models::library::{games_of, refresh, title_of, without_port_mark, Engine, GameRow, Kind, LibrarySource, LibraryView};
 use std::sync::Mutex;
 
 /// A source answering what a test sets; `fail` makes the next refresh fail with its words.
@@ -132,6 +132,8 @@ fn a_row_leads_to_its_games_by_title_and_recent_by_when() {
     let gb = games_of("gb", &read.systems, &read.catalog);
     assert_eq!((gb[1].hue, gb[1].favourite, gb[0].favourite), (212.0, true, false));
     assert_eq!(from_json(&to_json(&gb)), gb, "the plain data between the two models reads back whole");
+    let whole = GameRow { path: "/p.nes".into(), system: "nes".into(), title: "T".into(), hue: 12.5, favourite: true, cover: "c".into(), hero: "h".into(), console: "NES".into(), facts: "f".into(), played_at: 1_700_000_000 };
+    assert_eq!(from_json(&to_json([&whole])), vec![whole.clone()], "every field of a row crosses, as written straight from it");
     assert_eq!(title_of("/roms/Aurora Drift (Synthetic).sfc"), "Aurora Drift (Synthetic)");
     let mut view = LibraryView::empty();
     view.apply(Ok(read));

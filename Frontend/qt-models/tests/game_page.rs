@@ -180,6 +180,12 @@ fn qt_7_8_g2_the_standard_the_package_the_players_screenshots_scrape_and_open_fo
     assert!(rows[3].steps);
     assert_eq!(page.step_row(3, 1), Outcome::Changed(Change::Standard(None)), "PAL wraps to the game's own");
     assert_eq!(page.step_row(3, -1), Outcome::Changed(Change::Standard(Some("ntsc".into()))));
+    // A step saved is the page's at once, so the next steps from it before the read that follows the save is back.
+    page.changed(&Change::Standard(None));
+    assert_eq!(page.step_row(3, -1), Outcome::Changed(Change::Standard(Some("pal".into()))), "back from the game's own to PAL");
+    page.changed(&Change::Standard(Some("pal".into())));
+    page.changed(&Change::Favourite);
+    assert!(page.read.favourite != read().favourite, "the heart turned");
     assert_eq!(page.help(None, 3), Screen::GamePageValue);
     // The package's every state, as Mistress words it.
     assert_eq!(package_words(Package::None, 0), "Not a package");

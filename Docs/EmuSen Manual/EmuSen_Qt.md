@@ -4828,17 +4828,23 @@ state is: `focus` told during the page's own reset keeps what it was told and ap
 worked out once `end_reset_model` has returned); told at any other time it applies at once. `GamePage.qml` tells the
 focus directly as it moves, with no deferral of its own (an earlier zero-interval `Timer` standing in for the
 `Qt.callLater` the QML rules forbid, and an `assert!` in `focus` that aborted the process across the FFI, are gone).
-Held to: the page test watches `help` beside the model's rows (`Scene::watch_rows` now writes `reset:help` for a reset
-inside which a watched property of the model said it changed), and across the sections' turns and the two deletions
-every reset is told with no help inside it. Seeded on 2026-11-11: `focus` applying at once inside the reset; the page
-test fails on `reset:help`. The page test's waits that guarded a value wait for it (the tiles holding the focus, the
+Held to: the page test writes the page's `help` into the model's watched rows in order (`Scene::watch_order`, a
+`QSignalMapper` on the property's change signal, so the line is written as the signal is sent) and, deleting Slot 3,
+requires the reset's line first: a help told inside the reset is sent while the reset is under way and comes before
+it. (A count of the help's changes taken at `modelAboutToBeReset` was tried first and could not fail: the tiles' gate
+is connected to that signal before the harness is, so the focus is told and the help sent before the harness hears
+the reset begin.) Seeded on 2026-11-11: `focus` applying at once inside the reset. The page test's waits that guarded a value wait for it (the tiles holding the focus, the
 actions changed, the help declaring X as Delete…, the question gone from the screen). The 500 ms after two steps of the
 television standard back to back waited for nothing: measured on 2026-11-11 with the model's changes recorded
 (`watch_rows`), across those 500 ms the page told no row and its actions did not change. Each step is saved and shown in
 place as it is pressed (`outcome`: the library's change, then `shown`); a read-back that comes back after the next step is
-dropped by `refresh`'s `asked`, and one that is applied reads what is already shown, so it changes nothing. The wait is gone; the test
-now reads what the presses told, `2-2,2-2`, the standard's row in place twice, and then the row and games.db. A
-read-back that changed the row after the presses is not held by this test, as it was not by the wait.
+dropped by `refresh`'s `asked`, and one that is applied reads what is already shown, so it changes nothing. The fixed
+wait is gone. The old test's 500 ms did hold one case: a stale read-back that landed within them and changed the row
+would have failed the row's words. The test now reads what the model tells until the rows settle (nothing more told for
+300 ms, at most 5 s) and requires exactly `2-2,2-2`, the standard's row in place twice: a read-back that comes back
+late and tells the row again adds a line, at any time before the rows settle. Whether a stale read-back arrives late
+is a race between the two reading threads and the presses; the seeded fault of 2026-11-11 (`refresh` applying every
+read-back, the `asked` check removed) is recorded with its result in the evidence of this piece.
 
 Seeded faults, each reverted:
 - the refresh keeping hidden games: the models' library test, the Game Boy's games still counted;

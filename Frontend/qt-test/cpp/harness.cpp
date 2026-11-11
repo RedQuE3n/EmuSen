@@ -7,13 +7,13 @@
 #include <QtCore/QAbstractAnimation>
 #include <QtCore/QAbstractItemModel>
 #include <QtCore/QCoreApplication>
-#include <QtCore/QHash>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
 #include <QtCore/QLoggingCategory>
 #include <QtCore/QMutex>
 #include <QtCore/QMetaProperty>
+#include <QtCore/QSignalMapper>
 #include <QtGui/QAccessible>
 #include <QtGui/QColor>
 #include <QtGui/QFontMetricsF>
@@ -29,7 +29,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
-#include <memory>
 #include <utility>
 
 namespace {
@@ -644,21 +643,8 @@ int harness_notified(QObject& root, const QString& object_name, const QString& p
     return watch != nullptr ? static_cast<int>(watch->spy.count()) : -1;
 }
 
-// The counts of the object's watched properties, by property, as `harness_watch` keeps them.
-QHash<QString, qsizetype> watchedCounts(QObject* object)
-{
-    QHash<QString, qsizetype> counts;
-    for (const QObject* child : object->findChildren<QObject*>(Qt::FindDirectChildrenOnly)) {
-        if (const auto* watch = dynamic_cast<const Watch*>(child)) {
-            counts.insert(watch->objectName().mid(spyName(QString()).size()), watch->spy.count());
-        }
-    }
-    return counts;
-}
-
-// A list model's changes told from now, as a view hears them: each dataChanged as "first-last", a reset as "reset",
-// followed by ":property" for each of the model's watched properties that said it changed inside that reset; a child of
-// the model, so it lives as long as it does.
+// A list model's changes told from now, as a view hears them: each dataChanged as "first-last", a reset as "reset"; a
+// child of the model, so it lives as long as it does.
 bool harness_watch_rows(QObject& root, const QString& object_name)
 {
     auto* model = qobject_cast<QAbstractItemModel*>(named(root, object_name));
@@ -672,24 +658,32 @@ bool harness_watch_rows(QObject& root, const QString& object_name)
     QObject::connect(model, &QAbstractItemModel::dataChanged, told, [add](const QModelIndex& first, const QModelIndex& last) {
         add(QStringLiteral("%1-%2").arg(first.row()).arg(last.row()));
     });
-    auto before = std::make_shared<QHash<QString, qsizetype>>();
-    QObject::connect(model, &QAbstractItemModel::modelAboutToBeReset, told, [model, before] { *before = watchedCounts(model); });
-    QObject::connect(model, &QAbstractItemModel::modelReset, told, [model, before, add] {
-        QString line = QStringLiteral("reset");
-        const QHash<QString, qsizetype> after = watchedCounts(model);
-        QStringList inside;
-        for (auto it = after.cbegin(); it != after.cend(); ++it) {
-            if (it.value() != before->value(it.key(), it.value())) {
-                inside << it.key();
-            }
-        }
-        inside.sort();
-        for (const QString& property : inside) {
-            line += QLatin1Char(':') + property;
-        }
-        add(line);
-    });
+    QObject::connect(model, &QAbstractItemModel::modelReset, told, [add] { add(QStringLiteral("reset")); });
     return true;
+}
+
+// From now, each change signal of the object's property written into its watched model's list as the property's name, in
+// order with the rows and resets: what the model told inside a reset comes before that reset's line. False where the
+// object is no watched model or the property has no change signal.
+bool harness_watch_order(QObject& root, const QString& object_name, const QString& property)
+{
+    QObject* object = named(root, object_name);
+    QObject* told = object != nullptr ? object->findChild<QObject*>(QStringLiteral("harness-rows"), Qt::FindDirectChildrenOnly) : nullptr;
+    if (told == nullptr) {
+        return false;
+    }
+    const QMetaObject* meta = object->metaObject();
+    const QMetaProperty p = meta->property(meta->indexOfProperty(property.toUtf8().constData()));
+    if (!p.isValid() || !p.hasNotifySignal()) {
+        return false;
+    }
+    auto* mapper = new QSignalMapper(told);
+    mapper->setMapping(object, property);
+    const QMetaMethod map = mapper->metaObject()->method(mapper->metaObject()->indexOfSlot("map()"));
+    QObject::connect(mapper, &QSignalMapper::mappedString, told, [told](const QString& name) {
+        told->setProperty("told", told->property("told").toStringList() << name);
+    });
+    return static_cast<bool>(QObject::connect(object, p.notifySignal(), mapper, map));
 }
 
 // What the watched model told since the last read, comma-separated, emptied as read; empty where it is not watched.

@@ -560,8 +560,13 @@ impl Scene<'_> {
         ffi::harness_watch_rows(self.window(), &QString::from(object_name))
     }
 
+    /// From now, each change signal of the watched model's own property written into `rows_told` as the property's name,
+    /// in order with the rows and resets; false where the model is not watched or the property has no change signal.
+    pub fn watch_order(&mut self, object_name: &str, property: &str) -> bool {
+        ffi::harness_watch_order(self.window(), &QString::from(object_name), &QString::from(property))
+    }
+
     /// What the watched model told since the last read, as "first-last" for each dataChanged and "reset" for each reset,
-    /// with ":property" after a reset for each of the model's `watch`ed properties that said it changed inside it,
     /// comma-separated in order; empty where nothing was told or it is not watched.
     pub fn rows_told(&mut self, object_name: &str) -> String {
         ffi::harness_rows_told(self.window(), &QString::from(object_name)).to_string()

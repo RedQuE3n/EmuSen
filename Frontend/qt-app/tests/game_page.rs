@@ -265,7 +265,6 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     move_to(&mut scene, UiButton::Right, "Resume");
     let before = scene.property("pageModel", "actions");
     assert!(scene.watch_rows("pageModel"));
-    assert!(scene.watch("pageModel", "help"));
     scene.pad(UiButton::Left);
     until(&mut scene, "Left steps Resume's state", |s| s.property("pageModel", "actions") != before);
     assert_eq!(scene.rows_told("pageModel"), "1-2", "the two neighbouring tiles the mark moved between, told in place as one run");
@@ -347,6 +346,9 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     assert_eq!(scene.property("pageModel", "questionTitle"), "Delete Slot 3?");
     answers_focused(&mut scene);
     scene.pad(UiButton::Down);
+    // The page's help in order with its rows from here: told inside the reset, it would come before the reset's line.
+    scene.rows_told("pageModel");
+    assert!(scene.watch_order("pageModel", "help"));
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "pageModel", "asking", "false", 1000);
     for _ in 0..40 {
@@ -357,10 +359,9 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     }
     assert!(!slot3.exists(), "Delete takes Slot 3 away");
     tiles_focused_at(&mut scene, 0);
-    // The tiles' list told the page its focus inside the page's resets; the page kept it until each ended (EmuSen_Qt.md §7.8.1).
+    // The tiles' list told the page its focus inside the page's reset; the page kept it until the reset ended (EmuSen_Qt.md §7.8.1).
     let told = scene.rows_told("pageModel");
-    assert!(told.contains("reset"), "the sections turned and the deletions reset the tiles: {told}");
-    assert!(!told.contains(":help"), "no help changed inside a reset: {told}");
+    assert!(told.starts_with("reset"), "the deletion reset the tiles, and no help changed inside the reset: {told}");
     scene.pad(UiButton::Up);
     section(&mut scene, 2);
     assert_eq!(scene.property("pageModel", "shows"), "2");
@@ -394,11 +395,28 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     assert_eq!(standard(&platform), serde_json::Value::Null, "the game's own again");
     // Right then Left at once, before the first save's read is back: each steps from the one before, so the game's own stays.
     // Each step is saved and shown in place as it is pressed; of the two read-backs the older is dropped and the newer
-    // reads what is shown, so nothing is told after the presses return (EmuSen_Qt.md §7.8.1).
+    // reads what is shown, so nothing is told after the presses return (EmuSen_Qt.md §7.8.1). The rows are read until
+    // they settle (nothing more told for 300 ms), so a read-back that came back late and told the row again is counted.
     scene.rows_told("pageModel");
     scene.pad(UiButton::Right);
     scene.pad(UiButton::Left);
-    assert_eq!(scene.rows_told("pageModel"), "2-2,2-2", "each step told in place on the standard's row as it was pressed");
+    let mut told = vec![scene.rows_told("pageModel")];
+    let mut quiet = 0;
+    for _ in 0..100 {
+        scene.wait(50);
+        match scene.rows_told("pageModel") {
+            more if more.is_empty() => quiet += 1,
+            more => {
+                quiet = 0;
+                told.push(more);
+            }
+        }
+        if quiet == 6 {
+            break;
+        }
+    }
+    assert_eq!(quiet, 6, "the rows settled: {told:?}");
+    assert_eq!(told.join(","), "2-2,2-2", "each step told in place on the standard's row as it was pressed, and nothing after");
     assert!(comes_to_read(&mut scene, "The game's"), "two steps back to back come back to the game's own");
     assert_eq!(standard(&platform), serde_json::Value::Null, "and the game's own is what is saved");
     section(&mut scene, 3);

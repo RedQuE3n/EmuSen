@@ -1,7 +1,8 @@
 // The ring through the Rust runtime's frontend API 1.4: an installed libretro entry opened by emusen_crystal_open with
 // OPEN_RING and Serenity's device, each frame's picture drawn from the lent ring by a chain as the same frame read back
 // and uploaded; the ring given back, lent again at MACHINE_INFO, and released after a crash (EmuSen_LibretroHost.md §10l).
-// Runs on the card EMUSEN_GPU_DEVICE names (6800 when unset); EMUSEN_VALIDATE=1 holds the host's device to the layer.
+// Runs on the card EMUSEN_GPU_DEVICE names (6800 when unset) and stands down where no such card is here, a software
+// driver being none (EmuSen_RustPlatform.md §31.1); EMUSEN_VALIDATE=1 holds the host's device to the layer.
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -37,11 +38,17 @@ fn platform_words() -> String {
     String::from_utf8_lossy(&words[..n]).into_owned()
 }
 
-/// The host's device and Shaderc lent to the platform library, or `None` (the test then passes without running).
+/// The host's device and Shaderc lent to the platform library, or `None` where the named card or Shaderc is absent
+/// (the test then passes without running); a card that is here and gives no device fails.
 struct Gpu(*mut sd::DeviceHandle);
 
 impl Gpu {
     fn new() -> Option<Gpu> {
+        let name = std::env::var("EMUSEN_GPU_DEVICE").unwrap_or_else(|_| "6800".to_string());
+        if emusen_serenity::vulkan::Device::card_named(&name).is_none() {
+            eprintln!("skipped: no graphics card named {name} here");
+            return None;
+        }
         let shaderc = std::env::var("EMUSEN_SHADERC").unwrap_or_else(|_| "/usr/lib64/libshaderc_shared.so.1".to_string());
         let path = std::ffi::CString::new(shaderc.clone()).unwrap();
         let handle = unsafe { libc::dlopen(path.as_ptr(), libc::RTLD_NOW | libc::RTLD_LOCAL) };
@@ -49,13 +56,9 @@ impl Gpu {
             eprintln!("skipped: no Shaderc at {shaderc}");
             return None;
         }
-        let name = std::env::var("EMUSEN_GPU_DEVICE").unwrap_or_else(|_| "6800".to_string());
         let validate = std::env::var("EMUSEN_VALIDATE").is_ok_and(|v| v == "1");
         let d = unsafe { sd::emusen_serenity_device_new(name.as_ptr(), name.len(), validate as i32) };
-        if d.is_null() {
-            eprintln!("skipped: no Vulkan device named {name}: {}", platform_words());
-            return None;
-        }
+        assert!(!d.is_null(), "the card named {name} gives no device: {}", platform_words());
         Some(Gpu(d))
     }
 

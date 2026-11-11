@@ -416,6 +416,35 @@ fn qt_3_4_6_orrery_is_held_to_its_mockups() {
     built_in("orrery");
 }
 
+/// Choose a console over the canvas's eleven consoles with its focus, judged against the canvas in a folder of `name`.
+fn against_the_canvas(name: &str) -> Ran {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let dir = std::env::temp_dir().join(format!("theme-audit-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(root.join("Testing/mockups/Consoles.mockup.spec"), dir.join("emusen-Consoles.mockup.spec")).unwrap();
+    let ran = Ran::judged(
+        Command::new(PROGRAM)
+            .arg("--catalogue")
+            .arg(root.join("Testing/themes/catalogues/eleven.tsv"))
+            .args(["--focus", "Super Nintendo", "--mockups"])
+            .arg(&dir)
+            .arg(root.join("Frontend/themes/emusen")),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    ran
+}
+
+#[test]
+fn qt_3_4_2_the_places_and_the_covers_stand_where_the_canvas_stands_them() {
+    let ran = against_the_canvas("places");
+    assert_eq!(ran.held("Consoles"), (10, 2), "{}", ran.err);
+    let found: Vec<&str> = ran.out.lines().filter(|l| l.contains(" mockup ") && (l.contains(": place") || l.contains(": rowCover") && l.contains("W 73"))).collect();
+    assert!(found.is_empty(), "the places' x (R-20261111-34) and the covers' shape:\n{}", found.join("\n"));
+    let covers = ran.out.lines().filter(|l| l.contains(": rowCover.0: W ")).collect::<Vec<_>>();
+    assert!(covers.iter().all(|l| l.contains("W 137.0")), "the Super Nintendo's covers 137 wide, its shape 1/0.73: {covers:?}");
+}
+
 #[test]
 fn qt_3_4_2_choose_a_console_over_the_canvas_s_eleven_consoles_is_its_mockup() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");

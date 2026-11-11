@@ -225,6 +225,11 @@ mod tests {
 
     #[test]
     fn a_program_is_counted_between_its_two_lines() {
+        // Where the host gives no counters (a hosted runner, perf_event_paranoid above 2) the test says so and stands down; where it does, it runs in full.
+        if let Err(e) = Counter::open(0) {
+            eprintln!("skipped: no hardware counters here ({e}); lower kernel.perf_event_paranoid to 2 or below to run it");
+            return;
+        }
         let program = "echo begin >&2; i=0; while [ $i -lt 300000 ]; do i=$((i+1)); done; echo end >&2; echo printed";
         let text = run(&["hwcount", "--from", "begin", "--to", "end", "--", "bash", "-c", program].map(str::to_string)).unwrap();
         let thread = text.lines().find(|l| l.starts_with("thread ")).unwrap_or_else(|| panic!("{text}"));

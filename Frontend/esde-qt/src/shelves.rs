@@ -185,10 +185,13 @@ fn game_of(v: &GameRow, media: &Value) -> Game {
 /// `esdeShelves` with `esdeMedia`: each shelf's system and games; a collection's game by its file alone takes the row its
 /// console's shelf carries (EmuSen_Qt.md §4.6). The text is read straight into rows, never into a tree of values, since
 /// at a library's scale the tree was 150 MiB for a 6.6 MB text (§4.9). A text that does not read is the words why, which
-/// the model shows, never an empty library.
+/// the model shows, never an empty library; no media index text at all is no media (a host that gives none).
 pub fn shelves(shelves_text: &str, media_text: &str) -> Result<Vec<Shelf>, String> {
     let list: Vec<ShelfText> = serde_json::from_str(shelves_text).map_err(|e| format!("The library's shelves could not be read: {e}"))?;
-    let media: Value = serde_json::from_str(media_text).map_err(|e| format!("The library's media index could not be read: {e}"))?;
+    let media: Value = match media_text.trim() {
+        "" => Value::Null,
+        text => serde_json::from_str(text).map_err(|e| format!("The library's media index could not be read: {e}"))?,
+    };
     let mut whole: BTreeMap<&str, &GameRow> = BTreeMap::new();
     for g in list.iter().flat_map(|s| &s.games).filter(|g| g.is_whole() && !g.file.is_empty()) {
         whole.entry(&g.file).or_insert(g);

@@ -3116,6 +3116,17 @@ read install nothing and are the model's `problem` in their words ("The library'
 media presence text that does not read is now said too ("The library's media presence could not be read"), where
 `shelves::presence` had read it as no media at all with no word. An empty presence text is still no media.
 
+**No media index text is no media (2026-11-11).** Since the shelves' row was given its one schema, `shelves::shelves`
+had read an empty media index text as JSON and failed ("The library's media index could not be read: EOF while parsing
+a value at line 1 column 0"), so a host that gives no index loaded nothing. The program never hands an empty text (the
+library's `esdeMedia` starts as `{}` and is written from a `MediaIndex`, empty when no ES-DE media folder is set), but
+`EsdeModel.media` is empty by default, and esde-qt's GPU view test sets none: the theme never loaded, and on
+2026-11-11 its "the theme loaded within 5 s" failure (on c4f5d01b6, and on this piece's tip) was first read as the
+time limit. An empty text is now no media and only a text that does not read is said, as for the presence.
+`problem.rs` holds both: a malformed index is the problem, and with no index text the load ends as it does with `{}`.
+Each `until` in esde-qt's tests now names the model's `problem` when it times out. Seeded on 2026-11-11: an empty
+index text read as JSON again, `problem.rs` failing.
+
 **The ES-DE test's checks that could not fail (2026-11-11).** A sort or Favourites answers the first entry, and the
 load keeps the selected index, so with the selection already on the first entry the checks that the view selects the
 entry the act answered passed with the List card's `select` calls removed. The test now moves the selection to the

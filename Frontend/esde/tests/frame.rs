@@ -86,7 +86,7 @@ fn a_theme_setting_only_accepted_pairs_counts_none_unsupported() {
          <view name=\"gamelist\"><carousel name=\"c\"><itemLinearScale>0.1 0.1</itemLinearScale></carousel></view>",
     );
     let m = check::measure(&t.root, &["nes"]);
-    assert_eq!(m.properties.get("helpsystem.textColorDimmed"), Some(&"set"));
+    assert_eq!(m.properties.get("helpsystem.textColorDimmed"), Some(&"accepted"), "accepted is counted apart from drawn");
     assert_eq!(m.properties.get("carousel.itemLinearScale"), Some(&"unsupported"), "a later pair is unsupported, not unknown");
     assert!(m.loads());
 }

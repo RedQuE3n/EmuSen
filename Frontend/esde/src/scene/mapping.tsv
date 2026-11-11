@@ -1,5 +1,5 @@
 # The one list of (element, property) pairs and what the scene and its painter do with each (EmuSen_Qt.md §4.5.5).
-# drawn: the scene reads it and the painter draws it. accepted: set by a theme with no visible effect in EmuSen, counted as drawn.
+# drawn: the scene reads it and the painter draws it. accepted: set by a theme with no visible effect in EmuSen, counted apart from drawn until the tester rules.
 # later:<family>: not drawn yet; the family names the step of EmuSen_Qt.md §4.5.5 that draws it. Every catalogue pair is listed once.
 carousel	pos	drawn
 carousel	size	drawn

@@ -42,7 +42,7 @@ impl Measure {
         self.properties.values().filter(|s| **s == state).count()
     }
 
-    /// Drawn whole: it loads, and sets nothing unsupported or unknown and uses no undrawn kind.
+    /// Drawn whole: it loads, sets nothing unsupported, accepted or unknown, and uses no undrawn kind.
     pub fn whole(&self) -> bool {
         self.loads() && self.undrawn.is_empty() && self.properties.values().all(|s| *s == "set")
     }
@@ -119,8 +119,12 @@ pub fn measure(folder: &Path, systems: &[&str]) -> Measure {
                 }
                 for property in e.explicit.keys() {
                     let pair = format!("{}.{property}", e.kind());
-                    let drawn = e.kind() == "sound" || mapping::is_mapped(e.kind(), property);
-                    let state = if drawn { "set" } else { "unsupported" };
+                    let state = match mapping::status(e.kind(), property) {
+                        _ if e.kind() == "sound" => "set",
+                        Some(mapping::Status::Drawn) => "set",
+                        Some(mapping::Status::Accepted) => "accepted",
+                        _ => "unsupported",
+                    };
                     if m.properties.get(&pair).is_none_or(|s| *s == "set") {
                         m.properties.insert(pair, state);
                     }
@@ -133,13 +137,13 @@ pub fn measure(folder: &Path, systems: &[&str]) -> Measure {
 }
 
 pub const SUMMARY_HEADER: &str =
-    "theme\tloads\tsystems\tvariants\truns\terrors\twarnings\tset\tunknown\tunsupported\twhole\tkinds\tundrawn";
+    "theme\tloads\tsystems\tvariants\truns\terrors\twarnings\tset\tunknown\tunsupported\taccepted\twhole\tkinds\tundrawn";
 
 /// The theme's row of the corpus measure.
 pub fn summary_row(m: &Measure) -> String {
     let join = |set: &BTreeSet<String>| if set.is_empty() { "-".to_owned() } else { set.iter().cloned().collect::<Vec<_>>().join(",") };
     format!(
-        "{}\t{}\t{}/{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+        "{}\t{}\t{}/{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
         m.theme,
         if m.loads() { "yes" } else { "no" },
         m.themed_systems,
@@ -151,6 +155,7 @@ pub fn summary_row(m: &Measure) -> String {
         m.properties.len(),
         m.count("unknown"),
         m.count("unsupported"),
+        m.count("accepted"),
         if m.whole() { "yes" } else { "no" },
         join(&m.kinds),
         join(&m.undrawn)

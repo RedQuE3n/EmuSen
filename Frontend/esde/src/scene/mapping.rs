@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Status {
     Drawn,
-    /// Set by a theme with no visible effect in EmuSen; counted as drawn.
+    /// Set by a theme with no visible effect in EmuSen; counted apart from drawn until the tester rules on it.
     Accepted,
     /// Not drawn yet; the family that will draw it.
     Later(String),
@@ -56,7 +56,7 @@ pub fn is_drawn(kind: &str) -> bool {
     table().iter().any(|(k, _, s)| k == kind && *s == Status::Drawn)
 }
 
-/// Whether a property set on an element counts as supported: drawn or accepted.
+/// Whether a property set on an element is in the table as drawn or accepted (the check counts the two apart).
 pub fn is_mapped(kind: &str, property: &str) -> bool {
     matches!(status(kind, property), Some(Status::Drawn | Status::Accepted))
 }

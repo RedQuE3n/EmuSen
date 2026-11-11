@@ -2998,3 +2998,13 @@ qt-models and kit-gallery do. `kit-gallery/tests/page_frame.rs` still hands the 
 the keyboard model's reset and reads the tile list showing it, and qt-app's game page test still scrolls States' tiles
 and turns to Options and back at 16 ms with Qt silent. Rule Q's registry was reviewed and copied: one addition,
 `ResetGate` with `model` and `settled`.
+
+**A model deleted while the gate holds it (2026-11-11).** The gate kept the model's raw address and handed it back
+through `model`; a model reached through a `property var` (as `PageFrame`'s `tileModel` and `rowModel` are) says nothing
+when it is deleted, so the gate went on holding and exposing a dangling address, and a model later made at the same
+address would have been taken for the old one by `setModel`'s same-model check and never connected. The gate now also
+hears the model's `destroyed` (declared beside the reset signals in `item_model.rs`, private in the same way): from
+then it holds no model, says so through `model`'s change signal, and is settled. The connections Qt drops with the
+model are let go when the next model is handed over. Held to: the same test, a second gate in the scene handed its
+model through a `var`; the model deleted, the gate holds none (`model === null`), and a model handed after is held and
+its reset heard. Seeded on 2026-11-11: the `destroyed` connection left out, the gate still holding the deleted model.

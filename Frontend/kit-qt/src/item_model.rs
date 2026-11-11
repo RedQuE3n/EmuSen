@@ -21,6 +21,9 @@ pub mod ffi {
         fn data(self: &QAbstractItemModel, index: &QModelIndex, role: i32) -> QVariant;
         #[cxx_name = "roleNames"]
         fn role_names(self: &QAbstractItemModel) -> QHash_i32_QByteArray;
+        /// QObject's signal as the model is deleted, heard and never sent from here (`ResetGate`).
+        #[qsignal]
+        pub(self) unsafe fn destroyed(self: Pin<&mut QAbstractItemModel>, object: *mut QObject);
         /// Qt's private signals, heard and never sent from here: a model's reset begins and ends (`ResetGate`).
         #[qsignal]
         #[cxx_name = "modelAboutToBeReset"]

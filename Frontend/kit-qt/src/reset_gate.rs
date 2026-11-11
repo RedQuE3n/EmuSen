@@ -49,6 +49,15 @@ impl Gate {
         // SAFETY: the gate outlives the connections it holds (see `Gate`).
         unsafe { Pin::new_unchecked(&mut *self.0) }.set_settled_to(settled);
     }
+
+    /// The model is being deleted: the gate holds none from now, so a model made later at the same address is a new one.
+    fn forget(self) {
+        // SAFETY: as `hear`.
+        let mut gate = unsafe { Pin::new_unchecked(&mut *self.0) };
+        gate.as_mut().rust_mut().model = core::ptr::null_mut();
+        gate.as_mut().model_changed();
+        gate.set_settled_to(true);
+    }
 }
 
 impl qobject::ResetGate {
@@ -67,7 +76,8 @@ impl qobject::ResetGate {
             // SAFETY: the caller hands a live model; Qt drops each connection with the model.
             let mut target = unsafe { Pin::new_unchecked(&mut *model) };
             heard.push(target.as_mut().on_model_about_to_be_reset(move |_| gate.hear(false)));
-            heard.push(target.on_model_reset(move |_| gate.hear(true)));
+            heard.push(target.as_mut().on_model_reset(move |_| gate.hear(true)));
+            heard.push(target.on_destroyed(move |_, _| gate.forget()));
         }
         let mut rust = self.as_mut().rust_mut();
         rust.heard = heard;

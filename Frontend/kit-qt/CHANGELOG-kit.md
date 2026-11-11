@@ -9,7 +9,8 @@ entry names what was added and the section of `EmuSen_Kit.md` that records it.
 Additions only; no type, property, signal or invokable was removed or changed.
 
 - **`ResetGate`** (registry): `model` (a list model) and `settled`, false from the model's `modelAboutToBeReset` to its
-  `modelReset`; a model handed over is settled and the old one is no longer heard. `EmuSen_Kit.md` §7.58.
+  `modelReset`; a model handed over is settled and the old one is no longer heard; a model deleted while held is let go,
+  `model` then null. `EmuSen_Kit.md` §7.58.
 - `PageFrame`'s two lists hold their models through two of them in place of its QML flags, `Connections` and
   `Qt.callLater`, which the QML rules forbid; what it shows is unchanged. §7.58.
 

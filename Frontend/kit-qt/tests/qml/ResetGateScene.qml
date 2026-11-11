@@ -26,4 +26,21 @@ Window {
         readonly property bool holdsSecond: gate.model === second
         onSettledChanged: if (!gate.settled) scene.swapped = scene.swapping
     }
+    // A second gate handed its model through a var, which says nothing when the model is deleted; `later` is handed to it after.
+    property var handed: doomed
+    property bool handLater: false
+    Kit.KeyboardModel {
+        id: doomed
+        objectName: "doomed"
+    }
+    Kit.KeyboardModel {
+        id: later
+        objectName: "later"
+    }
+    Kit.ResetGate {
+        id: lone
+        objectName: "lone"
+        model: scene.handLater ? later : scene.handed
+        readonly property bool holdsNone: lone.model === null
+    }
 }

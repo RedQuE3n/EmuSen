@@ -5004,9 +5004,12 @@ page held at the five sizes, the pointer and then the pad starting the console; 
 row by the pad and then by the pointer; Back to Library and the Home card's Continue naming the console's session, held
 at the five sizes, and resuming it. Each time the console's picture is found drawn on a grab of the window, and B and
 Start, each held, turn it blue, B bluer than Start, and let go turn it back, while the program stays on the console's
-screen; the Pause Card; Quit Game back to Home) and `esde` (the Home card's row by the pad and by the pointer, the PlayStation gamelist's
+screen; the Pause Card; Quit Game back to Home; and, with a game from the grid suspended, the Home card's Start Console
+row by the pad, the suspended game giving way to the console, whose Quit Game leaves no session) and `esde` (the Home card's row by the pad and by the pointer, the PlayStation gamelist's
 Select row by the pointer, each to the console's screen proven the same way and Quit Game back to the theme, and the
-Home card's Continue naming and resuming the console's session, held at the five sizes).
+Home card's Continue naming and resuming the console's session, held at the five sizes). Until the merge of WiseMan on
+2026-11-11, `esde` started the console with its game suspended; that merge resumes and quits the game there first, and
+`console` holds the suspended case since.
 
 The Home card's facts were read once: `homeCardFacts` read the library's consoles and tools from the model itself, so
 its binding followed only the session and the clock, and a card opened before either changed offered no Start Console
@@ -5189,8 +5192,11 @@ A card made under a resting pointer still took the pointer's focus while the pad
 slid under the pointer, and on Home rebuilt after a session the tile that came there. Whether the pointer moved is now
 the window's fact, not each controller's, and only a real pointer event moves it (EmuSen_Kit.md §7.108). The same walk
 runs with the pointer left resting under the ES-DE theme across a game's session (`esde`: the Home card's Continue
-focused, Down and Up moving), in the own look across a game's session (`console`: the List card over the grid, its
-first row focused, Down moving), and with Start's Home card on the software tier (`cards`).
+focused, Down and Up moving), in the own look with a game suspended and the pointer left at a point the List card's
+controller never saw (`console`: the List card over the grid, its first row focused, Down moving), and on the software
+tier with controllers that have never seen the pointer (`cards`: the Home card opened under it focuses its first row,
+and Home shown again from Consoles focuses Games, not the place under it). EmuSen_Kit.md §7.108 gives the seeded
+faults, the rule of 0efa4a08f among them.
 
 The fifth pass recorded that Home's Continue took the pointer's focus "while no game was suspended". It is a defect of
 the reference theme, not of the kit: `themes/emusen/screens/Home.qml` keeps its Continue walkable enabled with no game,

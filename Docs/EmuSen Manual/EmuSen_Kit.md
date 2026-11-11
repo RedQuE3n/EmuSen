@@ -3150,10 +3150,20 @@ change of the registry. `hoverAt`'s `at` is likewise unread.
 Held by kit-gallery's `pointer` (`PointerScene.qml`): with a card's row holding the focus and the pointer resting, a
 walkable of a controller made under it (a `Loader` made active, as Start makes the Home card) takes nothing, a walkable
 enabled under it takes nothing, a click on a disabled walkable presses no A, and the pointer's own move onto a walkable
-focuses it; and in qt-app by `cards` (the pointer left over the Home card's second row: Home under it as B closes the
-card keeps its focus, and the card Start opens again focuses its first row) and on the GPU by `console` (the List card
-over the grid after a game session under a resting pointer: its first row focused, Down moving) and `esde` (the Home
-card over the ES-DE theme after a game session under a resting pointer: Continue focused, Down and Up moving). Seeded
-faults: `hoverAt` focusing on every hover (`pointer` fails at the late card) and the watch never moving (`pointer` fails
-at the move onto a walkable).
+focuses it; and in qt-app by `cards` on the software tier, where neither controller has seen the pointer before: the
+pointer moved over Home to where the Home card's second row lies and left there, the card Start opens focuses its first
+row; and from Consoles, the pointer moved to where another of Home's places lies and left there, Home shown again by B
+focuses Games, not that place. On the GPU, `console` holds a controller that last saw the pointer elsewhere (the List
+card's second row hovered, the pointer moved a little along it during a game and left there; the List card opened over
+the grid with the game suspended focuses its first row, Down moving), and `esde` the Home card over the ES-DE theme after
+a game session under a resting pointer (Continue focused, Down and Up moving).
+
+Seeded faults: `hoverAt` focusing on every hover (`pointer` fails at the late card); the watch never moving (`pointer`
+fails at the move onto a walkable); and the rule 0efa4a08f had, each controller judging "moved" by the position it last
+saw (fault 44, measured on 2026-11-11: `cards` fails at the Home card, "focuses its first row, Tools, not Settings"; with
+that assert set aside, the Home check fails alone, "focuses Games, not place.1"; on the GPU, fault 45 against `console`).
+A disabled place that is enabled again under a resting pointer is given no hover by Qt Quick at all: with the Home card
+open, the pointer moved onto one of Home's places, and Home shown again by B kept its focus under every rule, the rule of
+0efa4a08f and a `hoverAt` that focuses on every hover alike (measured on 2026-11-11), so `cards` reaches Home through
+Consoles instead.
 

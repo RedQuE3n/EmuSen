@@ -13,19 +13,19 @@
 
 mod common;
 
-use common::console::{console_owns_the_pad, pause, quit_game, row_centre, row_focused};
+use common::console::{console_owns_the_pad, guide_alone, pause, quit_game, row_centre, row_focused, row_middles};
 use common::{approved_console_core, hold, sandbox, wait_for};
 use cxx_qt_lib::QString;
 
 use emusen_client_fixture::cores::{installation_with_snes, snes_image};
 use emusen_client_fixture::library;
-use emusen_kit_core::input::{PadControl, UiButton};
+use emusen_kit_core::input::UiButton;
 use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
 use emusen_platform_client::Platform;
 use emusen_qt::{start, MAIN_URL};
 use emusen_qt_play::host::Host;
 use emusen_qt_test::compositor::Compositor;
-use emusen_qt_test::virtual_pad::{Sdl, VirtualPad};
+use emusen_qt_test::virtual_pad::Sdl;
 use emusen_qt_test::{mockup, Harness, Scene};
 use serde_json::json;
 use std::path::PathBuf;
@@ -33,14 +33,6 @@ use std::path::PathBuf;
 /// Art Book Next with the options the oracle and the C# baseline gave it (Testing/esde-baseline/states.tsv).
 const THEME: &str = "art-book-next-es-de";
 const CHOICES: [(&str, &str); 3] = [("Variant", "gamelist-list-metadata-cover"), ("ColorScheme", "dark-screenshots"), ("FontSize", "medium")];
-
-/// Guide pressed alone over the game, held until the router reads it, then let go: with the Guide chords on, as the start
-/// gives them outside Game Mode, Guide alone opens the menu as it is let go (EmuSen_Kit.md §7.26).
-fn guide_alone(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, guide: i32) {
-    sdl.press(pad, guide, true);
-    until(scene, 5, "the router holding Guide", |s| s.pad_held(UiButton::Guide));
-    sdl.press(pad, guide, false);
-}
 
 /// No finding is named for the tester: the gate holds every state whole.
 fn nothing_named(_: &str, _: &emusen_qt_test::tree::Tree, _: (i32, i32)) -> bool {
@@ -229,8 +221,7 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     // The pointer moves over the card's second row and is left resting there through the game's session, so the cards
     // that open after it are made under a resting pointer (EmuSen_Kit.md §7.107, §7.108).
     let first = focused_words(&mut scene);
-    let mut middles: Vec<(f64, f64)> = scene.tree().nodes.iter().filter(|n| n.visible && n.ty.starts_with("MenuRow")).map(|n| (n.x + n.w / 2.0, n.y + n.h / 2.0)).collect();
-    middles.sort_by(|a, b| a.1.total_cmp(&b.1));
+    let middles = row_middles(&mut scene);
     scene.hover(middles[1].0, middles[1].1 - 4.0);
     scene.hover(middles[1].0, middles[1].1);
     until(&mut scene, 5, "the moving pointer focusing the second row", |s| focused_words(s) != first);
@@ -252,10 +243,9 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     assert_eq!(scene.property("esde", "visible"), "false", "the theme hidden under the game");
 
     // Guide alone pauses it under the Pause Card; Leave, Back to Library is the gamelist at the same game.
-    let guide = emusen_qt_endymion::reading::sdl_button(PadControl::Guide).unwrap();
     assert!(scene.pad_chord_only(), "the game owns the pad");
     scene.run_pad_clock();
-    guide_alone(&mut scene, &sdl, &pad, guide);
+    guide_alone(&mut scene, &sdl, &pad);
     until(&mut scene, 10, "the chord pausing the game under the Pause Card", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Pause");
     until(&mut scene, 5, "the card in place", |s| s.property("cardCanvas", "slide") == "0");
     choose_row(&mut scene, "Leave");
@@ -287,7 +277,7 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     until(&mut scene, 5, "Continue resuming the game", |s| s.property("screens", "shown") == "Game" && s.property("session", "paused") == "false");
     until(&mut scene, 5, "the game owning the pad again", |s| s.pad_chord_only());
     scene.run_pad_clock();
-    guide_alone(&mut scene, &sdl, &pad, guide);
+    guide_alone(&mut scene, &sdl, &pad);
     until(&mut scene, 10, "Guide pausing it again", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Pause");
     until(&mut scene, 5, "the card in place", |s| s.property("cardCanvas", "slide") == "0");
     choose_row(&mut scene, "Leave");
@@ -329,7 +319,7 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     until(&mut scene, 10, "the game resumed", |s| s.property("screens", "shown") == "Game" && s.property("session", "paused") == "false");
     until(&mut scene, 5, "the game owning the pad again", |s| s.pad_chord_only());
     scene.run_pad_clock();
-    guide_alone(&mut scene, &sdl, &pad, guide);
+    guide_alone(&mut scene, &sdl, &pad);
     until(&mut scene, 10, "the chord pausing the game again", |s| s.property("screens", "shown") == "Pause");
     until(&mut scene, 5, "the card in place", |s| s.property("cardCanvas", "slide") == "0");
     choose_row(&mut scene, "Leave");

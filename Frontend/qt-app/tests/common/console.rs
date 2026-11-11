@@ -118,16 +118,46 @@ pub fn console_owns_the_pad(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, 
     assert!(b > start + 40.0 && start > a + 40.0, "blues: B (South) {b:.0}, A (East) {a:.0}, Start {start:.0}: the core told them apart");
 }
 
-/// The chord's Pause Card over the console, named as Mistress named its session.
+/// Guide pressed alone, held until the router reads it, then let go: with the Guide chords on, Guide alone opens the menu as it is let go (EmuSen_Kit.md §7.26).
 #[track_caller]
-pub fn pause(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, named: &str) {
+pub fn guide_alone(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad) {
     let guide = emusen_qt_endymion::reading::sdl_button(PadControl::Guide).unwrap();
-    until(scene, 5, "the console owning the pad", |s| s.pad_chord_only());
-    scene.run_pad_clock();
-    // Guide pressed alone and let go once the router holds it: with the Guide chords on, Guide alone opens the menu as it is let go (EmuSen_Kit.md §7.26).
     sdl.press(pad, guide, true);
     until(scene, 5, "the router holding Guide", |s| s.pad_held(UiButton::Guide));
     sdl.press(pad, guide, false);
+}
+
+/// The middles of the shown card's rows, top first.
+pub fn row_middles(scene: &mut Scene<'_>) -> Vec<(f64, f64)> {
+    let tree = scene.tree();
+    let mut rows: Vec<(f64, f64)> = tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("MenuRow")).map(|n| (n.x + n.w / 2.0, n.y + n.h / 2.0)).collect();
+    rows.sort_by(|a, b| a.1.total_cmp(&b.1));
+    rows
+}
+
+/// Whether the shown card's row `index`, top first, lies under `at`.
+pub fn row_box_holds(scene: &mut Scene<'_>, index: usize, at: (f64, f64)) -> bool {
+    let tree = scene.tree();
+    let mut rows: Vec<_> = tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("MenuRow")).collect();
+    rows.sort_by(|a, b| a.y.total_cmp(&b.y));
+    rows.get(index).is_some_and(|n| at.0 > n.x && at.0 < n.x + n.w && at.1 > n.y && at.1 < n.y + n.h)
+}
+
+/// The label of the shown card's row `index`, top first.
+pub fn row_words(scene: &mut Scene<'_>, index: usize) -> String {
+    let tree = scene.tree();
+    let mut rows: Vec<_> = tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("MenuRow")).collect();
+    rows.sort_by(|a, b| a.y.total_cmp(&b.y));
+    let row = rows.get(index).expect("the card's row");
+    tree.nodes.iter().find(|n| n.parent == row.id && n.name == "label").and_then(|n| n.text.clone()).unwrap_or_default()
+}
+
+/// The chord's Pause Card over the console, named as Mistress named its session.
+#[track_caller]
+pub fn pause(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, named: &str) {
+    until(scene, 5, "the console owning the pad", |s| s.pad_chord_only());
+    scene.run_pad_clock();
+    guide_alone(scene, sdl, pad);
     until(scene, 10, "Guide pausing the console under the Pause Card", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Pause");
     until(scene, 5, "the card in place", |s| s.property("cardCanvas", "slide") == "0");
     assert!(scene.tree().nodes.iter().any(|n| n.visible && n.text.as_deref() == Some(named)), "the Pause Card names {named}");

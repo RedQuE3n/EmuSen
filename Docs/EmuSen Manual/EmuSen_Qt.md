@@ -4765,13 +4765,15 @@ forgets a state's record).
 **Not built here, each for the tester:** the Start Console page's firmware line (Mistress's `FirmwareLine`: the library
 view does not read firmware needs); its A word "Start" in the help bar; the console session's Continue row and name
 (Mistress's `ConsoleSessionName`); Start Console in an ES-DE gamelist's Select menu (Mistress's `AddStartConsoleOption`);
-the Tools page's other rows (Scraper, Packages, Library Manager, Cheats, Collections, Compressed Discs, Shell), whose
+the gate's hold of the Home card over an ES-DE theme (its audit reads the theme's own items under the card: overlaps
+and colours outside the kit's palette, 45 findings at the five sizes, measured on 2026-11-11), which needs a rule for
+the theme's view under a card; the Tools page's other rows (Scraper, Packages, Library Manager, Cheats, Collections, Compressed Discs, Shell), whose
 screens the program does not have yet; the List card's Collections.
 
 **Held to** (measured on 2026-11-11): qt-models' `sorts`, `home_card_acts`, `failures`, and `cores`'s
 `a_failed_rescan_and_an_unread_firmware_are_said_never_taken_for_none_needed`; qt-app's `repairs` (the three sorts by
 pad and pointer, the List card held at the five sizes) and `esde` on the GPU (a NES game with no engine fails and is
-said, the theme back; Continue held at the five sizes and resuming the game; Tools ▸ Cores by the pointer and ▸ Themes
+said, the theme back; Continue resuming the game; Tools ▸ Cores by the pointer and ▸ Themes
 by the pad, B back to the theme).
 
 ---

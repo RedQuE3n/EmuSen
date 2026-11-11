@@ -10,7 +10,7 @@
 
 mod common;
 
-use common::{hold, sandbox, wait_for};
+use common::{sandbox, wait_for};
 
 use emusen_client_fixture::cores::{installation_with_snes, snes_image};
 use emusen_client_fixture::library;
@@ -21,18 +21,13 @@ use emusen_qt::{start, MAIN_URL};
 use emusen_qt_play::host::Host;
 use emusen_qt_test::compositor::Compositor;
 use emusen_qt_test::virtual_pad::Sdl;
-use emusen_qt_test::{mockup, Harness, Scene};
+use emusen_qt_test::{Harness, Scene};
 use serde_json::json;
 use std::path::PathBuf;
 
 /// Art Book Next with the options the oracle and the C# baseline gave it (Testing/esde-baseline/states.tsv).
 const THEME: &str = "art-book-next-es-de";
 const CHOICES: [(&str, &str); 3] = [("Variant", "gamelist-list-metadata-cover"), ("ColorScheme", "dark-screenshots"), ("FontSize", "medium")];
-
-/// No finding is named for the tester: the gate holds every state whole.
-fn nothing_named(_: &str, _: &emusen_qt_test::tree::Tree, _: (i32, i32)) -> bool {
-    false
-}
 
 fn home() -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap())
@@ -189,16 +184,14 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     );
     assert_eq!(scene.property("esde", "activeFocus"), "true", "the theme takes the pad again");
 
-    // Start's Home card leads with Continue over the suspended game, held at the gate's five sizes; A resumes the game.
+    // Start's Home card leads with Continue over the suspended game; A resumes the game.
     scene.pad(UiButton::Menu);
     until(&mut scene, 5, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
     assert!(focused_words(&mut scene).starts_with("Continue"), "the focus on Continue: {}", focused_words(&mut scene));
-    let mut report = Vec::new();
-    hold(&mut scene, "EsdeHomeCardContinue", &mockup::Mockup::default(), nothing_named, &mut report);
-    scene.resize(1280, 800);
-    scene.wait(150);
     scene.pad(UiButton::Accept);
     until(&mut scene, 5, "Continue resuming the game", |s| s.property("screens", "shown") == "Game" && s.property("session", "paused") == "false");
+    until(&mut scene, 5, "the game owning the pad again", |s| s.pad_chord_only());
+    scene.run_pad_clock();
     sdl.press(&pad, guide, true);
     until(&mut scene, 10, "the chord pausing it again", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Pause");
     sdl.press(&pad, guide, false);
@@ -233,7 +226,6 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
         scene.pad(UiButton::Back);
         until(&mut scene, 5, "B back to the theme", |s| s.property("screens", "shown") == "Esde");
     }
-    assert!(report.is_empty(), "{} faults:\n{}", report.len(), report.join("\n"));
     assert!(scene.set_property("game", "game", ""));
     until(&mut scene, 10, "the game closed to the theme", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Esde");
 

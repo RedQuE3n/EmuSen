@@ -1,6 +1,8 @@
 //! The painter's primitives on the GPU tier (EmuSen_Qt.md §8.1, tier 2): Vulkan in a compositor of the test's own, the
 //! validation layer on, each primitive drawn over black and read back (EmuSen_Qt.md §4.8).
 
+mod common;
+
 use std::path::{Path, PathBuf};
 
 use emusen_kit_core::tokens::Colour;
@@ -80,7 +82,7 @@ fn the_primitives_draw_what_the_scene_asks_on_vulkan() {
     assert!(scene.set_property("scene", "face", &url(&face)));
     until_ready(&mut scene, &["tinted", "halfTinted", "grey", "rounded", "ramp", "sharp", "soft"]);
     assert_eq!((scene.property("scene", "width"), scene.property("scene", "height")), ("1280".into(), "800".into()), "the window at its size");
-    let _ = scene.grab(&compare_dir().join("primitives-1280x800.png").to_string_lossy());
+    let _ = scene.grab(&common::compare_root().join("primitives-1280x800.png").to_string_lossy());
 
     let points = [
         (32.0, 32.0),   // 0 tinted
@@ -142,7 +144,7 @@ fn the_primitives_draw_what_the_scene_asks_on_vulkan() {
     if art.exists() {
         assert!(scene.set_property("scene", "art", &url(&art)));
         until_ready(&mut scene, &["slice"]);
-        assert!(scene.grab(&compare_dir().join("e1-slice-qt-1280x800.png").to_string_lossy()));
+        assert!(scene.grab(&common::compare_root().join("e1-slice-qt-1280x800.png").to_string_lossy()));
     }
     scene.assert_quiet();
     let _ = std::fs::remove_dir_all(&dir);
@@ -152,8 +154,4 @@ fn art_book_next() -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/emusen/bigpicture/corpus/whole/art-book-next-es-de")
 }
 
-fn compare_dir() -> PathBuf {
-    let dir = PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/emusen/tmp/qt-s4/compare");
-    let _ = std::fs::create_dir_all(&dir);
-    dir
-}
+

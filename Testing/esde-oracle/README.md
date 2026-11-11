@@ -91,6 +91,9 @@ not cross into another network namespace), plays to SDL's dummy audio, and draws
   repository; the comparison refuses one that is not listed or whose sum differs, so a recapture changes the
   comparison only through a commit of its new line. `cd ~/.cache/emusen/esde-oracle && sha256sum -c <this file>`
   checks them by hand.
+- The comparison's pictures for a human look (`oracle/qt/`, `oracle/difference/`, `qt/`, the primitives' grabs) go to
+  `~/.cache/emusen/tmp/qt-s4/compare/<checkout>/`, the checkout's folder name keying them, so runs from two worktrees
+  never write one folder (on 2026-11-11 one run's grabs were overwritten by another's while being read).
 - `pick.py <run-dir> <seconds> <out.png>` — keeps the run's capture, and prints its time and its difference from the
   grab one second before, which is 0 when the picture had settled.
 

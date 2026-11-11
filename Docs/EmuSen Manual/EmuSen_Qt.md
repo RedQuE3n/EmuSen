@@ -2627,7 +2627,7 @@ game) at 1280 × 800 and 1920 × 1200, on the oracle's library, and holds the gr
   gained, a watched MAE up by more than 0.05 (two runs on 2026-11-09 differed by 0.02) or a count up by one fails.
   `a_row_that_worsens_is_named` holds that comparison without Qt.
 
-Written for a human look to `~/.cache/emusen/tmp/qt-s4/compare/oracle/`: `qt/` (the grabs), `difference/` (pixels over 8
+Written for a human look to `~/.cache/emusen/tmp/qt-s4/compare/<checkout>/oracle/`: `qt/` (the grabs), `difference/` (pixels over 8
 levels apart with no match within a pixel, from the harness's `difference`), `oracle.tsv` (every figure, clocks in and
 out), `corpus.tsv`, and `<theme>-<state>-<W>x<H>.png`, ES-DE | C# above, Qt | difference ×4 below with the strip blue,
 made from them by `sheet.py` there (outside the repository, as the E3 sheets are).

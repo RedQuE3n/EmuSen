@@ -3368,8 +3368,8 @@ answers, the test runs in full and fails as before, including when the card give
 - `emusen-core-broker`, the five tests of `tests/api_ring.rs`. They skipped where no device of the name opened, which
   would also have hidden a card that stopped giving one; that now fails.
 
-**Why `api_ring` failed in the local nightly on 2026-11-11 and not before.** The nightly (`.claude/tools/nightly.sh`)
-runs with `VK_DRIVER_FILES` naming lavapipe's driver alone. On 2026-11-09 and -10 `EMUSEN_GPU_DEVICE` was unset, so the
+**Why `api_ring` failed in the local nightly on 2026-11-11 and not before.** The desktop's nightly run then
+ran with `VK_DRIVER_FILES` naming lavapipe's driver alone. On 2026-11-09 and -10 `EMUSEN_GPU_DEVICE` was unset, so the
 tests asked for "6800", no device of that name opened, and all five skipped (0.04 s). Between the run of 2026-11-10 and
 that of 2026-11-11 the script began to set `EMUSEN_GPU_DEVICE=llvmpipe`; the same test binary (`api_ring-2c04f5b476b6983b`
 in both logs, so no code changed) then opened lavapipe and ran. Lavapipe makes no ring (`Device::rings()` is false: it

@@ -3059,3 +3059,17 @@ Constellation's chart (y 88, 484 tall, d26becdce) is the canvas's 96 and 468 aga
 Games, deleted in a635cb1df, is back. a635cb1df's other change, the eyebrow's line box from 20 to 22.8, is the 19-unit
 small text of the tester's decision and stays; Horizon's 24-unit engine tag and 22.8 maker label (88fdeb837) likewise,
 and its shelves at x 32 are the canvas's camera rule (horizon.md §1.6) applied to the first console focused.
+
+**Measured 2026-11-11** (software backend, theme-audit's tests). Horizon, Meridian and Orrery are their mockups at both
+sizes. Constellation is not: its chart is the program's 88 and 484 against the canvas's 96 and 468, its Games shows no
+sixth cell, and its Choose a console mockup draws eleven bodies where the default library shelves four, so `body.4` to
+`body.10` are not shown (the mockup wants the `eleven` catalogue, which the theme tests do not yet place for it). The
+reference theme's Choose a console over `eleven` differs from its canvas in 50 lines: the places' left edges (8.6, 5
+and 1.3 units right of the canvas's), the focused body at 88 against 96 with its ring and words 4 units higher, the
+full name's line box 53 against 44, and the three covers under the key 73 units wide at x 973, 1058 and 1143 against
+the canvas's 140 at 772, 924 and 1076. Each is the program's difference from its approved canvas, left for the tester.
+The program's acceptance run on Vulkan the same day lists the same Consoles differences, the places' discs painting
+the glass edge #2E8C96DC outside the palette (`placeDisc.0` to `.2`), Home's `placeStatus.5` cut with an ellipsis, and
+the exemptions of §7.102 (65 scene colours on Choose a console, five on Home, and words in the spare tenth); the three
+named differences it had excused before are no longer excused, and the shelf title's contrast at 1280 × 720 no longer
+occurs.

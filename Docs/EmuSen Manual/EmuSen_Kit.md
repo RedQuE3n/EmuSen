@@ -3004,3 +3004,32 @@ the console column between its short and its whole words; whole where the room h
 every width), by kit-gallery's `screens` (the tool screen's rows of one, four and twenty consoles at the four fit sizes
 in both variants: "Atari 2600 +19" shown, the four whole or "Genesis +3", nothing cut), and by qt-app's `cores_fit` and
 `cores_fit_gpu` (EmuSen_Qt.md §7.9).
+
+### 7.107 The pointer focuses only an item that takes input (repair DC-B; 2026-11-11)
+
+The frame's pointer focus (`FrameController`'s `hover`, `hoverAt` and `click`, §7.39) called `forceActiveFocus` on the
+walkable under the pointer whatever its state. A `HoverHandler` still reports `hovered` on an item that is disabled
+through a parent, and `forceActiveFocus` gives the focus to every focus scope above the item. When the topmost of those
+scopes is disabled, Qt Quick moves the window's active focus to that scope's own scope. For a screen placed in the
+window, that scope is the window's root item. Nothing then holds the focus, and no press reaches anything.
+
+The program shows this under a card. The screen under a card is drawn and disabled (EmuSen_Qt.md §7.9, the slots'
+`backdrop`). Three places in qt-app's `Main.qml` and `ThemeHost.qml` had walkables there before this fix: the own look's
+Home screen under the Home card (`homeSlot`), its grid under the List card (`gamesSlot`), and the ES-DE view under every
+card and screen over it (`esdeLoader`). The ES-DE view draws its own items, not the kit's `Walkable`, so it had no pointer
+focus to lose; the two slots did, in the reference theme and in any EmuSen theme placed in them. In qt-app's `console` on 2026-11-11 the pointer stayed where the first walk had clicked a List card row.
+After a console session, the List card opened over the grid again, and the theme's first grid cell came under the
+resting pointer as the grid was made disabled. Its `hoverAt` took the focus from the card's row to the root, so Down
+moved nothing and the walk read Home's status line ("1 controller · 12:00"), the first words after the root item.
+Before the fix the walk failed six times in seven runs, and the focus log showed the cell's hover with `enabled` false
+just before the root took the focus. After it, it passed four times in four.
+
+`focus` now gives the focus only to an item that is enabled. `QQuickItem::isEnabled` is the effective state, so a
+disabled parent counts. A disabled walkable under the pointer leaves the focus where it is. Held by kit-gallery's
+`disabled` (`kit_7_107_*`: a card's row keeps the focus while the pointer comes to rest on a walkable in a disabled screen
+beside it) and on the GPU by qt-app's `console`.
+
+A walkable that comes under a pointer resting still takes the focus when the controller that owns it has not seen the
+pointer there before. Each frame's controller keeps its own last pointer position (§7.39). After the session above,
+Home's Continue took the focus this way while no game was suspended. This is recorded and not changed here: the guard's
+scope is the controller's, and widening it is a change to §7.39.

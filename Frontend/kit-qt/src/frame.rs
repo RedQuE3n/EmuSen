@@ -71,6 +71,8 @@ pub mod qobject {
         type QQuickItem;
         #[cxx_name = "forceActiveFocus"]
         fn force_active_focus(self: Pin<&mut QQuickItem>);
+        #[cxx_name = "isEnabled"]
+        fn is_enabled(self: &QQuickItem) -> bool;
     }
 
     #[auto_cxx_name]
@@ -264,8 +266,9 @@ impl cxx_qt::Initialize for qobject::FrameController {
     }
 }
 
+/// The pointer's focus, only on an item that takes input: a disabled one handed the window's focus to its root (§7.107).
 unsafe fn focus(item: *mut qobject::QQuickItem) {
-    if let Some(item) = item.as_mut() {
+    if let Some(item) = item.as_mut().filter(|item| item.is_enabled()) {
         Pin::new_unchecked(item).force_active_focus();
     }
 }

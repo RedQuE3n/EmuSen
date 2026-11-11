@@ -162,8 +162,5 @@ fn home_card(scene: &mut emusen_qt_test::Scene<'_>) {
     scene.pad(UiButton::Menu);
     until(scene, 5, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
     assert_eq!(scene.property("homeCardModel", "page"), emusen_qt_models::home_card::FIRST, "Start opens its first page");
-    until(scene, 5, "the card holding the focus", |s| {
-        let (card, home) = (s.property("homeCardCanvas", "activeFocus"), s.property("home", "activeFocus"));
-        card == "true" && home == "false"
-    });
+    until(scene, 5, "the card holding the focus", |s| common::console::focus_within(s, "homeCardCanvas"));
 }

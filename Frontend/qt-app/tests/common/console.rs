@@ -7,10 +7,13 @@ use emusen_qt_test::virtual_pad::{Sdl, VirtualPad};
 use emusen_qt_test::Scene;
 
 /// Waits up to `seconds` for a condition the scene answers, letting Qt run between looks.
+#[track_caller]
 pub fn until(scene: &mut Scene<'_>, seconds: u64, what: &str, mut done: impl FnMut(&mut Scene<'_>) -> bool) {
     let start = std::time::Instant::now();
     while !done(scene) {
-        assert!(start.elapsed() < std::time::Duration::from_secs(seconds), "{what}: not within {seconds} s");
+        if start.elapsed() >= std::time::Duration::from_secs(seconds) {
+            panic!("{what}: not within {seconds} s; the focus in {}", focus_chain(scene).join(" < "));
+        }
         scene.wait(8);
     }
 }
@@ -23,6 +26,7 @@ pub fn focused_words(scene: &mut Scene<'_>) -> String {
 }
 
 /// Down on a card until the focused row reads `words`, then A.
+#[track_caller]
 pub fn choose_row(scene: &mut Scene<'_>, words: &str) {
     for _ in 0..12 {
         if focused_words(scene).starts_with(words) {
@@ -31,7 +35,7 @@ pub fn choose_row(scene: &mut Scene<'_>, words: &str) {
         }
         scene.pad(UiButton::Down);
     }
-    panic!("no row reads {words}; the focus reads {}", focused_words(scene));
+    panic!("no row reads {words}; the focus reads {}, in {}", focused_words(scene), focus_chain(scene).join(" < "));
 }
 
 /// The centre of the shown card's row whose label reads `label`.
@@ -71,6 +75,7 @@ fn blue(scene: &mut Scene<'_>, points: &[(f64, f64)]) -> f64 {
 /// the pad the console's: B, A and Start (the RetroPad's, South, East and Start), each held on the pad, reach the console
 /// as themselves, its picture turning blue while each is held (B bluer than Start, Start than A, as the core draws them) and back when it is let go, and not the program,
 /// which stays on the console's screen unpaused.
+#[track_caller]
 pub fn console_owns_the_pad(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, console: &str) {
     until(scene, 20, "the console running", |s| {
         let problem = s.property("session", "problem");
@@ -80,6 +85,8 @@ pub fn console_owns_the_pad(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, 
     assert_eq!((scene.property("session", "console"), scene.property("session", "game")), (console.to_owned(), String::new()));
     until(scene, 20, "the first picture", |s| s.property("session", "firstPictureMs").parse::<f64>().is_ok_and(|ms| ms > 0.0));
     let points = picture_points(scene);
+    // Nothing over the picture: the card that started or resumed it has slid away with its scrim.
+    until(scene, 5, "the cards gone from over the console", |s| ["homeCardCanvas", "listCardCanvas", "cardCanvas"].iter().all(|c| s.property(c, "visible") == "false"));
     until(scene, 10, "the console's picture on the window", |s| {
         let seen = seen(s, &points);
         seen.len() == points.len() && seen.iter().any(|c| c != &seen[0]) && seen.iter().any(|c| c.iter().map(|v| u32::from(*v)).sum::<u32>() > 60)
@@ -112,6 +119,7 @@ pub fn console_owns_the_pad(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, 
 }
 
 /// The chord's Pause Card over the console, named as Mistress named its session.
+#[track_caller]
 pub fn pause(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, named: &str) {
     let guide = emusen_qt_endymion::reading::sdl_button(PadControl::Guide).unwrap();
     until(scene, 5, "the console owning the pad", |s| s.pad_chord_only());
@@ -143,6 +151,7 @@ pub fn row_shown(scene: &mut Scene<'_>, label: &str) -> bool {
 }
 
 /// The chord's Pause Card over the console named `named`, Leave, Quit Game and Yes: the session closed and `to` shown.
+#[track_caller]
 pub fn quit_game(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, named: &str, to: &str) {
     pause(scene, sdl, pad, named);
     choose_row(scene, "Leave");
@@ -154,10 +163,29 @@ pub fn quit_game(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, named: &str
 }
 
 /// The chord's Pause Card over the console named `named`, Leave and Back to Library: the session suspended and `to` shown.
+#[track_caller]
 pub fn back_to_library(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, named: &str, to: &str) {
     pause(scene, sdl, pad, named);
     choose_row(scene, "Leave");
     until(scene, 5, "the Leave page", |s| s.property("pause", "title") == "Leave" && row_shown(s, "Back to Library"));
     choose_row(scene, "Back to Library");
     until(scene, 5, &format!("Back to Library showing {to}"), |s| s.property("screens", "shown") == to && s.property("cardCanvas", "visible") == "false");
+}
+
+/// The item holding the focus and those it sits in, each by its name and type, innermost first.
+pub fn focus_chain(scene: &mut Scene<'_>) -> Vec<String> {
+    let tree = scene.tree();
+    let Some(at) = scene.focus(&tree) else { return Vec::new() };
+    let mut out = Vec::new();
+    let mut node = Some(&tree.nodes[at as usize]);
+    while let Some(n) = node {
+        out.push(format!("{}:{}", n.name, n.ty));
+        node = tree.nodes.iter().find(|p| p.id == n.parent);
+    }
+    out
+}
+
+/// Whether the focus is inside the item named `name`.
+pub fn focus_within(scene: &mut Scene<'_>, name: &str) -> bool {
+    focus_chain(scene).iter().any(|n| n.split(':').next() == Some(name))
 }

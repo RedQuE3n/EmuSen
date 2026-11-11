@@ -62,8 +62,12 @@ fn glyphs_off(scene: &mut Scene<'_>) -> Vec<String> {
     let mut off = vec![];
     for n in tree.nodes.iter().filter(|n| n.visible && n.name.starts_with("help-")) {
         let label = &n.name["help-".len()..];
-        let Some(g) = tree.nodes.iter().find(|g| g.visible && g.name == format!("helpGlyph-{label}")) else { continue };
-        let side: f64 = scene.property(&n.name, "box").parse().unwrap_or(f64::NAN);
+        let Some(g) = tree.nodes.iter().find(|g| g.visible && g.parent == n.id && g.name == format!("helpGlyph-{label}")) else {
+            off.push(format!("{label}: no glyph drawn"));
+            continue;
+        };
+        // The theme's picture is drawn at the icon's box whether it is shown or not.
+        let side = tree.nodes.iter().find(|p| p.parent == n.id && p.name == format!("helpPicture-{label}")).map_or(f64::NAN, |p| p.w);
         let want = side * 58.0 / 64.0 / emusen_kit_core::glyph::FILLED_DISC_SHARE;
         if !((g.w - want).abs() < 0.01) {
             off.push(format!("{label}: {:.2} against {want:.2} for a box of {side:.2}", g.w));

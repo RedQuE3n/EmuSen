@@ -102,6 +102,7 @@ ElementBox {
                 onClicked: root.esde.pressed(entry.button, false, 0)
                 // The glyph centred in its box, the box and the label each at the nearest pixel (EmuSen_Qt.md §4.12.1).
                 Image {
+                    objectName: "helpPicture-" + entry.label
                     anchors.centerIn: glyph
                     visible: entry.picture.toString().length > 0
                     width: entry.box

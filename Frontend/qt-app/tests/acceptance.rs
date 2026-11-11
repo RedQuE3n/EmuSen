@@ -26,8 +26,8 @@ use emusen_qt_test::{mockup, Harness, Scene};
 use std::path::{Path, PathBuf};
 
 /// Choose a console's elements whose boxes follow from the canvas's eleven consoles on three makers' orbits; the fixture
-/// shelves three consoles of one maker, so these are held by kit-core's orbits test against the canvas's own numbers
-/// (EmuSen_Qt.md §3.4.2).
+/// shelves three consoles of one maker, so these are held to the mockup by theme-audit's test over the canvas's own
+/// eleven consoles, the catalogue `eleven` (EmuSen_Kit.md §7.104).
 const COUNTED: [&str; 7] = ["tile.", "consoleBody.", "consoleName.", "consoleCount.", "consoleRing.", "rowCover.", "makerLabel."];
 
 /// The accepted render's library (Mistress's own-look fixture): eight games on three consoles, by title, each console's

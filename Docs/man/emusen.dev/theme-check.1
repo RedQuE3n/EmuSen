@@ -6,7 +6,7 @@ NAME
 SYNOPSIS
     theme-check [--static] [--state DIR] <folder>...
     theme-audit [--gpu] [--state DIR] [--states LIST] [--catalogue FILE]
-                [--section KEY] <folder>
+                [--section KEY] [--focus NAME] [--mockups DIR] <folder>
     theme-audit --list-states
 
 DESCRIPTION
@@ -248,6 +248,26 @@ THE LOADED STEP
     driver of its own, which the held clock of the timed states would
     have to replace (EmuSen_Kit.md 7.36).
 
+    --mockups DIR (theme-audit alone) holds each screen to its mockup in
+    DIR, the file <package>-<Screen>.mockup.spec (the package's folder
+    name and the screen's, Home, Consoles or Games, in any case), in the
+    default state, by night, at 1280 x 800 and 1920 x 1200, where a design
+    unit is the window's height over 800. Each element the mockup names is
+    found by its objectName and held within two units of every edge it
+    states, to its token's colour as the package's night overrides give
+    it, and to its words (EmuSen_Qt.md 8.2; qt-test's mockup comparison).
+    A difference is a line of kind mockup:
+        .../screens/Home.qml:1 mockup 1280x800 dark: ring: Y 451.1, the
+            mockup's 447.1
+    The built-in themes are held to Testing/themes by theme-audit's tests
+    (EmuSen_Kit.md 7.104); a mockup is never written to the program's
+    numbers.
+
+    --focus NAME (theme-audit alone, with --catalogue) gives the focus to
+    the console a reader hears as NAME before each size is judged, where
+    the crowd's sweep stands for the walk: a canvas that focuses another
+    console than the first (the reference canvas focuses the second).
+
     --catalogue FILE (theme-audit alone) places Choose a console once,
     over the synthetic library with FILE's consoles in place of its own,
     and judges it in both variants at the five sizes, the pad's reach by
@@ -363,6 +383,8 @@ EXAMPLES
     theme-audit --state /tmp/states --catalogue Testing/themes/catalogues/n30.tsv Frontend/themes/emusen
     theme-audit --states all --state /tmp/states Frontend/themes/meridian
     theme-audit --states nogame,splash-3s Frontend/themes/meridian
+    theme-audit --mockups Testing/themes Frontend/themes/horizon
+    theme-audit --catalogue Testing/themes/catalogues/eleven.tsv --focus "Super Nintendo" --mockups /tmp/m Frontend/themes/emusen
     theme-audit Frontend/theme-check/tests/themes/dim-picture
 
         .../dim-picture/screens/Home.qml:1 contrast 1280x800 dark: low

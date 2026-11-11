@@ -10,12 +10,13 @@ use std::path::Path;
 use cxx_qt::QObject;
 use emusen_kit_core::audit::{self, contrast, fit, named, no_chrome, pad_reach, pointer_reach, reached, Fault, Rect};
 use emusen_kit_core::input::{ElementId, UiButton, WalkForm};
-use emusen_kit_core::tokens::Variant;
+use emusen_kit_core::tokens::{colour, Colour, ColourToken, Variant};
 use emusen_kit_qt::kinds;
 use emusen_kit_qt::tokens::qobject::Tokens;
 use emusen_qt_test::ffi::ffi::harness_messages;
 use emusen_qt_test::harness::{edges, palette, Landing, Measures, Step, SETTLE_MS, SIZES};
 use emusen_qt_test::spec::{self, Header};
+use emusen_qt_test::mockup::{self, Mockup};
 use emusen_qt_test::tree::Tree;
 use emusen_qt_test::{Harness, Scene};
 use emusen_theme_manifest::Screen;
@@ -213,11 +214,13 @@ struct Pass<'a> {
     moving: Option<&'a HashSet<String>>,
     /// The places the host declines, by key and by the name a reader hears: exempt from the words' contrast when drawn apart.
     declined: &'a [(&'a str, String)],
+    /// The screen's mockup and the theme's night palette, held where the size is the canvas's or its 1.5 times.
+    mockup: Option<(&'a Mockup, &'a dyn Fn(ColourToken) -> Colour)>,
 }
 
 impl<'a> Pass<'a> {
     fn plain(variants: &'a [Variant], label: &'a str, consoles: Option<&'a [String]>) -> Pass<'a> {
-        Pass { variants, label, consoles, focus: None, press: false, held: false, moving: None, declined: &[] }
+        Pass { variants, label, consoles, focus: None, press: false, held: false, moving: None, declined: &[], mockup: None }
     }
 }
 
@@ -246,7 +249,11 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             let walked = edges(&walk);
             // A state's focus and held press are put on after the walk, and the screen judged and recorded as they leave it.
             if let Some(name) = pass.focus {
-                walk_to(scene, &tree, &walk, name);
+                if pass.consoles.is_some() {
+                    focus_named(scene, &tree, name);
+                } else {
+                    walk_to(scene, &tree, &walk, name);
+                }
             }
             if pass.press {
                 scene.key_hold(RETURN, true);
@@ -273,6 +280,11 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             }
             let seen = held_tree.as_ref().unwrap_or(&tree);
             let shown = scene.focus(seen).map(ElementId);
+            if let Some((m, colours)) = pass.mockup.filter(|_| variant == Variant::Dark && f64::from(w) / f64::from(h) == 1.6) {
+                for fault in mockup::compare_in(m, &seen.nodes, f64::from(h) / 800.0, colours) {
+                    lines.add(screen, "mockup", &format!("{w}x{h} {name}: {fault}"));
+                }
+            }
             // The splash is watched, not operated: nothing on it is clicked, whatever stands at its centre.
             let pointed: HashSet<ElementId> = if screen == Screen::Splash {
                 HashSet::new()
@@ -327,6 +339,12 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             }
         }
     }
+}
+
+/// Gives the focus to the element a reader hears as `name`, where the crowd's sweep stands for the walk; false when none is.
+fn focus_named(scene: &mut Scene<'_>, tree: &Tree, name: &str) -> bool {
+    let target = (0..tree.nodes.len() as u32).find(|&i| tree.nodes[i as usize].operable && spoken(tree, i) == name);
+    target.is_some_and(|i| scene.focus_item(tree, i))
 }
 
 /// Walks the focus by the pad, along the walk's own presses, to the element a reader hears as `name`; false when no walk leads there.
@@ -475,6 +493,8 @@ pub struct Asked<'a> {
     pub catalogue: Option<(&'a str, &'a [Entry])>,
     pub section: Option<&'a str>,
     pub states: Vec<&'static State>,
+    pub mockups: Option<&'a Path>,
+    pub focus: Option<&'a str>,
 }
 
 /// Places a screen afresh and feeds it; the host's words, a line each, when it cannot.
@@ -507,12 +527,18 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Vec<String>,
     // The covers' folder, the one a theme may show pictures from, as the program's start reads it from the settings.
     scene.set_property("host", "coverStores", &library.media.display().to_string());
     let overrides = package.colour_overrides();
+    let night = |t: ColourToken| {
+        let given = overrides.iter().find(|(light, name, _)| !light && name == t.property());
+        given.and_then(|(_, _, value)| Colour::parse(value)).unwrap_or(colour(Variant::Dark, t))
+    };
+    let mockups = asked.mockups.map(|dir| mockups_of(dir, folder)).transpose()?.unwrap_or_default();
     let both = [Variant::Dark, Variant::Light];
     if let (Some((name, _)), Some((view, names))) = (asked.catalogue, library.catalogue.as_ref()) {
         let screen = Screen::Consoles;
         logged();
         let label = format!(", {name}");
-        let pass = Pass::plain(&both, &label, Some(names));
+        let mockup = mockups.iter().find(|(s, _)| *s == screen).map(|(_, m)| (m, &night as &dyn Fn(ColourToken) -> Colour));
+        let pass = Pass { focus: asked.focus, mockup, ..Pass::plain(&both, &label, Some(names)) };
         let session = library.session(view, None)?;
         let fed = Fed { session: &session, declined: &[], reduced: true };
         match placed(&mut scene, &real, screen, |id| feed(id, &library, view, &fed, &overrides, section)) {
@@ -540,7 +566,8 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Vec<String>,
                 None => {
                     let fed = Fed { session: &session, declined: asked_state.declined, reduced: true };
                     let declined: Vec<(&str, String)> = asked_state.declined.iter().filter_map(|&key| place_name(&view, key).map(|name| (key, name))).collect();
-                    let pass = Pass { focus: focus.as_deref(), press: asked_state.press, declined: &declined, ..Pass::plain(&both, &label, None) };
+                    let mockup = mockups.iter().find(|(s, _)| *s == screen && default).map(|(_, m)| (m, &night as &dyn Fn(ColourToken) -> Colour));
+                    let pass = Pass { focus: focus.as_deref(), press: asked_state.press, declined: &declined, mockup, ..Pass::plain(&both, &label, None) };
                     match placed(&mut scene, &real, screen, |id| feed(id, &library, &view, &fed, &overrides, section)) {
                         Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
                         Ok(id) => lines.guarded(screen, |lines| {
@@ -568,6 +595,20 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Vec<String>,
         }
     }
     Ok(lines.out)
+}
+
+/// The package's mockups in `dir`, each `<package>-<Screen>.mockup.spec` with its screen; a file that does not read is an error.
+fn mockups_of(dir: &Path, folder: &Path) -> Result<Vec<(Screen, Mockup)>, String> {
+    let package = std::fs::canonicalize(folder).ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase())).unwrap_or_default();
+    let mut found = Vec::new();
+    for entry in std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?.flatten() {
+        let file = entry.file_name().to_string_lossy().to_lowercase();
+        let Some(stem) = file.strip_suffix(".mockup.spec").and_then(|s| s.strip_prefix(&format!("{package}-"))) else { continue };
+        let Some(screen) = Screen::ALL.into_iter().find(|s| title(*s).to_lowercase() == stem) else { continue };
+        let text = std::fs::read_to_string(entry.path()).map_err(|e| format!("{}: {e}", entry.path().display()))?;
+        found.push((screen, mockup::parse(&text).map_err(|e| format!("{}: {e}", entry.path().display()))?));
+    }
+    Ok(found)
 }
 
 /// A place's name as Home's list gives it, by its key.

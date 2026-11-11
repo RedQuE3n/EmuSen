@@ -310,3 +310,83 @@ fn qt_3_7_states_list_and_an_unknown_one_is_refused() {
     assert_eq!(out.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&out.stderr).contains("lost is not a state"));
 }
+
+/// theme-audit's lines on a package with its mockups in `dir`.
+fn audit_mockups(folder: &Path, dir: &Path) -> (String, i32) {
+    let out = Command::new(PROGRAM).arg("--mockups").arg(dir).arg(folder).output().expect("theme-audit runs");
+    assert!(matches!(out.status.code(), Some(0 | 1)), "theme-audit could not run: {}", String::from_utf8_lossy(&out.stderr));
+    (String::from_utf8_lossy(&out.stdout).into_owned(), out.status.code().unwrap_or(2))
+}
+
+#[test]
+fn qt_3_7_a_screen_is_held_to_its_mockup_at_the_canvas_s_sizes_by_night() {
+    let dir = std::env::temp_dir().join(format!("theme-audit-mockups-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let spec = |h: u32| format!("mockup 1\ncanvas Home 1280 800\nelement Home x=0 y=0 w=1280 h={h}\n");
+    std::fs::write(dir.join("loaded-Home.mockup.spec"), spec(800)).unwrap();
+    let (out, _) = audit_mockups(&themes().join("loaded"), &dir);
+    assert!(!out.contains(" mockup "), "the screen as its mockup states it: {out}");
+    std::fs::write(dir.join("loaded-Home.mockup.spec"), spec(700)).unwrap();
+    let (out, status) = audit_mockups(&themes().join("loaded"), &dir);
+    let found: Vec<&str> = out.lines().filter(|l| l.contains(" mockup ")).collect();
+    assert_eq!(status, 1, "{out}");
+    assert_eq!(found.len(), 2, "1280 x 800 and 1920 x 1200 by night, nothing else: {out}");
+    for size in ["1280x800 dark", "1920x1200 dark"] {
+        assert!(found.iter().any(|l| l.ends_with(&format!("loaded/screens/Home.qml:1 mockup {size}: Home: H 800.0, the mockup's 700"))), "{size}: {out}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The built-in themes' mockups (Testing/themes): Home, Games and Choose a console held to the canvases they were drawn from.
+fn built_in(theme: &str) {
+    let mockups = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../Testing/themes");
+    let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../themes").join(theme);
+    let held = std::fs::read_dir(&mockups).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().to_lowercase().starts_with(&format!("{theme}-"))).count();
+    assert_eq!(held, 3, "{theme}: Home, Games and Consoles");
+    let (out, _) = audit_mockups(&folder, &mockups);
+    let found: Vec<&str> = out.lines().filter(|l| l.contains(" mockup ")).collect();
+    assert!(found.is_empty(), "{theme}: {} differences from its mockups:\n{}", found.len(), found.join("\n"));
+}
+
+#[test]
+fn qt_3_4_3_horizon_is_held_to_its_mockups() {
+    built_in("horizon");
+}
+
+#[test]
+fn qt_3_4_4_meridian_is_held_to_its_mockups() {
+    built_in("meridian");
+}
+
+#[test]
+fn qt_3_4_5_constellation_is_held_to_its_mockups() {
+    built_in("constellation");
+}
+
+#[test]
+fn qt_3_4_6_orrery_is_held_to_its_mockups() {
+    built_in("orrery");
+}
+
+#[test]
+fn qt_3_4_2_choose_a_console_over_the_canvas_s_eleven_consoles_is_its_mockup() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let dir = std::env::temp_dir().join(format!("theme-audit-canvas-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // The reference theme's approved canvas, under the name theme-audit finds a package's mockup by.
+    std::fs::copy(root.join("Testing/mockups/Consoles.mockup.spec"), dir.join("emusen-Consoles.mockup.spec")).unwrap();
+    let out = Command::new(PROGRAM)
+        .arg("--catalogue")
+        .arg(root.join("Testing/themes/catalogues/eleven.tsv"))
+        .args(["--focus", "Super Nintendo", "--mockups"])
+        .arg(&dir)
+        .arg(root.join("Frontend/themes/emusen"))
+        .output()
+        .expect("theme-audit runs");
+    let out = String::from_utf8_lossy(&out.stdout).into_owned();
+    let found: Vec<&str> = out.lines().filter(|l| l.contains(" mockup ")).collect();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(found.is_empty(), "{} differences from the canvas:\n{}", found.len(), found.join("\n"));
+}

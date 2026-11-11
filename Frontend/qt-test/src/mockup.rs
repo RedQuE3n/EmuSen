@@ -144,6 +144,11 @@ pub fn token(name: &str) -> Option<ColourToken> {
 /// The state's items (a tree's nodes) held to the mockup: each element found by its objectName, its box in design units (the scene's
 /// pixels over `unit`) within `UNITS` of every stated edge, its paints holding its token's colour or its ink, and its words.
 pub fn compare(m: &Mockup, nodes: &[Node], unit: f64, variant: Variant) -> Vec<String> {
+    compare_in(m, nodes, unit, &|t| tokens::colour(variant, t))
+}
+
+/// As `compare`, each token's colour as `palette` gives it: a theme's, its overrides over the kit's.
+pub fn compare_in(m: &Mockup, nodes: &[Node], unit: f64, palette: &dyn Fn(ColourToken) -> Colour) -> Vec<String> {
     let mut faults = Vec::new();
     for e in &m.elements {
         let Some(i) = nodes.iter().position(|n| n.name == e.name && n.visible) else {
@@ -171,7 +176,7 @@ pub fn compare(m: &Mockup, nodes: &[Node], unit: f64, variant: Variant) -> Vec<S
         }
         let same =
             |a: Colour, b: Colour, levels: u8| a.r.abs_diff(b.r) <= levels && a.g.abs_diff(b.g) <= levels && a.b.abs_diff(b.b) <= levels;
-        let wanted = e.token.as_deref().and_then(token).map(|t| (tokens::colour(variant, t), 0u8)).or(e.ink.map(|c| (c, 1u8)));
+        let wanted = e.token.as_deref().and_then(token).map(|t| (palette(t), 0u8)).or(e.ink.map(|c| (c, 1u8)));
         if let Some((want, levels)) = wanted {
             match paints.iter().find(|p| same(**p, want, levels)) {
                 None => faults.push(format!(

@@ -3023,3 +3023,39 @@ press; the search box and the four rows above it are reached only by X, which en
 does not reach, while the keyboard is up" is removed, so `cores.rs` fails with five unreached items at each size until
 the tester rules between the shoulders taking the focus to the list, as the grid's search does, and the docked keyboard
 as a modal state, the screen behind a backdrop.
+
+### 7.104 The mockups held: Choose a console over the canvas's consoles, and the themes' screens (repair piece DC-A; 2026-11-11)
+
+**Choose a console.** The acceptance test's library shelves three consoles of one maker, so the canvas's eleven
+consoles on three makers' orbits cannot be compared there; its comparison left out every console element and said
+kit-core's orbits test held them, which reads no mockup. The program's test world cannot shelve the canvas's Sega and
+Sony consoles (a synthetic game in each of their folders is listed by no scan: measured 2026-11-11, as theme-audit's
+world found on 2026-11-08), so the comparison is theme-audit's: its test
+`qt_3_4_2_choose_a_console_over_the_canvas_s_eleven_consoles_is_its_mockup` places the reference theme's Choose a
+console over the catalogue `eleven` (the canvas's consoles, `Testing/themes/catalogues/eleven.tsv`) with `--focus
+"Super Nintendo"`, the second, as the canvas has it, and holds every element of `Testing/mockups/Consoles.mockup.spec`
+at 1280 × 800 and 1920 × 1200 by night. The acceptance test's comment points there.
+
+The mockup had been edited toward the program in four commits. The figures that carried the tester's decision of
+2026-11-08 (small text is 19 units: the maker labels 22.8 tall from y 149.2 and 217.04, the counts 22.8 tall) stay;
+the rest are the canvas's again:
+
+| Element | Program's figure written in | Canvas's figure restored | Commit and its source |
+|---|---|---|---|
+| `placeDisc.0`, `placeName.0` x | 326.4, 378.4 | 318, 370 | 62367944c: the names' widths as a browser draws them |
+| `placeDisc.1`, `placeName.1` x | 527, 579 | 522, 574 | 62367944c, the same |
+| `placeDisc.2`, `placeName.2` x | 735.7, 787.7 | 737, 789 | 62367944c, the same |
+| `consoleDetailName` y, h | 611, 53 | 612, 44 | 2d5fdeafc: Barlow Condensed's own line box |
+| `tile.4` | 434.72, 458.1, 88 × 88 | 423.72, 447.1, 110 × 110 | 4e1969d84: the focused body at 88 to clear an inner count |
+| `consoleBody.1` | 434.72, 458.1, 88 × 88 | 430.72, 454.1, 96 × 96 | 4e1969d84, the same |
+| `consoleRing.1` | 427.72, 451.1, 102 × 102 | 423.72, 447.1, 110 × 110 | 4e1969d84, the same |
+| `consoleName.1`, `consoleCount.1` y | 554.1, 578.1 | 558.1, 582.1 | 4e1969d84, the same |
+
+**The themes.** `theme-audit --mockups DIR` (man theme-check) holds each screen of a package to
+`<package>-<Screen>.mockup.spec` in the default state, by night, at the canvas's two sizes, token colours as the
+package's night overrides give them. theme-audit's tests hold Horizon, Meridian, Constellation and Orrery to their
+twelve mockups in `Testing/themes`, which no test read before. Two edits toward the program are undone there:
+Constellation's chart (y 88, 484 tall, d26becdce) is the canvas's 96 and 468 again, and `gridCell.5` of Constellation's
+Games, deleted in a635cb1df, is back. a635cb1df's other change, the eyebrow's line box from 20 to 22.8, is the 19-unit
+small text of the tester's decision and stays; Horizon's 24-unit engine tag and 22.8 maker label (88fdeb837) likewise,
+and its shelves at x 32 are the canvas's camera rule (horizon.md §1.6) applied to the first console focused.

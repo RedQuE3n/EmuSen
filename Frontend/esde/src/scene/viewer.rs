@@ -311,6 +311,7 @@ impl Viewer {
         if let Some(text) = self.left_words(settings) {
             out.push(placed("left", (LEFT_WORDS * w).round(), strip_y, w / 2.0, strip, 1.0, Paint::Text(words(&text, INK, None))));
         }
+        let spacing = 0.00833 * w;
         let help = Paint::Help(Help {
             entries: self.entries(),
             font: super::paint::es_de_help_face(data),
@@ -318,12 +319,13 @@ impl Viewer {
             label_color: Color(INK),
             icon_color: Color(INK),
             background: None,
-            entry_spacing: 0.00833 * w,
+            entry_spacing: spacing,
             icon_gap: 0.00416 * w,
             scale: 1.0,
             filled_glyphs: true,
         });
-        let (hw, hh) = measures.get(&key(&["mediaviewer", "help"])).map_or((0.0, 0.0), |m| (m.1, m.2));
+        // Measured as ES-DE's grid, its trailing spacing in; the strip seen is centred.
+        let (hw, hh) = measures.get(&key(&["mediaviewer", "help"])).map_or((0.0, 0.0), |m| ((m.1 - spacing).max(0.0), m.2));
         out.push(placed("help", (w - hw) / 2.0, strip_y + (strip - hh) / 2.0, hw, hh, 1.0, help));
         out
     }

@@ -703,3 +703,53 @@ fn a_vertical_container_of_fixed_height_shows_whole_rows_unless_the_theme_turns_
     assert!(!snap("across"), "a horizontal container has no rows to snap");
     assert!(!snap("grows"), "a box that grows to its words has no window to cut");
 }
+
+fn help_paint(t: &Synth, help: &str, size: Option<(f64, f64)>) -> Help {
+    let mut s = stage(t, "", &format!("<helpsystem name=\"h\"><entries>a,b</entries>{help}</helpsystem>"), "gamelist", 0);
+    if let Some((w, h)) = size {
+        (s.current.data.width, s.current.data.height) = (w, h);
+    }
+    let Paint::Help(h) = placed(&s.frame(), "h").paint.clone() else { panic!() };
+    h
+}
+
+// ES-DE 3.4.1's help numbers from a theme, in f32 (EmuSen_Qt.md §4.12.4; es-core HelpComponent.cpp applyTheme, Font.cpp
+// getFromTheme and Font::Font, Font.h getSmallFont). No capture holds the clamps; each is held here from the rule.
+#[test]
+fn the_help_s_size_spacings_and_scale_are_es_de_s_in_f32_with_its_clamps() {
+    let t = Synth::new();
+    let h = help_paint(&t, "<fontSize>0.04583333</fontSize><entrySpacing>0.015625</entrySpacing><iconTextSpacing>0.00651042</iconTextSpacing><entryRelativeScale>0.7</entryRelativeScale>", None);
+    assert_eq!(h.px, f64::from(0.045_833_33_f32 * H as f32), "fontSize × height in f32");
+    assert_eq!((h.entry_spacing, h.icon_gap), (f64::from(0.015_625_f32 * W as f32), f64::from(0.006_510_42_f32 * W as f32)));
+    assert_eq!(h.scale, f64::from(0.7_f32));
+    let h = help_paint(&t, "<fontSize>0.0001</fontSize><entrySpacing>0.06</entrySpacing><iconTextSpacing>0.05</iconTextSpacing><entryRelativeScale>0.1</entryRelativeScale>", None);
+    assert_eq!((h.px, h.entry_spacing, h.icon_gap, h.scale), (3.0, f64::from(0.04_f32 * W as f32), f64::from(0.04_f32 * W as f32), f64::from(0.2_f32)), "the floors and ceilings");
+    let h = help_paint(&t, "<fontSize>2</fontSize><entryRelativeScale>4</entryRelativeScale>", None);
+    assert_eq!((h.px, h.scale), (1.5 * H, 3.0), "1.5 heights, a scale of 3");
+    let h = help_paint(&t, "", None);
+    assert_eq!((h.px, h.entry_spacing, h.icon_gap), (f64::from(0.035_f32 * W.min(H) as f32), f64::from(0.008_33_f32 * W as f32), f64::from(0.004_16_f32 * W as f32)), "the defaults");
+    let h = help_paint(&t, "", Some((200.0, 320.0)));
+    assert_eq!(h.px, f64::from(0.035_f32 * 200.0), "the default size is of the shorter side, here the width");
+}
+
+// The strip measured as ES-DE's grid (its width with the trailing spacing, the row's height) is placed by two roundings
+// with the spacing's share of the origin, and its box is the strip seen (EmuSen_Qt.md §4.12.4; HelpComponent.cpp
+// updateGrid, GuiComponent.cpp getTransform).
+#[test]
+fn the_help_strip_is_placed_by_es_de_s_rule_from_its_grid() {
+    let t = Synth::new();
+    let help = "<helpsystem name=\"h\"><entries>a,b</entries><pos>0.5 0.9375</pos><origin>0.5 1</origin><entrySpacing>0.015625</entrySpacing></helpsystem>";
+    let mut s = stage(&t, "", help, "gamelist", 0);
+    let id = placed(&s.frame(), "h").id;
+    let es = f64::from(0.015_625_f32 * W as f32);
+    s.measured(id, 101.3 + es, 33.75);
+    let p = placed(&s.frame(), "h").clone();
+    let x = ((0.5 * W + es * 0.5) as f32).round() + (-0.5 * (101.3 + es) as f32).round();
+    let y = ((0.9375 * H) as f32).round() + (-33.75_f32).round();
+    assert_eq!((p.x, p.y, p.w, p.h), (f64::from(x), f64::from(y), 101.3 + es - es, 33.75));
+    let mut s = stage(&t, "", "<helpsystem name=\"h\"><entries>a,b</entries></helpsystem>", "gamelist", 0);
+    let id = placed(&s.frame(), "h").id;
+    s.measured(id, 80.0, 20.0);
+    let p = placed(&s.frame(), "h").clone();
+    assert_eq!((p.x, p.y), (f64::from((0.012 * W as f32).round()), f64::from((0.9515 * H as f32).round())), "ES-DE's default place, origin 0");
+}

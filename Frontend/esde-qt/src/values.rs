@@ -176,6 +176,8 @@ pub fn element(p: &Placed, primary: Option<&Primary>, role: &str) -> V {
             "entryScale" => Some(V::N(x.scale)),
             "filled" => Some(V::B(x.filled_glyphs)),
             "barWidth" => Some(V::N(crate::help::places(x).width)),
+            "rowHeight" => Some(V::N(crate::help::row_height(x).unwrap_or(0.0))),
+            "labelPx" => Some(V::N(crate::help::label_px(x))),
             _ => background(&x.background, role),
         },
         Paint::Info(x) => match role {
@@ -476,7 +478,7 @@ pub fn part(p: &Paint, i: usize, role: &str, swap: bool) -> V {
 }
 
 /// Every role name the element model answers, in role order.
-pub const ELEMENT_ROLES: [&str; 115] = [
+pub const ELEMENT_ROLES: [&str; 116] = [
     "elementId", "paint", "name", "boxX", "boxY", "boxWidth", "boxHeight", "turn", "originX", "originY", "alpha",
     "source", "fit", "cropX", "cropY", "tileWidth", "tileHeight", "tileRight", "tileBottom", "tint", "tintEnd", "gradientVertical",
     "saturation", "radius", "nearest", "frame",
@@ -491,7 +493,7 @@ pub const ELEMENT_ROLES: [&str; 115] = [
     "primaryColor", "secondaryColor", "selectedColor", "selectedSecondaryColor", "margin", "markerWidth",
     "columns", "itemWidth", "itemHeight", "pitchX", "pitchY", "marginX", "marginY", "itemScale", "focusFrom", "fromLevel", "toLevel",
     "progress", "unfocusedOpacity", "unfocusedSaturation", "unfocusedDim", "imageScale", "hasSelectedTint", "selectedTint", "ownFace",
-    "pageIndex", "stretch", "audio", "blur",
+    "pageIndex", "stretch", "audio", "blur", "labelPx",
 ];
 
 /// The grid's roles past the element list's first 112.

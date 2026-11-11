@@ -429,13 +429,13 @@ fn help_element(e: &Element, ctx: &Ctx) -> Option<Draft> {
     let paint = Paint::Help(Help {
         entries,
         font: help_face(e, ctx.data),
-        px: e.float("fontSize").unwrap_or(0.035) as f64 * ctx.h,
+        px: help::font_px(e, ctx.w, ctx.h),
         label_color: color(e, "textColor", 0x7777_77FF),
         icon_color: color(e, "iconColor", 0x7777_77FF),
         background: padded(e, ctx, Tint { color: bg, end: bg, vertical: false }),
-        entry_spacing: e.float("entrySpacing").unwrap_or(0.00833) as f64 * ctx.w,
-        icon_gap: e.float("iconTextSpacing").unwrap_or(0.00416) as f64 * ctx.w,
-        scale: e.float("entryRelativeScale").unwrap_or(1.0) as f64,
+        entry_spacing: help::spacing_px(e, "entrySpacing", 0.00833, ctx.w),
+        icon_gap: help::spacing_px(e, "iconTextSpacing", 0.00416, ctx.w),
+        scale: help::scale(e),
         filled_glyphs: true,
     });
     Some(Draft { paint, size: (0.0, 0.0), sizing: Sizing::Content { auto_w: true, auto_h: true }, scroll: None })

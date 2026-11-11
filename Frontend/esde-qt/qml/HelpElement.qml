@@ -27,17 +27,15 @@ ElementBox {
     required property real padBottom
     property int family: Kit.Families.Generic
     readonly property string faceName: face.status === FontLoader.Ready ? face.font.family : body.font.family
-    // THEMES.md: fontSize sets the text and the icons; entryRelativeScale above 1 shrinks the icons, below 1 the text.
-    // The element's height over the font's size, measured on its captures (EmuSen_Qt.md §4.8.7).
-    readonly property real heightShare: 0.9
-    readonly property real lineHeight: root.px * root.heightShare
+    // ES-DE's row: 1.25 × the rendered S at the font's size, unrounded (EmuSen_Qt.md §4.12.4).
+    required property real rowHeight
     // ES-DE's disc reaches 58 of its icon's 64 units; the kit's glyph is sized so its own disc does (EmuSen_Qt.md §4.12.1).
     readonly property real discEdge: 58 / 64
+    // The grid's width, its trailing spacing in; the scene places the strip from it and gives the box the strip seen.
     required property real barWidth
-    readonly property real labelPx: root.px * Math.min(1, root.entryScale)
-    // The bar starts at the nearest pixel to its place and ends at its last label (EmuSen_Qt.md §4.12.1).
-    readonly property real barStart: Math.round(root.boxX)
-    readonly property size extent: Qt.size(root.barWidth, root.lineHeight)
+    required property real labelPx
+    readonly property real barStart: root.boxX
+    readonly property size extent: Qt.size(root.barWidth, root.rowHeight)
     PartsModel {
         id: parts
         scene: root.esde
@@ -60,8 +58,8 @@ ElementBox {
         visible: root.hasBackground
         x: -root.padLeft
         y: -root.padTop
-        width: root.extent.width + root.padLeft + root.padRight
-        height: root.lineHeight + root.padTop + root.padBottom
+        width: root.boxWidth + root.padLeft + root.padRight
+        height: root.rowHeight + root.padTop + root.padBottom
         radius: root.backgroundRadius
         gradient: Gradient {
             orientation: root.backgroundVertical ? Gradient.Vertical : Gradient.Horizontal
@@ -69,13 +67,13 @@ ElementBox {
             GradientStop { position: 1; color: root.backgroundEnd }
         }
     }
-    // The bar's width and the line's height are the element's size, the bar centred on the line: the scene places it by its origin once measured (EmuSen_Qt.md §4.8.5).
+    // The grid's width and the row's height are its measure: the scene places the strip by ES-DE's rule from them (EmuSen_Qt.md §4.12.4).
     onExtentChanged: root.esde.measured(root.elementId, root.extent.width, root.extent.height)
     Item {
         id: bar
         objectName: "esdeHelp"
-        width: root.barWidth
-        height: root.lineHeight
+        width: root.boxWidth
+        height: root.rowHeight
         Repeater {
             model: parts
             AbstractButton {
@@ -96,7 +94,7 @@ ElementBox {
                 objectName: "help-" + entry.label
                 x: Math.round(root.barStart + entry.start) - root.boxX
                 width: words.x + words.width
-                height: root.lineHeight
+                height: root.rowHeight
                 focusPolicy: Qt.NoFocus
                 background: null
                 onClicked: root.esde.pressed(entry.button, false, 0)

@@ -32,7 +32,7 @@ fn kit_7_108_only_the_pointers_own_move_focuses() {
     scene.wait(50);
     scene.click(744.0, 104.0);
     scene.wait(50);
-    assert_eq!(scene.property("scene", "accepted"), "0", "a click on a disabled walkable pressed no A");
+    assert_eq!(scene.property("scene", "returns"), "0", "a click on a disabled walkable pressed no A");
     assert_eq!(scene.property("row", "activeFocus"), "true", "and left the focus on the row");
     // The pointer's own move onto a walkable focuses it.
     scene.hover(100.0, 120.0);

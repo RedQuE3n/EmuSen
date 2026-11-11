@@ -9,7 +9,7 @@ Window {
     width: 960
     height: 240
     color: Kit.Tokens.voidFill
-    property int accepted: 0
+    property int returns: 0
     Kit.FrameController {
         id: controller
     }
@@ -22,7 +22,7 @@ Window {
             objectName: "row"
             anchors.fill: parent
             focus: true
-            Keys.onReturnPressed: scene.accepted += 1
+            Keys.onReturnPressed: scene.returns += 1
         }
     }
     Kit.Walkable {

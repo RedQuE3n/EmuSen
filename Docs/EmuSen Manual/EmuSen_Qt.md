@@ -3651,19 +3651,21 @@ the painter is held to ES-DE 3.4.1, not to the C# painter (R-20261111-77).
 **The rule.** f32 throughout, as ES-DE computes it; "round" is half away from zero.
 
 1. *The font's size* (`resources/Font.cpp`, `Font::getFromTheme` and `Font::Font`; `resources/Font.h`, `getSmallFont`;
-   `components/HelpComponent.h`, the constructor's default font). A theme's `fontSize` × the screen's height, clamped to
-   0.001–1.5 heights; without one, 0.035 × the shorter side. The font then clamps it to 3 px – 1.5 heights. It is not
-   rounded. `emusen_esde::scene::help::font_px`.
+   `components/HelpComponent.h`, the constructor's default font). A theme's `fontSize` × the screen's height (the
+   share held to 0.001–1.5, as ES-DE clamps it, by the loader from `catalog.tsv`); without one, 0.035 × the shorter
+   side. The font then clamps it to 3 px – 1.5 heights. It is not rounded. `emusen_esde::scene::help::font_px`.
 2. *What FreeType is given* (`Font.cpp`, `FontFace::FontFace`): `FT_Set_Char_Size(face, 0, trunc(size × 64), 0, 0)`,
    the 26.6 height cut by the integer cast at the default 72 dpi. `esde-qt`'s `hinted::char_size`.
 3. *The letter height* (`Font.cpp`, `Font::Font` and `Font::getGlyph`): the rows of the `S` bitmap after
    `FT_Load_Char(…, FT_LOAD_RENDER)`, whole pixels. `hinted::rows`.
 4. *The row and the icon* (`components/HelpComponent.cpp`, `applyTheme` and `updateGrid`): the row is 1.25 × that
-   letter height, taken at the size before `entryRelativeScale` (clamped to 0.2–3), unrounded. Below a scale of 1 the
+   letter height, taken at the size before `entryRelativeScale` (held to 0.2–3 by the loader), unrounded. Below a scale of 1 the
    labels are drawn at size × scale and the icon is the row; at 1 or above the labels keep the size and the icon is
    the row ÷ scale. `help::row_height`, `help::icon_box`, `help::label_px`.
 5. *The spacings* (`HelpComponent.cpp`, `applyTheme`): `entrySpacing` and `iconTextSpacing` clamped to 0–0.04, defaults
-   0.00833 and 0.00416, × the screen's width, unrounded. `scene::help::spacing_px`.
+   0.00833 and 0.00416, × the screen's width, unrounded. The loader holds the shares and gives the defaults
+   (`catalog.tsv`, the one owner of each range); `scene::help::spacing_px` multiplies. A seeded fault that took the clamp
+   out of the scene was not caught on 2026-11-11 because the loader had already clamped: the clamp is the loader's alone.
 6. *The grid's width* (`HelpComponent.cpp`, `updateGrid`): the sum over the entries of icon + label + `iconTextSpacing`
    + `entrySpacing`, the spacing after the last entry included; each label's width is already whole (each glyph's
    advance rounded, §4.9). Each part's place is the sum of those before it (`components/ComponentGrid.cpp`,

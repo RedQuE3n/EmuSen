@@ -125,24 +125,23 @@ pub fn entries(view: &str, e: &Element, data: &Data) -> Vec<HelpEntry> {
 // The strip's numbers as ES-DE 3.4.1 takes them from a theme, in f32 as it computes them (EmuSen_Qt.md §4.12.4): es-core
 // HelpComponent.cpp (the constructor, applyTheme, updateGrid), Font.h getSmallFont, Font.cpp getFromTheme and Font::Font.
 
-/// The font's size in pixels: a theme's fontSize × the screen's height, clamped to 0.001–1.5 heights; without one, the
-/// default share (the loader's, 0.035) × the shorter side; then clamped to 3 px – 1.5 heights, as the font is made.
+/// The font's size in pixels: a theme's fontSize (the loader holds it to 0.001–1.5) × the screen's height; without one,
+/// the default share (the loader's, 0.035) × the shorter side; then clamped to 3 px – 1.5 heights, as the font is made.
 pub fn font_px(e: &Element, w: f64, h: f64) -> f64 {
     let (w, h) = (w as f32, h as f32);
     let share = e.float("fontSize").unwrap_or(0.035);
-    let size = if e.explicit.contains_key("fontSize") { (h * share).clamp(h * 0.001, h * 1.5) } else { share * w.min(h) };
+    let size = if e.explicit.contains_key("fontSize") { h * share } else { share * w.min(h) };
     f64::from(size.clamp(3.0, h * 1.5))
 }
 
-/// A spacing in pixels: the theme's share clamped to 0–0.04, or the default, times the screen's width.
-pub fn spacing_px(e: &Element, property: &str, default: f32, w: f64) -> f64 {
-    let share = e.float(property).map_or(default, |s| s.clamp(0.0, 0.04));
-    f64::from(share * w as f32)
+/// A spacing in pixels: the theme's share (the loader holds it to 0–0.04, its default ES-DE's) times the screen's width.
+pub fn spacing_px(e: &Element, property: &str, w: f64) -> f64 {
+    f64::from(e.float(property).unwrap_or(0.0) * w as f32)
 }
 
-/// entryRelativeScale, clamped to 0.2–3.
+/// entryRelativeScale, which the loader holds to 0.2–3.
 pub fn scale(e: &Element) -> f64 {
-    f64::from(e.float("entryRelativeScale").map_or(1.0, |s| s.clamp(0.2, 3.0)))
+    f64::from(e.float("entryRelativeScale").unwrap_or(1.0))
 }
 
 /// The strip's drawn top left from its grid's size (the entries' sum with its trailing spacing, and the row's height):

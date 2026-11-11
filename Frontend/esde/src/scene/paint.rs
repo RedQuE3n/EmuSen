@@ -433,8 +433,8 @@ fn help_element(e: &Element, ctx: &Ctx) -> Option<Draft> {
         label_color: color(e, "textColor", 0x7777_77FF),
         icon_color: color(e, "iconColor", 0x7777_77FF),
         background: padded(e, ctx, Tint { color: bg, end: bg, vertical: false }),
-        entry_spacing: help::spacing_px(e, "entrySpacing", 0.00833, ctx.w),
-        icon_gap: help::spacing_px(e, "iconTextSpacing", 0.00416, ctx.w),
+        entry_spacing: help::spacing_px(e, "entrySpacing", ctx.w),
+        icon_gap: help::spacing_px(e, "iconTextSpacing", ctx.w),
         scale: help::scale(e),
         filled_glyphs: true,
     });

@@ -3006,6 +3006,10 @@ address would have been taken for the old one by `setModel`'s same-model check a
 hears the model's `destroyed` (declared beside the reset signals in `item_model.rs`, private in the same way): from
 then it holds no model, says so through `model`'s change signal, and is settled. The connections Qt drops with the
 model are let go when the next model is handed over. Held to: the same test, a second gate in the scene handed its
-model through a `var` assigned once in a handler (a binding on the model's id would be told of the deletion and hand the
-gate null itself, which is how the scene first passed with the fault in place); the model deleted, the gate holds none
-(`model === null`), and a model handed after is held and its reset heard. Seeded on 2026-11-11: the `destroyed` connection left out, the gate still holding the deleted model.
+model by assignment to the gate's `model`, with no binding; the model deleted, the gate holds none (`model === null`),
+and a model handed after is held and its reset heard. Seeded on 2026-11-11: the `destroyed` connection left out, the
+gate still holding the deleted model. A binding does not show the fault: measured on 2026-11-11, a gate bound to the
+model's id, and one bound through a `property var` (as `PageFrame`'s `tileModel` is), each passed the test with the
+fault in place, because QML tells both of the deletion (the id's guard, and the guard a `var` property keeps on the
+object it holds) and the binding hands the gate null itself. So `PageFrame` was not exposed; the gate now guards itself
+for a model handed to it any other way.

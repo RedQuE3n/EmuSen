@@ -35,7 +35,6 @@ pub mod qobject {
         Pause,
         PausePage,
         Card,
-        CardStart,
         Search,
         PauseSlots,
         PauseReel,
@@ -60,6 +59,8 @@ pub mod qobject {
         GamePageChange,
         GamePageChoose,
         GamePageNone,
+        /// Start Console's page of a card (EmuSen_Qt.md §7.9), after every screen before it so their numbers stay.
+        CardStart,
     }
 
     extern "RustQt" {

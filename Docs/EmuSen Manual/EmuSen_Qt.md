@@ -4824,8 +4824,9 @@ ToolScreen (EmuSen_Kit.md §7.43) on the GPU, where Cores is held for the first 
 failing, for the tester to rule on how the kit's column is to be fixed.
 
 **The game page's States hold.** qt-app's `game_page` failed once at GamePageStates ("the pad does not reach" the State
-tiles) while the machine ran other builds (2026-11-11 04:15); run again on this branch under a load average of 22 it
-passed (05:10). Which of load or the runtime's state records caused the failure is not proven.
+tiles) while the machine ran other builds (2026-11-11 04:15); run again on this branch it passed under a load average of
+22 (05:10) and failed under one of 5 (05:50, at 1280 × 720, three State tiles). It is intermittent and does not follow
+the load; whether the runtime's state records cause it is not proven, and it is open.
 
 **Held to** (measured on 2026-11-11): qt-models' `sorts`, `home_card_acts`, `failures`, and `cores`'s
 `a_failed_rescan_and_an_unread_firmware_are_said_never_taken_for_none_needed`, `start_console` and `runtime_records`;

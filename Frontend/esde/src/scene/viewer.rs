@@ -312,7 +312,7 @@ impl Viewer {
         }
         let help = Paint::Help(Help {
             entries: self.entries(),
-            font: Face { file: data.default_font.clone(), own: true },
+            font: super::paint::es_de_help_face(data),
             px: WORDS * h,
             label_color: Color(INK),
             icon_color: Color(INK),

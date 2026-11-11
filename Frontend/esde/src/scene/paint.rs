@@ -60,6 +60,23 @@ pub(super) fn face_of(e: &Element, data: &Data) -> Face {
     }
 }
 
+/// A help element's face: the theme's `fontPath`, else ES-DE's help face, which rounds every advance as a theme's face
+/// does (EmuSen_Qt.md §4.12.1), else its default face.
+pub(super) fn help_face(e: &Element, data: &Data) -> Face {
+    match existing(e.path("fontPath")) {
+        Some(file) => Face { file: Some(file), own: false },
+        None => es_de_help_face(data),
+    }
+}
+
+/// ES-DE's own help face where the host found it, else its default face.
+pub(super) fn es_de_help_face(data: &Data) -> Face {
+    match &data.help_font {
+        Some(file) => Face { file: Some(file.clone()), own: false },
+        None => Face { file: data.default_font.clone(), own: true },
+    }
+}
+
 pub(super) fn color(e: &Element, property: &str, default: u32) -> Color {
     e.color(property).unwrap_or(Color(default))
 }
@@ -409,7 +426,7 @@ fn help_element(e: &Element, ctx: &Ctx) -> Option<Draft> {
     let bg = color(e, "backgroundColor", 0);
     let paint = Paint::Help(Help {
         entries,
-        font: face_of(e, ctx.data),
+        font: help_face(e, ctx.data),
         px: e.float("fontSize").unwrap_or(0.035) as f64 * ctx.h,
         label_color: color(e, "textColor", 0x7777_77FF),
         icon_color: color(e, "iconColor", 0x7777_77FF),

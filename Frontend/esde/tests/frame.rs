@@ -296,6 +296,23 @@ fn the_help_names_es_de_s_actions_on_the_buttons_and_icons_of_the_pad() {
 }
 
 #[test]
+fn the_help_takes_es_de_s_help_face_where_found_and_its_default_face_else() {
+    let t = Synth::new();
+    let gamelist = "<helpsystem name=\"h\"><entries>a,b</entries></helpsystem><text name=\"t\"><text>HELLO</text></text>";
+    let mut s = stage(&t, "", gamelist, "gamelist", 0);
+    s.current.data.default_font = Some("/f/Akrobat-Regular.ttf".to_owned());
+    let f = s.frame();
+    let Paint::Help(h) = &placed(&f, "h").paint else { panic!() };
+    assert_eq!(h.font, Face { file: Some("/f/Akrobat-Regular.ttf".to_owned()), own: true }, "no help face: the default face");
+    s.current.data.help_font = Some("/f/Akrobat-SemiBold.ttf".to_owned());
+    let f = s.frame();
+    let Paint::Help(h) = &placed(&f, "h").paint else { panic!() };
+    assert_eq!(h.font, Face { file: Some("/f/Akrobat-SemiBold.ttf".to_owned()), own: false }, "its advances rounded as a theme face's");
+    let Paint::Text(x) = &placed(&f, "t").paint else { panic!() };
+    assert_eq!(x.font.file.as_deref(), Some("/f/Akrobat-Regular.ttf"), "other text keeps the default face");
+}
+
+#[test]
 fn badges_lay_out_the_game_s_slots_and_status_shows_the_device() {
     let t = Synth::new();
     let gamelist = "<badges name=\"b\"><pos>0 0</pos><size>0.4 0.1</size><slots>favorite controller</slots><itemsPerLine>2</itemsPerLine><lines>1</lines><itemMargin>0 0</itemMargin></badges>

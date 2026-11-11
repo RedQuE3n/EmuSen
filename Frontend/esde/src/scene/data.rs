@@ -223,6 +223,8 @@ pub struct Data {
     pub selection_seed: u64,
     /// The face of a text whose theme names none: ES-DE's own where the host found it (`fonts`), else the painter's body face.
     pub default_font: Option<String>,
+    /// The face of the help where its theme names none: ES-DE's help face beside its default (`fonts::help_font`).
+    pub help_font: Option<String>,
     /// The player's media viewer settings.
     pub viewer: super::viewer::ViewerSettings,
 }
@@ -248,6 +250,7 @@ impl Data {
             scroll_overlay: false,
             selection_seed: 0,
             default_font: None,
+            help_font: None,
             viewer: super::viewer::ViewerSettings::default(),
         }
     }

@@ -107,6 +107,7 @@ impl Painter {
         // The gameselectors' random picks start from the host's seed, else the install's time, so a pinned time pins them too.
         data.selection_seed = self.selection_seed.unwrap_or(now.seconds() as u64);
         data.default_font = self.default_font.clone().or_else(|| fonts::default_font().map(|p| p.to_string_lossy().into_owned()));
+        data.help_font = data.default_font.as_deref().and_then(|d| fonts::help_font(std::path::Path::new(d))).map(|p| p.to_string_lossy().into_owned());
         data.show_clock = self.settings.show_clock;
         data.show_help = self.settings.show_help;
         data.scroll_overlay = self.settings.scroll_overlay;

@@ -10,6 +10,9 @@ pub const REFERENCE: &str = "S";
 
 /// ES-DE's default face, the one file looked for.
 pub const FILE: &str = "Akrobat-Regular.ttf";
+/// The face ES-DE draws its help prompts in, beside its default face: Akrobat SemiBold, measured on its captures
+/// (EmuSen_Qt.md §4.12.1).
+pub const HELP_FILE: &str = "Akrobat-SemiBold.ttf";
 /// Its family as fontconfig names it.
 const FAMILY: &str = "Akrobat";
 
@@ -63,9 +66,34 @@ pub fn default_font() -> Option<&'static Path> {
         .as_deref()
 }
 
+/// The help's face beside ES-DE's default face `default`, when that folder holds it; else none, and the log says so once.
+pub fn help_font(default: &Path) -> Option<PathBuf> {
+    static TOLD: std::sync::Once = std::sync::Once::new();
+    let path = default.with_file_name(HELP_FILE);
+    if path.is_file() {
+        return Some(path);
+    }
+    TOLD.call_once(|| eprintln!("emusen-esde: no {HELP_FILE} beside {}; the help is drawn in the default face", default.display()));
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_help_face_is_the_semibold_beside_the_default_face() {
+        let dir = std::env::temp_dir().join(format!("esde-help-font-{}", std::process::id()));
+        let (with, without) = (dir.join("with"), dir.join("without"));
+        for d in [&with, &without] {
+            std::fs::create_dir_all(d).unwrap();
+            std::fs::write(d.join(FILE), b"face").unwrap();
+        }
+        std::fs::write(with.join(HELP_FILE), b"face").unwrap();
+        assert_eq!(help_font(&with.join(FILE)), Some(with.join(HELP_FILE)));
+        assert_eq!(help_font(&without.join(FILE)), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn the_first_root_holding_es_de_s_face_is_the_one_found() {

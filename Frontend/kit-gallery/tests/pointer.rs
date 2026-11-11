@@ -1,6 +1,7 @@
 // The pointer focuses only as it moves (EmuSen_Kit.md §7.108): a walkable of a controller made under a resting pointer,
-// and one enabled under it, take nothing; a click on a disabled walkable is no A; a move onto a walkable focuses it. A
-// test of its own, since one process holds one Qt application.
+// and one enabled under it, take nothing; a move onto a walkable focuses it. It also holds Qt Quick's own behaviour, no
+// rule of the kit's: a click on a disabled walkable is delivered to no TapHandler (§7.107). A test of its own, since one
+// process holds one Qt application.
 
 use emusen_qt_test::Harness;
 
@@ -27,12 +28,12 @@ fn kit_7_108_only_the_pointers_own_move_focuses() {
     scene.wait(200);
     assert_eq!(scene.property("cell", "enabled"), "true");
     assert_eq!(scene.property("row", "activeFocus"), "true", "the walkable enabled under the resting pointer took nothing");
-    // A click on a disabled walkable is no A: the row hears no Return.
+    // Qt Quick delivers no tap to a disabled walkable, so the kit's click is not reached: the row hears no Return.
     assert!(scene.set_property("under", "enabled", "false"));
     scene.wait(50);
     scene.click(744.0, 104.0);
     scene.wait(50);
-    assert_eq!(scene.property("scene", "returns"), "0", "a click on a disabled walkable pressed no A");
+    assert_eq!(scene.property("scene", "returns"), "0", "Qt Quick delivered no tap to the disabled walkable");
     assert_eq!(scene.property("row", "activeFocus"), "true", "and left the focus on the row");
     // The pointer's own move onto a walkable focuses it.
     scene.hover(100.0, 120.0);

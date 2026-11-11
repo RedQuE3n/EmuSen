@@ -3115,10 +3115,13 @@ beside it) and on the GPU by qt-app's `console`.
 A walkable that came under a resting pointer took the focus when the controller that owns it had not seen the pointer
 there before, since each frame's controller kept its own last pointer position. §7.108 makes the fact the window's.
 
-A click on a disabled walkable does not reach `click`: Qt Quick delivers no tap to a `TapHandler` whose item is
-disabled through a parent, so `click`'s Accept after a refused focus is never reached (measured on 2026-11-11 with
-kit-gallery's `pointer`: a click on the disabled walkable called `click` no time, and the card's row heard no Return).
-`click` is unchanged; the test holds the behaviour.
+A click on a disabled walkable is Qt Quick's alone, not a rule of the kit's: Qt Quick delivers no tap to a `TapHandler`
+whose item is disabled through a parent, so `click` is never called and its Accept after a refused focus is never
+reached. Measured on 2026-11-11 with kit-gallery's `pointer` and a probe in `click` that prints a line and sends Return
+to the focused item before anything else (the evidence's fault 35): the click on the disabled walkable printed nothing
+and the card's row heard no Return, so the test passed; the same probe with a click on the enabled walkable `near`
+printed the line once. No change to the kit can make that assert fail, so it holds Qt's behaviour, and the test says so;
+the seeded fault 35, a click that is A however it comes, is recorded as missed for that reason. `click` is unchanged.
 
 ### 7.108 The pointer focuses only as it moves, a fact of the window (repair DC-B; 2026-11-11)
 
@@ -3149,7 +3152,7 @@ change of the registry. `hoverAt`'s `at` is likewise unread.
 
 Held by kit-gallery's `pointer` (`PointerScene.qml`): with a card's row holding the focus and the pointer resting, a
 walkable of a controller made under it (a `Loader` made active, as Start makes the Home card) takes nothing, a walkable
-enabled under it takes nothing, a click on a disabled walkable presses no A, and the pointer's own move onto a walkable
+enabled under it takes nothing, Qt Quick gives a click on a disabled walkable no tap (§7.107), and the pointer's own move onto a walkable
 focuses it; and in qt-app by `cards` on the software tier, where neither controller has seen the pointer before: the
 pointer moved over Home to where the Home card's second row lies and left there, the card Start opens focuses its first
 row; and from Consoles, the pointer moved to where another of Home's places lies and left there, Home shown again by B

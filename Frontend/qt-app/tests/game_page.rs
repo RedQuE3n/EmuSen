@@ -362,6 +362,16 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     // The tiles' list told the page its focus inside the page's reset; the page kept it until the reset ended (EmuSen_Qt.md §7.8.1).
     let told = scene.rows_told("pageModel");
     assert!(told.starts_with("reset"), "the deletion reset the tiles, and no help changed inside the reset: {told}");
+    // Back to the Overview with a tile focused: as the page tells `shows`, the frame hands the focus to the actions and
+    // the page hears it while it is still telling; it keeps it and says its help once all is told, after `words`.
+    assert!(scene.watch_order("pageModel", "shows"));
+    assert!(scene.watch_order("pageModel", "words"));
+    scene.rows_told("pageModel");
+    scene.pad(UiButton::PageUp);
+    until(&mut scene, "the Overview shown", |s| s.property("pageModel", "shows") == "0");
+    let told = scene.rows_told("pageModel");
+    assert!(told.contains("shows,words") && told.ends_with(",help") && told.matches("help").count() == 1, "the help told once, after the rest: {told}");
+    assert_eq!(scene.property("pageActions", "activeFocus"), "true", "the actions took the focus from the tiles");
     scene.pad(UiButton::Up);
     section(&mut scene, 2);
     assert_eq!(scene.property("pageModel", "shows"), "2");

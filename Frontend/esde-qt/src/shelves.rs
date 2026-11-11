@@ -60,14 +60,23 @@ fn choice(v: &Value, key: &str) -> Option<String> {
     text(v, key).or_else(|| text(v, &lower))
 }
 
-/// `esdeSettings` as `esde_shelves::settings_of` writes it; a text that does not read gives the defaults.
-pub fn settings(text_in: &str) -> Settings {
-    let v: Value = serde_json::from_str(text_in).unwrap_or(Value::Null);
+/// One rule for the view's four texts and the device's: no text is the default (the property's own, before the host sets
+/// it), and a text that does not read is the words why, never read as the default (EmuSen_Qt.md §4.9).
+fn read(text_in: &str, what: &str) -> Result<Value, String> {
+    match text_in.trim() {
+        "" => Ok(Value::Null),
+        text => serde_json::from_str(text).map_err(|e| format!("{what} could not be read: {e}")),
+    }
+}
+
+/// `esdeSettings` as `esde_shelves::settings_of` writes it; no text gives the defaults.
+pub fn settings(text_in: &str) -> Result<Settings, String> {
+    let v = read(text_in, "The view's settings")?;
     let c = v.get("choices").cloned().unwrap_or(Value::Null);
     let i = v.get("interface").cloned().unwrap_or(Value::Null);
     let on = |key: &str, default: bool| i.get(key).and_then(Value::as_bool).unwrap_or(default);
     let d = Settings::default();
-    Settings {
+    Ok(Settings {
         theme: text(&v, "theme").unwrap_or_default(),
         choices: Choices {
             variant: choice(&c, "Variant"),
@@ -85,21 +94,21 @@ pub fn settings(text_in: &str) -> Settings {
         startup_view: text(&i, "StartupView").unwrap_or(d.startup_view),
         random: v.get("collections").and_then(|c| text(c, "RandomEntryButton")).unwrap_or(d.random),
         screensaver_controls: on("ScreensaverControls", d.screensaver_controls),
-    }
+    })
 }
 
 /// The device's status as the host writes it, `{"wifi":true,"battery":80,"charging":false}`: a key left out is a radio
-/// or battery the device lacks, and an empty text shows no indicator at all.
-pub fn device(text_in: &str) -> DeviceStatus {
-    let v: Value = serde_json::from_str(text_in).unwrap_or(Value::Null);
+/// or battery the device lacks, and no text shows no indicator at all.
+pub fn device(text_in: &str) -> Result<DeviceStatus, String> {
+    let v = read(text_in, "The device's status")?;
     let radio = |key: &str| v.get(key).and_then(Value::as_bool);
-    DeviceStatus {
+    Ok(DeviceStatus {
         bluetooth: radio("bluetooth"),
         wifi: radio("wifi"),
         cellular: radio("cellular"),
         battery_percent: v.get("battery").and_then(Value::as_u64).map(|b| b.min(100) as u8),
         charging: radio("charging").unwrap_or(false),
-    }
+    })
 }
 
 /// A date of the metadata's `yyyy-MM-dd` (or `yyyyMMddTHHmmss`) form.
@@ -185,13 +194,14 @@ fn game_of(v: &GameRow, media: &Value) -> Game {
 /// `esdeShelves` with `esdeMedia`: each shelf's system and games; a collection's game by its file alone takes the row its
 /// console's shelf carries (EmuSen_Qt.md §4.6). The text is read straight into rows, never into a tree of values, since
 /// at a library's scale the tree was 150 MiB for a 6.6 MB text (§4.9). A text that does not read is the words why, which
-/// the model shows, never an empty library; no media index text at all is no media (a host that gives none).
+/// the model shows, never an empty library; no shelves text is no shelves, and no media index text no media (a host that
+/// gives none).
 pub fn shelves(shelves_text: &str, media_text: &str) -> Result<Vec<Shelf>, String> {
-    let list: Vec<ShelfText> = serde_json::from_str(shelves_text).map_err(|e| format!("The library's shelves could not be read: {e}"))?;
-    let media: Value = match media_text.trim() {
-        "" => Value::Null,
-        text => serde_json::from_str(text).map_err(|e| format!("The library's media index could not be read: {e}"))?,
+    let list: Vec<ShelfText> = match shelves_text.trim() {
+        "" => Vec::new(),
+        text => serde_json::from_str(text).map_err(|e| format!("The library's shelves could not be read: {e}"))?,
     };
+    let media = read(media_text, "The library's media index")?;
     let mut whole: BTreeMap<&str, &GameRow> = BTreeMap::new();
     for g in list.iter().flat_map(|s| &s.games).filter(|g| g.is_whole() && !g.file.is_empty()) {
         whole.entry(&g.file).or_insert(g);
@@ -229,10 +239,7 @@ pub fn shelves(shelves_text: &str, media_text: &str) -> Result<Vec<Shelf>, Strin
 /// `esdePresence`: the media types some game of each shelf has, for the variant triggers; no text is no media, and a text
 /// that does not read is said in the words returned.
 pub fn presence(text_in: &str) -> Result<BTreeMap<String, MediaPresence>, String> {
-    let v: Value = match text_in.trim() {
-        "" => Value::Null,
-        text => serde_json::from_str(text).map_err(|e| format!("The library's media presence could not be read: {e}"))?,
-    };
+    let v = read(text_in, "The library's media presence")?;
     let mut out = BTreeMap::new();
     for (shelf, types) in v.as_object().into_iter().flatten() {
         let types: Vec<&str> = types.as_array().into_iter().flatten().filter_map(Value::as_str).collect();

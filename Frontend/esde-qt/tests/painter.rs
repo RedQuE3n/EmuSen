@@ -71,12 +71,14 @@ fn selected(p: &Painter) -> usize {
 fn the_settings_read_mistress_s_keys() {
     let s = shelves::settings(
         "{\"theme\":\"/t\",\"choices\":{\"Variant\":\"v\",\"ColorScheme\":\"dark\",\"FontSize\":\"medium\"},\"interface\":{\"DisplayClock\":true,\"QuickSystemSelect\":\"leftrighttriggers\"}}",
-    );
+    )
+    .unwrap();
     assert_eq!((s.theme.as_str(), s.choices.variant.as_deref(), s.choices.color_scheme.as_deref()), ("/t", Some("v"), Some("dark")));
     assert_eq!(s.choices.font_size.as_deref(), Some("medium"));
     assert!(s.show_clock && s.show_help, "the clock as set, the help as defaulted");
     assert_eq!(s.quick_select, "leftrighttriggers");
-    assert_eq!(shelves::settings("not json"), Settings::default());
+    assert_eq!(shelves::settings(""), Ok(Settings::default()), "no text is the defaults");
+    assert!(shelves::settings("not json").is_err(), "a text that does not read is not the defaults");
 }
 
 #[test]

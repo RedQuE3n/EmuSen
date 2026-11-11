@@ -27,18 +27,19 @@ Window {
         onSettledChanged: if (!gate.settled) scene.swapped = scene.swapping
     }
     // A second gate handed its model by assignment, no binding to be told when the model is deleted (a binding on the
-    // model's id, or through a var property, is told and hands the gate null itself); `later` is handed to it after.
+    // model's id, or through a var property, is told and hands the gate null itself); `later` is made only after the
+    // deletion, the first model of its kind made since, so the allocator may place it where `doomed` was.
     property bool handing: false
     property bool handLater: false
     onHandingChanged: lone.model = doomed
-    onHandLaterChanged: lone.model = later
+    onHandLaterChanged: lone.model = maker.createObject(scene, { objectName: "later" })
     Kit.KeyboardModel {
         id: doomed
         objectName: "doomed"
     }
-    Kit.KeyboardModel {
-        id: later
-        objectName: "later"
+    Component {
+        id: maker
+        Kit.KeyboardModel {}
     }
     Kit.ResetGate {
         id: lone

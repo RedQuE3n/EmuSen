@@ -355,8 +355,8 @@ pub struct GamePageModelRust {
     items: Vec<Item>,
     /// The focus as last told: an action's index or none, and the content's index.
     focus: (Option<usize>, usize),
-    /// Between begin_reset_model and end_reset_model, when a focus told is kept, not applied.
-    resetting: bool,
+    /// How deep the page is in telling QML of a change; a focus told meanwhile is kept, and applied once it has finished.
+    telling: u32,
     /// The clients, opened on the first read and kept.
     source: Option<Arc<ClientSource>>,
     asked: u64,
@@ -395,7 +395,7 @@ impl Default for GamePageModelRust {
             file: GameFile::default(),
             items: Vec::new(),
             focus: (Some(0), 0),
-            resetting: false,
+            telling: 0,
             source: None,
             asked: 0,
         }
@@ -410,8 +410,10 @@ impl cxx_qt::Initialize for qobject::GamePageModel {
                 model.as_mut().rust_mut().page.section = 0;
                 model.as_mut().rust_mut().focus = (Some(0), 0);
                 if model.section != 0 {
-                    model.as_mut().rust_mut().section = 0;
-                    model.as_mut().section_changed();
+                    model.as_mut().telling(|mut model| {
+                        model.as_mut().rust_mut().section = 0;
+                        model.section_changed();
+                    });
                 }
                 model.refresh();
             })
@@ -506,94 +508,105 @@ impl qobject::GamePageModel {
         });
     }
 
-    fn apply(mut self: Pin<&mut Self>, read: Read) {
-        let fresh = self.page.read.title.is_empty() || self.page.read.cover != read.cover || !self.ready;
-        let now = crate::words::now();
-        self.as_mut().rust_mut().page.now = now;
-        self.as_mut().rust_mut().page.reread(read);
-        let r = self.page.read.clone();
-        macro_rules! put {
-            ($field:ident, $changed:ident, $value:expr) => {{
-                let value = $value;
-                if self.$field != value {
-                    self.as_mut().rust_mut().$field = value;
-                    self.as_mut().$changed();
-                }
-            }};
-        }
-        put!(title, title_changed, QString::from(r.title.as_str()));
-        put!(cover_name, cover_name_changed, QString::from(format!("{}, cover", r.title).as_str()));
-        put!(cover, cover_changed, QString::from(cover_url(&r.cover).as_str()));
-        put!(hero, hero_changed, QString::from(cover_url(&r.hero).as_str()));
-        put!(clip, clip_changed, QString::from(cover_url(&r.clip).as_str()));
-        put!(cover_aspect, cover_aspect_changed, r.cover_aspect);
-        self.as_mut().shown(fresh);
-        if !self.ready {
-            self.as_mut().rust_mut().ready = true;
-            self.ready_changed();
+    fn apply(self: Pin<&mut Self>, read: Read) {
+        self.telling(|mut model| {
+            let fresh = model.page.read.title.is_empty() || model.page.read.cover != read.cover || !model.ready;
+            let now = crate::words::now();
+            model.as_mut().rust_mut().page.now = now;
+            model.as_mut().rust_mut().page.reread(read);
+            let r = model.page.read.clone();
+            macro_rules! put {
+                ($field:ident, $changed:ident, $value:expr) => {{
+                    let value = $value;
+                    if model.$field != value {
+                        model.as_mut().rust_mut().$field = value;
+                        model.as_mut().$changed();
+                    }
+                }};
+            }
+            put!(title, title_changed, QString::from(r.title.as_str()));
+            put!(cover_name, cover_name_changed, QString::from(format!("{}, cover", r.title).as_str()));
+            put!(cover, cover_changed, QString::from(cover_url(&r.cover).as_str()));
+            put!(hero, hero_changed, QString::from(cover_url(&r.hero).as_str()));
+            put!(clip, clip_changed, QString::from(cover_url(&r.clip).as_str()));
+            put!(cover_aspect, cover_aspect_changed, r.cover_aspect);
+            model.as_mut().shown(fresh);
+            if !model.ready {
+                model.as_mut().rust_mut().ready = true;
+                model.ready_changed();
+            }
+        });
+    }
+
+    /// `tell` sends the page's signals with the focus kept: a focus QML tells back meanwhile is applied once, after the
+    /// outermost telling has finished, so no call back into the page works on it while it is still telling (EmuSen_Qt.md §7.8.1).
+    fn telling(mut self: Pin<&mut Self>, tell: impl FnOnce(Pin<&mut Self>)) {
+        self.as_mut().rust_mut().telling += 1;
+        tell(self.as_mut());
+        self.as_mut().rust_mut().telling -= 1;
+        if self.telling == 0 {
+            self.helped();
         }
     }
 
     /// What the page shows read again from the view: the facts, the actions, the content (reset where the section
     /// turned, else in place), the help.
-    fn shown(mut self: Pin<&mut Self>, turned: bool) {
-        let facts = QString::from(self.page.facts().as_str());
-        if self.facts != facts {
-            self.as_mut().rust_mut().facts = facts;
-            self.as_mut().facts_changed();
-        }
-        let actions: Vec<serde_json::Value> = self
-            .page
-            .actions()
-            .iter()
-            .map(|a| serde_json::json!({ "label": a.label, "value": a.value, "button": a.button, "filled": a.filled, "stepped": a.stepped, "stepLeft": a.step_left, "stepRight": a.step_right }))
-            .collect();
-        let actions = QString::from(serde_json::Value::from(actions).to_string().as_str());
-        if self.actions != actions {
-            self.as_mut().rust_mut().actions = actions;
-            self.as_mut().actions_changed();
-        }
-        let content = self.page.content();
-        let (shows, words, picture) = match &content {
-            Content::Text { words, picture } => (0, words.clone(), cover_url(picture)),
-            Content::Tiles(_) => (1, String::new(), String::new()),
-            Content::Rows(_) => (2, String::new(), String::new()),
-        };
-        let items = items(&content);
-        match content_change(&self.items, &items, turned) {
-            ContentChange::Reset => {
-                self.as_mut().rust_mut().resetting = true;
-                self.as_mut().begin_reset_model();
-                self.as_mut().rust_mut().items = items;
-                self.as_mut().end_reset_model();
-                self.as_mut().rust_mut().resetting = false;
-                self.as_mut().helped();
+    fn shown(self: Pin<&mut Self>, turned: bool) {
+        self.telling(|mut model| {
+            let facts = QString::from(model.page.facts().as_str());
+            if model.facts != facts {
+                model.as_mut().rust_mut().facts = facts;
+                model.as_mut().facts_changed();
             }
-            // The same items with new words or marks: in place, so each delegate and the list's focus stay (EmuSen_Qt.md §7.8.1).
-            ContentChange::InPlace(runs) => {
-                self.as_mut().rust_mut().items = items;
-                let root = QModelIndex::default();
-                for (first, last) in runs {
-                    let (first, last) = (self.index(first as i32, 0, &root), self.index(last as i32, 0, &root));
-                    self.as_mut().data_changed(&first, &last, &cxx_qt_lib::QVector::<i32>::default());
+            let actions: Vec<serde_json::Value> = model
+                .page
+                .actions()
+                .iter()
+                .map(|a| serde_json::json!({ "label": a.label, "value": a.value, "button": a.button, "filled": a.filled, "stepped": a.stepped, "stepLeft": a.step_left, "stepRight": a.step_right }))
+                .collect();
+            let actions = QString::from(serde_json::Value::from(actions).to_string().as_str());
+            if model.actions != actions {
+                model.as_mut().rust_mut().actions = actions;
+                model.as_mut().actions_changed();
+            }
+            let content = model.page.content();
+            let (shows, words, picture) = match &content {
+                Content::Text { words, picture } => (0, words.clone(), cover_url(picture)),
+                Content::Tiles(_) => (1, String::new(), String::new()),
+                Content::Rows(_) => (2, String::new(), String::new()),
+            };
+            let items = items(&content);
+            match content_change(&model.items, &items, turned) {
+                ContentChange::Reset => {
+                    model.as_mut().begin_reset_model();
+                    model.as_mut().rust_mut().items = items;
+                    model.as_mut().end_reset_model();
                 }
+                // The same items with new words or marks: in place, so each delegate and the list's focus stay (EmuSen_Qt.md §7.8.1).
+                ContentChange::InPlace(runs) => {
+                    model.as_mut().rust_mut().items = items;
+                    let root = QModelIndex::default();
+                    for (first, last) in runs {
+                        let (first, last) = (model.index(first as i32, 0, &root), model.index(last as i32, 0, &root));
+                        model.as_mut().data_changed(&first, &last, &cxx_qt_lib::QVector::<i32>::default());
+                    }
+                }
+                ContentChange::None => {}
             }
-            ContentChange::None => {}
-        }
-        if self.shows != shows {
-            self.as_mut().rust_mut().shows = shows;
-            self.as_mut().shows_changed();
-        }
-        let (words, picture) = (QString::from(words.as_str()), QString::from(picture.as_str()));
-        if self.words != words {
-            self.as_mut().rust_mut().words = words;
-            self.as_mut().words_changed();
-        }
-        if self.picture != picture {
-            self.as_mut().rust_mut().picture = picture;
-            self.as_mut().picture_changed();
-        }
-        self.helped();
+            if model.shows != shows {
+                model.as_mut().rust_mut().shows = shows;
+                model.as_mut().shows_changed();
+            }
+            let (words, picture) = (QString::from(words.as_str()), QString::from(picture.as_str()));
+            if model.words != words {
+                model.as_mut().rust_mut().words = words;
+                model.as_mut().words_changed();
+            }
+            if model.picture != picture {
+                model.as_mut().rust_mut().picture = picture;
+                model.as_mut().picture_changed();
+            }
+        });
     }
 
     fn helped(mut self: Pin<&mut Self>) {
@@ -605,60 +618,66 @@ impl qobject::GamePageModel {
         }
     }
 
-    fn said(mut self: Pin<&mut Self>, words: String) {
+    fn said(self: Pin<&mut Self>, words: String) {
         let words = QString::from(words.as_str());
         if self.problem != words {
-            self.as_mut().rust_mut().problem = words;
-            self.problem_changed();
+            self.telling(|mut model| {
+                model.as_mut().rust_mut().problem = words;
+                model.problem_changed();
+            });
         }
     }
 
-    fn outcome(mut self: Pin<&mut Self>, outcome: Outcome) {
-        match outcome {
-            Outcome::Nothing => {}
-            Outcome::Changed(change) => {
-                let saved = self.source.as_ref().map_or(Ok(()), |s| s.change(&self.file, &change));
-                let ok = saved.is_ok();
-                let hid = ok && change == crate::game_page::Change::Hide;
-                self.as_mut().said(saved.err().unwrap_or_default());
-                if hid {
-                    self.hidden();
-                    return;
+    fn outcome(self: Pin<&mut Self>, outcome: Outcome) {
+        self.telling(|mut model| {
+            match outcome {
+                Outcome::Nothing => {}
+                Outcome::Changed(change) => {
+                    let saved = model.source.as_ref().map_or(Ok(()), |s| s.change(&model.file, &change));
+                    let ok = saved.is_ok();
+                    let hid = ok && change == crate::game_page::Change::Hide;
+                    model.as_mut().said(saved.err().unwrap_or_default());
+                    if hid {
+                        model.hidden();
+                        return;
+                    }
+                    if ok {
+                        model.as_mut().rust_mut().page.changed(&change);
+                        model.as_mut().shown(false);
+                    }
+                    model.refresh();
                 }
-                if ok {
-                    self.as_mut().rust_mut().page.changed(&change);
-                    self.as_mut().shown(false);
+                Outcome::Ask(question, change) => model.ask(question, Pending::Change(change)),
+                Outcome::Play(Some(state)) => model.play_from(state),
+                Outcome::Play(None) => {
+                    let path = QString::from(model.file.path.as_str());
+                    model.played(path, QString::default());
                 }
-                self.refresh();
+                Outcome::Door(key) => model.door(QString::from(key)),
+                Outcome::OpenFolder => {
+                    let folder = std::path::Path::new(&model.file.path).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+                    model.open_folder(QString::from(folder.as_str()));
+                }
             }
-            Outcome::Ask(question, change) => self.ask(question, Pending::Change(change)),
-            Outcome::Play(Some(state)) => self.play_from(state),
-            Outcome::Play(None) => {
-                let path = QString::from(self.file.path.as_str());
-                self.played(path, QString::default());
-            }
-            Outcome::Door(key) => self.door(QString::from(key)),
-            Outcome::OpenFolder => {
-                let folder = std::path::Path::new(&self.file.path).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
-                self.open_folder(QString::from(folder.as_str()));
-            }
-        }
+        });
     }
 
     /// The question form opened on `question`, its Yes doing `pending`.
-    fn ask(mut self: Pin<&mut Self>, question: crate::question::Question, pending: Pending) {
-        let back = crate::question::back_index(&question);
-        self.as_mut().rust_mut().pending = Some(pending);
-        self.as_mut().rust_mut().question_title = QString::from(question.title.as_str());
-        self.as_mut().rust_mut().question_sentences = list(question.sentences.into_iter());
-        self.as_mut().rust_mut().question_choices = list(question.choices.into_iter());
-        self.as_mut().rust_mut().question_back = back;
-        self.as_mut().question_title_changed();
-        self.as_mut().question_sentences_changed();
-        self.as_mut().question_choices_changed();
-        self.as_mut().question_back_changed();
-        self.as_mut().rust_mut().asking = true;
-        self.asking_changed();
+    fn ask(self: Pin<&mut Self>, question: crate::question::Question, pending: Pending) {
+        self.telling(|mut model| {
+            let back = crate::question::back_index(&question);
+            model.as_mut().rust_mut().pending = Some(pending);
+            model.as_mut().rust_mut().question_title = QString::from(question.title.as_str());
+            model.as_mut().rust_mut().question_sentences = list(question.sentences.into_iter());
+            model.as_mut().rust_mut().question_choices = list(question.choices.into_iter());
+            model.as_mut().rust_mut().question_back = back;
+            model.as_mut().question_title_changed();
+            model.as_mut().question_sentences_changed();
+            model.as_mut().question_choices_changed();
+            model.as_mut().question_back_changed();
+            model.as_mut().rust_mut().asking = true;
+            model.asking_changed();
+        });
     }
 
     /// The game started from a state, asking first where the state was saved from another copy of the game; the
@@ -668,13 +687,13 @@ impl qobject::GamePageModel {
         let thread = self.qt_thread();
         std::thread::spawn(move || {
             let other = source.map_or(Ok(None), |s| s.other_copy(&file, &state));
-            let _ = thread.queue(move |mut model| {
+            let _ = thread.queue(move |model| {
                 let name = std::path::Path::new(&file.path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                match other {
+                model.telling(|model| match other {
                     Ok(Some(saved_from)) => model.ask(crate::game_page::other_copy_question(&saved_from, &name), Pending::Play(state)),
                     Ok(None) => model.played(QString::from(file.path.as_str()), QString::from(state.as_str())),
-                    Err(words) => model.as_mut().said(words),
-                }
+                    Err(words) => model.said(words),
+                });
             });
         });
     }
@@ -717,27 +736,29 @@ impl qobject::GamePageModel {
         }
     }
 
-    pub fn answer(mut self: Pin<&mut Self>, index: i32) {
-        let pending = self.as_mut().rust_mut().pending.take();
-        if self.asking {
-            self.as_mut().rust_mut().asking = false;
-            self.as_mut().asking_changed();
-            self.as_mut().answered();
-        }
-        match (index, pending) {
-            (1, Some(Pending::Change(change))) => self.outcome(Outcome::Changed(change)),
-            (1, Some(Pending::Play(state))) => {
-                let path = QString::from(self.file.path.as_str());
-                self.played(path, QString::from(state.as_str()));
+    pub fn answer(self: Pin<&mut Self>, index: i32) {
+        self.telling(|mut model| {
+            let pending = model.as_mut().rust_mut().pending.take();
+            if model.asking {
+                model.as_mut().rust_mut().asking = false;
+                model.as_mut().asking_changed();
+                model.as_mut().answered();
             }
-            _ => {}
-        }
+            match (index, pending) {
+                (1, Some(Pending::Change(change))) => model.outcome(Outcome::Changed(change)),
+                (1, Some(Pending::Play(state))) => {
+                    let path = QString::from(model.file.path.as_str());
+                    model.played(path, QString::from(state.as_str()));
+                }
+                _ => {}
+            }
+        });
     }
 
-    /// Told inside the page's own reset, the focus is kept and applied as the reset ends (EmuSen_Qt.md §7.8.1).
+    /// Told while the page tells QML of a change, the focus is kept and applied once the telling has finished (EmuSen_Qt.md §7.8.1).
     pub fn focus(mut self: Pin<&mut Self>, action: i32, content: i32) {
         self.as_mut().rust_mut().focus = (usize::try_from(action).ok(), content.max(0) as usize);
-        if !self.resetting {
+        if self.telling == 0 {
             self.helped();
         }
     }

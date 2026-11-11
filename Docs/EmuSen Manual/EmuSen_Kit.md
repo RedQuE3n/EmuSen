@@ -3007,7 +3007,13 @@ hears the model's `destroyed` (declared beside the reset signals in `item_model.
 then it holds no model, says so through `model`'s change signal, and is settled. The connections Qt drops with the
 model are let go when the next model is handed over. Held to: the same test, a second gate in the scene handed its
 model by assignment to the gate's `model`, with no binding; the model deleted, the gate holds none (`model === null`),
-and a model handed after is held and its reset heard. Seeded on 2026-11-11: the `destroyed` connection left out, the
+and a model handed after is held and its reset heard. That model is made only after the deletion (a `Component`'s
+`createObject`), so the allocator may give it the deleted model's address, the case the fix is for; it cannot be made
+to. Measured on 2026-11-11, printing the addresses `setModel` was handed: the deleted model and the one made after it
+were 0x3490 bytes apart (each `KeyboardModel` takes about 13 KiB), and none of sixteen made one after another took the
+deleted one's address. So the same-address case is argued from the code (`forget` nulls the address the same-model
+check compares), and what the test holds of the fix is the gate holding none after the deletion, told through `model`'s
+change signal, and settled. Seeded on 2026-11-11: the `destroyed` connection left out, the
 gate still holding the deleted model. A binding does not show the fault: measured on 2026-11-11, a gate bound to the
 model's id, and one bound through a `property var` (as `PageFrame`'s `tileModel` is), each passed the test with the
 fault in place, because QML tells both of the deletion (the id's guard, and the guard a `var` property keeps on the

@@ -2479,11 +2479,13 @@ Qt application.
 - **`shelves.rs`** reads §4.6's texts. `settings` takes `esdeSettings`: the theme folder, the choices under Mistress's
   keys (`Variant`, `ColorScheme`, `FontSize`, `AspectRatio`, `Language`, `Transitions`, as `BigPictureChoices` stores
   them) and the interface's switches (`DisplayClock`, `DisplayHelp`, `ListScrollOverlay`, `QuickSystemSelect`,
-  `StartupView`); a text that does not read gives the defaults. `shelves` takes `esdeShelves` and `esdeMedia` into the
+  `StartupView`); no text gives the defaults, and a text that does not read is the load's problem. `shelves` takes `esdeShelves` and `esdeMedia` into the
   scene's `ThemeSystem` and `Game`s: a collection's entry, carried by its file alone, takes the row its console's shelf
   carries, and its `source` is that console's system; a game's media is looked up by its folder and stem, then its
   stem, under its own console (§4.6); `last_played` (seconds since 1970) becomes a civil date in UTC by Howard
-  Hinnant's days-to-civil; `release_date` reads the metadata's `yyyy-MM-dd`. `presence` takes `esdePresence`.
+  Hinnant's days-to-civil; `release_date` reads the metadata's `yyyy-MM-dd`. `presence` takes `esdePresence`, and
+  `device` the device's status. All five follow one rule (`read`): no text is the property's default, and a text that
+  does not read is the words why, never the default.
 - **`painter.rs`**: `ThemeCache` keeps a resolved theme per (folder, system, choices, media presence), as
   `ThemedLibrary._themes` did, behind a mutex so the data thread fills it, with `forget` for a folder updated on disk;
   `systems` is the data thread's work, shelves and their themes. `Painter` holds the `Stage`, its clock in
@@ -3115,6 +3117,21 @@ holds the conversion of the four texts.
 read install nothing and are the model's `problem` in their words ("The library's shelves could not be read"), and a
 media presence text that does not read is now said too ("The library's media presence could not be read"), where
 `shelves::presence` had read it as no media at all with no word. An empty presence text is still no media.
+
+**One rule for the texts (2026-11-11).** `shelves::settings` and `shelves::device` still read a text that did not read
+as the defaults with no word, and `shelves::shelves` failed on an empty shelves text though `EsdeModel.shelves` is empty
+by default, so a host that set the settings in an earlier turn than the shelves would have shown "The library's
+shelves could not be read" for a moment (the program sets all four together, so this was not seen in it). The five
+readers now share one rule, `shelves::read`: no text is the default, a text that does not read is the problem. Settings
+that do not read install nothing and are the problem ("The view's settings could not be read"); a device status that
+does not read shows no indicator and is the problem ("The device's status could not be read") until a status that
+reads, or none, replaces it, unless the last load has a problem of its own, which is said first; no shelves text is no
+shelves and no problem. `problem.rs` installs a library that reads before each text that does not, so its `themed ==
+false` checks can fail: before, every shelves text in the scene was unreadable or `[]`, `themed` was false in every
+outcome, and only the `problem` checks held the test. The theme is one written for the test, a carousel and a text
+list. Seeded on 2026-11-11: settings that do not read taken as the defaults; a device status that does not read said
+nothing; an empty shelves text an error again; a load that cannot read keeping the view it had; each failing
+`problem.rs`.
 
 **No media index text is no media (2026-11-11).** Since the shelves' row was given its one schema, `shelves::shelves`
 had read an empty media index text as JSON and failed ("The library's media index could not be read: EOF while parsing
@@ -4857,18 +4874,27 @@ reset would be on the third. Before Kit §7.58 the program's tiles kept their mo
 (a seeded fault), the second deletion leaves the focus on the third tile (index 2), so WiseMan's page before this piece differed from
 Mistress's and this piece keeps Mistress's.
 
-**No call back into the page from inside its own reset (2026-11-11).** When the tiles' list lets its model go at
+**No call back into the page while it is telling (2026-11-11).** When the tiles' list lets its model go at
 `modelAboutToBeReset`, its current index becomes -1, and `GamePage.qml` told the page the new focus at once: a call
 into `GamePageModel.focus` from inside `GamePageModel`'s own `begin_reset_model`, a second `&mut` to an object whose
 method is still running, and the page's help changed (and was heard) from inside that reset. The rule is kept where the
-state is: `focus` told during the page's own reset keeps what it was told and applies it as the reset ends (the help
-worked out once `end_reset_model` has returned); told at any other time it applies at once. `GamePage.qml` tells the
+state is: `focus` told while the page is telling QML of a change keeps what it was told, and the page applies it once
+the telling has finished (the help worked out once, after every signal of the change has been sent); told at any other
+time it applies at once. The guard first covered the reset alone, from `begin_reset_model` to `end_reset_model`, but
+the reset is not the only signal a binding follows back: `shown` also sends `actions_changed`, `shows_changed` and
+`words_changed` while it holds the page, and when `shows` turns from tiles to words with a tile focused, the frame hands
+the focus to the actions (`PageFrame.contentKindChanged`) and the page heard `focus` before `words_changed` was sent.
+Every method that sends the page's signals (`shown`, `apply`, `said`, `ask`, `answer`, `outcome`, the start of a new
+game, and the queued end of a state's play) now runs inside `telling`, a depth count: the outermost one, as it ends,
+works out the help once. `GamePage.qml` tells the
 focus directly as it moves, with no deferral of its own (an earlier zero-interval `Timer` standing in for the
 `Qt.callLater` the QML rules forbid, and an `assert!` in `focus` that aborted the process across the FFI, are gone).
 Held to: the page test writes the page's `help` into the model's watched rows in order (`Scene::watch_order`, a
 `QSignalMapper` on the property's change signal, so the line is written as the signal is sent) and, deleting Slot 3,
 requires the reset's line first: a help told inside the reset is sent while the reset is under way and comes before
-it. (A count of the help's changes taken at `modelAboutToBeReset` was tried first and could not fail: the tiles' gate
+it. It then watches `shows` and `words` too and turns from States, a tile focused, to the Overview: the lines are
+`shows`, then `words`, then `help` once and last, and the actions hold the focus. With the guard narrowed back to the
+reset (a seeded fault, 2026-11-11), the help comes between `shows` and `words`. (A count of the help's changes taken at `modelAboutToBeReset` was tried first and could not fail: the tiles' gate
 is connected to that signal before the harness is, so the focus is told and the help sent before the harness hears
 the reset begin.) Seeded on 2026-11-11: `focus` applying at once inside the reset. The page test's waits that guarded a value wait for it (the tiles holding the focus, the
 actions changed, the help declaring X as Delete…, the question gone from the screen). The 500 ms after two steps of the

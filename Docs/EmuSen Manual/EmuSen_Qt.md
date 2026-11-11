@@ -4806,8 +4806,13 @@ process from an FFI call), and on the branch as it was the page test aborted the
 page's own reset"). `GamePage.qml` now tells the focus from a zero-interval `Timer` restarted by each change, on the next turn of the
 event loop (the QML rules forbid `Qt.callLater`),
 and the test runs through. The page test's waits that guarded a value wait for it (the tiles holding the focus, the
-actions changed, the help declaring X as Delete…, the question gone from the screen); the 500 ms after two steps of the
-television standard stays a fixed wait, since the two saves end where they began and leave no value to wait for.
+actions changed, the help declaring X as Delete…, the question gone from the screen). The 500 ms after two steps of the
+television standard back to back waited for nothing: measured on 2026-11-11 with the model's changes recorded
+(`watch_rows`), across those 500 ms the page told no row and its actions did not change. Each step is saved and shown in
+place as it is pressed (`outcome`: the library's change, then `shown`); a read-back that comes back after the next step is
+dropped by `refresh`'s `asked`, and one that is applied reads what is already shown, so it changes nothing. The wait is gone; the test
+now reads what the presses told, `2-2,2-2`, the standard's row in place twice, and then the row and games.db. A
+read-back that changed the row after the presses is not held by this test, as it was not by the wait.
 
 Seeded faults, each reverted:
 - the refresh keeping hidden games: the models' library test, the Game Boy's games still counted;

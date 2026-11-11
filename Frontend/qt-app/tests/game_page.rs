@@ -379,9 +379,12 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     }
     assert_eq!(standard(&platform), serde_json::Value::Null, "the game's own again");
     // Right then Left at once, before the first save's read is back: each steps from the one before, so the game's own stays.
+    // Each step is saved and shown in place as it is pressed; of the two read-backs the older is dropped and the newer
+    // reads what is shown, so nothing is told after the presses return (EmuSen_Qt.md §7.8.1).
+    scene.rows_told("pageModel");
     scene.pad(UiButton::Right);
     scene.pad(UiButton::Left);
-    scene.wait(500);
+    assert_eq!(scene.rows_told("pageModel"), "2-2,2-2", "each step told in place on the standard's row as it was pressed");
     assert!(comes_to_read(&mut scene, "The game's"), "two steps back to back come back to the game's own");
     assert_eq!(standard(&platform), serde_json::Value::Null, "and the game's own is what is saved");
     section(&mut scene, 3);

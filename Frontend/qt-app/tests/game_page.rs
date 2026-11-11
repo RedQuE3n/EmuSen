@@ -366,6 +366,8 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     // the page hears it while it is still telling; it keeps it and says its help once all is told, after `words`.
     assert!(scene.watch_order("pageModel", "shows"));
     assert!(scene.watch_order("pageModel", "words"));
+    // The question's answers gone from the screen first: a press while they are still shown is not the page's.
+    until(&mut scene, "the question gone", |s| !s.tree().nodes.iter().any(|n| n.visible && n.name == "answer.0"));
     scene.rows_told("pageModel");
     scene.pad(UiButton::PageUp);
     until(&mut scene, "the Overview shown", |s| s.property("pageModel", "shows") == "0");

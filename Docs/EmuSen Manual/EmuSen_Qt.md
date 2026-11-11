@@ -4893,8 +4893,11 @@ Held to: the page test writes the page's `help` into the model's watched rows in
 `QSignalMapper` on the property's change signal, so the line is written as the signal is sent) and, deleting Slot 3,
 requires the reset's line first: a help told inside the reset is sent while the reset is under way and comes before
 it. It then watches `shows` and `words` too and turns from States, a tile focused, to the Overview: the lines are
-`shows`, then `words`, then `help` once and last, and the actions hold the focus. With the guard narrowed back to the
-reset (a seeded fault, 2026-11-11), the help comes between `shows` and `words`. (A count of the help's changes taken at `modelAboutToBeReset` was tried first and could not fail: the tiles' gate
+`shows`, then `words`, then `help` once and last, and the actions hold the focus. The press waits for the question's
+answers to leave the screen, as the test's X presses do: pressed at once after the deletion, the shoulder was not the
+page's and the section did not turn (seen on 2026-11-11; pressed after the answers had gone, it turned at the first
+press). With the guard narrowed back to the reset (a seeded fault, 2026-11-11), the page told
+`reset,help,help,shows,words`: the help twice, from inside the turn, before the rest was told. (A count of the help's changes taken at `modelAboutToBeReset` was tried first and could not fail: the tiles' gate
 is connected to that signal before the harness is, so the focus is told and the help sent before the harness hears
 the reset begin.) Seeded on 2026-11-11: `focus` applying at once inside the reset. The page test's waits that guarded a value wait for it (the tiles holding the focus, the
 actions changed, the help declaring X as Delete…, the question gone from the screen). The 500 ms after two steps of the

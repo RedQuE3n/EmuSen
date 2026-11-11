@@ -29,6 +29,9 @@ pub mod qobject {
         /// AppSettings.NavigationSounds: off plays nothing.
         #[qproperty(bool, on)]
         #[qproperty(QString, problem, READ, NOTIFY)]
+        /// The key of the sound last played and how many have played, as the player was asked.
+        #[qproperty(QString, rung, READ, NOTIFY)]
+        #[qproperty(i32, rings, READ, NOTIFY)]
         type EsdeCues = super::EsdeCuesRust;
     }
 
@@ -84,6 +87,8 @@ pub struct EsdeCuesRust {
     sounds: QString,
     on: bool,
     problem: QString,
+    rung: QString,
+    rings: i32,
     player: Option<InterfacePlayer>,
     /// The names the theme's files are kept under.
     themed: Vec<String>,
@@ -91,21 +96,34 @@ pub struct EsdeCuesRust {
     opening: u64,
 }
 
-/// The player with the kit's cues, and each of the theme's files decoded and kept under its name.
-fn open(library: &str, sounds: &str) -> Result<(InterfacePlayer, Vec<String>), String> {
+/// The player with the kit's cues, and each of the theme's files decoded and kept under its name; a sounds text or a
+/// file that does not read is said in the words returned, the other sounds kept.
+fn open(library: &str, sounds: &str) -> Result<(InterfacePlayer, Vec<String>, String), String> {
     let player = bell_player::open_player(library)?;
     let quick: Vec<u8> = quick_select_samples().iter().flat_map(|s| s.to_le_bytes()).collect();
     player.remember(QUICK_SELECT, &quick).map_err(|e| e.to_string())?;
     let platform = Platform::load(library).map_err(|e| e.to_string())?;
-    let files: BTreeMap<String, String> = serde_json::from_str(sounds).unwrap_or_default();
+    let mut problems = Vec::new();
+    let files: BTreeMap<String, String> = match sounds.trim() {
+        "" => BTreeMap::new(),
+        text => serde_json::from_str(text).unwrap_or_else(|e| {
+            problems.push(format!("The theme's sounds could not be read: {e}"));
+            BTreeMap::new()
+        }),
+    };
     let mut themed = Vec::new();
     for (name, file) in files.iter().filter(|(n, _)| NAMES.iter().any(|(k, _)| k == n)) {
-        if let Some(bytes) = decode(&platform, file).map_err(|e| e.to_string())? {
-            player.remember(&format!("theme:{name}"), &bytes).map_err(|e| e.to_string())?;
-            themed.push(name.clone());
+        let kept = decode(&platform, file).map_err(|e| e.to_string()).and_then(|bytes| match bytes {
+            Some(bytes) => player.remember(&format!("theme:{name}"), &bytes).map(|()| true).map_err(|e| e.to_string()),
+            None => Ok(false),
+        });
+        match kept {
+            Ok(true) => themed.push(name.clone()),
+            Ok(false) => {}
+            Err(words) => problems.push(format!("The theme's {name} sound could not be played: {words}")),
         }
     }
-    Ok((player, themed))
+    Ok((player, themed, problems.join(" ")))
 }
 
 impl cxx_qt::Initialize for qobject::EsdeCues {
@@ -132,8 +150,16 @@ impl qobject::EsdeCues {
     fn ring(mut self: Pin<&mut Self>, name: &str) {
         let Some(key) = key_of(name, &self.themed) else { return };
         let played = self.player.as_ref().filter(|_| self.on).map(|p| p.play(&key));
-        if let Some(Err(e)) = played {
-            self.as_mut().publish(QString::from(e.to_string().as_str()));
+        match played {
+            Some(Ok(_)) => {
+                self.as_mut().rust_mut().rung = QString::from(key.as_str());
+                self.as_mut().rung_changed();
+                let rings = self.rings.wrapping_add(1);
+                self.as_mut().rust_mut().rings = rings;
+                self.as_mut().rings_changed();
+            }
+            Some(Err(e)) => self.as_mut().publish(QString::from(e.to_string().as_str())),
+            None => {}
         }
     }
 
@@ -152,10 +178,10 @@ impl qobject::EsdeCues {
                     return;
                 }
                 match opened {
-                    Ok((player, themed)) => {
+                    Ok((player, themed, problems)) => {
                         cues.as_mut().rust_mut().player = Some(player);
                         cues.as_mut().rust_mut().themed = themed;
-                        cues.publish(QString::default());
+                        cues.publish(QString::from(problems.as_str()));
                     }
                     Err(words) => cues.publish(QString::from(words.as_str())),
                 }

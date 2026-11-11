@@ -105,6 +105,25 @@ macro_rules! publish {
     }};
 }
 
+/// The four texts a load reads, as the GUI thread hands them to the load's thread: each QString shared, not copied, and
+/// turned into Rust text on that thread (EmuSen_Qt.md §4.9).
+pub struct LoadTexts(pub [QString; 4]);
+
+// Sound: the copies are made here and moved whole, and Qt's implicit sharing counts atomically (EmuSen_Qt.md §4.7).
+unsafe impl Send for LoadTexts {}
+
+impl LoadTexts {
+    /// The GUI thread's part: four shared copies, megabytes or not.
+    pub fn of(texts: [&QString; 4]) -> LoadTexts {
+        LoadTexts(texts.map(QString::clone))
+    }
+
+    /// The texts as Rust text, on the load's thread.
+    pub fn read(self) -> [String; 4] {
+        self.0.map(|t| t.to_string())
+    }
+}
+
 /// The painter shared with the list models of the same view, on the GUI thread only.
 pub type Shared = Rc<RefCell<Painter>>;
 
@@ -137,6 +156,8 @@ pub struct EsdeModelRust {
     /// The latest load asked for; an older load that finishes later is dropped.
     load: u64,
     load_asked: bool,
+    /// What the last load could not read, or what its theme lacks; empty where it read.
+    load_problem: String,
 }
 
 /// The local time at `pinned` seconds since 1970, or the wall clock's at 0, for the clock element and the dates.
@@ -157,7 +178,8 @@ impl cxx_qt::Initialize for qobject::EsdeModel {
         self.as_mut().on_height_changed(|m| m.ask_load()).release();
         self.as_mut().on_device_changed(|mut m| {
             let device = shelves::device(&m.device.to_string());
-            m.as_mut().rust_mut().shared.borrow_mut().set_device(device);
+            m.as_mut().rust_mut().shared.borrow_mut().set_device(device.unwrap_or_default());
+            m.as_mut().say_problem();
             m.publish();
         })
         .release();
@@ -194,23 +216,37 @@ impl qobject::EsdeModel {
         if w <= 0 || h <= 0 || self.settings.is_empty() {
             return;
         }
-        let texts = [&self.settings, &self.shelves, &self.media, &self.presence].map(|t| t.to_string());
+        let texts = LoadTexts::of([&self.settings, &self.shelves, &self.media, &self.presence]);
         let (qt, cache) = (self.qt_thread(), self.cache.clone());
         let load = self.load + 1;
         self.as_mut().rust_mut().load = load;
         std::thread::spawn(move || {
-            let [settings_text, shelves_text, media_text, presence_text] = texts;
-            let settings = shelves::settings(&settings_text);
-            let found = painter::systems(&cache, &settings, shelves::shelves(&shelves_text, &media_text), &shelves::presence(&presence_text), w, h);
+            let [settings_text, shelves_text, media_text, presence_text] = texts.read();
+            let (settings, found) = match shelves::settings(&settings_text) {
+                Ok(settings) => {
+                    let found = shelves::shelves(&shelves_text, &media_text)
+                        .and_then(|s| Ok(painter::systems(&cache, &settings, s, &shelves::presence(&presence_text)?, w, h)));
+                    (settings, found)
+                }
+                Err(words) => (Settings::default(), Err(words)),
+            };
             let _ = qt.queue(move |model| model.install(load, settings, found));
         });
     }
 
-    fn install(mut self: Pin<&mut Self>, load: u64, settings: Settings, systems: Vec<System>) {
+    // A text that did not read installs nothing and is the problem, so the host shows its words.
+    fn install(mut self: Pin<&mut Self>, load: u64, settings: Settings, found: Result<Vec<System>, String>) {
         if load != self.load {
             return;
         }
-        let problem = QString::from(painter::problem(&systems).as_str());
+        let (systems, problem) = match found {
+            Ok(systems) => {
+                let problem = painter::problem(&systems);
+                (systems, problem)
+            }
+            Err(words) => (Vec::new(), words),
+        };
+        self.as_mut().rust_mut().load_problem = problem;
         let (w, h) = (self.width, self.height);
         {
             let mut p = self.shared.borrow_mut();
@@ -220,9 +256,18 @@ impl qobject::EsdeModel {
         let themed = self.shared.borrow().stage.is_some();
         let sounds = QString::from(painter::sounds(&self.shared.borrow()).as_str());
         publish!(self, sounds, sounds_changed, sounds);
-        publish!(self, problem, problem_changed, problem);
+        self.as_mut().say_problem();
         publish!(self, themed, themed_changed, themed);
         self.publish();
+    }
+
+    /// The problem the host shows: the last load's, else a device status that does not read.
+    fn say_problem(mut self: Pin<&mut Self>) {
+        let words = match &self.load_problem {
+            words if !words.is_empty() => words.clone(),
+            _ => shelves::device(&self.device.to_string()).err().unwrap_or_default(),
+        };
+        publish!(self, problem, problem_changed, QString::from(words.as_str()));
     }
 
     /// The frame's state onto the properties, and the revision the list models refresh on.

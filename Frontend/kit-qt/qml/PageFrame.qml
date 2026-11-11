@@ -64,6 +64,15 @@ Kit.Frame {
         list.currentIndex = 0
         list.forceActiveFocus()
     }
+    // Each list lets its model go while the model resets, so no delegate is in flight across another section's content (EmuSen_Kit.md §7.58).
+    Kit.ResetGate {
+        id: tileGate
+        model: root.tileModel ?? null
+    }
+    Kit.ResetGate {
+        id: rowGate
+        model: root.rowModel ?? null
+    }
     Kit.PageLayout {
         id: places
         width: root.width
@@ -251,7 +260,7 @@ Kit.Frame {
                 // A model that fills after the view was made leaves it with no current item, so no delegate would take the focus.
                 onCountChanged: if (currentIndex < 0 && count > 0) currentIndex = 0
                 objectName: "pageTiles"
-                model: root.showsTiles && !root.showsText ? root.tileModel : null
+                model: root.showsTiles && !root.showsText && tileGate.settled ? root.tileModel : null
                 anchors.fill: parent
                 leftMargin: root.ringRoom
                 rightMargin: root.ringRoom
@@ -343,7 +352,7 @@ Kit.Frame {
                 // A model that fills after the view was made leaves it with no current item, so no delegate would take the focus.
                 onCountChanged: if (currentIndex < 0 && count > 0) currentIndex = 0
                 objectName: "pageRows"
-                model: !root.showsTiles && !root.showsText ? root.rowModel : null
+                model: !root.showsTiles && !root.showsText && rowGate.settled ? root.rowModel : null
                 anchors.fill: parent
                 clip: true
                 keyNavigationEnabled: true

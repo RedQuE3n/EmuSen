@@ -5,7 +5,8 @@
 use emusen_crystal_client::shapes::SystemRow;
 use emusen_platform_client::library::GameFile;
 use emusen_qt_models::esde_shelves::{metadata_of, names_of, Metadata, settings_of, theme_key, MediaIndex, Plays};
-use emusen_qt_models::esde_texts::EsdeTexts;
+use cxx_qt_lib::QString;
+use emusen_qt_models::esde_texts::{take, EsdeTexts};
 use emusen_qt_models::library::{refresh, Engine, FirstLook, LibrarySource, LibraryView};
 use emusen_qt_models::screens::{step, step_in, Ask, Shown};
 use serde_json::{json, Value};
@@ -322,27 +323,34 @@ fn the_gui_thread_s_part_of_a_refresh_stays_under_two_milliseconds_at_nine_thous
     let all = source.games.clone();
     let source = Fake { metadata: all.iter().map(|g| (g.path.clone(), fields(&g.path))).collect(), ..source };
     let fast = MetadataByMap(source);
-    let read = refresh(&fast).unwrap();
-    assert!(read.esde.shelves.len() > 2_000_000, "a library's scale: {} bytes", read.esde.shelves.len());
+    let first = refresh(&fast).unwrap();
+    assert!(first.esde.shelves.len() > 2_000_000, "a library's scale: {} bytes", first.esde.shelves.len());
+    // The next refresh: one more favourite, so the shelves' text is replaced and the other three compare equal at length.
+    let mut more = fast;
+    more.0.favourites.push(paths[1].clone());
+    let next = refresh(&more).unwrap();
     let mut best = std::time::Duration::MAX;
     for _ in 0..3 {
+        // A view already holding the library, as the GUI thread holds it after the first read.
         let mut view = LibraryView::empty();
-        let read = read.clone();
-        // The QStrings are made on the reading thread (esde_texts.rs).
-        let EsdeTexts(texts) = EsdeTexts::of(&read.esde_settings, &read.esde);
-        let mut published: [cxx_qt_lib::QString; 4] = Default::default();
-        let started = std::time::Instant::now();
-        // What LibraryModel.apply does on the GUI thread: compare, move the read in, move in the changed texts.
-        let changed = [read.esde_settings.text != view.esde_settings.text, read.esde.shelves != view.esde.shelves, read.esde.media != view.esde.media, read.esde.presence != view.esde.presence];
-        view.apply(Ok(read));
-        for ((slot, text), c) in published.iter_mut().zip(texts).zip(changed) {
-            if c {
-                *slot = text;
-            }
+        let mut shown: [QString; 4] = Default::default();
+        let texts = EsdeTexts::of(&first.esde_settings, &first.esde);
+        let [a, b, c, d] = &mut shown;
+        assert_eq!(take(&mut view, [a, b, c, d], Ok(first.clone()), Some(texts)), [true; 4]);
+        let read = [&first.esde_settings.text, &first.esde.shelves, &first.esde.media, &first.esde.presence];
+        for (i, (q, t)) in shown.iter().zip(read).enumerate() {
+            assert!(q.to_string() == *t, "text {i} published in its own place");
         }
+        // The QStrings are made on the reading thread (esde_texts.rs); the GUI thread's part is `take`, dropping what it replaces.
+        let (refreshed, texts) = (Ok(next.clone()), Some(EsdeTexts::of(&next.esde_settings, &next.esde)));
+        let made = texts.as_ref().map(|t| t.0[1].as_slice().as_ptr());
+        let [a, b, c, d] = &mut shown;
+        let started = std::time::Instant::now();
+        let changed = take(&mut view, [a, b, c, d], refreshed, texts);
         best = best.min(started.elapsed());
-        assert_eq!(changed, [true; 4]);
-        assert_eq!(published[1].to_string(), view.esde.shelves, "the moved-in text is the shelves' read");
+        assert_eq!(changed, [false, true, false, false]);
+        assert!(shown[1].to_string() == view.esde.shelves && view.esde.shelves == next.esde.shelves, "the shelves' new text moved in");
+        assert_eq!(Some(shown[1].as_slice().as_ptr()), made, "the shelves' QString is the one the reading thread made, not one made again");
     }
     eprintln!("the GUI thread's part at 9,000 games: {best:?}");
     assert!(best < std::time::Duration::from_millis(2), "{best:?}");

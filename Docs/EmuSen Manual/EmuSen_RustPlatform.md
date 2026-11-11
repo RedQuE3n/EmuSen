@@ -3316,6 +3316,33 @@ client, `EmuSen_DianaSh.md` S7's hour of play on Windows and macOS, and the stat
 means what §2 has always meant: a platform's own calls stay behind the platform library and Galaxia, never in a core,
 a pack or Crystal.
 
+### 31.1 The compile checks off until the C# is retired, 2026-11-11
+
+*Decided 2026-11-11 by the tester:* the `portable` job (its Windows and macOS compile checks) does not run until the C# is
+retired. Its condition in `rust-cores.yml` reads `false && vars.EMUSEN_ALL_PLATFORMS != 'on'`; deleting the leading
+`false &&` brings it back, with every step intact. The shared, library and WiseMan jobs already list Linux alone unless
+`EMUSEN_ALL_PLATFORMS` is `on`, and the repository does not set it.
+
+**What did not compile, read from the run of 2026-11-10 (push `42775742811`).** Each is Unix-only code reached by a
+`cargo check --release --all-targets` that names no `cfg`:
+
+- `emusen-assembler`: the `vector` and `grading` tests call `libc::mmap`, `mprotect`, `munmap` and the `PROT_*` and `MAP_*`
+  constants (9 errors; `x86_64-pc-windows-msvc` and `-gnu`).
+- `emusen-disc`: the `open_mapped` example uses `std::os::fd` and `File::as_raw_fd` (2 errors; both targets).
+- `emusen-core-broker`: its library uses `std::os::unix`, `libc::sendmsg`, `recvmsg`, `msghdr`, `iovec`, the `CMSG_*`
+  macros, `SCM_RIGHTS`, `SOL_SOCKET`, `fcntl`, `mmap`, `Command::pre_exec` and `ExitStatus::signal` (41 errors;
+  `-gnu`). On `-msvc` it stops earlier, in the build script of `ring`, a dev-dependency, which needs `lib.exe`.
+- `emusen-platform`: the `scraping` and `scraping_default` tests do not compile (1 error each; `-gnu`).
+- `aarch64-apple-darwin` has no log: its job queued for 24 hours on the Mac mini and was cancelled.
+
+Nothing in the list is a Linux defect.
+
+**`hwcount`'s test.** `a_program_is_counted_between_its_two_lines` opens hardware counters on the host. Where it cannot
+(a hosted runner, or `kernel.perf_event_paranoid` above 2) it prints `skipped: no hardware counters here` and passes;
+where it can, it runs in full and fails on a wrong count. The library job runs it once more with `--nocapture`, so its
+log shows which happened. To run it where it counts: `cd Platform && cargo test --profile test-checked -p emusen-dev-module
+--lib hwcount -- --nocapture` on a host whose `/proc/sys/kernel/perf_event_paranoid` is 2 or lower.
+
 ## 32. Interface 14, 2026-10-17: the save media's format modules, and the packs' code after them
 
 With the backend's step B3 (`EmuSen_Backend.md` §13), `emusen-systems` gained the packs' code and the library its C

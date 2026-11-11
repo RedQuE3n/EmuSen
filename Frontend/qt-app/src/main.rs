@@ -4,7 +4,7 @@
 
 use cxx_qt::casting::Upcast;
 use cxx_qt::QObject;
-use cxx_qt_lib::{QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString, QStringList, QUrl, QVariant};
+use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, QUrl, QVariant};
 use emusen_platform_client::Platform;
 use emusen_qt::{start, MAIN_URL};
 use emusen_qt_play::host::Host;
@@ -37,19 +37,7 @@ fn main() {
     let gate_pad = emusen_qt::gate_pad::start();
     let mut engine = QQmlApplicationEngine::new();
     if let Some(mut engine) = engine.as_mut() {
-        let mut initial = QMap::<QMapPair_QString_QVariant>::default();
-        initial.insert(QString::from("platformLibrary"), QVariant::from(&QString::from(&start.platform_library)));
-        initial.insert(QString::from("splash"), QVariant::from(&start.splash));
-        initial.insert(QString::from("reducedMotion"), QVariant::from(&start.reduced_motion));
-        initial.insert(QString::from("gameMode"), QVariant::from(&start.game_mode));
-        initial.insert(QString::from("guideChords"), QVariant::from(&start.guide_chords));
-        initial.insert(QString::from("theme"), QVariant::from(&QString::from(&start.theme)));
-        initial.insert(QString::from("themeWords"), QVariant::from(&QString::from(&start.theme_words)));
-        initial.insert(QString::from("esdeChosen"), QVariant::from(&start.esde));
-        initial.insert(QString::from("navigationSounds"), QVariant::from(&start.navigation_sounds));
-        let mut stores = QStringList::default();
-        start.cover_stores.iter().for_each(|s| stores.append(QString::from(s)));
-        initial.insert(QString::from("coverStores"), QVariant::from(&stores));
+        let mut initial = start::initial(&start);
         #[cfg(feature = "gate-pad")]
         if let Some(id) = &gate_pad {
             initial.insert(QString::from("onlyPads"), QVariant::from(&QString::from(id)));

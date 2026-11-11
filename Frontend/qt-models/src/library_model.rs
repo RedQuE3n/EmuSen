@@ -478,8 +478,7 @@ impl qobject::LibraryModel {
     }
 
     pub fn esde_enter(mut self: Pin<&mut Self>, shelf: &QString, entry: &QString) -> bool {
-        let Ok(entry) = serde_json::from_str::<serde_json::Value>(&entry.to_string()) else { return false };
-        let entry = crate::esde_shelves::EsdeGame::from_json(&entry);
+        let Ok(entry) = crate::esde_shelves::EsdeGame::from_text(&entry.to_string()) else { return false };
         let Some(found) = self.view.esde_state.shelf(&shelf.to_string()).cloned() else { return false };
         let entered = self.as_mut().rust_mut().view.gamelists.enter(&found, &entry);
         if entered {
@@ -560,9 +559,19 @@ impl qobject::LibraryModel {
     fn apply_esde(mut self: Pin<&mut Self>, esde: crate::esde_shelves::Esde, state: crate::esde_shelves::EsdeState, texts: EsdeTexts) {
         let old = &self.view.esde;
         let changed = [false, old.shelves != esde.shelves, old.media != esde.media, old.presence != esde.presence];
-        self.as_mut().rust_mut().view.esde = esde;
-        self.as_mut().rust_mut().view.esde_state = state;
-        self.publish_esde(changed, Some(texts));
+        let EsdeTexts([_, shelves, media, presence]) = texts;
+        {
+            let mut m = self.as_mut().rust_mut();
+            let m = &mut *m;
+            m.view.esde = esde;
+            m.view.esde_state = state;
+            for ((slot, text), c) in [&mut m.esde_shelves, &mut m.esde_media, &mut m.esde_presence].into_iter().zip([shelves, media, presence]).zip(&changed[1..]) {
+                if *c {
+                    *slot = text;
+                }
+            }
+        }
+        self.announce_esde(changed);
     }
 
     /// Opens the clients once the platform library is named, then refreshes, off the GUI thread.
@@ -607,47 +616,37 @@ impl qobject::LibraryModel {
             self.as_mut().rust_mut().source = source;
         }
         let rows_change = refreshed.is_ok();
-        // Which of the ES-DE texts changed, compared as Rust text before any is made a QString.
-        let changed = match &refreshed {
-            Ok(read) => {
-                let (old, new) = ((&self.view.esde_settings, &self.view.esde), (&read.esde_settings, &read.esde));
-                [old.0.text != new.0.text, old.1.shelves != new.1.shelves, old.1.media != new.1.media, old.1.presence != new.1.presence]
-            }
-            Err(_) => [false; 4],
-        };
         if rows_change {
             self.as_mut().begin_reset_model();
         }
-        self.as_mut().rust_mut().view.apply(refreshed);
+        let changed = {
+            let mut m = self.as_mut().rust_mut();
+            let m = &mut *m;
+            let shown = [&mut m.esde_settings, &mut m.esde_shelves, &mut m.esde_media, &mut m.esde_presence];
+            crate::esde_texts::take(&mut m.view, shown, refreshed, texts)
+        };
         if rows_change {
             self.as_mut().end_reset_model();
         }
-        self.as_mut().publish_esde(changed, texts);
+        self.as_mut().announce_esde(changed);
         self.as_mut().show_loading(false);
         self.publish();
     }
 
     /// The ES-DE view's texts that changed and whether it is shown, announced after a refresh and never on a step, since
     /// the shelves' text grows with the library.
-    fn publish_esde(mut self: Pin<&mut Self>, changed: [bool; 4], texts: Option<EsdeTexts>) {
-        // The texts were made QStrings where they were read; the GUI thread only moves in the ones that changed.
-        if let Some(EsdeTexts([settings, shelves, media, presence])) = texts {
-            if changed[0] {
-                self.as_mut().rust_mut().esde_settings = settings;
-                self.as_mut().esde_settings_changed();
-            }
-            if changed[1] {
-                self.as_mut().rust_mut().esde_shelves = shelves;
-                self.as_mut().esde_shelves_changed();
-            }
-            if changed[2] {
-                self.as_mut().rust_mut().esde_media = media;
-                self.as_mut().esde_media_changed();
-            }
-            if changed[3] {
-                self.as_mut().rust_mut().esde_presence = presence;
-                self.as_mut().esde_presence_changed();
-            }
+    fn announce_esde(mut self: Pin<&mut Self>, changed: [bool; 4]) {
+        if changed[0] {
+            self.as_mut().esde_settings_changed();
+        }
+        if changed[1] {
+            self.as_mut().esde_shelves_changed();
+        }
+        if changed[2] {
+            self.as_mut().esde_media_changed();
+        }
+        if changed[3] {
+            self.as_mut().esde_presence_changed();
         }
         let themed = self.view.esde_settings.themed;
         if self.themed != themed {

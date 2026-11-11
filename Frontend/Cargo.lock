@@ -296,6 +296,7 @@ name = "emusen-esde"
 version = "0.1.0"
 dependencies = [
  "quick-xml",
+ "serde",
 ]
 
 [[package]]
@@ -345,6 +346,7 @@ dependencies = [
  "cxx-qt-build",
  "cxx-qt-lib",
  "emusen-kit-core",
+ "emusen-qt-test",
 ]
 
 [[package]]

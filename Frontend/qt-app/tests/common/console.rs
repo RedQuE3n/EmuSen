@@ -124,9 +124,11 @@ pub fn pause(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, named: &str) {
     let guide = emusen_qt_endymion::reading::sdl_button(PadControl::Guide).unwrap();
     until(scene, 5, "the console owning the pad", |s| s.pad_chord_only());
     scene.run_pad_clock();
+    // Guide pressed alone and let go once the router holds it: with the Guide chords on, Guide alone opens the menu as it is let go (EmuSen_Kit.md §7.26).
     sdl.press(pad, guide, true);
-    until(scene, 10, "the chord pausing the console under the Pause Card", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Pause");
+    until(scene, 5, "the router holding Guide", |s| s.pad_held(UiButton::Guide));
     sdl.press(pad, guide, false);
+    until(scene, 10, "Guide pausing the console under the Pause Card", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Pause");
     until(scene, 5, "the card in place", |s| s.property("cardCanvas", "slide") == "0");
     assert!(scene.tree().nodes.iter().any(|n| n.visible && n.text.as_deref() == Some(named)), "the Pause Card names {named}");
 }

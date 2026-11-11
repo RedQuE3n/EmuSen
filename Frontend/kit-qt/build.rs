@@ -92,6 +92,7 @@ fn main() {
         "src/tool.rs",
         "src/page.rs",
         "src/table.rs",
+        "src/reset_gate.rs",
     ])
     .include_dir("cpp")
     .cpp_files(["cpp/kit_glue.cpp", "cpp/game_picture.h", "cpp/game_picture.cpp", "cpp/edge_mask.h", "cpp/edge_mask.cpp", "cpp/inside_clips.h", "cpp/inside_clips.cpp", "cpp/text_width.h", "cpp/text_width.cpp", "cpp/video_frames.h", "cpp/video_frames.cpp"])

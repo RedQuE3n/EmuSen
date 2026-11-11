@@ -1,6 +1,7 @@
 //! What the program reads before its window opens: the platform library's path and the player's settings that shape the
 //! start, as plain values handed to the window's root as its initial properties (EmuSen_Qt.md §1.2.1: no static carries them).
 
+use cxx_qt_lib::{QMap, QMapPair_QString_QVariant, QString, QStringList, QVariant};
 use emusen_platform_client::galaxia::consts::{DIR_MEDIA, DIR_THEMES};
 use emusen_qt_models::{esde_shelves, themes};
 use emusen_platform_client::Platform;
@@ -110,4 +111,23 @@ pub fn read(library: &Path) -> Start {
         theme, theme_words, cover_stores: cover_stores_from(media.as_deref(), &settings),
         esde: esde_shelves::settings_of(&settings).themed, navigation_sounds: navigation_sounds_from(&settings),
     }
+}
+
+/// The start's facts as the window's initial properties, by the root's property names; the program adds the device's
+/// feed and the gate's pad, and a test loads the window with the same map (EmuSen_Qt.md §4.9).
+pub fn initial(start: &Start) -> QMap<QMapPair_QString_QVariant> {
+    let mut initial = QMap::<QMapPair_QString_QVariant>::default();
+    initial.insert(QString::from("platformLibrary"), QVariant::from(&QString::from(&start.platform_library)));
+    initial.insert(QString::from("splash"), QVariant::from(&start.splash));
+    initial.insert(QString::from("reducedMotion"), QVariant::from(&start.reduced_motion));
+    initial.insert(QString::from("gameMode"), QVariant::from(&start.game_mode));
+    initial.insert(QString::from("guideChords"), QVariant::from(&start.guide_chords));
+    initial.insert(QString::from("theme"), QVariant::from(&QString::from(&start.theme)));
+    initial.insert(QString::from("themeWords"), QVariant::from(&QString::from(&start.theme_words)));
+    initial.insert(QString::from("esdeChosen"), QVariant::from(&start.esde));
+    initial.insert(QString::from("navigationSounds"), QVariant::from(&start.navigation_sounds));
+    let mut stores = QStringList::default();
+    start.cover_stores.iter().for_each(|s| stores.append(QString::from(s)));
+    initial.insert(QString::from("coverStores"), QVariant::from(&stores));
+    initial
 }

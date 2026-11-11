@@ -4,8 +4,9 @@
 //! `GamelistOptions`, `CollectionShelves` and `ThemedLibrary.Gamelists`/`.Folders` as plain data, with no view behind
 //! them: the view model writes what they list as text, off the GUI thread.
 
-use crate::esde_shelves::{EsdeGame, RowText};
-use serde::Serialize;
+use crate::esde_shelves::EsdeGame;
+use emusen_esde::shelves::{CountsText, Entry, ShelfText};
+use std::borrow::Cow;
 use serde_json::Value;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -836,73 +837,33 @@ impl Gamelists {
 /// A listing as the painter reads it, one shelf of the shelves' text, written into `out` with no tree made first
 /// (EmuSen_Qt.md §4.9).
 pub fn write_listing(out: &mut Vec<u8>, shelf: &Shelf, listing: &Listing) {
-    let text = ListingText {
+    let c = &listing.counts;
+    let text = ShelfText {
         collection_id: shelf.collection_id,
-        counts: CountsText {
-            favorites: listing.counts.favorites,
-            filtered: listing.counts.filtered,
-            games: listing.counts.games,
-            in_folder: listing.counts.in_folder,
-            shown: listing.counts.shown,
-        },
+        counts: Some(CountsText { favorites: c.favorites, filtered: c.filtered, games: c.games, in_folder: c.in_folder, shown: c.shown }),
         favourites_on_top: listing.favourites_on_top,
-        folder: &listing.folder,
-        full_name: &shelf.full_name,
+        folder: Cow::Borrowed(&listing.folder),
+        full_name: Cow::Borrowed(&shelf.full_name),
         games: listing.entries.iter().map(|g| entry_text(shelf, g)).collect(),
-        key: &listing.key,
-        kind: shelf.kind.name(),
-        letters: &listing.letters,
-        name: &shelf.name,
-        sort: listing.sort.stored(),
+        key: Cow::Borrowed(&listing.key),
+        kind: Cow::Borrowed(shelf.kind.name()),
+        letters: Cow::Borrowed(&listing.letters),
+        name: Cow::Borrowed(&shelf.name),
+        sort: Cow::Owned(listing.sort.stored()),
         stars: shelf.stars,
-        system: &shelf.system,
-        theme: &shelf.theme,
+        system: Cow::Borrowed(&shelf.system),
+        theme: Cow::Borrowed(&shelf.theme),
     };
     // Writing into a Vec fails only where the value cannot be written, which these plain fields never are.
     let _ = serde_json::to_writer(out, &text);
 }
 
-/// A listing's text, borrowed; the keys in the order a JSON object's sorted map gave them.
-#[derive(Serialize)]
-struct ListingText<'a> {
-    collection_id: Option<i64>,
-    counts: CountsText,
-    favourites_on_top: bool,
-    folder: &'a str,
-    full_name: &'a str,
-    games: Vec<EntryText<'a>>,
-    key: &'a str,
-    kind: &'static str,
-    letters: &'a [(String, usize)],
-    name: &'a str,
-    sort: String,
-    stars: bool,
-    system: &'a str,
-    theme: &'a str,
-}
-
-#[derive(Serialize)]
-struct CountsText {
-    favorites: usize,
-    filtered: bool,
-    games: usize,
-    in_folder: bool,
-    shown: usize,
-}
-
 /// An entry of a listing: a console's game as its whole row; a collection's game by its file alone, its row the one
 /// its console's shelf carries, so the text holds each game once; a folder entry whole, with its description.
-#[derive(Serialize)]
-#[serde(untagged)]
-enum EntryText<'a> {
-    Row(RowText<'a>),
-    Member { esde_system: &'a str, file: &'a str, sort_name: &'a Option<String> },
-}
-
-fn entry_text<'a>(shelf: &Shelf, g: &'a EsdeGame) -> EntryText<'a> {
+fn entry_text<'a>(shelf: &Shelf, g: &'a EsdeGame) -> Entry<'a> {
     match (shelf.kind, g.folder) {
-        (_, true) => EntryText::Row(g.row_whole()),
-        (Kind::Regular, false) => EntryText::Row(g.row()),
-        (_, false) => EntryText::Member { esde_system: &g.esde_system, file: &g.file, sort_name: &g.sort_name },
+        (_, true) => Entry::Row(g.row_whole()),
+        (Kind::Regular, false) => Entry::Row(g.row()),
+        (_, false) => Entry::Member { esde_system: Cow::Borrowed(&g.esde_system), file: Cow::Borrowed(&g.file), sort_name: g.sort_name.as_deref().map(Cow::Borrowed) },
     }
 }

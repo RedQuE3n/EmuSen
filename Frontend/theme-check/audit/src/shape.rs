@@ -3,7 +3,7 @@
 
 use emusen_crystal_client::shapes::SystemRow;
 use emusen_platform_client::library::GameFile;
-use emusen_qt_models::esde_shelves::{MediaIndex, Plays};
+use emusen_qt_models::esde_shelves::{MediaIndex, Metadata, Plays};
 use emusen_qt_models::gamelists::Collection;
 use emusen_qt_models::library::{Engine, LibrarySource};
 use serde_json::Value;
@@ -35,7 +35,7 @@ impl LibrarySource for Shaped<'_> {
     fn media(&self, systems: &[SystemRow], games: &[GameFile], types: &[&str]) -> Result<Vec<(String, String)>, String> {
         if self.covers { self.inner.media(systems, games, types) } else { Ok(Vec::new()) }
     }
-    fn metadata(&self, games: &[GameFile]) -> Result<Vec<(String, emusen_qt_models::esde_shelves::Metadata)>, String> {
+    fn metadata(&self, games: &[GameFile]) -> Result<Vec<(String, Metadata)>, String> {
         self.inner.metadata(games)
     }
     fn played(&self, games: &[GameFile]) -> Result<Vec<(String, i64)>, String> {

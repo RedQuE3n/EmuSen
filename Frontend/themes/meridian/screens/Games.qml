@@ -456,10 +456,10 @@ ThemeScreen {
                         lineHeight: 26.4
                         lineHeightMode: Text.FixedHeight
                     }
-                    // The rail's focused name, floating beside it while the rail holds the focus.
+                    // The rail's focused name, floating beside it while the rail holds the focus over a grid; an empty grid's words stand there instead.
                     Item {
                         objectName: "floatingLabel"
-                        visible: root.railHeld && root.labelled !== null
+                        visible: root.railHeld && root.labelled !== null && cells.count > 0
                         x: 136
                         y: rail.y + (root.labelled ? root.labelled.y - rail.contentY : 0) + 11
                         width: label.implicitWidth + 32

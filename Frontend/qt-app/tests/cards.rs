@@ -249,8 +249,8 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     scene.pad(UiButton::Menu);
     until(&mut scene, 5, "Start's Home card again", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
     scene.wait(200);
-    let focused = common::console::focused_words(&mut scene);
-    assert!(focused.starts_with(first.split(" | ").next().unwrap_or_default()), "the card made under the resting pointer focuses its first row, {first}, not {focused:?} (Home had {home_focus:?})");
+    let now = common::console::focused_words(&mut scene);
+    assert!(now.starts_with(first.split(" | ").next().unwrap_or_default()), "the card made under the resting pointer focuses its first row, {first}, not {now:?} (Home had {home_focus:?})");
     scene.pad(UiButton::Back);
     until(&mut scene, 5, "B closing the card to Home", |s| s.property("screens", "shown") == "Home");
     wait_for(&mut scene, "home", "activeFocus", "true", 1000);

@@ -47,6 +47,9 @@ bool harness_set_property(QObject& root, const QString& object_name, const QStri
 bool harness_destroy(QObject& root, const QString& object_name);
 bool harness_watch(QObject& root, const QString& object_name, const QString& property);
 int harness_notified(QObject& root, const QString& object_name, const QString& property);
+bool harness_watch_rows(QObject& root, const QString& object_name);
+bool harness_watch_order(QObject& root, const QString& object_name, const QString& property);
+QString harness_rows_told(QObject& root, const QString& object_name);
 QString harness_colours_at(QObject& window, const QString& points);
 void harness_hide_words(QObject& window, bool hidden);
 std::uint64_t harness_frames(QObject& window);

@@ -2913,9 +2913,17 @@ day the token landed (seen 2026-11-11; theme-check is outside the workspace and 
 the shadow's, in the registry's order. kit-qt does not read that constant: its `Tokens` property comes from the
 `shadow_color` field of its cxx-qt bridge, as each palette token's does from its own field, since the bridge's macro
 takes a field's name and not a constant; the two names are held equal by this test alone, as the palette's are. A
-theme's `shadowColor` in `theme.json` passes theme-check, which reads the registry, but the host sets only palette
-tokens on a theme's engine (theme-qt's `set_token_overrides` reads names through `ColourToken::named`), so the override
-is left out and the kit's shadow colour stays (read in the source 2026-11-11; no test runs it).
+theme's `shadowColor` in `theme.json` passes theme-check, which reads the registry.
+
+**A theme's own shadow colour** (decided 2026-11-11 by the tester, R-20261111-68). theme-qt's `set_token_overrides` sets
+a theme's `shadowColor` on its engine's `Tokens` beside its palette overrides, the name read from
+`Shadow::COLOUR_PROPERTY`; kit-qt's `Column::overridden` takes it in place of the registry's colour for the variant it
+names, and the registry's stays where the theme sets none. The shadow's opacity, offset and blur stay the kit's. Until
+2026-11-11 the host set palette tokens alone and left the override out. The program's own engine keeps the registry's
+shadow, as it keeps the kit's palette. Tests: kit-qt's `column` (a theme's colour replaces the registry's, none keeps
+it) and qt-app's `theme` (the accent fixture's `shadowColor` reaches its screen, the program's tokens keep the
+registry's). Seeded faults, each caught: the column ignoring the theme's colour (`column`); the host dropping it
+(`theme`). `EmuSen.Theme` is unchanged: `Tokens.shadowColor` was already its property.
 
 ### 7.58 The walk presses on through a stepped action; the page frame's focus; Qt Multimedia's two messages (stage 5, piece G2; 2026-11-09)
 

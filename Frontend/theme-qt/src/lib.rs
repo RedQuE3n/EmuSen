@@ -89,17 +89,22 @@ pub mod host {
     }
 
     /// A theme's token overrides as its `theme.json` writes them (light or not, a `Tokens` property, `#RRGGBB`), set on the
-    /// kit's tokens of the theme's engine and nowhere else; an entry that names no colour token or no colour is left out.
+    /// kit's tokens of the theme's engine and nowhere else: the palette's colours and the raised shadow's (`shadowColor`); an
+    /// entry that names no colour token or no colour is left out.
     pub fn set_token_overrides(within: Pin<&mut QObject>, overrides: &[(bool, String, String)]) {
-        use emusen_kit_core::tokens::{Colour, ColourToken, Variant};
+        use emusen_kit_core::tokens::{Colour, ColourToken, Shadow, Variant};
+        let variant = |light: bool| if light { Variant::Light } else { Variant::Dark };
         let table = overrides
             .iter()
-            .filter_map(|(light, name, value)| {
-                Some((if *light { Variant::Light } else { Variant::Dark }, ColourToken::named(name)?, Colour::parse(value)?))
-            })
+            .filter_map(|(light, name, value)| Some((variant(*light), ColourToken::named(name)?, Colour::parse(value)?)))
+            .collect();
+        let shadow = overrides
+            .iter()
+            .filter(|(_, name, _)| name == Shadow::COLOUR_PROPERTY)
+            .filter_map(|(light, _, value)| Some((variant(*light), Colour::parse(value)?)))
             .collect();
         if let Some(tokens) = kit_tokens(within) {
-            tokens.set_overrides(table);
+            tokens.set_overrides(table, shadow);
         }
     }
 

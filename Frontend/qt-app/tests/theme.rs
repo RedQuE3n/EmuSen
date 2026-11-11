@@ -51,6 +51,11 @@ fn qt_3_5_the_theme_s_screens_replace_the_reference_s_and_a_failed_theme_shows_t
     assert_eq!(scene.property("accentProbe", "color"), "#b4442a", "{}", scene.property("theme", "warnings"));
     let kit = scene.kit_tokens().map(|t| (t.accent().red(), t.accent().green(), t.accent().blue()));
     assert_eq!(kit, Some((0x4C, 0x9A, 0xE8)), "the program's accent is the kit's");
+    // Its own shadow colour too (R-20261111-68), where the program's stays the registry's.
+    assert_eq!(scene.property("shadowProbe", "color"), "#2a1b4c", "{}", scene.property("theme", "warnings"));
+    let registry = emusen_kit_core::tokens::raised_shadow(emusen_kit_core::tokens::Form::Desktop).colour;
+    let kit = scene.kit_tokens().map(|t| (t.shadow_color().red(), t.shadow_color().green(), t.shadow_color().blue()));
+    assert_eq!(kit, Some((i32::from(registry.r), i32::from(registry.g), i32::from(registry.b))), "the program's shadow is the registry's");
 
     // Switching at run time makes a new engine and lets the last one go; no theme, no engine.
     choose(&mut scene, "stub");

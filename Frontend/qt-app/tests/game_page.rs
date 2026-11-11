@@ -278,6 +278,15 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     scene.pad(UiButton::Right);
     until(&mut scene, "Right steps Resume back", |s| s.property("pageModel", "actions") == before);
     assert_eq!(scene.rows_told("pageModel"), "1-2", "and back, in place");
+    // Left to Slot 2, to Slot 1, then to the automatic state, the newest and drawn after the last slot in use: that step
+    // moves the mark from the first tile to the fourth, two runs apart, each told alone; then Right back to Slot 3.
+    for (button, told) in [(UiButton::Left, "1-2"), (UiButton::Left, "0-1"), (UiButton::Left, "0-0,3-3"), (UiButton::Right, "0-0,3-3"), (UiButton::Right, "0-1"), (UiButton::Right, "1-2")] {
+        let now = scene.property("pageModel", "actions");
+        scene.pad(button);
+        until(&mut scene, "Resume steps its state", |s| s.property("pageModel", "actions") != now);
+        assert_eq!(scene.rows_told("pageModel"), told, "the tiles the mark moved between, by runs");
+    }
+    assert_eq!(scene.property("pageModel", "actions"), before, "back on Slot 3");
     // States' tiles scrolled and Options' rows at once, three times: the tiles still being made as the section turns, and
     // Qt logs nothing (EmuSen_Kit.md §7.58).
     scene.pad(UiButton::Down);

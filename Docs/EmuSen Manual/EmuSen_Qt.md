@@ -4804,7 +4804,10 @@ covers a label alone, a picture alone, two rows apart, empty to empty (nothing),
 calls is tested in the program's page test (`qt-app/tests/game_page.rs`, offscreen): the qt-test harness records a list
 model's `dataChanged` ranges and resets as a view hears them (`Scene::watch_rows`, `rows_told`), and a step of Resume
 and its step back are each heard as the one run of the two neighbouring tiles the mark moved between (`1-2`), with no
-reset.
+reset. Two neighbouring tiles cannot tell runs from a first-to-last span, so the test then steps Resume on to the
+automatic state, the newest state (Resume's first) drawn after the last slot in use: the mark moves from the first
+tile to the fourth, heard as two runs, `0-0,3-3`, where a span would be `0-3` and a loop telling only the first run
+`0-0`; and back. Seeded on 2026-11-11: the model telling only the first run, the page test failing there.
 
 **The focus after a state is deleted (2026-11-11).** Mistress's page kept the focus on the item it was on while that
 item was still listed, and put it on the first item when the focused one went (`PageLayout.FillContent`:

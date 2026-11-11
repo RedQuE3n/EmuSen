@@ -92,6 +92,24 @@ fn a_theme_setting_only_accepted_pairs_counts_none_unsupported() {
 }
 
 #[test]
+fn accepted_pairs_have_a_column_of_their_own_and_are_never_whole() {
+    let t = Synth::new();
+    t.capabilities("").theme(
+        "<view name=\"system\"><helpsystem name=\"help\"><textColorDimmed>FF0000</textColorDimmed><opacityDimmed>0.5</opacityDimmed></helpsystem></view>",
+    );
+    let m = check::measure(&t.root, &["nes"]);
+    assert_eq!(m.count("accepted"), 2);
+    assert!(m.loads() && m.undrawn.is_empty() && m.count("unsupported") == 0 && m.count("unknown") == 0);
+    assert!(!m.whole(), "a theme whose only pairs are accepted is not drawn whole");
+    let header: Vec<&str> = check::SUMMARY_HEADER.split('\t').collect();
+    let row = check::summary_row(&m);
+    let cells: Vec<&str> = row.split('\t').collect();
+    assert_eq!(cells.len(), header.len());
+    assert_eq!(cells[header.iter().position(|c| *c == "accepted").unwrap()], "2");
+    assert_eq!(cells[header.iter().position(|c| *c == "whole").unwrap()], "no");
+}
+
+#[test]
 fn every_mark_is_polylines_in_its_unit_box() {
     let mut names = BTreeSet::new();
     for id in MarkId::ALL {

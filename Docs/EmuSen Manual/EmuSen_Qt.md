@@ -3408,10 +3408,35 @@ give M a 14 px advance from 20.70 px at the earliest (14 at every size with the 
 The hinted `S` of the two faces agrees but at the edges of a step (26 of 800 sizes from 10 to 26 px), none of them a
 measured copy.
 
+The viewer's help at 1920 × 1200 agrees: FIRST and LAST are 70 and 61 px of ink in the capture, SemiBold's rounded
+advances give 70 and 61 and Regular's 68 and 59; BROWSE is 110 against 111 and 107 (`viewer.py`). Only the help is
+shown so far to be SemiBold; ES-DE's other text in its own face is not measured against it, and keeps the default face
+and the rules of §4.9.1.
+
+**The painter (built 2026-11-11).** `emusen_esde::fonts`, the one owner of the font paths, names the help's face
+(`HELP_FILE`, Akrobat-SemiBold.ttf) and finds it beside the default face it already finds (`help_font`); no font file
+enters the repository. `Data::help_font` carries it, and a help element whose theme names no `fontPath`, and the media
+viewer's help, take it as a face whose every advance, the space's too, is rounded half up at the label's own size (a
+theme face's rule, `own` false). Where the SemiBold is absent the help takes the default face as before and the log
+says so once. The icon's box follows the face it is drawn in: SemiBold's hinted `S` is Regular's at every measured
+size but 23 and 36 px (17 against 16, 26 against 25), the latter the viewer's help at 1920 × 1200.
+
+**The advance's rounding, re-proved with SemiBold (`fixed.py`, pens re-read with SemiBold's rasters, `refit.py`).** Of
+the 93 copies: each advance exact and rounded half up, 90; the same in f32 arithmetic, 90; FreeType's fixed point (the
+16.16 scale of the size in 26.6, `FT_MulFix`, then `(x + 32) >> 6`) with the size rounded, floored or ceiled to 64ths,
+87, 88 and 81; carried fractions, exact or in 26.6, from the label's start or any phase, 29–62. `esde-text`'s rule of
+9687270e6 (§4.9.4) stands for the help in SemiBold; its proof on rost's copies was rost's own face and is unchanged.
+
 Open, **[blocked]** for the tester: the three copies SemiBold misses (`z04`, `lc04`, `y06`) are each a glyph whose
 exact advance is within 0.0005 px under a half (w 12.4999 px at 20.064, d 7.4995 at 16.128) and which ES-DE rounds
 up, as `v06`'s d in rost above; a size raised by 0.0015 px or more, or rounded up to 1/128 px, places all 93, but
-neither is derived.
+neither is derived. The three, with each rule's rounding of the glyph:
+
+| Copy | Glyph | Exact px | ES-DE | Exact rounded | 26.6 fixed point | The rule that rounds it up breaks |
+|---|---|---|---|---|---|---|
+| `z04` | w | 12.4999 | 13 | 12 | 13 | M at 20.112 px (13.4952 → 14, ES-DE 13; `z07`, `mn07`) |
+| `lc04` | w | 12.4999 | 13 | 12 | 13 | the same |
+| `y06` | d | 7.4995 | 8 | 7 | 8 | the same |
 
 **The hinter (decided 2026-11-10).** harfrust and read-fonts shape and read tables but do not hint, so the hinted height
 comes from the system's FreeType, the library the captures were drawn with (FreeType 2.14.3 on Fedora 44), loaded at run

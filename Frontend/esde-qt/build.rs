@@ -51,7 +51,19 @@ fn baked_shader() -> PathBuf {
     qrc
 }
 
+/// The system's FreeType linked by its run-time name, the library Qt already loads, so only libfreetype.so.6 need be
+/// installed; pkg-config, where it knows freetype2, adds the folder it is in (EmuSen_Qt.md §4.12.4).
+fn link_freetype() {
+    if let Ok(out) = Command::new("pkg-config").args(["--libs-only-L", "freetype2"]).output() {
+        for dir in String::from_utf8_lossy(&out.stdout).split_whitespace().filter_map(|a| a.strip_prefix("-L")) {
+            println!("cargo:rustc-link-search=native={dir}");
+        }
+    }
+    println!("cargo:rustc-link-lib=dylib:+verbatim=libfreetype.so.6");
+}
+
 fn main() {
+    link_freetype();
     let shaders = baked_shader();
     CxxQtBuilder::new_qml_module(
         QmlModule::new("EmuSen.Esde").version(1, 0).qml_files(ESDE_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtQml.Models").depend("QtQuick.Pdf").depend("EmuSen.Kit"),

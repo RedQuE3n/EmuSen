@@ -6,7 +6,7 @@ mod common;
 use std::path::PathBuf;
 
 use emusen_esde::fonts::REFERENCE;
-use emusen_esde_qt::hinted::height;
+use emusen_esde_qt::hinted::rows;
 
 fn rost() -> String {
     common::corpus().join("caralt-es-de/assets/fonts/rost.otf").to_string_lossy().into_owned()
@@ -19,7 +19,7 @@ fn akrobat() -> String {
 
 fn heights(path: &str, sizes: &[f64]) -> Vec<(f64, f64)> {
     let s = REFERENCE.chars().next().unwrap();
-    sizes.iter().map(|&px| (px, height(path, px, s).expect("FreeType").expect("the face's S"))).collect()
+    sizes.iter().map(|&px| (px, f64::from(rows(path, px as f32, s).expect("FreeType").expect("the face's S")))).collect()
 }
 
 #[test]
@@ -36,4 +36,14 @@ fn the_reference_glyph_is_hinted_at_every_measured_size_in_both_faces() {
         (want(&rost_sizes, &rost_want), want(&akrobat_sizes, &akrobat_want)),
         "the S hinted in rost and in Akrobat"
     );
+}
+
+// Art Book Next's help at 1280 × 800, in ES-DE's help face: 0.04583333 × 800 in f32, 36.666664 px, is 2346/64 truncated as ES-DE gives it to
+// FreeType, where the S renders 27 rows; rounded to 2347/64 it renders 26 (EmuSen_Qt.md §4.12.4). At 1920 × 1200 both give 41.
+#[test]
+fn the_size_is_truncated_to_sixty_fourths_where_the_hinter_turns() {
+    let s = REFERENCE.chars().next().unwrap();
+    let semibold = std::path::Path::new(&akrobat()).with_file_name(emusen_esde::fonts::HELP_FILE).to_string_lossy().into_owned();
+    let at = |px: f32| rows(&semibold, px, s).expect("FreeType").expect("the face's S");
+    assert_eq!((at(0.045_833_33_f32 * 800.0), at(2347.0 / 64.0), at(0.045_833_33_f32 * 1200.0)), (27, 26, 41));
 }

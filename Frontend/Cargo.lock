@@ -338,7 +338,6 @@ dependencies = [
  "emusen-kit-core",
  "emusen-kit-qt",
  "emusen-qt-test",
- "libloading",
  "serde",
  "serde_json",
 ]

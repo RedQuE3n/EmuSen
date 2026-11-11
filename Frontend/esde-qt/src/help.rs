@@ -1,16 +1,16 @@
-//! ES-DE's help bar places (EmuSen_Qt.md §4.12.1): each entry's icon box and label from the bar's start, carried as
-//! fractions, the labels at their laid-out widths, the bar ending at its last label and its width rounded to a whole
-//! pixel. The painter rounds the bar's start to the nearest pixel and draws each part at the nearest pixel from there.
+//! ES-DE 3.4.1's help strip (EmuSen_Qt.md §4.12.4), from es-core HelpComponent.cpp (applyTheme, updateGrid) and
+//! ComponentGrid.cpp: the row 1.25 × the rendered S at the help's font size, each entry's icon box and label from the
+//! strip's start, carried as fractions, and the grid's width the sum of every entry's parts with the spacing after the
+//! last one, none of it rounded. The scene places the strip and the painter draws each part at the nearest pixel.
 
 use emusen_esde::fonts::REFERENCE;
 use emusen_esde::scene::Help;
 use emusen_esde_text::{layout, Align, Spec};
 
-/// The icon's box over the height of the reference glyph hinted at the help's font size, measured on ES-DE 3.4.1's help
-/// copies of 2026-11-10.
-pub const BOX_OVER_REFERENCE: f64 = 1.25;
+/// The row's height over the rendered reference glyph's rows (HelpComponent.cpp, mLetterHeight).
+pub const ROW_OVER_REFERENCE: f32 = 1.25;
 
-/// The entries' starts and their labels' starts, and the bar's width, whole.
+/// The entries' starts and their labels' starts, and the grid's width, its trailing spacing in.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Places {
     pub starts: Vec<f64>,
@@ -18,12 +18,23 @@ pub struct Places {
     pub width: f64,
 }
 
-/// The icon's box of a help element: from its face's reference glyph hinted at the font size; a scale above 1 divides it.
+/// The row's height: the rows of the reference glyph rendered at the help's font size, before entryRelativeScale, × 1.25.
 /// None without FreeType, which the painter reports (`crate::hinted::ready`).
-pub fn icon_box(h: &Help) -> Option<f64> {
+pub fn row_height(h: &Help) -> Option<f64> {
     let reference = REFERENCE.chars().next()?;
-    let height = crate::hinted::height(h.font.file.as_deref().unwrap_or(""), h.px, reference).ok()??;
-    Some(height * BOX_OVER_REFERENCE / h.scale.max(1.0))
+    let rows = crate::hinted::rows(h.font.file.as_deref().unwrap_or(""), h.px as f32, reference).ok()??;
+    Some(f64::from(rows as f32 * ROW_OVER_REFERENCE))
+}
+
+/// The icon's box: the row's height, divided by entryRelativeScale above 1.
+pub fn icon_box(h: &Help) -> Option<f64> {
+    let row = row_height(h)? as f32;
+    Some(f64::from(if h.scale < 1.0 { row } else { row / h.scale as f32 }))
+}
+
+/// The labels' size: the help's, times entryRelativeScale below 1.
+pub fn label_px(h: &Help) -> f64 {
+    if h.scale < 1.0 { f64::from(h.px as f32 * h.scale as f32) } else { h.px }
 }
 
 /// The places of a help element's entries; with no icon box (no FreeType, or a face without the reference glyph) the
@@ -35,8 +46,8 @@ pub fn places(h: &Help) -> Places {
 /// The places of a help element's entries with a given icon box.
 pub fn places_with(h: &Help, icon: f64) -> Places {
     let face = crate::text::face_of(h.font.file.as_deref().unwrap_or("")).or_else(|| crate::text::face_of(""));
-    let px = h.px * h.scale.min(1.0);
-    let (mut starts, mut labels, mut x, mut width) = (vec![], vec![], 0.0, 0.0);
+    let px = label_px(h);
+    let (mut starts, mut labels, mut x) = (vec![], vec![], 0.0);
     for e in &h.entries {
         let words = face.as_ref().map_or(0, |f| {
             let spec = Spec { text: &e.label, px, own_face: h.font.own, width: 0.0, height: 0.0, line_spacing: 0.0, wrap: false, ellipsis: false, align: Align::Start };
@@ -44,10 +55,9 @@ pub fn places_with(h: &Help, icon: f64) -> Places {
         });
         starts.push(x);
         labels.push(x + icon + h.icon_gap);
-        width = x + icon + h.icon_gap + f64::from(words);
-        x = width + h.entry_spacing;
+        x += icon + f64::from(words) + h.icon_gap + h.entry_spacing;
     }
-    Places { starts, labels, width: width.round() }
+    Places { starts, labels, width: x }
 }
 
 #[cfg(test)]
@@ -77,19 +87,38 @@ mod tests {
         }
     }
 
-    // The labels' pens as ES-DE places the bar: its whole width laid back from 0.995 of 1280, the start rounded.
+    // The labels' pens as ES-DE places the strip: pos 0.995 of 1280 at origin 1, by the scene's rule (EmuSen_Qt.md §4.12.4).
     fn pens(h: &Help, icon: f64) -> Vec<f64> {
         let p = places_with(h, icon);
-        let start = (0.995 * 1280.0 - p.width).round();
+        let at = emusen_esde::loader::Pair { x: 0.995, y: 0.97 };
+        let (start, _) = emusen_esde::scene::help::top_left(Some(at), emusen_esde::loader::Pair { x: 1.0, y: 1.0 }, h.entry_spacing, (p.width, 17.5), 1280.0, 800.0);
         p.labels.iter().map(|l| (start + l).round()).collect()
     }
 
     // Copies v05 and g104 of the help sweeps: rost at 20 px, 5 px between icon and label, 8 between entries; ES-DE 3.4.1
-    // drew the labels' pens at these columns (EmuSen_Qt.md §4.12.1). The hinted S is 14 px at 20 px.
+    // drew the labels' pens at these columns (EmuSen_Qt.md §4.12.1). The rendered S is 14 rows at 20 px.
     #[test]
-    fn the_labels_stand_where_es_de_drew_them_from_a_whole_bar_and_a_rounded_start() {
+    fn the_labels_stand_where_es_de_drew_them_from_the_grid_s_width_and_two_roundings() {
         let file = rost().expect("CarAlt's rost in the theme corpus");
-        assert_eq!(pens(&copy(file.clone(), 1.0), 14.0 * BOX_OVER_REFERENCE), [985.0, 1053.0, 1115.0, 1215.0]);
-        assert_eq!(pens(&copy(file, 1.04), 14.0 * BOX_OVER_REFERENCE / 1.04), [987.0, 1055.0, 1115.0, 1215.0]);
+        let row = 14.0 * f64::from(ROW_OVER_REFERENCE);
+        assert_eq!(pens(&copy(file.clone(), 1.0), row), [985.0, 1053.0, 1115.0, 1215.0]);
+        assert_eq!(pens(&copy(file, 1.04), f64::from(row as f32 / 1.04)), [987.0, 1055.0, 1115.0, 1215.0]);
+    }
+
+    // The grid's width is every entry's parts with the spacing after the last, unrounded (HelpComponent.cpp updateGrid).
+    #[test]
+    fn the_grid_s_width_keeps_its_fraction_and_its_trailing_spacing() {
+        let file = rost().expect("CarAlt's rost in the theme corpus");
+        let mut h = copy(file.clone(), 1.0);
+        h.entries.truncate(2);
+        let face = crate::text::face_of(&file).expect("rost");
+        let width = |text: &str| {
+            let spec = Spec { text, px: 20.0, own_face: false, width: 0.0, height: 0.0, line_spacing: 0.0, wrap: false, ellipsis: false, align: Align::Start };
+            f64::from(layout(&face, &spec).width)
+        };
+        let p = places_with(&h, 17.3);
+        let want = 2.0 * (17.3 + 5.0 + 8.0) + width(&h.entries[0].label) + width(&h.entries[1].label);
+        assert!((p.width - want).abs() < 1e-9 && p.width.fract() > 0.5, "{p:?} against {want}");
+        assert!((p.width - (p.labels[1] + width(&h.entries[1].label)) - 8.0).abs() < 1e-9, "the trailing spacing: {p:?}");
     }
 }

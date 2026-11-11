@@ -497,6 +497,8 @@ void harness_keep_messages() { kept().shown = qInstallMessageHandler(keep); }
 
 QString harness_messages() { return std::exchange(kept().messages, {}).join(QChar(0x1e)); }
 
+bool harness_software() { return QQuickWindow::sceneGraphBackend() == QLatin1String("software"); }
+
 void harness_watch_dirty(bool on)
 {
     {

@@ -2952,3 +2952,12 @@ scene that plays no clip:
    conversion on the GPU; it then converts on the CPU, the path the software tier needs. The `offscreen` platform the
    tests run on offers no OpenGL to make one. The frames are drawn (the program's test reads the clip's magenta). It is
    Qt's own fallback, harmless, and left in `QT_INTERNAL`.
+
+### 7.101 Qt Multimedia's CPU conversion is Qt's own on the software backend alone (repair piece DC-A; 2026-11-11)
+
+`QT_INTERNAL` (§7.14, §7.58) now says of each message whether it is Qt's own only on the software backend.
+`No RHI backend. Using CPU conversion.` is: the tester decided on 2026-11-09 that it is ignored on the software backend
+only. On the GPU an RHI is there to convert on, so the same line means the clip's frames took the CPU path and fails the
+test. `Harness::software()` asks Qt for the scene graph backend in use (`QQuickWindow::sceneGraphBackend()`, settled once the first window is made), and
+`assert_quiet` filters by it; `qt_internal(message, software)` is the rule, held both ways by `tests/internal.rs`. The
+main-thread warning stays filtered on every backend, as §7.58 says.

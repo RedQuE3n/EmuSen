@@ -32,6 +32,8 @@ pub mod ffi {
         fn harness_wait(ms: i32);
         fn harness_keep_messages();
         fn harness_messages() -> QString;
+        /// Whether the scene graph draws on the software backend.
+        fn harness_software() -> bool;
         /// Keeps Qt's account of each frame's dirty items (its `qt.quick.dirty` log) from now, or stops; either clears it.
         fn harness_watch_dirty(on: bool);
         /// The kept account, one line a frame's start and one an item, emptied as read.

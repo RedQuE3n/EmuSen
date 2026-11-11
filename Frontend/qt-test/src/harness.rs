@@ -44,13 +44,19 @@ const STRICTLY_ENFORCE_RANGE: f64 = 2.0;
 const STEPPED: &str = "stepped";
 const STEPS_PRESSED: usize = 64;
 
-/// Messages Qt logs of its own accord that no code of ours causes, each with its reason (EmuSen_Kit.md §7.14).
-pub const QT_INTERNAL: [(&str, &str); 2] = [
+/// Messages Qt logs of its own accord that no code of ours causes, each with its reason and whether it is Qt's only on the
+/// software backend (EmuSen_Kit.md §7.14, §7.101).
+pub const QT_INTERNAL: [(&str, &str, bool); 2] = [
     // Qt Multimedia converting a clip's frame to a picture where there is no RHI, the software backend's path (EmuSen_Kit.md §7.50).
-    ("No RHI backend. Using CPU conversion.", "Qt Multimedia on the software backend"),
+    ("No RHI backend. Using CPU conversion.", "Qt Multimedia on the software backend, decided 2026-11-09", true),
     // QtCore's, once Qt Multimedia starts in a process whose application was made on a test runner's thread; the program makes it on main.
-    ("QApplication was not created in the main() thread", "the test runner's thread"),
+    ("QApplication was not created in the main() thread", "the test runner's thread", false),
 ];
+
+/// Whether a message Qt logged is one of `QT_INTERNAL`'s on the backend the scene graph draws on.
+pub fn qt_internal(message: &str, software: bool) -> bool {
+    QT_INTERNAL.iter().any(|(text, _, software_only)| message.contains(text) && (software || !software_only))
+}
 
 /// The sizes the gate runs at (EmuSen_Interface.md §24.7): 1280 × 800, a Steam Deck–class size kept as a fit size; the
 /// handheld's own 1920 × 1200 (a Legion Go S, decided 2026-11-08); 1920 × 1080, 1280 × 720 and 3840 × 2160.
@@ -156,8 +162,14 @@ impl Harness {
 
     /// Fails on any message Qt logged that is not one of `QT_INTERNAL`'s, each named with the reason it is Qt's (EmuSen_Kit.md §7.14).
     pub fn assert_quiet(&mut self) {
-        let ours: Vec<String> = self.messages().into_iter().filter(|m| !QT_INTERNAL.iter().any(|(text, _)| m.contains(text))).collect();
+        let software = self.software();
+        let ours: Vec<String> = self.messages().into_iter().filter(|m| !qt_internal(m, software)).collect();
         assert!(ours.is_empty(), "Qt logged {} warnings or errors:\n{}", ours.len(), ours.join("\n"));
+    }
+
+    /// Whether the scene graph draws on the software backend; Qt settles it when the first window is made.
+    pub fn software(&self) -> bool {
+        ffi::harness_software()
     }
 
     pub fn process_events(&self) {

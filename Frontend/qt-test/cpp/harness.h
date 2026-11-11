@@ -30,6 +30,7 @@ void harness_wheel(QObject& window, double x, double y, int delta);
 void harness_wait(int ms);
 void harness_keep_messages();
 QString harness_messages();
+bool harness_software();
 void harness_watch_dirty(bool on);
 QString harness_dirty();
 std::uint64_t harness_focus(QObject& window);

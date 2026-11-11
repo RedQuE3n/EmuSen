@@ -526,7 +526,6 @@ impl qobject::GamePageModel {
         match outcome {
             Outcome::Nothing => {}
             Outcome::Changed(change) => {
-                self.as_mut().said(String::new());
                 let saved = self.source.as_ref().map_or(Ok(()), |s| s.change(&self.file, &change));
                 let ok = saved.is_ok();
                 let hid = ok && change == crate::game_page::Change::Hide;
@@ -573,8 +572,7 @@ impl qobject::GamePageModel {
 
     /// The game started from a state, asking first where the state was saved from another copy of the game; the
     /// runtime's record and the game's hash are read off the GUI thread.
-    fn play_from(mut self: Pin<&mut Self>, state: String) {
-        self.as_mut().said(String::new());
+    fn play_from(self: Pin<&mut Self>, state: String) {
         let (source, file) = (self.source.clone(), self.file.clone());
         let thread = self.qt_thread();
         std::thread::spawn(move || {

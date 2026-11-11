@@ -556,7 +556,8 @@ Window {
             card: CardModel.Home
             start: screens.page
             shown: screens.shown === Screens.HomeCard
-            facts: library.homeCardFacts(player.session.running ? player.session.game : "", player.session.running ? player.session.console : "", clock.paused, program.gameMode)
+            // Every fact is an argument, so the card follows the library's consoles and tools as they are read.
+            facts: library.homeCardFacts(player.session.running ? player.session.game : "", player.session.running ? player.session.console : "", clock.paused, program.gameMode, library.startable, library.toolSummaries)
             onActed: (key) => screens.act(key)
             onClosed: screens.close()
         }

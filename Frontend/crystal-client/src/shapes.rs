@@ -237,9 +237,16 @@ pub struct Discs {
     pub lid_open: bool,
 }
 
+/// The runtime's -1 (its `disc_index` with the drive empty) is no index; any other value below zero is not read.
 fn index_in_drive<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Option<u32>, D::Error> {
-    Ok(Option::<i64>::deserialize(d)?.and_then(|i| u32::try_from(i).ok()))
+    match Option::<i64>::deserialize(d)? {
+        None | Some(EMPTY_DRIVE) => Ok(None),
+        Some(i) => u32::try_from(i).map(Some).map_err(|_| serde::de::Error::custom(format!("a disc index of {i}"))),
+    }
 }
+
+/// The index the runtime writes for a drive with no disc in it.
+const EMPTY_DRIVE: i64 = -1;
 
 /// The picture's shape.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
@@ -371,6 +378,21 @@ pub struct FirmwareFile {
     pub required: bool,
     pub status: String,
     pub need: String,
+}
+
+impl FirmwareFile {
+    /// The status of a file the player's folders hold.
+    pub const PRESENT: &'static str = "present";
+    /// The status of a required file not found.
+    pub const MISSING: &'static str = "missing";
+
+    pub fn present(&self) -> bool {
+        self.status == Self::PRESENT
+    }
+
+    pub fn missing(&self) -> bool {
+        self.status == Self::MISSING
+    }
 }
 
 /// The cheat codecs' catalogue and each system's pair.
@@ -518,5 +540,6 @@ mod tests {
         assert_eq!(read(r#"{"count":0,"index":-1}"#), None);
         assert_eq!(read(r#"{"count":2,"index":1}"#), Some(1));
         assert_eq!(read(r#"{"count":0}"#), None);
+        assert!(serde_json::from_str::<Discs>(r#"{"count":1,"index":-2}"#).is_err(), "only the runtime's -1 is an empty drive");
     }
 }

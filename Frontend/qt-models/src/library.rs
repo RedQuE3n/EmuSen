@@ -544,13 +544,14 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists, by_facts:
     Ok(Read { systems, catalog, rows, lists, esde_settings, esde, esde_state })
 }
 
-/// A system's firmware as Start Console's pane says it (Mistress's `FirmwareLine`): found, or not found as Cores words it;
+/// A system's firmware as Start Console's pane says it, in Mistress's words (her `FirmwareLine`): found, or not found;
 /// nothing where none is needed; and where the runtime cannot say, that it could not, never read as none needed.
 pub fn firmware_line(read: Result<Vec<emusen_crystal_client::shapes::FirmwareFile>, String>) -> String {
-    match read {
-        Ok(files) if files.iter().any(|f| f.status == "present") => "✓ Firmware found.".to_owned(),
-        Ok(files) if files.iter().any(|f| f.status == "missing") => "✗ Not found: add it in Settings → Firmware".to_owned(),
-        Ok(_) => String::new(),
+    use crate::firmware::{have, Have};
+    match read.as_deref().map(have) {
+        Ok(Have::Found) => "✓ Firmware found.".to_owned(),
+        Ok(Have::Missing) => "✗ Not found: add it in Settings → Firmware".to_owned(),
+        Ok(Have::NotNeeded | Have::Nothing) => String::new(),
         Err(why) => format!("⚠ EmuSen's runtime could not say whether you have it: {why}"),
     }
 }

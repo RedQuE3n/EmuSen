@@ -69,11 +69,17 @@ fn first_page(f: &Value) -> Page {
         collection => format!("Shows {collection}."),
     };
     let mut rows = Vec::new();
-    // A theme's gamelist of a console that starts empty offers it first (Mistress's `AddStartConsoleOption`).
-    if let Some(s) = f.get("console").cloned().and_then(|s| serde_json::from_value::<crate::home_card::Startable>(s).ok()) {
-        let page = crate::home_card::start_console_page(std::slice::from_ref(&s), "List");
-        let pane = page.rows.into_iter().next().map(|r| r.pane).unwrap_or_default();
-        rows.push(Row::new(&crate::home_card::start_console_action(&s.console), &format!("Start {} With No Disc", s.name)).pane(pane));
+    let mut footer = String::new();
+    // A theme's gamelist of a console that starts empty offers it first (Mistress's `AddStartConsoleOption`); a console
+    // the facts name and that cannot be read is said under the rows, never dropped unsaid.
+    match f.get("console").cloned().map(serde_json::from_value::<crate::home_card::Startable>) {
+        Some(Ok(s)) => {
+            let page = crate::home_card::start_console_page(std::slice::from_ref(&s), "List");
+            let pane = page.rows.into_iter().next().map(|r| r.pane).unwrap_or_default();
+            rows.push(Row::new(&crate::home_card::start_console_action(&s.console), &format!("Start {} With No Disc", s.name)).pane(pane));
+        }
+        Some(Err(why)) => footer = console_unread(&why.to_string()),
+        None => {}
     }
     rows.extend([
         Row::new(SEARCH, "Search").opens().pane(Pane::said("Type part of a name; the covers narrow as you type.", "The keyboard docks at the foot of the screen.")),
@@ -86,7 +92,12 @@ fn first_page(f: &Value) -> Page {
         rows.push(Row::new(START_CONSOLE, "Start Console").opens().pane(Pane::said("Starts a console with no disc in it.", "Change Disc on the Pause Card puts a game in.")));
     }
     rows.push(Row::new(COLLECTIONS, "Collections").opens().pane(Pane::said("Your collections, and the automatic ones.", "A opens a collection as a section of the library.")));
-    Page { title: format!("{} · {}", words(f, "section"), words(f, "count")), breadcrumb: "List".to_owned(), rows, footer: String::new() }
+    Page { title: format!("{} · {}", words(f, "section"), words(f, "count")), breadcrumb: "List".to_owned(), rows, footer }
+}
+
+/// The words under the List card's rows where the console its gamelist starts could not be read.
+pub fn console_unread(why: &str) -> String {
+    format!("The console this list starts could not be read: {why}")
 }
 
 /// The consoles Start Console lists, from the facts.

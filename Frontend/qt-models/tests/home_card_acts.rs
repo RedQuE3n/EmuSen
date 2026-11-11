@@ -86,6 +86,12 @@ fn start_console_lists_each_console_that_starts_empty_and_starts_the_one_chosen(
     assert_eq!(first.rows[0].pane.lines[0].0, "Starts a PlayStation with no disc in it, on Diamond.");
     assert_eq!(list.choose(list_card::FIRST, &first.rows[0].key), Choice::Act(start_console_action("PlayStation")));
     assert_eq!(list.page(list_card::FIRST, &lf).rows[0].key, list_card::SEARCH, "a gamelist of another console leads with Search");
+    // A console the facts name that cannot be read is said under the rows, not dropped unsaid.
+    let bad = json!({ "section": "PlayStation", "count": "8 games", "sort": "Name", "filter": "", "letter": "A", "letters": "A", "console": { "console": 7 } });
+    let first = list.page(list_card::FIRST, &bad);
+    assert_eq!(first.rows[0].key, list_card::SEARCH);
+    assert!(first.footer.starts_with(&list_card::console_unread("")), "said: {:?}", first.footer);
+    assert!(list.page(list_card::FIRST, &ef).footer.is_empty() && list.page(list_card::FIRST, &lf).footer.is_empty());
 }
 
 #[test]

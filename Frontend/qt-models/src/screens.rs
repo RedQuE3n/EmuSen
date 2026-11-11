@@ -419,8 +419,10 @@ impl qobject::Screens {
             }
             self.as_mut().resumed();
         }
-        if let Some(console) = crate::home_card::console_to_start(&key) {
-            self.as_mut().console_started(QString::from(console));
+        if let Some(console) = crate::home_card::console_to_start(&key).map(QString::from) {
+            // The game's screen asked for first, as a game's launch does, so a start that fails at once is answered after it.
+            self.as_mut().ask(Ask::Act(key));
+            return self.console_started(console);
         }
         if key == TO_GRID && !self.found {
             return;

@@ -10,7 +10,7 @@ pub mod row;
 pub mod words;
 
 use crate::card::{Pane as CardPane, Row as CardRow};
-use crate::firmware;
+use crate::firmware::{self, Have};
 use crate::tools::{Action, Bar, Column, Effect, Item, Mark, Pane, Source, Tone, Words};
 use approval::Asking;
 use backend::{Backend, Job};
@@ -51,8 +51,6 @@ pub fn verify_request() -> Value {
     json!({ "op": "core-verify", "cores": [] })
 }
 
-/// A console's firmware the runtime failed to read, as `have_firmware` answers it.
-const UNREAD: &str = "unread";
 
 /// The Cores source.
 pub struct Cores {
@@ -64,7 +62,7 @@ pub struct Cores {
     firmware_of: HashMap<String, String>,
     /// The consoles that start with no game in them, whose firmware every game needs.
     starts_empty: HashSet<String>,
-    have_firmware: RefCell<HashMap<String, Option<&'static str>>>,
+    have_firmware: RefCell<HashMap<String, Result<Have, ()>>>,
     listing: Vec<Core>,
     tool_rows: Vec<Core>,
     rows: Vec<Core>,
@@ -509,30 +507,17 @@ impl Cores {
         }
     }
 
-    /// The firmware of the row's first console as the runtime finds it: present where any file is, else missing or
-    /// not needed; `UNREAD` where the runtime failed, none where it lists no file.
-    fn have_firmware(&self, row: &Core) -> Option<&'static str> {
+    /// The firmware of the row's first console as the runtime finds it (`firmware::have`), an error where the runtime
+    /// failed; none for a row with no console.
+    fn have_firmware(&self, row: &Core) -> Option<Result<Have, ()>> {
         let first = row.consoles.first()?;
         let system = row.systems.iter().find(|s| self.consoles.console_of.get(*s) == Some(first)).or(row.systems.first())?;
         if let Some(known) = self.have_firmware.borrow().get(system) {
-            return *known;
+            return Some(*known);
         }
-        let read = self.backend.firmware(system);
-        let unread = read.is_err();
-        let found: Vec<String> = read.unwrap_or_default().into_iter().map(|f| f.status).collect();
-        let have = if unread {
-            Some(UNREAD)
-        } else if found.is_empty() {
-            None
-        } else if found.iter().any(|s| s == "present") {
-            Some("present")
-        } else if found.iter().any(|s| s == "missing") {
-            Some("missing")
-        } else {
-            Some("not_needed")
-        };
+        let have = self.backend.firmware(system).map(|files| firmware::have(&files)).map_err(drop);
         self.have_firmware.borrow_mut().insert(system.clone(), have);
-        have
+        Some(have)
     }
 
     /// Why a core that could run its console is not its engine, and what makes it one.
@@ -605,9 +590,9 @@ impl Cores {
         }
         if said.len() > before {
             match self.have_firmware(row) {
-                Some("present") => said.push(Words::new("✓ You have one.", Tone::Success)),
-                Some("missing") => said.push(Words::new("⚠ None found yet. Firmware, under X, says where it goes.", Tone::Attention)),
-                Some(UNREAD) => said.push(Words::new("⚠ EmuSen's runtime could not say whether you have one; Firmware, under X, says why.", Tone::Attention)),
+                Some(Ok(Have::Found)) => said.push(Words::new("✓ You have one.", Tone::Success)),
+                Some(Ok(Have::Missing)) => said.push(Words::new("⚠ None found yet. Firmware, under X, says where it goes.", Tone::Attention)),
+                Some(Err(())) => said.push(Words::new("⚠ EmuSen's runtime could not say whether you have one; Firmware, under X, says why.", Tone::Attention)),
                 _ => {}
             }
         }

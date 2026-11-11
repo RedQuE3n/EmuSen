@@ -139,11 +139,11 @@ pub mod qobject {
         fn game_file(self: &LibraryModel, path: &QString) -> QString;
 
         /// The Home card's facts as plain data (home_card.rs): the suspended game by its path, or the console started empty
-        /// by its name, and the words of its pause,
-        /// the tools' summaries, and whether Steam's Game Mode holds the session.
+        /// by its name, and the words of its pause, whether Steam's Game Mode holds the session, the consoles that start
+        /// empty (`startable`) and the tools' summaries (`toolSummaries`), each passed in, so a binding on it follows them.
         #[qinvokable]
         #[cxx_name = "homeCardFacts"]
-        fn home_card_facts(self: &LibraryModel, suspended: &QString, console: &QString, paused: &QString, game_mode: bool) -> QString;
+        fn home_card_facts(self: &LibraryModel, suspended: &QString, console: &QString, paused: &QString, game_mode: bool, startable: &QString, tools: &QString) -> QString;
 
         /// Records the game at `path` as started now, then reads the games again, so Recent and Continue lead with it.
         #[qinvokable]
@@ -420,7 +420,7 @@ impl qobject::LibraryModel {
         QString::from(serde_json::json!({ "games": self.view.catalog.games.len(), "running": title, "systems": systems }).to_string().as_str())
     }
 
-    pub fn home_card_facts(&self, suspended: &QString, console: &QString, paused: &QString, game_mode: bool) -> QString {
+    pub fn home_card_facts(&self, suspended: &QString, console: &QString, paused: &QString, game_mode: bool, startable: &QString, tools: &QString) -> QString {
         let suspended = suspended.to_string();
         let facts = crate::home_card::Facts {
             suspended: if !suspended.is_empty() {
@@ -432,8 +432,8 @@ impl qobject::LibraryModel {
             },
             paused: paused.to_string(),
             game_mode,
-            startable: self.view.startable(),
-            tools: serde_json::from_str(&self.tool_summaries.to_string()).unwrap_or(serde_json::Value::Null),
+            startable: serde_json::from_str(&startable.to_string()).unwrap_or_default(),
+            tools: serde_json::from_str(&tools.to_string()).unwrap_or(serde_json::Value::Null),
             ..crate::home_card::Facts::default()
         };
         QString::from(facts.to_json().as_str())

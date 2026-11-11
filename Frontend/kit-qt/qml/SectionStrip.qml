@@ -3,12 +3,12 @@ import QtQuick
 import QtQuick.Controls
 import EmuSen.Kit as Kit
 
-// A screen's section strip: the frame's sections in Caption upper case, the chosen one strong over the accent bar, only whole names drawn; a click chooses one as the shoulders step them (EmuSen_Kit.md §7.43).
+// A screen's section strip: the frame's sections in Caption upper case, the chosen one strong over the accent bar, only whole names drawn; a click chooses one as the shoulders step them, and where the names run past the strip the wheel moves it (EmuSen_Kit.md §7.43).
 ListView {
     id: root
     required property Kit.FrameController controller
     orientation: ListView.Horizontal
-    interactive: false
+    boundsBehavior: Flickable.StopAtBounds
     clip: true
     spacing: Kit.Tokens.base * 2
     model: root.controller.sections
@@ -17,6 +17,14 @@ ListView {
     preferredHighlightBegin: 0
     preferredHighlightEnd: root.width
     highlightMoveDuration: Kit.Tokens.instant
+    // A horizontal ListView takes no turn of an upright wheel: the wheel's turn moves the names along, within their ends.
+    WheelHandler {
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        onWheel: (event) => {
+            const delta = event.angleDelta.x !== 0 ? event.angleDelta.x : event.angleDelta.y
+            root.contentX = Math.max(root.originX, Math.min(root.originX + root.contentWidth - root.width, root.contentX - delta))
+        }
+    }
     delegate: TabButton {
         id: tab
         required property string modelData

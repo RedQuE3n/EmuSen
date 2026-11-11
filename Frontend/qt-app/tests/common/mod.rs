@@ -1,6 +1,7 @@
 //! What the program's tests share: a sandbox home with synthetic games, and waiting on a property.
 
 pub mod console;
+pub mod cores_fit;
 
 use emusen_client_fixture::{library, World};
 use emusen_crystal_client::Config;

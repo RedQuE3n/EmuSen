@@ -535,6 +535,11 @@ impl Scene<'_> {
         ffi::harness_property(self.window(), &QString::from(object_name), &QString::from(property)).to_string()
     }
 
+    /// A number property of a tree's item by its id (a `Node`'s `id`, read as a number), in the item's own units; NaN where it has none.
+    pub fn number(&mut self, id: u64, property: &str) -> f64 {
+        ffi::harness_get(self.window(), id, &QString::from(property))
+    }
+
     /// Counts the property's change signal from now, as a QSignalSpy does; false where it has none to count.
     pub fn watch(&mut self, object_name: &str, property: &str) -> bool {
         ffi::harness_watch(self.window(), &QString::from(object_name), &QString::from(property))

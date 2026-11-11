@@ -214,6 +214,45 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     section(&mut scene, 1);
     assert_eq!(scene.property("pageModel", "shows"), "1");
     hold(&mut scene, "GamePageStates", &mockup::Mockup::default(), nothing_named, &mut report);
+    // A step of Resume marks its state's tile in place, with no reset: Down comes back to the tile the focus left.
+    scene.pad(UiButton::Down);
+    scene.wait(200);
+    move_to(&mut scene, UiButton::Right, "Slot 3");
+    scene.pad(UiButton::Up);
+    scene.wait(100);
+    move_to(&mut scene, UiButton::Right, "Resume");
+    let before = scene.property("pageModel", "actions");
+    scene.pad(UiButton::Left);
+    scene.wait(300);
+    assert_ne!(scene.property("pageModel", "actions"), before, "Left steps Resume's state");
+    scene.pad(UiButton::Down);
+    scene.wait(100);
+    let tree = scene.tree();
+    let focus = scene.focus(&tree).map(|i| tree.nodes[i as usize].heard.clone()).unwrap_or_default();
+    assert_eq!(focus, "Slot 3", "the tiles kept their focused tile through Resume's step");
+    scene.pad(UiButton::Up);
+    scene.wait(100);
+    move_to(&mut scene, UiButton::Right, "Resume");
+    scene.pad(UiButton::Right);
+    scene.wait(300);
+    assert_eq!(scene.property("pageModel", "actions"), before, "Right steps Resume back");
+    // States' tiles scrolled and Options' rows at once, three times: the tiles still being made as the section turns, and
+    // Qt logs nothing (EmuSen_Kit.md §7.58).
+    scene.pad(UiButton::Down);
+    for _ in 0..3 {
+        for _ in 0..6 {
+            scene.pad(UiButton::Right);
+        }
+        scene.pad(UiButton::PageDown);
+        scene.wait(16);
+        scene.pad(UiButton::PageUp);
+        scene.wait(16);
+    }
+    scene.wait(300);
+    scene.assert_quiet();
+    section(&mut scene, 1);
+    scene.pad(UiButton::Up);
+    scene.wait(100);
     // X on Slot 1 asks first, No focused: A keeps the state; X again, Down to Delete, A deletes it, its picture and its record.
     let slot1 = platform.save_path(SAVE_STATE, rom.to_str().unwrap(), None, 1).unwrap();
     scene.pad(UiButton::Down);

@@ -2955,3 +2955,16 @@ past the new count, and it logs `DelegateModel::cancel: index out range 6 4` (an
 test in 2 of 14 runs. The tiles' list now takes `tileModel` while tiles are shown and the rows' list `rowModel` while
 rows are, null otherwise; the hidden list makes nothing. qt-app's game page test steps Media's scrolled tiles and
 Details' rows six times at 16 ms and holds Qt silent; with the aliases it logs the two lines on the first run.
+
+**Each content view lets its model go while the model resets (2026-11-11).** Holding the model only while shown
+still left the shown list exposed. The page resets its model to the next section's items and only then says the kind
+changed, so the outgoing list hears the reset first. Logged on 2026-11-11, States to Options: the tiles' count went from
+9 to 4 before `showsTiles` turned false and the list let the model go. Tiles past the view were still being made in
+Qt's default cache buffer, and the warning returned as `index out range 6 4` and `7 4` in 2 of 3 runs of the game page
+test. Each list now also holds its model only while that model is settled. A `Connections` on `tileModel`, and another
+on `rowModel`, clears the list's flag on `modelAboutToBeReset` and sets it again on `modelReset`. A list therefore
+lets the model go before the reset changes its count, while every index it is still making is in range, and takes the
+model back with the new content. No list is attached to the model across a reset, whichever section's content the
+reset brings and whatever order the host announces it in. The cache buffer stays Qt's default, so what is drawn while
+scrolling is unchanged. qt-app's game page test scrolls States' tiles and turns to Options and back three times at
+16 ms, then holds Qt silent. Before the change it logged `index out range 7 4` on its first run.

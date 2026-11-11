@@ -64,6 +64,24 @@ Kit.Frame {
         list.currentIndex = 0
         list.forceActiveFocus()
     }
+    // Each list lets its model go while the model resets, so no delegate is in flight across another section's content (EmuSen_Kit.md §7.58).
+    QtObject {
+        id: settled
+        property bool tiles: true
+        property bool rows: true
+    }
+    Connections {
+        target: root.tileModel
+        ignoreUnknownSignals: true
+        function onModelAboutToBeReset() { settled.tiles = false }
+        function onModelReset() { settled.tiles = true }
+    }
+    Connections {
+        target: root.rowModel
+        ignoreUnknownSignals: true
+        function onModelAboutToBeReset() { settled.rows = false }
+        function onModelReset() { settled.rows = true }
+    }
     Kit.PageLayout {
         id: places
         width: root.width
@@ -251,7 +269,7 @@ Kit.Frame {
                 // A model that fills after the view was made leaves it with no current item, so no delegate would take the focus.
                 onCountChanged: if (currentIndex < 0 && count > 0) currentIndex = 0
                 objectName: "pageTiles"
-                model: root.showsTiles && !root.showsText ? root.tileModel : null
+                model: root.showsTiles && !root.showsText && settled.tiles ? root.tileModel : null
                 anchors.fill: parent
                 leftMargin: root.ringRoom
                 rightMargin: root.ringRoom
@@ -343,7 +361,7 @@ Kit.Frame {
                 // A model that fills after the view was made leaves it with no current item, so no delegate would take the focus.
                 onCountChanged: if (currentIndex < 0 && count > 0) currentIndex = 0
                 objectName: "pageRows"
-                model: !root.showsTiles && !root.showsText ? root.rowModel : null
+                model: !root.showsTiles && !root.showsText && settled.rows ? root.rowModel : null
                 anchors.fill: parent
                 clip: true
                 keyNavigationEnabled: true

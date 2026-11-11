@@ -4869,8 +4869,9 @@ wait is gone. The old test's 500 ms did hold one case: a stale read-back that la
 would have failed the row's words. The test now reads what the model tells until the rows settle (nothing more told for
 300 ms, at most 5 s) and requires exactly `2-2,2-2`, the standard's row in place twice: a read-back that comes back
 late and tells the row again adds a line, at any time before the rows settle. Whether a stale read-back arrives late
-is a race between the two reading threads and the presses; the seeded fault of 2026-11-11 (`refresh` applying every
-read-back, the `asked` check removed) is recorded with its result in the evidence of this piece.
+is a race between the two reading threads and the presses. Seeded on 2026-11-11, `refresh` applying every read-back
+(the `asked` check removed): in one run the page test failed there, told `2-2,2-2,2-2,2-2`, the stale read-back and the
+fresh one each telling the row again; one run cannot show that the race goes that way every time.
 
 Seeded faults, each reverted:
 - the refresh keeping hidden games: the models' library test, the Game Boy's games still counted;

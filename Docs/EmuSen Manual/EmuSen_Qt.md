@@ -3577,7 +3577,7 @@ neither is derived. The three, with each rule's rounding of the glyph:
 | `lc04` | w | 12.4999 | 13 | 12 | 13 | the same |
 | `y06` | d | 7.4995 | 8 | 7 | 8 | the same |
 
-**The hinter (decided 2026-11-10).** harfrust and read-fonts shape and read tables but do not hint, so the hinted height
+**The hinter (measured 2026-11-10).** harfrust and read-fonts shape and read tables but do not hint, so the hinted height
 comes from the system's FreeType, the library the captures were drawn with (FreeType 2.14.3 on Fedora 44), loaded at run
 time as the platform client loads SQLite, with no crate of its own: `esde-qt`'s `hinted.rs` is its one owner and makes
 the one call measured, `FT_Set_Char_Size(face, 0, round(px × 64), 72, 72)`, `FT_Load_Char(face, 'S', FT_LOAD_DEFAULT)`,
@@ -3628,6 +3628,40 @@ at 1280 × 800 and 4.04 at 1920 × 1200 again, its gamelist 8.10 and 7.58 as bef
 since a container's words are still laid out whole and measured. Held by `frame.rs`'s
 `a_vertical_container_of_fixed_height_shows_whole_rows_unless_the_theme_turns_the_snap_off` and the mapping case
 `text.containerVerticalSnap` (a 0.3 × 0.2 container whose third row is cut, true against false).
+
+#### 4.12.4 What is open: two bars at 1280 × 800, and the painter's loader **[M 2026-11-11]**
+
+The oracle of 2026-11-11 (RX 6800, after §4.12.2 and §4.12.3) fails on two help bars, both at 1280 × 800; every other
+box is within its two units.
+
+| Box | Ours | ES-DE's | Off |
+|---|---|---|---|
+| Art Book Next system, `helpsystem_help-system-view` | 360.5, 717.0, 559.0 × 33.0 | 358.1, 716.1, 564.2 × 33.2 | 5.2 |
+| Artflix gamelist, `helpsystem_help` | 269.0, 768.0, 742.0 × 18.0 | 267.9, 768.0, 744.2 × 18.0 | 2.2 |
+
+**Art Book Next.** ES-DE's discs are 32 columns of ink at 1280 × 800 and 47 at 1920 × 1200; the box rule of §4.12.1
+(1.25 times the reference S hinted at the label's size) gives 32.5 and 51.25, so 29 and 47 columns. Akrobat SemiBold's
+hinted S is 26 px from 36 to 37.75 px and 28 px from 38 to 39.25 px, so the 1280 disc fits an S hinted at 38–39 px, or
+a box proportional to the size (51.25 ÷ 55 × 36.67 = 34.2). Ruled out: the S at the label's size rounded up (37 px, 26),
+the box rounded up or down (33, 32: 30 and 29 columns). Unproven. Captures that separate the two: Art Book Next's system
+help alone with one entry (A, SELECT) at 1280 × 800 at `fontSize` 0.0425, 0.0450, 0.04583333, 0.0475 and 0.0490
+(34.0, 36.0, 36.67, 38.0 and 39.2 px): an S-hinted box steps (28.75, 32.5, 32.5, 35, 35), a proportional one grows
+evenly (31.7, 33.6, 34.2, 35.4, 36.5).
+
+**Artflix.** ES-DE's bar starts one pixel left of ours at 1280 × 800 in both views, every part in the same place
+relative to its start; at 1920 × 1200 the starts agree. The candidates of `~/.cache/emusen/tmp/x7/boxes-table.md`
+(the width rounded before or after halving, floored, the exact label widths, the spacing or the box rounded up in the
+width alone) each miss one of the four bars. Unproven. Captures that separate them: Artflix's gamelist help at
+1280 × 800 with one entry, SELECT (exact width 54.32 px, rounded 53) and then BACK (39.12, 39), at the theme's
+`fontSize` and at 0.0375 (30 px), the help copies of `Testing/esde-oracle/helpcopy.py` with the theme's origin 0.5.
+
+**The painter's loader.** esde-qt's lint `qt_4_8_the_painter_names_no_client_and_no_runtime` holds the painter's
+dependencies to a list without `libloading`, which `hinted.rs` brought in on 2026-11-10 to reach the system's FreeType
+at run time. The need is the hinter's: harfrust and read-fonts do not hint, and Qt's `QRawFont` with full hinting gives
+other heights. Measured on 2026-11-11 over 10–80 px in quarter pixels (1,124 sizes; `ft.c` and `m.cpp` in the evidence
+folder): Qt and FreeType's default load disagree at 171 sizes, rost (CFF) by a pixel at 49 sizes from 10.25 px up, and
+Akrobat SemiBold, Akrobat Regular and Ubuntu Condensed at 31–58 sizes, all above 64 px, where Qt stops hinting. The
+lint's list is the tester's to change; it stays failing until then.
 
 ### 4.13 The media viewer's PDF manual **[M 2026-11-09]**
 

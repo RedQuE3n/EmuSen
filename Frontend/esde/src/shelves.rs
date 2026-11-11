@@ -68,6 +68,8 @@ pub struct GameRow<'a> {
     pub genre: Option<Text<'a>>,
     pub hidden: bool,
     pub hide_metadata: bool,
+    /// Written only where true: the library marks no game yet, and a hand-made text may.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub in_collection: bool,
     pub is_collection: bool,
     pub kid_game: bool,

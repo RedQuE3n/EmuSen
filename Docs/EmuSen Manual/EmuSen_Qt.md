@@ -3109,8 +3109,8 @@ error on the other, never a field read as absent. `emusen-esde`'s fence (`tests/
 may hold: quick-xml with memchr, and serde with its derive. `esde-qt/tests/shelves_text.rs` writes a
 shelf and reads it back equal (a member as a row with no name, negative plays kept) and a renamed key or a field of
 another type is an error; `esde_rows.rs` holds the two crates to it where the program links them. `in_collection`, which
-the reader takes and a hand-written text gives (`esde-qt/tests/mapping.rs`), is written `false` by qt-models: the
-library marks no game as in a custom collection yet. A text that leaves out `counts` still has the view count the games
+the reader takes and a hand-written text gives (`esde-qt/tests/mapping.rs`), is written only where true, and qt-models
+marks no game as in a custom collection yet, so its text is as it was. A text that leaves out `counts` still has the view count the games
 itself.
 
 **The start's properties in the test (2026-11-11).** The window's initial properties are one function, `start::initial`,

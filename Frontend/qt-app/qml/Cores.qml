@@ -79,7 +79,6 @@ Kit.NormalizedCanvas {
             target: screen.tool
             function onListFocused() { frame.forceActiveFocus() }
             function onSearchOpened() { searchFrame.forceActiveFocus() }
-            function onSearchKeysChanged() { if (screen.tool.searching && !screen.tool.searchKeys) frame.forceActiveFocus() }
         }
         Connections {
             target: frame.controller
@@ -147,10 +146,6 @@ Kit.NormalizedCanvas {
         Connections {
             target: searchFrame.controller
             function onActionInvoked(key) { screen.tool.act(key) }
-        }
-        Connections {
-            target: screen.tool
-            function onSearchKeysChanged() { if (screen.tool.searchKeys) searchFrame.forceActiveFocus() }
         }
         Item {
             x: -searchFrame.safeX

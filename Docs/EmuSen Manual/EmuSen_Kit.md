@@ -3155,6 +3155,13 @@ their ruling: Settings' ROM folder excuse (R-20261111-36), `QT_INTERNAL`'s CPU l
 qt-test's `excuse.rs` (an accepted class listed with its ruling, an unlisted one a finding, a test's own table), and
 theme-audit's fixture `small-caption` (the caption listed with R-20261111-40, the run clean).
 
+**What it changes for players** (measured 2026-11-11, `theme-audit` on each folder of `Frontend/themes`, debug build,
+software backend). Every exemption the five packages show is the spare tenth (R-20261111-37): Constellation 11,
+EmuSen 10, Horizon 0, Meridian 2, Orrery 23. With the table each run exits 0 and lists them on stderr; before it each was
+an `exempted` line on stdout, so theme-check failed Constellation, EmuSen, Meridian and Orrery, and the Themes tab's Use,
+which reads theme-check's status through qt-models' `check_package`, would have refused all four (the reference is
+checked by construction, not at Use). No test yet holds Use itself to an accepted and an unaccepted class.
+
 ### 7.103 The gate's walk presses a screen's own shoulders (repair piece DC-A; 2026-11-11)
 
 The gate's walk pressed the four directions from every operable item, so on the grid's search, where LB and RB are the

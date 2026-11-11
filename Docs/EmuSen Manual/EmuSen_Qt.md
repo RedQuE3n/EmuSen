@@ -3427,8 +3427,10 @@ data), so its outer edge spans 58 of the box's 64 units: 0.906 × 51.25 = 47 px 
 bars, 0.906 × 17.5 = 16 px on Artflix's at 1280 × 800, as the captures show. ES-DE's icon files are not drawn; the kit's
 own filled glyph is, at the icon's box (the entry before its gap) × (58/64) / the kit's `discShare` (EmuSen_Kit.md §7.71,
 0.85), so its disc's edge lands where ES-DE's does. A theme's own picture for a button is drawn at the box. Drawing the
-glyph at the box alone (its disc 0.85 of it) left Art Book Next's discs 44 px to ES-DE's 47 and raised Artflix's system
-MAE from 4.27 to 4.39 (1280) and from 4.07 to 4.25 (1920), and was withdrawn. `sizes.rs`'s
+glyph at the box alone (its disc 0.85 of it) left Art Book Next's discs 44 px to ES-DE's 47. Artflix's system MAE on the
+RX 6800 is 4.39 (1280) and 4.25 (1920) against the committed 4.27 and 4.07 with the glyph at 0.9 × the font's size (a
+run made before the box rule), at the box, and at this rule alike: the MAE leaves the help's strip out, so the glyph's
+size does not move it, and the rise came before. `sizes.rs`'s
 `the_watched_themes_hold_at_the_five_sizes` holds every drawn help glyph to this size.
 
 **The three boxes still off (measured 2026-11-11 on the committed captures).** Open, **[blocked]** for the tester: two of

@@ -16,7 +16,7 @@ use crate::values::{self, V};
 pub mod qobject {
     unsafe extern "C++" {
         include!(<QtCore/QAbstractListModel>);
-        type QAbstractListModel = crate::base::ffi::QAbstractListModel;
+        type QAbstractListModel = emusen_kit_qt::base::ffi::QAbstractListModel;
     }
 
     unsafe extern "C++" {
@@ -72,11 +72,12 @@ pub mod qobject {
 
         #[qobject]
         #[base = QAbstractListModel]
-        #[qml_element]
+        // Named for the crate, since qt-models' RowsModel links into the same program; QML knows it as RowsModel.
+        #[qml_element = "RowsModel"]
         #[qproperty(*mut EsdeModel, scene)]
         #[qproperty(i32, revision)]
         #[qproperty(bool, leaving)]
-        type RowsModel = super::RowsModelRust;
+        type EsdeRowsModel = super::EsdeRowsModelRust;
 
         #[qobject]
         #[base = QAbstractListModel]
@@ -107,13 +108,13 @@ pub mod qobject {
         fn row_count(self: &SlotsModel, parent: &QModelIndex) -> i32;
 
         #[cxx_override]
-        fn data(self: &RowsModel, index: &QModelIndex, role: i32) -> QVariant;
+        fn data(self: &EsdeRowsModel, index: &QModelIndex, role: i32) -> QVariant;
         #[cxx_override]
         #[cxx_name = "roleNames"]
-        fn role_names(self: &RowsModel) -> QHash_i32_QByteArray;
+        fn role_names(self: &EsdeRowsModel) -> QHash_i32_QByteArray;
         #[cxx_override]
         #[cxx_name = "rowCount"]
-        fn row_count(self: &RowsModel, parent: &QModelIndex) -> i32;
+        fn row_count(self: &EsdeRowsModel, parent: &QModelIndex) -> i32;
 
         #[cxx_override]
         fn data(self: &PartsModel, index: &QModelIndex, role: i32) -> QVariant;
@@ -154,10 +155,10 @@ pub mod qobject {
 
         #[inherit]
         #[cxx_name = "beginResetModel"]
-        fn begin_reset_model(self: Pin<&mut RowsModel>);
+        fn begin_reset_model(self: Pin<&mut EsdeRowsModel>);
         #[inherit]
         #[cxx_name = "endResetModel"]
-        fn end_reset_model(self: Pin<&mut RowsModel>);
+        fn end_reset_model(self: Pin<&mut EsdeRowsModel>);
 
         #[inherit]
         #[cxx_name = "beginResetModel"]
@@ -175,7 +176,7 @@ pub mod qobject {
 
     impl cxx_qt::Initialize for ElementModel {}
     impl cxx_qt::Initialize for SlotsModel {}
-    impl cxx_qt::Initialize for RowsModel {}
+    impl cxx_qt::Initialize for EsdeRowsModel {}
     impl cxx_qt::Initialize for PartsModel {}
 }
 
@@ -422,7 +423,7 @@ impl qobject::SlotsModel {
     }
 }
 
-pub struct RowsModelRust {
+pub struct EsdeRowsModelRust {
     scene: *mut EsdeModel,
     revision: i32,
     leaving: bool,
@@ -430,20 +431,20 @@ pub struct RowsModelRust {
     rows: RowCache,
 }
 
-impl Default for RowsModelRust {
+impl Default for EsdeRowsModelRust {
     fn default() -> Self {
-        RowsModelRust { scene: std::ptr::null_mut(), revision: 0, leaving: false, shared: None, rows: RowCache::default() }
+        EsdeRowsModelRust { scene: std::ptr::null_mut(), revision: 0, leaving: false, shared: None, rows: RowCache::default() }
     }
 }
 
-impl cxx_qt::Initialize for qobject::RowsModel {
+impl cxx_qt::Initialize for qobject::EsdeRowsModel {
     fn initialize(mut self: Pin<&mut Self>) {
         follow_scene!(self);
         self.as_mut().on_leaving_changed(|m| m.refresh()).release();
     }
 }
 
-impl qobject::RowsModel {
+impl qobject::EsdeRowsModel {
     /// A list's rows, replaced whole under a reset when the list or the install changes; a step changes none of them.
     fn refresh(mut self: Pin<&mut Self>) {
         let Some(shared) = self.shared.clone() else { return };

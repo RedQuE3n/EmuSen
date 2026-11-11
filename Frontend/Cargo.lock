@@ -296,6 +296,7 @@ name = "emusen-esde"
 version = "0.1.0"
 dependencies = [
  "quick-xml",
+ "serde",
 ]
 
 [[package]]
@@ -310,6 +311,7 @@ dependencies = [
  "emusen-kit-core",
  "emusen-kit-qt",
  "emusen-qt-test",
+ "serde",
  "serde_json",
 ]
 
@@ -344,6 +346,7 @@ dependencies = [
  "cxx-qt-build",
  "cxx-qt-lib",
  "emusen-kit-core",
+ "emusen-qt-test",
 ]
 
 [[package]]
@@ -371,6 +374,7 @@ dependencies = [
  "cxx-qt-lib",
  "emusen-client-fixture",
  "emusen-crystal-client",
+ "emusen-esde-qt",
  "emusen-kit-core",
  "emusen-kit-qt",
  "emusen-platform-client",

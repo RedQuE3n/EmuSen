@@ -67,6 +67,11 @@ pub struct Shadow {
     pub blur: f64,
 }
 
+impl Shadow {
+    /// The name the kit's `Tokens` singleton gives the shadow's colour: a colour token after the palette's (rule Q).
+    pub const COLOUR_PROPERTY: &'static str = "shadowColor";
+}
+
 /// The largest text scale a player may choose.
 pub const MAX_TEXT_SCALE: f64 = 1.3;
 

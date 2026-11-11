@@ -2906,6 +2906,12 @@ that and still a sixteenth darker, so the shadow is soft, besides the gate it al
 blur set to none, a hard-edged shadow (the gallery's softness check, which the first form of the check, the darkening
 alone, let through, so the check was strengthened); the theme mirror missing `shadowBlur` (`theme-qt`'s surface test).
 
+**Rule Q and the shadow's colour** (2026-11-11). `shadowColor` is a colour property of the kit's `Tokens` after the
+palette's, so theme-check's rule-Q test, which held the registry's colours to `ColourToken::ALL` alone, failed from the
+day the token landed (seen 2026-11-11; theme-check is outside the workspace and no landing ran it). The name is kit-core's
+now, `Shadow::COLOUR_PROPERTY`, and the test holds the registry's colour tokens to the palette's and the shadow's, in the
+registry's order. A theme may override it as any colour token.
+
 ### 7.58 The walk presses on through a stepped action; the page frame's focus; Qt Multimedia's two messages (stage 5, piece G2; 2026-11-09)
 
 **The walk and a stepped action.** The gate's walk (`emusen-qt-test`'s `walk_by`, §7.11) pressed each direction once
@@ -2946,3 +2952,76 @@ scene that plays no clip:
    conversion on the GPU; it then converts on the CPU, the path the software tier needs. The `offscreen` platform the
    tests run on offers no OpenGL to make one. The frames are drawn (the program's test reads the clip's magenta). It is
    Qt's own fallback, harmless, and left in `QT_INTERNAL`.
+
+**Each content view holds its model only while it is shown (2026-11-10).** `tileModel` and `rowModel` were aliases of
+the two lists' models, and a game's page gives both the same model, so the hidden list made delegates for every section
+too: seven media tiles as seven rows, the ones past its four visible rows made asynchronously in its cache buffer. A
+section change resets the model; a reset that lands while those are still being made has Qt cancel them by indices
+past the new count, and it logs `DelegateModel::cancel: index out range 6 4` (and 5), which failed qt-app's game page
+test in 2 of 14 runs. The tiles' list now takes `tileModel` while tiles are shown and the rows' list `rowModel` while
+rows are, null otherwise; the hidden list makes nothing. qt-app's game page test steps Media's scrolled tiles and
+Details' rows six times at 16 ms and holds Qt silent; with the aliases it logs the two lines on the first run.
+
+**Each content view lets its model go while the model resets (2026-11-11).** Holding the model only while shown
+still left the shown list exposed. The page resets its model to the next section's items and only then says the kind
+changed, so the outgoing list hears the reset first. Logged on 2026-11-11, States to Options: the tiles' count went from
+9 to 4 before `showsTiles` turned false and the list let the model go. Tiles past the view were still being made in
+Qt's default cache buffer, and the warning returned as `index out range 6 4` and `7 4` in 2 of 3 runs of the game page
+test. Each list now also holds its model only while that model is settled, as a `ResetGate` over it says (below): false
+from the model's `modelAboutToBeReset` to its `modelReset`. A list therefore
+lets the model go before the reset changes its count, while every index it is still making is in range, and takes the
+model back with the new content. No list is attached to the model across a reset, whichever section's content the
+reset brings and whatever order the host announces it in. The cache buffer stays Qt's default, so what is drawn while
+scrolling is unchanged. qt-app's game page test scrolls States' tiles and turns to Options and back three times at
+16 ms, then holds Qt silent. Before the change it logged `index out range 7 4` on its first run.
+
+**A model replaced in the middle of its reset (2026-11-11).** The first form kept each list's flag in QML: a
+`Connections` on the model cleared it on `modelAboutToBeReset` and set it on `modelReset`. A model replaced between the
+two never sent the second to the frame, whose `Connections` had moved to the new model, so that list kept no model for
+good; where the replacement was made from inside the old model's signal, the moved `Connections` still heard that signal
+after the change (measured: the frame handed the new model, its list holding none). The repair settled a replaced model
+with `Qt.callLater`, which §8.4's QML rules forbid, as they forbid the handlers' assignments (`qml-rules`: `callLater`,
+`function`); `qt_8_4_qml_rules_pass_the_kit_and_the_style` failed on those six lines.
+
+**`ResetGate`: the state out of QML (2026-11-11).** The state is now a kit type in Rust (`kit-qt/src/reset_gate.rs`)
+with one job: given a `model`, say whether it is `settled`. It connects to the model's `modelAboutToBeReset` (settled
+false) and `modelReset` (settled true) through the kit's one declaration of `QAbstractItemModel` (`item_model.rs`, which
+gains the two signals, declared private so nothing in the kit can send them). A model handed over drops both connections
+to the old one, so the old model's signals are no longer heard, even from inside the emission that caused the handover
+(Qt skips a connection dropped during an emission), and the gate is settled: Qt offers no way to ask a model whether it
+is in a reset, so a model handed over counts as not resetting. Each connection holds the gate's address and is owned by
+the gate, so it is dropped before the gate is; Qt drops it with the model. Nothing is in kit-core: the gate is three
+assignments, each held by the test below. `PageFrame` binds each list's model declaratively,
+`model: shown && tileGate.settled ? root.tileModel : null`, beside `Kit.ResetGate { model: root.tileModel ?? null }`,
+and keeps no state of its own; the QML rules and qmllint pass the kit with nothing excused.
+
+Held to: `kit-qt/tests/reset_gate.rs` over `kit-qt/tests/qml/ResetGateScene.qml`, a keyboard model relaid out (which
+resets it). The gate's `settled` changes twice across a reset; a second model handed over the moment the first one's
+reset begins leaves the gate settled; the first model's next reset is not heard and the second's is. Seeded on
+2026-11-11, each failing that test: the reset never unsettling the gate, the handover not settling it, and the old
+model's connections kept. kit-qt takes the harness (`emusen-qt-test`) as a dev-dependency for this test, as esde-qt,
+qt-models and kit-gallery do. `kit-gallery/tests/page_frame.rs` still hands the frame another model from inside
+the keyboard model's reset and reads the tile list showing it, and qt-app's game page test still scrolls States' tiles
+and turns to Options and back at 16 ms with Qt silent. Rule Q's registry was reviewed and copied: one addition,
+`ResetGate` with `model` and `settled`.
+
+**A model deleted while the gate holds it (2026-11-11).** The gate kept the model's raw address and handed it back
+through `model`; a model reached through a `property var` (as `PageFrame`'s `tileModel` and `rowModel` are) says nothing
+when it is deleted, so the gate went on holding and exposing a dangling address, and a model later made at the same
+address would have been taken for the old one by `setModel`'s same-model check and never connected. The gate now also
+hears the model's `destroyed` (declared beside the reset signals in `item_model.rs`, private in the same way): from
+then it holds no model, says so through `model`'s change signal, and is settled. The connections Qt drops with the
+model are let go when the next model is handed over. Held to: the same test, a second gate in the scene handed its
+model by assignment to the gate's `model`, with no binding; the model deleted, the gate holds none (`model === null`),
+and a model handed after is held and its reset heard. That model is made only after the deletion (a `Component`'s
+`createObject`), so the allocator may give it the deleted model's address, the case the fix is for; it cannot be made
+to. Measured on 2026-11-11, printing the addresses `setModel` was handed: the deleted model and the one made after it
+were 0x3490 bytes apart (each `KeyboardModel` takes about 13 KiB), and none of sixteen made one after another took the
+deleted one's address. So the same-address case is argued from the code (`forget` nulls the address the same-model
+check compares), and what the test holds of the fix is the gate holding none after the deletion, told through `model`'s
+change signal, and settled. Seeded on 2026-11-11: the `destroyed` connection left out, the
+gate still holding the deleted model. A binding does not show the fault: measured on 2026-11-11, a gate bound to the
+model's id, and one bound through a `property var` (as `PageFrame`'s `tileModel` is), each passed the test with the
+fault in place, because QML tells both of the deletion (the id's guard, and the guard a `var` property keeps on the
+object it holds) and the binding hands the gate null itself. So `PageFrame` was not exposed; the gate now guards itself
+for a model handed to it any other way.

@@ -7,6 +7,7 @@ import EmuSen.Endymion
 import QtQuick.Controls
 import EmuSen.Play as Play
 import EmuSen.App
+import EmuSen.Esde as Esde
 
 // emusen-qt's window: the screens on the big screen's canvas, the game under them and the Pause Card over it, Moonrise over them at the start until it ends and the library is read, the pads through Endymion (EmuSen_Qt.md §7, EmuSen_Interface.md §22).
 Window {
@@ -43,6 +44,16 @@ Window {
     readonly property ThemeHost themeHost: chosenTheme.item as ThemeHost
     // Why the reference is shown in place of the theme the settings choose, said once the splash has gone.
     property string themeWords
+    // An ES-DE theme is the library's look, as the start read the settings, and its navigation sounds are on (EmuSen_Qt.md §4.9).
+    property bool esdeChosen: false
+    property bool navigationSounds: true
+    readonly property Esde.View esdeView: esdeLoader.item as Esde.View
+    readonly property bool esdeWanted: program.esdeChosen || library.themed
+    // A theme that failed to load, or loaded with nothing to show, gives way to the own look.
+    readonly property bool esdeFailed: (program.esdeView?.scene.problem.length ?? 0) > 0 || ((program.esdeView?.scene.revision ?? 0) > 0 && !(program.esdeView?.scene.themed ?? false))
+    readonly property bool esdeLook: program.esdeWanted && !program.esdeFailed
+    // The splash waits for the look it gives way to: the own look's at once, the theme's once it has loaded or failed.
+    readonly property bool lookSettled: !program.esdeWanted || program.esdeFailed || (program.esdeView?.scene.themed ?? false)
     // The game in hand, whose page X opens: the one the theme's focus is on, else the grid's focused game.
     property string inHand
     // A game chosen: asked about where its core waits for approval or its firmware is missing, then recorded as started,
@@ -76,6 +87,7 @@ Window {
         objectName: "screens"
         gameRunning: player.session.running
         found: games.count > 0
+        themed: program.esdeLook
         onQuit: Qt.quit()
     }
     // Reduced motion as the start read it until Settings has read the settings, then as they say; the text size, which
@@ -174,9 +186,9 @@ Window {
         family: program.padFamily
         reducedMotion: program.reducedMotion
         inputs: !program.splashShown
-        homeWanted: !(program.themeHost?.home ?? false)
-        consolesWanted: !(program.themeHost?.consoles ?? false)
-        gamesWanted: !(program.themeHost?.games ?? false)
+        homeWanted: !program.esdeLook && !(program.themeHost?.home ?? false)
+        consolesWanted: !program.esdeLook && !(program.themeHost?.consoles ?? false)
+        gamesWanted: !program.esdeLook && !(program.themeHost?.games ?? false)
         onPlayed: (path) => program.play(path)
         onResumed: {
             player.session.resume()
@@ -196,7 +208,7 @@ Window {
         id: chosenTheme
         objectName: "chosenTheme"
         anchors.fill: parent
-        active: program.theme.length > 0 && program.theme !== ReferenceTheme.folder
+        active: program.theme.length > 0 && program.theme !== ReferenceTheme.folder && !program.esdeLook
         // A Loader is a focus scope: it takes the focus while one of the theme's screens is to hold it.
         focus: program.themeHost?.takesFocus ?? false
         sourceComponent: ThemeHost {
@@ -230,6 +242,64 @@ Window {
                     games.focused = games.rowOf(game)
             }
         }
+    }
+    // The ES-DE theme's view in place of Home, Choose a console and the grid while it is the library's look, in window pixels;
+    // kept under the cards and while a game plays, so the library comes back where it was left (EmuSen_Qt.md §4.9).
+    Loader {
+        id: esdeLoader
+        objectName: "esde"
+        anchors.fill: parent
+        active: program.esdeWanted
+        visible: program.esdeLook && !program.gameShown && !program.pauseShown
+        focus: program.esdeLook && screens.shown === Screens.Esde && !program.splashShown
+        sourceComponent: Esde.View {
+            settings: library.esdeSettings
+            shelves: library.esdeShelves
+            media: library.esdeMedia
+            presence: library.esdePresence
+            family: program.padFamily
+        }
+    }
+    // The view hears the pad through the router, which pumps while the view holds the focus, as a Frame's does.
+    Timer {
+        interval: 8
+        repeat: true
+        running: esdeLoader.activeFocus && Kit.PadRouter.clockRunning && Kit.PadRouter.pending
+        onTriggered: Kit.PadRouter.pump()
+    }
+    // What the view asks of the program: a game played, a favourite turned, Start's Home card, Select's List card, a sound.
+    Connections {
+        target: program.esdeView?.scene ?? null
+        function onPlayed(path) { program.play(path) }
+        function onFavourite(path) { library.toggleFavourite(path) }
+        function onMenu() { screens.home() }
+        function onOptions() { screens.list() }
+        function onCued(name) { cues.play(name, program.esdeView.scene.view) }
+    }
+    Connections {
+        target: program.esdeView?.scene ?? null
+        function onPlayed(path) { cues.launch() }
+        function onFavourite(path) { cues.favourite() }
+    }
+    // The theme's navigation sounds, else the kit's, through Endymion's interface player; made only for an ES-DE theme.
+    EsdeCues {
+        id: cues
+        objectName: "cues"
+        platformLibrary: program.esdeWanted ? program.platformLibrary : ""
+        sounds: program.esdeView?.scene.sounds ?? ""
+        on: program.navigationSounds
+    }
+    // A sound of the theme's that did not open or play, said once the splash has gone.
+    Timer {
+        interval: Kit.Tokens.fade
+        running: !program.splashShown && program.esdeLook && cues.problem.length > 0
+        onTriggered: notices.raise(cues.problem, true, false)
+    }
+    // Why the ES-DE theme gave way to the own look, said once the splash has gone.
+    Timer {
+        interval: Kit.Tokens.fade
+        running: !program.splashShown && program.esdeWanted && (program.esdeView?.scene.problem.length ?? 0) > 0
+        onTriggered: notices.raise(program.esdeView.scene.problem, true, false)
     }
     // The grid's search: its words, which the keyboard types and the grid's model narrows by, the field over the one row of
     // covers and the keyboard docked beneath, over the theme's Games screen (EmuSen_Interface.md §18.1; EmuSen_Qt.md §7.6).
@@ -327,14 +397,22 @@ Window {
             objectName: "listCardModel"
             card: CardModel.List
             shown: screens.shown === Screens.List
-            facts: games.listFacts
-            onActed: (key) => games.focused = games.listAct(key)
-            onStayed: (key) => games.focused = games.listAct(key)
+            facts: program.esdeLook ? library.esdeListFacts(program.esdeView?.scene.shelf ?? "", program.esdeView?.scene.selected ?? 0) : games.listFacts
+            // Under an ES-DE theme the own grid is hidden and acted on by nothing; the theme's gamelist is acted on below.
+            onActed: (key) => { if (!program.esdeLook) games.focused = games.listAct(key) }
+            onStayed: (key) => { if (!program.esdeLook) games.focused = games.listAct(key) }
             onClosed: screens.close()
         }
         Connections {
             target: listCardModel
             function onActed(key) { screens.act(key) }
+        }
+        // Under an ES-DE theme the card acts on the shown gamelist, and the view selects the entry it answers.
+        Connections {
+            target: listCardModel
+            enabled: program.esdeLook
+            function onActed(key) { program.esdeView.scene.select(library.esdeListAct(program.esdeView.scene.shelf, key, program.esdeView.scene.selected)) }
+            function onStayed(key) { program.esdeView.scene.select(library.esdeListAct(program.esdeView.scene.shelf, key, program.esdeView.scene.selected)) }
         }
         MenuCard {
             id: listCard
@@ -638,7 +716,7 @@ Window {
     Kit.Moonrise {
         id: moonrise
         objectName: "moonrise"
-        readonly property bool done: moonrise.finished && !library.loading
+        readonly property bool done: moonrise.finished && !library.loading && program.lookSettled
         anchors.fill: parent
         visible: program.splash && moonrise.opacity > 0
         opacity: moonrise.done ? 0 : 1

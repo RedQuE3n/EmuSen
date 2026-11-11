@@ -10,6 +10,7 @@ pub mod edits;
 pub mod consoles;
 pub mod consoles_source;
 pub mod esde_shelves;
+pub mod esde_texts;
 pub mod firmware;
 pub mod folders;
 pub mod game_model;

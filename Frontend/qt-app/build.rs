@@ -14,9 +14,10 @@ fn main() {
             .depend("EmuSen.Models")
             .depend("EmuSen.Endymion")
             .depend("EmuSen.Play")
-            .depend("EmuSen.ThemeHost"),
+            .depend("EmuSen.ThemeHost")
+            .depend("EmuSen.Esde"),
     )
-    .files(["src/theme.rs"])
+    .files(["src/theme.rs", "src/cues.rs"])
     .qrc("themes.qrc")
     .qt_module("Quick")
     .qt_module("QuickControls2")

@@ -538,6 +538,7 @@ name = "emusen-esde"
 version = "0.1.0"
 dependencies = [
  "quick-xml",
+ "serde",
 ]
 
 [[package]]

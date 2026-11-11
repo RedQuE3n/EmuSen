@@ -4,8 +4,10 @@
 
 use emusen_crystal_client::shapes::SystemRow;
 use emusen_platform_client::library::GameFile;
-use emusen_qt_models::esde_shelves::{names_of, settings_of, theme_key, MediaIndex, Plays};
-use emusen_qt_models::library::{refresh, Engine, LibrarySource, LibraryView};
+use emusen_qt_models::esde_shelves::{metadata_of, names_of, Metadata, settings_of, theme_key, MediaIndex, Plays};
+use cxx_qt_lib::QString;
+use emusen_qt_models::esde_texts::{take, EsdeTexts};
+use emusen_qt_models::library::{refresh, Engine, FirstLook, LibrarySource, LibraryView};
 use emusen_qt_models::screens::{step, step_in, Ask, Shown};
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -54,9 +56,9 @@ impl LibrarySource for Fake {
     fn settings(&self) -> Result<Value, String> {
         Ok(self.settings.clone())
     }
-    fn metadata(&self, games: &[GameFile]) -> Result<Vec<(String, Value)>, String> {
+    fn metadata(&self, games: &[GameFile]) -> Result<Vec<(String, Metadata)>, String> {
         self.asked.fetch_add(games.len(), Ordering::Relaxed);
-        Ok(self.metadata.iter().filter(|(p, _)| games.iter().any(|g| &g.path == p)).cloned().collect())
+        Ok(self.metadata.iter().filter(|(p, _)| games.iter().any(|g| &g.path == p)).map(|(p, m)| (p.clone(), metadata_of(m))).collect())
     }
     fn plays(&self, _: &[GameFile]) -> Result<Vec<(String, Plays)>, String> {
         Ok(self.plays.clone())
@@ -198,6 +200,21 @@ fn the_media_index_and_presence_are_written_beside_the_shelves_with_the_scraper_
 }
 
 #[test]
+fn the_first_look_lists_every_shelf_and_game_reading_no_metadata() {
+    let source = fake();
+    let first = refresh(&FirstLook(&source)).unwrap();
+    assert_eq!(source.asked.load(Ordering::Relaxed), 0, "no game's metadata is read for the first look");
+    let whole = refresh(&source).unwrap();
+    let files = |text: &str| -> Vec<(String, Vec<String>)> {
+        shelves(text).iter().map(|s| (s["name"].to_string(), s["games"].as_array().unwrap().iter().map(|g| g["file"].to_string()).collect())).collect()
+    };
+    let mut a = files(&first.esde.shelves);
+    let mut b = files(&whole.esde.shelves);
+    a.iter_mut().chain(b.iter_mut()).for_each(|(_, g)| g.sort());
+    assert_eq!(a, b, "the same shelves and games, which the whole read names and sorts by their metadata");
+}
+
+#[test]
 fn the_own_look_asks_for_no_metadata_and_writes_empty_texts() {
     let mut source = fake();
     source.settings["LibraryStyle"] = json!("Classic");
@@ -306,20 +323,34 @@ fn the_gui_thread_s_part_of_a_refresh_stays_under_two_milliseconds_at_nine_thous
     let all = source.games.clone();
     let source = Fake { metadata: all.iter().map(|g| (g.path.clone(), fields(&g.path))).collect(), ..source };
     let fast = MetadataByMap(source);
-    let read = refresh(&fast).unwrap();
-    assert!(read.esde.shelves.len() > 2_000_000, "a library's scale: {} bytes", read.esde.shelves.len());
+    let first = refresh(&fast).unwrap();
+    assert!(first.esde.shelves.len() > 2_000_000, "a library's scale: {} bytes", first.esde.shelves.len());
+    // The next refresh: one more favourite, so the shelves' text is replaced and the other three compare equal at length.
+    let mut more = fast;
+    more.0.favourites.push(paths[1].clone());
+    let next = refresh(&more).unwrap();
     let mut best = std::time::Duration::MAX;
     for _ in 0..3 {
+        // A view already holding the library, as the GUI thread holds it after the first read.
         let mut view = LibraryView::empty();
-        let read = read.clone();
+        let mut shown: [QString; 4] = Default::default();
+        let texts = EsdeTexts::of(&first.esde_settings, &first.esde);
+        let [a, b, c, d] = &mut shown;
+        assert_eq!(take(&mut view, [a, b, c, d], Ok(first.clone()), Some(texts)), [true; 4]);
+        let read = [&first.esde_settings.text, &first.esde.shelves, &first.esde.media, &first.esde.presence];
+        for (i, (q, t)) in shown.iter().zip(read).enumerate() {
+            assert!(q.to_string() == *t, "text {i} published in its own place");
+        }
+        // The QStrings are made on the reading thread (esde_texts.rs); the GUI thread's part is `take`, dropping what it replaces.
+        let (refreshed, texts) = (Ok(next.clone()), Some(EsdeTexts::of(&next.esde_settings, &next.esde)));
+        let made = texts.as_ref().map(|t| t.0[1].as_slice().as_ptr());
+        let [a, b, c, d] = &mut shown;
         let started = std::time::Instant::now();
-        // What LibraryModel.apply does on the GUI thread: compare, move the read in, make the changed texts QStrings.
-        let changed = [read.esde_settings.text != view.esde_settings.text, read.esde.shelves != view.esde.shelves, read.esde.media != view.esde.media, read.esde.presence != view.esde.presence];
-        view.apply(Ok(read));
-        let texts = [&view.esde_settings.text, &view.esde.shelves, &view.esde.media, &view.esde.presence];
-        let made: Vec<cxx_qt_lib::QString> = texts.iter().zip(changed).filter(|(_, c)| *c).map(|(t, _)| cxx_qt_lib::QString::from(t.as_str())).collect();
+        let changed = take(&mut view, [a, b, c, d], refreshed, texts);
         best = best.min(started.elapsed());
-        assert_eq!(made.len(), 4);
+        assert_eq!(changed, [false, true, false, false]);
+        assert!(shown[1].to_string() == view.esde.shelves && view.esde.shelves == next.esde.shelves, "the shelves' new text moved in");
+        assert_eq!(Some(shown[1].as_slice().as_ptr()), made, "the shelves' QString is the one the reading thread made, not one made again");
     }
     eprintln!("the GUI thread's part at 9,000 games: {best:?}");
     assert!(best < std::time::Duration::from_millis(2), "{best:?}");
@@ -350,8 +381,8 @@ impl LibrarySource for MetadataByMap {
     fn settings(&self) -> Result<Value, String> {
         self.0.settings()
     }
-    fn metadata(&self, _: &[GameFile]) -> Result<Vec<(String, Value)>, String> {
-        Ok(self.0.metadata.clone())
+    fn metadata(&self, _: &[GameFile]) -> Result<Vec<(String, Metadata)>, String> {
+        Ok(self.0.metadata.iter().map(|(p, m)| (p.clone(), metadata_of(m))).collect())
     }
     fn media_index(&self, s: &[String]) -> Result<MediaIndex, String> {
         self.0.media_index(s)

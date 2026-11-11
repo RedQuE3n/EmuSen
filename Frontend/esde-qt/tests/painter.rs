@@ -57,7 +57,7 @@ fn painter(theme: &Theme) -> Painter {
     let text = library();
     let settings = Settings { theme: theme.0.to_string_lossy().into_owned(), ..Settings::default() };
     let cache = ThemeCache::default();
-    let found = systems(&cache, &settings, shelves::shelves(&text, "{}"), &BTreeMap::new(), W as i32, H as i32);
+    let found = systems(&cache, &settings, shelves::shelves(&text, "{}").unwrap(), &BTreeMap::new(), W as i32, H as i32);
     let mut p = Painter::new(settings);
     p.install(found, W, H, DateTime::new(2026, 11, 8, 12, 0, 0));
     p
@@ -71,12 +71,14 @@ fn selected(p: &Painter) -> usize {
 fn the_settings_read_mistress_s_keys() {
     let s = shelves::settings(
         "{\"theme\":\"/t\",\"choices\":{\"Variant\":\"v\",\"ColorScheme\":\"dark\",\"FontSize\":\"medium\"},\"interface\":{\"DisplayClock\":true,\"QuickSystemSelect\":\"leftrighttriggers\"}}",
-    );
+    )
+    .unwrap();
     assert_eq!((s.theme.as_str(), s.choices.variant.as_deref(), s.choices.color_scheme.as_deref()), ("/t", Some("v"), Some("dark")));
     assert_eq!(s.choices.font_size.as_deref(), Some("medium"));
     assert!(s.show_clock && s.show_help, "the clock as set, the help as defaulted");
     assert_eq!(s.quick_select, "leftrighttriggers");
-    assert_eq!(shelves::settings("not json"), Settings::default());
+    assert_eq!(shelves::settings(""), Ok(Settings::default()), "no text is the defaults");
+    assert!(shelves::settings("not json").is_err(), "a text that does not read is not the defaults");
 }
 
 #[test]
@@ -86,7 +88,7 @@ fn a_collection_s_game_takes_its_console_s_row_and_media_by_folder_then_stem() {
         {\"file\":\"Cobalt.sfc\",\"name\":\"Cobalt\",\"esde_system\":\"snes\"}]},\
         {\"name\":\"favorites\",\"full_name\":\"Favorites\",\"theme\":\"favorites\",\"kind\":\"auto\",\"games\":[{\"file\":\"Tower/Aurora Drift.sfc\",\"esde_system\":\"snes\"}]}]";
     let media = "{\"snes\":{\"covers\":{\"Tower/Aurora Drift\":\"/m/tower.png\",\"Aurora Drift\":\"/m/stem.png\",\"Cobalt\":\"/m/cobalt.png\"}}}";
-    let found = shelves::shelves(text, media);
+    let found = shelves::shelves(text, media).unwrap();
     assert_eq!(found.len(), 2);
     let aurora = &found[0].games[0];
     assert_eq!(aurora.media.get("covers").map(String::as_str), Some("/m/tower.png"), "the folder and stem first");
@@ -105,13 +107,13 @@ fn the_cache_loads_a_system_s_theme_once_per_choices() {
     let settings = Settings { theme: theme.0.to_string_lossy().into_owned(), ..Settings::default() };
     let cache = ThemeCache::default();
     let text = format!("[{}]", shelf("snes", "Super Nintendo", &["Cobalt Harbor"]));
-    let first = systems(&cache, &settings, shelves::shelves(&text, "{}"), &BTreeMap::new(), 1280, 800);
+    let first = systems(&cache, &settings, shelves::shelves(&text, "{}").unwrap(), &BTreeMap::new(), 1280, 800);
     std::fs::write(theme.0.join("theme.xml"), "<theme><view name=\"system\"></view></theme>").unwrap();
-    let again = systems(&cache, &settings, shelves::shelves(&text, "{}"), &BTreeMap::new(), 1280, 800);
+    let again = systems(&cache, &settings, shelves::shelves(&text, "{}").unwrap(), &BTreeMap::new(), 1280, 800);
     assert_eq!(first[0].theme.files_read, again[0].theme.files_read);
     assert!(again[0].theme.system_view.elements.iter().any(|e| e.name == "systems"), "the second refresh read the cache, not the changed file");
     cache.forget();
-    let fresh = systems(&cache, &settings, shelves::shelves(&text, "{}"), &BTreeMap::new(), 1280, 800);
+    let fresh = systems(&cache, &settings, shelves::shelves(&text, "{}").unwrap(), &BTreeMap::new(), 1280, 800);
     assert!(!fresh[0].theme.system_view.elements.iter().any(|e| e.name == "systems"), "forget reads the folder again");
 }
 
@@ -215,7 +217,7 @@ fn a_measurement_survives_a_reload() {
     let words = |p: &Painter| p.frame.elements.iter().find(|e| e.name == "words").map(|e| (e.x, e.w)).unwrap();
     assert_eq!(words(&p), (W / 2.0 - 60.0, 120.0));
     let settings = p.settings.clone();
-    let found = systems(&ThemeCache::default(), &settings, shelves::shelves(&library(), "{}"), &BTreeMap::new(), W as i32, H as i32);
+    let found = systems(&ThemeCache::default(), &settings, shelves::shelves(&library(), "{}").unwrap(), &BTreeMap::new(), W as i32, H as i32);
     p.install(found, W, H, DateTime::new(2026, 11, 8, 12, 0, 0));
     assert_eq!(words(&p), (W / 2.0 - 60.0, 120.0), "a reload keeps what the painter measured, which no delegate reports again");
 }
@@ -227,7 +229,7 @@ fn four_thousand_games_install_and_step_on_the_gui_thread_within_two_millisecond
     let names: Vec<&str> = games.iter().map(String::as_str).collect();
     let text = format!("[{}]", shelf("snes", "Super Nintendo", &names));
     let settings = Settings { theme: theme.0.to_string_lossy().into_owned(), startup_view: "gamelist".into(), ..Settings::default() };
-    let found = systems(&ThemeCache::default(), &settings, shelves::shelves(&text, "{}"), &BTreeMap::new(), W as i32, H as i32);
+    let found = systems(&ThemeCache::default(), &settings, shelves::shelves(&text, "{}").unwrap(), &BTreeMap::new(), W as i32, H as i32);
     let mut p = Painter::new(settings);
     let t = std::time::Instant::now();
     p.install(found, W, H, DateTime::new(2026, 11, 8, 12, 0, 0));

@@ -5,6 +5,7 @@
 #include "harness.h"
 
 #include <QtCore/QAbstractAnimation>
+#include <QtCore/QAbstractItemModel>
 #include <QtCore/QCoreApplication>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
@@ -12,6 +13,7 @@
 #include <QtCore/QLoggingCategory>
 #include <QtCore/QMutex>
 #include <QtCore/QMetaProperty>
+#include <QtCore/QSignalMapper>
 #include <QtGui/QAccessible>
 #include <QtGui/QColor>
 #include <QtGui/QFontMetricsF>
@@ -639,6 +641,62 @@ int harness_notified(QObject& root, const QString& object_name, const QString& p
     QObject* child = object != nullptr ? object->findChild<QObject*>(spyName(property), Qt::FindDirectChildrenOnly) : nullptr;
     const auto* watch = dynamic_cast<Watch*>(child);
     return watch != nullptr ? static_cast<int>(watch->spy.count()) : -1;
+}
+
+// A list model's changes told from now, as a view hears them: each dataChanged as "first-last", a reset as "reset"; a
+// child of the model, so it lives as long as it does.
+bool harness_watch_rows(QObject& root, const QString& object_name)
+{
+    auto* model = qobject_cast<QAbstractItemModel*>(named(root, object_name));
+    if (model == nullptr) {
+        return false;
+    }
+    auto* told = new QObject(model);
+    told->setObjectName(QStringLiteral("harness-rows"));
+    told->setProperty("told", QStringList());
+    auto add = [told](const QString& line) { told->setProperty("told", told->property("told").toStringList() << line); };
+    QObject::connect(model, &QAbstractItemModel::dataChanged, told, [add](const QModelIndex& first, const QModelIndex& last) {
+        add(QStringLiteral("%1-%2").arg(first.row()).arg(last.row()));
+    });
+    QObject::connect(model, &QAbstractItemModel::modelReset, told, [add] { add(QStringLiteral("reset")); });
+    return true;
+}
+
+// From now, each change signal of the object's property written into its watched model's list as the property's name, in
+// order with the rows and resets: what the model told inside a reset comes before that reset's line. False where the
+// object is no watched model or the property has no change signal.
+bool harness_watch_order(QObject& root, const QString& object_name, const QString& property)
+{
+    QObject* object = named(root, object_name);
+    QObject* told = object != nullptr ? object->findChild<QObject*>(QStringLiteral("harness-rows"), Qt::FindDirectChildrenOnly) : nullptr;
+    if (told == nullptr) {
+        return false;
+    }
+    const QMetaObject* meta = object->metaObject();
+    const QMetaProperty p = meta->property(meta->indexOfProperty(property.toUtf8().constData()));
+    if (!p.isValid() || !p.hasNotifySignal()) {
+        return false;
+    }
+    auto* mapper = new QSignalMapper(told);
+    mapper->setMapping(object, property);
+    const QMetaMethod map = mapper->metaObject()->method(mapper->metaObject()->indexOfSlot("map()"));
+    QObject::connect(mapper, &QSignalMapper::mappedString, told, [told](const QString& name) {
+        told->setProperty("told", told->property("told").toStringList() << name);
+    });
+    return static_cast<bool>(QObject::connect(object, p.notifySignal(), mapper, map));
+}
+
+// What the watched model told since the last read, comma-separated, emptied as read; empty where it is not watched.
+QString harness_rows_told(QObject& root, const QString& object_name)
+{
+    QObject* model = named(root, object_name);
+    QObject* told = model != nullptr ? model->findChild<QObject*>(QStringLiteral("harness-rows"), Qt::FindDirectChildrenOnly) : nullptr;
+    if (told == nullptr) {
+        return QString();
+    }
+    const QStringList lines = told->property("told").toStringList();
+    told->setProperty("told", QStringList());
+    return lines.join(QLatin1Char(','));
 }
 
 // One grab, many samples: "x,y;x,y" in, "#AARRGGBB;#AARRGGBB" out.

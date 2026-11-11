@@ -14,3 +14,6 @@ name = "emusen_esde"
 [dependencies]
 # MIT. A streaming XML reader that also reads fragments, which ES-DE's lenient reading of a file needs (EmuSen_Qt.md §4.2).
 quick-xml = "0.38"
+# MIT or Apache-2.0. The shelves' one schema, written by qt-models and read by esde-qt (EmuSen_Qt.md §4.9); the
+# Frontend workspace's own version.
+serde = { version = "1", features = ["derive"] }

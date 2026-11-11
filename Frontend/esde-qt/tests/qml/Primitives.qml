@@ -9,6 +9,7 @@ Window {
     property url white
     property url strip
     property url checker
+    property url wide
     property url face
     property url art
     property int reports: 0
@@ -22,6 +23,9 @@ Window {
         Picture { objectName: "ramp"; x: 220; y: 100; width: 96; height: 96; fit: Picture.Fit.Fill; fadeFrom: 0.5; fadeFalloff: 2; source: root.white }
         Picture { objectName: "sharp"; x: 400; y: 100; width: 32; height: 32; fit: Picture.Fit.Fill; nearest: true; source: root.checker }
         Picture { objectName: "soft"; x: 450; y: 100; width: 32; height: 32; fit: Picture.Fit.Fill; source: root.checker }
+        Picture { objectName: "small"; x: 700; y: 100; width: 400; height: 100; fit: Picture.Fit.Contain; source: root.white }
+        Picture { objectName: "big"; x: 700; y: 220; width: 128; height: 128; fit: Picture.Fit.Contain; source: root.wide }
+        Picture { objectName: "covered"; x: 900; y: 0; width: 300; height: 80; fit: Picture.Fit.Cover; source: root.white }
         Mark { objectName: "star"; x: 600; y: 0; width: 64; height: 64; mark: "star"; color: "#00FF00" }
         TextBlock { objectName: "words"; x: 0; y: 300; width: 400; height: 40; text: "Measured once"; px: 24; color: "#FFFFFF"; fontSource: root.face; onMeasured: root.reports += 1 }
         TextBlock { objectName: "same"; x: 0; y: 350; width: 400; height: 40; text: "The same face"; px: 24; color: "#FFFFFF"; fontSource: root.face }

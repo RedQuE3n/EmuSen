@@ -8,6 +8,12 @@ use std::cmp::Reverse;
 /// The sorts the List card's Sort steps through, in order.
 pub const SORTS: [&str; 5] = ["Name", "Last played", "Most played", "Year", "Rating"];
 
+/// Each sort by its index in `SORTS`.
+const LAST_PLAYED: usize = 1;
+const MOST_PLAYED: usize = 2;
+const YEAR: usize = 3;
+const RATING: usize = 4;
+
 /// How a section is listed: the sort by its index in `SORTS`, whether the Filter page's Favourites narrows it, and the
 /// search's words.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -31,7 +37,7 @@ pub fn step_sort(sort: usize, by: i32) -> usize {
 
 /// The section's games as shown: the favourites where narrowed, those whose title holds the search's words in any case,
 /// then sorted; the recently played keep their own order under the name sort, and every other sort breaks a tie by
-/// name. The library reads no play counts, years or ratings yet, so those sorts are the name's (EmuSen_Qt.md §7.1).
+/// name, a game without the sort's datum after those with it (Mistress's `GamesScreen.Sorted`; EmuSen_Qt.md §7.9).
 pub fn shown(games: &[GameRow], section: &str, listing: &Listing) -> Vec<GameRow> {
     let words = listing.search.trim().to_lowercase();
     let favourites_only = listing.favourites_only && section != FAVOURITES;
@@ -41,8 +47,16 @@ pub fn shown(games: &[GameRow], section: &str, listing: &Listing) -> Vec<GameRow
         return out;
     }
     out.sort_by_cached_key(|g| g.title.to_lowercase());
-    if SORTS[listing.sort.min(SORTS.len() - 1)] == "Last played" {
-        out.sort_by_key(|g| Reverse(g.played_at));
+    // Each sort is stable over the name's order, so a tie keeps it.
+    match listing.sort.min(SORTS.len() - 1) {
+        LAST_PLAYED => out.sort_by_key(|g| Reverse(g.played_at)),
+        MOST_PLAYED => out.sort_by_key(|g| Reverse(g.plays)),
+        YEAR => out.sort_by(|a, b| (a.year.is_empty(), &a.year).cmp(&(b.year.is_empty(), &b.year))),
+        RATING => out.sort_by(|a, b| match (a.rating, b.rating) {
+            (Some(x), Some(y)) => y.total_cmp(&x),
+            (x, y) => y.is_some().cmp(&x.is_some()),
+        }),
+        _ => {}
     }
     out
 }

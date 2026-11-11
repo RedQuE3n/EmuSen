@@ -36,8 +36,10 @@ pub mod qobject {
         #[qproperty(i32, back_index, cxx_name = "backIndex", READ, NOTIFY)]
         /// The help bar's screen (HelpModel's): B answers Not Now, or goes back.
         #[qproperty(i32, help, READ, NOTIFY)]
-        /// What happened, said once the game is on its way: approved, or opened on another engine.
+        /// What happened, said once the game is on its way: approved, opened on another engine, or what could not be checked.
         #[qproperty(QString, notice, READ, NOTIFY)]
+        /// Whether that notice says something was not done.
+        #[qproperty(bool, notice_attention, cxx_name = "noticeAttention", READ, NOTIFY)]
         type LaunchModel = super::LaunchModelRust;
     }
 
@@ -77,6 +79,7 @@ pub struct LaunchModelRust {
     back_index: i32,
     help: i32,
     notice: QString,
+    notice_attention: bool,
     runtime: Option<Runtime>,
     folder: String,
     path: String,
@@ -100,7 +103,15 @@ impl qobject::LaunchModel {
         let platform = Platform::load(&library).map_err(|e| e.to_string())?;
         let config = crate::clients::runtime_config(&platform, &self.cores.to_string())?;
         let runtime = Api::load(&library).and_then(|api| Runtime::new(&api, &config)).map_err(|e| e.to_string())?;
-        let folder = platform.directory(DIR_FIRMWARE).ok().flatten().map(|d| d.display().to_string()).unwrap_or_else(|| "the firmware folder".to_owned());
+        // With no folder set the question says where in general words; a folder that cannot be read is said too (§7.9).
+        let folder = match platform.directory(DIR_FIRMWARE) {
+            Ok(folder) => folder.map(|d| d.display().to_string()),
+            Err(e) => {
+                self.as_mut().set_problem(format!("The firmware folder could not be read: {e}"));
+                None
+            }
+        };
+        let folder = folder.unwrap_or_else(|| "the firmware folder".to_owned());
         self.as_mut().rust_mut().folder = folder;
         self.as_mut().rust_mut().runtime = Some(runtime.clone());
         Ok(runtime)
@@ -114,7 +125,7 @@ impl qobject::LaunchModel {
         self.as_mut().put_up(None);
         let runtime = match self.as_mut().runtime() {
             Ok(runtime) => runtime,
-            // No runtime to ask: the game's own open says why.
+            // No runtime to ask: the game's own open says why, on the screen (§7.9).
             Err(_) => return self.go(),
         };
         let path = path.to_string();
@@ -152,9 +163,21 @@ impl qobject::LaunchModel {
         let queue = self.qt_thread();
         std::thread::spawn(move || {
             let engine = launch::engine_of(&runtime, &path);
-            let needs: Vec<FirmwareNeed> = runtime.firmware_needed(&path, engine.as_deref()).unwrap_or_default().into_iter().filter(|n| n.required).collect();
-            let _ = queue.queue(move |model| model.firmware_read(serial, needs));
+            let needs = runtime.firmware_needed(&path, engine.as_deref()).map(|n| n.into_iter().filter(|n| n.required).collect()).map_err(|e| e.to_string());
+            let _ = queue.queue(move |model| model.firmware_checked(serial, needs));
         });
+    }
+
+    /// A failed check is never read as "no firmware needed": the player is told, and the game's own open says the rest.
+    fn firmware_checked(mut self: Pin<&mut Self>, serial: u64, needs: Result<Vec<FirmwareNeed>, String>) {
+        match needs {
+            Ok(needs) => self.firmware_read(serial, needs),
+            Err(e) if serial == self.serial => {
+                self.as_mut().set_problem(launch::firmware_unchecked(&e));
+                self.go();
+            }
+            Err(_) => {}
+        }
     }
 
     fn firmware_read(mut self: Pin<&mut Self>, serial: u64, needs: Vec<FirmwareNeed>) {
@@ -203,8 +226,21 @@ impl qobject::LaunchModel {
         self.ready(path);
     }
 
-    fn set_notice(mut self: Pin<&mut Self>, words: String) {
+    fn set_notice(self: Pin<&mut Self>, words: String) {
+        self.said(words, false);
+    }
+
+    /// A notice that says something was not done.
+    fn set_problem(self: Pin<&mut Self>, words: String) {
+        self.said(words, true);
+    }
+
+    fn said(mut self: Pin<&mut Self>, words: String, attention: bool) {
         let words = QString::from(words.as_str());
+        if self.notice_attention != attention {
+            self.as_mut().rust_mut().notice_attention = attention;
+            self.as_mut().notice_attention_changed();
+        }
         if self.notice != words {
             self.as_mut().rust_mut().notice = words;
             self.notice_changed();

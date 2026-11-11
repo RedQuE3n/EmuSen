@@ -184,6 +184,10 @@ pub struct Catalog {
     pub played: Vec<(String, i64)>,
     /// The player's settings.
     pub settings: serde_json::Value,
+    /// How often and how long each played game was played, by path (games.db).
+    pub plays: Vec<(String, Plays)>,
+    /// Each game's metadata as the scraper resolves it, by path; read once a refresh for the grid's sorts and the ES-DE view.
+    pub metadata: Vec<(String, crate::esde_shelves::Metadata)>,
 }
 
 /// One game as the screens show it: its title from its file name, its console, its console's hue, its cover and its facts.
@@ -204,6 +208,12 @@ pub struct GameRow {
     pub facts: String,
     /// When it was last played, in seconds since 1970; 0 for never.
     pub played_at: i64,
+    /// How many times it was played (games.db); 0 for never.
+    pub plays: i64,
+    /// Its year of release, from the scraper's release date; empty where none is known.
+    pub year: String,
+    /// Its rating from 0 to 1, the scraper's; none where none is known.
+    pub rating: Option<f64>,
 }
 
 /// The media store's type for a cover.
@@ -255,6 +265,8 @@ fn game_rows(systems: &[SystemRow], catalog: &Catalog, now: i64) -> Vec<GameRow>
     let played: HashMap<&str, i64> = catalog.played.iter().map(|(p, at)| (p.as_str(), *at)).collect();
     let favourites: HashSet<&str> = catalog.favourites.iter().map(String::as_str).collect();
     let consoles: HashMap<&str, &SystemRow> = systems.iter().map(|s| (s.id.as_str(), s)).collect();
+    let plays: HashMap<&str, i64> = catalog.plays.iter().map(|(p, n)| (p.as_str(), n.count)).collect();
+    let metadata: HashMap<&str, &crate::esde_shelves::Metadata> = catalog.metadata.iter().map(|(p, m)| (p.as_str(), m)).collect();
     catalog
         .games
         .iter()
@@ -271,6 +283,9 @@ fn game_rows(systems: &[SystemRow], catalog: &Catalog, now: i64) -> Vec<GameRow>
                 hero: heroes.get(&g.path).cloned().unwrap_or_default(),
                 facts: [Some(console.clone()), when].into_iter().flatten().filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" · "),
                 played_at: played.get(g.path.as_str()).copied().unwrap_or(0),
+                plays: plays.get(g.path.as_str()).copied().unwrap_or(0),
+                year: metadata.get(g.path.as_str()).and_then(|m| crate::esde_shelves::release_date(m)).and_then(|d| crate::esde_shelves::year_of(&d)).unwrap_or_default(),
+                rating: metadata.get(g.path.as_str()).and_then(|m| crate::esde_shelves::rating(m)),
                 path: g.path.clone(),
                 system,
                 console,
@@ -441,7 +456,7 @@ pub type Refreshed = Result<Read, String>;
 
 /// One refresh of a source, run off the GUI thread, every gamelist as it first lists.
 /// A source's first read for an ES-DE theme: the systems, the games and the player's records without the metadata, the
-/// plays or the media, which the whole read brings after it, so the theme's view is shown first (EmuSen_Qt.md §4.9).
+/// plays or the media (so the grid's Most played, Year and Rating sort by name until then), which the whole read brings after it, so the theme's view is shown first (EmuSen_Qt.md §4.9).
 pub struct FirstLook<'a>(pub &'a dyn LibrarySource);
 
 impl LibrarySource for FirstLook<'_> {
@@ -498,7 +513,9 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists) -> Refres
     let played_games: Vec<GameFile> = games.iter().filter(|g| recent.contains(&g.path)).cloned().collect();
     let heroes = source.media(&systems, &played_games, &HERO)?;
     let played = source.played(&games)?;
-    let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings };
+    let plays = source.plays(&games)?;
+    let metadata = source.metadata(&games)?;
+    let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings, plays, metadata };
     let shelves = source.shelves()?;
     let mut shelved: Vec<SystemRow> = systems.clone();
     shelved.sort_by_key(|s| shelves.iter().position(|id| id == &s.id).unwrap_or(usize::MAX));
@@ -549,6 +566,27 @@ impl LibraryView {
         self.systems.iter().any(|s| s.starts_empty)
     }
 
+    /// The consoles that start with nothing in them, each once by its first system, in Mistress's order: by maker, then
+    /// year; each with the engine its row shows, else the first that runs it (Mistress's `StartConsoleEntries`).
+    pub fn startable(&self) -> Vec<crate::home_card::Startable> {
+        let mut seen: Vec<&SystemRow> = Vec::new();
+        for s in self.systems.iter().filter(|s| s.starts_empty && !s.engines.is_empty()) {
+            let console = if s.console.is_empty() { &s.id } else { &s.console };
+            if !seen.iter().any(|t| (if t.console.is_empty() { &t.id } else { &t.console }).eq_ignore_ascii_case(console)) {
+                seen.push(s);
+            }
+        }
+        seen.sort_by(|a, b| (a.manufacturer.to_lowercase(), a.release_year).cmp(&(b.manufacturer.to_lowercase(), b.release_year)));
+        let row = |id: &str| self.rows.rows().iter().find(|r| r.key == id).map(|r| r.engine_name.clone()).filter(|e| !e.is_empty());
+        seen.into_iter()
+            .map(|s| crate::home_card::Startable {
+                console: if s.console.is_empty() { s.id.clone() } else { s.console.clone() },
+                name: console_name(s),
+                engine: row(&s.id).unwrap_or_else(|| s.engines[0].clone()),
+            })
+            .collect()
+    }
+
     /// "11 consoles · 1,566 games": the consoles shown and every game.
     pub fn summary(&self) -> String {
         let consoles = self.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).count();
@@ -567,7 +605,7 @@ impl LibraryView {
         view
     }
 
-    /// A refresh's answer applied: new rows with the selection kept, or the rows kept and the problem's words shown.
+    /// A refresh's answer applied: new rows with the selection kept, or the rows kept and the problem said (§7.9).
     pub fn apply(&mut self, refreshed: Refreshed) {
         match refreshed {
             Ok(read) => {
@@ -580,7 +618,7 @@ impl LibraryView {
                 self.esde_state = read.esde_state;
                 self.problem.clear();
             }
-            Err(words) => self.problem = words,
+            Err(words) => self.problem = format!("The library could not be read: {words}"),
         }
     }
 }

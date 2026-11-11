@@ -16,7 +16,7 @@ pub const SEARCH: &str = "search";
 pub const SORT: &str = "sort";
 pub const JUMP: &str = "jump";
 pub const RANDOM: &str = "random";
-pub const START_CONSOLE: &str = "startConsole";
+pub const START_CONSOLE: &str = crate::home_card::START_CONSOLE;
 pub const COLLECTIONS: &str = "collections";
 /// The Filter page's rows: every game, and Favourites.
 pub const EVERY_GAME: &str = "every";
@@ -75,11 +75,16 @@ fn first_page(f: &Value) -> Page {
         Row::new(JUMP, "Jump to").value(words(f, "letter")).steps().pane(Pane::said("Moves to the first game under the letter.", words(f, "letters"))),
         Row::new(RANDOM, "Random game").pane(Pane::said("Moves to a game chosen at random.", "A plays it.")),
     ];
-    if f.get("startConsole").and_then(Value::as_bool).unwrap_or(false) {
+    if !startable(f).is_empty() {
         rows.push(Row::new(START_CONSOLE, "Start Console").opens().pane(Pane::said("Starts a console with no disc in it.", "Change Disc on the Pause Card puts a game in.")));
     }
     rows.push(Row::new(COLLECTIONS, "Collections").opens().pane(Pane::said("Your collections, and the automatic ones.", "A opens a collection as a section of the library.")));
     Page { title: format!("{} · {}", words(f, "section"), words(f, "count")), breadcrumb: "List".to_owned(), rows, footer: String::new() }
+}
+
+/// The consoles Start Console lists, from the facts.
+fn startable(f: &Value) -> Vec<crate::home_card::Startable> {
+    f.get("startable").cloned().and_then(|s| serde_json::from_value(s).ok()).unwrap_or_default()
 }
 
 /// The Filter page: every game, then Favourites except in the Favourites section; the player's collections follow
@@ -117,6 +122,7 @@ impl Pages for ListCard {
     fn page(&self, key: &str, facts: &Value) -> Page {
         match key {
             FILTER => filter_page(facts),
+            START_CONSOLE => crate::home_card::start_console_page(&startable(facts), "List"),
             _ => first_page(facts),
         }
     }
@@ -124,7 +130,8 @@ impl Pages for ListCard {
     fn choose(&self, page: &str, row: &str) -> Choice {
         match (page, row) {
             (FILTER, filter) => Choice::Act(filter.to_owned()),
-            (_, FILTER) => Choice::Turn(FILTER.to_owned()),
+            (_, FILTER | START_CONSOLE) => Choice::Turn(row.to_owned()),
+            (START_CONSOLE, console) => Choice::Act(console.to_owned()),
             (_, SORT | JUMP) => Choice::Stay(stepped(row, 1)),
             (_, SEARCH | RANDOM) => Choice::Act(row.to_owned()),
             _ => Choice::Owed,

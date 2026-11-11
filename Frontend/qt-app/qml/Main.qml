@@ -76,11 +76,12 @@ Window {
         cores: library.cores
         onReady: (path) => {
             library.started(path)
+            // The game's screen asked for first, so an open that fails at once gives way to the library after it.
+            screens.play()
             player.game = path
             player.session.resume()
-            screens.play()
         }
-        onNoticeChanged: if (launch.notice.length > 0) notices.raise(launch.notice, false, true)
+        onNoticeChanged: if (launch.notice.length > 0) notices.raise(launch.notice, launch.noticeAttention, true)
     }
     Screens {
         id: screens
@@ -89,6 +90,10 @@ Window {
         found: games.count > 0
         themed: program.esdeLook
         onQuit: Qt.quit()
+        // The Home card's Continue: the suspended game resumes as its screen comes back.
+        onResumed: player.session.resume()
+        // Start Console's row: the console starts with nothing in it, and its screen follows the session's start.
+        onConsoleStarted: (key) => player.session.openConsole(key)
     }
     // Reduced motion as the start read it until Settings has read the settings, then as they say; the text size, which
     // the kit's tokens scale by, and the variant as they say (EmuSen_Qt.md §7.7).
@@ -163,7 +168,7 @@ Window {
         games: library.loading ? "" : library.gamesOf(screens.key)
         section: screens.key
         sectionName: library.headingOf(screens.key)
-        startConsole: library.startsEmpty
+        startable: library.startable
         onPassedBack: screens.back()
         // A section read anew starts at its first game, as the grid's own did.
         onCountChanged: games.focused = games.count > 0 ? 0 : -1
@@ -695,6 +700,33 @@ Window {
     Connections {
         target: player.session
         function onNoticeChanged() { notices.raise(player.session.notice, player.session.noticeAttention, true) }
+    }
+    // What failed, from every model that can fail, said where the player is: a game that does not open (over the game),
+    // the library unread, a setting, a game's page's change, or Cores (EmuSen_Qt.md §7.9).
+    function failed(words, overGame) {
+        if (words.length > 0)
+            notices.raise(words, true, overGame)
+    }
+    Connections {
+        target: player.session
+        function onProblemChanged() { program.failed(player.session.problem, true) }
+        function onOpenFailed() { screens.failed() }
+    }
+    Connections {
+        target: library
+        function onProblemChanged() { program.failed(library.problem, false) }
+    }
+    Connections {
+        target: settingsModel
+        function onProblemChanged() { program.failed(settingsModel.problem, false) }
+    }
+    Connections {
+        target: pageModel
+        function onProblemChanged() { program.failed(pageModel.problem, false) }
+    }
+    Connections {
+        target: coresModel
+        function onProblemChanged() { program.failed(coresModel.problem, false) }
     }
     Kit.NormalizedCanvas {
         id: noticeCanvas

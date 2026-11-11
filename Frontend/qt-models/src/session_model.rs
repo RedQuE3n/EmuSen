@@ -2,7 +2,7 @@
 //! thread put on Qt; its reports come back through qt_thread().queue, the one way in.
 
 use crate::picture::PictureFeed;
-use crate::session::{GameIo, Report, Session};
+use crate::session::{GameIo, Opening, Report, Session};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{DateFormat, QDateTime, QString};
@@ -78,6 +78,12 @@ pub mod qobject {
         #[qinvokable]
         fn open(self: Pin<&mut SessionModel>, path: &QString);
 
+        /// Starts a console with nothing in it, by its key (Start Console); a game already open is closed first, and no
+        /// game is named.
+        #[qinvokable]
+        #[cxx_name = "openConsole"]
+        fn open_console(self: Pin<&mut SessionModel>, console: &QString);
+
         #[qinvokable]
         fn pause(self: Pin<&mut SessionModel>);
 
@@ -101,6 +107,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "chooseSpeed"]
         fn choose_speed(self: Pin<&mut SessionModel>, percent: u32);
+
+        /// The game or console named did not open, or stopped on a failure: `problem` says why.
+        #[qsignal]
+        #[cxx_name = "openFailed"]
+        fn open_failed(self: Pin<&mut SessionModel>);
 
         /// The game saved to a slot, off the GUI thread; a resume waits for it.
         #[qinvokable]
@@ -176,6 +187,8 @@ pub struct SessionModelRust {
     paused: bool,
     sounding: bool,
     problem: QString,
+    /// What a failure of the opening is said after, Mistress's "Failed to load {name}" or "Failed to start {console}".
+    failing: String,
     first_picture_ms: f64,
     picture_aspect: f64,
     card_facts: QString,
@@ -219,6 +232,7 @@ impl Default for SessionModelRust {
             paused: false,
             sounding: false,
             problem: QString::default(),
+            failing: String::new(),
             first_picture_ms: 0.0,
             picture_aspect: 0.0,
             card_facts: QString::default(),
@@ -260,6 +274,18 @@ impl qobject::SessionModel {
         }
     }
 
+    /// The opening failed: said in Mistress's form, after what was being opened.
+    fn failed(mut self: Pin<&mut Self>, words: String) {
+        let said = format!("{}: {words}", self.failing);
+        self.as_mut().set_problem(QString::from(&said));
+        // Named no longer, so choosing the same game again opens it afresh.
+        if !self.game.is_empty() {
+            self.as_mut().rust_mut().game = QString::default();
+            self.as_mut().game_changed();
+        }
+        self.open_failed();
+    }
+
     fn set_running(mut self: Pin<&mut Self>, value: bool) {
         if self.running != value {
             self.as_mut().rust_mut().running = value;
@@ -288,29 +314,46 @@ impl qobject::SessionModel {
         }
     }
 
-    fn open(mut self: Pin<&mut Self>, path: &QString) {
+    fn open(self: Pin<&mut Self>, path: &QString) {
+        self.start(Opening::Game(path.to_string()));
+    }
+
+    fn open_console(mut self: Pin<&mut Self>, console: &QString) {
+        if !self.game.is_empty() {
+            // No game is named, so the game open before is opened afresh when it is named again.
+            self.as_mut().rust_mut().game = QString::default();
+            self.as_mut().game_changed();
+        }
+        self.start(Opening::Console(console.to_string()));
+    }
+
+    fn start(mut self: Pin<&mut Self>, opening: Opening) {
         self.as_mut().close();
+        // Cleared first, so the same failure twice is said twice.
+        self.as_mut().set_problem(QString::default());
+        self.as_mut().rust_mut().failing = crate::session::failing(&opening);
         // SAFETY: the window's host names a live feed, which outlives the window and every model in it.
         let Some((handoff, device)) = (unsafe { PictureFeed::at(self.feed) }) else {
-            return self.as_mut().set_problem(QString::from("No picture is named."));
+            return self.as_mut().failed("No picture is named.".to_owned());
         };
         if self.runtime.is_none() {
             let library = self.platform_library.to_string();
             let config = match self.as_mut().runtime_config() {
                 Ok(config) => config,
-                Err(words) => return self.as_mut().set_problem(QString::from(&words)),
+                Err(words) => return self.as_mut().failed(words),
             };
             match Api::load(&library).and_then(|api| Runtime::new(&api, &config)) {
                 Ok(runtime) => self.as_mut().rust_mut().runtime = Some(runtime),
-                Err(e) => return self.as_mut().set_problem(QString::from(&e.to_string())),
+                Err(e) => return self.as_mut().failed(e.to_string()),
             }
         }
         let Some(runtime) = self.runtime.clone() else { return };
-        // A core approved, installed or made default since the last game, by Cores or the launch's question, is listed (EmuSen_Qt.md §7.7).
-        let _ = runtime.rescan();
+        // A core approved, installed or made default since the last game, by Cores or the launch's question, is listed (EmuSen_Qt.md §7.7);
+        // where the listing fails the game opens on what was listed before, and the player is told (§7.9).
+        let unlisted = runtime.rescan().err().map(|e| format!("The engines could not be listed again, so one approved or installed since the last game may not be used: {e}"));
         let pads = match self.as_mut().game_input() {
             Ok(pads) => pads,
-            Err(words) => return self.as_mut().set_problem(QString::from(&words)),
+            Err(words) => return self.as_mut().failed(words),
         };
         let (sound, unsounded) = match self.as_mut().game_sound() {
             Ok(sound) => (Some(sound), None),
@@ -323,22 +366,29 @@ impl qobject::SessionModel {
         };
         let clock = match self.as_mut().platform() {
             Ok(platform) => DisplayClock::new(&platform),
-            Err(words) => return self.as_mut().set_problem(QString::from(&words)),
+            Err(words) => return self.as_mut().failed(words),
         };
         let engine = (!self.engine.is_empty()).then(|| self.engine.to_string());
         let device = std::ptr::NonNull::new(device.as_ptr().cast_mut());
         // A state chosen is the start's answer: the Resume question is not asked (Mistress's `PlayFromPageAsync`).
         let from_state = Some(std::mem::take(&mut self.as_mut().rust_mut().start_state).to_string()).filter(|s| !s.is_empty());
-        let setting = self.as_mut().resume_setting();
+        // A console started empty has no game to resume, so nothing is asked (Mistress's `StartConsole`).
+        let from_state = from_state.filter(|_| matches!(opening, Opening::Game(_)));
+        let setting = if matches!(opening, Opening::Game(_)) { self.as_mut().resume_setting() } else { resume::Setting::Never };
         let holding = (from_state.is_none() && setting != resume::Setting::Never).then_some(setting);
         self.as_mut().rust_mut().holding = holding;
         let held = holding.is_some() || from_state.is_some();
         self.as_mut().rust_mut().from_state = from_state;
-        self.as_mut().set_resume_subject(QString::from(&resume::subject(&path.to_string())));
-        let session = Session::start(runtime, path.to_string(), engine, device, handoff, GameIo { pads, sound }, clock, held, report);
+        let subject = match &opening {
+            Opening::Game(path) => resume::subject(path),
+            Opening::Console(_) => String::new(),
+        };
+        self.as_mut().set_resume_subject(QString::from(&subject));
+        let session = Session::start(runtime, opening, engine, device, handoff, GameIo { pads, sound }, clock, held, report);
         self.as_mut().set_sounding(sounding);
         self.as_mut().rust_mut().session = Some(session);
-        self.as_mut().set_problem(QString::from(unsounded.as_deref().unwrap_or_default()));
+        let said: Vec<String> = [unlisted, unsounded].into_iter().flatten().collect();
+        self.as_mut().set_problem(QString::from(&said.join(" ")));
         self.as_mut().set_paused(false);
         self.as_mut().set_first_picture_ms(0.0);
     }
@@ -599,7 +649,7 @@ impl qobject::SessionModel {
                 self.picture_aspect_changed();
             }
             Report::Failed(words) => {
-                self.as_mut().set_problem(QString::from(&words));
+                self.as_mut().failed(words);
                 self.as_mut().set_running(false);
             }
             Report::Closed => self.as_mut().set_running(false),

@@ -72,8 +72,8 @@ pub mod qobject {
         #[qproperty(QString, tool_summaries, cxx_name = "toolSummaries")]
         #[qproperty(bool, dark)]
         #[qproperty(QString, home_lines, cxx_name = "homeLines", READ, NOTIFY)]
-        /// Whether a console starts with nothing in it, so the cards offer Start Console.
-        #[qproperty(bool, starts_empty, cxx_name = "startsEmpty", READ, NOTIFY)]
+        /// The consoles that start with nothing in them, as Start Console lists them (home_card::Startable, as JSON).
+        #[qproperty(QString, startable, READ, NOTIFY)]
         /// Whether an ES-DE theme is the library's look: `LibraryStyle` is Theme and `BigPictureTheme` names one.
         #[qproperty(bool, themed, READ, NOTIFY)]
         /// The ES-DE view's settings, shelves, media index and media presence as text (esde_shelves.rs), each written at a
@@ -232,7 +232,7 @@ pub struct LibraryModelRust {
     dark: bool,
     /// Home's places' second lines as a JSON array of `{"status", "attention"}`.
     home_lines: QString,
-    starts_empty: bool,
+    startable: QString,
     themed: bool,
     esde_settings: QString,
     esde_shelves: QString,
@@ -261,7 +261,7 @@ impl Default for LibraryModelRust {
             tool_summaries: QString::default(),
             dark: true,
             home_lines: QString::from("[]"),
-            starts_empty: false,
+            startable: QString::from("[]"),
             themed: false,
             esde_settings: QString::default(),
             esde_shelves: QString::from("[]"),
@@ -407,6 +407,7 @@ impl qobject::LibraryModel {
             paused: paused.to_string(),
             game_mode,
             start_console: self.view.starts_empty(),
+            startable: self.view.startable(),
             tools: serde_json::from_str(&self.tool_summaries.to_string()).unwrap_or(serde_json::Value::Null),
             ..crate::home_card::Facts::default()
         };
@@ -675,10 +676,10 @@ impl qobject::LibraryModel {
             self.as_mut().rust_mut().home_lines = home_lines;
             self.as_mut().home_lines_changed();
         }
-        let starts_empty = self.view.starts_empty();
-        if self.starts_empty != starts_empty {
-            self.as_mut().rust_mut().starts_empty = starts_empty;
-            self.as_mut().starts_empty_changed();
+        let startable = QString::from(serde_json::to_string(&self.view.startable()).unwrap_or_else(|_| "[]".into()).as_str());
+        if self.startable != startable {
+            self.as_mut().rust_mut().startable = startable;
+            self.as_mut().startable_changed();
         }
         if self.summary != summary {
             self.as_mut().rust_mut().summary = summary;

@@ -3640,7 +3640,7 @@ Power's rows stands "EmuSen 0.9.1" in Muted at 26 (Mistress's `BigMenuFooter`; w
 800). The version's owner is still MSBuild's `Directory.Build.props`. `qt-models/build.rs` reads it from there rather
 than copying it, and the reading moves with the build host (§1.9). Start Console is offered on both cards wherever a
 console of the systems table starts with nothing in it (`starts_empty`, Mistress's `ConsolesThatStartEmpty`, through
-`LibraryModel.startsEmpty`).
+`LibraryModel.startsEmpty`; since §7.9 `LibraryModel.startable`, the consoles themselves).
 `start.rs` reads Game Mode as Mistress's `InGameModeSession` does: gamescope among `XDG_CURRENT_DESKTOP`'s names, else
 `SteamDeck=1`. Its facts come from `LibraryModel.homeCardFacts` (the suspended game, its paused words, the tools'
 summaries, Game Mode).
@@ -3678,9 +3678,11 @@ over either) are `~/.cache/emusen/tmp/qt-s2/compare/<State>-<size>-side.png`.
 **Differences that remain, each for the tester:**
 - Exit Big Picture closes the card and does nothing more: emusen-qt has only the big-screen form until stage 6.
 - The Tools page's rows, Settings ▸, Start Console ▸ (§18.3's page), Collections ▸ and the paused frame in Continue's
-  pane are declared and do nothing yet. Each opens a screen of a later stage.
-- Most played, Year and Rating sort by name, since the library reads no play counts, years or ratings yet. Mistress
-  falls back the same way for Rating.
+  pane are declared and do nothing yet. Each opens a screen of a later stage. (Since §7.9: Continue resumes the game,
+  Start Console starts the console chosen, and Tools ▸ Cores and ▸ Themes open their screens; Most played, Year and
+  Rating sort by their data.)
+- Most played, Year and Rating sorted by name, since the library read no play counts, years or ratings then (sorted by
+  their data since §7.9).
 - The Filter page lists no collections of the player's own, since the library does not read them yet.
 - The words of the screen under a card read under 4.5:1 through the scrim. Mistress's recordings hold the card alone, so
   the test names this (`cards.rs`' `named`), as it names the grid's 18-unit neighbours at 1280 × 720 that stage 1 named.
@@ -4673,6 +4675,89 @@ Seeded faults, each reverted:
 - the walk pressing once: the program's page test, the gate naming Favourite unreached at both sizes;
 - the page not opening on Play: the program's page test, the focus still on Favourite;
 - the page's state not handed to the session: the program's page test, `startState` empty with the game shown.
+
+### 7.9 Repair piece DC-B: the program does what it offers and says when it fails (2026-11-11)
+
+A review of the landed program on 2026-11-11 proved rows that were drawn and did nothing, and failures the player never
+saw. The bar is Mistress's: what she did, the program does, and a row that is drawn acts.
+
+**1. Failures are shown.** Every model that can fail has a `problem` (SessionModel, LibraryModel, SettingsModel,
+GamePageModel, ToolModel) or a notice (LaunchModel); until now no screen read any of them. `Main.qml` now raises each
+non-empty `problem` through the kit's one notice layer (`Kit.NoticeModel`, EmuSen_Kit.md §7.26), in Attention's tone,
+over whatever screen the player is on; the session's over running gameplay too, as Mistress's `PadNotice` showed a
+failed load over the big screen. The words:
+
+| Failure | Words | Where made |
+|---|---|---|
+| A game that does not open, or stops on a failure | "Failed to load {title}: {why}" (Mistress's `LoadGame`) | `session::failing` |
+| A console that does not start | "Failed to start {console}: {why}" (Mistress's `StartConsole`) | `session::failing` |
+| The library unread | "The library could not be read: {why}" | `LibraryView::apply` |
+| The settings unsaved, or unread | "The settings could not be saved: {why}", "… read: …" | `SettingsModel::outcome` |
+| A console's setting, a memory card | "The console's setting could not be stored: …", "The memory card could not be made: …" | the same |
+| A game's page's change | "The game could not be hidden: …", "The state could not be deleted: …", and one line a change | `game_page::change_failed` |
+| A game's page unread | "The game's page could not be read: …" | `GamePageModel` |
+| Cores unopened | the source's words | `ToolModel` |
+
+A game that fails to open now gives way to the library's screen (`SessionModel.openFailed` → `Screens.failed`, the ask
+`Closed`), where before the program showed the game's screen with nothing on it; the launch asks for the game's screen
+before it names the game, so a failure at once is answered after it. The failed game is named no longer, so choosing it
+again opens it afresh. Each opening clears `problem` first, so the same failure twice is said twice.
+
+**2. The Home card's Continue and Start Console.** Continue's action (`home_card::RESUME`) is the game's screen in both
+looks (`screens::card_act`), and `Screens` says `resumed`, on which the program resumes the session; with no game
+running it closes the card. Start Console turns to a page of its own (Mistress's `StartConsolePage`): each console that
+starts empty, by its first system, ordered by maker and then year, its name and the engine its row shows, and in the
+pane Mistress's two sentences. Its row's action is `startConsole:<console>`; `Screens` says `consoleStarted`, and the
+program calls `SessionModel.openConsole`, which opens the runtime's session with the console and no path
+(`session::Opening::Console`), asks no Resume question (there is no game to resume, as in Mistress), and names no game.
+The List card's Start Console is the same page. The list of consoles is `LibraryModel.startable`, made once a refresh
+(`LibraryView::startable`).
+
+**3. Tools ▸ Cores and ▸ Themes.** In both looks the Home card's Cores and Themes rows open Cores and the Themes tab
+(`screens::card_act`). B comes back to where the card was opened, the library's screen, the card having closed as it
+opened them (`screens::tool_back`, from the screen each was opened over); the Themes tab opened from Settings still
+goes back to Settings, and Cores from Home's place to Home. Under an ES-DE theme Cores had no way back at all; it now
+has the theme's view.
+
+**4. Most played, Year and Rating.** A refresh reads games.db's plays and the scraper's metadata once
+(`Catalog.plays`, `Catalog.metadata`), which the ES-DE view now takes from the catalog rather than reading again. Each
+grid row carries its play count, its year and its rating (`GameRow.plays`, `.year`, `.rating`), read through the one
+reader of the release date and the rating (`esde_shelves::release_date`, `::rating`, `::year_of`, which a game's page's
+year also uses). The sorts are Mistress's `GamesScreen.Sorted`: most played first, oldest year first, highest rating
+first, each stable over the name's order so a tie keeps it, and a game without the datum last. The ES-DE theme's first
+read (`FirstLook`) reads no metadata or plays, so until the whole read arrives these three sort by name.
+
+The own look now reads every game's metadata at each refresh, where before only an ES-DE theme did; it is read off the
+interface thread. Not measured on a large library yet.
+
+**5. Errors no longer dropped.**
+- `runtime.rescan()` before a game opens: a failure is said with the open's words ("The engines could not be listed
+  again, so one approved or installed since the last game may not be used: …"), and the game opens on what was listed.
+- Cores' rescan (`Backend::rescan`, now a `Result`): a failure is Cores' notice.
+- Cores' firmware status (`Backend::firmware`, now a `Result`): a failure is never read as "no firmware". The pane says
+  "⚠ EmuSen's runtime could not say whether you have one", and the Firmware page, offered for it, leads with a row
+  "Firmware not read" whose pane holds the runtime's words.
+- The launch's firmware check (`firmware_needed`): a failure is no longer "no firmware needed". The player is told
+  ("The firmware this game needs could not be checked, so it opens without asking: …", `launch::firmware_unchecked`,
+  in Attention's tone, `LaunchModel.noticeAttention`) and the game's own open says the rest.
+- The launch's firmware folder (`DIR_FIRMWARE`): with no folder set, the question says "the firmware folder" in
+  general words, as before; a folder that cannot be read is said too.
+- The session's Resume setting (`resume_setting`): settings that cannot be read are taken as Ask, which loses nothing
+  the player chose: the question is asked where the setting would have answered it. Kept, with this reason.
+
+**6.** `Ask::Place`'s and `Ask::Act`'s comments no longer say Games is the only place built.
+
+**Not built here, each for the tester:** the Start Console page's firmware line (Mistress's `FirmwareLine`: the library
+view does not read firmware needs); its A word "Start" in the help bar; the console session's Continue row and name
+(Mistress's `ConsoleSessionName`); Start Console in an ES-DE gamelist's Select menu (Mistress's `AddStartConsoleOption`);
+the Tools page's other rows (Scraper, Packages, Library Manager, Cheats, Collections, Compressed Discs, Shell), whose
+screens the program does not have yet; the List card's Collections.
+
+**Held to** (measured on 2026-11-11): qt-models' `sorts`, `home_card_acts`, `failures`, and `cores`'s
+`a_failed_rescan_and_an_unread_firmware_are_said_never_taken_for_none_needed`; qt-app's `repairs` (the three sorts by
+pad and pointer, the List card held at the five sizes) and `esde` on the GPU (a NES game with no engine fails and is
+said, the theme back; Continue held at the five sizes and resuming the game; Tools ▸ Cores by the pointer and ▸ Themes
+by the pad, B back to the theme).
 
 ---
 

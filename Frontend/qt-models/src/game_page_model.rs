@@ -425,7 +425,7 @@ impl qobject::GamePageModel {
                         model.as_mut().said(String::new());
                         model.as_mut().apply(read);
                     }
-                    Err(words) => model.as_mut().said(words),
+                    Err(words) => model.as_mut().said(format!("The game's page could not be read: {words}")),
                 }
             });
         });
@@ -530,7 +530,7 @@ impl qobject::GamePageModel {
                 let saved = self.source.as_ref().map_or(Ok(()), |s| s.change(&self.file, &change));
                 let ok = saved.is_ok();
                 let hid = ok && change == crate::game_page::Change::Hide;
-                self.as_mut().said(saved.err().unwrap_or_default());
+                self.as_mut().said(saved.err().map(|why| crate::game_page::change_failed(&change, &why)).unwrap_or_default());
                 if hid {
                     self.hidden();
                     return;
@@ -583,7 +583,7 @@ impl qobject::GamePageModel {
                 match other {
                     Ok(Some(saved_from)) => model.ask(crate::game_page::other_copy_question(&saved_from, &name), Pending::Play(state)),
                     Ok(None) => model.played(QString::from(file.path.as_str()), QString::from(state.as_str())),
-                    Err(words) => model.as_mut().said(words),
+                    Err(words) => model.as_mut().said(format!("The state could not be read: {words}")),
                 }
             });
         });

@@ -18,6 +18,8 @@ struct Recorded {
     world: Scripted,
     approved: Arc<Mutex<Vec<String>>>,
     started: Arc<Mutex<Vec<Value>>>,
+    /// The runtime's rescan and firmware reads fail, with these words.
+    failing: Option<&'static str>,
 }
 
 impl Backend for Recorded {
@@ -46,10 +48,15 @@ impl Backend for Recorded {
     fn revoke(&self, sha256: &str) -> Result<(), String> {
         self.world.revoke(sha256)
     }
-    fn firmware(&self, system: &str) -> Option<Vec<FirmwareFile>> {
-        self.world.firmware(system)
+    fn firmware(&self, system: &str) -> Result<Vec<FirmwareFile>, String> {
+        match self.failing {
+            Some(words) => Err(words.to_owned()),
+            None => self.world.firmware(system),
+        }
     }
-    fn rescan(&self) {}
+    fn rescan(&self) -> Result<(), String> {
+        self.failing.map_or(Ok(()), |words| Err(words.to_owned()))
+    }
     fn start(&self, request: &Value) -> Result<Box<dyn Job>, String> {
         self.started.lock().unwrap().push(request.clone());
         self.world.start(request)
@@ -68,9 +75,13 @@ fn opened(world: &str) -> (Tool<Cores>, Arc<Mutex<Vec<String>>>) {
 }
 
 fn opened_recording(world: &str) -> (Tool<Cores>, Arc<Mutex<Vec<String>>>, Arc<Mutex<Vec<Value>>>) {
+    opened_failing(world, None)
+}
+
+fn opened_failing(world: &str, failing: Option<&'static str>) -> (Tool<Cores>, Arc<Mutex<Vec<String>>>, Arc<Mutex<Vec<Value>>>) {
     let approved = Arc::new(Mutex::new(Vec::new()));
     let started = Arc::new(Mutex::new(Vec::new()));
-    let backend = Recorded { world: Scripted::open(world).unwrap(), approved: approved.clone(), started: started.clone() };
+    let backend = Recorded { world: Scripted::open(world).unwrap(), approved: approved.clone(), started: started.clone(), failing };
     let mut tool = Tool::new(Cores::new(Box::new(backend), Host::default()));
     tool.refresh();
     for _ in 0..8 {
@@ -473,4 +484,22 @@ fn update_all_names_one_core_by_its_name_and_is_not_offered_with_none() {
     tool.list();
     let labels: Vec<String> = tool.card().unwrap().2.into_iter().map(|r| r.label).collect();
     assert_eq!(labels, ["Search", "Filter", "Sort", "Check for Updates", "Verify"]);
+}
+
+#[test]
+fn a_failed_rescan_and_an_unread_firmware_are_said_never_taken_for_none_needed() {
+    let (mut tool, _, _) = opened_failing(WORLD, Some("the runtime is gone"));
+    assert_eq!(tool.source.notice(), Some("EmuSen's runtime did not list its engines again: the runtime is gone"), "the rescan's failure is said");
+    tool.choose_section("PlayStation");
+    focus_on(&mut tool, "Diamond");
+    let said = words(&tool.pane().sentences).iter().map(|w| w.to_string()).collect::<Vec<_>>();
+    assert!(said.contains(&"⚠ EmuSen's runtime could not say whether you have one; Firmware, under X, says why.".to_owned()), "{said:?}");
+    tool.more();
+    let page: Vec<String> = tool.card().unwrap().2.into_iter().map(|r| r.label).collect();
+    assert!(page.contains(&"Firmware".to_owned()), "the page that says why is offered: {page:?}");
+    let at = page.iter().position(|l| l == "Firmware").unwrap();
+    tool.card_choose(at);
+    let (_, _, rows, _) = tool.card().unwrap();
+    assert_eq!(rows[0].label, "Firmware not read");
+    assert_eq!(rows[0].pane.lines[0], ("EmuSen's runtime could not say which firmware this console needs.".to_owned(), "the runtime is gone".to_owned()));
 }

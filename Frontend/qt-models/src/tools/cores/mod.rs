@@ -51,6 +51,9 @@ pub fn verify_request() -> Value {
     json!({ "op": "core-verify", "cores": [] })
 }
 
+/// A console's firmware the runtime failed to read, as `have_firmware` answers it.
+const UNREAD: &str = "unread";
+
 /// The Cores source.
 pub struct Cores {
     backend: Box<dyn Backend>,
@@ -172,8 +175,11 @@ impl Cores {
         if !keep_notice {
             self.notice = None;
         }
-        self.backend.rescan();
+        let unlisted = self.backend.rescan().err();
         self.read_runtime();
+        if let Some(e) = unlisted {
+            self.notice = Some(format!("EmuSen's runtime did not list its engines again: {e}"));
+        }
         self.listing = self.runtime_rows();
         if self.start(listing_request(), Kind::Listing) {
             self.progress = Some((0.0, "Listing the cores…".to_owned()));
@@ -504,15 +510,19 @@ impl Cores {
     }
 
     /// The firmware of the row's first console as the runtime finds it: present where any file is, else missing or
-    /// not needed; none where it cannot say.
+    /// not needed; `UNREAD` where the runtime failed, none where it lists no file.
     fn have_firmware(&self, row: &Core) -> Option<&'static str> {
         let first = row.consoles.first()?;
         let system = row.systems.iter().find(|s| self.consoles.console_of.get(*s) == Some(first)).or(row.systems.first())?;
         if let Some(known) = self.have_firmware.borrow().get(system) {
             return *known;
         }
-        let found: Vec<String> = self.backend.firmware(system).unwrap_or_default().into_iter().map(|f| f.status).collect();
-        let have = if found.is_empty() {
+        let read = self.backend.firmware(system);
+        let unread = read.is_err();
+        let found: Vec<String> = read.unwrap_or_default().into_iter().map(|f| f.status).collect();
+        let have = if unread {
+            Some(UNREAD)
+        } else if found.is_empty() {
             None
         } else if found.iter().any(|s| s == "present") {
             Some("present")
@@ -597,6 +607,7 @@ impl Cores {
             match self.have_firmware(row) {
                 Some("present") => said.push(Words::new("✓ You have one.", Tone::Success)),
                 Some("missing") => said.push(Words::new("⚠ None found yet. Firmware, under X, says where it goes.", Tone::Attention)),
+                Some(UNREAD) => said.push(Words::new("⚠ EmuSen's runtime could not say whether you have one; Firmware, under X, says why.", Tone::Attention)),
                 _ => {}
             }
         }
@@ -718,11 +729,11 @@ impl Cores {
         options::rows(&schema, &value, OPTION)
     }
 
-    /// The firmware of the row's first console, as the runtime finds it.
-    fn firmware_files(&self, row: &Core) -> Vec<emusen_crystal_client::shapes::FirmwareFile> {
-        let Some(first) = row.consoles.first() else { return Vec::new() };
+    /// The firmware of the row's first console, as the runtime finds it; its words where it cannot say.
+    fn firmware_files(&self, row: &Core) -> Result<Vec<emusen_crystal_client::shapes::FirmwareFile>, String> {
+        let Some(first) = row.consoles.first() else { return Ok(Vec::new()) };
         let system = row.systems.iter().find(|s| self.consoles.console_of.get(*s) == Some(first)).or(row.systems.first());
-        system.and_then(|s| self.backend.firmware(s)).unwrap_or_default()
+        system.map_or(Ok(Vec::new()), |s| self.backend.firmware(s))
     }
 
     /// One row a need, as Settings' Firmware page has it (`firmware.rs`, EmuSen_Interface.md §18.10): found or not, in
@@ -732,7 +743,11 @@ impl Cores {
         let shown = folder.clone().unwrap_or_else(|| "the firmware folder".to_owned());
         let console = row.consoles.first().cloned().unwrap_or_default();
         let system = row.systems.iter().find(|s| self.consoles.console_of.get(*s) == Some(&console)).or(row.systems.first()).cloned().unwrap_or_default();
-        let files: Vec<_> = self.firmware_files(row).into_iter().map(|f| (system.clone(), f)).collect();
+        let (files, unread) = match self.firmware_files(row) {
+            Ok(files) => (files, None),
+            Err(e) => (Vec::new(), Some(e)),
+        };
+        let files: Vec<_> = files.into_iter().map(|f| (system.clone(), f)).collect();
         let all = self.starts_empty.contains(&console);
         let mut rows: Vec<CardRow> = firmware::needs(&files, self.firmware_of.get(&console).map(String::as_str))
             .iter()
@@ -748,6 +763,10 @@ impl Cores {
                 CardRow::new(&format!("firmware.{at}"), &need.name).value(&firmware::short_status(need, all)).pane(CardPane { lines, ..CardPane::default() })
             })
             .collect();
+        if let Some(e) = unread {
+            let lines = vec![("EmuSen's runtime could not say which firmware this console needs.".to_owned(), e)];
+            rows.insert(0, CardRow::new("firmware.unread", "Firmware not read").pane(CardPane { lines, ..CardPane::default() }));
+        }
         if let Some(folder) = folder {
             rows.push(CardRow::new(&format!("{OPEN_FOLDER}{folder}"), "Open Folder"));
         }
@@ -996,7 +1015,7 @@ impl Source for Cores {
         if engine {
             rows.push(CardRow::new(OPTIONS, "Options").opens());
         }
-        if (!self.firmware_listed(row).is_empty() || row.firmware.is_some()) && !self.firmware_files(row).is_empty() {
+        if (!self.firmware_listed(row).is_empty() || row.firmware.is_some()) && self.firmware_files(row).map_or(true, |f| !f.is_empty()) {
             rows.push(CardRow::new(FIRMWARE, "Firmware").opens());
         }
         if self.hash_of(row).is_some() && (row.awaits_approval() || installed_libretro) {

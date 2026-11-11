@@ -100,7 +100,7 @@ fn the_list_card_and_the_listing_are_mistress_games_screen() {
     assert_eq!(page.rows[0].pane.lines[0], ("Type part of a name; the covers narrow as you type.".to_owned(), "The keyboard docks at the foot of the screen.".to_owned()));
     assert_eq!(page.rows[1].pane.lines[0].1, "Also: Last played · Most played · Year · Rating");
     let mut startable = f.clone();
-    startable["startConsole"] = json!(true);
+    startable["startable"] = json!([{ "console": "PlayStation", "name": "PlayStation", "engine": "Diamond" }]);
     assert_eq!(list.page(list_card::FIRST, &startable).rows[5].label, "Start Console", "offered where a console starts empty, before Collections");
     assert_eq!(list.choose(list_card::FIRST, list_card::SORT), Choice::Stay("sort+1".into()));
     assert_eq!(list.step(list_card::FIRST, list_card::JUMP, -1), Some("jump-1".into()));

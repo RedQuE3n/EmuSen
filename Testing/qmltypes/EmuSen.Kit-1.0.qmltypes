@@ -2450,7 +2450,7 @@ Module {
             name: "MarkRole"
             isScoped: true
             type: "int"
-            lineNumber: 141
+            lineNumber: 142
             values: ["Outline", "Filled", "Stroke", "CutLetter", "Holes"]
         }
         Property {
@@ -2561,53 +2561,62 @@ Module {
             lineNumber: 140
             isReadonly: true
         }
-        Signal { name: "familyChanged"; lineNumber: 171 }
-        Signal { name: "buttonChanged"; lineNumber: 172 }
-        Signal { name: "swapChanged"; lineNumber: 173 }
-        Signal { name: "sizeChanged"; lineNumber: 174 }
-        Signal { name: "letterChanged"; lineNumber: 175 }
-        Signal { name: "letterScaleChanged"; lineNumber: 176 }
-        Signal { name: "cutChanged"; lineNumber: 177 }
-        Signal { name: "nameChanged"; lineNumber: 178 }
-        Signal { name: "styleChanged"; lineNumber: 179 }
-        Signal { name: "letterBoldChanged"; lineNumber: 180 }
-        Signal { name: "pairChanged"; lineNumber: 181 }
-        Signal { name: "pairedChanged"; lineNumber: 182 }
+        Property {
+            name: "discShare"
+            type: "double"
+            read: "getDiscShare"
+            index: 12
+            lineNumber: 141
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Signal { name: "familyChanged"; lineNumber: 173 }
+        Signal { name: "buttonChanged"; lineNumber: 174 }
+        Signal { name: "swapChanged"; lineNumber: 175 }
+        Signal { name: "sizeChanged"; lineNumber: 176 }
+        Signal { name: "letterChanged"; lineNumber: 177 }
+        Signal { name: "letterScaleChanged"; lineNumber: 178 }
+        Signal { name: "cutChanged"; lineNumber: 179 }
+        Signal { name: "nameChanged"; lineNumber: 180 }
+        Signal { name: "styleChanged"; lineNumber: 181 }
+        Signal { name: "letterBoldChanged"; lineNumber: 182 }
+        Signal { name: "pairChanged"; lineNumber: 183 }
+        Signal { name: "pairedChanged"; lineNumber: 184 }
         Method {
             name: "setFamily"
-            lineNumber: 154
+            lineNumber: 155
             Parameter { name: "value"; type: "Families::Family" }
         }
         Method {
             name: "setButton"
-            lineNumber: 156
+            lineNumber: 157
             Parameter { name: "value"; type: "Pad::PadButton" }
         }
         Method {
             name: "setSwap"
-            lineNumber: 158
+            lineNumber: 159
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "setSize"
-            lineNumber: 160
+            lineNumber: 161
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setStyle"
-            lineNumber: 166
+            lineNumber: 167
             Parameter { name: "value"; type: "GlyphStyles::GlyphStyle" }
         }
         Method {
             name: "setPair"
-            lineNumber: 169
+            lineNumber: 170
             Parameter { name: "value"; type: "int" }
         }
         Method {
             name: "data"
             type: "QVariant"
             isMethodConstant: true
-            lineNumber: 183
+            lineNumber: 185
             Parameter { name: "index"; type: "QModelIndex" }
             Parameter { name: "role"; type: "int" }
         }
@@ -2615,13 +2624,13 @@ Module {
             name: "roleNames"
             type: "QHash_i32_QByteArray"
             isMethodConstant: true
-            lineNumber: 184
+            lineNumber: 186
         }
         Method {
             name: "rowCount"
             type: "int"
             isMethodConstant: true
-            lineNumber: 185
+            lineNumber: 187
             Parameter { name: "parent"; type: "QModelIndex" }
         }
     }

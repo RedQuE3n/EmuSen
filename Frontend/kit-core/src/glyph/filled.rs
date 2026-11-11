@@ -8,6 +8,8 @@ use crate::world::Point;
 
 /// The disc's radius in the box: 22 pixels beside a 26-pixel label, as ES-DE's help bar measured (§40.1).
 const R: f64 = 0.425;
+/// The share of its box the disc fills, edge to edge (EmuSen_Kit.md §7.71).
+pub const DISC_SHARE: f64 = 2.0 * R;
 /// Half the width of a stroke cut out of a shape.
 const CUT: f64 = 0.0425;
 /// A face letter cut out of its disc, and a shoulder's two letters out of its body, at these shares of the glyph type.

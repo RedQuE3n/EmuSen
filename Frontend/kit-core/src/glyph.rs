@@ -7,6 +7,8 @@ use crate::world::Point;
 
 mod filled;
 
+pub use filled::DISC_SHARE as FILLED_DISC_SHARE;
+
 /// What a pad prints on its buttons; `Generic` is a pad whose printing is not known, drawn by position as the RetroPad names its buttons.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PadFamily {

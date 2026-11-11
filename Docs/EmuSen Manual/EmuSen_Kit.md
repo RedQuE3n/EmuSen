@@ -2919,3 +2919,20 @@ its video to the screen (§4.14). Two additions, the defaults unchanged:
 **Held to**: kit-core's `kit_7_54_a_pair_pressed_for_one_action_is_one_glyph` (the whole d-pad among the pairs, its
 plus the single direction's with four arrows cut); the ES-DE oracle's `stretch` states, the video's ink within two units
 of ES-DE's.
+
+### 7.71 The share of its box the filled disc fills (stage 4, X7; 2026-11-11)
+
+Decided 2026-11-11 by the tester (R-20261111-24): the kit exposes, read-only, the share of its box the pad glyph's disc
+fills, so a host can size the glyph to a disc measured elsewhere without copying the kit's geometry. One addition, the
+defaults unchanged:
+
+- kit-core's `glyph::FILLED_DISC_SHARE`, the filled set's disc edge to edge over its box, is `2 × R` of
+  `glyph/filled.rs` (0.85), derived from the radius the set already draws with, not a second number.
+- `PadGlyphMarks.discShare` (read-only, constant) gives it to QML.
+
+The ES-DE painter's help bar is its user: ES-DE's icon disc reaches 58 of its 64 units, so the glyph is drawn at the icon's
+box × (58/64) / `discShare` (EmuSen_Qt.md §4.12.1).
+
+**Held to**: kit-core's `kit_7_71_the_filled_disc_fills_the_share_of_its_box_the_kit_publishes` (the drawn disc's extent
+against the constant); rule Q's registry (`discShare` declared last, no index moved); esde-qt's
+`the_watched_themes_hold_at_the_five_sizes`, which holds every help glyph to that size.

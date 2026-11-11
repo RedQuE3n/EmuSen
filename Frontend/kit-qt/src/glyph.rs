@@ -65,6 +65,8 @@ pub mod qobject {
         #[qproperty(i32, pair)]
         /// Whether the glyph drawn is the pair's one.
         #[qproperty(bool, paired, READ, NOTIFY)]
+        /// The share of its box the filled set's disc fills, from kit-core's one owner (EmuSen_Kit.md §7.71).
+        #[qproperty(f64, disc_share, READ, CONSTANT)]
         type PadGlyphMarks = super::PadGlyphMarksRust;
     }
 
@@ -117,6 +119,7 @@ pub struct PadGlyphMarksRust {
     letter_bold: bool,
     pair: i32,
     paired: bool,
+    disc_share: f64,
     glyph: Glyph,
 }
 
@@ -135,6 +138,7 @@ impl Default for PadGlyphMarksRust {
             letter_bold: false,
             pair: -1,
             paired: false,
+            disc_share: glyph::FILLED_DISC_SHARE,
             glyph: Glyph { marks: Vec::new(), letter: None },
         };
         rust.rebuild();

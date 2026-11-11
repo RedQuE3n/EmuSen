@@ -199,3 +199,10 @@ fn kit_7_54_a_pair_pressed_for_one_action_is_one_glyph() {
     assert_eq!(pad.marks[0].points, left.marks[0].points);
     assert_eq!(pad.marks[0].holes.len(), 4);
 }
+
+#[test]
+fn kit_7_71_the_filled_disc_fills_the_share_of_its_box_the_kit_publishes() {
+    let disc = &glyph::styled(PadFamily::Xbox, PadControl::South, GlyphStyle::Filled).marks[0].points;
+    let (lo, hi) = disc.iter().fold((f64::MAX, f64::MIN), |(lo, hi), p| (lo.min(p[0]), hi.max(p[0])));
+    assert!((hi - lo - glyph::FILLED_DISC_SHARE).abs() < 1e-3, "the disc spans {} of its box, the kit says {}", hi - lo, glyph::FILLED_DISC_SHARE);
+}

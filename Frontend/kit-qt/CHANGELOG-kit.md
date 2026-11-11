@@ -4,6 +4,13 @@ The kit is the QML module `EmuSen.Kit` (EmuSen_Qt.md §1.4), held by rule Q (§5
 writes it, is committed under `Testing/qmltypes/` and compared on every build. A minor adds and never removes; each
 entry names what was added and the section of `EmuSen_Kit.md` that records it.
 
+## 1.0, stage 4 piece X7: the filled disc's share of its box (2026-11-11)
+
+Additions only; no type, property, signal or invokable was removed or changed.
+
+- **`glyph::FILLED_DISC_SHARE`** (Rust) and **`PadGlyphMarks.discShare`** (registry, read-only, constant): the share of
+  its box the filled set's disc fills, from the radius it is drawn with. `EmuSen_Kit.md` §7.71.
+
 ## 1.0, stage 4 piece X2: the body face as bytes, and a fitted clip started at once (2026-11-09)
 
 Additions; every default keeps a tile as it was.

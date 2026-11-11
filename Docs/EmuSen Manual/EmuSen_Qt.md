@@ -3388,9 +3388,9 @@ the face (no table or metric differs: `hmtx` and `glyf` agree for every glyph, `
 column wider from the same size (12 columns, 11 to 20.112 px), where FreeType renders M 11 columns wide up to 20.9 px:
 the step follows the glyph as ES-DE rasterises it, not its advance.
 
-**[blocked]** for the tester: the rule by which ES-DE widens a glyph's step (M, V, d, w with the space) is not found. Single-word
-labels in the own face follow their rounded advances; View Media is drawn 1–3 px wider at sizes both fractional and
-whole.
+**[blocked]** for the tester: the rule by which ES-DE widens a glyph's step (M, V, d, w with the space) is not found.
+Labels without those glyphs (Select, Back, Favorites) follow their rounded advances; View Media is drawn 1–3 px wider
+at sizes both fractional and whole.
 
 **The hinter (decided 2026-11-10).** harfrust and read-fonts shape and read tables but do not hint, so the hinted height
 comes from the system's FreeType, the library the captures were drawn with (FreeType 2.14.3 on Fedora 44), loaded at run

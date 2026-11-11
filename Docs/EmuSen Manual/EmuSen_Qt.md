@@ -3643,10 +3643,22 @@ box is within its two units.
 (1.25 times the reference S hinted at the label's size) gives 32.5 and 51.25, so 29 and 47 columns. Akrobat SemiBold's
 hinted S is 26 px from 36 to 37.75 px and 28 px from 38 to 39.25 px, so the 1280 disc fits an S hinted at 38–39 px, or
 a box proportional to the size (51.25 ÷ 55 × 36.67 = 34.2). Ruled out: the S at the label's size rounded up (37 px, 26),
-the box rounded up or down (33, 32: 30 and 29 columns). Unproven. Captures that separate the two: Art Book Next's system
-help alone with one entry (A, SELECT) at 1280 × 800 at `fontSize` 0.0425, 0.0450, 0.04583333, 0.0475 and 0.0490
-(34.0, 36.0, 36.67, 38.0 and 39.2 px): an S-hinted box steps (28.75, 32.5, 32.5, 35, 35), a proportional one grows
-evenly (31.7, 33.6, 34.2, 35.4, 36.5).
+the box rounded up or down (33, 32: 30 and 29 columns). The captures of 2026-11-11 (rows `x8a1`–`x8a5` of
+`~/.cache/emusen/tmp/x8/captures.tsv`: CarAlt's help copy in ES-DE's own face, one entry, `entryRelativeScale` 1, at
+1280 × 800; the control `x8ctl` equals `k00`'s capture but for the clock) give ES-DE's disc, its widest row with
+sub-pixel edges (`disc8.py`), against each rule's disc (58/64 of the box):
+
+| fontSize (px) | ES-DE's disc | hinted S, its box, its disc | proportional box, its disc |
+|---|---|---|---|
+| 0.0425 (34.0) | 26.36 | 23, 28.75, 26.05 | 31.7, 28.7 |
+| 0.0450 (36.0) | 29.86 | 26, 32.5, 29.45 | 33.6, 30.4 |
+| 0.04583333 (36.67) | 30.71 | 26, 32.5, 29.45 | 34.2, 31.0 |
+| 0.0475 (38.0) | 31.67 | 28, 35, 31.7 | 35.4, 32.1 |
+| 0.0490 (39.2) | 31.67 | 28, 35, 31.7 | 36.5, 33.1 |
+
+The equal discs at 38 and 39.2 px and the 34 px disc rule out a box proportional to the size; the hinted S fits four
+sizes within 0.41 px and misses 36.67 px, Art Book Next's own size at 1280 × 800, by 1.26 (no Akrobat weight hints S
+to 27 there: Regular, SemiBold and Bold give 26). Unproven.
 
 **Artflix.** ES-DE's bar starts one pixel left of ours at 1280 × 800 in both views, every part in the same place
 relative to its start; at 1920 × 1200 the starts agree. The candidates of `~/.cache/emusen/tmp/x7/boxes-table.md`

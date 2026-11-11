@@ -3380,7 +3380,15 @@ units, V 7.8–10.3, d 3.0–5.5 (`pergl.py`). So a per-glyph cause is not ruled
 `helpglyphs.tsv` (Menu, holding M, at the `z` sizes; View Media in lower case, two words without V or M; the labels of
 `l`, `r`, `lt` and `rt`) separate it from the word count.
 
-**[blocked]** for the tester: the rule by which ES-DE draws a help label of two words is not found. Single-word
+The captures of `helpglyphs.tsv` (2026-11-11, `glyphs2.py`) settle it per glyph. Menu alone, one word, steps from M to e
+by 13 px up to 20.112 px and by 14 from 20.128, the very size where View Media's M widens; lower-case view media, two
+words without V or M, takes its rounded advances save the same w-and-space step from 20.064 px. The word count is
+ruled out; the labels of `l`, `r`, `lt` and `rt` draw nothing in this state. What makes M's step 14 is still not in
+the face (no table or metric differs: `hmtx` and `glyf` agree for every glyph, `tables.py`), but ES-DE's M raster is a
+column wider from the same size (12 columns, 11 to 20.112 px), where FreeType renders M 11 columns wide up to 20.9 px:
+the step follows the glyph as ES-DE rasterises it, not its advance.
+
+**[blocked]** for the tester: the rule by which ES-DE widens a glyph's step (M, V, d, w with the space) is not found. Single-word
 labels in the own face follow their rounded advances; View Media is drawn 1–3 px wider at sizes both fractional and
 whole.
 

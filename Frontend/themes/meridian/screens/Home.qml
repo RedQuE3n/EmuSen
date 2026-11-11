@@ -244,7 +244,8 @@ ThemeScreen {
                             offset.y: 10
                             blur: 24
                             radius: 12
-                            color: "#73000000"
+                            // 45% by night; 25% by day, where 45% darkened the sky under the eyebrow below CONTINUE PLAYING's 4.5:1 (EmuSen_Qt.md §3.4.4).
+                            color: Tokens.variant === Tokens.Light ? "#40000000" : "#73000000"
                         }
                         Item {
                             id: pausedBox
@@ -390,56 +391,66 @@ ThemeScreen {
                             lineHeight: 24
                             lineHeightMode: Text.FixedHeight
                         }
-                        ListView {
-                            id: shelfList
-                            objectName: "shelf"
+                        // The shelf fades 24 at an edge it runs past, so a cover there is faded, never cut (meridian.md §1.6).
+                        EdgeFade {
                             x: root.bandX - 16
                             y: 150
                             width: root.bandWidth + 32
                             height: 230
-                            orientation: ListView.Horizontal
-                            leftMargin: 16
-                            rightMargin: 16
-                            spacing: 24
-                            clip: true
-                            keyNavigationEnabled: true
-                            keyNavigationWraps: false
-                            highlightFollowsCurrentItem: true
-                            highlightMoveDuration: Tokens.reel
-                            highlight: Item {}
-                            boundsBehavior: Flickable.StopAtBounds
-                            property bool fadeLeft: false
-                            property bool fadeRight: false
-                            model: Library.shelf
-                            Keys.priority: Keys.AfterItem
-                            Keys.onLeftPressed: recentEntry.forceActiveFocus()
-                            delegate: ShelfCover {
-                                id: cover
-                                readonly property bool lit: cover.ListView.isCurrentItem && shelfList.activeFocus
-                                controller: frame.controller
-                                objectName: "shelfCover." + cover.index
-                                Accessible.name: cover.title
-                                focus: cover.ListView.isCurrentItem
-                                y: 10
-                                width: Math.round(200 * Math.min(1.6, Math.max(0.5, cover.coverShape > 0 ? cover.coverShape : 0.75)))
-                                height: 200
-                                z: cover.lit ? 1 : 0
-                                onActivated: Actions.play(cover.key)
-                                onActiveFocusChanged: {
-                                    if (!cover.activeFocus)
-                                        return
-                                    shelfList.currentIndex = cover.index
-                                    Actions.focus(cover.key)
-                                }
-                                CoverTile {
-                                    anchors.fill: parent
-                                    source: cover.cover
-                                    title: cover.title
-                                    hue: cover.consoleHue
-                                    favourite: cover.favourite
-                                    mark: Marks.heart
-                                    lit: cover.lit
-                                    pixelScale: root.pixelScale
+                            fadeLeft: shelfList.fadeLeft
+                            fadeRight: shelfList.fadeRight
+                            length: 24
+                            ListView {
+                                id: shelfList
+                                objectName: "shelf"
+                                anchors.fill: parent
+                                orientation: ListView.Horizontal
+                                leftMargin: 16
+                                rightMargin: 16
+                                spacing: 24
+                                clip: true
+                                keyNavigationEnabled: true
+                                keyNavigationWraps: false
+                                highlightFollowsCurrentItem: true
+                                highlightMoveDuration: Tokens.reel
+                                highlight: Item {}
+                                boundsBehavior: Flickable.StopAtBounds
+                                // The fit audit's edge rule reads a faded edge from these.
+                                property bool fadeLeft: shelfList.contentX > shelfList.originX - shelfList.leftMargin + 0.5
+                                property bool fadeRight: shelfList.contentX + shelfList.width < shelfList.originX + shelfList.contentWidth + shelfList.rightMargin - 0.5
+                                model: Library.shelf
+                                // Rows come after the shelf is made, which leaves no current cover for Right to enter on.
+                                onCountChanged: if (shelfList.currentIndex < 0 && shelfList.count > 0) shelfList.currentIndex = 0
+                                Keys.priority: Keys.AfterItem
+                                Keys.onLeftPressed: recentEntry.forceActiveFocus()
+                                delegate: ShelfCover {
+                                    id: cover
+                                    readonly property bool lit: cover.ListView.isCurrentItem && shelfList.activeFocus
+                                    controller: frame.controller
+                                    objectName: "shelfCover." + cover.index
+                                    Accessible.name: cover.title
+                                    focus: cover.ListView.isCurrentItem
+                                    y: 10
+                                    width: Math.round(200 * Math.min(1.6, Math.max(0.5, cover.coverShape > 0 ? cover.coverShape : 0.75)))
+                                    height: 200
+                                    z: cover.lit ? 1 : 0
+                                    onActivated: Actions.play(cover.key)
+                                    onActiveFocusChanged: {
+                                        if (!cover.activeFocus)
+                                            return
+                                        shelfList.currentIndex = cover.index
+                                        Actions.focus(cover.key)
+                                    }
+                                    CoverTile {
+                                        anchors.fill: parent
+                                        source: cover.cover
+                                        title: cover.title
+                                        hue: cover.consoleHue
+                                        favourite: cover.favourite
+                                        mark: Marks.heart
+                                        lit: cover.lit
+                                        pixelScale: root.pixelScale
+                                    }
                                 }
                             }
                         }

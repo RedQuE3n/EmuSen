@@ -78,9 +78,11 @@ pub struct Facts {
 }
 
 /// The consoles that start empty and the tools' summaries from the library's words for them, and the words said where
-/// either cannot be read, as the List card says a console it cannot read (EmuSen_Qt.md §7.9).
+/// either cannot be read, as the List card says a console it cannot read (EmuSen_Qt.md §7.9). An empty text is none, as
+/// the library holds before it has read either, not a text it could not read.
 pub fn read_lists(startable: &str, tools: &str) -> (Vec<Startable>, Value, String) {
     let mut unread = Vec::new();
+    let (startable, tools) = (if startable.is_empty() { "[]" } else { startable }, if tools.is_empty() { "null" } else { tools });
     let startable = serde_json::from_str(startable).unwrap_or_else(|why| {
         unread.push(format!("The consoles that start with no disc could not be read: {why}"));
         Vec::new()

@@ -235,6 +235,21 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     scene.pad(UiButton::Back);
     until(&mut scene, 5, "B closing the card to Home", |s| s.property("screens", "shown") == "Home");
     wait_for(&mut scene, "home", "activeFocus", "true", 1000);
+    // A list the card cannot read is said under its rows whole, on as many lines as its words take, never cut.
+    let mut unread: serde_json::Value = serde_json::from_str(&given).unwrap();
+    let said = "The tools' lines could not be read: expected value at line 1 column 1, so the Tools row shows no summary.";
+    unread["unread"] = serde_json::json!(said);
+    assert!(scene.set_property("homeCardModel", "facts", &unread.to_string()));
+    scene.pad(UiButton::Menu);
+    until(&mut scene, 5, "Start's Home card", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
+    let tree = scene.tree();
+    let footer = tree.nodes.iter().find(|n| n.visible && n.name == "cardFooter" && n.text.as_deref() == Some(said)).expect("the words under the rows");
+    assert!(footer.h > 60.0, "the words run on to a second line, {} high", footer.h);
+    hold(&mut scene, "HomeCardUnread", &mockup::Mockup::default(), named, &mut report);
+    scene.pad(UiButton::Back);
+    until(&mut scene, 5, "B closing the card to Home", |s| s.property("screens", "shown") == "Home");
+    assert!(scene.set_property("homeCardModel", "facts", &given));
+    wait_for(&mut scene, "home", "activeFocus", "true", 1000);
     let tree = scene.tree();
     let games = tree.find_named("place.0").expect("Home's Games");
     assert!(scene.focus_item(&tree, games));

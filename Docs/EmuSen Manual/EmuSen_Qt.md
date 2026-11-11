@@ -4916,6 +4916,22 @@ variants) and qt-models' `cores` (the wording, twenty consoles in the core's ord
 tiles) intermittently on this branch. It fails on WiseMan's base too, and the branch this piece sits on has since
 changed that page's focus, so it is not this piece's: left as it is, with no wait added.
 
+**A card after a session holds the focus.** In qt-app's `console` on the GPU, the List card opened over the grid after a
+console session had ended took no press: the focus was on the window's root item, and the walk read Home's status line
+("1 controller · 12:00"), the first words after it. The pointer still rested where the first walk had clicked a row. The
+theme's grid cell that came under it while the grid was disabled under the card took the pointer's focus, and Qt Quick
+gave a disabled item's focus to the root. A failed start on the software backend does not reproduce it, since the grid
+is not remade under the resting pointer. The fix is the kit's: the pointer focuses only an enabled item (EmuSen_Kit.md
+§7.107). The Home card's first page was walked by the pad and the pointer after a session in the same runs, and its
+focus was on its first row each time.
+
+**The Home card says only lists it could not read.** The library's `toolSummaries` is empty until each tool's stage fills
+it, and `home_card::read_lists` read the empty text as JSON it could not read. The Home card's first page then said "The
+tools' lines could not be read: EOF while parsing…" under its rows, cut with an ellipsis. qt-app's `console` gate found
+it at four of the five sizes (HomeCardContinueConsole). An empty text is now none (qt-models' `home_card_acts`), as for
+the ES-DE media index. The card's line under its rows wraps instead of being cut, so a list that really cannot be read
+is said whole (qt-app's `cards`, HomeCardUnread, held at the five sizes).
+
 **Held to** (measured on 2026-11-11): qt-models' `sorts`, `home_card_acts`, `failures`, and `cores`'s
 `a_failed_rescan_and_an_unread_firmware_are_said_never_taken_for_none_needed`, `start_console` and `runtime_records`;
 qt-app's `repairs` (the three sorts by pad and pointer, Most played with a tie, the List card held at the five sizes),

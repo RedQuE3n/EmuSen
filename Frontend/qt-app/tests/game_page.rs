@@ -265,6 +265,7 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     move_to(&mut scene, UiButton::Right, "Resume");
     let before = scene.property("pageModel", "actions");
     assert!(scene.watch_rows("pageModel"));
+    assert!(scene.watch("pageModel", "help"));
     scene.pad(UiButton::Left);
     until(&mut scene, "Left steps Resume's state", |s| s.property("pageModel", "actions") != before);
     assert_eq!(scene.rows_told("pageModel"), "1-2", "the two neighbouring tiles the mark moved between, told in place as one run");
@@ -347,6 +348,10 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     }
     assert!(!slot3.exists(), "Delete takes Slot 3 away");
     tiles_focused_at(&mut scene, 0);
+    // The tiles' list told the page its focus inside the page's resets; the page kept it until each ended (EmuSen_Qt.md §7.8.1).
+    let told = scene.rows_told("pageModel");
+    assert!(told.contains("reset"), "the sections turned and the deletions reset the tiles: {told}");
+    assert!(!told.contains(":help"), "no help changed inside a reset: {told}");
     scene.pad(UiButton::Up);
     section(&mut scene, 2);
     assert_eq!(scene.property("pageModel", "shows"), "2");

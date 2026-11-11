@@ -7,6 +7,7 @@
 #include <QtCore/QAbstractAnimation>
 #include <QtCore/QAbstractItemModel>
 #include <QtCore/QCoreApplication>
+#include <QtCore/QHash>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
@@ -28,6 +29,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <memory>
 #include <utility>
 
 namespace {
@@ -642,8 +644,21 @@ int harness_notified(QObject& root, const QString& object_name, const QString& p
     return watch != nullptr ? static_cast<int>(watch->spy.count()) : -1;
 }
 
-// A list model's changes told from now, as a view hears them: each dataChanged as "first-last", a reset as "reset"; a
-// child of the model, so it lives as long as it does.
+// The counts of the object's watched properties, by property, as `harness_watch` keeps them.
+QHash<QString, qsizetype> watchedCounts(QObject* object)
+{
+    QHash<QString, qsizetype> counts;
+    for (const QObject* child : object->findChildren<QObject*>(Qt::FindDirectChildrenOnly)) {
+        if (const auto* watch = dynamic_cast<const Watch*>(child)) {
+            counts.insert(watch->objectName().mid(spyName(QString()).size()), watch->spy.count());
+        }
+    }
+    return counts;
+}
+
+// A list model's changes told from now, as a view hears them: each dataChanged as "first-last", a reset as "reset",
+// followed by ":property" for each of the model's watched properties that said it changed inside that reset; a child of
+// the model, so it lives as long as it does.
 bool harness_watch_rows(QObject& root, const QString& object_name)
 {
     auto* model = qobject_cast<QAbstractItemModel*>(named(root, object_name));
@@ -657,7 +672,23 @@ bool harness_watch_rows(QObject& root, const QString& object_name)
     QObject::connect(model, &QAbstractItemModel::dataChanged, told, [add](const QModelIndex& first, const QModelIndex& last) {
         add(QStringLiteral("%1-%2").arg(first.row()).arg(last.row()));
     });
-    QObject::connect(model, &QAbstractItemModel::modelReset, told, [add] { add(QStringLiteral("reset")); });
+    auto before = std::make_shared<QHash<QString, qsizetype>>();
+    QObject::connect(model, &QAbstractItemModel::modelAboutToBeReset, told, [model, before] { *before = watchedCounts(model); });
+    QObject::connect(model, &QAbstractItemModel::modelReset, told, [model, before, add] {
+        QString line = QStringLiteral("reset");
+        const QHash<QString, qsizetype> after = watchedCounts(model);
+        QStringList inside;
+        for (auto it = after.cbegin(); it != after.cend(); ++it) {
+            if (it.value() != before->value(it.key(), it.value())) {
+                inside << it.key();
+            }
+        }
+        inside.sort();
+        for (const QString& property : inside) {
+            line += QLatin1Char(':') + property;
+        }
+        add(line);
+    });
     return true;
 }
 

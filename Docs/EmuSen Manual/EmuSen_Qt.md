@@ -4820,11 +4820,15 @@ Mistress's and this piece keeps Mistress's.
 **No call back into the page from inside its own reset (2026-11-11).** When the tiles' list lets its model go at
 `modelAboutToBeReset`, its current index becomes -1, and `GamePage.qml` told the page the new focus at once: a call
 into `GamePageModel.focus` from inside `GamePageModel`'s own `begin_reset_model`, a second `&mut` to an object whose
-method is still running. The page now refuses such a call (`focus` asserts it is not within its reset, which aborts the
-process from an FFI call), and on the branch as it was the page test aborted there ("the focus told from inside the
-page's own reset"). `GamePage.qml` now tells the focus from a zero-interval `Timer` restarted by each change, on the next turn of the
-event loop (the QML rules forbid `Qt.callLater`),
-and the test runs through. The page test's waits that guarded a value wait for it (the tiles holding the focus, the
+method is still running, and the page's help changed (and was heard) from inside that reset. The rule is kept where the
+state is: `focus` told during the page's own reset keeps what it was told and applies it as the reset ends (the help
+worked out once `end_reset_model` has returned); told at any other time it applies at once. `GamePage.qml` tells the
+focus directly as it moves, with no deferral of its own (an earlier zero-interval `Timer` standing in for the
+`Qt.callLater` the QML rules forbid, and an `assert!` in `focus` that aborted the process across the FFI, are gone).
+Held to: the page test watches `help` beside the model's rows (`Scene::watch_rows` now writes `reset:help` for a reset
+inside which a watched property of the model said it changed), and across the sections' turns and the two deletions
+every reset is told with no help inside it. Seeded on 2026-11-11: `focus` applying at once inside the reset; the page
+test fails on `reset:help`. The page test's waits that guarded a value wait for it (the tiles holding the focus, the
 actions changed, the help declaring X as Delete…, the question gone from the screen). The 500 ms after two steps of the
 television standard back to back waited for nothing: measured on 2026-11-11 with the model's changes recorded
 (`watch_rows`), across those 500 ms the page told no row and its actions did not change. Each step is saved and shown in

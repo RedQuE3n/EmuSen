@@ -355,7 +355,7 @@ pub struct GamePageModelRust {
     items: Vec<Item>,
     /// The focus as last told: an action's index or none, and the content's index.
     focus: (Option<usize>, usize),
-    /// Between begin_reset_model and end_reset_model, when nothing may call back in.
+    /// Between begin_reset_model and end_reset_model, when a focus told is kept, not applied.
     resetting: bool,
     /// The clients, opened on the first read and kept.
     source: Option<Arc<ClientSource>>,
@@ -567,6 +567,7 @@ impl qobject::GamePageModel {
                 self.as_mut().rust_mut().items = items;
                 self.as_mut().end_reset_model();
                 self.as_mut().rust_mut().resetting = false;
+                self.as_mut().helped();
             }
             // The same items with new words or marks: in place, so each delegate and the list's focus stay (EmuSen_Qt.md §7.8.1).
             ContentChange::InPlace(runs) => {
@@ -733,10 +734,12 @@ impl qobject::GamePageModel {
         }
     }
 
+    /// Told inside the page's own reset, the focus is kept and applied as the reset ends (EmuSen_Qt.md §7.8.1).
     pub fn focus(mut self: Pin<&mut Self>, action: i32, content: i32) {
-        assert!(!self.resetting, "the focus told from inside the page's own reset (EmuSen_Qt.md §7.8.1)");
         self.as_mut().rust_mut().focus = (usize::try_from(action).ok(), content.max(0) as usize);
-        self.helped();
+        if !self.resetting {
+            self.helped();
+        }
     }
 }
 

@@ -561,6 +561,7 @@ impl Scene<'_> {
     }
 
     /// What the watched model told since the last read, as "first-last" for each dataChanged and "reset" for each reset,
+    /// with ":property" after a reset for each of the model's `watch`ed properties that said it changed inside it,
     /// comma-separated in order; empty where nothing was told or it is not watched.
     pub fn rows_told(&mut self, object_name: &str) -> String {
         ffi::harness_rows_told(self.window(), &QString::from(object_name)).to_string()

@@ -5,8 +5,9 @@
 //! opens the gamelist and A on the game plays it through the ring; the chord pauses it under the Pause Card, and Back to Library is
 //! the gamelist at the same game, where the Home card's Continue resumes it and its Tools ▸ Cores and ▸ Themes open those
 //! screens and come back, the card, Cores and Themes held at the gate's five sizes over the theme; Start Console starts
-//! the client fixture's PlayStation by the pad, and the PlayStation's gamelist's Select menu starts it by the pointer,
-//! its screen owning the pad until Quit Game brings the theme back (EmuSen_Qt.md §7.9); Start is the Home card, Select
+//! the client fixture's PlayStation from the Home card by the pad and by the pointer, and the PlayStation's gamelist's
+//! Select menu starts it by the pointer, its picture found on a grab of the window and its pad's B and Start turning
+//! that picture blue, until Quit Game brings the theme back (EmuSen_Qt.md §7.9); Start is the Home card, Select
 //! the List card, Y the favourite; a theme that is not there gives way to the own look with a notice; nothing is logged. On Vulkan in a compositor of the test's own, as the
 //! acceptance runs. Run it with the ROM library bound read-only (`bwrap --ro-bind`), as the gates do.
 
@@ -254,6 +255,24 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     choose_row(&mut scene, "PlayStation");
     console_owns_the_pad(&mut scene, &sdl, &pad, "PlayStation");
     assert_eq!(scene.property("esde", "visible"), "false", "the theme hidden under the console");
+    pause(&mut scene, &sdl, &pad, "PlayStation (no disc)");
+    choose_row(&mut scene, "Leave");
+    wait_for(&mut scene, "pause", "title", "Leave", 1000);
+    choose_row(&mut scene, "Quit Game");
+    scene.wait(300);
+    choose_row(&mut scene, "Yes");
+    until(&mut scene, 10, "Quit Game closing the console to the theme", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Esde");
+
+    // Start Console by the pointer: the Home card's row clicked, then the PlayStation's; Quit Game to the theme again.
+    scene.pad(UiButton::Menu);
+    until(&mut scene, 5, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
+    let (x, y) = row_centre(&mut scene, "Start Console");
+    scene.click(x, y);
+    until(&mut scene, 5, "Start Console's page", |s| s.property("homeCardModel", "page") == emusen_qt_models::home_card::START_CONSOLE);
+    scene.wait(300);
+    let (x, y) = row_centre(&mut scene, "PlayStation");
+    scene.click(x, y);
+    console_owns_the_pad(&mut scene, &sdl, &pad, "PlayStation");
     pause(&mut scene, &sdl, &pad, "PlayStation (no disc)");
     choose_row(&mut scene, "Leave");
     wait_for(&mut scene, "pause", "title", "Leave", 1000);

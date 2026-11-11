@@ -45,8 +45,30 @@ pub fn row_centre(scene: &mut Scene<'_>, label: &str) -> (f64, f64) {
         .unwrap_or_else(|| panic!("no row reads {label}"))
 }
 
-/// The console's screen up, its picture drawn, the pad the console's: B and Start, pressed on the pad, reach it and
-/// not the program, which stays on the console's screen.
+/// Points over the middle of the game's screen, where the console's picture is drawn whatever its shape.
+fn picture_points(scene: &mut Scene<'_>) -> Vec<(f64, f64)> {
+    let tree = scene.tree();
+    let game = &tree.nodes[tree.find_named("game").expect("the game's screen") as usize];
+    let (cx, cy) = (game.x + game.w / 2.0, game.y + game.h / 2.0);
+    let (dx, dy) = (game.w * 0.15, game.h * 0.15);
+    [-1.0, -0.5, 0.0, 0.5, 1.0].iter().flat_map(|i| [-1.0, 0.0, 1.0].map(|j| (cx + i * dx, cy + j * dy))).collect()
+}
+
+/// The window's colours at `points`, as a grab of it reads them: red, green and blue.
+fn seen(scene: &mut Scene<'_>, points: &[(f64, f64)]) -> Vec<[u8; 3]> {
+    scene.colours_at(points).into_iter().flatten().map(|c| [c.r, c.g, c.b]).collect()
+}
+
+/// The blue the grab finds over the picture, on average: the client fixture's console core draws it full while a
+/// button of its pad is held, and none otherwise (emusen-native's test core under `AS_PLAYSTATION`).
+fn blue(scene: &mut Scene<'_>, points: &[(f64, f64)]) -> f64 {
+    let seen = seen(scene, points);
+    seen.iter().map(|c| f64::from(c[2])).sum::<f64>() / seen.len().max(1) as f64
+}
+
+/// The console's screen up, its picture drawn on the window as a grab reads it (more than one colour, not black), and
+/// the pad the console's: B and Start, each held on the pad, reach the console, whose picture turns blue while it is
+/// held and back when it is let go, and not the program, which stays on the console's screen unpaused.
 pub fn console_owns_the_pad(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, console: &str) {
     until(scene, 20, "the console running", |s| {
         let problem = s.property("session", "problem");
@@ -55,14 +77,20 @@ pub fn console_owns_the_pad(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, 
     });
     assert_eq!((scene.property("session", "console"), scene.property("session", "game")), (console.to_owned(), String::new()));
     until(scene, 20, "the first picture", |s| s.property("session", "firstPictureMs").parse::<f64>().is_ok_and(|ms| ms > 0.0));
+    let points = picture_points(scene);
+    until(scene, 10, "the console's picture on the window", |s| {
+        let seen = seen(s, &points);
+        seen.len() == points.len() && seen.iter().any(|c| c != &seen[0]) && seen.iter().any(|c| c.iter().map(|v| u32::from(*v)).sum::<u32>() > 60)
+    });
     until(scene, 5, "the console owning the pad", |s| s.pad_chord_only());
     scene.run_pad_clock();
     for control in [PadControl::East, PadControl::Start] {
         let button = emusen_qt_endymion::reading::sdl_button(control).unwrap();
+        let before = blue(scene, &points);
         sdl.press(pad, button, true);
-        scene.wait(120);
+        until(scene, 5, &format!("{control:?} held reaching the console's picture (blue {before:.0} before)"), |s| blue(s, &points) > before + 60.0);
         sdl.press(pad, button, false);
-        scene.wait(120);
+        until(scene, 5, &format!("{control:?} let go in the console's picture"), |s| blue(s, &points) < before + 20.0);
         assert_eq!((scene.property("screens", "shown"), scene.property("session", "paused")), ("Game".into(), "false".into()), "{control:?} is the console's");
     }
 }

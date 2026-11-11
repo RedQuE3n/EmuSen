@@ -157,6 +157,21 @@ pub const AS_PLAYSTATION: u64 = 1 << 42;
 fn system_id() -> &'static str {
     if faults() & AS_PLAYSTATION != 0 { "psx" } else { "test" }
 }
+
+/// The pad's buttons: A and Turbo, and under `AS_PLAYSTATION` B and Start besides, so a host's B and Start reach it.
+fn buttons() -> Vec<Button> {
+    let mut buttons = vec![Button { bit: 0, control: Some(Control::A), label: "A".into() }, Button { bit: 1, control: None, label: "Turbo".into() }];
+    if faults() & AS_PLAYSTATION != 0 {
+        buttons.extend([Button { bit: 2, control: Some(Control::B), label: "B".into() }, Button { bit: 3, control: Some(Control::Start), label: "Start".into() }]);
+    }
+    buttons
+}
+
+/// The picture's blue under `AS_PLAYSTATION`: full while any button of the first pad is held, so a host sees a press
+/// reach the console in the picture; none otherwise, and none for every other build.
+fn pressed_blue(pad: u32) -> u8 {
+    if faults() & AS_PLAYSTATION != 0 && pad != 0 { 0xFF } else { 0 }
+}
 /// The status of that fault, a core's own code that no text names.
 pub const STATUS_OLD_HOST: i32 = -1999;
 /// Not a fault, since 1.13: an image whose payload begins with `HELD_CHEATS` holds the cheats at the end of every
@@ -440,7 +455,8 @@ impl TestCore {
         let n = (self.width() * 4) as usize;
         let green = if self.settling > 0 { 0x80 } else { 0 };
         let late = if faults() & FAULT_STATE_LOST_LATE != 0 && self.frames >= STATE_LOST_FROM { self.held } else { 0 };
-        self.picture = (0..n).flat_map(|i| [(self.frames as u8).wrapping_add(i as u8).wrapping_add(late), green, 0, 255]).collect();
+        let blue = pressed_blue(self.pads[0]);
+        self.picture = (0..n).flat_map(|i| [(self.frames as u8).wrapping_add(i as u8).wrapping_add(late), green, blue, 255]).collect();
         self.raw = (self.raw_mask & 1 != 0).then(|| {
             let mut red: Vec<u8> = self.picture.chunks_exact(4).map(|p| p[0]).collect();
             red[0] = red[0].wrapping_add((faults() & FAULT_RAW_DISAGREES != 0) as u8);
@@ -550,7 +566,7 @@ impl Core for TestCore {
                     id: "test.pad".into(),
                     label: "Controller".into(),
                     ports: vec![0, 1],
-                    buttons: vec![Button { bit: 0, control: Some(Control::A), label: "A".into() }, Button { bit: 1, control: None, label: "Turbo".into() }],
+                    buttons: buttons(),
                     axes: vec![AxisControl { axis: Axis::LeftX as u32, control: Some(Axis::LeftX), trigger: false, label: "Stick".into() }],
                 }],
                 firmware: vec![Firmware {

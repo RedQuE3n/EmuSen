@@ -63,7 +63,7 @@ pub fn settings(theme: &Path, interface: &str) -> String {
 pub fn until(scene: &mut Scene<'_>, what: &str, ok: impl Fn(&mut Scene<'_>) -> bool) {
     let mut waited = 0;
     while !ok(scene) {
-        assert!(waited < 10_000, "{what} within 10 s");
+        assert!(waited < 10_000, "{what} within 10 s (the model's problem: {:?})", scene.property("esdeModel", "problem"));
         scene.wait(10);
         waited += 10;
     }

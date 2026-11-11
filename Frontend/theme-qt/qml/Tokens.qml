@@ -57,6 +57,11 @@ QtObject {
     readonly property real barWidth: Kit.Tokens.barWidth
     readonly property real tileScale: Kit.Tokens.tileScale
     readonly property real hoverBorder: Kit.Tokens.hoverBorder
+    readonly property color shadowColor: Kit.Tokens.shadowColor
+    readonly property real shadowOpacity: Kit.Tokens.shadowOpacity
+    readonly property real shadowOffsetX: Kit.Tokens.shadowOffsetX
+    readonly property real shadowOffsetY: Kit.Tokens.shadowOffsetY
+    readonly property real shadowBlur: Kit.Tokens.shadowBlur
     readonly property int instant: Kit.Tokens.instant
     readonly property int quick: Kit.Tokens.quick
     readonly property int enter: Kit.Tokens.enter

@@ -18,10 +18,10 @@ Kit.Frame {
     property string facts
     // Roles `label`, `value`, `button` (a pad button, or below zero for none) and `filled` (the screen's main action).
     property alias actionModel: actionList.model
-    // Roles `label`, `line` and `picture`.
-    property alias tileModel: tileList.model
-    // Roles `label`, `value`, `steps` and `opens`.
-    property alias rowModel: rowList.model
+    // Roles `label`, `line` and `picture`; the tiles' view holds it only while tiles are shown (EmuSen_Kit.md §7.58).
+    property var tileModel
+    // Roles `label`, `value`, `steps` and `opens`; the rows' view holds it only while rows are shown.
+    property var rowModel
     // Tiles where true, rows where false.
     property bool showsTiles: true
     // Words and a picture in place of tiles or rows, as a game's Overview shows them.
@@ -42,6 +42,37 @@ Kit.Frame {
     // Left or Right on a row that steps.
     signal rowStepped(int index, int by)
     controller.navigationShown: false
+    // Asked when a page opens, or opens on another game: the focus on the first action, as LunaP's page opens (EmuSen_Kit.md §7.58).
+    signal focusFirstAction()
+    onFocusFirstAction: {
+        actionList.currentIndex = 0
+        actionList.focus = true
+    }
+    // The content's kind changed with the focus in it: the focus to the list now shown, on its first item, or to the
+    // actions where words are shown, as LunaP's FillContent hands it on (EmuSen_Kit.md §7.58).
+    signal contentKindChanged()
+    onShowsTilesChanged: root.contentKindChanged()
+    onShowsTextChanged: root.contentKindChanged()
+    onContentKindChanged: {
+        if (!tileList.activeFocus && !rowList.activeFocus)
+            return
+        if (root.showsText) {
+            actionList.forceActiveFocus()
+            return
+        }
+        const list = root.showsTiles ? tileList : rowList
+        list.currentIndex = 0
+        list.forceActiveFocus()
+    }
+    // Each list lets its model go while the model resets, so no delegate is in flight across another section's content (EmuSen_Kit.md §7.58).
+    Kit.ResetGate {
+        id: tileGate
+        model: root.tileModel ?? null
+    }
+    Kit.ResetGate {
+        id: rowGate
+        model: root.rowModel ?? null
+    }
     Kit.PageLayout {
         id: places
         width: root.width
@@ -80,6 +111,14 @@ Kit.Frame {
                     GradientStop { position: 1; color: Kit.Tokens.overArtScrim }
                 }
             }
+        }
+        // The cover is raised over the hero's foot, so it casts §5.4's shadow (EmuSen_Kit.md §7.55).
+        Kit.RaisedShadow {
+            x: places.cover.x
+            y: places.cover.y
+            width: places.cover.width
+            height: places.cover.height
+            radius: Kit.Tokens.rowRadius
         }
         Rectangle {
             objectName: "pageCover"
@@ -221,6 +260,7 @@ Kit.Frame {
                 // A model that fills after the view was made leaves it with no current item, so no delegate would take the focus.
                 onCountChanged: if (currentIndex < 0 && count > 0) currentIndex = 0
                 objectName: "pageTiles"
+                model: root.showsTiles && !root.showsText && tileGate.settled ? root.tileModel : null
                 anchors.fill: parent
                 leftMargin: root.ringRoom
                 rightMargin: root.ringRoom
@@ -312,6 +352,7 @@ Kit.Frame {
                 // A model that fills after the view was made leaves it with no current item, so no delegate would take the focus.
                 onCountChanged: if (currentIndex < 0 && count > 0) currentIndex = 0
                 objectName: "pageRows"
+                model: !root.showsTiles && !root.showsText && rowGate.settled ? root.rowModel : null
                 anchors.fill: parent
                 clip: true
                 keyNavigationEnabled: true

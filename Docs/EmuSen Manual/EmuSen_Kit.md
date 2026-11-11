@@ -24,6 +24,7 @@ until stage 8 retires it, and is not edited for this; a change to a token is mad
 | Type, both forms | §5.2 | `tokens::type_scale(Form, text_scale)` |
 | Spacing, both forms | §5.3 | `tokens::spacing(Form)` |
 | Focus marks | §5.4 | `tokens::focus_marks(Form)` |
+| The raised shadow (added 2026-11-09, §7.55) | §5.4 | `tokens::raised_shadow(Form)` |
 | Motion durations, curves, reduced motion, the idle breath | §5.5, LunaP §206.5 | `motion::MotionToken`, `motion::Curve`, `motion::breath_opacity` |
 | Text scale 1 to 1.3, rounding to the half unit | LunaP §214.1 | `tokens::clamp_text_scale`, in `type_scale` |
 | The section heading's 28 and the 5% safe area | LunaP §206.2, §206.4 | `tokens::header_size`, `tokens::safe_area_of` |
@@ -67,8 +68,8 @@ scale flooring rather than rounding failed the LunaP §214.1 test.
 
 `emusen_kit_core::tokens`: `Form`, `Variant`, `ColourToken` (18 names), `Colour` (sRGB with straight alpha; `hex`,
 `hsl`, `over`, `contrast`), `colour`, `contrast_pairs`, `on_art_over`, `TypeScale`, `Spacing`, `Insets`, `FocusMarks`,
-`type_scale`, `spacing`, `focus_marks`, `header_size`, `safe_area_of`, `clamp_text_scale`, `MAX_TEXT_SCALE`,
-`SAFE_AREA_FRACTION`, `TEXT_FLOOR`, `GRAPHIC_FLOOR`. `emusen_kit_core::motion`: `MotionToken`, `Curve`, the breath's
+`Shadow`, `type_scale`, `spacing`, `focus_marks`, `raised_shadow`, `header_size`, `safe_area_of`, `clamp_text_scale`,
+`MAX_TEXT_SCALE`, `SAFE_AREA_FRACTION`, `TEXT_FLOOR`, `GRAPHIC_FLOOR`. `emusen_kit_core::motion`: `MotionToken`, `Curve`, the breath's
 constants, `breathes`, `breath_opacity`. The versioning rule is `EmuSen_Qt.md` §5's R: a `cargo public-api` baseline
 once the crate is consumed.
 
@@ -2555,8 +2556,8 @@ marks are piece G's, with the slots it steps.
 
 **Compared with the recordings** (read 2026-11-09), named: the title and facts are in the platform's sans serif, 60 and
 30 high where Barlow's are 53 and 27; the actions are the kit's action buttons, 16 inside their edges, where Mistress's
-cells are 8 to 21; the hero has no picture in the gallery, so its gradient is drawn over Void; the cover has no shadow
-yet (§5.4's raised shadow is not a token).
+cells are 8 to 21; the hero has no picture in the gallery, so its gradient is drawn over Void. The cover had no shadow
+until §5.4's raised shadow became a token (§7.55).
 
 ### 7.45 What the tool screen and the page frame are held to, and what is open (2026-11-09)
 
@@ -2595,7 +2596,7 @@ unchanged.
   recordings, and move the foot to the band (one more row on the tool screen) once stage 8 retires them, as one change
   in `tool::content_foot`.
 - **[routine]** A stepped action's ◂ ▸ and its stepping (Resume's slots) are piece G's.
-- **[routine]** The cover's raised shadow waits for a shadow token (§5.4).
+- The cover's raised shadow waited for a shadow token (§5.4); built 2026-11-09 (§7.55).
 
 **Found by Cores, the first screen on it** (stage 5, piece F; 2026-11-09; `EmuSen_Qt.md` §7.7.F). Three defects the
 gallery's still models could not show, each fixed in `ToolScreen.qml` with no change to the registry:
@@ -2882,6 +2883,178 @@ under `Testing/qmltypes` (`PadGlyphMarks.pair`, `paired`); the ES-DE oracle, whe
 views now span ES-DE's widths (CarAlt's Choose inks 1221–1237 as ES-DE's does). Measured on 2026-11-09 with two seeded
 faults, each reverted: the filled axis cut at one tip failed kit-core's test ("not the single control's glyph"), and
 `pairGlyph` left off in the ES-DE painter failed the oracle (the four system bars 22.3–40.9 units wider than ES-DE's).
+
+### 7.55 The raised shadow as a token, and `RaisedShadow` on both backends (stage 5, piece K; 2026-11-09)
+
+`EmuSen_Interface.md` §5.4 gives the interface one shadow: on a focused tile and on a card's open edge, offset 0,8, blur
+24, black at 50%. It was not a token, so each drawer wrote it as its own literals (`NoticeLayer`'s 0.5, 24 and 8,
+`MenuCard`'s offset of 8 and black), and the page frame's cover drew none (§7.44).
+
+**The token.** kit-core's `tokens::raised_shadow(Form)` gives a `Shadow` (`colour`, `opacity`, `offset_x`, `offset_y`,
+`blur`), the same in both forms' units, as the focus marks are. `Tokens` shows it as `shadowColor`, `shadowOpacity`,
+`shadowOffsetX`, `shadowOffsetY` and `shadowBlur`, declared after every earlier property so that no earlier index in the
+registry moves; the theme API's `Tokens` mirrors them (`CHANGELOG-theme-api.md`), as `theme-qt/tests/surface.rs`
+requires of every kit token. A minor under rule Q (`CHANGELOG-kit.md`): additions only, the module still 1.0.
+
+**Its drawers read it.** `NoticeLayer`'s `shadowOpacity` and `shadowRadius` default to `shadowOpacity` and `shadowBlur`,
+and its offset and colour are the tokens', so the notice draws what it drew. `MenuCard`'s offset and colour are the
+tokens'; its darkness of 90% and radius of 48 stay its own, being Mistress's panel shadow as measured on 2026-11-02
+(`EmuSen_Qt.md` §7.2), a different fact from §5.4's.
+
+**`RaisedShadow`** (qmldir) is the shadow a raised shape casts: an item with the shape's box and corner `radius`, placed
+under the shape. On the GPU it is `MultiEffect` over a hidden caster of the shape, with the tokens as its shadow's colour,
+opacity, offsets and `blurMax`, as the notice and the cards cast theirs. The software backend renders no shader effect
+(§7.35), so there Qt's own `Canvas` casts it: its 2D context paints the shape with the tokens as `shadowColor` (the
+colour at `shadowOpacity`), `shadowBlur`, `shadowOffsetX` and `shadowOffsetY`, through `QPainter`, into a canvas reaching
+twice the blur and the larger offset past the shape, so no part of the shadow is cut. Qt's mechanism rather than a render
+node of the kit's own (`EdgeMask`, §7.35), since this one draws as asked on the software backend. The shape itself is
+drawn in the shadow's colour under the raised item, which covers it. `qml-rules` takes `contextType` as a name, not words,
+as it takes `fragmentShader`.
+
+**The cover casts it.** `PageFrame` places a `RaisedShadow` at the cover's box with the cover's `rowRadius`, under the
+cover, so a game's page (`EmuSen_Qt.md` §7.8) shows its cover raised over the hero's foot.
+
+**Measured** (2026-11-09, the gallery on the software backend). Under the cover, 6 units below its foot and so 2 units
+inside the offset shape's foot, the light variant's frame (243) reads 176, 27.6% darker; the dark variant's (27, 27, 30)
+reads (20, 20, 22). A Gaussian of σ = blur ÷ 2 = 12, the canvas's definition of `shadowBlur`, predicts 0.5 · Φ(2 ⁄ 12) =
+28.3% at that point; the measurement is within 0.7 points of it. 6 units past the offset shape's foot it predicts
+0.5 · Φ(−6 ⁄ 12) = 15.4%, 243 to 205.5; the frame reads 205. 40 units beside the cover the frame is untouched. The
+GPU's `MultiEffect` blurs by its own mipmap levels up to `blurMax`, not a stated σ, so its falloff is not the canvas's;
+that difference between the backends is in Qt's two mechanisms, each given the same token. On Vulkan (the RX 6800,
+`qt-app`'s `acceptance.rs` on a game's page, 2026-11-09) the same point of the dark frame reads (18, 18, 20) against
+(27, 27, 30) beside the cover, 33% darker where the canvas gives 26%.
+
+**Held to:** kit-core's `tests/tokens.rs` (the raised shadow in both forms); kit-qt's `tests/column.rs` (the column's
+shadow is kit-core's in both forms) and `tests/qmltypes.rs` (the registry and the qmldir, committed); `theme-qt`'s
+`tests/surface.rs` (the mirror holds every kit token); `qml-rules`' `tests/rules.rs` (`contextType` a name); and
+kit-gallery's `tests/screens.rs`, which now also holds the cover's shadow in both page states, both variants and the four
+fit sizes: the frame under the cover at least an eighth darker than beside it, and 6 units past the shape lighter than
+that and still a sixteenth darker, so the shadow is soft, besides the gate it already ran; and `qt-app`'s
+`acceptance.rs`, which opens the first game's page from the grid on Vulkan and holds the same eighth (passed in 699 s).
+
+**Seeded faults**, each reverted, each caught: the cover's shadow hidden (the gallery, every page state); the canvas's
+blur set to none, a hard-edged shadow (the gallery's softness check, which the first form of the check, the darkening
+alone, let through, so the check was strengthened); the theme mirror missing `shadowBlur` (`theme-qt`'s surface test).
+
+**Rule Q and the shadow's colour** (2026-11-11). `shadowColor` is a colour property of the kit's `Tokens` after the
+palette's, so theme-check's rule-Q test, which held the registry's colours to `ColourToken::ALL` alone, failed from the
+day the token landed (seen 2026-11-11; theme-check is outside the workspace and no landing ran it). The name is kit-core's
+now, `Shadow::COLOUR_PROPERTY`, and the test holds the registry's colour tokens to the palette's and the shadow's, in the
+registry's order. A theme may override it as any colour token.
+
+### 7.58 The walk presses on through a stepped action; the page frame's focus; Qt Multimedia's two messages (stage 5, piece G2; 2026-11-09)
+
+**The walk and a stepped action.** The gate's walk (`emusen-qt-test`'s `walk_by`, §7.11) pressed each direction once
+from each element. On a game's page Right on Resume steps its state and keeps the focus, so the walk recorded Resume →
+Right as no move, and Favourite, which Right reaches from Resume only past its last state (LunaP's `MoveInActions`,
+§7.53), was named unreached by the pad: a finding piece G named for the tester rather than fixed. The walk now presses
+on as a player does: while a press leaves the focus where it was and the element declares a stepped value (the kit's
+`ActionButton.stepped`, read by its name), it presses the same direction again, at most 64 times, and records where the
+focus finally lands. An action that steps no further passes the press to the frame's navigation, so the walk ends at
+the neighbour; one that wraps would end at the bound, as before, standing still. What the presses stepped is the host's
+value, which the walk does not put back; a later press from the same action steps back the other way first. The
+program's game page test holds the five states with no finding named (`EmuSen_Qt.md` §7.8).
+
+**The page frame's focus** (`PageFrame`, two defects found by the program's game page test on 2026-11-09). (1) A page
+opened on another game kept the focus where the last page left it: closed from Details by Hide from Library, the next
+page opened on its Overview with the focus in the rows' list, hidden, so Down and Left and Right moved through a list
+no one saw (the tree read the focus on an invisible `MenuRow`). LunaP's page opens with the focus on its main action;
+the frame gains the signal `focusFirstAction()`, which the program's page emits when its game changes; and `contentKindChanged()`, emitted as the kind changes. (2) A section of another kind
+chosen with the focus in the content (tiles to rows, rows to tiles, either to words) left the focus in the list now
+hidden. LunaP's `FillContent` hands the focus on to the new content's first item, or to the actions where there is no
+item; the frame now does the same when `showsTiles` or `showsText` changes with the focus in a list. The program's test
+holds both: A on a state after Hide reaches the state, and the shoulder from a Media tile lands on Details' first row,
+shown.
+
+**Qt Multimedia's two messages** (`QT_INTERNAL`, §7.14), traced on 2026-11-09 under gdb on the theme-qt `qml` test, a
+scene that plays no clip:
+1. `WARNING: QApplication was not created in the main() thread.` is QtCore's, from `QCoreApplicationPrivate`'s
+   constructor when the thread making the application is not the one Qt holds as the main thread. A hardware watchpoint
+   on `QCoreApplicationPrivate::theMainThreadId` found it set before `main`, by `libQt6Multimedia.so.6`'s load-time
+   initializer (`SymbolsResolverImpl::instance`, which makes a `QLibrary`, a `QObject`, so Qt adopts the loading thread,
+   the process's main thread). The harness then makes the application on the thread libtest runs the test on. Every
+   test binary that links the kit (which links Qt Multimedia since §7.53) logs it once, whether or not it plays a clip;
+   the program makes its application on `main` and never does. Stopping it needs the application made on the process's
+   main thread: each Qt test target built with `harness = false` and a runner of its own, a change to every crate's
+   tests. Proposed to the tester; the line stays in `QT_INTERNAL` until then.
+2. `ThreadLocalRhiHolder::ensureRhi(...): No RHI backend. Using CPU conversion.` is Qt Multimedia's, logged once per
+   thread by `QVideoFrame::toImage` (the kit's `VideoFrames`) when no RHI can be made on the converting thread for a
+   conversion on the GPU; it then converts on the CPU, the path the software tier needs. The `offscreen` platform the
+   tests run on offers no OpenGL to make one. The frames are drawn (the program's test reads the clip's magenta). It is
+   Qt's own fallback, harmless, and left in `QT_INTERNAL`.
+
+**Each content view holds its model only while it is shown (2026-11-10).** `tileModel` and `rowModel` were aliases of
+the two lists' models, and a game's page gives both the same model, so the hidden list made delegates for every section
+too: seven media tiles as seven rows, the ones past its four visible rows made asynchronously in its cache buffer. A
+section change resets the model; a reset that lands while those are still being made has Qt cancel them by indices
+past the new count, and it logs `DelegateModel::cancel: index out range 6 4` (and 5), which failed qt-app's game page
+test in 2 of 14 runs. The tiles' list now takes `tileModel` while tiles are shown and the rows' list `rowModel` while
+rows are, null otherwise; the hidden list makes nothing. qt-app's game page test steps Media's scrolled tiles and
+Details' rows six times at 16 ms and holds Qt silent; with the aliases it logs the two lines on the first run.
+
+**Each content view lets its model go while the model resets (2026-11-11).** Holding the model only while shown
+still left the shown list exposed. The page resets its model to the next section's items and only then says the kind
+changed, so the outgoing list hears the reset first. Logged on 2026-11-11, States to Options: the tiles' count went from
+9 to 4 before `showsTiles` turned false and the list let the model go. Tiles past the view were still being made in
+Qt's default cache buffer, and the warning returned as `index out range 6 4` and `7 4` in 2 of 3 runs of the game page
+test. Each list now also holds its model only while that model is settled, as a `ResetGate` over it says (below): false
+from the model's `modelAboutToBeReset` to its `modelReset`. A list therefore
+lets the model go before the reset changes its count, while every index it is still making is in range, and takes the
+model back with the new content. No list is attached to the model across a reset, whichever section's content the
+reset brings and whatever order the host announces it in. The cache buffer stays Qt's default, so what is drawn while
+scrolling is unchanged. qt-app's game page test scrolls States' tiles and turns to Options and back three times at
+16 ms, then holds Qt silent. Before the change it logged `index out range 7 4` on its first run.
+
+**A model replaced in the middle of its reset (2026-11-11).** The first form kept each list's flag in QML: a
+`Connections` on the model cleared it on `modelAboutToBeReset` and set it on `modelReset`. A model replaced between the
+two never sent the second to the frame, whose `Connections` had moved to the new model, so that list kept no model for
+good; where the replacement was made from inside the old model's signal, the moved `Connections` still heard that signal
+after the change (measured: the frame handed the new model, its list holding none). The repair settled a replaced model
+with `Qt.callLater`, which §8.4's QML rules forbid, as they forbid the handlers' assignments (`qml-rules`: `callLater`,
+`function`); `qt_8_4_qml_rules_pass_the_kit_and_the_style` failed on those six lines.
+
+**`ResetGate`: the state out of QML (2026-11-11).** The state is now a kit type in Rust (`kit-qt/src/reset_gate.rs`)
+with one job: given a `model`, say whether it is `settled`. It connects to the model's `modelAboutToBeReset` (settled
+false) and `modelReset` (settled true) through the kit's one declaration of `QAbstractItemModel` (`item_model.rs`, which
+gains the two signals, declared private so nothing in the kit can send them). A model handed over drops both connections
+to the old one, so the old model's signals are no longer heard, even from inside the emission that caused the handover
+(Qt skips a connection dropped during an emission), and the gate is settled: Qt offers no way to ask a model whether it
+is in a reset, so a model handed over counts as not resetting. Each connection holds the gate's address and is owned by
+the gate, so it is dropped before the gate is; Qt drops it with the model. Nothing is in kit-core: the gate is three
+assignments, each held by the test below. `PageFrame` binds each list's model declaratively,
+`model: shown && tileGate.settled ? root.tileModel : null`, beside `Kit.ResetGate { model: root.tileModel ?? null }`,
+and keeps no state of its own; the QML rules and qmllint pass the kit with nothing excused.
+
+Held to: `kit-qt/tests/reset_gate.rs` over `kit-qt/tests/qml/ResetGateScene.qml`, a keyboard model relaid out (which
+resets it). The gate's `settled` changes twice across a reset; a second model handed over the moment the first one's
+reset begins leaves the gate settled; the first model's next reset is not heard and the second's is. Seeded on
+2026-11-11, each failing that test: the reset never unsettling the gate, the handover not settling it, and the old
+model's connections kept. kit-qt takes the harness (`emusen-qt-test`) as a dev-dependency for this test, as esde-qt,
+qt-models and kit-gallery do. `kit-gallery/tests/page_frame.rs` still hands the frame another model from inside
+the keyboard model's reset and reads the tile list showing it, and qt-app's game page test still scrolls States' tiles
+and turns to Options and back at 16 ms with Qt silent. Rule Q's registry was reviewed and copied: one addition,
+`ResetGate` with `model` and `settled`.
+
+**A model deleted while the gate holds it (2026-11-11).** The gate kept the model's raw address and handed it back
+through `model`; a model reached through a `property var` (as `PageFrame`'s `tileModel` and `rowModel` are) says nothing
+when it is deleted, so the gate went on holding and exposing a dangling address, and a model later made at the same
+address would have been taken for the old one by `setModel`'s same-model check and never connected. The gate now also
+hears the model's `destroyed` (declared beside the reset signals in `item_model.rs`, private in the same way): from
+then it holds no model, says so through `model`'s change signal, and is settled. The connections Qt drops with the
+model are let go when the next model is handed over. Held to: the same test, a second gate in the scene handed its
+model by assignment to the gate's `model`, with no binding; the model deleted, the gate holds none (`model === null`),
+and a model handed after is held and its reset heard. That model is made only after the deletion (a `Component`'s
+`createObject`), so the allocator may give it the deleted model's address, the case the fix is for; it cannot be made
+to. Measured on 2026-11-11, printing the addresses `setModel` was handed: the deleted model and the one made after it
+were 0x3490 bytes apart (each `KeyboardModel` takes about 13 KiB), and none of sixteen made one after another took the
+deleted one's address. So the same-address case is argued from the code (`forget` nulls the address the same-model
+check compares), and what the test holds of the fix is the gate holding none after the deletion, told through `model`'s
+change signal, and settled. Seeded on 2026-11-11: the `destroyed` connection left out, the
+gate still holding the deleted model. A binding does not show the fault: measured on 2026-11-11, a gate bound to the
+model's id, and one bound through a `property var` (as `PageFrame`'s `tileModel` is), each passed the test with the
+fault in place, because QML tells both of the deletion (the id's guard, and the guard a `var` property keeps on the
+object it holds) and the binding hands the gate null itself. So `PageFrame` was not exposed; the gate now guards itself
+for a model handed to it any other way.
 
 ### 7.60 The body face as bytes (stage 4, X2; 2026-11-09)
 

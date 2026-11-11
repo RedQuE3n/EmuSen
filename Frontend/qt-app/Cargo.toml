@@ -29,20 +29,22 @@ emusen-qt-play = { path = "../qt-play" }
 emusen-theme-host = { path = "../theme-host" }
 # The views a theme reads, which the program feeds into the theme's engine (src/theme.rs, EmuSen_Qt.md §3.5.2).
 emusen-theme-qt = { path = "../theme-qt" }
+# The ES-DE theme's view in place of the library's screens when the player chose one (EmuSen_Qt.md §4.15).
+emusen-esde-qt = { path = "../esde-qt" }
+# The kit's cues the ES-DE theme's navigation sounds fall back to (src/cues.rs).
+emusen-kit-core.workspace = true
 # The settings read before the window opens (Moonrise on or off), through the platform library.
 emusen-platform-client = { path = "../platform-client" }
 # The gates' in-process pad (gate_pad.rs), absent from every build without the feature (EmuSen_Qt.md §9.3.6).
 emusen-qt-test = { workspace = true, optional = true }
-emusen-kit-core = { workspace = true, optional = true }
 
 [features]
 # Off by default and never in a player's build: the pad the start-up gates press, fed from a FIFO.
-gate-pad = ["dep:emusen-qt-test", "dep:emusen-kit-core"]
+gate-pad = ["dep:emusen-qt-test"]
 
 [dev-dependencies]
 emusen-crystal-client = { path = "../crystal-client" }
 emusen-client-fixture = { path = "../client-fixture" }
-emusen-kit-core.workspace = true
 emusen-qt-test.workspace = true
 # The theme profile the reference package is held to, as theme-check holds every theme.
 emusen-qml-rules.workspace = true

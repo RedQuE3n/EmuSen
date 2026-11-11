@@ -33,7 +33,7 @@ fn qt_4_8_the_painter_names_no_client_and_no_runtime() {
     // emusen-esde-text, ES-DE's text rules, since 2026-11-09 (EmuSen_Qt.md §4.9.2).
     assert_eq!(
         names,
-        ["cxx", "cxx-qt", "cxx-qt-lib", "emusen-esde", "emusen-esde-text", "serde_json", "emusen-kit-qt", "emusen-kit-core"],
+        ["cxx", "cxx-qt", "cxx-qt-lib", "emusen-esde", "emusen-esde-text", "serde", "serde_json", "emusen-kit-qt", "emusen-kit-core"],
         "the painter's dependencies are its design's (EmuSen_Qt.md §4.8)"
     );
     for (crate_dir, manifest) in [

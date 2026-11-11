@@ -43,7 +43,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_LIBRARY_MAJOR 1u
-#define EMUSEN_LIBRARY_MINOR 3u
+#define EMUSEN_LIBRARY_MINOR 4u
 #define EMUSEN_LIBRARY_VERSION ((EMUSEN_LIBRARY_MAJOR << 16) | EMUSEN_LIBRARY_MINOR)
 
 /* ---- Statuses: the band -1140 to -1159 (EmuSen_Backend.md D12), beside the platform's shared codes ------------- */
@@ -126,6 +126,7 @@ int64_t emusen_library_identity(emusen_library *lib, const uint8_t *request, siz
  *   members {id}             paths
  *   collections_of {path}    ids
  *   crop {path}              {"left", "right", "top", "bottom"} or null
+ *   standard {path}          {"value": "ntsc" | "pal" | null (the game's own), "values": ["ntsc", "pal"]} (since 1.4)
  *   cover_lookup {path}      "Found", "Unknown", "NoArt" or null
  *   known_hash {path, bytes, modified}   the MD5 or null
  *   path_by_hash {md5}       a path or null
@@ -137,6 +138,7 @@ int64_t emusen_library_get(emusen_library *lib, const uint8_t *request, size_t l
  *   toggle_favourite {path}; set_favourite {path, favourite}; started {path, at}; played {path, seconds, max_hours}
  *   (the seconds recorded, or null where tracking is off or the launch ran past max_hours; 24 or more is no limit);
  *   set_play_stats {path, count, seconds}; set_crop {path, left, right, top, bottom}; clear_crop {path};
+ *   set_standard {path, standard: "ntsc" | "pal" | null, at} (since 1.4; another value is refused);
  *   save_edits {path, changes: {field: value | null}, at}; clear_edits {path} (the cover choice and the television
  *   standard kept); create_collection {name, at} (the id, or null for a name taken in any case);
  *   rename_collection {id, name} (true or false); delete_collection {id}; add_to_collection {id, path};

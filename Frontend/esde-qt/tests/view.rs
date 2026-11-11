@@ -44,7 +44,7 @@ fn settings(theme: &PathBuf) -> String {
 fn until(scene: &mut Scene<'_>, what: &str, ok: impl Fn(&mut Scene<'_>) -> bool) {
     let mut waited = 0;
     while !ok(scene) {
-        assert!(waited < 5000, "{what} within 5 s");
+        assert!(waited < 5000, "{what} within 5 s (the model's problem: {:?})", scene.property("esdeModel", "problem"));
         scene.wait(20);
         waited += 20;
     }

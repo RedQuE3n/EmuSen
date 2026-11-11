@@ -43,7 +43,8 @@ fn baked_shader() -> PathBuf {
         let status = Command::new(qsb).args(["--qt6", "-o"]).arg(&baked).arg(format!("shaders/{shader}")).status().expect("qsb runs");
         assert!(status.success(), "qsb failed on shaders/{shader}");
     }
-    let qrc = out.join("Shaders.qrc");
+    // Named for the crate: Qt names a resource's initialiser after its file, and the kit's Shaders.qrc links into the same program.
+    let qrc = out.join("EsdeShaders.qrc");
     let files: String = SHADERS.iter().map(|s| format!("    <file>{s}.qsb</file>\n")).collect();
     std::fs::write(&qrc, format!("<RCC>\n  <qresource prefix=\"/emusen/esde\">\n{files}  </qresource>\n</RCC>\n"))
         .expect("the shader's resource file");
@@ -56,7 +57,7 @@ fn main() {
         QmlModule::new("EmuSen.Esde").version(1, 0).qml_files(ESDE_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtQml.Models").depend("QtQuick.Pdf").depend("EmuSen.Kit"),
     )
     .qrc(shaders)
-    .files(["src/base.rs", "src/marks.rs", "src/model.rs", "src/lists.rs", "src/text.rs"])
+    .files(["src/marks.rs", "src/model.rs", "src/lists.rs", "src/text.rs"])
     .qt_module("Quick")
     .build()
     .export();

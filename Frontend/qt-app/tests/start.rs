@@ -1,6 +1,6 @@
 //! What the program reads before its window opens (EmuSen_Qt.md §7): where the platform library is, and Moonrise on or off.
 
-use emusen_qt::start::{chosen_theme, cover_stores_from, game_mode_from, guide_chords_from, platform_library, reduced_motion_from, splash_from, theme, LIBRARY_FILE};
+use emusen_qt::start::{chosen_theme, cover_stores_from, game_mode_from, guide_chords_from, navigation_sounds_from, platform_library, reduced_motion_from, splash_from, theme, LIBRARY_FILE};
 use serde_json::json;
 use std::path::Path;
 
@@ -19,6 +19,12 @@ fn moonrise_is_on_unless_the_player_turned_it_off() {
     assert!(splash_from(&json!({ "RomDirectory": "/r" })), "the key missing");
     assert!(!splash_from(&json!({ "StartupSplash": false })));
     assert!(splash_from(&json!({ "StartupSplash": true })));
+}
+
+#[test]
+fn the_navigation_sounds_are_on_unless_the_player_turned_them_off() {
+    assert!(navigation_sounds_from(&serde_json::Value::Null));
+    assert!(!navigation_sounds_from(&json!({ "NavigationSounds": false })));
 }
 
 #[test]

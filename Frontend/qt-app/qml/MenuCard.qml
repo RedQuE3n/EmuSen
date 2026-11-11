@@ -196,9 +196,9 @@ FocusScope {
                 source: caster
                 anchors.fill: caster
                 shadowEnabled: true
-                shadowColor: "#000000"
+                shadowColor: Kit.Tokens.shadowColor
                 shadowOpacity: root.shadowOpacity
-                shadowVerticalOffset: 8
+                shadowVerticalOffset: Kit.Tokens.shadowOffsetY
                 blurMax: root.shadowRadius
                 shadowBlur: 1
             }
@@ -335,9 +335,9 @@ FocusScope {
             height: root.height
             source: caster
             shadowEnabled: true
-            shadowColor: "#000000"
+            shadowColor: Kit.Tokens.shadowColor
             shadowOpacity: root.shadowOpacity
-            shadowVerticalOffset: 8
+            shadowVerticalOffset: Kit.Tokens.shadowOffsetY
             blurMax: root.shadowRadius
             shadowBlur: 1
         }

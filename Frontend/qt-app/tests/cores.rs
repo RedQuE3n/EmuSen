@@ -200,8 +200,27 @@ fn qt_7_7_cores_walks_into_mistress_s_five_recorded_states() {
         wait_for(&mut scene, "coresModel", "cardOpen", "false", 1000);
     }
     {
-        // Roll Back: PCEE2's page, the question, Yes, and the kept build put back.
+        // CoresUpdateAll: Select's List card, Update All…, its plan; Yes, and Beetle PSX's update runs to its end.
         let mut scene = open(&mut harness, "world.json");
+        scene.pad(UiButton::Options);
+        wait_for(&mut scene, "coresModel", "cardOpen", "true", 1000);
+        scene.wait(300);
+        let rows: serde_json::Value = serde_json::from_str(&scene.property("coresModel", "cardRows")).unwrap();
+        let at = rows.as_array().unwrap().iter().position(|r| r["label"] == "Update All…").expect("Update All… on the List card");
+        for _ in 0..at {
+            scene.pad(UiButton::Down);
+        }
+        scene.wait(100);
+        scene.pad(UiButton::Accept);
+        wait_for(&mut scene, "coresModel", "questionTitle", "Update Beetle PSX?", 1000);
+        scene.wait(400);
+        hold(&mut scene, "CoresUpdateAll", &none, named, &mut report);
+        scene.pad(UiButton::Down);
+        scene.pad(UiButton::Accept);
+        wait_for(&mut scene, "coresModel", "summary", "Installed Beetle PSX. Nothing downloaded runs until you approve it.", 3000);
+        wait_for(&mut scene, "coresModel", "busy", "false", 3000);
+
+        // Roll Back: PCEE2's page, the question, Yes, and the kept build put back.
         section(&mut scene, "PlayStation 2", UiButton::PageDown);
         down_to(&mut scene, "PCEE2");
         scene.pad(UiButton::Screensaver);

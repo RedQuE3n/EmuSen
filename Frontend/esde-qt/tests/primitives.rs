@@ -44,6 +44,10 @@ fn until_ready(scene: &mut Scene<'_>, names: &[&str]) {
     scene.wait(200);
 }
 
+fn own(scene: &mut Scene<'_>, name: &str) -> (String, String) {
+    (scene.property(name, "ownWidth"), scene.property(name, "ownHeight"))
+}
+
 fn level(c: &Option<Colour>) -> [i32; 3] {
     let c = c.expect("a colour read back");
     [c.r as i32, c.g as i32, c.b as i32]
@@ -69,9 +73,11 @@ fn the_primitives_draw_what_the_scene_asks_on_vulkan() {
     let white = dir.join("white.ppm");
     let strip = dir.join("strip.ppm");
     let checker = dir.join("checker.ppm");
+    let wide = dir.join("wide.ppm");
     ppm(&white, 64, 64, |_, _| [255, 255, 255]);
     ppm(&strip, 4, 1, |x, _| [[255, 0, 0], [0, 255, 0], [0, 0, 255], [200, 100, 50]][x]);
     ppm(&checker, 4, 4, |x, y| if (x + y) % 2 == 0 { [255; 3] } else { [0; 3] });
+    ppm(&wide, 512, 256, |_, _| [255, 255, 255]);
     let face = Path::new(env!("CARGO_MANIFEST_DIR")).join("../kit-qt/fonts/BarlowCondensed-Medium.ttf");
 
     let mut harness = Harness::new();
@@ -79,8 +85,9 @@ fn the_primitives_draw_what_the_scene_asks_on_vulkan() {
     assert!(scene.set_property("scene", "white", &url(&white)));
     assert!(scene.set_property("scene", "strip", &url(&strip)));
     assert!(scene.set_property("scene", "checker", &url(&checker)));
+    assert!(scene.set_property("scene", "wide", &url(&wide)));
     assert!(scene.set_property("scene", "face", &url(&face)));
-    until_ready(&mut scene, &["tinted", "halfTinted", "grey", "rounded", "ramp", "sharp", "soft"]);
+    until_ready(&mut scene, &["tinted", "halfTinted", "grey", "rounded", "ramp", "sharp", "soft", "small", "big", "covered"]);
     assert_eq!((scene.property("scene", "width"), scene.property("scene", "height")), ("1280".into(), "800".into()), "the window at its size");
     let _ = scene.grab(&common::compare_root().join("primitives-1280x800.png").to_string_lossy());
 
@@ -102,6 +109,10 @@ fn the_primitives_draw_what_the_scene_asks_on_vulkan() {
         (601.0, 1.0),   // 14 the star's corner
         (96.0, 227.0),  // 15 the rounded bottom edge's middle
         (191.0, 227.0), // 16 the rounded bottom-right corner
+        (764.0, 236.0), // 17 the contained wide picture's box above it
+        (764.0, 284.0), // 18 and the picture
+        (900.0, 150.0), // 19 the small picture contained, at its painted size in the middle of its box
+        (845.0, 150.0), // 20 and beside it
     ];
     let c = scene.colours_at(&points);
     near("white tinted FF8000", level(&c[0]), [255.0, 128.0, 0.0], 1.0);
@@ -122,6 +133,16 @@ fn the_primitives_draw_what_the_scene_asks_on_vulkan() {
     assert!(soft > 40 && soft < 215, "linear blends across the same edge ({soft}), so the nearest reading is the filter's");
     near("the star mark filled in its colour", level(&c[13]), [0.0, 255.0, 0.0], 0.0);
     near("and clear outside its points", level(&c[14]), [0.0; 3], 0.0);
+
+    // A raster is decoded no larger than its own size or its box, and drawn at the size Qt would paint it (EmuSen_Qt.md §4.8.1).
+    assert_eq!(own(&mut scene, "small"), ("64".into(), "64".into()), "a picture smaller than its box is not scaled up when decoded");
+    assert_eq!(own(&mut scene, "covered"), ("64".into(), "64".into()), "nor when covered");
+    assert_eq!(own(&mut scene, "big"), ("128".into(), "64".into()), "a larger one is decoded to fit the box, its aspect kept");
+    assert_eq!((scene.property("small", "paintedWidth"), scene.property("small", "paintedHeight")), ("100".into(), "100".into()));
+    near("the box above the contained picture is clear", level(&c[17]), [0.0; 3], 0.0);
+    near("and the picture fills its painted rows", level(&c[18]), [255.0; 3], 0.0);
+    near("the small picture is drawn at 100 x 100", level(&c[19]), [255.0; 3], 0.0);
+    near("and no wider", level(&c[20]), [0.0; 3], 0.0);
 
     // A text reports its extent once per change of it, the face loads once per path, and no face named sets the kit's body face.
     assert!(scene.set_property("scene", "reports", "0"));

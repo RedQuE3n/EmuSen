@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use cxx_qt::casting::Upcast;
 use cxx_qt::QObject;
-use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
+use cxx_qt_lib::{QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
 use emusen_kit_core::audit::{self, Edge, Fault, State};
 use emusen_kit_core::input::{ElementId, UiButton, WalkForm};
 use emusen_kit_core::tokens::{self, Colour, ColourToken, Variant};
@@ -38,6 +38,11 @@ pub const CLOCK: (&str, &str) = ("clock", "time");
 
 /// `PathView.StrictlyEnforceRange`: the current item held in the highlight range, so the offset follows the current index.
 const STRICTLY_ENFORCE_RANGE: f64 = 2.0;
+
+/// The kit's property an action declares a value Left and Right step with (`ActionButton.stepped`), and the most
+/// presses the walk makes on through one (EmuSen_Kit.md §7.58).
+const STEPPED: &str = "stepped";
+const STEPS_PRESSED: usize = 64;
 
 /// Messages Qt logs of its own accord that no code of ours causes, each with its reason (EmuSen_Kit.md §7.14).
 pub const QT_INTERNAL: [(&str, &str); 2] = [
@@ -104,9 +109,24 @@ impl Harness {
     /// `load`, with `prepare` given the window after it is made and before it is shown, as a host that adopts a device
     /// prepares its window (EmuSen_Kit.md §7.16).
     pub fn load_prepared(&mut self, url: &str, width: i32, height: i32, prepare: impl FnOnce(*mut QObject)) -> Scene<'_> {
+        self.load_initial(url, width, height, &QMap::default(), prepare)
+    }
+
+    /// `load_prepared`, the root's properties set to `initial` as it is made, as a program's start sets them with
+    /// QQmlApplicationEngine::setInitialProperties (EmuSen_Qt.md §4.15); later loads start from none.
+    pub fn load_initial(
+        &mut self,
+        url: &str,
+        width: i32,
+        height: i32,
+        initial: &QMap<QMapPair_QString_QVariant>,
+        prepare: impl FnOnce(*mut QObject),
+    ) -> Scene<'_> {
         self.created.store(0, Ordering::SeqCst);
-        let engine = self.engine.as_mut().expect("the QML engine");
-        engine.load(&QUrl::from(url));
+        let mut engine = self.engine.as_mut().expect("the QML engine");
+        engine.as_mut().set_initial_properties(initial);
+        engine.as_mut().load(&QUrl::from(url));
+        engine.as_mut().set_initial_properties(&QMap::default());
         let mut waited = 0;
         while self.created.load(Ordering::SeqCst) == 0 && waited < 3000 {
             ffi::harness_wait(20);
@@ -328,6 +348,15 @@ impl Scene<'_> {
         }
     }
 
+    /// Where a press from `from` landed: another element, the same one, or none of the tree's.
+    fn landing(&mut self, tree: &Tree, live: &[u64], from: u32) -> Landing {
+        match self.landed(tree, live) {
+            Some(to) if to == from => Landing::Same,
+            Some(to) => Landing::At(to),
+            None => Landing::Lost,
+        }
+    }
+
     pub fn focus_item(&mut self, tree: &Tree, index: u32) -> bool {
         let id = tree.id_of(index);
         let done = ffi::harness_focus_item(self.window(), id);
@@ -526,6 +555,23 @@ impl Scene<'_> {
         ffi::harness_watch(self.window(), &QString::from(object_name), &QString::from(property))
     }
 
+    /// Records a list model's changes from now, as a view hears them; false where the object is no item model.
+    pub fn watch_rows(&mut self, object_name: &str) -> bool {
+        ffi::harness_watch_rows(self.window(), &QString::from(object_name))
+    }
+
+    /// From now, each change signal of the watched model's own property written into `rows_told` as the property's name,
+    /// in order with the rows and resets; false where the model is not watched or the property has no change signal.
+    pub fn watch_order(&mut self, object_name: &str, property: &str) -> bool {
+        ffi::harness_watch_order(self.window(), &QString::from(object_name), &QString::from(property))
+    }
+
+    /// What the watched model told since the last read, as "first-last" for each dataChanged and "reset" for each reset,
+    /// comma-separated in order; empty where nothing was told or it is not watched.
+    pub fn rows_told(&mut self, object_name: &str) -> String {
+        ffi::harness_rows_told(self.window(), &QString::from(object_name)).to_string()
+    }
+
     /// How many times a watched property said it changed since `watch`; none where it is not watched.
     pub fn notified(&mut self, object_name: &str, property: &str) -> Option<usize> {
         usize::try_from(ffi::harness_notified(self.window(), &QString::from(object_name), &QString::from(property))).ok()
@@ -622,12 +668,15 @@ impl Scene<'_> {
                 self.wait(5);
                 press(self, button);
                 // A focus on no item the walk knows is found by reading the tree, which marks what it reads as read.
+                let mut to = self.landing(tree, &live, from);
+                // A stepped action keeps the focus while it steps its value; the pad presses on, as a player does, until it moves.
+                let mut more = STEPS_PRESSED;
+                while to == Landing::Same && more > 0 && ffi::harness_get(self.window(), id, &QString::from(STEPPED)) == 1.0 {
+                    press(self, button);
+                    to = self.landing(tree, &live, from);
+                    more -= 1;
+                }
                 let mut read = !live.contains(&ffi::harness_focus(self.window()));
-                let to = match self.landed(tree, &live) {
-                    Some(to) if to == from => Landing::Same,
-                    Some(to) => Landing::At(to),
-                    None => Landing::Lost,
-                };
                 steps.push(Step { from, button, to });
                 // Items made since the tree was read stand for the tree's own once found; a scope's focus is then given back to them.
                 for _ in 0..3 {

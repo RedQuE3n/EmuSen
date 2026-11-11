@@ -28,6 +28,24 @@ pub fn marks_for(row: &Core) -> Vec<Mark> {
     }
 }
 
+/// The mark Update All gives every core with an update.
+pub fn update_mark() -> Mark {
+    mark(UPDATE)
+}
+
+/// Every core offered an update, in the list's order: the rows Update All plans (EmuSen_Interface.md §15.5).
+pub fn with_updates(rows: &[Core]) -> Vec<&Core> {
+    rows.iter().filter(|r| marks_for(r).iter().any(|m| m.key == UPDATE)).collect()
+}
+
+/// Update All's title: one core by its name, as a plan of one update is titled, several by their count.
+pub fn update_all_title(rows: &[&Core]) -> String {
+    match rows {
+        [row] => format!("Update {}?", row.name),
+        _ => format!("Update {} cores?", rows.len()),
+    }
+}
+
 /// The marked rows, each with its mark.
 pub type Marked<'a> = [(&'a Core, &'a Mark)];
 

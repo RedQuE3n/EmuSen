@@ -20,7 +20,8 @@ emusen-esde = { path = "../esde" }
 emusen-esde-text = { path = "../esde-text" }
 # The system's FreeType loaded at run time for the help icon's hinted reference glyph, the library ES-DE draws with (EmuSen_Qt.md §4.12.1).
 libloading = "0.8"
-# The library's texts (EmuSen_Qt.md §4.6) read as JSON.
+# The library's texts (EmuSen_Qt.md §4.6) read as JSON, the shelves straight into rows.
+serde.workspace = true
 serde_json.workspace = true
 # The kit's QML module (the body face, the help bar, the pad router) and its conversions to Qt's types.
 emusen-kit-qt.workspace = true

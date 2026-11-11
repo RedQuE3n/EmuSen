@@ -276,7 +276,7 @@ fn the_list_card_filters_and_sorts_and_the_details_page_holds_the_raw_facts() {
     let (mut tool, _) = opened(WORLD);
     tool.list();
     let labels: Vec<String> = tool.card().unwrap().2.into_iter().map(|r| format!("{} {}", r.label, r.value)).collect();
-    assert_eq!(labels, ["Search ", "Filter All", "Sort Console", "Check for Updates ", "Verify "]);
+    assert_eq!(labels, ["Search ", "Filter All", "Sort Console", "Check for Updates ", "Update All… ", "Verify "]);
     tool.card_step(1, 4);
     assert_eq!(tool.card().unwrap().2[1].value, "To approve");
     let names: Vec<String> = cells(&tool).into_iter().map(|c| c[0].clone()).collect();
@@ -408,4 +408,69 @@ fn roll_back_asks_then_puts_the_kept_build_back_through_the_core_tool() {
     assert_eq!(tool.source.notice(), Some("Rolled back PCEE2 to the build of 24 October 2026."));
     let pcee2 = tool.rows().into_iter().find(|i| i.cells[0].words == "PCEE2").unwrap();
     assert_eq!(pcee2.cells[2].words, "Rolled back");
+}
+
+#[test]
+fn update_all_asks_the_plan_for_every_core_with_an_update_then_runs_the_core_tool_s_update() {
+    // The recorded world gives Beetle PSX an update; this one gives Snes9x one too.
+    let mut world: Value = serde_json::from_str(&std::fs::read_to_string(WORLD).unwrap()).unwrap();
+    for e in world["jobs"]["core-ls"]["events"].as_array_mut().unwrap() {
+        if e["stem"] == "snes9x" {
+            e["state"] = "update".into();
+        }
+    }
+    let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("cores-two-updates.json");
+    std::fs::write(&path, world.to_string()).unwrap();
+    let (mut tool, _, started) = opened_recording(path.to_str().unwrap());
+    tool.list();
+    let labels: Vec<String> = tool.card().unwrap().2.into_iter().map(|r| r.label).collect();
+    assert_eq!(labels, ["Search", "Filter", "Sort", "Check for Updates", "Update All…", "Verify"]);
+    tool.card_choose(4);
+    let q = tool.question().unwrap().clone();
+    assert_eq!(q.title, "Update 2 cores?");
+    assert_eq!(
+        q.sentences,
+        [
+            "Update Snes9x, Beetle PSX; the build installed now is kept for Roll Back.",
+            "Each core is checked before it is kept, and nothing downloaded runs until you approve it.",
+        ]
+    );
+    assert_eq!((q.choices.as_slice(), q.back), (["No".to_owned(), "Yes".to_owned()].as_slice(), Some(0)));
+    tool.answer(0);
+    assert!(!started.lock().unwrap().iter().any(|r| r["op"] == "core-update"), "No runs nothing");
+
+    tool.list();
+    tool.card_choose(4);
+    tool.answer(1);
+    let updates: Vec<Value> = started.lock().unwrap().iter().filter(|r| r["op"] == "core-update").cloned().collect();
+    assert_eq!(updates, [serde_json::json!({ "op": "core-update", "cores": ["snes9x", "mednafen_psx"] })], "one job naming both");
+    let bar = tool.bar();
+    assert_eq!(bar.line.words, "Updating Snes9x, Beetle PSX…");
+    assert_eq!(bar.progress, Some(0.0));
+    let beetle = tool.rows().into_iter().find(|i| i.cells[0].words == "Beetle PSX").unwrap();
+    assert_eq!(beetle.cells[2].words, "Updating…");
+    assert_eq!(help(&tool), ["Back", "Console", "List"], "nothing acts while it runs");
+    tool.poll();
+    assert_eq!(tool.source.notice(), Some("Installed Beetle PSX. Nothing downloaded runs until you approve it."));
+    for _ in 0..8 {
+        tool.poll();
+    }
+    assert!(!tool.source.running());
+}
+
+#[test]
+fn update_all_names_one_core_by_its_name_and_is_not_offered_with_none() {
+    let (mut tool, _) = opened(WORLD);
+    tool.list();
+    let at = tool.card().unwrap().2.iter().position(|r| r.label == "Update All…").expect("offered with an update");
+    tool.card_choose(at);
+    let q = tool.question().unwrap().clone();
+    assert_eq!(q.title, "Update Beetle PSX?");
+    assert_eq!(q.sentences[0], "Update Beetle PSX; the build installed now is kept for Roll Back.");
+    tool.answer(0);
+
+    let (mut tool, _) = opened(NO_CATALOGUE);
+    tool.list();
+    let labels: Vec<String> = tool.card().unwrap().2.into_iter().map(|r| r.label).collect();
+    assert_eq!(labels, ["Search", "Filter", "Sort", "Check for Updates", "Verify"]);
 }

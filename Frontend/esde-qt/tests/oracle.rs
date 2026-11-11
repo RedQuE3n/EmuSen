@@ -104,7 +104,14 @@ fn captured_picks() -> BTreeMap<(String, String, i32), Vec<(String, String)>> {
 /// (`selector::game_for`) on the systems the painter builds from the same texts, so the oracle's state is the capture's.
 fn seed_for(settings: &str, texts: &(String, String, String), w: i32, h: i32, picks: &[(String, String)]) -> u64 {
     use emusen_esde_qt::{painter, shelves};
-    let systems = painter::systems(&painter::ThemeCache::default(), &shelves::settings(settings), shelves::shelves(&texts.0, &texts.1), &shelves::presence(&texts.2), w, h);
+    let systems = painter::systems(
+        &painter::ThemeCache::default(),
+        &shelves::settings(settings).expect("the settings read"),
+        shelves::shelves(&texts.0, &texts.1).expect("the shelves read"),
+        &shelves::presence(&texts.2).expect("the presence reads"),
+        w,
+        h,
+    );
     let system = &systems[0];
     let view = system.theme.view("system");
     (1..1_000_000)

@@ -18,3 +18,7 @@ emusen-kit-core.workspace = true
 
 [build-dependencies]
 cxx-qt-build.workspace = true
+
+[dev-dependencies]
+# The headless harness, for the kit's types that are tested in a scene (tests/reset_gate.rs).
+emusen-qt-test.workspace = true

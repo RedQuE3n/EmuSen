@@ -26,6 +26,8 @@ fn kit_7_2_metrics_follow_the_form_and_the_text_scale() {
     assert_eq!(big.header, 28.0);
     assert_eq!(desktop.header, desktop.type_scale.strong);
     assert_eq!(big.focus, tokens::focus_marks(Form::BigScreen));
+    assert_eq!(big.shadow, tokens::raised_shadow(Form::BigScreen));
+    assert_eq!(desktop.shadow, tokens::raised_shadow(Form::Desktop));
     let scaled = Column::compute(Form::BigScreen, Variant::Dark, 1.3, false);
     assert_eq!(scaled.type_scale, tokens::type_scale(Form::BigScreen, 1.3));
     assert!(scaled.type_scale.row > big.type_scale.row);

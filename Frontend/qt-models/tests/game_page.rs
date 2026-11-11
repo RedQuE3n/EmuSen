@@ -29,7 +29,6 @@ fn read() -> Read {
         ],
         cheats: Some((1, 3)),
         crop: Some(false),
-        package: "Not a package".into(),
         ..Read::default()
     }
 }
@@ -160,4 +159,61 @@ fn qt_7_8_the_page_opens_over_the_grid_home_and_the_cards_and_b_returns() {
     assert_eq!(page_step(true, Shown::Esde, &Ask::Act("home".into())), Some(Shown::Esde));
     assert_eq!(page_step(false, Shown::Grid, &Ask::Act("home".into())), Some(Shown::Home));
     assert_eq!(page_step(false, Shown::Grid, &Ask::Play), Some(Shown::Game));
+}
+
+#[test]
+fn qt_7_8_g2_the_standard_the_package_the_players_screenshots_scrape_and_open_folder_are_mistresss() {
+    // The television standard: the game's own first, then each standard by its name, stepped, wrapping, and saved.
+    let mut r = read();
+    r.standards = Some(standard_choices(&["ntsc".into(), "pal".into()]));
+    r.standard = Some("pal".into());
+    r.package = Package::Linked;
+    r.layers = 2;
+    let mut page = GamePage::new(r, NOW);
+    page.choose_section(2);
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    let words: Vec<String> = rows.iter().map(|r| format!("{} | {}", r.label, r.value)).collect();
+    assert_eq!(
+        words,
+        ["Engine | Venus (default)", "Cheats | 1 of 3 on", "Display crop | Console's", "Television standard | PAL", "Package | Linked · 2 layers"]
+    );
+    assert!(rows[3].steps);
+    assert_eq!(page.step_row(3, 1), Outcome::Changed(Change::Standard(None)), "PAL wraps to the game's own");
+    assert_eq!(page.step_row(3, -1), Outcome::Changed(Change::Standard(Some("ntsc".into()))));
+    // A step saved is the page's at once, so the next steps from it before the read that follows the save is back.
+    page.changed(&Change::Standard(None));
+    assert_eq!(page.step_row(3, -1), Outcome::Changed(Change::Standard(Some("pal".into()))), "back from the game's own to PAL");
+    page.changed(&Change::Standard(Some("pal".into())));
+    page.changed(&Change::Favourite);
+    assert!(page.read.favourite != read().favourite, "the heart turned");
+    assert_eq!(page.help(None, 3), Screen::GamePageValue);
+    // The package's every state, as Mistress words it.
+    assert_eq!(package_words(Package::None, 0), "Not a package");
+    assert_eq!(package_words(Package::SelfContained, 1), "Self-contained · 1 layer");
+    assert_eq!(package_words(Package::Changed, 0), "Changed: plays as a plain game");
+    // The player's own screenshots first, numbered, then the scraper's pictures.
+    let mut r = read();
+    r.media = vec![
+        Media { path: "/s/b.png".into(), kind: MediaKind::Taken },
+        Media { path: "/s/a.png".into(), kind: MediaKind::Taken },
+        Media { path: "/m/shot.png".into(), kind: MediaKind::Screenshot },
+    ];
+    r.scraping = true;
+    let mut page = GamePage::new(r, NOW);
+    page.choose_section(3);
+    let Content::Tiles(tiles) = page.content() else { panic!("tiles") };
+    assert_eq!(tiles.iter().map(|t| t.label.as_str()).collect::<Vec<_>>(), ["Screenshot 1", "Screenshot 2", "Scraped screenshot"]);
+    assert_eq!(tiles[0].picture, "/s/b.png");
+    // A run going: Scrape This Game says so and waits; Open Folder is the program's folder action.
+    page.choose_section(4);
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    assert_eq!(rows[0].value, "A run is going");
+    assert_eq!(page.choose_row(0), Outcome::Nothing);
+    assert_eq!(page.choose_row(3), Outcome::OpenFolder);
+    // A state saved from another copy asks first, Cancel focused and B answering it.
+    let q = other_copy_question("Cobalt Harbor (Europe).sfc", "Cobalt Harbor.sfc");
+    assert_eq!(q.title, "A Different Copy of the Game");
+    assert_eq!(q.choices, ["Cancel", "Load Anyway"]);
+    assert_eq!(q.back, Some(0));
+    assert!(q.sentences[0].starts_with("This state was saved from Cobalt Harbor (Europe).sfc, whose contents are not those of Cobalt Harbor.sfc."));
 }

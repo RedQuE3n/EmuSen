@@ -1,7 +1,7 @@
 //! A game's page as plain Rust (EmuSen_Qt.md §7.8; EmuSen_Interface.md §2.5, §4 screen 3): its facts, its actions, its
 //! five sections and what each press does, over one read of the game a source answers. No Qt; the bridge,
 //! `game_page_model.rs`, only puts it on Qt. The deeper pages (Cheats, Package, Edit Details, Cover Art, Scrape This
-//! Game, the viewer) are doors the page names and a later piece opens.
+//! Game, the viewer) are doors the page names and a later piece opens; Open Folder is the program's folder action.
 
 use crate::help::Screen;
 use crate::question::Question;
@@ -15,6 +15,11 @@ pub trait GamePageSource: Send + Sync {
     fn read(&self, game: &GameFile) -> Result<Read, String>;
     /// One change, saved at once.
     fn change(&self, game: &GameFile, change: &Change) -> Result<(), String>;
+    /// The file a state was saved from where its contents are not the game's, as the runtime recorded the state; none
+    /// where they are the same or either is not known (Mistress's `SameGameOrConfirmedAsync`).
+    fn other_copy(&self, _game: &GameFile, _state: &str) -> Result<Option<String>, String> {
+        Ok(None)
+    }
 }
 
 /// A change the page makes to the game's records.
@@ -26,6 +31,8 @@ pub enum Change {
     Engine(Option<String>),
     /// The controller profile the game starts with; none is the console's.
     Profile(Option<String>),
+    /// The television standard the game's picture is drawn for; none follows the game.
+    Standard(Option<String>),
     /// A saved state deleted, by its file, with its picture and its record.
     DeleteState(String),
     /// The game hidden from every library view; its file is not touched.
@@ -59,6 +66,8 @@ pub struct State {
 /// What a picture or clip of the game is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MediaKind {
+    /// The player's own screenshot, taken while playing.
+    Taken,
     Screenshot,
     TitleScreen,
     Clip,
@@ -66,7 +75,7 @@ pub enum MediaKind {
     Fanart,
 }
 
-/// One picture or clip the scraper fetched, by its file.
+/// One picture or clip of the game, the player's own or the scraper's, by its file.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Media {
     pub path: String,
@@ -107,8 +116,59 @@ pub struct Read {
     pub cheats: Option<(usize, usize)>,
     /// Whether the game has a crop of its own; none where its console has no overscan to crop.
     pub crop: Option<bool>,
-    /// The package's mode in words.
-    pub package: String,
+    /// The television standards, the game's own first (its value none); none where its console drove no television.
+    pub standards: Option<Vec<Choice>>,
+    pub standard: Option<String>,
+    /// The game's package, and the patches layered on it.
+    pub package: Package,
+    pub layers: usize,
+    /// Whether a scrape run is going, which Scrape This Game waits for.
+    pub scraping: bool,
+}
+
+/// What the game's package is (Mistress's `IGamePageHost.Package`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Package {
+    #[default]
+    None,
+    /// Linked to the game where it is in the library.
+    Linked,
+    /// The game kept in the package.
+    SelfContained,
+    /// A package claims the game, but the game's file is not as it recorded, so the game plays as a plain one.
+    Changed,
+}
+
+/// The standards' row's values: the game's own, then each standard by its name, the value in capitals ("ntsc", NTSC).
+pub fn standard_choices(values: &[String]) -> Vec<Choice> {
+    std::iter::once(Choice { value: None, text: "The game's".into() })
+        .chain(values.iter().map(|v| Choice { value: Some(v.clone()), text: v.to_uppercase() }))
+        .collect()
+}
+
+/// The package row's words: its mode, and its layers where it has any.
+pub fn package_words(package: Package, layers: usize) -> String {
+    let mode = match package {
+        Package::None => return "Not a package".into(),
+        Package::Linked => "Linked",
+        Package::SelfContained => "Self-contained",
+        Package::Changed => "Changed: plays as a plain game",
+    };
+    match layers {
+        0 => mode.into(),
+        1 => format!("{mode} {BETWEEN} 1 layer"),
+        n => format!("{mode} {BETWEEN} {n} layers"),
+    }
+}
+
+/// Asked before a state saved from another copy of the game is loaded into it (Mistress's `SameGameOrConfirmedAsync`).
+pub fn other_copy_question(saved_from: &str, file: &str) -> Question {
+    let sentence = format!(
+        "This state was saved from {saved_from}, whose contents are not those of {file}. A state loaded into another version of a game can crash it. Load it anyway?"
+    );
+    let mut q = crate::question::confirm("A Different Copy of the Game", &[sentence.as_str()]);
+    q.choices = vec!["Cancel".into(), "Load Anyway".into()];
+    q
 }
 
 /// The page's five sections, in the strip's order.
@@ -149,6 +209,7 @@ pub const EDIT: &str = "edit";
 pub const COVER: &str = "cover";
 pub const FOLDER: &str = "folder";
 pub const HIDE: &str = "hide";
+pub const STANDARD: &str = "standard";
 
 pub const NO_DESCRIPTION: &str = "No description yet. Details ▸ Scrape This Game fetches one, and Edit Details writes one.";
 
@@ -212,6 +273,8 @@ pub enum Outcome {
     Play(Option<String>),
     /// A door to a later piece's page, by its row's key.
     Door(&'static str),
+    /// The folder holding the game's file, shown in the system's file manager.
+    OpenFolder,
     /// A question first; the change is made when its second answer, Yes, is chosen.
     Ask(Question, Change),
 }
@@ -405,16 +468,21 @@ impl GamePage {
     }
 
     fn media_tiles(&self) -> Vec<Tile> {
-        let label = |k: MediaKind| match k {
-            MediaKind::Screenshot => "Scraped screenshot",
-            MediaKind::TitleScreen => "Title screen",
-            MediaKind::Clip => "Clip",
-            MediaKind::Marquee => "Marquee",
-            MediaKind::Fanart => "Fan art",
-        };
         let r = &self.read;
+        let mut taken = 0;
+        let mut label = |k: MediaKind| match k {
+            MediaKind::Taken => {
+                taken += 1;
+                format!("Screenshot {taken}")
+            }
+            MediaKind::Screenshot => "Scraped screenshot".into(),
+            MediaKind::TitleScreen => "Title screen".into(),
+            MediaKind::Clip => "Clip".into(),
+            MediaKind::Marquee => "Marquee".into(),
+            MediaKind::Fanart => "Fan art".into(),
+        };
         let picture = |m: &Media| if m.kind == MediaKind::Clip { r.hero.clone() } else { m.path.clone() };
-        r.media.iter().map(|m| Tile { key: m.path.clone(), label: label(m.kind).into(), line: String::new(), picture: picture(m), marked: false }).collect()
+        r.media.iter().map(|m| Tile { key: m.path.clone(), label: label(m.kind), line: String::new(), picture: picture(m), marked: false }).collect()
     }
 
     fn text_of(choices: &[Choice], value: &Option<String>) -> String {
@@ -464,7 +532,18 @@ impl GamePage {
                 sentence: "How much of the picture's edge is cut away for this game.",
             });
         }
-        rows.push(Row { key: PACKAGE, label: "Package", value: r.package.clone(), steps: false, opens: true, sentence: "The game's package and its layers, from Packages." });
+        if let Some(standards) = &r.standards {
+            rows.push(Row {
+                key: STANDARD,
+                label: "Television standard",
+                value: Self::text_of(standards, &r.standard),
+                steps: true,
+                opens: false,
+                sentence: "The television the picture is drawn for: the game's own, NTSC or PAL.",
+            });
+        }
+        let package = package_words(r.package, r.layers);
+        rows.push(Row { key: PACKAGE, label: "Package", value: package, steps: false, opens: true, sentence: "The game's package and its layers, from Packages." });
         rows
     }
 
@@ -472,7 +551,7 @@ impl GamePage {
         let cover = if self.read.cover.is_empty() { "Generated" } else { "Its own" };
         let row = |key, label, value: &str, opens| Row { key, label, value: value.to_owned(), steps: false, opens, sentence: "" };
         vec![
-            row(SCRAPE, "Scrape This Game", "…", false),
+            row(SCRAPE, "Scrape This Game", if self.read.scraping { "A run is going" } else { "…" }, false),
             row(EDIT, "Edit Details", "", true),
             row(COVER, "Cover art", cover, true),
             row(FOLDER, "Open Folder", "", false),
@@ -491,6 +570,9 @@ impl GamePage {
                 let sentence = "It leaves every library view until Settings lists hidden games again. Its file is not touched.";
                 Outcome::Ask(ask(&format!("Hide {}?", self.read.title), sentence, "Hide"), Change::Hide)
             }
+            // A run going holds Scrape This Game until it ends, as Mistress's row is disabled.
+            Some(row) if row.key == SCRAPE && self.read.scraping => Outcome::Nothing,
+            Some(row) if row.key == FOLDER => Outcome::OpenFolder,
             Some(row) if !row.steps => Outcome::Door(row.key),
             _ => Outcome::Nothing,
         }
@@ -509,7 +591,20 @@ impl GamePage {
         Outcome::Ask(ask(&format!("Delete {slot}?"), &sentence, "Delete"), Change::DeleteState(state.path.clone()))
     }
 
-    /// Left or Right on a row: the engine or the profile stepped, wrapping, and saved.
+    /// A change saved, taken into the page's facts at once, so the next step steps from it rather than from the facts read
+    /// before it; the read that follows the save confirms them (EmuSen_Qt.md §7.8).
+    pub fn changed(&mut self, change: &Change) {
+        let r = &mut self.read;
+        match change {
+            Change::Favourite => r.favourite = !r.favourite,
+            Change::Engine(v) => r.engine = v.clone(),
+            Change::Profile(v) => r.profile = v.clone(),
+            Change::Standard(v) => r.standard = v.clone(),
+            Change::DeleteState(_) | Change::Hide => {}
+        }
+    }
+
+    /// Left or Right on a row: the engine, the profile or the standard stepped, wrapping, and saved.
     pub fn step_row(&self, index: usize, by: i32) -> Outcome {
         let Content::Rows(rows) = self.content() else { return Outcome::Nothing };
         let step = |choices: &[Choice], value: &Option<String>| {
@@ -521,6 +616,10 @@ impl GamePage {
             Some("engine") => Outcome::Changed(Change::Engine(step(&self.read.engines, &self.read.engine))),
             Some("profile") => match &self.read.profiles {
                 Some(p) => Outcome::Changed(Change::Profile(step(p, &self.read.profile))),
+                None => Outcome::Nothing,
+            },
+            Some(STANDARD) => match &self.read.standards {
+                Some(s) => Outcome::Changed(Change::Standard(step(s, &self.read.standard))),
                 None => Outcome::Nothing,
             },
             _ => Outcome::Nothing,

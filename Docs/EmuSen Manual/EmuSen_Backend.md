@@ -5841,7 +5841,10 @@ folders, `EmuSen_Qt.md` §4.6) each has `"folder"`: the folders between the cons
 the file, '/'-separated, as ES-DE's `ROMs/<system>/<folder>/<file>` reads them, from Galaxia's `game_folders::of`
 against the first root that holds the game; `""` at the console folder's top and for a package's game, which is one
 entry at its console's top (`EmuSen_GamePackages.md` §3.6). A 1.2 client skips the key, as the header's rule has it;
-`tests/library.rs` reads the answer with 1.2's shapes.
+`tests/library.rs` reads the answer with 1.2's shapes. Since 1.4 (2026-11-09, for a game's page, `EmuSen_Qt.md` §7.8) a get
+`standard` and a change `set_standard`: the television standard chosen for a game's picture, the `tvstandard` edit
+(`records::TELEVISION_STANDARD`), its values owned by `records::STANDARDS`, so a front end names none of them; the
+editor's Clear keeps it, as before. `tests/library.rs` holds the read, the change, a refused value and the Clear.
 
 **`identity`** answers what a dump is: `{"path": …, "systems": [...]?, "record": true}` gives `{"path": …, "bytes":
 40976, "modified": 638000000000000000, "md5": "…", "crc32": "…", "system": "nes", "cached": true}`. `modified` is
@@ -5860,13 +5863,15 @@ which is what Mistress's `IdentifyLater` does today. The hashing runs outside th
 | `edits`, `all_edits` | `path`; — | `{field: value}`; by path |
 | `collections`, `members`, `collections_of` | —; `id`; `path` | `[{"id", "name", "count"}]` in name order ignoring case; paths; ids |
 | `crop` | `path` | `{"left", "right", "top", "bottom"}` or `null` |
+| `standard` (since 1.4) | `path` | `{"value": "ntsc", "pal" or null for the game's own, "values": ["ntsc", "pal"]}`, the television standard chosen for the game's picture and the standards it may be |
 | `cover_lookup` | `path` | `"Found"`, `"Unknown"`, `"NoArt"` or `null` |
 | `known_hash`, `path_by_hash`, `orphans` | `path`, `bytes`, `modified`; `md5`; `present` | the MD5 or `null`; a path or `null`; `[{"path", "md5", "bytes"}]` |
 | `recent` | `limit` | the last scan's games with a last-played time, newest first |
 
 **`change`** makes one change, `{"op": …}`, each a `GameRecords` method's: `toggle_favourite`, `set_favourite`,
 `started` (`at`), `played` (`seconds`, and `max_hours`, under which `PlayTime.Tracked`'s rule records nothing),
-`set_play_stats`, `set_crop`, `clear_crop`, `save_edits` (`changes`, a value or `null` a field, `at`), `clear_edits`
+`set_play_stats`, `set_crop`, `clear_crop`, `set_standard` (since 1.4: `standard`, one of the `values` or `null`, `at`;
+another value is refused), `save_edits` (`changes`, a value or `null` a field, `at`), `clear_edits`
 (the cover choice and the television standard kept), `create_collection` (`name`, `at`; the id, or `null` for a name
 taken in any case), `rename_collection` (answers whether it was renamed), `delete_collection`, `add_to_collection`,
 `remove_from_collection`, `store_hash`, `identify`, `move` (a renamed game's row, collections, edits, the covers others

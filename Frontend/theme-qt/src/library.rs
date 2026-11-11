@@ -159,7 +159,8 @@ impl qobject::ThemeLibrary {
             fill(*list, view::first_of(view, id, *count, now));
         }
         fill(self.found, view::search(view, &self.words, now));
-        self.as_mut().rust_mut().view = view.clone();
+        // The own look reads the rows, the systems and the catalog alone; the lists' texts and the ES-DE state are not copied (EmuSen_Qt.md §4.15).
+        self.as_mut().rust_mut().view = LibraryView { rows: view.rows.clone(), systems: view.systems.clone(), catalog: view.catalog.clone(), ..LibraryView::default() };
         self.as_mut().rust_mut().lines = lines;
     }
 

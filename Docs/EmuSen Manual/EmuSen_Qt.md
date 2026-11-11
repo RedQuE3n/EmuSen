@@ -3170,6 +3170,11 @@ The 2026-11-08 capture of Art Book Next's clock at 1920 × 1200 had been measure
 110, as written), so the box is 61.19 units, and Qt's 61.3 is within it. The row is corrected; the clock's glyphs in
 ES-DE's capture stand at 0, 21, 42, 50, 71 px, Mulish at 35 px, as Qt's do.
 
+**The words as heard (2026-11-11).** `GlyphText` draws each glyph as a `Text` of its own, so a reader of the scene
+(the harness's tree, a screen reader) found one glyph per item; the `GlyphText` itself now carries the layout's words
+whole as its `text`, which the harness hears, and esde-qt's view test and qt-app's hosted-view test read an element's
+words there, the outermost heard words of the element only.
+
 #### 4.9.4 Which shaping: the proof of 2026-11-09
 
 ES-DE shapes with the system's HarfBuzz at the scale of its size in 64ths of a pixel (§4.9.1), and rounds each advance.

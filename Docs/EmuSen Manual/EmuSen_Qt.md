@@ -3118,12 +3118,15 @@ writes a library through qt-models' read (a game with every field the scraper an
 plays) and reads it through esde-qt's: every field the view shows as written, and a renamed key, a field of another
 type and a media index that does not read each an error.
 
-**The shelves' text has one owner (2026-11-11).** `serde` in `emusen-esde` was allowed on 2026-11-11 (a dependency the
-Frontend workspace already holds, at the same version), and the text's schema moved there: `emusen_esde::shelves`
+**The shelves' text has one owner (2026-11-11).** `emusen-esde` uses `serde`, a dependency the Frontend workspace
+already holds at the same version; as a new dependency of this crate it waits on the tester's approval. The text's
+schema moved there: `emusen_esde::shelves`
 holds `ShelfText` (a shelf, its counts as `CountsText`, its games), `GameRow` (a game's row or a folder entry's) and
 `Entry` (a row, or a collection's member by its file, system and sort name, which reads back as a row with no name).
-qt-models' `write_listing` and `EsdeGame::row` fill them borrowed (`Cow`, no copy of a game's text), and esde-qt's
-`shelves` reads the same types owned; every type refuses a key it does not name, so a key renamed on one side is an
+qt-models' `write_listing` and `EsdeGame::row` fill them borrowed (`Cow`, no copy of a game's text), esde-qt's
+`shelves` reads the same types owned, and an entry handed back to be entered (`LibraryModel.esdeEnter`) is read as a
+`GameRow` too (`EsdeGame::from_text`), where five of its keys had been read by literal (held by qt-models'
+`an_entry_is_read_back_through_the_shelves_row`); every type refuses a key it does not name, so a key renamed on one side is an
 error on the other, never a field read as absent. `emusen-esde`'s fence (`tests/fence.rs`) names the crates its tree
 may hold: quick-xml with memchr, and serde with its derive. `esde-qt/tests/shelves_text.rs` writes a
 shelf and reads it back equal (a member as a row with no name, negative plays kept) and a renamed key or a field of

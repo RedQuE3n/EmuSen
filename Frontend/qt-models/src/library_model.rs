@@ -450,8 +450,7 @@ impl qobject::LibraryModel {
     }
 
     pub fn esde_enter(mut self: Pin<&mut Self>, shelf: &QString, entry: &QString) -> bool {
-        let Ok(entry) = serde_json::from_str::<serde_json::Value>(&entry.to_string()) else { return false };
-        let entry = crate::esde_shelves::EsdeGame::from_json(&entry);
+        let Ok(entry) = crate::esde_shelves::EsdeGame::from_text(&entry.to_string()) else { return false };
         let Some(found) = self.view.esde_state.shelf(&shelf.to_string()).cloned() else { return false };
         let entered = self.as_mut().rust_mut().view.gamelists.enter(&found, &entry);
         if entered {

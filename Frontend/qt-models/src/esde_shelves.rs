@@ -213,11 +213,18 @@ impl EsdeGame {
         self.row_of(true)
     }
 
-    /// An entry read back from its text, as the painter hands one in to be entered.
-    pub fn from_json(v: &Value) -> EsdeGame {
-        let text = |key: &str| v.get(key).and_then(Value::as_str).unwrap_or("").to_owned();
-        let flag = |key: &str| v.get(key).and_then(Value::as_bool).unwrap_or(false);
-        EsdeGame { name: text("name"), file: text("file"), folder: flag("folder"), folder_path: text("folder_path"), is_collection: flag("is_collection"), ..EsdeGame::default() }
+    /// An entry read back from its text, as the painter hands one in to be entered: the shelves' own row, so a key it does
+    /// not name is an error, never a field read as absent.
+    pub fn from_text(text: &str) -> Result<EsdeGame, String> {
+        let row: GameRow<'_> = serde_json::from_str(text).map_err(|e| format!("The entry could not be read: {e}"))?;
+        Ok(EsdeGame {
+            name: row.name.into_owned(),
+            file: row.file.into_owned(),
+            folder: row.folder,
+            folder_path: row.folder_path.into_owned(),
+            is_collection: row.is_collection,
+            ..EsdeGame::default()
+        })
     }
 
     // The shelves' row, borrowed (emusen-esde's `shelves`, the schema both sides keep).
@@ -466,5 +473,19 @@ fn game_of_file(g: &GameFile, s: &SystemRow, f: &Facts) -> EsdeGame {
         manual: f.manual,
         folder_path: g.folder.clone(),
         ..EsdeGame::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_entry_is_read_back_through_the_shelves_row() {
+        let game = EsdeGame { name: "Cobalt Harbor".into(), file: "/roms/nes/c.nes".into(), folder: true, folder_path: "nes/Harbors".into(), is_collection: true, ..EsdeGame::default() };
+        let text = serde_json::to_string(&game.row()).unwrap();
+        assert_eq!(EsdeGame::from_text(&text), Ok(game), "the five fields the gamelists enter by, as written");
+        assert!(EsdeGame::from_text(r#"{"names":"Cobalt Harbor"}"#).is_err(), "a key the row does not name is an error");
+        assert!(EsdeGame::from_text(r#"{"folder":"yes"}"#).is_err(), "a field of another type is an error");
     }
 }

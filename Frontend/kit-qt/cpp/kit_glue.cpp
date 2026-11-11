@@ -123,8 +123,9 @@ bool pointer_moving(QQuickItem* item)
     }
     const PointerWatch* watch = watch_of(window);
     if (watch == nullptr) {
+        // Unwatched, it cannot tell a move from a frame's hover, so it says no (EmuSen_Kit.md §7.108).
         start_watch(window);
-        return true;
+        return false;
     }
     return watch->moving;
 }

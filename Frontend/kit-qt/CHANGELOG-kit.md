@@ -21,7 +21,11 @@ No type, property, signal or invokable was added, removed or changed in the regi
 - `FrameController.hoverAt` focuses only while its item's window is delivering a real pointer event, a fact each Qt
   Quick window keeps once; `pointerMoved` stays in the registry and does nothing, and the kit's QML no longer calls it.
   `EmuSen_Kit.md` §7.108.
-- `SectionStrip` is interactive only while its names run past it, and a mouse drag never moves it. §7.105.
+- `SectionStrip` is interactive only while its names run past it (its read-only `overflows`, the one place the condition
+  is written), and neither a mouse drag nor a finger's drag moves it; where its names fit a finger's drag is the page's.
+  §7.105.
+- The window's fact answers no for a window whose watch no controller started, and the kit's Rust gives it to the ES-DE
+  view (`frame::pointer_moving`, `frame::watch_windows`), whose hovers ask it as `hoverAt` does. §7.108.
 
 ## 1.0, stage 5 piece K: the raised shadow as a token, and the item that casts it (2026-11-09)
 

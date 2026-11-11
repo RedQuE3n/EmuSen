@@ -270,9 +270,21 @@ impl Scene<'_> {
         self.wait(20);
     }
 
+    /// The pointer moved to a point of another window of the scene's, named `window`, and left resting there.
+    pub fn hover_in(&mut self, window: &str, x: f64, y: f64) {
+        assert!(ffi::harness_hover_in(&QString::from(window), x, y), "no window named {window}");
+        self.wait(20);
+    }
+
     /// The left button pressed at one point, moved in steps to another and let go there.
     pub fn drag(&mut self, from: (f64, f64), to: (f64, f64)) {
         ffi::harness_drag(self.window(), from.0, from.1, to.0, to.1);
+        self.wait(20);
+    }
+
+    /// One finger pressed at one point, moved in steps to another and lifted there.
+    pub fn touch_drag(&mut self, from: (f64, f64), to: (f64, f64)) {
+        ffi::harness_touch_drag(self.window(), from.0, from.1, to.0, to.1);
         self.wait(20);
     }
 

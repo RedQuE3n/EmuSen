@@ -64,4 +64,27 @@ Window {
             controller: controller
         }
     }
+    // A window made after every controller, so none started its watch, a walkable of the scene's controller in it.
+    Loader {
+        id: elsewhere
+        objectName: "elsewhere"
+        property bool shown: false
+        readonly property bool awayFocused: item ? item.awayFocused : false
+        readonly property Kit.FrameController walk: controller
+        active: false
+        sourceComponent: Window {
+            objectName: "otherWindow"
+            readonly property bool awayFocused: away.focus
+            visible: true
+            width: 300
+            height: 200
+            Kit.Walkable {
+                id: away
+                width: 200
+                height: 200
+                visible: elsewhere.shown
+                controller: elsewhere.walk
+            }
+        }
+    }
 }

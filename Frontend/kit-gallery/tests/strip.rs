@@ -21,6 +21,10 @@ fn kit_7_43_the_wheel_moves_a_section_strip_whose_names_run_past_it() {
     scene.drag((strip.x + strip.w - 20.0, strip.y + strip.h / 2.0), (strip.x + 20.0, strip.y + strip.h / 2.0));
     scene.settle(&tree);
     assert_eq!(scene.number(id, "contentX"), 0.0, "a drag does not move the strip");
+    scene.touch_drag((strip.x + strip.w - 20.0, strip.y + strip.h / 2.0), (strip.x + 20.0, strip.y + strip.h / 2.0));
+    scene.wait(300);
+    scene.settle(&tree);
+    assert_eq!(scene.number(id, "contentX"), 0.0, "a touch drag does not move the strip");
     let before = scene.number(id, "contentX");
     scene.wheel(strip.x + strip.w / 2.0, strip.y + strip.h / 2.0, -3);
     scene.wait(300);

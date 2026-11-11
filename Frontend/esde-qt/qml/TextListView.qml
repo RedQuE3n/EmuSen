@@ -69,7 +69,7 @@ ElementBox {
             width: root.width
             height: root.rowHeight
             HoverHandler {
-                onHoveredChanged: root.esde.hover(hovered ? line.index : -1)
+                onHoveredChanged: root.esde.hover(parent, hovered ? line.index : -1)
             }
             TapHandler {
                 onTapped: root.esde.tap(line.index)

@@ -273,6 +273,20 @@ unsafe fn focus(item: *mut qobject::QQuickItem) {
     }
 }
 
+/// Whether a real pointer event is reaching the item's window now: the window's one pointer fact, which the ES-DE view's
+/// hovers ask as `hoverAt` does (§7.108).
+///
+/// # Safety
+/// `item` is null or a live `QQuickItem`.
+pub unsafe fn pointer_moving(item: *mut qobject::QQuickItem) -> bool {
+    qobject::pointer_moving(item)
+}
+
+/// Starts the pointer watch of every Qt Quick window that has none, as a view that asks `pointer_moving` is made (§7.108).
+pub fn watch_windows() {
+    qobject::watch_windows();
+}
+
 impl qobject::FrameController {
     pub fn offer(mut self: Pin<&mut Self>, button: PadButton) -> bool {
         let Some(ui) = kinds::ui_button(button) else { return false };

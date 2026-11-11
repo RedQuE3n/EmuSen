@@ -1,5 +1,6 @@
 // The pointer focuses only as it moves (EmuSen_Kit.md §7.108): a walkable of a controller made under a resting pointer,
-// and one enabled under it, take nothing; a move onto a walkable focuses it. It also holds Qt Quick's own behaviour, no
+// and one enabled under it, take nothing, in a window no controller watched as in one watched; a move onto a walkable
+// focuses it. It also holds Qt Quick's own behaviour, no
 // rule of the kit's: a click on a disabled walkable is delivered to no TapHandler (§7.107). A test of its own, since one
 // process holds one Qt application.
 
@@ -40,5 +41,18 @@ fn kit_7_108_only_the_pointers_own_move_focuses() {
     scene.hover(104.0, 124.0);
     scene.wait(50);
     assert_eq!(scene.property("near", "activeFocus"), "true", "the pointer moved onto a walkable focuses it");
+    // A window no controller watched, made after them all, cannot tell a move from a frame's hover: a walkable shown in
+    // it under the resting pointer takes nothing, and the pointer's move onto it, once watched, focuses it.
+    assert!(scene.set_property("elsewhere", "active", "true"));
+    scene.wait(100);
+    scene.hover_in("otherWindow", 100.0, 100.0);
+    scene.hover_in("otherWindow", 104.0, 104.0);
+    assert!(scene.set_property("elsewhere", "shown", "true"));
+    scene.wait(200);
+    assert_eq!(scene.property("elsewhere", "awayFocused"), "false", "the walkable shown under the resting pointer in an unwatched window took nothing");
+    scene.hover_in("otherWindow", 260.0, 100.0);
+    scene.hover_in("otherWindow", 104.0, 104.0);
+    scene.wait(50);
+    assert_eq!(scene.property("elsewhere", "awayFocused"), "true", "the pointer's move onto it focuses it");
     scene.assert_quiet();
 }

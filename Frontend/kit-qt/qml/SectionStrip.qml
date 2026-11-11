@@ -3,12 +3,13 @@ import QtQuick
 import QtQuick.Controls
 import EmuSen.Kit as Kit
 
-// A screen's section strip: the frame's sections in Caption upper case, the chosen one strong over the accent bar, only whole names drawn; a click chooses one as the shoulders step them, and only where the names run past the strip is it a scroller, moved by the wheel and the walk, never dragged (EmuSen_Kit.md §7.43, §7.105).
+// A screen's section strip: the frame's sections in Caption upper case, the chosen one strong over the accent bar, only whole names drawn; a click chooses one as the shoulders step them, and only where the names run past the strip is it a scroller, moved by the wheel and the walk, never dragged by mouse or finger (EmuSen_Kit.md §7.43, §7.105).
 ListView {
     id: root
     required property Kit.FrameController controller
     orientation: ListView.Horizontal
-    interactive: root.contentWidth > root.width
+    readonly property bool overflows: root.contentWidth > root.width
+    interactive: root.overflows
     acceptedButtons: Qt.NoButton
     clip: true
     spacing: Kit.Tokens.base * 2
@@ -18,9 +19,16 @@ ListView {
     preferredHighlightBegin: 0
     preferredHighlightEnd: root.width
     highlightMoveDuration: Kit.Tokens.instant
+    // A finger's drag is this handler's, which yields it to nothing, so the strip is not flicked by touch as by no mouse (EmuSen_Kit.md §7.105).
+    DragHandler {
+        enabled: root.overflows
+        target: null
+        acceptedDevices: PointerDevice.TouchScreen
+        grabPermissions: PointerHandler.CanTakeOverFromAnything
+    }
     // A horizontal ListView takes no turn of an upright wheel: the wheel's turn moves the names along, within their ends.
     WheelHandler {
-        enabled: root.contentWidth > root.width
+        enabled: root.overflows
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         onWheel: (event) => {
             const delta = event.angleDelta.x !== 0 ? event.angleDelta.x : event.angleDelta.y

@@ -3168,7 +3168,11 @@ software backend). Every exemption the five packages show is the spare tenth (R-
 EmuSen 10, Horizon 0, Meridian 2, Orrery 23. With the table each run exits 0 and lists them on stderr; before it each was
 an `exempted` line on stdout, so theme-check failed Constellation, EmuSen, Meridian and Orrery, and the Themes tab's Use,
 which reads theme-check's status through qt-models' `check_package`, would have refused all four (the reference is
-checked by construction, not at Use). No test yet holds Use itself to an accepted and an unaccepted class.
+checked by construction, not at Use). qt-app's `themes_tab` test holds Use to both (2026-11-11): its stand-in for
+theme-audit writes, for one package, an accepted class's line on stderr and exits 0, and Use takes the theme; for
+another, an `exempted` line on stdout and exits 1, and Use is not offered and A stores nothing. That the real program
+writes those two forms is theme-audit's own `kit_7_102` tests'. Seeded faults, each caught by it: theme-check reading
+stderr as findings; theme-check passing over an `exempted` line.
 
 ### 7.103 The gate's walk presses a screen's own shoulders (repair piece DC-A; 2026-11-11)
 

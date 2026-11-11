@@ -28,6 +28,14 @@ fn copy(from: &Path, to: &Path) {
     }
 }
 
+/// Copies the clean fixture to the store as `id`, named `name`.
+fn named_copy(store: &Path, id: &str, name: &str) {
+    copy(&Path::new(FIXTURES).join("clean"), &store.join(id));
+    let manifest = store.join(id).join("theme.json");
+    let text = std::fs::read_to_string(&manifest).unwrap().replace("\"Fixture clean\"", &format!("\"{name}\""));
+    std::fs::write(&manifest, text).unwrap();
+}
+
 fn focused(scene: &mut Scene<'_>) -> String {
     let tree = scene.tree();
     scene.focus(&tree).map(|i| tree.nodes[i as usize].name.clone()).unwrap_or_default()
@@ -59,14 +67,30 @@ fn qt_3_8_the_themes_tab_checks_uses_and_switches_the_chosen_theme_s_host() {
     copy(&Path::new(FIXTURES).join("clean"), &store.join("dawn"));
     copy(&Path::new(FIXTURES).join("loaded"), &store.join("dusk"));
     copy(&Path::new(FIXTURES).join("literal"), &store.join("rough"));
+    named_copy(&store, "sage", "Fixture kept");
+    named_copy(&store, "tide", "Fixture held");
     let book = store.join("book");
     std::fs::create_dir_all(&book).unwrap();
     std::fs::write(book.join("capabilities.xml"), "<themeCapabilities><themeName>Picture Book</themeName></themeCapabilities>").unwrap();
     std::fs::write(book.join("theme.xml"), "<theme><view name=\"system\"><text name=\"t\"><text>x</text></text></view></theme>").unwrap();
-    // theme-audit stood in for by a script that finds nothing; the loaded step is theme-check's own tests' to prove.
+    // theme-audit stood in for by a script that finds nothing; the loaded step is theme-check's own tests' to prove. For sage
+    // and tide it writes what theme-audit writes (its kit_7_102 tests hold the program to it): an exemption of an accepted
+    // class on stderr with exit 0, and one of a class with no ruling on stdout with exit 1.
     let audit = world.root.join("audit.sh");
     let ran = world.root.join("audit-ran");
-    std::fs::write(&audit, format!("#!/bin/bash\ntouch \"{}\"\nexit 0\n", ran.display())).unwrap();
+    let script = format!(
+        r#"#!/bin/bash
+touch "{}"
+package="${{@: -1}}"
+case "$package" in
+  *sage) echo "theme-audit: accepted by R-20261111-40: $package/screens/Home.qml 1280x800 dark: too small: moonriseCaption" >&2; exit 0 ;;
+  *tide) echo "$package/screens/Home.qml:1 exempted 1280x800 dark: overlap: title and ring (excused by the screen)"; exit 1 ;;
+esac
+exit 0
+"#,
+        ran.display()
+    );
+    std::fs::write(&audit, script).unwrap();
     assert!(std::process::Command::new("chmod").arg("+x").arg(&audit).status().unwrap().success(), "the stand-in made runnable");
     std::env::set_var("EMUSEN_THEME_AUDIT", &audit);
 
@@ -136,8 +160,24 @@ fn qt_3_8_the_themes_tab_checks_uses_and_switches_the_chosen_theme_s_host() {
     scene.wait(200);
     assert_eq!(stored(&platform), "dusk");
 
+    // An exemption of a class the tester accepted (R-20261111-40) is no finding: Use is offered and takes the theme.
+    check_next(&mut scene, "Fixture kept");
+    assert_eq!(scene.property("themesModel", "findings"), "Checked: nothing found.");
+    assert_eq!(scene.property("themesModel", "usable"), "true");
+    scene.pad(UiButton::Accept);
+    scene.wait(200);
+    assert_eq!(stored(&platform), "sage");
+
+    // An exemption of a class with no ruling is a finding: no Use, and A stores nothing.
+    check_next(&mut scene, "Fixture held");
+    assert_eq!(scene.property("themesModel", "usable"), "false");
+    assert!(scene.property("themesModel", "findings").contains("exempted"), "{}", scene.property("themesModel", "findings"));
+    scene.pad(UiButton::Accept);
+    scene.wait(200);
+    assert_eq!(stored(&platform), "sage");
+
     // The reference again: its id is stored and the chosen theme's host is gone with its engine.
-    for _ in 0..3 {
+    for _ in 0..5 {
         scene.pad(UiButton::Up);
     }
     wait_for(&mut scene, "themesModel", "name", "EmuSen", 2000);
@@ -167,3 +207,4 @@ fn qt_3_8_the_themes_tab_checks_uses_and_switches_the_chosen_theme_s_host() {
     wait_for(&mut scene, "screens", "shown", "Home", 2000);
     assert!(report.is_empty(), "{}", report.join("\n"));
 }
+

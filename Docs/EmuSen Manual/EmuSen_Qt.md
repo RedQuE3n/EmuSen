@@ -1239,6 +1239,23 @@ canvas's own; kit-core's test holds them within 0.01 unit.
      for in §7.1 step 4. The fill is the kit's raised surface at 50%. No token is that ink, and the kit's border at 18%
      would not show on the sky. The acceptance test names the disc's edge with the orbit lines.
 
+**Against the canvas after R-20261111-34** (measured 2026-11-11, offscreen on the software backend, theme-audit's
+`qt_3_4_2` run: eleven consoles, the Super Nintendo focused). The places and the cover row's shape are fixed (items 4
+above and `CoverRow`). 44 lines remain, 22 a size, in four figures the screen cannot meet without a finding elsewhere,
+each waiting on the tester:
+- the focused body, 96 (item 8): at the canvas's own figures (body 96, the `Walkable` the ring's 110) the focused box
+  reaches 7.4 units into the next orbit's count; at 96 with the body's box, the first focus (the NES) reaches 3.5 units
+  into Master System's count, 60 lines over eleven (18 lines at 88);
+- the full name's line box, 44 (item 6): Barlow Condensed Medium at 44 in Qt 6.11 lays a line 53 (ascent 44, descent
+  8.8), with `lineHeight: 44` fixed as without; a 44 box is cut at the foot by the fit rule, which judges the line box
+  (2 lines at 53);
+- the cover row: the canvas's Super Nintendo is 1.4 wide a unit tall; the systems table's `cover_aspect` 0.73 makes it
+  1.37, so three covers 137 wide stand at 781, 930 and 1079 against 140 at 772, 924 and 1076 (12 lines);
+- the inner orbit's label (item 9): the window ends at 197, not the canvas's 178, so its label's right edge is 725.35
+  against 753.72 (2 lines).
+The figures, the probes and what the canvas would have to say for each are kept with the branch's evidence
+(`canvas-figures.md`); the acceptance test's Consoles mockup lines are the same figures.
+
 **The sweep.** theme-check's 120-console sweep walked each row in one direction, then went Down. Over the orbits, Down
 lands nearest in x, so the sweep heard 52 consoles of 120. The sweep now walks each row to both of its ends, as its man
 page says ("along and back"), and hears all 120 (man theme-check).

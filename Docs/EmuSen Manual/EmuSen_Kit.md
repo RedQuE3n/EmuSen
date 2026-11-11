@@ -1685,7 +1685,7 @@ frame's sheet rule (as `Sheet` does) is the fix; owed to stage 5, whose settings
 - **The shoulders without sections.** The walk stepped its sections on LB and RB in every form but the card's, and
   with no sections it declined them, so a screen could not declare a shoulder (`EmuSen_Qt.md` §7.6: the search's Move
   to grid). Now a walk with no sections offers the shoulders to the declared actions like any other button; a walk
-  with sections keeps them, except a shoulder the screen declares an enabled action on (since 2026-11-11, §7.103). An extension under rule Q: no surface changes, and a screen that declares no shoulder sees
+  with sections keeps them, except a shoulder the screen declares an enabled action on (since 2026-11-11, §7.103; that exception waits on the tester's ruling, not decided). An extension under rule Q: no surface changes, and a screen that declares no shoulder sees
   no difference. Held to kit-core's `tests/input.rs` (both shoulders reaching a declared `toGrid` with no sections; a
   walk with sections still stepping them on a shoulder it declares nothing on).
 - **The pointer resting.** `Scene::hover` (qt-test, `harness_hover`, Qt Test's `mouseMove`) moves the pointer to a point
@@ -3199,7 +3199,7 @@ shoulders as `toGrid` ("Move to list", the right shoulder unnamed, as the games 
 while the rows hold the focus the tool declares its shoulders `previous` and `next` (`Tool::action_lines`). Cores' rows
 are a sectioned frame, whose shoulders stepped the sections before any action, so the kit's walk now gives a shoulder to
 the section strip only where the screen declares no enabled action on it (kit-core `Walk::press`); no screen declared a
-shoulder action beside sections before. The card that closes as the search opens no longer hands the focus to the list.
+shoulder action beside sections before. This change to the kit's walk is built and waits on the tester's ruling; it is not decided (R-20261111-31 rules the Cores search's shoulders, not the kit's walk). The card that closes as the search opens no longer hands the focus to the list.
 `cores.rs` holds `CoresSearch` with `WITH_SHOULDERS` and no excuse, then presses RB (a row focused, the keyboard docked,
 the section unchanged) and LB (the keys again).
 

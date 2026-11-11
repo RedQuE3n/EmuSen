@@ -3106,7 +3106,7 @@ holds `ShelfText` (a shelf, its counts as `CountsText`, its games), `GameRow` (a
 qt-models' `write_listing` and `EsdeGame::row` fill them borrowed (`Cow`, no copy of a game's text), and esde-qt's
 `shelves` reads the same types owned; every type refuses a key it does not name, so a key renamed on one side is an
 error on the other, never a field read as absent. `emusen-esde`'s fence (`tests/fence.rs`) names the crates its tree
-may hold: quick-xml with memchr, serde with its derive, and serde_json for its tests. `esde/tests/shelves.rs` writes a
+may hold: quick-xml with memchr, and serde with its derive. `esde-qt/tests/shelves_text.rs` writes a
 shelf and reads it back equal (a member as a row with no name, negative plays kept) and a renamed key or a field of
 another type is an error; `esde_rows.rs` holds the two crates to it where the program links them. `in_collection`, which
 the reader takes and a hand-written text gives (`esde-qt/tests/mapping.rs`), is written `false` by qt-models: the

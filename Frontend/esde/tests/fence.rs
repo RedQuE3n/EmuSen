@@ -15,10 +15,9 @@ fn qt_4_2_the_dependency_tree_is_the_crate_and_its_xml_reader() {
     }
     let known = [
         "emusen-esde", "quick-xml", "memchr", "serde", "serde_core", "serde_derive", "proc-macro2", "quote", "syn", "unicode-ident",
-        "serde_json", "itoa", "zmij",
     ];
     let unknown: Vec<&&str> = names.iter().filter(|n| !known.contains(n)).collect();
-    assert!(unknown.is_empty(), "the crate, quick-xml, serde with its derive, and serde_json for the tests, and nothing else: {unknown:?}");
+    assert!(unknown.is_empty(), "the crate, quick-xml and serde with its derive, and nothing else: {unknown:?}");
 }
 
 #[test]

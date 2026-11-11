@@ -276,12 +276,12 @@ fn change_disc_lists_the_games_discs_the_consoles_others_and_the_tray() {
     assert_eq!(c.choose(at(&c, "Change Disc")), Outcome::Shown);
     assert_eq!((c.page, c.title("Basalt Run"), c.help()), (Page::Disc, "Change Disc".into(), Screen::PauseDisc));
     let rows: Vec<String> = c.rows().into_iter().map(|r| format!("{}|{}", r.label, r.value)).collect();
-    assert_eq!(rows, ["Basalt Run (Disc 1)|Inserted", "Basalt Run (Disc 2)|", "Amber Coast|", "Open the tray|"]);
+    assert_eq!(rows, ["Basalt Run (Disc 1)|Inserted", "Basalt Run (Disc 2)|", "Amber Coast|", "Eject disc|"]);
     let pane = c.pane();
     assert_eq!((pane.kind, pane.big.as_str(), pane.title.as_str()), (PaneKind::Cover, "file:///c/basalt.png", "Basalt Run, Disc 1 of 2"));
     assert_eq!(pane.sentence, "In the console now. B goes back.");
     c.focus(1);
-    assert_eq!(c.pane().sentence, "A opens the tray, swaps the disc and closes it, as the console sees it.");
+    assert_eq!(c.pane().sentence, "A swaps to this disc, as the console sees it.");
     assert_eq!(c.choose(1), Outcome::ChangeDisc(1));
     assert_eq!(c.choose(0), Outcome::Resume, "the disc already in changes nothing");
     c.focus(2);
@@ -305,7 +305,7 @@ fn change_disc_lists_the_games_discs_the_consoles_others_and_the_tray() {
     let mut unread = Card { shelf: two_discs().shelf, ..unread };
     unread.choose(at(&unread, "Change Disc"));
     let rows: Vec<String> = unread.rows().into_iter().map(|r| format!("{}|{}", r.label, r.value)).collect();
-    assert_eq!(rows, ["Basalt Run (Disc 1)|Not known", "Basalt Run (Disc 2)|Not known", "Amber Coast|", "Open the tray|"]);
+    assert_eq!(rows, ["Basalt Run (Disc 1)|Not known", "Basalt Run (Disc 2)|Not known", "Amber Coast|", "Eject disc|"]);
     assert_eq!(Facts::from_json(&two_discs().facts.to_json()), two_discs().facts, "the drive crosses as plain data");
 }
 

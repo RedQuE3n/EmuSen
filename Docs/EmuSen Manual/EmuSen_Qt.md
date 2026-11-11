@@ -1031,7 +1031,7 @@ the reference's splash unchanged.
 
 **Free arrangement where the reference had it.** Home and Choose a console walk by `KeyNavigation` as they did; Home's
 `ThemeScreen.focusItems` names where its focus starts (Continue, else the shelf's first game, else Games), which the
-host gives the focus again when Start is pressed on Home (`Screens.homeAgain`). A list read anew is followed by the
+host gives the focus again when Start is pressed on Home (`Screens.homeAgain`). The EmuSen theme's Continue is enabled only while a game is suspended, so a moving pointer cannot focus it with none (`home_continue.rs`, 2026-11-11). A list read anew is followed by the
 Repeaters' own `itemAdded`, never by an item kept from before. Delegates' data is read through `var` properties, as
 `qmllint` cannot follow a cast to an inline component across the theme's own files.
 
@@ -4068,13 +4068,13 @@ is seated is read from the pads' hand-over (`GamePads::seated`).
 
 **Change Disc** (§20.2): the game's own discs (`Basalt Run (Disc 1)` with `Inserted` on the one in, or the game's name
 for a single disc), then the console's other games in the library (`LibraryModel.gamesOf` of the facts' system, handed
-to `PauseModel.shelf`), then `Open the tray` while a disc is in. A on an own disc is `SessionModel.changeDisc` ("Disc 2
-is in"), on another game `insertDisc` ("Amber Coast is in"), on the tray `ejectDisc` ("The disc is out"), each off the
+to `PauseModel.shelf`), then `Eject disc` while a disc is in. A on an own disc is `SessionModel.changeDisc` ("Disc 2
+is in"), on another game `insertDisc` ("Amber Coast is in"), on Eject disc `ejectDisc` ("The disc is out"), each off the
 GUI thread with the card closed, as Mistress's rows close it; A on the disc already in only closes the card. The help
 reads Put in, Back and Screenshot, Start not offered (`help::Screen::PauseDisc`). The pane is Mistress's `ShowCover`: the
 cover at 180 square, the generated card edged in Border where there is none, and beside it, 24 across and 48 down, the
-disc's name and the sentence in Muted at 22 ("A opens the tray, swaps the disc and closes it, as the console sees it.",
-or "In the console now. B goes back."); the tray's pane is its sentence alone. `Any file…` is the desktop form's
+disc's name and the sentence in Muted at 22 ("A swaps to this disc, as the console sees it.",
+or "In the console now. B goes back."); Eject disc's pane is its sentence alone (the words decided 2026-11-11: the program loads disc images and has no tray). `Any file…` is the desktop form's
 (stage 6).
 
 **Swap Players 1 and 2** closes the card and swaps the first two players' pads in the hand-over from the next read, for
@@ -5073,8 +5073,8 @@ happen in the program, since nothing the front end passes makes the call fail.
   …") is new: Mistress's pane showed nothing there. Listed for the tester, as what the player sees.
 - Only the runtime's -1 (its `disc_index` with the drive empty) reads as an empty drive. Any other index below zero is
   not read, and the rest of the session's answer still is: `shapes::Discs` has no index and keeps the one written
-  (`unread_index`), and the Pause Card's Change Disc says "Not known" on each of the game's own discs and offers the
-  tray (`pause::UNREAD_DISC`). Until 2026-11-11 such an index failed the whole `session_info` read and with it the
+  (`unread_index`), and the Pause Card's Change Disc says "Not known" on each of the game's own discs and offers Eject disc
+  (`pause::UNREAD_DISC`). Until 2026-11-11 such an index failed the whole `session_info` read and with it the
   session. Held by `an_empty_drive_is_no_index` and qt-models' `pause`.
 - The Home card's lists of consoles that start empty and of the tools' lines, which the program writes itself: one that
   cannot be read is said under the first page's rows ("The consoles that start with no disc could not be read: …",
@@ -5200,7 +5200,7 @@ changed here; the tester is asked.
 
 **Changes the player sees beyond the three rulings, for the tester.** Three changes of this piece are not covered by
 R-20261111-25, -26 or -27: every card's line under its rows now wraps instead of being cut (`MenuCard.qml`); Change
-Disc says "Not known" on each of a game's discs and offers "Open the tray" when the runtime's disc index cannot be read
+Disc says "Not known" on each of a game's discs and offers "Eject disc" when the runtime's disc index cannot be read
 (`pause.rs`, `UNREAD_DISC`); and Cores' pane, when the runtime cannot say whether the firmware is there, now gives the
 runtime's words ("⚠ EmuSen's runtime could not say whether you have one: …. Firmware, under X, says more.") where it
 dropped them.

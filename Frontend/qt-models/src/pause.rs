@@ -328,7 +328,9 @@ pub const TRAY: &str = "tray";
 pub const SWAPPED: &str = "Players 1 and 2 swapped";
 
 /// What A does on Change Disc, as Mistress says it (`DiscSentence`).
-pub const DISC_SENTENCE: &str = "A opens the tray, swaps the disc and closes it, as the console sees it.";
+pub const DISC_SENTENCE: &str = "A swaps to this disc, as the console sees it.";
+/// What A does on the eject row.
+pub const EJECT_SENTENCE: &str = "A takes the disc out and leaves none in, as the console sees it.";
 
 /// What Guide held with a button asks of the running game (EmuSen_BigPicture.md §48.7): Up saves to the slot, Down
 /// loads it, the right shoulder takes a screenshot; the kit says only which button was chorded.
@@ -910,7 +912,7 @@ impl Card {
             .collect();
         rows.extend(self.others().into_iter().map(|g| row(OTHER_DISC, &g.title, String::new())));
         if discs.index.is_some() || discs.unread {
-            rows.push(row(TRAY, "Open the tray", String::new()));
+            rows.push(row(TRAY, "Eject disc", String::new()));
         }
         rows
     }
@@ -943,7 +945,7 @@ impl Card {
         } else if let Some(game) = others.get(i - own) {
             (game.cover.clone(), game.title.clone(), DISC_SENTENCE)
         } else {
-            let sentence = "A opens the tray and leaves it open, with no disc in, as the console sees it.".to_string();
+            let sentence = EJECT_SENTENCE.to_string();
             return Pane { kind: PaneKind::Sentence, sentence, ..Pane::none() };
         };
         Pane { kind: PaneKind::Cover, big, title: name, sentence: sentence.to_string(), ..Pane::none() }

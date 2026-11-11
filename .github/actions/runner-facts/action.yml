@@ -1,0 +1,18 @@
+name: What this runner has
+description: Prints what a Linux runner has (threads, memory, disk, kernel, counters, graphics, libraries, image) and fails on nothing; EmuSen_RustPlatform.md section 31.1 holds what each job needs of it.
+runs:
+  using: composite
+  steps:
+    - name: What this runner has
+      shell: bash
+      run: |
+        echo "image: ${ImageOS:-unknown} ${ImageVersion:-unknown}"
+        echo "threads: $(nproc)"
+        free -g || true
+        df -h . || true
+        echo "kernel: $(uname -r)"
+        echo "perf_event_paranoid: $(cat /proc/sys/kernel/perf_event_paranoid 2>/dev/null || echo unreadable)"
+        echo "/dev/dri: $(ls /dev/dri 2>/dev/null | tr '\n' ' ' || true)"
+        if command -v vulkaninfo > /dev/null; then vulkaninfo --summary 2>/dev/null | head -20 || true; else echo "no vulkaninfo"; fi
+        ldconfig -p | grep -E 'sqlite3|vulkan|SDL2' || echo "none of sqlite3, vulkan, SDL2 in ldconfig"
+        exit 0

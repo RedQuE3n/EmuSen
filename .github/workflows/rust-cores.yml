@@ -2,6 +2,7 @@
 # The platform library (Platform/, emusen_platform) is built and tested beside them, since the WiseMan job needs both - see EmuSen_RustPlatform.md §2.7.
 name: Rust cores
 
+# Run by hand since 2026-11-11 (EmuSen_RustPlatform.md section 31.2): the desktop's landing gate and nightly test more than a hosted runner can, and a weekly clean-machine build in a container is to replace what the runner gave.
 on:
   workflow_dispatch:
     inputs:
@@ -9,87 +10,6 @@ on:
         description: Build every library, taking none from an earlier run
         type: boolean
         default: false
-  push:
-    paths:
-      - 'EmuSen/Cores/Nintendo/MarsRT - N64/**'
-      - 'EmuSen/Cores/Nintendo/MercuryRT - GB/**'
-      - 'EmuSen/Cores/Nintendo/MoonRT - NES/**'
-      - 'EmuSen/Cores/Nintendo/VenusRT - SNES/**'
-      - 'EmuSen/Cores/Sega/Nephrite - Genesis/**'
-      - 'EmuSen/Cores/Sega/Beryl-HW/**'
-      - 'EmuSen/Cores/Sony/Diamond - PlayStation/**'
-      - 'EmuSen/Cores/Sony/Sapphire - PlayStation 2/**'
-      - 'EmuSen/Cores/Sony/BlackMoon-HW/**'
-      - 'EmuSen/Cores/Nintendo/SilverMillennium-HW/**'
-      - 'EmuSen/Cores/Shared/**'
-      - 'Platform/**'
-      - 'EmuSen.Galaxia/**'
-      - 'EmuSen.WiseMan/Galaxia/**'
-      - 'EmuSen.Endymion/**'
-      - 'EmuSen.WiseMan/Endymion/**'
-      - 'EmuSen.Serenity/Slang/**'
-      - 'EmuSen.Serenity/Native/**'
-      - 'EmuSen.WiseMan/Serenity/Slang*'
-      - 'EmuSen.WiseMan/Serenity/Spirv*'
-      - 'EmuSen.WiseMan/Serenity/SerenityParity*'
-      - 'EmuSen.WiseMan/Serenity/SerenityChainParity*'
-      - 'EmuSen.WiseMan/Serenity/SerenitySwitch*'
-      - 'EmuSen.DianaSh/**'
-      - 'EmuSen.Crystal/**'
-      - 'EmuSen.WiseMan/DianaSh/**'
-      - 'EmuSen.WiseMan/Crystal/**'
-      - 'xtask/**'
-      - 'Directory.Build.targets'
-      - 'EmuSen/EmuSen.csproj'
-      - 'EmuSen.WiseMan/Cores/MarsRt*'
-      - 'EmuSen.WiseMan/Cores/MercuryRt*'
-      - 'EmuSen.WiseMan/Cores/MoonRt*'
-      - 'EmuSen.WiseMan/Cores/VenusRt*'
-      - 'EmuSen.WiseMan/Cores/Nephrite*'
-      - 'EmuSen.WiseMan/Cores/Diamond*'
-      - '.github/workflows/rust-cores.yml'
-      - '.github/scripts/library_key.py'
-  # The core ABI's guard must see every pull request that could change version 1 (EmuSen_CoreAPI.md §5.4).
-  pull_request:
-    paths:
-      - 'EmuSen/Cores/Nintendo/MarsRT - N64/**'
-      - 'EmuSen/Cores/Nintendo/MercuryRT - GB/**'
-      - 'EmuSen/Cores/Nintendo/MoonRT - NES/**'
-      - 'EmuSen/Cores/Nintendo/VenusRT - SNES/**'
-      - 'EmuSen/Cores/Sega/Nephrite - Genesis/**'
-      - 'EmuSen/Cores/Sega/Beryl-HW/**'
-      - 'EmuSen/Cores/Sony/Diamond - PlayStation/**'
-      - 'EmuSen/Cores/Sony/Sapphire - PlayStation 2/**'
-      - 'EmuSen/Cores/Sony/BlackMoon-HW/**'
-      - 'EmuSen/Cores/Nintendo/SilverMillennium-HW/**'
-      - 'EmuSen/Cores/Shared/**'
-      - 'Platform/**'
-      - 'EmuSen.Galaxia/**'
-      - 'EmuSen.WiseMan/Galaxia/**'
-      - 'EmuSen.Endymion/**'
-      - 'EmuSen.WiseMan/Endymion/**'
-      - 'EmuSen.Serenity/Slang/**'
-      - 'EmuSen.Serenity/Native/**'
-      - 'EmuSen.WiseMan/Serenity/Slang*'
-      - 'EmuSen.WiseMan/Serenity/Spirv*'
-      - 'EmuSen.WiseMan/Serenity/SerenityParity*'
-      - 'EmuSen.WiseMan/Serenity/SerenityChainParity*'
-      - 'EmuSen.WiseMan/Serenity/SerenitySwitch*'
-      - 'EmuSen.DianaSh/**'
-      - 'EmuSen.Crystal/**'
-      - 'EmuSen.WiseMan/DianaSh/**'
-      - 'EmuSen.WiseMan/Crystal/**'
-      - 'xtask/**'
-      - 'Directory.Build.targets'
-      - 'EmuSen/EmuSen.csproj'
-      - 'EmuSen.WiseMan/Cores/MarsRt*'
-      - 'EmuSen.WiseMan/Cores/MercuryRt*'
-      - 'EmuSen.WiseMan/Cores/MoonRt*'
-      - 'EmuSen.WiseMan/Cores/VenusRt*'
-      - 'EmuSen.WiseMan/Cores/Nephrite*'
-      - 'EmuSen.WiseMan/Cores/Diamond*'
-      - '.github/workflows/rust-cores.yml'
-      - '.github/scripts/library_key.py'
 
 jobs:
   # The crates every core builds with (EmuSen/Cores/Shared/), Beryl's (the Sega cores' shared CPUs and chips) and BlackMoon's (the Sony cores'), tested on their own; no library of theirs ships.
@@ -104,6 +24,10 @@ jobs:
         os: ${{ fromJSON(vars.EMUSEN_ALL_PLATFORMS == 'on' && '["ubuntu-22.04", "windows-latest", "macos-latest"]' || '["ubuntu-22.04"]') }}
     steps:
       - uses: actions/checkout@v4
+      # What the runner has, printed and never failing, so what a job asks of it is read from the runner itself (EmuSen_RustPlatform.md section 31.1).
+      - name: What this runner has
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/runner-facts
       - uses: dtolnay/rust-toolchain@stable
       # The ABI check needs libclang and runs in abi-guard alone. Every suite of this workflow runs on test-checked, release with overflow checks on (EmuSen_RustPlatform.md §37).
       - name: Test
@@ -115,6 +39,18 @@ jobs:
             case "$crate" in *Beryl-HW/*) features=--all-features ;; *) features= ;; esac
             (cd "$crate" && cargo test --profile test-checked $features)
           done
+
+      # The tests that open a database load SQLite from EMUSEN_SQLITE, and a runner has no NuGet cache to find one in: the system's, by its name, installed if the image lacks it (Platform/sqlite/src/lib.rs, for_tests). Windows has none to name and is paused.
+      - name: SQLite for the tests
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux)
+              ldconfig -p | grep -q 'libsqlite3.so.0 ' || sudo apt-get install -y libsqlite3-0
+              echo "EMUSEN_SQLITE=libsqlite3.so.0" >> "$GITHUB_ENV"
+              ;;
+            macOS) echo "EMUSEN_SQLITE=libsqlite3.dylib" >> "$GITHUB_ENV" ;;
+          esac
 
       # The platform's crates: their own rules with no .NET present, the header against the exports, and the header as C99 and C++17. Not yet a gate, as nothing of the platform's is until Galaxia's own (EmuSen_RustPlatform.md §3.9, §10.6): a failure here is reported and does not stop the cores.
       - name: Test the platform workspace
@@ -165,6 +101,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+      # What the runner has, printed and never failing, so what a job asks of it is read from the runner itself (EmuSen_RustPlatform.md section 31.1).
+      - name: What this runner has
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/runner-facts
       - uses: dtolnay/rust-toolchain@stable
       # The channel of kernel/rust-toolchain.toml, with the source build-std needs.
       - uses: dtolnay/rust-toolchain@master
@@ -187,6 +127,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # What the runner has, printed and never failing, so what a job asks of it is read from the runner itself (EmuSen_RustPlatform.md section 31.1).
+      - name: What this runner has
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/runner-facts
       - uses: dtolnay/rust-toolchain@stable
       - name: libclang
         run: sudo apt-get update && sudo apt-get install -y libclang-dev clang
@@ -301,6 +245,10 @@ jobs:
       reuse: ${{ steps.plan.outputs.reuse }}
     steps:
       - uses: actions/checkout@v4
+      # What the runner has, printed and never failing, so what a job asks of it is read from the runner itself (EmuSen_RustPlatform.md section 31.1).
+      - name: What this runner has
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/runner-facts
 
       - name: The plan
         id: plan
@@ -342,6 +290,10 @@ jobs:
         include: ${{ fromJSON(needs.plan.outputs.build) }}
     steps:
       - uses: actions/checkout@v4
+      # What the runner has, printed and never failing, so what a job asks of it is read from the runner itself (EmuSen_RustPlatform.md section 31.1).
+      - name: What this runner has
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/runner-facts
 
       # A crate with pgo/<name>.<target>.profdata: the toolchain its manifest pins, which the profile's names need, and a copy named by its hash, so a refreshed profile rebuilds what it guides; a target without one builds on stable, unguided and without a warning - see Mars_Native.md §6.17.
       - name: The PGO profile
@@ -381,6 +333,18 @@ jobs:
           workspaces: '${{ matrix.crate.dir }} -> target'
           key: ${{ matrix.crate.name }}-${{ matrix.platform.rid }}
 
+      # The tests that open a database load SQLite from EMUSEN_SQLITE, and a runner has no NuGet cache to find one in: the system's, by its name, installed if the image lacks it (Platform/sqlite/src/lib.rs, for_tests). Windows has none to name and is paused.
+      - name: SQLite for the tests
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux)
+              ldconfig -p | grep -q 'libsqlite3.so.0 ' || sudo apt-get install -y libsqlite3-0
+              echo "EMUSEN_SQLITE=libsqlite3.so.0" >> "$GITHUB_ENV"
+              ;;
+            macOS) echo "EMUSEN_SQLITE=libsqlite3.dylib" >> "$GITHUB_ENV" ;;
+          esac
+
       # The crate's own suite; the games and the corpus skip without their files. MarsRT's block tests run compiled code, which is the check on each platform's JIT rules.
       - name: Test
         if: matrix.platform.test == true
@@ -391,6 +355,11 @@ jobs:
       - name: The hardware counters (hwcount)
         if: matrix.crate.name == 'emusen_platform' && matrix.platform.test == true
         run: cargo test --profile test-checked --target ${{ matrix.platform.target }} -p emusen-dev-module --lib hwcount::tests::a_program_is_counted_between_its_two_lines -- --nocapture
+
+      # The device test needs the card it names and stands down, saying so, where none is here (EmuSen_RustPlatform.md section 31.1); the line is printed here so the log shows which happened.
+      - name: The named graphics card (serenity_device)
+        if: matrix.crate.name == 'emusen_platform' && matrix.platform.test == true
+        run: cargo test --profile test-checked --target ${{ matrix.platform.target }} -p emusen-platform --lib serenity_device::tests::a_device_made_for_no_host_is_the_card_by_its_name_and_an_absent_name_is_refused -- --nocapture
 
       - name: Test Diamond's machine and layers
         if: matrix.crate.name == 'diamond' && matrix.platform.test == true
@@ -528,6 +497,11 @@ jobs:
           repository: RedQuE3n/EmuSen.LunaP
           ref: openemu-library
           path: EmuSen.LunaP
+
+      # What the runner has, printed and never failing, so what a job asks of it is read from the runner itself (EmuSen_RustPlatform.md section 31.1).
+      - name: What this runner has
+        if: runner.os == 'Linux'
+        uses: ./EmuSen-Project/.github/actions/runner-facts
 
       - uses: actions/setup-dotnet@v4
         with:

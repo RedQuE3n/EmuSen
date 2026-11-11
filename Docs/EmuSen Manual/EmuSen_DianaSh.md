@@ -1125,7 +1125,8 @@ prints is a breaking change, made only with a recorded reason and a new golden f
 
 As the core ABI's (`EmuSen_CoreAPI.md` §5): each header is written by hand and normative; its Rust definitions are
 checked against it with bindgen and every field's offset by name; a recorded baseline per surface
-(`abi/dianash/v1/baseline.txt`, `abi/emusen-session/v1/baseline.txt`) is diffed on every pull request, a removed or
+(`abi/dianash/v1/baseline.txt`, `abi/emusen-session/v1/baseline.txt`) is diffed against the base
+branch's where a run of the workflow has a base (none since it is run by hand, `EmuSen_RustPlatform.md` §31.2), a removed or
 changed line failing it and an added line requiring the baseline in the same request. And two checks of this page's own:
 
 - **The shell's crate names no service.** A CI step fails if any identifier declared in `emusen_session.h` or the
@@ -1882,7 +1883,8 @@ constants by value, each export's Rust signature against the header's, each layo
 from the headers with `-std=c11 -Wall -Wextra -Werror -pedantic`), fails on a fact missing from the baseline until
 it is recorded (`DIANASH_ABI_EMIT=1`), fails on a baseline line that is no longer a fact, and, given the base
 branch's baseline (`DIANASH_ABI_AGAINST`), on any line that branch had and this one removed or changed. The core
-ABI's guard job runs it with the base's baseline on every pull request; the platform job compiles `dianash.h` as C99
+ABI's guard job runs it with the base's baseline where its run has a base (none since the workflow is run by hand,
+`EmuSen_RustPlatform.md` §31.2); the platform job compiles `dianash.h` as C99
 and C++17. A second test, `dianash/tests/surface.rs`, is §11.4's: the crate names no identifier `emusen_session.h`
 declares, and depends on no crate of the emulator's but Galaxia's. The layouts are recorded for a 64-bit target;
 a 32-bit one is not a target the project builds.

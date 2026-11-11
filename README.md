@@ -281,8 +281,8 @@ codesign --force --deep --sign - EmuSen.app
 ### Platforms and requirements
 
 We develop and test on Linux, on a desktop and on a Lenovo Legion Go S running SteamOS. Windows and macOS builds come
-from the same tree, and CI runs the Rust cores' tests and their comparisons with the C# cores on both, but they get
-far less play.
+from the same tree, but they get far less play: their CI jobs are paused, and the Rust cores' workflow is run by hand
+(`Docs/EmuSen Manual/EmuSen_RustPlatform.md` §31, §31.2).
 
 A 64-bit x86 processor (or Apple Silicon) is needed. The N64's and the PlayStation's graphics-card renderers,
 RetroArch's shader presets and the Linux picture path use Vulkan. Without a Vulkan device the games still run: the

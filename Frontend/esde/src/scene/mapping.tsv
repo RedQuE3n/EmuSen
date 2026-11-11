@@ -1,5 +1,5 @@
 # The one list of (element, property) pairs and what the scene and its painter do with each (EmuSen_Qt.md §4.5.5).
-# drawn: the scene reads it and the painter draws it. accepted: set by a theme with no visible effect in EmuSen, counted apart from drawn until the tester rules.
+# drawn: the scene reads it and the painter draws it.
 # later:<family>: not drawn yet; the family names the step of EmuSen_Qt.md §4.5.5 that draws it. Every catalogue pair is listed once.
 carousel	pos	drawn
 carousel	size	drawn
@@ -404,26 +404,26 @@ gameselector	selection	drawn
 gameselector	gameCount	drawn
 gameselector	allowDuplicates	drawn
 helpsystem	pos	drawn
-helpsystem	posDimmed	accepted
+helpsystem	posDimmed	later:help-dimmed
 helpsystem	origin	drawn
-helpsystem	originDimmed	accepted
+helpsystem	originDimmed	later:help-dimmed
 helpsystem	rotation	drawn
 helpsystem	rotationOrigin	drawn
 helpsystem	textColor	drawn
-helpsystem	textColorDimmed	accepted
+helpsystem	textColorDimmed	later:help-dimmed
 helpsystem	iconColor	drawn
-helpsystem	iconColorDimmed	accepted
+helpsystem	iconColorDimmed	later:help-dimmed
 helpsystem	fontPath	drawn
 helpsystem	fontSize	drawn
-helpsystem	fontSizeDimmed	accepted
+helpsystem	fontSizeDimmed	later:help-dimmed
 helpsystem	scope	drawn
 helpsystem	entries	drawn
 helpsystem	entryLayout	later:help-layout
 helpsystem	entryRelativeScale	drawn
 helpsystem	entrySpacing	drawn
-helpsystem	entrySpacingDimmed	accepted
+helpsystem	entrySpacingDimmed	later:help-dimmed
 helpsystem	iconTextSpacing	drawn
-helpsystem	iconTextSpacingDimmed	accepted
+helpsystem	iconTextSpacingDimmed	later:help-dimmed
 helpsystem	letterCase	drawn
 helpsystem	backgroundColor	drawn
 helpsystem	backgroundColorEnd	later:gradients
@@ -432,7 +432,7 @@ helpsystem	backgroundHorizontalPadding	drawn
 helpsystem	backgroundVerticalPadding	drawn
 helpsystem	backgroundCornerRadius	drawn
 helpsystem	opacity	drawn
-helpsystem	opacityDimmed	accepted
+helpsystem	opacityDimmed	later:help-dimmed
 helpsystem	customButtonIcon	drawn
 systemstatus	pos	drawn
 systemstatus	height	drawn
@@ -472,4 +472,4 @@ clock	backgroundVerticalPadding	drawn
 clock	backgroundCornerRadius	drawn
 clock	format	drawn
 clock	opacity	drawn
-sound	path	accepted
+sound	path	later:sound

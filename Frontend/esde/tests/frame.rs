@@ -58,7 +58,7 @@ fn close(a: f64, b: f64) -> bool {
 const CAROUSEL: &str = "<carousel name=\"c\"><pos>0 0</pos><size>1 1</size><maxItemCount>3</maxItemCount><itemScale>1.5</itemScale><unfocusedItemOpacity>0.3</unfocusedItemOpacity>";
 
 #[test]
-fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted() {
+fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_not_drawn() {
     let listed: Vec<(String, String)> = mapping::pairs().map(|(k, p, _)| (k.to_owned(), p.to_owned())).collect();
     let unique: BTreeSet<_> = listed.iter().cloned().collect();
     assert_eq!(unique.len(), listed.len(), "a pair listed twice");
@@ -67,10 +67,9 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted() {
     assert_eq!(unique, catalogue);
     let dimmed: Vec<_> = mapping::pairs().filter(|(k, p, _)| *k == "helpsystem" && p.ends_with("Dimmed")).collect();
     assert_eq!(dimmed.len(), 8);
-    assert!(dimmed.iter().all(|(_, _, s)| **s == Mapped::Accepted));
-    assert!(mapping::is_mapped("helpsystem", "textColorDimmed"));
+    assert!(dimmed.iter().all(|(_, _, s)| **s == Mapped::Later("help-dimmed".into())), "R-20261111-75: not drawn until checked");
+    assert_eq!(mapping::status("sound", "path"), Some(&Mapped::Later("sound".into())));
     assert_eq!(mapping::status("video", "delay"), Some(&Mapped::Later("video".into())));
-    assert!(!mapping::is_mapped("carousel", "itemLinearScale"));
     assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 361);
     assert!(
         mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"),
@@ -79,33 +78,23 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted() {
 }
 
 #[test]
-fn a_theme_setting_only_accepted_pairs_counts_none_unsupported() {
+fn a_theme_setting_the_dimmed_help_or_a_sound_counts_them_unsupported_and_not_whole() {
     let t = Synth::new();
     t.capabilities("").theme(
         "<view name=\"system\"><helpsystem name=\"help\"><textColorDimmed>FF0000</textColorDimmed><opacityDimmed>0.5</opacityDimmed></helpsystem></view>
-         <view name=\"gamelist\"><carousel name=\"c\"><itemLinearScale>0.1 0.1</itemLinearScale></carousel></view>",
+         <view name=\"all\"><sound name=\"systembrowse\"><path>./s.wav</path></sound></view>",
     );
     let m = check::measure(&t.root, &["nes"]);
-    assert_eq!(m.properties.get("helpsystem.textColorDimmed"), Some(&"accepted"), "accepted is counted apart from drawn");
-    assert_eq!(m.properties.get("carousel.itemLinearScale"), Some(&"unsupported"), "a later pair is unsupported, not unknown");
-    assert!(m.loads());
-}
-
-#[test]
-fn accepted_pairs_have_a_column_of_their_own_and_are_never_whole() {
-    let t = Synth::new();
-    t.capabilities("").theme(
-        "<view name=\"system\"><helpsystem name=\"help\"><textColorDimmed>FF0000</textColorDimmed><opacityDimmed>0.5</opacityDimmed></helpsystem></view>",
-    );
-    let m = check::measure(&t.root, &["nes"]);
-    assert_eq!(m.count("accepted"), 2);
-    assert!(m.loads() && m.undrawn.is_empty() && m.count("unsupported") == 0 && m.count("unknown") == 0);
-    assert!(!m.whole(), "a theme whose only pairs are accepted is not drawn whole");
+    assert_eq!(m.properties.get("helpsystem.textColorDimmed"), Some(&"unsupported"));
+    assert_eq!(m.properties.get("sound.path"), Some(&"unsupported"));
+    assert_eq!(m.count("unsupported"), 3);
+    assert!(m.loads() && !m.whole());
     let header: Vec<&str> = check::SUMMARY_HEADER.split('\t').collect();
+    assert!(!header.contains(&"accepted"), "no state between drawn and not drawn");
     let row = check::summary_row(&m);
     let cells: Vec<&str> = row.split('\t').collect();
     assert_eq!(cells.len(), header.len());
-    assert_eq!(cells[header.iter().position(|c| *c == "accepted").unwrap()], "2");
+    assert_eq!(cells[header.iter().position(|c| *c == "unsupported").unwrap()], "3");
     assert_eq!(cells[header.iter().position(|c| *c == "whole").unwrap()], "no");
 }
 

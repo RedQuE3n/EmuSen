@@ -2153,12 +2153,13 @@ two views of a pan):
   ES-DE's, the kit's functions the kit's.
 
 **`scene/mapping.tsv`** is now one row per (element, property): all 472 catalogue pairs, each once, with a status. The
-test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted` holds it equal to the catalogue.
+test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_not_drawn` holds it equal to the catalogue.
 
 | Status | Pairs | Meaning |
 |---|---|---|
 | `drawn` | 347 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, measured 2026-11-08) |
-| `accepted` | 9 | the help's eight `*Dimmed` properties (decided 2026-11-08; the design counted six, `THEMES.md` lists eight: `posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`), and `sound.path`, which the host plays |
+| `later:help-dimmed` | 8 | the help's eight `*Dimmed` properties (`posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`): not drawn until each is checked (R-20261111-75, decided 2026-11-11; the `accepted` state of 2026-11-08 is withdrawn) |
+| `later:sound` | 1 | `sound.path`, which the host plays: not drawn until checked (R-20261111-75) |
 | `later:video` | 16 | the video family |
 | `later:gradients` | 22 | the `*ColorEnd` and `*GradientType` pairs the C# did not draw |
 | `later:item-text` | 19 | carousel and grid item text styles and scrolling, the collections' letter cases, name suffixes |
@@ -2173,10 +2174,11 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted` h
 | `later:grid-rows` | 1 | `fractionalRows`: the grid's record carries no row count, so a partial row is drawn either way |
 | `later:text-lines` | 1 | datetime's `lineSpacing`: one line at the top of its box is placed the same at every spacing |
 
-`check` counts a pair as `set` when it is drawn, `accepted` when the table marks it accepted (the eight `*Dimmed`
-properties of `helpsystem` and `sound`'s `path`, a column of their own and never whole, kept apart
-from drawn until the tester rules on them), `unsupported` otherwise; nothing reads `catalog.tsv`'s `deferred`
-column for it any more.
+`check` counts a pair as `set` when it is drawn and `unsupported` otherwise, `sound`'s pairs included; there is no
+state between (R-20261111-75, decided 2026-11-11: the nine pairs once marked `accepted` are counted as not drawn until
+each is checked). Nothing reads `catalog.tsv`'s `deferred` column for it any more. The corpus measure of 2026-11-09
+counted the nine as set: measured again on 2026-11-11 over the 71 themes, 57 rise in `unsupported` by the pairs they
+set and nothing else changes; the committed measure is not changed here.
 
 **`marks`** (`src/marks.rs`): 30 icons as `Mark { aspect, parts }`, each part rings of points in the unit box (the first
 the outline, the rest holes, filled even-odd) filled or stroked at a width in box heights, in the element's colour, the
@@ -2209,7 +2211,7 @@ the scene has no grouped custom collections, which belong to the shelves (the de
 
 No row worsened but one, and that one by loading: NXE Menu loads in all five runs with no error (was 20 errors, 2 unknown properties; its unsupported
 pairs rise from 10 to 12, the two carousel rows now known and `later`). 30 themes set
-fewer unsupported pairs, each by its help's dimmed properties now accepted (CarAlt 8 to 2, Epic Noir Revisited 8 to 2,
+fewer unsupported pairs, each by its help's dimmed properties then accepted, a state withdrawn on 2026-11-11 (R-20261111-75) (CarAlt 8 to 2, Epic Noir Revisited 8 to 2,
 Razor 4 to 2). Atelier and Analogue 3D Menu warn less (6,795 to 6,585 and 2,575 to 2,540), each by the two
 `customCollectionName` values no longer refused. Nine themes now set at most two unsupported pairs; the pairs most often
 unsupported are the video family's (`video.delay` in 55 themes, `pillarboxes` 49), then `carousel.imageInterpolation`
@@ -2225,7 +2227,7 @@ tests pass. Seeded faults, each applied alone and reverted:
 |---|---|
 | carousel slots drawn nearest first | `a_carousel_s_selected_slot_grows…`, `a_carousel_mid_step…`, `a_wheel_turns…` |
 | a list's measurement kept after its name changes | `a_text_list_keeps_the_selection_mid_window_and_scrolls_its_name_once_measured` |
-| accepted pairs counted unsupported | `mapping_lists_every_catalogue_pair_once…`, `a_theme_setting_only_accepted_pairs_counts_none_unsupported` |
+| accepted pairs counted unsupported (the state withdrawn 2026-11-11, R-20261111-75; the tests renamed for it) | `mapping_lists_every_catalogue_pair_once…`, `a_theme_setting_the_dimmed_help_or_a_sound_counts_them_unsupported_and_not_whole` |
 | the swap moving the button but not its icon | `the_help_names_the_project_s_actions_on_the_buttons_and_icons_of_the_pad` |
 | overlays panned with the view | `the_overlays_hold_still_while_the_views_pan_and_both_primaries_are_drawn` |
 | the next change ignoring the scrolls | `a_text_list_keeps_the_selection_mid_window…` |

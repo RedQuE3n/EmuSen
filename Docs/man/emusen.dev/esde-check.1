@@ -30,10 +30,8 @@ DESCRIPTION
         set          the type.property pairs the theme sets, in any run
         unknown      those the loader does not know (an error)
         unsupported  those the scene and its painter do not draw
-        accepted     those the scene's table marks accepted, counted
-                     apart from drawn until the tester rules on them
-        whole        yes when it loads with nothing unknown,
-                     unsupported or accepted and no undrawn kind
+        whole        yes when it loads with nothing unknown or
+                     unsupported and no undrawn kind
         kinds        the element kinds used
         undrawn      kinds not drawn, and carousel:<type> for a wheel
                      carousel, which is drawn only in part
@@ -47,11 +45,13 @@ DESCRIPTION
     (EmuSen_BigPicture.md §12.3).
 
     --properties prints the property map instead, a row a pair: theme,
-    type.property and its state, one of set (drawn), accepted,
-    unsupported or unknown. The scene's table,
-    Frontend/esde/src/scene/mapping.tsv, lists every pair once as drawn,
-    accepted (no visible effect in EmuSen, such as the help bar's dimmed
-    set) or later:<family>; the painter's stages move pairs to drawn.
+    type.property and its state, one of set (drawn), unsupported or
+    unknown. The scene's table, Frontend/esde/src/scene/mapping.tsv,
+    lists every pair once as drawn or later:<family>; the painter's
+    stages move pairs to drawn. A pair is drawn or it is not: the help
+    bar's eight dimmed properties (later:help-dimmed) and a sound's path
+    (later:sound) are counted unsupported until each is checked
+    (R-20261111-75, decided 2026-11-11).
 
     Nothing is fetched: the corpus is fetched beforehand, outside the
     repository (EmuSen_Qt.md §4.5.4), and the command only reads it.

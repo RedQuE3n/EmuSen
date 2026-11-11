@@ -350,6 +350,11 @@ impl Drop for Image {
     }
 }
 
+/// Whether a device's name holds `wanted` whatever its ASCII case; an empty `wanted` holds every name.
+fn holds_name(name: &str, wanted: &str) -> bool {
+    wanted.is_empty() || name.to_ascii_uppercase().contains(&wanted.to_ascii_uppercase())
+}
+
 struct Candidate {
     physical: vk::PhysicalDevice,
     family: u32,
@@ -384,14 +389,7 @@ impl Device {
     /// host can adopt them (EmuSen_Qt.md §1.8); refused, naming it, when one is not offered.
     pub fn create_for(name_contains: Option<&str>, validate: bool, host: &Host) -> Result<Device, String> {
         let unavailable = |why: String| format!("Vulkan is not available: {why}");
-        // SAFETY: the system's loader, whose one entry point has the type Vulkan declares for it; the device keeps
-        // the loader for as long as any handle made through it lives.
-        let loader = unsafe { libloading::Library::new(LOADER) }.map_err(|e| unavailable(e.to_string()))?;
-        let entry = match unsafe { loader.get::<vk::PFN_vkGetInstanceProcAddr>(b"vkGetInstanceProcAddr\0") } {
-            Ok(get_instance_proc_addr) => unsafe { ash::Entry::from_static_fn(ash::StaticFn { get_instance_proc_addr: *get_instance_proc_addr }) },
-            Err(e) => return Err(unavailable(e.to_string())),
-        };
-        let root = Self::root(entry, loader, validate, &host.instance).map_err(unavailable)?;
+        let root = Self::loaded_root(validate, &host.instance).map_err(unavailable)?;
         let instance = &root.instance;
 
         let mut candidates = Vec::new();
@@ -415,11 +413,39 @@ impl Device {
 
         let wanted = name_contains.unwrap_or_default();
         // The first of the lowest rank, as the C#'s stable ordering takes it.
-        let Some(chosen) = candidates.iter().filter(|c| wanted.is_empty() || c.name.to_ascii_uppercase().contains(&wanted.to_ascii_uppercase())).min_by_key(|c| c.rank) else {
+        let Some(chosen) = candidates.iter().filter(|c| holds_name(&c.name, wanted)).min_by_key(|c| c.rank) else {
             return Err(if candidates.is_empty() { "no Vulkan device offers a graphics queue".to_string() } else { format!("no Vulkan device is named like \"{wanted}\"") });
         };
         let (physical, family, name, timestamp_period) = (chosen.physical, chosen.family, chosen.name.clone(), chosen.timestamp_period as f64);
         Self::open(root, physical, family, name, timestamp_period, &host.device).map_err(unavailable)
+    }
+
+    /// The name of the first graphics card on this machine whose name holds `wanted` (as `create` matches it), or
+    /// `None`: a device the driver reports as the CPU is no card. Tests that need real hardware ask this before they
+    /// run and stand down without it (EmuSen_RustPlatform.md §31.1).
+    pub fn card_named(wanted: &str) -> Option<String> {
+        let root = Self::loaded_root(false, &[]).ok()?;
+        let physicals = {
+            let _lists = loader_lists();
+            unsafe { root.instance.enumerate_physical_devices() }.unwrap_or_default()
+        };
+        physicals.into_iter().find_map(|physical| {
+            let properties = unsafe { root.instance.get_physical_device_properties(physical) };
+            let name = properties.device_name_as_c_str().ok()?.to_string_lossy().into_owned();
+            (properties.device_type != vk::PhysicalDeviceType::CPU && holds_name(&name, wanted)).then_some(name)
+        })
+    }
+
+    /// The system's loader opened and an instance made over it.
+    fn loaded_root(validate: bool, host: &[CString]) -> Result<Root, String> {
+        // SAFETY: the system's loader, whose one entry point has the type Vulkan declares for it; the device keeps
+        // the loader for as long as any handle made through it lives.
+        let loader = unsafe { libloading::Library::new(LOADER) }.map_err(|e| e.to_string())?;
+        let entry = match unsafe { loader.get::<vk::PFN_vkGetInstanceProcAddr>(b"vkGetInstanceProcAddr\0") } {
+            Ok(get_instance_proc_addr) => unsafe { ash::Entry::from_static_fn(ash::StaticFn { get_instance_proc_addr: *get_instance_proc_addr }) },
+            Err(e) => return Err(e.to_string()),
+        };
+        Self::root(entry, loader, validate, host)
     }
 
     /// Whether the device offers both extensions an image and its semaphores are exported with.
@@ -1288,6 +1314,48 @@ pub(crate) unsafe fn libc_close(fd: i32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const SOFTWARE_CHILD: &str = "EMUSEN_SERENITY_SOFTWARE_CHILD";
+    const LAVAPIPE: &str = "/usr/share/vulkan/icd.d/lvp_icd.x86_64.json";
+
+    /// Run alone as a child that sees only lavapipe: the device opens by its name, yet it is no card.
+    #[test]
+    fn child_with_only_a_software_driver() {
+        if std::env::var(SOFTWARE_CHILD).is_err() {
+            return;
+        }
+        let device = Device::create(Some("llvmpipe"), false).expect("lavapipe opens by its name");
+        assert_eq!(Device::card_named("llvmpipe"), None, "{} was taken for a card", device.name());
+        assert_eq!(Device::card_named(""), None, "a card was found where only lavapipe is");
+        println!("no card: {}", device.name());
+    }
+
+    /// The card EMUSEN_GPU_DEVICE names (6800 when unset) is found exactly where a device of that name opens and is no CPU.
+    #[test]
+    fn a_card_is_found_where_a_device_of_its_name_opens_on_hardware() {
+        let wanted = std::env::var("EMUSEN_GPU_DEVICE").unwrap_or_else(|_| "6800".into());
+        let hardware = Device::create(Some(&wanted), false).ok().filter(|d| {
+            unsafe { d.inner.root.instance.get_physical_device_properties(d.inner.physical) }.device_type != vk::PhysicalDeviceType::CPU
+        });
+        assert_eq!(Device::card_named(&wanted).is_some(), hardware.is_some(), "the card named {wanted}");
+    }
+
+    #[test]
+    fn a_software_driver_is_no_card_and_a_name_no_card_holds_finds_none() {
+        assert_eq!(Device::card_named("no card is named this"), None);
+        if !std::path::Path::new(LAVAPIPE).exists() {
+            return eprintln!("skipped: no lavapipe at {LAVAPIPE}");
+        }
+        let out = std::process::Command::new(std::env::current_exe().expect("the test binary"))
+            .args(["--exact", "vulkan::tests::child_with_only_a_software_driver", "--nocapture", "--test-threads=1"])
+            .env(SOFTWARE_CHILD, "1")
+            .env("VK_DRIVER_FILES", LAVAPIPE)
+            .output()
+            .expect("the child ran");
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(out.status.success(), "the child failed: {text}{}", String::from_utf8_lossy(&out.stderr));
+        assert!(text.contains("no card: "), "the child did not run its test: {text}");
+    }
 
     #[test]
     fn a_result_is_named_as_the_csharp_binding_names_it() {

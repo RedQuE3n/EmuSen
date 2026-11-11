@@ -880,10 +880,13 @@ mod tests {
     }
 
     /// On the RX 6800 (EMUSEN_GPU_DEVICE names another): `_new` is `_new_for` with no host's extensions, the same card by
-    /// the same name, and a name no card holds is refused with the words why.
+    /// the same name, and a name no card holds is refused with the words why. Stands down where no such card is here.
     #[test]
     fn a_device_made_for_no_host_is_the_card_by_its_name_and_an_absent_name_is_refused() {
         let wanted = std::env::var("EMUSEN_GPU_DEVICE").unwrap_or_else(|_| "6800".into());
+        if Device::card_named(&wanted).is_none() {
+            return eprintln!("skipped: no graphics card named {wanted} here");
+        }
         let name_of = |h: *const DeviceHandle| {
             let mut out = [0u8; 256];
             let n = unsafe { emusen_serenity_device_name(h, out.as_mut_ptr(), out.len()) };

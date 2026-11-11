@@ -3354,6 +3354,63 @@ the NuGet cache out of reach and `EMUSEN_SQLITE` unset, and five of five pass wi
 WiseMan job's "The libraries beside the tests" step failed only because that Test step stopped the library job before
 its upload, so `emusen_platform` was never downloaded; `ls` on a missing library still stops that step.
 
+**Tests that need a named graphics card.** *Decided 2026-11-11 by the tester:* a test that needs real consumer hardware
+(a named graphics card, hardware counters) is not asked of a hosted runner. It stands down, printing why, where the
+hardware is absent, and runs in full on the desktop and in the landing gate; it is not made to pass on a runner by
+pointing it at a software driver. Serenity's `Device::card_named(name)` is the one question such a test asks: the first
+device whose name holds `name` (matched as `Device::create` matches it), a device the driver reports as the CPU being no
+card. Where it answers `None`, the test prints `skipped: no graphics card named <name> here` and passes; where it
+answers, the test runs in full and fails as before, including when the card gives no device. Two tests take this form:
+
+- `emusen-platform`, `serenity_device::tests::a_device_made_for_no_host_is_the_card_by_its_name_and_an_absent_name_is_refused`.
+  On the run of 2026-11-11 (`43081556945`) it failed in the library job and in the shared job with "a device named 6800".
+  The library job now runs it once more with `--nocapture`, as it does `hwcount`'s, so the log shows which happened.
+- `emusen-core-broker`, the five tests of `tests/api_ring.rs`. They skipped where no device of the name opened, which
+  would also have hidden a card that stopped giving one; that now fails.
+
+**Why `api_ring` failed in the local nightly on 2026-11-11 and not before.** The nightly (`.claude/tools/nightly.sh`)
+runs with `VK_DRIVER_FILES` naming lavapipe's driver alone. On 2026-11-09 and -10 `EMUSEN_GPU_DEVICE` was unset, so the
+tests asked for "6800", no device of that name opened, and all five skipped (0.04 s). Between the run of 2026-11-10 and
+that of 2026-11-11 the script began to set `EMUSEN_GPU_DEVICE=llvmpipe`; the same test binary (`api_ring-2c04f5b476b6983b`
+in both logs, so no code changed) then opened lavapipe and ran. Lavapipe makes no ring (`Device::rings()` is false: it
+refuses the timeline semaphore's export, `EmuSen_DevicePicture.md` §5.6), so the engine lends the core none and logs
+why, and every frame reports `picture_in_ring` 0 where the tests expect 1. That is the engine's specified behaviour on
+such a device, not a defect: the tests assumed every device they opened makes rings. Measured on 2026-11-11 on the
+desktop under the nightly's environment: `libretro.rs`'s ring test prints "no Vulkan device here can make a ring", and
+the five `api_ring` tests now print the skip line and pass.
+
+**Other tests in `Platform/` and `EmuSen/Cores/Shared/` that open a device, unchanged** (each passes where the card is
+absent): Serenity's `ring.rs` tests skip with "no Vulkan device" or "the device makes no ring"; the broker's
+`libretro.rs` ring test skips where no device makes a ring, and its measurement runs only when asked for; Serenity's loader race
+test runs only when asked for; `emusen-gpu`'s `tests/device.rs` and `tests/lent.rs` return early where no device opens.
+
+**What the runner has, and what each job needs of it.** *Decided 2026-11-11 by the tester:* what a job asks of a runner
+is decided from what the runner has, found by asking it. Every Linux job's first step after its checkout is "What this
+runner has" (`.github/actions/runner-facts`), which prints the image, threads, memory, disk, kernel,
+`perf_event_paranoid`, `/dev/dri`, `vulkaninfo --summary` and the SQLite, Vulkan and SDL2 libraries, and fails on
+nothing. Until a run prints them, the rows below come from the logs of runs `43072535496` and `43081556945` (2026-11-11)
+and from GitHub's page "GitHub-hosted runners" (docs.github.com/en/actions/reference/runners/github-hosted-runners, read
+2026-11-11), for a public repository's standard runners; where the two disagree the log wins.
+
+| What | ubuntu-22.04 (shared, abi-guard, diamond-kernel, library) | ubuntu-24.04 (plan, reuse, WiseMan) | Source |
+|---|---|---|---|
+| Image | 20261101.347.1 | 20261101.360.1 | seen in the logs |
+| Threads, memory, disk | 4, 16 GB, 14 GB | 4, 16 GB, 14 GB | from GitHub's documentation, not yet seen in a run |
+| `sudo` | passwordless | passwordless | GitHub's documentation; seen (`apt-get` steps succeed) |
+| `libsqlite3.so.0` | present (no install ran) | not yet seen in a run | seen in the logs of `43081556945` |
+| A graphics card | none named 6800 | not yet seen in a run | seen: the device test's failure; GPUs only on larger runners per the documentation |
+| Hardware counters | not yet seen in a run | not yet seen in a run | the documentation does not say |
+
+| Job | Needs | Has it? |
+|---|---|---|
+| shared | Rust, a C compiler, SQLite for the platform's tests | yes |
+| shared, library (`emusen_platform`): the device and `api_ring` tests | a graphics card by name | no: they stand down |
+| library (`emusen_platform`): `hwcount` | hardware counters | not yet seen; the test stands down without them |
+| abi-guard | libclang (installed by the job) | yes |
+| diamond-kernel | the pinned nightly toolchain with `rust-src` | yes |
+| plan, reuse | Python 3, `gh` | yes |
+| WiseMan | .NET 10 (installed by the job), glibc 2.38 for SDL3 | yes (24.04's glibc) |
+
 ## 32. Interface 14, 2026-10-17: the save media's format modules, and the packs' code after them
 
 With the backend's step B3 (`EmuSen_Backend.md` §13), `emusen-systems` gained the packs' code and the library its C

@@ -4780,7 +4780,7 @@ tile. The program does the same: the content's reset lets the tiles' list drop i
 comes back the list's current index is set to the first tile. The page test deletes Slot 1 (the first tile) and then
 Slot 3 (the third), and after each the tiles hold the focus on the first tile; a list that kept its index through the
 reset would be on the third. Before Kit §7.58 the program's tiles kept their model through the reset; seeded back
-(`faults/12`), the second deletion leaves the focus on tile 2, so WiseMan's page before this piece differed from
+(a seeded fault), the second deletion leaves the focus on the third tile (index 2), so WiseMan's page before this piece differed from
 Mistress's and this piece keeps Mistress's.
 
 **No call back into the page from inside its own reset (2026-11-11).** When the tiles' list lets its model go at

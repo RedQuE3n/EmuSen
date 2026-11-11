@@ -179,3 +179,22 @@ pub fn write_clip(path: &std::path::Path) {
 /// depend on the minute they are read in.
 #[allow(dead_code)]
 pub const HELD_NOW: &str = "1793966400";
+
+#[allow(dead_code)]
+/// What the program holds at a failure, for the message that reports it: the screen shown, each model's problem, and the
+/// item holding the focus with those it sits in.
+pub fn state(scene: &mut Scene<'_>) -> String {
+    let problems: Vec<String> = ["library", "session", "pageModel", "settingsModel"].iter().map(|m| format!("{m} {:?}", scene.property(m, "problem"))).collect();
+    format!("shown {:?}; problems: {}; the focus: {:?}", scene.property("screens", "shown"), problems.join(", "), console::focus_chain(scene))
+}
+
+#[allow(dead_code)]
+/// `assert_still`, its failure saying what the program held then (`state`).
+#[track_caller]
+pub fn assert_still_saying(scene: &mut Scene<'_>, what: &str) {
+    let still = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| scene.assert_still(what)));
+    if let Err(failure) = still {
+        let said = failure.downcast_ref::<String>().cloned().or_else(|| failure.downcast_ref::<&str>().map(|s| (*s).to_owned())).unwrap_or_default();
+        panic!("{said}\nat the failure: {}", state(scene));
+    }
+}

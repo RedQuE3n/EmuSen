@@ -89,7 +89,7 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Home, Ask::Place(POWER_PLACE)) => Some((Shown::HomeCard, Some(crate::home_card::POWER.to_owned()))),
         (Shown::Home | Shown::Grid | Shown::SearchGrid | Shown::HomeCard, Ask::Act(key)) if key == GAME_PAGE => Some((Shown::Page, None)),
         (Shown::Home, Ask::Act(key)) if key == SEARCH => Some((Shown::Search, Some(crate::library::ALL.to_owned()))),
-        // Start on Home opens the Home card at its first page, as Mistress's Start did over Home (decided 2026-11-11).
+        // Start on Home opens the Home card at its first page (decided 2026-11-11); Mistress's did so on the desktop, her big screen's focused Home's start.
         (Shown::Home, Ask::Act(key)) if key == HOME => Some((Shown::HomeCard, Some(crate::home_card::FIRST.to_owned()))),
         (Shown::Consoles | Shown::Grid | Shown::Search | Shown::SearchGrid, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
         (Shown::HomeCard, Ask::Back | Ask::Close) => Some((Shown::Home, None)),

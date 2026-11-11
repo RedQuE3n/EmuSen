@@ -4899,22 +4899,33 @@ The status words and the core's names are never cut at the gate's sizes. The wor
 column declares that it gives way (`Column::gives_way`), and the kit's `ToolScreen` picks the words by the width laid out.
 The order is the core's, as Mistress's `CoreRow.ConsolesOf` kept it: its systems in the order it declares them, each
 console once (`row::Consoles::of`). The pane's caption lists them all. At 1920 × 1080, 1280 × 720 and 3840 × 2160 the
-room holds every whole list.
+console column is given 364 and SameBoy's two consoles (291.36) are read whole; at 1280 × 800 and 1920 × 1200 it is
+given 278 and they read "Game Boy +1". Genesis Plus GX's four (458.09) fit at no gate size and read "Genesis +3" at all
+five (measured on 2026-11-11, `cores-fit-software.tsv`).
 
 Two measures were wrong besides, each fixed in the kit. `ColumnFit` measured words with `QFontMetricsF`, which disagrees
 with `Text`'s design-metric layout by up to half a unit; and a fill column had no measure of its words, so nothing kept
-`Mupen64Plus-Next` whole (EmuSen_Kit.md §7.106). The strip's wheel was the kit's too (§7.105): it moves the strip only
-where the names run past it, and the strip is not dragged, as it never was before this piece.
+`Mupen64Plus-Next` whole (EmuSen_Kit.md §7.106). The strip's wheel was the kit's too (§7.105): where the names run past
+the strip it is a scroller, which the wheel and the walk move and a drag does not, and where they fit it is no scroller.
+The gate's rule for a flickable's wheel, which an earlier pass of this piece had widened to fit the strip, is back as it
+was.
 
 `cores_fit` and `cores_fit_gpu` now fail on any finding the gate gives on Cores in either look at any size, not the
 wheel's alone, and on any cell given less than its words take, a status column given other than its widest words, or a
-core of several consoles read as neither its whole list nor its first console and a count; on 2026-11-11 both passed
-with no finding. kit-core's `table`, kit-gallery's `screens` (one console, four and twenty, the four fit sizes, both
-variants) and qt-models' `cores` (the wording, twenty consoles in the core's order) hold the rest.
+core of several consoles read as neither its whole list nor its first console and a count. They hold both sides of
+giving way: a cell that gives way must read its whole list exactly where the list's width fits the cell (the width of
+the hidden whole text, `ToolScreen`'s `whole`, against the cell's), SameBoy's two consoles must be read whole at some
+size and as "Game Boy +1" at another, in each look, and a core of one console (NES, Super Nintendo) whole at every size.
+kit-core's `table`, kit-gallery's `screens` (one console, two, four and twenty, the four fit sizes, both variants, the
+same rule for each cell, and the pane of the twenty-console core, whose caption names all twenty, wrapped and never
+cut) and qt-models' `cores` (the wording, twenty consoles in the core's order) hold the rest. No core of the program's
+data declares twenty consoles, so the twenty-console row and pane are held on the gallery, not in qt-app.
 
-**The game page's States hold.** qt-app's `game_page` failed at GamePageStates ("the pad does not reach" the State
-tiles) intermittently on this branch. It fails on WiseMan's base too, and the branch this piece sits on has since
-changed that page's focus, so it is not this piece's: left as it is, with no wait added.
+**The game page's States hold, and idle's stillness.** qt-app's `game_page` failed at GamePageStates ("the pad does not
+reach" three State tiles) and `idle` at Home's `assert_still` (two frames swapped, the Settings rows' words dirty) once
+each under load on this branch. No wait was added. Each now says, when it fails, what the program held then: the screen
+shown, the library's, session's, page's and settings' problems, and the focus with the items it sits in (`common::state`;
+`game_page` adds every walkable's box and whether it is shown, `idle` wraps `assert_still`).
 
 **A card after a session holds the focus.** In qt-app's `console` on the GPU, the List card opened over the grid after a
 console session had ended took no press: the focus was on the window's root item, and the walk read Home's status line
@@ -4925,10 +4936,30 @@ is not remade under the resting pointer. The fix is the kit's: the pointer focus
 §7.107). The Home card's first page was walked by the pad and the pointer after a session in the same runs, and its
 focus was on its first row each time.
 
+A card made under a resting pointer still took the pointer's focus while the pad was in use: the row Start's Home card
+slid under the pointer, and on Home rebuilt after a session the tile that came there. Whether the pointer moved is now
+the window's fact, not each controller's, and only a real pointer event moves it (EmuSen_Kit.md §7.108). The same walk
+runs with the pointer left resting under the ES-DE theme across a game's session (`esde`: the Home card's Continue
+focused, Down and Up moving), in the own look across a game's session (`console`: the List card over the grid, its
+first row focused, Down moving), and with Start's Home card on the software tier (`cards`).
+
+The fifth pass recorded that Home's Continue took the pointer's focus "while no game was suspended". It is a defect of
+the reference theme, not of the kit: `themes/emusen/screens/Home.qml` keeps its Continue walkable enabled with no game,
+where the walk never reaches it (`focusItems`, `activeFocusOnTab: Session.hasGame`) and its A does nothing, so a moving
+pointer gives the focus, and its ring, to a box A cannot act on. A resting pointer no longer does (§7.108). It is not
+changed here; the tester is asked.
+
+**Changes the player sees beyond the three rulings, for the tester.** Three changes of this piece are not covered by
+R-20261111-25, -26 or -27: every card's line under its rows now wraps instead of being cut (`MenuCard.qml`); Change
+Disc says "Not known" on each of a game's discs and offers "Open the tray" when the runtime's disc index cannot be read
+(`pause.rs`, `UNREAD_DISC`); and Cores' pane, when the runtime cannot say whether the firmware is there, now gives the
+runtime's words ("⚠ EmuSen's runtime could not say whether you have one: …. Firmware, under X, says more.") where it
+dropped them.
+
 **The Home card says only lists it could not read.** The library's `toolSummaries` is empty until each tool's stage fills
 it, and `home_card::read_lists` read the empty text as JSON it could not read. The Home card's first page then said "The
 tools' lines could not be read: EOF while parsing…" under its rows, cut with an ellipsis. qt-app's `console` gate found
-it at four of the five sizes (HomeCardContinueConsole). An empty text is now none (qt-models' `home_card_acts`), as for
+it at all five sizes (HomeCardContinueConsole). An empty text is now none (qt-models' `home_card_acts`), as for
 the ES-DE media index. The card's line under its rows wraps instead of being cut, so a list that really cannot be read
 is said whole (qt-app's `cards`, HomeCardUnread, held at the five sizes).
 
@@ -4937,7 +4968,7 @@ is said whole (qt-app's `cards`, HomeCardUnread, held at the five sizes).
 pointer, Most played with a tie, the List card held at the five sizes), `cards` (HomeCardUnread among its holds),
 `failures`, `console_fails` and `cores_fit` on the software tier, and on the GPU `console` (every walk named above, the
 List card's second opening after a session among them), `esde`, `cores_fit_gpu` and `acceptance`; kit-gallery's `strip`,
-`strip_fits` and `disabled`. qt-app's `esde` ran to its end for the first time: after the Cores assert, its missing-theme
+`strip_fits`, `disabled`, `pointer` and `screens`. qt-app's `esde` ran to its end for the first time: after the Cores assert, its missing-theme
 fallback and `assert_quiet` passed with nothing to report. Everything it walks passes: a NES game with no engine fails and
 is said, the theme back; Continue resuming the game; Tools ▸ Cores by the pointer and ▸ Themes by the pad, B back to the
 theme; the Home card and Themes held at the five sizes; Start Console from the Home card by the pad and by the pointer and

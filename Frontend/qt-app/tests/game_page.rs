@@ -213,7 +213,12 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
 
     section(&mut scene, 1);
     assert_eq!(scene.property("pageModel", "shows"), "1");
+    let before = report.len();
     hold(&mut scene, "GamePageStates", &mockup::Mockup::default(), nothing_named, &mut report);
+    if report.len() > before {
+        let tiles: Vec<String> = scene.tree().nodes.iter().filter(|n| n.ty.starts_with("Walkable")).map(|n| format!("{} {:?} at {:.0},{:.0} {}x{} visible {}", n.id, n.name, n.x, n.y, n.w, n.h, n.visible)).collect();
+        report.push(format!("GamePageStates, at the failure: {}; shows {}; the walkables: {tiles:?}", common::state(&mut scene), scene.property("pageModel", "shows")));
+    }
     // X on Slot 1 asks first, No focused: A keeps the state; X again, Down to Delete, A deletes it, its picture and its record.
     let slot1 = platform.save_path(SAVE_STATE, rom.to_str().unwrap(), None, 1).unwrap();
     scene.pad(UiButton::Down);

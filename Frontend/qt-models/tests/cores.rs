@@ -493,7 +493,7 @@ fn a_failed_rescan_and_an_unread_firmware_are_said_never_taken_for_none_needed()
     tool.choose_section("PlayStation");
     focus_on(&mut tool, "Diamond");
     let said = words(&tool.pane().sentences).iter().map(|w| w.to_string()).collect::<Vec<_>>();
-    assert!(said.contains(&"⚠ EmuSen's runtime could not say whether you have one; Firmware, under X, says why.".to_owned()), "{said:?}");
+    assert!(said.contains(&"⚠ EmuSen's runtime could not say whether you have one: the runtime is gone. Firmware, under X, says more.".to_owned()), "{said:?}");
     tool.more();
     let page: Vec<String> = tool.card().unwrap().2.into_iter().map(|r| r.label).collect();
     assert!(page.contains(&"Firmware".to_owned()), "the page that says why is offered: {page:?}");

@@ -62,7 +62,7 @@ pub struct Cores {
     firmware_of: HashMap<String, String>,
     /// The consoles that start with no game in them, whose firmware every game needs.
     starts_empty: HashSet<String>,
-    have_firmware: RefCell<HashMap<String, Result<Have, ()>>>,
+    have_firmware: RefCell<HashMap<String, Result<Have, String>>>,
     listing: Vec<Core>,
     tool_rows: Vec<Core>,
     rows: Vec<Core>,
@@ -508,15 +508,15 @@ impl Cores {
     }
 
     /// The firmware of the row's first console as the runtime finds it (`firmware::have`), an error where the runtime
-    /// failed; none for a row with no console.
-    fn have_firmware(&self, row: &Core) -> Option<Result<Have, ()>> {
+    /// failed, with its words; none for a row with no console.
+    fn have_firmware(&self, row: &Core) -> Option<Result<Have, String>> {
         let first = row.consoles.first()?;
         let system = row.systems.iter().find(|s| self.consoles.console_of.get(*s) == Some(first)).or(row.systems.first())?;
         if let Some(known) = self.have_firmware.borrow().get(system) {
-            return Some(*known);
+            return Some(known.clone());
         }
-        let have = self.backend.firmware(system).map(|files| firmware::have(&files)).map_err(drop);
-        self.have_firmware.borrow_mut().insert(system.clone(), have);
+        let have = self.backend.firmware(system).map(|files| firmware::have(&files));
+        self.have_firmware.borrow_mut().insert(system.clone(), have.clone());
         Some(have)
     }
 
@@ -592,7 +592,7 @@ impl Cores {
             match self.have_firmware(row) {
                 Some(Ok(Have::Found)) => said.push(Words::new("✓ You have one.", Tone::Success)),
                 Some(Ok(Have::Missing)) => said.push(Words::new("⚠ None found yet. Firmware, under X, says where it goes.", Tone::Attention)),
-                Some(Err(())) => said.push(Words::new("⚠ EmuSen's runtime could not say whether you have one; Firmware, under X, says why.", Tone::Attention)),
+                Some(Err(why)) => said.push(Words::new(format!("⚠ EmuSen's runtime could not say whether you have one: {why}. Firmware, under X, says more."), Tone::Attention)),
                 _ => {}
             }
         }

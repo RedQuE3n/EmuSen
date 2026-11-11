@@ -3233,6 +3233,10 @@ and its shelves at x 32 are the canvas's camera rule (horizon.md §1.6) applied 
 sizes. Constellation is not: its chart is the program's 88 and 484 against the canvas's 96 and 468, its Games shows no
 sixth cell, and its Choose a console mockup draws eleven bodies where the default library shelves four, so `body.4` to
 `body.10` are not shown (the mockup wants the `eleven` catalogue, which the theme tests do not yet place for it). The
+tester ruled on 2026-11-11 (R-20261111-33) that these differences are not fixed: Constellation is pulled from the
+program until the new default look lands, and its mockup test (`qt_3_4_5_constellation_is_held_to_its_mockups`) goes
+with it (third pass). Its package stays in `Frontend/themes/constellation` and its mockups in `Testing/themes`; only
+the program's resources no longer carry it (`EmuSen_Qt.md` §3.4.5). The
 reference theme's Choose a console over `eleven` differs from its canvas in 50 lines: the places' left edges (8.6, 5
 and 1.3 units right of the canvas's), the focused body at 88 against 96 with its ring and words 4 units higher, the
 full name's line box 53 against 44, and the three covers under the key 73 units wide at x 973, 1058 and 1143 against

@@ -1387,6 +1387,13 @@ the theme before its fix, which a revert restores.
 
 #### 3.4.5 Constellation as built **[M 2026-11-09]**
 
+**Pulled from the program, 2026-11-11.** The tester ruled (R-20261111-33) that Constellation's 20 differences from its
+mockup are not fixed and that it is pulled until the new default look lands, its mockup gate with it. The themes the
+program carries are the blocks of `qt-app/themes.qrc`; Constellation's block is removed, so the program no longer
+carries it, and theme-audit's mockup test for it is removed. Its package and its mockups stay in the tree. The Themes tab
+itself lists the reference and the folders of the themes store (§3.8's rows), so no built-in theme but the reference
+appears there in either case. Held by qt-app's `qt_3_4_5_the_program_carries_the_built_in_themes_but_constellation`.
+
 "Constellation" (`Frontend/themes/constellation/`, resources at `qrc:/emusen/themes/constellation/`) is the design of
 `qt-s3/final/constellation.md`: Home a star chart whose lines are the pad's walk, Choose a console the makers as figures
 (the kit's `FigureLayout`, `EmuSen_Kit.md` §7.31), Games a grid joined by connectors. Written against `EmuSen.Theme` alone;

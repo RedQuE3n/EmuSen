@@ -103,3 +103,14 @@ fn qt_3_4_2_the_program_s_reference_theme_is_the_package_theme_audit_holds_to_it
     assert!(wanted.iter().any(|(alias, _)| alias == "screens/Consoles.qml"), "Choose a console is the package's");
     assert_eq!(listed, wanted, "the resources' reference theme is Frontend/themes/emusen, file for file");
 }
+
+#[test]
+fn qt_3_4_5_the_program_carries_the_built_in_themes_but_constellation() {
+    // R-20261111-33: Constellation is pulled until the new default look lands; its files stay in Frontend/themes (EmuSen_Qt.md §3.4.5).
+    let qrc = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/themes.qrc")).unwrap();
+    let carried: Vec<&str> =
+        qrc.split("<qresource prefix=\"/emusen/themes/").skip(1).map(|b| &b[..b.find('"').unwrap()]).collect();
+    assert_eq!(carried, ["emusen", "horizon", "meridian", "orrery"]);
+    assert!(!qrc.contains("themes/constellation/"), "no file of Constellation's in the resources");
+    assert!(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../themes/constellation/theme.json").is_file(), "its package kept");
+}

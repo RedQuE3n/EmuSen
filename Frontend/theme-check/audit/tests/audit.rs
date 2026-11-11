@@ -412,11 +412,6 @@ fn qt_3_4_4_meridian_is_held_to_its_mockups() {
 }
 
 #[test]
-fn qt_3_4_5_constellation_is_held_to_its_mockups() {
-    built_in("constellation");
-}
-
-#[test]
 fn qt_3_4_6_orrery_is_held_to_its_mockups() {
     built_in("orrery");
 }

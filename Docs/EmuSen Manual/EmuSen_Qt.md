@@ -3361,10 +3361,19 @@ step of a glyph is not a function of its own advance, and the cause belongs to t
    (`joint.py`, `fam.py`). Within each word alone a carried fraction fits every copy but `x00` and `x01`
    (`phase3.py`), which no single anchor joins.
 
-**[blocked]** for the tester: the rule is not found. The next captures, `helpwords.tsv` (Back and Favorites alone
-at the `z` sizes, View Media alone at 18–24 px), separate a rule of the space or of two words (Favorites, one word of
-nine glyphs, would then follow its rounded advances) from one of the label's length, and show whether whole sizes
-widen too.
+The captures of 2026-11-11, `helpwords.tsv` (`b`, Back alone, and `f`, Favorites alone, at the `z` sizes; `vw`,
+View Media alone at 18, 19, 21, 22, 23 and 24 px), read the same way (`words.py`): Back and Favorites, one word of
+four and of nine glyphs, take every glyph's rounded advance at all eleven sizes, so the label's length is not the
+cause. View Media widens at whole sizes too, by a pixel or two at 18, 19, 21, 22 and 23 px and not at 20 or 24
+(`vw18`: i at 3.44 px drawn 4, the label 67 px where its rounded advances give 66), so neither is the size's fraction.
+What is left belongs to the label of two words. A size for the whole label drawn larger (rasters and rounded
+advances at 1.0125–1.03 times the size) fits the column profiles a little better than the label's own size, but
+Select's profiles fit 1.01 times as well, so the rasters do not settle it (`gsize.py`), and a carried fraction from
+one free anchor fits 15 of the 39 View Media copies (`vwphase.py`).
+
+**[blocked]** for the tester: the rule by which ES-DE draws a help label of two words is not found. Single-word
+labels in the own face follow their rounded advances; View Media is drawn 1–3 px wider at sizes both fractional and
+whole.
 
 **The hinter (decided 2026-11-10).** harfrust and read-fonts shape and read tables but do not hint, so the hinted height
 comes from the system's FreeType, the library the captures were drawn with (FreeType 2.14.3 on Fedora 44), loaded at run

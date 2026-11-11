@@ -1153,6 +1153,9 @@ are unchanged.
   - the worlds;
   - the foot: the full name, the facts, the engine line, and three covers.
 - `parts/CoverRow.qml`, new: three covers whole at the console's shape, no taller than 100 and no wider than 150, 12 apart.
+  The shape is `coverShape`, width over height, which theme-qt turns from the systems table's `cover_aspect` (height over
+  width, `EmuSen_Interface.md` §21). Until 2026-11-11 theme-qt handed on the table's figure unturned, so every theme drew
+  a Super Nintendo cover 73 wide where it is 137 and a NES cover 143 where it is 70; theme-qt's view test holds the turn.
 - `parts/EngineLine.qml`, new: the mark, the engine's name and its tag, in the console's hue on the night in both
   variants (until 2026-11-09 darkened by day to 30% lightness to hold 4.5:1 on the paper).
 - `parts/EngineMark.qml`: libretro's badge is now drawn in the ink it is given, as the canvas draws it. It was a fixed
@@ -1198,12 +1201,12 @@ canvas's own; kit-core's test holds them within 0.01 unit.
    Up and Down stop at the ends.
 3. The ring does not breathe (decided 2026-11-08): the reference theme keeps an idle screen at no redraw, which
    `idle.rs` holds. The spec's resting breath is not drawn.
-4. The places' widths are the faces' own: each name is measured, where the canvas places its row by an estimate of
-   11.5 units a letter. The spec's rule is the row centred with 48 between. The canvas's own browser draws the three
-   names 100.54, 108.71 and 165.92 wide (measured 2026-11-09 in headless Chrome), shorter than its estimate, so its
-   drawn row stands 3.5 units left of centre and its gaps are 51.5 and 54.3. Under the spec's rule with those widths the
-   first disc stands at 326.4; the screen puts it at 326.6. The mockup spec holds the rule's positions, and notes the
-   canvas's estimated ones (318, 522, 737).
+4. The places stand where the canvas stands them (R-20261111-34, 2026-11-11). The canvas sizes each place's slot as
+   52 + 11.5 units a letter of its name, the row centred with 48 between (`placesRow` in `consoles.html`), so its discs
+   stand at 318, 522 and 737 though its browser draws the names 100.54, 108.71 and 165.92 wide (measured 2026-11-09 in
+   headless Chrome). The screen sizes a place the same way, or by the name's own width where that is wider, so no name
+   runs into the next disc. Until 2026-11-11 each slot was the measured name, which stood the first disc at 326.6 and
+   the second at 527.0: four lines a size against the canvas. Seeded back, the canvas test names them again.
 5. After the first focus, the shown makers move only when the focus leaves them, as spec §3.1 asks; the canvas centres
    the focused maker on every press.
 6. The canvas's 17-unit words (the counts, the maker labels and the engine line) are 19, since at 17 they fell under the

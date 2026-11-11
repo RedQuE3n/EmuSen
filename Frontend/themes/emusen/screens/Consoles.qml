@@ -30,7 +30,8 @@ ThemeScreen {
         Accessible.description: place.line
         // The section last opened has the focus, else the first console, else the first shelf.
         focus: Browse.section.length > 0 ? place.key === Browse.section : Library.consoles.count === 0 && place.index === 0
-        width: 52 + placeName.implicitWidth
+        // The canvas's slot, 11.5 units a letter, else the name's own width where that is wider (EmuSen_Qt.md §3.4.2).
+        width: 52 + Math.max(Math.round(place.name.length * 11.5), placeName.implicitWidth)
         height: 40
         onCentreXChanged: layout.lead(place.index, place.centreX)
         onActiveFocusChanged: {

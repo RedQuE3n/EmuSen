@@ -212,6 +212,8 @@ mod tests {
         assert!(options(&args("hwcount -- prog")).unwrap_err().contains("required"));
         assert!(options(&args("hwcount --from a")).unwrap_err().contains("required"));
         assert!(options(&args("hwcount --per 0 --from a -- p")).unwrap_err().contains("above 0"));
+        assert_eq!(options(&args("hwcount --period 1 --from a -- p")).unwrap().period, 1);
+        assert!(options(&args("hwcount --period 0 --from a -- p")).unwrap_err().contains("above 0"));
         assert!(options(&args("hwcount --nope")).unwrap_err().contains("not an option"));
     }
 
@@ -233,8 +235,11 @@ mod tests {
         let program = "echo begin >&2; i=0; while [ $i -lt 300000 ]; do i=$((i+1)); done; echo end >&2; echo printed";
         let text = run(&["hwcount", "--from", "begin", "--to", "end", "--", "bash", "-c", program].map(str::to_string)).unwrap();
         let thread = text.lines().find(|l| l.starts_with("thread ")).unwrap_or_else(|| panic!("{text}"));
-        let instr: u64 = thread.split_whitespace().nth(4).unwrap().parse().unwrap();
-        assert!(instr > 1_000_000 && text.contains("exit 0") && text.ends_with("printed\n"), "{text}");
+        let field = |name: &str| -> u64 { let w: Vec<&str> = thread.split_whitespace().collect(); w[w.iter().position(|x| *x == name).unwrap() + 1].parse().unwrap() };
+        let (instr, cycles, branches) = (field("instr"), field("cycles"), field("branches"));
+        // 300000 loop turns cost at least 100 instructions each; a branch is an instruction, and no core retires 8 a cycle.
+        assert!(instr >= 30_000_000 && branches <= instr && instr <= cycles * 8, "{text}");
+        assert!(text.contains("exit 0") && text.ends_with("printed\n"), "{text}");
     }
 
     #[test]

@@ -1,16 +1,22 @@
-//! A test's excuses (EmuSen_Kit.md §7.100): each finding a test does not count names the one item it excuses, the finding,
-//! the size it holds at and who decided it; an excuse that excused nothing by the time the test ends fails the test.
+//! A test's excuses (EmuSen_Kit.md §7.100): each finding a test does not count names its kind, the items it is
+//! about, the size it holds at and who decided it; an excuse that excused nothing by the time the test ends fails the test.
 
+use crate::mockup::Difference;
 use crate::tree::Node;
+use emusen_kit_core::audit::{Exempted, Fault, SMALL_TEXT_EXCEPTIONS};
+use emusen_kit_core::input::ElementId;
 
 /// One finding a test does not count.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Excuse {
-    /// The finding's words as the gate or the mockup writes them: `low contrast`, `too small to read`, `Y`.
+    /// The finding's kind: kit-core's `Fault::kind` or `Exempted::kind` (`low contrast`, `cut with an ellipsis`), or a
+    /// mockup difference's (`Y`, `not shown`).
     pub finding: &'static str,
-    /// The objectName of the one item it excuses.
+    /// The objectName of the item it excuses.
     pub item: &'static str,
-    /// Words the item's own words hold, where its name is shared by others (a row's `value`); empty for any.
+    /// The other item of a finding about two (an overlap, a limit passed, an edge cut at); empty for a finding about one.
+    pub with: &'static str,
+    /// Words the item's own words hold; needed where its name is shared by others (a row's `value`).
     pub words: &'static str,
     /// The window size it holds at; every size when `None`.
     pub size: Option<(i32, i32)>,
@@ -18,15 +24,98 @@ pub struct Excuse {
     pub why: &'static str,
 }
 
-/// A test's excuses and how often each excused a finding; dropped with one unused, the test fails.
+/// One item a finding names, as the tree has it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Named {
+    pub name: String,
+    pub ty: String,
+    pub text: Option<String>,
+    /// Whether another item of the tree has its name, so that the name alone does not tell which it is.
+    pub shared: bool,
+}
+
+/// One finding of a held state in the one form an excuse reads: its kind, the items it names and its line.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Finding {
+    pub kind: &'static str,
+    pub items: Vec<Named>,
+    pub line: String,
+}
+
+fn named(id: ElementId, nodes: &[Node]) -> Named {
+    let Some(n) = nodes.get(id.0 as usize) else { return Named { name: format!("#{}", id.0), ..Named::default() } };
+    let shared = !n.name.is_empty() && nodes.iter().filter(|o| o.name == n.name).count() > 1;
+    Named { name: n.name.clone(), ty: n.ty.clone(), text: n.text.clone(), shared }
+}
+
+impl Finding {
+    /// A rule's finding, its items read from the fault itself.
+    pub fn gate(fault: &Fault, nodes: &[Node]) -> Finding {
+        Finding { kind: fault.kind(), items: fault.items().into_iter().map(|i| named(i, nodes)).collect(), line: format!("gate: {fault}") }
+    }
+
+    /// An item a rule's exemption let pass.
+    pub fn exempted(exempted: &Exempted, nodes: &[Node]) -> Finding {
+        Finding { kind: exempted.kind(), items: vec![named(exempted.item(), nodes)], line: format!("gate: {exempted}") }
+    }
+
+    /// A difference from the mockup, about the element of its name, which the mockup names once.
+    pub fn mockup(difference: &Difference, nodes: &[Node]) -> Finding {
+        let shown = nodes.iter().find(|n| n.name == difference.element && n.visible);
+        let item = Named {
+            name: difference.element.clone(),
+            ty: shown.map(|n| n.ty.clone()).unwrap_or_default(),
+            text: shown.and_then(|n| n.text.clone()),
+            shared: false,
+        };
+        Finding { kind: difference.kind, items: vec![item], line: format!("mockup: {difference}") }
+    }
+
+    /// The items as a reader finds them in the QML: type and name.
+    pub fn who(&self) -> String {
+        self.items.iter().map(|n| format!("{} {}", n.ty, n.name)).collect::<Vec<_>>().join(", ")
+    }
+}
+
+/// What an excuse makes of a finding.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Verdict {
+    /// Not the finding it names.
+    Other,
+    /// Its finding, on an item whose name others share, and the excuse gives no words to tell which.
+    Ambiguous,
+    /// The finding it names.
+    Names,
+}
+
+/// Whether `excuse` names `finding`: the same kind, the same items (both of a pair, either way round), its words if given.
+pub fn names(excuse: &Excuse, finding: &Finding) -> Verdict {
+    if excuse.finding != finding.kind {
+        return Verdict::Other;
+    }
+    let got: Vec<&str> = finding.items.iter().map(|n| n.name.as_str()).collect();
+    let same = match (excuse.with, got.as_slice()) {
+        ("", [a]) => *a == excuse.item,
+        (with, [a, b]) if !with.is_empty() => (*a == excuse.item && *b == with) || (*a == with && *b == excuse.item),
+        _ => false,
+    };
+    let Some(item) = finding.items.iter().find(|n| same && n.name == excuse.item) else { return Verdict::Other };
+    if excuse.words.is_empty() {
+        return if item.shared { Verdict::Ambiguous } else { Verdict::Names };
+    }
+    if item.text.as_deref().is_some_and(|t| t.contains(excuse.words)) { Verdict::Names } else { Verdict::Other }
+}
+
+/// A test's excuses, how often each excused a finding, and how often one met its finding on an item it could not tell
+/// from others; dropped with one unused, the test fails.
 #[derive(Debug, Default)]
 pub struct Excuses {
-    list: Vec<(Excuse, usize)>,
+    list: Vec<(Excuse, usize, usize)>,
 }
 
 impl Excuses {
     pub fn new(list: &[Excuse]) -> Excuses {
-        Excuses { list: list.iter().cloned().map(|e| (e, 0)).collect() }
+        Excuses { list: list.iter().cloned().map(|e| (e, 0, 0)).collect() }
     }
 
     /// No excuse: every finding counts.
@@ -34,12 +123,19 @@ impl Excuses {
         Excuses::default()
     }
 
-    /// Whether one of the excuses names this finding over these items at this size; the first that does is counted used.
-    pub fn excuses(&mut self, fault: &str, nodes: &[Node], size: (i32, i32)) -> bool {
-        for (excuse, used) in &mut self.list {
-            if excuse.size.is_none_or(|s| s == size) && names(fault, excuse.finding, excuse.item, excuse.words, nodes) {
-                *used += 1;
-                return true;
+    /// Whether one of the excuses names this finding at this size; the first that does is counted used.
+    pub fn excuses(&mut self, finding: &Finding, size: (i32, i32)) -> bool {
+        for (excuse, used, ambiguous) in &mut self.list {
+            if !excuse.size.is_none_or(|s| s == size) {
+                continue;
+            }
+            match names(excuse, finding) {
+                Verdict::Names => {
+                    *used += 1;
+                    return true;
+                }
+                Verdict::Ambiguous => *ambiguous += 1,
+                Verdict::Other => {}
             }
         }
         false
@@ -49,8 +145,13 @@ impl Excuses {
     pub fn stale(&self) -> Vec<String> {
         self.list
             .iter()
-            .filter(|(_, used)| *used == 0)
-            .map(|(e, _)| format!("{} on {}{}: excused nothing", e.finding, e.item, e.size.map_or(String::new(), |(w, h)| format!(" at {w}x{h}"))))
+            .filter(|(_, used, _)| *used == 0)
+            .map(|(e, _, ambiguous)| {
+                let with = if e.with.is_empty() { String::new() } else { format!(" with {}", e.with) };
+                let at = e.size.map_or(String::new(), |(w, h)| format!(" at {w}x{h}"));
+                let why = if *ambiguous > 0 { ", its item's name shared by others and no words given" } else { "" };
+                format!("{} on {}{with}{at}: excused nothing{why}", e.finding, e.item)
+            })
             .collect()
     }
 }
@@ -64,19 +165,44 @@ impl Drop for Excuses {
     }
 }
 
-/// Whether `fault` is of `finding` and names `item`: as a mockup's finding begins with its element's name, or as the gate's
-/// numbers the item right after its words (both numbers of an overlap or of a limit and what passes it).
-pub fn names(fault: &str, finding: &str, item: &str, words: &str, nodes: &[Node]) -> bool {
-    let Some(at) = fault.find(finding) else { return false };
-    if words.is_empty() && fault[..at].ends_with(&format!("{item}: ")) {
-        return true;
+/// Which of kit-core's `SMALL_TEXT_EXCEPTIONS` a gate saw let pass, over every state it held; dropped with an entry that
+/// let nothing pass, the gate fails, as a stale excuse does.
+#[derive(Debug, Default)]
+pub struct SmallText {
+    seen: Vec<&'static str>,
+}
+
+impl SmallText {
+    pub fn new() -> SmallText {
+        SmallText::default()
     }
-    let said = |n: &Node| words.is_empty() || n.text.as_deref().is_some_and(|t| t.contains(words));
-    let both = finding == "overlap" || finding.starts_with("past its scroller");
-    let ids = fault[at + finding.len()..]
-        .split_whitespace()
-        .map(|w| w.trim_end_matches([':', ',']))
-        .filter_map(|w| w.parse::<usize>().ok())
-        .take(if both { 2 } else { 1 });
-    ids.collect::<Vec<_>>().into_iter().any(|i| nodes.get(i).is_some_and(|n| n.name == item && said(n)))
+
+    /// Notes each named small text among one state's exemptions.
+    pub fn saw(&mut self, exempted: &[Exempted], nodes: &[Node]) {
+        for e in exempted.iter().filter(|e| matches!(e, Exempted::SmallText { .. })) {
+            let name = nodes.get(e.item().0 as usize).map(|n| n.name.as_str()).unwrap_or_default();
+            let entry = SMALL_TEXT_EXCEPTIONS.iter().map(|(n, _)| *n).find(|n| *n == name);
+            if let Some(entry) = entry.filter(|e| !self.seen.contains(e)) {
+                self.seen.push(entry);
+            }
+        }
+    }
+
+    /// The entries that let nothing pass, each in words.
+    pub fn stale(&self) -> Vec<String> {
+        SMALL_TEXT_EXCEPTIONS
+            .iter()
+            .filter(|(name, _)| !self.seen.contains(name))
+            .map(|(name, _)| format!("SMALL_TEXT_EXCEPTIONS' {name}: let nothing pass"))
+            .collect()
+    }
+}
+
+impl Drop for SmallText {
+    fn drop(&mut self) {
+        let stale = self.stale();
+        if !stale.is_empty() && !std::thread::panicking() {
+            panic!("{} stale small-text exceptions:\n{}", stale.len(), stale.join("\n"));
+        }
+    }
 }

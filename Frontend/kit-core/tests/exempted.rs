@@ -16,7 +16,7 @@ fn kit_7_102_words_passing_by_the_spare_tenth_are_named() {
     let mut sky = vec![black; 19];
     sky.push(white);
     let state = Item::new(1, Kind::Panel, PANEL).child(words(2, 10.0, white, sky)).child(words(3, 300.0, white, vec![black; 20]));
-    let found = exempted(&state, &[], 0.0);
+    let found = exempted(&state, Some(&[]), 0.0);
     assert_eq!(found.len(), 1, "{found:?}");
     assert!(matches!(found[0], Exempted::Spare { item: ElementId(2), .. }), "the words over a star alone: {found:?}");
 }
@@ -32,8 +32,8 @@ fn kit_7_102_words_under_their_contrast_at_a_faded_edge_are_named() {
                 .child(words(3, x, faint, vec![white])),
         )
     };
-    assert!(matches!(exempted(&strip(1180.0), &[], 0.0)[..], [Exempted::Fading { item: ElementId(3), .. }]), "crossing the faded edge");
-    assert!(exempted(&strip(600.0), &[], 0.0).is_empty(), "inside the strip the rule holds it, and nothing is exempted");
+    assert!(matches!(exempted(&strip(1180.0), Some(&[]), 0.0)[..], [Exempted::Fading { item: ElementId(3), .. }]), "crossing the faded edge");
+    assert!(exempted(&strip(600.0), Some(&[]), 0.0).is_empty(), "inside the strip the rule holds it, and nothing is exempted");
 }
 
 #[test]
@@ -45,7 +45,8 @@ fn kit_7_102_a_scene_s_colour_outside_the_palette_is_named() {
             .scene()
             .child(Item::new(91, Kind::Picture, Rect::new(0.0, 0.0, 100.0, 100.0)).paints(&[stray, declared[0]])),
     );
-    assert_eq!(exempted(&state, &declared, 0.0), vec![Exempted::Scene { item: ElementId(91), colour: stray }]);
+    assert_eq!(exempted(&state, Some(&declared), 0.0), vec![Exempted::Scene { item: ElementId(91), colour: stray }]);
+    assert!(exempted(&state, None, 0.0).is_empty(), "where no palette rule runs, a scene's colour is exempted from none");
 }
 
 #[test]
@@ -57,13 +58,30 @@ fn kit_7_102_a_named_small_text_under_the_floor_is_named() {
                 .words(Text { cap_height: 9.0, width: 100.0, height: 18.0, ellipsis: false, data: false, own: None }),
         )
     };
-    assert!(matches!(exempted(&small("moonriseCaption"), &[], 11.64)[..], [Exempted::SmallText { item: ElementId(2), .. }]));
-    assert!(exempted(&small("other"), &[], 11.64).is_empty(), "another item is the floor's finding, not an exemption");
-    assert!(exempted(&small("moonriseCaption"), &[], 0.0).is_empty(), "no floor, nothing exempted");
+    assert!(matches!(exempted(&small("moonriseCaption"), Some(&[]), 11.64)[..], [Exempted::SmallText { item: ElementId(2), .. }]));
+    assert!(exempted(&small("other"), Some(&[]), 11.64).is_empty(), "another item is the floor's finding, not an exemption");
+    assert!(exempted(&small("moonriseCaption"), Some(&[]), 0.0).is_empty(), "no floor, nothing exempted");
 }
 
 #[test]
 fn kit_7_102_an_exemption_reads_as_one_line() {
     let line = Exempted::Scene { item: ElementId(91), colour: Colour::hex("#007ACC") }.to_string();
     assert_eq!(line, "a colour outside the palette in a scene: 91 #007ACC");
+}
+
+#[test]
+fn kit_7_100_a_finding_names_its_kind_and_its_items_apart_from_its_numbers() {
+    use emusen_kit_core::audit::{Fault, Side};
+    let cut = Fault::CutAtEdge { item: ElementId(7), area: ElementId(3), side: Side::Bottom };
+    assert_eq!((cut.kind(), cut.items()), ("cut at an edge with no fade", vec![ElementId(7), ElementId(3)]), "the item first, its area after");
+    let past = Fault::PastItsLimit { item: ElementId(9), limit: Some(ElementId(2)) };
+    assert_eq!((past.kind(), past.items()), ("past its scroller or clip", vec![ElementId(9), ElementId(2)]));
+    let low = Fault::LowContrast { item: ElementId(4), ratio: 3.0, needed: 4.5 };
+    assert_eq!((low.kind(), low.items()), ("low contrast", vec![ElementId(4)]), "a ratio is no item");
+    let room = Fault::ScrollsInTooLittleRoom { item: ElementId(5), height: 3.0 };
+    assert_eq!(room.items(), vec![ElementId(5)], "a height is no item");
+    assert!(low.to_string().starts_with(low.kind()) && past.to_string().starts_with(past.kind()));
+    let spare = Exempted::Spare { item: ElementId(6), worst: 3.0, needed: 4.5 };
+    assert_eq!((spare.kind(), spare.item()), ("low contrast in the spare tenth", ElementId(6)));
+    assert!(spare.to_string().starts_with(spare.kind()));
 }

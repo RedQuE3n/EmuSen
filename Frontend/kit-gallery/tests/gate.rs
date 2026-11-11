@@ -8,6 +8,7 @@ use emusen_kit_gallery::GALLERY_URL;
 use emusen_qt_test::harness::{edges, palette, Measures, Step, SIZES};
 use emusen_qt_test::lint::{frontend, qmllint, rules};
 use emusen_qt_test::spec::{self, Header};
+use emusen_qt_test::excuse::SmallText;
 use emusen_qt_test::{Harness, Scene};
 
 const FORMS: [(WalkForm, &str, &str); 3] =
@@ -194,6 +195,8 @@ fn qt_7_stage_0_gate_on_the_gallery() {
     let grabs = grabs();
     let mut report = Vec::new();
     let mut states = 0;
+    // The named small texts the gate sees let pass; one that let nothing pass fails the gate (EmuSen_Kit.md §7.100).
+    let mut small = SmallText::new();
     for variant in [Variant::Dark, Variant::Light] {
         scene.set_variant(variant);
         for (form, form_name, form_value) in FORMS {
@@ -240,6 +243,10 @@ fn qt_7_stage_0_gate_on_the_gallery() {
                     faults.extend(
                         scene.audit(&tree, form, variant, focus, &edges, f64::from(w), f64::from(h)).iter().map(ToString::to_string),
                     );
+                    // What the rules' exemptions let pass, each item by itself, as the program's hold reports them (EmuSen_Kit.md §7.102).
+                    let exempted = scene.exempted(&tree, form, variant, f64::from(h));
+                    small.saw(&exempted, &tree.nodes);
+                    faults.extend(exempted.iter().map(ToString::to_string));
                     let notes = grabs.join(format!("{name}.faults.txt"));
                     if faults.is_empty() {
                         let _ = std::fs::remove_file(&notes);
@@ -276,6 +283,9 @@ fn qt_7_stage_0_gate_on_the_gallery() {
     record("question-1280x800", &tree, &sheet, (WalkForm::BigScreen, Variant::Dark), (1280, 800), focus, &walk);
     let faults = scene.audit_item(&sheet, WalkForm::BigScreen, Variant::Dark, focus, &edges, 1280.0, 800.0);
     report.extend(faults.iter().map(|f| format!("question: {f}")));
+    let exempted = scene.exempted_item(&sheet, WalkForm::BigScreen, Variant::Dark, 800.0);
+    small.saw(&exempted, &tree.nodes);
+    report.extend(exempted.iter().map(|f| format!("question: {f}")));
     scene.pad(UiButton::Back);
     scene.wait(400);
     assert_eq!(scene.property("question", "opened"), "false", "B closed it");

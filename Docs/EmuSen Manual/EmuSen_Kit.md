@@ -2908,9 +2908,14 @@ alone, let through, so the check was strengthened); the theme mirror missing `sh
 
 **Rule Q and the shadow's colour** (2026-11-11). `shadowColor` is a colour property of the kit's `Tokens` after the
 palette's, so theme-check's rule-Q test, which held the registry's colours to `ColourToken::ALL` alone, failed from the
-day the token landed (seen 2026-11-11; theme-check is outside the workspace and no landing ran it). The name is kit-core's
-now, `Shadow::COLOUR_PROPERTY`, and the test holds the registry's colour tokens to the palette's and the shadow's, in the
-registry's order. A theme may override it as any colour token.
+day the token landed (seen 2026-11-11; theme-check is outside the workspace and no landing ran it). kit-core names it
+`Shadow::COLOUR_PROPERTY`, which theme-check reads, and the test holds the registry's colour tokens to the palette's and
+the shadow's, in the registry's order. kit-qt does not read that constant: its `Tokens` property comes from the
+`shadow_color` field of its cxx-qt bridge, as each palette token's does from its own field, since the bridge's macro
+takes a field's name and not a constant; the two names are held equal by this test alone, as the palette's are. A
+theme's `shadowColor` in `theme.json` passes theme-check, which reads the registry, but the host sets only palette
+tokens on a theme's engine (theme-qt's `set_token_overrides` reads names through `ColourToken::named`), so the override
+is left out and the kit's shadow colour stays (read in the source 2026-11-11; no test runs it).
 
 ### 7.58 The walk presses on through a stepped action; the page frame's focus; Qt Multimedia's two messages (stage 5, piece G2; 2026-11-09)
 
@@ -2966,10 +2971,29 @@ an ellipsis`, a mockup's `Y`), the objectName of the one item it excuses, words 
 name is shared (a row's `value`), the size it holds at or every size, and why, with who decided it and when, or "no
 ruling". A test's `Excuses` counts each use; `hold` (qt-app's `tests/common`) leaves out a finding only when an excuse
 names it. When the `Excuses` is dropped, at the end of the test, any excuse that excused nothing fails the test as
-stale, naming it. `Excuses::none()` is a test with no excuse. An item is found from the gate's finding by the first
-number after the finding's words (both numbers of an overlap, or of a limit and what passes it), and from a mockup's
-finding by the element's name before them; a ratio, a height or capitals are never read as items
-(`tests/excuse.rs`).
+stale, naming it. `Excuses::none()` is a test with no excuse.
+
+**What an excuse reads (second pass, 2026-11-11).** The first form found an excuse's item by reading the first numbers
+after the finding's words in its line, which could take a mockup's own figure for an item's number, the scroller's
+number for the item cut at its edge, either side of an overlap for a pair, and, with no words given, any of the items
+sharing a name. An excuse now reads no prose. kit-core's `Fault::kind` and `Fault::items` give a rule's finding its
+kind and the items it is about, the one it is about first and then the other of a pair (what it overlaps, the limit
+it passes, the area that cuts it, the owner its words pass, what a click hits); `Exempted::kind` and `Exempted::item`
+do the same for an exemption; qt-test's mockup comparison returns a `Difference` with its element and its kind (an
+edge's name, `not shown`, `paints`, `alpha`, `says`, `shows no words`). qt-test's `Finding` holds each in one form:
+its kind, its items by name, type, words and whether another item shares the name, and its line. `Excuse` gains
+`with`, the other item of a pair, and names a finding only when the kinds are the same and the items are the same,
+both of a pair in either order. An excuse with no words on an item whose name is shared excuses nothing, and its stale
+line says so. Held by `qt-test/tests/excuse.rs`, a test a case: a mockup's figure that is an item's number, a cut
+named by its scroller, an overlap named by one side, a shared name with no words, an exemption by the rule's own kind.
+An excuse used once is not stale however many findings it excused at its sizes; `size: None` holds at every size.
+
+`SMALL_TEXT_EXCEPTIONS` (kit-core `fit.rs`) is a list a gate uses rather than a test's, so it is held by qt-test's
+`SmallText`: a gate notes each named small text its exemptions let pass, and when it ends, an entry that let nothing
+pass in any state fails the gate as a stale excuse does. The gallery's gate (`kit-gallery/tests/gate.rs`), the one
+that draws Moonrise, keeps one. The program's tests do not, since no state they hold draws Moonrise's caption. The
+entry says "decided 2026-11-08"; the tester's ruling given for this piece says the floor holds with no exception. Both
+stand as written, for the tester.
 
 **What the blankets had been excusing,** measured 2026-11-11 with every excuse removed on the software backend: at
 1280 × 720 nothing in the Home and List cards, Settings, Settings ▸ Consoles or the Themes tab is under the floor any
@@ -3004,7 +3028,16 @@ exemption let pass in one state, as `Exempted` (`low contrast in the spare tenth
 colour outside the palette in a scene`, `too small to read, a named exception`), and only where the strict rule would
 have failed it. `Scene::exempted` runs it with the gate's palette and floor, and the program's `hold` counts each line
 as a finding of the gate, so a test accepts one only by an `Excuse` naming its item. The rules themselves are
-unchanged; theme-audit and the gallery do not yet report the exemptions (see the report table of DC-A).
+unchanged.
+
+**The same in every gate (second pass, 2026-11-11).** The gallery's three gates (`gate.rs`, `screens.rs`,
+`settings_gate.rs`) add `Scene::exempted` to each state's findings, and its question sheet `Scene::exempted_item`, as
+`hold` does. theme-audit reports each as a line of kind `exempted` (man theme-check). `exempted` takes the palette as
+`Option`: theme-audit runs no palette rule over a theme, so it passes none and no scene colour is an exemption there.
+No exemption was removed or added. Measured 2026-11-11 on the software backend: the gallery's gate fails with 1,082
+such lines over its 91 states, 1,070 of them scene colours (28 a state on the menu page in four of its form and
+variant pairs, 17 a state on Moonrise's page in six) and 12 Moonrise's caption under the floor by `SMALL_TEXT_EXCEPTIONS` (three sizes, both
+variants, the big screen and the card); each waits on the tester's ruling.
 
 ### 7.103 The gate's walk presses a screen's own shoulders (repair piece DC-A; 2026-11-11)
 
@@ -3036,6 +3069,24 @@ console over the catalogue `eleven` (the canvas's consoles, `Testing/themes/cata
 "Super Nintendo"`, the second, as the canvas has it, and holds every element of `Testing/mockups/Consoles.mockup.spec`
 at 1280 × 800 and 1920 × 1200 by night. The acceptance test's comment points there.
 
+**What that comparison covers, and what not (second pass, 2026-11-11).** The program and theme-audit show one screen
+file: qt-app's `qt_3_4_2_the_program_s_reference_theme_is_the_package_theme_audit_holds_to_its_canvas` (`tests/theme.rs`)
+holds the resources' reference theme, `REFERENCE_THEME`, to `Frontend/themes/emusen` file for file, the folder
+theme-audit's eleven-console test holds. They are not the same catalogue (the acceptance library shelves three
+consoles of one maker, theme-audit's `eleven` the canvas's eleven on three makers) or the same host (theme-audit feeds
+the screen through its own synthetic world and `emusen-theme-host`; the program through its library). So the
+program's own gate still compares none of the seven console classes; that stands for the tester.
+
+**A test that runs a program checks that it ran.** theme-audit's tests read only its stdout, so a run that could not
+load its package, or stopped before a state, printed no mockup line and passed. theme-audit now writes, on stderr, a
+line a screen it judged (`held Consoles in 10 states, 2 against its mockup`; man theme-check), counting a state only
+once every rule has judged it. Every test in `theme-check/audit/tests/audit.rs` runs it through `Ran`, which fails on a
+signal and, where the run should judge, on any status but 0 or 1, and each checks the count of the screen it is about:
+the eleven-console test wants Choose a console in 10 states, 2 against the canvas; each built-in theme its three
+screens against their mockups twice; a pass that stops, none. The stand-ins for theme-audit in theme-check's,
+qt-models' and qt-app's tests check that `chmod` succeeded, and the two that expect "nothing found" check that the
+stand-in ran.
+
 The mockup had been edited toward the program in four commits. The figures that carried the tester's decision of
 2026-11-08 (small text is 19 units: the maker labels 22.8 tall from y 149.2 and 217.04, the counts 22.8 tall) stay;
 the rest are the canvas's again:
@@ -3050,6 +3101,14 @@ the rest are the canvas's again:
 | `consoleBody.1` | 434.72, 458.1, 88 × 88 | 430.72, 454.1, 96 × 96 | 4e1969d84, the same |
 | `consoleRing.1` | 427.72, 451.1, 102 × 102 | 423.72, 447.1, 110 × 110 | 4e1969d84, the same |
 | `consoleName.1`, `consoleCount.1` y | 554.1, 578.1 | 558.1, 582.1 | 4e1969d84, the same |
+| `makerLabel.0` right | 725.35 | 753.72 | 78eccb8a7: the program's inner orbit ending its window at y 197 (second pass) |
+
+`makerLabel.0`'s right edge was missing from this table in the first pass. The canvas
+(`reference-consoles/consoles.html`, unchanged since 2026-11-08 17:13, before 78eccb8a7 at 23:35) ends the inner
+orbit's window at `YMIN = 178`, and its label rule (the window's end moved 60 units toward the orbits' centre) gives
+753.72 there and 725.35 at y 197. The canvas did not change; the program did, and `EmuSen_Qt.md` §3.4.2 item 9 records
+that change as "decided 2026-11-08", a date with no entry in the tester's rulings. The canvas's figure is restored, so
+the eleven-console test lists one more difference.
 
 **The themes.** `theme-audit --mockups DIR` (man theme-check) holds each screen of a package to
 `<package>-<Screen>.mockup.spec` in the default state, by night, at the canvas's two sizes, token colours as the

@@ -88,9 +88,11 @@ fn main() {
         audit::run(&PathBuf::from(&o.folder), &o.folder, &asked)
     };
     let status = match options.and_then(run) {
-        Ok(lines) => {
-            lines.iter().for_each(|l| println!("{l}"));
-            i32::from(!lines.is_empty())
+        Ok(audited) => {
+            audited.lines.iter().for_each(|l| println!("{l}"));
+            // What was held, so a caller can tell a screen judged and clean from one never judged (man theme-check).
+            audited.held.iter().for_each(|l| eprintln!("theme-audit: {l}"));
+            i32::from(!audited.lines.is_empty())
         }
         Err(words) => {
             eprintln!("{words}");

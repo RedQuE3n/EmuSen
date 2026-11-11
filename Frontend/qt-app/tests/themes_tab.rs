@@ -65,8 +65,9 @@ fn qt_3_8_the_themes_tab_checks_uses_and_switches_the_chosen_theme_s_host() {
     std::fs::write(book.join("theme.xml"), "<theme><view name=\"system\"><text name=\"t\"><text>x</text></text></view></theme>").unwrap();
     // theme-audit stood in for by a script that finds nothing; the loaded step is theme-check's own tests' to prove.
     let audit = world.root.join("audit.sh");
-    std::fs::write(&audit, "#!/bin/bash\nexit 0\n").unwrap();
-    std::process::Command::new("chmod").arg("+x").arg(&audit).status().unwrap();
+    let ran = world.root.join("audit-ran");
+    std::fs::write(&audit, format!("#!/bin/bash\ntouch \"{}\"\nexit 0\n", ran.display())).unwrap();
+    assert!(std::process::Command::new("chmod").arg("+x").arg(&audit).status().unwrap().success(), "the stand-in made runnable");
     std::env::set_var("EMUSEN_THEME_AUDIT", &audit);
 
     let mut harness = emusen_qt_test::Harness::new();
@@ -110,6 +111,7 @@ fn qt_3_8_the_themes_tab_checks_uses_and_switches_the_chosen_theme_s_host() {
     // A package is checked before Use is offered; Use stores its id and its host is made at once.
     check_next(&mut scene, "Fixture clean");
     assert_eq!(scene.property("themesModel", "findings"), "Checked: nothing found.");
+    assert!(ran.exists(), "nothing found only once the loaded step ran");
     assert_eq!(scene.property("themesModel", "usable"), "true");
     scene.pad(UiButton::Accept);
     scene.wait(200);

@@ -20,19 +20,40 @@ pub enum Exempted {
     SmallText { item: ElementId, capitals: f64 },
 }
 
-impl fmt::Display for Exempted {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Exempted {
+    /// The exemption's name, as its line begins with it.
+    pub fn kind(&self) -> &'static str {
         match self {
-            Exempted::Spare { item, worst, needed } => write!(f, "low contrast in the spare tenth: {} at {worst:.2}:1, needs {needed}:1", item.0),
-            Exempted::Fading { item, ratio, needed } => write!(f, "low contrast at a faded edge: {} at {ratio:.2}:1, needs {needed}:1", item.0),
-            Exempted::Scene { item, colour } => write!(f, "a colour outside the palette in a scene: {} {}", item.0, colour.to_hex()),
-            Exempted::SmallText { item, capitals } => write!(f, "too small to read, a named exception: {} with capitals of {capitals:.2}", item.0),
+            Exempted::Spare { .. } => "low contrast in the spare tenth",
+            Exempted::Fading { .. } => "low contrast at a faded edge",
+            Exempted::Scene { .. } => "a colour outside the palette in a scene",
+            Exempted::SmallText { .. } => "too small to read, a named exception",
+        }
+    }
+
+    /// The one item it let pass.
+    pub fn item(&self) -> ElementId {
+        match self {
+            Exempted::Spare { item, .. } | Exempted::Fading { item, .. } | Exempted::Scene { item, .. } | Exempted::SmallText { item, .. } => *item,
         }
     }
 }
 
-/// Every item the contrast, palette and floor rules let pass by an exemption, over one state.
-pub fn exempted(root: &Item, declared: &[Colour], smallest: f64) -> Vec<Exempted> {
+impl fmt::Display for Exempted {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let kind = self.kind();
+        match self {
+            Exempted::Spare { item, worst, needed } => write!(f, "{kind}: {} at {worst:.2}:1, needs {needed}:1", item.0),
+            Exempted::Fading { item, ratio, needed } => write!(f, "{kind}: {} at {ratio:.2}:1, needs {needed}:1", item.0),
+            Exempted::Scene { item, colour } => write!(f, "{kind}: {} {}", item.0, colour.to_hex()),
+            Exempted::SmallText { item, capitals } => write!(f, "{kind}: {} with capitals of {capitals:.2}", item.0),
+        }
+    }
+}
+
+/// Every item the contrast, palette and floor rules let pass by an exemption, over one state; `declared` is the palette
+/// the palette rule holds, and none where that rule is not run, so no scene colour is an exemption from it.
+pub fn exempted(root: &Item, declared: Option<&[Colour]>, smallest: f64) -> Vec<Exempted> {
     let mut out = Vec::new();
     root.visit(&mut |item, ancestors| {
         if let Some((ratios, needed)) = item.legibility.as_ref().and_then(ratios) {
@@ -43,7 +64,7 @@ pub fn exempted(root: &Item, declared: &[Colour], smallest: f64) -> Vec<Exempted
                 out.push(Exempted::Spare { item: item.id, worst: ratios[0], needed });
             }
         }
-        if item.scene || ancestors.iter().any(|a| a.scene) {
+        if let Some(declared) = declared.filter(|_| item.scene || ancestors.iter().any(|a| a.scene)) {
             for colour in item.paints.iter().filter(|c| !declared_colour(c, declared)) {
                 out.push(Exempted::Scene { item: item.id, colour: *colour });
             }

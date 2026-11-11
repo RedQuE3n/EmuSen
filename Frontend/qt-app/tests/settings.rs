@@ -24,6 +24,7 @@ fn focused(scene: &mut Scene<'_>) -> String {
 const ROM_FOLDER_CUT: Excuse = Excuse {
     finding: "cut with an ellipsis",
     item: "value",
+    with: "",
     words: "/Roms",
     size: None,
     why: "EmuSen_Qt.md §7.7, no ruling",

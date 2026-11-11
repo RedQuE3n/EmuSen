@@ -190,6 +190,16 @@ THE LOADED STEP
                     its opacity, changed over the frame before the
                     held time (16 ms) is mid-change and not judged;
                     a text resting faint is still a finding.
+        exempted    an item a rule let pass by an exemption, each by
+                    itself, as kit-core's exempted lists it and the
+                    program's tests report it (EmuSen_Kit.md 7.102):
+                    words that reach their contrast over all but the
+                    spare tenth of what is behind them, words under it
+                    at a scroller's faded edge, and words under the
+                    floor that SMALL_TEXT_EXCEPTIONS names. A scene's
+                    colour outside the palette is not one: no palette
+                    rule runs over a theme. Each is a finding until
+                    the tester rules on it.
         motion      a screen not still under reduced motion
         load        the host could not place the screen: the engine's
                     and the sandbox's words, a line each
@@ -363,6 +373,14 @@ STATES
     leaves Qt's default driver in place of a threaded render loop's own,
     so the held states run last. The reference theme has no Splash.qml
     and no splash states: its splash is Moonrise, the kit's.
+
+    theme-audit writes what it judged to stderr, a line a screen:
+        theme-audit: held Consoles in 10 states, 2 against its mockup
+    a state counted once every rule has judged it at its size and
+    variant, and against its mockup when one was compared. A pass that
+    stopped, or a screen that did not load, counts none, so a caller
+    tells a screen judged and clean from one never judged; theme-audit's
+    tests read these lines (EmuSen_Kit.md 7.104).
 
 EXIT STATUS
     0 for no finding, 1 for one or more, 2 when it could not run (no

@@ -125,6 +125,8 @@ fn qt_5_a_the_settings_frame_the_choices_and_the_sliders_pass_the_gate_at_the_fo
                         .iter()
                         .map(ToString::to_string),
                 );
+                // What the rules' exemptions let pass, each item by itself, as the program's hold reports them (EmuSen_Kit.md §7.102).
+                faults.extend(scene.exempted(&tree, WalkForm::BigScreen, variant, f64::from(h)).iter().map(ToString::to_string));
                 let notes = grabs.join(format!("{name}.faults.txt"));
                 if faults.is_empty() {
                     let _ = std::fs::remove_file(&notes);

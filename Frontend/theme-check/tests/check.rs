@@ -149,7 +149,7 @@ fn stand_in(name: &str, body: &str) -> PathBuf {
     std::fs::create_dir_all(&dir).unwrap();
     let script = dir.join("theme-audit");
     std::fs::write(&script, format!("#!/bin/bash\nfolder=\"${{@: -1}}\"\ntouch \"{}/ran\"\n{body}\n", dir.display())).unwrap();
-    std::process::Command::new("chmod").arg("+x").arg(&script).status().unwrap();
+    assert!(std::process::Command::new("chmod").arg("+x").arg(&script).status().unwrap().success(), "the stand-in made runnable");
     script
 }
 

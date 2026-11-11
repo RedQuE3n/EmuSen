@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use cxx_qt::QObject;
-use emusen_kit_core::audit::{self, contrast, fit, named, no_chrome, pad_reach, pointer_reach, reached, Fault, Rect};
+use emusen_kit_core::audit::{self, contrast, fit, named, no_chrome, pad_reach, pointer_reach, reached, Rect};
 use emusen_kit_core::input::{ElementId, UiButton, WalkForm};
 use emusen_kit_core::tokens::{colour, Colour, ColourToken, Variant};
 use emusen_kit_qt::kinds;
@@ -77,31 +77,6 @@ fn tokens(screen: u64) -> Option<Pin<&'static mut Tokens>> {
     host::kit_tokens(object(screen))
 }
 
-/// The items a fault names, so its line can say what they are.
-fn items(fault: &Fault) -> Vec<ElementId> {
-    match fault {
-        Fault::PastItsLimit { item, limit } => [Some(*item), *limit].into_iter().flatten().collect(),
-        Fault::WordsPastOwner { words, owner } => vec![*words, *owner],
-        Fault::Overlap { a, b } => vec![*a, *b],
-        Fault::CutAtEdge { item, area, .. } => vec![*item, *area],
-        Fault::Covered { item, by } => vec![*item, *by],
-        Fault::ScrollsInTooLittleRoom { item, .. }
-        | Fault::Ellipsis { item }
-        | Fault::RunsPastItsBox { item }
-        | Fault::CutAtFoot { item }
-        | Fault::TooSmall { item, .. }
-        | Fault::TitleCut { item }
-        | Fault::FooterCut { item }
-        | Fault::Unreachable { item }
-        | Fault::ClickDiffers { item }
-        | Fault::WheelDoesNotMove { item }
-        | Fault::Chrome { item }
-        | Fault::Unnamed { item }
-        | Fault::OutsidePalette { item, .. }
-        | Fault::LowContrast { item, .. } => vec![*item],
-    }
-}
-
 /// An item as a reader finds it in the QML: its type, its objectName or words, and its box in window pixels.
 fn described(tree: &Tree, id: ElementId) -> String {
     let Some(n) = tree.nodes.get(id.0 as usize) else { return format!("{}", id.0) };
@@ -115,9 +90,33 @@ struct Lines<'a> {
     out: Vec<String>,
     /// Where the audit is: the size and the variant being judged, named when a state cannot be read.
     at: String,
+    /// Each screen judged, with how many states were judged in full and how many of those against its mockup.
+    held: Vec<(Screen, usize, usize)>,
+}
+
+/// What a run found, and what it held: a line a screen, `held <Screen> in N states, M against its mockup`.
+pub struct Audited {
+    pub lines: Vec<String>,
+    pub held: Vec<String>,
 }
 
 impl Lines<'_> {
+    /// One state of `screen` judged by every rule to its end, `mocked` when its mockup was compared too.
+    fn judged(&mut self, screen: Screen, mocked: bool) {
+        match self.held.iter_mut().find(|(s, _, _)| *s == screen) {
+            Some((_, states, mockups)) => {
+                *states += 1;
+                *mockups += usize::from(mocked);
+            }
+            None => self.held.push((screen, 1, usize::from(mocked))),
+        }
+    }
+
+    fn audited(self) -> Audited {
+        let held = self.held.iter().map(|(s, n, m)| format!("held {} in {n} states, {m} against its mockup", title(*s))).collect();
+        Audited { lines: self.out, held }
+    }
+
     fn add(&mut self, screen: Screen, kind: &str, words: &str) {
         let line = format!("{}/{}:1 {kind} {words}", self.shown, screen.file());
         if !self.out.contains(&line) {
@@ -280,7 +279,8 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             }
             let seen = held_tree.as_ref().unwrap_or(&tree);
             let shown = scene.focus(seen).map(ElementId);
-            if let Some((m, colours)) = pass.mockup.filter(|_| variant == Variant::Dark && f64::from(w) / f64::from(h) == 1.6) {
+            let mocked = pass.mockup.filter(|_| variant == Variant::Dark && f64::from(w) / f64::from(h) == 1.6);
+            if let Some((m, colours)) = mocked {
                 for fault in mockup::compare_in(m, &seen.nodes, f64::from(h) / 800.0, colours) {
                     lines.add(screen, "mockup", &format!("{w}x{h} {name}: {fault}"));
                 }
@@ -306,10 +306,15 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             ];
             for (kind, faults, judged) in found {
                 for fault in faults {
-                    let who: Vec<String> = items(&fault).into_iter().map(|i| described(judged, i)).collect();
+                    let who: Vec<String> = fault.items().into_iter().map(|i| described(judged, i)).collect();
                     lines.add(screen, kind, &format!("{w}x{h} {name}: {fault} ({})", who.join("; ")));
                 }
             }
+            // What an exemption let pass, each item by itself; no palette rule runs over a theme, so no scene colour is one.
+            for exempted in audit::exempted(&seen.root, None, smallest) {
+                lines.add(screen, "exempted", &format!("{w}x{h} {name}: {exempted} ({})", described(seen, exempted.item())));
+            }
+            lines.judged(screen, mocked.is_some());
             if let Some(dir) = state {
                 let file = format!("{}-{}-{w}x{h}", title(screen), name.replace(", ", "-").replace(' ', "-"));
                 let declared = palette(variant);
@@ -505,14 +510,14 @@ fn placed(scene: &mut Scene<'_>, folder: &str, screen: Screen, feeding: impl FnO
 
 /// The findings of the package at `folder` (named `shown` in the lines), its screens loaded in turn in each state asked.
 /// With a catalogue (`man theme-check`, --catalogue), Choose a console alone is placed over it, its states labelled by its name.
-pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Vec<String>, String> {
+pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, String> {
     let (state, section) = (asked.state, asked.section);
     let shown = shown.trim_end_matches('/');
     let text = std::fs::read_to_string(folder.join("theme.json")).map_err(|e| format!("{shown}/theme.json: {e}"))?;
-    let mut lines = Lines { shown, out: Vec::new(), at: String::new() };
+    let mut lines = Lines { shown, out: Vec::new(), at: String::new(), held: Vec::new() };
     let package = match emusen_theme_host::package::read(&text) {
         Ok(p) => p,
-        Err(words) => return Ok(words.lines().map(|l| format!("{shown}/{l}")).collect()),
+        Err(words) => return Ok(Audited { lines: words.lines().map(|l| format!("{shown}/{l}")).collect(), held: Vec::new() }),
     };
     if let Some(dir) = state {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -546,7 +551,7 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Vec<String>,
             Ok(id) => lines.guarded(screen, |lines| states(&mut scene, screen, id, &pass, state, lines)),
         }
         logged().iter().for_each(|w| lines.add(screen, "warning", w));
-        return Ok(lines.out);
+        return Ok(lines.audited());
     }
     for asked_state in &asked.states {
         let screens: Vec<Screen> = Screen::ALL.into_iter().filter(|s| package.screens.contains(s) && asked_state.screens.contains(s)).collect();
@@ -594,7 +599,7 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Vec<String>,
             logged().iter().for_each(|w| lines.add(screen, "warning", w));
         }
     }
-    Ok(lines.out)
+    Ok(lines.audited())
 }
 
 /// The package's mockups in `dir`, each `<package>-<Screen>.mockup.spec` with its screen; a file that does not read is an error.

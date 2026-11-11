@@ -174,6 +174,8 @@ fn qt_5_b_the_tool_screen_and_the_page_frame_on_the_gallery() {
                         .iter()
                         .map(ToString::to_string),
                 );
+                // What the rules' exemptions let pass, each item by itself, as the program's hold reports them (EmuSen_Kit.md §7.102).
+                faults.extend(scene.exempted(&tree, WalkForm::BigScreen, variant, f64::from(h)).iter().map(ToString::to_string));
                 let notes = grabs.join(format!("{name}.faults.txt"));
                 if faults.is_empty() {
                     let _ = std::fs::remove_file(&notes);

@@ -751,8 +751,13 @@ impl Scene<'_> {
 
     /// What the audit's rules let pass by an exemption over one state, each item by item (EmuSen_Kit.md §7.102).
     pub fn exempted(&self, tree: &Tree, form: WalkForm, variant: Variant, height: f64) -> Vec<audit::Exempted> {
+        self.exempted_item(&tree.root, form, variant, height)
+    }
+
+    /// The same over one item and what is under it, as `audit_item` judges an open sheet alone.
+    pub fn exempted_item(&self, root: &audit::Item, form: WalkForm, variant: Variant, height: f64) -> Vec<audit::Exempted> {
         let measures = Measures::of(form, height);
-        audit::exempted(&tree.root, &palette(variant), measures.floor * audit::DESKTOP_CAPS * measures.unit)
+        audit::exempted(root, Some(&palette(variant)), measures.floor * audit::DESKTOP_CAPS * measures.unit)
     }
 }
 

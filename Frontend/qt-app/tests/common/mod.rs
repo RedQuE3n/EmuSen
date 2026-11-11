@@ -11,7 +11,7 @@ use emusen_kit_core::tokens::Variant;
 use emusen_kit_core::input::UiButton;
 use emusen_qt_test::harness::{edges, palette, Measures, DIRECTIONS, SIZES};
 use emusen_qt_test::spec::{self, Header};
-use emusen_qt_test::excuse::Excuses;
+use emusen_qt_test::excuse::{Excuses, Finding};
 use emusen_qt_test::{mockup, Scene};
 use std::path::PathBuf;
 
@@ -101,9 +101,9 @@ pub fn hold_walking(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, nam
         let mut tree = scene.tree();
         let focus = scene.focus(&tree);
         let name = format!("{screen}-{w}x{h}");
-        let mut faults = Vec::new();
+        let mut faults: Vec<Finding> = Vec::new();
         if f64::from(w) / f64::from(h) == 1.6 {
-            faults.extend(mockup::compare(m, &tree.nodes, f64::from(h) / 800.0, variant).into_iter().map(|f| format!("mockup: {f}")));
+            faults.extend(mockup::compare(m, &tree.nodes, f64::from(h) / 800.0, variant).iter().map(|d| Finding::mockup(d, &tree.nodes)));
         }
         assert!(scene.grab(&out().join(format!("{name}.png")).display().to_string()), "grab {name}");
         scene.sample_behind(&mut tree, f64::from(w), f64::from(h));
@@ -124,20 +124,17 @@ pub fn hold_walking(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, nam
             scene
                 .audit(&tree, WalkForm::BigScreen, variant, focus, &walked, f64::from(w), f64::from(h))
                 .iter()
-                .map(|f| format!("gate: {f}")),
+                .map(|f| Finding::gate(f, &tree.nodes)),
         );
-        faults.extend(scene.exempted(&tree, WalkForm::BigScreen, variant, f64::from(h)).iter().map(|f| format!("gate: {f}")));
-        faults.retain(|f| !named.excuses(f, &tree.nodes, (w, h)));
+        faults.extend(scene.exempted(&tree, WalkForm::BigScreen, variant, f64::from(h)).iter().map(|e| Finding::exempted(e, &tree.nodes)));
+        faults.retain(|f| !named.excuses(f, (w, h)));
         let notes = out().join(format!("{name}.faults.txt"));
         if faults.is_empty() {
             let _ = std::fs::remove_file(&notes);
         } else {
-            std::fs::write(&notes, format!("{}\n-- items:\n{}\n", faults.join("\n"), tree.legend())).unwrap();
-            let who = |f: &str| -> String {
-                let ids = f.rsplit(": ").next().unwrap_or("").split(|c: char| !c.is_ascii_digit()).filter_map(|n| n.parse::<usize>().ok());
-                ids.filter_map(|i| tree.nodes.get(i)).map(|n| format!("{} {}", n.ty, n.name)).collect::<Vec<_>>().join(", ")
-            };
-            report.extend(faults.iter().map(|f| format!("{name}: {f} [{}]", who(f))));
+            let lines: Vec<&str> = faults.iter().map(|f| f.line.as_str()).collect();
+            std::fs::write(&notes, format!("{}\n-- items:\n{}\n", lines.join("\n"), tree.legend())).unwrap();
+            report.extend(faults.iter().map(|f| format!("{name}: {} [{}]", f.line, f.who())));
         }
     }
     scene.resize(1280, 800);

@@ -154,6 +154,14 @@ pub mod qobject {
         #[inherit]
         #[cxx_name = "endResetModel"]
         fn end_reset_model(self: Pin<&mut GamePageModel>);
+
+        #[inherit]
+        #[qsignal]
+        #[cxx_name = "dataChanged"]
+        fn data_changed(self: Pin<&mut GamePageModel>, top_left: &QModelIndex, bottom_right: &QModelIndex, roles: &QVector_i32);
+
+        #[inherit]
+        fn index(self: &GamePageModel, row: i32, column: i32, parent: &QModelIndex) -> QModelIndex;
     }
 
     extern "RustQt" {
@@ -241,6 +249,46 @@ fn items(content: &Content) -> Vec<Item> {
             .iter()
             .map(|r| Item { key: r.key.into(), label: r.label.into(), value: r.value.clone(), steps: r.steps, opens: r.opens, ..Item::default() })
             .collect(),
+    }
+}
+
+/// How the content's list hears a new content: reset where the section turned or the items are others, else in place.
+#[derive(Debug, PartialEq, Eq)]
+enum ContentChange {
+    Reset,
+    /// The first and last rows whose words or marks changed.
+    InPlace(usize, usize),
+    None,
+}
+
+fn content_change(old: &[Item], new: &[Item], turned: bool) -> ContentChange {
+    if turned || old.len() != new.len() || old.iter().zip(new).any(|(a, b)| a.key != b.key) {
+        return ContentChange::Reset;
+    }
+    let differs = |(a, b): (&Item, &Item)| a != b;
+    match (old.iter().zip(new).position(differs), old.iter().zip(new).rposition(differs)) {
+        (Some(first), Some(last)) => ContentChange::InPlace(first, last),
+        _ => ContentChange::None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tile(key: &str, marked: bool) -> Item {
+        Item { key: key.into(), label: key.into(), marked, ..Item::default() }
+    }
+
+    #[test]
+    fn a_mark_moved_between_the_same_tiles_is_heard_in_place() {
+        let old = [tile("s1", true), tile("s2", false), tile("s3", false)];
+        let new = [tile("s1", false), tile("s2", true), tile("s3", false)];
+        assert_eq!(content_change(&old, &new, false), ContentChange::InPlace(0, 1));
+        assert_eq!(content_change(&old, &old, false), ContentChange::None);
+        assert_eq!(content_change(&old, &new, true), ContentChange::Reset, "a turned section is reset");
+        assert_eq!(content_change(&old, &new[..2], false), ContentChange::Reset, "a tile fewer is reset");
+        assert_eq!(content_change(&old, &[tile("s1", true), tile("s3", false), tile("s2", false)], false), ContentChange::Reset, "others in order");
     }
 }
 
@@ -485,10 +533,20 @@ impl qobject::GamePageModel {
             Content::Rows(_) => (2, String::new(), String::new()),
         };
         let items = items(&content);
-        if turned || items != self.items {
-            self.as_mut().begin_reset_model();
-            self.as_mut().rust_mut().items = items;
-            self.as_mut().end_reset_model();
+        match content_change(&self.items, &items, turned) {
+            ContentChange::Reset => {
+                self.as_mut().begin_reset_model();
+                self.as_mut().rust_mut().items = items;
+                self.as_mut().end_reset_model();
+            }
+            // The same items with new words or marks: in place, so each delegate and the list's focus stay (EmuSen_Qt.md §7.8.1).
+            ContentChange::InPlace(first, last) => {
+                self.as_mut().rust_mut().items = items;
+                let root = QModelIndex::default();
+                let (first, last) = (self.index(first as i32, 0, &root), self.index(last as i32, 0, &root));
+                self.as_mut().data_changed(&first, &last, &cxx_qt_lib::QVector::<i32>::default());
+            }
+            ContentChange::None => {}
         }
         if self.shows != shows {
             self.as_mut().rust_mut().shows = shows;

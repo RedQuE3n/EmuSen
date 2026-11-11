@@ -4689,6 +4689,20 @@ nothing). Once on 2026-11-09 (the blast radius's run, under other builds' load) 
 unreached: the walk's Right from Slot 3 landed on a delegate the list made as it scrolled, which the walk read as no
 element; every other run, before and after, held every tile reached.
 
+**The content is told of a changed mark in place (2026-11-11).** `GamePageModel.shown` is documented as resetting
+where the section turned and otherwise updating in place, but it reset the content whenever any item differed. Each
+step of Resume moves the mark from one state's tile to another, so each step reset the tiles and every tile delegate
+was made again. Measured 2026-11-11, with each reset logged against the times the gate read its tree: the gate's walk
+over Resume made six resets at every window size, within about 1 s after the tree was read. Once each page list held
+its model only while shown (Kit §7.58), only the tile delegates were freed and made, and the new ones took the freed
+addresses in another order. The walk names an element by its address, so it took a new tile for an old one, and the
+gate named a tile unreached: 2857 at 1920 × 1200 in the landing of 2026-11-11, and 2863 at 1280 × 800 when it was
+reproduced. With the rows' delegates made too, as before, the addresses did not line up, so the defect did not show.
+`content_change` now resets only when the section turned or the items' keys differ in count or order. Otherwise it
+announces `dataChanged` over the rows that changed, so each delegate and the list's current item stay. It is held by
+the models' unit test `a_mark_moved_between_the_same_tiles_is_heard_in_place`; qt-app's page test then holds every
+States tile reached at every size, and the focus back on Slot 3 after a step of Resume.
+
 Seeded faults, each reverted:
 - the refresh keeping hidden games: the models' library test, the Game Boy's games still counted;
 - `Words` ignoring `now`: theme-qt's qml test, `Paused 20755 days ago`;

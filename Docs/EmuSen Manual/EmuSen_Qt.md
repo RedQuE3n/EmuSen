@@ -3340,6 +3340,32 @@ rounded advances give 83–86), while the gap between the words stays 5–6 px, 
 that widens it is not found; Select follows its rounded advances in every copy. The `y` copies (the label at
 `entryRelativeScale` 0.8, 15.36–16.64 px) are captured for the next fit.
 
+**View Media glyph by glyph (measured 2026-11-11 on the `x`, `y` and `z` copies).** Each glyph's pen was read by
+fitting FreeType's raster of the glyph at the label's size to the capture's column profile (`~/.cache/emusen/tmp/x6/`
+`pens.py`, `run2.py`, outside the repository). The steps from glyph to glyph exceed the glyph's rounded advance by a
+pixel at places that move with the size: w to M from 20.064 px (16.79 px of `w` and space, drawn 17 where the
+floored space gives 16), M to e from 20.128 (13.12 px drawn 14), V to i at 20.8 (9.36 drawn 10), and in the `y` copies
+M at 15.744, d at 16.128, V from 16.384 and e at 16.64. The same reading of the `o` copies, Select at 19.2–20.8 px,
+gives every step its rounded advance, its `e` and `l` at 9.36 px drawn 9 where View Media's V at 9.36 is drawn 10: the
+step of a glyph is not a function of its own advance, and the cause belongs to the label. Ruled out:
+
+1. FreeType's hinted advances: the default and light loads give the rounded advances at every size; the v35
+   interpreter's miss 20 of the 32 copies (`v35.py`).
+2. Kerning: HarfBuzz's one pair in the label, e–w, is −2 units (−0.04 px); ES-DE imports no `FT_Get_Kerning`
+   (its dynamic symbols: `hb_shape`, `hb_font_set_scale` and FreeType's `FT_Set_Char_Size`, `FT_Load_Char`,
+   `FT_Load_Glyph` only).
+3. One size for the advances, rounded: at 20.128 px M's 14 needs a size of 20.71 px or more and d's 9 one under
+   20.56 (`gfit.py`, `kfit.py`).
+4. Places carried as fractions from one anchor, with exact, 64ths or linear advances, the space exact, floored,
+   rounded or ceiled, and the pen snapped after the space or not: none places every copy; the best 20 of 32
+   (`joint.py`, `fam.py`). Within each word alone a carried fraction fits every copy but `x00` and `x01`
+   (`phase3.py`), which no single anchor joins.
+
+**[blocked]** for the tester: the rule is not found. The next captures, `helpwords.tsv` (Back and Favorites alone
+at the `z` sizes, View Media alone at 18–24 px), separate a rule of the space or of two words (Favorites, one word of
+nine glyphs, would then follow its rounded advances) from one of the label's length, and show whether whole sizes
+widen too.
+
 **The hinter (decided 2026-11-10).** harfrust and read-fonts shape and read tables but do not hint, so the hinted height
 comes from the system's FreeType, the library the captures were drawn with (FreeType 2.14.3 on Fedora 44), loaded at run
 time as the platform client loads SQLite, with no crate of its own: `esde-qt`'s `hinted.rs` is its one owner and makes

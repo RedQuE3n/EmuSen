@@ -2969,12 +2969,15 @@ listed for the tester and waits on her. `start.rs` (9), the cues' two rules
 missing file none), and the offscreen tests the change reaches (program, screens, start, splash, cards, theme,
 theme_feed, themes_tab; qt-models' library, esde, gamelists, qml, themes) green.
 
-On 2026-11-11, under load, the test timed out once at the first chord ("the chord pausing the game under the Pause
-Card: not within 10 s"), the router having said the game owned the pad. The second chord, after A resumes the game from
-the gamelist, was sent without waiting for the game to own the pad again; it now waits for that, as the router reports it
-(`pad_chord_only`), before the pad clock runs and the chord is pressed. A wait that times out now names where the program
-stands (the screen shown, the session's running, paused and problem, and whether the pad gives the chord alone), so a
-timeout says what the program was doing.
+On 2026-11-11 the test timed out twice at the first chord ("not within 10 s"; shown Game, the session running and not
+paused, the pad giving the chord alone). The cause was the test: since the window is made with the start's own initial
+properties (`start::initial`), `guideChords` is the start's, on outside Game Mode (`guide_chords_from`, Auto), where the
+test had made the window with the default, off. With the Guide chords on, Guide alone opens the menu as it is let go
+(EmuSen_Kit.md §7.26), and the test held Guide down while it waited for the pause. It now presses Guide, waits for the
+router to hold it, and lets it go, then waits for the Pause Card (`guide_alone`); the run passed in 14.5 s on the GPU.
+The second chord, after A resumes the game from the gamelist, also waits for the game to own the pad again
+(`pad_chord_only`) before the pad clock runs. A wait that times out names where the program stands (the screen shown,
+the session's running, paused and problem, and whether the pad gives the chord alone).
 
 | Seeded fault, applied alone and reverted | Caught by |
 |---|---|

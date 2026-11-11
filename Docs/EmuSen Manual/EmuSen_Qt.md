@@ -2104,8 +2104,8 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted` h
 | `later:text-lines` | 1 | datetime's `lineSpacing`: one line at the top of its box is placed the same at every spacing |
 
 `check` counts a pair as `set` when it is drawn, `accepted` when the table marks it accepted (the eight `*Dimmed`
-properties of `helpsystem` and `sound`'s `path`, a column of their own and never whole, decided 2026-11-11 to keep them
-apart from drawn until the tester rules on them), `unsupported` otherwise; nothing reads `catalog.tsv`'s `deferred`
+properties of `helpsystem` and `sound`'s `path`, a column of their own and never whole, kept apart
+from drawn until the tester rules on them), `unsupported` otherwise; nothing reads `catalog.tsv`'s `deferred`
 column for it any more.
 
 **`marks`** (`src/marks.rs`): 30 icons as `Mark { aspect, parts }`, each part rings of points in the unit box (the first

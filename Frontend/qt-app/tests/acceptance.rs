@@ -359,6 +359,7 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     let tree = scene.tree();
     scene.focus_item(&tree, first);
     let mut consoles_mockup = mockup_of("Consoles");
+    // Same screen file as theme-audit's eleven-console test (theme.rs's qt_3_4_2 test); not the same catalogue or host: Kit §7.104.
     consoles_mockup.elements.retain(|e| !COUNTED.iter().any(|c| e.name.starts_with(c)));
     hold(&mut scene, "Consoles", &consoles_mockup, &mut excuses, &mut report);
 

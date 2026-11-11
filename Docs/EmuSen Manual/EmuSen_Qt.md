@@ -4932,15 +4932,16 @@ it at four of the five sizes (HomeCardContinueConsole). An empty text is now non
 the ES-DE media index. The card's line under its rows wraps instead of being cut, so a list that really cannot be read
 is said whole (qt-app's `cards`, HomeCardUnread, held at the five sizes).
 
-**Held to** (measured on 2026-11-11): qt-models' `sorts`, `home_card_acts`, `failures`, and `cores`'s
-`a_failed_rescan_and_an_unread_firmware_are_said_never_taken_for_none_needed`, `start_console` and `runtime_records`;
-qt-app's `repairs` (the three sorts by pad and pointer, Most played with a tie, the List card held at the five sizes),
-`failures`, `console_fails` and `cores_fit` (software tier), `console` and `cores_fit_gpu` on the GPU; kit-gallery's
-`strip`. Not held to: qt-app's `esde` on the GPU is red with the 50 cut words above. Everything it walks before its last
-assert passes (measured on 2026-11-11): a NES game with no engine fails and is said, the theme back; Continue resuming
-the game; Tools ▸ Cores by the pointer and ▸ Themes by the pad, B back to the theme; the Home card and Themes held at the
-five sizes; Start Console from the Home card by the pad and by the pointer and from the Select menu by the pointer.
-That assert stops the test before its missing-theme fallback and `assert_quiet`, which have not run since.
+**Held to** (measured on 2026-11-11, on the branch's last code): qt-models' `sorts`, `home_card_acts`, `failures`,
+`cores`, `start_console` and `runtime_records`, and on the GPU `session`; qt-app's `repairs` (the three sorts by pad and
+pointer, Most played with a tie, the List card held at the five sizes), `cards` (HomeCardUnread among its holds),
+`failures`, `console_fails` and `cores_fit` on the software tier, and on the GPU `console` (every walk named above, the
+List card's second opening after a session among them), `esde`, `cores_fit_gpu` and `acceptance`; kit-gallery's `strip`,
+`strip_fits` and `disabled`. qt-app's `esde` ran to its end for the first time: after the Cores assert, its missing-theme
+fallback and `assert_quiet` passed with nothing to report. Everything it walks passes: a NES game with no engine fails and
+is said, the theme back; Continue resuming the game; Tools ▸ Cores by the pointer and ▸ Themes by the pad, B back to the
+theme; the Home card and Themes held at the five sizes; Start Console from the Home card by the pad and by the pointer and
+from the Select menu by the pointer.
 
 ---
 

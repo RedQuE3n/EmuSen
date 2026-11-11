@@ -3663,9 +3663,21 @@ to 27 there: Regular, SemiBold and Bold give 26). Unproven.
 **Artflix.** ES-DE's bar starts one pixel left of ours at 1280 × 800 in both views, every part in the same place
 relative to its start; at 1920 × 1200 the starts agree. The candidates of `~/.cache/emusen/tmp/x7/boxes-table.md`
 (the width rounded before or after halving, floored, the exact label widths, the spacing or the box rounded up in the
-width alone) each miss one of the four bars. Unproven. Captures that separate them: Artflix's gamelist help at
-1280 × 800 with one entry, SELECT (exact width 54.32 px, rounded 53) and then BACK (39.12, 39), at the theme's
-`fontSize` and at 0.0375 (30 px), the help copies of `Testing/esde-oracle/helpcopy.py` with the theme's origin 0.5.
+width alone) each miss one of the four bars. The captures of 2026-11-11 (`~/.cache/emusen/tmp/x8/captures-artflix.tsv`,
+`helpcopy.py`'s `file=default.xml`: Artflix's help alone with one entry, origin 0.5, at 1280 × 800; the control `x8ctl`,
+the theme unchanged, draws the help as the committed `gamelist-1-1280x800.png` does, whose generated media's colours,
+clock and console mark are older) give ES-DE's start, the disc's left edge less half of what the box leaves around it:
+
+| Entry, size | ES-DE's start | bar width, rounded advances | floor(640 − W ÷ 2) | bar width, exact advances | floor(640 − W ÷ 2) |
+|---|---|---|---|---|---|
+| SELECT, 20 px | 602 | 74.34 | 602 | 75.78 | 602 |
+| BACK, 20 px | 609 | 60.34 | 609 | 60.54 | 609 |
+| SELECT, 30 px | 584 | 112.09 | 583 | 111.75 | 584 |
+| BACK, 30 px | 595 | 89.09 | 595 | 88.89 | 595 |
+
+Ours, `round(640 − round(W) ÷ 2)`, is 603, 610, 584 and 595. The start floored from the width with exact advances fits
+all four, and gives 266 for the theme's own gamelist bar at 1280 × 800, where ES-DE's is 268; with rounded advances
+it misses SELECT at 30 px. No rule fits every bar measured. Unproven.
 
 **The painter's loader.** esde-qt's lint `qt_4_8_the_painter_names_no_client_and_no_runtime` holds the painter's
 dependencies to a list without `libloading`, which `hinted.rs` brought in on 2026-11-10 to reach the system's FreeType

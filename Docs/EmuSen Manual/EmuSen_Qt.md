@@ -3421,6 +3421,37 @@ theme face's rule, `own` false). Where the SemiBold is absent the help takes the
 says so once. The icon's box follows the face it is drawn in: SemiBold's hinted `S` is Regular's at every measured
 size but 23 and 36 px (17 against 16, 26 against 25), the latter the viewer's help at 1920 × 1200.
 
+**The glyph at ES-DE's disc (decided 2026-11-11 by the tester, R-20261111-24; measured 2026-11-11).** ES-DE's help icon is
+a disc of radius 28 inside an outline of radius 28 and stroke 2 in a 64-unit box (its `button_*_XBOX.svg`, read as
+data), so its outer edge spans 58 of the box's 64 units: 0.906 × 51.25 = 47 px of ink on Art Book Next's 1920 × 1200
+bars, 0.906 × 17.5 = 16 px on Artflix's at 1280 × 800, as the captures show. ES-DE's icon files are not drawn; the kit's
+own filled glyph is, at the icon's box (the entry before its gap) × (58/64) / the kit's `discShare` (EmuSen_Kit.md §7.71,
+0.85), so its disc's edge lands where ES-DE's does. A theme's own picture for a button is drawn at the box. Drawing the
+glyph at the box alone (its disc 0.85 of it) left Art Book Next's discs 44 px to ES-DE's 47 and raised Artflix's system
+MAE from 4.27 to 4.39 (1280) and from 4.07 to 4.25 (1920), and was withdrawn. `sizes.rs`'s
+`the_watched_themes_hold_at_the_five_sizes` holds every drawn help glyph to this size.
+
+**The three boxes still off (measured 2026-11-11 on the committed captures).** Open, **[blocked]** for the tester: two of
+`esde-boxes.tsv`'s rows are mis-derived, and correcting them uncovers a third difference.
+
+| Box | The row | The capture | Ours |
+|---|---|---|---|
+| Art Book Next system, 1920 × 1200 | x 357.18, w 562.89 | the panel 509.125–1410.85 px, centred on 959.99 (pos and origin 0.5); less the theme's 25 px paddings, x 356.08, w 567.82 | x 356.0, w 568.0 |
+| Art Book Next system, 1280 × 800 | x 359.22, w 559.78 | the panel 341.43–939.0; x 358.10, w 564.24 | x 359.67, w 561.67 |
+| Art Book Next gamelist, 1920 × 1200 | x 60.0, w 371.47 | origin 0, so x is the pos, 58.33; SELECT's T inks to 649.46 px, its right bearing at the rounded advance 1.0 px: w 375.3 | x 58.3, w 374.7 |
+| Artflix gamelist, 1280 × 800 | x 267.9, w 744.2 | the bar one whole pixel left of ours, every part's place relative to its start equal | x 269.0, w 742.0 |
+
+The system rows subtracted 17.78 units on the left and 20.0 on the right where the theme's paddings are 16.67 each, so
+their centre (957.9 px) is not the theme's; the gamelist row took the first disc's ink as the element's edge. With the
+panel read at sub-pixel coverage, the system bar at 1920 × 1200 is ES-DE's within 0.2 units and the gamelist bar within
+0.6, but at 1280 × 800 ES-DE's labels sit 2 px left of ours at the first entry and 2 px right at the last, its discs 32 px
+of ink where 58/64 of the box (1.25 × the hinted `S`, 26 px at 36, 36.67 and 37 px alike) gives 29.5: the icon's box at
+that size is not yet derived. Artflix's bars at 1280 × 800 start a pixel left of ours (268 against 269, and 450 against
+451 in the system view) and its bars at 1920 × 1200 do not; neither rounding nor flooring of the start from the unrounded
+width, nor centring by the labels' exact widths, gives all three. Correcting the rows changes what the oracle compares
+against, which is the tester's to allow; the measures and the candidates are in `~/.cache/emusen/tmp/x7/boxes-table.md`
+and `edge3.py`, `ink2.py`, `runs.py`, outside the repository.
+
 **The advance's rounding, re-proved with SemiBold (`fixed.py`, pens re-read with SemiBold's rasters, `refit.py`).** Of
 the 93 copies: each advance exact and rounded half up, 90; the same in f32 arithmetic, 90; FreeType's fixed point (the
 16.16 scale of the size in 26.6, `FT_MulFix`, then `(x + 32) >> 6`) with the size rounded, floored or ceiled to 64ths,

@@ -28,10 +28,11 @@ ElementBox {
     property int family: Kit.Families.Generic
     readonly property string faceName: face.status === FontLoader.Ready ? face.font.family : body.font.family
     // THEMES.md: fontSize sets the text and the icons; entryRelativeScale above 1 shrinks the icons, below 1 the text.
-    // The element's height over the font's size, the side the glyph is drawn at, measured on its captures (EmuSen_Qt.md §4.8.7).
+    // The element's height over the font's size, measured on its captures (EmuSen_Qt.md §4.8.7).
     readonly property real heightShare: 0.9
     readonly property real lineHeight: root.px * root.heightShare
-    readonly property real glyphSide: root.lineHeight * Math.min(1, 1 / Math.max(0.2, root.entryScale))
+    // ES-DE's disc reaches 58 of its icon's 64 units; the kit's glyph is sized so its own disc does (EmuSen_Qt.md §4.12.1).
+    readonly property real discEdge: 58 / 64
     required property real barWidth
     readonly property real labelPx: root.px * Math.min(1, root.entryScale)
     // The bar starts at the nearest pixel to its place and ends at its last label (EmuSen_Qt.md §4.12.1).
@@ -42,6 +43,9 @@ ElementBox {
         scene: root.esde
         revision: root.esde ? root.esde.revision : 0
         element: root.elementId
+    }
+    Kit.PadGlyphMarks {
+        id: kitMarks
     }
     FontLoader {
         id: face
@@ -85,6 +89,9 @@ ElementBox {
                 readonly property url picture: entry.model.icon ?? ""
                 required property real start
                 required property real labelStart
+                // The icon's box, the entry before its gap; the kit's glyph drawn so its disc's edge is ES-DE's (EmuSen_Qt.md §4.12.1).
+                readonly property real box: entry.labelStart - entry.start - root.iconGap
+                readonly property real side: entry.box * root.discEdge / kitMarks.discShare
                 // Each part at the nearest whole pixel of the window, its place carried from the bar's start (EmuSen_Qt.md §4.12.1).
                 objectName: "help-" + entry.label
                 x: Math.round(root.barStart + entry.start) - root.boxX
@@ -97,19 +104,20 @@ ElementBox {
                 Image {
                     anchors.centerIn: glyph
                     visible: entry.picture.toString().length > 0
-                    width: root.glyphSide
-                    height: root.glyphSide
-                    sourceSize: Qt.size(root.glyphSide, root.glyphSide)
+                    width: entry.box
+                    height: entry.box
+                    sourceSize: Qt.size(entry.box, entry.box)
                     fillMode: Image.PreserveAspectFit
                     source: entry.picture
                 }
                 Kit.PadGlyph {
                     id: glyph
+                    objectName: "helpGlyph-" + entry.label
                     x: (Math.round(root.barStart + entry.labelStart) - root.boxX - entry.x - root.iconGap - width) / 2
                     anchors.verticalCenter: parent.verticalCenter
                     visible: entry.picture.toString().length === 0
-                    width: root.glyphSide
-                    height: root.glyphSide
+                    width: entry.side
+                    height: entry.side
                     family: root.family
                     style: root.filled ? Kit.GlyphStyles.Filled : Kit.GlyphStyles.Outlined
                     ink: root.iconColor
@@ -122,8 +130,8 @@ ElementBox {
                     x: glyph.x + glyph.width
                     anchors.verticalCenter: parent.verticalCenter
                     visible: entry.pair >= 0 && !glyph.paired
-                    width: root.glyphSide
-                    height: root.glyphSide
+                    width: entry.side
+                    height: entry.side
                     family: root.family
                     style: glyph.style
                     ink: root.iconColor

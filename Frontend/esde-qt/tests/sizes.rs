@@ -56,6 +56,22 @@ fn clear_points(scene: &mut Scene<'_>, w: f64, h: f64) -> Vec<(i64, i64)> {
     points.iter().zip(colours).filter(|(_, c)| c.is_some_and(|c| c.a < 255)).map(|(p, _)| (p.0 as i64, p.1 as i64)).take(4).collect()
 }
 
+/// The help's glyphs not sized so the kit's disc reaches ES-DE's 58 of 64 units of the icon's box (EmuSen_Qt.md §4.12.1).
+fn glyphs_off(scene: &mut Scene<'_>) -> Vec<String> {
+    let tree = scene.tree();
+    let mut off = vec![];
+    for n in tree.nodes.iter().filter(|n| n.visible && n.name.starts_with("help-")) {
+        let label = &n.name["help-".len()..];
+        let Some(g) = tree.nodes.iter().find(|g| g.visible && g.name == format!("helpGlyph-{label}")) else { continue };
+        let side: f64 = scene.property(&n.name, "box").parse().unwrap_or(f64::NAN);
+        let want = side * 58.0 / 64.0 / emusen_kit_core::glyph::FILLED_DISC_SHARE;
+        if !((g.w - want).abs() < 0.01) {
+            off.push(format!("{label}: {:.2} against {want:.2} for a box of {side:.2}", g.w));
+        }
+    }
+    off
+}
+
 /// The primary's items and the help's entries the pointer can reach: their centres inside the window.
 fn unreachable(scene: &mut Scene<'_>, w: f64, h: f64) -> (Vec<String>, Vec<(f64, f64)>) {
     let tree = scene.tree();
@@ -167,6 +183,10 @@ fn the_watched_themes_hold_at_the_five_sizes() {
                 }
                 if items.is_empty() {
                     failures.push(format!("{at}: no item of the primary element in the window"));
+                }
+                let glyphs = glyphs_off(&mut scene);
+                if !glyphs.is_empty() {
+                    failures.push(format!("{at}: help glyphs not at ES-DE's disc {glyphs:?}"));
                 }
             }
 

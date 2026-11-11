@@ -2,9 +2,10 @@
 //! the first game, at 1280 × 800 and 1920 × 1200, on the oracle's library, grabbed on the GPU tier and held to ES-DE
 //! 3.4.1's captures: every element's box within two design units of where ES-DE draws it (the C# scene's spec, or the
 //! box measured on the capture in `Testing/esde-baseline/esde-boxes.tsv` where the C#'s is not ES-DE's), and the mean
-//! absolute error, the help bar's strip left out, no higher than the last committed measure. The corpus measure of
-//! `esde-check` gains the watched columns and is written for `Testing/esde-corpus`; a row that worsens against the last
-//! committed measure fails, and a watched figure that falls fails until the lower one is committed.
+//! absolute error, the help bar's strip left out, no higher than the last committed measure. Each capture is used only
+//! with the SHA-256 that `Testing/esde-oracle/captures.sha256` gives it. The corpus measure of `esde-check` gains the
+//! watched columns and is written for `Testing/esde-corpus`; a row that worsens against the last committed measure
+//! fails, a watched figure that falls fails until the lower one is committed, and only a run with no failure commits it.
 
 mod common;
 
@@ -129,6 +130,45 @@ fn baseline() -> BTreeMap<(String, String, i32), (i32, i32, f64)> {
             ((c[0].to_owned(), c[1].to_owned(), c[2].parse().unwrap()), (c[4].parse().unwrap(), c[5].parse().unwrap(), c[6].parse().unwrap()))
         })
         .collect()
+}
+
+/// The captures in use and their SHA-256s, `sha256sum` lines relative to the oracle's folder (Testing/esde-oracle/README.md).
+fn manifest() -> BTreeMap<String, String> {
+    let text = std::fs::read_to_string(repo().join("Testing/esde-oracle/captures.sha256")).unwrap();
+    text.lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| {
+            let (sum, name) = l.split_once("  ").unwrap_or_else(|| panic!("captures.sha256: sum, two spaces, name: {l}"));
+            (name.to_owned(), sum.to_owned())
+        })
+        .collect()
+}
+
+/// A file's SHA-256 in hex, by `sha256sum`, as the manifest names it.
+fn sha256(path: &Path) -> Option<String> {
+    let out = std::process::Command::new("sha256sum").arg(path).output().ok()?;
+    let text = String::from_utf8(out.stdout).ok()?;
+    out.status.success().then(|| text.split_whitespace().next().unwrap_or_default().to_owned())
+}
+
+/// The capture `name` under `oracle` when the manifest lists it with the file's own sum; refused otherwise.
+fn captured(oracle: &Path, sums: &BTreeMap<String, String>, name: &str) -> Result<PathBuf, String> {
+    let path = oracle.join(name);
+    let listed = sums.get(name).ok_or_else(|| format!("{name}: not in Testing/esde-oracle/captures.sha256"))?;
+    match sha256(&path) {
+        Some(sum) if sum == *listed => Ok(path),
+        Some(sum) => Err(format!("{name}: its SHA-256 {sum} is not the manifest's {listed}")),
+        None => Err(format!("{}: not read", path.display())),
+    }
+}
+
+/// Writes the corpus measure as the committed one only when asked and every check of the run passed; whether it wrote.
+fn record(committed: &Path, file: &str, measure: &str, failures: &[String], asked: bool) -> bool {
+    let write = asked && failures.is_empty();
+    if write {
+        std::fs::write(committed.join(file), measure).unwrap();
+    }
+    write
 }
 
 /// The spec's elements in drawing order: (key, kind, name, box in design units).
@@ -278,6 +318,7 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
     let baseline = baseline();
     let esde = esde_boxes();
     let picks = captured_picks();
+    let sums = manifest();
     // ES-DE's default face, read from the approved AppImage's fonts by path as an installed ES-DE's would be (EmuSen_Qt.md §4.8.7).
     let face = oracle.join("bin/AppDir/usr/share/es-de/resources/fonts").join(emusen_esde::fonts::FILE);
     assert!(face.is_file(), "ES-DE's face at {}: Testing/esde-oracle/README.md", face.display());
@@ -296,7 +337,7 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
         for (view, state) in STATES {
             for (w, h) in SIZES {
                 let at = format!("{theme} {state} {w}x{h}");
-                let capture = oracle.join(&theme).join(format!("{state}-{w}x{h}.png"));
+                let capture = captured(&oracle, &sums, &format!("{theme}/{state}-{w}x{h}.png")).unwrap_or_else(|e| panic!("{at}: {e}"));
                 // The clock and the relative dates at the capture's time, as the C# baseline set them (Testing/esde-baseline/README.md).
                 let taken = std::fs::metadata(&capture).and_then(|m| m.modified()).unwrap_or_else(|e| panic!("{}: {e}", capture.display()));
                 let taken = taken.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
@@ -374,7 +415,7 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
             for n in 0..=8 {
                 let name = format!("nes-gamelist-0-media-{n}-{w}x{h}");
                 let at = format!("{theme} {name}");
-                let capture = oracle.join(&theme).join(format!("{name}.png"));
+                let capture = captured(&oracle, &sums, &format!("{theme}/{name}.png")).unwrap_or_else(|e| panic!("{at}: {e}"));
                 assert!(scene.set_property("view", "defaultFont", &face.to_string_lossy()));
                 common::install(&mut scene, &folder, &choices, "gamelist", &viewer_texts, w, h);
                 scene.pad(emusen_kit_core::input::UiButton::Screensaver);
@@ -463,7 +504,7 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
                 let unit = f64::from(w) / 1280.0;
                 let name = format!("{name0}-{w}x{h}");
                 let at = format!("{theme} {name}");
-                let capture = oracle.join(&theme).join(format!("{name}.png"));
+                let capture = captured(&oracle, &sums, &format!("{theme}/{name}.png")).unwrap_or_else(|e| panic!("{at}: {e}"));
                 assert!(scene.set_property("view", "defaultFont", &face.to_string_lossy()));
                 common::install_with(&mut scene, &folder, &choices, "gamelist", &viewer_texts, w, h, more);
                 for _ in 0..entry {
@@ -554,9 +595,8 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
         failures.push("a theme of the corpus does not load".to_owned());
     }
     std::fs::write(out.join("corpus.tsv"), &measure).unwrap();
-    if std::env::var_os("EMUSEN_ESDE_CORPUS").is_some() {
-        std::fs::write(committed.join(&file), &measure).unwrap();
-    }
+    // The committed measure is re-recorded only by a run that passed every check above.
+    record(&committed, &file, &measure, &failures, std::env::var_os("EMUSEN_ESDE_CORPUS").is_some());
     eprintln!("{}", measure.lines().last().unwrap_or_default());
     eprintln!("{} failures\n{}", failures.len(), failures.join("\n"));
     assert!(failures.is_empty(), "{}", failures.join("\n"));
@@ -588,4 +628,31 @@ fn a_row_that_worsens_is_named() {
     assert!(worsened(new, new).is_empty());
     assert_eq!(fell(new, old), ["A: mae_system_1280 1.2 → 1"]);
     assert!(fell(old, new).is_empty());
+}
+
+#[test]
+fn a_failing_run_leaves_the_committed_measure_alone() {
+    let scratch = Scratch::new("oracle-record");
+    assert!(!record(&scratch.0, "a.tsv", "m\n", &["a box off".to_owned()], true));
+    assert!(!scratch.0.join("a.tsv").exists(), "a failing run re-recorded the baseline");
+    assert!(!record(&scratch.0, "b.tsv", "m\n", &[], false));
+    assert!(!scratch.0.join("b.tsv").exists());
+    assert!(record(&scratch.0, "c.tsv", "m\n", &[], true));
+    assert_eq!(std::fs::read_to_string(scratch.0.join("c.tsv")).unwrap(), "m\n");
+}
+
+#[test]
+fn a_capture_is_used_only_with_the_manifest_s_sum() {
+    let scratch = Scratch::new("oracle-manifest");
+    std::fs::create_dir_all(scratch.0.join("t")).unwrap();
+    std::fs::write(scratch.0.join("t/s.png"), b"capture").unwrap();
+    let sum = sha256(&scratch.0.join("t/s.png")).unwrap();
+    assert_eq!(sum, "460ee6aa3a80359181b794cc31a7185addba77626e9f719c10e3c8efb8668a1d");
+    let listed = BTreeMap::from([("t/s.png".to_owned(), sum.clone())]);
+    assert_eq!(captured(&scratch.0, &listed, "t/s.png"), Ok(scratch.0.join("t/s.png")));
+    std::fs::write(scratch.0.join("t/s.png"), b"recaptured").unwrap();
+    assert!(captured(&scratch.0, &listed, "t/s.png").unwrap_err().contains("is not the manifest's"));
+    assert!(captured(&scratch.0, &listed, "t/other.png").unwrap_err().contains("not in"));
+    let sums = manifest();
+    assert!(sums.len() >= 86 && sums.values().all(|s| s.len() == 64), "every capture the oracle reads is listed by its SHA-256");
 }

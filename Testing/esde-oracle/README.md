@@ -86,6 +86,11 @@ not cross into another network namespace), plays to SDL's dummy audio, and draws
 - `viewerstates.sh` — the media viewer under its settings (USERGUIDE.md, "Media viewer settings") on the NES's first
   game in CarAlt at both sizes, scanlines off, each capture named by a `TAG`.
   `run_esde.sh` takes `ESDE_SETTINGS` ("Name=value ...", names `settings.py` knows) and `TAG` (added to the name).
+- `captures.sha256` — every capture the oracle comparison (`Frontend/esde-qt/tests/oracle.rs`) reads, as `sha256sum`
+  lines relative to `~/.cache/emusen/esde-oracle`: 86 files, hashed on 2026-11-11. The captures stay outside the
+  repository; the comparison refuses one that is not listed or whose sum differs, so a recapture changes the
+  comparison only through a commit of its new line. `cd ~/.cache/emusen/esde-oracle && sha256sum -c <this file>`
+  checks them by hand.
 - `pick.py <run-dir> <seconds> <out.png>` — keeps the run's capture, and prints its time and its difference from the
   grab one second before, which is 0 when the picture had settled.
 

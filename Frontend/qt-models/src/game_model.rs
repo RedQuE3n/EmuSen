@@ -58,6 +58,8 @@ pub mod qobject {
         #[qproperty(QString, count_line, cxx_name = "countLine", READ, NOTIFY)]
         /// The List card's facts as plain data (list_card.rs).
         #[qproperty(QString, list_facts, cxx_name = "listFacts", READ, NOTIFY)]
+        /// Whether the sort needs the scraper's facts (Year, Rating), which the library then reads (LibraryModel.byFacts).
+        #[qproperty(bool, by_facts, cxx_name = "byFacts", READ, NOTIFY)]
         type GameModel = super::GameModelRust;
     }
 
@@ -173,6 +175,7 @@ pub struct GameModelRust {
     startable: QString,
     count_line: QString,
     list_facts: QString,
+    by_facts: bool,
     /// The sort, global as Mistress's is, and the sections narrowed to their favourites, each keeping its own.
     sort: usize,
     favourites_in: std::collections::HashSet<String>,
@@ -316,6 +319,11 @@ impl qobject::GameModel {
             (SORT, by) => {
                 let sort = crate::listing::step_sort(self.sort, by);
                 self.as_mut().rust_mut().sort = sort;
+                let by_facts = crate::listing::by_facts(sort);
+                if self.by_facts != by_facts {
+                    self.as_mut().rust_mut().by_facts = by_facts;
+                    self.as_mut().by_facts_changed();
+                }
                 self.read();
                 0
             }

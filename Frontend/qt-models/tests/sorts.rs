@@ -6,8 +6,9 @@ use emusen_crystal_client::shapes::SystemRow;
 use emusen_platform_client::library::GameFile;
 use emusen_qt_models::esde_shelves::{rating, release_date, year_of, Metadata, Plays};
 use emusen_qt_models::games::{from_json, to_json};
-use emusen_qt_models::library::{games_of, refresh, Engine, LibrarySource};
-use emusen_qt_models::listing::{shown, Listing, SORTS};
+use emusen_qt_models::gamelists::Gamelists;
+use emusen_qt_models::library::{games_of, refresh, refresh_with, Engine, LibrarySource};
+use emusen_qt_models::listing::{by_facts, shown, Listing, SORTS};
 
 struct Source;
 
@@ -42,10 +43,10 @@ impl LibrarySource for Source {
 }
 
 fn sorted(name: &str) -> Vec<String> {
-    let read = refresh(&Source).unwrap();
+    let sort = SORTS.iter().position(|s| *s == name).unwrap();
+    let read = refresh_with(&Source, &Gamelists::default(), by_facts(sort)).unwrap();
     // The rows as GameModel reads them: the data crosses the plain text between the two models.
     let rows = from_json(&to_json(&games_of("all", &read.systems, &read.catalog)));
-    let sort = SORTS.iter().position(|s| *s == name).unwrap();
     shown(&rows, "all", &Listing { sort, ..Listing::default() }).into_iter().map(|g| g.title).collect()
 }
 
@@ -55,6 +56,14 @@ fn most_played_year_and_rating_sort_by_their_data_without_it_last_and_ties_by_na
     assert_eq!(sorted("Most played"), ["Cobalt", "brass", "Ember", "Aurora", "Dune"], "most first; a tie by name; never played last");
     assert_eq!(sorted("Year"), ["brass", "Aurora", "Dune", "Cobalt", "Ember"], "oldest first by year alone, a tie by name; no date last");
     assert_eq!(sorted("Rating"), ["Dune", "Aurora", "Ember", "brass", "Cobalt"], "highest first; a tie by name; no rating last");
+}
+
+#[test]
+fn the_own_look_reads_the_scraper_s_facts_only_while_a_sort_needs_them() {
+    assert_eq!((0..5).map(by_facts).collect::<Vec<_>>(), [false, false, false, true, true], "Year and Rating alone");
+    assert!(refresh(&Source).unwrap().catalog.metadata.is_empty(), "no metadata read for the own look by default");
+    assert_eq!(refresh(&Source).unwrap().catalog.plays.len(), 3, "games.db's plays, one answer, always");
+    assert_eq!(refresh_with(&Source, &Gamelists::default(), true).unwrap().catalog.metadata.len(), 4);
 }
 
 #[test]

@@ -493,14 +493,17 @@ impl LibrarySource for FirstLook<'_> {
 }
 
 pub fn refresh(source: &dyn LibrarySource) -> Refreshed {
-    refresh_with(source, &Gamelists::default())
+    refresh_with(source, &Gamelists::default(), false)
 }
 
 /// One refresh, each gamelist listed with the choices the player made of it.
-pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists) -> Refreshed {
+/// The scraper's metadata is read where it is shown: for an ES-DE theme, and for the own look's grid while it sorts by
+/// Year or Rating (`by_facts`); games.db's plays, one answer, always.
+pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists, by_facts: bool) -> Refreshed {
     let systems = source.systems()?;
     let mut games = source.games()?;
     let settings = source.settings()?;
+    let themed = crate::esde_shelves::settings_of(&settings).themed;
     // A hidden game leaves every view until Settings lists hidden games again (Mistress's `Listed`).
     if !settings.get(SHOW_HIDDEN).and_then(serde_json::Value::as_bool).unwrap_or(false) {
         let hidden: HashSet<String> = source.hidden(&games)?.into_iter().collect();
@@ -514,7 +517,7 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists) -> Refres
     let heroes = source.media(&systems, &played_games, &HERO)?;
     let played = source.played(&games)?;
     let plays = source.plays(&games)?;
-    let metadata = source.metadata(&games)?;
+    let metadata = if themed || by_facts { source.metadata(&games)? } else { Vec::new() };
     let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings, plays, metadata };
     let shelves = source.shelves()?;
     let mut shelved: Vec<SystemRow> = systems.clone();

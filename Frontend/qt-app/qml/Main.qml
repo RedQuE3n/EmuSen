@@ -117,6 +117,8 @@ Window {
         id: library
         objectName: "library"
         platformLibrary: program.platformLibrary
+        // The grid's Year and Rating sort by the scraper's facts, read for the own look only while one of them is chosen.
+        byFacts: games.byFacts
     }
     PadReader {
         id: pads

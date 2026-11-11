@@ -30,6 +30,11 @@ impl Listing {
     }
 }
 
+/// Whether the sort orders by the scraper's facts, which the library reads only while one does.
+pub fn by_facts(sort: usize) -> bool {
+    matches!(sort, YEAR | RATING)
+}
+
 /// The sort `by` steps from `sort`, wrapping both ways.
 pub fn step_sort(sort: usize, by: i32) -> usize {
     (sort as i32 + by).rem_euclid(SORTS.len() as i32) as usize

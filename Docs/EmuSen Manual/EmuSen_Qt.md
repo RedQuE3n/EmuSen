@@ -4719,16 +4719,19 @@ opened them (`screens::tool_back`, from the screen each was opened over); the Th
 goes back to Settings, and Cores from Home's place to Home. Under an ES-DE theme Cores had no way back at all; it now
 has the theme's view.
 
-**4. Most played, Year and Rating.** A refresh reads games.db's plays and the scraper's metadata once
-(`Catalog.plays`, `Catalog.metadata`), which the ES-DE view now takes from the catalog rather than reading again. Each
+**4. Most played, Year and Rating.** A refresh reads games.db's plays (one answer) and, where it is shown, the scraper's
+metadata, once (`Catalog.plays`, `Catalog.metadata`), which the ES-DE view now takes from the catalog rather than
+reading again. The metadata is a call a game, so the own look reads it only while the grid sorts by Year or Rating:
+`GameModel.byFacts` says so, `LibraryModel.byFacts` follows it and reads the library again when it turns on, and every
+refresh after keeps reading it while it stays on (`library::refresh_with`'s `by_facts`). Each
 grid row carries its play count, its year and its rating (`GameRow.plays`, `.year`, `.rating`), read through the one
 reader of the release date and the rating (`esde_shelves::release_date`, `::rating`, `::year_of`, which a game's page's
 year also uses). The sorts are Mistress's `GamesScreen.Sorted`: most played first, oldest year first, highest rating
 first, each stable over the name's order so a tie keeps it, and a game without the datum last. The ES-DE theme's first
 read (`FirstLook`) reads no metadata or plays, so until the whole read arrives these three sort by name.
 
-The own look now reads every game's metadata at each refresh, where before only an ES-DE theme did; it is read off the
-interface thread. Not measured on a large library yet.
+While Year or Rating is chosen, the own look reads every game's metadata at each refresh, off the interface thread, as
+an ES-DE theme does; how long that takes on a large library is not measured yet.
 
 **5. Errors no longer dropped.**
 - `runtime.rescan()` before a game opens: a failure is said with the open's words ("The engines could not be listed

@@ -81,6 +81,9 @@ fn sorted_by(scene: &mut Scene<'_>, sort: &str) -> Vec<String> {
     assert_eq!(rows(scene)[1], format!("Sort | {sort}"));
     scene.pad(UiButton::Back);
     wait_for(scene, "screens", "shown", "Grid", 1000);
+    // Year and Rating have the library read the scraper's facts again; the order is read once that read is in.
+    scene.wait(300);
+    wait_for(scene, "library", "loading", "false", 10000);
     scene.wait(300);
     order(scene)
 }

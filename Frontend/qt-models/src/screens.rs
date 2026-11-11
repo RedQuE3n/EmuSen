@@ -102,6 +102,8 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Grid, Ask::Act(key)) if key == LIST => Some((Shown::List, None)),
         (Shown::List, Ask::Back | Ask::Close) => Some((Shown::Grid, None)),
         (Shown::List, Ask::Act(key)) if key == SEARCH => Some((Shown::Search, None)),
+        // A console started from its Start Console page is the game's screen, as a game's launch asks for it first.
+        (Shown::List, Ask::Act(key)) if crate::home_card::console_to_start(key).is_some() => Some((Shown::Game, None)),
         // Every other action of the List card is the grid's, and the card closes on it.
         (Shown::List, Ask::Act(_)) => Some((Shown::Grid, None)),
         // The keyboard closed, by X keeping the words or by B on an empty field: the grid.
@@ -128,13 +130,14 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
     }
 }
 
-/// The Home card's row's action besides Settings and a game's page: Continue the game, Tools ▸ Cores and ▸ Themes their
-/// screens; every other row closes the card to the library's screen (EmuSen_Qt.md §7.9).
+/// The Home card's row's action besides Settings and a game's page: Continue the game and a console started its screen,
+/// Tools ▸ Cores and ▸ Themes their screens; every other row closes the card to the library's screen (EmuSen_Qt.md §7.9).
 fn card_act(themed: bool, key: &str) -> Option<(Shown, Option<String>)> {
     let shown = match key {
         crate::home_card::RESUME => Shown::Game,
         crate::home_card::CORES => Shown::Cores,
         crate::home_card::THEMES => Shown::Themes,
+        _ if crate::home_card::console_to_start(key).is_some() => Shown::Game,
         _ => library_of(themed),
     };
     Some((shown, None))
@@ -198,6 +201,7 @@ pub fn step_in(themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<S
         (true, Shown::Esde | Shown::List | Shown::Pause, Ask::Play) => Some((Shown::Game, None)),
         (true, Shown::HomeCard, Ask::Act(key)) if key == crate::home_card::SETTINGS => Some((Shown::Settings, None)),
         (true, Shown::HomeCard, Ask::Act(key)) => card_act(true, key),
+        (true, Shown::List, Ask::Act(key)) if crate::home_card::console_to_start(key).is_some() => Some((Shown::Game, None)),
         (true, Shown::Settings, Ask::Back) => Some((Shown::Esde, None)),
         (true, Shown::Settings | Shown::Themes, Ask::Act(key)) if key == HOME => Some((Shown::Esde, None)),
         (true, Shown::Settings, Ask::Act(key)) if key == THEMES => Some((Shown::Themes, None)),

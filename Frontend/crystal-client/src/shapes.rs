@@ -225,14 +225,20 @@ pub struct Port {
     pub controller: Option<String>,
 }
 
-/// The session's discs.
+/// The session's discs; `index` is none with no disc in the drive, which the runtime writes as -1 (a console started
+/// empty, a disc taken out).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub struct Discs {
     pub count: u32,
+    #[serde(deserialize_with = "index_in_drive")]
     pub index: Option<u32>,
     pub can_change: bool,
     pub lid_open: bool,
+}
+
+fn index_in_drive<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Option<u32>, D::Error> {
+    Ok(Option::<i64>::deserialize(d)?.and_then(|i| u32::try_from(i).ok()))
 }
 
 /// The picture's shape.
@@ -500,4 +506,17 @@ pub struct SessionCodecs {
     pub auto: Option<CheatCodec>,
     pub explicit: Option<CheatCodec>,
     pub systems: Vec<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Discs;
+
+    #[test]
+    fn an_empty_drive_is_no_index() {
+        let read = |text: &str| serde_json::from_str::<Discs>(text).unwrap().index;
+        assert_eq!(read(r#"{"count":0,"index":-1}"#), None);
+        assert_eq!(read(r#"{"count":2,"index":1}"#), Some(1));
+        assert_eq!(read(r#"{"count":0}"#), None);
+    }
 }

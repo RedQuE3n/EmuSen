@@ -42,6 +42,12 @@ pub struct Startable {
     pub console: String,
     pub name: String,
     pub engine: String,
+    /// The firmware line its pane ends with (`library::firmware_line`); empty where it needs none.
+    #[serde(default)]
+    pub firmware: String,
+    /// The system it is listed by, its first.
+    #[serde(default)]
+    pub system: String,
 }
 
 const TITLE: &str = "Home";
@@ -61,9 +67,7 @@ pub struct Facts {
     pub in_hand_favourite: bool,
     /// Whether the view shown has a search.
     pub search: bool,
-    /// Whether a console starts with no disc in it.
-    pub start_console: bool,
-    /// The consoles that start with no disc in it, in Start Console's order.
+    /// The consoles that start with no disc in it, in Start Console's order: the row is offered where there is one.
     pub startable: Vec<Startable>,
     /// Steam's Game Mode, where Power holds Quit alone (Mistress's `_bigScreenForced`).
     pub game_mode: bool,
@@ -76,7 +80,7 @@ impl Facts {
         json!({
             "suspended": self.suspended, "paused": self.paused, "inHand": self.in_hand, "inHandConsole": self.in_hand_console,
             "inHandCover": self.in_hand_cover, "inHandFavourite": self.in_hand_favourite, "search": self.search,
-            "startConsole": self.start_console, "startable": self.startable, "gameMode": self.game_mode, "tools": self.tools,
+            "startable": self.startable, "gameMode": self.game_mode, "tools": self.tools,
         })
         .to_string()
     }
@@ -92,7 +96,6 @@ impl Facts {
             in_hand_cover: words("inHandCover"),
             in_hand_favourite: flag("inHandFavourite"),
             search: flag("search"),
-            start_console: flag("startConsole"),
             startable: v.get("startable").cloned().and_then(|s| serde_json::from_value(s).ok()).unwrap_or_default(),
             game_mode: flag("gameMode"),
             tools: v.get("tools").cloned().unwrap_or(Value::Null),
@@ -152,7 +155,7 @@ fn first_page(f: &Facts) -> Page {
     if f.search {
         rows.push(Row::new(SEARCH, "Search"));
     }
-    if f.start_console {
+    if !f.startable.is_empty() {
         rows.push(Row::new(START_CONSOLE, "Start Console").opens());
     }
     let tools_at = rows.len();
@@ -193,7 +196,11 @@ pub fn start_console_page(startable: &[Startable], breadcrumb: &str) -> Page {
         .iter()
         .map(|s| {
             let said = format!("Starts {} {} with no disc in it, on {}.", article(&s.name), s.name, s.engine);
-            Row::new(&start_console_action(&s.console), &s.name).value(&s.engine).pane(Pane::said(&said, "Its BIOS screen comes up; Change Disc on the Pause Card puts a game in."))
+            let mut pane = Pane::said(&said, "Its BIOS screen comes up; Change Disc on the Pause Card puts a game in.");
+            if !s.firmware.is_empty() {
+                pane.lines.push((s.firmware.clone(), String::new()));
+            }
+            Row::new(&start_console_action(&s.console), &s.name).value(&s.engine).pane(pane)
         })
         .collect();
     Page { title: "Start Console".to_owned(), breadcrumb: breadcrumb.to_owned(), rows, footer: String::new() }
@@ -237,5 +244,10 @@ impl Pages for HomeCard {
             (TOOLS, tool) => Choice::Act(tool.to_owned()),
             _ => Choice::Owed,
         }
+    }
+
+    /// Start Console's page names A "Start" (Mistress's `AcceptWord`).
+    fn help(&self, page: &str) -> crate::help::Screen {
+        if page == START_CONSOLE { crate::help::Screen::CardStart } else { crate::help::Screen::Card }
     }
 }

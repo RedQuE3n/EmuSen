@@ -25,14 +25,17 @@ pub fn platform_dir() -> PathBuf {
 struct Built {
     library: PathBuf,
     test_core: PathBuf,
+    console_core: PathBuf,
 }
 
-/// The library and the test core, built once a process; `EMUSEN_PLATFORM_LIBRARY` and `EMUSEN_TEST_CORE` name prebuilt ones.
+/// The library and the test cores, built once a process; `EMUSEN_PLATFORM_LIBRARY` and `EMUSEN_TEST_CORE` name prebuilt
+/// ones, the console core beside the test core.
 fn built() -> &'static Built {
     static BUILT: OnceLock<Built> = OnceLock::new();
     BUILT.get_or_init(|| {
         if let (Ok(library), Ok(test_core)) = (std::env::var("EMUSEN_PLATFORM_LIBRARY"), std::env::var("EMUSEN_TEST_CORE")) {
-            return Built { library: library.into(), test_core: test_core.into() };
+            let console_core = PathBuf::from(&test_core).with_file_name("libcrystal_console_core.so");
+            return Built { library: library.into(), test_core: test_core.into(), console_core };
         }
         let dir = platform_dir();
         let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
@@ -50,13 +53,19 @@ fn built() -> &'static Built {
                 "emusen-crystal",
                 "--example",
                 "crystal_test_core",
+                "--example",
+                "crystal_console_core",
             ])
             .env_remove("CARGO_TARGET_DIR")
             .status()
             .expect("cargo runs");
         assert!(status.success(), "the platform library did not build: {status}");
         let out = dir.join("target").join(PROFILE);
-        Built { library: out.join("libemusen_platform.so"), test_core: out.join("examples").join("libcrystal_test_core.so") }
+        Built {
+            library: out.join("libemusen_platform.so"),
+            test_core: out.join("examples").join("libcrystal_test_core.so"),
+            console_core: out.join("examples").join("libcrystal_console_core.so"),
+        }
     })
 }
 
@@ -68,6 +77,12 @@ pub fn library() -> &'static Path {
 /// The crystal test core's library as built from this commit.
 pub fn test_core() -> &'static Path {
     &built().test_core
+}
+
+/// The test core as a PlayStation that starts with nothing in it (the platform's `crystal_console_core`), built beside
+/// the test core: the one fixture core a console starts empty on.
+pub fn console_core() -> &'static Path {
+    &built().console_core
 }
 
 /// A test's scratch tree, with Galaxia's config and data redirected into it while the guard is held.

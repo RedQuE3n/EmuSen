@@ -4683,7 +4683,7 @@ saw. The bar is Mistress's: what she did, the program does, and a row that is dr
 
 **1. Failures are shown.** Every model that can fail has a `problem` (SessionModel, LibraryModel, SettingsModel,
 GamePageModel, ToolModel) or a notice (LaunchModel); until now no screen read any of them. `Main.qml` now raises each
-non-empty `problem` through the kit's one notice layer (`Kit.NoticeModel`, EmuSen_Kit.md §7.26), in Attention's tone,
+`problem` through the kit's one notice layer (`Kit.NoticeModel`, EmuSen_Kit.md §7.26), in Attention's tone,
 over whatever screen the player is on; the session's over running gameplay too, as Mistress's `PadNotice` showed a
 failed load over the big screen. The words:
 
@@ -4701,17 +4701,53 @@ failed load over the big screen. The words:
 A game that fails to open now gives way to the library's screen (`SessionModel.openFailed` → `Screens.failed`, the ask
 `Closed`), where before the program showed the game's screen with nothing on it; the launch asks for the game's screen
 before it names the game, so a failure at once is answered after it. The failed game is named no longer, so choosing it
-again opens it afresh. Each opening clears `problem` first, so the same failure twice is said twice.
+again opens it afresh. Each opening clears `problem` first, so the same failure twice is said twice; so do Settings (each
+read, save, console setting and memory card) and a game's page (each read, change and state started from).
+
+Every notice of the program is raised through one handler, `Main.qml`'s signal `said`, which raises none for empty words,
+so a model's cleared `problem` says nothing; the kit's `Notices` is as it was. Held by qt-app's `failures` (software
+tier): a settings save, a hide and a state's deletion each made to fail twice and found on the notice layer twice,
+Cores that cannot be opened and a library that cannot be read found once.
 
 **2. The Home card's Continue and Start Console.** Continue's action (`home_card::RESUME`) is the game's screen in both
 looks (`screens::card_act`), and `Screens` says `resumed`, on which the program resumes the session; with no game
 running it closes the card. Start Console turns to a page of its own (Mistress's `StartConsolePage`): each console that
 starts empty, by its first system, ordered by maker and then year, its name and the engine its row shows, and in the
-pane Mistress's two sentences. Its row's action is `startConsole:<console>`; `Screens` says `consoleStarted`, and the
-program calls `SessionModel.openConsole`, which opens the runtime's session with the console and no path
-(`session::Opening::Console`), asks no Resume question (there is no game to resume, as in Mistress), and names no game.
-The List card's Start Console is the same page. The list of consoles is `LibraryModel.startable`, made once a refresh
-(`LibraryView::startable`).
+pane Mistress's two sentences and her firmware line ("✓ Firmware found.", "✗ Not found: add it in Settings → Firmware",
+nothing where none is named; where the runtime cannot say, that it could not, never read as none needed), which the
+library reads at each refresh for those consoles alone (`LibrarySource::firmware`, `library::firmware_line`). The help
+bar names A "Start" on that page (`Pages::help`, `help::Screen::CardStart`; Mistress's `AcceptWord`). The row is offered
+while the page lists a console, the one fact both read (`LibraryModel.startable`); a console with no engine is listed by
+neither. Its rows' action is `startConsole:<console>`: `Screens` says `consoleStarted` and shows the game's screen at
+once, as a game's launch does, and the program calls `SessionModel.openConsole`, which closes any session, opens the
+runtime's with the console and no path (`session::Opening::Console`), asks no Resume question and names no game; a start
+that fails gives way to the library's screen. As in Mistress, nothing is asked first: her `StartConsole` runs "no
+firmware or resume question", and the runtime's own refusal (an engine waiting for approval, the console's firmware)
+is said as "Failed to start {console}: …". The session names its console (`SessionModel.console`), so the Home card's
+Continue and the Pause Card call it "PlayStation (no disc)" (`session::console_session_name`, Mistress's
+`ConsoleSessionName`; the Pause Card is titled so, `pause::Card::title`). The List card's Start Console is the same page; under an ES-DE theme the gamelist of a console that
+starts empty leads its Select menu with "Start {console} With No Disc" (`LibraryView::startable_on_shelf`, Mistress's
+`AddStartConsoleOption`).
+
+Three defects stood between the row and the console's screen, each fixed where it lives. The library and a game's page
+made their runtime with the cores folder alone, which leaves out the player's cores, while the session's included them;
+both now take the configuration every model takes (`clients::source_for`, over `runtime_config`), so the console core
+approved in the player's folder was listed. crystal-client read a session's `discs.index` as a `u32`, and the runtime
+writes -1 for an empty drive, so every console started empty failed as "session_info answered JSON this program cannot
+read"; an empty drive is now no index (`shapes::Discs`, its test `an_empty_drive_is_no_index`). And the Pause Card,
+titled by the library's title of the game, had none for a console.
+
+The client fixture's console core (`console_core`, the platform's `crystal_console_core` example: emusen-native's v1
+test core under `AS_PLAYSTATION`, its one system the table's `psx`, which it starts empty) is what a console is started
+on in the tests. Held by qt-models' `start_console` and `home_card_acts`, and on the GPU by qt-app's `console` (the own
+look: the page held at the five sizes, the pointer starting the console, its screen up and owning the pad, B and Start
+the console's, the Pause Card, Continue held at the five sizes, Quit Game back to Home) and `esde` (the Home card's row
+by the pad, the PlayStation gamelist's Select row by the pointer, each to the console's screen and Quit Game back to the
+theme, and the Home card's Continue resuming the console's session).
+
+Not built: the own look's Home shows a suspended game's Continue through the theme feed's `showSession`, which names a
+game by its path; a console's session has none, so the own look's Home offers no Continue for it, where Mistress's did.
+Naming it there is a change to the theme API, for the tester.
 
 **3. Tools ▸ Cores and ▸ Themes.** In both looks the Home card's Cores and Themes rows open Cores and the Themes tab
 (`screens::card_act`). B comes back to where the card was opened, the library's screen, the card having closed as it
@@ -4736,17 +4772,21 @@ an ES-DE theme does; how long that takes on a large library is not measured yet.
 **5. Errors no longer dropped.**
 - `runtime.rescan()` before a game opens: a failure is said with the open's words ("The engines could not be listed
   again, so one approved or installed since the last game may not be used: …"), and the game opens on what was listed.
+  The platform answers the call with a failure only for a null runtime (`emusen_crystal_rescan`), so no test makes it.
 - Cores' rescan (`Backend::rescan`, now a `Result`): a failure is Cores' notice.
 - Cores' firmware status (`Backend::firmware`, now a `Result`): a failure is never read as "no firmware". The pane says
   "⚠ EmuSen's runtime could not say whether you have one", and the Firmware page, offered for it, leads with a row
   "Firmware not read" whose pane holds the runtime's words.
 - The launch's firmware check (`firmware_needed`): a failure is no longer "no firmware needed". The player is told
   ("The firmware this game needs could not be checked, so it opens without asking: …", `launch::firmware_unchecked`,
-  in Attention's tone, `LaunchModel.noticeAttention`) and the game's own open says the rest.
+  in Attention's tone, `LaunchModel.noticeAttention`) and the game's own open says the rest. The platform answers it with
+  a failure only for an empty path or a null runtime (`emusen_crystal_firmware_needed`), so no game's launch makes it.
 - The launch's firmware folder (`DIR_FIRMWARE`): with no folder set, the question says "the firmware folder" in
-  general words, as before; a folder that cannot be read is said too.
-- The session's Resume setting (`resume_setting`): settings that cannot be read are taken as Ask, which loses nothing
-  the player chose: the question is asked where the setting would have answered it. Kept, with this reason.
+  general words, as before; a folder that cannot be read is said too. Galaxia answers that call with a failure only for a
+  folder number it does not have (`emusen_galaxia_directory`), so no test makes it either.
+- The session's Resume setting (`resume_setting`): settings that cannot be read are taken as Ask, so the player is asked
+  rather than a state being loaded or left unasked, even where the player had chosen Restart or Load. Kept, with this
+  reason.
 
 **6.** `Ask::Place`'s and `Ask::Act`'s comments no longer say Games is the only place built.
 
@@ -4759,22 +4799,40 @@ is `lent` with none, so `Config` and every caller of `new` are unchanged), and q
 program through `clients::runtime`, which lends the one SQLite the front end already loads through platform-client's
 `Lent` (`clients::lent_sqlite`). platform-client's `Lent::handle` became public for it: crystal-client does not depend
 on platform-client, so the handle has to cross as a raw pointer, which is what the C field takes.
-Held by qt-models' `runtime_records` (a runtime made without the lend is refused; each of the models' configurations
-forgets a state's record).
+Where `libsqlite3.so.0` cannot be loaded, the runtime is lent nothing and games still open (`clients::runtime_lending`);
+the session says it once, as its runtime is made: "The states' records are not kept, since SQLite could not be loaded:
+…". Only the library, which keeps games.db on SQLite, still fails without it. `clients::lent_sqlite` is private, and the
+soname is `clients::SQLITE`. Held by qt-models' `runtime_records` (a runtime made without the lend is refused; each of the
+models' configurations forgets a state's record; without SQLite a game opens and the words are said).
 
-**Not built here, each for the tester:** the Start Console page's firmware line (Mistress's `FirmwareLine`: the library
-view does not read firmware needs); its A word "Start" in the help bar; the console session's Continue row and name
-(Mistress's `ConsoleSessionName`); Start Console in an ES-DE gamelist's Select menu (Mistress's `AddStartConsoleOption`);
-the gate's hold of the Home card over an ES-DE theme (its audit reads the theme's own items under the card: overlaps
-and colours outside the kit's palette, 45 findings at the five sizes, measured on 2026-11-11), which needs a rule for
-the theme's view under a card; the Tools page's other rows (Scraper, Packages, Library Manager, Cheats, Collections, Compressed Discs, Shell), whose
-screens the program does not have yet; the List card's Collections.
+**Not built here, each for the tester:** the Tools page's other rows (Scraper, Packages, Library Manager, Cheats,
+Collections, Compressed Discs, Shell), whose screens the program does not have yet; the List card's Collections; the
+scraper's field names `releasedate` and `rating`, which `esde_shelves` names again because no surface gives the front
+end the scraper's `metadata::FIELDS`.
+
+**The ES-DE view under a card.** The gate's hold of the Home card over an ES-DE theme gave 45 findings at the five sizes
+(overlaps of the theme's items with the card's rows, and the theme's colours outside the kit's palette). The view was
+drawn and enabled under every card and screen over it, so the theme's items were reachable there. It now declares
+itself a backdrop whenever another screen is shown and is disabled there (`esdeLoader.backdrop`), as the own look's
+screens are under a card (ThemeHost's slots). Held on 2026-11-11 with no finding at the five sizes: the Home card over
+the suspended game and over the console's session, the Themes tab, and the PlayStation gamelist's Select menu.
+
+Cores over the theme is held too and is not clean: 55 findings (measured on 2026-11-11), 50 of them the list's state
+column ("Available", "● Default") cut with an ellipsis at every size, 5 the section strip's wheel. Both are the kit's
+ToolScreen (EmuSen_Kit.md §7.43) on the GPU, where Cores is held for the first time: `ColumnFit` measures a column with
+`QFontMetricsF`, and the words drawn in it on Vulkan come out wider than that measure. The hold stays in esde.rs,
+failing, for the tester to rule on how the kit's column is to be fixed.
+
+**The game page's States hold.** qt-app's `game_page` failed once at GamePageStates ("the pad does not reach" the State
+tiles) while the machine ran other builds (2026-11-11 04:15); run again on this branch under a load average of 22 it
+passed (05:10). Which of load or the runtime's state records caused the failure is not proven.
 
 **Held to** (measured on 2026-11-11): qt-models' `sorts`, `home_card_acts`, `failures`, and `cores`'s
-`a_failed_rescan_and_an_unread_firmware_are_said_never_taken_for_none_needed`; qt-app's `repairs` (the three sorts by
-pad and pointer, the List card held at the five sizes) and `esde` on the GPU (a NES game with no engine fails and is
+`a_failed_rescan_and_an_unread_firmware_are_said_never_taken_for_none_needed`, `start_console` and `runtime_records`;
+qt-app's `repairs` (the three sorts by pad and pointer, Most played with a tie, the List card held at the five sizes),
+`failures`, `console` on the GPU, and `esde` on the GPU (a NES game with no engine fails and is
 said, the theme back; Continue resuming the game; Tools ▸ Cores by the pointer and ▸ Themes
-by the pad, B back to the theme).
+by the pad, B back to the theme, the Home card, Cores and Themes held at the five sizes; Start Console).
 
 ---
 

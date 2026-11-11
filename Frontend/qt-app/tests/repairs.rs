@@ -116,9 +116,9 @@ fn qt_7_9_the_list_card_sorts_by_plays_year_and_rating() {
     let world = sandbox("qt-app-repairs", &named);
     let platform = Platform::load(library()).unwrap();
     // games.db's plays and the release dates and ratings as edits, which the scraper's metadata reads first.
-    let sqlite = Lent::open("libsqlite3.so.0").unwrap();
+    let sqlite = Lent::open(emusen_qt_models::clients::SQLITE).unwrap();
     let games = Library::open(&platform, &platform.file(FILE_GAMES).unwrap(), &sqlite).unwrap();
-    let facts = [("Aurora Drift", 1, "1994-03-01", "0.6"), ("Brass Lantern", 3, "1987-07-10", ""), ("Cobalt Harbor", 5, "", "0.9"), ("Dune Relay", 0, "1991-01-01", "0.2")];
+    let facts = [("Aurora Drift", 3, "1994-03-01", "0.6"), ("Brass Lantern", 3, "1987-07-10", ""), ("Cobalt Harbor", 5, "", "0.9"), ("Dune Relay", 0, "1991-01-01", "0.2")];
     for (title, plays, date, rating) in facts {
         let path = world.root.join("Roms/NES").join(format!("{title} (Synthetic).nes"));
         let path = path.to_str().unwrap();
@@ -145,8 +145,8 @@ fn qt_7_9_the_list_card_sorts_by_plays_year_and_rating() {
     let mut report = Vec::new();
 
     // Most played (by the pointer's click on Sort), Year and Rating (by the pad), each with a game without the datum
-    // last and a tie by name.
-    assert_eq!(sorted_by(&mut scene, "Most played"), ["Cobalt Harbor", "Brass Lantern", "Aurora Drift", "Dune Relay"]);
+    // last; Aurora Drift and Brass Lantern were each played three times, a tie kept in the name's order.
+    assert_eq!(sorted_by(&mut scene, "Most played"), ["Cobalt Harbor", "Aurora Drift", "Brass Lantern", "Dune Relay"]);
     assert_eq!(sorted_by(&mut scene, "Year"), ["Brass Lantern", "Dune Relay", "Aurora Drift", "Cobalt Harbor"]);
     assert_eq!(sorted_by(&mut scene, "Rating"), ["Cobalt Harbor", "Aurora Drift", "Dune Relay", "Brass Lantern"]);
     scene.pad(UiButton::Options);

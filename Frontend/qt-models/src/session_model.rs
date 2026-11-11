@@ -37,6 +37,8 @@ pub mod qobject {
         #[qproperty(QString, engine)]
         #[qproperty(u64, pads)]
         #[qproperty(QString, game, READ, WRITE = set_game, NOTIFY)]
+        /// The console started with nothing in it (`openConsole`), by the name it was started by; empty for a game.
+        #[qproperty(QString, console, READ, NOTIFY)]
         /// The saved state the next game named starts from, by its file, as a game's page asks (EmuSen_Qt.md §7.8);
         /// taken by that start, and given to the open game when it is the one named. Empty starts as Resume says.
         #[qproperty(QString, start_state, cxx_name = "startState")]
@@ -182,6 +184,7 @@ pub struct SessionModelRust {
     engine: QString,
     pads: u64,
     game: QString,
+    console: QString,
     start_state: QString,
     running: bool,
     paused: bool,
@@ -227,6 +230,7 @@ impl Default for SessionModelRust {
             engine: QString::default(),
             pads: 0,
             game: QString::default(),
+            console: QString::default(),
             start_state: QString::default(),
             running: false,
             paused: false,
@@ -332,10 +336,20 @@ impl qobject::SessionModel {
         // Cleared first, so the same failure twice is said twice.
         self.as_mut().set_problem(QString::default());
         self.as_mut().rust_mut().failing = crate::session::failing(&opening);
+        let console = QString::from(match &opening {
+            Opening::Console(console) => console.as_str(),
+            Opening::Game(_) => "",
+        });
+        if self.console != console {
+            self.as_mut().rust_mut().console = console;
+            self.as_mut().console_changed();
+        }
         // SAFETY: the window's host names a live feed, which outlives the window and every model in it.
         let Some((handoff, device)) = (unsafe { PictureFeed::at(self.feed) }) else {
             return self.as_mut().failed("No picture is named.".to_owned());
         };
+        // Said once, as the runtime is made: a runtime lent no SQLite keeps no records of states (§7.9).
+        let mut unkept = None;
         if self.runtime.is_none() {
             let library = self.platform_library.to_string();
             let config = match self.as_mut().runtime_config() {
@@ -343,7 +357,10 @@ impl qobject::SessionModel {
                 Err(words) => return self.as_mut().failed(words),
             };
             match Api::load(&library).map_err(|e| e.to_string()).and_then(|api| crate::clients::runtime(&api, &config)) {
-                Ok(runtime) => self.as_mut().rust_mut().runtime = Some(runtime),
+                Ok((runtime, note)) => {
+                    self.as_mut().rust_mut().runtime = Some(runtime);
+                    unkept = note;
+                }
                 Err(e) => return self.as_mut().failed(e.to_string()),
             }
         }
@@ -387,7 +404,7 @@ impl qobject::SessionModel {
         let session = Session::start(runtime, opening, engine, device, handoff, GameIo { pads, sound }, clock, held, report);
         self.as_mut().set_sounding(sounding);
         self.as_mut().rust_mut().session = Some(session);
-        let said: Vec<String> = [unlisted, unsounded].into_iter().flatten().collect();
+        let said: Vec<String> = [unkept, unlisted, unsounded].into_iter().flatten().collect();
         self.as_mut().set_problem(QString::from(&said.join(" ")));
         self.as_mut().set_paused(false);
         self.as_mut().set_first_picture_ms(0.0);

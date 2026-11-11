@@ -401,16 +401,15 @@ impl qobject::GamePageModel {
         self.as_mut().rust_mut().file = file.clone();
         let asked = self.asked.wrapping_add(1);
         self.as_mut().rust_mut().asked = asked;
+        // Cleared at the start of each attempt, so the same failure twice is said twice (EmuSen_Qt.md §7.9).
+        self.as_mut().said(String::new());
         let source = self.source.clone();
         let cores = self.cores.to_string();
         let thread = self.qt_thread();
         std::thread::spawn(move || {
             let source = match source {
                 Some(s) => Ok(s),
-                None => {
-                    let config = emusen_crystal_client::Config { cores: (!cores.is_empty()).then(|| vec![cores]), ..Default::default() };
-                    ClientSource::open(&library, &config).map(Arc::new)
-                }
+                None => crate::clients::source_for(&library, &cores).map(Arc::new),
             };
             let read = source.as_ref().map_err(Clone::clone).and_then(|s| s.read(&file));
             let _ = thread.queue(move |mut model| {
@@ -527,6 +526,7 @@ impl qobject::GamePageModel {
         match outcome {
             Outcome::Nothing => {}
             Outcome::Changed(change) => {
+                self.as_mut().said(String::new());
                 let saved = self.source.as_ref().map_or(Ok(()), |s| s.change(&self.file, &change));
                 let ok = saved.is_ok();
                 let hid = ok && change == crate::game_page::Change::Hide;
@@ -573,7 +573,8 @@ impl qobject::GamePageModel {
 
     /// The game started from a state, asking first where the state was saved from another copy of the game; the
     /// runtime's record and the game's hash are read off the GUI thread.
-    fn play_from(self: Pin<&mut Self>, state: String) {
+    fn play_from(mut self: Pin<&mut Self>, state: String) {
+        self.as_mut().said(String::new());
         let (source, file) = (self.source.clone(), self.file.clone());
         let thread = self.qt_thread();
         std::thread::spawn(move || {

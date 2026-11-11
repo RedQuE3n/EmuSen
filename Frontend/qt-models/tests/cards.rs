@@ -35,7 +35,7 @@ fn the_home_card_has_mistress_rows_and_pages() {
     assert_eq!(home.choose(home_card::QUIT, YES), Choice::Act(home_card::QUIT_EMUSEN.into()));
 
     // The first page in §2.3's order, over a suspended game with a game in hand (HomeCardDesktop).
-    let f = facts(Facts { suspended: "Cobalt Harbor".into(), paused: "SNES · Paused just now".into(), in_hand: "Aurora Drift".into(), search: true, start_console: true, ..Facts::default() });
+    let f = facts(Facts { suspended: "Cobalt Harbor".into(), paused: "SNES · Paused just now".into(), in_hand: "Aurora Drift".into(), search: true, startable: vec![home_card::Startable { console: "PlayStation".into(), name: "PlayStation".into(), engine: "Diamond".into(), ..Default::default() }], ..Facts::default() });
     let first = home.page(home_card::FIRST, &f);
     assert_eq!(first.title, "Home");
     assert_eq!(labels(home_card::CARD, home_card::FIRST, &f), ["Continue", "Selected game", "Search", "Start Console", "Tools", "Settings", "Power"]);

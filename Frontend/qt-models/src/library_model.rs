@@ -1,7 +1,6 @@
 //! `LibraryModel`, the library's navigation as a QAbstractListModel (EmuSen_Qt.md §1.2.1): library.rs's rows put on
 //! Qt. A refresh runs off the GUI thread and comes back through qt_thread().queue, the one way in.
 
-use crate::clients::ClientSource;
 use crate::esde_texts::EsdeTexts;
 use crate::library::{refresh, refresh_with, splash_worlds, LibrarySource, LibraryView, Refreshed};
 use core::pin::Pin;
@@ -139,11 +138,12 @@ pub mod qobject {
         #[cxx_name = "gameFile"]
         fn game_file(self: &LibraryModel, path: &QString) -> QString;
 
-        /// The Home card's facts as plain data (home_card.rs): the suspended game by its path and the words of its pause,
+        /// The Home card's facts as plain data (home_card.rs): the suspended game by its path, or the console started empty
+        /// by its name, and the words of its pause,
         /// the tools' summaries, and whether Steam's Game Mode holds the session.
         #[qinvokable]
         #[cxx_name = "homeCardFacts"]
-        fn home_card_facts(self: &LibraryModel, suspended: &QString, paused: &QString, game_mode: bool) -> QString;
+        fn home_card_facts(self: &LibraryModel, suspended: &QString, console: &QString, paused: &QString, game_mode: bool) -> QString;
 
         /// Records the game at `path` as started now, then reads the games again, so Recent and Continue lead with it.
         #[qinvokable]
@@ -420,13 +420,18 @@ impl qobject::LibraryModel {
         QString::from(serde_json::json!({ "games": self.view.catalog.games.len(), "running": title, "systems": systems }).to_string().as_str())
     }
 
-    pub fn home_card_facts(&self, suspended: &QString, paused: &QString, game_mode: bool) -> QString {
+    pub fn home_card_facts(&self, suspended: &QString, console: &QString, paused: &QString, game_mode: bool) -> QString {
         let suspended = suspended.to_string();
         let facts = crate::home_card::Facts {
-            suspended: if suspended.is_empty() { String::new() } else { crate::library::title_of(&suspended) },
+            suspended: if !suspended.is_empty() {
+                crate::library::title_of(&suspended)
+            } else if !console.is_empty() {
+                crate::session::console_session_name(&console.to_string())
+            } else {
+                String::new()
+            },
             paused: paused.to_string(),
             game_mode,
-            start_console: self.view.starts_empty(),
             startable: self.view.startable(),
             tools: serde_json::from_str(&self.tool_summaries.to_string()).unwrap_or(serde_json::Value::Null),
             ..crate::home_card::Facts::default()
@@ -491,7 +496,8 @@ impl qobject::LibraryModel {
     }
 
     pub fn esde_list_facts(&self, shelf: &QString, focused: i32) -> QString {
-        let facts = self.view.esde_state.summaries.get(&shelf.to_string()).map(|s| crate::list_card::esde_facts(s, focused.max(0) as usize));
+        let console = self.view.startable_on_shelf(&shelf.to_string());
+        let facts = self.view.esde_state.summaries.get(&shelf.to_string()).map(|s| crate::list_card::esde_facts(s, focused.max(0) as usize, console.as_ref()));
         QString::from(facts.unwrap_or(serde_json::Value::Null).to_string().as_str())
     }
 
@@ -565,11 +571,10 @@ impl qobject::LibraryModel {
         }
         self.as_mut().show_loading(true);
         let cores = self.cores.to_string();
-        let config = emusen_crystal_client::Config { cores: (!cores.is_empty()).then(|| vec![cores]), ..Default::default() };
         let qt = self.qt_thread();
         std::thread::spawn(move || {
             let (source, refreshed): (Option<Arc<dyn LibrarySource>>, Refreshed) =
-                match ClientSource::open(&library, &config) {
+                match crate::clients::source_for(&library, &cores) {
                     Ok(source) => {
                         let source: Arc<dyn LibrarySource> = Arc::new(source);
                         // The systems come before the scan, so Moonrise's planets do not wait for the games.

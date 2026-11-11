@@ -8,7 +8,7 @@ use emusen_qt_models::esde_shelves::{rating, release_date, year_of, Metadata, Pl
 use emusen_qt_models::games::{from_json, to_json};
 use emusen_qt_models::gamelists::Gamelists;
 use emusen_qt_models::library::{games_of, refresh, refresh_with, Engine, LibrarySource};
-use emusen_qt_models::listing::{by_facts, shown, Listing, SORTS};
+use emusen_qt_models::listing::{by_facts, shown, Listing, Sort};
 
 struct Source;
 
@@ -43,7 +43,7 @@ impl LibrarySource for Source {
 }
 
 fn sorted(name: &str) -> Vec<String> {
-    let sort = SORTS.iter().position(|s| *s == name).unwrap();
+    let sort = Sort::ALL.iter().position(|s| s.words() == name).unwrap();
     let read = refresh_with(&Source, &Gamelists::default(), by_facts(sort)).unwrap();
     // The rows as GameModel reads them: the data crosses the plain text between the two models.
     let rows = from_json(&to_json(&games_of("all", &read.systems, &read.catalog)));

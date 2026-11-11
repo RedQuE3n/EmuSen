@@ -149,6 +149,14 @@ pub const FAULT_OUTPUT_UNDECLARED: u64 = 1 << 40;
 /// refused with `STATUS_OLD_HOST`, which `status_text` does not answer. Only C12 plays that host, so C11 sees the code
 /// only where C12's statuses reach it.
 pub const FAULT_OLD_HOST_UNANSWERED: u64 = 1 << 41;
+/// Not a fault: the one system is the PlayStation's table id, `psx`, so a host whose systems table names it starts that
+/// console with nothing in it on this core (the client fixture's console core).
+pub const AS_PLAYSTATION: u64 = 1 << 42;
+
+/// The one system's id: `test`, or `psx` under `AS_PLAYSTATION`.
+fn system_id() -> &'static str {
+    if faults() & AS_PLAYSTATION != 0 { "psx" } else { "test" }
+}
 /// The status of that fault, a core's own code that no text names.
 pub const STATUS_OLD_HOST: i32 = -1999;
 /// Not a fault, since 1.13: an image whose payload begins with `HELD_CHEATS` holds the cheats at the end of every
@@ -363,7 +371,7 @@ impl TestCore {
             holds: body.first() == Some(&HELD_CHEATS),
             cheats_held: false,
             reads: std::cell::Cell::new(0),
-            system: "test",
+            system: system_id(),
             old_host: faults() & FAULT_OLD_HOST_UNANSWERED != 0 && r.host_abi_version == (1 << 16) | 99,
         };
         m.draw();
@@ -534,7 +542,7 @@ impl Core for TestCore {
                 "A counter that exercises every export of the core ABI.".into()
             }),
             systems: vec![System {
-                id: "test".into(),
+                id: system_id().into(),
                 name: "Test system".into(),
                 extensions: vec![".tst".into()],
                 regions: vec![Region::Ntsc],
@@ -611,7 +619,7 @@ impl Core for TestCore {
     }
 
     fn starts_empty(system: &str) -> bool {
-        system == "test"
+        system == system_id()
     }
 
     fn create_empty(_system: &str, r: &Create<'_>) -> Result<Self, i32> {
@@ -984,7 +992,7 @@ impl Core for TestCore {
     fn battery_files(system: &str) -> Option<Vec<Battery>> {
         let inside = Battery::console(2, ".mem").label("Inside the console");
         let inside = if faults() & FAULT_MEDIUM_DISAGREES != 0 { inside.medium("test.card").port(7) } else { inside.medium("test.memory") };
-        (system == "test").then(|| vec![Battery::game(0, ".srm"), Battery::removable(1, ".card").medium("test.card").label("Card slot"), inside])
+        (system == system_id()).then(|| vec![Battery::game(0, ".srm"), Battery::removable(1, ".card").medium("test.card").label("Card slot"), inside])
     }
 
     fn drives(&self) -> Vec<Drive> {

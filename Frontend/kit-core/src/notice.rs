@@ -38,10 +38,6 @@ impl Notices {
 
     /// Raises a notice; true when it is shown now (its hold starts again), false when it waits for gameplay to stop.
     pub fn raise(&mut self, notice: Notice) -> bool {
-        // Empty words say nothing, so a model's cleared problem raises no notice (EmuSen_Kit.md §7.105).
-        if notice.words.is_empty() {
-            return false;
-        }
         if self.game_running && !notice.over_game {
             self.waiting = Some(notice);
             return false;

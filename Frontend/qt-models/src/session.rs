@@ -67,6 +67,11 @@ pub fn failing(opening: &Opening) -> String {
     }
 }
 
+/// A console session's name, where a game's title would be: "PlayStation (no disc)" (Mistress's `ConsoleSessionName`).
+pub fn console_session_name(console: &str) -> String {
+    format!("{console} (no disc)")
+}
+
 /// A game running on its frame thread.
 pub struct Session {
     control: Arc<Control>,

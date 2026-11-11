@@ -334,6 +334,8 @@ impl qobject::SettingsModel {
         }
         let asked = self.asked.wrapping_add(1);
         self.as_mut().rust_mut().asked = asked;
+        // Cleared at the start of each attempt, so the same failure twice is said twice (EmuSen_Qt.md §7.9).
+        self.as_mut().said(String::new());
         let thread = self.qt_thread();
         let (cores, world) = (self.cores.to_string(), self.world.to_string());
         std::thread::spawn(move || {
@@ -405,6 +407,9 @@ impl qobject::SettingsModel {
     }
 
     fn outcome(mut self: Pin<&mut Self>, outcome: Outcome) {
+        if matches!(outcome, Outcome::Saved(..) | Outcome::Set { .. } | Outcome::NewCard(_)) {
+            self.as_mut().said(String::new());
+        }
         match outcome {
             Outcome::Nothing => {}
             Outcome::Saved(model, document) => {

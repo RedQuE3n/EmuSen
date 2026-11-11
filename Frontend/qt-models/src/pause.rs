@@ -572,10 +572,16 @@ impl Card {
         }
     }
 
+    /// The game's name the card is titled by: the library's title of it, else its own (a console started empty has no
+    /// game the library names).
+    fn named(&self, game: &str) -> String {
+        if game.is_empty() { self.own_title() } else { game.to_owned() }
+    }
+
     /// The page's title over its rows: the game's on the first, the page's own name on the others.
     pub fn title(&self, game: &str) -> String {
         match self.page {
-            Page::First => game.to_string(),
+            Page::First => self.named(game),
             Page::Leave => "Leave".to_string(),
             Page::Reel => "Rewind".to_string(),
             Page::Options => "Game Options".to_string(),
@@ -591,7 +597,7 @@ impl Card {
         match self.page {
             Page::First => String::new(),
             Page::Ask(ask) => ask.page().breadcrumb,
-            _ => game.to_string(),
+            _ => self.named(game),
         }
     }
 
@@ -866,8 +872,12 @@ impl Card {
         Pane { kind: PaneKind::Slots, tiles, sentence, ..Pane::none() }
     }
 
-    /// The game's title: its file name without the extension, as the library titles it.
+    /// The game's title: its file name without the extension, as the library titles it; a console started with nothing
+    /// in it by its session's name (Mistress's `RunningGameTitle`).
     fn own_title(&self) -> String {
+        if self.facts.path.is_empty() && !self.facts.cards.console.is_empty() {
+            return crate::session::console_session_name(&self.facts.cards.console);
+        }
         crate::library::title_of(&self.facts.path)
     }
 

@@ -1,5 +1,7 @@
 //! What the program's tests share: a sandbox home with synthetic games, and waiting on a property.
 
+pub mod console;
+
 use emusen_client_fixture::{library, World};
 use emusen_crystal_client::Config;
 use emusen_qt_models::clients::ClientSource;
@@ -140,6 +142,21 @@ pub fn hold_in(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, named: N
 
 #[allow(unused_imports)]
 pub use emusen_qt_test::covers::draw as draw_covers;
+
+#[allow(dead_code)]
+/// The client fixture's console core, a PlayStation that starts empty, in the player's cores folder (Galaxia's), approved
+/// by its hash on the configuration the program makes with `cores` as the installation's folder, as Cores approves one.
+pub fn approved_console_core(cores: &std::path::Path) {
+    let platform = Platform::load(library()).unwrap();
+    let player = platform.directory(emusen_platform_client::galaxia::consts::DIR_CORES).unwrap().expect("the player's cores folder");
+    std::fs::create_dir_all(&player).unwrap();
+    let core = player.join(emusen_client_fixture::console_core().file_name().unwrap());
+    std::fs::copy(emusen_client_fixture::console_core(), &core).unwrap();
+    let config = emusen_qt_models::clients::runtime_config(&platform, cores.to_str().unwrap()).unwrap();
+    let api = emusen_crystal_client::Api::load(library()).unwrap();
+    let rt = emusen_crystal_client::Runtime::new(&api, &config).unwrap();
+    rt.core_approve(&emusen_client_fixture::cores::sha256(&core)).unwrap_or_else(|e| panic!("{e}; the runtime lists {:?}", rt.cores()));
+}
 
 #[allow(dead_code)]
 /// A clip of one colour, magenta, 64 × 48 at 30 frames a second for two seconds: a YUV4MPEG2 stream, the simplest a

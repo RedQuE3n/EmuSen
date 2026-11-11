@@ -368,7 +368,7 @@ impl qobject::GameModel {
         let facts = serde_json::json!({
             "section": self.section_name.to_string(),
             "count": count,
-            "sort": crate::listing::SORTS[self.sort],
+            "sort": crate::listing::Sort::at(self.sort).words(),
             "filter": if listing.favourites_only { "Favourites" } else { "" },
             "letter": letter,
             "letters": self.read.letters.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>().join(" "),

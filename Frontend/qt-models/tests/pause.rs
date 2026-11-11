@@ -66,6 +66,10 @@ fn the_first_page_holds_mistresss_rows_in_her_words() {
     assert_eq!(Facts::from_json(&reeling(4).to_json()), reeling(4));
     let c = card(Facts::default());
     assert_eq!((c.title("Cobalt Harbor (Synthetic)"), c.breadcrumb("Cobalt Harbor (Synthetic)")), ("Cobalt Harbor (Synthetic)".into(), String::new()));
+    // A console started empty has no game the library names: the card is titled by its session's name (EmuSen_Qt.md §7.9).
+    let mut console = Facts::default();
+    console.cards.console = "PlayStation".into();
+    assert_eq!(card(console).title(""), "PlayStation (no disc)");
 }
 
 #[test]

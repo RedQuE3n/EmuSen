@@ -33,11 +33,3 @@ fn over_gameplay_only_the_game_s_own_notices_show_and_the_rest_wait() {
     assert_eq!(notices.shown().map(|n| n.words.as_str()), Some("Library read"), "shown once a card or a screen is up");
     assert!(notices.waiting().is_none());
 }
-
-#[test]
-fn a_notice_with_no_words_raises_nothing() {
-    let mut notices = Notices::default();
-    assert!(notices.raise(notice("Core approved", false)));
-    assert!(!notices.raise(notice("", true)), "empty words say nothing");
-    assert_eq!(notices.shown().map(|n| n.words.as_str()), Some("Core approved"), "the notice shown stays");
-}

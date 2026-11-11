@@ -65,6 +65,11 @@ pub trait LibrarySource: Send + Sync {
     fn plays(&self, _games: &[GameFile]) -> Result<Vec<(String, Plays)>, String> {
         Ok(Vec::new())
     }
+    /// A system's firmware files with the status the runtime finds for each (`firmware_status`); none where it names
+    /// none, the runtime's words where it cannot say.
+    fn firmware(&self, _system: &str) -> Result<Vec<emusen_crystal_client::shapes::FirmwareFile>, String> {
+        Ok(Vec::new())
+    }
     /// The media found for the shelves named by their ES-DE systems: the media store's and the ES-DE folder's files, the
     /// store's first (esde_shelves::MediaIndex); a source with neither has none.
     fn media_index(&self, _systems: &[String]) -> Result<MediaIndex, String> {
@@ -188,6 +193,8 @@ pub struct Catalog {
     pub plays: Vec<(String, Plays)>,
     /// Each game's metadata as the scraper resolves it, by path; read once a refresh for the grid's sorts and the ES-DE view.
     pub metadata: Vec<(String, crate::esde_shelves::Metadata)>,
+    /// The firmware line of each system that starts empty, by its id: Start Console's pane (Mistress's `FirmwareLine`).
+    pub firmware: Vec<(String, String)>,
 }
 
 /// One game as the screens show it: its title from its file name, its console, its console's hue, its cover and its facts.
@@ -518,7 +525,9 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists, by_facts:
     let played = source.played(&games)?;
     let plays = source.plays(&games)?;
     let metadata = if themed || by_facts { source.metadata(&games)? } else { Vec::new() };
-    let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings, plays, metadata };
+    // Read for the consoles that start empty alone, a call each, so Start Console's pane says what the runtime finds.
+    let firmware = systems.iter().filter(|s| s.starts_empty && !s.engines.is_empty()).map(|s| (s.id.clone(), firmware_line(source.firmware(&s.id)))).collect();
+    let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings, plays, metadata, firmware };
     let shelves = source.shelves()?;
     let mut shelved: Vec<SystemRow> = systems.clone();
     shelved.sort_by_key(|s| shelves.iter().position(|id| id == &s.id).unwrap_or(usize::MAX));
@@ -533,6 +542,17 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists, by_facts:
         (Esde::default(), EsdeState::default())
     };
     Ok(Read { systems, catalog, rows, lists, esde_settings, esde, esde_state })
+}
+
+/// A system's firmware as Start Console's pane says it (Mistress's `FirmwareLine`): found, or not found as Cores words it;
+/// nothing where none is needed; and where the runtime cannot say, that it could not, never read as none needed.
+pub fn firmware_line(read: Result<Vec<emusen_crystal_client::shapes::FirmwareFile>, String>) -> String {
+    match read {
+        Ok(files) if files.iter().any(|f| f.status == "present") => "✓ Firmware found.".to_owned(),
+        Ok(files) if files.iter().any(|f| f.status == "missing") => "✗ Not found: add it in Settings → Firmware".to_owned(),
+        Ok(_) => String::new(),
+        Err(why) => format!("⚠ EmuSen's runtime could not say whether you have it: {why}"),
+    }
 }
 
 /// The view's state: the rows with the selection kept across refreshes, and the last refresh's problem.
@@ -563,12 +583,6 @@ impl LibraryView {
         games_of_at(ALL, &self.systems, &self.catalog, words::now()).into_iter().find(|g| g.path == path)
     }
 
-    /// Whether a console of the systems table starts with nothing in it, where the List card and the Home card offer
-    /// Start Console (Mistress's `ConsolesThatStartEmpty`).
-    pub fn starts_empty(&self) -> bool {
-        self.systems.iter().any(|s| s.starts_empty)
-    }
-
     /// The consoles that start with nothing in them, each once by its first system, in Mistress's order: by maker, then
     /// year; each with the engine its row shows, else the first that runs it (Mistress's `StartConsoleEntries`).
     pub fn startable(&self) -> Vec<crate::home_card::Startable> {
@@ -586,8 +600,17 @@ impl LibraryView {
                 console: if s.console.is_empty() { s.id.clone() } else { s.console.clone() },
                 name: console_name(s),
                 engine: row(&s.id).unwrap_or_else(|| s.engines[0].clone()),
+                firmware: self.catalog.firmware.iter().find(|(id, _)| *id == s.id).map(|(_, line)| line.clone()).unwrap_or_default(),
+                system: s.id.clone(),
             })
             .collect()
+    }
+
+    /// The console an ES-DE shelf shows, where it starts empty: Start Console's row first in its Select menu (Mistress's
+    /// `AddStartConsoleOption`).
+    pub fn startable_on_shelf(&self, shelf: &str) -> Option<crate::home_card::Startable> {
+        let console = self.systems.iter().find(|s| s.esde_system == shelf).map(|s| if s.console.is_empty() { &s.id } else { &s.console })?;
+        self.startable().into_iter().find(|s| s.console.eq_ignore_ascii_case(console))
     }
 
     /// "11 consoles · 1,566 games": the consoles shown and every game.

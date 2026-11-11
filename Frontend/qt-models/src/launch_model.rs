@@ -102,7 +102,7 @@ impl qobject::LaunchModel {
         let library = self.platform_library.to_string();
         let platform = Platform::load(&library).map_err(|e| e.to_string())?;
         let config = crate::clients::runtime_config(&platform, &self.cores.to_string())?;
-        let runtime = Api::load(&library).map_err(|e| e.to_string()).and_then(|api| crate::clients::runtime(&api, &config))?;
+        let runtime = Api::load(&library).map_err(|e| e.to_string()).and_then(|api| crate::clients::runtime(&api, &config))?.0;
         // With no folder set the question says where in general words; a folder that cannot be read is said too (§7.9).
         let folder = match platform.directory(DIR_FIRMWARE) {
             Ok(folder) => folder.map(|d| d.display().to_string()),

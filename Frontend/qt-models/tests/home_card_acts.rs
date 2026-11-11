@@ -5,6 +5,7 @@
 use emusen_qt_models::card::{pages_of, Choice};
 use emusen_qt_models::home_card::{self, console_to_start, start_console_action, Facts, Startable};
 use emusen_qt_models::list_card;
+use emusen_qt_models::help::Screen;
 use emusen_qt_models::screens::{step, step_in, tool_back, Ask, Shown, THEMES};
 use serde_json::{json, Value};
 
@@ -14,8 +15,8 @@ fn act(key: &str) -> Ask {
 
 fn startable() -> Vec<Startable> {
     vec![
-        Startable { console: "PlayStation".into(), name: "PlayStation".into(), engine: "Diamond".into() },
-        Startable { console: "Saturn".into(), name: "Saturn".into(), engine: "Topaz".into() },
+        Startable { console: "PlayStation".into(), name: "PlayStation".into(), engine: "Diamond".into(), firmware: "✓ Firmware found.".into(), system: "psx".into() },
+        Startable { console: "Saturn".into(), name: "Saturn".into(), engine: "Topaz".into(), firmware: String::new(), system: "saturn".into() },
     ]
 }
 
@@ -30,7 +31,12 @@ fn continue_shows_the_suspended_game_in_both_looks() {
 #[test]
 fn start_console_lists_each_console_that_starts_empty_and_starts_the_one_chosen() {
     let home = pages_of(home_card::CARD).unwrap();
-    let f: Value = serde_json::from_str(&Facts { start_console: true, startable: startable(), ..Facts::default() }.to_json()).unwrap();
+    let f: Value = serde_json::from_str(&Facts { startable: startable(), ..Facts::default() }.to_json()).unwrap();
+    // The row and its page read one fact: offered while a console is listed, and not over an empty page.
+    let rows_of = |f: &Value| home.page(home_card::FIRST, f).rows.iter().map(|r| r.key.clone()).collect::<Vec<_>>();
+    assert!(rows_of(&f).iter().any(|k| k == home_card::START_CONSOLE));
+    let none: Value = serde_json::from_str(&Facts::default().to_json()).unwrap();
+    assert!(!rows_of(&none).iter().any(|k| k == home_card::START_CONSOLE), "no row over an empty page");
     assert_eq!(home.choose(home_card::FIRST, home_card::START_CONSOLE), Choice::Turn(home_card::START_CONSOLE.into()), "the row opens its page");
     let page = home.page(home_card::START_CONSOLE, &f);
     assert_eq!((page.title.as_str(), page.breadcrumb.as_str()), ("Start Console", "Home"));
@@ -39,13 +45,25 @@ fn start_console_lists_each_console_that_starts_empty_and_starts_the_one_chosen(
         page.rows[0].pane.lines[0],
         ("Starts a PlayStation with no disc in it, on Diamond.".to_owned(), "Its BIOS screen comes up; Change Disc on the Pause Card puts a game in.".to_owned())
     );
+    // The firmware line ends the pane where the console has one (Mistress's `FirmwareLine`).
+    assert_eq!(page.rows[0].pane.lines.get(1), Some(&("✓ Firmware found.".to_owned(), String::new())));
+    assert_eq!(page.rows[1].pane.lines.len(), 1);
+    // A starts the console, and the help bar says so; every other page of the card says Choose.
+    assert_eq!(home.help(home_card::START_CONSOLE), Screen::CardStart);
+    assert_eq!(home.help(home_card::FIRST), Screen::Card);
+    assert_eq!(emusen_qt_models::help::entries(Screen::CardStart)[0].1, "Start");
     let chosen = home.choose(home_card::START_CONSOLE, &page.rows[1].key);
     assert_eq!(chosen, Choice::Act(start_console_action("Saturn")));
     assert_eq!(console_to_start(&start_console_action("Saturn")), Some("Saturn"));
     assert_eq!((console_to_start(home_card::START_CONSOLE), console_to_start(home_card::RESUME)), (None, None));
-    // The card closes on it to the library's screen, where the console's start shows the game's screen.
-    assert_eq!(step(Shown::HomeCard, &act(&start_console_action("Saturn"))), Some((Shown::Home, None)));
-    assert_eq!(step(Shown::Home, &Ask::Play), Some((Shown::Game, None)));
+    // The card closes on it to the console's screen in both looks, from the Home card and the List card, as a game's
+    // launch asks for it first; a start that fails gives way to the library's screen.
+    for themed in [false, true] {
+        for card in [Shown::HomeCard, Shown::List] {
+            assert_eq!(step_in(themed, card, &act(&start_console_action("Saturn"))), Some((Shown::Game, None)), "{card:?} themed {themed}");
+        }
+        assert_eq!(step_in(themed, Shown::Game, &Ask::Closed).map(|s| s.0), Some(if themed { Shown::Esde } else { Shown::Home }));
+    }
 
     // The List card's Start Console is the same page, under the List.
     let list = pages_of(list_card::CARD).unwrap();
@@ -58,6 +76,25 @@ fn start_console_lists_each_console_that_starts_empty_and_starts_the_one_chosen(
     assert_eq!(list.choose(list_card::START_CONSOLE, &page.rows[0].key), Choice::Act(start_console_action("PlayStation")));
     let none = json!({ "section": "All", "count": "8 games", "sort": "Name", "filter": "", "letter": "A", "letters": "A", "startable": [] });
     assert!(!list.page(list_card::FIRST, &none).rows.iter().any(|r| r.key == list_card::START_CONSOLE), "not offered with none");
+    assert_eq!(list.help(list_card::START_CONSOLE), Screen::CardStart);
+
+    // A theme's gamelist of a console that starts empty offers it first in Select's menu (Mistress's
+    // `AddStartConsoleOption`), in its words, starting it at once.
+    let ef = json!({ "section": "PlayStation", "count": "8 games", "sort": "Name", "filter": "", "letter": "A", "letters": "A", "console": startable()[0] });
+    let first = list.page(list_card::FIRST, &ef);
+    assert_eq!((first.rows[0].key.as_str(), first.rows[0].label.as_str()), (start_console_action("PlayStation").as_str(), "Start PlayStation With No Disc"));
+    assert_eq!(first.rows[0].pane.lines[0].0, "Starts a PlayStation with no disc in it, on Diamond.");
+    assert_eq!(list.choose(list_card::FIRST, &first.rows[0].key), Choice::Act(start_console_action("PlayStation")));
+    assert_eq!(list.page(list_card::FIRST, &lf).rows[0].key, list_card::SEARCH, "a gamelist of another console leads with Search");
+}
+
+#[test]
+fn a_console_session_is_named_as_mistress_named_it() {
+    assert_eq!(emusen_qt_models::session::console_session_name("PlayStation"), "PlayStation (no disc)");
+    let home = pages_of(home_card::CARD).unwrap();
+    let f: Value = serde_json::from_str(&Facts { suspended: emusen_qt_models::session::console_session_name("PlayStation"), ..Facts::default() }.to_json()).unwrap();
+    let first = home.page(home_card::FIRST, &f);
+    assert_eq!((first.rows[0].key.as_str(), first.rows[0].value.as_str()), (home_card::RESUME, "PlayStation (no disc)"));
 }
 
 #[test]

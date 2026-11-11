@@ -2365,14 +2365,17 @@ sharing atomically and may be passed between threads (Qt 6, "Implicit Sharing");
 changed: 16–19 µs in four runs of the test alone.
 
 **Measured again on 2026-11-11, on the real path.** The figure above timed a copy of what `LibraryModel.apply` does,
-against an empty view: it could not fail on the model, and every comparison stopped at the length. The GUI thread's part
-is now one function, `esde_texts::take`, which `apply` calls and the test times: the four comparisons, the read moved in
+against an empty view: it could not fail on the model, and every comparison stopped at the length. The test now times
+one function, `esde_texts::take`, which `apply` calls: the four comparisons, the read moved in
 (`LibraryView::swap_in`), and the changed QStrings moved into the properties, on a view that already holds the 9,000
 games, the next read differing by one favourite (the shelves replaced, the media index and presence compared in full).
-So timed it took 3.5 ms in a debug build, the old view's rows, catalog and lists and the replaced 13 MiB QString
-dropped on the GUI thread. What the read replaces is now handed back by `swap_in` and dropped on a thread of its own:
-177 µs, best of three (`the_gui_thread_s_part_of_a_refresh_stays_under_two_milliseconds_at_nine_thousand_games`, the
-2 ms gate). Making the four QStrings on the GUI thread again (a seeded fault) cost 0.9 and 2.5 ms in two runs, too
+The rest of `apply` runs on the GUI thread too and is not timed by this test: the list model's reset over the rows,
+the four change signals (which ask `EsdeModel` for a load, §4.9), the loading state and the publish. So timed, `take`
+took 3.5 ms in a debug build, the old view's rows, catalog and lists and the replaced 13 MiB QString dropped on the GUI
+thread. What the read replaces is now handed back by `swap_in` and dropped on a thread of its own; the figures for
+`take` so far (177 µs best of three, and the seeded fault's below) come from single runs on a machine busy with other
+builds, and wait on a run on a quiet machine (`the_gui_thread_s_part_of_a_refresh_stays_under_two_milliseconds_at_nine_thousand_games`,
+the 2 ms gate). Making the four QStrings on the GUI thread again (a seeded fault) cost 0.9 and 2.5 ms in two such runs, too
 close to the gate for the time alone to catch it, so the test also checks that the shelves' property holds the very
 QString the reading thread made (its data's address), which the fault fails every time.
 
@@ -3100,9 +3103,18 @@ is the tester's to decide; until then the cards are not compared.
 text on the GUI thread before starting its thread (UTF-16 to UTF-8, 8.6 MB at 9,007 games), after every publish: the
 copy the library's side had moved off (§4.7) was still made on this side. The GUI thread now hands the load's thread
 shared copies (`LoadTexts::of`, Qt's implicit sharing, sent by the same reasoning as `esde_texts.rs`), and the thread
-reads them as text. `esde-qt/tests/load.rs` times that part at the library's scale (a 6.6 MB shelves text, a 2.2 MB
-media index): 3.9 µs, under the 2 ms gate, and checks that the shelves' copy shares the property's data; with the
-conversion back on the GUI thread (a seeded fault) the check fails.
+reads them as text. `esde-qt/tests/load.rs` drives `EsdeModel`'s own load in an offscreen scene (`tests/qml/Load.qml`)
+at the library's scale (a 6.6 MB shelves text, a 2.2 MB media index): each round sets a new shelves text with no wait
+and times the next turn of the event loop, in which the load asked for runs its GUI-thread part (the shared copies and
+the thread's start), then waits for the load to come back and be installed (`revision`). The 2 ms gate is a timing
+test and waits on a run on a quiet machine; the first figure (3.9 µs) timed `LoadTexts::of` alone, from a single run
+on a busy machine, and is withdrawn. With the conversion back on the GUI thread in `load` (a seeded fault), the turn
+holds the conversion of the four texts.
+
+**A text the load cannot read (2026-11-11).** `esde-qt/tests/problem.rs` drives the same scene: shelves that do not
+read install nothing and are the model's `problem` in their words ("The library's shelves could not be read"), and a
+media presence text that does not read is now said too ("The library's media presence could not be read"), where
+`shelves::presence` had read it as no media at all with no word. An empty presence text is still no media.
 
 **The shelves' row, written in one crate and read in another (2026-11-11).** qt-models writes each game's row
 (`esde_shelves::RowText`, a collection's member by its file) and esde-qt read it (`shelves::Row`): two hand-kept

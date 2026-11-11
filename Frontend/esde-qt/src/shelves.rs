@@ -223,13 +223,17 @@ pub fn shelves(shelves_text: &str, media_text: &str) -> Result<Vec<Shelf>, Strin
         .collect())
 }
 
-/// `esdePresence`: the media types some game of each shelf has, for the variant triggers.
-pub fn presence(text_in: &str) -> BTreeMap<String, MediaPresence> {
-    let v: Value = serde_json::from_str(text_in).unwrap_or(Value::Null);
+/// `esdePresence`: the media types some game of each shelf has, for the variant triggers; no text is no media, and a text
+/// that does not read is said in the words returned.
+pub fn presence(text_in: &str) -> Result<BTreeMap<String, MediaPresence>, String> {
+    let v: Value = match text_in.trim() {
+        "" => Value::Null,
+        text => serde_json::from_str(text).map_err(|e| format!("The library's media presence could not be read: {e}"))?,
+    };
     let mut out = BTreeMap::new();
     for (shelf, types) in v.as_object().into_iter().flatten() {
         let types: Vec<&str> = types.as_array().into_iter().flatten().filter_map(Value::as_str).collect();
         out.insert(shelf.clone(), MediaPresence::of(&types));
     }
-    out
+    Ok(out)
 }

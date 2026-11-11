@@ -220,7 +220,8 @@ impl qobject::EsdeModel {
         std::thread::spawn(move || {
             let [settings_text, shelves_text, media_text, presence_text] = texts.read();
             let settings = shelves::settings(&settings_text);
-            let found = shelves::shelves(&shelves_text, &media_text).map(|s| painter::systems(&cache, &settings, s, &shelves::presence(&presence_text), w, h));
+            let found = shelves::shelves(&shelves_text, &media_text)
+                .and_then(|s| Ok(painter::systems(&cache, &settings, s, &shelves::presence(&presence_text)?, w, h)));
             let _ = qt.queue(move |model| model.install(load, settings, found));
         });
     }

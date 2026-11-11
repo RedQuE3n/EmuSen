@@ -145,7 +145,7 @@ fn qt_5_a_the_settings_frame_the_choices_and_the_sliders_pass_the_gate_at_the_fo
     }
     scene.assert_quiet();
     // Each exemption a ruling accepts, listed beside the grabs and in the test's output (EmuSen_Kit.md §7.102).
-    let _ = std::fs::write(grabs.join("accepted.txt"), accepted.join("\n"));
+    let _ = std::fs::write(emusen_kit_gallery::accepted_list(&grabs, "settings"), accepted.join("\n"));
     println!("{} exemptions accepted:\n{}", accepted.len(), accepted.join("\n"));
     assert!(report.is_empty(), "{states} states; faults:\n{}", report.join("\n"));
     assert_eq!(states, (STATES.len() + 1) * FIT);

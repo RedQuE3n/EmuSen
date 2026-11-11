@@ -215,7 +215,7 @@ fn qt_5_b_the_tool_screen_and_the_page_frame_on_the_gallery() {
 
     scene.assert_quiet();
     // Each exemption a ruling accepts, listed beside the grabs and in the test's output (EmuSen_Kit.md §7.102).
-    let _ = std::fs::write(grabs.join("accepted.txt"), accepted.join("\n"));
+    let _ = std::fs::write(emusen_kit_gallery::accepted_list(&grabs, "screens"), accepted.join("\n"));
     println!("{} exemptions accepted:\n{}", accepted.len(), accepted.join("\n"));
     assert!(report.is_empty(), "{states} states; faults:\n{}", report.join("\n"));
     assert_eq!(states, 2 * SCREENS.len() * FIT);

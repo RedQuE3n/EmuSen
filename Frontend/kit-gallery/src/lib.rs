@@ -16,5 +16,11 @@ pub const SETTINGS_URL: &str = "qrc:/qt/qml/EmuSen/Gallery/qml/SettingsGallery.q
 
 pub mod grab;
 
+/// Where a gate lists the exemptions a ruling accepts, beside the grabs: one file a gate (`gate`, `screens`, `settings`), so
+/// each gate's list survives the others' runs (EmuSen_Kit.md §7.102).
+pub fn accepted_list(grabs: &std::path::Path, gate: &str) -> std::path::PathBuf {
+    grabs.join(format!("accepted-{gate}.txt"))
+}
+
 /// Where the gallery's screens live: the tool screen and the page frame (EmuSen_Kit.md §7.43, §7.44).
 pub const SCREENS_URL: &str = "qrc:/qt/qml/EmuSen/Gallery/qml/Screens.qml";

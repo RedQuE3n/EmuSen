@@ -3155,8 +3155,10 @@ a named small text by the class its `SMALL_TEXT_EXCEPTIONS` entry gives. Every g
 table: one whose class has a row is listed with its ruling (`accepted by R-20261111-39: a colour outside the palette in
 a scene: …`) and fails nothing; one whose class has none is a finding, as before. The program's `hold` sorts through its
 `Excuses`, which hold the table (kit-core's, or a test's own through `Excuses::accepting`) and keep every line accepted
-(`Excuses::listed`); the gallery's three gates sort through qt-test's `excuse::sort` and write the accepted lines to
-`accepted.txt` beside the grabs; theme-audit writes each to stderr as `theme-audit: accepted by …` and only the others
+(`Excuses::listed`); the gallery's three gates sort through qt-test's `excuse::sort` and write the accepted lines
+beside the grabs, each to its own file (`accepted-gate.txt`, `accepted-screens.txt`, `accepted-settings.txt`, named by
+the gallery's `accepted_list`; until 2026-11-11 all three wrote `accepted.txt`, so the last run's list replaced the
+others'); theme-audit writes each to stderr as `theme-audit: accepted by …` and only the others
 to stdout, so only they fail a check. The rows for the classes no exemption carries are where the other places cite
 their ruling: Settings' ROM folder excuse (R-20261111-36), `QT_INTERNAL`'s CPU line (R-20261111-41). Held by kit-core's
 `exempted.rs` (the table's rows; each exemption's class and ruling; a table without the class accepts nothing),

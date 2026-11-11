@@ -15,6 +15,7 @@ ElementBox {
     required property bool wrap
     required property bool ellipsis
     required property bool everyLine
+    required property bool snapRows
     required property bool hasBackground
     required property color background
     required property color backgroundEnd
@@ -44,6 +45,7 @@ ElementBox {
         wrap: root.wrap
         ellipsis: root.ellipsis
         everyLine: root.everyLine
+        snapRows: root.snapRows
         hasBackground: root.hasBackground
         background: root.background
         backgroundEnd: root.backgroundEnd

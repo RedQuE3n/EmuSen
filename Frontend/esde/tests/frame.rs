@@ -71,7 +71,7 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted() {
     assert!(mapping::is_mapped("helpsystem", "textColorDimmed"));
     assert_eq!(mapping::status("video", "delay"), Some(&Mapped::Later("video".into())));
     assert!(!mapping::is_mapped("carousel", "itemLinearScale"));
-    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 360);
+    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 361);
     assert!(
         mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"),
         "the gameselector picks the system view's games; sound is played"
@@ -692,4 +692,25 @@ fn a_gameselector_picks_from_the_games_inside_folders_too() {
     assert_eq!(names.len(), 7, "five games and the two inside, the folder never: {names:?}");
     assert!(names.contains(&"Rune Gate".to_owned()) && names.contains(&"Quartz Spire".to_owned()), "{names:?}");
     assert!(!names.contains(&"Brass Lantern".to_owned()), "a folder is not picked");
+}
+
+#[test]
+fn a_vertical_container_of_fixed_height_shows_whole_rows_unless_the_theme_turns_the_snap_off() {
+    let t = Synth::new();
+    let text = |name: &str, extra: &str| {
+        format!("<text name=\"{name}\"><text>WORDS</text><pos>0 0</pos><size>0.4 0.2</size><container>true</container>{extra}</text>")
+    };
+    let gamelist = text("snapped", "")
+        + &text("off", "<containerVerticalSnap>false</containerVerticalSnap>")
+        + &text("across", "<containerType>horizontal</containerType>")
+        + "<text name=\"grows\"><text>WORDS</text><pos>0 0.5</pos><size>0.4 0</size><container>true</container></text>";
+    let f = stage(&t, "", &gamelist, "gamelist", 0).frame();
+    let snap = |name: &str| match &placed(&f, name).paint {
+        Paint::Text(x) => x.snap_rows,
+        _ => panic!("{name} is a text"),
+    };
+    assert!(snap("snapped"), "THEMES.md: containerVerticalSnap is true by default");
+    assert!(!snap("off"));
+    assert!(!snap("across"), "a horizontal container has no rows to snap");
+    assert!(!snap("grows"), "a box that grows to its words has no window to cut");
 }

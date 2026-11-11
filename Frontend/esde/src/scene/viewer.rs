@@ -264,6 +264,7 @@ impl Viewer {
             wrap: false,
             ellipsis: false,
             every_line: false,
+            snap_rows: false,
             background,
             scroll: None,
         };

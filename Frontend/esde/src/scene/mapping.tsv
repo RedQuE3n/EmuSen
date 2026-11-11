@@ -325,7 +325,7 @@ text	gameselector	drawn
 text	gameselectorEntry	drawn
 text	container	drawn
 text	containerType	drawn
-text	containerVerticalSnap	later:container
+text	containerVerticalSnap	drawn
 text	containerScrollSpeed	later:container
 text	containerStartDelay	drawn
 text	containerResetDelay	drawn

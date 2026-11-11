@@ -3607,7 +3607,27 @@ The old system rows took 17.78 units off the left and 20.0 off the right, which 
 the theme's `pos` 0.5 and `origin` 0.5; the old gamelist row took the first disc's ink (column 90) for the element's
 edge. With the rows as measured, the system bar at 1920 × 1200 and the gamelist bar are within a unit of ours (568.0
 and 374.7). Art Book Next's system bar at 1280 × 800 is 2.6 units narrower than ES-DE's: its discs are 32 columns of
-ink against our 29 (§4.12.3).
+ink against our 29 (§4.12.4).
+
+#### 4.12.3 A vertical container's whole rows: Artflix's system view **[M 2026-11-11]**
+
+Commit e90417aa3 laid a vertical container's text out with every line and clipped it to its box, so its overflow is
+measured before the first scroll. Artflix's system view then rose from 4.27 to 4.39 (1280 × 800) and from 4.04 to 4.25
+(1920 × 1200) with the captures unchanged, the error in its top left. Grabbed against `system-1280x800.png` there, the
+system's description (`system-description`, a 0.4 × 0.18 container at 19.2 px and `lineSpacing` 1.1, 6.8 rows) showed a
+seventh row cut by the box's bottom edge, where ES-DE shows six whole rows and nothing below them; laid out to the box's
+height before e90417aa3, the layout had kept six rows by accident. THEMES.md gives the rule: `containerVerticalSnap`,
+true by default, cuts a vertical container's height to whole rows of text at its start and end positions without moving
+the element. The scene marks a vertical container of fixed height `snap_rows` unless the theme turns the snap off;
+`TextBlock` clips to `floor(height ÷ pitch)` rows of its layout's pitch (the box itself where not one row fits) and
+reports its words' height with the window's shortfall added, so the scroll's travel (measured less the box) ends on
+the last whole row. `mapping.tsv` marks the pair drawn (361 pairs).
+
+Measured on 2026-11-11 (the oracle on the RX 6800 at the merge with WiseMan 987c6a306): Artflix's system view is 4.27
+at 1280 × 800 and 4.04 at 1920 × 1200 again, its gamelist 8.10 and 7.58 as before; nothing e90417aa3 fixed is undone,
+since a container's words are still laid out whole and measured. Held by `frame.rs`'s
+`a_vertical_container_of_fixed_height_shows_whole_rows_unless_the_theme_turns_the_snap_off` and the mapping case
+`text.containerVerticalSnap` (a 0.3 × 0.2 container whose third row is cut, true against false).
 
 ### 4.13 The media viewer's PDF manual **[M 2026-11-09]**
 

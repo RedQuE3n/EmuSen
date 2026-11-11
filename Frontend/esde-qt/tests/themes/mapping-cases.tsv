@@ -126,11 +126,11 @@ textlist	textHorizontalScrolling	false	true	-	-	-	-	size=0.3 1	4000	-	-	-
 textlist	textHorizontalScrollSpeed	1	3	-	-	-	-	size=0.3 1;textHorizontalScrollDelay=0	500	-	-	-
 textlist	textHorizontalScrollDelay	0	5	-	-	-	-	size=0.3 1	1000	-	-	-
 textlist	textHorizontalScrollGap	0.5	3	-	-	-	-	size=0.3 1;textHorizontalScrollDelay=0	1500	-	-	-
+text	containerVerticalSnap	true	false	-	-	-	-	container=true;size=0.3 0.2;text=A long description that cannot fit in the small box it is given here, so a part of a row is left below the whole ones	-	-	-	-
 text	containerStartDelay	0	5	-	-	-	-	container=true;size=0.9 0.2;text=A long description that cannot fit in the small box it is given here	2000	-	-	-
 text	containerScrollSpeed	1	3	-	-	-	-	container=true;size=0.9 0.2;containerStartDelay=0;text=A long description that cannot fit in the small box it is given here	1000	-	-	-
 text	containerResetDelay	0.5	10	-	-	-	-	container=true;size=0.9 0.2;containerStartDelay=0;text=A long description that cannot fit in the small box it is given here	4000	-	-	-
 text	containerScrollGap	0.5	3	-	-	-	-	container=true;containerType=horizontal;size=0.9 0.2;containerStartDelay=0;text=A long description that cannot fit in the small box it is given here	7000	-	-	-
-text	containerVerticalSnap	true	false	-	-	-	-	container=true;size=0.9 0.2;text=A long description that cannot fit in the small box it is given here	-	-	-	-
 image	scrollFadeIn	false	true	-	-	-	path	imageType=cover	100	step	-	-
 video	scrollFadeIn	false	true	-	-	-	-	-	100	step	-	-
 textlist	systemNameSuffix	false	true	-	5	-	-	-	-	-	-	-

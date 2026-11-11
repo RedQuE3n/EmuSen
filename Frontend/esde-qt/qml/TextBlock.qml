@@ -25,6 +25,8 @@ Item {
     property bool ellipsis: false
     // A vertical container keeps every line, so what overflows its box is measured before it first scrolls.
     property bool everyLine: false
+    // A vertical container shows whole rows at its start and end: its window is cut to them (EmuSen_Qt.md §4.12.3).
+    property bool snapRows: false
     property bool hasBackground: false
     property color background
     property color backgroundEnd: root.background
@@ -46,12 +48,17 @@ Item {
     readonly property real alignedY: root.scrollVertical || root.vAlign === TextBlock.Align.Start ? 0 : Math.max(0, root.vAlign === TextBlock.Align.End ? root.height - root.laidHeight : (root.height - root.laidHeight) / 2)
     readonly property real contentWidth: laid.contentWidth
     readonly property real contentHeight: laid.contentHeight
+    readonly property int wholeRows: root.snapRows && laid.pitch > 0 ? Math.floor((root.height + 1e-6) / laid.pitch) : 0
+    readonly property real windowHeight: root.wholeRows > 0 ? Math.round(root.wholeRows * laid.pitch) : root.height
+    // The scroll travels the measured height less the box, so the window's shortfall is measured with the words.
+    readonly property real measuredHeight: laid.contentHeight + root.height - root.windowHeight
     readonly property string family: face.status === FontLoader.Ready ? face.font.family : body.font.family
     readonly property alias fontStatus: face.status
     // The first line's baseline, in the block's own coordinates.
     readonly property real baselineY: root.alignedY + Math.round(laid.baseline)
     // The words' laid-out extent, once per change of it, for the scene's measured().
     signal measured(real width, real height)
+    onMeasuredHeightChanged: root.measured(laid.contentWidth, root.measuredHeight)
 
     TextLayout {
         id: laid
@@ -66,8 +73,7 @@ Item {
         wrap: root.wrap
         ellipsis: root.ellipsis && !root.scrolling
         align: root.scrolling && !root.scrollVertical ? TextBlock.Align.Start : root.hAlign
-        onContentWidthChanged: root.measured(laid.contentWidth, laid.contentHeight)
-        onContentHeightChanged: root.measured(laid.contentWidth, laid.contentHeight)
+        onContentWidthChanged: root.measured(laid.contentWidth, root.measuredHeight)
     }
     FontLoader {
         id: face
@@ -91,7 +97,8 @@ Item {
         }
     }
     Item {
-        anchors.fill: parent
+        width: root.width
+        height: root.windowHeight
         clip: root.scrolling || root.everyLine
         opacity: root.scrollOpacity
         GlyphText {

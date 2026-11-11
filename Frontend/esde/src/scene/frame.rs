@@ -165,6 +165,8 @@ pub struct Text {
     pub ellipsis: bool,
     /// A vertical container: laid out with every line, past its box, so the scroll can measure what overflows.
     pub every_line: bool,
+    /// A vertical container's window cut to whole rows at its start and end (THEMES.md's `containerVerticalSnap`).
+    pub snap_rows: bool,
     pub background: Option<Background>,
     /// None before the painter has measured the text, and when it fits.
     pub scroll: Option<Scroll>,

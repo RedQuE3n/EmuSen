@@ -34,11 +34,21 @@ fn home() -> PathBuf {
 }
 
 
-/// Waits up to `seconds` for a condition the scene answers, letting Qt run between looks.
+/// Waits up to `seconds` for a condition the scene answers, letting Qt run between looks; at the timeout it names where the program stands.
 fn until(scene: &mut Scene<'_>, seconds: u64, what: &str, mut done: impl FnMut(&mut Scene<'_>) -> bool) {
     let start = std::time::Instant::now();
     while !done(scene) {
-        assert!(start.elapsed() < std::time::Duration::from_secs(seconds), "{what}: not within {seconds} s");
+        if start.elapsed() >= std::time::Duration::from_secs(seconds) {
+            let state = format!(
+                "shown {}, session running {} paused {} problem {:?}, the pad's chord only {}",
+                scene.property("screens", "shown"),
+                scene.property("session", "running"),
+                scene.property("session", "paused"),
+                scene.property("session", "problem"),
+                scene.pad_chord_only()
+            );
+            panic!("{what}: not within {seconds} s ({state})");
+        }
         scene.wait(8);
     }
 }
@@ -207,6 +217,7 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     // A on the suspended game resumes it; the chord, Leave, Quit Game and Yes close it, and the theme comes back.
     scene.pad(UiButton::Accept);
     until(&mut scene, 10, "the game resumed", |s| s.property("screens", "shown") == "Game" && s.property("session", "paused") == "false");
+    until(&mut scene, 5, "the game owning the pad again", |s| s.pad_chord_only());
     scene.run_pad_clock();
     sdl.press(&pad, guide, true);
     until(&mut scene, 10, "the chord pausing the game again", |s| s.property("screens", "shown") == "Pause");

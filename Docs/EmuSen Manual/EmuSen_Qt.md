@@ -2969,6 +2969,13 @@ listed for the tester and waits on her. `start.rs` (9), the cues' two rules
 missing file none), and the offscreen tests the change reaches (program, screens, start, splash, cards, theme,
 theme_feed, themes_tab; qt-models' library, esde, gamelists, qml, themes) green.
 
+On 2026-11-11, under load, the test timed out once at the first chord ("the chord pausing the game under the Pause
+Card: not within 10 s"), the router having said the game owned the pad. The second chord, after A resumes the game from
+the gamelist, was sent without waiting for the game to own the pad again; it now waits for that, as the router reports it
+(`pad_chord_only`), before the pad clock runs and the chord is pressed. A wait that times out now names where the program
+stands (the screen shown, the session's running, paused and problem, and whether the pad gives the chord alone), so a
+timeout says what the program was doing.
+
 | Seeded fault, applied alone and reverted | Caught by |
 |---|---|
 | a failed theme still the look (`esdeLook` without the failure) | `esde.rs`: the own look not shown within 20 s of the missing theme |

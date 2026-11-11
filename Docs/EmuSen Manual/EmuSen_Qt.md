@@ -3388,9 +3388,30 @@ the face (no table or metric differs: `hmtx` and `glyf` agree for every glyph, `
 column wider from the same size (12 columns, 11 to 20.112 px), where FreeType renders M 11 columns wide up to 20.9 px:
 the step follows the glyph as ES-DE rasterises it, not its advance.
 
-**[blocked]** for the tester: the rule by which ES-DE widens a glyph's step (M, V, d, w with the space) is not found.
-Labels without those glyphs (Select, Back, Favorites) follow their rounded advances; View Media is drawn 1–3 px wider
-at sizes both fractional and whole.
+**The cause: the help is drawn in Akrobat SemiBold (measured 2026-11-11, `faces.py`, `semi.py`, `semi2.py`, `sbm.py`).**
+ES-DE's AppImage holds three Akrobat files, each one build (name table "Version 1.000"):
+
+| File | SHA-256 (first 16) | Weight | V | M | d | w | i | e | space |
+|---|---|---|---|---|---|---|---|---|---|
+| Akrobat-Regular.ttf | 9e35e6cd05f46f33 | 500 | 450 | 652 | 462 | 608 | 191 | 450 | 229 |
+| Akrobat-SemiBold.ttf | 3061b78a6a5f8420 | 600 | 460 | 671 | 465 | 623 | 203 | 452 | 222 |
+| Akrobat-Bold.ttf | 4433539f13f44ddb | 700 | 469 | 688 | 467 | 636 | 213 | 454 | 215 |
+
+SemiBold's advances less Regular's are the per-glyph extras the pens asked for (M +19 units in 18.7–19.2, V +10 in
+7.8–10.3, d +3 in 3.0–5.5, i +12 in 4.7–13.5). Each glyph's advance in SemiBold at the label's size, rounded half up,
+the space rounded like any glyph, places 90 of the 93 own-face copies read glyph by glyph (View Media's `x`, `y`, `z`,
+`vw`, `lc`; Menu; Back; Favorites; Select); Regular places 56 at best. SemiBold's M is rendered 12 columns wide from
+20.128 px and 11 to 20.112 px, the column the captures gained. The load flags were tried first and set aside: the
+default, light, no-hinting, no-autohint, mono, LCD and forced-autohint loads of Regular, at 20 to 20.9 px in 64ths,
+give M a 14 px advance from 20.70 px at the earliest (14 at every size with the autohinter) and 12 columns from
+20.19 or 20.89 px, never at 20.128 (`flags.py`; the face is TrueType, so the CFF driver's properties do not apply).
+The hinted `S` of the two faces agrees but at the edges of a step (26 of 800 sizes from 10 to 26 px), none of them a
+measured copy.
+
+Open, **[blocked]** for the tester: the three copies SemiBold misses (`z04`, `lc04`, `y06`) are each a glyph whose
+exact advance is within 0.0005 px under a half (w 12.4999 px at 20.064, d 7.4995 at 16.128) and which ES-DE rounds
+up, as `v06`'s d in rost above; a size raised by 0.0015 px or more, or rounded up to 1/128 px, places all 93, but
+neither is derived.
 
 **The hinter (decided 2026-11-10).** harfrust and read-fonts shape and read tables but do not hint, so the hinted height
 comes from the system's FreeType, the library the captures were drawn with (FreeType 2.14.3 on Fedora 44), loaded at run

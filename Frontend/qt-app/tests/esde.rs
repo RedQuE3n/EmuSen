@@ -126,6 +126,11 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     assert!(scene.set_property("program", "onlyPads", &pad.id.to_string()));
     assert!(scene.set_property("program", "feed", &host.feed.address().to_string()));
     assert!(scene.set_property("library", "cores", cores.to_str().unwrap()));
+    // The splash skipped before the library is named: finished, Moonrise still stands, the theme not yet drawn.
+    scene.pad(UiButton::Accept);
+    until(&mut scene, 5, "the splash skipped", |s| s.property("moonrise", "finished") == "true");
+    scene.wait(100);
+    assert_eq!(scene.property("moonrise", "done"), "false", "Moonrise stays while the theme is not drawn");
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
 
     // Moonrise, then the theme's system view in place of Home, the first system selected; the own look's screens unmade.
@@ -258,7 +263,8 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     };
     assert_eq!(nes(&mut scene), ["Brass Lantern", "Cobalt Harbor"]);
     assert_eq!(scene.property("esdeModel", "selected"), "0");
-    let own = (scene.property("games", "listFacts"), scene.property("games", "focused"), scene.property("games", "count"));
+    let own = (scene.property("gridGames", "listFacts"), scene.property("gridGames", "focused"), scene.property("gridGames", "count"));
+    assert!(!own.0.is_empty() && !own.2.is_empty(), "the own grid read by its name: {own:?}");
     // Select, Down to Sort, A steps it to name, descending: the new order shown, the selection on the first entry the act answered.
     scene.pad(UiButton::Options);
     until(&mut scene, 5, "the List card in place", |s| s.property("screens", "shown") == "List" && s.property("listCardCanvas", "slide") == "0");
@@ -283,7 +289,7 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     choose_row(&mut scene, "Favourites");
     until(&mut scene, 10, "the favourites alone", |s| nes(s) == ["Cobalt Harbor"] && s.property("screens", "shown") == "Esde");
     assert_eq!(scene.property("esdeModel", "selected"), "0");
-    assert_eq!((scene.property("games", "listFacts"), scene.property("games", "focused"), scene.property("games", "count")), own, "the own look's listing untouched");
+    assert_eq!((scene.property("gridGames", "listFacts"), scene.property("gridGames", "focused"), scene.property("gridGames", "count")), own, "the own look's listing untouched");
 
     // A sounds text that does not read is said as a notice.
     assert!(scene.set_property("cues", "sounds", "{"));

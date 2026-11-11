@@ -2979,6 +2979,15 @@ The second chord, after A resumes the game from the gamelist, also waits for the
 (`pad_chord_only`) before the pad clock runs. A wait that times out names where the program stands (the screen shown,
 the session's running, paused and problem, and whether the pad gives the chord alone).
 
+Two of the test's checks could not fail, found on 2026-11-11 when their seeded faults passed. (1) "The own look's
+listing untouched" read an object named `games`, which no object is (the grid's model is `gridGames`), so it compared
+three empty texts; it now reads `gridGames` and first checks that the reading is not empty. (2) "Moonrise gives way only
+once the theme is drawn" (`lookSettled`) sampled Moonrise's `done` while the splash still ran, and the theme was drawn
+before the splash finished, so `done` without `lookSettled` gave way at the same moment. The test now skips the splash
+with A before it names the library, as a player can, and holds Moonrise standing with the splash finished and the theme
+not yet drawn. Seeded, each failing the test: the List card acting on the own grid as well (fault 10), and Moonrise's
+`done` without `lookSettled` (fault 17).
+
 | Seeded fault, applied alone and reverted | Caught by |
 |---|---|
 | a failed theme still the look (`esdeLook` without the failure) | `esde.rs`: the own look not shown within 20 s of the missing theme |

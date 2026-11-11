@@ -5,7 +5,7 @@ use emusen_client_fixture::{library, World};
 use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
 use emusen_platform_client::Platform;
-use emusen_qt_models::clients::{runtime_config, ClientSource};
+use emusen_qt_models::clients::{runtime, runtime_config, ClientSource};
 
 #[test]
 fn every_runtime_the_program_makes_keeps_state_records() {
@@ -22,11 +22,10 @@ fn every_runtime_the_program_makes_keeps_state_records() {
     let refused = bare.state_forget(at).unwrap_err().to_string();
     assert!(refused.contains("SQLite"), "{refused}");
 
-    // The models' configuration, with and without a cores folder named, and the library's source each lend it.
+    // The models' runtime, with and without a cores folder named, and the library's source each lend it.
     for cores in ["", world.root.join("cores").to_str().unwrap()] {
         let config = runtime_config(&platform, cores).unwrap();
-        assert!(config.sqlite.is_some(), "SQLite lent with cores '{cores}'");
-        let runtime = Runtime::new(&api, &config).unwrap();
+        let runtime = runtime(&api, &config).unwrap();
         runtime.state_forget(at).unwrap_or_else(|e| panic!("the record forgotten with cores '{cores}': {e}"));
         assert!(runtime.state_record(at).unwrap().is_none(), "no record left");
     }

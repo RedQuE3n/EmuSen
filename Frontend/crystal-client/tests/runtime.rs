@@ -6,7 +6,7 @@ use emusen_client_fixture::{TEST_SYSTEM, World, library};
 use emusen_crystal_client::{Api, Config, Error, Event, Open, Runtime, Scope, consts, frame_info, kinds, service_flags};
 
 fn no_cores() -> Config {
-    Config { sqlite: None, development: false, cores: Some(Vec::new()), player_cores: Some(Vec::new()) }
+    Config { development: false, cores: Some(Vec::new()), player_cores: Some(Vec::new()) }
 }
 
 /// A runtime whose only core is the test core, approved through the API as a player approves one.
@@ -16,7 +16,7 @@ fn with_test_core(world: &World) -> Runtime {
     let api = Api::load(library()).unwrap();
     let rt = Runtime::new(
         &api,
-        &Config { sqlite: None, development: false, cores: Some(Vec::new()), player_cores: Some(vec![player.to_str().unwrap().into()]) },
+        &Config { development: false, cores: Some(Vec::new()), player_cores: Some(vec![player.to_str().unwrap().into()]) },
     )
     .unwrap();
     let cores = rt.cores().unwrap();

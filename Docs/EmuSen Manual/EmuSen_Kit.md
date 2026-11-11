@@ -2955,3 +2955,10 @@ past the new count, and it logs `DelegateModel::cancel: index out range 6 4` (an
 test in 2 of 14 runs. The tiles' list now takes `tileModel` while tiles are shown and the rows' list `rowModel` while
 rows are, null otherwise; the hidden list makes nothing. qt-app's game page test steps Media's scrolled tiles and
 Details' rows six times at 16 ms and holds Qt silent; with the aliases it logs the two lines on the first run.
+
+### 7.105 A notice with no words raises nothing (repair piece DC-B; 2026-11-11)
+
+`Notices::raise` (kit-core) answers false and changes nothing for a notice whose words are empty. A model's `problem`
+is cleared to empty at the start of each attempt, and the program raises every change of it straight through, one call
+a handler as the QML rules ask (EmuSen_Qt.md §7.9); an empty notice was never meant to be drawn. Held by kit-core's
+`notice` test `a_notice_with_no_words_raises_nothing`.

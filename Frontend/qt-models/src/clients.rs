@@ -252,7 +252,7 @@ impl ClientSource {
         let platform = Platform::load(platform_library).map_err(words)?;
         let api = emusen_crystal_client::Api::load(platform_library).map_err(words)?;
         let sqlite = lent_sqlite()?;
-        let runtime = Runtime::new(&api, &with_sqlite(config, &sqlite)).map_err(words)?;
+        let runtime = runtime_on(&api, config, &sqlite)?;
         let games_db = platform.file(FILE_GAMES).map_err(words)?;
         let library = Library::open(&platform, &games_db, &sqlite).map_err(words)?;
         let scraper = open_scraper(&platform, &runtime, &games_db.to_string_lossy(), &sqlite);
@@ -301,25 +301,28 @@ pub fn lent_sqlite() -> Result<Lent, String> {
     Lent::open("libsqlite3.so.0").map_err(words)
 }
 
-/// `config` with `sqlite` lent to the runtime, so it keeps its state records (EmuSen_Qt.md §7.9).
-pub fn with_sqlite(config: &emusen_crystal_client::Config, sqlite: &Lent) -> emusen_crystal_client::Config {
-    // SAFETY: a Lent is a loader's handle never closed, so it outlives every runtime.
-    let lent = unsafe { emusen_crystal_client::LentLibrary::from_handle(sqlite.handle()) };
-    emusen_crystal_client::Config { sqlite: lent, ..config.clone() }
+/// A runtime on `config`, lent the front end's SQLite, so it keeps its state records (EmuSen_Qt.md §7.9): how every
+/// model makes its runtime.
+pub fn runtime(api: &Arc<emusen_crystal_client::Api>, config: &emusen_crystal_client::Config) -> Result<Runtime, String> {
+    runtime_on(api, config, &lent_sqlite()?)
 }
 
-/// The runtime's configuration a program's models share, SQLite lent: the cores folder a test or a build names, with the player's
+fn runtime_on(api: &Arc<emusen_crystal_client::Api>, config: &emusen_crystal_client::Config, sqlite: &Lent) -> Result<Runtime, String> {
+    // SAFETY: a Lent is a loader's handle never closed, so it outlives every runtime.
+    let lent = unsafe { emusen_crystal_client::LentLibrary::from_handle(sqlite.handle()) };
+    Runtime::lent(api, config, lent).map_err(words)
+}
+
+/// The runtime's configuration a program's models share: the cores folder a test or a build names, with the player's
 /// own from Galaxia beside it; the runtime's defaults with none named.
 pub fn runtime_config(platform: &Platform, cores: &str) -> Result<emusen_crystal_client::Config, String> {
-    let sqlite = lent_sqlite()?;
     if cores.is_empty() {
-        return Ok(with_sqlite(&emusen_crystal_client::Config::default(), &sqlite));
+        return Ok(emusen_crystal_client::Config::default());
     }
     let player = platform.directory(emusen_platform_client::galaxia::consts::DIR_CORES).map_err(words)?;
-    let config = emusen_crystal_client::Config {
+    Ok(emusen_crystal_client::Config {
         cores: Some(vec![cores.to_owned()]),
         player_cores: Some(player.into_iter().map(|p| p.to_string_lossy().into_owned()).collect()),
         ..emusen_crystal_client::Config::default()
-    };
-    Ok(with_sqlite(&config, &sqlite))
+    })
 }

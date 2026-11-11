@@ -342,7 +342,7 @@ impl qobject::SessionModel {
                 Ok(config) => config,
                 Err(words) => return self.as_mut().failed(words),
             };
-            match Api::load(&library).and_then(|api| Runtime::new(&api, &config)) {
+            match Api::load(&library).map_err(|e| e.to_string()).and_then(|api| crate::clients::runtime(&api, &config)) {
                 Ok(runtime) => self.as_mut().rust_mut().runtime = Some(runtime),
                 Err(e) => return self.as_mut().failed(e.to_string()),
             }

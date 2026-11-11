@@ -29,8 +29,6 @@ impl LentLibrary {
 /// How a runtime is made; `None` for a directory list is the implementation's default.
 #[derive(Clone, Debug, Default)]
 pub struct Config {
-    /// The host's SQLite, lent so the runtime keeps its state records (states.db); with none their calls are refused.
-    pub sqlite: Option<LentLibrary>,
     /// Cores still in development are listed.
     pub development: bool,
     /// The cores directories, scanned in order.
@@ -87,8 +85,13 @@ impl Drop for Inner {
 pub struct Runtime(pub(crate) Arc<Inner>);
 
 impl Runtime {
-    /// A runtime made by the library `api` loaded.
+    /// A runtime made by the library `api` loaded, lent no SQLite, so it keeps no state records.
     pub fn new(api: &Arc<Api>, config: &Config) -> Result<Runtime> {
+        Runtime::lent(api, config, None)
+    }
+
+    /// A runtime lent the host's SQLite (`emusen_crystal_config.sqlite`), so it keeps its state records (states.db).
+    pub fn lent(api: &Arc<Api>, config: &Config, sqlite: Option<LentLibrary>) -> Result<Runtime> {
         let cores = config.cores.as_ref().map(to_json);
         let player = config.player_cores.as_ref().map(to_json);
         let (c, cl) = text(cores.as_deref());
@@ -96,7 +99,7 @@ impl Runtime {
         let raw_config = raw::emusen_crystal_config {
             size: std::mem::size_of::<raw::emusen_crystal_config>() as u32,
             flags: if config.development { raw::EMUSEN_CRYSTAL_CONFIG_DEVELOPMENT } else { 0 },
-            sqlite: config.sqlite.map_or(std::ptr::null_mut(), |l| l.0.as_ptr()),
+            sqlite: sqlite.map_or(std::ptr::null_mut(), |l| l.0.as_ptr()),
             cores: c,
             cores_len: cl,
             player_cores: p,

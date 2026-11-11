@@ -268,7 +268,7 @@ fn cores_source(platform_library: &str, cores: &str, world: &str) -> Result<Box<
         let platform = emusen_platform_client::Platform::load(platform_library).map_err(|e| e.to_string())?;
         let config = crate::clients::runtime_config(&platform, cores)?;
         let api = emusen_crystal_client::Api::load(platform_library).map_err(|e| e.to_string())?;
-        let runtime = emusen_crystal_client::Runtime::new(&api, &config).map_err(|e| e.to_string())?;
+        let runtime = crate::clients::runtime(&api, &config)?;
         Box::new(Clients { runtime, platform })
     } else {
         Box::new(Scripted::open(world)?)

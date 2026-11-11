@@ -704,31 +704,27 @@ Window {
         function onNoticeChanged() { notices.raise(player.session.notice, player.session.noticeAttention, true) }
     }
     // What failed, from every model that can fail, said where the player is: a game that does not open (over the game),
-    // the library unread, a setting, a game's page's change, or Cores (EmuSen_Qt.md §7.9).
-    function failed(words, overGame) {
-        if (words.length > 0)
-            notices.raise(words, true, overGame)
-    }
+    // the library unread, a setting, a game's page's change, or Cores; a cleared problem raises nothing (EmuSen_Qt.md §7.9).
     Connections {
         target: player.session
-        function onProblemChanged() { program.failed(player.session.problem, true) }
+        function onProblemChanged() { notices.raise(player.session.problem, true, true) }
         function onOpenFailed() { screens.failed() }
     }
     Connections {
         target: library
-        function onProblemChanged() { program.failed(library.problem, false) }
+        function onProblemChanged() { notices.raise(library.problem, true, false) }
     }
     Connections {
         target: settingsModel
-        function onProblemChanged() { program.failed(settingsModel.problem, false) }
+        function onProblemChanged() { notices.raise(settingsModel.problem, true, false) }
     }
     Connections {
         target: pageModel
-        function onProblemChanged() { program.failed(pageModel.problem, false) }
+        function onProblemChanged() { notices.raise(pageModel.problem, true, false) }
     }
     Connections {
         target: coresModel
-        function onProblemChanged() { program.failed(coresModel.problem, false) }
+        function onProblemChanged() { notices.raise(coresModel.problem, true, false) }
     }
     Kit.NormalizedCanvas {
         id: noticeCanvas

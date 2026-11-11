@@ -3411,6 +3411,19 @@ and from GitHub's page "GitHub-hosted runners" (docs.github.com/en/actions/refer
 | plan, reuse | Python 3, `gh` | yes |
 | WiseMan | .NET 10 (installed by the job), glibc 2.38 for SDL3 | yes (24.04's glibc) |
 
+### 31.2 The workflow run by hand, 2026-11-11
+
+*Decided 2026-11-11 by the tester:* `rust-cores.yml` no longer runs by itself. Its `push` and `pull_request` triggers are
+gone and `workflow_dispatch` alone remains, so it runs when someone starts it (Actions, "Rust cores", "Run workflow", or
+`gh workflow run rust-cores.yml --ref <branch>`). The reason: the desktop's landing gate and nightly test more than a
+hosted runner can (the graphics card, the hardware counters, the GPU suites of §31.1), and a weekly clean-machine build
+in a container is to replace what the runner gave, a build on a machine with nothing of the desktop's installed.
+
+What a run by hand does differently: the core ABI's guard and the DianaSh, frontend-API, library and scraper surface
+steps take their base from `github.event.pull_request.base.sha || github.event.before`, which a dispatched run has
+neither of, so each checks against its header and its own recorded baseline alone, not against a base branch's (the core
+ABI's step says so, printing "no baseline at the base commit"). Every other step runs as before.
+
 ## 32. Interface 14, 2026-10-17: the save media's format modules, and the packs' code after them
 
 With the backend's step B3 (`EmuSen_Backend.md` §13), `emusen-systems` gained the packs' code and the library its C

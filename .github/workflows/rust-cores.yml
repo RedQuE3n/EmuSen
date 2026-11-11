@@ -2,6 +2,7 @@
 # The platform library (Platform/, emusen_platform) is built and tested beside them, since the WiseMan job needs both - see EmuSen_RustPlatform.md §2.7.
 name: Rust cores
 
+# Run by hand since 2026-11-11 (EmuSen_RustPlatform.md section 31.2): the desktop's landing gate and nightly test more than a hosted runner can, and a weekly clean-machine build in a container is to replace what the runner gave.
 on:
   workflow_dispatch:
     inputs:
@@ -9,87 +10,6 @@ on:
         description: Build every library, taking none from an earlier run
         type: boolean
         default: false
-  push:
-    paths:
-      - 'EmuSen/Cores/Nintendo/MarsRT - N64/**'
-      - 'EmuSen/Cores/Nintendo/MercuryRT - GB/**'
-      - 'EmuSen/Cores/Nintendo/MoonRT - NES/**'
-      - 'EmuSen/Cores/Nintendo/VenusRT - SNES/**'
-      - 'EmuSen/Cores/Sega/Nephrite - Genesis/**'
-      - 'EmuSen/Cores/Sega/Beryl-HW/**'
-      - 'EmuSen/Cores/Sony/Diamond - PlayStation/**'
-      - 'EmuSen/Cores/Sony/Sapphire - PlayStation 2/**'
-      - 'EmuSen/Cores/Sony/BlackMoon-HW/**'
-      - 'EmuSen/Cores/Nintendo/SilverMillennium-HW/**'
-      - 'EmuSen/Cores/Shared/**'
-      - 'Platform/**'
-      - 'EmuSen.Galaxia/**'
-      - 'EmuSen.WiseMan/Galaxia/**'
-      - 'EmuSen.Endymion/**'
-      - 'EmuSen.WiseMan/Endymion/**'
-      - 'EmuSen.Serenity/Slang/**'
-      - 'EmuSen.Serenity/Native/**'
-      - 'EmuSen.WiseMan/Serenity/Slang*'
-      - 'EmuSen.WiseMan/Serenity/Spirv*'
-      - 'EmuSen.WiseMan/Serenity/SerenityParity*'
-      - 'EmuSen.WiseMan/Serenity/SerenityChainParity*'
-      - 'EmuSen.WiseMan/Serenity/SerenitySwitch*'
-      - 'EmuSen.DianaSh/**'
-      - 'EmuSen.Crystal/**'
-      - 'EmuSen.WiseMan/DianaSh/**'
-      - 'EmuSen.WiseMan/Crystal/**'
-      - 'xtask/**'
-      - 'Directory.Build.targets'
-      - 'EmuSen/EmuSen.csproj'
-      - 'EmuSen.WiseMan/Cores/MarsRt*'
-      - 'EmuSen.WiseMan/Cores/MercuryRt*'
-      - 'EmuSen.WiseMan/Cores/MoonRt*'
-      - 'EmuSen.WiseMan/Cores/VenusRt*'
-      - 'EmuSen.WiseMan/Cores/Nephrite*'
-      - 'EmuSen.WiseMan/Cores/Diamond*'
-      - '.github/workflows/rust-cores.yml'
-      - '.github/scripts/library_key.py'
-  # The core ABI's guard must see every pull request that could change version 1 (EmuSen_CoreAPI.md §5.4).
-  pull_request:
-    paths:
-      - 'EmuSen/Cores/Nintendo/MarsRT - N64/**'
-      - 'EmuSen/Cores/Nintendo/MercuryRT - GB/**'
-      - 'EmuSen/Cores/Nintendo/MoonRT - NES/**'
-      - 'EmuSen/Cores/Nintendo/VenusRT - SNES/**'
-      - 'EmuSen/Cores/Sega/Nephrite - Genesis/**'
-      - 'EmuSen/Cores/Sega/Beryl-HW/**'
-      - 'EmuSen/Cores/Sony/Diamond - PlayStation/**'
-      - 'EmuSen/Cores/Sony/Sapphire - PlayStation 2/**'
-      - 'EmuSen/Cores/Sony/BlackMoon-HW/**'
-      - 'EmuSen/Cores/Nintendo/SilverMillennium-HW/**'
-      - 'EmuSen/Cores/Shared/**'
-      - 'Platform/**'
-      - 'EmuSen.Galaxia/**'
-      - 'EmuSen.WiseMan/Galaxia/**'
-      - 'EmuSen.Endymion/**'
-      - 'EmuSen.WiseMan/Endymion/**'
-      - 'EmuSen.Serenity/Slang/**'
-      - 'EmuSen.Serenity/Native/**'
-      - 'EmuSen.WiseMan/Serenity/Slang*'
-      - 'EmuSen.WiseMan/Serenity/Spirv*'
-      - 'EmuSen.WiseMan/Serenity/SerenityParity*'
-      - 'EmuSen.WiseMan/Serenity/SerenityChainParity*'
-      - 'EmuSen.WiseMan/Serenity/SerenitySwitch*'
-      - 'EmuSen.DianaSh/**'
-      - 'EmuSen.Crystal/**'
-      - 'EmuSen.WiseMan/DianaSh/**'
-      - 'EmuSen.WiseMan/Crystal/**'
-      - 'xtask/**'
-      - 'Directory.Build.targets'
-      - 'EmuSen/EmuSen.csproj'
-      - 'EmuSen.WiseMan/Cores/MarsRt*'
-      - 'EmuSen.WiseMan/Cores/MercuryRt*'
-      - 'EmuSen.WiseMan/Cores/MoonRt*'
-      - 'EmuSen.WiseMan/Cores/VenusRt*'
-      - 'EmuSen.WiseMan/Cores/Nephrite*'
-      - 'EmuSen.WiseMan/Cores/Diamond*'
-      - '.github/workflows/rust-cores.yml'
-      - '.github/scripts/library_key.py'
 
 jobs:
   # The crates every core builds with (EmuSen/Cores/Shared/), Beryl's (the Sega cores' shared CPUs and chips) and BlackMoon's (the Sony cores'), tested on their own; no library of theirs ships.

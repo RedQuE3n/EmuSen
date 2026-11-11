@@ -9,6 +9,8 @@ Item {
     property string family
     property string styleName
     property color color
+    // The words whole, as a reader of the scene finds them on the item that draws them.
+    readonly property string text: root.laid.text
     readonly property int base: Math.max(1, Math.round(root.laid.size))
     readonly property real stretch: root.laid.size > 0 ? root.laid.size / root.base : 1
     Repeater {

@@ -92,7 +92,7 @@ ElementBox {
                 dim: slot.dim
                 sourceScale: slot.grow
                 HoverHandler {
-                    onHoveredChanged: root.esde.hover(parent, hovered ? slot.row : -1)
+                    onHoveredChanged: root.esde.hoverAt(parent, hovered ? slot.row : -1)
                 }
                 TapHandler {
                     onTapped: root.esde.tap(slot.row)
@@ -133,7 +133,7 @@ ElementBox {
                 hasBackground: root.itemBackground.a > 0
                 background: root.itemBackground
                 HoverHandler {
-                    onHoveredChanged: root.esde.hover(parent, hovered ? slot.row : -1)
+                    onHoveredChanged: root.esde.hoverAt(parent, hovered ? slot.row : -1)
                 }
                 TapHandler {
                     onTapped: root.esde.tap(slot.row)

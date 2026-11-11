@@ -3156,7 +3156,7 @@ children.
 
 The ES-DE view asks the same fact. Its carousel, grid and text list select the row under the pointer from their own
 `HoverHandler`s (EmuSen_Qt.md §4.8.5), and a row that came under a resting pointer, as a gamelist is made under it, was
-selected like a moved-onto one. `EsdeModel.hover` takes the row's item and selects only while
+selected like a moved-onto one. `EsdeModel.hoverAt`, which the view's QML now calls in place of `hover(row)`, takes the row's item and selects only while
 `emusen_kit_qt::frame::pointer_moving` says that item's window is moving; a hover off every row is passed on as before.
 `EsdeModel` starts the watch of every window as it is made, as a `FrameController` does, through
 `frame::watch_windows`. The two are the kit's Rust functions over the glue, not copies of it; neither is in the QML

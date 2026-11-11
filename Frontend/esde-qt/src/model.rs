@@ -63,9 +63,12 @@ pub mod qobject {
         fn pressed(self: Pin<&mut EsdeModel>, button: i32, repeat: bool, jump: i32);
         #[qinvokable]
         fn released(self: Pin<&mut EsdeModel>, button: i32);
+        #[qinvokable]
+        fn hover(self: Pin<&mut EsdeModel>, row: i32);
         /// The pointer onto the row `item` draws, or off every row (-1): it selects only as the pointer itself moves (EmuSen_Kit.md §7.108).
         #[qinvokable]
-        unsafe fn hover(self: Pin<&mut EsdeModel>, item: *mut QQuickItem, row: i32);
+        #[cxx_name = "hoverAt"]
+        unsafe fn hover_at(self: Pin<&mut EsdeModel>, item: *mut QQuickItem, row: i32);
         #[qinvokable]
         fn tap(self: Pin<&mut EsdeModel>, row: i32);
         #[qinvokable]
@@ -329,7 +332,12 @@ impl qobject::EsdeModel {
         self.publish();
     }
 
-    pub unsafe fn hover(self: Pin<&mut Self>, item: *mut qobject::QQuickItem, row: i32) {
+    pub fn hover(self: Pin<&mut Self>, row: i32) {
+        self.shared.borrow_mut().hover(row);
+        self.publish();
+    }
+
+    pub unsafe fn hover_at(self: Pin<&mut Self>, item: *mut qobject::QQuickItem, row: i32) {
         if row >= 0 && !emusen_kit_qt::frame::pointer_moving(item) {
             return;
         }

@@ -87,7 +87,7 @@ ElementBox {
             opacity: root.unfocusedOpacity + (1 - root.unfocusedOpacity) * cell.level
             scale: 1 + (root.itemScale - 1) * cell.level
             HoverHandler {
-                onHoveredChanged: root.esde.hover(parent, hovered ? cell.index : -1)
+                onHoveredChanged: root.esde.hoverAt(parent, hovered ? cell.index : -1)
             }
             TapHandler {
                 onTapped: root.esde.tap(cell.index)

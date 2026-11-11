@@ -295,19 +295,19 @@ Module {
         Signal { name: "soundsChanged"; lineNumber: 341 }
         Signal {
             name: "played"
-            lineNumber: 351
+            lineNumber: 352
             Parameter { name: "path"; type: "QString" }
         }
         Signal {
             name: "favourite"
-            lineNumber: 352
+            lineNumber: 353
             Parameter { name: "path"; type: "QString" }
         }
-        Signal { name: "menu"; lineNumber: 353 }
-        Signal { name: "options"; lineNumber: 354 }
+        Signal { name: "menu"; lineNumber: 354 }
+        Signal { name: "options"; lineNumber: 355 }
         Signal {
             name: "cued"
-            lineNumber: 355
+            lineNumber: 356
             Parameter { name: "name"; type: "QString" }
         }
         Method {
@@ -378,26 +378,32 @@ Module {
             Parameter { name: "row"; type: "int" }
         }
         Method {
-            name: "tap"
+            name: "hoverAt"
             lineNumber: 346
+            Parameter { name: "item"; type: "QQuickItem"; isPointer: true }
+            Parameter { name: "row"; type: "int" }
+        }
+        Method {
+            name: "tap"
+            lineNumber: 347
             Parameter { name: "row"; type: "int" }
         }
         Method {
             name: "wheel"
-            lineNumber: 347
+            lineNumber: 348
             Parameter { name: "notches"; type: "int" }
         }
         Method {
             name: "measured"
-            lineNumber: 348
+            lineNumber: 349
             Parameter { name: "id"; type: "QString" }
             Parameter { name: "w"; type: "double" }
             Parameter { name: "h"; type: "double" }
         }
-        Method { name: "reload"; lineNumber: 349 }
+        Method { name: "reload"; lineNumber: 350 }
         Method {
             name: "select"
-            lineNumber: 350
+            lineNumber: 351
             Parameter { name: "row"; type: "int" }
         }
     }

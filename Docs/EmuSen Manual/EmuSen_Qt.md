@@ -3371,6 +3371,15 @@ advances at 1.0125–1.03 times the size) fits the column profiles a little bett
 Select's profiles fit 1.01 times as well, so the rasters do not settle it (`gsize.py`), and a carried fraction from
 one free anchor fits 15 of the 39 View Media copies (`vwphase.py`).
 
+But Back and Favorites hold none of the glyphs that widen (V, w, M, d), so the glyphs and the word count are not yet
+separated. Checked on the face itself: it has no `hdmx`, `HVAR` or `kern` table; its GPOS pairs in View Media are only
+e–w (−2 units), and none touches V or M (HarfBuzz with and without `kern`, `kern.py`); FreeType's default and light
+advances are the rounded ones, and the hinter's `lsb_delta` and `rsb_delta` change sign with the size (`deltas.py`).
+Yet a constant extra advance per glyph in font units places every View Media copy save at w and the space: M 18.7–19.2
+units, V 7.8–10.3, d 3.0–5.5 (`pergl.py`). So a per-glyph cause is not ruled out by the face, and the captures of
+`helpglyphs.tsv` (Menu, holding M, at the `z` sizes; View Media in lower case, two words without V or M; the labels of
+`l`, `r`, `lt` and `rt`) separate it from the word count.
+
 **[blocked]** for the tester: the rule by which ES-DE draws a help label of two words is not found. Single-word
 labels in the own face follow their rounded advances; View Media is drawn 1–3 px wider at sizes both fractional and
 whole.

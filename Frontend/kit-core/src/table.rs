@@ -7,8 +7,13 @@ pub enum ColumnWidth {
     /// Its widest words, as the view measured them; trimmed only where a fill column would fall under its least.
     Content(f64),
     /// Its `least`, then a share by weight of what the content columns and every fill's least leave; where the room
-    /// cannot give every fill its least, the leasts are scaled into it.
-    Fill { weight: f64, least: f64 },
+    /// cannot give every fill its least, the leasts are scaled into it. `words` is its widest words as the view measured
+    /// them, which a column that gives way leaves it room for.
+    Fill { weight: f64, least: f64, words: f64 },
+    /// Gives way first (EmuSen_Kit.md §7.106): its widest whole words where the room holds them beside every other column's words,
+    /// else what that room leaves, never under its widest short words; the view shows a row's short words where its
+    /// whole ones do not fit.
+    GivesWay { whole: f64, short: f64 },
 }
 
 /// The table's own margins: the mark column at the left, the gap between columns, the room after the last.
@@ -42,6 +47,7 @@ pub fn room(width: f64, count: usize, m: &TableMeasures) -> f64 {
 /// columns' widths never sum past the room, so the last column ends at or before `width - trail`.
 pub fn fit_columns(width: f64, columns: &[ColumnWidth], m: &TableMeasures) -> Vec<Column> {
     let room = room(width, columns.len(), m);
+    let columns = &give_way(room, columns);
     let content: f64 = columns.iter().map(|c| if let ColumnWidth::Content(w) = c { w.max(0.0).ceil() } else { 0.0 }).sum();
     let weight: f64 = columns.iter().map(|c| if let ColumnWidth::Fill { weight, .. } = c { weight.max(0.0) } else { 0.0 }).sum();
     let least: f64 = columns.iter().map(|c| if let ColumnWidth::Fill { least, .. } = c { least.max(0.0) } else { 0.0 }).sum();
@@ -59,7 +65,7 @@ pub fn fit_columns(width: f64, columns: &[ColumnWidth], m: &TableMeasures) -> Ve
         .iter()
         .map(|c| match *c {
             ColumnWidth::Content(w) => w.max(0.0).ceil() * kept,
-            ColumnWidth::Fill { weight: w, least: l } => {
+            ColumnWidth::Fill { weight: w, least: l, .. } => {
                 if weight > 0.0 && left >= least {
                     l.max(0.0) + (left - least) * w.max(0.0) / weight
                 } else if least > 0.0 {
@@ -68,6 +74,7 @@ pub fn fit_columns(width: f64, columns: &[ColumnWidth], m: &TableMeasures) -> Ve
                     left / columns.iter().filter(|c| matches!(c, ColumnWidth::Fill { .. })).count() as f64
                 }
             }
+            ColumnWidth::GivesWay { .. } => 0.0,
         })
         .collect();
     let mut x = m.lead;
@@ -77,6 +84,41 @@ pub fn fit_columns(width: f64, columns: &[ColumnWidth], m: &TableMeasures) -> Ve
             let column = Column { x, width };
             x += width + m.gap;
             column
+        })
+        .collect()
+}
+
+/// Every column that gives way as a content column of the width it is given: whole where the room holds its words
+/// beside every other column's (content columns' words, fills' least or words, the larger), else the room those leave
+/// shared in proportion to what each would add to its short words, never under them.
+fn give_way(room: f64, columns: &[ColumnWidth]) -> Vec<ColumnWidth> {
+    let others: f64 = columns
+        .iter()
+        .map(|c| match *c {
+            ColumnWidth::Content(w) => w.max(0.0).ceil(),
+            ColumnWidth::Fill { least, words, .. } => least.max(words).max(0.0).ceil(),
+            ColumnWidth::GivesWay { .. } => 0.0,
+        })
+        .sum();
+    let (whole, short) = columns.iter().fold((0.0, 0.0), |(w, s), c| match *c {
+        ColumnWidth::GivesWay { whole, short } => (w + whole.max(short).max(0.0).ceil(), s + short.max(0.0).ceil()),
+        _ => (w, s),
+    });
+    let spare = (room - others).floor();
+    columns
+        .iter()
+        .map(|c| match *c {
+            ColumnWidth::GivesWay { whole: w, short: s } => {
+                let (w, s) = (w.max(s).max(0.0).ceil(), s.max(0.0).ceil());
+                ColumnWidth::Content(if spare >= whole {
+                    w
+                } else if whole > short && spare > short {
+                    (s + (spare - short) * (w - s) / (whole - short)).floor()
+                } else {
+                    s
+                })
+            }
+            other => other,
         })
         .collect()
 }

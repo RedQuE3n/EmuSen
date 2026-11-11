@@ -46,13 +46,32 @@ fn nothing_named(_: &str, _: &emusen_qt_test::tree::Tree, _: (i32, i32)) -> bool
     false
 }
 
+/// The list's cells as laid out: each one's place and words, from the tree.
+fn laid_out(scene: &mut Scene<'_>) -> Vec<(String, i64, i64, i64)> {
+    let tree = scene.tree();
+    let Some(list) = tree.find_named("toolList").map(|i| tree.nodes[i as usize].clone()) else { return Vec::new() };
+    let inside = |n: &emusen_qt_test::tree::Node| n.x >= list.x && n.y >= list.y && n.x < list.x + list.w && n.y < list.y + list.h;
+    tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("ToneText") && inside(n)).map(|n| (n.text.clone().unwrap_or_default(), n.x as i64, n.w as i64, list.w as i64)).collect()
+}
+
+/// Until the list holds cells and two reads of them in a row agree: the columns fitted to the size and the words chosen.
+pub fn steady(scene: &mut Scene<'_>) {
+    let mut last = Vec::new();
+    until(scene, 5, "the list's cells at rest", |s| {
+        let now = laid_out(s);
+        let done = !now.is_empty() && now == last;
+        last = now;
+        done
+    });
+}
+
 /// Every visible cell of the list, at every size the gate holds; then Cores held by the gate as `held`, its findings
 /// added to `report`.
 pub fn cells(scene: &mut Scene<'_>, held: &str, report: &mut Vec<String>) -> Vec<Cell> {
     let mut out = Vec::new();
     for size in SIZES {
         scene.resize(size.0, size.1);
-        scene.wait(150);
+        steady(scene);
         let tree = scene.tree();
         let list = tree.find_named("toolList").map(|i| tree.nodes[i as usize].clone()).expect("the list");
         let inside = |n: &emusen_qt_test::tree::Node| n.x >= list.x && n.y >= list.y && n.x < list.x + list.w && n.y < list.y + list.h;
@@ -71,7 +90,7 @@ pub fn cells(scene: &mut Scene<'_>, held: &str, report: &mut Vec<String>) -> Vec
         }
     }
     scene.resize(1280, 800);
-    scene.wait(100);
+    steady(scene);
     hold(scene, held, &emusen_qt_test::mockup::Mockup::default(), nothing_named, report);
     out
 }
@@ -100,7 +119,7 @@ pub fn both_looks(scene: &mut Scene<'_>, world: &World, cores: &std::path::Path,
     scene.pad(UiButton::Accept);
     wait_for(scene, "screens", "shown", "Cores", 2000);
     wait_for(scene, "coresModel", "busy", "false", 10000);
-    scene.wait(300);
+    steady(scene);
     let own = cells(scene, "CoresFit", report);
     scene.pad(UiButton::Back);
     wait_for(scene, "screens", "shown", "Home", 2000);
@@ -117,36 +136,37 @@ pub fn both_looks(scene: &mut Scene<'_>, world: &World, cores: &std::path::Path,
     scene.pad(UiButton::Menu);
     until(scene, 5, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
     choose_row(scene, "Tools");
-    until(scene, 5, "the Tools page", |s| s.property("homeCardModel", "page") == "tools");
-    scene.wait(300);
+    until(scene, 5, "the Tools page", |s| s.property("homeCardModel", "page") == "tools" && !super::console::focused_words(s).starts_with("Tools"));
     choose_row(scene, "Cores");
     until(scene, 5, "Cores", |s| s.property("screens", "shown") == "Cores");
     wait_for(scene, "coresModel", "busy", "false", 10000);
-    scene.wait(300);
+    steady(scene);
     let themed = cells(scene, "EsdeCoresFit", report);
     let _ = world;
     (own, themed)
 }
 
-/// For each size, the share of their words' width each content column was given (`ColumnFit`'s `kept`): the column's
-/// width over its widest words as drawn, whole pixels rounded up; the first column, which fills, is left out.
-pub fn shares(cells: &[Cell]) -> Vec<((i32, i32), Vec<f64>)> {
+/// Every way the list's words fail to fit, at every size: a cell cut, a cell given less than its words take, the status
+/// column given other than its widest words (rounded up, as `ColumnFit` measures them), and a core of several consoles
+/// read as neither its whole list nor its first and a count (EmuSen_Kit.md §7.106, decided 2026-11-11).
+pub fn misfits(cells: &[Cell], several: &[(&str, &str)]) -> Vec<String> {
     let mut out = Vec::new();
+    for c in cells.iter().filter(|c| c.cut || c.takes > c.given + 0.01) {
+        out.push(format!("{:?}: \"{}\" takes {:.2} and is given {:.2}{}", c.size, c.words, c.takes, c.given, if c.cut { ", cut" } else { "" }));
+    }
     for size in SIZES {
         let at: Vec<&Cell> = cells.iter().filter(|c| c.size == size).collect();
-        let mut xs: Vec<f64> = at.iter().map(|c| c.x).collect();
-        xs.sort_by(f64::total_cmp);
-        xs.dedup_by(|a, b| (*a - *b).abs() < 0.01);
-        let shares = xs
-            .iter()
-            .skip(1)
-            .map(|x| {
-                let column: Vec<&&Cell> = at.iter().filter(|c| (c.x - x).abs() < 0.01).collect();
-                let widest = column.iter().map(|c| c.takes).fold(0.0, f64::max).ceil();
-                column[0].given / widest
-            })
-            .collect();
-        out.push((size, shares));
+        let right = at.iter().map(|c| c.x).fold(f64::MIN, f64::max);
+        let status: Vec<&&Cell> = at.iter().filter(|c| (c.x - right).abs() < 0.01).collect();
+        let widest = status.iter().map(|c| c.takes).fold(0.0, f64::max).ceil();
+        if status.first().is_none_or(|c| (c.given - widest).abs() > 0.01) {
+            out.push(format!("{size:?}: the status column is given {:?}, its widest words {widest}", status.first().map(|c| c.given)));
+        }
+        for (whole, short) in several {
+            if !at.iter().any(|c| c.words == *whole || c.words == *short) {
+                out.push(format!("{size:?}: neither \"{whole}\" nor \"{short}\""));
+            }
+        }
     }
     out
 }

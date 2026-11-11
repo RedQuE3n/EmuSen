@@ -2962,10 +2962,45 @@ Details' rows six times at 16 ms and holds Qt silent; with the aliases it logs t
 the strip holds, as Cores does over a world of fourteen engines, the gate's pointer reach found its wheel leaving it
 still (EmuSen_Qt.md §7.9: five findings, one a size, measured on 2026-11-11 on the software backend and on Vulkan alike).
 Making it interactive alone does not move it: a horizontal `ListView` takes no turn of an upright wheel (measured with
-kit-gallery's `strip`: `contentX` 0 before and after three notches). The strip is now interactive, held at its ends
-(`Flickable.StopAtBounds`), and a `WheelHandler` moves its names along by the wheel's turn, horizontal or upright,
-within `originX` and the content's end. Held by kit-gallery's `strip` (`StripScene.qml`, thirteen names in a 600-unit
-strip: three notches move it, and pointer reach finds no still scroller).
+kit-gallery's `strip`: `contentX` 0 before and after three notches). The strip stays as it was, not interactive, so it
+is neither dragged nor flicked, and a click on a name still chooses it. A `WheelHandler` moves its names along by the
+wheel's turn, horizontal or upright, within `originX` and the content's end, and is enabled only while the names run
+past the strip (`contentWidth > width`). Where they fit, the turn goes to whatever is under the strip. qt-test's tree
+read a flickable's wheel from its `interactive` alone, so the strip read as a scroller the wheel leaves still. It now
+also counts an enabled `WheelHandler` of the item's own, or of its content item, which takes a flickable's declared
+handlers. Held by kit-gallery's `strip` (`StripScene.qml`: thirteen names in a 600-unit strip; a drag leaves it still,
+three notches move it, and pointer reach finds no still scroller) and `strip_fits` (three names that fit, on a page that
+scrolls: the wheel over the strip moves the page and not the strip, a drag leaves it still, and a click on SATURN chooses
+it).
 
 qt-test's `Scene::number` reads a number property of a tree's item by its id, as the harness's own settle already did,
 so a test can read an item's `implicitWidth`, `contentX` or `x` where it has no objectName.
+
+### 7.106 A column that gives way; words measured as Text lays them out (repair DC-B; 2026-11-11)
+
+A table's column may give way first (`ColumnWidth::GivesWay { whole, short }`, kit-core's `table`). Its rows carry two
+words: their whole words and short words that stand for them. The column takes its widest whole words where the room
+holds them beside every other column's words: content columns' widest words, and each fill column's `least` or its
+widest words, whichever is larger. Otherwise it takes what that room leaves, never less than its widest short words, and
+each row whose whole words do not fit the width given shows its short words. Where the room cannot hold even the short
+words, the column counts as a content column of their width and §7.43's scaling applies as before. A fill column
+(`ColumnWidth::Fill`) now carries its widest words (`words`), so a column that gives way leaves it the room they take.
+Its share of the room is unchanged.
+
+On Qt, `ToolScreen`'s columns take a `shortKey` role, which names the role of a row's short words; an empty one gives
+no way. `ColumnFit` measures the whole and short words of such a column, and every fill column's words. Each cell
+decides from the width its words take as laid out: a hidden `Text` holding its whole words. Its `implicitWidth` is
+what the cell would draw, so the choice and the cut agree to the pixel. Decided 2026-11-11 (EmuSen_Qt.md §7.9): Cores'
+console column gives way, showing a core's first console and a count ("Genesis +3").
+
+`ColumnFit`'s words were measured with `QFontMetricsF::horizontalAdvance`. Qt Quick's `Text` lays a line out with
+design metrics (the default `Text.QtRendering`), and the two disagree by up to half a unit. On the gallery on
+2026-11-11, "Genesis Plus GX" was measured at 195 or under and laid out at 195.5, so it was cut in a column given its
+own measure. `text_width` now lays the line out with `QTextLayout` and `QTextOption::setUseDesignMetrics(true)`, as
+`Text` does, and reads `naturalTextWidth`.
+
+Held by kit-core's `table` (`kit_7_106_*`: Cores' measures at 1280 × 800 keep the status and the core's name whole, with
+the console column between its short and its whole words; whole where the room holds everything; inside the table at
+every width), by kit-gallery's `screens` (the tool screen's rows of one, four and twenty consoles at the four fit sizes
+in both variants: "Atari 2600 +19" shown, the four whole or "Genesis +3", nothing cut), and by qt-app's `cores_fit` and
+`cores_fit_gpu` (EmuSen_Qt.md §7.9).

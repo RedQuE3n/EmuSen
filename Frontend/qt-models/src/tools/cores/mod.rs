@@ -862,12 +862,13 @@ impl Source for Cores {
         "Console"
     }
 
-    /// Core, Console and Status (EmuSen_Interface.md §15.2); the name's least holds `Mupen64Plus-Next` (190).
+    /// Core, Console and Status (EmuSen_Interface.md §15.2, the core's least from its measure of `Mupen64Plus-Next`); the
+    /// console column gives way where the list is narrow (EmuSen_Qt.md §7.9, decided 2026-11-11).
     fn columns(&self) -> Vec<Column> {
         vec![
-            Column { title: "Core", fill: 1.0, least: 190.0, trailing: false },
-            Column { title: "Console", fill: 0.0, least: 0.0, trailing: false },
-            Column { title: "Status", fill: 0.0, least: 0.0, trailing: true },
+            Column { title: "Core", fill: 1.0, least: 190.0, trailing: false, gives_way: false },
+            Column { title: "Console", fill: 0.0, least: 0.0, trailing: false, gives_way: true },
+            Column { title: "Status", fill: 0.0, least: 0.0, trailing: true, gives_way: false },
         ]
     }
 
@@ -886,7 +887,7 @@ impl Source for Cores {
                         .collect::<Vec<_>>()
                         .join(" "),
                     sorts: vec![r.name.clone(), status.words.clone()],
-                    cells: vec![Words::text(r.name.clone()), Words::text(words::consoles(r)), status],
+                    cells: vec![Words::text(r.name.clone()), Words::giving_way(words::consoles(r), words::first_console(r)), status],
                 }
             })
             .collect()

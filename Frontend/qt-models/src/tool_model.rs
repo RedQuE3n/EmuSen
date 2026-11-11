@@ -444,7 +444,7 @@ impl qobject::ToolModel {
                 .columns()
                 .iter()
                 .enumerate()
-                .map(|(at, c)| json!({ "key": format!("c{at}"), "toneKey": format!("t{at}"), "title": c.title, "fill": c.fill, "least": c.least, "trailing": c.trailing }))
+                .map(|(at, c)| json!({ "key": format!("c{at}"), "toneKey": format!("t{at}"), "shortKey": if c.gives_way { format!("s{at}") } else { String::new() }, "title": c.title, "fill": c.fill, "least": c.least, "trailing": c.trailing }))
                 .collect(),
         ));
         let rows = text(&Value::Array(
@@ -456,6 +456,7 @@ impl qobject::ToolModel {
                     for (at, cell) in item.cells.iter().enumerate() {
                         row[format!("c{at}")] = json!(cell.words);
                         row[format!("t{at}")] = json!(cell.tone as i32);
+                        row[format!("s{at}")] = json!(cell.short.as_deref().unwrap_or(&cell.words));
                     }
                     row
                 })

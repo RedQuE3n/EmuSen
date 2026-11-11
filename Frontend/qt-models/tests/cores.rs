@@ -503,3 +503,36 @@ fn a_failed_rescan_and_an_unread_firmware_are_said_never_taken_for_none_needed()
     assert_eq!(rows[0].label, "Firmware not read");
     assert_eq!(rows[0].pane.lines[0], ("EmuSen's runtime could not say which firmware this console needs.".to_owned(), "the runtime is gone".to_owned()));
 }
+
+#[test]
+fn qt_7_9_the_console_column_gives_way_to_the_first_console_and_a_count_in_the_core_s_order() {
+    use emusen_qt_models::tools::cores::row::{of_runtime, Consoles};
+    use emusen_qt_models::tools::cores::words::{consoles, first_console};
+    // Twenty consoles, listed in the order the core declares its systems, not the table's or the alphabet's.
+    let names = [
+        "WonderSwan Color", "Atari 2600", "Super Nintendo", "ColecoVision", "Game Boy", "Game Boy Color", "Game Boy Advance", "Game Gear", "Genesis", "Master System",
+        "32X", "Sega CD", "MSX", "Neo Geo Pocket", "NES", "Nintendo 64", "PC Engine", "PlayStation", "SG-1000", "WonderSwan",
+    ];
+    let mut table = Consoles::default();
+    for (i, name) in names.iter().enumerate() {
+        table.console_of.insert(format!("s{i}"), format!("c{i}"));
+        table.name_of.insert(format!("c{i}"), (*name).to_owned());
+    }
+    let row = |systems: &[usize]| {
+        let core = CoreRow { library: Some("/cores/x.so".into()), systems: systems.iter().map(|i| format!("s{i}")).collect(), ..CoreRow::default() };
+        of_runtime(&core, &table, &|_, _| false, &|_| None).expect("a row")
+    };
+    let twenty = row(&(0..20).collect::<Vec<_>>());
+    assert_eq!(first_console(&twenty), "WonderSwan Color +19");
+    assert_eq!(consoles(&twenty), names.join(", "), "the pane lists them all, in the core's order");
+    let four = row(&[8, 11, 9, 18, 8]);
+    assert_eq!(first_console(&four), "Genesis +3", "a console two systems share counts once");
+    assert_eq!(consoles(&four), "Genesis, Sega CD, Master System, SG-1000");
+    assert_eq!(first_console(&row(&[2])), "Super Nintendo", "one console: its name alone");
+    assert_eq!(first_console(&row(&[])), "—");
+    // The list's cells: the Console column gives way, and its cell holds both words.
+    let (tool, _) = opened(WORLD);
+    let columns = tool.source.columns();
+    assert_eq!(columns.iter().map(|c| (c.title, c.gives_way)).collect::<Vec<_>>(), [("Core", false), ("Console", true), ("Status", false)]);
+    assert!(tool.rows().iter().all(|i| i.cells[1].short.is_some() && i.cells[0].short.is_none() && i.cells[2].short.is_none()));
+}

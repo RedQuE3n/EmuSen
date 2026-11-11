@@ -37,21 +37,23 @@ Window {
                 ListElement { words: "catalogue read 31 Oct 2026"; tone: 1 }
             }
             columns: ListModel {
-                ListElement { key: "core"; fill: 1; least: 120; trailing: false; toneKey: "" }
-                ListElement { key: "console"; fill: 0; least: 0; trailing: false; toneKey: "" }
-                ListElement { key: "status"; fill: 0; least: 0; trailing: true; toneKey: "statusTone" }
+                ListElement { key: "core"; fill: 1; least: 120; trailing: false; toneKey: ""; shortKey: "" }
+                ListElement { key: "console"; fill: 0; least: 0; trailing: false; toneKey: ""; shortKey: "consoleShort" }
+                ListElement { key: "status"; fill: 0; least: 0; trailing: true; toneKey: "statusTone"; shortKey: "" }
             }
             rows: ListModel {
-                ListElement { core: "PCEE2"; console: "PlayStation 2"; status: "Default"; statusTone: 0 }
-                ListElement { core: "Sapphire"; console: "PlayStation 2"; status: "Built in"; statusTone: 1 }
-                ListElement { core: "Extra PS2 Core"; console: "PlayStation 2"; status: "To approve"; statusTone: 5 }
-                ListElement { core: "LRPS2"; console: "PlayStation 2"; status: "Available"; statusTone: 1 }
-                ListElement { core: "Diamond"; console: "PlayStation"; status: "Default"; statusTone: 0 }
-                ListElement { core: "Beetle PSX HW"; console: "PlayStation"; status: "Installed"; statusTone: 4 }
-                ListElement { core: "SwanStation"; console: "PlayStation"; status: "Update"; statusTone: 5 }
-                ListElement { core: "Venus"; console: "Super Nintendo"; status: "Default"; statusTone: 0 }
-                ListElement { core: "Snes9x"; console: "Super Nintendo"; status: "install"; statusTone: 3 }
-                ListElement { core: "bsnes"; console: "Super Nintendo"; status: "Available"; statusTone: 1 }
+                ListElement { core: "PCEE2"; console: "PlayStation 2"; consoleShort: "PlayStation 2"; status: "Default"; statusTone: 0 }
+                ListElement { core: "Sapphire"; console: "PlayStation 2"; consoleShort: "PlayStation 2"; status: "Built in"; statusTone: 1 }
+                ListElement { core: "Genesis Plus GX"; console: "Genesis, Sega CD, Master System, SG-1000"; consoleShort: "Genesis +3"; status: "Installed"; statusTone: 4 }
+                ListElement { core: "ares"; console: "Atari 2600, ColecoVision, Game Boy, Game Boy Color, Game Boy Advance, Game Gear, Genesis, Master System, 32X, Sega CD, MSX, Neo Geo Pocket, NES, Nintendo 64, PC Engine, PlayStation, SG-1000, Super Nintendo, WonderSwan, WonderSwan Color"; consoleShort: "Atari 2600 +19"; status: "Available"; statusTone: 1 }
+                ListElement { core: "Extra PS2 Core"; console: "PlayStation 2"; consoleShort: "PlayStation 2"; status: "To approve"; statusTone: 5 }
+                ListElement { core: "LRPS2"; console: "PlayStation 2"; consoleShort: "PlayStation 2"; status: "Available"; statusTone: 1 }
+                ListElement { core: "Diamond"; console: "PlayStation"; consoleShort: "PlayStation"; status: "Default"; statusTone: 0 }
+                ListElement { core: "Beetle PSX HW"; console: "PlayStation"; consoleShort: "PlayStation"; status: "Installed"; statusTone: 4 }
+                ListElement { core: "SwanStation"; console: "PlayStation"; consoleShort: "PlayStation"; status: "Update"; statusTone: 5 }
+                ListElement { core: "Venus"; console: "Super Nintendo"; consoleShort: "Super Nintendo"; status: "Default"; statusTone: 0 }
+                ListElement { core: "Snes9x"; console: "Super Nintendo"; consoleShort: "Super Nintendo"; status: "install"; statusTone: 3 }
+                ListElement { core: "bsnes"; console: "Super Nintendo"; consoleShort: "Super Nintendo"; status: "Available"; statusTone: 1 }
             }
             paneTitle: "LRPS2"
             paneCaption: "From libretro's buildbot · PlayStation 2"

@@ -1,11 +1,11 @@
 //! Cores' list measured on Vulkan (EmuSen_Qt.md §7.9), in a compositor of the test's own, as the acceptance runs, over the world esde.rs holds Cores in, in the own look and
-//! under the ES-DE theme, at the gate's sizes: `ColumnFit` gives every content column one share of its words' width as
-//! drawn, and the section strip, whose names run past it here, moves by the wheel. Whether the words are cut is the
-//! gate's, which esde.rs holds; the measures and the findings are written to the comparison folder. cores_fit.rs holds the same on the software backend. A GPU job.
+//! under the ES-DE theme, at the gate's sizes: the gate finds nothing, every cell's words fit, the status column is given its
+//! widest words, and the console column gives way to the first console and a count (decided 2026-11-11); the measures
+//! and the findings are written to the comparison folder. cores_fit.rs holds the same on the software backend. A GPU job.
 
 mod common;
 
-use common::cores_fit::{both_looks, shares, table, world};
+use common::cores_fit::{both_looks, misfits, table, world};
 use common::out;
 use emusen_client_fixture::library;
 use emusen_platform_client::Platform;
@@ -13,7 +13,7 @@ use emusen_qt_play::host::Host;
 use emusen_qt_test::compositor::Compositor;
 
 #[test]
-fn qt_7_9_cores_list_is_measured_as_drawn_and_its_strip_moves_by_the_wheel_on_vulkan() {
+fn qt_7_9_cores_list_holds_every_word_whole_or_gives_way_on_vulkan() {
     unsafe { std::env::set_var("SDL_AUDIODRIVER", "dummy") };
     let kwin = Compositor::start(3840, 2160);
     kwin.watch(300);
@@ -33,13 +33,12 @@ fn qt_7_9_cores_list_is_measured_as_drawn_and_its_strip_moves_by_the_wheel_on_vu
     std::fs::write(out().join("cores-fit-vulkan.tsv"), format!("{}\n{}\n", table("own", &own), table("esde", &themed))).unwrap();
     assert!(!own.is_empty() && !themed.is_empty(), "cells measured");
     std::fs::write(out().join("cores-fit-vulkan-findings.txt"), report.join("\n")).unwrap();
-    // The section strip's names run past it in this world, and the wheel moves it.
-    let wheel: Vec<_> = report.iter().filter(|f| f.contains("the wheel does not move")).collect();
-    assert!(wheel.is_empty(), "the section strip's wheel: {wheel:#?}");
-    // ColumnFit measures each column as its words are drawn: every content column is given one share of that width.
-    for (size, shares) in shares(&own).into_iter().chain(shares(&themed)) {
-        assert!(shares.len() >= 2 && shares.iter().all(|s| (s - shares[0]).abs() < 0.001 && *s <= 1.0), "at {size:?} the content columns' shares {shares:?}");
-    }
+    // The gate finds nothing on Cores in either look, at any size: no cut, no overlap, no reach, the wheel moving the strip.
+    assert!(report.is_empty(), "the gate on Cores: {report:#?}");
+    // Every cell's words fit; the console column gave way to the first console and a count where the whole list did not.
+    let several = [("Genesis, Sega CD, Master System, SG-1000", "Genesis +3"), ("Game Boy, Game Boy Color", "Game Boy +1")];
+    let misfits: Vec<String> = misfits(&own, &several).into_iter().chain(misfits(&themed, &several)).collect();
+    assert!(misfits.is_empty(), "{misfits:#?}");
     scene.assert_quiet();
     assert!(scene.set_property("program", "visible", "false"));
     scene.wait(50);

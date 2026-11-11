@@ -4766,9 +4766,32 @@ States tile reached at every size, and the focus back on Slot 3 after a step of 
 is told run by run: one `dataChanged` for each run of neighbouring rows that changed, so a row between two changed
 ones is not told (it had been, the range spanning first to last). `only_the_rows_that_changed_are_told_in_place_and_others_reset`
 covers a label alone, a picture alone, two rows apart, empty to empty (nothing), empty to some and some to empty
-(reset), and one key replaced at the same count (reset). These test the decision; that the list hears exactly those
-`dataChanged` calls is not tested at the model's Qt level, which needs a page read from a world with saved states
-outside qt-app's GPU test, and is not built.
+(reset), and one key replaced at the same count (reset). These test the decision. That the list hears exactly those
+calls is tested in the program's page test (`qt-app/tests/game_page.rs`, offscreen): the qt-test harness records a list
+model's `dataChanged` ranges and resets as a view hears them (`Scene::watch_rows`, `rows_told`), and a step of Resume
+and its step back are each heard as the one run of the two neighbouring tiles the mark moved between (`1-2`), with no
+reset.
+
+**The focus after a state is deleted (2026-11-11).** Mistress's page kept the focus on the item it was on while that
+item was still listed, and put it on the first item when the focused one went (`PageLayout.FillContent`:
+`_focusKey = keys.FirstOrDefault()` where the key is gone; with no items, on the actions). A state is deleted from its
+own tile (X on the focused tile), so the focused tile is always the one that goes, and the focus goes to the first
+tile. The program does the same: the content's reset lets the tiles' list drop its model (Kit §7.58), and when the model
+comes back the list's current index is set to the first tile. The page test deletes Slot 1 (the first tile) and then
+Slot 3 (the third), and after each the tiles hold the focus on the first tile; a list that kept its index through the
+reset would be on the third. Before Kit §7.58 the program's tiles kept their model through the reset; seeded back
+(`faults/12`), the second deletion leaves the focus on tile 2, so WiseMan's page before this piece differed from
+Mistress's and this piece keeps Mistress's.
+
+**No call back into the page from inside its own reset (2026-11-11).** When the tiles' list lets its model go at
+`modelAboutToBeReset`, its current index becomes -1, and `GamePage.qml` told the page the new focus at once: a call
+into `GamePageModel.focus` from inside `GamePageModel`'s own `begin_reset_model`, a second `&mut` to an object whose
+method is still running. The page now refuses such a call (`focus` asserts it is not within its reset, which aborts the
+process from an FFI call), and on the branch as it was the page test aborted there ("the focus told from inside the
+page's own reset"). `GamePage.qml` now tells the focus through `Qt.callLater`, after the change's own call has returned,
+and the test runs through. The page test's waits that guarded a value wait for it (the tiles holding the focus, the
+actions changed, the help declaring X as Delete…, the question gone from the screen); the 500 ms after two steps of the
+television standard stays a fixed wait, since the two saves end where they began and leave no value to wait for.
 
 Seeded faults, each reverted:
 - the refresh keeping hidden games: the models' library test, the Game Boy's games still counted;

@@ -57,6 +57,47 @@ fn answers_focused(scene: &mut Scene<'_>) {
     panic!("the question never opened with its first answer focused");
 }
 
+/// `done` within two seconds, else the test fails saying `what`.
+fn until(scene: &mut Scene<'_>, what: &str, mut done: impl FnMut(&mut Scene<'_>) -> bool) {
+    for _ in 0..80 {
+        if done(scene) {
+            return;
+        }
+        scene.wait(25);
+    }
+    assert!(done(scene), "{what} within two seconds");
+}
+
+/// X declared as Delete… by the page's help, and its words on the bar, the question's answers gone from the screen.
+fn delete_declared(scene: &mut Scene<'_>) {
+    until(scene, "the question gone", |s| !s.tree().nodes.iter().any(|n| n.visible && n.name == "answer.0"));
+    until(scene, "X declared as Delete…", |s| s.property("pageHelp", "actionLines").contains(emusen_qt_models::help::DELETE));
+    assert!(comes_to_read(scene, "Delete…"), "X reads Delete…");
+}
+
+/// What the focused item is heard as.
+fn heard(scene: &mut Scene<'_>) -> String {
+    let tree = scene.tree();
+    scene.focus(&tree).map(|i| tree.nodes[i as usize].heard.clone()).unwrap_or_default()
+}
+
+/// The page's tiles holding the focus, or letting it go.
+fn tiles_hold_focus(scene: &mut Scene<'_>, held: bool) {
+    until(scene, &format!("the tiles' focus {held}"), |s| s.property("pageTiles", "activeFocus") == held.to_string());
+}
+
+/// The page's tiles holding the focus on the tile at `index`, within two seconds.
+fn tiles_focused_at(scene: &mut Scene<'_>, index: i32) {
+    let now = |s: &mut Scene<'_>| (s.property("pageTiles", "activeFocus"), s.property("pageTiles", "currentIndex"));
+    for _ in 0..40 {
+        if now(scene) == ("true".to_owned(), index.to_string()) {
+            return;
+        }
+        scene.wait(50);
+    }
+    assert_eq!(now(scene), ("true".to_owned(), index.to_string()), "the tiles focused on tile {index}");
+}
+
 fn down_to(scene: &mut Scene<'_>, row: &str) {
     move_to(scene, UiButton::Down, row);
 }
@@ -214,28 +255,28 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     section(&mut scene, 1);
     assert_eq!(scene.property("pageModel", "shows"), "1");
     hold(&mut scene, "GamePageStates", &mockup::Mockup::default(), nothing_named, &mut report);
-    // A step of Resume marks its state's tile in place, with no reset: Down comes back to the tile the focus left.
+    // A step of Resume marks its state's tile in place, with no reset: the list is told of the two tiles whose mark
+    // moved and no other, and Down comes back to the tile the focus left.
     scene.pad(UiButton::Down);
-    scene.wait(200);
+    tiles_hold_focus(&mut scene, true);
     move_to(&mut scene, UiButton::Right, "Slot 3");
     scene.pad(UiButton::Up);
-    scene.wait(100);
+    tiles_hold_focus(&mut scene, false);
     move_to(&mut scene, UiButton::Right, "Resume");
     let before = scene.property("pageModel", "actions");
+    assert!(scene.watch_rows("pageModel"));
     scene.pad(UiButton::Left);
-    scene.wait(300);
-    assert_ne!(scene.property("pageModel", "actions"), before, "Left steps Resume's state");
+    until(&mut scene, "Left steps Resume's state", |s| s.property("pageModel", "actions") != before);
+    assert_eq!(scene.rows_told("pageModel"), "1-2", "the two neighbouring tiles the mark moved between, told in place as one run");
     scene.pad(UiButton::Down);
-    scene.wait(100);
-    let tree = scene.tree();
-    let focus = scene.focus(&tree).map(|i| tree.nodes[i as usize].heard.clone()).unwrap_or_default();
-    assert_eq!(focus, "Slot 3", "the tiles kept their focused tile through Resume's step");
+    tiles_focused_at(&mut scene, 2);
+    assert_eq!(heard(&mut scene), "Slot 3", "the tiles kept their focused tile through Resume's step");
     scene.pad(UiButton::Up);
-    scene.wait(100);
+    tiles_hold_focus(&mut scene, false);
     move_to(&mut scene, UiButton::Right, "Resume");
     scene.pad(UiButton::Right);
-    scene.wait(300);
-    assert_eq!(scene.property("pageModel", "actions"), before, "Right steps Resume back");
+    until(&mut scene, "Right steps Resume back", |s| s.property("pageModel", "actions") == before);
+    assert_eq!(scene.rows_told("pageModel"), "1-2", "and back, in place");
     // States' tiles scrolled and Options' rows at once, three times: the tiles still being made as the section turns, and
     // Qt logs nothing (EmuSen_Kit.md §7.58).
     scene.pad(UiButton::Down);
@@ -252,15 +293,15 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     scene.assert_quiet();
     section(&mut scene, 1);
     scene.pad(UiButton::Up);
-    scene.wait(100);
+    tiles_hold_focus(&mut scene, false);
     // X on Slot 1 asks first, No focused: A keeps the state; X again, Down to Delete, A deletes it, its picture and its record.
     let slot1 = platform.save_path(SAVE_STATE, rom.to_str().unwrap(), None, 1).unwrap();
     scene.pad(UiButton::Down);
-    scene.wait(200);
+    tiles_hold_focus(&mut scene, true);
     move_to(&mut scene, UiButton::Left, "Slot 1");
     wait_for(&mut scene, "pageModel", "help", &help(emusen_qt_models::help::Screen::GamePageLoad), 1000);
     // The help bar's actions follow the help screen a frame later: X is Delete… once it shows.
-    scene.wait(300);
+    delete_declared(&mut scene);
     scene.pad(UiButton::Screensaver);
     wait_for(&mut scene, "pageModel", "asking", "true", 1000);
     assert_eq!(scene.property("pageModel", "questionTitle"), "Delete Slot 1?");
@@ -268,7 +309,8 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "pageModel", "asking", "false", 1000);
     assert!(slot1.exists(), "No keeps the state");
-    scene.wait(300);
+    tiles_focused_at(&mut scene, 0);
+    delete_declared(&mut scene);
     scene.pad(UiButton::Screensaver);
     wait_for(&mut scene, "pageModel", "asking", "true", 1000);
     answers_focused(&mut scene);
@@ -282,6 +324,29 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
         scene.wait(50);
     }
     assert!(!slot1.exists(), "Delete takes the state away");
+    // The focused state deleted, the focus is on the first tile, as Mistress's page put it (EmuSen_Qt.md §7.8.1); then
+    // Slot 3, two tiles on, where a list that kept its index would leave the focus on the emptied slot.
+    tiles_focused_at(&mut scene, 0);
+    let slot3 = platform.save_path(SAVE_STATE, rom.to_str().unwrap(), None, 3).unwrap();
+    move_to(&mut scene, UiButton::Right, "Slot 3");
+    assert_eq!(scene.property("pageTiles", "currentIndex"), "2");
+    wait_for(&mut scene, "pageModel", "help", &help(emusen_qt_models::help::Screen::GamePageLoad), 1000);
+    delete_declared(&mut scene);
+    scene.pad(UiButton::Screensaver);
+    wait_for(&mut scene, "pageModel", "asking", "true", 1000);
+    assert_eq!(scene.property("pageModel", "questionTitle"), "Delete Slot 3?");
+    answers_focused(&mut scene);
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "pageModel", "asking", "false", 1000);
+    for _ in 0..40 {
+        if !slot3.exists() {
+            break;
+        }
+        scene.wait(50);
+    }
+    assert!(!slot3.exists(), "Delete takes Slot 3 away");
+    tiles_focused_at(&mut scene, 0);
     scene.pad(UiButton::Up);
     section(&mut scene, 2);
     assert_eq!(scene.property("pageModel", "shows"), "2");

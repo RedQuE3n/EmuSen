@@ -1,5 +1,5 @@
-// A section strip whose names fit (EmuSen_Kit.md §7.105): it leaves the wheel to the page under it, a drag does not move
-// it, and a click on a name chooses it. A test of its own, since one process holds one Qt application.
+// A section strip whose names fit (EmuSen_Kit.md §7.105): no scroller at all, it leaves the wheel to the page under it, a
+// drag does not move it, and a click on a name chooses it. A test of its own, since one process holds one Qt application.
 
 use emusen_qt_test::Harness;
 
@@ -14,6 +14,7 @@ fn kit_7_105_a_strip_whose_names_fit_leaves_the_wheel_to_what_is_under_it_and_a_
     let (strip, page) = (node("fits"), node("page"));
     let (strip_id, page_id): (u64, u64) = (strip.id.parse().unwrap(), page.id.parse().unwrap());
     assert!(scene.number(strip_id, "contentWidth") <= scene.number(strip_id, "width"), "the names fit the strip");
+    assert!(!strip.sh && !strip.wheel, "a strip whose names fit is no scroller at all, to the gate or the wheel");
     let centre = (strip.x + strip.w / 2.0, strip.y + strip.h / 2.0);
     scene.wheel(centre.0, centre.1, -3);
     scene.settle(&tree);

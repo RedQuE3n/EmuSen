@@ -11,6 +11,7 @@ Window {
     color: Kit.Tokens.voidFill
     Kit.FrameController {
         id: controller
+        objectName: "many"
         sections: ["All", "NES", "Super Nintendo", "Nintendo 64", "Game Boy", "Game Boy Color", "Game Boy Advance", "Genesis", "Sega CD", "Master System", "Saturn", "PlayStation", "PlayStation 2"]
         selectedSection: "All"
     }

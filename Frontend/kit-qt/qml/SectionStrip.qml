@@ -3,12 +3,13 @@ import QtQuick
 import QtQuick.Controls
 import EmuSen.Kit as Kit
 
-// A screen's section strip: the frame's sections in Caption upper case, the chosen one strong over the accent bar, only whole names drawn; a click chooses one as the shoulders step them, and only where the names run past the strip does the wheel move it (EmuSen_Kit.md §7.43, §7.105).
+// A screen's section strip: the frame's sections in Caption upper case, the chosen one strong over the accent bar, only whole names drawn; a click chooses one as the shoulders step them, and only where the names run past the strip is it a scroller, moved by the wheel and the walk, never dragged (EmuSen_Kit.md §7.43, §7.105).
 ListView {
     id: root
     required property Kit.FrameController controller
     orientation: ListView.Horizontal
-    interactive: false
+    interactive: root.contentWidth > root.width
+    acceptedButtons: Qt.NoButton
     clip: true
     spacing: Kit.Tokens.base * 2
     model: root.controller.sections

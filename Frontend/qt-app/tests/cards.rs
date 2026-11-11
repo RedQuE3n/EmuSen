@@ -232,9 +232,29 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     assert!(rows(&mut scene).iter().any(|r| r == "Tools"), "the first page's rows: {:?}", rows(&mut scene));
     let first = rows(&mut scene)[0].clone();
     until(&mut scene, 5, &format!("the focus on the first row, {first}"), |s| common::console::focused_words(s).starts_with(first.split(" | ").next().unwrap_or_default()));
+    // A pointer left resting over the card's second row while the pad is used focuses nothing (EmuSen_Kit.md §7.108):
+    // Home under it as B closes the card keeps its focus, and the card Start opens again over it focuses its first row.
+    let tree = scene.tree();
+    let mut row_boxes: Vec<(f64, f64)> = tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("MenuRow")).map(|n| (n.y + n.h / 2.0, n.x + n.w / 2.0)).collect();
+    row_boxes.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let (rest_y, rest_x) = row_boxes[1];
+    scene.hover(rest_x, rest_y - 4.0);
+    scene.hover(rest_x, rest_y);
+    let second = rows(&mut scene)[1].clone();
+    until(&mut scene, 5, &format!("the moving pointer focusing the second row, {second}"), |s| common::console::focused_words(s).starts_with(second.split(" | ").next().unwrap_or_default()));
     scene.pad(UiButton::Back);
     until(&mut scene, 5, "B closing the card to Home", |s| s.property("screens", "shown") == "Home");
     wait_for(&mut scene, "home", "activeFocus", "true", 1000);
+    let home_focus = common::console::focused_words(&mut scene);
+    scene.pad(UiButton::Menu);
+    until(&mut scene, 5, "Start's Home card again", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
+    scene.wait(200);
+    let focused = common::console::focused_words(&mut scene);
+    assert!(focused.starts_with(first.split(" | ").next().unwrap_or_default()), "the card made under the resting pointer focuses its first row, {first}, not {focused:?} (Home had {home_focus:?})");
+    scene.pad(UiButton::Back);
+    until(&mut scene, 5, "B closing the card to Home", |s| s.property("screens", "shown") == "Home");
+    wait_for(&mut scene, "home", "activeFocus", "true", 1000);
+    assert_eq!(common::console::focused_words(&mut scene), home_focus, "Home under the resting pointer kept its focus");
     // A list the card cannot read is said under its rows whole, on as many lines as its words take, never cut.
     let mut unread: serde_json::Value = serde_json::from_str(&given).unwrap();
     let said = "The tools' lines could not be read: expected value at line 1 column 1, so the Tools row shows no summary.";

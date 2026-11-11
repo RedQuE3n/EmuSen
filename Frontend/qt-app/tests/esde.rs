@@ -3,7 +3,7 @@
 //! from this commit with its sidecar (the client fixture's; no player's game and no published build is read). Moonrise
 //! gives way to the system view; a NES game with no engine fails, said as Mistress said it; Right steps the carousel; A
 //! opens the gamelist and A on the game plays it through the ring; the chord pauses it under the Pause Card, and Back to Library is
-//! the gamelist at the same game, where the Home card's Continue resumes it and its Tools ▸ Cores and ▸ Themes open those
+//! the gamelist at the same game, where the Home card, made under a pointer left resting since the List card, holds the focus on Continue and resumes it and its Tools ▸ Cores and ▸ Themes open those
 //! screens and come back, the card, Cores and Themes held at the gate's five sizes over the theme; Start Console starts
 //! the client fixture's PlayStation from the Home card by the pad and by the pointer, and the PlayStation's gamelist's
 //! Select menu starts it by the pointer, its picture found on a grab of the window and its pad's B and Start turning
@@ -162,6 +162,14 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     until(&mut scene, 5, "the Home card closed to the theme", |s| s.property("screens", "shown") == "Esde" && s.property("homeCardCanvas", "visible") == "false");
     scene.pad(UiButton::Options);
     until(&mut scene, 5, "the List card in place", |s| s.property("screens", "shown") == "List" && s.property("listCardCanvas", "slide") == "0");
+    // The pointer moves over the card's second row and is left resting there through the game's session, so the cards
+    // that open after it are made under a resting pointer (EmuSen_Kit.md §7.107, §7.108).
+    let first = focused_words(&mut scene);
+    let mut middles: Vec<(f64, f64)> = scene.tree().nodes.iter().filter(|n| n.visible && n.ty.starts_with("MenuRow")).map(|n| (n.x + n.w / 2.0, n.y + n.h / 2.0)).collect();
+    middles.sort_by(|a, b| a.1.total_cmp(&b.1));
+    scene.hover(middles[1].0, middles[1].1 - 4.0);
+    scene.hover(middles[1].0, middles[1].1);
+    until(&mut scene, 5, "the moving pointer focusing the second row", |s| focused_words(s) != first);
     scene.pad(UiButton::Back);
     until(&mut scene, 5, "the List card closed to the theme", |s| s.property("screens", "shown") == "Esde" && s.property("listCardCanvas", "visible") == "false");
     assert_eq!((scene.property("esdeModel", "view"), scene.property("esdeModel", "selected")), ("gamelist".into(), selected.clone()));
@@ -201,6 +209,11 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     scene.pad(UiButton::Menu);
     until(&mut scene, 5, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
     assert!(focused_words(&mut scene).starts_with("Continue"), "the focus on Continue: {}", focused_words(&mut scene));
+    // Made under the resting pointer, the card holds the focus: Down moves it and Up brings it back to Continue.
+    scene.pad(UiButton::Down);
+    until(&mut scene, 5, "Down moving the focus on the card", |s| !focused_words(s).starts_with("Continue") && common::console::focus_within(s, "homeCardCanvas"));
+    scene.pad(UiButton::Up);
+    until(&mut scene, 5, "Up back on Continue", |s| focused_words(s).starts_with("Continue"));
     let mut report = Vec::new();
     hold(&mut scene, "EsdeHomeCardContinue", &mockup::Mockup::default(), nothing_named, &mut report);
     scene.resize(1280, 800);

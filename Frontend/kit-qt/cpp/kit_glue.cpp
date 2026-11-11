@@ -1,6 +1,9 @@
 #include "kit_glue.h"
 
 #include <QtCore/QCoreApplication>
+#include <QtCore/QEvent>
+#include <QtCore/QMetaObject>
+#include <QtCore/QObject>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QKeyEvent>
 #include <QtGui/QWindow>
@@ -55,4 +58,73 @@ void make_current(QQuickItem* item)
         }
         return;
     }
+}
+
+namespace {
+
+const char* const POINTER_WATCH = "EmuSen.Kit pointer watch";
+
+// The window's one pointer fact: a real move, press or touch of the pointer is being delivered to it, until the event loop next turns (EmuSen_Kit.md §7.108).
+class PointerWatch : public QObject {
+public:
+    explicit PointerWatch(QWindow* window) : QObject(window) { setObjectName(QString::fromLatin1(POINTER_WATCH)); }
+    bool moving = false;
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        switch (event->type()) {
+        case QEvent::MouseMove:
+        case QEvent::MouseButtonPress:
+        case QEvent::TabletMove:
+        case QEvent::TabletPress:
+        case QEvent::TouchBegin:
+        case QEvent::TouchUpdate:
+            if (!moving) {
+                moving = true;
+                QMetaObject::invokeMethod(this, [this] { moving = false; }, Qt::QueuedConnection);
+            }
+            break;
+        default:
+            break;
+        }
+        return QObject::eventFilter(watched, event);
+    }
+};
+
+PointerWatch* watch_of(QWindow* window)
+{
+    return static_cast<PointerWatch*>(window->findChild<QObject*>(QString::fromLatin1(POINTER_WATCH), Qt::FindDirectChildrenOnly));
+}
+
+void start_watch(QWindow* window)
+{
+    if (watch_of(window) == nullptr) {
+        window->installEventFilter(new PointerWatch(window));
+    }
+}
+
+} // namespace
+
+void watch_windows()
+{
+    for (QWindow* window : QGuiApplication::allWindows()) {
+        if (qobject_cast<QQuickWindow*>(window) != nullptr) {
+            start_watch(window);
+        }
+    }
+}
+
+bool pointer_moving(QQuickItem* item)
+{
+    QQuickWindow* window = item != nullptr ? item->window() : nullptr;
+    if (window == nullptr) {
+        return false;
+    }
+    const PointerWatch* watch = watch_of(window);
+    if (watch == nullptr) {
+        start_watch(window);
+        return true;
+    }
+    return watch->moving;
 }

@@ -6,13 +6,15 @@
 //! as Mistress named it, its Resume plays on and its Quit Game closes it to Home; then the pad starts it from the same
 //! page. Start on Home opens the Home card at its first page (decided 2026-11-11), whose Start Console row the pad and
 //! then the pointer take to the console; Back to Library, and the Home card's Continue names the console's session, is
-//! held at the five sizes and resumes it. The ES-DE theme's walk is esde.rs's. A GPU job.
+//! held at the five sizes and resumes it. Then the List card's walk after a game session, under a pointer left resting
+//! over it: its first row focused, Down moving. The ES-DE theme's walk is esde.rs's. A GPU job.
 
 mod common;
 
 use common::console::{back_to_library, choose_row, console_owns_the_pad, focused_words, grid_ready, pause, quit_game, row_centre, row_focused, row_shown, until};
 use common::{approved_console_core, hold, sandbox, wait_for};
 
+use emusen_client_fixture::cores::{installation_with_snes, snes_image};
 use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
 use emusen_platform_client::Platform;
@@ -42,7 +44,8 @@ fn qt_7_9_start_console_starts_a_console_whose_screen_owns_the_pad() {
     let adoption = host.adoption();
 
     let world = sandbox("qt-app-console", &[("nes", "Brass Lantern.nes")]);
-    let cores = world.dir("lib");
+    std::fs::write(world.dir("Roms/snes").join("Aurora Drift.sfc"), snes_image("AURORA DRIFT")).unwrap();
+    let cores = installation_with_snes(&world.dir("lib"));
     approved_console_core(&cores);
 
     let sdl = Sdl::open();
@@ -121,6 +124,43 @@ fn qt_7_9_start_console_starts_a_console_whose_screen_owns_the_pad() {
     console_owns_the_pad(&mut scene, &sdl, &pad, "PlayStation");
     quit_game(&mut scene, &sdl, &pad, "PlayStation (no disc)", "Home");
 
+    // The same walk after a game session (EmuSen_Kit.md §7.107, §7.108): the pointer left resting over the List card's
+    // second row, a game played from the grid and quit, then the List card over the grid again under that pointer: its
+    // first row holds the focus and Down moves it.
+    all_games(&mut scene);
+    scene.pad(UiButton::Options);
+    until(&mut scene, 5, "the List card in place", |s| s.property("screens", "shown") == "List" && s.property("listCardCanvas", "slide") == "0");
+    let first = focused_words(&mut scene);
+    let rows = row_middles(&mut scene);
+    scene.hover(rows[1].0, rows[1].1 - 4.0);
+    scene.hover(rows[1].0, rows[1].1);
+    until(&mut scene, 5, "the moving pointer focusing the second row", |s| focused_words(s) != first);
+    scene.pad(UiButton::Back);
+    until(&mut scene, 5, "the List card closed to the grid", |s| s.property("screens", "shown") == "Grid" && s.property("listCardCanvas", "visible") == "false");
+    grid_ready(&mut scene);
+    until(&mut scene, 5, "the first cover, Aurora Drift's by name, focused", |s| s.property("gridCells", "currentIndex") == "0" && s.property("gridCells", "activeFocus") == "true");
+    scene.pad(UiButton::Accept);
+    until(&mut scene, 20, "Aurora Drift running", |s| s.property("screens", "shown") == "Game" && s.property("session", "running") == "true");
+    pause(&mut scene, &sdl, &pad, "Aurora Drift");
+    choose_row(&mut scene, "Leave");
+    until(&mut scene, 5, "the Leave page", |s| s.property("pause", "title") == "Leave" && row_shown(s, "Quit Game"));
+    choose_row(&mut scene, "Quit Game");
+    until(&mut scene, 5, "Quit Game's question", |s| row_shown(s, "Yes"));
+    choose_row(&mut scene, "Yes");
+    until(&mut scene, 10, "Quit Game closing the game", |s| s.property("session", "running") == "false" && ["Grid", "Home"].contains(&s.property("screens", "shown").as_str()));
+    if scene.property("screens", "shown") == "Home" {
+        all_games(&mut scene);
+    }
+    grid_ready(&mut scene);
+    scene.pad(UiButton::Options);
+    until(&mut scene, 5, "the List card in place again", |s| s.property("screens", "shown") == "List" && s.property("listCardCanvas", "slide") == "0");
+    scene.wait(200);
+    assert_eq!(focused_words(&mut scene), first, "the List card made under the resting pointer focuses its first row; the chain {:?}", common::console::focus_chain(&mut scene));
+    scene.pad(UiButton::Down);
+    until(&mut scene, 5, "Down moving the focus on the card", |s| focused_words(s) != first && common::console::focus_within(s, "listCardCanvas"));
+    scene.pad(UiButton::Back);
+    until(&mut scene, 5, "the List card closed to the grid", |s| s.property("screens", "shown") == "Grid");
+
     assert!(report.is_empty(), "{} faults:\n{}", report.len(), report.join("\n"));
     scene.assert_quiet();
     sdl.detach(pad);
@@ -136,6 +176,27 @@ fn games_place(scene: &mut emusen_qt_test::Scene<'_>) {
         let tree = s.tree();
         tree.find_named("place.0").is_some_and(|games| s.focus(&tree) == Some(games) || s.focus_item(&tree, games))
     });
+}
+
+/// From Home: Games, All Games, the grid in place.
+fn all_games(scene: &mut emusen_qt_test::Scene<'_>) {
+    games_place(scene);
+    scene.pad(UiButton::Accept);
+    wait_for(scene, "screens", "shown", "Consoles", 1000);
+    let tree = scene.tree();
+    let all = tree.find_named("tile.0").expect("All Games");
+    assert!(scene.focus_item(&tree, all));
+    scene.pad(UiButton::Accept);
+    wait_for(scene, "screens", "shown", "Grid", 1000);
+    grid_ready(scene);
+}
+
+/// The middles of the shown card's rows, top first.
+fn row_middles(scene: &mut emusen_qt_test::Scene<'_>) -> Vec<(f64, f64)> {
+    let tree = scene.tree();
+    let mut rows: Vec<(f64, f64)> = tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("MenuRow")).map(|n| (n.x + n.w / 2.0, n.y + n.h / 2.0)).collect();
+    rows.sort_by(|a, b| a.1.total_cmp(&b.1));
+    rows
 }
 
 /// From Home: Games, All Games, the grid, Select's List card and its Start Console page, on the PlayStation's row.

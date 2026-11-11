@@ -4,6 +4,15 @@ The kit is the QML module `EmuSen.Kit` (EmuSen_Qt.md §1.4), held by rule Q (§5
 writes it, is committed under `Testing/qmltypes/` and compared on every build. A minor adds and never removes; each
 entry names what was added and the section of `EmuSen_Kit.md` that records it.
 
+## 1.0, repair DC-B: the pointer's fact the window's, the section strip a scroller where it overflows (2026-11-11)
+
+No type, property, signal or invokable was added, removed or changed in the registry.
+
+- `FrameController.hoverAt` focuses only while its item's window is delivering a real pointer event, a fact each Qt
+  Quick window keeps once; `pointerMoved` stays in the registry and does nothing, and the kit's QML no longer calls it.
+  `EmuSen_Kit.md` §7.108.
+- `SectionStrip` is interactive only while its names run past it, and a mouse drag never moves it. §7.105.
+
 ## 1.0, stage 5 piece K: the raised shadow as a token, and the item that casts it (2026-11-09)
 
 Additions only; no type, property, signal or invokable was removed or changed. The new properties are declared after

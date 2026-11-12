@@ -223,6 +223,7 @@ impl qobject::EsdeModel {
         }
         let texts = LoadTexts::of([&self.settings, &self.shelves, &self.media, &self.presence]);
         let (qt, cache) = (self.qt_thread(), self.cache.clone());
+        let given = (!self.default_font.is_empty()).then(|| self.default_font.to_string());
         let load = self.load + 1;
         self.as_mut().rust_mut().load = load;
         std::thread::spawn(move || {
@@ -235,12 +236,13 @@ impl qobject::EsdeModel {
                 }
                 Err(words) => (Settings::default(), Err(words)),
             };
-            let _ = qt.queue(move |model| model.install(load, settings, found));
+            let faces = painter::faces(given);
+            let _ = qt.queue(move |model| model.install(load, settings, found, faces));
         });
     }
 
     // A text that did not read installs nothing and is the problem, so the host shows its words.
-    fn install(mut self: Pin<&mut Self>, load: u64, settings: Settings, found: Result<Vec<System>, String>) {
+    fn install(mut self: Pin<&mut Self>, load: u64, settings: Settings, found: Result<Vec<System>, String>, faces: painter::Faces) {
         if load != self.load {
             return;
         }
@@ -259,7 +261,7 @@ impl qobject::EsdeModel {
         {
             let mut p = self.shared.borrow_mut();
             p.settings = settings;
-            p.default_font = (!self.default_font.is_empty()).then(|| self.default_font.to_string());
+            p.faces = faces;
             p.selection_seed = u64::try_from(self.selection_seed).ok().filter(|s| *s != 0);
             p.install(systems, w, h, local_now(self.now));
         }

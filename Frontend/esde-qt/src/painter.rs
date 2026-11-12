@@ -34,6 +34,20 @@ impl ThemeCache {
     }
 }
 
+/// ES-DE's default face and the help's beside it, for text whose theme names none (EmuSen_Qt.md §4.8.7).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Faces {
+    pub default: Option<String>,
+    pub help: Option<String>,
+}
+
+/// The faces looked for on disk, on the data thread: the host's default face, else the one `fonts` finds.
+pub fn faces(given: Option<String>) -> Faces {
+    let default = given.or_else(|| fonts::default_font().map(|p| p.to_string_lossy().into_owned()));
+    let help = default.as_deref().and_then(|d| fonts::help_font(std::path::Path::new(d))).map(|p| p.to_string_lossy().into_owned());
+    Faces { default, help }
+}
+
 /// The systems a refresh hands the GUI thread: the shelves each with its theme, built on the data thread.
 pub fn systems(cache: &ThemeCache, settings: &Settings, shelves: Vec<Shelf>, presence: &BTreeMap<String, MediaPresence>, w: i32, h: i32) -> Vec<System> {
     let choices = Choices { screen_width: w, screen_height: h, ..settings.choices.clone() };
@@ -71,8 +85,8 @@ pub struct Painter {
     pub swap: bool,
     /// What the host reports of the device for systemstatus; none until it reports.
     pub device: DeviceStatus,
-    /// ES-DE's default face as the host gave it; none, the one `fonts` finds.
-    pub default_font: Option<String>,
+    /// ES-DE's faces as the data thread found them (`faces`); none, the kit's body face.
+    pub faces: Faces,
     /// The gameselectors' seed as the host gave it; none, the install's time.
     pub selection_seed: Option<u64>,
 }
@@ -85,7 +99,7 @@ impl Default for Painter {
 
 impl Painter {
     pub fn new(settings: Settings) -> Self {
-        Painter { stage: None, now: 0, frame: Frame::default(), held: None, settings, generation: 0, swap: false, device: DeviceStatus::default(), default_font: None, selection_seed: None }
+        Painter { stage: None, now: 0, frame: Frame::default(), held: None, settings, generation: 0, swap: false, device: DeviceStatus::default(), faces: Faces::default(), selection_seed: None }
     }
 
     /// Installs a refresh's systems, keeping the view and the selection where they still exist.
@@ -106,8 +120,8 @@ impl Painter {
         data.now = now;
         // The gameselectors' random picks start from the host's seed, else the install's time, so a pinned time pins them too.
         data.selection_seed = self.selection_seed.unwrap_or(now.seconds() as u64);
-        data.default_font = self.default_font.clone().or_else(|| fonts::default_font().map(|p| p.to_string_lossy().into_owned()));
-        data.help_font = data.default_font.as_deref().and_then(|d| fonts::help_font(std::path::Path::new(d))).map(|p| p.to_string_lossy().into_owned());
+        data.default_font = self.faces.default.clone();
+        data.help_font = self.faces.help.clone();
         data.show_clock = self.settings.show_clock;
         data.show_help = self.settings.show_help;
         data.scroll_overlay = self.settings.scroll_overlay;

@@ -2956,7 +2956,12 @@ installed, the help box of Art Book Next among them. `emusen_esde::fonts` has th
 `/usr/local/share/es-de`, the user's `~/ES-DE`, the Flatpak `org.es_de.frontend` system-wide and per user, a running
 AppImage's `/tmp/.mount_ES-DE*` mount; USERGUIDE.md names `/usr/share/es-de` as the installation folder), and then asks
 fontconfig for the family (`fc-list :family=Akrobat:style=Regular file`); `default_font` does this once and caches the
-path (a `OnceLock`, written once, read after). The scene's `Data::default_font` carries it, and every text, list,
+path (a `OnceLock`, written once, read after). The search runs on the load's data thread, never in the GUI thread's
+install: `painter::faces` finds the default face and the help's beside it there, and `Painter::install` takes them as
+given (`Painter.faces`). Measured on 2026-11-11, the first install had spent 8.47 ms (the gate's quiet pass, load 2.9)
+and 17.8 to 41.8 ms (a temporary folder of 136,165 entries, load 3.8) starting `fc-list` and listing the temporary
+folder for an AppImage's mount, against the 2 ms gate of `four_thousand_games_install_and_step_on_the_gui_thread_within_two_milliseconds`;
+with the search moved, 0.45 and 0.59 ms at load 6.0 and 7.5. The scene's `Data::default_font` carries it, and every text, list,
 carousel, grid and help element whose theme names no `fontPath` takes it (`paint::face_of`). `EsdeModel.defaultFont`
 (`View.defaultFont`) gives a file instead, for a host or a test; empty, the one found. The oracle gives it the AppImage's
 own file by path.

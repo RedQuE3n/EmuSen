@@ -1250,8 +1250,9 @@ each waiting on the tester:
 - the full name's line box, 44 (item 6): Barlow Condensed Medium at 44 in Qt 6.11 lays a line 53 (ascent 44, descent
   8.8), with `lineHeight: 44` fixed as without; a 44 box is cut at the foot by the fit rule, which judges the line box.
   Decided 2026-11-11 (R-20261111-94): the canvas gives it 53 with its baseline kept, and the screen moved to y 607.6;
-- the cover row: the canvas's Super Nintendo is 1.4 wide a unit tall; the systems table's `cover_aspect` 0.73 makes it
-  1.37, so three covers 137 wide stand at 781, 930 and 1079 against 140 at 772, 924 and 1076 (12 lines);
+- the cover row: the canvas's Super Nintendo was 1.4 wide a unit tall; the systems table's `cover_aspect` 0.73 makes it
+  1.37, so three covers 137 wide stand at 781, 930 and 1079 against 140 at 772, 924 and 1076. Decided 2026-11-11
+  (R-20261111-95): the canvas follows the systems data, and the data is unchanged;
 - the inner orbit's label (item 9): the window ended at 197 on the screen and at 178 in the canvas, so its label's right
   edge stood at 725.35 against 753.72. Decided 2026-11-11 (R-20261111-93): the canvas ends it at 197.
 The figures, the probes and what the canvas would have to say for each are kept with the branch's evidence

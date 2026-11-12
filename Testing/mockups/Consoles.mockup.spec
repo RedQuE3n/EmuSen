@@ -72,11 +72,11 @@ note the full name in Barlow Condensed's own line box, 53, its baseline at 651.6
 element consoleDetailName x=64 y=607.6 h=53 token=TextStrong words=data
 element consoleDetailFacts x=64 y=664 h=26.4 token=Muted words=data
 element consoleDetailEngine x=64 y=696 h=20
-note three covers whole at 100 tall, 12 apart, their feet at 716; the Super Nintendo's 1.4 shape makes each 140 wide
+note three covers whole at 100 tall, 12 apart, their feet at 716; the Super Nintendo's shape is the systems table's, 1 / 0.73, so each is 137 wide (R-20261111-95)
 element coverRow right=1216 y=616 h=100
-element rowCover.0 x=772 y=616 w=140 h=100
-element rowCover.1 x=924 y=616 w=140 h=100
-element rowCover.2 x=1076 y=616 w=140 h=100
+element rowCover.0 x=781 y=616 w=137 h=100
+element rowCover.1 x=930 y=616 w=137 h=100
+element rowCover.2 x=1079 y=616 w=137 h=100
 note the help bar stands flush on the foot, 742 to 800, decided 2026-11-05 (EmuSen_Interface.md §24.7)
 note the band is the accepted render's night glass, the input surface at 0.72 (LunaP's HelpBand), where the canvas had Surface at 0.92; the render stands (EmuSen_Qt.md §7.1, step 5)
 element helpBar x=0 y=742 w=1280 h=58 token=InputSurface alpha=0.72

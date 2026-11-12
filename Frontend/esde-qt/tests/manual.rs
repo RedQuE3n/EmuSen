@@ -110,16 +110,22 @@ fn start() -> Compositor {
     kwin
 }
 
+// One application a process (EmuSen_Kit.md §7.9): both cases run in one test on one scene, never two tests at once.
 #[test]
-fn a_game_s_pdf_manual_opens_with_up_and_pages_zooms_and_draws_through_qt_pdf() {
+fn the_media_viewer_pages_a_pdf_manual_and_blurs_the_bars_beside_a_narrow_video() {
     assert!(emusen_esde_qt::marks::mark_named("star").is_some(), "the module is linked into this test");
     let _kwin = start();
+    let mut harness = Harness::new();
+    let mut scene = harness.load(SCENE, W, H);
+    a_game_s_pdf_manual_opens_with_up_and_pages_zooms_and_draws_through_qt_pdf(&mut scene);
+    the_viewer_s_blur_takes_the_bars_beside_a_narrow_video_and_leaves_them_sharp_when_off(&mut scene);
+}
+
+fn a_game_s_pdf_manual_opens_with_up_and_pages_zooms_and_draws_through_qt_pdf(scene: &mut Scene<'_>) {
     let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("esde-qt-manual-{}", std::process::id()));
     theme(&root.join("theme"));
     let manual = root.join("manual.pdf");
     std::fs::write(&manual, pdf(&[((600, 800), (1.0, 0.0, 0.0)), ((800, 600), (0.0, 0.0, 1.0))])).unwrap();
-    let mut harness = Harness::new();
-    let mut scene = harness.load(SCENE, W, H);
     let shot = root.join("shot.bmp");
     common::bmp(&shot, 64, 56, |_, _| [0, 160, 0]);
     let media = format!("{{\"nes\":{{\"manual\":{{\"nes-0000\":\"{}\"}},\"screenshot\":{{\"nes-0000\":\"{}\"}}}}}}", manual.display(), shot.display());
@@ -128,58 +134,53 @@ fn a_game_s_pdf_manual_opens_with_up_and_pages_zooms_and_draws_through_qt_pdf() 
     assert!(scene.set_property("view", "settings", &settings));
     let shelf = "[{\"name\":\"nes\",\"full_name\":\"Nintendo\",\"theme\":\"nes\",\"kind\":\"regular\",\"games\":[{\"file\":\"nes-0000.rom\",\"name\":\"Game\",\"esde_system\":\"nes\",\"favourite\":false,\"last_played\":0}]}]";
     assert!(scene.set_property("view", "shelves", shelf));
-    until(&mut scene, "the theme loaded", |s| s.property("esdeModel", "themed") == "true");
-    until(&mut scene, "the gamelist", |s| s.property("esdeModel", "view") == "gamelist");
+    until(scene, "the theme loaded", |s| s.property("esdeModel", "themed") == "true");
+    until(scene, "the gamelist", |s| s.property("esdeModel", "view") == "gamelist");
 
     // X opens the viewer on a game with a screenshot and a manual; up opens the manual at its first page.
     scene.pad(UiButton::Screensaver);
     scene.wait(200);
-    assert_eq!(words(&mut scene, "element-help"), "BROWSEPDFMANUALFIRSTLAST", "a game with a manual offers it");
+    assert_eq!(words(scene, "element-help"), "BROWSEPDFMANUALFIRSTLAST", "a game with a manual offers it");
     scene.pad(UiButton::Up);
-    until(&mut scene, "the pages counted", |s| words(s, "element-left") == "PAGE1OF2");
-    assert_eq!(words(&mut scene, "element-help"), "BROWSEGAMEMEDIAFIRSTLASTZOOM", "the manual's help");
+    until(scene, "the pages counted", |s| words(s, "element-left") == "PAGE1OF2");
+    assert_eq!(words(scene, "element-help"), "BROWSEGAMEMEDIAFIRSTLASTZOOM", "the manual's help");
     let strip = emusen_esde::scene::Viewer::strip(f64::from(H));
-    until(&mut scene, "the page placed", |s| box_of(s, "element-item").2 > 0.0);
-    let (x, y, w, h) = box_of(&mut scene, "element-item");
+    until(scene, "the page placed", |s| box_of(s, "element-item").2 > 0.0);
+    let (x, y, w, h) = box_of(scene, "element-item");
     let fit = (f64::from(H) - strip) / 800.0;
     assert!((w - 600.0 * fit).abs() < 0.5 && (h - 800.0 * fit).abs() < 0.5 && (y - strip).abs() < 0.5, "fitted below the strip: {x} {y} {w} {h}");
     let scratch = root.join("grabs");
     std::fs::create_dir_all(&scratch).unwrap();
-    until(&mut scene, "the page drawn", |s| pixel(s, &scratch, W / 2, H / 2)[0] > 200);
-    assert!(pixel(&mut scene, &scratch, W / 2, H / 2)[2] < 50, "the first page is red");
+    until(scene, "the page drawn", |s| pixel(s, &scratch, W / 2, H / 2)[0] > 200);
+    assert!(pixel(scene, &scratch, W / 2, H / 2)[2] < 50, "the first page is red");
 
     // Right turns to the second page, across: the box takes its shape, and it is drawn blue.
     scene.pad(UiButton::Right);
-    until(&mut scene, "the second page", |s| words(s, "element-left") == "PAGE2OF2");
-    until(&mut scene, "the second page placed", |s| {
+    until(scene, "the second page", |s| words(s, "element-left") == "PAGE2OF2");
+    until(scene, "the second page placed", |s| {
         let b = box_of(s, "element-item");
         b.2 > b.3
     });
-    until(&mut scene, "the second page drawn", |s| pixel(s, &scratch, W / 2, H / 2)[2] > 200);
+    until(scene, "the second page drawn", |s| pixel(s, &scratch, W / 2, H / 2)[2] > 200);
 
     // The right shoulder zooms: the page half the screen's height taller, centred, and the help the pan's.
-    let before = box_of(&mut scene, "element-item");
+    let before = box_of(scene, "element-item");
     scene.pad(UiButton::PageDown);
-    until(&mut scene, "the zoom", |s| box_of(s, "element-item").3 > before.3 + 1.0);
-    let after = box_of(&mut scene, "element-item");
+    until(scene, "the zoom", |s| box_of(s, "element-item").3 > before.3 + 1.0);
+    let after = box_of(scene, "element-item");
     assert!((after.3 - before.3 - 0.5 * f64::from(H)).abs() < 0.5, "a zoom step: {before:?} to {after:?}");
-    assert_eq!(words(&mut scene, "element-help"), "PANRESETZOOM");
+    assert_eq!(words(scene, "element-help"), "PANRESETZOOM");
     scene.pad(UiButton::Back);
     scene.wait(200);
     assert!(scene.tree().nodes.iter().all(|n| !(n.visible && n.name == "element-strip")), "any other button closes the viewer");
     scene.assert_quiet();
 }
 
-#[test]
-fn the_viewer_s_blur_takes_the_bars_beside_a_narrow_video_and_leaves_them_sharp_when_off() {
-    assert!(emusen_esde_qt::marks::mark_named("star").is_some(), "the module is linked into this test");
-    let _kwin = start();
+fn the_viewer_s_blur_takes_the_bars_beside_a_narrow_video_and_leaves_them_sharp_when_off(scene: &mut Scene<'_>) {
     let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("esde-qt-blur-{}", std::process::id()));
     theme(&root.join("theme"));
     let clip = root.join("clip.y4m");
     emusen_qt_test::clips::write(&clip, 20);
-    let mut harness = Harness::new();
-    let mut scene = harness.load(SCENE, W, H);
     let media = format!("{{\"nes\":{{\"video\":{{\"nes-0000\":\"{}\"}}}}}}", clip.display());
     assert!(scene.set_property("view", "media", &media));
     let shelf = "[{\"name\":\"nes\",\"full_name\":\"Nintendo\",\"theme\":\"nes\",\"kind\":\"regular\",\"games\":[{\"file\":\"nes-0000.rom\",\"name\":\"Game\",\"esde_system\":\"nes\",\"favourite\":false,\"last_played\":0}]}]";
@@ -205,10 +206,10 @@ fn the_viewer_s_blur_takes_the_bars_beside_a_narrow_video_and_leaves_them_sharp_
         scene.wait(200);
         (edge, red(edge - 3), red(edge - 40))
     };
-    let (edge, near, far) = edge_and_bar(&mut scene, false);
+    let (edge, near, far) = edge_and_bar(scene, false);
     assert!(edge > 100, "a narrow clip leaves a bar at its left: edge at {edge}");
     assert!(near < 4 && far < 4, "off, the bar is sharp black beside the clip: {near} and {far} at 3 and 40 px");
-    let (edge_on, near, far) = edge_and_bar(&mut scene, true);
+    let (edge_on, near, far) = edge_and_bar(scene, true);
     assert!((edge_on - edge).abs() <= 2, "the clip is placed alike: {edge} and {edge_on}");
     assert!(near > 12, "on, the blur reaches the bar 3 px beside the clip, as ES-DE's over the whole screen: red {near}");
     assert!(far < 4, "and the bar further out is black: {far}");

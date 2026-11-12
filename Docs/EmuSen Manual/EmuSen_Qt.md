@@ -3944,7 +3944,12 @@ gives the same picture with one layer: the video's element is the full width of 
 transparent in the layer over the viewer's black ground, and a horizontal blur of that layer laid over black is the blur
 of ground, bars and video together, since black adds nothing to the sum. Read again on 2026-11-11, this was already so;
 the earlier note here that only the video was blurred took the element for the fitted frame. Held by manual.rs's
-`the_viewer_s_blur_takes_the_bars_beside_a_narrow_video_and_leaves_them_sharp_when_off` (GPU tier): a 64 × 48 clip,
+case `the_viewer_s_blur_takes_the_bars_beside_a_narrow_video_and_leaves_them_sharp_when_off` (GPU tier), run after the
+PDF manual's case in the file's one test on one application and one scene: as two tests, `cargo test` ran them on two
+threads at once, each making its own `QGuiApplication`, and the second's warning that only one may exist was written into
+the harness's message list while the first read it, a segmentation fault (measured 2026-11-12; run one after the other,
+the second application ran the test's 7 GB scope out of memory). One application a process is the harness's rule
+(EmuSen_Kit.md §7.9). The case: a 64 × 48 clip,
 narrower than the screen, its bar 3 px from the clip's edge black with the setting off and lit with it on. Two
 differences stand, unruled: ES-DE's kernel is nine taps in two passes where EmuSen's is one Gaussian fitted to the
 captures (above), and ES-DE blurs vertically on a screen rotated by 90 or 270 degrees, where EmuSen has no rotation.

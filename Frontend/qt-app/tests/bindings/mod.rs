@@ -7,9 +7,21 @@ use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
 use emusen_qt_test::Scene;
 
-/// The gate's findings Settings names for the tester (`settings.rs`): the help bar's words under the floor at 1280 × 720.
-pub fn named(fault: &str, _: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
-    size == (1280, 720) && fault.contains("too small to read")
+/// The gate's findings Settings names for the tester (`settings.rs`): the help bar's words under the floor at 1280 × 720,
+/// and only those; a label of the drawing's, or any other word, stays a finding at every size.
+pub fn named(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
+    let items: Vec<usize> = fault.rsplit(": ").next().unwrap_or("").split(|c: char| !c.is_ascii_digit()).filter_map(|n| n.parse().ok()).collect();
+    let in_help_bar = |i: &usize| {
+        let mut at = tree.nodes.get(*i);
+        while let Some(n) = at {
+            if n.name == "helpBar" {
+                return true;
+            }
+            at = tree.nodes.iter().find(|p| p.id == n.parent);
+        }
+        false
+    };
+    size == (1280, 720) && fault.contains("too small to read") && !items.is_empty() && items.iter().all(in_help_bar)
 }
 
 pub fn sentence(scene: &mut Scene<'_>) -> String {

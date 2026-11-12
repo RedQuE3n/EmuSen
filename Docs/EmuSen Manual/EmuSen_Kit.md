@@ -3562,7 +3562,7 @@ is 142.9 units against its 134-unit box, and the longest the line can be, "Light
 read from `Barlow-Regular.ttf`'s own tables on 2026-11-11; Qt's layout of "7 games" agreed to 0.03 unit). No size of
 Barlow both fits and stays over the floor at 1280 × 720 (at 17 the line fits, 131.3, but its capitals there are under
 11.64). The places' lines take Barlow Condensed's regular face, which the worlds' counts already take (EmuSen_Qt.md
-§3.4.2); the face awaits the tester's ruling. "Light · 100% sound" is 124.1 there (127.5 if Qt draws the family's
+§3.4.2); the face was decided 2026-11-12 (R-20261112-1), regular at the same size. "Light · 100% sound" is 124.1 there (127.5 if Qt draws the family's
 medium weight), inside the box. The tile,
 the name and the line's place are unchanged. Held by theme-audit's `qt_3_4_1` test, which runs the reference package's
 Home by default and in the `loud` state, fails on any line naming `placeStatus`, and reads from each recording that the

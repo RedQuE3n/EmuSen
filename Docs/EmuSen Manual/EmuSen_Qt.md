@@ -1137,7 +1137,7 @@ faults); an empty picture URL refused by the sandbox (`theme_feed.rs`, 22 refusa
 row (`scale.rs`, 9,000 covers for 4). The stage 1 start-up gates of §9.3.1 (Home shown ≤ 0.35 s, the first press
 ≤ 0.95 s on the real library) were not re-run: their driver is no longer kept.
 
-**The places' lines in the condensed face** (2026-11-11; the face awaits the tester's ruling). The Settings place's line
+**The places' lines in the condensed face** (2026-11-11; the face decided 2026-11-12, R-20261112-1: Barlow Condensed regular at the same size). The Settings place's line
 is the program's own words, built from two settings, so it is held whole (R-20261111-35); in Barlow at 20 it overran its
 134-unit box ("Dark · 60% sound" 142.9, "Light · 100% sound" 154.5, measured 2026-11-11). The places' second lines take
 Barlow Condensed's regular face, as the worlds' counts do on Choose a console; the longest line is then 124.1.

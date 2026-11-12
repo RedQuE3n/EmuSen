@@ -1,7 +1,7 @@
 //! The five fit sizes (EmuSen_Qt.md §4.8.5): each watched theme's system view at the SNES and its gamelist at the first
 //! game, at the harness's `SIZES`, on the oracle's synthetic library, on the GPU tier. Held: pad reach, pointer reach, no
-//! chrome, nothing logged, and every element's rectangle ÷ (W, H) equal within 0.001 across the sizes of one aspect
-//! ratio (a theme lays itself out per aspect ratio). Each grab is written for the side-by-sides beside ES-DE's captures.
+//! chrome, nothing logged, and every element's rectangle ÷ (W, H) equal within one pixel of the smaller window across the
+//! sizes of one aspect ratio (a theme lays itself out per aspect ratio; ES-DE places at whole pixels, EmuSen_Qt.md §4.8.5). Each grab is written for the side-by-sides beside ES-DE's captures.
 
 mod common;
 
@@ -128,7 +128,7 @@ fn the_watched_themes_hold_at_the_five_sizes() {
                 scene.pad(step);
             }
             let state = if view == "system" { "system".to_owned() } else { "gamelist-1".to_owned() };
-            let mut by_ratio: BTreeMap<(i32, i32), (String, Boxes)> = BTreeMap::new();
+            let mut by_ratio: BTreeMap<(i32, i32), ((i32, i32), Boxes)> = BTreeMap::new();
             for (w, h) in SIZES {
                 let before = scene.property("esdeModel", "revision");
                 let at = |s: &mut Scene<'_>, p: &str| s.property("view", p).parse::<f64>().unwrap_or(-1.0);
@@ -150,20 +150,27 @@ fn the_watched_themes_hold_at_the_five_sizes() {
                 }
                 match by_ratio.get(&ratio(w, h)) {
                     None => {
-                        by_ratio.insert(ratio(w, h), (format!("{w}x{h}"), boxes));
+                        by_ratio.insert(ratio(w, h), ((w, h), boxes));
                     }
-                    Some((first, held)) => {
+                    Some((size, held)) => {
+                        let first = format!("{}x{}", size.0, size.1);
+                        // One pixel of the smaller window: ES-DE 3.4.1 rounds a component's position and its origin's
+                        // offset to whole pixels (GuiComponent::getTransform) and an image's corners (ImageComponent::
+                        // updateVertices), so each edge is up to half a pixel from proportional at either size.
+                        let pixel = (f64::from(w.min(size.0)), f64::from(h.min(size.1)));
                         for (name, b) in &boxes {
                             match held.get(name) {
                                 None => failures.push(format!("{at}: {name} drawn here but not at {first}")),
                                 Some((a, worded)) => {
                                     let (b, _) = b;
                                     let words = |extent: f64| if *worded { WORDS * extent } else { 0.0 };
-                                    let off = [(b.0 - a.0, a.2), (b.1 - a.1, a.3), (b.2 - a.2, a.2), (b.3 - a.3, a.3)]
+                                    let off = [(b.0 - a.0, a.2, pixel.0), (b.1 - a.1, a.3, pixel.1), (b.2 - a.2, a.2, pixel.0), (b.3 - a.3, a.3, pixel.1)]
                                         .iter()
-                                        .fold(0.0f64, |m, (d, extent)| m.max(d.abs() - words(*extent)));
-                                    if off > 0.001 {
-                                        failures.push(format!("{at}: {name} {b:.4?} against {a:.4?} at {first}, {off:.4} off"));
+                                        .fold(0.0f64, |m, (d, extent, across)| m.max((d.abs() - words(*extent)) * across));
+                                    if off > 1.0 {
+                                        failures.push(format!(
+                                            "{at}: {name} {b:.4?} against {a:.4?} at {first}, {off:.2} px off at the smaller window, past the one pixel ES-DE's whole-pixel placing allows (GuiComponent::getTransform, v3.4.1)"
+                                        ));
                                     }
                                 }
                             }

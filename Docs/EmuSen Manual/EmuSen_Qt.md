@@ -2640,7 +2640,13 @@ no image crate is needed, the oracle library read as the three texts of §4.6).
   systems in the order ES-DE showed them and its counts (every game of a system, those inside folders too: 14 games and
   7 favourites on the SNES, as ES-DE's captures read). Held: nothing drawn but the elements, the help's entries and the
   primary's items inside the window and taking the pointer, a step and A and B answered, the pointer selecting, and
-  every element's box ÷ (W, H) equal within 0.001 across the sizes of one aspect ratio. A box sized by its laid-out
+  every element's box ÷ (W, H) equal within one pixel of the smaller window across the sizes of one aspect ratio
+  (decided 2026-11-11 by the tester, R-20261111-88; until then 0.001 of the extent, a bound no rule gave). The pixel is
+  ES-DE's own: ES-DE 3.4.1 rounds a component's position and its origin's offset to whole pixels
+  (`GuiComponent::getTransform`, `es-core/src/GuiComponent.cpp`) and an image's corners (`ImageComponent::updateVertices`),
+  so each edge stands up to half a pixel from proportional at either size, and two sizes differ by up to one pixel at
+  the smaller. Seeded 2026-11-11: every box two pixels right at the sizes wider than 1600 (1.33 px at 1280 × 800 against
+  1920 × 1200), which must fail it. A box sized by its laid-out
   words (a help bar, a status row, an auto-sized text) may differ by a further 4 % of its extent: each run's advance is
   rounded to whole pixels and hinted at its own size, so a 14 px bar is not two thirds of a 21 px one (CarAlt's help
   measured 3.3 % apart at 1280 × 720 and 1920 × 1080), and ES-DE's own is not proportional either (Art Book Next's

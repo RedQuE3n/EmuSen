@@ -3157,8 +3157,13 @@ next turns, so the hovers delivered within that event see it and a frame's hover
 while its item's window is moving. Each `FrameController` starts the watch of every Qt Quick window that has none as it
 is made, before any hover in them. A window made after every controller has no watch until its first hover asks, and
 an unwatched window cannot tell a move from a frame's hover, so it answers no and starts the watch: its first hover takes
-nothing, and later moves focus. It answered yes until 2026-11-11, so the first walkable that came under a resting
-pointer in such a window took the focus. The watch is no static: it is found by its object name among the window's
+nothing, and later moves focus. The player's first move in such a window, if it lands on a walkable, is that first
+hover, so the walkable takes nothing until the pointer leaves it and comes back; kit-gallery's `pointer` holds the
+return, not that first move. An application-wide event filter that started a window's watch at its first pointer event
+was tried on 2026-11-11 and not kept: Qt calls application filters only on the process's first thread, and the test
+harness runs Qt on another, so in kit-gallery's `pointer` the filter was never called and could not be held by a test.
+It answered yes until 2026-11-11, so the first walkable that came under a resting pointer in such a window took the
+focus. The watch is no static: it is found by its object name among the window's
 children.
 
 The ES-DE view asks the same fact. Its carousel, grid and text list select the row under the pointer from their own
@@ -3199,9 +3204,7 @@ Seeded faults: `hoverAt` focusing on every hover (`pointer` fails at the late ca
 fails at the move onto a walkable); an unwatched window answering yes (fault 48, `pointer` fails at the second window);
 the ES-DE view's hover not asking the fact (fault 47, esde-qt's `pointer` fails, the fourth row selected); and the rule 0efa4a08f had, each controller judging "moved" by the position it last
 saw (fault 44, measured on 2026-11-11: `cards` fails at the Home card, "focuses its first row, Tools, not Settings"; with
-that assert set aside, the Home check fails alone, "focuses Games, not place.1"; on the GPU, fault 45 against `console`).
-A disabled place that is enabled again under a resting pointer is given no hover by Qt Quick at all: with the Home card
-open, the pointer moved onto one of Home's places, and Home shown again by B kept its focus under every rule, the rule of
-0efa4a08f and a `hoverAt` that focuses on every hover alike (measured on 2026-11-11), so `cards` reaches Home through
-Consoles instead.
+that assert set aside, the Home check fails alone, "focuses Games, not place.1"); and the same rule against qt-app's
+`console` on the GPU (fault 45, run on 2026-11-11 on 7d3b6571b: `console` panics at its List card made under the resting
+pointer, "focuses its first row", and the binary aborts). `cards` reaches Home through Consoles.
 

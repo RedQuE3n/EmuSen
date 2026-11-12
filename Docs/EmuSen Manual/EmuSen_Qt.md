@@ -2177,8 +2177,13 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_n
 `check` counts a pair as `set` when it is drawn and `unsupported` otherwise, `sound`'s pairs included; there is no
 state between (R-20261111-75, decided 2026-11-11: the nine pairs once marked `accepted` are counted as not drawn until
 each is checked). Nothing reads `catalog.tsv`'s `deferred` column for it any more. The corpus measure of 2026-11-09
-counted the nine as set: measured again on 2026-11-11 over the 71 themes, 57 rise in `unsupported` by the pairs they
-set and nothing else changes; the committed measure is not changed here.
+counted the nine as set: measured again on 2026-11-11 over the 71 themes, 57 rise in `unsupported`, 53 of them by
+exactly the pairs of the nine they set. The other four, ESboy, ForAll, PSOne-ish and X20s, rise by one fewer (2 of 3,
+5 of 6, 2 of 3, 2 of 3) because each also sets `text.containerVerticalSnap`, which was `later:container` on 2026-11-09
+and is `drawn` since that day's container snap (§4.12.3), so it left their unsupported pairs as the nine came in. Four
+more themes set it, Art Book Next, Colorful Simplified, Tategriddy and Texgriddy, and of the nine only `sound.path`, so
+theirs did not change at all (read 2026-11-11 from `esde-check`'s per-pair listing and the diff of `mapping.tsv` since
+2026-11-09, where it is the only other pair whose state changed).
 
 **`marks`** (`src/marks.rs`): 30 icons as `Mark { aspect, parts }`, each part rings of points in the unit box (the first
 the outline, the rest holes, filled even-odd) filled or stroked at a width in box heights, in the element's colour, the

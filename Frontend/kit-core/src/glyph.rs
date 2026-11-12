@@ -18,6 +18,21 @@ pub enum PadFamily {
 
 impl PadFamily {
     pub const ALL: [PadFamily; 4] = [PadFamily::Generic, PadFamily::Xbox, PadFamily::PlayStation, PadFamily::Nintendo];
+
+    /// The family's name, as a setting that chooses one stores it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            PadFamily::Generic => "Generic",
+            PadFamily::Xbox => "Xbox",
+            PadFamily::PlayStation => "PlayStation",
+            PadFamily::Nintendo => "Nintendo",
+        }
+    }
+
+    /// The family a stored name chooses; none for any other word (Automatic).
+    pub fn named(name: &str) -> Option<PadFamily> {
+        PadFamily::ALL.into_iter().find(|f| f.name() == name)
+    }
 }
 
 /// One mark in the unit box: a polyline, filled or stroked (`stroke` a share of the box, 0 for none); `cut` when the

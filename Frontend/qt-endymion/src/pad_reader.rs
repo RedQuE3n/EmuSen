@@ -143,7 +143,7 @@ impl qobject::PadReader {
     fn apply(mut self: Pin<&mut Self>, delivery: Delivery) {
         let tick = match delivery {
             Ok(tick) => tick,
-            Err(words) => return self.publish_problem(QString::from(words.as_str())),
+            Err(words) => return self.publish_problem(QString::from(crate::reader::unread(&words).as_str())),
         };
         for event in &tick.events {
             self.as_mut().button(kinds::pad_button(event.button), event.down);

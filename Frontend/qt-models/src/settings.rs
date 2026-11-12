@@ -143,6 +143,8 @@ pub enum Outcome {
     Seat(emusen_qt_endymion::seats::Ask),
     /// Words to type for a page: the question's title, its prompt and the words it starts with.
     Type { title: String, prompt: String, start: String, typed: crate::settings_controllers::Typed },
+    /// Nothing done, and the words of what failed, said as the program's other failures are (EmuSen_Qt.md §7.9).
+    Failed(String),
 }
 
 /// A page open under a section.
@@ -1001,9 +1003,7 @@ impl SettingsView {
 
     /// The help bar's pad family chosen by Controller type; none for Automatic, which follows the pad last pressed.
     pub fn controller_family(&self) -> Option<PadFamily> {
-        let chosen = self.applied("controller_type")?;
-        // The setting's choices are the kit's family names, so no table of them is kept here.
-        PadFamily::ALL.into_iter().find(|f| format!("{f:?}") == chosen)
+        PadFamily::named(&self.applied("controller_type")?)
     }
 
     /// Whether a pad's coming and going raises a notice (Controller notices).
@@ -1017,16 +1017,23 @@ impl SettingsView {
     }
 
     /// The settings the pads act on: Only the first controller, Left stick as the D-pad, Stick deadzone, Mirror player 1
-    /// to player 2; none until the settings are read.
-    pub fn pad_settings(&self) -> Option<PadSettings> {
-        let deadzone = self.applied("stick_deadzone")?.parse().ok()?;
-        Some(PadSettings {
+    /// to player 2; none until the settings are read. A stored deadzone that is not a number is left unset, in words.
+    pub fn pad_settings(&self) -> Option<(PadSettings, Option<String>)> {
+        let stored = self.applied("stick_deadzone").filter(|v| !v.is_empty())?;
+        let deadzone = stored.parse::<f64>().ok();
+        let settings = PadSettings {
             first_controller_only: self.applies_as("first_controller_only"),
             stick_as_dpad: self.applies_as("stick_as_dpad"),
             stick_deadzone: deadzone,
             mirror: self.applies_as("mirror"),
-        })
+        };
+        Some((settings, deadzone.is_none().then(|| unread_deadzone(&stored))))
     }
+}
+
+/// The words for a stored stick deadzone that is not a number, said as the program's other failures are.
+pub fn unread_deadzone(stored: &str) -> String {
+    format!("The stick deadzone could not be read, so it was left as it was: \"{stored}\" is not a number")
 }
 
 /// A console's words with its names filled: `{console}` and the names given.

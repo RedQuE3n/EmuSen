@@ -8,9 +8,10 @@ use emusen_kit_core::controller::{drawing_for, Drawing};
 use emusen_qt_endymion::seats::{Ask, Connected, Player};
 use emusen_qt_models::bindings::{Bindings, Choice, File};
 use emusen_qt_models::consoles::{Console, ConsoleRead};
-use emusen_qt_models::controllers;
+use emusen_qt_models::{controllers, settings_controllers};
 use emusen_qt_models::settings::{self, Model, Outcome, Page, Preview, SettingsSource, SettingsView};
 use emusen_qt_models::settings_controllers::{Chooser, ControlWord, Seated};
+use emusen_qt_models::settings_source::ClientSettings;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
@@ -39,35 +40,35 @@ impl SettingsSource for Fake {
     }
 }
 
-/// Endymion's rule for a test: a profile named, else the one every console has, named Standard here so that a page
-/// restating Endymion's own name for it shows; a player's own map in it, else player 1's.
+/// Endymion itself, from the platform library built from this commit: its choice of a map, its game names and its
+/// controls' words. Only the pad's bindings are the test's own answer (Y on West), since `bindings_bound` reads the
+/// player's own files.
 struct Rule;
 
+fn endymion() -> &'static Arc<dyn Chooser> {
+    static ENDYMION: std::sync::OnceLock<Arc<dyn Chooser>> = std::sync::OnceLock::new();
+    ENDYMION.get_or_init(|| ClientSettings::open(&emusen_client_fixture::library().display().to_string()).unwrap().chooser().unwrap())
+}
+
+/// The profile every console has, as Endymion names it.
+fn standard() -> String {
+    endymion().choose(&json!({}), &json!({}), "", 1, None, None).unwrap().profile
+}
+
 impl Chooser for Rule {
-    fn choose(&self, gamepad: &Value, profiles: &Value, console: &str, player: u32, profile: Option<&str>, _game: Option<&str>) -> Choice {
-        let profile = profile.unwrap_or("Standard").to_owned();
-        let own = if profile == "Standard" {
-            gamepad["Players"][console][player.to_string()].is_object()
-        } else {
-            profiles[console]["Profiles"][&profile][player.to_string()].is_object()
-        };
-        Choice { profile, map_player: if own { player } else { 1 } }
+    fn choose(&self, gamepad: &Value, profiles: &Value, console: &str, player: u32, profile: Option<&str>, game: Option<&str>) -> Result<Choice, String> {
+        endymion().choose(gamepad, profiles, console, player, profile, game)
     }
-    fn bound(&self, _: &str, _: u32) -> [i32; 16] {
+    fn bound(&self, _: &str, _: u32) -> Result<[i32; 16], String> {
         let mut out = [-1; 16];
         out[1] = 2; // Y on West
-        out
+        Ok(out)
     }
-    fn game_key(&self, path: &str) -> String {
-        std::path::Path::new(path).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+    fn game_key(&self, path: &str) -> Result<String, String> {
+        endymion().game_key(path)
     }
-    /// Endymion's own words, from the platform library built from this commit.
     fn controls(&self) -> &[ControlWord] {
-        static WORDS: std::sync::OnceLock<Vec<ControlWord>> = std::sync::OnceLock::new();
-        WORDS.get_or_init(|| {
-            let platform = emusen_platform_client::Platform::load(emusen_client_fixture::library()).unwrap();
-            ControlWord::read(&platform.bindings_controls().unwrap())
-        })
+        endymion().controls()
     }
 }
 
@@ -94,7 +95,7 @@ fn bindings() -> Bindings {
         key_defaults,
         pad_defaults,
         hotkey_defaults,
-        default_profile: "Standard".into(),
+        default_profile: standard(),
     }
 }
 
@@ -148,8 +149,8 @@ fn qt_7_7_h_every_drawing_file_reads_and_covers_its_controllers_controls() {
     }
     assert_eq!(controllers::drawing("ps2.dualshock2"), controllers::drawing("psx.dualshock"), "one drawing for two ids");
     assert_eq!(controllers::drawing("test.pad"), None, "an id with no file");
-    // A hosted core's RetroPad is drawn as its console's pad where the console has one (decided 2026-11-10 by the
-    // tester): the Saturn's and the Dreamcast's, each covering the controls their hosted cores give them; any other
+    // A hosted core's RetroPad is drawn as its console's pad where the console has one (the tester's
+    // R-20261111-113): the Saturn's and the Dreamcast's, each covering the controls their hosted cores give them; any other
     // console's RetroPad is the generic drawing.
     let hosted: [(&str, &[u32], &[u32]); 2] =
         [("saturn", &[0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], &[]), ("dreamcast", &[0, 1, 3, 4, 5, 6, 7, 8, 9, 12, 13], &[0, 1])];
@@ -174,9 +175,9 @@ fn qt_7_7_h_the_section_counts_the_seats_names_the_profile_and_shows_rumble_wher
     let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
     assert_eq!(&ids[..8], ["players", "bindings", "profiles", "rumble", "swap", "chords", "keys", "hotkeys"]);
     assert_eq!(rows[0].value, "1 of 4 set");
-    assert_eq!(rows[2].value, "Standard");
+    assert_eq!(rows[2].value, standard());
     let pane = view.pane(0);
-    assert_eq!(pane.sentence, "Player 1 · Simulated pad · Standard profile");
+    assert_eq!(pane.sentence, format!("Player 1 · Simulated pad · {} profile", standard()));
     assert_eq!(pane.muted, ["Players 2 and 3 and 4 · none", "Left and Right on a controller's row pick its player."]);
     let rumble = view.pane(3);
     assert_eq!(rumble.sentence, "Your controller shakes when the game drives its motor.");
@@ -208,13 +209,13 @@ fn qt_7_7_h_profiles_are_made_renamed_chosen_and_deleted_in_endymions_model() {
     let mut view = view();
     view.choose_section(0);
     let profiles = index(&view, "profiles");
-    assert_eq!(view.pane(profiles).sentence, "Super Nintendo · 1 profile · Standard starts its games");
+    assert_eq!(view.pane(profiles).sentence, format!("Super Nintendo · 1 profile · {} starts its games", standard()));
     assert_eq!(view.choose(profiles), Outcome::Opened);
     let new = index(&view, "newprofile");
     let Outcome::Type { typed, prompt, .. } = view.choose(new) else { panic!("New profile asks for a name") };
     assert_eq!(prompt, "A name for the new Super Nintendo profile");
     assert_eq!(view.typed(&typed, "  Couch "), Outcome::Bindings(vec![File::Profiles]));
-    assert_eq!(view.read.bindings.profiles("SNES"), ["Standard", "Couch"]);
+    assert_eq!(view.read.bindings.profiles("SNES"), [standard(), "Couch".into()]);
     assert_eq!(view.read.bindings.profiles["SNES"]["Profiles"]["Couch"]["1"]["Y"], "West", "a copy of the chosen profile's maps");
     let couch = index(&view, "profile:Couch");
     assert_eq!(view.choose(couch), Outcome::Opened);
@@ -226,11 +227,11 @@ fn qt_7_7_h_profiles_are_made_renamed_chosen_and_deleted_in_endymions_model() {
     assert_eq!(view.read.bindings.console_default("SNES"), "Sofa", "the console's choice follows the name");
     assert_eq!(view.trail(), ["Controllers", "Profiles", "Sofa"]);
     assert_eq!(view.choose(index(&view, "pdelete")), Outcome::Bindings(vec![File::Profiles]));
-    assert_eq!(view.read.bindings.profiles("SNES"), ["Standard"]);
-    assert_eq!(view.read.bindings.console_default("SNES"), "Standard");
+    assert_eq!(view.read.bindings.profiles("SNES"), [standard()]);
+    assert_eq!(view.read.bindings.console_default("SNES"), standard());
     assert_eq!(view.page(), Some(&Page::Profiles), "Delete closes the profile's page");
     // The profile every console has cannot be renamed or deleted.
-    view.choose(index(&view, "profile:Standard"));
+    view.choose(index(&view, &format!("profile:{}", standard())));
     assert!(view.rows()[index(&view, "prename")].held && view.rows()[index(&view, "pdelete")].held);
 }
 
@@ -289,7 +290,7 @@ fn qt_7_7_h_the_bindings_page_draws_the_consoles_controller_and_rebinds_resets_a
     assert_eq!(view.binding_act("test"), Outcome::Shown);
     let mut seated = view.seats.clone();
     seated.pads[0].buttons = 1 << 2;
-    view.held = view.held_from(&seated);
+    view.held = view.held_from(&seated).unwrap();
     assert_eq!(view.held, ["Y"]);
     assert_eq!(view.pane(0).lines, ["Held: Y"]);
     assert!(view.back_taken() && !view.testing());
@@ -331,11 +332,11 @@ fn qt_7_7_h_keyboard_keys_and_hotkeys_take_a_key_from_each_other_and_name_a_clas
     assert_eq!(view.rows()[0].value, "Not bound");
     // Reset every binding: keys, pads and hotkeys at their defaults, a named profile kept.
     view.back();
-    view.read.bindings.create("SNES", "Couch", "Standard");
+    view.read.bindings.create("SNES", "Couch", &standard());
     view.choose(index(&view, "resetbindings"));
     assert_eq!(view.read.bindings.hotkey("FastForward").as_deref(), Some("Tab"));
     assert_eq!(view.read.bindings.key("SNES", "B").as_deref(), Some("Z"));
-    assert_eq!(view.read.bindings.profiles("SNES"), ["Standard", "Couch"]);
+    assert_eq!(view.read.bindings.profiles("SNES"), [standard(), "Couch".into()]);
 }
 
 #[test]
@@ -365,12 +366,12 @@ fn qt_7_7_h_the_cards_controllers_page_seats_chooses_the_games_profile_and_opens
     view.facts = json!({ "game": "/roms/snes/Hero.sfc", "system": "snes" });
     let rows = view.game_rows();
     assert_eq!(rows.iter().map(|r| (r.label.as_str(), r.value.as_str())).collect::<Vec<_>>(),
-        [("Player 1", "Simulated pad"), ("Player 2", "None"), ("Profile", "Standard"), ("Bindings", ""), ("Swap Players", "")]);
-    assert_eq!(rows[0].sentence, "Player 1 plays on the Simulated pad, with the Standard profile.");
+        [("Player 1", "Simulated pad"), ("Player 2", "None"), ("Profile", standard().as_str()), ("Bindings", ""), ("Swap Players", "")]);
+    assert_eq!(rows[0].sentence, format!("Player 1 plays on the Simulated pad, with the {} profile.", standard()));
     assert_eq!(rows[0].muted, "Left and Right pick another connected controller; Bindings opens the drawing for this console.");
     assert!(rows[4].dimmed, "no player 2");
     assert_eq!(view.game_act(1, 1), Outcome::Seat(Ask::Move { key: 7, player: 2 }));
-    view.read.bindings.create("SNES", "Couch", "Standard");
+    view.read.bindings.create("SNES", "Couch", &standard());
     assert_eq!(view.game_act(2, 1), Outcome::Bindings(vec![File::Profiles]));
     assert_eq!(view.read.bindings.profiles["SNES"]["Games"]["Hero"], "Couch");
     assert_eq!(view.game_act(3, 0), Outcome::Door("cardBindings".into()));
@@ -385,26 +386,133 @@ fn qt_7_7_h_the_tester_lights_keys_and_pad_moves_the_sticks_and_holds_b_a_second
     view.choose(index(&view, "bindings"));
     view.binding_shoulder(1);
     assert_eq!(view.drawn().unwrap().tabs[1], "PlayStation");
-    assert!(!view.tester_key("X", true), "a key is the tester's only while it runs");
+    assert!(!view.tester_key("X", true).unwrap(), "a key is the tester's only while it runs");
     assert_eq!(view.binding_act("test"), Outcome::Shown);
     assert_eq!(view.tester_hold_ms(), 1000, "B held a second leaves, as Mistress's TestExitHold");
     // A key held lights the control it is bound to on the console's keyboard map, and lets it go when released.
-    assert!(view.tester_key("x", true));
+    assert!(view.tester_key("x", true).unwrap());
     assert_eq!(view.held, ["A"]);
-    assert!(view.tester_key("X", false));
+    assert!(view.tester_key("X", false).unwrap());
     assert!(view.held.is_empty());
     // The left stick pushed right and up: its knob stands there, and up and right light past Endymion's deadzone.
     let mut seated = view.seats.clone();
     seated.pads[0].axes = [0.75, -0.25, 0.0, 0.0, 0.0, 0.0];
-    view.held = view.held_from(&seated);
+    view.held = view.held_from(&seated).unwrap();
     view.pushes = view.pushes_from(&seated);
     let drawn = view.drawn().unwrap();
     let push = |c: &str| drawn.pushes[drawn.controls.iter().position(|x| x == c).unwrap()];
     assert_eq!((push("LeftX+"), push("LeftX-"), push("LeftY-"), push("LeftY+")), (0.75, 0.0, 0.25, 0.0));
     assert_eq!(view.held, ["LeftX+"], "up at a quarter is under the deadzone");
     seated.deadzone = 0.2;
-    assert_eq!(view.held_from(&seated), ["LeftY-", "LeftX+"], "the deadzone is Endymion's, not a number of the page's");
+    assert_eq!(view.held_from(&seated).unwrap(), ["LeftY-", "LeftX+"], "the deadzone is Endymion's, not a number of the page's");
     // Stopped, nothing is held or pushed and the knobs are at rest.
     assert!(view.back_taken() && !view.testing());
     assert!(view.held.is_empty() && view.pushes.is_empty() && view.drawn().unwrap().pushes.is_empty());
+}
+
+/// Endymion failing each call, for the failures' tests: its controls' words still Endymion's own.
+struct Failing {
+    choose: bool,
+    game_key: bool,
+}
+
+impl Chooser for Failing {
+    fn choose(&self, gamepad: &Value, profiles: &Value, console: &str, player: u32, profile: Option<&str>, game: Option<&str>) -> Result<Choice, String> {
+        if self.choose {
+            return Err("no map".into());
+        }
+        endymion().choose(gamepad, profiles, console, player, profile, game)
+    }
+    fn bound(&self, _: &str, _: u32) -> Result<[i32; 16], String> {
+        Err("no files".into())
+    }
+    fn game_key(&self, path: &str) -> Result<String, String> {
+        if self.game_key {
+            return Err("no name".into());
+        }
+        endymion().game_key(path)
+    }
+    fn controls(&self) -> &[ControlWord] {
+        endymion().controls()
+    }
+}
+
+/// Endymion naming no control's word, for a key that must not be written under the drawing's name.
+struct Wordless;
+
+impl Chooser for Wordless {
+    fn choose(&self, gamepad: &Value, profiles: &Value, console: &str, player: u32, profile: Option<&str>, game: Option<&str>) -> Result<Choice, String> {
+        endymion().choose(gamepad, profiles, console, player, profile, game)
+    }
+    fn bound(&self, console: &str, player: u32) -> Result<[i32; 16], String> {
+        Rule.bound(console, player)
+    }
+    fn game_key(&self, path: &str) -> Result<String, String> {
+        endymion().game_key(path)
+    }
+    fn controls(&self) -> &[ControlWord] {
+        &[]
+    }
+}
+
+#[test]
+fn qt_7_7_h5_a_map_endymion_cannot_choose_is_said_and_nothing_is_written() {
+    let mut view = view();
+    view.chooser = Some(Arc::new(Failing { choose: true, game_key: false }));
+    view.choose_section(0);
+    view.choose(index(&view, "bindings"));
+    let words = settings_controllers::unchosen("no map");
+    assert_eq!(view.controllers_problem().as_deref(), Some(words.as_str()), "the page says the failure");
+    let y = view.drawn().unwrap().controls.iter().position(|c| c == "Y").unwrap();
+    assert_eq!(view.drawn().unwrap().texts[y], "", "no binding shown in place of Endymion's map");
+    assert!(view.binding_focus(y));
+    let before = view.read.bindings.gamepad.clone();
+    assert_eq!(view.binding_act("reset"), Outcome::Failed(words.clone()));
+    assert!(view.binding_accept());
+    assert_eq!(view.heard_pad(Some(3), None), Outcome::Failed(words.clone()));
+    assert_eq!(view.read.bindings.gamepad, before, "nothing written under a fallback map");
+}
+
+#[test]
+fn qt_7_7_h5_the_pads_bindings_unread_light_nothing_and_are_said() {
+    let mut view = view();
+    view.chooser = Some(Arc::new(Failing { choose: false, game_key: false }));
+    view.choose_section(0);
+    view.choose(index(&view, "bindings"));
+    assert_eq!(view.binding_act("test"), Outcome::Shown);
+    let mut seated = view.seats.clone();
+    seated.pads[0].buttons = 1 << 2;
+    assert_eq!(view.held_from(&seated), Err(settings_controllers::unbound("no files")));
+}
+
+#[test]
+fn qt_7_7_h5_the_cards_profile_fails_in_words_where_endymion_cannot_choose_or_name_the_game() {
+    let mut view = view();
+    view.facts = json!({ "game": "/roms/snes/Hero.sfc", "system": "snes" });
+    view.read.bindings.create("SNES", "Couch", &standard());
+    view.chooser = Some(Arc::new(Failing { choose: false, game_key: true }));
+    let before = view.read.bindings.profiles.clone();
+    assert_eq!(view.game_act(2, 1), Outcome::Failed(settings_controllers::unnamed("no name")));
+    assert_eq!(view.read.bindings.profiles, before, "nothing written under an empty key");
+    view.chooser = Some(Arc::new(Failing { choose: true, game_key: false }));
+    let words = settings_controllers::unchosen("no map");
+    let keys: Vec<String> = view.game_rows().into_iter().map(|r| r.key).collect();
+    assert!(!keys.iter().any(|k| k == "gprofile" || k == "gbindings"), "no profile shown or opened on a fallback: {keys:?}");
+    assert_eq!(view.controllers_problem(), Some(words.clone()), "and the failure is said");
+    assert_eq!(view.open_card_bindings("SNES"), Err(words), "the drawing is not opened on a fallback profile");
+}
+
+#[test]
+fn qt_7_7_h5_a_key_endymion_names_no_word_for_is_said_and_not_written() {
+    let mut view = view();
+    view.chooser = Some(Arc::new(Wordless));
+    view.choose_section(0);
+    view.choose(index(&view, "keys"));
+    let before = view.read.bindings.keys.clone();
+    assert!(view.binding_accept());
+    let control = view.drawn().unwrap().controls[0].clone();
+    assert_eq!(view.heard_key(Some("K")), Outcome::Failed(settings_controllers::unworded(&control)));
+    assert_eq!(view.binding_act("clear"), Outcome::Failed(settings_controllers::unworded(&control)));
+    assert_eq!(view.binding_act("reset"), Outcome::Failed(settings_controllers::unworded(&control)));
+    assert_eq!(view.read.bindings.keys, before, "nothing written under the drawing's name");
 }

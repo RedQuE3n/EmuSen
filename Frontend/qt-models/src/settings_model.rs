@@ -520,7 +520,7 @@ impl qobject::SettingsModel {
                 };
                 let names: Vec<&str> = read.consoles.consoles.iter().map(|c| c.console.as_str()).collect();
                 read.bindings = source.bindings(&names)?;
-                Ok((read, source.chooser()))
+                Ok((read, source.chooser()?))
             });
             let _ = thread.queue(move |mut model| {
                 if model.asked != asked {
@@ -636,9 +636,13 @@ impl qobject::SettingsModel {
                 self.refresh();
             }
             Outcome::Reread => self.refresh(),
+            Outcome::Failed(words) => {
+                self.as_mut().said(words);
+                self.shown(false);
+            }
             Outcome::Bindings(files) => {
                 let saved = ClientSettings::open(&self.platform_library.to_string()).and_then(|s| s.save_bindings(&self.view.read.bindings, &files));
-                self.as_mut().said(saved.err().unwrap_or_default());
+                self.as_mut().said(saved.err().map(|e| format!("The bindings could not be saved: {e}")).unwrap_or_default());
                 // A running game hears its pads through the files' bindings: bound again at once (EmuSen_Interface.md §20.3).
                 // SAFETY: the address is PadReader.gamePads, whose reader outlives the screens.
                 if let Some(pads) = unsafe { emusen_qt_endymion::game::GamePads::at(self.game_pads) } {
@@ -721,8 +725,11 @@ impl qobject::SettingsModel {
     }
 
     /// The settings the pads act on handed to the pads' reader, once read (Mistress's `SaveApp`: deadzone, stickdpad, mirror).
-    fn settle_pads(self: Pin<&mut Self>) {
-        let Some(settings) = self.view.pad_settings() else { return };
+    fn settle_pads(mut self: Pin<&mut Self>) {
+        let Some((settings, unread)) = self.view.pad_settings() else { return };
+        if let Some(words) = unread {
+            self.as_mut().said(words);
+        }
         // SAFETY: the address is PadReader.gamePads, whose reader outlives the screens.
         if let Some(pads) = unsafe { emusen_qt_endymion::game::GamePads::at(self.game_pads) } {
             pads.settle(settings);
@@ -799,6 +806,10 @@ impl qobject::SettingsModel {
         r.listening_pad = listening_pad;
         r.testing = testing;
         r.card_controllers = QString::from(card.as_str());
+        let problem = self.view.controllers_problem();
+        if let Some(words) = problem {
+            self.as_mut().said(words);
+        }
         self.drawn();
     }
 
@@ -832,6 +843,13 @@ impl qobject::SettingsModel {
             (down != 0).then_some(down)
         });
         let (held, pushes) = (self.view.held_from(&seated), self.view.pushes_from(&seated));
+        let held = match held {
+            Ok(held) => held,
+            Err(words) => {
+                self.as_mut().said(words);
+                Vec::new()
+            }
+        };
         {
             let mut r = self.as_mut().rust_mut();
             r.view.seats = seated;
@@ -916,8 +934,13 @@ impl qobject::SettingsModel {
             emusen_qt_endymion::keys::Heard::Escape if down => self.as_mut().back(),
             emusen_qt_endymion::keys::Heard::Escape => {}
             emusen_qt_endymion::keys::Heard::Key(word) => {
-                if self.as_mut().rust_mut().view.tester_key(word, down) {
-                    self.shown(false);
+                match self.as_mut().rust_mut().view.tester_key(word, down) {
+                    Ok(true) => self.shown(false),
+                    Ok(false) => {}
+                    Err(words) => {
+                        self.as_mut().said(words);
+                        self.shown(false);
+                    }
                 }
             }
         }

@@ -44,7 +44,8 @@ pub struct Read {
 pub struct PadSettings {
     pub first_controller_only: bool,
     pub stick_as_dpad: bool,
-    pub stick_deadzone: f64,
+    /// None leaves Endymion's as it is, where the stored value could not be read.
+    pub stick_deadzone: Option<f64>,
     pub mirror: bool,
 }
 
@@ -117,7 +118,10 @@ impl GamePads {
         let Some(s) = self.state().settings.take() else { return Ok(()) };
         pads.set_setting(consts::SETTING_FIRST_CONTROLLER_ONLY, f64::from(u8::from(s.first_controller_only)))?;
         pads.set_setting(consts::SETTING_STICK_AS_DPAD, f64::from(u8::from(s.stick_as_dpad)))?;
-        pads.set_setting(consts::SETTING_STICK_DEADZONE, s.stick_deadzone)
+        match s.stick_deadzone {
+            Some(deadzone) => pads.set_setting(consts::SETTING_STICK_DEADZONE, deadzone),
+            None => Ok(()),
+        }
     }
 
     /// The game's motors after a frame, port 0 first; the reader drives each player's pad by its port's (EmuSen_Input.md §9.7).
@@ -202,7 +206,7 @@ impl GamePads {
         for ask in std::mem::take(&mut state.asks) {
             state.seats.ask(pads.platform(), ask)?;
         }
-        let (players, connected) = (state.seats.players(), state.seats.connected(Some(pads)));
+        let (players, connected) = (state.seats.players(), state.seats.connected(Some(pads))?);
         let deadzone = pads.setting(consts::SETTING_STICK_DEADZONE)?;
         let changed = players != state.players || connected != state.connected || deadzone != state.stick_deadzone;
         state.stick_deadzone = deadzone;

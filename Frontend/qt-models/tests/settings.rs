@@ -250,3 +250,24 @@ fn qt_7_7_e_a_folder_row_asks_the_folder_dialog_and_saves_its_answer_in_its_mode
         assert!(matches!(view.choose(index(&view, id)), Outcome::ChooseFolder { .. }), "{id} asks the dialog too");
     }
 }
+
+#[test]
+fn qt_7_7_h5_a_stored_deadzone_that_is_not_a_number_is_said_and_the_other_pad_settings_still_apply() {
+    let (settings, unread) = view(&fake(json!({ "StickDeadzone": 0.3, "MirrorPlayer1ToPlayer2": true }), json!({}))).pad_settings().expect("read");
+    assert_eq!((settings.stick_deadzone, unread), (Some(0.3), None));
+    let (settings, unread) = view(&fake(json!({ "StickDeadzone": "most", "MirrorPlayer1ToPlayer2": true }), json!({}))).pad_settings().expect("read");
+    assert_eq!(settings.stick_deadzone, None, "Endymion's deadzone left as it was");
+    assert!(settings.mirror, "the other three still reach the pads");
+    assert_eq!(unread, Some(settings::unread_deadzone("most")));
+}
+
+#[test]
+fn qt_7_7_h5_every_controller_type_galaxia_offers_but_automatic_is_a_family_of_the_kits() {
+    let rows: Value = serde_json::from_str(ROWS).unwrap();
+    let row = rows["AppSettings"].as_array().unwrap().iter().find(|r| r["key"] == "ControllerType").expect("Galaxia's Controller type");
+    for choice in row["choices"].as_array().unwrap().iter().filter_map(Value::as_str) {
+        let family = view(&fake(json!({ "ControllerType": choice }), json!({}))).controller_family();
+        assert_eq!(family.is_none(), choice == "Automatic", "{choice}");
+        assert_eq!(family.map(|f| f.name()), (choice != "Automatic").then_some(choice));
+    }
+}

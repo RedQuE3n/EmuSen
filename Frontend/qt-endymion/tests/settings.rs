@@ -18,7 +18,7 @@ fn pad(p: &Arc<Platform>, name: &str, path: &str) -> SimPad {
     pad
 }
 
-const PLAIN: PadSettings = PadSettings { first_controller_only: false, stick_as_dpad: true, stick_deadzone: 0.5, mirror: false };
+const PLAIN: PadSettings = PadSettings { first_controller_only: false, stick_as_dpad: true, stick_deadzone: Some(0.5), mirror: false };
 
 /// One tick as the reader runs it: the settings, a poll, the seats, the game's read; the read handed over, if any.
 fn tick(pads: &Pads, reading: &mut Reading, game: &GamePads, game_reading: &mut GameReading) -> (Vec<String>, Option<Read>) {
@@ -65,11 +65,11 @@ fn qt_7_7_h3_the_settings_reach_endymion_s_pads_and_the_game() {
     one.set_axis(0, 0.4).unwrap();
     let (_, read) = tick(&pads, &mut reading, &game, &mut game_reading);
     assert_eq!(read.expect("a read").held[0], 0, "under the deadzone");
-    game.settle(PadSettings { stick_deadzone: 0.3, ..PLAIN });
+    game.settle(PadSettings { stick_deadzone: Some(0.3), ..PLAIN });
     let (_, read) = tick(&pads, &mut reading, &game, &mut game_reading);
     assert_eq!(pads.setting(consts::SETTING_STICK_DEADZONE).unwrap(), 0.3);
     assert_ne!(read.expect("a read").held[0], 0, "past the deadzone the stick is the d-pad");
-    game.settle(PadSettings { stick_as_dpad: false, stick_deadzone: 0.3, ..PLAIN });
+    game.settle(PadSettings { stick_as_dpad: false, stick_deadzone: Some(0.3), ..PLAIN });
     one.set_axis(0, 1.0).unwrap();
     let (_, read) = tick(&pads, &mut reading, &game, &mut game_reading);
     assert_eq!(pads.setting(consts::SETTING_STICK_AS_DPAD).unwrap(), 0.0);

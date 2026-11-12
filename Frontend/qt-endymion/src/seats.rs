@@ -146,22 +146,28 @@ impl Seats {
             .collect()
     }
 
-    /// Every pad connected, in the order it was opened, with its player; `pressed` from the pads read now.
-    pub fn connected(&self, pads: Option<&Pads>) -> Vec<Connected> {
+    /// Every pad connected, in the order it was opened, with its player; `pressed` from the pads read now. A pad that
+    /// cannot be read fails the whole, said by the reader, rather than read as nothing held.
+    pub fn connected(&self, pads: Option<&Pads>) -> Result<Vec<Connected>> {
         self.open
             .iter()
             .map(|(key, name, _)| {
-                let buttons = pads.map_or(0, |p| p.get(*key, consts::HELD, 0).unwrap_or(0) as u32);
-                // To a hundredth, so a stick's noise at rest is no change.
-                let axes: [f64; AXES] = std::array::from_fn(|a| pads.map_or(0.0, |p| (p.axis(*key, consts::AXIS_RAW, a as u32).unwrap_or(0.0) * 100.0).round() / 100.0));
-                Connected {
+                let (mut buttons, mut axes) = (0u32, [0.0; AXES]);
+                if let Some(p) = pads {
+                    for (a, value) in axes.iter_mut().enumerate() {
+                        // To a hundredth, so a stick's noise at rest is no change.
+                        *value = (p.axis(*key, consts::AXIS_RAW, a as u32)? * 100.0).round() / 100.0;
+                    }
+                    buttons = p.get(*key, consts::HELD, 0)? as u32;
+                }
+                Ok(Connected {
                     key: *key,
                     name: name.clone(),
                     player: self.keys.iter().position(|k| *k == Some(*key)).map_or(0, |i| i + 1),
                     pressed: buttons != 0,
                     buttons,
                     axes,
-                }
+                })
             })
             .collect()
     }

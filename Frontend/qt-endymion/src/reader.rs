@@ -23,6 +23,11 @@ struct Shared {
     only: Mutex<Option<Option<Vec<u32>>>>,
 }
 
+/// The words for pads that could not be opened or read, said as the program's other failures are (EmuSen_Qt.md §7.9).
+pub fn unread(why: &str) -> String {
+    format!("The controllers could not be read: {why}")
+}
+
 /// The reading thread; dropping it stops and joins the thread.
 pub struct Reader {
     shared: Arc<Shared>,

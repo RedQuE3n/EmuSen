@@ -37,11 +37,12 @@ pub struct Binding {
 
 /// Endymion's choice of a player's map (`bindings_choose`), over the models as they stand; and the gamepad button each
 /// canonical button is bound to for a player as the files stand (`bindings_bound`), SDL's number or -1.
+/// Each answers Endymion's failure in its words, never a value in its place.
 pub trait Chooser: Send + Sync {
-    fn choose(&self, gamepad: &Value, profiles: &Value, console: &str, player: u32, profile: Option<&str>, game: Option<&str>) -> Choice;
-    fn bound(&self, console: &str, player: u32) -> [i32; 16];
+    fn choose(&self, gamepad: &Value, profiles: &Value, console: &str, player: u32, profile: Option<&str>, game: Option<&str>) -> Result<Choice, String>;
+    fn bound(&self, console: &str, player: u32) -> Result<[i32; 16], String>;
     /// The name a game is known by in a console's profiles, from its path: Endymion's.
-    fn game_key(&self, path: &str) -> String;
+    fn game_key(&self, path: &str) -> Result<String, String>;
     /// Each control's word in the binding files, with the button it is or the stick's axis and way: Endymion's.
     fn controls(&self) -> &[ControlWord];
 }
@@ -64,6 +65,26 @@ impl ControlWord {
             Some(ControlWord { word: e["word"].as_str()?.to_owned(), button: number(e, "button"), axis: number(e, "axis"), toward: e["toward"].as_i64().unwrap_or(0) as i32 })
         }).collect()
     }
+}
+
+/// The words for a map Endymion could not choose (`bindings_choose`), said as the program's other failures are.
+pub fn unchosen(why: &str) -> String {
+    format!("The controller's bindings could not be chosen: {why}")
+}
+
+/// The words for the pad's bindings Endymion could not give (`bindings_bound`).
+pub fn unbound(why: &str) -> String {
+    format!("The pad's bindings could not be read: {why}")
+}
+
+/// The words for a game Endymion could not name in the profiles (`bindings_game_key`).
+pub fn unnamed(why: &str) -> String {
+    format!("The game's profile could not be stored: {why}")
+}
+
+/// The words for a control the binding files have no word for (`bindings_controls`), so nothing is written for it.
+pub fn unworded(control: &str) -> String {
+    format!("The binding files have no word for the control {control}, so its key could not be stored")
 }
 
 /// The bits a pad's triggers take beside SDL's buttons in what it holds: Endymion's (`PADS_HELD`).
@@ -139,13 +160,19 @@ impl SettingsView {
         self.read.consoles.console(console).map_or(1, |c| controllers::players(&c.controllers))
     }
 
-    /// The map a player plays with in a profile, as Endymion chooses it.
-    fn choice(&self, console: &str, player: u32, profile: &str) -> Choice {
+    /// The map a player plays with in a profile, as Endymion chooses it; its failure in words.
+    fn choice(&self, console: &str, player: u32, profile: &str) -> Result<Choice, String> {
         let b = &self.read.bindings;
         match &self.chooser {
-            Some(chooser) => chooser.choose(&b.gamepad, &b.profiles, console, player, Some(profile), None),
-            None => Choice { profile: profile.to_owned(), map_player: 1 },
+            Some(chooser) => chooser.choose(&b.gamepad, &b.profiles, console, player, Some(profile), None).map_err(|e| unchosen(&e)),
+            None => Ok(Choice { profile: profile.to_owned(), map_player: 1 }),
         }
+    }
+
+    /// What Endymion failed to give the page or the card as they stand, in words; none where nothing failed.
+    pub fn controllers_problem(&self) -> Option<String> {
+        let page = self.binding.as_ref().filter(|b| !b.keys && matches!(self.page(), Some(Page::Bindings))).and_then(|b| self.choice(&b.console, b.player, &b.profile).err());
+        page.or_else(|| self.running_game().and_then(|(c, g)| self.game_profile(&c, &g).err()))
     }
 
     /// The emulator's actions in the screen's order, each with its words: those of the description that Endymion's
@@ -583,8 +610,7 @@ impl SettingsView {
         if !controllers::is_button(control) {
             return None;
         }
-        let choice = self.choice(&b.console, b.player, &b.profile);
-        let bound = self.read.bindings.bound(&b.console, &choice, control).map(|w| pad_words(&w));
+        let bound = self.choice(&b.console, b.player, &b.profile).ok().and_then(|choice| self.read.bindings.bound(&b.console, &choice, control)).map(|w| pad_words(&w));
         let trigger = self.description_at(&["controllers", "triggers", control]).as_str().map(|w| self.cw(w));
         match (bound, trigger) {
             (Some(b), Some(t)) => Some(fill(&self.cw("trigger_or"), &[("pad", &b), ("trigger", &t)])),
@@ -620,7 +646,7 @@ impl SettingsView {
                 lines.push(format!("{} {}", self.cw("listening_mark"), fill(&self.cw("listen_key"), &[("control", &name)])));
                 tones.push(Tone::Attention);
             } else {
-                lines.push(self.read.bindings.key(&b.console, &self.file_control(&control)).map_or_else(|| self.cw("no_key"), |k| fill(&self.cw("bound_key"), &[("key", &k)])));
+                lines.push(self.file_control(&control).and_then(|w| self.read.bindings.key(&b.console, &w)).map_or_else(|| self.cw("no_key"), |k| fill(&self.cw("bound_key"), &[("key", &k)])));
                 tones.push(Tone::Text);
                 muted.push(self.cw("keys_muted"));
             }
@@ -657,18 +683,18 @@ impl SettingsView {
     }
 
     /// The word the binding files give a control the drawing names by the core's button or a stick's way (Endymion's
-    /// `bindings_controls`); the control's own name where Endymion names no such control.
-    fn file_control(&self, control: &str) -> String {
+    /// `bindings_controls`); none where Endymion names no such control.
+    fn file_control(&self, control: &str) -> Option<String> {
         let words = self.chooser.as_ref().map_or(&[][..], |c| c.controls());
         let found = match controllers::control_number(control) {
             Some(n) => words.iter().find(|w| w.button == Some(n)),
             None => controllers::stick_way(control).and_then(|(axis, toward)| words.iter().find(|w| w.axis == Some(axis) && w.toward == toward)),
         };
-        found.map_or_else(|| control.to_owned(), |w| w.word.clone())
+        found.map(|w| w.word.clone())
     }
 
     fn conflict_words(&self, console: &str) -> Option<String> {
-        let controls: Vec<(String, String)> = self.controls_of(console).into_iter().map(|c| (self.file_control(&c), self.control_words(&c))).collect();
+        let controls: Vec<(String, String)> = self.controls_of(console).into_iter().filter_map(|c| Some((self.file_control(&c)?, self.control_words(&c)))).collect();
         let found = self.read.bindings.conflicts(console, &controls, &|a| self.action_words(a));
         if found.is_empty() {
             return None;
@@ -684,14 +710,14 @@ impl SettingsView {
         let console = self.read.consoles.console(&b.console)?;
         let controls = controllers::controls(&console.controllers);
         let drawing = controllers::drawing_on(console, b.player).unwrap_or_default().to_owned();
-        let choice = self.choice(&b.console, b.player, &b.profile);
+        let choice = self.choice(&b.console, b.player, &b.profile).ok();
         let texts = controls
             .iter()
             .map(|c| {
                 if b.keys {
-                    self.read.bindings.key(&b.console, &self.file_control(c)).unwrap_or_default()
+                    self.file_control(c).and_then(|w| self.read.bindings.key(&b.console, &w)).unwrap_or_default()
                 } else if controllers::is_button(c) {
-                    self.read.bindings.bound(&b.console, &choice, c).map(|w| pad_words(&w)).unwrap_or_default()
+                    choice.as_ref().and_then(|choice| self.read.bindings.bound(&b.console, choice, c)).map(|w| pad_words(&w)).unwrap_or_default()
                 } else {
                     String::new()
                 }
@@ -735,16 +761,17 @@ impl SettingsView {
     /// What the tester lights: a control whose key is held on the keyboard, and the page's player's pad as the game
     /// would hear it, a canonical button by its bound gamepad button, L2 and R2 by their triggers past half, and a
     /// stick's directions past Endymion's stick deadzone.
-    pub fn held_from(&self, seated: &Seated) -> Vec<String> {
-        let Some(b) = self.binding.as_ref().filter(|b| b.testing) else { return Vec::new() };
+    /// Endymion's failure to give the pad's bindings is in words, and nothing is lit then.
+    pub fn held_from(&self, seated: &Seated) -> Result<Vec<String>, String> {
+        let Some(b) = self.binding.as_ref().filter(|b| b.testing) else { return Ok(Vec::new()) };
         let pad = self.tester_pad(seated, b.player);
         let bound = match (pad, self.chooser.as_ref()) {
-            (Some(_), Some(chooser)) => chooser.bound(&b.console, b.player),
+            (Some(_), Some(chooser)) => chooser.bound(&b.console, b.player).map_err(|e| unbound(&e))?,
             _ => [-1; 16],
         };
         let mut held = Vec::new();
         for control in self.controls_of(&b.console) {
-            let by_key = self.read.bindings.key(&b.console, &self.file_control(&control)).is_some_and(|k| self.keys_held.iter().any(|h| h.eq_ignore_ascii_case(&k)));
+            let by_key = self.file_control(&control).and_then(|w| self.read.bindings.key(&b.console, &w)).is_some_and(|k| self.keys_held.iter().any(|h| h.eq_ignore_ascii_case(&k)));
             let by_pad = pad.is_some_and(|pad| {
                 if let Some(n) = controllers::control_number(&control) {
                     let by_button = bound.get(n as usize).is_some_and(|&sdl| sdl >= 0 && pad.buttons & (1 << sdl) != 0);
@@ -757,7 +784,7 @@ impl SettingsView {
                 held.push(control);
             }
         }
-        held
+        Ok(held)
     }
 
     /// How far the tester sees each control pushed, in the controls' order: a stick's directions by the page's player's
@@ -773,18 +800,20 @@ impl SettingsView {
         seated.pads.iter().find(|p| p.player == player as usize)
     }
 
-    /// A key down or up on the keyboard while the tester runs, by the binding files' word for it: what is held then.
-    pub fn tester_key(&mut self, word: &str, down: bool) -> bool {
+    /// A key down or up on the keyboard while the tester runs, by the binding files' word for it: what is held then;
+    /// Endymion's failure to give the pad's bindings in words, nothing lit.
+    pub fn tester_key(&mut self, word: &str, down: bool) -> Result<bool, String> {
         if !self.testing() {
-            return false;
+            return Ok(false);
         }
         self.keys_held.retain(|k| !k.eq_ignore_ascii_case(word));
         if down {
             self.keys_held.push(word.to_owned());
         }
         let seated = self.seats.clone();
-        self.held = self.held_from(&seated);
-        true
+        let held = self.held_from(&seated);
+        self.held = held.clone().unwrap_or_default();
+        held.map(|_| true)
     }
 
     /// A direction on the bindings page (`dx`, `dy`, one of the four): the nearest declared control that way on the
@@ -843,18 +872,18 @@ impl SettingsView {
         let Some(control) = self.focused_control() else { return Outcome::Nothing };
         let Some(b) = self.binding.clone().filter(|b| !b.capturing) else { return Outcome::Nothing };
         match action {
-            crate::help::RESET if b.keys => {
-                let word = self.file_control(&control);
-                Outcome::Bindings(vec![self.read.bindings.reset_key(&b.console, &word)])
-            }
-            crate::help::RESET if controllers::is_button(&control) => {
-                let choice = self.choice(&b.console, b.player, &b.profile);
-                Outcome::Bindings(vec![self.read.bindings.reset_button(&b.console, b.player, &choice, &control)])
-            }
-            crate::help::CLEAR if b.keys => {
-                let word = self.file_control(&control);
-                Outcome::Bindings(vec![self.read.bindings.clear_key(&b.console, &word)])
-            }
+            crate::help::RESET if b.keys => match self.file_control(&control) {
+                Some(word) => Outcome::Bindings(vec![self.read.bindings.reset_key(&b.console, &word)]),
+                None => Outcome::Failed(unworded(&control)),
+            },
+            crate::help::RESET if controllers::is_button(&control) => match self.choice(&b.console, b.player, &b.profile) {
+                Ok(choice) => Outcome::Bindings(vec![self.read.bindings.reset_button(&b.console, b.player, &choice, &control)]),
+                Err(words) => Outcome::Failed(words),
+            },
+            crate::help::CLEAR if b.keys => match self.file_control(&control) {
+                Some(word) => Outcome::Bindings(vec![self.read.bindings.clear_key(&b.console, &word)]),
+                None => Outcome::Failed(unworded(&control)),
+            },
             crate::help::PLAYER if !b.keys => {
                 let players = self.players_of(&b.console);
                 if let Some(page) = self.binding.as_mut() {
@@ -883,7 +912,10 @@ impl SettingsView {
         if let Some(page) = self.binding.as_mut() {
             page.capturing = false;
         }
-        let choice = self.choice(&b.console, b.player, &b.profile);
+        let choice = match self.choice(&b.console, b.player, &b.profile) {
+            Ok(choice) => choice,
+            Err(words) => return Outcome::Failed(words),
+        };
         match (pad, trigger) {
             // A trigger pulled for L2 or R2 binds it alone, as the trigger is always read (EmuSen_Input.md §7.3).
             (_, Some(t)) if t == control => Outcome::Bindings(vec![self.read.bindings.unbind(&b.console, b.player, &choice, &control)]),
@@ -907,10 +939,10 @@ impl SettingsView {
             page.capturing = false;
         }
         match key {
-            Some(k) => {
-                let word = self.file_control(&control);
-                Outcome::Bindings(self.read.bindings.rebind_key(&b.console, &word, k))
-            }
+            Some(k) => match self.file_control(&control) {
+                Some(word) => Outcome::Bindings(self.read.bindings.rebind_key(&b.console, &word, k)),
+                None => Outcome::Failed(unworded(&control)),
+            },
             None => Outcome::Shown,
         }
     }
@@ -1021,12 +1053,12 @@ impl SettingsView {
         Some((self.running_console()?, game))
     }
 
-    /// The profile the running game plays with, as Endymion resolves it.
-    fn game_profile(&self, console: &str, game: &str) -> String {
+    /// The profile the running game plays with, as Endymion resolves it; its failure in words.
+    fn game_profile(&self, console: &str, game: &str) -> Result<String, String> {
         let b = &self.read.bindings;
         match &self.chooser {
-            Some(c) => c.choose(&b.gamepad, &b.profiles, console, 1, None, Some(game)).profile,
-            None => b.console_default(console),
+            Some(c) => c.choose(&b.gamepad, &b.profiles, console, 1, None, Some(game)).map(|choice| choice.profile).map_err(|e| unchosen(&e)),
+            None => Ok(b.console_default(console)),
         }
     }
 
@@ -1036,7 +1068,7 @@ impl SettingsView {
         let mut rows = Vec::new();
         let running = self.running_game();
         let players = running.as_ref().map_or(1, |(c, _)| self.players_of(c)).max(2);
-        let profile = running.as_ref().map(|(c, g)| self.game_profile(c, g));
+        let profile = running.as_ref().and_then(|(c, g)| self.game_profile(c, g).ok());
         let profile_words = profile.as_ref().map(|p| fill(&self.card_word("seat_profile"), &[("profile", p)])).unwrap_or_default();
         for p in 1..=players as usize {
             let n = p.to_string();
@@ -1103,28 +1135,38 @@ impl SettingsView {
         match row.key.as_str() {
             "gprofile" => {
                 let profiles = self.read.bindings.profiles(&console);
-                let now = self.game_profile(&console, &game);
+                let now = match self.game_profile(&console, &game) {
+                    Ok(now) => now,
+                    Err(words) => return Outcome::Failed(words),
+                };
                 let at = profiles.iter().position(|p| *p == now).unwrap_or(0);
                 let next = profiles[(at as i64 + i64::from(if by == 0 { 1 } else { by })).rem_euclid(profiles.len() as i64) as usize].clone();
                 let own = (next != self.read.bindings.console_default(&console)).then_some(next.as_str());
                 let Some(key) = self.chooser.as_ref().map(|c| c.game_key(&game)) else { return Outcome::Nothing };
-                Outcome::Bindings(vec![self.read.bindings.set_game_profile(&console, &key, own)])
+                match key {
+                    Ok(key) => Outcome::Bindings(vec![self.read.bindings.set_game_profile(&console, &key, own)]),
+                    Err(e) => Outcome::Failed(unnamed(&e)),
+                }
             }
-            "gbindings" if by == 0 => {
-                self.open_card_bindings(&console);
-                Outcome::Door(CARD_BINDINGS.into())
-            }
+            "gbindings" if by == 0 => match self.open_card_bindings(&console) {
+                Ok(()) => Outcome::Door(CARD_BINDINGS.into()),
+                Err(words) => Outcome::Failed(words),
+            },
             SWAP if by == 0 && !row.dimmed => Outcome::Door(SWAP.into()),
             _ => Outcome::Nothing,
         }
     }
 
     /// Settings' drawing page for a console as the only page, from the card: B closes Settings back to the card.
-    pub fn open_card_bindings(&mut self, console: &str) {
+    pub fn open_card_bindings(&mut self, console: &str) -> Result<(), String> {
+        let profile = match self.running_game() {
+            Some((c, g)) => self.game_profile(&c, &g)?,
+            None => self.read.bindings.console_default(console),
+        };
         self.choose_section(0);
-        let profile = self.running_game().map_or_else(|| self.read.bindings.console_default(console), |(c, g)| self.game_profile(&c, &g));
         self.binding = Some(Binding { console: console.to_owned(), profile, player: 1, focus: 0, capturing: false, testing: false, keys: false });
         self.pages.push((Page::Bindings, self.cw("bindings_title"), 0));
         self.from_card = true;
+        Ok(())
     }
 }

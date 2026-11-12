@@ -137,7 +137,7 @@ Window {
         // A pad come or gone, told where Controller notices is on, over a game too (EmuSen_Input.md §8.13.5).
         onNotice: (words) => {
             if (settingsModel.controllerNotices)
-                notices.raise(words, false, true)
+                program.said(words, false, true)
         }
     }
     // Swap A and B in menus, once Settings has read the settings; the tester and the help bar's glyphs read the router's (EmuSen_Qt.md §7.7.H3).
@@ -768,6 +768,11 @@ Window {
     Connections {
         target: coresModel
         function onProblemChanged() { program.said(coresModel.problem, true, false) }
+    }
+    // The pads unread: opening them or a tick failed, said once until they read again (EmuSen_Qt.md §7.7.H5).
+    Connections {
+        target: pads
+        function onProblemChanged() { program.said(pads.problem, true, false) }
     }
     Kit.NormalizedCanvas {
         id: noticeCanvas

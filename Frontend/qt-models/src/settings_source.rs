@@ -56,10 +56,10 @@ impl ClientSettings {
         Ok(())
     }
 
-    /// The chooser over this platform library.
-    pub fn chooser(&self) -> std::sync::Arc<dyn Chooser> {
-        let controls = self.platform.bindings_controls().map(|a| ControlWord::read(&a)).unwrap_or_default();
-        std::sync::Arc::new(Endymion(self.platform.clone(), controls))
+    /// The chooser over this platform library, with Endymion's controls' words; their failure fails the read.
+    pub fn chooser(&self) -> Result<std::sync::Arc<dyn Chooser>, String> {
+        let controls = ControlWord::read(&self.platform.bindings_controls().map_err(words)?);
+        Ok(std::sync::Arc::new(Endymion(self.platform.clone(), controls)))
     }
 }
 
@@ -74,20 +74,23 @@ fn default_profile(p: &Platform) -> Result<String, String> {
 struct Endymion(std::sync::Arc<Platform>, Vec<ControlWord>);
 
 impl Chooser for Endymion {
-    fn choose(&self, gamepad: &Value, profiles: &Value, console: &str, player: u32, profile: Option<&str>, game: Option<&str>) -> Choice {
-        let answer = self.0.bindings_choose(Some(gamepad), Some(profiles), console, player as i32, game, profile).unwrap_or(Value::Null);
-        Choice {
-            profile: answer["profile"].as_str().map_or_else(|| profile.unwrap_or_default().to_owned(), str::to_owned),
-            map_player: answer["mapPlayer"].as_u64().map_or(1, |n| n as u32),
+    fn choose(&self, gamepad: &Value, profiles: &Value, console: &str, player: u32, profile: Option<&str>, game: Option<&str>) -> Result<Choice, String> {
+        let answer = self.0.bindings_choose(Some(gamepad), Some(profiles), console, player as i32, game, profile).map_err(words)?;
+        match (answer["profile"].as_str(), answer["mapPlayer"].as_u64()) {
+            (Some(profile), Some(map_player)) => Ok(Choice { profile: profile.to_owned(), map_player: map_player as u32 }),
+            _ => Err(format!("bindings_choose named no profile and player: {answer}")),
         }
     }
 
-    fn bound(&self, console: &str, player: u32) -> [i32; 16] {
-        self.0.bindings_bound(console, player as i32, None).unwrap_or([-1; 16])
+    fn bound(&self, console: &str, player: u32) -> Result<[i32; 16], String> {
+        self.0.bindings_bound(console, player as i32, None).map_err(words)
     }
 
-    fn game_key(&self, path: &str) -> String {
-        self.0.bindings_game_key(path).unwrap_or_default()
+    fn game_key(&self, path: &str) -> Result<String, String> {
+        match self.0.bindings_game_key(path).map_err(words)? {
+            key if key.is_empty() => Err(format!("Endymion named {path} by no name")),
+            key => Ok(key),
+        }
     }
 
     fn controls(&self) -> &[ControlWord] {

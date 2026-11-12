@@ -1404,7 +1404,8 @@ looks hokey and should stay put:
   moments after it are kept until the player plays on. `RewindReelWindow` retires.
 - **Change Disc ▸** (disc consoles): the game's own discs first (`Basalt Run (Disc 1) · In the console`), then the
   console's other games in the library, then `Eject disc`; the pane shows the focused disc's cover and one sentence
-  (`A swaps to this disc, as the console sees it.`). `InsertDiscWindow` retires; on the desktop
+  (`A swaps to this disc, as the console sees it.`; on Eject disc, `A takes the disc out and leaves none in, as the
+  console sees it.`; these words decided 2026-11-11). `InsertDiscWindow` retires; on the desktop
   the same page with `Any file…` last, opening the file dialog.
 - **Game Options ▸ Controllers**: `Player 1 ◂ Wireless pad ▸`, `Player 2 ◂ None ▸`, `Profile ◂ Default ▸`, `Bindings
   ▸` (the drawing page of §16.2 for this console), `Swap Players`; the pane says who plays on what.
@@ -1693,7 +1694,8 @@ mockups draw these pages. The game runs no frame on any page; a screen a page op
   console's other games in the library, `Eject disc` while a disc is in, and `Any file…` last on the desktop, which
   keeps the card open under the file dialog. The pane is the disc's cover as the library draws it, the generated card
   where it has none, framed in Border because the generated card is drawn on the pane's own surface, then the disc's
-  name and `A swaps to this disc, as the console sees it.` The help reads A Put in.
+  name and `A swaps to this disc, as the console sees it.`; Eject disc's pane is the one sentence `A takes the disc out
+  and leaves none in, as the console sees it.` (the page's words decided 2026-11-11). The help reads A Put in.
 - `InsertDiscWindow` is retired; the Game menu's *Change Disc…* opens this page. A console started empty has no own
   disc, so its page is the library's games and Eject disc.
 

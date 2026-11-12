@@ -289,7 +289,7 @@ fn change_disc_lists_the_games_discs_the_consoles_others_and_the_tray() {
     assert_eq!(c.choose(2), Outcome::InsertDisc(0));
     assert_eq!(c.others()[0].path, "/g/Amber Coast.cue");
     c.focus(3);
-    assert_eq!(c.pane().kind, PaneKind::Sentence);
+    assert_eq!((c.pane().kind, c.pane().sentence.as_str()), (PaneKind::Sentence, "A takes the disc out and leaves none in, as the console sees it."));
     assert_eq!(c.choose(3), Outcome::Eject);
     assert_eq!(c.back(), Outcome::Shown);
     assert_eq!((c.page, c.current), (Page::First, 5), "B back to Change Disc's row");

@@ -294,14 +294,7 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
         choose_row(&mut scene, "Tools");
         until(&mut scene, 5, "the Tools page", |s| s.property("homeCardModel", "page") == "tools");
         if by_pointer {
-            let tree = scene.tree();
-            let row = tree
-                .nodes
-                .iter()
-                .filter(|n| n.visible && n.ty.starts_with("MenuRow"))
-                .find(|r| tree.nodes.iter().any(|n| n.parent == r.id && n.name == "label" && n.text.as_deref() == Some(tool)))
-                .map(|r| (r.x + r.w / 2.0, r.y + r.h / 2.0))
-                .expect("the tool's row");
+            let row = row_centre(&mut scene, tool);
             scene.click(row.0, row.1);
         } else {
             choose_row(&mut scene, tool);
@@ -435,7 +428,7 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     until(&mut scene, 5, "the List card in place", |s| s.property("screens", "shown") == "List" && s.property("listCardCanvas", "slide") == "0");
     hold(&mut scene, "EsdeListCardStartConsole", &mockup::Mockup::default(), nothing_named, &mut report);
     let (x, y) = row_centre(&mut scene, "Start PlayStation With No Disc");
-    let top = scene.tree().nodes.iter().filter(|n| n.visible && n.ty.starts_with("MenuRow")).map(|n| n.y + n.h / 2.0).fold(f64::MAX, f64::min);
+    let top = row_middles(&mut scene)[0].1;
     assert_eq!(y, top, "the console's row leads the menu");
     scene.click(x, y);
     console_owns_the_pad(&mut scene, &sdl, &pad, "PlayStation");
@@ -470,11 +463,17 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     assert!(scene.set_property("library", "platformLibrary", ""));
     assert!(scene.set_property("library", "platformLibrary", library().to_str().unwrap()));
     until(&mut scene, 20, "the theme back", |s| s.property("screens", "shown") == "Esde");
-    for (folder, file) in [("nes", "Brass Lantern.nes"), ("nes", "Cobalt Harbor.nes"), ("snes", "Aurora Drift.sfc")] {
+    // Every game the sandbox holds, the PlayStation's disc with them, so the theme has no shelf left to show.
+    for (folder, file) in [("nes", "Brass Lantern.nes"), ("nes", "Cobalt Harbor.nes"), ("snes", "Aurora Drift.sfc"), ("psx", "Basalt Run.iso")] {
         std::fs::remove_file(world.dir(&format!("Roms/{folder}")).join(file)).unwrap();
     }
     assert!(scene.set_property("library", "platformLibrary", ""));
     assert!(scene.set_property("library", "platformLibrary", library().to_str().unwrap()));
+    let no_game = |s: &mut Scene<'_>| {
+        let shelves: serde_json::Value = serde_json::from_str(&s.property("library", "esdeShelves")).unwrap_or_default();
+        shelves.as_array().is_some_and(|all| all.iter().all(|x| x["games"].as_array().is_none_or(|g| g.is_empty())))
+    };
+    until(&mut scene, 20, "the library read with no game on any shelf", |s| s.property("library", "loading") == "false" && no_game(s));
     until(&mut scene, 20, "the own look in place of the empty theme", |s| s.property("screens", "shown") == "Home");
     assert_eq!((scene.property("esdeModel", "themed"), scene.property("esdeModel", "problem")), ("false".into(), String::new()));
 

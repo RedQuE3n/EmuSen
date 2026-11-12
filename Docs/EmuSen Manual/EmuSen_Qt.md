@@ -5231,6 +5231,13 @@ is said, the theme back; Continue resuming the game; Tools ▸ Cores by the poin
 theme; the Home card and Themes held at the five sizes; Start Console from the Home card by the pad and by the pointer and
 from the Select menu by the pointer.
 
+On the GPU run of 7d3b6571b (2026-11-11), after the merge of WiseMan, `esde` failed at its last step: the library's
+games removed and the library read again, the own look did not come in place of the theme within 20 s, the program on
+the theme's view with no session. The step came from WiseMan and removed the three NES and Super Nintendo files it knew;
+this branch's `esde` had added a PlayStation disc (`Basalt Run.iso`) for the console's gamelist, so one game and its
+shelf were left, and the theme rightly stayed. The step now removes the disc too and first waits for the library read
+with no game on any shelf, so a library that is not empty is named as such and not as the look failing to give way.
+
 ---
 
 ## 8. Testing

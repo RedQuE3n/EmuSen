@@ -467,15 +467,55 @@ fn qt_3_4_2_choose_a_console_over_the_canvas_s_eleven_consoles_is_its_mockup() {
     assert!(found.is_empty(), "{} differences from the canvas:\n{}", found.len(), found.join("\n"));
 }
 
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap().flatten() {
+        let target = to.join(entry.file_name());
+        if entry.path().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
 #[test]
-fn kit_7_102_an_exemption_of_an_accepted_class_is_listed_with_its_ruling_and_fails_nothing() {
-    let ran = audit("small-caption");
-    assert_eq!(ran.held("Home").0, 10, "{}", ran.err);
+fn qt_3_4_1_home_s_places_lines_are_the_program_s_own_and_whole_at_every_size() {
+    // The reference package with its Home alone, so the run holds no other screen.
+    let package = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../themes/emusen");
+    let dir = std::env::temp_dir().join(format!("theme-audit-home-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    copy_tree(&package, &dir);
+    let manifest = std::fs::read_to_string(dir.join("theme.json")).unwrap();
+    let home_only = manifest.replace(r#""screens": ["home", "consoles", "games"]"#, r#""screens": ["home"]"#);
+    assert_ne!(home_only, manifest, "the manifest names its three screens");
+    std::fs::write(dir.join("theme.json"), home_only).unwrap();
+    let ran = Ran::judged(Command::new(PROGRAM).arg(&dir));
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(ran.held("Home").0, 10, "Home at five sizes in both variants: {}", ran.err);
+    let cut: Vec<&str> = ran.out.lines().chain(ran.err.lines()).filter(|l| l.contains("placeStatus")).collect();
+    assert!(cut.is_empty(), "the Settings place's line is the program's own and fits (R-20261111-35):\n{}", cut.join("\n"));
+}
+
+#[test]
+fn kit_7_105_a_title_cut_with_an_ellipsis_is_listed_under_its_ruling_and_fails_nothing() {
+    let ran = audit("elided-title");
+    assert_eq!(ran.held("Games").0, 10, "{}", ran.err);
     assert_eq!((ran.out.as_str(), ran.status), ("", 0), "{}", ran.err);
     let listed: Vec<&str> = ran.err.lines().filter(|l| l.starts_with("theme-audit: accepted by ")).collect();
-    assert_eq!(listed.len(), 10, "the caption at five sizes in both variants: {}", ran.err);
+    assert!(!listed.is_empty(), "{}", ran.err);
     assert!(
-        listed.iter().all(|l| l.starts_with("theme-audit: accepted by R-20261111-40: ") && l.contains("small-caption/screens/Home.qml") && l.contains("moonriseCaption")),
+        listed.iter().all(|l| l.starts_with("theme-audit: accepted by R-20261111-44: ") && l.contains("data cut with an ellipsis") && l.contains("rowTitle.")),
         "{listed:?}"
     );
+}
+
+#[test]
+fn kit_7_102_moonrise_s_caption_name_on_a_theme_s_home_is_not_accepted() {
+    let ran = audit("small-caption");
+    assert_eq!(ran.held("Home").0, 10, "{}", ran.err);
+    assert_eq!(ran.status, 1, "{}", ran.out);
+    assert!(!ran.err.contains("theme-audit: accepted by"), "R-20261111-40 covers Moonrise's caption in Moonrise alone: {}", ran.err);
+    let small: Vec<&str> = ran.out.lines().filter(|l| l.contains("small-caption/screens/Home.qml") && l.contains("too small") && l.contains("moonriseCaption")).collect();
+    assert_eq!(small.len(), 10, "the floor's finding at five sizes in both variants:\n{}", ran.out);
 }

@@ -3,7 +3,7 @@
 
 use crate::mockup::Difference;
 use crate::tree::Node;
-use emusen_kit_core::audit::{ACCEPTED, Accepted, Exempted, Fault, SMALL_TEXT_EXCEPTIONS};
+use emusen_kit_core::audit::{ACCEPTED, Class, Exempted, Fault, SMALL_TEXT_EXCEPTIONS, accepted};
 use emusen_kit_core::input::ElementId;
 
 /// One finding a test does not count.
@@ -24,6 +24,9 @@ pub struct Excuse {
     pub size: Option<(i32, i32)>,
     /// Why, and who decided it and when, or `no ruling`.
     pub why: &'static str,
+    /// The accepted class it stands for, whose row in kit-core's `ACCEPTED` gives its ruling; without that row it excuses
+    /// nothing (EmuSen_Kit.md §7.105). None for an excuse no ruling stands behind.
+    pub class: Option<Class>,
 }
 
 /// One item a finding names, as the tree has it.
@@ -127,39 +130,59 @@ pub fn names(excuse: &Excuse, finding: &Finding) -> Verdict {
     }
 }
 
-/// One state's exemptions sorted by a table of accepted classes: the line of each it accepts, with its ruling, and each
-/// it does not, which is a finding (EmuSen_Kit.md §7.102).
-pub fn sort(exempted: &[Exempted], table: &'static [Accepted]) -> (Vec<String>, Vec<Exempted>) {
-    let mut accepted = Vec::new();
+/// One state's exemptions sorted by kit-core's `ACCEPTED`: the line of each it accepts, with its ruling, and each it does
+/// not, which is a finding (EmuSen_Kit.md §7.102).
+pub fn sort(exempted: &[Exempted]) -> (Vec<String>, Vec<Exempted>) {
+    sort_refusing(exempted, &[])
+}
+
+/// As `sort`, the classes `refusing` names accepted by no row: a test narrows the table this way, never widens it.
+pub fn sort_refusing(exempted: &[Exempted], refusing: &[Class]) -> (Vec<String>, Vec<Exempted>) {
+    let mut listed = Vec::new();
     let mut refused = Vec::new();
     for e in exempted {
-        match e.accepted_in(table) {
-            Some(a) => accepted.push(format!("accepted by {}: {e}", a.ruling)),
+        match e.accepted().filter(|a| !refusing.contains(&a.class)) {
+            Some(a) => listed.push(format!("accepted by {}: {e}", a.ruling)),
             None => refused.push(e.clone()),
         }
     }
-    (accepted, refused)
+    (listed, refused)
 }
 
 /// A test's excuses, how often each excused a finding, and how often one met its finding on an item it could not tell
 /// from others; dropped with one unused, the test fails. It holds the table of accepted classes its exemptions are
 /// sorted by, and lists each it accepted.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Excuses {
     list: Vec<(Excuse, usize, usize)>,
-    table: &'static [Accepted],
+    refusing: Vec<Class>,
     listed: Vec<String>,
+    gate: Option<&'static str>,
 }
 
-impl Default for Excuses {
-    fn default() -> Excuses {
-        Excuses { list: Vec::new(), table: &ACCEPTED, listed: Vec::new() }
+/// The folder every gate lists what a ruling accepted in, one file a gate (EmuSen_Kit.md §7.102, §7.105).
+pub fn accepted_dir() -> std::path::PathBuf {
+    std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".cache/emusen/tmp/accepted")
+}
+
+/// Where a gate lists what a ruling accepted, in `dir`: one file a gate, so each gate's list survives the others' runs.
+pub fn accepted_list(dir: &std::path::Path, gate: &str) -> std::path::PathBuf {
+    dir.join(format!("accepted-{gate}.txt"))
+}
+
+/// Writes a gate's list, printing it as well; a list that cannot be written fails the gate.
+pub fn write_accepted(dir: &std::path::Path, gate: &str, lines: &[String]) {
+    let file = accepted_list(dir, gate);
+    let written = std::fs::create_dir_all(dir).and_then(|()| std::fs::write(&file, lines.join("\n")));
+    if let Err(e) = written {
+        panic!("{gate}'s accepted list not written to {}: {e}", file.display());
     }
+    println!("{} accepted, listed in {}:\n{}", lines.len(), file.display(), lines.join("\n"));
 }
 
 impl Excuses {
     pub fn new(list: &[Excuse]) -> Excuses {
-        Excuses { list: list.iter().cloned().map(|e| (e, 0, 0)).collect(), table: &ACCEPTED, listed: Vec::new() }
+        Excuses { list: list.iter().cloned().map(|e| (e, 0, 0)).collect(), refusing: Vec::new(), listed: Vec::new(), gate: None }
     }
 
     /// No excuse: every finding counts.
@@ -167,15 +190,27 @@ impl Excuses {
         Excuses::default()
     }
 
-    /// The same, its exemptions sorted by `table` in place of kit-core's `ACCEPTED`.
-    pub fn accepting(mut self, table: &'static [Accepted]) -> Excuses {
-        self.table = table;
+    /// The same, its accepted lines written to `gate`'s list in `accepted_dir` when it is dropped.
+    pub fn listing(mut self, gate: &'static str) -> Excuses {
+        self.gate = Some(gate);
+        self
+    }
+
+    /// The same, accepting none of kit-core's classes: every exemption is a finding.
+    pub fn refusing_all(mut self) -> Excuses {
+        self.refusing = ACCEPTED.iter().map(|a| a.class).collect();
+        self
+    }
+
+    /// The same, accepting no class of `classes`; the table is narrowed, never widened.
+    pub fn refusing(mut self, classes: &[Class]) -> Excuses {
+        self.refusing = classes.to_vec();
         self
     }
 
     /// One state's exemptions: those the table accepts are listed under `state`, the others returned as findings.
     pub fn sort(&mut self, state: &str, exempted: &[Exempted]) -> Vec<Exempted> {
-        let (accepted, refused) = sort(exempted, self.table);
+        let (accepted, refused) = sort_refusing(exempted, &self.refusing);
         self.listed.extend(accepted.into_iter().map(|l| format!("{state}: {l}")));
         refused
     }
@@ -185,15 +220,23 @@ impl Excuses {
         &self.listed
     }
 
-    /// Whether one of the excuses names this finding at this size; the first that does is counted used.
+    /// Whether one of the excuses names this finding at this size; the first that does is counted used, and one that
+    /// stands for an accepted class is listed with its ruling. An excuse whose class no row accepts excuses nothing.
     pub fn excuses(&mut self, finding: &Finding, size: (i32, i32)) -> bool {
         for (excuse, used, ambiguous) in &mut self.list {
             if !excuse.size.is_none_or(|s| s == size) {
                 continue;
             }
+            let ruled = excuse.class.map(|c| accepted(c).filter(|a| !self.refusing.contains(&a.class)));
+            if ruled.is_some_and(|row| row.is_none()) {
+                continue;
+            }
             match names(excuse, finding) {
                 Verdict::Names => {
                     *used += 1;
+                    if let Some(Some(row)) = ruled {
+                        self.listed.push(format!("{}x{}: accepted by {}: {}", size.0, size.1, row.ruling, finding.line));
+                    }
                     return true;
                 }
                 Verdict::Ambiguous => *ambiguous += 1,
@@ -220,9 +263,15 @@ impl Excuses {
 
 impl Drop for Excuses {
     fn drop(&mut self) {
+        if std::thread::panicking() {
+            return;
+        }
         let stale = self.stale();
-        if !stale.is_empty() && !std::thread::panicking() {
+        if !stale.is_empty() {
             panic!("{} stale excuses:\n{}", stale.len(), stale.join("\n"));
+        }
+        if let Some(gate) = self.gate {
+            write_accepted(&accepted_dir(), gate, &self.listed);
         }
     }
 }
@@ -243,7 +292,7 @@ impl SmallText {
     pub fn saw(&mut self, exempted: &[Exempted], nodes: &[Node]) {
         for e in exempted.iter().filter(|e| matches!(e, Exempted::SmallText { .. })) {
             let name = nodes.get(e.item().0 as usize).map(|n| n.name.as_str()).unwrap_or_default();
-            let entry = SMALL_TEXT_EXCEPTIONS.iter().map(|(n, _)| *n).find(|n| *n == name);
+            let entry = SMALL_TEXT_EXCEPTIONS.iter().map(|(_, n, _)| *n).find(|n| *n == name);
             if let Some(entry) = entry.filter(|e| !self.seen.contains(e)) {
                 self.seen.push(entry);
             }
@@ -254,8 +303,8 @@ impl SmallText {
     pub fn stale(&self) -> Vec<String> {
         SMALL_TEXT_EXCEPTIONS
             .iter()
-            .filter(|(name, _)| !self.seen.contains(name))
-            .map(|(name, _)| format!("SMALL_TEXT_EXCEPTIONS' {name}: let nothing pass"))
+            .filter(|(_, name, _)| !self.seen.contains(name))
+            .map(|(_, name, _)| format!("SMALL_TEXT_EXCEPTIONS' {name}: let nothing pass"))
             .collect()
     }
 }

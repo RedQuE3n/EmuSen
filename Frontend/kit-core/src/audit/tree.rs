@@ -103,7 +103,7 @@ pub struct Text {
     pub width: f64,
     pub height: f64,
     pub ellipsis: bool,
-    /// The words are the host's data (a title, a name, a line built from them), which may elide; a fixed word may not.
+    /// The words are data (from the library, a game or a file), which may elide; the host's own words may not.
     pub data: bool,
     /// The item's own box in the scene's units, unturned, where a turn makes its scene box another shape; None where the
     /// scene box is its own. The words are measured along the item's own axes, so they are held to this box.
@@ -314,7 +314,7 @@ impl Item {
         self.is_drawn() && (matches!(self.kind, Kind::Words | Kind::Picture) || self.hit_testable)
     }
 
-    /// Marks every item's words as data unless `fixed` knows them as one of the host's fixed words, by what a reader hears.
+    /// Marks every item's words as data unless `fixed` knows them as the host's own words, by what a reader hears.
     pub fn mark_data(&mut self, fixed: &dyn Fn(&str) -> bool) {
         if let Some(text) = self.text.as_mut() {
             text.data = !fixed(self.heard.as_deref().unwrap_or_default());

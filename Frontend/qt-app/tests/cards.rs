@@ -131,7 +131,7 @@ fn the_home_card_and_the_list_card_are_mistresss() {
         scene.wait(50);
     }
     let mut report = Vec::new();
-    let mut excuses = Excuses::none();
+    let mut excuses = Excuses::none().listing("qt-app-cards");
 
     // A hidden card's words wait for it to show (EmuSen_Qt.md §7.8): its facts changed under Home (a paused game's minute
     // turning over did it in acceptance) swap no frame, and the card shown reads them current. Then the facts as the

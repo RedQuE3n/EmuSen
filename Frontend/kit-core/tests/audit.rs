@@ -227,8 +227,10 @@ fn settings_4_83_2_words_cut_with_an_ellipsis_past_their_box_at_the_foot_or_too_
     let mut excepted = clean();
     excepted.children[2].children[0].name = "moonriseCaption".to_owned();
     excepted.children[2].children[0].text = Some(Text { cap_height: 11.0, width: 100.0, height: 20.0, ellipsis: false, data: false, own: None });
+    assert_eq!(fit_faults(&excepted), vec![Fault::TooSmall { item: id(21), capitals: 11.0 }], "the caption's name outside Moonrise is held to the floor");
+    excepted.children[2].name = "moonrise".to_owned();
     let faults = fit_faults(&excepted);
-    assert!(faults.is_empty(), "Moonrise's caption is a named exception to the floor: {faults:?}");
+    assert!(faults.is_empty(), "Moonrise's caption, in Moonrise, is a named exception to the floor: {faults:?}");
 
     let mut at_the_floor = clean();
     at_the_floor.children[2].children[0].text = Some(text(11.61, 150.0, 26.0));

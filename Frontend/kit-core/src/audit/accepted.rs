@@ -1,4 +1,4 @@
-//! The classes of finding the tester has accepted, each with the ruling that accepts it; the one table every gate reads (EmuSen_Kit.md §7.102).
+//! The classes of finding the tester has accepted, each with the ruling that accepts it; the one table every gate reads (EmuSen_Kit.md §7.102, §7.105).
 
 /// A class of finding a ruling may accept.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -11,7 +11,6 @@ pub enum Class {
     CpuConversionLine,
     DimmedAndMoving,
     DataWordsElided,
-    BridgeDuplicates,
 }
 
 /// One accepted class: the ruling's id in the rulings log and what it covers.
@@ -23,7 +22,7 @@ pub struct Accepted {
 }
 
 /// Every class the tester has accepted; a row is added only by a ruling of hers.
-pub const ACCEPTED: [Accepted; 9] = [
+pub const ACCEPTED: [Accepted; 8] = [
     Accepted {
         class: Class::RomFolderCutAtStart,
         ruling: "R-20261111-36",
@@ -44,15 +43,9 @@ pub const ACCEPTED: [Accepted; 9] = [
         covers: "dimmed (declined) places exempt from contrast, and moving words not judged",
     },
     Accepted { class: Class::DataWordsElided, ruling: "R-20261111-44", covers: "data words, such as a game's title, cut with an ellipsis" },
-    Accepted { class: Class::BridgeDuplicates, ruling: "R-20261111-46", covers: "the 22 duplicate-code pairs of the cxx-qt bridges in dupes.accept" },
 ];
 
-/// The row of `table` that accepts `class`, if any.
-pub fn accepted_in(table: &'static [Accepted], class: Class) -> Option<&'static Accepted> {
-    table.iter().find(|a| a.class == class)
-}
-
-/// The row of `ACCEPTED` that accepts `class`, if any.
+/// The row of `ACCEPTED` that accepts `class`, if any; no other table accepts anything.
 pub fn accepted(class: Class) -> Option<&'static Accepted> {
-    accepted_in(&ACCEPTED, class)
+    ACCEPTED.iter().find(|a| a.class == class)
 }

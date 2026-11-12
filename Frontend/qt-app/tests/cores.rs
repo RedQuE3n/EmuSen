@@ -89,7 +89,7 @@ fn qt_7_7_cores_walks_into_mistress_s_five_recorded_states() {
     let _world = sandbox("qt-app-cores", &[("NES", "One.nes")]);
     let mut harness = emusen_qt_test::Harness::new();
     let mut report = Vec::new();
-    let mut excuses = Excuses::none();
+    let mut excuses = Excuses::none().listing("qt-app-cores");
     let none = mockup::Mockup::default();
     {
         let mut scene = open(&mut harness, "world.json");

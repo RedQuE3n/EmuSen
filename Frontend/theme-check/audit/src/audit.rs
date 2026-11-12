@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use cxx_qt::QObject;
-use emusen_kit_core::audit::{self, contrast, fit, named, no_chrome, pad_reach, pointer_reach, reached, Rect};
+use emusen_kit_core::audit::{self, contrast, fit, named, no_chrome, pad_reach, pointer_reach, reached, Class, Rect};
 use emusen_kit_core::input::{ElementId, UiButton, WalkForm};
 use emusen_kit_core::tokens::{colour, Colour, ColourToken, Variant};
 use emusen_kit_qt::kinds;
@@ -245,8 +245,8 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             scene.resize(w, h);
             scene.wait(150);
             let mut tree = scene.tree();
-            // A title or a name may elide; the program's fixed words may not.
-            tree.root.mark_data(&words::is_fixed);
+            // A title or a name may elide; the program's own words, fixed or built from its settings, may not.
+            tree.root.mark_data(&words::is_own);
             // What lies behind each text as drawn, pictures and translucent fills included, before the walk moves anything.
             scene.sample_behind(&mut tree, f64::from(w), f64::from(h));
             if let Some(moving) = pass.moving {
@@ -273,7 +273,7 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
                     scene.rest();
                 }
                 let mut shown = scene.tree();
-                shown.root.mark_data(&words::is_fixed);
+                shown.root.mark_data(&words::is_own);
                 scene.sample_behind(&mut shown, f64::from(w), f64::from(h));
                 if let Some(moving) = pass.moving {
                     rested(&mut shown, moving);
@@ -323,7 +323,7 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             // What an exemption let pass, each item by itself: listed with its ruling where one accepts its class, else a finding (EmuSen_Kit.md §7.102).
             for exempted in audit::exempted(&seen.root, None, smallest) {
                 let words = format!("{w}x{h} {name}: {exempted} ({})", described(seen, exempted.item()));
-                match exempted.accepted_in(&audit::ACCEPTED) {
+                match exempted.accepted() {
                     Some(a) => lines.accept(screen, a.ruling, &words),
                     None => lines.add(screen, "exempted", &words),
                 }
@@ -702,7 +702,8 @@ fn declined_places(scene: &mut Scene<'_>, screen: u64, tree: &mut Tree, declined
     for (&place, points) in places.iter().zip(&grids) {
         let span = at..at + points.len();
         at = span.end;
-        if audit::changed_share(&was[span.clone()], &enabled[span]) > 0.0 {
+        // Exempt only while R-20261111-43's row accepts dimmed places (EmuSen_Kit.md §7.105).
+        if audit::changed_share(&was[span.clone()], &enabled[span]) > 0.0 && audit::accepted(Class::DimmedAndMoving).is_some() {
             for index in tree.under(place) {
                 tree.not_judged(index);
             }
@@ -753,6 +754,10 @@ fn changing(before: &Tree, after: &Tree) -> HashSet<String> {
 
 /// Leaves the texts mid-change out of the contrast rule.
 fn rested(tree: &mut Tree, moving: &HashSet<String>) {
+    // Moving words go unjudged only while R-20261111-43's row accepts them (EmuSen_Kit.md §7.105).
+    if audit::accepted(Class::DimmedAndMoving).is_none() {
+        return;
+    }
     let mid: Vec<u32> = (0..tree.nodes.len() as u32).filter(|&i| moving.contains(&tree.nodes[i as usize].id)).collect();
     for index in mid {
         tree.not_judged(index);

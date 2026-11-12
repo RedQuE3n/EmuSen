@@ -310,7 +310,7 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     assert_eq!(scene.property("library", "places"), "3");
     until(&mut scene, "the virtual pad read", |s| s.property("pads", "connected") == "1");
     let mut report = Vec::new();
-    let mut excuses = Excuses::none();
+    let mut excuses = Excuses::none().listing("qt-app-acceptance");
 
     // Home with no game suspended, as Mistress's Home has it: no Continue, the shelf's first game at the top with its
     // hero art (Aurora Drift's screenshot), the focus on its cover.
@@ -535,7 +535,7 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     // A scene's colours are listed with their ruling and fail nothing; held again with a table that accepts no class, each is a finding (Kit §7.102).
     assert!(excuses.listed().iter().any(|l| l.starts_with("Home-1280x800: accepted by R-20261111-39: ")), "{:?}", excuses.listed());
     let mut refused = Vec::new();
-    hold(&mut scene, "HomeAcceptingNothing", &mockup::Mockup::default(), &mut Excuses::none().accepting(&[]), &mut refused);
+    hold(&mut scene, "HomeAcceptingNothing", &mockup::Mockup::default(), &mut Excuses::none().refusing_all(), &mut refused);
     assert!(refused.iter().any(|l| l.contains("gate: a colour outside the palette in a scene: ")), "{refused:?}");
 
     // Continue resumes the game; closed, Home has no Continue again and the shelf leads with it.

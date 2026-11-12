@@ -14,8 +14,17 @@ pub const CAPS_SLACK: f64 = 0.05 * DESKTOP_CAPS;
 /// A scrolling area must show two rows of 42 design pixels.
 pub const TWO_ROWS: f64 = 84.0;
 
-/// Words the capitals' floor does not hold, each by its item's name with the accepted class that lets it pass (EmuSen_Kit.md §7.102).
-pub const SMALL_TEXT_EXCEPTIONS: [(&str, Class); 1] = [("moonriseCaption", Class::MoonriseCaption)];
+/// Words the capitals' floor does not hold: the scene they belong to (an ancestor's name), their item's name, and the
+/// accepted class that lets them pass (EmuSen_Kit.md §7.102).
+pub const SMALL_TEXT_EXCEPTIONS: [(&str, &str, Class); 1] = [("moonrise", "moonriseCaption", Class::MoonriseCaption)];
+
+/// The class of `SMALL_TEXT_EXCEPTIONS`' entry that names an item in its scene, if one does; the same name elsewhere is held.
+pub fn small_text_exception(item: &Item, ancestors: &[&Item]) -> Option<Class> {
+    SMALL_TEXT_EXCEPTIONS
+        .iter()
+        .find(|(scene, name, _)| item.name == *name && ancestors.iter().any(|a| a.name == *scene))
+        .map(|(_, _, class)| *class)
+}
 
 /// The floor on a big screen: the capitals Inter draws at 16 design pixels, 11.64.
 pub fn smallest_capitals() -> f64 {
@@ -134,8 +143,7 @@ fn words(item: &Item, ancestors: &[&Item], slack: f64, smallest: f64, faults: &m
     if text.height > own_h + slack {
         faults.push(Fault::CutAtFoot { item: item.id });
     }
-    let excepted = SMALL_TEXT_EXCEPTIONS.iter().any(|(name, _)| item.name == *name);
-    if smallest > 0.0 && text.cap_height < smallest - CAPS_SLACK && !excepted {
+    if smallest > 0.0 && text.cap_height < smallest - CAPS_SLACK && small_text_exception(item, ancestors).is_none() {
         faults.push(Fault::TooSmall { item: item.id, capitals: text.cap_height });
     }
 }

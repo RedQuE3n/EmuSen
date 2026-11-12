@@ -4,7 +4,6 @@
 
 use std::path::PathBuf;
 
-use emusen_kit_core::audit::ACCEPTED;
 use emusen_kit_core::input::{UiButton, WalkForm};
 use emusen_kit_core::tokens::{Colour, Variant};
 use emusen_kit_gallery::SCREENS_URL;
@@ -178,7 +177,7 @@ fn qt_5_b_the_tool_screen_and_the_page_frame_on_the_gallery() {
                         .map(ToString::to_string),
                 );
                 // What the rules' exemptions let pass: listed with its ruling where one accepts its class, else a finding (EmuSen_Kit.md §7.102).
-                let (listed, refused) = sort(&scene.exempted(&tree, WalkForm::BigScreen, variant, f64::from(h)), &ACCEPTED);
+                let (listed, refused) = sort(&scene.exempted(&tree, WalkForm::BigScreen, variant, f64::from(h)));
                 accepted.extend(listed.into_iter().map(|l| format!("{name}: {l}")));
                 faults.extend(refused.iter().map(ToString::to_string));
                 let notes = grabs.join(format!("{name}.faults.txt"));
@@ -215,8 +214,7 @@ fn qt_5_b_the_tool_screen_and_the_page_frame_on_the_gallery() {
 
     scene.assert_quiet();
     // Each exemption a ruling accepts, listed beside the grabs and in the test's output (EmuSen_Kit.md §7.102).
-    let _ = std::fs::write(emusen_kit_gallery::accepted_list(&grabs, "screens"), accepted.join("\n"));
-    println!("{} exemptions accepted:\n{}", accepted.len(), accepted.join("\n"));
+    emusen_qt_test::excuse::write_accepted(&emusen_qt_test::excuse::accepted_dir(), "screens", &accepted);
     assert!(report.is_empty(), "{states} states; faults:\n{}", report.join("\n"));
     assert_eq!(states, 2 * SCREENS.len() * FIT);
 }

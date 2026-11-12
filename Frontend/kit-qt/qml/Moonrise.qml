@@ -5,6 +5,8 @@ import EmuSen.Kit as Kit
 // Moonrise: the splash laid out from kit-core's frame, drawn in the draft's order: the halo's glow, the moon's outline, its face and the shadow inside it, the row of worlds (the draft's lit disc for a plain one, a host's world as a Body), the sweep, the line and the words (EmuSen_Kit.md §7.5, §7.10).
 Item {
     id: root
+    // The scene kit-core's small-text exception names its caption by (EmuSen_Kit.md §7.102).
+    objectName: "moonrise"
     property alias title: splash.title
     property alias caption: splash.caption
     property alias worlds: splash.worlds

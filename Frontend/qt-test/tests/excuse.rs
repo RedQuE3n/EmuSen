@@ -1,9 +1,9 @@
 //! EmuSen_Kit.md §7.100: an excuse names the finding's kind and the items it is about, read from the finding's own
 //! structure and never from its words, at its size, and fails the test when it excused nothing.
 
-use emusen_kit_core::audit::{ACCEPTED, Accepted, Class, Exempted, Fault, SMALL_TEXT_EXCEPTIONS, Side};
+use emusen_kit_core::audit::{Class, Exempted, Fault, SMALL_TEXT_EXCEPTIONS, Side};
 use emusen_kit_core::input::ElementId;
-use emusen_qt_test::excuse::{names, sort, Excuse, Excuses, Finding, SmallText, Verdict};
+use emusen_qt_test::excuse::{names, sort, sort_refusing, Excuse, Excuses, Finding, SmallText, Verdict};
 use emusen_qt_test::mockup::{compare_in, parse};
 use emusen_qt_test::tree::Node;
 
@@ -20,11 +20,11 @@ fn gate(fault: Fault) -> Finding {
 }
 
 fn excuse(finding: &'static str, item: &'static str, with: &'static str, words: &'static str) -> Excuse {
-    Excuse { finding, item, with, words, with_words: "", size: None, why: "test" }
+    Excuse { finding, item, with, words, with_words: "", size: None, why: "test", class: None }
 }
 
 const SMALL_COUNT: Excuse =
-    Excuse { finding: "too small to read", item: "count", with: "", words: "", with_words: "", size: Some((1280, 720)), why: "test" };
+    Excuse { finding: "too small to read", item: "count", with: "", words: "", with_words: "", size: Some((1280, 720)), why: "test", class: None };
 
 #[test]
 fn kit_7_100_an_excuse_names_its_item_its_finding_and_its_size() {
@@ -118,14 +118,14 @@ fn kit_7_100_no_excuse_excuses_nothing_and_passes() {
 #[should_panic(expected = "stale small-text exceptions:")]
 fn kit_7_100_a_small_text_exception_that_let_nothing_pass_fails_the_gate() {
     let seen = SmallText::new();
-    let names: Vec<String> = SMALL_TEXT_EXCEPTIONS.iter().map(|(n, _)| format!("SMALL_TEXT_EXCEPTIONS' {n}: let nothing pass")).collect();
+    let names: Vec<String> = SMALL_TEXT_EXCEPTIONS.iter().map(|(_, n, _)| format!("SMALL_TEXT_EXCEPTIONS' {n}: let nothing pass")).collect();
     assert_eq!(seen.stale(), names, "every entry stale before any state is seen");
 }
 
 #[test]
 fn kit_7_100_a_small_text_exception_seen_letting_its_item_pass_is_not_stale() {
     let mut n = nodes();
-    let (entry, class) = SMALL_TEXT_EXCEPTIONS[0];
+    let (_, entry, class) = SMALL_TEXT_EXCEPTIONS[0];
     n[2].name = entry.into();
     let mut seen = SmallText::new();
     seen.saw(&[Exempted::Spare { item: ElementId(2), worst: 3.0, needed: 4.5 }], &n);
@@ -154,17 +154,32 @@ fn kit_7_100_a_pair_s_second_item_is_told_by_its_name_and_words_as_the_first() {
 fn kit_7_102_an_accepted_class_passes_listed_with_its_ruling_and_another_is_a_finding() {
     let scene = Exempted::Scene { item: ElementId(3), colour: emusen_kit_core::tokens::Colour::hex("#2E8C96") };
     let spare = Exempted::Spare { item: ElementId(1), worst: 3.0, needed: 4.5 };
-    let (listed, refused) = sort(&[scene.clone(), spare.clone()], &ACCEPTED);
+    let (listed, refused) = sort(&[scene.clone(), spare.clone()]);
     assert!(refused.is_empty(), "{refused:?}");
     assert_eq!(listed, ["accepted by R-20261111-39: a colour outside the palette in a scene: 3 #2E8C96", "accepted by R-20261111-37: low contrast in the spare tenth: 1 at 3.00:1, needs 4.5:1"]);
-    static SPARE_ONLY: [Accepted; 1] = [Accepted { class: Class::SpareTenth, ruling: "R-test", covers: "test" }];
-    let (listed, refused) = sort(&[scene.clone(), spare], &SPARE_ONLY);
-    assert_eq!(listed, ["accepted by R-test: low contrast in the spare tenth: 1 at 3.00:1, needs 4.5:1"]);
-    assert_eq!(refused, [scene.clone()], "a class the table does not hold is a finding");
-    let mut e = Excuses::none().accepting(&SPARE_ONLY);
-    assert_eq!(e.sort("Home-1280x800", &[scene.clone()]), [scene], "held to the test's own table");
+    let (listed, refused) = sort_refusing(&[scene.clone(), spare.clone()], &[Class::SceneColour]);
+    assert_eq!(listed, ["accepted by R-20261111-37: low contrast in the spare tenth: 1 at 3.00:1, needs 4.5:1"]);
+    assert_eq!(refused, [scene.clone()], "a class refused is a finding");
+    let mut e = Excuses::none().refusing(&[Class::SceneColour]);
+    assert_eq!(e.sort("Home-1280x800", &[scene.clone()]), [scene.clone()], "the table narrowed for the test");
     assert!(e.listed().is_empty());
+    let mut e = Excuses::none().refusing_all();
+    assert_eq!(e.sort("Home-1280x800", &[scene.clone(), spare.clone()]), [scene, spare], "every class refused");
     let mut e = Excuses::none();
     assert!(e.sort("Home-1280x800", &[Exempted::Fading { item: ElementId(2), ratio: 2.0, needed: 4.5 }]).is_empty());
     assert_eq!(e.listed(), ["Home-1280x800: accepted by R-20261111-38: low contrast at a faded edge: 2 at 2.00:1, needs 4.5:1"]);
+}
+
+#[test]
+fn kit_7_105_an_excuse_standing_for_an_accepted_class_excuses_only_while_its_row_accepts_it() {
+    let cut = gate(Fault::Ellipsis { item: ElementId(5) });
+    let rom = Excuse { class: Some(Class::RomFolderCutAtStart), ..excuse("cut with an ellipsis", "value", "", "/Roms") };
+    let mut e = Excuses::new(&[rom.clone()]);
+    assert!(e.excuses(&cut, (1280, 800)));
+    assert_eq!(e.listed(), ["1280x800: accepted by R-20261111-36: gate: cut with an ellipsis: 5"]);
+    let mut e = Excuses::new(&[rom]).refusing(&[Class::RomFolderCutAtStart]);
+    assert!(!e.excuses(&cut, (1280, 800)), "its class refused, it excuses nothing");
+    let stale = e.stale();
+    std::mem::forget(e);
+    assert_eq!(stale.len(), 1);
 }

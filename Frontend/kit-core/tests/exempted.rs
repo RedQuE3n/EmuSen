@@ -1,6 +1,6 @@
 // EmuSen_Kit.md §7.102: every item a rule's exemption lets pass is reported by itself, and only where the strict rule fails it.
 
-use emusen_kit_core::audit::{ACCEPTED, Axes, Class, Edges, Exempted, Item, Kind, Legibility, Rect, SMALL_TEXT_EXCEPTIONS, Text, accepted, exempted};
+use emusen_kit_core::audit::{ACCEPTED, Axes, Class, Edges, Exempted, Fault, Item, Kind, Legibility, Rect, SMALL_TEXT_EXCEPTIONS, Text, accepted, exempted, fit};
 use emusen_kit_core::input::ElementId;
 use emusen_kit_core::tokens::{Colour, ColourToken, Variant, colour};
 
@@ -51,16 +51,33 @@ fn kit_7_102_a_scene_s_colour_outside_the_palette_is_named() {
 
 #[test]
 fn kit_7_102_a_named_small_text_under_the_floor_is_named() {
-    let small = |name: &str| {
-        Item::new(1, Kind::Panel, PANEL).child(
+    let small = |scene: &str, name: &str| {
+        Item::new(1, Kind::Panel, PANEL).named(scene).child(
             Item::new(2, Kind::Words, Rect::new(10.0, 10.0, 200.0, 20.0))
                 .named(name)
                 .words(Text { cap_height: 9.0, width: 100.0, height: 18.0, ellipsis: false, data: false, own: None }),
         )
     };
-    assert!(matches!(exempted(&small("moonriseCaption"), Some(&[]), 11.64)[..], [Exempted::SmallText { item: ElementId(2), .. }]));
-    assert!(exempted(&small("other"), Some(&[]), 11.64).is_empty(), "another item is the floor's finding, not an exemption");
-    assert!(exempted(&small("moonriseCaption"), Some(&[]), 0.0).is_empty(), "no floor, nothing exempted");
+    assert!(matches!(exempted(&small("moonrise", "moonriseCaption"), Some(&[]), 11.64)[..], [Exempted::SmallText { item: ElementId(2), .. }]));
+    assert!(exempted(&small("moonrise", "other"), Some(&[]), 11.64).is_empty(), "another item is the floor's finding, not an exemption");
+    assert!(exempted(&small("Home", "moonriseCaption"), Some(&[]), 11.64).is_empty(), "the caption's name outside Moonrise is the floor's finding");
+    assert!(exempted(&small("moonrise", "moonriseCaption"), Some(&[]), 0.0).is_empty(), "no floor, nothing exempted");
+}
+
+#[test]
+fn kit_7_105_data_cut_with_an_ellipsis_is_an_exemption_and_a_fixed_word_a_fault() {
+    let cut = |data: bool| {
+        Item::new(1, Kind::Panel, PANEL).child(
+            Item::new(2, Kind::Words, Rect::new(10.0, 10.0, 200.0, 20.0))
+                .named("title")
+                .words(Text { cap_height: 14.0, width: 200.0, height: 18.0, ellipsis: true, data, own: None }),
+        )
+    };
+    assert_eq!(exempted(&cut(true), None, 11.64), vec![Exempted::Elided { item: ElementId(2) }]);
+    assert_eq!(Exempted::Elided { item: ElementId(2) }.to_string(), "data cut with an ellipsis: 2");
+    assert!(exempted(&cut(false), None, 11.64).is_empty(), "a fixed word cut is the fit rule's fault, no exemption");
+    assert_eq!(fit(&cut(false), PANEL, 1.0, 11.64), vec![Fault::Ellipsis { item: ElementId(2) }]);
+    assert!(fit(&cut(true), PANEL, 1.0, 11.64).is_empty(), "data is left to the table (R-20261111-44)");
 }
 
 #[test]
@@ -100,7 +117,6 @@ fn kit_7_102_the_table_holds_the_classes_the_tester_accepted_and_no_other() {
             (Class::CpuConversionLine, "R-20261111-41"),
             (Class::DimmedAndMoving, "R-20261111-43"),
             (Class::DataWordsElided, "R-20261111-44"),
-            (Class::BridgeDuplicates, "R-20261111-46"),
         ]
     );
     assert!(ACCEPTED.iter().all(|a| !a.covers.is_empty()), "each row says what it covers");
@@ -113,11 +129,11 @@ fn kit_7_102_each_exemption_is_of_its_class_and_accepted_by_its_ruling() {
         (Exempted::Spare { item: id, worst: 3.0, needed: 4.5 }, "R-20261111-37"),
         (Exempted::Fading { item: id, ratio: 2.0, needed: 4.5 }, "R-20261111-38"),
         (Exempted::Scene { item: id, colour: Colour::hex("#2E8C96") }, "R-20261111-39"),
-        (Exempted::SmallText { item: id, capitals: 10.0, class: SMALL_TEXT_EXCEPTIONS[0].1 }, "R-20261111-40"),
+        (Exempted::SmallText { item: id, capitals: 10.0, class: SMALL_TEXT_EXCEPTIONS[0].2 }, "R-20261111-40"),
+        (Exempted::Elided { item: id }, "R-20261111-44"),
     ];
     for (e, ruling) in found {
-        assert_eq!(e.accepted_in(&ACCEPTED).map(|a| a.ruling), Some(ruling), "{e}");
+        assert_eq!(e.accepted().map(|a| a.ruling), Some(ruling), "{e}");
         assert_eq!(accepted(e.class()).map(|a| a.ruling), Some(ruling));
-        assert_eq!(e.accepted_in(&[]), None, "a table without its class accepts nothing");
     }
 }

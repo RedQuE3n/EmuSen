@@ -2,7 +2,6 @@
 
 use std::path::PathBuf;
 
-use emusen_kit_core::audit::ACCEPTED;
 use emusen_kit_core::input::{UiButton, WalkForm};
 use emusen_kit_core::tokens::Variant;
 use emusen_kit_gallery::GALLERY_URL;
@@ -248,7 +247,7 @@ fn qt_7_stage_0_gate_on_the_gallery() {
                     // What the rules' exemptions let pass: listed with its ruling where one accepts its class, else a finding (EmuSen_Kit.md §7.102).
                     let exempted = scene.exempted(&tree, form, variant, f64::from(h));
                     small.saw(&exempted, &tree.nodes);
-                    let (listed, refused) = sort(&exempted, &ACCEPTED);
+                    let (listed, refused) = sort(&exempted);
                     accepted.extend(listed.into_iter().map(|l| format!("{name}: {l}")));
                     faults.extend(refused.iter().map(ToString::to_string));
                     let notes = grabs.join(format!("{name}.faults.txt"));
@@ -289,7 +288,7 @@ fn qt_7_stage_0_gate_on_the_gallery() {
     report.extend(faults.iter().map(|f| format!("question: {f}")));
     let exempted = scene.exempted_item(&sheet, WalkForm::BigScreen, Variant::Dark, 800.0);
     small.saw(&exempted, &tree.nodes);
-    let (listed, refused) = sort(&exempted, &ACCEPTED);
+    let (listed, refused) = sort(&exempted);
     accepted.extend(listed.into_iter().map(|l| format!("question: {l}")));
     report.extend(refused.iter().map(|f| format!("question: {f}")));
     scene.pad(UiButton::Back);
@@ -308,8 +307,7 @@ fn qt_7_stage_0_gate_on_the_gallery() {
 
     scene.assert_quiet();
     // Each exemption a ruling accepts, listed beside the grabs and in the test's output (EmuSen_Kit.md §7.102).
-    let _ = std::fs::write(emusen_kit_gallery::accepted_list(&grabs, "gate"), accepted.join("\n"));
-    println!("{} exemptions accepted:\n{}", accepted.len(), accepted.join("\n"));
+    emusen_qt_test::excuse::write_accepted(&emusen_qt_test::excuse::accepted_dir(), "gate", &accepted);
     assert!(report.is_empty(), "{} states; faults:\n{}", states, report.join("\n"));
     assert_eq!(states, 2 * 3 * 3 * SIZES.len() + 1);
 }

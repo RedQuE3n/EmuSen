@@ -7,7 +7,7 @@ use std::sync::Arc;
 use cxx_qt::casting::Upcast;
 use cxx_qt::QObject;
 use cxx_qt_lib::{QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
-use emusen_kit_core::audit::{self, Edge, Fault, State};
+use emusen_kit_core::audit::{self, Class, Edge, Fault, State, accepted};
 use emusen_kit_core::input::{ElementId, UiButton, WalkForm};
 use emusen_kit_core::tokens::{self, Colour, ColourToken, Variant};
 use emusen_kit_qt::kinds;
@@ -50,18 +50,51 @@ pub const DIRECTIONS: [UiButton; 4] = [UiButton::Up, UiButton::Down, UiButton::L
 /// The walk's presses on a screen whose shoulders are its own declared actions, as the search's keys and covers are.
 pub const WITH_SHOULDERS: [UiButton; 6] = [UiButton::Up, UiButton::Down, UiButton::Left, UiButton::Right, UiButton::PageUp, UiButton::PageDown];
 
-/// Messages Qt logs of its own accord that no code of ours causes, each with its reason and whether it is Qt's only on the
-/// software backend (EmuSen_Kit.md §7.14, §7.101).
-pub const QT_INTERNAL: [(&str, &str, bool); 2] = [
+/// Messages Qt logs of its own accord that no code of ours causes, each with the accepted class that lets it pass and
+/// whether it is Qt's only on the software backend (EmuSen_Kit.md §7.14, §7.101).
+pub const QT_INTERNAL: [(&str, Class, bool); 1] = [
     // Qt Multimedia converting a clip's frame to a picture where there is no RHI, the software backend's path (EmuSen_Kit.md §7.50).
-    ("No RHI backend. Using CPU conversion.", "Qt Multimedia on the software backend, accepted by R-20261111-41", true),
-    // QtCore's, once Qt Multimedia starts in a process whose application was made on a test runner's thread; the program makes it on main.
-    ("QApplication was not created in the main() thread", "the test runner's thread", false),
+    ("No RHI backend. Using CPU conversion.", Class::CpuConversionLine, true),
 ];
 
-/// Whether a message Qt logged is one of `QT_INTERNAL`'s on the backend the scene graph draws on.
+/// Whether a message Qt logged is one of `QT_INTERNAL`'s on the backend the scene graph draws on, its class accepted by a
+/// row of kit-core's `ACCEPTED` (EmuSen_Kit.md §7.105).
 pub fn qt_internal(message: &str, software: bool) -> bool {
-    QT_INTERNAL.iter().any(|(text, _, software_only)| message.contains(text) && (software || !software_only))
+    QT_INTERNAL
+        .iter()
+        .any(|(text, class, software_only)| message.contains(text) && (software || !software_only) && accepted(*class).is_some())
+}
+
+/// Messages the tester holds, neither accepted nor a failure until she rules: each is counted and printed with its ruling
+/// by every test that sees it (EmuSen_Kit.md §7.101).
+pub const QT_HELD: [(&str, &str); 1] = [
+    // QtCore's, once Qt Multimedia starts in a process whose application was made on a test runner's thread.
+    ("QApplication was not created in the main() thread", "R-20261111-42"),
+];
+
+/// The ruling that holds a message Qt logged, if `QT_HELD` names it.
+pub fn qt_held(message: &str) -> Option<&'static str> {
+    QT_HELD.iter().find(|(text, _)| message.contains(text)).map(|(_, ruling)| *ruling)
+}
+
+/// Prints `held_lines` on the process's own stderr, past the test runner's capture, so a passing test shows them too.
+fn say_held(messages: &[String]) {
+    use std::io::Write;
+    let mut err = std::io::stderr().lock();
+    for line in held_lines(messages) {
+        writeln!(err, "{line}").expect("stderr takes the held line");
+    }
+}
+
+/// One line for the held messages among `messages`, each counted: "held, R-…: 2 × the message"; none where none is held.
+pub fn held_lines(messages: &[String]) -> Vec<String> {
+    QT_HELD
+        .iter()
+        .filter_map(|(text, ruling)| {
+            let seen = messages.iter().filter(|m| m.contains(text)).count();
+            (seen > 0).then(|| format!("held, {ruling}: {seen} × {text}"))
+        })
+        .collect()
 }
 
 /// The sizes the gate runs at (EmuSen_Interface.md §24.7): 1280 × 800, a Steam Deck–class size kept as a fit size; the
@@ -181,10 +214,13 @@ impl Harness {
         all.split('\u{1e}').filter(|m| !m.is_empty()).map(str::to_owned).collect()
     }
 
-    /// Fails on any message Qt logged that is not one of `QT_INTERNAL`'s, each named with the reason it is Qt's (EmuSen_Kit.md §7.14).
+    /// Fails on any message Qt logged that is not one of `QT_INTERNAL`'s, each named with the reason it is Qt's; one `QT_HELD`
+    /// names is printed with its count and ruling, and fails nothing (EmuSen_Kit.md §7.14, §7.101).
     pub fn assert_quiet(&mut self) {
         let software = self.software();
-        let ours: Vec<String> = self.messages().into_iter().filter(|m| !qt_internal(m, software)).collect();
+        let messages = self.messages();
+        say_held(&messages);
+        let ours: Vec<String> = messages.into_iter().filter(|m| !qt_internal(m, software) && qt_held(m).is_none()).collect();
         assert!(ours.is_empty(), "Qt logged {} warnings or errors:\n{}", ours.len(), ours.join("\n"));
     }
 
@@ -197,6 +233,13 @@ impl Harness {
         if let Some(app) = self.app.as_ref() {
             app.process_events();
         }
+    }
+}
+
+impl Drop for Harness {
+    /// What Qt logged since a test last asked, the held messages among it counted and printed, as `assert_quiet` does.
+    fn drop(&mut self) {
+        say_held(&self.messages());
     }
 }
 

@@ -3104,13 +3104,14 @@ held within 0.001.
 `No RHI backend. Using CPU conversion.` is: the tester accepted it on the software backend only (R-20261111-41, 2026-11-11). On the GPU an RHI is there to convert on, so the same line means the clip's frames took the CPU path and fails the
 test. `Harness::software()` asks Qt for the scene graph backend in use (`QQuickWindow::sceneGraphBackend()`, settled once the first window is made), and
 `assert_quiet` filters by it; `qt_internal(message, software)` is the rule, held both ways by `tests/internal.rs`. The
-main-thread warning stays filtered on every backend, as §7.58 says. The tester holds that line (R-20261111-42, 2026-11-11, held and not accepted)
+main-thread warning stayed filtered on every backend until the sixth pass; it is now held, not filtered (§7.105). The tester holds that line (R-20261111-42, 2026-11-11, held and not accepted)
 until it is proven whose it is. Read on 2026-11-11: its words are in `libQt6Core.so.6` once and in no other Qt library
 here, nor in any source of ours but `QT_INTERNAL` and its test, which only match it; §7.58's trace of 2026-11-09 has
 QtCore print it from `QCoreApplicationPrivate`'s constructor when qt-test's `Harness` makes the application on the
 thread libtest runs a test on, after Qt Multimedia's load-time initializer has adopted the process's main thread. So the
 words are Qt's, and the call that makes Qt print them is the harness's; the program, which makes its application on
-`main`, never prints it. It stays in `QT_INTERNAL`, with no row in the accepted table, for the tester's ruling.
+`main`, never prints it. It has no row in the accepted table, and since the sixth pass it is in `QT_HELD`, not
+`QT_INTERNAL` (§7.105).
 
 ### 7.102 The rules' exemptions reported item by item (repair piece DC-A; 2026-11-11)
 
@@ -3148,7 +3149,10 @@ exactly these rows.
 | `CpuConversionLine` | R-20261111-41 | Qt Multimedia's CPU-conversion log line on the software backend |
 | `DimmedAndMoving` | R-20261111-43 | dimmed (declined) places exempt from contrast, and moving words not judged |
 | `DataWordsElided` | R-20261111-44 | data words, such as a game's title, cut with an ellipsis |
-| `BridgeDuplicates` | R-20261111-46 | the 22 duplicate-code pairs of the cxx-qt bridges in `dupes.accept` |
+
+(The sixth pass removed a ninth row, `BridgeDuplicates` for R-20261111-46, which nothing read; §7.105 says where that
+class is accepted. Since that pass every row is read by the place that accepts its class, and `Excuses::accepting` is
+gone: §7.105.)
 
 `Exempted::class` gives each exemption its class: the spare tenth, a faded edge and a scene's colour by their kind, and
 a named small text by the class its `SMALL_TEXT_EXCEPTIONS` entry gives. Every gate sorts a state's exemptions by the
@@ -3315,4 +3319,70 @@ the Consoles figures the run named are ruled the same day (`EmuSen_Qt.md` §3.4.
 (`COUNTED`) need the canvas's eleven consoles; the acceptance library shelves three consoles, and theme-audit's
 `qt_3_4_2` test holds them on the same screen file over the catalogue `eleven` (the line's comment says so). Held: the
 acceptance test lists Home's scene colours as accepted by R-20261111-39 and, holding Home again with a table that
-accepts nothing (`Excuses::accepting(&[])`), finds them as findings.
+accepts nothing (`Excuses::accepting(&[])`, since the sixth pass `Excuses::refusing_all()`), finds them as findings.
+
+### 7.105 Each accepted class read in one place, the program's own words held whole, and the held line said (repair piece DC-A, sixth pass; 2026-11-11)
+
+**One place a class.** Every row of `audit::ACCEPTED` is now read by the one place that accepts its class, so deleting a
+row turns that place's gate red, and no class is accepted anywhere else:
+
+| Class | Ruling | Read by |
+|---|---|---|
+| `RomFolderCutAtStart` | R-20261111-36 | an `Excuse` that stands for the class (`Excuse::class`); without the row it excuses nothing and goes stale (qt-app `settings.rs`) |
+| `SpareTenth`, `FadedEdge`, `SceneColour` | R-20261111-37 to -39 | `Exempted::class`, sorted by every gate (§7.102) |
+| `MoonriseCaption` | R-20261111-40 | `SMALL_TEXT_EXCEPTIONS`' entry, matched by its scene and its name (below) |
+| `CpuConversionLine` | R-20261111-41 | `QT_INTERNAL`'s entry, which names the class: `qt_internal` lets the line pass only while the row is there |
+| `DimmedAndMoving` | R-20261111-43 | theme-audit's `declined_places` and `rested`, which leave words out of the contrast rule only while the row is there |
+| `DataWordsElided` | R-20261111-44 | `Exempted::Elided`, data cut with an ellipsis, sorted by every gate as the others are |
+
+The class of R-20261111-46, the 22 duplicate-code pairs of the cxx-qt bridges, cannot be routed through the table:
+`dupes.accept` is read by emusen-dev's `dupes` command (`Platform/emusen-dev-module`, man `dupes`), which links no
+front-end crate, and making it link kit-core would be a cross-component dependency for one comment's worth of fact. Its
+row is removed; the class is accepted in `dupes.accept` alone, each pair by its own line, under R-20261111-46.
+
+Data words cut with an ellipsis were let pass by the fit rule itself (`text.data`). The fit rule still names a fixed
+word cut, and leaves data to `exempted`, which lists each as `data cut with an ellipsis: <item>`; the gates list it with
+R-20261111-44, and without that row it is a finding. So every elision the ruling lets pass is now named, item by item, in
+theme-audit's stderr and the gates' accepted lists.
+
+**Only the table accepts.** `Excuses::accepting(table)` and `excuse::sort`'s table are gone: `sort` reads `ACCEPTED`,
+and a test may only narrow it (`sort_refusing`, `Excuses::refusing`, `Excuses::refusing_all`, which the acceptance
+run's `HomeAcceptingNothing` uses). kit-core's `accepted_in(table, …)` is gone with them; `accepted(class)` reads
+`ACCEPTED` alone.
+
+**The program's own words are not data** (R-20261111-35). Data is what comes from the library, a game or a file
+(R-20261111-44). `words::is_own` is the host's fixed words and the lines the program builds from its own settings,
+devices and clock: the Settings place's line (`settings_line`), the status line and the version line, each recognised
+beside the function that builds it. theme-audit and the program's `hold` mark data by it, where both used
+`words::is_fixed`. Home's `placeStatus.5`, "Dark · 60% sound", is then held whole, and it did not fit: in Barlow at 20 it
+is 142.9 units against its 134-unit box, and the longest the line can be, "Light · 100% sound", 154.5 (advance widths
+read from `Barlow-Regular.ttf`'s own tables on 2026-11-11; Qt's layout of "7 games" agreed to 0.03 unit). No size of
+Barlow both fits and stays over the floor at 1280 × 720 (at 17 the line fits, 131.3, but its capitals there are under
+11.64). The places' lines take Barlow Condensed's regular face, which the worlds' counts already take (EmuSen_Qt.md
+§3.4.2): "Light · 100% sound" is 124.1 there (127.5 if Qt draws the family's medium weight), inside the box. The tile,
+the name and the line's place are unchanged. Held by theme-audit's `qt_3_4_1` test, which runs the reference package's
+Home and fails on any line naming `placeStatus`, and by qt-models' `qt_3_7_2_the_program_s_own_lines_are_not_data`.
+
+**Moonrise's caption, in Moonrise** (R-20261111-40). `SMALL_TEXT_EXCEPTIONS` entries are (scene, name, class):
+`("moonrise", "moonriseCaption", MoonriseCaption)`. `small_text_exception(item, ancestors)` gives the class only where an
+ancestor bears the scene's name; the kit's `Moonrise.qml` names its root `moonrise`, as the program and the gallery
+already named their instances. An item named `moonriseCaption` anywhere else is held to the floor: theme-check's fixture
+`small-caption`, a Home of its own with that name, is now a finding at every size in both variants.
+
+**The held line** (R-20261111-42, held). `QT_INTERNAL` no longer holds the main-thread line. qt-test's `QT_HELD` names
+it with its ruling; `assert_quiet` and the harness's `Drop` count it and write `held, R-20261111-42: N × <words>` to the
+process's own stderr, past libtest's capture, so a passing test shows it too, and neither fails on it. Every test binary
+that links Qt Multimedia logs it once, at its first `Harness` (§7.101).
+
+**Accepted lists.** qt-test owns the one writer, `excuse::write_accepted`, into `~/.cache/emusen/tmp/accepted/`,
+one file a gate (`accepted-gate.txt` and so on); the gallery's three gates and the program's tests (an `Excuses` made with
+`.listing("qt-app-…")` writes on drop) use it, and a list that cannot be written fails its gate. An `Excuse` that stands
+for a class lists the finding it excused with the class's ruling.
+
+**Use reads the table.** qt-app's `themes_tab` test hands two packages to the real theme-audit (built beside the test):
+theme-check's fixture `elided-title`, whose titles are cut (R-20261111-44), which Use takes, and `small-caption`, which
+it refuses, its findings naming `moonriseCaption`. Emptying the table refuses the first.
+
+**One owner for the cover shape's turn.** qt-models' `library::cover_shape(system)` turns the systems table's height over
+width into the width over height a theme draws, with one fallback, `COVER_SHAPE` (0.75); theme-qt's `view::games` and
+qt-models' game page read it. theme-qt's view test holds the NES's figure to 0.6993, written down, not computed.

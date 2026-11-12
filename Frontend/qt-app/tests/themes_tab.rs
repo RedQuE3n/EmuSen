@@ -29,11 +29,20 @@ fn copy(from: &Path, to: &Path) {
 }
 
 /// Copies the clean fixture to the store as `id`, named `name`.
-fn named_copy(store: &Path, id: &str, name: &str) {
-    copy(&Path::new(FIXTURES).join("clean"), &store.join(id));
+/// A fixture under another id and name, its manifest's own name replaced.
+fn named_copy(store: &Path, fixture: &str, was: &str, id: &str, name: &str) {
+    copy(&Path::new(FIXTURES).join(fixture), &store.join(id));
     let manifest = store.join(id).join("theme.json");
-    let text = std::fs::read_to_string(&manifest).unwrap().replace("\"Fixture clean\"", &format!("\"{name}\""));
+    let text = std::fs::read_to_string(&manifest).unwrap().replace(&format!("\"{was}\""), &format!("\"{name}\""));
     std::fs::write(&manifest, text).unwrap();
+}
+
+/// theme-audit as this build made it, beside the test's own program in the target folder.
+fn theme_audit() -> std::path::PathBuf {
+    let exe = std::env::current_exe().unwrap();
+    let audit = exe.parent().and_then(Path::parent).unwrap().join("theme-audit");
+    assert!(audit.exists(), "theme-audit is built beside this test ({}): cargo build --release -p emusen-theme-audit", audit.display());
+    audit
 }
 
 fn focused(scene: &mut Scene<'_>) -> String {
@@ -53,7 +62,7 @@ fn check_next(scene: &mut Scene<'_>, name: &str) {
     wait_for(scene, "themesModel", "name", name, 2000);
     scene.pad(UiButton::Screensaver);
     let mut waited = 0;
-    while scene.property("themesModel", "findings").starts_with("Checking") && waited < 30000 {
+    while scene.property("themesModel", "findings").starts_with("Checking") && waited < 180_000 {
         scene.wait(50);
         waited += 50;
     }
@@ -67,15 +76,16 @@ fn qt_3_8_the_themes_tab_checks_uses_and_switches_the_chosen_theme_s_host() {
     copy(&Path::new(FIXTURES).join("clean"), &store.join("dawn"));
     copy(&Path::new(FIXTURES).join("loaded"), &store.join("dusk"));
     copy(&Path::new(FIXTURES).join("literal"), &store.join("rough"));
-    named_copy(&store, "sage", "Fixture kept");
-    named_copy(&store, "tide", "Fixture held");
+    // Two themes the real theme-audit judges: titles cut with an ellipsis, a class R-20261111-44 accepts, and Moonrise's
+    // caption's name on a Home of its own, which no ruling accepts (R-20261111-40 covers the caption in Moonrise alone).
+    named_copy(&store, "elided-title", "Fixture elided title", "sage", "Fixture kept");
+    named_copy(&store, "small-caption", "Fixture small caption", "tide", "Fixture held");
     let book = store.join("book");
     std::fs::create_dir_all(&book).unwrap();
     std::fs::write(book.join("capabilities.xml"), "<themeCapabilities><themeName>Picture Book</themeName></themeCapabilities>").unwrap();
     std::fs::write(book.join("theme.xml"), "<theme><view name=\"system\"><text name=\"t\"><text>x</text></text></view></theme>").unwrap();
-    // theme-audit stood in for by a script that finds nothing; the loaded step is theme-check's own tests' to prove. For sage
-    // and tide it writes what theme-audit writes (its kit_7_102 tests hold the program to it): an exemption of an accepted
-    // class on stderr with exit 0, and one of a class with no ruling on stdout with exit 1.
+    // theme-audit stood in for by a script that finds nothing for the first three, whose loaded step is theme-check's own
+    // tests' to prove; sage and tide go to the real theme-audit, so what kit-core's table accepts is what reaches the tab.
     let audit = world.root.join("audit.sh");
     let ran = world.root.join("audit-ran");
     let script = format!(
@@ -83,12 +93,12 @@ fn qt_3_8_the_themes_tab_checks_uses_and_switches_the_chosen_theme_s_host() {
 touch "{}"
 package="${{@: -1}}"
 case "$package" in
-  *sage) echo "theme-audit: accepted by R-20261111-40: $package/screens/Home.qml 1280x800 dark: too small: moonriseCaption" >&2; exit 0 ;;
-  *tide) echo "$package/screens/Home.qml:1 exempted 1280x800 dark: overlap: title and ring (excused by the screen)"; exit 1 ;;
+  *sage|*tide) exec "{}" "$@" ;;
 esac
 exit 0
 "#,
-        ran.display()
+        ran.display(),
+        theme_audit().display()
     );
     std::fs::write(&audit, script).unwrap();
     assert!(std::process::Command::new("chmod").arg("+x").arg(&audit).status().unwrap().success(), "the stand-in made runnable");
@@ -129,7 +139,7 @@ exit 0
     assert_eq!(scene.property("themesModel", "usable"), "false");
     scene.wait(300);
     let mut report = Vec::new();
-    let mut excuses = Excuses::none();
+    let mut excuses = Excuses::none().listing("qt-app-themes-tab");
     hold(&mut scene, "ThemesTab", &mockup::Mockup::default(), &mut excuses, &mut report);
 
     // A package is checked before Use is offered; Use stores its id and its host is made at once.
@@ -160,7 +170,7 @@ exit 0
     scene.wait(200);
     assert_eq!(stored(&platform), "dusk");
 
-    // An exemption of a class the tester accepted (R-20261111-40) is no finding: Use is offered and takes the theme.
+    // An exemption of a class the tester accepted (R-20261111-44) is no finding: Use is offered and takes the theme.
     check_next(&mut scene, "Fixture kept");
     assert_eq!(scene.property("themesModel", "findings"), "Checked: nothing found.");
     assert_eq!(scene.property("themesModel", "usable"), "true");
@@ -168,10 +178,10 @@ exit 0
     scene.wait(200);
     assert_eq!(stored(&platform), "sage");
 
-    // An exemption of a class with no ruling is a finding: no Use, and A stores nothing.
+    // Words under the floor no ruling accepts are a finding: no Use, and A stores nothing.
     check_next(&mut scene, "Fixture held");
     assert_eq!(scene.property("themesModel", "usable"), "false");
-    assert!(scene.property("themesModel", "findings").contains("exempted"), "{}", scene.property("themesModel", "findings"));
+    assert!(scene.property("themesModel", "findings").contains("moonriseCaption"), "{}", scene.property("themesModel", "findings"));
     scene.pad(UiButton::Accept);
     scene.wait(200);
     assert_eq!(stored(&platform), "sage");

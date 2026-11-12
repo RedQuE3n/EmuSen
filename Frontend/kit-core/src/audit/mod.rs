@@ -9,9 +9,9 @@ mod tree;
 
 use std::fmt;
 
-pub use accepted::{ACCEPTED, Accepted, Class, accepted, accepted_in};
+pub use accepted::{ACCEPTED, Accepted, Class, accepted};
 pub use exempt::{Exempted, exempted};
-pub use fit::{CAPS_SLACK, DESKTOP_CAPS, SMALL_TEXT_EXCEPTIONS, SMALLEST_TEXT, TWO_ROWS, fit, smallest_capitals};
+pub use fit::{CAPS_SLACK, DESKTOP_CAPS, SMALL_TEXT_EXCEPTIONS, SMALLEST_TEXT, TWO_ROWS, fit, small_text_exception, smallest_capitals};
 pub use reach::{Edge, pad_reach, pointer_reach, reached};
 pub use rules::{CONTRAST_SPARE, LARGE_BOLD_TEXT, LARGE_TEXT, STATE_CHANGE, changed_share, contrast, named, no_chrome, palette_reach};
 pub use tree::{Axes, Edges, Item, Kind, Legibility, Rect, Stacking, Text};

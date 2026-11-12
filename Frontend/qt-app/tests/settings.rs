@@ -6,6 +6,7 @@ mod common;
 
 use common::{hold, hold_in, sandbox, wait_for};
 use emusen_client_fixture::library;
+use emusen_kit_core::audit::Class;
 use emusen_kit_core::input::UiButton;
 use emusen_kit_core::tokens::Variant;
 use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
@@ -28,7 +29,8 @@ const ROM_FOLDER_CUT: Excuse = Excuse {
     words: "/Roms",
     with_words: "",
     size: None,
-    why: "R-20261111-36: the path cut at its start, the pane giving it whole (EmuSen_Qt.md §7.7)",
+    why: "the path cut at its start, the pane giving it whole (EmuSen_Qt.md §7.7)",
+    class: Some(Class::RomFolderCutAtStart),
 };
 
 fn stored(platform: &Platform, key: &str) -> serde_json::Value {
@@ -78,7 +80,7 @@ fn qt_7_7_settings_opens_from_home_steps_saves_and_holds_its_states() {
     wait_for(&mut scene, "screens", "shown", "Settings", 2000);
     assert_eq!(scene.property("settingsModel", "section"), "0");
     let mut report = Vec::new();
-    let mut excuses = Excuses::new(&[ROM_FOLDER_CUT]);
+    let mut excuses = Excuses::new(&[ROM_FOLDER_CUT]).listing("qt-app-settings");
 
     reach(&mut scene, 2, 0);
     assert_eq!(scene.property("settingsModel", "preview"), "2", "Volume's pane holds its meter");

@@ -229,7 +229,7 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     assert_eq!(scene.property("pageModel", "clip"), "", "Play videos off: no clip");
     assert_eq!(scene.property("pageClip", "running"), "false", "no clip, no player: Qt Multimedia not started");
     let mut report = Vec::new();
-    let mut excuses = Excuses::none();
+    let mut excuses = Excuses::none().listing("qt-app-game-page");
     // Right from Play is Resume; Right steps Resume through the four states, then reaches Favourite.
     scene.pad(UiButton::Right);
     wait_for(&mut scene, "pageModel", "help", &help(emusen_qt_models::help::Screen::GamePageResumeSlots), 1000);

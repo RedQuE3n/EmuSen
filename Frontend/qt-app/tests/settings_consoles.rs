@@ -60,7 +60,7 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     }
     wait_for(&mut scene, "settingsModel", "section", "3", 1000);
     let mut report = Vec::new();
-    let mut excuses = Excuses::none();
+    let mut excuses = Excuses::none().listing("qt-app-settings-consoles");
 
     // The list, on the Super Nintendo as Mistress's recording is.
     for _ in 0..5 {

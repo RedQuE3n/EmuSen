@@ -2,8 +2,8 @@ import QtQuick
 import EmuSen.Theme 1.0
 import "../parts"
 
-// Home's places as rows, and words under the capitals' floor by the one name the floor's table of exceptions holds: an
-// exemption of a class a ruling accepts, so listed and not a finding.
+// Home's places as rows, and words under the capitals' floor by the name the floor's table of exceptions holds for
+// Moonrise's caption: outside Moonrise the name is no exception, so the floor's finding.
 ThemeScreen {
     objectName: "Home"
     role: ThemeScreen.Home

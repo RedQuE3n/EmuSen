@@ -2672,14 +2672,22 @@ no image crate is needed, the oracle library read as the three texts of §4.6).
   (`GuiComponent::getTransform`, `es-core/src/GuiComponent.cpp`) and an image's corners (`ImageComponent::updateVertices`),
   so each edge stands up to half a pixel from proportional at either size, and two sizes differ by up to one pixel at
   the smaller. Seeded 2026-11-11: every box two pixels right at the sizes wider than 1600 (1.33 px at 1280 × 800 against
-  1920 × 1200), which must fail it. A box sized by its laid-out
-  words (a help bar, a status row, an auto-sized text) may differ by half a pixel for each letter it shows plus one
-  pixel, in pixels of the smaller window (decided 2026-11-11 by the tester, R-20261111-112, replacing an allowance of
-  4 % of its extent that no rule gave): ES-DE 3.4.1 rounds each glyph's advance to a whole pixel (`Font::shapeText`,
-  `es-core/src/resources/Font.cpp`), so n letters may stand n halves of a pixel from proportional, beside the one pixel of
-  placing. The letters are those of the visible words drawn under the box in the item tree, so every worded box has a
-  count; the rule is `emusen_qt_test::worded`, held by its unit test, and the test writes each worded box at each size
-  pair with its letters and allowance to `worded-boxes.tsv` beside its grabs.
+  1920 × 1200), which must fail it. On an axis ES-DE sizes from the
+  laid-out words a box may differ by half a pixel for each letter it shows plus one pixel, in pixels of the smaller
+  window (decided 2026-11-11 by the tester, R-20261111-112, replacing an allowance of 4 % of its extent that no rule
+  gave): ES-DE 3.4.1 rounds each glyph's advance to a whole pixel (`Font::shapeText`, `es-core/src/resources/Font.cpp`),
+  so n letters may stand n halves of a pixel from proportional, beside the one pixel of placing. Which axes those are is
+  ES-DE's: a help strip's both (`HelpComponent::updateGrid`), a status row's width, its height being the theme's
+  (`SystemStatusComponent::updateGrid`), and a text's, a date's or the clock's on each axis its theme's `size` leaves at 0,
+  both when it gives none (`GuiComponent::applyTheme` sets the extent rule from `size`, `TextComponent::onTextChanged`
+  applies it). Every other axis, a description's or any text whose theme gives its width and height among them, is
+  held to R-20261111-88's one pixel. The scene's `paint::sized_by_words` is the one reading of that rule, which the
+  painter sizes by and the test reads from the theme as resolved at each size (held by `esde/tests/frame.rs`); until
+  2026-11-12 the test gave every text the letters' allowance, 121 px to Art Book Next's description of 240 letters and
+  283.5 px to Artflix's system description, whose sizes the theme gives. The letters are those of the visible words drawn
+  under the box in the item tree; the rule is `emusen_qt_test::worded`, held by its unit test, and the test writes every
+  help, status and text box at each size pair, with its rule, why, its letters and what each axis may move, to
+  `worded-boxes.tsv` beside its grabs.
   *The one box past it* (2026-11-11): Art Book Next's system help at 1280 × 720 against 1920 × 1080 moved 14.67 px for
   27 letters (14.5). Read in ES-DE's source, the cause is ES-DE's own: the help's icon box is 1.25 × the rows of the
   hinted S at the help's size (`HelpComponent::applyTheme`, `es-core/src/components/HelpComponent.cpp`; rule 4 of

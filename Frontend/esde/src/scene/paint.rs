@@ -111,6 +111,14 @@ pub(super) fn media(e: &Element, kind: &str, game: Option<&Game>) -> Option<Stri
     binding.names.iter().find_map(|t| game.media.get(t).cloned())
 }
 
+/// The axes of a text, a date or the clock that take their extent from the words, as ES-DE 3.4.1 sizes them: no `size`
+/// sizes both, an axis given as 0 sizes that one, and two given axes size neither (es-core/src/GuiComponent.cpp
+/// `GuiComponent::applyTheme` sets the extent rule; es-core/src/components/TextComponent.cpp `TextComponent::onTextChanged`
+/// applies it; EmuSen_Qt.md §4.8.5).
+pub fn sized_by_words(e: &Element) -> (bool, bool) {
+    e.pair("size").map_or((true, true), |s| (s.x <= 0.0, s.y <= 0.0))
+}
+
 fn px(pair: Option<Pair>, w: f64, h: f64) -> Option<(f64, f64)> {
     pair.map(|p| (p.x.max(0.0) as f64 * w, p.y.max(0.0) as f64 * h))
 }
@@ -259,8 +267,8 @@ fn text(e: &Element, said: String, scroll: Option<TextScroll>, ctx: &Ctx) -> Dra
             t.wrap = false;
         }
     }
-    let sizing = Sizing::Content { auto_w: size.0 <= 0.0, auto_h: size.1 <= 0.0 };
-    Draft { paint: Paint::Text(t), size, sizing, scroll: scroll.map(|s| (s, vertical)) }
+    let (auto_w, auto_h) = sized_by_words(e);
+    Draft { paint: Paint::Text(t), size, sizing: Sizing::Content { auto_w, auto_h }, scroll: scroll.map(|s| (s, vertical)) }
 }
 
 fn rating(e: &Element, ctx: &Ctx) -> Option<Draft> {

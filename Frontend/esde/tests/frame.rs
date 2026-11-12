@@ -756,3 +756,23 @@ fn the_help_strip_is_placed_by_es_de_s_rule_from_its_grid() {
     let p = placed(&s.frame(), "h").clone();
     assert_eq!((p.x, p.y), (f64::from((0.012 * W as f32).round()), f64::from((0.9515 * H as f32).round())), "ES-DE's default place, origin 0");
 }
+
+// Which axes of a text its words size, as ES-DE 3.4.1's GuiComponent::applyTheme and TextComponent::onTextChanged do: the
+// sizes test holds a box the theme sizes to one pixel and only a worded one to its letters (R-20261111-88, -112).
+#[test]
+fn a_text_s_words_size_only_the_axes_its_theme_leaves_at_zero() {
+    let t = Synth::new();
+    t.capabilities("").theme(
+        "<view name=\"system\"><text name=\"none\"><text>a</text></text><text name=\"both\"><size>0.4 0.2</size><text>a</text></text>\
+         <text name=\"tall\"><size>0.4 0</size><text>a</text></text><text name=\"zero\"><size>0 0</size><text>a</text></text>\
+         <datetime name=\"date\"><size>0.2 0.05</size></datetime></view>",
+    );
+    let theme = t.load();
+    let v = theme.view("system");
+    let of = |kind: &str, name: &str| paint::sized_by_words(v.find(kind, name).unwrap_or_else(|| panic!("{kind} {name}")));
+    assert_eq!(of("text", "none"), (true, true));
+    assert_eq!(of("text", "zero"), (true, true));
+    assert_eq!(of("text", "tall"), (false, true));
+    assert_eq!(of("text", "both"), (false, false));
+    assert_eq!(of("datetime", "date"), (false, false));
+}

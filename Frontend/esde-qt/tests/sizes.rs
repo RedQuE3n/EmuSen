@@ -1,9 +1,9 @@
 //! The five fit sizes (EmuSen_Qt.md §4.8.5): each watched theme's system view at the SNES and its gamelist at the first
 //! game, at the harness's `SIZES`, on the oracle's synthetic library, on the GPU tier. Held: pad reach, pointer reach, no
 //! chrome, nothing logged, and every element's rectangle ÷ (W, H) equal within one pixel of the smaller window across the
-//! sizes of one aspect ratio (a theme lays itself out per aspect ratio; ES-DE places at whole pixels, EmuSen_Qt.md §4.8.5),
-//! a box sized by its words within half a pixel a letter plus one (R-20261111-112). Each grab is written for the
-//! side-by-sides beside ES-DE's captures.
+//! sizes of one aspect ratio (a theme lays itself out per aspect ratio; ES-DE places at whole pixels, EmuSen_Qt.md §4.8.5;
+//! R-20261111-88), on an axis ES-DE sizes from the words within half a pixel a letter plus one (R-20261111-112). Each grab
+//! is written for the side-by-sides beside ES-DE's captures.
 
 mod common;
 
@@ -13,15 +13,51 @@ use common::{until, Scratch};
 use emusen_kit_core::input::UiButton;
 use emusen_qt_test::harness::SIZES;
 use emusen_qt_test::worded;
+use emusen_esde::loader::View;
+use emusen_esde::scene::paint::sized_by_words;
 use emusen_qt_test::{Harness, Scene};
 
-// A box as a fraction of the window, and the letters it shows when the painter sized it by its laid-out words (a help
-// bar, a status row, an auto-sized text); none for any other.
-type Boxes = BTreeMap<String, ((f64, f64, f64, f64), Option<usize>)>;
+/// Which rule an element's box is held to across sizes, axis by axis, and why.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Rule {
+    /// The horizontal and the vertical axis sized by the words, held to R-20261111-112; else to R-20261111-88's one pixel.
+    words: (bool, bool),
+    why: &'static str,
+}
 
-// Every drawn element's box as a fraction of the window, keyed by its name and its place among elements of that name; a
-// worded one with the letters of the visible words drawn under it, white space left out (R-20261111-112).
-fn fractions(scene: &mut Scene<'_>, w: f64, h: f64) -> Boxes {
+// What sizes a text-like box in ES-DE 3.4.1: a help strip its entries (HelpComponent::updateGrid), a status row its
+// entries' width at the theme's height (SystemStatusComponent::updateGrid, applyTheme), a text, date or clock its words on
+// the axes its theme's size leaves at 0 (GuiComponent::applyTheme, TextComponent::onTextChanged; the scene's
+// `sized_by_words`). A text whose name the view holds more than once with different rules takes the stricter, one pixel.
+// Any other box has no words and is held to one pixel (None).
+fn rule_of(cls: &str, name: &str, view: &View) -> Option<Rule> {
+    if cls.contains("HelpElement") {
+        return Some(Rule { words: (true, true), why: "R-112: a help strip, sized by its entries (HelpComponent::updateGrid)" });
+    }
+    if cls.contains("StatusElement") {
+        return Some(Rule { words: (true, false), why: "R-112 across, R-88 down: a status row, its width its entries' at the theme's height (SystemStatusComponent::updateGrid)" });
+    }
+    if !cls.contains("TextElement") {
+        return None;
+    }
+    let texts: Vec<(bool, bool)> =
+        view.elements.iter().filter(|e| e.name == name && matches!(e.kind(), "text" | "datetime" | "clock")).map(sized_by_words).collect();
+    Some(match texts.first() {
+        None => Rule { words: (false, false), why: "R-88: no text of that name in the resolved view" },
+        Some(&first) if texts.iter().any(|t| *t != first) => Rule { words: (false, false), why: "R-88: texts of that name sized differently" },
+        Some((false, false)) => Rule { words: (false, false), why: "R-88: the theme gives its width and height" },
+        Some((true, true)) => Rule { words: (true, true), why: "R-112: the theme gives no width or height (size absent or 0 0)" },
+        Some((false, true)) => Rule { words: (false, true), why: "R-88 across, R-112 down: the theme gives its width, its height 0" },
+        Some((true, false)) => Rule { words: (true, false), why: "R-112 across, R-88 down: the theme gives its height, its width 0" },
+    })
+}
+
+// A box as a fraction of the window, the letters of the visible words under it, and its rule if it is text-like.
+type Boxes = BTreeMap<String, ((f64, f64, f64, f64), usize, Option<Rule>)>;
+
+// Every drawn element's box as a fraction of the window, keyed by its name and its place among elements of that name,
+// with the letters of the visible words drawn under it, white space left out, and the rule `view` gives it.
+fn fractions(scene: &mut Scene<'_>, w: f64, h: f64, view: &View) -> Boxes {
     let tree = scene.tree();
     let parent: BTreeMap<&str, &str> = tree.nodes.iter().map(|n| (n.id.as_str(), n.parent.as_str())).collect();
     let under = |id: &str, top: &str| {
@@ -41,8 +77,9 @@ fn fractions(scene: &mut Scene<'_>, w: f64, h: f64) -> Boxes {
     let mut out = Boxes::new();
     for n in tree.nodes.iter().filter(|n| n.visible && n.name.starts_with("element-")) {
         let k = seen.entry(n.name.clone()).or_default();
-        let worded = ["HelpElement", "StatusElement", "TextElement"].iter().any(|c| n.cls.contains(c));
-        out.insert(format!("{}#{k}", n.name), ((n.x / w, n.y / h, n.w / w, n.h / h), worded.then(|| shown(&n.id))));
+        let rule = rule_of(&n.cls, &n.name["element-".len()..], view);
+        let letters = if rule.is_some_and(|r| r.words != (false, false)) { shown(&n.id) } else { 0 };
+        out.insert(format!("{}#{k}", n.name), ((n.x / w, n.y / h, n.w / w, n.h / h), letters, rule));
         *k += 1;
     }
     out
@@ -129,8 +166,8 @@ fn the_watched_themes_hold_at_the_five_sizes() {
     let out = common::compare_dir();
     let mut harness = Harness::new();
     let mut failures = vec![];
-    // Every worded box at every size pair, beside its letters and its allowance (R-20261111-112).
-    let mut table = vec!["theme\tstate\tsize\tagainst\tbox\tx_px\ty_px\tw_px\th_px\tmost_px\tletters\thalf_per_letter_plus_one\twithin".to_owned()];
+    // Every text-like box at every size pair: its edges, its rule axis by axis and why, its letters and the most each axis may move.
+    let mut table = vec!["theme\tstate\tsize\tagainst\tbox\tx_px\ty_px\tw_px\th_px\trule\tletters\tallowed_across\tallowed_down\twithin".to_owned()];
     let (w0, h0) = SIZES[0];
     let mut scene = harness.load(common::VIEW, w0, h0);
     for (theme, variant, scheme, font) in common::watched() {
@@ -167,7 +204,14 @@ fn the_watched_themes_hold_at_the_five_sizes() {
                 }
                 assert!(scene.grab(&out.join(format!("{theme}-{state}-{w}x{h}.png")).to_string_lossy()));
                 let at = format!("{theme} {state} {w}x{h}");
-                let boxes = fractions(&mut scene, f64::from(w), f64::from(h));
+                // The theme as ES-DE resolves it at this size, for which axes its texts' words size.
+                let resolved = emusen_esde::loader::load(
+                    &folder.to_string_lossy(),
+                    &common::oracle_snes(),
+                    &emusen_esde::loader::Choices { screen_width: w, screen_height: h, ..picked.clone() },
+                    None,
+                );
+                let boxes = fractions(&mut scene, f64::from(w), f64::from(h), resolved.view(view));
                 if boxes.is_empty() {
                     failures.push(format!("{at}: no element drawn"));
                 }
@@ -184,29 +228,27 @@ fn the_watched_themes_hold_at_the_five_sizes() {
                         for (name, b) in &boxes {
                             match held.get(name) {
                                 None => failures.push(format!("{at}: {name} drawn here but not at {first}")),
-                                Some((a, worded)) => {
-                                    let (b, _) = b;
+                                Some((a, _, _)) => {
+                                    let (b, letters, texty) = b;
+                                    let rule = texty.unwrap_or(Rule { words: (false, false), why: "R-88: no words" });
                                     let px = [(b.0 - a.0) * pixel.0, (b.1 - a.1) * pixel.1, (b.2 - a.2) * pixel.0, (b.3 - a.3) * pixel.1];
-                                    let most = px.iter().fold(0.0f64, |m, d| m.max(d.abs()));
-                                    match worded {
-                                        Some(n) => {
-                                            let ok = worded::within(most, *n);
-                                            table.push(format!(
-                                                "{theme}\t{state}\t{w}x{h}\t{first}\t{name}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{most:.2}\t{n}\t{:.1}\t{}",
-                                                px[0], px[1], px[2], px[3], worded::allowance(*n), if ok { "yes" } else { "no" }
-                                            ));
-                                            if !ok {
-                                                let why = if name.starts_with("element-help") { HELP_ICONS } else { "" };
-                                                failures.push(format!(
-                                                    "{at}: {name} {most:.2} px off at the smaller window against {first}, past half a pixel for each of its {n} letters plus one, {:.1} (ES-DE's per-glyph rounding, Font::shapeText, v3.4.1; R-20261111-112){why}",
-                                                    worded::allowance(*n)
-                                                ));
-                                            }
-                                        }
-                                        None if most > 1.0 => failures.push(format!(
-                                            "{at}: {name} {b:.4?} against {a:.4?} at {first}, {most:.2} px off at the smaller window, past the one pixel ES-DE's whole-pixel placing allows (GuiComponent::getTransform, v3.4.1)"
-                                        )),
-                                        None => {}
+                                    let allowed = |words: bool| if words { worded::allowance(*letters) } else { 1.0 };
+                                    let (across, down) = (allowed(rule.words.0), allowed(rule.words.1));
+                                    let off_across = px[0].abs().max(px[2].abs());
+                                    let off_down = px[1].abs().max(px[3].abs());
+                                    let ok = off_across <= across && off_down <= down;
+                                    if texty.is_some() {
+                                        table.push(format!(
+                                            "{theme}\t{state}\t{w}x{h}\t{first}\t{name}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{}\t{letters}\t{across:.1}\t{down:.1}\t{}",
+                                            px[0], px[1], px[2], px[3], rule.why, if ok { "yes" } else { "no" }
+                                        ));
+                                    }
+                                    if !ok {
+                                        let why = if name.starts_with("element-help") { HELP_ICONS } else { "" };
+                                        failures.push(format!(
+                                            "{at}: {name} {b:.4?} against {a:.4?} at {first}, {off_across:.2} px across and {off_down:.2} down at the smaller window, past {across:.1} and {down:.1} ({}; {letters} letters; ES-DE places at whole pixels, GuiComponent::getTransform, and rounds each glyph's advance, Font::shapeText, v3.4.1){why}",
+                                            rule.why
+                                        ));
                                     }
                                 }
                             }

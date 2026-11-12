@@ -2200,7 +2200,11 @@ theme-audit records a theme's splash at a stated time and a screen with A held (
   installs it at 0; each later one moves it to `ms` 16 ms at a time, calling `advance()` and processing events at each step,
   as a display's frames would, so a `Behavior` or a `FrameAnimation` that a step starts runs from its own time rather than
   being jumped over. `None` uninstalls it, which leaves Qt's default timer driver in place, not a threaded render loop's own:
-  a caller holds the clock last. Every `QAbstractAnimation` and `FrameAnimation` is held; a `Timer` is not. Under a held clock
+  a caller holds the clock last. Every `QAbstractAnimation` is held, and a `FrameAnimation` is triggered on the held
+  clock's frames; a `Timer` is not. A `FrameAnimation`'s `frameTime` and `elapsedTime` are not held: Qt reads them from
+  a `QElapsedTimer` of its own (`qquickframeanimation.cpp`, `maybeTick`), found 2026-11-12 when the ES-DE view's clock,
+  which summed them, ran on through a held clock (EmuSen_Qt.md §4.8.4); a scene whose time must be held reads it from
+  an animation's value. Under a held clock
   nothing settles, so `rest()` must not be called (a running animation never ends); the audit waits a frame instead.
   The clock is the `Harness`'s, a field holding the C++ object (`harness_clock_hold` gives it, `harness_clock_move` moves it,
   dropping it uninstalls it), not a static of `harness.cpp` (changed 2026-11-09: the house rules forbid a mutable static used

@@ -2560,8 +2560,12 @@ in the theme's face and colours, filled glyphs; a press of an entry is `pressed(
 `TextListView` and `GridElement`, over `ElementBox` (the box and its turn) and `Icon` (a theme file or a mark). The
 text list's file is not `TextListElement`: `qml-rules` reads any line containing `ListElement` as rows.
 
-- **The clock.** A `FrameAnimation` runs while `moving` and calls `tick(frameTime × 1000)`; a repeating `Timer` of
-  `nextChangeMs` runs while nothing moves and something will. At rest neither runs and the window swaps no frame.
+- **The clock.** A `NumberAnimation` on the view's `clockMs` runs while `moving`, and each change calls `tick` with the
+  milliseconds it moved; a repeating `Timer` of `nextChangeMs` runs while nothing moves and something will. At rest
+  neither runs and the window swaps no frame. Until 2026-11-12 a `FrameAnimation` ran and called `tick(frameTime × 1000)`;
+  Qt reads that `frameTime` from a `QElapsedTimer` of its own (`qquickframeanimation.cpp`, `maybeTick`), the wall clock,
+  so no animation driver held it, and a stall of the GUI thread moved the scene by the stall's length (§4.8.5's mapping
+  test). The animation's value follows the driver: Qt's own, a render loop's, or a test's held clock (EmuSen_Kit.md §7.36).
 - **The pad and the keyboard.** `Connections` on `Kit.PadRouter` while the view has focus (`pressed`, `released`);
   `Keys.onPressed` is `PadRouter.pushKey`.
 - **The pointer.** Each carousel slot, list row and grid cell carries a `HoverHandler` (`hoverAt(item, row)` on entering) and a
@@ -2590,7 +2594,7 @@ needs and releases the painter before any signal, and `measured` publishes from 
 
 | Seeded fault, applied alone and reverted | Caught by |
 |---|---|
-| the `FrameAnimation` running always | `assert_still`: 119 frames in 2 s at rest |
+| the `FrameAnimation` running always (now the clock's `NumberAnimation`) | `assert_still`: 119 frames in 2 s at rest |
 | `ElementModel` emitting no `dataChanged` | the metadata still "Game 0000" after the step |
 | a list row's hover one row off | the hover selecting row 4 |
 | the help's place not swapped | `a_help_entry_s_place_is_the_kit_button_that_draws_there_under_the_swap` |
@@ -2619,6 +2623,26 @@ no image crate is needed, the oracle library read as the three texts of §4.6).
   custom collection, a console of pads), each case's system and game rotated to the front so the view starts on them.
   Each case is rendered twice through the bridge at 640 × 400 and the two grabs must differ; each case's two themes
   load without an error; every drawn pair has a case, and a case's pair is drawn or later. 347 cases, 254 s.
+  **A timed move** (a time in `at` and a move: the item and row transitions, `scrollFadeIn`, `fastScrolling`) is pressed
+  and grabbed on the harness's held clock (EmuSen_Kit.md §7.36): the scene at rest, the clock is held at 0 before the
+  press and moved 16 ms at a time to 32 ms short of `at`; the last step is what the view's own clock (`tickedMs`, the
+  milliseconds it has ticked since the scene began to move) still lacks, and the grab is taken when it reads `at`
+  within half a millisecond, or once the scene is at rest again. Qt starts the view's clock animation a few
+  milliseconds off the held clock (102 against 100, measured 2026-11-12), and with the held clock alone a fault that
+  made `instant` glide (rows or grid items) passed, the two glides differing by those milliseconds. The test runs Qt's
+  basic render loop, under which a held clock is taken. The eleven timed cases without a move (the text list's and the text
+  container's scrolling, the animation's speed, direction and count) still wait `at` ms on the wall clock: part of their
+  time passes at rest, where the view's `Timer` of `nextChangeMs` ticks the scene, and a `Timer` is not held. Held,
+  `text.containerResetDelay` painted the same pixels for 0.5 and 10 (measured 2026-11-12): the reset after the
+  container's end pause never came. They are open: they share the wall clock's weakness while the rest `Timer` is one. Until 2026-11-12 the test pressed, waited `at` ms on the wall clock and
+  grabbed. Measured 2026-11-12 on the RX 6800, the six timed cases alone: a sleep of 400 ms or 1000 ms between the press
+  and the grab failed every run (2 of 2 each), with five of the six cases painting the same pixels on both sides, the
+  scene having finished its 250 ms glide on the wall clock before the grab; 200 ms and none failed none. The same
+  sleep with the held clock and the clock of §4.8.4 failed none (2 of 2 runs at 1000 ms). `grid.rowTransitions` also
+  drew nothing it was meant to: in a grid of 160-pixel items two rows fit the window, so Down from the first row
+  selected a row already in view and the grid did not scroll; its two pictures differed only by the focus glide's
+  timing (one level of colour over 33,347 pixels, the two pictures taken 2 ms apart on the scene's clock). The case
+  now sets `itemSize` to 0.3 0.6, one row in view, so Down scrolls.
   The first runs found 47 drawn pairs that painted nothing, and each was settled one way or the other:
 
 | Found | Settled |

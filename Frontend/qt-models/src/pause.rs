@@ -332,6 +332,12 @@ pub const CONTROLLER: &str = "controller";
 /// What Swap Players says once done. Mistress names each player's pad; the pads' names do not reach the session yet.
 pub const SWAPPED: &str = "Players 1 and 2 swapped";
 
+/// Said as a Frame Advance holds the game after its frame, as Mistress's status line said it.
+pub const ADVANCED: &str = "Paused: advanced one frame";
+
+/// Said as the Fast Forward hotkey goes down, as Mistress's `Notify` said it.
+pub const FAST_FORWARD: &str = "Fast forward";
+
 /// What A does on Change Disc, as Mistress says it (`DiscSentence`).
 pub const DISC_SENTENCE: &str = "A swaps to this disc, as the console sees it.";
 /// What A does on the eject row.

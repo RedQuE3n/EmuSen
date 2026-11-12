@@ -135,7 +135,7 @@ fn qt_7_7_h3_mirror_player_1_to_player_2_gives_port_1_a_controller() {
     let pad = SimPad::new(&platform, None).unwrap();
     set.connect(&pad).unwrap();
     let mut rig = Rig::open(&world, &platform, &set, &[TWO_PADS, 1, 2, 3]);
-    let plain = PadSettings { first_controller_only: false, stick_as_dpad: true, stick_deadzone: Some(0.5), mirror: false };
+    let plain = PadSettings { first_controller_only: false, stick_as_dpad: true, stick_deadzone: Some(0.5), mirror: false, keyboard_player: Some(1) };
     rig.run(2);
     assert_eq!(rig.ram(ABSENT) & 0b10, 0b10, "one pad: port 1 has no controller");
     rig.hand.settle(PadSettings { mirror: true, ..plain });

@@ -126,7 +126,7 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Home | Shown::Grid | Shown::Pause | Shown::List | Shown::Search | Shown::SearchGrid, Ask::Play) => Some((Shown::Game, None)),
         (Shown::Game, Ask::Menu) => Some((Shown::Pause, None)),
         (Shown::Pause, Ask::Act(key)) if key == CARD_BINDINGS => Some((Shown::Settings, None)),
-        (Shown::Pause, Ask::Library) => Some((Shown::Home, None)),
+        (Shown::Game | Shown::Pause, Ask::Library) => Some((Shown::Home, None)),
         (Shown::Game | Shown::Pause, Ask::Closed) => Some((Shown::Home, None)),
         (Shown::Home, Ask::Place(CORES_PLACE)) => Some((Shown::Cores, None)),
         (Shown::Cores, Ask::Back) => Some((Shown::Home, None)),
@@ -214,7 +214,7 @@ pub fn step_in(themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<S
         (true, Shown::HomeCard | Shown::List, Ask::Back | Ask::Close | Ask::Act(_)) => Some((Shown::Esde, None)),
         (true, Shown::Game, Ask::Menu) => Some((Shown::Pause, None)),
         (true, Shown::Pause, Ask::Act(key)) if key == CARD_BINDINGS => Some((Shown::Settings, None)),
-        (true, Shown::Pause, Ask::Library) => Some((Shown::Esde, None)),
+        (true, Shown::Game | Shown::Pause, Ask::Library) => Some((Shown::Esde, None)),
         (true, Shown::Game | Shown::Pause, Ask::Closed) => Some((Shown::Esde, None)),
         _ => None,
     }

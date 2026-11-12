@@ -6,7 +6,7 @@
 mod bindings;
 mod common;
 
-use bindings::{named, open_settings, tabs};
+use bindings::{nothing_named, open_settings, tabs};
 use common::{hold, sandbox, wait_for};
 use emusen_kit_core::input::UiButton;
 use emusen_qt::MAIN_URL;
@@ -33,7 +33,7 @@ fn qt_7_7_h_every_declared_controllers_drawing_fits_and_a_controller_with_none_i
         let generic = scene.property("controllerLayout", "generic");
         assert_eq!(generic, if id == "test.pad" { "true" } else { "false" }, "{id}: only the controller with no drawing is drawn generic");
         assert_eq!(scene.property("controllerLayout", "fits"), "true", "{id}: every label beside the drawing");
-        hold(&mut scene, &format!("Bindings-{}", id.replace('.', "-")), &mockup::Mockup::default(), named, &mut report);
+        hold(&mut scene, &format!("Bindings-{}", id.replace('.', "-")), &mockup::Mockup::default(), nothing_named, &mut report);
         seen.push(id);
         scene.pad(UiButton::PageDown);
         scene.wait(200);

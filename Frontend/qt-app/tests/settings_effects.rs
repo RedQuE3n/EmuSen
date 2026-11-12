@@ -6,26 +6,14 @@
 mod bindings;
 mod common;
 
-use bindings::{open_settings, open_settings_reading};
+use bindings::{focus_row as focus, open_settings, open_settings_reading};
 use common::{sandbox, wait_for};
 use emusen_kit_core::input::UiButton;
 use emusen_qt::MAIN_URL;
 use emusen_qt_test::virtual_pad::Sdl;
-use emusen_qt_test::Scene;
 
 const WORLD: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/settings_controllers.json");
 
-/// The Controllers row whose sentence begins with `words` focused, walking down from the first.
-fn focus(scene: &mut Scene<'_>, words: &str) {
-    for _ in 0..40 {
-        if scene.property("settingsModel", "sentence").starts_with(words) {
-            return;
-        }
-        scene.pad(UiButton::Down);
-        scene.wait(60);
-    }
-    panic!("no row says '{words}'");
-}
 
 fn qt_7_7_h3_swap_a_and_b_trades_the_menus_a_and_b_on_the_pad(sdl: &Sdl, harness: &mut emusen_qt_test::Harness) {
     let _world = sandbox("qt-app-settings-swap", &[("snes", "Hero.sfc")]);
@@ -159,6 +147,25 @@ fn qt_7_7_h3_rumble_reaches_the_session(sdl: &Sdl, harness: &mut emusen_qt_test:
     wait_for(&mut scene, "session", "rumble", "false", 1000);
 }
 
+fn qt_7_7_h6_guide_chords_changed_on_the_row_hold_without_a_restart(sdl: &Sdl, harness: &mut emusen_qt_test::Harness) {
+    let _world = sandbox("qt-app-settings-chords", &[("snes", "Hero.sfc")]);
+    let pad = sdl.attach("Simulated pad", 0x045e, 0x028e);
+    let mut scene = harness.load(MAIN_URL, 1280, 800);
+    open_settings(&mut scene, WORLD, pad.id);
+    // Auto away from Steam's Game Mode: on, for the game and the router.
+    wait_for(&mut scene, "game", "guideChords", "true", 1000);
+    focus(&mut scene, "Guide held with Up saves");
+    // Auto, On, Off: two steps to Off.
+    for _ in 0..2 {
+        scene.pad(UiButton::Right);
+        scene.wait(100);
+    }
+    wait_for(&mut scene, "settingsModel", "guideChords", "false", 2000);
+    wait_for(&mut scene, "game", "guideChords", "false", 1000);
+    scene.pad(UiButton::Left);
+    wait_for(&mut scene, "game", "guideChords", "true", 1000);
+}
+
 /// One process, one Qt and one SDL: the rows in turn, each over its own world and window; those that run the router's
 /// clock for a real pad's presses last, since the harness's own presses keep it stopped.
 #[test]
@@ -168,6 +175,7 @@ fn qt_7_7_h3_the_controllers_rows_take_effect() {
     qt_7_7_h3_controller_type_chooses_the_help_bar_s_buttons(&sdl, &mut harness);
     qt_7_7_h3_stick_deadzone_moves_where_the_stick_counts_as_a_direction(&sdl, &mut harness);
     qt_7_7_h3_rumble_reaches_the_session(&sdl, &mut harness);
+    qt_7_7_h6_guide_chords_changed_on_the_row_hold_without_a_restart(&sdl, &mut harness);
     qt_7_7_h3_controller_notices_tell_of_a_pad_come_and_gone_where_on(&sdl, &mut harness);
     qt_7_7_h3_only_the_first_controller_leaves_the_menus_one_pad(&sdl, &mut harness);
     qt_7_7_h3_swap_a_and_b_trades_the_menus_a_and_b_on_the_pad(&sdl, &mut harness);

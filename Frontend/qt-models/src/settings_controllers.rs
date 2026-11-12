@@ -11,6 +11,7 @@ use crate::settings::{Outcome, Page, Pane, Preview, Row, SettingsView};
 use crate::tools::Tone;
 use emusen_kit_core::settings::RowKind;
 use emusen_qt_endymion::seats::{Ask, Connected, Player};
+use emusen_qt_endymion::hotkeys::Hotkey;
 use serde_json::{json, Value};
 
 /// The seats and the pads connected, as the pads' reader last gave them.
@@ -437,7 +438,7 @@ impl SettingsView {
     fn hotkey_pane(&self, action: &str) -> Pane {
         let mut lines = Vec::new();
         let mut tones = vec![Tone::Text];
-        let held = self.description_at(&["controllers", "held_actions"]).as_array().is_some_and(|a| a.iter().any(|x| x == action));
+        let held = Hotkey::named(action).is_some_and(Hotkey::held);
         let sentence = self.cw(if held { "hotkey_held" } else { "hotkey_press" });
         if self.listening.as_deref() == Some(action) {
             lines.push(format!("{} {}", self.cw("listening_mark"), self.cw("hotkey_listen")));

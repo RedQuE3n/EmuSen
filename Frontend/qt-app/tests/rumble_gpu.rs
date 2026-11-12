@@ -1,7 +1,8 @@
-//! Rumble in the program on Vulkan (EmuSen_Qt.md §7.7.H3, EmuSen_Input.md §9.7): a game of the test core reporting a
+//! Rumble in the program on Vulkan (EmuSen_Qt.md §7.7.H3, §7.7.H6, EmuSen_Input.md §9.7): a game of the test core reporting a
 //! console whose games drive a motor, its motor reaching the SDL virtual pad in this process, stopped while the Pause
-//! Card holds the pad and by the Rumble switch turned mid-game; on the RX 6800 unless EMUSEN_GPU_DEVICE names another.
+//! Card holds the pad and by Settings' Rumble row turned with the game suspended; on the RX 6800 unless EMUSEN_GPU_DEVICE names another.
 
+mod bindings;
 mod common;
 
 use common::{sandbox, wait_for};
@@ -33,6 +34,29 @@ const GUIDE: i32 = 5;
 
 fn running(pad: &VirtualPad) -> bool {
     pad.rumble() != (0, 0)
+}
+
+/// Escape over the game (the Exit to Library hotkey) to Home, Settings' Rumble row stepped from Home's Settings place,
+/// then B back to Home and the Home card's Continue to the game.
+fn rumble_row(scene: &mut Scene<'_>) {
+    let was = scene.property("settingsModel", "rumble");
+    scene.key_hold(0x0100_0000, true);
+    scene.key_hold(0x0100_0000, false);
+    until(scene, "the game suspended under Home", |s| s.property("screens", "shown") == "Home" && s.property("session", "paused") == "true");
+    for _ in 0..5 {
+        scene.pad(UiButton::Right);
+    }
+    scene.pad(UiButton::Accept);
+    wait_for(scene, "screens", "shown", "Settings", 2000);
+    bindings::focus_row(scene, "Your controller");
+    scene.pad(UiButton::Right);
+    until(scene, "the row turned", |s| s.property("settingsModel", "rumble") != was && s.property("session", "rumble") != was);
+    scene.pad(UiButton::Back);
+    wait_for(scene, "screens", "shown", "Home", 2000);
+    scene.pad(UiButton::Menu);
+    until(scene, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
+    common::console::choose_row(scene, "Continue");
+    until(scene, "the game again", |s| s.property("screens", "shown") == "Game" && s.property("session", "paused") == "false");
 }
 
 #[test]
@@ -84,12 +108,13 @@ fn qt_7_7_h3_the_game_s_motor_runs_the_pad_and_stops_for_the_card_and_the_switch
     until(&mut scene, "the game again", |s| s.property("screens", "shown") == "Game");
     until(&mut scene, "the motor running again", |_| running(&pad));
 
-    // Rumble turned off while the game runs, as Settings' row sets it: the motor stops; on, it runs again.
-    assert!(scene.set_property("session", "rumble", "false"));
-    until(&mut scene, "the motor stopped by the switch", |_| !running(&pad));
+    // Rumble turned off on Settings' row with the game suspended under Home: back in the game the motor stays stopped;
+    // turned on there again, it runs.
+    rumble_row(&mut scene);
+    until(&mut scene, "the motor stopped by the row", |_| !running(&pad));
     scene.wait(300);
     assert!(!running(&pad), "it stays stopped");
-    assert!(scene.set_property("session", "rumble", "true"));
+    rumble_row(&mut scene);
     until(&mut scene, "the motor on again", |_| running(&pad));
     assert!(scene.set_property("game", "game", ""));
     until(&mut scene, "the game closed", |s| s.property("session", "running") == "false");

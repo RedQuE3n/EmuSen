@@ -1017,23 +1017,49 @@ impl SettingsView {
     }
 
     /// The settings the pads act on: Only the first controller, Left stick as the D-pad, Stick deadzone, Mirror player 1
-    /// to player 2; none until the settings are read. A stored deadzone that is not a number is left unset, in words.
+    /// to player 2, the Players page's Keyboard; none until the settings are read. A stored deadzone or player that is not
+    /// a number is left unset, in words.
     pub fn pad_settings(&self) -> Option<(PadSettings, Option<String>)> {
         let stored = self.applied("stick_deadzone").filter(|v| !v.is_empty())?;
         let deadzone = stored.parse::<f64>().ok();
+        let player = self.applied("keyboard_player").unwrap_or_default();
+        let keyboard_player = player.parse::<u32>().ok().filter(|p| (1..=emusen_qt_endymion::game::PLAYERS as u32).contains(p));
         let settings = PadSettings {
             first_controller_only: self.applies_as("first_controller_only"),
             stick_as_dpad: self.applies_as("stick_as_dpad"),
             stick_deadzone: deadzone,
             mirror: self.applies_as("mirror"),
+            keyboard_player,
         };
-        Some((settings, deadzone.is_none().then(|| unread_deadzone(&stored))))
+        let unread = [deadzone.is_none().then(|| unread_deadzone(&stored)), keyboard_player.is_none().then(|| unread_keyboard_player(&player))];
+        let words: Vec<String> = unread.into_iter().flatten().collect();
+        Some((settings, (!words.is_empty()).then(|| words.join("; "))))
+    }
+
+    /// Whether Guide's chords are read, by the stored Guide chords and whether Steam's Game Mode holds the session.
+    pub fn guide_chords(&self, game_mode: bool) -> bool {
+        guide_chords_on(self.applied("guide_chords").as_deref(), game_mode)
+    }
+}
+
+/// The Guide chords as Mistress's `GuideChordsOn` reads the stored word: "On", "Off", or Auto (the default), off under
+/// Steam's Game Mode, where Steam holds Guide's chords.
+pub fn guide_chords_on(stored: Option<&str>, game_mode: bool) -> bool {
+    match stored {
+        Some("On") => true,
+        Some("Off") => false,
+        _ => !game_mode,
     }
 }
 
 /// The words for a stored stick deadzone that is not a number, said as the program's other failures are.
 pub fn unread_deadzone(stored: &str) -> String {
     format!("The stick deadzone could not be read, so it was left as it was: \"{stored}\" is not a number")
+}
+
+/// The words for a stored keyboard player that is not a player's number.
+pub fn unread_keyboard_player(stored: &str) -> String {
+    format!("The keyboard's player could not be read, so it was left as it was: \"{stored}\" is not a player")
 }
 
 /// A console's words with its names filled: `{console}` and the names given.

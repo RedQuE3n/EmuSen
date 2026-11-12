@@ -18,8 +18,9 @@ pub struct GameInput {
     owned: bool,
     ports: usize,
     motors: [Motors; PLAYERS],
-    /// The mirror the router was last set to; none since the game started.
+    /// The mirror and the keyboard's player the router was last set to; none since the game started.
     mirror: Option<bool>,
+    keyboard_player: Option<u32>,
 }
 
 impl GameInput {
@@ -33,6 +34,7 @@ impl GameInput {
             ports: 0,
             motors: [(0, 0); PLAYERS],
             mirror: None,
+            keyboard_player: None,
         })
     }
 
@@ -42,7 +44,7 @@ impl GameInput {
         // A core that declares no port has one, as the C# front end reads it.
         let ports = info.ports.len().max(1);
         self.router.reset(ports as i32, &info.axes).map_err(|e| e.to_string())?;
-        (self.ports, self.mirror) = (ports.min(PLAYERS), None);
+        (self.ports, self.mirror, self.keyboard_player) = (ports.min(PLAYERS), None, None);
         self.pads.want(Some(Want { console: info.console, game: Some(game.to_string()), ports, axes: info.axes }));
         Ok(())
     }
@@ -55,8 +57,8 @@ impl GameInput {
         }
     }
 
-    /// Before a frame: the last frame's motors handed to the pads, a newer read routed (the mirror as it says), and each
-    /// change told to the core in the router's order.
+    /// Before a frame: the last frame's motors handed to the pads, a newer read routed (the mirror and the keyboard's
+    /// player as it says, the keys held to the keyboard's player), and each change told to the core in the router's order.
     pub fn frame(&mut self, runtime: &Runtime, session: SessionId) -> Result<(), String> {
         for (port, motors) in self.motors.iter_mut().enumerate().take(self.ports) {
             *motors = runtime.input_rumble(session, port as u32).map_err(|e| e.to_string())?;
@@ -70,7 +72,11 @@ impl GameInput {
             self.router.set(consts::MIRROR, i32::from(read.mirror)).map_err(|e| e.to_string())?;
             self.mirror = Some(read.mirror);
         }
-        self.router.poll(&read.held[..read.players], &read.axes, 0, read.seated, &mut self.changes).map_err(|e| e.to_string())?;
+        if read.keyboard_player != 0 && self.keyboard_player != Some(read.keyboard_player) {
+            self.router.set(consts::KEYBOARD_PLAYER, read.keyboard_player as i32).map_err(|e| e.to_string())?;
+            self.keyboard_player = Some(read.keyboard_player);
+        }
+        self.router.poll(&read.held[..read.players], &read.axes, read.keyboard, read.seated, &mut self.changes).map_err(|e| e.to_string())?;
         for change in &self.changes {
             let port = u32::try_from(change.port).unwrap_or(0);
             let told = match change.kind {

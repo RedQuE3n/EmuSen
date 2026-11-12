@@ -19,7 +19,9 @@
     "stick_as_dpad": ["AppSettings AnalogStickAsDpad", true],
     "stick_deadzone": "AppSettings StickDeadzone",
     "mirror": ["AppSettings MirrorPlayer1ToPlayer2", true],
-    "rumble": ["AppSettings Rumble", true]
+    "rumble": ["AppSettings Rumble", true],
+    "keyboard_player": "AppSettings KeyboardPlayer",
+    "guide_chords": "AppSettings GuideChords"
   },
   "sections": [
     {
@@ -275,10 +277,6 @@
       "warning_mark": "⚠",
       "listening_mark": "●"
     },
-    "held_actions": [
-      "FastForward",
-      "Rewind"
-    ],
     "actions": [
       ["FastForward", "Fast Forward"],
       ["Rewind", "Rewind"],

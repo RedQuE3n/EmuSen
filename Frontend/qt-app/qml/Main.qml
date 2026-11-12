@@ -175,7 +175,8 @@ Window {
         anchors.fill: parent
         visible: program.gameShown || program.pauseShown || (screens.shown === Screens.Home && player.session.running)
         inFront: program.gameShown && !player.session.resumeAsked
-        guideChords: program.guideChords
+        // As the start read them until the settings are read, then as they say, changed on the screen or not.
+        guideChords: settingsModel.ready ? settingsModel.guideChords : program.guideChords
         focus: program.gameShown && !player.session.resumeAsked
         feed: program.feed
         platformLibrary: program.platformLibrary
@@ -184,6 +185,16 @@ Window {
         onMenu: {
             player.session.pause()
             screens.menu()
+        }
+        // The window's hotkeys: Exit to Library suspends the game to the library as the card's Back to Library does,
+        // Fullscreen turns the window's full screen, as Mistress's `ToggleFullScreen`.
+        onHotkey: (action) => {
+            if (action === "ExitToLibrary") {
+                player.session.pause()
+                screens.library()
+            } else if (action === "ToggleFullscreen") {
+                program.visibility = program.visibility === Window.FullScreen ? Window.Windowed : Window.FullScreen
+            }
         }
     }
     // The grid's games: the section shown, sorted, narrowed and searched as the List card and the search ask; a theme's
@@ -486,6 +497,7 @@ Window {
         open: screens.shown === Screens.Settings || program.pauseShown
         facts: library.loading ? "" : library.settingsFacts(player.session.running ? player.session.game : "")
         gamePads: pads.gamePads
+        gameMode: program.gameMode
         onDoor: (name) => screens.act(name)
         onOpenFolder: (path) => folders.open(path)
         onChooseFolder: (key, start) => folders.choose(key, start)

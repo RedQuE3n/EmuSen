@@ -18,7 +18,7 @@ fn pad(p: &Arc<Platform>, name: &str, path: &str) -> SimPad {
     pad
 }
 
-const PLAIN: PadSettings = PadSettings { first_controller_only: false, stick_as_dpad: true, stick_deadzone: Some(0.5), mirror: false };
+const PLAIN: PadSettings = PadSettings { first_controller_only: false, stick_as_dpad: true, stick_deadzone: Some(0.5), mirror: false, keyboard_player: Some(1) };
 
 /// One tick as the reader runs it: the settings, a poll, the seats, the game's read; the read handed over, if any.
 fn tick(pads: &Pads, reading: &mut Reading, game: &GamePads, game_reading: &mut GameReading) -> (Vec<String>, Option<Read>) {

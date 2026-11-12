@@ -12,7 +12,7 @@
 
 mod common;
 
-use common::console::{back_to_library, choose_row, console_owns_the_pad, focused_words, grid_ready, pause, quit_game, row_box_holds, row_centre, row_focused, row_middles, row_shown, row_words, until};
+use common::console::{back_to_library, choose_row, console_owns_the_pad, games_place, list_card_start_console, focused_words, grid_ready, pause, quit_game, row_box_holds, row_centre, row_focused, row_middles, row_shown, row_words, until};
 use common::{approved_console_core, hold, sandbox, wait_for};
 
 use emusen_client_fixture::cores::{installation_with_snes, snes_image};
@@ -194,13 +194,6 @@ fn qt_7_9_start_console_starts_a_console_whose_screen_owns_the_pad() {
     drop(host);
 }
 
-/// Home's focus on Games, as Home gives it.
-fn games_place(scene: &mut emusen_qt_test::Scene<'_>) {
-    until(scene, 5, "Home's Games holding the focus", |s| {
-        let tree = s.tree();
-        tree.find_named("place.0").is_some_and(|games| s.focus(&tree) == Some(games) || s.focus_item(&tree, games))
-    });
-}
 
 /// From Home: Games, All Games, the grid in place.
 fn all_games(scene: &mut emusen_qt_test::Scene<'_>) {
@@ -215,23 +208,6 @@ fn all_games(scene: &mut emusen_qt_test::Scene<'_>) {
     grid_ready(scene);
 }
 
-/// From Home: Games, All Games, the grid, Select's List card and its Start Console page, on the PlayStation's row.
-fn list_card_start_console(scene: &mut emusen_qt_test::Scene<'_>) {
-    games_place(scene);
-    scene.pad(UiButton::Accept);
-    wait_for(scene, "screens", "shown", "Consoles", 1000);
-    let tree = scene.tree();
-    let all = tree.find_named("tile.0").expect("All Games");
-    assert!(scene.focus_item(&tree, all));
-    scene.pad(UiButton::Accept);
-    wait_for(scene, "screens", "shown", "Grid", 1000);
-    grid_ready(scene);
-    scene.pad(UiButton::Options);
-    until(scene, 5, "the List card in place", |s| s.property("screens", "shown") == "List" && s.property("listCardCanvas", "slide") == "0");
-    choose_row(scene, "Start Console");
-    until(scene, 5, "Start Console's page", |s| s.property("listCardModel", "page") == emusen_qt_models::list_card::START_CONSOLE);
-    row_focused(scene, "PlayStation");
-}
 
 /// Start on Home: the Home card at its first page, in place.
 fn home_card(scene: &mut emusen_qt_test::Scene<'_>) {

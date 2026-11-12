@@ -21,6 +21,12 @@ Item {
     readonly property alias picture: picture
     readonly property bool ownsPad: session.running && !session.paused && root.inFront
     signal menu()
+    // A hotkey whose action is the window's, by the binding files' word (ToggleFullscreen, ExitToLibrary, ToggleBigPicture).
+    signal hotkey(string action)
+
+    // The keyboard over the game: the console's keys to the game, the hotkeys to their actions (EmuSen_Qt.md §7.7.H6).
+    Keys.onPressed: (event) => event.accepted = session.running && session.key(event.key, event.modifiers, true, event.isAutoRepeat)
+    Keys.onReleased: (event) => event.accepted = session.running && session.key(event.key, event.modifiers, false, event.isAutoRepeat)
 
     // While the game owns the pad only the chord leaves the router, and it reaches the host.
     Binding {
@@ -50,6 +56,7 @@ Item {
     SessionModel {
         id: session
         objectName: "session"
+        onHotkey: (action) => root.hotkey(action)
         platformLibrary: root.platformLibrary
         feed: root.feed
         cores: root.cores

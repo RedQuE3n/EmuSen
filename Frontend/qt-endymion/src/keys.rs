@@ -86,6 +86,18 @@ const FUNCTIONS: [&str; 24] = [
     "F24",
 ];
 
+/// Escape as the binding files name it (the Exit to Library hotkey's key by default).
+pub const ESCAPE: &str = "Escape";
+
+/// A key pressed over a running game, as the files name it, Escape among them; none for a key they have no word for.
+pub fn word(key: i32, modifiers: i32) -> Option<&'static str> {
+    match heard(key, modifiers) {
+        Heard::Key(word) => Some(word),
+        Heard::Escape => Some(ESCAPE),
+        Heard::Nothing => None,
+    }
+}
+
 /// A key pressed, by Qt's number and modifiers, as the binding files name it.
 pub fn heard(key: i32, modifiers: i32) -> Heard {
     if key == 0x0100_0000 {

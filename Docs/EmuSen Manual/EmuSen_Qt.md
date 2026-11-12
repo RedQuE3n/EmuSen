@@ -4710,15 +4710,14 @@ at once. Leaving clears what was held and puts the knobs at rest.
 `.Controllers.cs`, `.Keys.cs`, `.Game.cs`, `SettingsView.cs` and `MainWindow.Settings.cs`). Built: Players (seats, a
 pad's player stepped, a kept seat forgotten, a held button marking its row), Controller bindings, Profiles (the console
 chosen, a profile opened, made, renamed, chosen to start games, deleted, the one every console has held), Rumble shown
-where a console's games drive a motor, Keyboard keys and Hotkeys (listening, clearing, clashes named; **saving only**:
-the keys are written to the binding files, but no game hears the keyboard, since the game's router is polled with no
-keyboard (`qt-models` `input.rs`), and nothing in the program reads a hotkey), Reset every binding,
+where a console's games drive a motor, Keyboard keys and Hotkeys (listening, clearing, clashes named; a running game
+hears the keys and the hotkeys act, §7.7.H6), Reset every binding,
 every row of Galaxia's Controllers group (Swap A and B, Guide chords, Controller type, Only the first controller,
 Controller notices, On-screen keyboard, Left stick as the D-pad, Stick deadzone, Mirror player 1 to player 2) shown and
 saved, the bindings page (the strip, the drawing, a press listened for with its five seconds, Y reset, X the player or
 clear, the shoulders, the directions over the drawing, the conflict line), the tester, and the card's Controllers page.
-What those saved rows change outside these pages is §7.7.H3's; the on-screen keyboard row still picks nothing (Steam's
-keyboard has no call here), and Guide chords are read at the start alone.
+What those saved rows change outside these pages is §7.7.H3's and §7.7.H6's; the on-screen keyboard row still picks
+nothing (§7.7.H6 names the call it waits for).
 
 **Facts read from their owners** (2026-11-10). The profile every console has is named by Endymion: the source reads
 it once with the models, as the profile `bindings_choose` answers where no profile exists (Endymion's
@@ -4837,9 +4836,75 @@ SDL's button numbers and the test core's image bytes in the tests, as every test
 **Held to** `qt-models/tests/controllers.rs` (a map unchosen said, no binding shown and nothing written by Y or a press;
 the tester's bindings unread; the card's profile unwritten for a game unnamed and its rows withheld for a map unchosen;
 a key with no word said and not written) and `qt-models/tests/settings.rs` (a deadzone that is not a number said, the
-other three settled; every Controller type of Galaxia's a family of the kit's but Automatic). The Settings tests of the
-program excuse a word under the floor at 1280 × 720 only inside the help bar (`tests/bindings/mod.rs` `named`), as
-`settings.rs` names that finding; a label beside the drawing is held at every size (R-20261111-114).
+other three settled; every Controller type of Galaxia's a family of the kit's but Automatic). The program's Controllers
+tests excuse nothing (`tests/bindings/mod.rs` `nothing_named`): run on 2026-11-12 with no finding named,
+`settings_controllers`, `card_controllers` and `settings_drawings` found none, the help bar's words included, so the
+excuse they had carried named nothing that happened; a label beside the drawing is held at every size (R-20261111-114).
+
+#### 7.7.H6 The keyboard over a game, the hotkeys and Guide chords (stage 5, piece H3's second pass; 2026-11-12)
+
+**Keyboard keys heard by a game**, as Mistress's `SetButtonFromKey` and `ApplyKeys` routed them. When a game's wants are
+taken, the pads' reader reads the console's map from keybindings.json (`bindings_load` KEYS with the console) and
+Endymion's controls' words (`bindings_controls`), and gives each bound key the bit of its control, the control's place
+in that list being its PadControl (`qt-endymion` `game::keyboard_of`); the hotkeys are read with them. `Game.qml` hands
+every key pressed or let go over the game to `SessionModel.key`, which names it in the files' words (`keys::word`,
+Escape among them) and asks the hand-over (`GamePads::key`): a key of the console's is held for the game, by its bit,
+and handed over with each read (`Read.keyboard`), which `GameInput` gives the router's poll as its keyboard mask in
+place of the 0 it gave before. The keyboard plays as the Players page's Keyboard (`AppSettings KeyboardPlayer`, the
+description's `applies` `keyboard_player`), set on the router (`ROUTER_KEYBOARD_PLAYER`) as the mirror is. A key held as
+a menu takes the keyboard is let go for the game, and the game's quiet after a menu waits for the keys as for the
+buttons. A stored player that is not a player's number is said ("The keyboard's player could not be read, …") and the
+router's left as it was.
+
+**The hotkeys**, each at the key hotkeybindings.json gives it, over a running game, as Mistress's acted (the actions by
+the header's words, `qt-endymion` `hotkeys.rs`; held ones while the key is down, the rest as it goes down, an
+auto-repeat doing nothing):
+
+| Hotkey | What it does | As Mistress |
+|---|---|---|
+| Fast Forward (held) | the runtime's turbo speed (`speed_mode` TURBO, NORMAL when let go), "Fast forward" said | `_turboHeld`, `Notify` |
+| Rewind (held) | the frame thread steps back one snapshot every `reel::held_step` frames (the snapshots' interval over 4) in place of a frame, the pads unheard and the sound dropped; an engine that keeps no rewind is said once | `_rewindHeld`, `HeldRewindSpeedup` |
+| Save State, Load State | the slot chosen, as the Pause Card's rows | `SaveState`, `LoadState` |
+| Pause / Resume | the game held with nothing over it, and let go | `TogglePause` |
+| Frame Advance | the runtime's `frame_advance`, "Paused: advanced one frame"; Pause / Resume, the card's Resume or Continue lets it run (`run_control` RESUME) | `AdvanceOneFrame` |
+| Screenshot | as the Pause Card's | `TakeScreenshot` |
+| Fullscreen | the window's full screen turned (`Main.qml`) | `ToggleFullScreen` |
+| Exit to Library | the game suspended to the library, as the card's Back to Library (the screens' `Library` from the game's screen too) | `ToggleLibrary` |
+| Big Picture | nothing: the program has no desktop view to leave to | `SetBigPicture` |
+
+**Guide chords** are read as they are changed: `SettingsModel.guideChords` gives Mistress's rule (On, Off, Auto off under
+Steam's Game Mode, `settings::guide_chords_on`, which the start's reading uses too) from the stored value and the
+window's `gameMode`, and the game's `guideChords` follows it once the settings are read.
+
+**The controller drawing** no longer imports `QtQuick.Window`: it used it for `Screen.devicePixelRatio`, the picture's
+source size, and Qt 6's `QtQuick.Window` module only imports `QtQuick` (its qmldir's `import QtQuick auto`), where
+`Screen` is.
+
+**Not acting, each waiting on something outside these pages** (for the tester): Big Picture (above); the On-screen
+keyboard row, whose Steam choice needs a platform call that says whether Steam is there and asks for its keyboard
+(Mistress's `DeviceKeyboard.UnderSteam` and `AskSteam`), which the interface does not have; the Players page's "The
+first controller pressed is player 1" and "External controller first", which need rules Endymion's seats do not have
+(§7.7.H3). Left stick as the D-pad and Mirror player 1 to player 2 act (§7.7.H3), but no core of the client fixture shows
+a d-pad or a second port where a program's test can see it, so neither is tested from its row.
+
+**The failures §7.7.H5 left untested.** The pads that will not open are made so in the program by naming the reader a
+platform library that does not load (the reader opens the pads through that library), and the bindings unsaved by
+making the configuration's folders read-only before a key is bound: each is said on the notice layer
+(`controller_failures.rs`). Endymion's controls' words unread (`ClientSettings::chooser`) has no such seam:
+`emusen_endymion_bindings_controls` takes no input and fails only for a null buffer of non-zero length, which the
+client never passes, and the program reads it from the one platform library it loads, so only a stand-in platform
+library could make it fail, and the tree has none; a tick's pad reads, likewise, fail only for a handle or number the
+reader never passes (§7.7.H5).
+
+**Held to** (written 2026-11-12). `qt-endymion/tests/keyboard.rs` (a console's key held by its control's bit and handed
+over with the keyboard's player, let go under a menu, the hotkeys by their keys, Escape's word; every action of
+Endymion's hotkeys has its action here and only Fast Forward and Rewind are held); `qt-models/tests/keyboard.rs` (keys
+bound through the bindings model and saved as the page saves them, pressed as the window names them, reaching the
+console core as its buttons, and not as player 2); `qt-models/tests/library.rs` and `esde.rs` (Exit to Library from the
+game's screen); the program's `settings_effects.rs` (Guide chords stepped to Off and back, the game's chords following),
+`controller_failures.rs` (pads that will not open, and bindings that cannot be saved, each said on the notice layer),
+`controls_gpu.rs` (on Vulkan: B's key reaching the console core, and every hotkey but Big Picture acting) and
+`rumble_gpu.rs` (Rumble turned on Settings' row with the game suspended under Home).
 
 #### 7.7.K Cores' Update All…, and the cover's raised shadow (stage 5, piece K; 2026-11-09)
 

@@ -61,11 +61,7 @@ pub fn reduced_motion_from(settings: &Value) -> bool {
 /// The Guide chords from the settings, as Mistress's `GuideChordsOn` reads them: "On", "Off", or Auto (the default),
 /// off under Steam's Game Mode, where Steam holds Guide's chords.
 pub fn guide_chords_from(settings: &Value, game_mode: bool) -> bool {
-    match settings.get("GuideChords").and_then(Value::as_str) {
-        Some("On") => true,
-        Some("Off") => false,
-        _ => !game_mode,
-    }
+    emusen_qt_models::settings::guide_chords_on(settings.get("GuideChords").and_then(Value::as_str), game_mode)
 }
 
 /// Steam's Game Mode from the environment, as Mistress reads it: gamescope among `XDG_CURRENT_DESKTOP`'s names, or,

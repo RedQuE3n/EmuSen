@@ -76,7 +76,7 @@ pub fn card_words(scene: &mut Scene<'_>) -> Vec<(String, String)> {
 }
 
 /// Points over the middle of the game's screen, where the console's picture is drawn whatever its shape.
-fn picture_points(scene: &mut Scene<'_>) -> Vec<(f64, f64)> {
+pub fn picture_points(scene: &mut Scene<'_>) -> Vec<(f64, f64)> {
     let tree = scene.tree();
     let game = &tree.nodes[tree.find_named("game").expect("the game's screen") as usize];
     let (cx, cy) = (game.x + game.w / 2.0, game.y + game.h / 2.0);
@@ -92,7 +92,7 @@ fn seen(scene: &mut Scene<'_>, points: &[(f64, f64)]) -> Vec<[u8; 3]> {
 /// The blue the grab finds over the picture, on average: the client fixture's console core draws it by the button of its
 /// pad held, B the most and Start less, and none with none held (emusen-native's test core under `AS_PLAYSTATION`,
 /// its `PRESSED_BLUES`).
-fn blue(scene: &mut Scene<'_>, points: &[(f64, f64)]) -> f64 {
+pub fn blue(scene: &mut Scene<'_>, points: &[(f64, f64)]) -> f64 {
     let seen = seen(scene, points);
     seen.iter().map(|c| f64::from(c[2])).sum::<f64>() / seen.len().max(1) as f64
 }
@@ -236,4 +236,30 @@ pub fn focus_chain(scene: &mut Scene<'_>) -> Vec<String> {
 /// Whether the focus is inside the item named `name`.
 pub fn focus_within(scene: &mut Scene<'_>, name: &str) -> bool {
     focus_chain(scene).iter().any(|n| n.split(':').next() == Some(name))
+}
+
+/// Home's focus on Games, as Home gives it.
+pub fn games_place(scene: &mut emusen_qt_test::Scene<'_>) {
+    until(scene, 5, "Home's Games holding the focus", |s| {
+        let tree = s.tree();
+        tree.find_named("place.0").is_some_and(|games| s.focus(&tree) == Some(games) || s.focus_item(&tree, games))
+    });
+}
+
+/// From Home: Games, All Games, the grid, Select's List card and its Start Console page, on the PlayStation's row.
+pub fn list_card_start_console(scene: &mut emusen_qt_test::Scene<'_>) {
+    games_place(scene);
+    scene.pad(UiButton::Accept);
+    crate::common::wait_for(scene, "screens", "shown", "Consoles", 1000);
+    let tree = scene.tree();
+    let all = tree.find_named("tile.0").expect("All Games");
+    assert!(scene.focus_item(&tree, all));
+    scene.pad(UiButton::Accept);
+    crate::common::wait_for(scene, "screens", "shown", "Grid", 1000);
+    grid_ready(scene);
+    scene.pad(UiButton::Options);
+    until(scene, 5, "the List card in place", |s| s.property("screens", "shown") == "List" && s.property("listCardCanvas", "slide") == "0");
+    choose_row(scene, "Start Console");
+    until(scene, 5, "Start Console's page", |s| s.property("listCardModel", "page") == emusen_qt_models::list_card::START_CONSOLE);
+    row_focused(scene, "PlayStation");
 }

@@ -82,6 +82,9 @@ pub mod qobject {
         #[qproperty(i32, controller_family, cxx_name = "controllerFamily", READ, NOTIFY)]
         #[qproperty(bool, controller_notices, cxx_name = "controllerNotices", READ, NOTIFY)]
         #[qproperty(bool, rumble, READ, NOTIFY)]
+        /// Whether Guide's chords are read, by Guide chords and `gameMode`, the program's Steam Game Mode (EmuSen_Qt.md §7.7.H6).
+        #[qproperty(bool, guide_chords, cxx_name = "guideChords", READ, NOTIFY)]
+        #[qproperty(bool, game_mode, cxx_name = "gameMode")]
         /// The help bar's screen (HelpModel's numbers).
         #[qproperty(i32, help, READ, NOTIFY)]
         /// The pads' hand-over (`PadReader.gamePads`), whose seats the Players page shows and changes (EmuSen_Qt.md §7.7.H).
@@ -321,6 +324,8 @@ pub struct SettingsModelRust {
     controller_family: i32,
     controller_notices: bool,
     rumble: bool,
+    guide_chords: bool,
+    game_mode: bool,
     help: i32,
     problem: QString,
     view: SettingsView,
@@ -391,6 +396,8 @@ impl Default for SettingsModelRust {
             controller_family: -1,
             controller_notices: false,
             rumble: false,
+            guide_chords: false,
+            game_mode: false,
             help: shown_screen(Screen::Settings),
             problem: QString::default(),
             rows: view.rows(),
@@ -443,6 +450,13 @@ impl cxx_qt::Initialize for qobject::SettingsModel {
                 let section = model.section.max(0) as usize;
                 model.as_mut().rust_mut().view.choose_section(section);
                 model.shown(true);
+            })
+            .release();
+        self.as_mut()
+            .on_game_mode_changed(|model| {
+                if model.ready {
+                    model.applied();
+                }
             })
             .release();
         self.as_mut()
@@ -716,6 +730,11 @@ impl qobject::SettingsModel {
         if self.rumble != rumble {
             self.as_mut().rust_mut().rumble = rumble;
             self.as_mut().rumble_changed();
+        }
+        let chords = self.view.guide_chords(self.game_mode);
+        if self.guide_chords != chords {
+            self.as_mut().rust_mut().guide_chords = chords;
+            self.as_mut().guide_chords_changed();
         }
         self.as_mut().settle_pads();
         if !self.ready {

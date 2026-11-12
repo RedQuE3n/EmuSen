@@ -310,7 +310,7 @@ fn the_screens_switch_by_what_was_asked() {
     assert_eq!(step(Shown::Pause, &Ask::Library), Some((Shown::Home, None)), "Back to Library: Home, the game suspended");
     assert_eq!(step(Shown::Pause, &Ask::Closed), Some((Shown::Home, None)), "a game that stops under the card");
     assert_eq!(step(Shown::Pause, &Ask::Menu), None, "the card's own Start is its action, not the chord");
-    assert_eq!(step(Shown::Game, &Ask::Library), None);
+    assert_eq!(step(Shown::Game, &Ask::Library), Some((Shown::Home, None)), "the Exit to Library hotkey: Home, the game suspended");
 }
 
 #[test]

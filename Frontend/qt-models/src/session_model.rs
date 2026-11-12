@@ -15,7 +15,9 @@ use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_platform_client::audio::{GameSound, SoundSettings};
 use emusen_platform_client::pace::DisplayClock;
 use emusen_platform_client::{galaxia, Lent, Platform};
-use emusen_qt_endymion::game::GamePads;
+use emusen_qt_endymion::game::{GamePads, KeyUse};
+use emusen_qt_endymion::hotkeys::Hotkey;
+use emusen_qt_endymion::keys;
 use std::sync::Arc;
 
 #[cxx_qt::bridge]
@@ -178,6 +180,15 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "guideChord"]
         fn guide_chord(self: Pin<&mut SessionModel>, button: PadButton);
+
+        /// A key pressed or let go over the running game, by Qt's number and modifiers: a control of the console's for
+        /// the game, or a hotkey's action (EmuSen_Qt.md §7.7.H6); whether the key was the game's or a hotkey's.
+        #[qinvokable]
+        fn key(self: Pin<&mut SessionModel>, key: i32, modifiers: i32, pressed: bool, repeated: bool) -> bool;
+
+        /// A hotkey whose action is the window's (ToggleFullscreen, ExitToLibrary), by the files' word.
+        #[qsignal]
+        fn hotkey(self: Pin<&mut SessionModel>, action: QString);
     }
 
     impl cxx_qt::Threading for SessionModel {}
@@ -226,6 +237,8 @@ pub struct SessionModelRust {
     runtime: Option<Runtime>,
     platform: Option<Arc<Platform>>,
     session: Option<Session>,
+    /// The runtime holding the game after a Frame Advance, until a resume lets it run (Mistress's `AdvanceOneFrame`).
+    stepped: bool,
 }
 
 impl Default for SessionModelRust {
@@ -265,6 +278,7 @@ impl Default for SessionModelRust {
             runtime: None,
             platform: None,
             session: None,
+            stepped: false,
         }
     }
 }
@@ -645,17 +659,108 @@ impl qobject::SessionModel {
             session.set_paused(false);
             self.as_mut().set_paused(false);
         }
+        self.unstep();
     }
 
     fn toggle_pause(self: Pin<&mut Self>) {
-        if self.paused {
+        if self.paused || self.stepped {
             self.resume();
         } else {
             self.pause();
         }
     }
 
+    /// The runtime let run again after a Frame Advance held it.
+    fn unstep(mut self: Pin<&mut Self>) {
+        if !std::mem::take(&mut self.as_mut().rust_mut().stepped) {
+            return;
+        }
+        let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
+        let resumed = runtime.session_service(session, 0).and_then(|service| service.run_control(session, emusen_crystal_client::consts::RUN_RESUME, 0, 0));
+        if let Err(e) = resumed {
+            self.say(format!("The game could not be resumed: {e}"), true);
+        }
+    }
+
+    /// One frame run and the game held after it, by the runtime's frame advance (Mistress's `AdvanceOneFrame`).
+    fn frame_advance(mut self: Pin<&mut Self>) {
+        let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
+        if let Err(e) = runtime.frame_advance(session) {
+            return self.say(format!("Frame Advance failed: {e}"), true);
+        }
+        self.as_mut().rust_mut().stepped = true;
+        if let Some(session) = &self.session {
+            session.set_paused(false);
+        }
+        self.as_mut().set_paused(false);
+        self.say(pause::ADVANCED.to_string(), false);
+    }
+
+    /// Words over the game, as a job's are said.
+    fn say(mut self: Pin<&mut Self>, words: String, attention: bool) {
+        if self.notice_attention != attention {
+            self.as_mut().rust_mut().notice_attention = attention;
+            self.as_mut().notice_attention_changed();
+        }
+        self.as_mut().rust_mut().notice = QString::from(&words);
+        self.notice_changed();
+    }
+
+    fn key(self: Pin<&mut Self>, key: i32, modifiers: i32, pressed: bool, repeated: bool) -> bool {
+        let Some(word) = keys::word(key, modifiers) else { return false };
+        // SAFETY: as in `game_input`.
+        let Some(pads) = (unsafe { GamePads::at(self.pads) }) else { return false };
+        match pads.key(word, pressed) {
+            KeyUse::Control => true,
+            KeyUse::Hotkey(hotkey) => {
+                if !repeated {
+                    self.hotkey_acted(hotkey, pressed);
+                }
+                true
+            }
+            KeyUse::Nothing => false,
+        }
+    }
+
+    /// A hotkey's action, held ones while the key is down and the rest as it goes down (Mistress's `SetButtonFromKey`).
+    fn hotkey_acted(mut self: Pin<&mut Self>, hotkey: Hotkey, pressed: bool) {
+        if !pressed && !hotkey.held() {
+            return;
+        }
+        let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
+        match hotkey {
+            Hotkey::FastForward => {
+                let mode = if pressed { emusen_crystal_client::consts::SPEED_TURBO } else { emusen_crystal_client::consts::SPEED_NORMAL };
+                match runtime.speed_mode(session, mode) {
+                    Err(e) => self.say(format!("Fast forward failed: {e}"), true),
+                    Ok(()) if pressed => self.say(pause::FAST_FORWARD.to_string(), false),
+                    Ok(()) => {}
+                }
+            }
+            Hotkey::Rewind => {
+                if let Some(session) = &self.session {
+                    session.set_rewinding(pressed);
+                }
+            }
+            Hotkey::SaveState => {
+                let slot = self.slot;
+                self.save_state(slot);
+            }
+            Hotkey::LoadState => {
+                let slot = self.slot;
+                self.load_state(slot);
+            }
+            Hotkey::TogglePause => self.toggle_pause(),
+            Hotkey::FrameAdvance => self.frame_advance(),
+            Hotkey::Screenshot => self.screenshot(),
+            Hotkey::ToggleFullscreen | Hotkey::ExitToLibrary | Hotkey::ToggleBigPicture => {
+                self.as_mut().hotkey(QString::from(hotkey.word()));
+            }
+        }
+    }
+
     fn close(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().stepped = false;
         *self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         drop(self.as_mut().rust_mut().session.take());
         self.as_mut().rust_mut().opened = None;
@@ -692,6 +797,7 @@ impl qobject::SessionModel {
                 self.as_mut().set_running(false);
             }
             Report::Closed => self.as_mut().set_running(false),
+            Report::Said(words) => self.as_mut().say(words, true),
         }
     }
 

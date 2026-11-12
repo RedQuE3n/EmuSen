@@ -2709,10 +2709,15 @@ no image crate is needed, the oracle library read as the three texts of §4.6).
   width and the row as a share of the height; the expected difference is the change in those shares in pixels of the
   smaller window, on the width and the height, and −origin × each on the left and the top, as the strip is placed
   (`scene::help::top_left`). Nothing of it is read from the painter's layout. `worded-boxes.tsv` gives every box its
-  expected edges and what is left on each axis (0 expected for any box but a help strip). Art Book Next's system help at
-  1280 × 720 against 1920 × 1080, which moved 14.67 px for 27 letters (14.5), is the case that asked for it: in Akrobat
-  SemiBold at the theme's 0.04583333 the S is 23 rows at 33.0 px and 37 at 49.5 px, an icon box of 28.75 px against
-  46.25 ÷ 1.5 = 30.83, 2.08 px per entry at the smaller window over its four entries.
+  expected edges and what is left on each axis (0 expected for any box but a help strip). The face is the one the painter
+  finds in the same process, so on a machine without ES-DE's fonts both draw and measure the help in the kit's body face.
+  Measured on 2026-11-12 on the RX 6800 at 90cd96902 (`worded-boxes.tsv`), the case that asked for the rule, Art Book
+  Next's system help at 1280 × 720 against 1920 × 1080, moved 14.67 px across for 27 letters: its S is 23 rows at
+  33.0 px and 34 at 49.5 px in the body face, an icon box of 28.75 px against 42.5 ÷ 1.5 = 28.33, so its four entries
+  are expected 1.67 px wider at the smaller window and 13.00 px is left against 14.5; every help strip of the three
+  watched themes is within its allowance. In Akrobat SemiBold, ES-DE's help face, the same S is 23 and 37 rows (28.75
+  against 30.83, 2.08 px narrower an entry), so the expected figure depends on the face drawn, which is why it is
+  calculated at each run and never written down.
   A size is read only
   after its install has published, since the old frame stands until the new size's load comes back. The defects it
   found, each fixed and proved:

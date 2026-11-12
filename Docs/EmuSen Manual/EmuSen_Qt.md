@@ -3742,7 +3742,8 @@ the painter is held to ES-DE 3.4.1, not to the C# painter (R-20261111-77).
    (`catalog.tsv`, the one owner of each range); `scene::help::spacing_px` multiplies. A seeded fault that took the clamp
    out of the scene was not caught on 2026-11-11 because the loader had already clamped: the clamp is the loader's alone.
    The media viewer's help, which no theme styles, takes the same defaults from `catalog.tsv` through
-   `scene::help::default_spacing_px`, not figures of its own.
+   `scene::help::default_spacing_px`, not figures of its own; a property `catalog.tsv` gives no default stops with its
+   name, where until 2026-11-12 it became a spacing of 0 unsaid (held by help.rs's `a_missing_catalogue_default_is_said`).
 6. *The grid's width* (`HelpComponent.cpp`, `updateGrid`): the sum over the entries of icon + label + `iconTextSpacing`
    + `entrySpacing`, the spacing after the last entry included; each label's width is already whole (each glyph's
    advance rounded, §4.9). Each part's place is the sum of those before it (`components/ComponentGrid.cpp`,

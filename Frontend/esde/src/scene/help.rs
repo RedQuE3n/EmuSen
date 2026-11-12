@@ -140,10 +140,11 @@ pub fn spacing_px(e: &Element, property: &str, w: f64) -> f64 {
 }
 
 /// A spacing where no theme sets one, as the media viewer's help: the catalogue's default share for the help times the
-/// screen's width, in f32 as `spacing_px`.
+/// screen's width, in f32 as `spacing_px`. A catalogue with no number for it is a defect of catalog.tsv, said, not a 0.
 pub fn default_spacing_px(property: &str, w: f64) -> f64 {
     let share = crate::loader::catalog().find("helpsystem").and_then(|e| e.find(property)).and_then(|p| p.default.as_deref()).and_then(|d| d.parse::<f32>().ok());
-    f64::from(share.unwrap_or(0.0) * w as f32)
+    let share = share.unwrap_or_else(|| panic!("catalog.tsv gives helpsystem.{property} no default share"));
+    f64::from(share * w as f32)
 }
 
 /// entryRelativeScale, which the loader holds to 0.2–3.
@@ -165,6 +166,18 @@ pub fn top_left(pos: Option<Pair>, origin: Pair, entry_spacing: f64, size: (f64,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // A property the catalogue has no default for is said by name, never a spacing of 0.
+    #[test]
+    #[should_panic(expected = "catalog.tsv gives helpsystem.noSuchSpacing no default share")]
+    fn a_missing_catalogue_default_is_said() {
+        default_spacing_px("noSuchSpacing", 1280.0);
+    }
+
+    #[test]
+    fn the_viewer_s_two_spacings_have_catalogue_defaults() {
+        assert!(default_spacing_px("entrySpacing", 1280.0) > 0.0 && default_spacing_px("iconTextSpacing", 1280.0) > 0.0);
+    }
 
     fn pair(x: f32, y: f32) -> Pair {
         Pair { x, y }

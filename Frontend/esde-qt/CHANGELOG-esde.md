@@ -13,6 +13,8 @@ compared on every build. Each entry names what changed and the section that reco
   `barWidth`, `barStart`, `discEdge`, `faceName` and the object names `help-`, `helpPicture-` and `helpGlyph-` with the
   entry's label; `Mark.aspect` and `baselineShare`; `View.defaultFont` and `selectionSeed`; `TextBlock.contentWidth`,
   `contentHeight`, `wholeRows`, `windowHeight`, `measuredHeight` and `baselineY` as numbers. §4.8.7, §4.9, §4.12, §4.14.
+- QML files, added: the object name `viewClock` under `View`, the inner object that holds the scene's clock
+  (`clockMs`, `tickedMs`), which the view's root does not offer (decided 2026-11-12 by the tester, R-20261112-20). §4.8.4.
 - QML files, removed or changed: `TextBlock.pitch` and `halfLeading`, and `contentWidth` and `contentHeight` as aliases;
   `HelpElement.heightShare`, `inkShare`, `lineHeight` and `glyphSide`, and `labelPx` from read-only to required.
 - Registry, removed: `EsdeModel.hover(row)`, deprecated in 1.1 (R-20261111-98) and removed in this minor (decided

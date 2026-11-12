@@ -30,20 +30,26 @@ Item {
         scene: esde
         revision: esde.revision
     }
-    // The scene's clock is Qt's animation clock, so a held or recording driver holds it as it holds every animation (EmuSen_Qt.md §4.8.5).
-    property real clockMs: 0
-    property real tickedMs: 0
-    NumberAnimation on clockMs {
-        running: esde.moving
-        from: 0
-        to: 1e9
-        duration: 1e9
-        loops: Animation.Infinite
-    }
-    onClockMsChanged: {
-        if (clockMs > tickedMs)
-            esde.tick(clockMs - tickedMs)
-        tickedMs = clockMs
+    // The scene's clock is Qt's animation clock, kept in an inner object so View does not offer it (EmuSen_Qt.md §4.8.4).
+    QtObject {
+        id: clock
+        objectName: "viewClock"
+        property real clockMs: 0
+        property real tickedMs: 0
+        property NumberAnimation driver: NumberAnimation {
+            target: clock
+            property: "clockMs"
+            running: esde.moving
+            from: 0
+            to: 1e9
+            duration: 1e9
+            loops: Animation.Infinite
+        }
+        onClockMsChanged: {
+            if (clockMs > tickedMs)
+                esde.tick(clockMs - tickedMs)
+            tickedMs = clockMs
+        }
     }
     Timer {
         interval: Math.max(1, esde.nextChangeMs)

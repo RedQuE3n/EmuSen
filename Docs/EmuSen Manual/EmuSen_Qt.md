@@ -2602,8 +2602,10 @@ in the theme's face and colours, filled glyphs; a press of an entry is `pressed(
 `TextListView` and `GridElement`, over `ElementBox` (the box and its turn) and `Icon` (a theme file or a mark). The
 text list's file is not `TextListElement`: `qml-rules` reads any line containing `ListElement` as rows.
 
-- **The clock.** A `NumberAnimation` on the view's `clockMs` runs while `moving`, and each change calls `tick` with the
-  milliseconds it moved; a repeating `Timer` of `nextChangeMs` runs while nothing moves and something will. At rest
+- **The clock.** A `NumberAnimation` on `clockMs` runs while `moving`, and each change calls `tick` with the
+  milliseconds it moved. The clock's `clockMs` and `tickedMs` live in an inner `QtObject` named `viewClock`, not on the
+  view's root, so the view does not offer them; the module's QML-files surface lists only that object name (decided
+  2026-11-12 by the tester, R-20261112-20); a repeating `Timer` of `nextChangeMs` runs while nothing moves and something will. At rest
   neither runs and the window swaps no frame. Until 2026-11-12 a `FrameAnimation` ran and called `tick(frameTime × 1000)`;
   Qt reads that `frameTime` from a `QElapsedTimer` of its own (`qquickframeanimation.cpp`, `maybeTick`), the wall clock,
   so no animation driver held it, and a stall of the GUI thread moved the scene by the stall's length (§4.8.5's mapping
@@ -2667,7 +2669,7 @@ no image crate is needed, the oracle library read as the three texts of §4.6).
   load without an error; every drawn pair has a case, and a case's pair is drawn or later. 347 cases, 254 s.
   **A timed move** (a time in `at` and a move: the item and row transitions, `scrollFadeIn`, `fastScrolling`) is pressed
   and grabbed on the harness's held clock (EmuSen_Kit.md §7.36): the scene at rest, the clock is held at 0 before the
-  press and moved 16 ms at a time to 32 ms short of `at`; the last step is what the view's own clock (`tickedMs`, the
+  press and moved 16 ms at a time to 32 ms short of `at`; the last step is what the view's own clock (`viewClock`'s `tickedMs`, the
   milliseconds it has ticked since the scene began to move) still lacks, and the grab is taken when it reads `at`
   within half a millisecond, or once the scene is at rest again. Qt starts the view's clock animation a few
   milliseconds off the held clock (102 against 100, measured 2026-11-12), and with the held clock alone a fault that

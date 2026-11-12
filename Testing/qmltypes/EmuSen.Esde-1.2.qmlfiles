@@ -323,6 +323,7 @@ View
     property int family
     readonly property alias scene
     objectName "esdeModel"
+    objectName "viewClock"
     objectName "scrollLetters"
 GlyphLine
     property string text

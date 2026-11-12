@@ -343,9 +343,9 @@ fn held(c: &Case) -> bool {
     c.at.is_some() && c.moves.is_some()
 }
 
-// The view's own clock since the press, which starts from 0 as the scene starts moving (View.qml's clockMs).
+// The view's own clock since the press, which starts from 0 as the scene starts moving (View.qml's inner viewClock).
 fn since_press(scene: &mut Scene<'_>) -> f64 {
-    scene.property("view", "tickedMs").parse().unwrap_or(f64::NAN)
+    scene.property("viewClock", "tickedMs").parse().unwrap_or(f64::NAN)
 }
 
 /// One rendering of a case: the view emptied so the next install starts afresh, the theme and the rotated library

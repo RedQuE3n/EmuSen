@@ -132,7 +132,7 @@ fn a_row_leads_to_its_games_by_title_and_recent_by_when() {
     let gb = games_of("gb", &read.systems, &read.catalog);
     assert_eq!((gb[1].hue, gb[1].favourite, gb[0].favourite), (212.0, true, false));
     assert_eq!(from_json(&to_json(&gb)), gb, "the plain data between the two models reads back whole");
-    let whole = GameRow { path: "/p.nes".into(), system: "nes".into(), title: "T".into(), hue: 12.5, favourite: true, cover: "c".into(), hero: "h".into(), console: "NES".into(), facts: "f".into(), played_at: 1_700_000_000 };
+    let whole = GameRow { path: "/p.nes".into(), system: "nes".into(), title: "T".into(), hue: 12.5, favourite: true, cover: "c".into(), hero: "h".into(), console: "NES".into(), facts: "f".into(), played_at: 1_700_000_000, plays: 7, year: "1994".into(), rating: Some(0.8) };
     assert_eq!(from_json(&to_json([&whole])), vec![whole.clone()], "every field of a row crosses, as written straight from it");
     assert_eq!(title_of("/roms/Aurora Drift (Synthetic).sfc"), "Aurora Drift (Synthetic)");
     let mut view = LibraryView::empty();
@@ -263,9 +263,9 @@ fn a_failed_refresh_keeps_the_rows_and_shows_the_source_s_words() {
     let source = fake();
     let mut view = LibraryView::empty();
     view.apply(refresh(&source));
-    *source.fail.lock().unwrap() = Some("The library could not be read.".into());
+    *source.fail.lock().unwrap() = Some("games.db is locked".into());
     view.apply(refresh(&source));
-    assert_eq!((view.rows.rows().len(), view.problem.as_str()), (5, "The library could not be read."));
+    assert_eq!((view.rows.rows().len(), view.problem.as_str()), (5, "The library could not be read: games.db is locked"));
     view.apply(refresh(&source));
     assert!(view.problem.is_empty(), "the next good refresh clears it");
 }

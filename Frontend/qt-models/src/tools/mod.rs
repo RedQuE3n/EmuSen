@@ -23,16 +23,23 @@ pub enum Tone {
     Error,
 }
 
-/// Words and their tone: a header's fact, a pane's sentence, a cell.
+/// Words and their tone: a header's fact, a pane's sentence, a cell; a cell of a column that gives way has short words
+/// too, shown where its whole ones do not fit (EmuSen_Kit.md §7.106).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Words {
     pub words: String,
     pub tone: Tone,
+    pub short: Option<String>,
 }
 
 impl Words {
     pub fn new(words: impl Into<String>, tone: Tone) -> Words {
-        Words { words: words.into(), tone }
+        Words { words: words.into(), tone, short: None }
+    }
+
+    /// A cell's whole words and the short words that stand for them where they do not fit.
+    pub fn giving_way(words: impl Into<String>, short: impl Into<String>) -> Words {
+        Words { short: Some(short.into()), ..Words::text(words) }
     }
 
     pub fn text(words: impl Into<String>) -> Words {
@@ -41,13 +48,15 @@ impl Words {
 }
 
 /// A column of the list: its title as a reader hears it, a fill's weight (0 for its words' width), its least width in
-/// design units, and whether its words stand at its right.
+/// design units, whether its words stand at its right, and whether it gives way first, its cells' short words shown
+/// where their whole ones do not fit (EmuSen_Kit.md §7.106).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Column {
     pub title: &'static str,
     pub fill: f64,
     pub least: f64,
     pub trailing: bool,
+    pub gives_way: bool,
 }
 
 /// One row of a source: its key across refreshes, a cell for each column, the sections and filters it is listed under

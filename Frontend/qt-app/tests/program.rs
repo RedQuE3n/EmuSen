@@ -112,7 +112,7 @@ fn program_start_words() -> String {
 }
 
 #[test]
-fn kit_7_105_the_program_itself_never_prints_the_main_thread_line() {
+fn kit_7_109_the_program_itself_never_prints_the_main_thread_line() {
     // R-20261111-110 accepts the line in test programs only: the program makes its application on its own main thread.
     let words = program_start_words();
     assert!(words.contains("No game can be played"), "the program made its application and said so: {words}");

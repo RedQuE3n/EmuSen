@@ -507,7 +507,7 @@ fn qt_3_4_1_home_s_places_lines_are_the_program_s_own_and_whole_at_every_size() 
 }
 
 #[test]
-fn kit_7_105_a_title_cut_with_an_ellipsis_is_listed_under_its_ruling_and_fails_nothing() {
+fn kit_7_109_a_title_cut_with_an_ellipsis_is_listed_under_its_ruling_and_fails_nothing() {
     let ran = audit("elided-title");
     assert_eq!(ran.held("Games").0, 10, "{}", ran.err);
     assert_eq!((ran.out.as_str(), ran.status), ("", 0), "{}", ran.err);

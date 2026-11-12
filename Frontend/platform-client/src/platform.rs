@@ -91,7 +91,8 @@ impl Lent {
         Ok(Lent { handle: lib.into_raw() })
     }
 
-    pub(crate) fn handle(&self) -> *mut c_void {
+    /// The loader's handle, which another client of the same process is lent (crystal-client's `LentLibrary`).
+    pub fn handle(&self) -> *mut c_void {
         self.handle
     }
 }

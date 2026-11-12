@@ -120,7 +120,7 @@ pub struct Legibility {
     pub bold: bool,
     /// What is behind the words, sampled across their box with no words drawn.
     pub behind: Vec<Colour>,
-    /// The words are a disabled control's: the contrast rule leaves them to `exempted`, which names each (EmuSen_Kit.md §7.105).
+    /// The words are a disabled control's: the contrast rule leaves them to `exempted`, which names each (EmuSen_Kit.md §7.109).
     pub disabled: bool,
 }
 

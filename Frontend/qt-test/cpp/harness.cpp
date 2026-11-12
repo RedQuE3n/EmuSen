@@ -17,6 +17,7 @@
 #include <QtGui/QAccessible>
 #include <QtGui/QColor>
 #include <QtGui/QFontMetricsF>
+#include <QtGui/QGuiApplication>
 #include <QtGui/QImage>
 #include <QtQml/QQmlContext>
 #include <QtQml/QQmlEngine>
@@ -157,7 +158,7 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
     node["cls"] = QString::fromLatin1(item->metaObject()->className());
     node["name"] = item->objectName();
     const QQmlContext* written = qmlContext(item);
-    node["source"] = written != nullptr ? written->baseUrl().toString() : QString(); // the file it is written in (EmuSen_Kit.md §7.105)
+    node["source"] = written != nullptr ? written->baseUrl().toString() : QString(); // the file it is written in (EmuSen_Kit.md §7.109)
     node["x"] = rect.x();
     node["y"] = rect.y();
     node["w"] = rect.width();
@@ -213,7 +214,7 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
         node["cap"] = QFontMetricsF(font).capHeight() * sy;
         QColor ink = item->property("color").value<QColor>();
         ink.setAlphaF(ink.alphaF() * opacity);
-        node["ink"] = ink.name(QColor::HexArgb); // a disabled control's too: kit-core's exempted names it under R-20261111-43 (EmuSen_Kit.md §7.105)
+        node["ink"] = ink.name(QColor::HexArgb); // a disabled control's too: kit-core's exempted names it under R-20261111-43 (EmuSen_Kit.md §7.109)
         node["size"] = font.pixelSize() > 0 ? font.pixelSize() : font.pointSizeF() * 4.0 / 3.0;
         node["bold"] = font.weight() >= QFont::Bold;
         node["face"] = font.family();
@@ -447,6 +448,17 @@ void harness_hover(QObject& window, double x, double y)
     if (QQuickWindow* w = quick(window)) {
         QTest::mouseMove(w, QPoint(static_cast<int>(x), static_cast<int>(y)));
     }
+}
+
+bool harness_hover_in(const QString& name, double x, double y)
+{
+    for (QWindow* window : QGuiApplication::allWindows()) {
+        if (auto* w = qobject_cast<QQuickWindow*>(window); w != nullptr && w->objectName() == name) {
+            QTest::mouseMove(w, QPoint(static_cast<int>(x), static_cast<int>(y)));
+            return true;
+        }
+    }
+    return false;
 }
 
 void harness_key(QObject& window, int key, int modifiers)
@@ -798,4 +810,20 @@ void harness_drag(QObject& window, double x0, double y0, double x1, double y1)
         QTest::mouseMove(w, at(step / 8.0), 10);
     }
     QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier, at(1));
+}
+
+void harness_touch_drag(QObject& window, double x0, double y0, double x1, double y1)
+{
+    QQuickWindow* w = quick(window);
+    if (w == nullptr) {
+        return;
+    }
+    static QPointingDevice* const finger = QTest::createTouchDevice();
+    const auto at = [&](double t) { return QPoint(static_cast<int>(x0 + (x1 - x0) * t), static_cast<int>(y0 + (y1 - y0) * t)); };
+    QTest::touchEvent(w, finger).press(0, at(0), w);
+    for (int step = 1; step <= 8; ++step) {
+        QTest::qWait(10);
+        QTest::touchEvent(w, finger).move(0, at(step / 8.0), w);
+    }
+    QTest::touchEvent(w, finger).release(0, at(1), w);
 }

@@ -52,12 +52,14 @@ pub mod qobject {
         #[qproperty(QString, search)]
         /// The focused row, whose letter the List card's Jump to names.
         #[qproperty(i32, focused)]
-        /// Whether a console starts with nothing in it, so the List card offers Start Console.
-        #[qproperty(bool, start_console, cxx_name = "startConsole")]
+        /// The consoles that start with nothing in them (LibraryModel.startable), which the List card's Start Console lists.
+        #[qproperty(QString, startable)]
         /// The count beside the section's name: "8 games", or "1 of 8 games" where narrowed.
         #[qproperty(QString, count_line, cxx_name = "countLine", READ, NOTIFY)]
         /// The List card's facts as plain data (list_card.rs).
         #[qproperty(QString, list_facts, cxx_name = "listFacts", READ, NOTIFY)]
+        /// Whether the sort needs the scraper's facts (Year, Rating), which the library then reads (LibraryModel.byFacts).
+        #[qproperty(bool, by_facts, cxx_name = "byFacts", READ, NOTIFY)]
         type GameModel = super::GameModelRust;
     }
 
@@ -170,9 +172,10 @@ pub struct GameModelRust {
     section_name: QString,
     search: QString,
     focused: i32,
-    start_console: bool,
+    startable: QString,
     count_line: QString,
     list_facts: QString,
+    by_facts: bool,
     /// The sort, global as Mistress's is, and the sections narrowed to their favourites, each keeping its own.
     sort: usize,
     favourites_in: std::collections::HashSet<String>,
@@ -194,7 +197,7 @@ impl cxx_qt::Initialize for qobject::GameModel {
         self.as_mut().on_section_changed(|model| model.read()).release();
         self.as_mut().on_section_name_changed(|model| model.said()).release();
         self.as_mut().on_search_changed(|model| model.read()).release();
-        self.as_mut().on_start_console_changed(|model| model.said()).release();
+        self.as_mut().on_startable_changed(|model| model.said()).release();
         self.on_focused_changed(|model| model.said()).release();
     }
 }
@@ -316,6 +319,11 @@ impl qobject::GameModel {
             (SORT, by) => {
                 let sort = crate::listing::step_sort(self.sort, by);
                 self.as_mut().rust_mut().sort = sort;
+                let by_facts = crate::listing::by_facts(sort);
+                if self.by_facts != by_facts {
+                    self.as_mut().rust_mut().by_facts = by_facts;
+                    self.as_mut().by_facts_changed();
+                }
                 self.read();
                 0
             }
@@ -360,12 +368,12 @@ impl qobject::GameModel {
         let facts = serde_json::json!({
             "section": self.section_name.to_string(),
             "count": count,
-            "sort": crate::listing::SORTS[self.sort],
+            "sort": crate::listing::Sort::at(self.sort).words(),
             "filter": if listing.favourites_only { "Favourites" } else { "" },
             "letter": letter,
             "letters": self.read.letters.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>().join(" "),
             "favouritesSection": self.section.to_string() == crate::library::FAVOURITES,
-            "startConsole": self.start_console,
+            "startable": serde_json::from_str::<serde_json::Value>(&self.startable.to_string()).unwrap_or(serde_json::Value::Null),
         })
         .to_string();
         let (count, facts) = (QString::from(count.as_str()), QString::from(facts.as_str()));

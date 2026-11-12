@@ -701,7 +701,7 @@ Nephrite's follow-up, not built here: an empty start for `mcd`, once the stall i
 - The pad menu's *Library* → *Start a Console*.
 - In a session with a drive: Emulation → *Change Disc...* and *Eject Disc*, and the Pause Card's *Change Disc* row.
 - *Change Disc* is a page of the Pause Card since 2026-11-03 (`EmuSen_Interface.md` §20): the game's own discs, the
-  console's library games, *Open the tray*, and *Any file…* on the desktop only. `InsertDiscWindow` is retired.
+  console's library games, *Eject disc*, and *Any file…* on the desktop only. `InsertDiscWindow` is retired.
 - `EmuSen_Settings_Reference.md` §4.120 is the player-facing summary.
 
 **DianaSh.**

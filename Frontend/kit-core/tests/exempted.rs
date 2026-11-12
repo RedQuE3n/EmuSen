@@ -68,7 +68,7 @@ fn kit_7_102_a_named_small_text_under_the_floor_is_named() {
 }
 
 #[test]
-fn kit_7_105_data_cut_with_an_ellipsis_is_an_exemption_and_a_fixed_word_a_fault() {
+fn kit_7_109_data_cut_with_an_ellipsis_is_an_exemption_and_a_fixed_word_a_fault() {
     let cut = |data: bool| {
         Item::new(1, Kind::Panel, PANEL).child(
             Item::new(2, Kind::Words, Rect::new(10.0, 10.0, 200.0, 20.0))
@@ -153,7 +153,7 @@ fn kit_7_102_each_exemption_is_of_its_class_and_accepted_by_its_ruling() {
 }
 
 #[test]
-fn kit_7_105_a_disabled_control_s_words_under_their_contrast_are_named_not_faults() {
+fn kit_7_109_a_disabled_control_s_words_under_their_contrast_are_named_not_faults() {
     let (faint, white) = (Colour::hex("#C8C8C8"), Colour::hex("#FFFFFF"));
     let state = |disabled: bool| {
         let words = Item::new(2, Kind::Words, Rect::new(10.0, 300.0, 200.0, 30.0))

@@ -171,7 +171,7 @@ fn kit_7_102_an_accepted_class_passes_listed_with_its_ruling_and_another_is_a_fi
 }
 
 #[test]
-fn kit_7_105_an_excuse_standing_for_an_accepted_class_excuses_only_while_its_row_accepts_it() {
+fn kit_7_109_an_excuse_standing_for_an_accepted_class_excuses_only_while_its_row_accepts_it() {
     let cut = gate(Fault::Ellipsis { item: ElementId(5) });
     let rom = Excuse { class: Some(Class::RomFolderCutAtStart), ..excuse("cut with an ellipsis", "value", "", "/Roms") };
     let mut e = Excuses::new(&[rom.clone()]);
@@ -186,6 +186,6 @@ fn kit_7_105_an_excuse_standing_for_an_accepted_class_excuses_only_while_its_row
 
 #[test]
 #[should_panic(expected = "1 excuses name no class of kit-core's table:\ntoo small to read on count")]
-fn kit_7_105_an_excuse_naming_no_class_fails_its_test() {
+fn kit_7_109_an_excuse_naming_no_class_fails_its_test() {
     let _e = Excuses::new(&[Excuse { class: None, ..SMALL_COUNT }]);
 }

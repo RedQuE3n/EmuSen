@@ -122,16 +122,13 @@ fn named(scene: &mut Scene<'_>, name: &str) -> Option<u32> {
 /// bar, Resume focused; then held at the gate's sizes and recorded for the C# reader (PauseCard-*.spec).
 fn pause_card(scene: &mut Scene<'_>, excuses: &mut Excuses, report: &mut Vec<String>) {
     assert_eq!(scene.property("pause", "title"), "Cobalt Harbor (Synthetic)");
+    let rows = common::console::card_words(scene);
     let tree = scene.tree();
-    let words = |parent: &str, name: &str| tree.nodes.iter().find(|n| n.parent == parent && n.name == name).and_then(|n| n.text.clone()).unwrap_or_default();
-    let mut rows: Vec<(f64, String, String)> =
-        tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("MenuRow")).map(|n| (n.y, words(&n.id, "label"), words(&n.id, "value"))).collect();
-    rows.sort_by(|a, b| a.0.total_cmp(&b.0));
-    let labels: Vec<&str> = rows.iter().map(|r| r.1.as_str()).collect();
+    let labels: Vec<&str> = rows.iter().map(|r| r.0.as_str()).collect();
     // The test core claims a drive (MEDIA with a drive named), so Change Disc stands after Speed, as Mistress's rule has it.
     assert_eq!(labels, ["Resume", "Rewind", "Save State", "Load State", "Speed", "Change Disc", "Game Options", "Leave"]);
-    assert_eq!(rows[2].2, "Slot 1 (Empty)", "the session's first slot holds nothing");
-    assert_eq!(rows[4].2, "100%");
+    assert_eq!(rows[2].1, "Slot 1 (Empty)", "the session's first slot holds nothing");
+    assert_eq!(rows[4].1, "100%");
     let focus = scene.focus(&tree).map(|i| tree.nodes[i as usize].heard.clone());
     assert_eq!(focus.as_deref(), Some("Resume"), "the card opens on Resume");
     assert!(tree.nodes.iter().any(|n| n.visible && n.name == "help-Screenshot"), "the help bar names X");
@@ -444,9 +441,8 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
         assert!(scene.pad_chord_only(), "the game owns the pad");
         // The router's clock back on the wall clock, as a real pad needs it, since the harness's presses stopped it.
         scene.run_pad_clock();
-        sdl.press(&pad, guide, true);
+        common::console::guide_alone(scene, &sdl, &pad);
         until(scene, "the chord pausing the game under the Pause Card", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Pause");
-        sdl.press(&pad, guide, false);
         until(scene, "the card in place", |s| s.property("cardCanvas", "slide") == "0");
     };
     chord(&mut scene);

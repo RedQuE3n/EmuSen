@@ -122,6 +122,7 @@ ThemeScreen {
                         width: root.width - 104
                         height: 296
                         // Continue holds the focus while a game is suspended; otherwise the shelf's first game does, else the first place.
+                        enabled: Session.hasGame
                         focus: Session.hasGame
                         activeFocusOnTab: Session.hasGame
                         Accessible.name: Words.continuePlaying

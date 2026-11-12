@@ -20,6 +20,8 @@ pub mod ffi {
         fn harness_turning(window: Pin<&mut QObject>, id: u64) -> bool;
         fn harness_click(window: Pin<&mut QObject>, x: f64, y: f64, button: i32);
         fn harness_hover(window: Pin<&mut QObject>, x: f64, y: f64);
+        /// The pointer moved to a point of another Qt Quick window, found by its object name; false where none has it.
+        fn harness_hover_in(name: &QString, x: f64, y: f64) -> bool;
         fn harness_key(window: Pin<&mut QObject>, key: i32, modifiers: i32);
         /// Presses a key without releasing it, or releases it: a press held.
         fn harness_key_hold(window: Pin<&mut QObject>, key: i32, down: bool);
@@ -70,5 +72,7 @@ pub mod ffi {
             marks: &QString,
         ) -> i32;
         fn harness_drag(window: Pin<&mut QObject>, x0: f64, y0: f64, x1: f64, y1: f64);
+        /// One finger on a touch screen pressed at one point, moved in steps to another and lifted there.
+        fn harness_touch_drag(window: Pin<&mut QObject>, x0: f64, y0: f64, x1: f64, y1: f64);
     }
 }

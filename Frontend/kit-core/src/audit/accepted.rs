@@ -1,4 +1,4 @@
-//! The classes of finding the tester has accepted, each with the ruling that accepts it; the one table every gate reads (EmuSen_Kit.md §7.102, §7.105).
+//! The classes of finding the tester has accepted, each with the ruling that accepts it; the one table every gate reads (EmuSen_Kit.md §7.102, §7.109).
 
 /// A class of finding a ruling may accept.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

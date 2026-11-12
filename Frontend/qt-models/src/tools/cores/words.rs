@@ -91,6 +91,15 @@ pub fn consoles(row: &Core) -> String {
     }
 }
 
+/// The consoles a row runs where the whole list does not fit its column: the first, as the core lists its systems, and
+/// how many more ("Genesis +3"); the whole list where there is one console or none (EmuSen_Qt.md §7.9).
+pub fn first_console(row: &Core) -> String {
+    match row.console_names.as_slice() {
+        [first, rest @ ..] if !rest.is_empty() => format!("{first} +{}", rest.len()),
+        _ => consoles(row),
+    }
+}
+
 /// The tool's refusal of a whole request, as the screen says it.
 pub fn refusal(tool: &str) -> String {
     if tool == "no buildbot listing is known for this platform" {

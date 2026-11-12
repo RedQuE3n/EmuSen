@@ -718,7 +718,7 @@ fn declined_places(scene: &mut Scene<'_>, screen: u64, tree: &mut Tree, declined
     for (&place, points) in places.iter().zip(&grids) {
         let span = at..at + points.len();
         at = span.end;
-        // Exempt only while R-20261111-43's row accepts dimmed places (EmuSen_Kit.md §7.105).
+        // Exempt only while R-20261111-43's row accepts dimmed places (EmuSen_Kit.md §7.109).
         if audit::changed_share(&was[span.clone()], &enabled[span]) > 0.0 && audit::accepted(Class::DimmedAndMoving).is_some() {
             for index in tree.under(place) {
                 tree.not_judged(index);
@@ -770,7 +770,7 @@ fn changing(before: &Tree, after: &Tree) -> HashSet<String> {
 
 /// Leaves the texts mid-change out of the contrast rule.
 fn rested(tree: &mut Tree, moving: &HashSet<String>) {
-    // Moving words go unjudged only while R-20261111-43's row accepts them (EmuSen_Kit.md §7.105).
+    // Moving words go unjudged only while R-20261111-43's row accepts them (EmuSen_Kit.md §7.109).
     if audit::accepted(Class::DimmedAndMoving).is_none() {
         return;
     }

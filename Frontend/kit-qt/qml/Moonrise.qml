@@ -294,7 +294,7 @@ Item {
     }
     Text {
         id: captionWords
-        // kit-core's small-text exception names it by this name and this file (EmuSen_Kit.md §7.105).
+        // kit-core's small-text exception names it by this name and this file (EmuSen_Kit.md §7.109).
         objectName: "moonriseCaption"
         visible: splash.wordsVisible
         text: splash.caption

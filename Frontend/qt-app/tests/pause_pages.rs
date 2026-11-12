@@ -4,6 +4,8 @@
 
 extern crate emusen_qt;
 
+mod common;
+
 use emusen_kit_core::input::UiButton;
 use emusen_qt_models::pause::{DiscFacts, Facts, SlotFact};
 
@@ -37,18 +39,7 @@ Window {
 
 /// The card's rows as shown: each row's label and value words, in order.
 fn rows(scene: &mut emusen_qt_test::Scene<'_>) -> Vec<String> {
-    let tree = scene.tree();
-    let words = |parent: &str, name: &str| {
-        tree.nodes.iter().find(|n| n.parent == parent && n.name == name).and_then(|n| n.text.clone()).unwrap_or_default()
-    };
-    let mut rows: Vec<(f64, String)> = tree
-        .nodes
-        .iter()
-        .filter(|n| n.visible && n.ty.starts_with("MenuRow"))
-        .map(|n| (n.y, format!("{} | {}", words(&n.id, "label"), words(&n.id, "value"))))
-        .collect();
-    rows.sort_by(|a, b| a.0.total_cmp(&b.0));
-    rows.into_iter().map(|(_, r)| r).collect()
+    common::console::card_words(scene).into_iter().map(|(label, value)| format!("{label} | {value}")).collect()
 }
 
 fn help(scene: &mut emusen_qt_test::Scene<'_>) -> Vec<String> {
@@ -173,7 +164,7 @@ fn the_pane_follows_the_row_and_the_reel_turns_in_place() {
 
 /// A game of two discs, the first in, beside another game of its console in the library.
 fn disc_facts() -> String {
-    let discs = DiscFacts { count: 2, index: Some(0), can_change: true, lid_open: false };
+    let discs = DiscFacts { count: 2, index: Some(0), unread: false, can_change: true, lid_open: false };
     Facts { path: "/games/Cobalt Harbor (Synthetic).tst".into(), system: "tst".into(), discs, ..Facts::default() }.to_json()
 }
 
@@ -204,7 +195,7 @@ fn options_and_discs(scene: &mut emusen_qt_test::Scene<'_>) {
     assert_eq!(scene.property("cardTitle", "text"), "Change Disc");
     assert_eq!(
         rows(scene),
-        ["Cobalt Harbor (Synthetic) (Disc 1) | Inserted", "Cobalt Harbor (Synthetic) (Disc 2) | ", "Amber Coast | ", "Open the tray | "]
+        ["Cobalt Harbor (Synthetic) (Disc 1) | Inserted", "Cobalt Harbor (Synthetic) (Disc 2) | ", "Amber Coast | ", "Eject disc | "]
     );
     assert_eq!(help(scene), ["Put in", "Back", "Screenshot"], "A puts the disc in; Start is not offered");
     assert_eq!(scene.property("PaneTitle", "text"), "Cobalt Harbor (Synthetic), Disc 1 of 2");
@@ -214,7 +205,7 @@ fn options_and_discs(scene: &mut emusen_qt_test::Scene<'_>) {
     scene.pad(UiButton::Down);
     scene.wait(20);
     assert_eq!(scene.property("PaneTitle", "text"), "Amber Coast");
-    assert_eq!(scene.property("PaneHint", "text"), "A opens the tray, swaps the disc and closes it, as the console sees it.");
+    assert_eq!(scene.property("PaneHint", "text"), "A swaps to this disc, as the console sees it.");
     scene.pad(UiButton::Back);
     scene.wait(20);
     assert_eq!(scene.property("PadMenuList", "currentIndex"), "5", "B back to Change Disc's row");

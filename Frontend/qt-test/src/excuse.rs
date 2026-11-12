@@ -25,7 +25,7 @@ pub struct Excuse {
     /// Why, and who decided it and when, or `no ruling`.
     pub why: &'static str,
     /// The accepted class it stands for, whose row in kit-core's `ACCEPTED` gives its ruling; without that row it excuses
-    /// nothing, and an excuse naming no class fails its test (EmuSen_Kit.md §7.105).
+    /// nothing, and an excuse naming no class fails its test (EmuSen_Kit.md §7.109).
     pub class: Option<Class>,
 }
 
@@ -160,7 +160,7 @@ pub struct Excuses {
     gate: Option<&'static str>,
 }
 
-/// The folder every gate lists what a ruling accepted in, one file a gate (EmuSen_Kit.md §7.102, §7.105).
+/// The folder every gate lists what a ruling accepted in, one file a gate (EmuSen_Kit.md §7.102, §7.109).
 pub fn accepted_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".cache/emusen/tmp/accepted")
 }
@@ -188,7 +188,7 @@ pub fn tests_only_list(dir: &std::path::Path, program: &str) -> std::path::PathB
 
 /// Adds one test's count of each test-only line (`harness::QT_TESTS_ONLY`) to its test program's list in `dir`, so a gate
 /// whose runner shows a passing test's output to no one still leaves, per program, how many and under which ruling
-/// (EmuSen_Kit.md §7.105). The list starts afresh in each run; runs of one program's tests at once wait on its lock.
+/// (EmuSen_Kit.md §7.109). The list starts afresh in each run; runs of one program's tests at once wait on its lock.
 pub fn tally_tests_only(dir: &std::path::Path, program: &str, run: &str, test: &str, seen: &[(&str, &str, usize)]) {
     use std::io::{Read, Seek, Write};
     let file = tests_only_list(dir, program);

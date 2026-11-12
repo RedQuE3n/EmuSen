@@ -1,4 +1,4 @@
-//! The gates' lists of what a ruling accepted (EmuSen_Kit.md §7.102, §7.105): one file a gate in one folder, so no gate's
+//! The gates' lists of what a ruling accepted (EmuSen_Kit.md §7.102, §7.109): one file a gate in one folder, so no gate's
 //! list overwrites another's, and a list that cannot be written fails its gate.
 
 use emusen_qt_test::excuse::{accepted_list, write_accepted};
@@ -18,14 +18,14 @@ fn kit_7_102_each_gate_s_accepted_list_survives_the_others() {
 
 #[test]
 #[should_panic(expected = "accepted list not written")]
-fn kit_7_105_a_list_that_cannot_be_written_fails_its_gate() {
+fn kit_7_109_a_list_that_cannot_be_written_fails_its_gate() {
     let file = std::env::temp_dir().join(format!("qt-test-accepted-file-{}", std::process::id()));
     std::fs::write(&file, "a file where the folder should be").unwrap();
     write_accepted(&file, "gate", &["a line".to_owned()]);
 }
 
 #[test]
-fn kit_7_105_each_test_program_lists_its_count_of_the_main_thread_line_under_its_ruling() {
+fn kit_7_109_each_test_program_lists_its_count_of_the_main_thread_line_under_its_ruling() {
     use emusen_qt_test::excuse::{tally_tests_only, tests_only_list};
     let dir = std::env::temp_dir().join(format!("qt-test-tests-only-{}", std::process::id()));
     let line = "QApplication was not created in the main() thread";
@@ -47,7 +47,7 @@ fn kit_7_105_each_test_program_lists_its_count_of_the_main_thread_line_under_its
 }
 
 #[test]
-fn kit_7_105_a_harness_leaves_its_program_s_count_where_the_gates_list() {
+fn kit_7_109_a_harness_leaves_its_program_s_count_where_the_gates_list() {
     use emusen_qt_test::excuse::{accepted_dir, tests_only_list};
     use emusen_qt_test::harness::tests_only_process;
     let (program, run, _) = tests_only_process();

@@ -19,7 +19,7 @@ fn kit_7_101_the_cpu_conversion_line_is_qt_s_on_the_software_backend_only() {
 const MAIN_THREAD: &str = "QApplication was not created in the main() thread.";
 
 #[test]
-fn kit_7_105_the_main_thread_line_is_accepted_in_tests_counted_and_printed() {
+fn kit_7_109_the_main_thread_line_is_accepted_in_tests_counted_and_printed() {
     assert!(!qt_internal(MAIN_THREAD, true) && !qt_internal(MAIN_THREAD, false), "not one of Qt's own lines on any backend");
     assert_eq!(qt_tests_only(MAIN_THREAD), Some("R-20261111-110"));
     assert_eq!(qt_tests_only(CPU), None);

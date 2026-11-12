@@ -251,7 +251,12 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
 
     section(&mut scene, 1);
     assert_eq!(scene.property("pageModel", "shows"), "1");
+    let held_before = report.len();
     hold(&mut scene, "GamePageStates", &mockup::Mockup::default(), &mut excuses, &mut report);
+    if report.len() > held_before {
+        let tiles: Vec<String> = scene.tree().nodes.iter().filter(|n| n.ty.starts_with("Walkable")).map(|n| format!("{} {:?} at {:.0},{:.0} {}x{} visible {}", n.id, n.name, n.x, n.y, n.w, n.h, n.visible)).collect();
+        report.push(format!("GamePageStates, at the failure: {}; shows {}; the walkables: {tiles:?}", common::state(&mut scene), scene.property("pageModel", "shows")));
+    }
     // A step of Resume marks its state's tile in place, with no reset: the list is told of the two tiles whose mark
     // moved and no other, and Down comes back to the tile the focus left.
     scene.pad(UiButton::Down);

@@ -76,11 +76,12 @@ Window {
         cores: library.cores
         onReady: (path) => {
             library.started(path)
+            // The game's screen asked for first, so an open that fails at once gives way to the library after it.
+            screens.play()
             player.game = path
             player.session.resume()
-            screens.play()
         }
-        onNoticeChanged: if (launch.notice.length > 0) notices.raise(launch.notice, false, true)
+        onNoticeChanged: program.said(launch.notice, launch.noticeAttention, true)
     }
     Screens {
         id: screens
@@ -89,6 +90,10 @@ Window {
         found: games.count > 0
         themed: program.esdeLook
         onQuit: Qt.quit()
+        // The Home card's Continue: the suspended game resumes as its screen comes back.
+        onResumed: player.session.resume()
+        // Start Console's row: the console starts with nothing in it, and its screen follows the session's start.
+        onConsoleStarted: (key) => player.session.openConsole(key)
     }
     // Reduced motion as the start read it until Settings has read the settings, then as they say; the text size, which
     // the kit's tokens scale by, and the variant as they say (EmuSen_Qt.md §7.7).
@@ -112,6 +117,8 @@ Window {
         id: library
         objectName: "library"
         platformLibrary: program.platformLibrary
+        // The grid's Year and Rating sort by the scraper's facts, read for the own look only while one of them is chosen.
+        byFacts: games.byFacts
     }
     PadReader {
         id: pads
@@ -163,7 +170,7 @@ Window {
         games: library.loading ? "" : library.gamesOf(screens.key)
         section: screens.key
         sectionName: library.headingOf(screens.key)
-        startConsole: library.startsEmpty
+        startable: library.startable
         onPassedBack: screens.back()
         // A section read anew starts at its first game, as the grid's own did.
         onCountChanged: games.focused = games.count > 0 ? 0 : -1
@@ -248,7 +255,11 @@ Window {
     Loader {
         id: esdeLoader
         objectName: "esde"
+        // Under a card or another screen the view is drawn and nothing on it is reached: a backdrop to the gate, as the
+        // own look's screens are under a card (ThemeHost's slots; EmuSen_Qt.md §7.9).
+        property bool backdrop: screens.shown !== Screens.Esde
         anchors.fill: parent
+        enabled: !esdeLoader.backdrop
         active: program.esdeWanted
         visible: program.esdeLook && !program.gameShown && !program.pauseShown
         focus: program.esdeLook && screens.shown === Screens.Esde && !program.splashShown
@@ -299,7 +310,7 @@ Window {
     Timer {
         interval: Kit.Tokens.fade
         running: !program.splashShown && program.esdeWanted && (program.esdeView?.scene.problem.length ?? 0) > 0
-        onTriggered: notices.raise(program.esdeView.scene.problem, true, false)
+        onTriggered: program.said(program.esdeView.scene.problem, true, false)
     }
     // The grid's search: its words, which the keyboard types and the grid's model narrows by, the field over the one row of
     // covers and the keyboard docked beneath, over the theme's Games screen (EmuSen_Interface.md §18.1; EmuSen_Qt.md §7.6).
@@ -430,7 +441,7 @@ Window {
             panePicture: listCardModel.panePicture
             paneCaption: listCardModel.paneCaption
             help: HelpModel {
-                screen: HelpModel.Card
+                screen: listCardModel.help
             }
             onChosen: (index) => listCardModel.choose(index)
             onStepped: (index, by, held) => listCardModel.step(index, by)
@@ -552,7 +563,8 @@ Window {
             card: CardModel.Home
             start: screens.page
             shown: screens.shown === Screens.HomeCard
-            facts: library.homeCardFacts(player.session.running ? player.session.game : "", clock.paused, program.gameMode)
+            // Every fact is an argument, so the card follows the library's consoles and tools as they are read.
+            facts: library.homeCardFacts(player.session.running ? player.session.game : "", player.session.running ? player.session.console : "", clock.paused, program.gameMode, library.startable, library.toolSummaries)
             onActed: (key) => screens.act(key)
             onClosed: screens.close()
         }
@@ -572,7 +584,7 @@ Window {
             panePicture: homeCardModel.panePicture
             paneCaption: homeCardModel.paneCaption
             help: HelpModel {
-                screen: HelpModel.Card
+                screen: homeCardModel.help
             }
             onChosen: (index) => homeCardModel.choose(index)
             onStepped: (index, by, held) => homeCardModel.step(index, by)
@@ -693,15 +705,41 @@ Window {
         objectName: "notices"
         gameRunning: program.gameShown
     }
+    // Every notice is raised here, and words that say nothing (a model's cleared problem) raise none (EmuSen_Qt.md §7.9).
+    signal said(string words, bool attention, bool overGame)
+    onSaid: (words, attention, overGame) => { if (words.length > 0) notices.raise(words, attention, overGame) }
     // The theme the settings choose that cannot be shown, said once, after the splash has faded.
     Timer {
         interval: Kit.Tokens.fade
         running: !program.splashShown && program.themeWords.length > 0
-        onTriggered: notices.raise(program.themeWords, true, false)
+        onTriggered: program.said(program.themeWords, true, false)
     }
     Connections {
         target: player.session
-        function onNoticeChanged() { notices.raise(player.session.notice, player.session.noticeAttention, true) }
+        function onNoticeChanged() { program.said(player.session.notice, player.session.noticeAttention, true) }
+    }
+    // What failed, from every model that can fail, said where the player is: a game that does not open (over the game),
+    // the library unread, a setting, a game's page's change, or Cores; a cleared problem raises nothing (EmuSen_Qt.md §7.9).
+    Connections {
+        target: player.session
+        function onProblemChanged() { program.said(player.session.problem, true, true) }
+        function onOpenFailed() { screens.failed() }
+    }
+    Connections {
+        target: library
+        function onProblemChanged() { program.said(library.problem, true, false) }
+    }
+    Connections {
+        target: settingsModel
+        function onProblemChanged() { program.said(settingsModel.problem, true, false) }
+    }
+    Connections {
+        target: pageModel
+        function onProblemChanged() { program.said(pageModel.problem, true, false) }
+    }
+    Connections {
+        target: coresModel
+        function onProblemChanged() { program.said(coresModel.problem, true, false) }
     }
     Kit.NormalizedCanvas {
         id: noticeCanvas

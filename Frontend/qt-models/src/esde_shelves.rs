@@ -318,12 +318,12 @@ impl EsdeState {
 }
 
 /// The ES-DE view's reads for a refresh: each shelf of `shelved` with games, its games the library's less the hidden
-/// unless the player shows them, each with the scraper's metadata, games.db's plays and its folder.
+/// unless the player shows them, each with the scraper's metadata and games.db's plays as the catalog read them, and its folder.
 pub fn read(source: &dyn LibrarySource, shelved: &[SystemRow], catalog: &Catalog, settings: &Value) -> Result<Base, String> {
     let show_hidden = settings.get(crate::library::SHOW_HIDDEN).and_then(Value::as_bool).unwrap_or(false);
     let collections = Settings::from_json(settings.get("BigPictureCollections").unwrap_or(&Value::Null));
-    let metadata: HashMap<String, Metadata> = source.metadata(&catalog.games)?.into_iter().collect();
-    let plays: HashMap<String, Plays> = source.plays(&catalog.games)?.into_iter().collect();
+    let metadata: HashMap<&str, &Metadata> = catalog.metadata.iter().map(|(p, m)| (p.as_str(), m)).collect();
+    let plays: HashMap<&str, Plays> = catalog.plays.iter().map(|(p, n)| (p.as_str(), *n)).collect();
     let systems: Vec<String> = shelved.iter().map(|s| s.esde_system.clone()).filter(|s| !s.is_empty()).collect();
     let mut media = source.media_index(&systems)?;
     let by_id: HashMap<&str, &SystemRow> = shelved.iter().map(|s| (s.id.as_str(), s)).collect();
@@ -348,8 +348,8 @@ pub fn read(source: &dyn LibrarySource, shelved: &[SystemRow], catalog: &Catalog
             .iter()
             .map(|g| {
                 let facts = Facts {
-                    metadata: metadata.get(&g.path),
-                    plays: plays.get(&g.path).copied().unwrap_or_default(),
+                    metadata: metadata.get(g.path.as_str()).copied(),
+                    plays: plays.get(g.path.as_str()).copied().unwrap_or_default(),
                     last_played: played.get(g.path.as_str()).copied().unwrap_or(0),
                     favourite: favourites.contains(g.path.as_str()),
                     manual: media.find(&s.esde_system, "manual", &names_of(&g.path, &g.folder)).is_some(),
@@ -423,6 +423,27 @@ fn present(media: &MediaIndex, games: &[EsdeGame]) -> Vec<String> {
 /// out. A game's answer is made this as it is read, so the library's answers are never held whole (EmuSen_Qt.md §4.9).
 pub type Metadata = BTreeMap<String, String>;
 
+/// The scraper's keys for a game's release date (`yyyy-MM-dd`) and its rating (0 to 1).
+pub const RELEASE_DATE: &str = "releasedate";
+pub const RATING: &str = "rating";
+
+/// A game's release date as the scraper keeps it; the one reader of it, which the view, the grid's sorts and a game's
+/// page share.
+pub fn release_date(m: &Metadata) -> Option<String> {
+    m.get(RELEASE_DATE).filter(|d| !d.is_empty()).cloned()
+}
+
+/// A game's rating from 0 to 1, as the scraper keeps it.
+pub fn rating(m: &Metadata) -> Option<f64> {
+    m.get(RATING).and_then(|r| r.parse::<f64>().ok()).filter(|r| r.is_finite()).map(|r| r.clamp(0.0, 1.0))
+}
+
+/// A release date's year, its first four digits; none for a date that does not begin with them.
+pub fn year_of(date: &str) -> Option<String> {
+    let year: String = date.chars().take(4).collect();
+    (year.len() == 4 && year.chars().all(|c| c.is_ascii_digit())).then_some(year)
+}
+
 /// The scraper's `metadata` answer, `{key: {"value", …}}`, as the view keeps it.
 pub fn metadata_of(answer: &Value) -> Metadata {
     let chosen = |(k, f): (&String, &Value)| f.get("value")?.as_str().filter(|v| !v.is_empty()).map(|v| (k.clone(), v.to_owned()));
@@ -456,8 +477,8 @@ fn game_of_file(g: &GameFile, s: &SystemRow, f: &Facts) -> EsdeGame {
         publisher: text("publisher"),
         genre: text("genre"),
         players: text("players"),
-        release_date: text("releasedate"),
-        rating: value("rating").and_then(|r| r.parse::<f64>().ok()).map(|r| r.clamp(0.0, 1.0)),
+        release_date: f.metadata.and_then(release_date),
+        rating: f.metadata.and_then(rating),
         last_played: f.last_played,
         play_count: f.plays.count,
         play_time: f.plays.seconds,

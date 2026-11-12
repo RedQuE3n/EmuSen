@@ -51,7 +51,7 @@ pub const DIRECTIONS: [UiButton; 4] = [UiButton::Up, UiButton::Down, UiButton::L
 pub const WITH_SHOULDERS: [UiButton; 6] = [UiButton::Up, UiButton::Down, UiButton::Left, UiButton::Right, UiButton::PageUp, UiButton::PageDown];
 
 /// The classes of message Qt logs of its own accord that no code of ours causes, each with whether it is Qt's only on the
-/// software backend; the words are the class's row's in kit-core's `ACCEPTED`, so no text is accepted here (EmuSen_Kit.md §7.14, §7.101, §7.105).
+/// software backend; the words are the class's row's in kit-core's `ACCEPTED`, so no text is accepted here (EmuSen_Kit.md §7.14, §7.101, §7.109).
 pub const QT_INTERNAL: [(Class, bool); 1] = [
     // Qt Multimedia converting a clip's frame to a picture where there is no RHI, the software backend's path (EmuSen_Kit.md §7.50).
     (Class::CpuConversionLine, true),
@@ -68,7 +68,7 @@ pub fn qt_internal(message: &str, software: bool) -> bool {
 }
 
 /// The classes of message accepted in test programs only: counted and written with the row's ruling by every test that sees
-/// one, failing none; without the row, a failure (EmuSen_Kit.md §7.101, §7.105).
+/// one, failing none; without the row, a failure (EmuSen_Kit.md §7.101, §7.109).
 pub const QT_TESTS_ONLY: [Class; 1] = [
     // QtCore's, once Qt Multimedia starts in a process whose application was made on a test runner's thread.
     Class::MainThreadLineInTests,
@@ -246,7 +246,7 @@ impl Harness {
     }
 
     /// Fails on any message Qt logged that is not one of `QT_INTERNAL`'s, each named with the reason it is Qt's; one
-    /// `QT_TESTS_ONLY` accepts is printed with its count and ruling, and fails nothing (EmuSen_Kit.md §7.14, §7.105).
+    /// `QT_TESTS_ONLY` accepts is printed with its count and ruling, and fails nothing (EmuSen_Kit.md §7.14, §7.109).
     pub fn assert_quiet(&mut self) {
         let software = self.software();
         let messages = self.messages();
@@ -362,9 +362,21 @@ impl Scene<'_> {
         self.wait(20);
     }
 
+    /// The pointer moved to a point of another window of the scene's, named `window`, and left resting there.
+    pub fn hover_in(&mut self, window: &str, x: f64, y: f64) {
+        assert!(ffi::harness_hover_in(&QString::from(window), x, y), "no window named {window}");
+        self.wait(20);
+    }
+
     /// The left button pressed at one point, moved in steps to another and let go there.
     pub fn drag(&mut self, from: (f64, f64), to: (f64, f64)) {
         ffi::harness_drag(self.window(), from.0, from.1, to.0, to.1);
+        self.wait(20);
+    }
+
+    /// One finger pressed at one point, moved in steps to another and lifted there.
+    pub fn touch_drag(&mut self, from: (f64, f64), to: (f64, f64)) {
+        ffi::harness_touch_drag(self.window(), from.0, from.1, to.0, to.1);
         self.wait(20);
     }
 
@@ -640,6 +652,11 @@ impl Scene<'_> {
     /// A property of the object with this objectName (or the root's), as text.
     pub fn property(&mut self, object_name: &str, property: &str) -> String {
         ffi::harness_property(self.window(), &QString::from(object_name), &QString::from(property)).to_string()
+    }
+
+    /// A number property of a tree's item by its id (a `Node`'s `id`, read as a number), in the item's own units; NaN where it has none.
+    pub fn number(&mut self, id: u64, property: &str) -> f64 {
+        ffi::harness_get(self.window(), id, &QString::from(property))
     }
 
     /// Counts the property's change signal from now, as a QSignalSpy does; false where it has none to count.

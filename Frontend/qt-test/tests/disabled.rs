@@ -1,4 +1,4 @@
-// EmuSen_Kit.md §7.105: a disabled control's words keep their ink in the tree, so the contrast rule sees them, and kit-core's
+// EmuSen_Kit.md §7.109: a disabled control's words keep their ink in the tree, so the contrast rule sees them, and kit-core's
 // `exempted` names each that falls under it with R-20261111-43's class; no other place exempts them.
 
 use emusen_kit_core::audit::{self, Class, Exempted, Fault};
@@ -6,7 +6,7 @@ use emusen_kit_core::input::ElementId;
 use emusen_qt_test::Harness;
 
 #[test]
-fn kit_7_105_a_disabled_control_s_words_are_named_under_their_ruling_not_dropped() {
+fn kit_7_109_a_disabled_control_s_words_are_named_under_their_ruling_not_dropped() {
     let mut harness = Harness::new();
     let mut scene = harness.load("qrc:/qt/qml/EmuSen/Scenes/qml/HelpBarScene.qml", 1280, 800);
     let mut tree = scene.tree();

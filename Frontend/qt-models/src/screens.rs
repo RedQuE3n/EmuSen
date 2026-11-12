@@ -17,7 +17,8 @@ pub enum Shown {
     Game,
     /// The Pause Card over the paused game.
     Pause,
-    /// The Home card over Home, opened at its Power page by Home's place (EmuSen_BigPicture.md §51.2).
+    /// The Home card over Home, opened at its Power page by Home's place (EmuSen_BigPicture.md §51.2) and at its first
+    /// page by Start on Home.
     HomeCard,
     /// The List card over the grid (EmuSen_Interface.md §18.1).
     List,
@@ -42,13 +43,13 @@ pub enum Shown {
 /// What asked for a change.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Ask {
-    /// One of Home's places, by its index in `words::HOME_PLACES`; the first, Games, is the only one built yet.
+    /// One of Home's places, by its index in `words::HOME_PLACES`.
     Place(usize),
     /// A row chosen on Choose a console.
     Open(String),
     /// B that no screen kept.
     Back,
-    /// A screen's declared action (crate::help); the favourites' action opens their grid, the others are a later stage's.
+    /// A screen's declared action (crate::help) or a card's row's action, by its key.
     Act(String),
     /// A game chosen on Home's shelf or the grid, Continue chosen, or the Pause Card resuming: the game is shown.
     Play,
@@ -98,13 +99,12 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Home, Ask::Place(POWER_PLACE)) => Some((Shown::HomeCard, Some(crate::home_card::POWER.to_owned()))),
         (Shown::Home | Shown::Grid | Shown::SearchGrid | Shown::HomeCard, Ask::Act(key)) if key == GAME_PAGE => Some((Shown::Page, None)),
         (Shown::Home, Ask::Act(key)) if key == SEARCH => Some((Shown::Search, Some(crate::library::ALL.to_owned()))),
-        // Start on Home stays on Home, which takes the focus back to where it starts.
-        (Shown::Home, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
+        // Start on Home opens the Home card at its first page (decided 2026-11-11); Mistress's did so on the desktop, her big screen's focused Home's start.
+        (Shown::Home, Ask::Act(key)) if key == HOME => Some((Shown::HomeCard, Some(crate::home_card::FIRST.to_owned()))),
         (Shown::Consoles | Shown::Grid | Shown::Search | Shown::SearchGrid, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
         (Shown::HomeCard, Ask::Back | Ask::Close) => Some((Shown::Home, None)),
         (Shown::HomeCard, Ask::Act(key)) if key == crate::home_card::SETTINGS => Some((Shown::Settings, None)),
-        // The card closes on its rows' actions; those of a later stage (Exit Big Picture, the tools) do nothing more yet.
-        (Shown::HomeCard, Ask::Act(_)) => Some((Shown::Home, None)),
+        (Shown::HomeCard, Ask::Act(key)) => card_act(false, key),
         (Shown::Settings, Ask::Back) => Some((Shown::Home, None)),
         (Shown::Settings | Shown::Themes, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
         (Shown::Settings, Ask::Act(key)) if key == THEMES => Some((Shown::Themes, None)),
@@ -113,6 +113,8 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Grid, Ask::Act(key)) if key == LIST => Some((Shown::List, None)),
         (Shown::List, Ask::Back | Ask::Close) => Some((Shown::Grid, None)),
         (Shown::List, Ask::Act(key)) if key == SEARCH => Some((Shown::Search, None)),
+        // A console started from its Start Console page is the game's screen, as a game's launch asks for it first.
+        (Shown::List, Ask::Act(key)) if crate::home_card::console_to_start(key).is_some() => Some((Shown::Game, None)),
         // Every other action of the List card is the grid's, and the card closes on it.
         (Shown::List, Ask::Act(_)) => Some((Shown::Grid, None)),
         // The keyboard closed, by X keeping the words or by B on an empty field: the grid.
@@ -135,6 +137,29 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Game | Shown::Pause, Ask::Closed) => Some((Shown::Home, None)),
         (Shown::Home, Ask::Place(CORES_PLACE)) => Some((Shown::Cores, None)),
         (Shown::Cores, Ask::Back) => Some((Shown::Home, None)),
+        _ => None,
+    }
+}
+
+/// The Home card's row's action besides Settings and a game's page: Continue the game and a console started its screen,
+/// Tools ▸ Cores and ▸ Themes their screens; every other row closes the card to the library's screen (EmuSen_Qt.md §7.9).
+fn card_act(themed: bool, key: &str) -> Option<(Shown, Option<String>)> {
+    let shown = match key {
+        crate::home_card::RESUME => Shown::Game,
+        crate::home_card::CORES => Shown::Cores,
+        crate::home_card::THEMES => Shown::Themes,
+        _ if crate::home_card::console_to_start(key).is_some() => Shown::Game,
+        _ => library_of(themed),
+    };
+    Some((shown, None))
+}
+
+/// Where B on Cores or the Themes tab returns where the Home card opened it: the library's screen, the card having
+/// closed as it opened it; `None` where something else opened it, whose own rule stands.
+pub fn tool_back(themed: bool, opened_over: Option<Shown>, shown: Shown, ask: &Ask) -> Option<Shown> {
+    match (opened_over, shown, ask) {
+        (Some(Shown::HomeCard), Shown::Cores | Shown::Themes, Ask::Back) => Some(library_of(themed)),
+        (_, Shown::Cores, Ask::Back) => Some(library_of(themed)),
         _ => None,
     }
 }
@@ -186,6 +211,8 @@ pub fn step_in(themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<S
         (true, Shown::Esde, Ask::Act(key)) if key == LIST => Some((Shown::List, None)),
         (true, Shown::Esde | Shown::List | Shown::Pause, Ask::Play) => Some((Shown::Game, None)),
         (true, Shown::HomeCard, Ask::Act(key)) if key == crate::home_card::SETTINGS => Some((Shown::Settings, None)),
+        (true, Shown::HomeCard, Ask::Act(key)) => card_act(true, key),
+        (true, Shown::List, Ask::Act(key)) if crate::home_card::console_to_start(key).is_some() => Some((Shown::Game, None)),
         (true, Shown::Settings, Ask::Back) => Some((Shown::Esde, None)),
         (true, Shown::Settings | Shown::Themes, Ask::Act(key)) if key == HOME => Some((Shown::Esde, None)),
         (true, Shown::Settings, Ask::Act(key)) if key == THEMES => Some((Shown::Themes, None)),
@@ -231,8 +258,6 @@ pub mod qobject {
         #[qproperty(Screen, shown, READ, NOTIFY)]
         #[qproperty(QString, key, READ, NOTIFY)]
         #[qproperty(bool, game_running, cxx_name = "gameRunning")]
-        /// Counts the times Home is asked for while it shows, so Home takes the focus back to where it starts.
-        #[qproperty(i32, home_again, cxx_name = "homeAgain", READ, NOTIFY)]
         /// The page the Home card opens at, by its key.
         #[qproperty(QString, page, READ, NOTIFY)]
         /// Whether the grid shows a game, so the keyboard's shoulders have covers to move to.
@@ -273,6 +298,9 @@ pub mod qobject {
         /// Select at the ES-DE theme's view, its options: the List card.
         #[qinvokable]
         fn list(self: Pin<&mut Screens>);
+        /// The game failed to open or stopped on a failure: the library's screen, as when it closes.
+        #[qinvokable]
+        fn failed(self: Pin<&mut Screens>);
         /// The search's focus taken by its keys or its covers.
         #[qinvokable]
         #[cxx_name = "keysFocused"]
@@ -280,6 +308,13 @@ pub mod qobject {
         /// Quit EmuSen answered Yes: the program ends.
         #[qsignal]
         fn quit(self: Pin<&mut Screens>);
+        /// The Home card's Continue: the suspended game resumes as its screen is shown.
+        #[qsignal]
+        fn resumed(self: Pin<&mut Screens>);
+        /// Start Console's row chosen: the console starts with nothing in it, by its key.
+        #[qsignal]
+        #[cxx_name = "consoleStarted"]
+        fn console_started(self: Pin<&mut Screens>, key: QString);
     }
 
     impl cxx_qt::Threading for Screens {}
@@ -293,12 +328,13 @@ pub struct ScreensRust {
     key: QString,
     /// Whether the program's game runs: a game that starts is shown, and when it stops its screen gives way to Home.
     game_running: bool,
-    home_again: i32,
     page: QString,
     found: bool,
     themed: bool,
     /// The screen a game's page was opened over.
     page_origin: Shown,
+    /// The screen Cores or the Themes tab was opened over.
+    tool_origin: Option<Shown>,
 }
 
 impl Default for ScreensRust {
@@ -307,11 +343,11 @@ impl Default for ScreensRust {
             shown: Screen::Home,
             key: QString::default(),
             game_running: false,
-            home_again: 0,
             page: QString::default(),
             found: false,
             themed: false,
             page_origin: Shown::Home,
+            tool_origin: None,
         }
     }
 }
@@ -384,6 +420,17 @@ impl qobject::Screens {
         if key == crate::home_card::QUIT_EMUSEN {
             self.as_mut().quit();
         }
+        if key == crate::home_card::RESUME && self.shown == Screen::HomeCard {
+            if !self.game_running {
+                return self.ask(Ask::Close);
+            }
+            self.as_mut().resumed();
+        }
+        if let Some(console) = crate::home_card::console_to_start(&key).map(QString::from) {
+            // The game's screen asked for first, as a game's launch does, so a start that fails at once is answered after it.
+            self.as_mut().ask(Ask::Act(key));
+            return self.console_started(console);
+        }
         if key == TO_GRID && !self.found {
             return;
         }
@@ -414,6 +461,10 @@ impl qobject::Screens {
         self.ask(Ask::Act(LIST.to_owned()));
     }
 
+    pub fn failed(self: Pin<&mut Self>) {
+        self.ask(Ask::Closed);
+    }
+
     pub fn keys_focused(self: Pin<&mut Self>, keys: bool) {
         self.ask(Ask::Keys(keys));
     }
@@ -426,9 +477,12 @@ impl qobject::Screens {
         let was = shown_of(self.shown);
         let stepped = match was {
             Shown::Page => page_step(self.themed, self.page_origin, &ask).map(|s| (s, None)),
-            _ => step_in(self.themed, was, &ask),
+            _ => tool_back(self.themed, self.tool_origin, was, &ask).map(|s| (s, None)).or_else(|| step_in(self.themed, was, &ask)),
         };
         let Some((shown, key)) = stepped else { return };
+        if matches!(shown, Shown::Cores | Shown::Themes) && shown != was {
+            self.as_mut().rust_mut().tool_origin = Some(was);
+        }
         if shown == Shown::Page && was != Shown::Page {
             self.as_mut().rust_mut().page_origin = page_origin(self.themed, was);
         }
@@ -446,11 +500,6 @@ impl qobject::Screens {
             }
         }
         let screen = screen_of(shown);
-        if self.shown == Screen::Home && screen == Screen::Home {
-            let again = self.home_again.wrapping_add(1);
-            self.as_mut().rust_mut().home_again = again;
-            self.as_mut().home_again_changed();
-        }
         if self.shown != screen {
             self.as_mut().rust_mut().shown = screen;
             self.as_mut().shown_changed();

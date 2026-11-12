@@ -9184,7 +9184,7 @@ memory card manager, or whose player's BIOS shows its own.
   card mode, since there is no game whose own to use (§9 Q5 of the design). Restart starts the console again.
 - **The disc.** In a running session whose machine has a drive, Emulation → *Change Disc...* and *Eject Disc*, and the
   Pause Card's *Change Disc* page (since 2026-11-03, `EmuSen_Interface.md` §20): the game's own discs, the console's
-  games in the library, *Open the tray*, and *Any file…* for any file on the desktop; the disc goes in as on a
+  games in the library, *Eject disc*, and *Any file…* for any file on the desktop; the disc goes in as on a
   console, the lid opened, the disc in and the lid closed a second later, and the core judges it. A disc refused leaves
   the lid open and the session's discs as they were. *Change Disc* lists the discs put in as well as a set's.
 - **Tests.** `ConsoleStartTests` (the entries, the session's name, its states and its rows), `DiamondShellTests` (the

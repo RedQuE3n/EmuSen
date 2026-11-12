@@ -11,7 +11,7 @@ Kit.Frame {
     property alias facts: factRepeater.model
     // The rows, any list model; each column's `key` names the role its cell reads.
     property alias rows: list.model
-    // Roles `key`, `fill` (a weight, or 0 for the words' width), `least`, `trailing` (aligned right) and `toneKey` (the role holding the cell's tone).
+    // Roles `key`, `fill` (a weight, or 0 for the words' width), `least`, `trailing` (aligned right), `toneKey` (the role holding the cell's tone) and `shortKey` (the role of a column that gives way: a row's words where its whole ones do not fit, EmuSen_Kit.md §7.106).
     property var columns
     // The role a reader hears for a row.
     property string nameRole
@@ -195,15 +195,22 @@ Kit.Frame {
                                 required property string key
                                 required property bool trailing
                                 required property string toneKey
+                                required property string shortKey
                                 required property int index
                                 x: fit.xs[cell.index] ?? 0
                                 width: fit.widths[cell.index] ?? 0
                                 anchors.verticalCenter: parent?.verticalCenter
-                                text: row.model[cell.key] ?? ""
+                                text: cell.shortKey.length > 0 && whole.implicitWidth > cell.width ? (row.model[cell.shortKey] ?? "") : (row.model[cell.key] ?? "")
                                 tone: cell.toneKey.length > 0 ? (row.model[cell.toneKey] ?? Kit.Tones.Text) : Kit.Tones.Text
                                 font: root.cellFont
                                 elide: Text.ElideRight
                                 horizontalAlignment: cell.trailing ? Text.AlignRight : Text.AlignLeft
+                                Text {
+                                    id: whole
+                                    visible: false
+                                    font: root.cellFont
+                                    text: cell.shortKey.length > 0 ? (row.model[cell.key] ?? "") : ""
+                                }
                             }
                         }
                     }

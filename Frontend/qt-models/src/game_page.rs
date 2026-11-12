@@ -39,6 +39,19 @@ pub enum Change {
     Hide,
 }
 
+/// What the player is told when a change could not be made, and why (EmuSen_Qt.md §7.9).
+pub fn change_failed(change: &Change, why: &str) -> String {
+    let what = match change {
+        Change::Favourite => "The favourite could not be changed",
+        Change::Engine(_) => "The game's engine could not be stored",
+        Change::Profile(_) => "The game's controller profile could not be stored",
+        Change::Standard(_) => "The game's television standard could not be stored",
+        Change::DeleteState(_) => "The state could not be deleted",
+        Change::Hide => "The game could not be hidden",
+    };
+    format!("{what}: {why}")
+}
+
 /// One value of a stepped row: what is stored, none for the default, and its words.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Choice {

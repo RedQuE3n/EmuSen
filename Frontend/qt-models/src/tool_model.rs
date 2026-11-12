@@ -276,7 +276,7 @@ fn cores_source(platform_library: &str, cores: &str, world: &str) -> Result<Box<
         let platform = emusen_platform_client::Platform::load(platform_library).map_err(|e| e.to_string())?;
         let config = crate::clients::runtime_config(&platform, cores)?;
         let api = emusen_crystal_client::Api::load(platform_library).map_err(|e| e.to_string())?;
-        let runtime = emusen_crystal_client::Runtime::new(&api, &config).map_err(|e| e.to_string())?;
+        let runtime = crate::clients::runtime(&api, &config)?.0;
         Box::new(Clients { runtime, platform })
     } else {
         Box::new(Scripted::open(world)?)
@@ -462,7 +462,7 @@ impl qobject::ToolModel {
                 .columns()
                 .iter()
                 .enumerate()
-                .map(|(at, c)| json!({ "key": format!("c{at}"), "toneKey": format!("t{at}"), "title": c.title, "fill": c.fill, "least": c.least, "trailing": c.trailing }))
+                .map(|(at, c)| json!({ "key": format!("c{at}"), "toneKey": format!("t{at}"), "shortKey": if c.gives_way { format!("s{at}") } else { String::new() }, "title": c.title, "fill": c.fill, "least": c.least, "trailing": c.trailing }))
                 .collect(),
         ));
         let rows = text(&Value::Array(
@@ -474,6 +474,7 @@ impl qobject::ToolModel {
                     for (at, cell) in item.cells.iter().enumerate() {
                         row[format!("c{at}")] = json!(cell.words);
                         row[format!("t{at}")] = json!(cell.tone as i32);
+                        row[format!("s{at}")] = json!(cell.short.as_deref().unwrap_or(&cell.words));
                     }
                     row
                 })

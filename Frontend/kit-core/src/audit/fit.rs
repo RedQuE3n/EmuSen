@@ -18,7 +18,7 @@ pub const TWO_ROWS: f64 = 84.0;
 pub const MOONRISE_SOURCE: &str = "qrc:/qt/qml/EmuSen/Kit/qml/Moonrise.qml";
 
 /// Words the capitals' floor does not hold: the kit file they are written in, their item's name, and the accepted class
-/// that lets them pass (EmuSen_Kit.md §7.102, §7.105).
+/// that lets them pass (EmuSen_Kit.md §7.102, §7.109).
 pub const SMALL_TEXT_EXCEPTIONS: [(&str, &str, Class); 1] = [(MOONRISE_SOURCE, "moonriseCaption", Class::MoonriseCaption)];
 
 /// The class of `SMALL_TEXT_EXCEPTIONS`' entry that names an item written in its file, if one does; the same name in any

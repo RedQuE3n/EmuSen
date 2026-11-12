@@ -45,7 +45,11 @@ Two files hold what the specs cannot:
   captures, one row per theme, state, width and spec key, in design units of 1280 × 800, with how it was measured (a
   background's edges less the theme's paddings, an icon's ink less its box's margin with the edge the theme anchors, a
   drawn picture's edges, or nothing drawn). The oracle holds every spec element to this row where there is one and to
-  the spec's box otherwise.
+  the spec's box otherwise. A help strip's right edge is the end of its last letter, that glyph's pen matched to the
+  capture plus its advance rounded as ES-DE rounds it, where the capture shows it (Art Book Next's and Artflix's rows
+  at 1280 × 800, re-measured 2026-11-11 and 2026-11-12); Artflix's rows at 1920 × 1200 still take the left edge
+  mirrored about the centre, which the capture puts within a third of a unit of that end, and CarAlt's the theme's
+  `pos` with origin 1.
 - `picks.tsv`: the games a capture shows for its gameselector elements, read off the capture. The oracle seeds the
   painter so that it shows the same games, as it sets the clock to the capture's time.
 

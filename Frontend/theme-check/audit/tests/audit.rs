@@ -574,6 +574,8 @@ fn qt_3_4_2_a_full_name_far_longer_than_any_wraps_or_shrinks_short_of_every_coun
     assert_eq!(ran.held("Consoles").0, 10, "Choose a console at five sizes in both variants: {}", ran.err);
     let named: Vec<&str> = ran.out.lines().filter(|l| l.contains("consoleDetailName")).collect();
     assert!(named.is_empty(), "the full name is cut or meets nothing (R-20261112-2):\n{}", named.join("\n"));
+    let elided: Vec<&str> = ran.err.lines().filter(|l| l.contains("consoleDetailName") && l.contains("ellipsis")).collect();
+    assert!(elided.is_empty(), "the full name is never cut with an ellipsis:\n{}", elided.join("\n"));
     for variant in ["dark", "light"] {
         for (w, h) in [(1280, 800), (1920, 1200), (1920, 1080), (1280, 720), (3840, 2160)] {
             let file = states.join(format!("Consoles-{variant}-longest-{w}x{h}.spec"));

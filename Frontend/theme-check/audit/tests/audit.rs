@@ -490,11 +490,20 @@ fn qt_3_4_1_home_s_places_lines_are_the_program_s_own_and_whole_at_every_size() 
     let home_only = manifest.replace(r#""screens": ["home", "consoles", "games"]"#, r#""screens": ["home"]"#);
     assert_ne!(home_only, manifest, "the manifest names its three screens");
     std::fs::write(dir.join("theme.json"), home_only).unwrap();
-    let ran = Ran::judged(Command::new(PROGRAM).arg(&dir));
-    let _ = std::fs::remove_dir_all(&dir);
-    assert_eq!(ran.held("Home").0, 10, "Home at five sizes in both variants: {}", ran.err);
+    let states = dir.join("states");
+    std::fs::create_dir_all(&states).unwrap();
+    let ran = Ran::judged(Command::new(PROGRAM).arg(&dir).arg("--states").arg("default,loud").arg("--state").arg(&states));
+    assert_eq!(ran.held("Home").0, 20, "Home at five sizes in both variants, by default and loud: {}", ran.err);
     let cut: Vec<&str> = ran.out.lines().chain(ran.err.lines()).filter(|l| l.contains("placeStatus")).collect();
     assert!(cut.is_empty(), "the Settings place's line is the program's own and fits (R-20261111-35):\n{}", cut.join("\n"));
+    // The line as each variant words it, the light one the longest it can be at full volume, drawn at every size.
+    for (variant, line) in [("dark", "Dark · 100% sound"), ("light", "Light · 100% sound")] {
+        for (w, h) in [(1280, 800), (1920, 1200), (1920, 1080), (1280, 720), (3840, 2160)] {
+            let spec = std::fs::read_to_string(states.join(format!("Home-{variant}-loud-{w}x{h}.spec"))).unwrap_or_default();
+            assert!(spec.contains(line), "Home {variant} at {w}x{h} draws {line:?}");
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -511,11 +520,11 @@ fn kit_7_105_a_title_cut_with_an_ellipsis_is_listed_under_its_ruling_and_fails_n
 }
 
 #[test]
-fn kit_7_102_moonrise_s_caption_name_on_a_theme_s_home_is_not_accepted() {
+fn kit_7_102_moonrise_s_caption_name_in_a_theme_s_own_moonrise_is_not_accepted() {
     let ran = audit("small-caption");
     assert_eq!(ran.held("Home").0, 10, "{}", ran.err);
     assert_eq!(ran.status, 1, "{}", ran.out);
-    assert!(!ran.err.contains("theme-audit: accepted by"), "R-20261111-40 covers Moonrise's caption in Moonrise alone: {}", ran.err);
+    assert!(!ran.err.contains("theme-audit: accepted by"), "R-20261111-40 covers the kit's Moonrise.qml alone, not a theme's item named moonrise: {}", ran.err);
     let small: Vec<&str> = ran.out.lines().filter(|l| l.contains("small-caption/screens/Home.qml") && l.contains("too small") && l.contains("moonriseCaption")).collect();
     assert_eq!(small.len(), 10, "the floor's finding at five sizes in both variants:\n{}", ran.out);
 }

@@ -169,13 +169,15 @@ struct Fed<'a> {
     session: &'a SessionFacts,
     declined: &'a [&'a str],
     reduced: bool,
+    /// The variant Home's Settings line names, as the program's library model words it.
+    dark: bool,
 }
 
 /// The views fed as the program's host feeds them, the kit's tokens set to the big screen, with reduced motion on but for a held clock.
 fn feed(screen: u64, library: &Synthetic, view: &LibraryView, fed: &Fed<'_>, overrides: &[(bool, String, String)], section: Option<&str>) -> Result<(), String> {
     let mut theme = host::library(object(screen)).ok_or("EmuSen.Theme's Library is not in the theme's engine")?;
     theme.as_mut().show_declined(&fed.declined.iter().map(|d| (*d).to_owned()).collect::<Vec<_>>());
-    theme.as_mut().show(view, &library.home_lines(view));
+    theme.as_mut().show(view, &library.home_lines(view, fed.dark));
     // The Games screen's section as the program's showBrowse gives it: the named one, else the first console's, else the All shelf.
     let first = view.rows.rows().iter().find(|r| r.kind == Some(Kind::Console)).map(|r| r.key.clone()).or(Some(ALL.to_owned()));
     if let Some(key) = section.map(str::to_owned).or(first) {
@@ -190,6 +192,13 @@ fn feed(screen: u64, library: &Synthetic, view: &LibraryView, fed: &Fed<'_>, ove
     kit.as_mut().set_reduced_motion(fed.reduced);
     host::set_token_overrides(object(screen), overrides);
     Ok(())
+}
+
+/// Home's lines fed afresh in a variant: the Settings place's line names the look, as the program's does.
+fn relined(screen: u64, library: &Synthetic, view: &LibraryView, dark: bool) {
+    if let Some(mut theme) = host::library(object(screen)) {
+        theme.as_mut().show(view, &library.home_lines(view, dark));
+    }
 }
 
 /// Whether the screen comes to rest under reduced motion: no animation running and no frame swapped for two seconds.
@@ -225,11 +234,13 @@ struct Pass<'a> {
     declined: &'a [(&'a str, String)],
     /// The screen's mockup and the theme's night palette, held where the size is the canvas's or its 1.5 times.
     mockup: Option<(&'a Mockup, &'a dyn Fn(ColourToken) -> Colour)>,
+    /// Feeds Home's lines afresh for a variant, dark or not, as the program's library model words them when the look changes.
+    relined: Option<&'a dyn Fn(u64, bool)>,
 }
 
 impl<'a> Pass<'a> {
     fn plain(variants: &'a [Variant], label: &'a str, consoles: Option<&'a [String]>) -> Pass<'a> {
-        Pass { variants, label, consoles, focus: None, press: false, held: false, moving: None, declined: &[], mockup: None }
+        Pass { variants, label, consoles, focus: None, press: false, held: false, moving: None, declined: &[], mockup: None, relined: None }
     }
 }
 
@@ -239,6 +250,9 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
         let name = format!("{}{}", if variant == Variant::Dark { "dark" } else { "light" }, pass.label);
         if let Some(mut kit) = tokens(id) {
             kit.as_mut().set_variant(if variant == Variant::Dark { kinds::Variant::Dark } else { kinds::Variant::Light });
+        }
+        if let Some(relined) = pass.relined {
+            relined(id, variant == Variant::Dark);
         }
         for (w, h) in SIZES {
             lines.at = format!("{w}x{h} {name}");
@@ -557,9 +571,10 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
         logged();
         let label = format!(", {name}");
         let mockup = mockups.iter().find(|(s, _)| *s == screen).map(|(_, m)| (m, &night as &dyn Fn(ColourToken) -> Colour));
-        let pass = Pass { focus: asked.focus, mockup, ..Pass::plain(&both, &label, Some(names)) };
+        let lines_in = |id: u64, dark: bool| relined(id, &library, view, dark);
+        let pass = Pass { focus: asked.focus, mockup, relined: Some(&lines_in), ..Pass::plain(&both, &label, Some(names)) };
         let session = library.session(view, None)?;
-        let fed = Fed { session: &session, declined: &[], reduced: true };
+        let fed = Fed { session: &session, declined: &[], reduced: true, dark: true };
         match placed(&mut scene, &real, screen, |id| feed(id, &library, view, &fed, &overrides, section)) {
             Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
             Ok(id) => lines.guarded(screen, |lines| states(&mut scene, screen, id, &pass, state, lines)),
@@ -583,10 +598,11 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
             match asked_state.clock {
                 Some(ms) => held(&mut scene, &real, screen, (&library, &view, &session), ms, &label, (state, section, &overrides), &mut lines),
                 None => {
-                    let fed = Fed { session: &session, declined: asked_state.declined, reduced: true };
+                    let fed = Fed { session: &session, declined: asked_state.declined, reduced: true, dark: true };
                     let declined: Vec<(&str, String)> = asked_state.declined.iter().filter_map(|&key| place_name(&view, key).map(|name| (key, name))).collect();
                     let mockup = mockups.iter().find(|(s, _)| *s == screen && default).map(|(_, m)| (m, &night as &dyn Fn(ColourToken) -> Colour));
-                    let pass = Pass { focus: focus.as_deref(), press: asked_state.press, declined: &declined, mockup, ..Pass::plain(&both, &label, None) };
+                    let lines_in = |id: u64, dark: bool| relined(id, &library, &view, dark);
+                    let pass = Pass { focus: focus.as_deref(), press: asked_state.press, declined: &declined, mockup, relined: Some(&lines_in), ..Pass::plain(&both, &label, None) };
                     match placed(&mut scene, &real, screen, |id| feed(id, &library, &view, &fed, &overrides, section)) {
                         Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
                         Ok(id) => lines.guarded(screen, |lines| {
@@ -654,7 +670,7 @@ fn held(
 ) {
     for variant in [Variant::Dark, Variant::Light] {
         scene.hold_clock(Some(0));
-        let fed = Fed { session, declined: &[], reduced: false };
+        let fed = Fed { session, declined: &[], reduced: false, dark: variant == Variant::Dark };
         let id = placed(scene, folder, screen, |id| {
             feed(id, library, view, &fed, overrides, section)?;
             let mut kit = tokens(id).ok_or("the kit's Tokens are not in the theme's engine")?;

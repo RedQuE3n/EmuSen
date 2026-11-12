@@ -1080,8 +1080,8 @@ catalogues (`--catalogue`) found the same faults. Each was the package's layout,
    wide in Barlow at 20, and the line's box was 126, the tile's 150 less 12 each side. The line now runs to 4 units short
    of the tile's right edge (134); its left edge stays with the name's. The other fixed lines are 107.5 ("Art and
    facts"), 123.3, 101.7 and 32.6 wide (measured 2026-11-09 with Qt's `qml`). The acceptance test's exception for the
-   places' lines holds the same rule now: a line built from data may elide (Settings' "Dark · 60% sound" does), a fixed
-   word may not; with the old exception gone it named only Settings' line. Seeded back (the line 126 wide), the audit
+   places' lines holds the same rule now: a line built from data may elide, a fixed word or a line the program builds
+   from its own settings may not (R-20261111-35; Settings' "Dark · 60% sound" is the program's own and is held whole). Seeded back (the line 126 wide), the audit
    names `placeStatus.2` cut with an ellipsis at every size in both variants.
 2. **The grid's neighbours under the floor.** `gridPrevious`, the `·` between and `gridNext`, at 18 units, drew capitals of
    11.33 at 1280 × 720, under the floor of 11.64 (36 lines, every state that shows the grid). They are 19. Seeded back at
@@ -1137,11 +1137,12 @@ faults); an empty picture URL refused by the sandbox (`theme_feed.rs`, 22 refusa
 row (`scale.rs`, 9,000 covers for 4). The stage 1 start-up gates of §9.3.1 (Home shown ≤ 0.35 s, the first press
 ≤ 0.95 s on the real library) were not re-run: their driver is no longer kept.
 
-**The places' lines in the condensed face** (sixth pass, 2026-11-11). The Settings place's line is the program's own
-words, built from two settings, so it is held whole (R-20261111-35); in Barlow at 20 it overran its 134-unit box
-("Dark · 60% sound" 142.9, "Light · 100% sound" 154.5). The places' second lines take Barlow Condensed's regular face,
-as the worlds' counts do on Choose a console; the longest line is then 124.1. EmuSen_Kit.md §7.105 has the measurement
-and the tests.
+**The places' lines in the condensed face** (2026-11-11; the face awaits the tester's ruling). The Settings place's line
+is the program's own words, built from two settings, so it is held whole (R-20261111-35); in Barlow at 20 it overran its
+134-unit box ("Dark · 60% sound" 142.9, "Light · 100% sound" 154.5, measured 2026-11-11). The places' second lines take
+Barlow Condensed's regular face, as the worlds' counts do on Choose a console; the longest line is then 124.1.
+theme-audit's `loud` state draws "Light · 100% sound" at the five sizes. EmuSen_Kit.md §7.105 has the measurement and
+the tests.
 
 #### 3.4.2 The reference theme's Choose a console: the orbits **[M 2026-11-08]**
 

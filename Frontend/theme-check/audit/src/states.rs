@@ -18,6 +18,8 @@ pub enum Library {
     OneConsole,
     /// The eight and a game whose title is too long for any place, played last.
     Long,
+    /// The synthetic library with the navigation sound at full volume.
+    Loud,
     /// A catalogue of Testing/themes/catalogues, by its stem and its text.
     Catalogue(&'static str, &'static str),
 }
@@ -57,7 +59,7 @@ const fn state(name: &'static str, screens: &'static [Screen], library: Library,
 }
 
 /// Every state, the default first and the held clocks last, since letting the clock go leaves Qt's own driver in place.
-pub const STATES: [State; 14] = [
+pub const STATES: [State; 15] = [
     state(DEFAULT, &[Screen::Home, Screen::Consoles, Screen::Games, Screen::Splash], Library::Synthetic, Some(SUSPENDED), "the synthetic library with a game suspended; the splash finished under reduced motion; Choose a console again over 120 consoles"),
     state("nogame", &[Screen::Home], Library::Synthetic, None, "no game to continue"),
     state("empty", ALL_THREE, catalogue!("empty"), None, "no console and no game; Games shows the All shelf"),
@@ -73,6 +75,7 @@ pub const STATES: [State; 14] = [
         focus: Some("scraper"),
         ..state("disabled", &[Screen::Home], Library::Synthetic, Some(SUSPENDED), "the Scraper declined by the host, the focus walked to it")
     },
+    state("loud", &[Screen::Home], Library::Loud, Some(SUSPENDED), "the navigation sound at full volume: the Settings place's longest line"),
     State { clock: Some(1000), ..state("splash-1s", &[Screen::Splash], Library::Synthetic, Some(SUSPENDED), "the splash 1 s after it is placed") },
     State { clock: Some(3000), ..state("splash-3s", &[Screen::Splash], Library::Synthetic, Some(SUSPENDED), "the splash at 3 s") },
     State { clock: Some(5000), ..state("splash-5s", &[Screen::Splash], Library::Synthetic, Some(SUSPENDED), "the splash at 5 s") },

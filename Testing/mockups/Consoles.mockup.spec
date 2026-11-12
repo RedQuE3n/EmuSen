@@ -16,7 +16,8 @@ element placeName.1 x=574 y=100 h=40 token=TextStrong words=data
 element placeDisc.2 x=737 y=100 w=40 h=40
 element placeName.2 x=789 y=100 h=40 token=TextStrong words=data
 note the counts, the maker labels and the engine line at 19 units, where the canvas had 17: the smallest whole size over the capitals' floor at 1280 x 720; the counts in Barlow Condensed, no wider than the canvas's; a label's line grows upward, its foot where the canvas's 20-unit box ends (EmuSen_Qt.md §3.4.2)
-element makerLabel.0 right=753.72 y=149.2 h=22.8
+note the inner orbit's window ends at y 197, the middle's and the outer's at 178 (R-20261111-93)
+element makerLabel.0 right=725.35 y=149.2 h=22.8
 element makerLabel.1 right=971.26 y=149.2 h=22.8
 element makerLabel.2 right=1125.76 y=217.04 h=22.8
 note each console on its orbit: slot s has radii 260 + 180 s by 220 + 150 s about (640, 0); what the pad and the pointer reach is

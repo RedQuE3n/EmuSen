@@ -1224,7 +1224,7 @@ canvas's own; kit-core's test holds them within 0.01 unit.
    name still starts a unit under the ring, as at 96. Seeded back (96), the audit names the overlap over eleven at
    every size in both variants. The second meeting the audit named on 2026-11-08, a turning
    orbit's label by its window's last world at 16:9, is named in no catalogue on 2026-11-09.
-9. The inner orbit's window ends at y 197, not 178 (decided 2026-11-08), so it holds 2 worlds, not 3. At 178 a
+9. The inner orbit's window ends at y 197, not 178 (decided 2026-11-11, R-20261111-93; the canvas ends it there too), so it holds 2 worlds, not 3. At 178 a
    focused world at its end grew its ring to y 123, into the places row (which ends at 140). The audit over the 120
    consoles found it, and the canvas's own numbers do the same. A turning orbit shows its whole capacity, with the
    focus at the middle world (left of the middle when the capacity is even). The canvas centred the focus, which
@@ -1251,8 +1251,8 @@ each waiting on the tester:
   (2 lines at 53);
 - the cover row: the canvas's Super Nintendo is 1.4 wide a unit tall; the systems table's `cover_aspect` 0.73 makes it
   1.37, so three covers 137 wide stand at 781, 930 and 1079 against 140 at 772, 924 and 1076 (12 lines);
-- the inner orbit's label (item 9): the window ends at 197, not the canvas's 178, so its label's right edge is 725.35
-  against 753.72 (2 lines).
+- the inner orbit's label (item 9): the window ended at 197 on the screen and at 178 in the canvas, so its label's right
+  edge stood at 725.35 against 753.72. Decided 2026-11-11 (R-20261111-93): the canvas ends it at 197.
 The figures, the probes and what the canvas would have to say for each are kept with the branch's evidence
 (`canvas-figures.md`); the acceptance test's Consoles mockup lines are the same figures.
 

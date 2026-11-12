@@ -3041,7 +3041,7 @@ object it holds) and the binding hands the gate null itself. So `PageFrame` was 
 for a model handed to it any other way.
 ### 7.100 An excuse names its one item and fails when it excuses nothing (2026-11-11)
 
-**The defect.** A review of 2026-11-11 found the program's tests excusing findings by a blanket: `named()` in five test
+**The defect** (found 2026-11-11). The program's tests excused findings by a blanket: `named()` in five test
 files dropped every "too small to read" at 1280 × 720, whatever the item, and Cores dropped every "the pad does not
 reach" while its keyboard was docked. The tester's decision of 2026-11-08 (the floor holds with no exception, every
 small text is 19) left no room for the first; and nothing could notice when an excuse had outlived its cause, since a
@@ -3204,9 +3204,9 @@ shoulder action beside sections before. Decided 2026-11-11 by the tester (R-2026
 `cores.rs` holds `CoresSearch` with `WITH_SHOULDERS` and no excuse, then presses RB (a row focused, the keyboard docked,
 the section unchanged) and LB (the keys again).
 
-**What the walk presses from (2026-11-11).** An independent reading suspected that a press of the walk could
-start from a state no player can be in: `put_back` restores the views and the focus but not the screens' state, so after
-RB the next item's presses might start with `SearchGrid` shown while the focus is forced onto a key. `hold_walking` now
+**What the walk presses from (2026-11-11).** `put_back` restores the views and the focus but not the screens' state,
+so a press of the walk could start from a state no player can be in: after RB, the next item's presses with
+`SearchGrid` shown while the focus is forced onto a key. `hold_walking` now
 writes, beside each state's grab, `<state>.presses.txt`: the screen shown, Cores' `searchKeys`, the focused item and the
 button, before every press. Read on 2026-11-11 for `CoresSearch`: the focus forced onto the list's search box or a row
 sets `searchKeys` false and onto the keyboard true before the press, through the pointer path, so every press starts from

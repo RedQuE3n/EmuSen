@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use emusen_qt_test::harness::SIZES;
 use emusen_theme_check::run_with;
 
 // The package's Qt crates, linked so the build's initializers find them; the program under test is the binary.
@@ -498,7 +499,7 @@ fn qt_3_4_1_home_s_places_lines_are_the_program_s_own_and_whole_at_every_size() 
     assert!(cut.is_empty(), "the Settings place's line is the program's own and fits (R-20261111-35):\n{}", cut.join("\n"));
     // The line as each variant words it, the light one the longest it can be at full volume, drawn at every size.
     for (variant, line) in [("dark", "Dark · 100% sound"), ("light", "Light · 100% sound")] {
-        for (w, h) in [(1280, 800), (1920, 1200), (1920, 1080), (1280, 720), (3840, 2160)] {
+        for (w, h) in SIZES {
             let spec = std::fs::read_to_string(states.join(format!("Home-{variant}-loud-{w}x{h}.spec"))).unwrap_or_default();
             assert!(spec.contains(line), "Home {variant} at {w}x{h} draws {line:?}");
         }
@@ -577,7 +578,7 @@ fn qt_3_4_2_a_full_name_far_longer_than_any_wraps_or_shrinks_short_of_every_coun
     let elided: Vec<&str> = ran.err.lines().filter(|l| l.contains("consoleDetailName") && l.contains("ellipsis")).collect();
     assert!(elided.is_empty(), "the full name is never cut with an ellipsis:\n{}", elided.join("\n"));
     for variant in ["dark", "light"] {
-        for (w, h) in [(1280, 800), (1920, 1200), (1920, 1080), (1280, 720), (3840, 2160)] {
+        for (w, h) in SIZES {
             let file = states.join(format!("Consoles-{variant}-longest-{w}x{h}.spec"));
             let spec = std::fs::read_to_string(&file).unwrap_or_else(|_| panic!("{} recorded", file.display()));
             let (_, name, words) = boxes(&spec, "consoleDetailName").pop().unwrap_or_else(|| panic!("{variant} {w}x{h}: the full name drawn"));

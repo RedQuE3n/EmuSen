@@ -17,8 +17,9 @@ compared on every build. Each entry names what changed and the section that reco
   `HelpElement.heightShare`, `inkShare`, `lineHeight` and `glyphSide`, and `labelPx` from read-only to required.
 - Registry, removed: `EsdeModel.hover(row)`, deprecated in 1.1 (R-20261111-98) and removed in this minor (decided
   2026-11-11 by the tester, R-20261111-108: before the first release a call deprecated in one minor may go in any later
-  one); `hoverAt(item, row)` is the call. Its test of the deprecated behaviour and the lint that no QML calls it went
-  with it.
+  one); `hoverAt(item, row)` is the call. Its test of the deprecated behaviour went with it; the lint stays, as
+  `qt_5_3_the_removed_hover_is_called_by_no_qml_and_offered_by_no_registry` in `tests/lint.rs`, holding that no QML
+  calls `hover` and the registry offers none.
 - The minor moved to 1.2 for all of these: until the first release an addition, a change and a removal each bump the
   minor (decided 2026-11-11 by the tester, R-20261111-107, EmuSen_Qt.md §5.3).
 

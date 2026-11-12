@@ -1,8 +1,9 @@
 # EmuSen.Kit changes
 
 The kit is the QML module `EmuSen.Kit` (EmuSen_Qt.md §1.4), held by rule Q (§5.3): its registry, as qmltyperegistrar
-writes it, is committed under `Testing/qmltypes/` and compared on every build. A minor adds and never removes; each
-entry names what was added and the section of `EmuSen_Kit.md` that records it.
+writes it, is committed under `Testing/qmltypes/` and compared on every build. Until the first release every change, an
+addition, a change or a removal, bumps the minor (R-20261111-107, R-20261111-108); each entry names what changed and the
+section of `EmuSen_Kit.md` that records it.
 
 ## 1.1, stage 4 piece X: the help bar's pair glyph, the clip's player and fade, the page's clip volume (2026-11-11)
 

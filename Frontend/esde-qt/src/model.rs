@@ -166,12 +166,12 @@ pub struct EsdeModelRust {
     load_problem: String,
 }
 
-/// The local time at `pinned` seconds since 1970, or the wall clock's at 0, for the clock element and the dates.
 /// A read load's problem: the painter's, or with themed systems and none, FreeType's when it did not start (EmuSen_Qt.md §4.12.4).
 fn load_problem(painter: String, themed: bool, freetype: Result<(), String>) -> String {
     if painter.is_empty() && themed { freetype.err().unwrap_or_default() } else { painter }
 }
 
+/// The local time at `pinned` seconds since 1970, or the wall clock's at 0, for the clock element and the dates.
 fn local_now(pinned: i64) -> DateTime {
     let now = if pinned == 0 { QDateTime::current_date_time() } else { QDateTime::from_secs_since_epoch(pinned, &QTimeZone::system_time_zone()) };
     let (d, t) = (now.date(), now.time());

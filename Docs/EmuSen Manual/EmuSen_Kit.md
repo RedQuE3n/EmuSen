@@ -2665,9 +2665,11 @@ registry as `EmuSen.Kit-1.1.qmlfiles`, R-20261111-99, `EmuSen_Qt.md` §5.3.) `Te
 and `EmuSen.Kit-1.1.qmldir` are the registry as
 `qmltyperegistrar` and cxx-qt write them (`Frontend/target/cxxqt/qml_modules/EmuSen/Kit/`). `tests/qmltypes.rs`
 compares the build's files to the committed ones with line numbers and header file names dropped, since those move
-with every edit; a difference fails until it is reviewed, the minor bumped for an addition or the major for a removal,
-and the files copied. Until 1.0 the comparison is strict equality; the addition and removal distinction is a reviewer's
-step, not the test's.
+with every edit; a difference fails until it is reviewed, the minor bumped for any change, an addition, a change or a
+removal (R-20261111-107: no major before the first release), the change listed in `CHANGELOG-kit.md`, and the files
+copied. The comparison is strict equality with the committed files of the current version, so it cannot tell whether
+the version moved: a change may rewrite those files in place. The bump is a person's check at review and landing, a
+file under `Testing/qmltypes` changed at a version the trunk already has being its mark (`EmuSen_Qt.md` §5.3).
 
 **Tests** (`Frontend/kit-qt/tests`, 34 with §7.5's and §7.8's, no Qt application needed; the bridges themselves are
 exercised by the harness of step 9): `kinds` (the mirrors pair by pair), `column` (every colour of both variants, the metrics by form and text

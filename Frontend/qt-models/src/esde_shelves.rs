@@ -34,6 +34,11 @@ pub struct EsdeSettings {
 /// `AppSettings`' volume, a share of full: the one EmuSen plays sound at, the media viewer's video's included (EmuSen_Qt.md §4.14).
 pub const VOLUME: &str = "Volume";
 
+/// The volume the settings give, a share of full; full where they give none.
+pub fn volume_of(settings: &Value) -> f64 {
+    settings.get(VOLUME).and_then(Value::as_f64).map_or(1.0, |v| v.clamp(0.0, 1.0))
+}
+
 /// The settings for the ES-DE view: the choices are those stored under the theme folder's full path less a trailing
 /// separator, as Mistress's `ThemeSettingsWindow.Key` keys them.
 pub fn settings_of(settings: &Value) -> EsdeSettings {

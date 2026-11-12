@@ -103,6 +103,8 @@ pub struct Read {
     pub hero: String,
     pub screenshot: String,
     pub clip: String,
+    /// The share of full the clip's sound plays at: the player's Volume (R-20261111-100).
+    pub clip_volume: f64,
     /// The saved states, the most recent first.
     pub states: Vec<State>,
     pub media: Vec<Media>,

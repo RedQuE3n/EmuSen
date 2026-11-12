@@ -206,6 +206,8 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     set_setting(&platform, "EsdeMediaDirectory", serde_json::json!(media.to_str().unwrap()));
     // The recordings hold a still: the clip is off while the states are held, and on for the clip's own part.
     set_setting(&platform, "PlayVideos", serde_json::json!(false));
+    // The player's Volume, which the page's clip is heard at (R-20261111-100).
+    set_setting(&platform, "Volume", serde_json::json!(0.35));
 
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
@@ -512,6 +514,8 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     wait_for(&mut scene, "videoPlayer", "playbackState", "PlayingState", 4000);
     wait_for(&mut scene, "pageClip", "showing", "true", 4000);
     assert!(scene.property("pageClip", "frames").parse::<i32>().unwrap_or(0) > 0, "the frames drawn by the kit's sink");
+    assert_eq!(scene.property("videoPlayback", "heard"), "true", "the page's clip heard");
+    assert!(scene.property("videoPlayback", "level").parse::<f64>().is_ok_and(|v| (v - 0.35).abs() < 1e-6), "at the player's Volume, 35 %: {}", scene.property("videoPlayback", "level"));
     // The fade over the still done.
     scene.wait(1200);
     let clip = hero_colour(&mut scene);

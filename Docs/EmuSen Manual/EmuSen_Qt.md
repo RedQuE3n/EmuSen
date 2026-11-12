@@ -3818,7 +3818,10 @@ the scanlines off in each so that only the setting differs.
 - *Volume* (decided 2026-11-11 by the tester, R-20261111-91): the viewer's video plays at EmuSen's `Volume`
   (`AppSettings`, a share of full, the Sound page's row), carried in `esdeSettings` as `volume`
   (`esde_shelves::settings_of`) to the clip's `volume`; no setting of its own. ES-DE plays it at its video player volume,
-  `SoundVolumeVideos` (default 80), which EmuSen has no key for.
+  `SoundVolumeVideos` (default 80), which EmuSen has no key for. The game page's own clip is heard at the same `Volume`
+  (decided 2026-11-11 by the tester, R-20261111-100): `GamePageModel.clipVolume`, read by `esde_shelves::volume_of`, the
+  one reading of the key, onto `PageFrame.clipVolume`, the clip no longer muted; held by qt-app's `game_page` test,
+  which reads the page player's `heard` and `level` at a Volume of 0.35.
 
 - *The fade-in* (decided 2026-11-11 by the tester, R-20261111-101): the video fades in over 600 ms once its first frame
   shows, as ES-DE 3.4.1's does (`MEDIA_VIEWER_FADE_IN_TIME`, read in `VideoComponent::update`,

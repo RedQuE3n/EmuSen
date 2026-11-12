@@ -1216,8 +1216,8 @@ canvas's own; kit-core's test holds them within 0.01 unit.
 7. A world's `Walkable` is the body's box, the ring drawn 7 units about it when focused, and the name and count hang
    beneath it, outside the `Walkable`. The canvas's node was 140 units wide and held the words too. On the steep stretches of the outer
    orbits those nodes covered their neighbours, which the fit audit read as overlaps of empty corners.
-8. The focused body is 88 units, where the canvas drew 96 (2026-11-09), and the `Walkable` is the body's box rather than
-   the ring's. At 96, with the ring's box as the `Walkable`, the focused world's box reached into the count of the world
+8. The focused body is 88 units, in the canvas as on the screen (decided 2026-11-11, R-20261111-92; the canvas had drawn
+   96 until then), and the `Walkable` is the body's box rather than the ring's. At 96, with the ring's box as the `Walkable`, the focused world's box reached into the count of the world
    on the orbit inside it: the focused NES's into Master System's count, 10 units at 1280 × 800, in the canvases'
    eleven, n30 and long, at every size (one line in n30, six a size in each variant in the others). The drawn ring stayed
    clear of the words; the boxes did not. At 88 the body's box ends 0.45 unit below that count's line box, and its own
@@ -1244,8 +1244,8 @@ canvas's own; kit-core's test holds them within 0.01 unit.
 above and `CoverRow`). 44 lines remain, 22 a size, in four figures the screen cannot meet without a finding elsewhere,
 each waiting on the tester:
 - the focused body, 96 (item 8): at the canvas's own figures (body 96, the `Walkable` the ring's 110) the focused box
-  reaches 7.4 units into the next orbit's count; at 96 with the body's box, the first focus (the NES) reaches 3.5 units
-  into Master System's count, 60 lines over eleven (18 lines at 88);
+  reached 7.4 units into the next orbit's count; at 96 with the body's box, the first focus (the NES) reached 3.5 units
+  into Master System's count, 60 lines over eleven. Decided 2026-11-11 (R-20261111-92): the canvas draws it 88;
 - the full name's line box, 44 (item 6): Barlow Condensed Medium at 44 in Qt 6.11 lays a line 53 (ascent 44, descent
   8.8), with `lineHeight: 44` fixed as without; a 44 box is cut at the foot by the fit rule, which judges the line box
   (2 lines at 53);

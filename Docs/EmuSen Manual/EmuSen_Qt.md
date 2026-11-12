@@ -3707,8 +3707,17 @@ by mirroring its left edge about 640. Measured on the capture (`gamelist-1-1280x
 (bitmap_left 1, 13 columns, 14 rows), matches the capture's columns 997–1009 in all 14 rows; its pen is therefore 996,
 and its rounded advance (14.26 → 14) ends the label, and the strip, at **1010**. ES-DE's width is 1010 − 267.90 = 742.10,
 not 744.20; by the rule above the strip starts at 268 and is 742.35 wide. The method and figures are in
-`~/.cache/emusen/tmp/x9/artflix-row.md` (outside the repository). The row is not changed here: correcting it is the
-tester's to rule, as R-20261111-49 was.
+`~/.cache/emusen/tmp/x9/artflix-row.md` (outside the repository). *Decided 2026-11-11 by the tester
+(R-20261111-85):* the row's width is corrected to 742.10, x kept, its note saying how the edge was measured.
+
+**Art Book Next, gamelist, 1280 × 800** (R-20261111-86, decided 2026-11-11: re-measured the same way; what the capture
+shows stands whether or not the drawing then passes). The row (x 59.00, w 368.20) took its right edge as the last
+label's ink less 2 px. The last glyph, SELECT's T in Akrobat SemiBold at 25.666664 px (0.04583333 × 800 × 0.7 in f32),
+rendered as ES-DE renders it (trunc(25.666664 × 64) = 1642, bitmap_left 0, 11 columns, 18 rows), matches the capture
+(`gamelist-1-1280x800.png`, its committed hash) in all 198 pixels with its column 0 at 419, to within half a level;
+its pen is 419 and its rounded advance (10.70 → 11) ends the label, and the strip, at **430**. The row is now x 59.00
+(the first icon's first ink, unchanged), w 371.00. The method is in `~/.cache/emusen/tmp/x10/abn-gamelist-row.md`
+(outside the repository).
 
 **What is still not known.** The FreeType inside the captured ES-DE build was not checked; the probes used Fedora's
 2.14.3. That it reproduces the 27-row `S` at 2346/64 and RANDOM's M to the pixel supports alike hinting; it is not

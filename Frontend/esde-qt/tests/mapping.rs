@@ -339,7 +339,7 @@ fn along(c: &Case, value: &str) -> UiButton {
 }
 
 /// One rendering of a case: the view emptied so the next install starts afresh, the theme and the rotated library
-/// installed, the case's move made, and the picture left on the window at the case's time.
+/// installed, the case's move made, and the picture left on the window at the case's time, a timed case's clock still held.
 fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &Assets) {
     common::write_theme(theme, "", &element(c, value, assets));
     if scene.property("esdeModel", "themed") == "true" {
@@ -355,7 +355,10 @@ fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &A
     assert!(scene.set_property("view", "settings", &settings(theme, &interface)));
     assert!(scene.set_property("view", "shelves", &shelves));
     until(scene, "the case's theme installed", |s| s.property("esdeModel", "themed") == "true");
-    let started = std::time::Instant::now();
+    // A timed case moves on the held clock, so its picture is the scene at `at` whatever the machine's load (EmuSen_Qt.md §4.8.5).
+    if c.at.is_some() {
+        scene.hold_clock(Some(0));
+    }
     match c.moves.as_deref() {
         Some("step") => scene.pad(along(c, value)),
         Some("down") => scene.pad(UiButton::Down),
@@ -363,10 +366,7 @@ fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &A
         _ => {}
     }
     match c.at {
-        Some(at) => {
-            let left = at - started.elapsed().as_millis() as i32;
-            scene.wait(left.max(0));
-        }
+        Some(at) => scene.hold_clock(Some(i64::from(at))),
         None => {
             until(scene, "the case at rest", |s| s.property("esdeModel", "moving") == "false");
             scene.wait(150);
@@ -404,6 +404,8 @@ fn every_case_s_two_themes_load_without_errors() {
 fn every_drawn_pair_changes_the_painted_pixels() {
     assert!(emusen_esde_qt::marks::mark_named("star").is_some(), "the module is linked into this test");
     let _kwin = common::start();
+    // A held clock is refused under a threaded render loop, which installs its own animation driver (EmuSen_Kit.md §7.36).
+    std::env::set_var("QSG_RENDER_LOOP", "basic");
     let dir = Scratch::new("mapping");
     let assets = Assets::new(&dir.0);
     let only = std::env::var("ESDE_MAPPING_ONLY").ok();
@@ -425,11 +427,17 @@ fn every_drawn_pair_changes_the_painted_pixels() {
         if c.moves.as_deref() == Some("hold") {
             scene.pad_up(along(c, &c.a));
         }
+        if c.at.is_some() {
+            scene.hold_clock(None);
+        }
         render(&mut scene, c, &c.b, &tb, &assets);
         let problems: Vec<String> = problems.into_iter().chain(errors(&tb)).chain(Some(scene.property("esdeModel", "problem")).filter(|p| !p.is_empty())).collect();
         let differing = scene.difference(&picture, 0, 0, &[], "");
         if c.moves.as_deref() == Some("hold") {
             scene.pad_up(along(c, &c.b));
+        }
+        if c.at.is_some() {
+            scene.hold_clock(None);
         }
         if !problems.is_empty() {
             failures.push(format!("{c}: theme errors: {}", problems.join("; ")));

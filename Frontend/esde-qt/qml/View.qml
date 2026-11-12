@@ -28,9 +28,20 @@ Item {
         scene: esde
         revision: esde.revision
     }
-    FrameAnimation {
+    // The scene's clock is Qt's animation clock, so a held or recording driver holds it as it holds every animation (EmuSen_Qt.md §4.8.5).
+    property real clockMs: 0
+    property real tickedMs: 0
+    NumberAnimation on clockMs {
         running: esde.moving
-        onTriggered: esde.tick(frameTime * 1000)
+        from: 0
+        to: 1e9
+        duration: 1e9
+        loops: Animation.Infinite
+    }
+    onClockMsChanged: {
+        if (clockMs > tickedMs)
+            esde.tick(clockMs - tickedMs)
+        tickedMs = clockMs
     }
     Timer {
         interval: Math.max(1, esde.nextChangeMs)

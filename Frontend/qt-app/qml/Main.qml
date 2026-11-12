@@ -462,20 +462,8 @@ Window {
         onDoor: (name) => screens.act(name)
         onOpenFolder: (path) => folders.open(path)
         onChooseFolder: (key, start) => folders.choose(key, start)
-        onSaved: settingsRead.saved = true
-    }
-    // What Settings saved reaches the library's read as Settings closes, the ES-DE view's settings with it: the media
-    // viewer's clip plays at the Volume saved (EmuSen_Qt.md §4.14).
-    Connections {
-        id: settingsRead
-        target: screens
-        property bool saved: false
-        function onShownChanged() {
-            if (settingsRead.saved && screens.shown !== Screens.Settings) {
-                settingsRead.saved = false
-                library.refresh()
-            }
-        }
+        // What Settings saved reaches the library's read as it closes: the media viewer plays at the Volume saved (EmuSen_Qt.md §4.14).
+        onSaved: library.refresh()
     }
     // The program's folder actions (EmuSen_Qt.md §7.7.E): one shown in the system's file manager, one chosen in the
     // system's own folder dialog (through the desktop portal where there is one), whose answer the row's model saves.

@@ -3871,8 +3871,8 @@ the scanlines off in each so that only the setting differs.
   which reads the page player's `heard` and `level` at a Volume of 0.35.
   *Found 2026-11-11 and fixed:* the settings reached `esdeSettings` only when the library was read again, and nothing
   read it after Settings saved, so a Volume changed in Settings did not reach the viewer until the next start (measured:
-  `volume` 1.0 after Sound ▸ Volume was stepped to 0.95 and Settings closed). `SettingsModel` now signals `saved`, and
-  `Main.qml` reads the library again as Settings closes after a save; qt-app's `settings` test holds it.
+  `volume` 1.0 after Sound ▸ Volume was stepped to 0.95 and Settings closed). `SettingsModel` now signals `saved` as
+  Settings closes after a save, and `Main.qml` reads the library again on it; qt-app's `settings` test holds it.
 
 - *The fade-in* (decided 2026-11-11 by the tester, R-20261111-101): the video fades in over 600 ms once its first frame
   shows, as ES-DE 3.4.1's does (`MEDIA_VIEWER_FADE_IN_TIME`, read in `VideoComponent::update`,

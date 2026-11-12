@@ -127,7 +127,7 @@ pub mod qobject {
         #[qsignal]
         fn left(self: Pin<&mut SettingsModel>);
 
-        /// A value saved through Galaxia: what the library reads from the settings may have changed.
+        /// Settings closed after a value was saved through Galaxia: what the library reads from the settings may have changed.
         #[qsignal]
         fn saved(self: Pin<&mut SettingsModel>);
 
@@ -214,6 +214,8 @@ pub struct SettingsModelRust {
     rows: Vec<settings::Row>,
     /// The reads asked for, so an older read that finishes late is dropped.
     asked: u64,
+    /// A value saved since Settings opened, told as `saved` when it closes.
+    saved_since_open: bool,
 }
 
 fn list(words: impl Iterator<Item = String>) -> QStringList {
@@ -232,6 +234,7 @@ impl Default for SettingsModelRust {
             cores: QString::default(),
             world: QString::default(),
             open: false,
+            saved_since_open: false,
             facts: QString::default(),
             sections: list(view.sections().into_iter()),
             section: 0,
@@ -262,9 +265,11 @@ impl Default for SettingsModelRust {
 impl cxx_qt::Initialize for qobject::SettingsModel {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut()
-            .on_open_changed(|model| {
+            .on_open_changed(|mut model| {
                 if model.open {
                     model.read_if_named();
+                } else if std::mem::take(&mut model.as_mut().rust_mut().saved_since_open) {
+                    model.saved();
                 }
             })
             .release();
@@ -419,7 +424,7 @@ impl qobject::SettingsModel {
             Outcome::Saved(model, document) => {
                 let saved = ClientSettings::open(&self.platform_library.to_string()).and_then(|s| s.save(model, &document));
                 if saved.is_ok() {
-                    self.as_mut().saved();
+                    self.as_mut().rust_mut().saved_since_open = true;
                 }
                 self.as_mut().said(saved.err().map(|e| format!("The settings could not be saved: {e}")).unwrap_or_default());
                 self.as_mut().applied();

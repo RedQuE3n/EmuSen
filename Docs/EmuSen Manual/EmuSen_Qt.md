@@ -2685,8 +2685,8 @@ no image crate is needed, the oracle library read as the three texts of §4.6).
   hinted S at the help's size (`HelpComponent::applyTheme`, `es-core/src/components/HelpComponent.cpp`; rule 4 of
   §4.12.4), whole rows that do not scale with the window. In Akrobat SemiBold at the theme's 0.04583333 the S is 23 rows
   at 33.0 px (1280 × 720) and 37 at 49.5 px (1920 × 1080): an icon box of 28.75 px against 46.25 ÷ 1.5 = 30.83, 2.08 px
-  per entry at the smaller window, and the bar has five entries (start, back, a, x, left/right), about 10.4 px of the
-  14.67 before a letter is counted. EmuSen follows the same rule (`help::row_height`). Whether a help strip's allowance
+  per entry at the smaller window, and the bar shows four entries (MENU, SELECT, SCREENSAVER, CHOOSE, its pair glyph
+  one entry), about 8.3 px of the 14.67 before a letter is counted. EmuSen follows the same rule (`help::row_height`). Whether a help strip's allowance
   counts its icons waits on the tester; the check stays failing with that reason printed.
   A size is read only
   after its install has published, since the old frame stands until the new size's load comes back. The defects it

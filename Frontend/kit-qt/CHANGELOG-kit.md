@@ -4,6 +4,24 @@ The kit is the QML module `EmuSen.Kit` (EmuSen_Qt.md §1.4), held by rule Q (§5
 writes it, is committed under `Testing/qmltypes/` and compared on every build. A minor adds and never removes; each
 entry names what was added and the section of `EmuSen_Kit.md` that records it.
 
+## 1.1, stage 5 piece H: the controller drawing and the settings frame's page of content (2026-11-09; 1.1 on 2026-11-12)
+
+Additions only; no type, property, signal or invokable was removed or changed.
+
+- **`ControllerLayout`** (registry): a drawing file and the controls a host declares in; the drawing's place, scale and
+  picture, the labels' boxes and names, the leaders and the walk out. `EmuSen_Kit.md` §7.62.
+- **`ControllerLayout.texts`, `labelWords` (told by `worded`), `labelBoxes`; `accent` a colour** (registry): each label's words and box as
+  properties a delegate binds, so `ControllerDrawing` keeps the QML rules (no function, nothing done on completion, no
+  words of its own) and qmllint takes the token's colour. §7.62.
+- **`ControllerLayout.pushes`** (registry): how far each control is pushed, in the controls' order; a stick's knob
+  stands where its directions push it (kit-core's `controller::knob`). §7.62.
+- **`ControllerDrawing`** (qmldir): the controller's picture, a label for each control with its leader, the focused one
+  ringed; `pushes` beside `held`. §7.62.
+- **`SettingsFrame.pageShown`, `pageContent`, `pageSentence`** (qmldir): a page of content in place of the rows, and the
+  pane's sentence while it is shown. §7.63.
+- The minor moved to 1.1 for these additions (rule Q, EmuSen_Qt.md §5.3); the registry and
+  qmldir are `Testing/qmltypes/EmuSen.Kit-1.1.*`.
+
 ## 1.0, stage 4 piece H: a model's reset told to a view without QML state (2026-11-11)
 
 Additions only; no type, property, signal or invokable was removed or changed.
@@ -28,22 +46,6 @@ No type, property, signal or invokable was added, removed or changed in the regi
   the page's, and a short tap still chooses a name. §7.105.
 - The window's fact answers no for a window whose watch no controller started, and the kit's Rust gives it to the ES-DE
   view (`frame::pointer_moving`, `frame::watch_windows`), whose hovers ask it as `hoverAt` does. §7.108.
-
-## 1.0, stage 5 piece H: the controller drawing and the settings frame's page of content (2026-11-09)
-
-Additions only; no type, property, signal or invokable was removed or changed.
-
-- **`ControllerLayout`** (registry): a drawing file and the controls a host declares in; the drawing's place, scale and
-  picture, the labels' boxes and names, the leaders and the walk out. `EmuSen_Kit.md` §7.62.
-- **`ControllerLayout.texts`, `labelWords` (told by `worded`), `labelBoxes`; `accent` a colour** (registry): each label's words and box as
-  properties a delegate binds, so `ControllerDrawing` keeps the QML rules (no function, nothing done on completion, no
-  words of its own) and qmllint takes the token's colour. §7.62.
-- **`ControllerLayout.pushes`** (registry): how far each control is pushed, in the controls' order; a stick's knob
-  stands where its directions push it (kit-core's `controller::knob`). §7.62.
-- **`ControllerDrawing`** (qmldir): the controller's picture, a label for each control with its leader, the focused one
-  ringed; `pushes` beside `held`. §7.62.
-- **`SettingsFrame.pageShown`, `pageContent`, `pageSentence`** (qmldir): a page of content in place of the rows, and the
-  pane's sentence while it is shown. §7.63.
 
 ## 1.0, stage 5 piece K: the raised shadow as a token, and the item that casts it (2026-11-09)
 

@@ -2,8 +2,8 @@
 
 use std::path::PathBuf;
 
-const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.0.qmltypes");
-const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.0.qmldir");
+const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.1.qmltypes");
+const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.1.qmldir");
 
 /// The registry without its line numbers and header file names, which move with every edit and mean nothing to a QML author.
 fn normalized(text: &str) -> String {
@@ -30,7 +30,7 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
     assert_eq!(
         normalized(COMMITTED_TYPES),
         normalized(&built("plugin.qmltypes")),
-        "EmuSen.Kit's types changed: review it, bump the minor for an addition or the major for a removal, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Kit-1.0.qmltypes"
+        "EmuSen.Kit's types changed: review it, bump the minor for an addition or the major for a removal, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Kit-1.1.qmltypes"
     );
 }
 
@@ -39,7 +39,7 @@ fn qt_5_3_the_committed_qmldir_is_the_built_one() {
     assert_eq!(
         normalized(COMMITTED_QMLDIR),
         normalized(&built("qmldir")),
-        "EmuSen.Kit's qmldir changed: review the .qml types it lists, then copy it to Testing/qmltypes/EmuSen.Kit-1.0.qmldir"
+        "EmuSen.Kit's qmldir changed: review the .qml types it lists, then copy it to Testing/qmltypes/EmuSen.Kit-1.1.qmldir"
     );
 }
 
@@ -50,5 +50,5 @@ fn qt_5_3_the_registry_names_the_kits_types() {
     }
     assert!(COMMITTED_TYPES.contains("exports: [\"EmuSen.Kit/Tokens 1.0\"]"));
     assert!(COMMITTED_TYPES.contains("isSingleton: true"));
-    assert!(COMMITTED_QMLDIR.contains("Walkable 1.0 qml/Walkable.qml"));
+    assert!(COMMITTED_QMLDIR.contains("Walkable 1.1 qml/Walkable.qml"));
 }

@@ -17,6 +17,10 @@ Window {
     property string thirdKind: rows.count > 2 ? rows.itemAt(2).kind : ""
     property int thirdCount: rows.count > 2 ? rows.itemAt(2).count : -1
     property string thirdShown: rows.count > 2 ? rows.itemAt(2).text : ""
+    // The Home card's facts as the window binds them: the consoles that start empty and the tools' lines are arguments.
+    property string startableGiven
+    property string toolsGiven
+    readonly property string homeFacts: library.homeCardFacts("", "", "", false, startableGiven, toolsGiven)
     LibraryModel {
         id: library
     }

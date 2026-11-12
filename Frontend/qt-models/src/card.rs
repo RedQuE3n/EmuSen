@@ -110,6 +110,11 @@ pub trait Pages {
         let _ = (page, row, by);
         None
     }
+    /// The help bar a page shows: a card's, A choosing, unless the page says otherwise.
+    fn help(&self, page: &str) -> crate::help::Screen {
+        let _ = page;
+        crate::help::Screen::Card
+    }
 }
 
 /// The pages a card has turned through, each with the row it was on: B goes back to the row that opened a page.

@@ -259,7 +259,8 @@ FocusScope {
                 color: Kit.Tokens.muted
                 font.family: faces.regular
                 font.pixelSize: 26
-                elide: Text.ElideRight
+                // Whole: a failure's words run on to the next line, never cut (EmuSen_Qt.md §7.9).
+                wrapMode: Text.WordWrap
             }
             Item {
                 objectName: "AdaptiveCardRows"

@@ -18,6 +18,8 @@ struct Recorded {
     world: Scripted,
     approved: Arc<Mutex<Vec<String>>>,
     started: Arc<Mutex<Vec<Value>>>,
+    /// The runtime's rescan and firmware reads fail, with these words.
+    failing: Option<&'static str>,
 }
 
 impl Backend for Recorded {
@@ -46,10 +48,15 @@ impl Backend for Recorded {
     fn revoke(&self, sha256: &str) -> Result<(), String> {
         self.world.revoke(sha256)
     }
-    fn firmware(&self, system: &str) -> Option<Vec<FirmwareFile>> {
-        self.world.firmware(system)
+    fn firmware(&self, system: &str) -> Result<Vec<FirmwareFile>, String> {
+        match self.failing {
+            Some(words) => Err(words.to_owned()),
+            None => self.world.firmware(system),
+        }
     }
-    fn rescan(&self) {}
+    fn rescan(&self) -> Result<(), String> {
+        self.failing.map_or(Ok(()), |words| Err(words.to_owned()))
+    }
     fn start(&self, request: &Value) -> Result<Box<dyn Job>, String> {
         self.started.lock().unwrap().push(request.clone());
         self.world.start(request)
@@ -68,9 +75,13 @@ fn opened(world: &str) -> (Tool<Cores>, Arc<Mutex<Vec<String>>>) {
 }
 
 fn opened_recording(world: &str) -> (Tool<Cores>, Arc<Mutex<Vec<String>>>, Arc<Mutex<Vec<Value>>>) {
+    opened_failing(world, None)
+}
+
+fn opened_failing(world: &str, failing: Option<&'static str>) -> (Tool<Cores>, Arc<Mutex<Vec<String>>>, Arc<Mutex<Vec<Value>>>) {
     let approved = Arc::new(Mutex::new(Vec::new()));
     let started = Arc::new(Mutex::new(Vec::new()));
-    let backend = Recorded { world: Scripted::open(world).unwrap(), approved: approved.clone(), started: started.clone() };
+    let backend = Recorded { world: Scripted::open(world).unwrap(), approved: approved.clone(), started: started.clone(), failing };
     let mut tool = Tool::new(Cores::new(Box::new(backend), Host::default()));
     tool.refresh();
     for _ in 0..8 {
@@ -473,4 +484,55 @@ fn update_all_names_one_core_by_its_name_and_is_not_offered_with_none() {
     tool.list();
     let labels: Vec<String> = tool.card().unwrap().2.into_iter().map(|r| r.label).collect();
     assert_eq!(labels, ["Search", "Filter", "Sort", "Check for Updates", "Verify"]);
+}
+
+#[test]
+fn a_failed_rescan_and_an_unread_firmware_are_said_never_taken_for_none_needed() {
+    let (mut tool, _, _) = opened_failing(WORLD, Some("the runtime is gone"));
+    assert_eq!(tool.source.notice(), Some("EmuSen's runtime did not list its engines again: the runtime is gone"), "the rescan's failure is said");
+    tool.choose_section("PlayStation");
+    focus_on(&mut tool, "Diamond");
+    let said = words(&tool.pane().sentences).iter().map(|w| w.to_string()).collect::<Vec<_>>();
+    assert!(said.contains(&"⚠ EmuSen's runtime could not say whether you have one: the runtime is gone. Firmware, under X, says more.".to_owned()), "{said:?}");
+    tool.more();
+    let page: Vec<String> = tool.card().unwrap().2.into_iter().map(|r| r.label).collect();
+    assert!(page.contains(&"Firmware".to_owned()), "the page that says why is offered: {page:?}");
+    let at = page.iter().position(|l| l == "Firmware").unwrap();
+    tool.card_choose(at);
+    let (_, _, rows, _) = tool.card().unwrap();
+    assert_eq!(rows[0].label, "Firmware not read");
+    assert_eq!(rows[0].pane.lines[0], ("EmuSen's runtime could not say which firmware this console needs.".to_owned(), "the runtime is gone".to_owned()));
+}
+
+#[test]
+fn qt_7_9_the_console_column_gives_way_to_the_first_console_and_a_count_in_the_core_s_order() {
+    use emusen_qt_models::tools::cores::row::{of_runtime, Consoles};
+    use emusen_qt_models::tools::cores::words::{consoles, first_console};
+    // Twenty consoles, listed in the order the core declares its systems, not the table's or the alphabet's.
+    let names = [
+        "WonderSwan Color", "Atari 2600", "Super Nintendo", "ColecoVision", "Game Boy", "Game Boy Color", "Game Boy Advance", "Game Gear", "Genesis", "Master System",
+        "32X", "Sega CD", "MSX", "Neo Geo Pocket", "NES", "Nintendo 64", "PC Engine", "PlayStation", "SG-1000", "WonderSwan",
+    ];
+    let mut table = Consoles::default();
+    for (i, name) in names.iter().enumerate() {
+        table.console_of.insert(format!("s{i}"), format!("c{i}"));
+        table.name_of.insert(format!("c{i}"), (*name).to_owned());
+    }
+    let row = |systems: &[usize]| {
+        let core = CoreRow { library: Some("/cores/x.so".into()), systems: systems.iter().map(|i| format!("s{i}")).collect(), ..CoreRow::default() };
+        of_runtime(&core, &table, &|_, _| false, &|_| None).expect("a row")
+    };
+    let twenty = row(&(0..20).collect::<Vec<_>>());
+    assert_eq!(first_console(&twenty), "WonderSwan Color +19");
+    assert_eq!(consoles(&twenty), names.join(", "), "the pane lists them all, in the core's order");
+    let four = row(&[8, 11, 9, 18, 8]);
+    assert_eq!(first_console(&four), "Genesis +3", "a console two systems share counts once");
+    assert_eq!(consoles(&four), "Genesis, Sega CD, Master System, SG-1000");
+    assert_eq!(first_console(&row(&[2])), "Super Nintendo", "one console: its name alone");
+    assert_eq!(first_console(&row(&[])), "—");
+    // The list's cells: the Console column gives way, and its cell holds both words.
+    let (tool, _) = opened(WORLD);
+    let columns = tool.source.columns();
+    assert_eq!(columns.iter().map(|c| (c.title, c.gives_way)).collect::<Vec<_>>(), [("Core", false), ("Console", true), ("Status", false)]);
+    assert!(tool.rows().iter().all(|i| i.cells[1].short.is_some() && i.cells[0].short.is_none() && i.cells[2].short.is_none()));
 }

@@ -3,7 +3,7 @@ use std::process::Command;
 
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 
-// EmuSen.Esde 1.0, the painter's module (EmuSen_Qt.md §4.8); its .qmltypes is the module's surface.
+// EmuSen.Esde 1.1, the painter's module (EmuSen_Qt.md §4.8); its .qmltypes is the module's surface.
 const ESDE_FILES: [&str; 16] = [
     "qml/Picture.qml",
     "qml/Mark.qml",
@@ -44,7 +44,7 @@ fn baked_shader() -> PathBuf {
 fn main() {
     let shaders = baked_shader();
     CxxQtBuilder::new_qml_module(
-        QmlModule::new("EmuSen.Esde").version(1, 0).qml_files(ESDE_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtQml.Models").depend("EmuSen.Kit"),
+        QmlModule::new("EmuSen.Esde").version(1, 1).qml_files(ESDE_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtQml.Models").depend("EmuSen.Kit"),
     )
     .qrc(shaders)
     .files(["src/marks.rs", "src/model.rs", "src/lists.rs"])

@@ -5,7 +5,7 @@ use emusen_kit_core::table::{ColumnWidth, TableMeasures, fit_columns, room};
 const M: TableMeasures = TableMeasures::BIG_SCREEN;
 
 fn fill(weight: f64, least: f64) -> ColumnWidth {
-    ColumnWidth::Fill { weight, least }
+    ColumnWidth::Fill { weight, least, words: 0.0 }
 }
 
 /// The last column's right edge never passes the table's width less its trail, and no column is negative.
@@ -85,4 +85,44 @@ fn no_width_puts_a_column_past_the_table() {
         }
     }
     assert!(fit_columns(500.0, &[], &M).is_empty());
+}
+
+/// Each column's width at `width`, rounded to a hundredth.
+fn widths(width: f64, columns: &[ColumnWidth]) -> Vec<f64> {
+    fit_columns(width, columns, &M).iter().map(|c| (c.width * 100.0).round() / 100.0).collect()
+}
+
+#[test]
+fn kit_7_106_the_console_column_gives_way_and_the_others_keep_their_words() {
+    // Cores at 1280 x 800 as measured on 2026-11-11: Core (fill, least 190, `Mupen64Plus-Next` 208.48), Console (four
+    // consoles whole 458.09, "Super Nintendo" the widest short words 170.95) and Status ("● Default" 107.27).
+    let cores = |whole: f64| [ColumnWidth::Fill { weight: 1.0, least: 190.0, words: 208.48 }, ColumnWidth::GivesWay { whole, short: 170.95 }, ColumnWidth::Content(107.27)];
+    let at = widths(691.0, &cores(458.09));
+    assert_eq!(at[2], 108.0, "the status words whole: {at:?}");
+    assert!(at[0] >= 208.48, "the core's name whole: {at:?}");
+    assert!(at[1] >= 171.0 && at[1] < 459.0, "the console column between its short and its whole words: {at:?}");
+    // Room for every column's words: the console column whole, and the fill takes the rest.
+    let wide = widths(1400.0, &cores(458.09));
+    assert_eq!(wide[1], 459.0, "{wide:?}");
+    assert!(wide[0] > 208.48, "{wide:?}");
+    // Room for the short words alone: the short words, the fill and the status whole.
+    let short = widths(584.0, &cores(458.09));
+    assert_eq!(short[1], 171.0, "{short:?}");
+    assert!(short[0] >= 190.0 && short[2] == 108.0, "{short:?}");
+    // Less room than that: every column scaled into it, as before (§7.43), none past the table.
+    let narrow = widths(500.0, &cores(458.09));
+    assert!(narrow[1] <= 171.0, "{narrow:?}");
+    inside(500.0, &cores(458.09));
+    // A column whose whole words are its short ones gives nothing.
+    assert_eq!(widths(691.0, &cores(170.95))[1], 171.0);
+}
+
+#[test]
+fn kit_7_106_columns_that_give_way_stay_inside_the_table() {
+    let set = [ColumnWidth::Fill { weight: 1.0, least: 120.0, words: 150.0 }, ColumnWidth::GivesWay { whole: 900.0, short: 60.0 }, ColumnWidth::GivesWay { whole: 300.0, short: 80.0 }, ColumnWidth::Content(90.0)];
+    for width in [0.0, 100.0, 300.0, 500.0, 691.0, 900.0, 1500.0, 4000.0] {
+        inside(width, &set);
+    }
+    let at = widths(691.0, &set);
+    assert!(at[1] >= 60.0 && at[2] >= 80.0 && at[3] == 90.0 && at[0] >= 150.0, "{at:?}");
 }

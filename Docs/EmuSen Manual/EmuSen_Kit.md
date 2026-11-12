@@ -362,7 +362,7 @@ ways in:
   close. The player's A/B swap is applied once, in `PadRouter` (§7.4); the walk's own `set_swap_accept_back` stays off,
   so the fact has one owner.
 - **The pointer.** `Walkable.qml`, the module's first component, is the §1.7 declaration made once: an `Item` with a
-  `HoverHandler` calling `controller.hoverAt(item, hovered, at)` (a pointer that has not moved focuses nothing, §7.39; `hover(item, hovered)`, unguarded, stays for any other caller) and one `TapHandler` for the left, right and back buttons
+  `HoverHandler` calling `controller.hoverAt(item, hovered, at)` (only the pointer's own move focuses, §7.39, §7.108; `hover(item, hovered)`, unguarded, stays for any other caller) and one `TapHandler` for the left, right and back buttons
   calling `controller.click(item, button)`. Rust maps Qt's button to kit-core's `PointerButton` (`qt_keys`), asks
   `intent` and acts: `Focus` gives the item the active focus (`QQuickItem::forceActiveFocus`, called through cxx-qt's
   `extern "C++Qt"` without glue); `Activate` focuses the item and then offers Accept through the same `offer`, so a
@@ -2316,7 +2316,8 @@ strip turned again, and it stopped at its end (measured on 2026-11-09 in `GridSc
 300 ms). The same hover moved the focus off the item a key had chosen whenever a key turned the strip under a resting
 pointer. `FrameController` now keeps where the pointer was last seen over a walkable (`hoverAt(item, hovered, at)`, beside the unguarded `hover(item, hovered)` it keeps, and
 `pointerMoved(at)`, the scene position from the `HoverHandler`'s point; Qt sets the point before it reports `hovered`),
-and an element coming under the pointer at that same place takes no focus. A pointer that moves gives the focus as before.
+and an element coming under the pointer at that same place takes no focus. A pointer that moves gives the focus as before. §7.108
+replaces the controller's saved position with a fact of the window.
 
 **The walk settles a turning view.** theme-audit's walk focuses each element and puts back what the press moved, then
 waits for the views to rest (`Scene::settle`). Qt's `moving` reports a flick or a drag, not a view turning to its current
@@ -3025,3 +3026,195 @@ model's id, and one bound through a `property var` (as `PageFrame`'s `tileModel`
 fault in place, because QML tells both of the deletion (the id's guard, and the guard a `var` property keeps on the
 object it holds) and the binding hands the gate null itself. So `PageFrame` was not exposed; the gate now guards itself
 for a model handed to it any other way.
+
+### 7.105 The section strip is a scroller only where its names run past it; the harness reads an item's number (repair DC-B; 2026-11-11)
+
+`SectionStrip` (§7.43) was a horizontal `ListView` with `interactive: false`. Where a screen lists more sections than
+the strip holds, as Cores does over a world of fourteen engines, the gate's pointer reach found its wheel leaving it
+still (EmuSen_Qt.md §7.9: five findings, one a size, measured on 2026-11-11 on the software backend and on Vulkan alike).
+Making it interactive alone does not move it: a horizontal `ListView` takes no turn of an upright wheel (measured with
+kit-gallery's `strip`: `contentX` 0 before and after three notches). A `WheelHandler` moves its names along by the
+wheel's turn, horizontal or upright, within `originX` and the content's end, and is enabled only while the names run
+past the strip (`contentWidth > width`).
+
+The gate reads a flickable's wheel from its `interactive` (qt-test's tree, `harness.cpp`), and that rule is the gate's,
+not the strip's to change. The strip is therefore a scroller exactly where it is one: `interactive` is
+`contentWidth > width`, so where its names run past it the gate reads a scroller the wheel moves, and the wheel, through
+the handler, does move it; the walk's shoulders step the chosen section, and the view's highlight range brings that name
+into the strip whole, as every other view's current item. `acceptedButtons` is `Qt.NoButton`, so a mouse drag does not
+move it (Qt 6.9's `Flickable.acceptedButtons`) and a click on a name still chooses it. That property is the mouse's
+alone: a finger's drag flicked an interactive strip (measured on 2026-11-11 with kit-gallery's `strip` and qt-test's
+`Scene::touch_drag`, one finger on a touch screen: `contentX` 0 before, 1618 after). A `DragHandler` for touch screens,
+with no target and `CanTakeOverFromAnything` alone, so that it yields its grab to nothing, takes a finger's sideways drag
+while the names run past the strip, and the strip stays where it is. Its upright axis is off (`yAxis.enabled: false`),
+so a finger's upright drag that starts on the strip is the page's, as it was before the strip took touch: without that,
+measured on 2026-11-11 with kit-gallery's `strip`, the handler took the upright drag too and the page under an
+overflowing strip did not move. A tap shorter than the drag threshold still reaches the name (`strip` taps NES on the
+page's overflowing strip and it is chosen). Where the names fit, the handler is off and a finger's drag from the strip
+is the page's. A ListView's
+`flickableDirection` set across was tried first: the ListView sets it again from its orientation, and set once made it
+turned the gate's reading of the strip to an upright scroller, so it was taken out. The condition is written once, in
+the strip's read-only `overflows`. Where the names fit,
+`interactive` is false and the handler disabled: no scroller at all, and the turn goes to whatever is under the strip.
+
+A pass of 2026-11-11 had kept the strip not interactive and changed the gate instead, counting any enabled
+`WheelHandler` under a flickable as moving it. That rule had no test of its own and would have passed a handler that
+moves nothing; it was taken out, and the harness reads `interactive` alone as before.
+
+Held by kit-gallery's `strip` (`StripScene.qml`: thirteen names in a 600-unit strip: the gate reads it as a scroller the
+wheel moves and pointer reach finds no still scroller; a drag leaves it still; three notches move it; a click on a whole
+name chooses it; the walk's last section, PLAYSTATION 2, is brought in whole; on a page that scrolls, a finger's drag up
+from a second overflowing strip moves the page and not the strip, and a finger's short tap on NES chooses it) and
+`strip_fits` (three names that fit,
+on a page that scrolls: the gate reads no scroller, the wheel over the strip moves the page and not the strip, a drag
+leaves it still, a finger's drag up from it moves the page, and a click on SATURN chooses it). Seeded faults: the strip
+never interactive (`strip` fails), always interactive (`strip_fits` fails), dragged by the mouse (`strip` fails), and
+the touch handler gone (fault 49, `strip` fails at the finger's drag), and the handler taking the upright drag too
+(fault 50, `strip` fails at the page's drag).
+
+qt-test's `Scene::number` reads a number property of a tree's item by its id, as the harness's own settle already did,
+so a test can read an item's `implicitWidth`, `contentX` or `x` where it has no objectName.
+
+### 7.106 A column that gives way; words measured as Text lays them out (repair DC-B; 2026-11-11)
+
+A table's column may give way first (`ColumnWidth::GivesWay { whole, short }`, kit-core's `table`). Its rows carry two
+words: their whole words and short words that stand for them. The column takes its widest whole words where the room
+holds them beside every other column's words: content columns' widest words, and each fill column's `least` or its
+widest words, whichever is larger. Otherwise it takes what that room leaves, never less than its widest short words, and
+each row whose whole words do not fit the width given shows its short words. Where the room cannot hold even the short
+words, the column counts as a content column of their width and §7.43's scaling applies as before. A fill column
+(`ColumnWidth::Fill`) now carries its widest words (`words`), so a column that gives way leaves it the room they take.
+Its share of the room is unchanged.
+
+On Qt, `ToolScreen`'s columns take a `shortKey` role, which names the role of a row's short words; an empty one gives
+no way. `ColumnFit` measures the whole and short words of such a column, and every fill column's words. Each cell
+decides from the width its words take as laid out: a hidden `Text` holding its whole words. Its `implicitWidth` is
+what the cell would draw, so the choice and the cut agree to the pixel. Decided 2026-11-11 (EmuSen_Qt.md §7.9): Cores'
+console column gives way, showing a core's first console and a count ("Genesis +3").
+
+`ColumnFit`'s words were measured with `QFontMetricsF::horizontalAdvance`. Qt Quick's `Text` lays a line out with
+design metrics (the default `Text.QtRendering`), and the two disagree by up to half a unit. On the gallery on
+2026-11-11, "Genesis Plus GX" was measured at 195 or under and laid out at 195.5, so it was cut in a column given its
+own measure. `text_width` now lays the line out with `QTextLayout` and `QTextOption::setUseDesignMetrics(true)`, as
+`Text` does, and reads `naturalTextWidth`.
+
+Held by kit-core's `table` (`kit_7_106_*`: Cores' measures at 1280 × 800 keep the status and the core's name whole, with
+the console column between its short and its whole words; whole where the room holds everything; inside the table at
+every width), by kit-gallery's `screens` (the tool screen's rows of one, four and twenty consoles at the four fit sizes
+in both variants: "Atari 2600 +19" shown, the four whole or "Genesis +3", nothing cut), and by qt-app's `cores_fit` and
+`cores_fit_gpu` (EmuSen_Qt.md §7.9).
+
+### 7.107 The pointer focuses only an item that takes input (repair DC-B; 2026-11-11)
+
+The frame's pointer focus (`FrameController`'s `hover`, `hoverAt` and `click`, §7.39) called `forceActiveFocus` on the
+walkable under the pointer whatever its state. A `HoverHandler` still reports `hovered` on an item that is disabled
+through a parent, and `forceActiveFocus` gives the focus to every focus scope above the item. When the topmost of those
+scopes is disabled, Qt Quick moves the window's active focus to that scope's own scope. For a screen placed in the
+window, that scope is the window's root item. Nothing then holds the focus, and no press reaches anything.
+
+The program shows this under a card. The screen under a card is drawn and disabled (EmuSen_Qt.md §7.9, the slots'
+`backdrop`). Three places in qt-app's `Main.qml` and `ThemeHost.qml` had walkables there before this fix: the own look's
+Home screen under the Home card (`homeSlot`), its grid under the List card (`gamesSlot`), and the ES-DE view under every
+card and screen over it (`esdeLoader`). The ES-DE view draws its own items, not the kit's `Walkable`, so it had no pointer
+focus to lose; the two slots did, in the reference theme and in any EmuSen theme placed in them. In qt-app's `console` on 2026-11-11 the pointer stayed where the first walk had clicked a List card row.
+After a console session, the List card opened over the grid again, and the theme's first grid cell came under the
+resting pointer as the grid was made disabled. Its `hoverAt` took the focus from the card's row to the root, so Down
+moved nothing and the walk read Home's status line ("1 controller · 12:00"), the first words after the root item.
+Before the fix the walk failed six times in seven runs, and the focus log showed the cell's hover with `enabled` false
+just before the root took the focus. After it, it passed four times in four.
+
+`focus` now gives the focus only to an item that is enabled. `QQuickItem::isEnabled` is the effective state, so a
+disabled parent counts. A disabled walkable under the pointer leaves the focus where it is. Held by kit-gallery's
+`disabled` (`kit_7_107_*`: a card's row keeps the focus while the pointer comes to rest on a walkable in a disabled screen
+beside it) and by qt-app's `home_continue` on the software tier (the pointer moved onto Home's Continue, disabled while
+no game is suspended, leaves the focus on Home's first place; without the rule the focus leaves it for the item named `frame`).
+qt-app's `console` on the GPU held it before §7.108 and no longer does: since then the grid cell comes under a resting
+pointer, which focuses nothing whatever the cell's state, and the fault that drops the rule passed `console` on
+2026-11-11.
+
+A walkable that came under a resting pointer took the focus when the controller that owns it had not seen the pointer
+there before, since each frame's controller kept its own last pointer position. §7.108 makes the fact the window's.
+
+A click on a disabled walkable is Qt Quick's alone, not a rule of the kit's: Qt Quick delivers no tap to a `TapHandler`
+whose item is disabled through a parent, so `click` is never called and its Accept after a refused focus is never
+reached. Measured on 2026-11-11 with kit-gallery's `pointer` and a probe in `click` that prints a line and sends Return
+to the focused item before anything else (the evidence's fault 35): the click on the disabled walkable printed nothing
+and the card's row heard no Return, so the test passed; the same probe with a click on the enabled walkable `near`
+printed the line once. No change to the kit can make that assert fail, so it holds Qt's behaviour, and the test says so;
+the seeded fault 35, a click that is A however it comes, is recorded as missed for that reason. `click` is unchanged.
+
+### 7.108 The pointer focuses only as it moves, a fact of the window (repair DC-B; 2026-11-11)
+
+§7.39 gave the focus to a walkable the pointer came onto unless the pointer had not moved, and judged "moved" by the
+position the walkable's own `FrameController` last saw. A controller made under a resting pointer had seen none, so its
+first walkable under the pointer took the focus without the pointer moving. The program met it with a mouse left
+resting while the pad was used: Start opens the Home card, whose frame has a controller of its own (`MenuCard.qml`), and
+the row the card slid under the pointer took the focus in place of the first row; Home rebuilt after a session did the
+same with whatever tile came there.
+
+Whether the pointer has moved is now one fact for the window, not one for each controller. Qt raises a hover in two
+ways: as a real pointer event is delivered to the window (a move, a press, a touch), and as items move under a pointer
+at rest, when the window syncs a frame (`QQuickDeliveryAgent`'s frame-synchronous hover). Only the first is the pointer
+moving. The kit's glue keeps a `PointerWatch` for each Qt Quick window, an event filter that is the window's child
+(`kit_glue.cpp`): it marks the window moving as a real pointer event reaches it and clears the mark when the event loop
+next turns, so the hovers delivered within that event see it and a frame's hovers later do not. `hoverAt` focuses only
+while its item's window is moving. Each `FrameController` starts the watch of every Qt Quick window that has none as it
+is made, before any hover in them, and the first one made also connects the glue to `QGuiApplication`'s
+`focusWindowChanged`, so that a window made later is watched as it first takes the focus. Qt gives a window the focus
+as it is shown; in kit-gallery's `pointer` (offscreen, 2026-11-11) a probe printed
+the focus going to `scene` and then to `otherWindow` as the second window opened, and the pointer's first move in that
+window, onto a walkable, focused it. Qt announces no window's making to code that did not make it: the window's own
+events (show, expose) reach only its own filters and the application's, and an application-wide event filter that
+started a window's watch at its first pointer event was tried on 2026-11-11 and not kept, since Qt calls application
+filters only on the process's first thread and the test harness runs Qt on another (in kit-gallery's `pointer` it was
+never called). So a window shown without taking the focus (one that refuses it, or a compositor that keeps the focus
+elsewhere) is still unwatched at its first hover; unwatched, it cannot tell a move from a frame's hover, so it answers no
+and starts the watch: its first hover takes nothing, and later moves focus. The connection's owner is a child object of
+the application found by its name, as the watch is, not a static. An unwatched window answered yes until 2026-11-11,
+so the first walkable that came under a resting pointer in it took the focus. The watch is no static: it is found by its object name among the window's
+children.
+
+The ES-DE view asks the same fact. Its carousel, grid and text list select the row under the pointer from their own
+`HoverHandler`s (EmuSen_Qt.md §4.8.5), and a row that came under a resting pointer, as a gamelist is made under it, was
+selected like a moved-onto one. `EsdeModel.hoverAt`, which the view's QML now calls in place of `hover(row)` (deprecated in EmuSen.Esde 1.1, EmuSen_Qt.md §4.8.3), takes the row's item and selects only while
+`emusen_kit_qt::frame::pointer_moving` says that item's window is moving; a hover off every row is passed on as before.
+`EsdeModel` starts the watch of every window as it is made, as a `FrameController` does, through
+`frame::watch_windows`. The two are the kit's Rust functions over the glue, not copies of it; neither is in the QML
+registry.
+
+The watch is the window's rather than the application's: an application-wide filter, tried first, was installed and
+called for none of the moves under the test harness, which runs Qt on a test's thread rather than the process's first
+(measured on 2026-11-11 with kit-gallery's `pointer`); the window's own filter sees them on any thread.
+
+`pointerMoved(at)` and the controller's saved position are no longer needed: the invokable stays in the 1.x registry,
+does nothing, and the kit's QML no longer calls it (`Walkable.qml`, `Carousel.qml`); taking it out is a removal, a major
+change of the registry. `hoverAt`'s `at` is likewise unread.
+
+Held by kit-gallery's `pointer` (`PointerScene.qml`): with a card's row holding the focus and the pointer resting, a
+walkable of a controller made under it (a `Loader` made active, as Start makes the Home card) takes nothing, a walkable
+enabled under it takes nothing, Qt Quick gives a click on a disabled walkable no tap (§7.107), and the pointer's own move onto a walkable
+focuses it; and in qt-app by `cards` on the software tier, where neither controller has seen the pointer before: the
+pointer moved over Home to where the Home card's second row lies and left there, the card Start opens focuses its first
+row; and from Consoles, the pointer moved to where another of Home's places lies and left there, Home shown again by B
+focuses Games, not that place. On the GPU, `console` holds a controller that last saw the pointer elsewhere (the List
+card's second row hovered, the pointer moved a little along it during a game and left there; the List card opened over
+the grid with the game suspended focuses its first row, Down moving), and `esde` the Home card over the ES-DE theme after
+a game session under a resting pointer (Continue focused, Down and Up moving).
+
+kit-gallery's `pointer` also opens a second window after every controller, two walkables of the scene's controller in
+it, and moves the pointer there with qt-test's `Scene::hover_in`: the pointer's first move in the window, onto one
+walkable, focuses it; the other, shown under the resting pointer, takes nothing, and the pointer's move off and onto it
+focuses it. esde-qt's `pointer`, offscreen: the pointer's move onto a gamelist's
+fourth row selects it; Down to the fifth; back to the systems and into the next one's gamelist, which opens on the
+fifth row and is made under the pointer at rest over its fourth: the fifth stays selected, and the pointer's move onto
+the sixth selects it.
+
+Seeded faults: `hoverAt` focusing on every hover (`pointer` fails at the late card); the watch never moving (`pointer`
+fails at the move onto a walkable); an unwatched window answering yes (fault 48, `pointer` fails at the second window); the window shown
+later not watched as it takes the focus (fault 54, `pointer` fails at the first move in the second window);
+the ES-DE view's hover not asking the fact (fault 47, esde-qt's `pointer` fails, the fourth row selected); and the rule 0efa4a08f had, each controller judging "moved" by the position it last
+saw (fault 44, measured on 2026-11-11: `cards` fails at the Home card, "focuses its first row, Tools, not Settings"; with
+that assert set aside, the Home check fails alone, "focuses Games, not place.1"); and the same rule against qt-app's
+`console` on the GPU (fault 45, run on 2026-11-11 on 7d3b6571b: `console` panics at its List card made under the resting
+pointer, "focuses its first row", and the binary aborts). `cards` reaches Home through Consoles.
+

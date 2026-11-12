@@ -66,6 +66,10 @@ fn the_first_page_holds_mistresss_rows_in_her_words() {
     assert_eq!(Facts::from_json(&reeling(4).to_json()), reeling(4));
     let c = card(Facts::default());
     assert_eq!((c.title("Cobalt Harbor (Synthetic)"), c.breadcrumb("Cobalt Harbor (Synthetic)")), ("Cobalt Harbor (Synthetic)".into(), String::new()));
+    // A console started empty has no game the library names: the card is titled by its session's name (EmuSen_Qt.md §7.9).
+    let mut console = Facts::default();
+    console.cards.console = "PlayStation".into();
+    assert_eq!(card(console).title(""), "PlayStation (no disc)");
 }
 
 #[test]
@@ -243,7 +247,7 @@ fn row(path: &str, title: &str, cover: &str) -> emusen_qt_models::library::GameR
 
 /// A game of two discs, the first in, with another game of its console in the library.
 fn two_discs() -> Card {
-    let discs = DiscFacts { count: 2, index: Some(0), can_change: true, lid_open: false };
+    let discs = DiscFacts { count: 2, index: Some(0), unread: false, can_change: true, lid_open: false };
     let facts = Facts { path: "/g/Basalt Run.cue".into(), system: "tst".into(), discs, ..Facts::default() };
     let shelf = vec![row("/g/Amber Coast.cue", "Amber Coast", "file:///c/amber.png"), row("/g/Basalt Run.cue", "Basalt Run", "file:///c/basalt.png")];
     Card { facts, shelf, ..Card::default() }
@@ -272,12 +276,12 @@ fn change_disc_lists_the_games_discs_the_consoles_others_and_the_tray() {
     assert_eq!(c.choose(at(&c, "Change Disc")), Outcome::Shown);
     assert_eq!((c.page, c.title("Basalt Run"), c.help()), (Page::Disc, "Change Disc".into(), Screen::PauseDisc));
     let rows: Vec<String> = c.rows().into_iter().map(|r| format!("{}|{}", r.label, r.value)).collect();
-    assert_eq!(rows, ["Basalt Run (Disc 1)|Inserted", "Basalt Run (Disc 2)|", "Amber Coast|", "Open the tray|"]);
+    assert_eq!(rows, ["Basalt Run (Disc 1)|Inserted", "Basalt Run (Disc 2)|", "Amber Coast|", "Eject disc|"]);
     let pane = c.pane();
     assert_eq!((pane.kind, pane.big.as_str(), pane.title.as_str()), (PaneKind::Cover, "file:///c/basalt.png", "Basalt Run, Disc 1 of 2"));
     assert_eq!(pane.sentence, "In the console now. B goes back.");
     c.focus(1);
-    assert_eq!(c.pane().sentence, "A opens the tray, swaps the disc and closes it, as the console sees it.");
+    assert_eq!(c.pane().sentence, "A swaps to this disc, as the console sees it.");
     assert_eq!(c.choose(1), Outcome::ChangeDisc(1));
     assert_eq!(c.choose(0), Outcome::Resume, "the disc already in changes nothing");
     c.focus(2);
@@ -285,15 +289,23 @@ fn change_disc_lists_the_games_discs_the_consoles_others_and_the_tray() {
     assert_eq!(c.choose(2), Outcome::InsertDisc(0));
     assert_eq!(c.others()[0].path, "/g/Amber Coast.cue");
     c.focus(3);
-    assert_eq!(c.pane().kind, PaneKind::Sentence);
+    assert_eq!((c.pane().kind, c.pane().sentence.as_str()), (PaneKind::Sentence, "A takes the disc out and leaves none in, as the console sees it."));
     assert_eq!(c.choose(3), Outcome::Eject);
     assert_eq!(c.back(), Outcome::Shown);
     assert_eq!((c.page, c.current), (Page::First, 5), "B back to Change Disc's row");
     let mut single = two_discs();
-    single.facts.discs = DiscFacts { count: 1, index: None, can_change: true, lid_open: true };
+    single.facts.discs = DiscFacts { count: 1, index: None, unread: false, can_change: true, lid_open: true };
     single.choose(at(&single, "Change Disc"));
     let rows: Vec<String> = single.rows().into_iter().map(|r| format!("{}|{}", r.label, r.value)).collect();
     assert_eq!(rows, ["Basalt Run|", "Amber Coast|"], "a single disc by the game's name, no tray with none in");
+    // An index the runtime gave that this program cannot read: no disc said to be in, each said not known, the tray offered.
+    let mut unread = two_discs();
+    unread.facts.discs = DiscFacts { count: 2, index: None, unread: true, can_change: true, lid_open: false };
+    let unread = card(Facts::from_json(&unread.facts.to_json()));
+    let mut unread = Card { shelf: two_discs().shelf, ..unread };
+    unread.choose(at(&unread, "Change Disc"));
+    let rows: Vec<String> = unread.rows().into_iter().map(|r| format!("{}|{}", r.label, r.value)).collect();
+    assert_eq!(rows, ["Basalt Run (Disc 1)|Not known", "Basalt Run (Disc 2)|Not known", "Amber Coast|", "Eject disc|"]);
     assert_eq!(Facts::from_json(&two_discs().facts.to_json()), two_discs().facts, "the drive crosses as plain data");
 }
 

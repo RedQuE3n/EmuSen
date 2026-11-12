@@ -27,8 +27,8 @@ PathView {
     }
     HoverHandler {
         id: hover
+        // Only the pointer's own move focuses: what comes under a pointer at rest takes nothing (EmuSen_Kit.md §7.39, §7.108).
         onHoveredChanged: root.controller.hoverAt(root, hover.hovered, hover.point.scenePosition)
-        onPointChanged: if (hover.hovered) root.controller.pointerMoved(hover.point.scenePosition)
     }
     TapHandler {
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.BackButton

@@ -122,6 +122,11 @@ pub fn held_notice(name: &str, instead: &str, why: &str) -> String {
     format!("{name} could not be used, so this game opens on {instead}: {why}")
 }
 
+/// The line saying the firmware a game needs could not be checked, so it opens without the question (EmuSen_Qt.md §7.9).
+pub fn firmware_unchecked(why: &str) -> String {
+    format!("The firmware this game needs could not be checked, so it opens without asking: {why}")
+}
+
 /// The line saying an approval was recorded, or why not.
 pub fn approved_notice(found: &Awaiting, refused: Option<&str>) -> String {
     match refused {

@@ -159,6 +159,10 @@ impl LibrarySource for ClientSource {
         games.iter().map(one).collect::<Result<_, _>>().map_err(words)
     }
 
+    fn firmware(&self, system: &str) -> Result<Vec<emusen_crystal_client::shapes::FirmwareFile>, String> {
+        self.runtime.firmware_status(system).map(|s| s.map(|s| s.firmware).unwrap_or_default()).map_err(words)
+    }
+
     fn plays(&self, games: &[GameFile]) -> Result<Vec<(String, Plays)>, String> {
         let records = self.library.get(&json!({ "what": "records" })).map_err(words)?;
         let number = |r: &Value, key: &str| r.get(key).and_then(Value::as_i64).unwrap_or(0);
@@ -251,8 +255,8 @@ impl ClientSource {
     pub fn open(platform_library: &str, config: &emusen_crystal_client::Config) -> Result<ClientSource, String> {
         let platform = Platform::load(platform_library).map_err(words)?;
         let api = emusen_crystal_client::Api::load(platform_library).map_err(words)?;
-        let runtime = Runtime::new(&api, config).map_err(words)?;
-        let sqlite = emusen_platform_client::Lent::open("libsqlite3.so.0").map_err(words)?;
+        let sqlite = lent_sqlite()?;
+        let runtime = runtime_on(&api, config, Some(&sqlite))?;
         let games_db = platform.file(FILE_GAMES).map_err(words)?;
         let library = Library::open(&platform, &games_db, &sqlite).map_err(words)?;
         let scraper = open_scraper(&platform, &runtime, &games_db.to_string_lossy(), &sqlite);
@@ -294,6 +298,45 @@ fn lexical(path: &std::path::Path) -> String {
         }
     }
     out.to_string_lossy().into_owned()
+}
+
+/// The system's soname of SQLite, which the Qt front end lends to the platform library and to the runtime (EmuSen_Qt.md §1.1.2).
+pub const SQLITE: &str = "libsqlite3.so.0";
+
+fn lent_sqlite() -> Result<Lent, String> {
+    Lent::open(SQLITE).map_err(words)
+}
+
+/// A runtime on `config`, lent the front end's SQLite, so it keeps its state records (EmuSen_Qt.md §7.9): how every
+/// model makes its runtime. Where SQLite cannot be loaded the runtime is lent none and games still open; the second value
+/// then says that no state records are kept.
+pub fn runtime(api: &Arc<emusen_crystal_client::Api>, config: &emusen_crystal_client::Config) -> Result<(Runtime, Option<String>), String> {
+    runtime_lending(api, config, lent_sqlite())
+}
+
+/// As `runtime`, lent `sqlite` as loaded, or nothing where it failed to load.
+pub fn runtime_lending(
+    api: &Arc<emusen_crystal_client::Api>,
+    config: &emusen_crystal_client::Config,
+    sqlite: Result<Lent, String>,
+) -> Result<(Runtime, Option<String>), String> {
+    match sqlite {
+        Ok(sqlite) => Ok((runtime_on(api, config, Some(&sqlite))?, None)),
+        Err(why) => Ok((runtime_on(api, config, None)?, Some(format!("The states' records are not kept, since SQLite could not be loaded: {why}")))),
+    }
+}
+
+fn runtime_on(api: &Arc<emusen_crystal_client::Api>, config: &emusen_crystal_client::Config, sqlite: Option<&Lent>) -> Result<Runtime, String> {
+    // SAFETY: a Lent is a loader's handle never closed, so it outlives every runtime.
+    let lent = sqlite.and_then(|s| unsafe { emusen_crystal_client::LentLibrary::from_handle(s.handle()) });
+    Runtime::lent(api, config, lent).map_err(words)
+}
+
+/// The clients on the platform library, their runtime made on `runtime_config` with the cores folder `cores`, as every
+/// model's runtime is, so the library lists the player's cores the session opens games on (EmuSen_Qt.md §7.9).
+pub fn source_for(platform_library: &str, cores: &str) -> Result<ClientSource, String> {
+    let platform = Platform::load(platform_library).map_err(words)?;
+    ClientSource::open(platform_library, &runtime_config(&platform, cores)?)
 }
 
 /// The runtime's configuration a program's models share: the cores folder a test or a build names, with the player's

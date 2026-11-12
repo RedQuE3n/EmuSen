@@ -478,16 +478,15 @@ impl qobject::GamePageModel {
         self.as_mut().rust_mut().file = file.clone();
         let asked = self.asked.wrapping_add(1);
         self.as_mut().rust_mut().asked = asked;
+        // Cleared at the start of each attempt, so the same failure twice is said twice (EmuSen_Qt.md §7.9).
+        self.as_mut().said(String::new());
         let source = self.source.clone();
         let cores = self.cores.to_string();
         let thread = self.qt_thread();
         std::thread::spawn(move || {
             let source = match source {
                 Some(s) => Ok(s),
-                None => {
-                    let config = emusen_crystal_client::Config { cores: (!cores.is_empty()).then(|| vec![cores]), ..Default::default() };
-                    ClientSource::open(&library, &config).map(Arc::new)
-                }
+                None => crate::clients::source_for(&library, &cores).map(Arc::new),
             };
             let read = source.as_ref().map_err(Clone::clone).and_then(|s| s.read(&file));
             let _ = thread.queue(move |mut model| {
@@ -502,7 +501,7 @@ impl qobject::GamePageModel {
                         model.as_mut().said(String::new());
                         model.as_mut().apply(read);
                     }
-                    Err(words) => model.as_mut().said(words),
+                    Err(words) => model.as_mut().said(format!("The game's page could not be read: {words}")),
                 }
             });
         });
@@ -636,7 +635,7 @@ impl qobject::GamePageModel {
                     let saved = model.source.as_ref().map_or(Ok(()), |s| s.change(&model.file, &change));
                     let ok = saved.is_ok();
                     let hid = ok && change == crate::game_page::Change::Hide;
-                    model.as_mut().said(saved.err().unwrap_or_default());
+                    model.as_mut().said(saved.err().map(|why| crate::game_page::change_failed(&change, &why)).unwrap_or_default());
                     if hid {
                         model.hidden();
                         return;
@@ -692,7 +691,7 @@ impl qobject::GamePageModel {
                 model.telling(|model| match other {
                     Ok(Some(saved_from)) => model.ask(crate::game_page::other_copy_question(&saved_from, &name), Pending::Play(state)),
                     Ok(None) => model.played(QString::from(file.path.as_str()), QString::from(state.as_str())),
-                    Err(words) => model.said(words),
+                    Err(words) => model.said(format!("The state could not be read: {words}")),
                 });
             });
         });

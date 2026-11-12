@@ -1,7 +1,6 @@
 //! `LibraryModel`, the library's navigation as a QAbstractListModel (EmuSen_Qt.md §1.2.1): library.rs's rows put on
 //! Qt. A refresh runs off the GUI thread and comes back through qt_thread().queue, the one way in.
 
-use crate::clients::ClientSource;
 use crate::esde_texts::EsdeTexts;
 use crate::library::{refresh, refresh_with, splash_worlds, LibrarySource, LibraryView, Refreshed};
 use core::pin::Pin;
@@ -72,8 +71,11 @@ pub mod qobject {
         #[qproperty(QString, tool_summaries, cxx_name = "toolSummaries")]
         #[qproperty(bool, dark)]
         #[qproperty(QString, home_lines, cxx_name = "homeLines", READ, NOTIFY)]
-        /// Whether a console starts with nothing in it, so the cards offer Start Console.
-        #[qproperty(bool, starts_empty, cxx_name = "startsEmpty", READ, NOTIFY)]
+        /// The consoles that start with nothing in them, as Start Console lists them (home_card::Startable, as JSON).
+        #[qproperty(QString, startable, READ, NOTIFY)]
+        /// Whether the grid sorts by the scraper's facts (Year, Rating), so a refresh reads every game's metadata for the
+        /// own look too; turned on, the library is read again with them (EmuSen_Qt.md §7.9).
+        #[qproperty(bool, by_facts, cxx_name = "byFacts", READ, WRITE = set_by_facts, NOTIFY)]
         /// Whether an ES-DE theme is the library's look: `LibraryStyle` is Theme and `BigPictureTheme` names one.
         #[qproperty(bool, themed, READ, NOTIFY)]
         /// The ES-DE view's settings, shelves, media index and media presence as text (esde_shelves.rs), each written at a
@@ -107,6 +109,9 @@ pub mod qobject {
         #[qinvokable]
         fn refresh(self: Pin<&mut LibraryModel>);
 
+        #[cxx_name = "setByFacts"]
+        fn set_by_facts(self: Pin<&mut LibraryModel>, value: bool);
+
         /// A game's title from its path, for a game the library does not hold (one opened by its file).
         #[qinvokable]
         #[cxx_name = "titleOf"]
@@ -133,11 +138,12 @@ pub mod qobject {
         #[cxx_name = "gameFile"]
         fn game_file(self: &LibraryModel, path: &QString) -> QString;
 
-        /// The Home card's facts as plain data (home_card.rs): the suspended game by its path and the words of its pause,
-        /// the tools' summaries, and whether Steam's Game Mode holds the session.
+        /// The Home card's facts as plain data (home_card.rs): the suspended game by its path, or the console started empty
+        /// by its name, and the words of its pause, whether Steam's Game Mode holds the session, the consoles that start
+        /// empty (`startable`) and the tools' summaries (`toolSummaries`), each passed in, so a binding on it follows them.
         #[qinvokable]
         #[cxx_name = "homeCardFacts"]
-        fn home_card_facts(self: &LibraryModel, suspended: &QString, paused: &QString, game_mode: bool) -> QString;
+        fn home_card_facts(self: &LibraryModel, suspended: &QString, console: &QString, paused: &QString, game_mode: bool, startable: &QString, tools: &QString) -> QString;
 
         /// Records the game at `path` as started now, then reads the games again, so Recent and Continue lead with it.
         #[qinvokable]
@@ -232,7 +238,8 @@ pub struct LibraryModelRust {
     dark: bool,
     /// Home's places' second lines as a JSON array of `{"status", "attention"}`.
     home_lines: QString,
-    starts_empty: bool,
+    startable: QString,
+    by_facts: bool,
     themed: bool,
     esde_settings: QString,
     esde_shelves: QString,
@@ -261,7 +268,8 @@ impl Default for LibraryModelRust {
             tool_summaries: QString::default(),
             dark: true,
             home_lines: QString::from("[]"),
-            starts_empty: false,
+            startable: QString::from("[]"),
+            by_facts: false,
             themed: false,
             esde_settings: QString::default(),
             esde_shelves: QString::from("[]"),
@@ -358,12 +366,24 @@ impl qobject::LibraryModel {
         self.view.rows.rows().len() as i32
     }
 
+    pub fn set_by_facts(mut self: Pin<&mut Self>, value: bool) {
+        if self.by_facts == value {
+            return;
+        }
+        self.as_mut().rust_mut().by_facts = value;
+        self.as_mut().by_facts_changed();
+        // The facts read once are kept by every later refresh while wanted; the own look reads them now.
+        if value && !self.view.esde_settings.themed {
+            self.refresh();
+        }
+    }
+
     pub fn refresh(mut self: Pin<&mut Self>) {
         let Some(source) = self.source.clone() else { return };
         self.as_mut().show_loading(true);
-        let (qt, gamelists) = (self.qt_thread(), self.view.gamelists.clone());
+        let (qt, gamelists, by_facts) = (self.qt_thread(), self.view.gamelists.clone(), self.by_facts);
         std::thread::spawn(move || {
-            let refreshed = refresh_with(source.as_ref(), &gamelists);
+            let refreshed = refresh_with(source.as_ref(), &gamelists, by_facts);
             let texts = texts_of(&refreshed);
             let _ = qt.queue(move |model| model.apply(None, refreshed, texts));
         });
@@ -400,14 +420,22 @@ impl qobject::LibraryModel {
         QString::from(serde_json::json!({ "games": self.view.catalog.games.len(), "running": title, "systems": systems }).to_string().as_str())
     }
 
-    pub fn home_card_facts(&self, suspended: &QString, paused: &QString, game_mode: bool) -> QString {
+    pub fn home_card_facts(&self, suspended: &QString, console: &QString, paused: &QString, game_mode: bool, startable: &QString, tools: &QString) -> QString {
         let suspended = suspended.to_string();
+        let (startable, tools, unread) = crate::home_card::read_lists(&startable.to_string(), &tools.to_string());
         let facts = crate::home_card::Facts {
-            suspended: if suspended.is_empty() { String::new() } else { crate::library::title_of(&suspended) },
+            suspended: if !suspended.is_empty() {
+                crate::library::title_of(&suspended)
+            } else if !console.is_empty() {
+                crate::session::console_session_name(&console.to_string())
+            } else {
+                String::new()
+            },
             paused: paused.to_string(),
             game_mode,
-            start_console: self.view.starts_empty(),
-            tools: serde_json::from_str(&self.tool_summaries.to_string()).unwrap_or(serde_json::Value::Null),
+            startable,
+            tools,
+            unread,
             ..crate::home_card::Facts::default()
         };
         QString::from(facts.to_json().as_str())
@@ -416,9 +444,9 @@ impl qobject::LibraryModel {
     pub fn started(mut self: Pin<&mut Self>, path: &QString) {
         let Some(source) = self.source.clone() else { return };
         self.as_mut().show_loading(true);
-        let (qt, path, gamelists) = (self.qt_thread(), path.to_string(), self.view.gamelists.clone());
+        let (qt, path, gamelists, by_facts) = (self.qt_thread(), path.to_string(), self.view.gamelists.clone(), self.by_facts);
         std::thread::spawn(move || {
-            let refreshed = source.started(&path).and_then(|()| refresh_with(source.as_ref(), &gamelists));
+            let refreshed = source.started(&path).and_then(|()| refresh_with(source.as_ref(), &gamelists, by_facts));
             let texts = texts_of(&refreshed);
             let _ = qt.queue(move |model| model.apply(None, refreshed, texts));
         });
@@ -426,9 +454,9 @@ impl qobject::LibraryModel {
 
     pub fn toggle_favourite(self: Pin<&mut Self>, path: &QString) {
         let Some(source) = self.source.clone() else { return };
-        let (qt, path, gamelists) = (self.qt_thread(), path.to_string(), self.view.gamelists.clone());
+        let (qt, path, gamelists, by_facts) = (self.qt_thread(), path.to_string(), self.view.gamelists.clone(), self.by_facts);
         std::thread::spawn(move || {
-            let refreshed = source.toggle_favourite(&path).and_then(|()| refresh_with(source.as_ref(), &gamelists));
+            let refreshed = source.toggle_favourite(&path).and_then(|()| refresh_with(source.as_ref(), &gamelists, by_facts));
             let texts = texts_of(&refreshed);
             let _ = qt.queue(move |model| model.apply(None, refreshed, texts));
         });
@@ -469,7 +497,8 @@ impl qobject::LibraryModel {
     }
 
     pub fn esde_list_facts(&self, shelf: &QString, focused: i32) -> QString {
-        let facts = self.view.esde_state.summaries.get(&shelf.to_string()).map(|s| crate::list_card::esde_facts(s, focused.max(0) as usize));
+        let console = self.view.startable_on_shelf(&shelf.to_string());
+        let facts = self.view.esde_state.summaries.get(&shelf.to_string()).map(|s| crate::list_card::esde_facts(s, focused.max(0) as usize, console.as_ref()));
         QString::from(facts.unwrap_or(serde_json::Value::Null).to_string().as_str())
     }
 
@@ -553,11 +582,10 @@ impl qobject::LibraryModel {
         }
         self.as_mut().show_loading(true);
         let cores = self.cores.to_string();
-        let config = emusen_crystal_client::Config { cores: (!cores.is_empty()).then(|| vec![cores]), ..Default::default() };
         let qt = self.qt_thread();
         std::thread::spawn(move || {
             let (source, refreshed): (Option<Arc<dyn LibrarySource>>, Refreshed) =
-                match ClientSource::open(&library, &config) {
+                match crate::clients::source_for(&library, &cores) {
                     Ok(source) => {
                         let source: Arc<dyn LibrarySource> = Arc::new(source);
                         // The systems come before the scan, so Moonrise's planets do not wait for the games.
@@ -674,10 +702,10 @@ impl qobject::LibraryModel {
             self.as_mut().rust_mut().home_lines = home_lines;
             self.as_mut().home_lines_changed();
         }
-        let starts_empty = self.view.starts_empty();
-        if self.starts_empty != starts_empty {
-            self.as_mut().rust_mut().starts_empty = starts_empty;
-            self.as_mut().starts_empty_changed();
+        let startable = QString::from(serde_json::to_string(&self.view.startable()).unwrap_or_else(|_| "[]".into()).as_str());
+        if self.startable != startable {
+            self.as_mut().rust_mut().startable = startable;
+            self.as_mut().startable_changed();
         }
         if self.summary != summary {
             self.as_mut().rust_mut().summary = summary;

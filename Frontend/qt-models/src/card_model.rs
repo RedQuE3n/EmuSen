@@ -64,6 +64,8 @@ pub mod qobject {
         #[qproperty(QStringList, pane_muted, cxx_name = "paneMuted", READ, NOTIFY)]
         #[qproperty(QString, pane_picture, cxx_name = "panePicture", READ, NOTIFY)]
         #[qproperty(QString, pane_caption, cxx_name = "paneCaption", READ, NOTIFY)]
+        /// The help bar the page shows, as QML names it (`HelpModel.Card`).
+        #[qproperty(i32, help, READ, NOTIFY)]
         type CardModel = super::CardModelRust;
     }
 
@@ -156,6 +158,7 @@ pub struct CardModelRust {
     pane_muted: QStringList,
     pane_picture: QString,
     pane_caption: QString,
+    help: i32,
     deck: Deck,
     page_shown: Page,
 }
@@ -177,6 +180,7 @@ impl Default for CardModelRust {
             pane_muted: QStringList::default(),
             pane_picture: QString::default(),
             pane_caption: QString::default(),
+            help: crate::help_model::shown_screen(crate::help::Screen::Card),
             deck: Deck::default(),
             page_shown: Page::default(),
         }
@@ -364,6 +368,11 @@ impl qobject::CardModel {
         if self.breadcrumb != breadcrumb {
             self.as_mut().rust_mut().breadcrumb = breadcrumb;
             self.as_mut().breadcrumb_changed();
+        }
+        let help = crate::help_model::shown_screen(pages.help(&key));
+        if self.help != help {
+            self.as_mut().rust_mut().help = help;
+            self.as_mut().help_changed();
         }
         let footer = QString::from(self.page_shown.footer.as_str());
         if self.footer != footer {

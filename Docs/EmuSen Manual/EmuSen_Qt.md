@@ -2501,8 +2501,9 @@ Qt application.
   clock, and only the scene knows the measured consequences of a hold (the metadata fading out from the first repeat,
   the list's fast tier jumping four entries). The router gives the first press and the release.
 - **The pointer makes the pad's calls.** `hoverAt(item, row)` steps to the row as the pad's step does, only while the
-  pointer itself moves (the window's fact, EmuSen_Kit.md §7.108). EmuSen.Esde is 1.1 for it, with `hover(row)`, which
-  nothing called, removed (decided 2026-11-11; `CHANGELOG-esde.md`), `tap(row)` is
+  pointer itself moves (the window's fact, EmuSen_Kit.md §7.108). EmuSen.Esde is 1.1 for it. `hover(row)`, which
+  nothing of the repository calls, stays in 1.1, deprecated and selecting as it did in 1.0, and goes at the next major
+  (decided 2026-11-11; `CHANGELOG-esde.md`; held by `tests/deprecated.rs` and `lint.rs`). `tap(row)` is
   that and A, and a wheel notch is one step, back for a notch up.
 
 **Proof**, `tests/painter.rs` (6, on a synthetic theme the test writes, no Qt application): the settings under
@@ -2664,7 +2665,7 @@ THEMES.md and USERGUIDE.md, settled or named:
 |---|---|
 | The help's words: LAUNCH, SYSTEM on the system view, JUMP, FIRST, LAST and CHOOSE in a gamelist, FAVORITE | ES-DE 3.4.1's entries in its order and words (`help.rs`): the system view MENU, SELECT, SCREENSAVER, CHOOSE; a gamelist OPTIONS, MENU, SELECT, BACK, FAVORITES, SYSTEM, RANDOM. A reads Select on every entry, as ES-DE's documentation of the A button and the captures have it. The project's words of `EmuSen_BigPicture.md` §15 stay the C# painter's |
 | No SCREENSAVER or RANDOM entry | the help reads the player's *Enable screensaver controls* (`ScreensaverControls`, on by default) and *Random entry button* (`RandomEntryButton`, games by default), and resolves *Quick system select*'s two "or" settings by the gamelist's primary (UG "Quick system select") |
-| Wi-Fi, a battery and 80 % drawn where ES-DE drew none | the view shows no indicator until the host reports the device on `EsdeModel.device` (a JSON text, `{"wifi":true,"battery":80}`; an addition to EmuSen.Esde 1.0's registry, copied to `Testing/qmltypes`) |
+| Wi-Fi, a battery and 80 % drawn where ES-DE drew none | the view shows no indicator until the host reports the device on `EsdeModel.device` (a JSON text, `{"wifi":true,"battery":80}`; an addition to EmuSen.Esde 1.0's registry, kept in 1.1's, `Testing/qmltypes/EmuSen.Esde-1.1.qmltypes`) |
 | CarAlt's title screen, screenshots and marquee tiled into strips | THEMES.md: `tile` "can only be used when `path` has been set", so a game's media is never tiled (`paint.rs`) |
 | Art Book Next's Tower Set drawn with a folder where ES-DE draws its folder-link mark | a folder with a link has the `FolderLink` marker (`primary.rs`); the mark is the scene's link, where ES-DE's symbol is an arrow into a bracket: **named, open** |
 | The list's names indented on a row with no marker (Brass Lantern), the selection bar beginning at the name, the star larger | ES-DE prefixes the marker to the name: a row with none starts at the margin, the bar covers marker and name, the marker is one `fontSize` square |
@@ -2934,7 +2935,7 @@ neither `LibraryStyle` nor `BigPictureTheme`; Mistress's Settings remain where t
 | A failure | the model's `problem` raised as a notice once the splash has gone, the own look shown |
 
 **Additions to surfaces** (rule Q, reviewed, additions only): `EsdeModel.shelf`, `selected`, `sounds` (read-only) and
-`select(row)` in `EmuSen.Esde` 1.0 (the registry copied to `Testing/qmltypes`); `LibraryModel.toggleFavourite(path)`
+`select(row)` in `EmuSen.Esde` 1.0 (kept in 1.1's registry, `Testing/qmltypes/EmuSen.Esde-1.1.qmltypes`); `LibraryModel.toggleFavourite(path)`
 and `LibrarySource::toggle_favourite`, `Screens.home()` and `Screens.list()` in `EmuSen.Models` (QML builds no key
 text, §1.3, so Start and Select at the view are calls of their own); `sounds::decode` in `emusen-platform-client`.
 `emusen-esde-qt` no longer declares `QAbstractListModel` itself and names the kit's (`emusen_kit_qt::base`): with the

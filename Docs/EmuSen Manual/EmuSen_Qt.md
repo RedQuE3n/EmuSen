@@ -2392,7 +2392,8 @@ The second half of the engine, as the painter's design laid it out: a crate of i
 `Frontend/esde-qt`, beside the plain-data `emusen-esde` the way `kit-qt` stands beside `kit-core`. It depends on cxx-qt,
 `emusen-esde` (the scene and its marks) and `emusen-kit-qt` (the body face, and from E2 the help bar and the pad
 router); `tests/lint.rs` holds its manifest to exactly those and the two EmuSen crates' manifests to no client, runtime
-or model crate. The registry is `Testing/qmltypes/EmuSen.Esde-1.0.*`, compared on every build as the kit's is (§5.3).
+or model crate. The registry is `Testing/qmltypes/EmuSen.Esde-1.1.*`, compared on every build as the kit's is (§5.3);
+its changes are listed in `Frontend/esde-qt/CHANGELOG-esde.md`.
 
 #### 4.8.1 The primitives
 
@@ -2500,8 +2501,8 @@ Qt application.
   clock, and only the scene knows the measured consequences of a hold (the metadata fading out from the first repeat,
   the list's fast tier jumping four entries). The router gives the first press and the release.
 - **The pointer makes the pad's calls.** `hoverAt(item, row)` steps to the row as the pad's step does, only while the
-  pointer itself moves (the window's fact, EmuSen_Kit.md §7.108; an addition to EmuSen.Esde 1.0's registry on 2026-11-11,
-  copied to `Testing/qmltypes`; `hover(row)` stays and is no longer called by the view's QML), `tap(row)` is
+  pointer itself moves (the window's fact, EmuSen_Kit.md §7.108). EmuSen.Esde is 1.1 for it, with `hover(row)`, which
+  nothing called, removed (decided 2026-11-11; `CHANGELOG-esde.md`), `tap(row)` is
   that and A, and a wheel notch is one step, back for a notch up.
 
 **Proof**, `tests/painter.rs` (6, on a synthetic theme the test writes, no Qt application): the settings under
@@ -2527,7 +2528,7 @@ pointer. Each list binds `revision: esde.revision` and refreshes on its change, 
 
 | Object | Holds | Changes |
 |---|---|---|
-| `EsdeModel` | writable `settings`, `shelves`, `media`, `presence` (the texts of §4.6), `width`, `height`, `swap`; read-only `themed`, `problem`, `view`, `moving`, `nextChangeMs`, `revision`, the quick-scroll `letters`, `lettersMark`, `lettersPx`, `lettersOpacity`; invokables `tick(ms)`, `pressed(button, repeat, jump)`, `released`, `hover(row)`, `hoverAt(item, row)`, `tap(row)`, `wheel(notches)`, `measured(id, w, h)`, `reload()`; signals `played(path)`, `favourite(path)`, `menu`, `options`, `cued(name)` | a text or the size changing starts a load on a thread of its own (the texts read, `painter::systems` through the `ThemeCache`), handed back by `qt_thread().queue`; a load older than the last asked for is dropped |
+| `EsdeModel` | writable `settings`, `shelves`, `media`, `presence` (the texts of §4.6), `width`, `height`, `swap`; read-only `themed`, `problem`, `view`, `moving`, `nextChangeMs`, `revision`, the quick-scroll `letters`, `lettersMark`, `lettersPx`, `lettersOpacity`; invokables `tick(ms)`, `pressed(button, repeat, jump)`, `released`, `hoverAt(item, row)`, `tap(row)`, `wheel(notches)`, `measured(id, w, h)`, `reload()`; signals `played(path)`, `favourite(path)`, `menu`, `options`, `cued(name)` | a text or the size changing starts a load on a thread of its own (the texts read, `painter::systems` through the `ThemeCache`), handed back by `qt_thread().queue`; a load older than the last asked for is dropped |
 | `ElementModel` | one row per `Frame.elements`, roles flattened by `src/values.rs`, the `paint` role a `PaintKind` enum (`ElementModel.Picture` … `Grid`) the chooser reads, the primary's layout flattened onto its own row | a reset when the ids, paints or layouts change (a view switch, a system change); otherwise `dataChanged` for each row that differs |
 | `SlotsModel` | a carousel's slots (current or `leaving`) with their row's text and picture | a reset when the count or the rows change; `dataChanged` per moved slot |
 | `RowsModel` | a list's or grid's rows | replaced under a reset only when the `Rows` or the install changes; a step changes none |

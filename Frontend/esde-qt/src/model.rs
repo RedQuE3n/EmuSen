@@ -63,8 +63,6 @@ pub mod qobject {
         fn pressed(self: Pin<&mut EsdeModel>, button: i32, repeat: bool, jump: i32);
         #[qinvokable]
         fn released(self: Pin<&mut EsdeModel>, button: i32);
-        #[qinvokable]
-        fn hover(self: Pin<&mut EsdeModel>, row: i32);
         /// The pointer onto the row `item` draws, or off every row (-1): it selects only as the pointer itself moves (EmuSen_Kit.md §7.108).
         #[qinvokable]
         #[cxx_name = "hoverAt"]
@@ -329,11 +327,6 @@ impl qobject::EsdeModel {
     pub fn released(self: Pin<&mut Self>, button: i32) {
         let Some(button) = usize::try_from(button).ok().and_then(|i| UiButton::ALL.get(i).copied()) else { return };
         self.shared.borrow_mut().released(button);
-        self.publish();
-    }
-
-    pub fn hover(self: Pin<&mut Self>, row: i32) {
-        self.shared.borrow_mut().hover(row);
         self.publish();
     }
 

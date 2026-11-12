@@ -3847,11 +3847,18 @@ the scanlines off in each so that only the setting differs.
 scanline settings. ES-DE's two, `MediaViewerVideoScanlines` and `MediaViewerScreenshotScanlines`, default to on
 (`Settings::setDefaults`); this viewer matches ES-DE with both turned off, as the captures were taken.
 
-**Differences from ES-DE that wait on the tester** (read in ES-DE 3.4.1's source 2026-11-11, not ruled):
-- The blur: ES-DE blurs the whole screen, the black ground and the letterbox bars included, before the strip is drawn
-  (`MediaViewer::render`, `RendererOpenGL::shaderPostprocessing`), with a 9-tap kernel in two passes; EmuSen lays one
-  Gaussian pass over the video element only. ES-DE blurs vertically on a screen rotated by 90 or 270 degrees; EmuSen
-  has no vertical blur, and no screen rotation.
+**The blur over the whole screen** (decided 2026-11-11 by the tester, R-20261111-103: "Match ES-DE: blur the whole
+screen"). ES-DE 3.4.1 draws the black ground and the video, then blurs the whole screen, the bars beside the video
+included, and draws the strip and its help over it, sharp (`MediaViewer::render`, `es-app/src/MediaViewer.cpp`; the
+pass over the full screen in `RendererOpenGL::shaderPostprocessing`, `es-core/src/renderers/RendererOpenGL.cpp`). EmuSen
+gives the same picture with one layer: the video's element is the full width of the screen below the strip, its bars
+transparent in the layer over the viewer's black ground, and a horizontal blur of that layer laid over black is the blur
+of ground, bars and video together, since black adds nothing to the sum. Read again on 2026-11-11, this was already so;
+the earlier note here that only the video was blurred took the element for the fitted frame. Held by manual.rs's
+`the_viewer_s_blur_takes_the_bars_beside_a_narrow_video_and_leaves_them_sharp_when_off` (GPU tier): a 64 × 48 clip,
+narrower than the screen, its bar 3 px from the clip's edge black with the setting off and lit with it on. Two
+differences stand, unruled: ES-DE's kernel is nine taps in two passes where EmuSen's is one Gaussian fitted to the
+captures (above), and ES-DE blurs vertically on a screen rotated by 90 or 270 degrees, where EmuSen has no rotation.
 
 **Held to**: `frame.rs`'s `the_media_viewer_follows_the_player_s_viewer_settings`; `settings_rows`' one-row test, which
 names the six keys; the oracle's seven settings states in CarAlt at both sizes; `viewer_clip.rs` (esde-qt, offscreen on

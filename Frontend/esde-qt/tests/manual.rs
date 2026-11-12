@@ -1,5 +1,6 @@
-//! The media viewer's PDF manual on the GPU tier (EmuSen_Qt.md §4.13): a manual the test writes, two pages of flat
-//! colour, one upright and one across, opened with up, paged, zoomed and drawn through Qt PDF.
+//! The media viewer on the GPU tier (EmuSen_Qt.md §4.13, §4.14): a PDF manual the test writes, two pages of flat colour,
+//! one upright and one across, opened with up, paged, zoomed and drawn through Qt PDF; and the video blur over the whole
+//! screen beneath the strip, the bars beside a narrow video with it, as ES-DE 3.4.1 blurs it (R-20261111-103).
 
 mod common;
 
@@ -166,5 +167,50 @@ fn a_game_s_pdf_manual_opens_with_up_and_pages_zooms_and_draws_through_qt_pdf() 
     scene.pad(UiButton::Back);
     scene.wait(200);
     assert!(scene.tree().nodes.iter().all(|n| !(n.visible && n.name == "element-strip")), "any other button closes the viewer");
+    scene.assert_quiet();
+}
+
+#[test]
+fn the_viewer_s_blur_takes_the_bars_beside_a_narrow_video_and_leaves_them_sharp_when_off() {
+    assert!(emusen_esde_qt::marks::mark_named("star").is_some(), "the module is linked into this test");
+    let _kwin = start();
+    let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(format!("esde-qt-blur-{}", std::process::id()));
+    theme(&root.join("theme"));
+    let clip = root.join("clip.y4m");
+    emusen_qt_test::clips::write(&clip, 20);
+    let mut harness = Harness::new();
+    let mut scene = harness.load(SCENE, W, H);
+    let media = format!("{{\"nes\":{{\"video\":{{\"nes-0000\":\"{}\"}}}}}}", clip.display());
+    assert!(scene.set_property("view", "media", &media));
+    let shelf = "[{\"name\":\"nes\",\"full_name\":\"Nintendo\",\"theme\":\"nes\",\"kind\":\"regular\",\"games\":[{\"file\":\"nes-0000.rom\",\"name\":\"Game\",\"esde_system\":\"nes\",\"favourite\":false,\"last_played\":0}]}]";
+    let scratch = root.join("grabs");
+    std::fs::create_dir_all(&scratch).unwrap();
+    let mid = H / 2 + 20;
+    // The 64 x 48 clip fitted below the strip is narrower than the screen: black bars stand at its left and right.
+    let edge_and_bar = |scene: &mut Scene<'_>, blur: bool| {
+        let settings = format!("{{\"theme\":\"{}\",\"interface\":{{\"DisplayClock\":false,\"StartupView\":\"gamelist\",\"MediaViewerVideoBlur\":{blur}}}}}", root.join("theme").display());
+        assert!(scene.set_property("view", "settings", &settings));
+        assert!(scene.set_property("view", "shelves", shelf));
+        until(scene, "the theme loaded", |s| s.property("esdeModel", "themed") == "true");
+        until(scene, "the gamelist", |s| s.property("esdeModel", "view") == "gamelist");
+        scene.pad(UiButton::Screensaver);
+        until(scene, "the clip shown and faded in", |s| pixel(s, &scratch, W / 2, mid)[0] > 200);
+        scene.wait(700);
+        let path = scratch.join("blur.png");
+        assert!(scene.grab(&path.to_string_lossy()));
+        let image = QImage::from_data(&std::fs::read(&path).unwrap(), None).expect("the grab reads");
+        let red = |x: i32| image.pixel_color(x, mid).red();
+        let edge = (0..W / 2).find(|x| red(*x) > 128).expect("the clip's left edge");
+        scene.pad(UiButton::Back);
+        scene.wait(200);
+        (edge, red(edge - 3), red(edge - 40))
+    };
+    let (edge, near, far) = edge_and_bar(&mut scene, false);
+    assert!(edge > 100, "a narrow clip leaves a bar at its left: edge at {edge}");
+    assert!(near < 4 && far < 4, "off, the bar is sharp black beside the clip: {near} and {far} at 3 and 40 px");
+    let (edge_on, near, far) = edge_and_bar(&mut scene, true);
+    assert!((edge_on - edge).abs() <= 2, "the clip is placed alike: {edge} and {edge_on}");
+    assert!(near > 12, "on, the blur reaches the bar 3 px beside the clip, as ES-DE's over the whole screen: red {near}");
+    assert!(far < 4, "and the bar further out is black: {far}");
     scene.assert_quiet();
 }

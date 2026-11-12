@@ -10,6 +10,9 @@ use emusen_esde_text::{layout, Align, Spec};
 /// The row's height over the rendered reference glyph's rows (HelpComponent.cpp, mLetterHeight).
 pub const ROW_OVER_REFERENCE: f32 = 1.25;
 
+/// The smallest font ES-DE makes, in pixels: Font's constructor raises a smaller size to it (es-core Font.cpp, v3.4.1).
+const LABEL_FLOOR: f32 = 3.0;
+
 /// The entries' starts and their labels' starts, and the grid's width, its trailing spacing in.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Places {
@@ -32,9 +35,9 @@ pub fn icon_box(h: &Help) -> Option<f64> {
     Some(f64::from(if h.scale < 1.0 { row } else { row / h.scale as f32 }))
 }
 
-/// The labels' size: the help's, times entryRelativeScale below 1.
+/// The labels' size: the help's, times entryRelativeScale below 1, and never under ES-DE's smallest font.
 pub fn label_px(h: &Help) -> f64 {
-    if h.scale < 1.0 { f64::from(h.px as f32 * h.scale as f32) } else { h.px }
+    if h.scale < 1.0 { f64::from((h.px as f32 * h.scale as f32).max(LABEL_FLOOR)) } else { h.px }
 }
 
 /// The places of a help element's entries; with no icon box (no FreeType, or a face without the reference glyph) the
@@ -47,17 +50,19 @@ pub fn places(h: &Help) -> Places {
 pub fn places_with(h: &Help, icon: f64) -> Places {
     let face = crate::text::face_of(h.font.file.as_deref().unwrap_or("")).or_else(|| crate::text::face_of(""));
     let px = label_px(h);
-    let (mut starts, mut labels, mut x) = (vec![], vec![], 0.0);
+    // Summed in f32, as HelpComponent.cpp's updateGrid sums (EmuSen_Qt.md §4.12.4).
+    let (icon, gap, spacing) = (icon as f32, h.icon_gap as f32, h.entry_spacing as f32);
+    let (mut starts, mut labels, mut x) = (vec![], vec![], 0.0_f32);
     for e in &h.entries {
         let words = face.as_ref().map_or(0, |f| {
             let spec = Spec { text: &e.label, px, own_face: h.font.own, width: 0.0, height: 0.0, line_spacing: 0.0, wrap: false, ellipsis: false, align: Align::Start };
             layout(f, &spec).width
         });
-        starts.push(x);
-        labels.push(x + icon + h.icon_gap);
-        x += icon + f64::from(words) + h.icon_gap + h.entry_spacing;
+        starts.push(f64::from(x));
+        labels.push(f64::from(x + icon + gap));
+        x += icon + words as f32 + gap + spacing;
     }
-    Places { starts, labels, width: x }
+    Places { starts, labels, width: f64::from(x) }
 }
 
 #[cfg(test)]
@@ -118,6 +123,15 @@ mod tests {
         assert!((17.17..=17.52).contains(&rost), "rost at 20 px: {rost}");
     }
 
+    // A label scaled below 3 px is made at 3, as ES-DE's Font constructor makes it; above, the product in f32.
+    #[test]
+    fn a_label_is_never_smaller_than_the_smallest_font() {
+        let h = |px: f64, scale: f64| Help { px, ..copy(String::new(), scale) };
+        assert_eq!(label_px(&h(4.0, 0.5)), 3.0);
+        assert_eq!(label_px(&h(20.0, 0.7)), f64::from(20.0_f32 * 0.7_f32));
+        assert_eq!(label_px(&h(20.0, 1.2)), 20.0);
+    }
+
     // The grid's width is every entry's parts with the spacing after the last, unrounded (HelpComponent.cpp updateGrid).
     #[test]
     fn the_grid_s_width_keeps_its_fraction_and_its_trailing_spacing() {
@@ -130,8 +144,9 @@ mod tests {
             f64::from(layout(&face, &spec).width)
         };
         let p = places_with(&h, 17.3);
-        let want = 2.0 * (17.3 + 5.0 + 8.0) + width(&h.entries[0].label) + width(&h.entries[1].label);
-        assert!((p.width - want).abs() < 1e-9 && p.width.fract() > 0.5, "{p:?} against {want}");
-        assert!((p.width - (p.labels[1] + width(&h.entries[1].label)) - 8.0).abs() < 1e-9, "the trailing spacing: {p:?}");
+        let entry = |label: &str| 17.3_f32 + width(label) as f32 + 5.0 + 8.0;
+        let want = f64::from(entry(&h.entries[0].label) + entry(&h.entries[1].label));
+        assert!(p.width == want && p.width.fract() > 0.5, "summed in f32 as ES-DE sums: {p:?} against {want}");
+        assert!((p.width - (p.labels[1] + width(&h.entries[1].label)) - 8.0).abs() < 1e-5, "the trailing spacing: {p:?}");
     }
 }

@@ -70,11 +70,19 @@ fn the_viewer_s_video_plays_on_behind_a_picture_when_kept_running_and_is_heard_a
     scene.pad(UiButton::Back);
     until(&mut scene, "the viewer closed", |s| position(s).is_none());
 
-    // Off: the clip goes with the picture shown and starts again on return; and silent with its audio off.
-    open(&mut scene, false, false);
+    // Keep videos running off, its audio on: the clip goes with the picture shown and starts again on return, still heard.
+    open(&mut scene, false, true);
     let (before, behind, back) = there_and_back(&mut scene, 1500, 1500);
     assert_eq!(behind, None, "no clip plays behind the picture: {before}");
     assert!(back < before, "the clip starts again: {before} then {back}");
+    assert_eq!(playback(&mut scene, "heard"), Some(1.0), "Keep videos running off leaves the sound alone");
+    scene.pad(UiButton::Back);
+    until(&mut scene, "the viewer closed", |s| position(s).is_none());
+
+    // Its audio off, kept running: silent, and still playing on behind a picture.
+    open(&mut scene, true, false);
+    let (before, behind, _) = there_and_back(&mut scene, 1500, 1500);
+    assert!(behind.is_some_and(|p| p > before), "audio off leaves the clip running behind the picture: {before} then {behind:?}");
     assert_eq!(playback(&mut scene, "heard"), Some(0.0), "the viewer's clip silent with its audio off");
     scene.pad(UiButton::Back);
     scene.assert_quiet();

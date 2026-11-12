@@ -643,6 +643,9 @@ fn the_media_viewer_follows_the_player_s_viewer_settings() {
     open(&mut s, &data, ViewerSettings { help: HelpPlace::Bottom, ..base });
     let f = s.frame();
     assert!(close(placed(&f, "strip").y, H - strip) && close(placed(&f, "video").y, 0.0) && close(placed(&f, "video").h, H - strip), "the strip at the bottom");
+    // The help's spacings are ES-DE's defaults for a help element, THEMES.md's 0.00833 and 0.00416 of the width.
+    let Paint::Help(help) = &placed(&f, "help").paint else { panic!("the viewer's help") };
+    assert_eq!((help.entry_spacing, help.icon_gap), (f64::from(0.00833_f32 * W as f32), f64::from(0.00416_f32 * W as f32)));
     open(&mut s, &data, ViewerSettings { help: HelpPlace::Off, ..base });
     let f = s.frame();
     assert!(f.elements.iter().all(|e| e.name != "strip" && e.name != "help") && close(placed(&f, "video").h, H), "no help, the whole screen");

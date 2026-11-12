@@ -139,6 +139,13 @@ pub fn spacing_px(e: &Element, property: &str, w: f64) -> f64 {
     f64::from(e.float(property).unwrap_or(0.0) * w as f32)
 }
 
+/// A spacing where no theme sets one, as the media viewer's help: the catalogue's default share for the help times the
+/// screen's width, in f32 as `spacing_px`.
+pub fn default_spacing_px(property: &str, w: f64) -> f64 {
+    let share = crate::loader::catalog().find("helpsystem").and_then(|e| e.find(property)).and_then(|p| p.default.as_deref()).and_then(|d| d.parse::<f32>().ok());
+    f64::from(share.unwrap_or(0.0) * w as f32)
+}
+
 /// entryRelativeScale, which the loader holds to 0.2–3.
 pub fn scale(e: &Element) -> f64 {
     f64::from(e.float("entryRelativeScale").unwrap_or(1.0))

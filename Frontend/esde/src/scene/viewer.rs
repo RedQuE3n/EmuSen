@@ -315,7 +315,7 @@ impl Viewer {
         if let Some(text) = self.left_words(settings) {
             out.push(placed("left", (LEFT_WORDS * w).round(), strip_y, w / 2.0, strip, 1.0, Paint::Text(words(&text, INK, None))));
         }
-        let spacing = 0.00833 * w;
+        let spacing = super::help::default_spacing_px("entrySpacing", w);
         let help = Paint::Help(Help {
             entries: self.entries(),
             font: super::paint::es_de_help_face(data),
@@ -324,7 +324,7 @@ impl Viewer {
             icon_color: Color(INK),
             background: None,
             entry_spacing: spacing,
-            icon_gap: 0.00416 * w,
+            icon_gap: super::help::default_spacing_px("iconTextSpacing", w),
             scale: 1.0,
             filled_glyphs: true,
         });

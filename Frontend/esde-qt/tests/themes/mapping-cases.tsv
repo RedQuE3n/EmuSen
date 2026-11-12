@@ -145,7 +145,7 @@ grid	itemSpacing	0.01 0.01	0.05 0.05	-	-	-	-	-	-	-	-	-
 grid	scaleInwards	false	true	-	-	-	-	-	-	-	-	-
 grid	fractionalRows	false	true	-	-	-	-	itemSize=0.3 0.35	-	-	-	-
 grid	itemTransitions	animate	instant	-	-	-	-	-	100	step	-	-
-grid	rowTransitions	animate	instant	-	-	-	-	-	100	down	-	-
+grid	rowTransitions	animate	instant	-	-	-	-	itemSize=0.3 0.6	100	down	-	-
 grid	unfocusedItemOpacity	0.5	1	-	-	-	-	-	-	-	-	-
 grid	unfocusedItemSaturation	1	0	-	-	-	-	-	-	-	-	-
 grid	unfocusedItemDimming	1	0.3	-	-	-	-	-	-	-	-	-

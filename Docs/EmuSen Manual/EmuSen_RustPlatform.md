@@ -4643,8 +4643,12 @@ Galaxia's, not a core's, and need no runtime. `Frontend/platform-client` wraps i
 the document as `serde_json::Value` so that Galaxia stays the rows' one owner. The C# half has its rows in code until it
 retires and never calls it, so `GalaxiaParityTests` counts it as the front end's. `lib.rs`, `emusen_platform.h` and
 `PlatformLibrary.InterfaceVersion` moved to 45 together. Measured by `stage5.rs`'s
-`the_front_ends_settings_rows_come_from_galaxia_by_length_then_fill` (all 59 rows, a row's twelve members, a console's
-crop choices); an empty answer seeded in the C layer was caught.
+`the_front_ends_settings_rows_come_from_galaxia_by_length_then_fill` (every row, a row's twelve members, a console's
+crop choices); an empty answer seeded in the C layer was caught. *Revised 2026-11-11:* the test counted 59 rows, a bare
+number that the media viewer's six rows (`EmuSen_Galaxia.md` §3.15.1) made 65 while the crate stood outside the gate; it
+now compares the keys served, section by section and by name, with `frontend_settings.json` as committed, so the count
+follows the rows, and Galaxia's one-row test stays the one that names the C# keys and the viewer's. A copy of the rows
+without the Media viewer group, seeded in the C layer, was caught.
 
 The same interface carries Serenity's crop limits in `emusen_serenity_filters`' catalogue, `"crop"`, a member added to
 a document and no new call (`EmuSen_Serenity.md` §2.10).

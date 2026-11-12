@@ -211,8 +211,15 @@ fn the_front_ends_settings_rows_come_from_galaxia_by_length_then_fill() {
     let p = Platform::load(library()).unwrap();
     let rows = p.settings_rows().unwrap();
     let app = rows["AppSettings"].as_array().unwrap();
-    let all = app.len() + rows["GraphicsConfig"].as_array().unwrap().len() + rows["GraphicsConfig.Consoles"].as_array().unwrap().len();
-    assert_eq!(all, 59, "every key a settings screen sets");
+    let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Platform/galaxia/data/frontend_settings.json");
+    let committed: Value = serde_json::from_str(&std::fs::read_to_string(here).unwrap()).unwrap();
+    let keys = |doc: &Value, section: &str| doc[section].as_array().unwrap().iter().map(|r| r["key"].as_str().unwrap().to_owned()).collect::<Vec<_>>();
+    let sections = |doc: &Value| doc.as_object().unwrap().keys().cloned().collect::<Vec<_>>();
+    assert_eq!(sections(&rows), sections(&committed));
+    for section in sections(&committed) {
+        let section = section.as_str();
+        assert_eq!(keys(&rows, section), keys(&committed, section), "{section}: every row Galaxia holds, by name, and no other");
+    }
     let schema = ["key", "label", "hint", "kind", "default", "min", "max", "choices", "choice_labels", "group", "shown_with", "locked"];
     let swap = app.iter().find(|r| r["key"] == "SwapPadButtons").unwrap();
     assert_eq!(swap.as_object().unwrap().keys().filter(|k| schema.contains(&k.as_str())).count(), schema.len(), "{swap}");

@@ -56,9 +56,23 @@ fn card_rows(tree: &Tree) -> Vec<&Node> {
     rows
 }
 
+/// A card row's words of the part named `part`: its `label` or its `value`.
+fn row_part<'t>(tree: &'t Tree, row: &Node, part: &str) -> Option<&'t str> {
+    tree.nodes.iter().find(|n| n.parent == row.id && n.name == part).and_then(|n| n.text.as_deref())
+}
+
 /// A card row's label.
 fn row_label<'t>(tree: &'t Tree, row: &Node) -> Option<&'t str> {
-    tree.nodes.iter().find(|n| n.parent == row.id && n.name == "label").and_then(|n| n.text.as_deref())
+    row_part(tree, row, "label")
+}
+
+/// The shown card's rows, top first, each as its label and its value, empty where a row has none.
+pub fn card_words(scene: &mut Scene<'_>) -> Vec<(String, String)> {
+    let tree = scene.tree();
+    card_rows(&tree)
+        .into_iter()
+        .map(|r| (row_label(&tree, r).unwrap_or_default().to_owned(), row_part(&tree, r, "value").unwrap_or_default().to_owned()))
+        .collect()
 }
 
 /// Points over the middle of the game's screen, where the console's picture is drawn whatever its shape.

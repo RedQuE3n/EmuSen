@@ -68,16 +68,7 @@ fn focused(scene: &mut Scene<'_>) -> String {
 
 /// The shown card's rows: each row's label and value, in order.
 fn rows(scene: &mut Scene<'_>) -> Vec<String> {
-    let tree = scene.tree();
-    let words = |parent: &str, name: &str| tree.nodes.iter().find(|n| n.parent == parent && n.name == name).and_then(|n| n.text.clone()).unwrap_or_default();
-    let mut rows: Vec<(f64, String)> = tree
-        .nodes
-        .iter()
-        .filter(|n| n.visible && n.ty.starts_with("MenuRow"))
-        .map(|n| (n.y, [words(&n.id, "label"), words(&n.id, "value")].join(" | ").trim_end_matches(" | ").to_owned()))
-        .collect();
-    rows.sort_by(|a, b| a.0.total_cmp(&b.0));
-    rows.into_iter().map(|(_, r)| r).collect()
+    common::console::card_words(scene).into_iter().map(|(label, value)| if value.is_empty() { label } else { format!("{label} | {value}") }).collect()
 }
 
 fn titled(scene: &mut Scene<'_>, card: &str) -> (String, String) {

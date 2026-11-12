@@ -515,8 +515,8 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists) -> Refres
     Ok(Read { systems, catalog, rows, lists, esde_settings, esde, esde_state })
 }
 
-/// A cover's shape where the systems table gives none: 3 wide by 4 tall.
-pub const COVER_SHAPE: f64 = 0.75;
+/// A cover's shape where the systems table gives none: the kit's, 3 wide by 4 tall.
+pub use emusen_kit_core::page::COVER_SHAPE;
 
 /// A console's cover shape as a theme draws it, width over height: the systems table's `cover_aspect` (height over width)
 /// turned, or `COVER_SHAPE` where it gives none. The one place the turn is made (EmuSen_Qt.md §3.4.2).

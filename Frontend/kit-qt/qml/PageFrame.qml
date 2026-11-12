@@ -11,7 +11,7 @@ Kit.Frame {
     property bool clipPlaying: false
     property bool clipMuted: true
     property url cover
-    // The cover's width per unit of its height: 0.75 for a 3:4 box.
+    // The cover's width per unit of its height; until a host gives one, kit-core's COVER_SHAPE, held equal by tests/cover_shape.rs.
     property real coverAspect: 0.75
     property string coverName
     property string title

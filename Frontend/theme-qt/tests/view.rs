@@ -116,6 +116,10 @@ fn qt_3_2_the_library_s_lists_over_the_real_clients() {
         assert!((shape - 0.6993).abs() < 1e-4, "the NES cover 0.6993 wide to 1 tall, the table's 1.43 turned: {shape}");
         assert_eq!((&g[6], text(&g[16])), (&Cell::Flag(false), ""), "never played, so no words for it");
     }
+    // A game whose console the systems table lacks is drawn 3 wide by 4 tall, as any cover with no shape; it was 0, which
+    // the reference look's rows drew square and Horizon's games drew with no width.
+    let stray = emusen_qt_models::library::GameRow { system: "no-such-console".into(), title: "Stray".into(), ..Default::default() };
+    assert_eq!(view::games(v, &[stray], 0)[0][3], Cell::Number(0.75), "an unknown console's cover is 3:4");
     assert!(view::games_of(v, "favourites", 0).is_empty() && view::games_of(v, "recent", 0).is_empty());
     assert!(view::games_of(v, "no-such-console", 0).is_empty());
     assert_eq!(view::search(v, "SYNTH", 0).len(), 1, "a search in any case");

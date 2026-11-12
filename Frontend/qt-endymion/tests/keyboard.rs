@@ -65,6 +65,10 @@ fn qt_7_7_h6_a_consoles_key_is_held_for_the_game_and_a_hotkey_names_its_action()
     game.set_owned(false);
     game.set_owned(true);
     assert_eq!(tick(&pads, &mut reading, &game, &mut game_reading).unwrap().keyboard, 0, "a key under a menu is not the game's");
+    // Its letting go went to the menu: the game is not left waiting for it, and hears the key pressed afresh.
+    assert_eq!(game.key("N", true), KeyUse::Control);
+    assert_eq!(tick(&pads, &mut reading, &game, &mut game_reading).unwrap().keyboard, start, "the key pressed again after the menu");
+    game.key("N", false);
 
     // Endymion's hotkeys by their keys; a key bound to nothing is nothing.
     let hotkeys = p.bindings_defaults(files::HOTKEYS).unwrap();

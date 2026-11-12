@@ -152,6 +152,13 @@ fn qt_7_7_settings_opens_from_home_steps_saves_and_holds_its_states() {
     wait_for(&mut scene, "screens", "shown", "Settings", 2000);
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Home", 2000);
+    // What Settings saved reaches the library's ES-DE settings once Settings closes: the media viewer plays at the new Volume.
+    let mut waited = 0;
+    while !scene.property("library", "esdeSettings").contains("\"volume\":0.95") {
+        assert!(waited < 5000, "the ES-DE view's settings carry the Volume saved: {}", scene.property("library", "esdeSettings"));
+        scene.wait(50);
+        waited += 50;
+    }
     scene.assert_quiet();
     assert!(report.is_empty(), "{}", report.join("\n"));
 }

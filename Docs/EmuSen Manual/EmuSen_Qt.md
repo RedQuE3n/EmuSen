@@ -2236,7 +2236,7 @@ Razor 4 to 2). Atelier and Analogue 3D Menu warn less (6,795 to 6,585 and 2,575 
 unsupported are the video family's (`video.delay` in 55 themes, `pillarboxes` 49), then `carousel.imageInterpolation`
 (20) and `image.stationary` (18), the order the painter's design ranks the families in.
 
-**Proof.** 14 tests in `tests/frame.rs` (the mapping and its accepted pairs through `check`, the marks in their box,
+**Proof.** 14 tests in `tests/frame.rs` (the mapping and its pairs counted through `check`, the marks in their box,
 the carousel at rest and mid-step, a wheel and a reflecting row, the text list's window and marquee through a
 measurement, a `maxSize` picture and a text sized by its words, the help's words, buttons and icons under the swap,
 badges, status and rating, the overlays through a pan, the quick-scroll letters, the clock's wake); the crate's 157
@@ -3701,15 +3701,19 @@ the painter is held to ES-DE 3.4.1, not to the C# painter (R-20261111-77).
 4. *The row and the icon* (`components/HelpComponent.cpp`, `applyTheme` and `updateGrid`): the row is 1.25 × that
    letter height, taken at the size before `entryRelativeScale` (held to 0.2–3 by the loader), unrounded. Below a scale of 1 the
    labels are drawn at size × scale and the icon is the row; at 1 or above the labels keep the size and the icon is
-   the row ÷ scale. `help::row_height`, `help::icon_box`, `help::label_px`.
+   the row ÷ scale. The labels' size × scale is a font made anew, so it too is raised to 3 px where it falls below
+   (`Font::Font`). `help::row_height`, `help::icon_box`, `help::label_px`.
 5. *The spacings* (`HelpComponent.cpp`, `applyTheme`): `entrySpacing` and `iconTextSpacing` clamped to 0–0.04, defaults
    0.00833 and 0.00416, × the screen's width, unrounded. The loader holds the shares and gives the defaults
    (`catalog.tsv`, the one owner of each range); `scene::help::spacing_px` multiplies. A seeded fault that took the clamp
    out of the scene was not caught on 2026-11-11 because the loader had already clamped: the clamp is the loader's alone.
+   The media viewer's help, which no theme styles, takes the same defaults from `catalog.tsv` through
+   `scene::help::default_spacing_px`, not figures of its own.
 6. *The grid's width* (`HelpComponent.cpp`, `updateGrid`): the sum over the entries of icon + label + `iconTextSpacing`
    + `entrySpacing`, the spacing after the last entry included; each label's width is already whole (each glyph's
    advance rounded, §4.9). Each part's place is the sum of those before it (`components/ComponentGrid.cpp`,
-   `getColWidth`, `updateCellComponent`). `help::places`; `HelpElement` reports this width and the row as its measure.
+   `getColWidth`, `updateCellComponent`), summed in f32. `help::places`; `HelpElement` reports this width and the row
+   as its measure.
 7. *The place* (`HelpComponent.cpp`, `updateGrid`; `GuiComponent.cpp`, `getTransform`): pos × the screen (ES-DE's
    default (0.012, 0.9515) where the theme sets none), x moved by `entrySpacing` × origin.x; the drawn top left is
    round(that place) + round(−origin × the grid's size), two roundings. Each part is drawn at round(top left + its
@@ -3849,6 +3853,10 @@ the scanlines off in each so that only the setting differs.
   (decided 2026-11-11 by the tester, R-20261111-100): `GamePageModel.clipVolume`, read by `esde_shelves::volume_of`, the
   one reading of the key, onto `PageFrame.clipVolume`, the clip no longer muted; held by qt-app's `game_page` test,
   which reads the page player's `heard` and `level` at a Volume of 0.35.
+  *Found 2026-11-11 and fixed:* the settings reached `esdeSettings` only when the library was read again, and nothing
+  read it after Settings saved, so a Volume changed in Settings did not reach the viewer until the next start (measured:
+  `volume` 1.0 after Sound ▸ Volume was stepped to 0.95 and Settings closed). `SettingsModel` now signals `saved`, and
+  `Main.qml` reads the library again as Settings closes after a save; qt-app's `settings` test holds it.
 
 - *The fade-in* (decided 2026-11-11 by the tester, R-20261111-101): the video fades in over 600 ms once its first frame
   shows, as ES-DE 3.4.1's does (`MEDIA_VIEWER_FADE_IN_TIME`, read in `VideoComponent::update`,

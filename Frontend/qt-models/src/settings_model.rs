@@ -127,6 +127,10 @@ pub mod qobject {
         #[qsignal]
         fn left(self: Pin<&mut SettingsModel>);
 
+        /// A value saved through Galaxia: what the library reads from the settings may have changed.
+        #[qsignal]
+        fn saved(self: Pin<&mut SettingsModel>);
+
         /// LB (-1) or RB (+1) on a console's page: the console before or after it; false elsewhere.
         #[qinvokable]
         fn shoulder(self: Pin<&mut SettingsModel>, by: i32) -> bool;
@@ -409,6 +413,9 @@ impl qobject::SettingsModel {
             Outcome::Nothing => {}
             Outcome::Saved(model, document) => {
                 let saved = ClientSettings::open(&self.platform_library.to_string()).and_then(|s| s.save(model, &document));
+                if saved.is_ok() {
+                    self.as_mut().saved();
+                }
                 self.as_mut().said(saved.err().unwrap_or_default());
                 self.as_mut().applied();
                 self.shown(false);

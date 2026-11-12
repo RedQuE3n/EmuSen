@@ -343,6 +343,11 @@ fn held(c: &Case) -> bool {
     c.at.is_some() && c.moves.is_some()
 }
 
+// The view's own clock since the press, which starts from 0 as the scene starts moving (View.qml's clockMs).
+fn since_press(scene: &mut Scene<'_>) -> f64 {
+    scene.property("view", "tickedMs").parse().unwrap_or(f64::NAN)
+}
+
 /// One rendering of a case: the view emptied so the next install starts afresh, the theme and the rotated library
 /// installed, the case's move made, and the picture left on the window at the case's time, a timed case's clock still held.
 fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &Assets) {
@@ -362,6 +367,7 @@ fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &A
     until(scene, "the case's theme installed", |s| s.property("esdeModel", "themed") == "true");
     // A timed move runs on the held clock, so its picture is the scene at `at` whatever the machine's load (EmuSen_Qt.md §4.8.5).
     if held(c) {
+        until(scene, "the case at rest before its move", |s| s.property("esdeModel", "moving") == "false");
         scene.hold_clock(Some(0));
     }
     let started = std::time::Instant::now();
@@ -372,7 +378,17 @@ fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &A
         _ => {}
     }
     match c.at {
-        Some(at) if held(c) => scene.hold_clock(Some(i64::from(at))),
+        Some(at) if held(c) => {
+            // Qt starts the view's clock a few ms off the held one, so the last step is what the view still lacks.
+            // A scene that has come to rest reads the same at any later time.
+            let near = i64::from(at) - 32;
+            scene.hold_clock(Some(near));
+            let moving = |s: &mut Scene<'_>| s.property("esdeModel", "moving") == "true";
+            let lacking = if moving(scene) { (f64::from(at) - since_press(scene)).round() as i64 } else { 32 };
+            scene.hold_clock(Some(near + lacking));
+            let t = since_press(scene);
+            assert!(!moving(scene) || (t - f64::from(at)).abs() < 0.5, "{c} = {value}: the scene read at {t} ms after the press, not {at}");
+        }
         Some(at) => {
             let left = at - started.elapsed().as_millis() as i32;
             scene.wait(left.max(0));

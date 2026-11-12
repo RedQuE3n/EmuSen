@@ -2624,9 +2624,13 @@ no image crate is needed, the oracle library read as the three texts of §4.6).
   Each case is rendered twice through the bridge at 640 × 400 and the two grabs must differ; each case's two themes
   load without an error; every drawn pair has a case, and a case's pair is drawn or later. 347 cases, 254 s.
   **A timed move** (a time in `at` and a move: the item and row transitions, `scrollFadeIn`, `fastScrolling`) is pressed
-  and grabbed on the harness's held clock (EmuSen_Kit.md §7.36): the clock is held at 0 before the press and moved to
-  `at` 16 ms at a time, so the picture is the scene at `at` whatever the machine's load, and the test runs Qt's basic
-  render loop, under which a held clock is taken. The eleven timed cases without a move (the text list's and the text
+  and grabbed on the harness's held clock (EmuSen_Kit.md §7.36): the scene at rest, the clock is held at 0 before the
+  press and moved 16 ms at a time to 32 ms short of `at`; the last step is what the view's own clock (`tickedMs`, the
+  milliseconds it has ticked since the scene began to move) still lacks, and the grab is taken when it reads `at`
+  within half a millisecond, or once the scene is at rest again. Qt starts the view's clock animation a few
+  milliseconds off the held clock (102 against 100, measured 2026-11-12), and with the held clock alone a fault that
+  made `instant` glide (rows or grid items) passed, the two glides differing by those milliseconds. The test runs Qt's
+  basic render loop, under which a held clock is taken. The eleven timed cases without a move (the text list's and the text
   container's scrolling, the animation's speed, direction and count) still wait `at` ms on the wall clock: part of their
   time passes at rest, where the view's `Timer` of `nextChangeMs` ticks the scene, and a `Timer` is not held. Held,
   `text.containerResetDelay` painted the same pixels for 0.5 and 10 (measured 2026-11-12): the reset after the

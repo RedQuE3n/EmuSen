@@ -63,6 +63,7 @@ void make_current(QQuickItem* item)
 namespace {
 
 const char* const POINTER_WATCH = "EmuSen.Kit pointer watch";
+const char* const WINDOW_WATCHER = "EmuSen.Kit window watcher";
 
 // The window's one pointer fact: a real move, press or touch of the pointer is being delivered to it, until the event loop next turns (EmuSen_Kit.md §7.108).
 class PointerWatch : public QObject {
@@ -112,6 +113,17 @@ void watch_windows()
         if (qobject_cast<QQuickWindow*>(window) != nullptr) {
             start_watch(window);
         }
+    }
+    // A window made later is watched as it first takes the focus, which Qt gives a window as it is shown (EmuSen_Kit.md §7.108).
+    auto* app = qobject_cast<QGuiApplication*>(QCoreApplication::instance());
+    if (app != nullptr && app->findChild<QObject*>(QString::fromLatin1(WINDOW_WATCHER), Qt::FindDirectChildrenOnly) == nullptr) {
+        auto* watcher = new QObject(app);
+        watcher->setObjectName(QString::fromLatin1(WINDOW_WATCHER));
+        QObject::connect(app, &QGuiApplication::focusWindowChanged, watcher, [](QWindow* window) {
+            if (qobject_cast<QQuickWindow*>(window) != nullptr) {
+                start_watch(window);
+            }
+        });
     }
 }
 

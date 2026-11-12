@@ -70,11 +70,13 @@ Window {
         objectName: "elsewhere"
         property bool shown: false
         readonly property bool awayFocused: item ? item.awayFocused : false
+        readonly property bool firstFocused: item ? item.firstFocused : false
         readonly property Kit.FrameController walk: controller
         active: false
         sourceComponent: Window {
             objectName: "otherWindow"
             readonly property bool awayFocused: away.focus
+            readonly property bool firstFocused: first.focus
             visible: true
             width: 300
             height: 200
@@ -83,6 +85,13 @@ Window {
                 width: 200
                 height: 200
                 visible: elsewhere.shown
+                controller: elsewhere.walk
+            }
+            Kit.Walkable {
+                id: first
+                x: 220
+                width: 80
+                height: 200
                 controller: elsewhere.walk
             }
         }

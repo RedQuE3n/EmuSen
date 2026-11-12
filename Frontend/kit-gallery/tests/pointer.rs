@@ -41,10 +41,13 @@ fn kit_7_108_only_the_pointers_own_move_focuses() {
     scene.hover(104.0, 124.0);
     scene.wait(50);
     assert_eq!(scene.property("near", "activeFocus"), "true", "the pointer moved onto a walkable focuses it");
-    // A window no controller watched, made after them all, cannot tell a move from a frame's hover: a walkable shown in
-    // it under the resting pointer takes nothing, and the pointer's move onto it, once watched, focuses it.
+    // A window made after every controller is watched from its making: the pointer's first move in it, onto a walkable,
+    // focuses it; a walkable shown in it under the resting pointer takes nothing, and the pointer's move onto it focuses it.
     assert!(scene.set_property("elsewhere", "active", "true"));
     scene.wait(100);
+    scene.hover_in("otherWindow", 260.0, 100.0);
+    scene.wait(50);
+    assert_eq!(scene.property("elsewhere", "firstFocused"), "true", "the pointer's first move in the window, onto a walkable, focuses it");
     scene.hover_in("otherWindow", 100.0, 100.0);
     scene.hover_in("otherWindow", 104.0, 104.0);
     assert!(scene.set_property("elsewhere", "shown", "true"));

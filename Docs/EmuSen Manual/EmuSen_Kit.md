@@ -3126,7 +3126,11 @@ just before the root took the focus. After it, it passed four times in four.
 `focus` now gives the focus only to an item that is enabled. `QQuickItem::isEnabled` is the effective state, so a
 disabled parent counts. A disabled walkable under the pointer leaves the focus where it is. Held by kit-gallery's
 `disabled` (`kit_7_107_*`: a card's row keeps the focus while the pointer comes to rest on a walkable in a disabled screen
-beside it) and on the GPU by qt-app's `console`.
+beside it) and by qt-app's `home_continue` on the software tier (the pointer moved onto Home's Continue, disabled while
+no game is suspended, leaves the focus on Home's first place; without the rule the focus leaves it for the item named `frame`).
+qt-app's `console` on the GPU held it before §7.108 and no longer does: since then the grid cell comes under a resting
+pointer, which focuses nothing whatever the cell's state, and the fault that drops the rule passed `console` on
+2026-11-11.
 
 A walkable that came under a resting pointer took the focus when the controller that owns it had not seen the pointer
 there before, since each frame's controller kept its own last pointer position. §7.108 makes the fact the window's.
@@ -3155,20 +3159,24 @@ moving. The kit's glue keeps a `PointerWatch` for each Qt Quick window, an event
 (`kit_glue.cpp`): it marks the window moving as a real pointer event reaches it and clears the mark when the event loop
 next turns, so the hovers delivered within that event see it and a frame's hovers later do not. `hoverAt` focuses only
 while its item's window is moving. Each `FrameController` starts the watch of every Qt Quick window that has none as it
-is made, before any hover in them. A window made after every controller has no watch until its first hover asks, and
-an unwatched window cannot tell a move from a frame's hover, so it answers no and starts the watch: its first hover takes
-nothing, and later moves focus. The player's first move in such a window, if it lands on a walkable, is that first
-hover, so the walkable takes nothing until the pointer leaves it and comes back; kit-gallery's `pointer` holds the
-return, not that first move. An application-wide event filter that started a window's watch at its first pointer event
-was tried on 2026-11-11 and not kept: Qt calls application filters only on the process's first thread, and the test
-harness runs Qt on another, so in kit-gallery's `pointer` the filter was never called and could not be held by a test.
-It answered yes until 2026-11-11, so the first walkable that came under a resting pointer in such a window took the
-focus. The watch is no static: it is found by its object name among the window's
+is made, before any hover in them, and the first one made also connects the glue to `QGuiApplication`'s
+`focusWindowChanged`, so that a window made later is watched as it first takes the focus. Qt gives a window the focus
+as it is shown; in kit-gallery's `pointer` (offscreen, 2026-11-11) a probe printed
+the focus going to `scene` and then to `otherWindow` as the second window opened, and the pointer's first move in that
+window, onto a walkable, focused it. Qt announces no window's making to code that did not make it: the window's own
+events (show, expose) reach only its own filters and the application's, and an application-wide event filter that
+started a window's watch at its first pointer event was tried on 2026-11-11 and not kept, since Qt calls application
+filters only on the process's first thread and the test harness runs Qt on another (in kit-gallery's `pointer` it was
+never called). So a window shown without taking the focus (one that refuses it, or a compositor that keeps the focus
+elsewhere) is still unwatched at its first hover; unwatched, it cannot tell a move from a frame's hover, so it answers no
+and starts the watch: its first hover takes nothing, and later moves focus. The connection's owner is a child object of
+the application found by its name, as the watch is, not a static. An unwatched window answered yes until 2026-11-11,
+so the first walkable that came under a resting pointer in it took the focus. The watch is no static: it is found by its object name among the window's
 children.
 
 The ES-DE view asks the same fact. Its carousel, grid and text list select the row under the pointer from their own
 `HoverHandler`s (EmuSen_Qt.md §4.8.5), and a row that came under a resting pointer, as a gamelist is made under it, was
-selected like a moved-onto one. `EsdeModel.hoverAt`, which the view's QML now calls in place of `hover(row)`, takes the row's item and selects only while
+selected like a moved-onto one. `EsdeModel.hoverAt`, which the view's QML now calls in place of `hover(row)` (deprecated in EmuSen.Esde 1.1, EmuSen_Qt.md §4.8.3), takes the row's item and selects only while
 `emusen_kit_qt::frame::pointer_moving` says that item's window is moving; a hover off every row is passed on as before.
 `EsdeModel` starts the watch of every window as it is made, as a `FrameController` does, through
 `frame::watch_windows`. The two are the kit's Rust functions over the glue, not copies of it; neither is in the QML
@@ -3193,15 +3201,17 @@ card's second row hovered, the pointer moved a little along it during a game and
 the grid with the game suspended focuses its first row, Down moving), and `esde` the Home card over the ES-DE theme after
 a game session under a resting pointer (Continue focused, Down and Up moving).
 
-kit-gallery's `pointer` also opens a second window after every controller, a walkable of the scene's controller in it,
-and moves the pointer there with qt-test's `Scene::hover_in`: the walkable shown under the resting pointer takes nothing,
-and the pointer's move off and onto it focuses it. esde-qt's `pointer`, offscreen: the pointer's move onto a gamelist's
+kit-gallery's `pointer` also opens a second window after every controller, two walkables of the scene's controller in
+it, and moves the pointer there with qt-test's `Scene::hover_in`: the pointer's first move in the window, onto one
+walkable, focuses it; the other, shown under the resting pointer, takes nothing, and the pointer's move off and onto it
+focuses it. esde-qt's `pointer`, offscreen: the pointer's move onto a gamelist's
 fourth row selects it; Down to the fifth; back to the systems and into the next one's gamelist, which opens on the
 fifth row and is made under the pointer at rest over its fourth: the fifth stays selected, and the pointer's move onto
 the sixth selects it.
 
 Seeded faults: `hoverAt` focusing on every hover (`pointer` fails at the late card); the watch never moving (`pointer`
-fails at the move onto a walkable); an unwatched window answering yes (fault 48, `pointer` fails at the second window);
+fails at the move onto a walkable); an unwatched window answering yes (fault 48, `pointer` fails at the second window); the window shown
+later not watched as it takes the focus (fault 54, `pointer` fails at the first move in the second window);
 the ES-DE view's hover not asking the fact (fault 47, esde-qt's `pointer` fails, the fourth row selected); and the rule 0efa4a08f had, each controller judging "moved" by the position it last
 saw (fault 44, measured on 2026-11-11: `cards` fails at the Home card, "focuses its first row, Tools, not Settings"; with
 that assert set aside, the Home check fails alone, "focuses Games, not place.1"); and the same rule against qt-app's

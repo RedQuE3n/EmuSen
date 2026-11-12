@@ -4972,7 +4972,7 @@ Return, Escape and the rest) stays the interface's, as Mistress's themed keys di
 | Pause / Resume, Frame Advance | §7.7.H6 | nothing | :328, :329 (`!LibraryView.IsVisible`) |
 | Screenshot | §7.7.H6 | the suspended game's picture; with none, nothing | :326, `TakeScreenshot` (MainWindow.Hud.cs:131-133) |
 | Fullscreen | §7.7.H6 | the window's full screen turned | :331 |
-| Exit to Library | §7.7.H6 | the suspended game played again, as Continue (`gameAsked`); with none, nothing | :325, `ToggleLibrary` :1150-1160 |
+| Exit to Library | §7.7.H6 | the suspended game played again, as Continue (`gameAsked`, answered by `Screens.resume`, the one owner a library's Continue calls too); with none, nothing | :325, `ToggleLibrary` :1150-1160 |
 | Big Picture | hidden | hidden | :332 |
 
 Over the Pause Card the game is paused under the card: Exit to Library goes to the library as Back to Library does,

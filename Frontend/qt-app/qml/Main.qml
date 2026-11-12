@@ -107,7 +107,7 @@ Window {
             found: games.count > 0
             themed: program.esdeLook
             onQuit: Qt.quit()
-            // The Home card's Continue: the suspended game resumes as its screen comes back.
+            // The suspended game resumes as its screen comes back: the Home card's Continue, or resume() (a library's Continue, Exit to Library over the library).
             onResumed: player.session.resume()
             // Start Console's row: the console starts with nothing in it, and its screen follows the session's start.
             onConsoleStarted: (key) => player.session.openConsole(key)
@@ -247,10 +247,7 @@ Window {
             consolesWanted: !program.esdeLook && !(program.themeHost?.consoles ?? false)
             gamesWanted: !program.esdeLook && !(program.themeHost?.games ?? false)
             onPlayed: (path) => program.play(path)
-            onResumed: {
-                player.session.resume()
-                screens.play()
-            }
+            onResumed: screens.resume()
             onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
             onFocused: (game) => {
                 program.inHand = game
@@ -288,10 +285,7 @@ Window {
                 splashShown: program.splashShown
                 splashLayer: splashLayer
                 onPlayed: (path) => program.play(path)
-                onResumed: {
-                    player.session.resume()
-                    screens.play()
-                }
+                onResumed: screens.resume()
                 onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
                 onFocused: (game) => {
                     program.inHand = game
@@ -769,10 +763,7 @@ Window {
             target: player.session
             function onNoticeChanged() { program.said(player.session.notice, player.session.noticeAttention, true) }
             // Exit to Library's key over the library: the suspended game again, as Continue plays it.
-            function onGameAsked() {
-                screens.play()
-                player.session.resume()
-            }
+            function onGameAsked() { screens.resume() }
         }
         // What failed, from every model that can fail, said where the player is: a game that does not open (over the game),
         // the library unread, a setting, a game's page's change, or Cores; a cleared problem raises nothing (EmuSen_Qt.md §7.9).

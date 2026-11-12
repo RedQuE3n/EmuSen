@@ -277,6 +277,9 @@ pub mod qobject {
         /// A game chosen, or Continue: the game's screen.
         #[qinvokable]
         fn play(self: Pin<&mut Screens>);
+        /// The suspended game shown again and resumed: a library's Continue, or Exit to Library's key over the library.
+        #[qinvokable]
+        fn resume(self: Pin<&mut Screens>);
         /// The menu chord over the game: the Pause Card.
         #[qinvokable]
         fn menu(self: Pin<&mut Screens>);
@@ -302,7 +305,7 @@ pub mod qobject {
         /// Quit EmuSen answered Yes: the program ends.
         #[qsignal]
         fn quit(self: Pin<&mut Screens>);
-        /// The Home card's Continue: the suspended game resumes as its screen is shown.
+        /// The Home card's Continue or resume(): the suspended game resumes as its screen is shown.
         #[qsignal]
         fn resumed(self: Pin<&mut Screens>);
         /// Start Console's row chosen: the console starts with nothing in it, by its key.
@@ -435,6 +438,11 @@ impl qobject::Screens {
     }
 
     pub fn play(self: Pin<&mut Self>) {
+        self.ask(Ask::Play);
+    }
+
+    pub fn resume(mut self: Pin<&mut Self>) {
+        self.as_mut().resumed();
         self.ask(Ask::Play);
     }
 

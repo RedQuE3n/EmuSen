@@ -600,7 +600,7 @@ fn qt_3_4_2_a_full_name_far_longer_than_any_wraps_or_shrinks_short_of_every_coun
 fn qt_3_4_2_the_full_name_meets_no_count_over_120_consoles() {
     let dir = consoles_alone("detail-120");
     let ran = Ran::judged(Command::new(PROGRAM).arg(&dir));
-    assert_eq!(ran.held("Consoles").0, 10, "{}", ran.err);
+    assert_eq!(ran.held("Consoles").0, 15, "the default state: Choose a console at five sizes in both variants, and again over 120 consoles at five: {}", ran.err);
     let named: Vec<&str> = ran.out.lines().filter(|l| l.contains("consoleDetailName")).collect();
     assert!(named.is_empty(), "the full name's box over a count in the default state (R-20261112-2):\n{}", named.join("\n"));
     let _ = std::fs::remove_dir_all(&dir);

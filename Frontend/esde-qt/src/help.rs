@@ -105,6 +105,19 @@ mod tests {
         assert_eq!(pens(&copy(file, 1.04), f64::from(row as f32 / 1.04)), [987.0, 1055.0, 1115.0, 1215.0]);
     }
 
+    // The row's height against figures measured on ES-DE's captures, not from ROW_OVER_REFERENCE: Artflix's bars, a box of
+    // 17.5 and 26.25 px at 20 and 30 px from disc to disc, and rost's interval at 20 px, 17.17-17.52 (EmuSen_Qt.md §4.12.4).
+    #[test]
+    fn the_row_s_height_is_what_es_de_s_captures_show() {
+        let home = std::path::PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/emusen/bigpicture/corpus/whole");
+        let exo = home.join("artflix-revisited-es-de/_inc/fonts/Exo2-RegularCondensed.otf").to_string_lossy().into_owned();
+        let at = |file: &str, px: f64| row_height(&Help { px, ..copy(file.to_owned(), 1.0) });
+        assert_eq!(at(&exo, 20.0), Some(17.5), "Artflix at 1280 x 800");
+        assert_eq!(at(&exo, 30.0), Some(26.25), "Artflix at 1920 x 1200");
+        let rost = at(&rost().expect("CarAlt's rost in the theme corpus"), 20.0).unwrap();
+        assert!((17.17..=17.52).contains(&rost), "rost at 20 px: {rost}");
+    }
+
     // The grid's width is every entry's parts with the spacing after the last, unrounded (HelpComponent.cpp updateGrid).
     #[test]
     fn the_grid_s_width_keeps_its_fraction_and_its_trailing_spacing() {

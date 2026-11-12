@@ -29,9 +29,6 @@ fn until(scene: &mut Scene<'_>, what: &str, mut done: impl FnMut(&mut Scene<'_>)
     panic!("{what} within 5 s");
 }
 
-/// SDL's Guide button.
-const GUIDE: i32 = 5;
-
 fn running(pad: &VirtualPad) -> bool {
     pad.rumble() != (0, 0)
 }
@@ -96,11 +93,11 @@ fn qt_7_7_h3_the_game_s_motor_runs_the_pad_and_stops_for_the_card_and_the_switch
     until(&mut scene, "the motor on the pad", |_| running(&pad));
 
     // The Pause Card takes the pad: the motor stops; back in the game, it runs again.
-    // The router's clock on the wall clock, as a real pad needs it; Guide opens the card, as acceptance.rs's chord does.
+    // The router's clock on the wall clock, as a real pad needs it; with the Guide chords on (Auto, read from the
+    // settings), Guide alone opens the card as it is let go, as console.rs's pause does.
     scene.run_pad_clock();
-    sdl.press(&pad, GUIDE, true);
+    common::console::guide_alone(&mut scene, &sdl, &pad);
     until(&mut scene, "the card open", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Pause");
-    sdl.press(&pad, GUIDE, false);
     until(&mut scene, "the motor stopped under the card", |_| !running(&pad));
     // B resumes the game once the card has slid into place.
     until(&mut scene, "the card in place", |s| s.property("cardCanvas", "slide") == "0");

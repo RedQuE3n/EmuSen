@@ -132,13 +132,6 @@ fn qt_7_7_h6_the_keyboard_plays_the_game_and_each_hotkey_acts() {
     tap(&mut scene, F9);
     said(&mut scene, "Screenshot saved");
 
-    // F11 turns the window's full screen on and off.
-    let windowed = scene.property("program", "visibility");
-    tap(&mut scene, F11);
-    until(&mut scene, 5, "F11 full screen", |s| s.property("program", "visibility") == FULL_SCREEN);
-    tap(&mut scene, F11);
-    until(&mut scene, 5, "F11 again windowed", |s| s.property("program", "visibility") == windowed);
-
     // Escape: the game suspended to the library, as Back to Library leaves it.
     tap(&mut scene, ESCAPE);
     until(&mut scene, 5, "Escape exiting to the library", |s| s.property("screens", "shown") == "Home" && s.property("session", "paused") == "true");
@@ -149,6 +142,14 @@ fn qt_7_7_h6_the_keyboard_plays_the_game_and_each_hotkey_acts() {
     until(&mut scene, 5, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
     choose_row(&mut scene, "Continue");
     console_owns_the_pad(&mut scene, &sdl, &pad, "PlayStation");
+
+    // F11 turns the window's full screen on and off.
+    let windowed = scene.property("program", "visibility");
+    tap(&mut scene, F11);
+    until(&mut scene, 5, &format!("F11 full screen (visibility {windowed} before)"), |s| s.property("program", "visibility") == FULL_SCREEN);
+    tap(&mut scene, F11);
+    until(&mut scene, 5, "F11 again windowed", |s| s.property("program", "visibility") == windowed);
+
     quit_game(&mut scene, &sdl, &pad, "PlayStation (no disc)", "Home");
     sdl.detach(pad);
     assert!(scene.set_property("program", "visible", "false"));

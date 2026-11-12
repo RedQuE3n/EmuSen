@@ -3823,6 +3823,27 @@ pkg-config alone does not know it the build says so as a warning (`build/freetyp
 and the lint `qt_4_8_the_painter_names_no_client_and_no_runtime` passes unchanged. `hinted.rs` declares the five
 FreeType calls it makes and reads the face and glyph slot through `#[repr(C)]` prefixes of `freetype.h`'s records.
 
+#### 4.12.5 Two rows corrected to the capture **[M 2026-11-12]**
+
+Decided 2026-11-12 by the tester: Art Book Next's clock row at 1280 × 800 is corrected to what the capture shows, and a
+real difference that then shows stays failing (R-20261112-4); the other fifteen rows re-checked that day stand, and
+Artflix's system help row at 1280 × 800 takes its width to the end of the last letter, as its gamelist twin does
+(R-20261112-5). Measured on 2026-11-12 on the committed captures (their hashes checked), with PIL and FreeType outside
+the repository (`~/.cache/emusen/tmp/x15/`).
+
+| Row | Was | Now | Derivation |
+|---|---|---|---|
+| Art Book Next, system, 1280 × 800, `clock_clock` | 38.12, 38.39, 61.22 × 22.42 | 38.12, 38.33, 60.21 × 22.89 | the background's edges, each the coverage of its boundary pixel on the green channel ((P − B) ÷ (F − B), B 2 px outside, F 2 px inside): left 26.46 (column 26 at 0.50 and 0.59 on rows 45 and 50, the other rows meeting the carousel's stripe), right 110.00 (column 109 the fill (20,21,16), column 110 the backdrop (67,83,3), rows 40–60, where 111.0 had been written), top 25.00, bottom 74.55 (row 74 at 0.55, columns 50–90, where 74.15 had been written); less the paddings 0.00911458 × 1280 = 11.667 and 0.01666667 × 800 = 13.333 |
+| Artflix, system, 1280 × 800, `helpsystem_help` | w 380.20 | w 379.10 | x kept; the right edge 829.00: CHOOSE's E in Exo 2 Regular Condensed at 20 px, its bitmap (ink 1–8 px from the pen) matched to the capture's columns 821–828 in rows 770–783, pen 820, plus its advance rounded per glyph (9.125 → 9); the old width mirrored the left edge about x 640 |
+
+The Artflix rows at 1920 × 1200 keep the mirrored edge; the capture puts the last letter's end at 832.00 units (system,
+E's pen 1234 + 14 px) and 1014.67 (gamelist, M's pen 1501 + 21 px), against the rows' 832.34 and 1015.00, and each
+row's note says so. CarAlt's four help rows take their right edge from the theme's `pos` with origin 1 (1273.6), as
+their notes say; no figure of theirs changed.
+
+With the two rows as measured, esde-qt's `oracle` passes (graphics-card gate of 2026-11-12, 22 tests, 0 failed): the
+painter's clock and Artflix's system strip lie within the oracle's two units of ES-DE's boxes, so no difference shows.
+
 ### 4.13 The media viewer's PDF manual **[M 2026-11-09]**
 
 **Approved 2026-11-09 by the tester:** a game's PDF manual in the media viewer, through Qt PDF. The evidence is the user

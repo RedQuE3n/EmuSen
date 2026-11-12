@@ -336,7 +336,7 @@ pub fn corpus() -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/emusen/bigpicture/corpus/whole")
 }
 
-/// The folder this checkout's pictures for a human look are written under, named by the checkout so two worktrees'
+/// The folder this checkout's pictures for a human look are written under, named by the checkout so two checkouts'
 /// runs never write one folder (Testing/esde-oracle/README.md).
 pub fn compare_root() -> PathBuf {
     let checkout = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();

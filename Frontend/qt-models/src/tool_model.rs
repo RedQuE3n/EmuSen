@@ -51,6 +51,8 @@ pub mod qobject {
         #[qproperty(QString, search_text, cxx_name = "searchText", READ, NOTIFY)]
         /// The search box takes words from the docked keyboard.
         #[qproperty(bool, searching, READ, NOTIFY)]
+        /// While searching, the keys hold the focus; the shoulders give it to the rows and back.
+        #[qproperty(bool, search_keys, cxx_name = "searchKeys", READ, NOTIFY)]
         #[qproperty(QString, search_hint, cxx_name = "searchHint", READ, CONSTANT)]
         #[qproperty(QString, apply_label, cxx_name = "applyLabel", READ, CONSTANT)]
         #[qproperty(QString, pane_title, cxx_name = "paneTitle", READ, NOTIFY)]
@@ -99,6 +101,10 @@ pub mod qobject {
         /// The screen's declared action by its key: X's page, Select's List card, Start's plan.
         #[qinvokable]
         fn act(self: Pin<&mut ToolModel>, key: &QString);
+        /// While searching, the focus went to the keys (true) or the rows (false) by other means than the shoulders: the pointer.
+        #[qinvokable]
+        #[cxx_name = "keysFocused"]
+        fn keys_focused(self: Pin<&mut ToolModel>, keys: bool);
         /// The docked keyboard closed, its words kept.
         #[qinvokable]
         #[cxx_name = "endSearch"]
@@ -165,6 +171,7 @@ pub struct ToolModelRust {
     current: i32,
     search_text: QString,
     searching: bool,
+    search_keys: bool,
     search_hint: QString,
     apply_label: QString,
     pane_title: QString,
@@ -215,6 +222,7 @@ impl Default for ToolModelRust {
             current: -1,
             search_text: QString::default(),
             searching: false,
+            search_keys: false,
             search_hint: QString::from(crate::tools::SEARCH_HINT),
             apply_label: QString::from(crate::tools::APPLY_LABEL),
             pane_title: QString::default(),
@@ -227,7 +235,7 @@ impl Default for ToolModelRust {
             meter: 0.0,
             meter_words: QString::default(),
             help: QString::from("[]"),
-            action_lines: QString::from(Tool::<Box<dyn Source>>::action_lines().as_str()),
+            action_lines: QString::default(),
             card_open: false,
             card_title: QString::default(),
             card_breadcrumb: QString::default(),
@@ -364,8 +372,18 @@ impl qobject::ToolModel {
                 crate::tools::MORE => t.more(),
                 crate::tools::LIST => t.list(),
                 crate::tools::APPLY => t.apply(),
-                _ => {}
+                other => {
+                    t.shoulder(other);
+                }
             }
+            None
+        });
+    }
+
+    /// At once, not after the event: the focus has already moved, and a later press must find the state it left.
+    pub fn keys_focused(self: Pin<&mut Self>, keys: bool) {
+        self.change(move |t| {
+            t.focus_keys(keys);
             None
         });
     }
@@ -465,6 +483,8 @@ impl qobject::ToolModel {
         let current = tool.focus().map_or(-1, |at| at as i32);
         let search_text = QString::from(tool.search());
         let searching = tool.searching();
+        let search_keys = tool.search_keys();
+        let action_lines = QString::from(tool.action_lines().as_str());
         let pane = tool.pane();
         let sentences = text(&Value::Array(pane.sentences.iter().map(|s| json!({ "words": s.words, "tone": s.tone as i32 })).collect()));
         let bar = tool.bar();
@@ -508,6 +528,8 @@ impl qobject::ToolModel {
         let typed = self.searching && !searching;
         let opened = !self.searching && searching;
         put!(self, searching, searching, searching_changed);
+        put!(self, search_keys, search_keys, search_keys_changed);
+        put!(self, action_lines, action_lines, action_lines_changed);
         put!(self, pane_title, QString::from(pane.title.as_str()), pane_title_changed);
         put!(self, pane_caption, QString::from(pane.caption.as_str()), pane_caption_changed);
         put!(self, sentences, sentences, sentences_changed);
@@ -526,7 +548,8 @@ impl qobject::ToolModel {
         put!(self, card_pane_muted, pane_muted, card_pane_muted_changed);
         let closed = self.card_open && card.is_none();
         put!(self, card_open, card.is_some(), card_open_changed);
-        if closed || typed {
+        // A card closed on the search's opening leaves the focus to the keys.
+        if (closed && !search_keys) || typed {
             self.as_mut().list_focused();
         }
         if opened {

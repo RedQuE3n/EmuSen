@@ -378,7 +378,7 @@ impl Default for GamePageModelRust {
             hero: QString::default(),
             clip: QString::default(),
             clip_volume: 1.0,
-            cover_aspect: 0.75,
+            cover_aspect: crate::library::COVER_SHAPE,
             cover_name: QString::default(),
             sections: list(page.sections().into_iter()),
             section: 0,

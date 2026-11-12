@@ -38,7 +38,7 @@ pub fn palette_reach(root: &Item, declared: &[Colour]) -> Vec<Fault> {
             return;
         }
         for colour in &item.paints {
-            if !declared.iter().any(|d| (d.r, d.g, d.b) == (colour.r, colour.g, colour.b) && (d.a == colour.a || d.a == 255)) {
+            if !declared_colour(colour, declared) {
                 faults.push(Fault::OutsidePalette { item: item.id, colour: *colour });
             }
         }
@@ -53,34 +53,45 @@ pub const LARGE_TEXT: f64 = 24.0;
 pub const LARGE_BOLD_TEXT: f64 = 18.66;
 
 /// Contrast (WCAG 2.1, 1.4.3): words drawn over what is behind them reach 4.5:1, or 3:1 for large type, over all but the spare share;
-/// words crossing a scroller's faded edge are fading out there and are not held to it.
+/// words crossing a scroller's faded edge are fading out there, and a disabled control's words are inactive, so neither is
+/// held to it here: `exempted` names each that falls under it.
 pub fn contrast(root: &Item) -> Vec<Fault> {
     let mut faults = Vec::new();
     root.visit(&mut |item, ancestors| {
         let Some(words) = &item.legibility else { return };
-        if super::fit::fading_out(item, ancestors) {
+        if words.disabled || super::fit::fading_out(item, ancestors) {
             return;
         }
-        if words.behind.is_empty() || words.ink.a == 0 {
-            return;
-        }
-        let mut ratios: Vec<f64> = words
-            .behind
-            .iter()
-            .map(|back| {
-                let back = Colour::rgb(back.r, back.g, back.b);
-                words.ink.over(back).contrast(back)
-            })
-            .collect();
-        ratios.sort_by(f64::total_cmp);
+        let Some((ratios, needed)) = ratios(words) else { return };
         let ratio = ratios[((ratios.len() as f64) * CONTRAST_SPARE).floor() as usize];
-        let large = words.size >= LARGE_TEXT || (words.bold && words.size >= LARGE_BOLD_TEXT);
-        let needed = if large { 3.0 } else { 4.5 };
         if ratio < needed {
             faults.push(Fault::LowContrast { item: item.id, ratio, needed });
         }
     });
     faults
+}
+
+/// The words' contrast over each sample behind them, least first, and the ratio they need; none with nothing to judge.
+pub(crate) fn ratios(words: &super::tree::Legibility) -> Option<(Vec<f64>, f64)> {
+    if words.behind.is_empty() || words.ink.a == 0 {
+        return None;
+    }
+    let mut ratios: Vec<f64> = words
+        .behind
+        .iter()
+        .map(|back| {
+            let back = Colour::rgb(back.r, back.g, back.b);
+            words.ink.over(back).contrast(back)
+        })
+        .collect();
+    ratios.sort_by(f64::total_cmp);
+    let large = words.size >= LARGE_TEXT || (words.bold && words.size >= LARGE_BOLD_TEXT);
+    Some((ratios, if large { 3.0 } else { 4.5 }))
+}
+
+/// Whether a colour is one the state declares, at any alpha.
+pub(crate) fn declared_colour(colour: &Colour, declared: &[Colour]) -> bool {
+    declared.iter().any(|d| (d.r, d.g, d.b) == (colour.r, colour.g, colour.b) && (d.a == colour.a || d.a == 255))
 }
 
 /// The least change between two states of one element at the same pixels, WCAG 2.2 2.4.13's ratio between a focused and an

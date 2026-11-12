@@ -65,12 +65,16 @@ impl Column {
         self.colours[ColourToken::ALL.iter().position(|t| *t == token).unwrap_or(0)]
     }
 
-    /// The column with a theme's colours in place of the kit's, for the variant it was computed for.
-    pub fn overridden(mut self, overrides: &[(ColourToken, Colour)]) -> Column {
+    /// The column with a theme's colours in place of the kit's, for the variant it was computed for: the palette's, and the
+    /// raised shadow's colour where the theme sets its own (EmuSen_Kit.md §7.55).
+    pub fn overridden(mut self, overrides: &[(ColourToken, Colour)], shadow: Option<Colour>) -> Column {
         for (token, colour) in overrides {
             if let Some(i) = ColourToken::ALL.iter().position(|t| t == token) {
                 self.colours[i] = *colour;
             }
+        }
+        if let Some(colour) = shadow {
+            self.shadow.colour = colour;
         }
         self
     }

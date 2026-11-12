@@ -1,3 +1,4 @@
+use super::accepted::Class;
 use super::tree::{Item, Kind, Rect};
 use super::{Fault, Side};
 
@@ -13,9 +14,18 @@ pub const CAPS_SLACK: f64 = 0.05 * DESKTOP_CAPS;
 /// A scrolling area must show two rows of 42 design pixels.
 pub const TWO_ROWS: f64 = 84.0;
 
-/// Words the capitals' floor does not hold, each by its item's name with the reason (EmuSen_Kit.md §7.10).
-pub const SMALL_TEXT_EXCEPTIONS: [(&str, &str); 1] =
-    [("moonriseCaption", "Moonrise's caption at the approved draft's 15 units: the draft is the splash's oracle, decided 2026-11-08")];
+/// Moonrise's own file in the kit's QML module, where Qt loads it from: no theme package can put a file there.
+pub const MOONRISE_SOURCE: &str = "qrc:/qt/qml/EmuSen/Kit/qml/Moonrise.qml";
+
+/// Words the capitals' floor does not hold: the kit file they are written in, their item's name, and the accepted class
+/// that lets them pass (EmuSen_Kit.md §7.102, §7.109).
+pub const SMALL_TEXT_EXCEPTIONS: [(&str, &str, Class); 1] = [(MOONRISE_SOURCE, "moonriseCaption", Class::MoonriseCaption)];
+
+/// The class of `SMALL_TEXT_EXCEPTIONS`' entry that names an item written in its file, if one does; the same name in any
+/// other file, a theme's among them, is held.
+pub fn small_text_exception(item: &Item) -> Option<Class> {
+    SMALL_TEXT_EXCEPTIONS.iter().find(|(source, name, _)| item.name == *name && item.source == *source).map(|(_, _, class)| *class)
+}
 
 /// The floor on a big screen: the capitals Inter draws at 16 design pixels, 11.64.
 pub fn smallest_capitals() -> f64 {
@@ -134,8 +144,7 @@ fn words(item: &Item, ancestors: &[&Item], slack: f64, smallest: f64, faults: &m
     if text.height > own_h + slack {
         faults.push(Fault::CutAtFoot { item: item.id });
     }
-    let excepted = SMALL_TEXT_EXCEPTIONS.iter().any(|(name, _)| item.name == *name);
-    if smallest > 0.0 && text.cap_height < smallest - CAPS_SLACK && !excepted {
+    if smallest > 0.0 && text.cap_height < smallest - CAPS_SLACK && small_text_exception(item).is_none() {
         faults.push(Fault::TooSmall { item: item.id, capitals: text.cap_height });
     }
 }

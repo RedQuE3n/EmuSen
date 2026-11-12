@@ -9,6 +9,7 @@ use emusen_kit_core::tokens::{Colour, Variant};
 use emusen_kit_gallery::SCREENS_URL;
 use emusen_qt_test::harness::{edges, palette, Measures, SIZES};
 use emusen_qt_test::lint::{frontend, qmllint, rules};
+use emusen_qt_test::excuse::sort;
 use emusen_qt_test::spec::{self, Header};
 use emusen_qt_test::tree::Tree;
 use emusen_qt_test::{Harness, Scene};
@@ -165,6 +166,7 @@ fn qt_5_b_the_tool_screen_and_the_page_frame_on_the_gallery() {
     scene.set_token_form(WalkForm::BigScreen);
     let grabs = grabs();
     let mut report = Vec::new();
+    let mut accepted: Vec<String> = Vec::new();
     let mut states = 0;
     for variant in [Variant::Dark, Variant::Light] {
         scene.set_variant(variant);
@@ -207,6 +209,10 @@ fn qt_5_b_the_tool_screen_and_the_page_frame_on_the_gallery() {
                         .iter()
                         .map(ToString::to_string),
                 );
+                // What the rules' exemptions let pass: listed with its ruling where one accepts its class, else a finding (EmuSen_Kit.md §7.102).
+                let (listed, refused) = sort(&scene.exempted(&tree, WalkForm::BigScreen, variant, f64::from(h)));
+                accepted.extend(listed.into_iter().map(|l| format!("{name}: {l}")));
+                faults.extend(refused.iter().map(ToString::to_string));
                 let notes = grabs.join(format!("{name}.faults.txt"));
                 if faults.is_empty() {
                     let _ = std::fs::remove_file(&notes);
@@ -240,6 +246,8 @@ fn qt_5_b_the_tool_screen_and_the_page_frame_on_the_gallery() {
     assert_eq!(scene.property("scene", "applied"), "1", "a click on Apply…");
 
     scene.assert_quiet();
+    // Each exemption a ruling accepts, listed beside the grabs and in the test's output (EmuSen_Kit.md §7.102).
+    emusen_qt_test::excuse::write_accepted(&emusen_qt_test::excuse::accepted_dir(), "screens", &accepted);
     assert!(report.is_empty(), "{states} states; faults:\n{}", report.join("\n"));
     assert_eq!(states, 2 * SCREENS.len() * FIT);
 }

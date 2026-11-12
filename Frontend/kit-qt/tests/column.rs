@@ -62,3 +62,16 @@ fn kit_7_2_reduced_motion_zeroes_movements_and_keeps_fades_at_120() {
     }
     assert!(!reduced.breathes);
 }
+
+#[test]
+fn kit_7_55_a_theme_s_shadow_colour_replaces_the_registry_s_and_none_keeps_it() {
+    let kit = Column::compute(Form::Desktop, Variant::Dark, 1.0, false);
+    let own = tokens::Colour::hex("#2A1B4C");
+    let accent = tokens::Colour::hex("#B4442A");
+    let themed = kit.clone().overridden(&[(ColourToken::Accent, accent)], Some(own));
+    assert_eq!(themed.shadow.colour, own, "the theme's own shadow colour");
+    assert_eq!(themed.colour(ColourToken::Accent), accent, "the palette's override still holds");
+    assert_eq!(themed.shadow.opacity, kit.shadow.opacity, "the colour alone is the theme's");
+    let plain = kit.clone().overridden(&[(ColourToken::Accent, accent)], None);
+    assert_eq!(plain.shadow.colour, tokens::raised_shadow(Form::Desktop).colour, "no shadowColor, the registry's");
+}

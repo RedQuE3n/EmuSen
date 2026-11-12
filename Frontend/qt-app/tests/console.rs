@@ -22,16 +22,13 @@ use emusen_platform_client::Platform;
 use emusen_qt::MAIN_URL;
 use emusen_qt_play::host::Host;
 use emusen_qt_test::compositor::Compositor;
+use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::virtual_pad::Sdl;
 use emusen_qt_test::{mockup, Harness};
 
-/// No finding is named for the tester: the gate holds every state whole.
-fn nothing_named(_: &str, _: &emusen_qt_test::tree::Tree, _: (i32, i32)) -> bool {
-    false
-}
-
 #[test]
 fn qt_7_9_start_console_starts_a_console_whose_screen_owns_the_pad() {
+    let mut excuses = Excuses::none().listing("qt-app-console");
     unsafe { std::env::set_var("SDL_AUDIODRIVER", "dummy") };
     let kwin = Compositor::start(3840, 2160);
     kwin.watch(600);
@@ -72,7 +69,7 @@ fn qt_7_9_start_console_starts_a_console_whose_screen_owns_the_pad() {
     let shown: Vec<String> = scene.tree().nodes.iter().filter(|n| n.visible).filter_map(|n| n.text.clone()).collect();
     assert!(shown.iter().any(|t| t.starts_with("Starts a PlayStation with no disc in it, on V1ConsoleCore")), "the pane's sentence: {shown:?}");
     assert!(shown.iter().any(|t| t == "✗ Not found: add it in Settings → Firmware"), "the pane's firmware line: {shown:?}");
-    hold(&mut scene, "ListCardStartConsole", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "ListCardStartConsole", &mockup::Mockup::default(), &mut excuses, &mut report);
 
     // The pointer's click on the console starts it; its screen is shown and owns the pad.
     let (x, y) = row_centre(&mut scene, "PlayStation");
@@ -108,7 +105,7 @@ fn qt_7_9_start_console_starts_a_console_whose_screen_owns_the_pad() {
     home_card(&mut scene);
     assert!(focused_words(&mut scene).starts_with("Continue"), "the focus on Continue: {}", focused_words(&mut scene));
     assert!(scene.tree().nodes.iter().any(|n| n.visible && n.text.as_deref() == Some("PlayStation (no disc)")), "Continue names the console's session");
-    hold(&mut scene, "HomeCardContinueConsole", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "HomeCardContinueConsole", &mockup::Mockup::default(), &mut excuses, &mut report);
     scene.pad(UiButton::Accept);
     until(&mut scene, 5, "Continue resuming the console", |s| s.property("screens", "shown") == "Game" && s.property("session", "paused") == "false");
     console_owns_the_pad(&mut scene, &sdl, &pad, "PlayStation");

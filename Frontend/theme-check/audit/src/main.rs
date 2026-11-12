@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 extern crate emusen_theme_host;
 extern crate emusen_theme_qt;
 
-const USAGE: &str = "Usage: theme-audit [--gpu] [--state DIR] [--states LIST] [--catalogue FILE] [--section KEY] <folder>\n       theme-audit --list-states\n  Exit 1 for a finding, 0 for none, 2 when it could not run. See man theme-check.";
+const USAGE: &str = "Usage: theme-audit [--gpu] [--state DIR] [--states LIST] [--catalogue FILE] [--section KEY] [--focus NAME] [--mockups DIR] <folder>\n       theme-audit --list-states\n  Exit 1 for a finding, 0 for none, 2 when it could not run. See man theme-check.";
 
 /// What the command line asks for.
 struct Options {
@@ -24,18 +24,24 @@ struct Options {
     section: Option<String>,
     /// The states a run records, by name, `all` for every one; the default alone when not given.
     states: String,
+    /// The folder of the package's mockups, `<package>-<Screen>.mockup.spec`, held at the canvas's sizes by night.
+    mockups: Option<PathBuf>,
+    /// The console a catalogue's Choose a console is judged with the focus on, by the name a reader hears.
+    focus: Option<String>,
     gpu: bool,
 }
 
 /// The options, or the words for the usage.
 fn options(args: &[String]) -> Result<Options, String> {
-    let (mut folder, mut state, mut catalogue, mut section, mut gpu) = (None, None, None, None, false);
+    let (mut folder, mut state, mut catalogue, mut section, mut mockups, mut focus, mut gpu) = (None, None, None, None, None, None, false);
     let mut states = states::DEFAULT.to_owned();
     let mut words = args.iter().skip(1);
     while let Some(word) = words.next() {
         match word.as_str() {
             "--state" => state = Some(PathBuf::from(words.next().ok_or(format!("theme-audit: --state needs a folder\n{USAGE}"))?)),
             "--catalogue" => catalogue = Some(PathBuf::from(words.next().ok_or(format!("theme-audit: --catalogue needs a file\n{USAGE}"))?)),
+            "--mockups" => mockups = Some(PathBuf::from(words.next().ok_or(format!("theme-audit: --mockups needs a folder\n{USAGE}"))?)),
+            "--focus" => focus = Some(words.next().ok_or(format!("theme-audit: --focus needs a name\n{USAGE}"))?.to_owned()),
             "--gpu" => gpu = true,
             "--states" => states = words.next().ok_or(format!("theme-audit: --states needs a list of states, or all\n{USAGE}"))?.to_owned(),
             "--section" => section = Some(words.next().ok_or(format!("theme-audit: --section needs a key\n{USAGE}"))?.to_owned()),
@@ -44,7 +50,7 @@ fn options(args: &[String]) -> Result<Options, String> {
             _ => return Err(format!("theme-audit: one folder at a time\n{USAGE}")),
         }
     }
-    Ok(Options { folder: folder.ok_or(format!("theme-audit: a folder is needed\n{USAGE}"))?, state, catalogue, section, states, gpu })
+    Ok(Options { folder: folder.ok_or(format!("theme-audit: a folder is needed\n{USAGE}"))?, state, catalogue, section, states, mockups, focus, gpu })
 }
 
 /// The catalogue's name (its file's stem, which labels its states) and its entries.
@@ -76,13 +82,18 @@ fn main() {
             catalogue: listed.as_ref().map(|(name, e)| (name.as_str(), e.as_slice())),
             section: o.section.as_deref(),
             states: states::chosen(&o.states)?,
+            mockups: o.mockups.as_deref(),
+            focus: o.focus.as_deref(),
         };
         audit::run(&PathBuf::from(&o.folder), &o.folder, &asked)
     };
     let status = match options.and_then(run) {
-        Ok(lines) => {
-            lines.iter().for_each(|l| println!("{l}"));
-            i32::from(!lines.is_empty())
+        Ok(audited) => {
+            audited.lines.iter().for_each(|l| println!("{l}"));
+            // What was held, so a caller can tell a screen judged and clean from one never judged (man theme-check).
+            audited.held.iter().for_each(|l| eprintln!("theme-audit: {l}"));
+            audited.accepted.iter().for_each(|l| eprintln!("theme-audit: {l}"));
+            i32::from(!audited.lines.is_empty())
         }
         Err(words) => {
             eprintln!("{words}");

@@ -10,6 +10,7 @@ use emusen_kit_core::tokens::{ColourToken, Variant, colour};
 use emusen_kit_gallery::SETTINGS_URL;
 use emusen_qt_test::Harness;
 use emusen_qt_test::harness::{Measures, SIZES, edges, palette};
+use emusen_qt_test::excuse::sort;
 use emusen_qt_test::spec::{self, Header};
 use emusen_qt_test::tree::Tree;
 
@@ -75,6 +76,7 @@ fn qt_5_a_the_settings_frame_the_choices_and_the_sliders_pass_the_gate_at_the_fo
     let mut scene = harness.load(SETTINGS_URL, 1280, 800);
     let grabs = grabs();
     let mut report = Vec::new();
+    let mut accepted: Vec<String> = Vec::new();
     let mut states = 0;
     for variant in [Variant::Dark, Variant::Light] {
         scene.set_variant(variant);
@@ -125,6 +127,10 @@ fn qt_5_a_the_settings_frame_the_choices_and_the_sliders_pass_the_gate_at_the_fo
                         .iter()
                         .map(ToString::to_string),
                 );
+                // What the rules' exemptions let pass: listed with its ruling where one accepts its class, else a finding (EmuSen_Kit.md §7.102).
+                let (listed, refused) = sort(&scene.exempted(&tree, WalkForm::BigScreen, variant, f64::from(h)));
+                accepted.extend(listed.into_iter().map(|l| format!("{name}: {l}")));
+                faults.extend(refused.iter().map(ToString::to_string));
                 let notes = grabs.join(format!("{name}.faults.txt"));
                 if faults.is_empty() {
                     let _ = std::fs::remove_file(&notes);
@@ -137,6 +143,8 @@ fn qt_5_a_the_settings_frame_the_choices_and_the_sliders_pass_the_gate_at_the_fo
         }
     }
     scene.assert_quiet();
+    // Each exemption a ruling accepts, listed beside the grabs and in the test's output (EmuSen_Kit.md §7.102).
+    emusen_qt_test::excuse::write_accepted(&emusen_qt_test::excuse::accepted_dir(), "settings", &accepted);
     assert!(report.is_empty(), "{states} states; faults:\n{}", report.join("\n"));
     assert_eq!(states, (STATES.len() + 1) * FIT);
 }

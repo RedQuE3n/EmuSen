@@ -14,11 +14,7 @@ use emusen_platform_client::library::Library;
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt::MAIN_URL;
 use emusen_qt_test::{mockup, Scene};
-
-/// No finding is named for the tester: the gate holds every state whole.
-fn nothing_named(_: &str, _: &emusen_qt_test::tree::Tree, _: (i32, i32)) -> bool {
-    false
-}
+use emusen_qt_test::excuse::Excuses;
 
 const GAMES: [&str; 4] = ["Aurora Drift (Synthetic)", "Brass Lantern (Synthetic)", "Cobalt Harbor (Synthetic)", "Dune Relay (Synthetic)"];
 
@@ -91,6 +87,7 @@ fn open_all_games(scene: &mut Scene<'_>) {
 
 #[test]
 fn qt_7_9_the_list_card_sorts_by_plays_year_and_rating() {
+    let mut excuses = Excuses::none().listing("qt-app-repairs");
     let files: Vec<(&str, String)> = GAMES.iter().map(|g| ("NES", format!("{g}.nes"))).collect();
     let named: Vec<(&str, &str)> = files.iter().map(|(f, n)| (*f, n.as_str())).collect();
     let world = sandbox("qt-app-repairs", &named);
@@ -134,7 +131,7 @@ fn qt_7_9_the_list_card_sorts_by_plays_year_and_rating() {
     scene.wait(400);
     scene.pad(UiButton::Down);
     scene.wait(100);
-    hold(&mut scene, "ListCardRating", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "ListCardRating", &mockup::Mockup::default(), &mut excuses, &mut report);
     assert!(report.is_empty(), "{} faults:\n{}", report.len(), report.join("\n"));
     scene.assert_quiet();
 }

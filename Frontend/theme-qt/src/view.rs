@@ -195,7 +195,7 @@ fn game(g: &GameRow, shapes: &HashMap<&str, f64>, now: i64) -> Row {
         text(&g.path),
         text(&g.title),
         Cell::Text(cover_url(&g.cover)),
-        Cell::Number(shapes.get(g.system.as_str()).copied().unwrap_or(0.0)),
+        Cell::Number(shapes.get(g.system.as_str()).copied().unwrap_or_else(|| library::cover_shape(None))),
         Cell::Flag(g.favourite),
         Cell::Number(g.played_at as f64),
         Cell::Flag(played),
@@ -214,9 +214,9 @@ fn game(g: &GameRow, shapes: &HashMap<&str, f64>, now: i64) -> Row {
     ]
 }
 
-/// Rows of games as a list shows them, each console's cover shape from the view (`Browse.games`, Home's shelf).
+/// Rows of games as a list shows them, each console's cover shape from qt-models' `library::cover_shape` (`Browse.games`, Home's shelf).
 pub fn games(view: &LibraryView, list: &[GameRow], now: i64) -> Vec<Row> {
-    let shapes: HashMap<&str, f64> = view.systems.iter().map(|s| (s.id.as_str(), s.cover_aspect)).collect();
+    let shapes: HashMap<&str, f64> = view.systems.iter().map(|s| (s.id.as_str(), library::cover_shape(Some(s)))).collect();
     list.iter().map(|g| game(g, &shapes, now)).collect()
 }
 

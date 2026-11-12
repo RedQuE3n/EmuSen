@@ -1685,9 +1685,9 @@ frame's sheet rule (as `Sheet` does) is the fix; owed to stage 5, whose settings
 - **The shoulders without sections.** The walk stepped its sections on LB and RB in every form but the card's, and
   with no sections it declined them, so a screen could not declare a shoulder (`EmuSen_Qt.md` §7.6: the search's Move
   to grid). Now a walk with no sections offers the shoulders to the declared actions like any other button; a walk
-  with sections keeps them. An extension under rule Q: no surface changes, and a screen that declares no shoulder sees
+  with sections keeps them, except a shoulder the screen declares an enabled action on (decided 2026-11-11 by the tester, R-20261111-89; §7.103). An extension under rule Q: no surface changes, and a screen that declares no shoulder sees
   no difference. Held to kit-core's `tests/input.rs` (both shoulders reaching a declared `toGrid` with no sections; a
-  walk with sections still stepping them past a declared shoulder).
+  walk with sections still stepping them on a shoulder it declares nothing on).
 - **The pointer resting.** `Scene::hover` (qt-test, `harness_hover`, Qt Test's `mouseMove`) moves the pointer to a point
   and leaves it there, nothing pressed, so a test reaches what a hover does without a click's A. *C++ part*: one
   function in `cpp/harness.cpp` [own, because the harness's pointer is Qt Test's, which has no Rust binding]. Found by
@@ -2952,9 +2952,22 @@ alone, let through, so the check was strengthened); the theme mirror missing `sh
 
 **Rule Q and the shadow's colour** (2026-11-11). `shadowColor` is a colour property of the kit's `Tokens` after the
 palette's, so theme-check's rule-Q test, which held the registry's colours to `ColourToken::ALL` alone, failed from the
-day the token landed (seen 2026-11-11; theme-check is outside the workspace and no landing ran it). The name is kit-core's
-now, `Shadow::COLOUR_PROPERTY`, and the test holds the registry's colour tokens to the palette's and the shadow's, in the
-registry's order. A theme may override it as any colour token.
+day the token landed (seen 2026-11-11; theme-check is outside the workspace and no landing ran it). kit-core names it
+`Shadow::COLOUR_PROPERTY`, which theme-check reads, and the test holds the registry's colour tokens to the palette's and
+the shadow's, in the registry's order. kit-qt does not read that constant: its `Tokens` property comes from the
+`shadow_color` field of its cxx-qt bridge, as each palette token's does from its own field, since the bridge's macro
+takes a field's name and not a constant; the two names are held equal by this test alone, as the palette's are. A
+theme's `shadowColor` in `theme.json` passes theme-check, which reads the registry.
+
+**A theme's own shadow colour** (decided 2026-11-11 by the tester, R-20261111-68). theme-qt's `set_token_overrides` sets
+a theme's `shadowColor` on its engine's `Tokens` beside its palette overrides, the name read from
+`Shadow::COLOUR_PROPERTY`; kit-qt's `Column::overridden` takes it in place of the registry's colour for the variant it
+names, and the registry's stays where the theme sets none. The shadow's opacity, offset and blur stay the kit's. Until
+2026-11-11 the host set palette tokens alone and left the override out. The program's own engine keeps the registry's
+shadow, as it keeps the kit's palette. Tests: kit-qt's `column` (a theme's colour replaces the registry's, none keeps
+it) and qt-app's `theme` (the accent fixture's `shadowColor` reaches its screen, the program's tokens keep the
+registry's). Seeded faults, each caught: the column ignoring the theme's colour (`column`); the host dropping it
+(`theme`). `EmuSen.Theme` is unchanged: `Tokens.shadowColor` was already its property.
 
 ### 7.58 The walk presses on through a stepped action; the page frame's focus; Qt Multimedia's two messages (stage 5, piece G2; 2026-11-09)
 
@@ -3069,6 +3082,284 @@ model's id, and one bound through a `property var` (as `PageFrame`'s `tileModel`
 fault in place, because QML tells both of the deletion (the id's guard, and the guard a `var` property keeps on the
 object it holds) and the binding hands the gate null itself. So `PageFrame` was not exposed; the gate now guards itself
 for a model handed to it any other way.
+### 7.100 An excuse names its one item and fails when it excuses nothing (2026-11-11)
+
+**The defect** (found 2026-11-11). The program's tests excused findings by a blanket: `named()` in five test
+files dropped every "too small to read" at 1280 × 720, whatever the item, and Cores dropped every "the pad does not
+reach" while its keyboard was docked. The tester's decision of 2026-11-08 (the floor holds with no exception, every
+small text is 19) left no room for the first; and nothing could notice when an excuse had outlived its cause, since a
+predicate that matches nothing passes as quietly as one that matches.
+
+**The surface.** `emusen_qt_test::excuse` holds one `Excuse` a finding: the finding's words (`low contrast`, `cut with
+an ellipsis`, a mockup's `Y`), the objectName of the one item it excuses, words that item's own words hold where its
+name is shared (a row's `value`), the size it holds at or every size, and why, with who decided it and when, or "no
+ruling". A test's `Excuses` counts each use; `hold` (qt-app's `tests/common`) leaves out a finding only when an excuse
+names it. When the `Excuses` is dropped, at the end of the test, any excuse that excused nothing fails the test as
+stale, naming it. `Excuses::none()` is a test with no excuse.
+
+**What an excuse reads (2026-11-11).** An excuse's item was first found by reading the first numbers
+after the finding's words in its line, which could take a mockup's own figure for an item's number, the scroller's
+number for the item cut at its edge, either side of an overlap for a pair, and, with no words given, any of the items
+sharing a name. An excuse now reads no prose. kit-core's `Fault::kind` and `Fault::items` give a rule's finding its
+kind and the items it is about, the one it is about first and then the other of a pair (what it overlaps, the limit
+it passes, the area that cuts it, the owner its words pass, what a click hits); `Exempted::kind` and `Exempted::item`
+do the same for an exemption; qt-test's mockup comparison returns a `Difference` with its element and its kind (an
+edge's name, `not shown`, `paints`, `alpha`, `says`, `shows no words`). qt-test's `Finding` holds each in one form:
+its kind, its items by name, type, words and whether another item shares the name, and its line. `Excuse` gains
+`with`, the other item of a pair, and names a finding only when the kinds are the same and the items are the same,
+both of a pair in either order. An excuse with no words on an item whose name is shared excuses nothing, and its stale
+line says so. Held by `qt-test/tests/excuse.rs`, a test a case: a mockup's figure that is an item's number, a cut
+named by its scroller, an overlap named by one side, a shared name with no words, an exemption by the rule's own kind.
+An excuse used once is not stale however many findings it excused at its sizes; `size: None` holds at every size.
+
+`SMALL_TEXT_EXCEPTIONS` (kit-core `fit.rs`) is a list a gate uses rather than a test's, so it is held by qt-test's
+`SmallText`: a gate notes each named small text its exemptions let pass, and when it ends, an entry that let nothing
+pass in any state fails the gate as a stale excuse does. The gallery's gate (`kit-gallery/tests/gate.rs`), the one
+that draws Moonrise, keeps one. The program's tests do not, since no state they hold draws Moonrise's caption. Each
+entry names its item and the accepted class that lets it pass: the one entry, `moonriseCaption`, is of the
+class Moonrise's caption, which the tester accepted on 2026-11-11 (R-20261111-40) until a new splash replaces Moonrise,
+so the gallery's gate lists it and passes (§7.102).
+
+**An excuse's second item, and what an excuse does not fix (2026-11-11).** The pair's other item was matched
+by its name alone, so an excuse of `title` over `value` excused title's overlap with every row's `value`. `Excuse` gains
+`with_words`, and each item of a pair is told as the first is: by its name, and where the name is shared, by words its
+own words hold; with none given, a shared name excuses nothing and the stale line says so. Held by `qt-test/tests/
+excuse.rs`'s pair test (two rows' `value`, either way round). An excuse fixes no amount: one that names a finding's kind
+and item excuses that finding at any ratio, capitals or colour, a later worsening of the same item included. Nothing in
+this section changes that.
+
+**What the blankets had been excusing,** measured 2026-11-11 with every excuse removed on the software backend: at
+1280 × 720 nothing in the Home and List cards, Settings, Settings ▸ Consoles or the Themes tab is under the floor any
+more, so each of those five blankets was already stale. The cards' "words under a card's scrim" contrast excuse
+excused nothing either: a backdrop is a panel to the rules and its words are not judged. What stood is in §7.103 (the
+search's reach) and below:
+
+| Test | Finding | Item | Status |
+|---|---|---|---|
+| `settings.rs` | cut with an ellipsis | `value` holding `/Roms` (the ROM folder's path, cut at its start) | accepted 2026-11-11, R-20261111-36 |
+
+`esde-qt/tests/sizes.rs` held every box sized by its words (a help bar, a status row, a text) within 4 % of its extent
+across the sizes of one aspect ratio, by its class; that tolerance named no item and is removed, so every element is
+held within 0.001.
+
+### 7.101 Qt Multimedia's CPU conversion is Qt's own on the software backend alone (2026-11-11)
+
+`QT_INTERNAL` (§7.14, §7.58) now says of each message whether it is Qt's own only on the software backend.
+`No RHI backend. Using CPU conversion.` is: the tester accepted it on the software backend only (R-20261111-41, 2026-11-11). On the GPU an RHI is there to convert on, so the same line means the clip's frames took the CPU path and fails the
+test. `Harness::software()` asks Qt for the scene graph backend in use (`QQuickWindow::sceneGraphBackend()`, settled once the first window is made), and
+`assert_quiet` filters by it; `qt_internal(message, software)` is the rule, held both ways by `tests/internal.rs`. The
+main-thread warning is accepted in test programs only (R-20261111-110, decided 2026-11-11; §7.109). Read on 2026-11-11:
+its words are in `libQt6Core.so.6` once and in no other Qt library here; §7.58's trace of 2026-11-09 has QtCore print it
+from `QCoreApplicationPrivate`'s constructor when qt-test's `Harness` makes the application on the thread libtest runs a
+test on, after Qt Multimedia's load-time initializer has adopted the process's main thread. So the words are Qt's, and
+the call that makes Qt print them is the harness's; the program, which makes its application on `main`, never prints it.
+
+### 7.102 The rules' exemptions reported item by item (2026-11-11)
+
+Four of the audit's rules let some items pass by an exemption that named no item: words that reach their contrast over
+all but `CONTRAST_SPARE` (a tenth) of what is behind them; words crossing a scroller's faded edge, not held to contrast
+at all (§7.35); colours painted inside a theme's `Scene`, not held to the palette (InterfaceSpec §4.4); and the words
+`SMALL_TEXT_EXCEPTIONS` names under the floor (§7.10). `audit::exempted(root, declared, smallest)` lists every item an
+exemption let pass in one state, as `Exempted` (`low contrast in the spare tenth`, `low contrast at a faded edge`, `a
+colour outside the palette in a scene`, `too small to read, a named exception`), and only where the strict rule would
+have failed it. `Scene::exempted` runs it with the gate's palette and floor, and the program's `hold` counts each line
+as a finding of the gate, so a test accepts one only by an `Excuse` naming its item. The rules themselves are
+unchanged.
+
+**The same in every gate (2026-11-11).** The gallery's three gates (`gate.rs`, `screens.rs`,
+`settings_gate.rs`) add `Scene::exempted` to each state's findings, and its question sheet `Scene::exempted_item`, as
+`hold` does. theme-audit reports each as a line of kind `exempted` (man theme-check). `exempted` takes the palette as
+`Option`: theme-audit runs no palette rule over a theme, so it passes none and no scene colour is an exemption there.
+No exemption was removed or added. Measured 2026-11-11 on the software backend: the gallery's gate fails with 1,082
+such lines over its 91 states, 1,070 of them scene colours (28 a state on the menu page in four of its form and
+variant pairs, 17 a state on Moonrise's page in six) and 12 Moonrise's caption under the floor by `SMALL_TEXT_EXCEPTIONS` (three sizes, both
+variants, the big screen and the card).
+
+**Accepted classes (2026-11-11).** The tester accepted each of these classes on 2026-11-11, and kit-core
+holds them in one table, `audit::ACCEPTED` (`audit/accepted.rs`), beside `exempted`: a row a class, with the ruling's id
+in the rulings log and one line on what it covers. Adding a row is the tester's; kit-core's test holds the table to
+exactly these rows.
+
+| Class | Ruling | Covers |
+|---|---|---|
+| `RomFolderCutAtStart` | R-20261111-36 | the ROM folder's path cut at its start so the folder's name shows, the pane giving it whole |
+| `SpareTenth` | R-20261111-37 | a tenth of the samples behind words failing the contrast rule |
+| `FadedEdge` | R-20261111-38 | words under their contrast where they cross a scroller's faded edge |
+| `SceneColour` | R-20261111-39 | colours painted inside a theme's scene, outside the palette rule |
+| `MoonriseCaption` | R-20261111-40 | Moonrise's caption under the text floor, until a new splash replaces Moonrise |
+| `CpuConversionLine` | R-20261111-41 | Qt Multimedia's CPU-conversion log line on the software backend |
+| `DimmedAndMoving` | R-20261111-43 | dimmed (declined) places exempt from contrast, and moving words not judged |
+| `DataWordsElided` | R-20261111-44 | data words, such as a game's title, cut with an ellipsis |
+
+(A ninth row, `BridgeDuplicates` for R-20261111-46, which nothing read, is removed; §7.109 says where that class is
+accepted. Every row is read by the place that accepts its class, and `Excuses::accepting` is gone: §7.109.)
+
+`Exempted::class` gives each exemption its class: the spare tenth, a faded edge and a scene's colour by their kind, and
+a named small text by the class its `SMALL_TEXT_EXCEPTIONS` entry gives. Every gate sorts a state's exemptions by the
+table: one whose class has a row is listed with its ruling (`accepted by R-20261111-39: a colour outside the palette in
+a scene: …`) and fails nothing; one whose class has none is a finding, as before. The program's `hold` sorts through its
+`Excuses`, which hold the table (kit-core's, or a test's own through `Excuses::accepting`) and keep every line accepted
+(`Excuses::listed`); the gallery's three gates sort through qt-test's `excuse::sort` and write the accepted lines
+beside the grabs, each to its own file (`accepted-gate.txt`, `accepted-screens.txt`, `accepted-settings.txt`, named by
+the gallery's `accepted_list`; until 2026-11-11 all three wrote `accepted.txt`, so the last run's list replaced the
+others'); theme-audit writes each to stderr as `theme-audit: accepted by …` and only the others
+to stdout, so only they fail a check. The rows for the classes no exemption carries are where the other places cite
+their ruling: Settings' ROM folder excuse (R-20261111-36), `QT_INTERNAL`'s CPU line (R-20261111-41). Held by kit-core's
+`exempted.rs` (the table's rows; each exemption's class and ruling; a table without the class accepts nothing),
+qt-test's `excuse.rs` (an accepted class listed with its ruling, an unlisted one a finding, a test's own table), and
+theme-audit's fixture `small-caption` (the caption listed with R-20261111-40, the run clean).
+
+**What it changes for players** (measured 2026-11-11, `theme-audit` on each folder of `Frontend/themes`, debug build,
+software backend). Every exemption the five packages show is the spare tenth (R-20261111-37): Constellation 11,
+EmuSen 10, Horizon 0, Meridian 2, Orrery 23. With the table each run exits 0 and lists them on stderr; before it each was
+an `exempted` line on stdout, so theme-check failed Constellation, EmuSen, Meridian and Orrery, and the Themes tab's Use,
+which reads theme-check's status through qt-models' `check_package`, would have refused all four (the reference is
+checked by construction, not at Use). qt-app's `themes_tab` test holds Use to both (2026-11-11): its stand-in for
+theme-audit writes, for one package, an accepted class's line on stderr and exits 0, and Use takes the theme; for
+another, an `exempted` line on stdout and exits 1, and Use is not offered and A stores nothing. That the real program
+writes those two forms is theme-audit's own `kit_7_102` tests'. Seeded faults, each caught by it: theme-check reading
+stderr as findings; theme-check passing over an `exempted` line.
+
+### 7.103 The gate's walk presses a screen's own shoulders (2026-11-11)
+
+The gate's walk pressed the four directions from every operable item, so on the grid's search, where LB and RB are the
+screen's declared actions taking the focus between the keys and the covers (EmuSen_Qt.md §7.6), the covers were "not
+reached" from the keys and the keys from the covers, and the cards test excused every unreached cover and the keyboard
+by name prefix. `Scene::walk_pressing(tree, buttons, press)` walks any set of presses; `walk_by` is it over
+`DIRECTIONS`, and `WITH_SHOULDERS` adds PageUp and PageDown for a screen whose shoulders are its own actions. qt-app's
+`hold_walking` holds a state with it, and `GamesSearch` and `GamesSearchGrid` are held so, with no excuse: the gate
+sees each shoulder's press land, measured 2026-11-11 on the software backend (`cards.rs` passes with `Excuses::none()`).
+A screen whose shoulders step sections (Settings, Cores) is walked by the four directions alone, since a section step
+leaves the state the walk judges.
+
+**Cores' search (2026-11-11).** The tester ruled that in Cores' search, with the keyboard docked, the
+shoulders move the focus between the keys and the list, as the games search does (R-20261111-31), and that the gate's
+walk may press the shoulders on the search screens and count that as reach (R-20261111-32). The rule has one owner,
+qt-models' `screens::search_shoulder(on_keys, key)`: from the keys `toGrid` gives the focus to the results, from the
+results `previous` or `next` gives it back, and nothing else moves it. The games search's `step` reads it for `Search`
+and `SearchGrid`; Cores' `Tool::shoulder` reads it for its own `on_keys`, which the List card's Search sets and the
+pointer moves (`keysFocused`, as `Screens::keysFocused` does for the grid). The tool's help on the keys declares the
+shoulders as `toGrid` ("Move to list", the right shoulder unnamed, as the games search's bar draws "Move to grid"), and
+while the rows hold the focus the tool declares its shoulders `previous` and `next` (`Tool::action_lines`). Cores' rows
+are a sectioned frame, whose shoulders stepped the sections before any action, so the kit's walk now gives a shoulder to
+the section strip only where the screen declares no enabled action on it (kit-core `Walk::press`); no screen declared a
+shoulder action beside sections before. Decided 2026-11-11 by the tester (R-20261111-89): in the kit, a shoulder a screen declares for an action of its own goes to that action before stepping between sections. The card that closes as the search opens no longer hands the focus to the list.
+`cores.rs` holds `CoresSearch` with `WITH_SHOULDERS` and no excuse, then presses RB (a row focused, the keyboard docked,
+the section unchanged) and LB (the keys again).
+
+**What the walk presses from (2026-11-11).** `put_back` restores the views and the focus but not the screens' state,
+so a press of the walk could start from a state no player can be in: after RB, the next item's presses with
+`SearchGrid` shown while the focus is forced onto a key. `hold_walking` now
+writes, beside each state's grab, `<state>.presses.txt`: the screen shown, Cores' `searchKeys`, the focused item and the
+button, before every press. Read on 2026-11-11 for `CoresSearch`: the focus forced onto the list's search box or a row
+sets `searchKeys` false and onto the keyboard true before the press, through the pointer path, so every press starts from
+the state the focus says. Cores' `keysFocused` changes the model at once, not after the event as its other calls do:
+queued, the walk's put-back of the keyboard's scope reported the keys after the walk had forced the focus onto a row, the
+model took the focus back to the keys, and Down from the first row was recorded as reaching the keyboard (the three rows
+below it unreached; seen 2026-11-11). The grid's search keeps its state the same way (`GalleryKeyboard` tells `Screens`
+of its active focus); its `GamesSearch` log of the same day holds 12 presses, none from `SearchGrid` with the focus on a
+key nor from `Search` with it on a cover.
+
+### 7.104 The mockups held: Choose a console over the canvas's consoles, and the themes' screens (2026-11-11)
+
+**Choose a console.** The acceptance test's library shelves three consoles of one maker, so the canvas's eleven
+consoles on three makers' orbits cannot be compared there; its comparison left out every console element and said
+kit-core's orbits test held them, which reads no mockup. The program's test world cannot shelve the canvas's Sega and
+Sony consoles (a synthetic game in each of their folders is listed by no scan: measured 2026-11-11, as theme-audit's
+world found on 2026-11-08), so the comparison is theme-audit's: its test
+`qt_3_4_2_choose_a_console_over_the_canvas_s_eleven_consoles_is_its_mockup` places the reference theme's Choose a
+console over the catalogue `eleven` (the canvas's consoles, `Testing/themes/catalogues/eleven.tsv`) with `--focus
+"Super Nintendo"`, the second, as the canvas has it, and holds every element of `Testing/mockups/Consoles.mockup.spec`
+at 1280 × 800 and 1920 × 1200 by night. The acceptance test's comment points there.
+
+**What that comparison covers, and what not (2026-11-11).** The program and theme-audit show one screen
+file: qt-app's `qt_3_4_2_the_program_s_reference_theme_is_the_package_theme_audit_holds_to_its_canvas` (`tests/theme.rs`)
+holds the resources' reference theme, `REFERENCE_THEME`, to `Frontend/themes/emusen` file for file, the folder
+theme-audit's eleven-console test holds. They are not the same catalogue (the acceptance library shelves three
+consoles of one maker, theme-audit's `eleven` the canvas's eleven on three makers) or the same host (theme-audit feeds
+the screen through its own synthetic world and `emusen-theme-host`; the program through its library). So the
+program's own gate still compares none of the seven console classes; that stands for the tester.
+
+**A test that runs a program checks that it ran.** theme-audit's tests read only its stdout, so a run that could not
+load its package, or stopped before a state, printed no mockup line and passed. theme-audit now writes, on stderr, a
+line a screen it judged (`held Consoles in 10 states, 2 against its mockup`; man theme-check), counting a state only
+once every rule has judged it. Every test in `theme-check/audit/tests/audit.rs` that runs the program directly runs it
+through `Ran`, which fails on a signal and, where the run should judge, on any status but 0 or 1, and where it judges a
+screen checks that screen's count (the states list's test judges none, and the QML rules' test runs no program). Three go through theme-check's `run_with` instead and hold no count: the loaded fixture's run
+through both steps, the static findings' test, and the second half of the unsettled test, each of which reads
+theme-check's own output and status (corrected 2026-11-11). Of those that count:
+the eleven-console test wants Choose a console in 10 states, 2 against the canvas; each built-in theme its three
+screens against their mockups twice; a pass that stops, none. The stand-ins for theme-audit in theme-check's,
+qt-models' and qt-app's tests check that `chmod` succeeded, and the two that expect "nothing found" check that the
+stand-in ran.
+
+The mockup had been edited toward the program in four commits. The figures that carried the tester's decision of
+2026-11-08 (small text is 19 units: the maker labels 22.8 tall from y 149.2 and 217.04, the counts 22.8 tall) stay;
+the rest are the canvas's again:
+
+| Element | Program's figure written in | Canvas's figure restored | Commit and its source |
+|---|---|---|---|
+| `placeDisc.0`, `placeName.0` x | 326.4, 378.4 | 318, 370 | 62367944c: the names' widths as a browser draws them |
+| `placeDisc.1`, `placeName.1` x | 527, 579 | 522, 574 | 62367944c, the same |
+| `placeDisc.2`, `placeName.2` x | 735.7, 787.7 | 737, 789 | 62367944c, the same |
+| `consoleDetailName` y, h | 611, 53 | 612, 44 | 2d5fdeafc: Barlow Condensed's own line box |
+| `tile.4` | 434.72, 458.1, 88 × 88 | 423.72, 447.1, 110 × 110 | 4e1969d84: the focused body at 88 to clear an inner count |
+| `consoleBody.1` | 434.72, 458.1, 88 × 88 | 430.72, 454.1, 96 × 96 | 4e1969d84, the same |
+| `consoleRing.1` | 427.72, 451.1, 102 × 102 | 423.72, 447.1, 110 × 110 | 4e1969d84, the same |
+| `consoleName.1`, `consoleCount.1` y | 554.1, 578.1 | 558.1, 582.1 | 4e1969d84, the same |
+| `makerLabel.0` right | 725.35 | 753.72 | 78eccb8a7: the program's inner orbit ending its window at y 197 |
+
+`makerLabel.0`'s right edge was missing from this table until 2026-11-11. The canvas
+(`reference-consoles/consoles.html`, unchanged since 2026-11-08 17:13, before 78eccb8a7 at 23:35) ends the inner
+orbit's window at `YMIN = 178`, and its label rule (the window's end moved 60 units toward the orbits' centre) gives
+753.72 there and 725.35 at y 197. The canvas did not change; the program did, and `EmuSen_Qt.md` §3.4.2 item 9 records
+that change as "decided 2026-11-08", a date with no entry in the tester's rulings. The canvas's figure is restored, so
+the eleven-console test lists one more difference.
+
+**The themes.** `theme-audit --mockups DIR` (man theme-check) holds each screen of a package to
+`<package>-<Screen>.mockup.spec` in the default state, by night, at the canvas's two sizes, token colours as the
+package's night overrides give them. theme-audit's tests hold Horizon, Meridian, Constellation and Orrery to their
+twelve mockups in `Testing/themes`, which no test read before. Two edits toward the program are undone there:
+Constellation's chart (y 88, 484 tall, d26becdce) is the canvas's 96 and 468 again, and `gridCell.5` of Constellation's
+Games, deleted in a635cb1df, is back. a635cb1df's other change, the eyebrow's line box from 20 to 22.8, is the 19-unit
+small text of the tester's decision and stays; Horizon's 24-unit engine tag and 22.8 maker label (88fdeb837) likewise,
+and its shelves at x 32 are the canvas's camera rule (horizon.md §1.6) applied to the first console focused.
+
+**Measured 2026-11-11** (software backend, theme-audit's tests). Horizon, Meridian and Orrery are their mockups at both
+sizes. Constellation is not: its chart is the program's 88 and 484 against the canvas's 96 and 468, its Games shows no
+sixth cell, and its Choose a console mockup draws eleven bodies where the default library shelves four, so `body.4` to
+`body.10` are not shown (the mockup wants the `eleven` catalogue, which the theme tests do not yet place for it). The
+tester ruled on 2026-11-11 (R-20261111-33) that these differences are not fixed: Constellation is pulled from the
+program until the new default look lands, and its mockup test (`qt_3_4_5_constellation_is_held_to_its_mockups`) goes
+with it. Its package stays in `Frontend/themes/constellation` and its mockups in `Testing/themes`; only
+the program's resources no longer carry it (`EmuSen_Qt.md` §3.4.5). The
+reference theme's Choose a console over `eleven` differs from its canvas in 50 lines: the places' left edges (8.6, 5
+and 1.3 units right of the canvas's), the focused body at 88 against 96 with its ring and words 4 units higher, the
+full name's line box 53 against 44, and the three covers under the key 73 units wide at x 973, 1058 and 1143 against
+the canvas's 140 at 772, 924 and 1076. Each is the program's difference from its approved canvas, left for the tester.
+The program's acceptance run on Vulkan the same day lists the same Consoles differences, the places' discs painting
+the glass edge #2E8C96DC outside the palette (`placeDisc.0` to `.2`), Home's `placeStatus.5` cut with an ellipsis, and
+the exemptions of §7.102 (65 scene colours on Choose a console, five on Home, and words in the spare tenth); the three
+named differences it had excused before are no longer excused, and the shelf title's contrast at 1280 × 720 no longer
+occurs.
+
+**The acceptance run's two findings (2026-11-11).** (1) Home's `placeStatus.5` is the Settings place's line,
+"Dark · 60% sound", built from two settings (`words::settings_line`, as the C#'s own look built it). theme-audit judges a
+theme's words as data unless they are one of the host's fixed words (`words::is_fixed`, through kit-core's `mark_data`),
+and data may elide (EmuSen_Qt.md §3.7.2; accepted 2026-11-11, R-20261111-44); the program's gate read every elided word
+as fixed, so it named the line where theme-audit, on the same screen file, did not. `hold` now marks the words inside the
+theme host (`reference`) as theme-audit does, and only there: the program's own screens keep every elided word a
+finding (Settings' ROM folder is still named, by its excuse, R-20261111-36). The line still elides at 1280 × 720, as data,
+and is no longer a finding. (2) The colour on `placeDisc.0` to `.2` is printed `#2E8C96DC`, kit-core's `#AARRGGBB`: alpha
+0x2E (0.18) over (140, 150, 220). It is a literal of the reference theme, the disc's border in
+`Frontend/themes/emusen/screens/Consoles.qml` (`border.color: Qt.rgba(140 / 255, 150 / 255, 220 / 255, 0.18)`), the
+same on every place's disc; it is no console's colour and no token. It was not exempted. Decided 2026-11-11
+(R-20261111-96): the border is the palette's muted token at the same 18%, so it is no longer a colour outside the palette;
+the Consoles figures the run named are ruled the same day (`EmuSen_Qt.md` §3.4.2). The seven counted classes `acceptance.rs` leaves out of its Consoles comparison
+(`COUNTED`) need the canvas's eleven consoles; the acceptance library shelves three consoles, and theme-audit's
+`qt_3_4_2` test holds them on the same screen file over the catalogue `eleven` (the line's comment says so). Held: the
+acceptance test lists Home's scene colours as accepted by R-20261111-39 and, holding Home again with a table that
+accepts nothing (`Excuses::refusing_all()`), finds them as findings.
 
 ### 7.105 The section strip is a scroller only where its names run past it; the harness reads an item's number (repair DC-B; 2026-11-11)
 
@@ -3314,3 +3605,123 @@ box × (58/64) / `discShare` (EmuSen_Qt.md §4.12.1).
 **Held to**: kit-core's `kit_7_71_the_filled_disc_fills_the_share_of_its_box_the_kit_publishes` (the drawn disc's extent
 against the constant); rule Q's registry (`discShare` declared last, no index moved); esde-qt's
 `the_watched_themes_hold_at_the_five_sizes`, which holds every help glyph to that size.
+
+### 7.109 Each accepted class read in one place, the program's own words held whole, and the main-thread line accepted in tests only (2026-11-11)
+
+**One place a class.** Every row of `audit::ACCEPTED` is read by the one place that accepts its class, so deleting a
+row turns that place's gate red wherever the class has something to accept, and no class is accepted anywhere else:
+
+| Class | Ruling | Read by |
+|---|---|---|
+| `RomFolderCutAtStart` | R-20261111-36 | an `Excuse` that stands for the class (`Excuse::class`); without the row it excuses nothing and goes stale (qt-app `settings.rs`). An excuse that names no class fails its test, naming itself |
+| `SpareTenth`, `FadedEdge`, `SceneColour` | R-20261111-37 to -39 | `Exempted::class`, sorted by every gate (§7.102) |
+| `MoonriseCaption` | R-20261111-40 | `SMALL_TEXT_EXCEPTIONS`' entry, matched by the kit file the words are written in and their name (below) |
+| `CpuConversionLine` | R-20261111-41 | the row's `lines`, the log line word for word; `QT_INTERNAL` names only the class and the backend, and `qt_internal` lets the line pass only while the row is there |
+| `DimmedAndMoving` | R-20261111-43 | `Exempted::Disabled`, a disabled control's words under their contrast, sorted by every gate (below); theme-audit's `declined_places` and `rested`, which leave declined places' and moving words out of the contrast rule only while the row is there |
+| `DataWordsElided` | R-20261111-44 | `Exempted::Elided`, data cut with an ellipsis, sorted by every gate as the others are |
+| `MainThreadLineInTests` | R-20261111-110 | the row's `lines`, read through qt-test's `QT_TESTS_ONLY`, which names only the class: Qt's main-thread warning, in test programs only (below) |
+
+A log line a row accepts lives in that row (`Accepted::lines`), so adding a line under an existing class changes the table,
+and kit-core's table test (`kit_7_102_the_table_holds_the_classes_the_tester_accepted_and_no_other`) holds every row's
+lines word for word.
+
+**A disabled control's words** (R-20261111-43). The harness writes every text's ink, a disabled control's too, and marks
+its words `disabled` (`Legibility::disabled`, from Qt's `isEnabled`). The contrast rule leaves them to `exempted`, which
+names each one under its contrast as `low contrast on a disabled control`, of the class `DimmedAndMoving`; every gate
+sorts it by the table, so it is listed under R-20261111-43 while the row is there and is a finding without it. Until
+2026-11-12 the harness blanked a disabled control's ink, so no rule saw the words and no row was read. qt-test's
+`kit_7_109_a_disabled_control_s_words_are_named_under_their_ruling_not_dropped` holds it on the help bar's declined
+entry, drawn at 38 %; kit-core's `kit_7_109_a_disabled_control_s_words_under_their_contrast_are_named_not_faults` holds
+the rule. Measured 2026-11-12 on the software backend, the gallery's three gates name no disabled control under its
+contrast, so with the row removed they stay green: there is nothing there for it to accept.
+
+The class of R-20261111-46, the 22 duplicate-code pairs of the cxx-qt bridges, cannot be routed through the table:
+`dupes.accept` is read by emusen-dev's `dupes` command (`Platform/emusen-dev-module`, man `dupes`), which links no
+front-end crate, and making it link kit-core would be a cross-component dependency for one comment's worth of fact. Its
+row is removed; the class is accepted in `dupes.accept` alone, each pair by its own line, under R-20261111-46.
+
+Data words cut with an ellipsis were let pass by the fit rule itself (`text.data`). The fit rule still names a fixed
+word cut, and leaves data to `exempted`, which lists each as `data cut with an ellipsis: <item>`; the gates list it with
+R-20261111-44, and without that row it is a finding. So every elision the ruling lets pass is now named, item by item, in
+theme-audit's stderr and the gates' accepted lists.
+
+**Only the table accepts.** `Excuses::accepting(table)` and `excuse::sort`'s table are gone: `sort` reads `ACCEPTED`,
+and a test may only narrow it (`sort_refusing`, `Excuses::refusing`, `Excuses::refusing_all`, which the acceptance
+run's `HomeAcceptingNothing` uses). kit-core's `accepted_in(table, …)` is gone with them; `accepted(class)` reads
+`ACCEPTED` alone.
+
+**The program's own words are not data** (R-20261111-35). Data is what comes from the library, a game or a file
+(R-20261111-44). `words::is_own` is the host's fixed words and the lines the program builds from its own settings,
+devices and clock: the Settings place's line (`settings_line`), the status line and the version line, each recognised
+beside the function that builds it. theme-audit and the program's `hold` mark data by it, where both used
+`words::is_fixed`. Home's `placeStatus.5`, "Dark · 60% sound", is then held whole, and it did not fit: in Barlow at 20 it
+is 142.9 units against its 134-unit box, and the longest the line can be, "Light · 100% sound", 154.5 (advance widths
+read from `Barlow-Regular.ttf`'s own tables on 2026-11-11; Qt's layout of "7 games" agreed to 0.03 unit). No size of
+Barlow both fits and stays over the floor at 1280 × 720 (at 17 the line fits, 131.3, but its capitals there are under
+11.64). The places' lines take Barlow Condensed's regular face, which the worlds' counts already take (EmuSen_Qt.md
+§3.4.2); the face was decided 2026-11-12 (R-20261112-1), regular at the same size. "Light · 100% sound" is 124.1 there (127.5 if Qt draws the family's
+medium weight), inside the box. The tile,
+the name and the line's place are unchanged. Held by theme-audit's `qt_3_4_1` test, which runs the reference package's
+Home by default and in the `loud` state, fails on any line naming `placeStatus`, and reads from each recording that the
+loud light variant draws "Light · 100% sound" and the dark one "Dark · 100% sound" at the five sizes; and by qt-models'
+`qt_3_7_2_the_program_s_own_lines_are_not_data`. theme-audit words the Settings place's line in the variant it holds,
+as the program's library model does, feeding Home's lines afresh when the variant changes.
+
+**Moonrise's caption, in Moonrise** (R-20261111-40). `SMALL_TEXT_EXCEPTIONS` entries are (file, name, class):
+`(MOONRISE_SOURCE, "moonriseCaption", MoonriseCaption)`, where `MOONRISE_SOURCE` is
+`qrc:/qt/qml/EmuSen/Kit/qml/Moonrise.qml`, the kit module's own file. The harness writes the URL of the QML file each item
+is written in (`qmlContext(item)->baseUrl()`, `Item::source`), and `small_text_exception(item)` gives the class only to
+words of that name written in that file. A theme package is loaded from its own folder and cannot write into the kit's
+resources, so no name or wrapper of its own reaches the exception; an ancestor's `objectName`, which any theme can set,
+is not read. theme-check's fixture `small-caption` puts a caption of that name inside an item the theme names
+`moonrise`, and the audit holds it to the floor at every size in both variants
+(`kit_7_102_moonrise_s_caption_name_in_a_theme_s_own_moonrise_is_not_accepted`). The gallery's gate still sees the
+kit's own caption pass under the ruling, 12 times (measured 2026-11-12).
+
+**The main-thread line, in test programs only** (R-20261111-42 held it until the tester decided on 2026-11-11,
+R-20261111-110: accepted in test programs only). `QT_INTERNAL` does not hold it. qt-test's `QT_TESTS_ONLY` names the
+class `MainThreadLineInTests`, whose row gives R-20261111-110 and the line's words; `assert_quiet` and the harness's
+`Drop` count it, write `accepted in tests, R-20261111-110: N × <words>` to the process's own stderr, and add the count to
+the test program's list beside the gates' accepted lists, `accepted-tests-only-<program>.txt`
+(`excuse::tally_tests_only`): a first line naming the run (nextest's run id, or the process under `cargo test`), the
+program's total under the ruling, and a line a test. A list starts afresh in each run, and a program's tests running at
+once wait on the file's lock. The gate runner (cargo-nextest) shows a passing test's output to no one, so the stderr line
+is seen only under `cargo test` or when a test fails; the list is what a green gate leaves. qt-test's
+`kit_7_109_a_harness_leaves_its_program_s_count_where_the_gates_list` holds that a harness writes it, and
+`kit_7_109_each_test_program_lists_its_count_of_the_main_thread_line_under_its_ruling` its form. Neither fails on the
+line; without the row, it fails `assert_quiet`. Every test binary that links Qt Multimedia logs it once, at its first
+`Harness` (§7.101). The program itself must never print it: qt-app's `program` test
+`kit_7_109_the_program_itself_never_prints_the_main_thread_line` runs the built `emusen-qt` (its own `main`), offscreen on
+the software scene with no platform library, so no device is opened, reads its stderr until it says it has made its
+application, and fails if the line is there. Seeded (the program first making a throwaway application on a thread of
+its own), the test names the line.
+
+**Accepted lists.** qt-test owns the one writer, `excuse::write_accepted`, into `~/.cache/emusen/tmp/accepted/`,
+one file a gate (`accepted-gate.txt` and so on); the gallery's three gates and the program's tests (an `Excuses` made with
+`.listing("qt-app-…")` writes on drop) use it, and a list that cannot be written fails its gate. An `Excuse` that stands
+for a class lists the finding it excused with the class's ruling.
+
+**A class excuses only what its ruling covers.** Each row of `ACCEPTED` lists the kinds of finding an excuse under its
+class may excuse (`Accepted::findings`), read from the kinds' owners (`Fault::ELLIPSIS`, `Exempted::SPARE` and the
+other exemptions' names): `RomFolderCutAtStart` an ellipsis, each exemption's class its own exemption, and the two log
+lines' classes no finding of the rules. An excuse whose class does not cover its kind excuses nothing, and its stale
+line says so (`…: excused nothing, its class SpareTenth (R-20261111-37) covering no too small to read`). Until
+2026-11-12 the class was only checked to have a row, so a contrast class could excuse small words, a cut or a pad that
+does not reach. Held by kit-core's `kit_7_109_each_class_covers_its_own_kinds_of_finding_and_no_other` and qt-test's
+`kit_7_109_an_excuse_whose_class_does_not_cover_its_finding_excuses_nothing_and_says_so`. The one excuse a gate holds,
+qt-app `settings.rs`' ROM folder (an ellipsis under `RomFolderCutAtStart`), is covered.
+
+**Use reads the table.** qt-app's `themes_tab` test hands two packages to the real theme-audit (built beside the test):
+theme-check's fixture `elided-title`, whose titles are cut (R-20261111-44), which Use takes, and `small-caption`, which
+it refuses, its findings naming `moonriseCaption`. Emptying the table refuses the first.
+
+**One owner for the cover shape.** A cover's shape where nothing gives one, 3 wide by 4 tall, is kit-core's
+`page::COVER_SHAPE` (0.75); qt-models' `library::COVER_SHAPE` is that constant, and its `library::cover_shape(system)`
+turns the systems table's height over width into the width over height a theme draws, with that one fallback.
+theme-qt's `view::games` and qt-models' game page, its starting value included, read it. The kit's `PageFrame` keeps a
+`coverAspect` default because the kit stands without a host and draws a page before one gives a shape; kit-qt's
+`kit_7_109_the_page_frame_s_cover_shape_is_kit_core_s` reads that default from the QML and holds it equal to
+`COVER_SHAPE`. `OrbitSlot` has no fallback of its own: every host gives a shape. A game whose console the systems table
+lacks has the shape 0.75 where it had 0 until 2026-11-11; the reference look's cover rows drew such a cover square and
+Horizon's games drew it with no width, and both now draw it 3:4 (theme-qt's view test). theme-qt's view test holds the
+NES's figure to 0.6993, written down, not computed.

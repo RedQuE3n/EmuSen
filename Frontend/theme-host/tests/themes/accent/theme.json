@@ -7,5 +7,5 @@
     "variants": ["dark"],
     "fontSizes": [1],
     "screens": ["home"],
-    "tokens": {"dark": {"accent": "#B4442A"}}
+    "tokens": {"dark": {"accent": "#B4442A", "shadowColor": "#2A1B4C"}}
 }

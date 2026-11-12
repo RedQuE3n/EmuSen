@@ -6,7 +6,7 @@ NAME
 SYNOPSIS
     theme-check [--static] [--state DIR] <folder>...
     theme-audit [--gpu] [--state DIR] [--states LIST] [--catalogue FILE]
-                [--section KEY] <folder>
+                [--section KEY] [--focus NAME] [--mockups DIR] <folder>
     theme-audit --list-states
 
 DESCRIPTION
@@ -190,6 +190,21 @@ THE LOADED STEP
                     its opacity, changed over the frame before the
                     held time (16 ms) is mid-change and not judged;
                     a text resting faint is still a finding.
+        exempted    an item a rule let pass by an exemption, each by
+                    itself, as kit-core's exempted lists it and the
+                    program's tests report it (EmuSen_Kit.md 7.102):
+                    words that reach their contrast over all but the
+                    spare tenth of what is behind them, words under it
+                    at a scroller's faded edge, and words under the
+                    floor that SMALL_TEXT_EXCEPTIONS names. A scene's
+                    colour outside the palette is not one: no palette
+                    rule runs over a theme. An exemption of a class
+                    the tester has accepted (kit-core's ACCEPTED,
+                    EmuSen_Kit.md 7.102) is not a line here: it goes
+                    to stderr as "theme-audit: accepted by <ruling>:
+                    <file> <size> <variant>: <words>" and fails
+                    nothing. Only an exemption of a class with no
+                    ruling is an exempted line, and a finding.
         motion      a screen not still under reduced motion
         load        the host could not place the screen: the engine's
                     and the sandbox's words, a line each
@@ -247,6 +262,26 @@ THE LOADED STEP
     environment says: a threaded render loop installs an animation
     driver of its own, which the held clock of the timed states would
     have to replace (EmuSen_Kit.md 7.36).
+
+    --mockups DIR (theme-audit alone) holds each screen to its mockup in
+    DIR, the file <package>-<Screen>.mockup.spec (the package's folder
+    name and the screen's, Home, Consoles or Games, in any case), in the
+    default state, by night, at 1280 x 800 and 1920 x 1200, where a design
+    unit is the window's height over 800. Each element the mockup names is
+    found by its objectName and held within two units of every edge it
+    states, to its token's colour as the package's night overrides give
+    it, and to its words (EmuSen_Qt.md 8.2; qt-test's mockup comparison).
+    A difference is a line of kind mockup:
+        .../screens/Home.qml:1 mockup 1280x800 dark: ring: Y 451.1, the
+            mockup's 447.1
+    The built-in themes are held to Testing/themes by theme-audit's tests
+    (EmuSen_Kit.md 7.104); a mockup is never written to the program's
+    numbers.
+
+    --focus NAME (theme-audit alone, with --catalogue) gives the focus to
+    the console a reader hears as NAME before each size is judged, where
+    the crowd's sweep stands for the walk: a canvas that focuses another
+    console than the first (the reference canvas focuses the second).
 
     --catalogue FILE (theme-audit alone) places Choose a console once,
     over the synthetic library with FILE's consoles in place of its own,
@@ -327,6 +362,9 @@ STATES
                 pad along the walk's own presses; its words are held
                 to contrast only if it is drawn as if offered
                 (contrast, above)
+    loud        Home with the navigation sound at full volume, so the
+                Settings place's line is the longest it can be, "Light ·
+                100% sound" in the light variant
     splash-1s   the splash with motion allowed and every animation's
                 clock held 1 s after it is placed
     splash-3s   the same at 3 s
@@ -343,6 +381,14 @@ STATES
     leaves Qt's default driver in place of a threaded render loop's own,
     so the held states run last. The reference theme has no Splash.qml
     and no splash states: its splash is Moonrise, the kit's.
+
+    What theme-audit judged goes to stderr, a line a screen:
+        theme-audit: held Consoles in 10 states, 2 against its mockup
+    a state counted once every rule has judged it at its size and
+    variant, and against its mockup when one was compared. A pass that
+    stopped, or a screen that did not load, counts none, so a caller
+    tells a screen judged and clean from one never judged; theme-audit's
+    tests read these lines (EmuSen_Kit.md 7.104).
 
 EXIT STATUS
     0 for no finding, 1 for one or more, 2 when it could not run (no
@@ -363,6 +409,8 @@ EXAMPLES
     theme-audit --state /tmp/states --catalogue Testing/themes/catalogues/n30.tsv Frontend/themes/emusen
     theme-audit --states all --state /tmp/states Frontend/themes/meridian
     theme-audit --states nogame,splash-3s Frontend/themes/meridian
+    theme-audit --mockups Testing/themes Frontend/themes/horizon
+    theme-audit --catalogue Testing/themes/catalogues/eleven.tsv --focus "Super Nintendo" --mockups /tmp/m Frontend/themes/emusen
     theme-audit Frontend/theme-check/tests/themes/dim-picture
 
         .../dim-picture/screens/Home.qml:1 contrast 1280x800 dark: low

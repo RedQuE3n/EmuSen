@@ -7,7 +7,7 @@ use emusen_platform_client::Platform;
 use emusen_qt_models::clients::ClientSource;
 use emusen_qt_models::library::{refresh, LibraryView};
 
-/// The NES's cover shape as the systems table declares it, and the view read from the clients.
+/// The NES's cover shape as the systems table declares it (height over width), and the view read from the clients.
 #[allow(dead_code)]
 pub struct Read {
     pub view: LibraryView,

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use cxx_qt::casting::Upcast;
 use cxx_qt::QObject;
 use cxx_qt_lib::{QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
-use emusen_kit_core::audit::{self, Edge, Fault, State};
+use emusen_kit_core::audit::{self, Class, Edge, Fault, State, accepted};
 use emusen_kit_core::input::{ElementId, UiButton, WalkForm};
 use emusen_kit_core::tokens::{self, Colour, ColourToken, Variant};
 use emusen_kit_qt::kinds;
@@ -44,13 +44,89 @@ const STRICTLY_ENFORCE_RANGE: f64 = 2.0;
 const STEPPED: &str = "stepped";
 const STEPS_PRESSED: usize = 64;
 
-/// Messages Qt logs of its own accord that no code of ours causes, each with its reason (EmuSen_Kit.md §7.14).
-pub const QT_INTERNAL: [(&str, &str); 2] = [
+/// The presses the gate's walk makes from every operable item.
+pub const DIRECTIONS: [UiButton; 4] = [UiButton::Up, UiButton::Down, UiButton::Left, UiButton::Right];
+
+/// The walk's presses on a screen whose shoulders are its own declared actions, as the search's keys and covers are.
+pub const WITH_SHOULDERS: [UiButton; 6] = [UiButton::Up, UiButton::Down, UiButton::Left, UiButton::Right, UiButton::PageUp, UiButton::PageDown];
+
+/// The classes of message Qt logs of its own accord that no code of ours causes, each with whether it is Qt's only on the
+/// software backend; the words are the class's row's in kit-core's `ACCEPTED`, so no text is accepted here (EmuSen_Kit.md §7.14, §7.101, §7.109).
+pub const QT_INTERNAL: [(Class, bool); 1] = [
     // Qt Multimedia converting a clip's frame to a picture where there is no RHI, the software backend's path (EmuSen_Kit.md §7.50).
-    ("No RHI backend. Using CPU conversion.", "Qt Multimedia on the software backend"),
-    // QtCore's, once Qt Multimedia starts in a process whose application was made on a test runner's thread; the program makes it on main.
-    ("QApplication was not created in the main() thread", "the test runner's thread"),
+    (Class::CpuConversionLine, true),
 ];
+
+/// The lines a class's row accepts, none without the row.
+fn lines_of(class: Class) -> &'static [&'static str] {
+    accepted(class).map_or(&[], |a| a.lines)
+}
+
+/// Whether a message Qt logged is one of `QT_INTERNAL`'s classes' lines on the backend the scene graph draws on.
+pub fn qt_internal(message: &str, software: bool) -> bool {
+    QT_INTERNAL.iter().any(|(class, software_only)| (software || !software_only) && lines_of(*class).iter().any(|text| message.contains(text)))
+}
+
+/// The classes of message accepted in test programs only: counted and written with the row's ruling by every test that sees
+/// one, failing none; without the row, a failure (EmuSen_Kit.md §7.101, §7.109).
+pub const QT_TESTS_ONLY: [Class; 1] = [
+    // QtCore's, once Qt Multimedia starts in a process whose application was made on a test runner's thread.
+    Class::MainThreadLineInTests,
+];
+
+/// The ruling that accepts a message Qt logged in a test program, if a `QT_TESTS_ONLY` class's row holds its words.
+pub fn qt_tests_only(message: &str) -> Option<&'static str> {
+    QT_TESTS_ONLY.iter().filter_map(|class| accepted(*class)).find(|a| a.lines.iter().any(|text| message.contains(text))).map(|a| a.ruling)
+}
+
+/// Prints `tests_only_lines` on the process's own stderr, past the test runner's capture, and adds the counts to the test
+/// program's list beside the gates' accepted lists, which a gate leaves whether or not its runner shows the output.
+fn say_tests_only(messages: &[String]) {
+    use std::io::Write;
+    let mut err = std::io::stderr().lock();
+    for line in tests_only_lines(messages) {
+        writeln!(err, "{line}").expect("stderr takes the line");
+    }
+    if !std::thread::panicking() {
+        let (program, run, test) = tests_only_process();
+        crate::excuse::tally_tests_only(&crate::excuse::accepted_dir(), &program, &run, &test, &tests_only_counts(messages));
+    }
+}
+
+/// This process's test program, run and test, as its counts are listed: nextest's names where it runs the test, else the
+/// program's file, the process and the test's thread.
+pub fn tests_only_process() -> (String, String, String) {
+    let program = std::env::var("NEXTEST_BINARY_ID")
+        .ok()
+        .or_else(|| {
+            let stem = std::env::current_exe().ok()?.file_stem()?.to_string_lossy().into_owned();
+            // Cargo's file name ends in a hash of the build, which a list does not keep.
+            Some(stem.rsplit_once('-').filter(|(_, h)| h.len() == 16 && h.bytes().all(|b| b.is_ascii_hexdigit())).map_or(stem.clone(), |(n, _)| n.to_owned()))
+        })
+        .unwrap_or_default();
+    let run = std::env::var("NEXTEST_RUN_ID").unwrap_or_else(|_| std::process::id().to_string());
+    let test = std::env::var("NEXTEST_TEST_NAME").ok().or_else(|| std::thread::current().name().map(str::to_owned)).unwrap_or_default();
+    (program, run, test)
+}
+
+/// Each test-only line's ruling, words and count among `messages`, nought included.
+pub fn tests_only_counts(messages: &[String]) -> Vec<(&'static str, &'static str, usize)> {
+    QT_TESTS_ONLY
+        .iter()
+        .filter_map(|class| accepted(*class))
+        .flat_map(|row| row.lines.iter().map(move |text| (row.ruling, *text)))
+        .map(|(ruling, text)| (ruling, text, messages.iter().filter(|m| m.contains(text)).count()))
+        .collect()
+}
+
+/// One line for each accepted test-only message among `messages`, counted: "accepted in tests, R-…: 2 × the message".
+pub fn tests_only_lines(messages: &[String]) -> Vec<String> {
+    tests_only_counts(messages)
+        .into_iter()
+        .filter(|(_, _, seen)| *seen > 0)
+        .map(|(ruling, text, seen)| format!("accepted in tests, {ruling}: {seen} × {text}"))
+        .collect()
+}
 
 /// The sizes the gate runs at (EmuSen_Interface.md §24.7): 1280 × 800, a Steam Deck–class size kept as a fit size; the
 /// handheld's own 1920 × 1200 (a Legion Go S, decided 2026-11-08); 1920 × 1080, 1280 × 720 and 3840 × 2160.
@@ -169,16 +245,32 @@ impl Harness {
         all.split('\u{1e}').filter(|m| !m.is_empty()).map(str::to_owned).collect()
     }
 
-    /// Fails on any message Qt logged that is not one of `QT_INTERNAL`'s, each named with the reason it is Qt's (EmuSen_Kit.md §7.14).
+    /// Fails on any message Qt logged that is not one of `QT_INTERNAL`'s, each named with the reason it is Qt's; one
+    /// `QT_TESTS_ONLY` accepts is printed with its count and ruling, and fails nothing (EmuSen_Kit.md §7.14, §7.109).
     pub fn assert_quiet(&mut self) {
-        let ours: Vec<String> = self.messages().into_iter().filter(|m| !QT_INTERNAL.iter().any(|(text, _)| m.contains(text))).collect();
+        let software = self.software();
+        let messages = self.messages();
+        say_tests_only(&messages);
+        let ours: Vec<String> = messages.into_iter().filter(|m| !qt_internal(m, software) && qt_tests_only(m).is_none()).collect();
         assert!(ours.is_empty(), "Qt logged {} warnings or errors:\n{}", ours.len(), ours.join("\n"));
+    }
+
+    /// Whether the scene graph draws on the software backend; Qt settles it when the first window is made.
+    pub fn software(&self) -> bool {
+        ffi::harness_software()
     }
 
     pub fn process_events(&self) {
         if let Some(app) = self.app.as_ref() {
             app.process_events();
         }
+    }
+}
+
+impl Drop for Harness {
+    /// What Qt logged since a test last asked, the test-only messages among it counted and printed, as `assert_quiet` does.
+    fn drop(&mut self) {
+        say_tests_only(&self.messages());
     }
 }
 
@@ -677,13 +769,19 @@ impl Scene<'_> {
     }
 
     /// The walk with each press made by `press`: a real pad's, where `walk` pushes into the router's queue.
-    pub fn walk_by(&mut self, tree: &Tree, mut press: impl FnMut(&mut Self, UiButton)) -> Vec<Step> {
+    pub fn walk_by(&mut self, tree: &Tree, press: impl FnMut(&mut Self, UiButton)) -> Vec<Step> {
+        self.walk_pressing(tree, &DIRECTIONS, press)
+    }
+
+    /// The walk over `buttons`: the four directions, and the shoulders on a screen that declares them as its own actions
+    /// (EmuSen_Kit.md §7.27, §7.103).
+    pub fn walk_pressing(&mut self, tree: &Tree, buttons: &[UiButton], mut press: impl FnMut(&mut Self, UiButton)) -> Vec<Step> {
         let mut steps = Vec::new();
         // The object standing for each of the tree's items: a view deletes a delegate scrolled out of it and makes another
         // when it scrolls back, so a press can leave the tree's numbers naming nothing, or a new item at a freed address.
         let mut live = tree.ids.clone();
         for from in tree.operable() {
-            for button in [UiButton::Up, UiButton::Down, UiButton::Left, UiButton::Right] {
+            for &button in buttons {
                 let id = live[from as usize];
                 if id == 0 || !ffi::harness_focus_item(self.window(), id) {
                     continue;
@@ -778,6 +876,17 @@ impl Scene<'_> {
             smallest: measures.floor * audit::DESKTOP_CAPS * measures.unit,
         };
         audit::check(root, &state)
+    }
+
+    /// What the audit's rules let pass by an exemption over one state, each item by item (EmuSen_Kit.md §7.102).
+    pub fn exempted(&self, tree: &Tree, form: WalkForm, variant: Variant, height: f64) -> Vec<audit::Exempted> {
+        self.exempted_item(&tree.root, form, variant, height)
+    }
+
+    /// The same over one item and what is under it, as `audit_item` judges an open sheet alone.
+    pub fn exempted_item(&self, root: &audit::Item, form: WalkForm, variant: Variant, height: f64) -> Vec<audit::Exempted> {
+        let measures = Measures::of(form, height);
+        audit::exempted(root, Some(&palette(variant)), measures.floor * audit::DESKTOP_CAPS * measures.unit)
     }
 }
 

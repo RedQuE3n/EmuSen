@@ -8,14 +8,15 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use cxx_qt::QObject;
-use emusen_kit_core::audit::{self, contrast, fit, named, no_chrome, pad_reach, pointer_reach, reached, Fault, Rect};
+use emusen_kit_core::audit::{self, contrast, fit, named, no_chrome, pad_reach, pointer_reach, reached, Class, Rect};
 use emusen_kit_core::input::{ElementId, UiButton, WalkForm};
-use emusen_kit_core::tokens::Variant;
+use emusen_kit_core::tokens::{colour, Colour, ColourToken, Variant};
 use emusen_kit_qt::kinds;
 use emusen_kit_qt::tokens::qobject::Tokens;
 use emusen_qt_test::ffi::ffi::harness_messages;
 use emusen_qt_test::harness::{edges, palette, Landing, Measures, Step, SETTLE_MS, SIZES};
 use emusen_qt_test::spec::{self, Header};
+use emusen_qt_test::mockup::{self, Mockup};
 use emusen_qt_test::tree::Tree;
 use emusen_qt_test::{Harness, Scene};
 use emusen_theme_manifest::Screen;
@@ -76,31 +77,6 @@ fn tokens(screen: u64) -> Option<Pin<&'static mut Tokens>> {
     host::kit_tokens(object(screen))
 }
 
-/// The items a fault names, so its line can say what they are.
-fn items(fault: &Fault) -> Vec<ElementId> {
-    match fault {
-        Fault::PastItsLimit { item, limit } => [Some(*item), *limit].into_iter().flatten().collect(),
-        Fault::WordsPastOwner { words, owner } => vec![*words, *owner],
-        Fault::Overlap { a, b } => vec![*a, *b],
-        Fault::CutAtEdge { item, area, .. } => vec![*item, *area],
-        Fault::Covered { item, by } => vec![*item, *by],
-        Fault::ScrollsInTooLittleRoom { item, .. }
-        | Fault::Ellipsis { item }
-        | Fault::RunsPastItsBox { item }
-        | Fault::CutAtFoot { item }
-        | Fault::TooSmall { item, .. }
-        | Fault::TitleCut { item }
-        | Fault::FooterCut { item }
-        | Fault::Unreachable { item }
-        | Fault::ClickDiffers { item }
-        | Fault::WheelDoesNotMove { item }
-        | Fault::Chrome { item }
-        | Fault::Unnamed { item }
-        | Fault::OutsidePalette { item, .. }
-        | Fault::LowContrast { item, .. } => vec![*item],
-    }
-}
-
 /// An item as a reader finds it in the QML: its type, its objectName or words, and its box in window pixels.
 fn described(tree: &Tree, id: ElementId) -> String {
     let Some(n) = tree.nodes.get(id.0 as usize) else { return format!("{}", id.0) };
@@ -114,9 +90,43 @@ struct Lines<'a> {
     out: Vec<String>,
     /// Where the audit is: the size and the variant being judged, named when a state cannot be read.
     at: String,
+    /// Each screen judged, with how many states were judged in full and how many of those against its mockup.
+    held: Vec<(Screen, usize, usize)>,
+    /// Each exemption of a class the tester's ruling accepts, with its ruling: listed, not a finding.
+    accepted: Vec<String>,
+}
+
+/// What a run found, what it held (`held <Screen> in N states, M against its mockup`) and what a ruling accepted.
+pub struct Audited {
+    pub lines: Vec<String>,
+    pub held: Vec<String>,
+    pub accepted: Vec<String>,
 }
 
 impl Lines<'_> {
+    /// One state of `screen` judged by every rule to its end, `mocked` when its mockup was compared too.
+    fn judged(&mut self, screen: Screen, mocked: bool) {
+        match self.held.iter_mut().find(|(s, _, _)| *s == screen) {
+            Some((_, states, mockups)) => {
+                *states += 1;
+                *mockups += usize::from(mocked);
+            }
+            None => self.held.push((screen, 1, usize::from(mocked))),
+        }
+    }
+
+    fn audited(self) -> Audited {
+        let held = self.held.iter().map(|(s, n, m)| format!("held {} in {n} states, {m} against its mockup", title(*s))).collect();
+        Audited { lines: self.out, held, accepted: self.accepted }
+    }
+
+    fn accept(&mut self, screen: Screen, ruling: &str, words: &str) {
+        let line = format!("accepted by {ruling}: {}/{} {words}", self.shown, screen.file());
+        if !self.accepted.contains(&line) {
+            self.accepted.push(line);
+        }
+    }
+
     fn add(&mut self, screen: Screen, kind: &str, words: &str) {
         let line = format!("{}/{}:1 {kind} {words}", self.shown, screen.file());
         if !self.out.contains(&line) {
@@ -159,13 +169,15 @@ struct Fed<'a> {
     session: &'a SessionFacts,
     declined: &'a [&'a str],
     reduced: bool,
+    /// The variant Home's Settings line names, as the program's library model words it.
+    dark: bool,
 }
 
 /// The views fed as the program's host feeds them, the kit's tokens set to the big screen, with reduced motion on but for a held clock.
 fn feed(screen: u64, library: &Synthetic, view: &LibraryView, fed: &Fed<'_>, overrides: &[(bool, String, String)], section: Option<&str>) -> Result<(), String> {
     let mut theme = host::library(object(screen)).ok_or("EmuSen.Theme's Library is not in the theme's engine")?;
     theme.as_mut().show_declined(&fed.declined.iter().map(|d| (*d).to_owned()).collect::<Vec<_>>());
-    theme.as_mut().show(view, &library.home_lines(view));
+    theme.as_mut().show(view, &library.home_lines(view, fed.dark));
     // The Games screen's section as the program's showBrowse gives it: the named one, else the first console's, else the All shelf.
     let first = view.rows.rows().iter().find(|r| r.kind == Some(Kind::Console)).map(|r| r.key.clone()).or(Some(ALL.to_owned()));
     if let Some(key) = section.map(str::to_owned).or(first) {
@@ -180,6 +192,13 @@ fn feed(screen: u64, library: &Synthetic, view: &LibraryView, fed: &Fed<'_>, ove
     kit.as_mut().set_reduced_motion(fed.reduced);
     host::set_token_overrides(object(screen), overrides);
     Ok(())
+}
+
+/// Home's lines fed afresh in a variant: the Settings place's line names the look, as the program's does.
+fn relined(screen: u64, library: &Synthetic, view: &LibraryView, dark: bool) {
+    if let Some(mut theme) = host::library(object(screen)) {
+        theme.as_mut().show(view, &library.home_lines(view, dark));
+    }
 }
 
 /// Whether the screen comes to rest under reduced motion: no animation running and no frame swapped for two seconds.
@@ -213,11 +232,15 @@ struct Pass<'a> {
     moving: Option<&'a HashSet<String>>,
     /// The places the host declines, by key and by the name a reader hears: exempt from the words' contrast when drawn apart.
     declined: &'a [(&'a str, String)],
+    /// The screen's mockup and the theme's night palette, held where the size is the canvas's or its 1.5 times.
+    mockup: Option<(&'a Mockup, &'a dyn Fn(ColourToken) -> Colour)>,
+    /// Feeds Home's lines afresh for a variant, dark or not, as the program's library model words them when the look changes.
+    relined: Option<&'a dyn Fn(u64, bool)>,
 }
 
 impl<'a> Pass<'a> {
     fn plain(variants: &'a [Variant], label: &'a str, consoles: Option<&'a [String]>) -> Pass<'a> {
-        Pass { variants, label, consoles, focus: None, press: false, held: false, moving: None, declined: &[] }
+        Pass { variants, label, consoles, focus: None, press: false, held: false, moving: None, declined: &[], mockup: None, relined: None }
     }
 }
 
@@ -228,13 +251,16 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
         if let Some(mut kit) = tokens(id) {
             kit.as_mut().set_variant(if variant == Variant::Dark { kinds::Variant::Dark } else { kinds::Variant::Light });
         }
+        if let Some(relined) = pass.relined {
+            relined(id, variant == Variant::Dark);
+        }
         for (w, h) in SIZES {
             lines.at = format!("{w}x{h} {name}");
             scene.resize(w, h);
             scene.wait(150);
             let mut tree = scene.tree();
-            // A title or a name may elide; the program's fixed words may not.
-            tree.root.mark_data(&words::is_fixed);
+            // A title or a name may elide; the program's own words, fixed or built from its settings, may not.
+            tree.root.mark_data(&words::is_own);
             // What lies behind each text as drawn, pictures and translucent fills included, before the walk moves anything.
             scene.sample_behind(&mut tree, f64::from(w), f64::from(h));
             if let Some(moving) = pass.moving {
@@ -246,7 +272,11 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             let walked = edges(&walk);
             // A state's focus and held press are put on after the walk, and the screen judged and recorded as they leave it.
             if let Some(name) = pass.focus {
-                walk_to(scene, &tree, &walk, name);
+                if pass.consoles.is_some() {
+                    focus_named(scene, &tree, name);
+                } else {
+                    walk_to(scene, &tree, &walk, name);
+                }
             }
             if pass.press {
                 scene.key_hold(RETURN, true);
@@ -257,7 +287,7 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
                     scene.rest();
                 }
                 let mut shown = scene.tree();
-                shown.root.mark_data(&words::is_fixed);
+                shown.root.mark_data(&words::is_own);
                 scene.sample_behind(&mut shown, f64::from(w), f64::from(h));
                 if let Some(moving) = pass.moving {
                     rested(&mut shown, moving);
@@ -273,6 +303,12 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             }
             let seen = held_tree.as_ref().unwrap_or(&tree);
             let shown = scene.focus(seen).map(ElementId);
+            let mocked = pass.mockup.filter(|_| variant == Variant::Dark && f64::from(w) / f64::from(h) == 1.6);
+            if let Some((m, colours)) = mocked {
+                for fault in mockup::compare_in(m, &seen.nodes, f64::from(h) / 800.0, colours) {
+                    lines.add(screen, "mockup", &format!("{w}x{h} {name}: {fault}"));
+                }
+            }
             // The splash is watched, not operated: nothing on it is clicked, whatever stands at its centre.
             let pointed: HashSet<ElementId> = if screen == Screen::Splash {
                 HashSet::new()
@@ -294,10 +330,19 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             ];
             for (kind, faults, judged) in found {
                 for fault in faults {
-                    let who: Vec<String> = items(&fault).into_iter().map(|i| described(judged, i)).collect();
+                    let who: Vec<String> = fault.items().into_iter().map(|i| described(judged, i)).collect();
                     lines.add(screen, kind, &format!("{w}x{h} {name}: {fault} ({})", who.join("; ")));
                 }
             }
+            // What an exemption let pass, each item by itself: listed with its ruling where one accepts its class, else a finding (EmuSen_Kit.md §7.102).
+            for exempted in audit::exempted(&seen.root, None, smallest) {
+                let words = format!("{w}x{h} {name}: {exempted} ({})", described(seen, exempted.item()));
+                match exempted.accepted() {
+                    Some(a) => lines.accept(screen, a.ruling, &words),
+                    None => lines.add(screen, "exempted", &words),
+                }
+            }
+            lines.judged(screen, mocked.is_some());
             if let Some(dir) = state {
                 let file = format!("{}-{}-{w}x{h}", title(screen), name.replace(", ", "-").replace(' ', "-"));
                 let declared = palette(variant);
@@ -327,6 +372,12 @@ fn states(scene: &mut Scene<'_>, screen: Screen, id: u64, pass: &Pass<'_>, state
             }
         }
     }
+}
+
+/// Gives the focus to the element a reader hears as `name`, where the crowd's sweep stands for the walk; false when none is.
+fn focus_named(scene: &mut Scene<'_>, tree: &Tree, name: &str) -> bool {
+    let target = (0..tree.nodes.len() as u32).find(|&i| tree.nodes[i as usize].operable && spoken(tree, i) == name);
+    target.is_some_and(|i| scene.focus_item(tree, i))
 }
 
 /// Walks the focus by the pad, along the walk's own presses, to the element a reader hears as `name`; false when no walk leads there.
@@ -475,6 +526,8 @@ pub struct Asked<'a> {
     pub catalogue: Option<(&'a str, &'a [Entry])>,
     pub section: Option<&'a str>,
     pub states: Vec<&'static State>,
+    pub mockups: Option<&'a Path>,
+    pub focus: Option<&'a str>,
 }
 
 /// Places a screen afresh and feeds it; the host's words, a line each, when it cannot.
@@ -485,14 +538,14 @@ fn placed(scene: &mut Scene<'_>, folder: &str, screen: Screen, feeding: impl FnO
 
 /// The findings of the package at `folder` (named `shown` in the lines), its screens loaded in turn in each state asked.
 /// With a catalogue (`man theme-check`, --catalogue), Choose a console alone is placed over it, its states labelled by its name.
-pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Vec<String>, String> {
+pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, String> {
     let (state, section) = (asked.state, asked.section);
     let shown = shown.trim_end_matches('/');
     let text = std::fs::read_to_string(folder.join("theme.json")).map_err(|e| format!("{shown}/theme.json: {e}"))?;
-    let mut lines = Lines { shown, out: Vec::new(), at: String::new() };
+    let mut lines = Lines { shown, out: Vec::new(), at: String::new(), held: Vec::new(), accepted: Vec::new() };
     let package = match emusen_theme_host::package::read(&text) {
         Ok(p) => p,
-        Err(words) => return Ok(words.lines().map(|l| format!("{shown}/{l}")).collect()),
+        Err(words) => return Ok(Audited { lines: words.lines().map(|l| format!("{shown}/{l}")).collect(), held: Vec::new(), accepted: Vec::new() }),
     };
     if let Some(dir) = state {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -507,20 +560,27 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Vec<String>,
     // The covers' folder, the one a theme may show pictures from, as the program's start reads it from the settings.
     scene.set_property("host", "coverStores", &library.media.display().to_string());
     let overrides = package.colour_overrides();
+    let night = |t: ColourToken| {
+        let given = overrides.iter().find(|(light, name, _)| !light && name == t.property());
+        given.and_then(|(_, _, value)| Colour::parse(value)).unwrap_or(colour(Variant::Dark, t))
+    };
+    let mockups = asked.mockups.map(|dir| mockups_of(dir, folder)).transpose()?.unwrap_or_default();
     let both = [Variant::Dark, Variant::Light];
     if let (Some((name, _)), Some((view, names))) = (asked.catalogue, library.catalogue.as_ref()) {
         let screen = Screen::Consoles;
         logged();
         let label = format!(", {name}");
-        let pass = Pass::plain(&both, &label, Some(names));
+        let mockup = mockups.iter().find(|(s, _)| *s == screen).map(|(_, m)| (m, &night as &dyn Fn(ColourToken) -> Colour));
+        let lines_in = |id: u64, dark: bool| relined(id, &library, view, dark);
+        let pass = Pass { focus: asked.focus, mockup, relined: Some(&lines_in), ..Pass::plain(&both, &label, Some(names)) };
         let session = library.session(view, None)?;
-        let fed = Fed { session: &session, declined: &[], reduced: true };
+        let fed = Fed { session: &session, declined: &[], reduced: true, dark: true };
         match placed(&mut scene, &real, screen, |id| feed(id, &library, view, &fed, &overrides, section)) {
             Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
             Ok(id) => lines.guarded(screen, |lines| states(&mut scene, screen, id, &pass, state, lines)),
         }
         logged().iter().for_each(|w| lines.add(screen, "warning", w));
-        return Ok(lines.out);
+        return Ok(lines.audited());
     }
     for asked_state in &asked.states {
         let screens: Vec<Screen> = Screen::ALL.into_iter().filter(|s| package.screens.contains(s) && asked_state.screens.contains(s)).collect();
@@ -538,9 +598,11 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Vec<String>,
             match asked_state.clock {
                 Some(ms) => held(&mut scene, &real, screen, (&library, &view, &session), ms, &label, (state, section, &overrides), &mut lines),
                 None => {
-                    let fed = Fed { session: &session, declined: asked_state.declined, reduced: true };
+                    let fed = Fed { session: &session, declined: asked_state.declined, reduced: true, dark: true };
                     let declined: Vec<(&str, String)> = asked_state.declined.iter().filter_map(|&key| place_name(&view, key).map(|name| (key, name))).collect();
-                    let pass = Pass { focus: focus.as_deref(), press: asked_state.press, declined: &declined, ..Pass::plain(&both, &label, None) };
+                    let mockup = mockups.iter().find(|(s, _)| *s == screen && default).map(|(_, m)| (m, &night as &dyn Fn(ColourToken) -> Colour));
+                    let lines_in = |id: u64, dark: bool| relined(id, &library, &view, dark);
+                    let pass = Pass { focus: focus.as_deref(), press: asked_state.press, declined: &declined, mockup, relined: Some(&lines_in), ..Pass::plain(&both, &label, None) };
                     match placed(&mut scene, &real, screen, |id| feed(id, &library, &view, &fed, &overrides, section)) {
                         Err(words) => words.lines().for_each(|w| lines.add(screen, "load", w)),
                         Ok(id) => lines.guarded(screen, |lines| {
@@ -567,7 +629,21 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Vec<String>,
             logged().iter().for_each(|w| lines.add(screen, "warning", w));
         }
     }
-    Ok(lines.out)
+    Ok(lines.audited())
+}
+
+/// The package's mockups in `dir`, each `<package>-<Screen>.mockup.spec` with its screen; a file that does not read is an error.
+fn mockups_of(dir: &Path, folder: &Path) -> Result<Vec<(Screen, Mockup)>, String> {
+    let package = std::fs::canonicalize(folder).ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase())).unwrap_or_default();
+    let mut found = Vec::new();
+    for entry in std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?.flatten() {
+        let file = entry.file_name().to_string_lossy().to_lowercase();
+        let Some(stem) = file.strip_suffix(".mockup.spec").and_then(|s| s.strip_prefix(&format!("{package}-"))) else { continue };
+        let Some(screen) = Screen::ALL.into_iter().find(|s| title(*s).to_lowercase() == stem) else { continue };
+        let text = std::fs::read_to_string(entry.path()).map_err(|e| format!("{}: {e}", entry.path().display()))?;
+        found.push((screen, mockup::parse(&text).map_err(|e| format!("{}: {e}", entry.path().display()))?));
+    }
+    Ok(found)
 }
 
 /// A place's name as Home's list gives it, by its key.
@@ -594,7 +670,7 @@ fn held(
 ) {
     for variant in [Variant::Dark, Variant::Light] {
         scene.hold_clock(Some(0));
-        let fed = Fed { session, declined: &[], reduced: false };
+        let fed = Fed { session, declined: &[], reduced: false, dark: variant == Variant::Dark };
         let id = placed(scene, folder, screen, |id| {
             feed(id, library, view, &fed, overrides, section)?;
             let mut kit = tokens(id).ok_or("the kit's Tokens are not in the theme's engine")?;
@@ -642,7 +718,8 @@ fn declined_places(scene: &mut Scene<'_>, screen: u64, tree: &mut Tree, declined
     for (&place, points) in places.iter().zip(&grids) {
         let span = at..at + points.len();
         at = span.end;
-        if audit::changed_share(&was[span.clone()], &enabled[span]) > 0.0 {
+        // Exempt only while R-20261111-43's row accepts dimmed places (EmuSen_Kit.md §7.109).
+        if audit::changed_share(&was[span.clone()], &enabled[span]) > 0.0 && audit::accepted(Class::DimmedAndMoving).is_some() {
             for index in tree.under(place) {
                 tree.not_judged(index);
             }
@@ -693,6 +770,10 @@ fn changing(before: &Tree, after: &Tree) -> HashSet<String> {
 
 /// Leaves the texts mid-change out of the contrast rule.
 fn rested(tree: &mut Tree, moving: &HashSet<String>) {
+    // Moving words go unjudged only while R-20261111-43's row accepts them (EmuSen_Kit.md §7.109).
+    if audit::accepted(Class::DimmedAndMoving).is_none() {
+        return;
+    }
     let mid: Vec<u32> = (0..tree.nodes.len() as u32).filter(|&i| moving.contains(&tree.nodes[i as usize].id)).collect();
     for index in mid {
         tree.not_judged(index);

@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use emusen_qt_test::harness::SIZES;
 use emusen_theme_check::run_with;
 
 // The package's Qt crates, linked so the build's initializers find them; the program under test is the binary.
@@ -22,11 +23,41 @@ fn plain(path: &str) -> Result<String, String> {
     Ok(path.to_owned())
 }
 
+/// One run of theme-audit: its lines, its words on stderr, its exit status, and the screens it held.
+struct Ran {
+    out: String,
+    err: String,
+    status: i32,
+}
+
+impl Ran {
+    /// The run, which must have exited of itself: a signal is never a result.
+    fn of(command: &mut Command) -> Ran {
+        let out = command.output().expect("theme-audit runs");
+        let err = String::from_utf8_lossy(&out.stderr).into_owned();
+        let status = out.status.code().unwrap_or_else(|| panic!("theme-audit was stopped ({}): {err}", out.status));
+        Ran { out: String::from_utf8_lossy(&out.stdout).into_owned(), err, status }
+    }
+
+    /// As `of`, a run that judged the package: its findings (1) or none (0), never a failure to run (2).
+    fn judged(command: &mut Command) -> Ran {
+        let ran = Ran::of(command);
+        assert!(matches!(ran.status, 0 | 1), "theme-audit could not run ({}): {}", ran.status, ran.err);
+        ran
+    }
+
+    /// How many states of `screen` theme-audit judged to their end, and how many against its mockup, by its own count.
+    fn held(&self, screen: &str) -> (usize, usize) {
+        let prefix = format!("theme-audit: held {screen} in ");
+        let Some(line) = self.err.lines().find_map(|l| l.strip_prefix(&prefix)) else { return (0, 0) };
+        let numbers: Vec<usize> = line.split(|c: char| !c.is_ascii_digit()).filter_map(|n| n.parse().ok()).collect();
+        (numbers[0], numbers[1])
+    }
+}
+
 /// theme-audit's lines on a fixture, and its exit status.
-fn audit(name: &str) -> (String, i32) {
-    let out = Command::new(PROGRAM).arg(themes().join(name)).output().expect("theme-audit runs");
-    assert!(matches!(out.status.code(), Some(0 | 1)), "theme-audit could not run: {}", String::from_utf8_lossy(&out.stderr));
-    (String::from_utf8_lossy(&out.stdout).into_owned(), out.status.code().unwrap_or(2))
+fn audit(name: &str) -> Ran {
+    Ran::judged(Command::new(PROGRAM).arg(themes().join(name)))
 }
 
 #[test]
@@ -38,8 +69,10 @@ fn qt_3_7_a_theme_that_keeps_the_rules_is_ok_through_both_steps() {
 
 #[test]
 fn qt_3_7_a_games_screen_placed_for_800_rows_is_cut_at_1280_x_720() {
-    let (out, status) = audit("cut-games");
+    let ran = audit("cut-games");
+    let (out, status) = (ran.out.as_str(), ran.status);
     assert_eq!(status, 1);
+    assert_eq!(ran.held("Games").0, 10, "the Games screen judged at five sizes in both variants: {}", ran.err);
     assert!(out.contains("cut-games/screens/Games.qml:1 fit 1280x720 dark: past its panel: "), "{out}");
     assert!(out.contains("QQuickText count at 64,730"), "the count is named with its box: {out}");
     assert!(!out.contains("1280x800 dark: past its panel"), "at 800 it fits: {out}");
@@ -48,8 +81,10 @@ fn qt_3_7_a_games_screen_placed_for_800_rows_is_cut_at_1280_x_720() {
 
 #[test]
 fn qt_3_7_a_place_no_walk_leads_to_is_unreachable_at_every_size() {
-    let (out, status) = audit("unreachable");
+    let ran = audit("unreachable");
+    let (out, status) = (ran.out.as_str(), ran.status);
     assert_eq!(status, 1);
+    assert_eq!(ran.held("Home").0, 10, "{}", ran.err);
     for size in ["1280x800", "1920x1200", "1920x1080", "1280x720", "3840x2160"] {
         for variant in ["dark", "light"] {
             let want = format!("unreachable/screens/Home.qml:1 reach {size} {variant}: the pad does not reach: ");
@@ -61,8 +96,10 @@ fn qt_3_7_a_place_no_walk_leads_to_is_unreachable_at_every_size() {
 
 #[test]
 fn qt_3_7_a_view_that_never_settles_stops_its_pass_loudly_and_fails_the_check() {
-    let (out, status) = audit("unsettled");
+    let ran = audit("unsettled");
+    let (out, status) = (ran.out.as_str(), ran.status);
     assert_eq!(status, 1);
+    assert_eq!(ran.held("Home").0, 0, "the pass stopped before any state was judged: {}", ran.err);
     let stopped: Vec<&str> = out.lines().filter(|l| l.contains("unsettled/screens/Home.qml:1 stopped ")).collect();
     assert_eq!(stopped.len(), 1, "one line for the pass: {out}");
     // The view is moving from the start, so the pass stops at its first settling: the reduced-motion check at 1280 x 800.
@@ -70,16 +107,17 @@ fn qt_3_7_a_view_that_never_settles_stops_its_pass_loudly_and_fails_the_check() 
     assert!(stopped[0].contains("QQuickFlickable restless") && stopped[0].contains("still moving after 5000 ms"), "the harness's words: {out}");
     let folder = themes().join("unsettled").display().to_string();
     let (out, status) = run_with(&["theme-check".into(), folder], plain, Some(Path::new(PROGRAM))).unwrap();
-    assert_ne!(status, 0, "{out}");
+    assert_eq!(status, 1, "{out}");
     assert!(out.contains("unsettled/screens/Home.qml:1 stopped "), "{out}");
 }
 
 #[test]
 fn qt_3_7_a_transition_longer_than_the_kit_s_is_recorded_at_rest() {
     let state = std::env::temp_dir().join(format!("theme-audit-slow-{}", std::process::id()));
-    let out = Command::new(PROGRAM).arg("--state").arg(&state).arg(themes().join("slow")).output().expect("theme-audit runs");
-    let lines = String::from_utf8_lossy(&out.stdout).into_owned();
+    let ran = Ran::judged(Command::new(PROGRAM).arg("--state").arg(&state).arg(themes().join("slow")));
+    let lines = &ran.out;
     assert!(!lines.contains(" stopped "), "the veil comes to rest: {lines}");
+    assert_eq!(ran.held("Home").0, 10, "{}", ran.err);
     let png = std::fs::read(state.join("Home-dark-1280x800.png")).expect("the recording's picture");
     let picture = cxx_qt_lib::QImage::from_data(&png, Some("PNG")).expect("a PNG");
     // The veil's centre, (900, 450) at one pixel a unit, in the kit's dark accent #4C9AE8 once its 1.5 s fade has ended.
@@ -91,8 +129,10 @@ fn qt_3_7_a_transition_longer_than_the_kit_s_is_recorded_at_rest() {
 
 #[test]
 fn qt_3_7_words_over_a_pale_picture_are_measured_against_the_picture() {
-    let (out, status) = audit("dim-picture");
+    let ran = audit("dim-picture");
+    let (out, status) = (ran.out.as_str(), ran.status);
     assert_eq!(status, 1, "{out}");
+    assert_eq!(ran.held("Home").0, 10, "{}", ran.err);
     for size in ["1280x800", "1920x1200", "1920x1080", "1280x720", "3840x2160"] {
         let want = format!("dim-picture/screens/Home.qml:1 contrast {size} dark: low contrast: ");
         assert!(out.lines().any(|l| l.contains(&want) && l.contains("caption")), "{want}\n{out}");
@@ -103,8 +143,10 @@ fn qt_3_7_words_over_a_pale_picture_are_measured_against_the_picture() {
 
 #[test]
 fn qt_3_7_consoles_laid_out_by_hand_do_not_survive_120_consoles() {
-    let (out, status) = audit("by-hand");
+    let ran = audit("by-hand");
+    let (out, status) = (ran.out.as_str(), ran.status);
     assert_eq!(status, 1);
+    assert_eq!(ran.held("Consoles").0, 15, "both variants at five sizes, and the crowd by night at five: {}", ran.err);
     assert!(out.lines().all(|l| l.contains("by-hand/screens/Consoles.qml:1 ") && l.contains("dark, 120 consoles: ")), "the crowd alone: {out}");
     for size in ["1280x800", "1920x1200", "1920x1080", "1280x720", "3840x2160"] {
         let want = format!(" reach {size} dark, 120 consoles: the pad's sweep heard ");
@@ -143,9 +185,10 @@ fn qt_3_7_a_catalogue_records_choose_a_console_over_its_consoles_alone() {
     let file = dir.join("two.tsv");
     std::fs::write(&file, "# two consoles of two makers\nSega\tGenesis\t12\tNephrite\temusen\tmd\nSony\tPlayStation\t3\tDiamond\temusen\tpsx\n").unwrap();
     let state = dir.join("state");
-    let out = Command::new(PROGRAM).arg("--state").arg(&state).arg("--catalogue").arg(&file).arg(themes().join("loaded")).output().expect("theme-audit runs");
-    let lines = String::from_utf8_lossy(&out.stdout).into_owned();
-    assert_eq!(out.status.code(), Some(0), "the loaded fixture over the catalogue: {lines}{}", String::from_utf8_lossy(&out.stderr));
+    let ran = Ran::judged(Command::new(PROGRAM).arg("--state").arg(&state).arg("--catalogue").arg(&file).arg(themes().join("loaded")));
+    assert_eq!(ran.status, 0, "the loaded fixture over the catalogue: {}{}", ran.out, ran.err);
+    assert_eq!(ran.held("Consoles"), (10, 0), "Choose a console alone, at five sizes in both variants: {}", ran.err);
+    assert!(!ran.err.contains("held Home") && !ran.err.contains("held Games"), "{}", ran.err);
     for variant in ["dark", "light"] {
         for size in ["1280x800", "1920x1200", "1920x1080", "1280x720", "3840x2160"] {
             let name = format!("Consoles-{variant}-two-{size}");
@@ -159,9 +202,10 @@ fn qt_3_7_a_catalogue_records_choose_a_console_over_its_consoles_alone() {
     assert!(spec.contains("Genesis") && spec.contains("PlayStation"), "the catalogue's consoles on the screen");
     let bad = dir.join("bad.tsv");
     std::fs::write(&bad, "Sega\tGenesis\tmany\n").unwrap();
-    let out = Command::new(PROGRAM).arg("--catalogue").arg(&bad).arg(themes().join("loaded")).output().expect("theme-audit runs");
-    assert_eq!(out.status.code(), Some(2));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("bad.tsv: line 1: the games count"), "the line named");
+    let ran = Ran::of(Command::new(PROGRAM).arg("--catalogue").arg(&bad).arg(themes().join("loaded")));
+    assert_eq!(ran.status, 2);
+    assert!(ran.err.contains("bad.tsv: line 1: the games count"), "the line named");
+    assert_eq!(ran.held("Consoles"), (0, 0), "nothing held");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -175,13 +219,15 @@ fn qt_3_7_a_desktop_at_125_percent_still_records_one_pixel_a_unit() {
     let file = dir.join("one.tsv");
     std::fs::write(&file, "Sega\tGenesis\t12\tNephrite\temusen\tmd\n").unwrap();
     let state = dir.join("state");
-    let out = Command::new(PROGRAM)
-        .env("QT_QPA_PLATFORM", format!("offscreen:configfile={}", screen.display()))
-        .arg("--state").arg(&state).arg("--catalogue").arg(&file).arg(themes().join("loaded"))
-        .output().expect("theme-audit runs");
-    let lines = String::from_utf8_lossy(&out.stdout).into_owned();
+    let ran = Ran::judged(
+        Command::new(PROGRAM)
+            .env("QT_QPA_PLATFORM", format!("offscreen:configfile={}", screen.display()))
+            .arg("--state").arg(&state).arg("--catalogue").arg(&file).arg(themes().join("loaded")),
+    );
+    let lines = ran.out.as_str();
     assert!(!lines.contains(" recording "), "every picture at its state's size: {lines}");
-    assert_eq!(out.status.code(), Some(0), "{lines}");
+    assert_eq!(ran.status, 0, "{lines}");
+    assert_eq!(ran.held("Consoles").0, 10, "{}", ran.err);
     let png = std::fs::read(state.join("Consoles-dark-one-1280x800.png")).expect("the recording's picture");
     let picture = cxx_qt_lib::QImage::from_data(&png, Some("PNG")).expect("a PNG");
     assert_eq!((picture.width(), picture.height()), (1280, 800), "one device pixel a unit");
@@ -189,20 +235,20 @@ fn qt_3_7_a_desktop_at_125_percent_still_records_one_pixel_a_unit() {
 }
 
 /// theme-audit's lines on a fixture in the states a list names, the default among them.
-fn audit_states(name: &str, states: &str, record: Option<&Path>) -> (String, i32) {
+fn audit_states(name: &str, states: &str, record: Option<&Path>) -> Ran {
     let mut command = Command::new(PROGRAM);
     if let Some(dir) = record {
         command.arg("--state").arg(dir);
     }
-    let out = command.arg("--states").arg(states).arg(themes().join(name)).output().expect("theme-audit runs");
-    assert!(matches!(out.status.code(), Some(0 | 1)), "theme-audit could not run: {}", String::from_utf8_lossy(&out.stderr));
-    (String::from_utf8_lossy(&out.stdout).into_owned(), out.status.code().unwrap_or(2))
+    Ran::judged(command.arg("--states").arg(states).arg(themes().join(name)))
 }
 
 /// A fixture wrong in one state alone: found there, of one kind, at every size in both variants, and nowhere in the default.
 fn found_only_in(name: &str, screen: &str, state: &str, kind: &str, words: &str) {
-    let (out, status) = audit_states(name, &format!("default,{state}"), None);
+    let ran = audit_states(name, &format!("default,{state}"), None);
+    let (out, status) = (ran.out.as_str(), ran.status);
     assert_eq!(status, 1, "{name}: {out}");
+    assert_eq!(ran.held(screen).0, 20, "{screen} in both states, at five sizes in both variants: {}", ran.err);
     assert!(out.lines().all(|l| l.contains(&format!("{name}/screens/{screen}.qml:1 {kind} ")) && l.contains(&format!(", {state}: "))), "{state} alone, {kind} alone: {out}");
     for size in ["1280x800", "1920x1200", "1920x1080", "1280x720", "3840x2160"] {
         for variant in ["dark", "light"] {
@@ -245,8 +291,10 @@ fn qt_3_7_a_count_set_near_the_right_edge_runs_past_it_at_9000_games() {
 #[test]
 fn qt_3_7_a_splash_is_held_at_1_3_and_5_s_and_judged_at_each() {
     let dir = std::env::temp_dir().join(format!("theme-audit-splash-{}", std::process::id()));
-    let (out, status) = audit_states("state-splash", "default,splash-1s,splash-3s,splash-5s", Some(&dir));
+    let ran = audit_states("state-splash", "default,splash-1s,splash-3s,splash-5s", Some(&dir));
+    let (out, status) = (ran.out.as_str(), ran.status);
     assert_eq!(status, 1, "{out}");
+    assert_eq!(ran.held("Splash").0, 40, "the default and three held times, at five sizes in both variants: {}", ran.err);
     assert!(out.lines().all(|l| l.contains("state-splash/screens/Splash.qml:1 fit ") && l.contains(", splash-3s: ")), "at 3 s alone: {out}");
     assert!(out.contains("fit 1280x800 dark, splash-3s: past its panel") && out.contains("fit 3840x2160 light, splash-3s: past its panel"), "{out}");
     // Each held time is its own picture: the wordmark past the edge at 3 s, in place at 1 and 5.
@@ -260,23 +308,22 @@ fn qt_3_7_a_splash_is_held_at_1_3_and_5_s_and_judged_at_each() {
 
 #[test]
 fn qt_3_7_a_held_clock_logs_nothing_where_the_environment_asks_for_a_threaded_render_loop() {
-    let out = Command::new(PROGRAM)
-        .env("QSG_RENDER_LOOP", "threaded")
-        .arg("--states")
-        .arg("splash-1s,splash-3s,splash-5s")
-        .arg(themes().join("state-splash"))
-        .output()
-        .expect("theme-audit runs");
-    let (stdout, stderr) = (String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-    assert_eq!(out.status.code(), Some(1), "{stdout}{stderr}");
+    let ran = Ran::judged(
+        Command::new(PROGRAM).env("QSG_RENDER_LOOP", "threaded").arg("--states").arg("splash-1s,splash-3s,splash-5s").arg(themes().join("state-splash")),
+    );
+    let (stdout, stderr) = (ran.out.as_str(), ran.err.as_str());
+    assert_eq!(ran.status, 1, "{stdout}{stderr}");
+    assert_eq!(ran.held("Splash").0, 30, "three held times, at five sizes in both variants: {stderr}");
     assert!(stdout.lines().all(|l| l.contains("state-splash/screens/Splash.qml:1 fit ") && l.contains(", splash-3s: ")), "the held states' findings alone, no warning: {stdout}");
     assert!(!stderr.contains("QUnifiedTimer") && !stderr.contains("driver"), "the held clock installed and uninstalled once a hold, quietly: {stderr}");
 }
 
 #[test]
 fn qt_3_7_a_declined_place_drawn_apart_is_exempt_and_a_dim_offered_one_is_not() {
-    let (out, status) = audit_states("state-declined", "default,disabled", None);
+    let ran = audit_states("state-declined", "default,disabled", None);
+    let (out, status) = (ran.out.as_str(), ran.status);
     assert_eq!(status, 1, "{out}");
+    assert_eq!(ran.held("Home").0, 20, "{}", ran.err);
     // Power, offered with its words at 38%, is low in both states; the Scraper, declined at 38% and so told apart, never is.
     assert!(out.lines().all(|l| l.contains("state-declined/screens/Home.qml:1 contrast ") && l.contains("\"Power\"")), "{out}");
     for state in ["", ", disabled"] {
@@ -291,8 +338,10 @@ fn qt_3_7_a_declined_place_drawn_apart_is_exempt_and_a_dim_offered_one_is_not() 
 
 #[test]
 fn qt_3_7_words_are_judged_at_rest_not_while_their_opacity_changes() {
-    let (out, status) = audit_states("state-fade", "default,splash-1s,splash-3s,splash-5s", None);
+    let ran = audit_states("state-fade", "default,splash-1s,splash-3s,splash-5s", None);
+    let (out, status) = (ran.out.as_str(), ran.status);
     assert_eq!(status, 1, "{out}");
+    assert_eq!(ran.held("Splash").0, 40, "{}", ran.err);
     // The caption mid-fade at 1 s and the title mid-fade at 5 s are not judged; the caption at rest, at 0.3, is.
     assert!(out.lines().all(|l| l.contains("state-fade/screens/Splash.qml:1 contrast ") && l.contains("restsFaint")), "{out}");
     for state in [", splash-3s: ", ", splash-5s: ", " dark: ", " light: "] {
@@ -303,10 +352,180 @@ fn qt_3_7_words_are_judged_at_rest_not_while_their_opacity_changes() {
 
 #[test]
 fn qt_3_7_states_list_and_an_unknown_one_is_refused() {
-    let out = Command::new(PROGRAM).arg("--list-states").output().expect("theme-audit runs");
-    let listed = String::from_utf8_lossy(&out.stdout).into_owned();
+    let ran = Ran::of(Command::new(PROGRAM).arg("--list-states"));
+    assert_eq!(ran.status, 0, "{}", ran.err);
+    let listed = ran.out;
     assert!(listed.lines().any(|l| l.starts_with("nocover\tHome,Consoles,Games\t")), "{listed}");
-    let out = Command::new(PROGRAM).arg("--states").arg("nogame,lost").arg(themes().join("loaded")).output().expect("theme-audit runs");
-    assert_eq!(out.status.code(), Some(2));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("lost is not a state"));
+    let ran = Ran::of(Command::new(PROGRAM).arg("--states").arg("nogame,lost").arg(themes().join("loaded")));
+    assert_eq!(ran.status, 2);
+    assert!(ran.err.contains("lost is not a state"));
+}
+
+/// theme-audit's lines on a package with its mockups in `dir`.
+fn audit_mockups(folder: &Path, dir: &Path) -> Ran {
+    Ran::judged(Command::new(PROGRAM).arg("--mockups").arg(dir).arg(folder))
+}
+
+#[test]
+fn qt_3_7_a_screen_is_held_to_its_mockup_at_the_canvas_s_sizes_by_night() {
+    let dir = std::env::temp_dir().join(format!("theme-audit-mockups-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let spec = |h: u32| format!("mockup 1\ncanvas Home 1280 800\nelement Home x=0 y=0 w=1280 h={h}\n");
+    std::fs::write(dir.join("loaded-Home.mockup.spec"), spec(800)).unwrap();
+    let ran = audit_mockups(&themes().join("loaded"), &dir);
+    assert!(!ran.out.contains(" mockup "), "the screen as its mockup states it: {}", ran.out);
+    assert_eq!(ran.held("Home").1, 2, "held to it at 1280 x 800 and 1920 x 1200 by night: {}", ran.err);
+    std::fs::write(dir.join("loaded-Home.mockup.spec"), spec(700)).unwrap();
+    let ran = audit_mockups(&themes().join("loaded"), &dir);
+    let (out, status) = (ran.out.as_str(), ran.status);
+    let found: Vec<&str> = out.lines().filter(|l| l.contains(" mockup ")).collect();
+    assert_eq!(status, 1, "{out}");
+    assert_eq!(found.len(), 2, "1280 x 800 and 1920 x 1200 by night, nothing else: {out}");
+    for size in ["1280x800 dark", "1920x1200 dark"] {
+        assert!(found.iter().any(|l| l.ends_with(&format!("loaded/screens/Home.qml:1 mockup {size}: Home: H 800.0, the mockup's 700"))), "{size}: {out}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The built-in themes' mockups (Testing/themes): Home, Games and Choose a console held to the canvases they were drawn from.
+fn built_in(theme: &str) {
+    let mockups = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../Testing/themes");
+    let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../themes").join(theme);
+    let held = std::fs::read_dir(&mockups).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().to_lowercase().starts_with(&format!("{theme}-"))).count();
+    assert_eq!(held, 3, "{theme}: Home, Games and Consoles");
+    let ran = audit_mockups(&folder, &mockups);
+    for screen in ["Home", "Games", "Consoles"] {
+        assert_eq!(ran.held(screen).1, 2, "{theme}: {screen} held to its mockup at the canvas's two sizes: {}", ran.err);
+    }
+    let found: Vec<&str> = ran.out.lines().filter(|l| l.contains(" mockup ")).collect();
+    assert!(found.is_empty(), "{theme}: {} differences from its mockups:\n{}", found.len(), found.join("\n"));
+}
+
+#[test]
+fn qt_3_4_3_horizon_is_held_to_its_mockups() {
+    built_in("horizon");
+}
+
+#[test]
+fn qt_3_4_4_meridian_is_held_to_its_mockups() {
+    built_in("meridian");
+}
+
+#[test]
+fn qt_3_4_6_orrery_is_held_to_its_mockups() {
+    built_in("orrery");
+}
+
+/// Choose a console over the canvas's eleven consoles with its focus, judged against the canvas in a folder of `name`.
+fn against_the_canvas(name: &str) -> Ran {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let dir = std::env::temp_dir().join(format!("theme-audit-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(root.join("Testing/mockups/Consoles.mockup.spec"), dir.join("emusen-Consoles.mockup.spec")).unwrap();
+    let ran = Ran::judged(
+        Command::new(PROGRAM)
+            .arg("--catalogue")
+            .arg(root.join("Testing/themes/catalogues/eleven.tsv"))
+            .args(["--focus", "Super Nintendo", "--mockups"])
+            .arg(&dir)
+            .arg(root.join("Frontend/themes/emusen")),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    ran
+}
+
+#[test]
+fn qt_3_4_2_the_places_and_the_covers_stand_where_the_canvas_stands_them() {
+    let ran = against_the_canvas("places");
+    assert_eq!(ran.held("Consoles"), (10, 2), "{}", ran.err);
+    let found: Vec<&str> = ran.out.lines().filter(|l| l.contains(" mockup ") && (l.contains(": place") || l.contains(": rowCover") && l.contains("W 73"))).collect();
+    assert!(found.is_empty(), "the places' x (R-20261111-34) and the covers' shape:\n{}", found.join("\n"));
+    let covers = ran.out.lines().filter(|l| l.contains(": rowCover.0: W ")).collect::<Vec<_>>();
+    assert!(covers.iter().all(|l| l.contains("W 137.0")), "the Super Nintendo's covers 137 wide, its shape 1/0.73: {covers:?}");
+}
+
+#[test]
+fn qt_3_4_2_choose_a_console_over_the_canvas_s_eleven_consoles_is_its_mockup() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let dir = std::env::temp_dir().join(format!("theme-audit-canvas-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // The reference theme's approved canvas, under the name theme-audit finds a package's mockup by.
+    std::fs::copy(root.join("Testing/mockups/Consoles.mockup.spec"), dir.join("emusen-Consoles.mockup.spec")).unwrap();
+    let ran = Ran::judged(
+        Command::new(PROGRAM)
+            .arg("--catalogue")
+            .arg(root.join("Testing/themes/catalogues/eleven.tsv"))
+            .args(["--focus", "Super Nintendo", "--mockups"])
+            .arg(&dir)
+            .arg(root.join("Frontend/themes/emusen")),
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(ran.held("Consoles"), (10, 2), "Choose a console judged in ten states, two against the canvas: {}", ran.err);
+    let found: Vec<&str> = ran.out.lines().filter(|l| l.contains(" mockup ")).collect();
+    assert!(found.is_empty(), "{} differences from the canvas:\n{}", found.len(), found.join("\n"));
+}
+
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for entry in std::fs::read_dir(from).unwrap().flatten() {
+        let target = to.join(entry.file_name());
+        if entry.path().is_dir() {
+            copy_tree(&entry.path(), &target);
+        } else {
+            std::fs::copy(entry.path(), target).unwrap();
+        }
+    }
+}
+
+#[test]
+fn qt_3_4_1_home_s_places_lines_are_the_program_s_own_and_whole_at_every_size() {
+    // The reference package with its Home alone, so the run holds no other screen.
+    let package = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../themes/emusen");
+    let dir = std::env::temp_dir().join(format!("theme-audit-home-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    copy_tree(&package, &dir);
+    let manifest = std::fs::read_to_string(dir.join("theme.json")).unwrap();
+    let home_only = manifest.replace(r#""screens": ["home", "consoles", "games"]"#, r#""screens": ["home"]"#);
+    assert_ne!(home_only, manifest, "the manifest names its three screens");
+    std::fs::write(dir.join("theme.json"), home_only).unwrap();
+    let states = dir.join("states");
+    std::fs::create_dir_all(&states).unwrap();
+    let ran = Ran::judged(Command::new(PROGRAM).arg(&dir).arg("--states").arg("default,loud").arg("--state").arg(&states));
+    assert_eq!(ran.held("Home").0, 20, "Home at five sizes in both variants, by default and loud: {}", ran.err);
+    let cut: Vec<&str> = ran.out.lines().chain(ran.err.lines()).filter(|l| l.contains("placeStatus")).collect();
+    assert!(cut.is_empty(), "the Settings place's line is the program's own and fits (R-20261111-35):\n{}", cut.join("\n"));
+    // The line as each variant words it, the light one the longest it can be at full volume, drawn at every size.
+    for (variant, line) in [("dark", "Dark · 100% sound"), ("light", "Light · 100% sound")] {
+        for (w, h) in SIZES {
+            let spec = std::fs::read_to_string(states.join(format!("Home-{variant}-loud-{w}x{h}.spec"))).unwrap_or_default();
+            assert!(spec.contains(line), "Home {variant} at {w}x{h} draws {line:?}");
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn kit_7_109_a_title_cut_with_an_ellipsis_is_listed_under_its_ruling_and_fails_nothing() {
+    let ran = audit("elided-title");
+    assert_eq!(ran.held("Games").0, 10, "{}", ran.err);
+    assert_eq!((ran.out.as_str(), ran.status), ("", 0), "{}", ran.err);
+    let listed: Vec<&str> = ran.err.lines().filter(|l| l.starts_with("theme-audit: accepted by ")).collect();
+    assert!(!listed.is_empty(), "{}", ran.err);
+    assert!(
+        listed.iter().all(|l| l.starts_with("theme-audit: accepted by R-20261111-44: ") && l.contains("data cut with an ellipsis") && l.contains("rowTitle.")),
+        "{listed:?}"
+    );
+}
+
+#[test]
+fn kit_7_102_moonrise_s_caption_name_in_a_theme_s_own_moonrise_is_not_accepted() {
+    let ran = audit("small-caption");
+    assert_eq!(ran.held("Home").0, 10, "{}", ran.err);
+    assert_eq!(ran.status, 1, "{}", ran.out);
+    assert!(!ran.err.contains("theme-audit: accepted by"), "R-20261111-40 covers the kit's Moonrise.qml alone, not a theme's item named moonrise: {}", ran.err);
+    let small: Vec<&str> = ran.out.lines().filter(|l| l.contains("small-caption/screens/Home.qml") && l.contains("too small") && l.contains("moonriseCaption")).collect();
+    assert_eq!(small.len(), 10, "the floor's finding at five sizes in both variants:\n{}", ran.out);
 }

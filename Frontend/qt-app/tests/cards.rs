@@ -8,46 +8,21 @@ mod common;
 
 use common::console::{row_middles, until};
 
-use common::{draw_covers, hold, sandbox, wait_for};
+use common::{draw_covers, hold, hold_walking, sandbox, wait_for};
+use emusen_kit_core::tokens::Variant;
+use emusen_qt_test::harness::WITH_SHOULDERS;
 use emusen_client_fixture::library;
 use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
 use emusen_platform_client::Platform;
 use emusen_kit_core::input::UiButton;
 use emusen_qt::MAIN_URL;
+use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::{mockup, Scene};
-
-/// The differences named for the tester in EmuSen_Qt.md §7.1, stage 2: words of the screen under a card, dimmed by its
-/// scrim, read under 4.5:1 (Mistress's recordings hold the card alone); and at 1280 x 720 alone the grid's 18-unit
-/// neighbours under the floor, as stage 1 named them.
-fn named(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
-    let index = |r: &str| r.split(|c: char| !c.is_ascii_digit()).find(|n| !n.is_empty()).and_then(|n| n.parse::<usize>().ok());
-    fault.split("low contrast: ").nth(1).and_then(index).is_some_and(|i| under_backdrop(tree, i)) || (size == (1280, 720) && fault.contains("too small to read"))
-}
-
-/// Whether the item numbered `index` is inside a backdrop: a screen under a card.
-fn under_backdrop(tree: &emusen_qt_test::tree::Tree, index: usize) -> bool {
-    let mut at = tree.nodes.get(index);
-    while let Some(node) = at {
-        if node.backdrop {
-            return true;
-        }
-        at = tree.nodes.iter().find(|p| p.id == node.parent);
-    }
-    false
-}
 
 /// Qt's key codes for the letters typed on a keyboard.
 const KEY_G: i32 = 0x47;
 const KEY_R: i32 = 0x52;
 const KEY_A: i32 = 0x41;
-
-/// The search's difference named in EmuSen_Qt.md §7.6: the keys and the covers are reached from each other by the
-/// shoulders, which the gate's walk (the four directions) does not press; the test walks them below.
-fn named_in_search(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
-    let node = |r: &str| r.trim().split(|c: char| !c.is_ascii_digit()).next().and_then(|n| n.parse::<usize>().ok()).and_then(|i| tree.nodes.get(i));
-    let unreached = fault.split("the pad does not reach: ").nth(1).and_then(node).is_some_and(|n| n.name.starts_with("gridCell.") || n.name == "GalleryKeyboard");
-    named(fault, tree, size) || unreached
-}
 
 /// The fixture's games, as Mistress's own-look library names them.
 const GAMES: [(&str, &str); 8] = [
@@ -156,6 +131,7 @@ fn the_home_card_and_the_list_card_are_mistresss() {
         scene.wait(50);
     }
     let mut report = Vec::new();
+    let mut excuses = Excuses::none().listing("qt-app-cards");
 
     // A hidden card's words wait for it to show (EmuSen_Qt.md §7.8): its facts changed under Home (a paused game's minute
     // turning over did it in acceptance) swap no frame, and the card shown reads them current. Then the facts as the
@@ -200,7 +176,7 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     assert_eq!(rows(&mut scene), ["Exit Big Picture", "Quit EmuSen..."]);
     assert_eq!(scene.property("homeCardModel", "current"), "0");
     scene.assert_still("the Home card in place");
-    hold(&mut scene, "HomeCardPower", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "HomeCardPower", &mockup::Mockup::default(), &mut excuses, &mut report);
 
     // Quit EmuSen... asks first: No, then Yes, the sentence above the question (HomeCardQuit); B goes back to its row.
     scene.pad(UiButton::Down);
@@ -208,7 +184,7 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     scene.wait(50);
     assert_eq!(titled(&mut scene, "homeCardCanvas"), ("EmuSen closes.".into(), "Quit EmuSen?".into()));
     assert_eq!(rows(&mut scene), ["No", "Yes"]);
-    hold(&mut scene, "HomeCardQuit", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "HomeCardQuit", &mockup::Mockup::default(), &mut excuses, &mut report);
     scene.pad(UiButton::Back);
     scene.wait(50);
     assert_eq!(rows(&mut scene), ["Exit Big Picture", "Quit EmuSen..."]);
@@ -274,7 +250,7 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     let tree = scene.tree();
     let footer = tree.nodes.iter().find(|n| n.visible && n.name == "cardFooter" && n.text.as_deref() == Some(said)).expect("the words under the rows");
     assert!(footer.h > 60.0, "the words run on to a second line, {} high", footer.h);
-    hold(&mut scene, "HomeCardUnread", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "HomeCardUnread", &mockup::Mockup::default(), &mut excuses, &mut report);
     scene.pad(UiButton::Back);
     until(&mut scene, 5, "B closing the card to Home", |s| s.property("screens", "shown") == "Home");
     assert!(scene.set_property("homeCardModel", "facts", &given));
@@ -303,7 +279,7 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     assert_eq!(titled(&mut scene, "listCardCanvas"), ("List".into(), "All · 8 games".into()));
     assert_eq!(rows(&mut scene), ["Search", "Sort | Name", "Filter", "Jump to | A", "Random game", "Collections"]);
     assert!(scene.tree().nodes.iter().any(|n| n.visible && n.text.as_deref() == Some("Type part of a name; the covers narrow as you type.")), "the pane says what Search does");
-    hold(&mut scene, "GamesListCard", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "GamesListCard", &mockup::Mockup::default(), &mut excuses, &mut report);
 
     // Sort steps on Right and on A, the grid re-sorted beneath; Left steps back.
     scene.pad(UiButton::Down);
@@ -363,7 +339,8 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     assert_eq!(cover_of(&mut scene, 0), granite, "Granite Choir's tile in the search: its picture, box and colours as in the full grid");
     // The pointer set aside on the sky, so that at no size does it rest on a cover, which would take the focus there.
     scene.hover(2.0, 2.0);
-    hold(&mut scene, "GamesSearch", &mockup::Mockup::default(), named_in_search, &mut report);
+    // The gate's walk presses the shoulders too, which take the focus between the keys and the covers (EmuSen_Kit.md §7.103).
+    hold_walking(&mut scene, "GamesSearch", &mockup::Mockup::default(), &mut excuses, &mut report, Variant::Dark, &WITH_SHOULDERS);
     // The shoulders move the focus to the covers, the keyboard staying docked without its ring, and back to the keys.
     scene.resize(1280, 800);
     scene.wait(150);
@@ -372,7 +349,7 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     assert_eq!(focused(&mut scene), "gridCell.0", "the found game focused");
     assert_eq!(scene.property("GalleryKeyboard", "showsCurrent"), "false", "no ring on the keys once the focus has left them");
     assert_eq!(scene.property("GalleryKeyboard", "visible"), "true");
-    hold(&mut scene, "GamesSearchGrid", &mockup::Mockup::default(), named_in_search, &mut report);
+    hold_walking(&mut scene, "GamesSearchGrid", &mockup::Mockup::default(), &mut excuses, &mut report, Variant::Dark, &WITH_SHOULDERS);
     scene.resize(1280, 800);
     scene.pad(UiButton::PageUp);
     wait_for(&mut scene, "screens", "shown", "Search", 1000);

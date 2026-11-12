@@ -11,8 +11,10 @@ use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
 use emusen_platform_client::Platform;
 use emusen_kit_core::input::WalkForm;
 use emusen_kit_core::tokens::Variant;
-use emusen_qt_test::harness::{edges, palette, Measures, SIZES};
+use emusen_kit_core::input::UiButton;
+use emusen_qt_test::harness::{edges, palette, Measures, DIRECTIONS, SIZES};
 use emusen_qt_test::spec::{self, Header};
+use emusen_qt_test::excuse::{Excuses, Finding};
 use emusen_qt_test::{mockup, Scene};
 use std::path::PathBuf;
 
@@ -80,32 +82,44 @@ pub fn out() -> PathBuf {
     dir
 }
 
-/// A test's differences named for the tester, which a held state does not count as faults: the fault, the tree, the size.
 #[allow(dead_code)]
-pub type Named = fn(&str, &emusen_qt_test::tree::Tree, (i32, i32)) -> bool;
-
-#[allow(dead_code)]
-/// Holds one state: the mockup where the size is the canvas's or its 1.5 times, the gate at every size, the spec and the grab.
-pub fn hold(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, named: Named, report: &mut Vec<String>) {
+/// Holds one state: the mockup where the size is the canvas's or its 1.5 times, the gate at every size, the spec and the grab;
+/// a finding the test's excuses name is not counted (EmuSen_Kit.md §7.100).
+pub fn hold(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, named: &mut Excuses, report: &mut Vec<String>) {
     hold_in(scene, screen, m, named, report, Variant::Dark);
 }
 
 #[allow(dead_code)]
 /// As `hold`, the state drawn in a variant of its own, its palette and contrast judged in it.
-pub fn hold_in(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, named: Named, report: &mut Vec<String>, variant: Variant) {
+pub fn hold_in(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, named: &mut Excuses, report: &mut Vec<String>, variant: Variant) {
+    hold_walking(scene, screen, m, named, report, variant, &DIRECTIONS);
+}
+
+#[allow(dead_code)]
+/// As `hold_in`, the gate's walk pressing `buttons` from every item: the shoulders too where the screen declares them.
+pub fn hold_walking(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, named: &mut Excuses, report: &mut Vec<String>, variant: Variant, buttons: &[UiButton]) {
     for (w, h) in SIZES {
         scene.resize(w, h);
         scene.wait(150);
         let mut tree = scene.tree();
         let focus = scene.focus(&tree);
         let name = format!("{screen}-{w}x{h}");
-        let mut faults = Vec::new();
+        let mut faults: Vec<Finding> = Vec::new();
         if f64::from(w) / f64::from(h) == 1.6 {
-            faults.extend(mockup::compare(m, &tree.nodes, f64::from(h) / 800.0, variant).into_iter().map(|f| format!("mockup: {f}")));
+            faults.extend(mockup::compare(m, &tree.nodes, f64::from(h) / 800.0, variant).iter().map(|d| Finding::mockup(d, &tree.nodes)));
         }
         assert!(scene.grab(&out().join(format!("{name}.png")).display().to_string()), "grab {name}");
         scene.sample_behind(&mut tree, f64::from(w), f64::from(h));
-        let walk = scene.walk(&tree);
+        theme_words(&mut tree.root);
+        // What the screen showed and held before each press, kept beside the grab (EmuSen_Kit.md §7.103).
+        let mut presses = Vec::new();
+        let walk = scene.walk_pressing(&tree, buttons, |s, button| {
+            let at = s.focus(&tree).map_or_else(|| "none".to_owned(), |i| tree.nodes[i as usize].name.clone());
+            let (shown, keys) = (s.property("screens", "shown"), s.property("coresModel", "searchKeys"));
+            presses.push(format!("shown={shown} coresKeys={keys} focus={at} press={button:?}"));
+            s.pad(button);
+        });
+        std::fs::write(out().join(format!("{name}.presses.txt")), presses.join("\n")).unwrap();
         let walked = edges(&walk);
         let declared = palette(variant);
         let header = Header {
@@ -122,23 +136,32 @@ pub fn hold_in(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, named: N
             scene
                 .audit(&tree, WalkForm::BigScreen, variant, focus, &walked, f64::from(w), f64::from(h))
                 .iter()
-                .map(|f| format!("gate: {f}")),
+                .map(|f| Finding::gate(f, &tree.nodes)),
         );
-        faults.retain(|f| !named(f, &tree, (w, h)));
+        let refused = named.sort(&name, &scene.exempted(&tree, WalkForm::BigScreen, variant, f64::from(h)));
+        faults.extend(refused.iter().map(|e| Finding::exempted(e, &tree.nodes)));
+        faults.retain(|f| !named.excuses(f, (w, h)));
         let notes = out().join(format!("{name}.faults.txt"));
         if faults.is_empty() {
             let _ = std::fs::remove_file(&notes);
         } else {
-            std::fs::write(&notes, format!("{}\n-- items:\n{}\n", faults.join("\n"), tree.legend())).unwrap();
-            let who = |f: &str| -> String {
-                let ids = f.rsplit(": ").next().unwrap_or("").split(|c: char| !c.is_ascii_digit()).filter_map(|n| n.parse::<usize>().ok());
-                ids.filter_map(|i| tree.nodes.get(i)).map(|n| format!("{} {}", n.ty, n.name)).collect::<Vec<_>>().join(", ")
-            };
-            report.extend(faults.iter().map(|f| format!("{name}: {f} [{}]", who(f))));
+            let lines: Vec<&str> = faults.iter().map(|f| f.line.as_str()).collect();
+            std::fs::write(&notes, format!("{}\n-- items:\n{}\n", lines.join("\n"), tree.legend())).unwrap();
+            report.extend(faults.iter().map(|f| format!("{name}: {} [{}]", f.line, f.who())));
         }
     }
     scene.resize(1280, 800);
     scene.wait(100);
+}
+
+/// The theme's screen judged as theme-audit judges it: its words that are not the program's own (`words::is_own`) are
+/// data, which may elide (R-20261111-44, EmuSen_Qt.md §3.7.2); words outside the theme host are the program's own, held whole.
+fn theme_words(item: &mut emusen_kit_core::audit::Item) {
+    if item.name == "reference" {
+        item.mark_data(&emusen_qt_models::words::is_own);
+        return;
+    }
+    item.children.iter_mut().for_each(theme_words);
 }
 
 #[allow(unused_imports)]

@@ -1083,8 +1083,8 @@ catalogues (`--catalogue`) found the same faults. Each was the package's layout,
    wide in Barlow at 20, and the line's box was 126, the tile's 150 less 12 each side. The line now runs to 4 units short
    of the tile's right edge (134); its left edge stays with the name's. The other fixed lines are 107.5 ("Art and
    facts"), 123.3, 101.7 and 32.6 wide (measured 2026-11-09 with Qt's `qml`). The acceptance test's exception for the
-   places' lines holds the same rule now: a line built from data may elide (Settings' "Dark · 60% sound" does), a fixed
-   word may not; with the old exception gone it named only Settings' line. Seeded back (the line 126 wide), the audit
+   places' lines holds the same rule now: a line built from data may elide, a fixed word or a line the program builds
+   from its own settings may not (R-20261111-35; Settings' "Dark · 60% sound" is the program's own and is held whole). Seeded back (the line 126 wide), the audit
    names `placeStatus.2` cut with an ellipsis at every size in both variants.
 2. **The grid's neighbours under the floor.** `gridPrevious`, the `·` between and `gridNext`, at 18 units, drew capitals of
    11.33 at 1280 × 720, under the floor of 11.64 (36 lines, every state that shows the grid). They are 19. Seeded back at
@@ -1140,6 +1140,13 @@ faults); an empty picture URL refused by the sandbox (`theme_feed.rs`, 22 refusa
 row (`scale.rs`, 9,000 covers for 4). The stage 1 start-up gates of §9.3.1 (Home shown ≤ 0.35 s, the first press
 ≤ 0.95 s on the real library) were not re-run: their driver is no longer kept.
 
+**The places' lines in the condensed face** (2026-11-11; the face decided 2026-11-12, R-20261112-1: Barlow Condensed regular at the same size). The Settings place's line
+is the program's own words, built from two settings, so it is held whole (R-20261111-35); in Barlow at 20 it overran its
+134-unit box ("Dark · 60% sound" 142.9, "Light · 100% sound" 154.5, measured 2026-11-11). The places' second lines take
+Barlow Condensed's regular face, as the worlds' counts do on Choose a console; the longest line is then 124.1.
+theme-audit's `loud` state draws "Light · 100% sound" at the five sizes. EmuSen_Kit.md §7.109 has the measurement and
+the tests.
+
 #### 3.4.2 The reference theme's Choose a console: the orbits **[M 2026-11-08]**
 
 **Decided 2026-11-08 by the tester:** the reference theme's Choose a console becomes the orbits. Each maker's consoles sit
@@ -1156,6 +1163,9 @@ are unchanged.
   - the worlds;
   - the foot: the full name, the facts, the engine line, and three covers.
 - `parts/CoverRow.qml`, new: three covers whole at the console's shape, no taller than 100 and no wider than 150, 12 apart.
+  The shape is `coverShape`, width over height, which theme-qt turns from the systems table's `cover_aspect` (height over
+  width, `EmuSen_Interface.md` §21). Until 2026-11-11 theme-qt handed on the table's figure unturned, so every theme drew
+  a Super Nintendo cover 73 wide where it is 137 and a NES cover 143 where it is 70; theme-qt's view test holds the turn.
 - `parts/EngineLine.qml`, new: the mark, the engine's name and its tag, in the console's hue on the night in both
   variants (until 2026-11-09 darkened by day to 30% lightness to hold 4.5:1 on the paper).
 - `parts/EngineMark.qml`: libretro's badge is now drawn in the ink it is given, as the canvas draws it. It was a fixed
@@ -1201,43 +1211,75 @@ canvas's own; kit-core's test holds them within 0.01 unit.
    Up and Down stop at the ends.
 3. The ring does not breathe (decided 2026-11-08): the reference theme keeps an idle screen at no redraw, which
    `idle.rs` holds. The spec's resting breath is not drawn.
-4. The places' widths are the faces' own: each name is measured, where the canvas places its row by an estimate of
-   11.5 units a letter. The spec's rule is the row centred with 48 between. The canvas's own browser draws the three
-   names 100.54, 108.71 and 165.92 wide (measured 2026-11-09 in headless Chrome), shorter than its estimate, so its
-   drawn row stands 3.5 units left of centre and its gaps are 51.5 and 54.3. Under the spec's rule with those widths the
-   first disc stands at 326.4; the screen puts it at 326.6. The mockup spec holds the rule's positions, and notes the
-   canvas's estimated ones (318, 522, 737).
+4. The places stand where the canvas stands them (R-20261111-34, 2026-11-11). The canvas sizes each place's slot as
+   52 + 11.5 units a letter of its name, the row centred with 48 between (`placesRow` in `consoles.html`), so its discs
+   stand at 318, 522 and 737 though its browser draws the names 100.54, 108.71 and 165.92 wide (measured 2026-11-09 in
+   headless Chrome). The screen sizes a place the same way, or by the name's own width where that is wider, so no name
+   runs into the next disc; the canvas has no such rule, and the widening stays (decided 2026-11-11, R-20261111-111). A
+   name wider than 11.5 units a letter widens its own slot, and the centred row grows by the difference, half to each
+   side, moving every place. Until 2026-11-11 each slot was the measured name, which stood the first disc at 326.6 and
+   the second at 527.0: four lines a size against the canvas. Seeded back, the canvas test names them again.
 5. After the first focus, the shown makers move only when the focus leaves them, as spec §3.1 asks; the canvas centres
    the focused maker on every press.
 6. The canvas's 17-unit words (the counts, the maker labels and the engine line) are 19, since at 17 they fell under the
    floor at 1280 × 720; the counts are in Barlow Condensed, no wider than the canvas's, and a label's line grows upward
    from the layout's 20-unit box. The full name takes Barlow
-   Condensed's own line box, 53 from y 611, where the canvas's was 44 from 612 (2026-11-09, §3.4.1).
+   Condensed's own line box, 53, from y 607.6, in the canvas as on the screen, so its baseline stands at 651.6 where the
+   canvas's 44-unit line from 612 put it (decided 2026-11-11, R-20261111-94; the screen stood it from 611 until then).
 7. A world's `Walkable` is the body's box, the ring drawn 7 units about it when focused, and the name and count hang
    beneath it, outside the `Walkable`. The canvas's node was 140 units wide and held the words too. On the steep stretches of the outer
    orbits those nodes covered their neighbours, which the fit audit read as overlaps of empty corners.
-8. The focused body is 88 units, where the canvas drew 96 (2026-11-09), and the `Walkable` is the body's box rather than
-   the ring's. At 96, with the ring's box as the `Walkable`, the focused world's box reached into the count of the world
+8. The focused body is 88 units, in the canvas as on the screen (decided 2026-11-11, R-20261111-92; the canvas had drawn
+   96 until then), and the `Walkable` is the body's box rather than the ring's (decided 2026-11-11, R-20261111-109; with
+   the ring's box, 102, the audit names the focused tile over the inner orbit's count at every size, measured that day,
+   EmuSen_Kit.md §7.109). At 96, with the ring's box as the `Walkable`, the focused world's box reached into the count of the world
    on the orbit inside it: the focused NES's into Master System's count, 10 units at 1280 × 800, in the canvases'
    eleven, n30 and long, at every size (one line in n30, six a size in each variant in the others). The drawn ring stayed
    clear of the words; the boxes did not. At 88 the body's box ends 0.45 unit below that count's line box, and its own
    name still starts a unit under the ring, as at 96. Seeded back (96), the audit names the overlap over eleven at
    every size in both variants. The second meeting the audit named on 2026-11-08, a turning
    orbit's label by its window's last world at 16:9, is named in no catalogue on 2026-11-09.
-9. The inner orbit's window ends at y 197, not 178 (decided 2026-11-08), so it holds 2 worlds, not 3. At 178 a
+9. The inner orbit's window ends at y 197, not 178 (decided 2026-11-11, R-20261111-93; the canvas ends it there too), so it holds 2 worlds, not 3. At 178 a
    focused world at its end grew its ring to y 123, into the places row (which ends at 140). The audit over the 120
    consoles found it, and the canvas's own numbers do the same. A turning orbit shows its whole capacity, with the
    focus at the middle world (left of the middle when the capacity is even). The canvas centred the focus, which
    showed one world fewer on an orbit of even capacity: the inner's 2, the middle's 6, and the outer's 10 at 16:9.
    kit-core's test holds a focused inner world's ring at or below 140 at the five sizes.
-10. Two colours on the screen are not the kit's tokens, and each is argued here:
+10. One colour on the screen is not the kit's tokens, argued here, and one was until 2026-11-11:
    - The engine's mark after a world's count and the foot's engine line (mark, name and tag) are drawn in the console's
      hue, as the canvas and `EmuSen_Interface.md` §24.6 draw them. A hue is the console's, as the world's body is, so
      both stand in the kit's `Scene` (`EmuSen_Kit.md` §7.20): the gate's palette leaves the colour to the theme and
      still holds the words to contrast. The stage 1 reference drew its engine row in a `Scene` for the same reason.
-   - The places' glass discs take the canvas's edge, its line ink #8C96DC at 18%, the ink the orbit lines are named
-     for in §7.1 step 4. The fill is the kit's raised surface at 50%. No token is that ink, and the kit's border at 18%
-     would not show on the sky. The acceptance test names the disc's edge with the orbit lines.
+   - The places' glass discs took the canvas's edge, its line ink #8C96DC at 18%, until 2026-11-11. Decided 2026-11-11
+     (R-20261111-96): the thin ring about each disc is the palette's muted token at the same 18%, so it is no longer a
+     colour outside the palette. The fill is the kit's raised surface at 50%. qt-app's `screens.rs` holds the edge to
+     the kit's muted token at 18%.
+
+**Against the canvas after R-20261111-34** (measured 2026-11-11, offscreen on the software backend, theme-audit's
+`qt_3_4_2` run: eleven consoles, the Super Nintendo focused). The places and the cover row's shape are fixed (items 4
+above and `CoverRow`). 44 lines remained, 22 a size, in four figures the screen could not meet without a finding
+elsewhere; the tester ruled on each on 2026-11-11, and with the canvas and its mockup changed to the rulings the run
+names no line (measured 2026-11-11, theme-audit's two `qt_3_4_2` tests passing):
+- the focused body, 96 (item 8): at the canvas's own figures (body 96, the `Walkable` the ring's 110) the focused box
+  reached 7.4 units into the next orbit's count; at 96 with the body's box, the first focus (the NES) reached 3.5 units
+  into Master System's count, 60 lines over eleven. Decided 2026-11-11 (R-20261111-92): the canvas draws it 88;
+- the full name's line box, 44 (item 6): Barlow Condensed Medium at 44 in Qt 6.11 lays a line 53 (ascent 44, descent
+  8.8), with `lineHeight: 44` fixed as without; a 44 box is cut at the foot by the fit rule, which judges the line box.
+  Decided 2026-11-11 (R-20261111-94): the canvas gives it 53 with its baseline kept, and the screen moved to y 607.6;
+- the cover row: the canvas's Super Nintendo was 1.4 wide a unit tall; the systems table's `cover_aspect` 0.73 makes it
+  1.37, so three covers 137 wide stand at 781, 930 and 1079 against 140 at 772, 924 and 1076. Decided 2026-11-11
+  (R-20261111-95): the canvas follows the systems data, and the data is unchanged;
+- the inner orbit's label (item 9): the window ended at 197 on the screen and at 178 in the canvas, so its label's right
+  edge stood at 725.35 against 753.72. Decided 2026-11-11 (R-20261111-93): the canvas ends it at 197.
+The figures and the probes are kept with the branch's evidence (`canvas-figures.md`); the acceptance test's Consoles
+mockup lines were the same figures.
+
+**The full name against the counts** (decided 2026-11-12, R-20261112-2: no exception). The full name's box is as wide
+as its letters and never wider than the room before the nearest count that shares its rows; a longer name wraps or
+shrinks rather than running under a count. Not yet built: the orbit layout does not yet give a theme the room before
+the nearest count. Until it does, the full name's line box runs from x 64 to the covers (685 units at 1280 × 800), and
+over 120 consoles theme-audit names it over a count resting low on the outer orbit (`consoleCount.4` at 1280 × 800,
+`.57` at 1920 × 1200, `.58` at 3840 × 2160; measured 2026-11-11), though no letter of the name reaches the count.
 
 **The sweep.** theme-check's 120-console sweep walked each row in one direction, then went Down. Over the orbits, Down
 lands nearest in x, so the sweep heard 52 consoles of 120. The sweep now walks each row to both of its ends, as its man
@@ -1389,6 +1431,13 @@ turned off during the resize, fixed in the kit on 2026-11-09, `EmuSen_Kit.md` §
 the theme before its fix, which a revert restores.
 
 #### 3.4.5 Constellation as built **[M 2026-11-09]**
+
+**Pulled from the program, 2026-11-11.** The tester ruled (R-20261111-33) that Constellation's 20 differences from its
+mockup are not fixed and that it is pulled until the new default look lands, its mockup gate with it. The themes the
+program carries are the blocks of `qt-app/themes.qrc`; Constellation's block is removed, so the program no longer
+carries it, and theme-audit's mockup test for it is removed. Its package and its mockups stay in the tree. The Themes tab
+itself lists the reference and the folders of the themes store (§3.8's rows), so no built-in theme but the reference
+appears there in either case. Held by qt-app's `qt_3_4_5_the_program_carries_the_built_in_themes_but_constellation`.
 
 "Constellation" (`Frontend/themes/constellation/`, resources at `qrc:/emusen/themes/constellation/`) is the design of
 `qt-s3/final/constellation.md`: Home a star chart whose lines are the pad's walk, Choose a console the makers as figures

@@ -17,12 +17,17 @@ pub struct Part {
     pub stroke: f64,
 }
 
-/// A built-in icon: its parts, and its width over its height (the unit box is stretched to that shape).
+/// A built-in icon: its parts, its width over its height (the unit box is stretched to that shape), and the share of
+/// its height down to the baseline it sits on beside words (the whole of it for a square mark).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mark {
     pub aspect: f64,
     pub parts: Vec<Part>,
+    pub baseline: f64,
 }
+
+/// An info icon's baseline: 0.85 of the em above it and 0.15 below.
+const INFO_BASELINE: f64 = 0.85;
 
 /// Every built-in icon the scene names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -164,7 +169,7 @@ impl MarkId {
 }
 
 fn square(parts: Vec<Part>) -> Mark {
-    Mark { aspect: 1.0, parts }
+    Mark { aspect: 1.0, parts, baseline: 1.0 }
 }
 
 // An info icon: em units across `width` and from 0.85 above the baseline to 0.15 below, to the unit box.
@@ -174,13 +179,13 @@ fn info(width: f64, parts: Vec<Part>) -> Mark {
         .map(|mut p| {
             for ring in &mut p.rings {
                 for q in ring.iter_mut() {
-                    *q = [q[0] / width, q[1] + 0.85];
+                    *q = [q[0] / width, q[1] + INFO_BASELINE];
                 }
             }
             p
         })
         .collect();
-    Mark { aspect: width, parts }
+    Mark { aspect: width, parts, baseline: INFO_BASELINE }
 }
 
 fn em(points: &[Point]) -> Vec<Point> {

@@ -1,0 +1,15 @@
+# Two- and three-entry help copies at entryRelativeScale 0.8 across font size, and two-entry copies across the scale at 0.025, that separate the icon's layout box (EmuSen_Qt.md §4.12.1).
+p0144	0.0144	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a,b
+p0150	0.0150	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a,b
+p0160	0.0160	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a,b
+p0170	0.0170	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a,b
+p0180	0.0180	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a,b
+p0190	0.0190	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a,b
+p0200	0.0200	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a,b
+p0220	0.0220	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a,b
+q85	0.025	entryRelativeScale=0.85	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a,b
+q90	0.025	entryRelativeScale=0.90	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a,b
+q95	0.025	entryRelativeScale=0.95	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a,b
+r0144	0.0144	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a,b,x
+r0170	0.0170	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a,b,x
+r0144d	0.0144	entryRelativeScale=0.8	entries=a,b,x

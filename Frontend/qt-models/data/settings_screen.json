@@ -100,6 +100,7 @@
          "value": {"from": "AppSettings Scraping", "words": {"true": "ScreenScraper", "false": "Off"}}},
         {"id": "collections", "label": "Collections", "hint": "The automatic collections shown, your own, and how lists are sorted.", "page": "Collections"},
         {"id": "hidden", "row": "AppSettings ShowHiddenGames"},
+        {"id": "viewer", "label": "Media viewer", "hint": "How X shows a game's videos, pictures and manual: the help's place, the media types, the video's settings.", "page": "Media viewer"},
         {"id": "cheats", "label": "Cheats", "hint": "The cheats of the game last played, turned on or off, and the cheat database.", "door": "cheats"},
         {"id": "discs", "label": "Compressed discs", "hint": "The library's discs converted to CHD beside them, checked and listed; the library is only read.", "door": "discs"},
         {"id": "media", "label": "ES-DE media folder", "hint": "An ES-DE downloaded_media folder whose art the theme shows; only ever read.", "folder": "AppSettings EsdeMediaDirectory",

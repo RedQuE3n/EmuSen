@@ -6,6 +6,7 @@ ElementBox {
     id: root
     required property string text
     required property url fontSource
+    required property bool ownFace
     required property real px
     required property color color
     required property int hAlign
@@ -13,6 +14,8 @@ ElementBox {
     required property real lineSpacing
     required property bool wrap
     required property bool ellipsis
+    required property bool everyLine
+    required property bool snapRows
     required property bool hasBackground
     required property color background
     required property color backgroundEnd
@@ -33,6 +36,7 @@ ElementBox {
         anchors.fill: parent
         text: root.text
         fontSource: root.fontSource
+        ownFace: root.ownFace
         px: root.px
         color: root.color
         hAlign: root.hAlign
@@ -40,6 +44,8 @@ ElementBox {
         lineSpacing: root.lineSpacing
         wrap: root.wrap
         ellipsis: root.ellipsis
+        everyLine: root.everyLine
+        snapRows: root.snapRows
         hasBackground: root.hasBackground
         background: root.background
         backgroundEnd: root.backgroundEnd

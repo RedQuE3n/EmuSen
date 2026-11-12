@@ -15,7 +15,9 @@ TYPES = {
     "InputDeviceNotifications": "bool", "ShowHelpPrompts": "bool", "DisplayClock": "bool", "ROMDirectory": "string",
     "MediaDirectory": "string", "Theme": "string", "ThemeVariant": "string", "ThemeColorScheme": "string",
     "ThemeFontSize": "string", "ThemeAspectRatio": "string", "ThemeTransitions": "string", "StartupSystem": "string",
-    "StartupView": "string",
+    "StartupView": "string", "MediaViewerHelpPrompts": "string", "MediaViewerShowTypes": "bool",
+    "MediaViewerKeepVideoRunning": "bool", "MediaViewerStretchVideos": "bool", "MediaViewerVideoAudio": "bool",
+    "MediaViewerVideoBlur": "bool", "MediaViewerVideoScanlines": "bool", "MediaViewerScreenshotScanlines": "bool",
 }
 FIXED = {
     "ApplicationUpdaterFrequency": "never", "ScraperUseAccountScreenScraper": "false", "ScraperUsernameScreenScraper": "",

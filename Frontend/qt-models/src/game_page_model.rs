@@ -49,6 +49,7 @@ pub mod qobject {
         #[qproperty(QString, cover, READ, NOTIFY)]
         #[qproperty(QString, hero, READ, NOTIFY)]
         #[qproperty(QString, clip, READ, NOTIFY)]
+        #[qproperty(f64, clip_volume, cxx_name = "clipVolume", READ, NOTIFY)]
         #[qproperty(f64, cover_aspect, cxx_name = "coverAspect", READ, NOTIFY)]
         #[qproperty(QString, cover_name, cxx_name = "coverName", READ, NOTIFY)]
         #[qproperty(QStringList, sections, READ, CONSTANT)]
@@ -333,6 +334,7 @@ pub struct GamePageModelRust {
     cover: QString,
     hero: QString,
     clip: QString,
+    clip_volume: f64,
     cover_aspect: f64,
     cover_name: QString,
     sections: QStringList,
@@ -375,6 +377,7 @@ impl Default for GamePageModelRust {
             cover: QString::default(),
             hero: QString::default(),
             clip: QString::default(),
+            clip_volume: 1.0,
             cover_aspect: crate::library::COVER_SHAPE,
             cover_name: QString::default(),
             sections: list(page.sections().into_iter()),
@@ -528,6 +531,7 @@ impl qobject::GamePageModel {
             put!(cover, cover_changed, QString::from(cover_url(&r.cover).as_str()));
             put!(hero, hero_changed, QString::from(cover_url(&r.hero).as_str()));
             put!(clip, clip_changed, QString::from(cover_url(&r.clip).as_str()));
+            put!(clip_volume, clip_volume_changed, r.clip_volume);
             put!(cover_aspect, cover_aspect_changed, r.cover_aspect);
             model.as_mut().shown(fresh);
             if !model.ready {

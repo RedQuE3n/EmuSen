@@ -112,6 +112,8 @@ pub fn paint_kind(p: &Placed, primary: Option<&Primary>) -> &'static str {
         Paint::Help(_) => "help",
         Paint::Info(_) => "info",
         Paint::Status(_) => "status",
+        Paint::Clip(_) => "clip",
+        Paint::Page(_) => "page",
         Paint::Primary { .. } => match primary.map(|p| &p.layout) {
             Some(Layout::Carousel(_)) => "carousel",
             Some(Layout::TextList(_)) => "textlist",
@@ -151,8 +153,23 @@ pub fn element(p: &Placed, primary: Option<&Primary>, role: &str) -> V {
             _ => None,
         },
         Paint::Badges(_) => None,
+        Paint::Clip(c) => match role {
+            "source" => Some(url(&Some(c.source.clone()))),
+            "stretch" => Some(V::B(c.stretch)),
+            "audio" => Some(V::B(c.audio)),
+            "volume" => Some(V::N(c.volume)),
+            "blur" => Some(V::N(c.blur)),
+            "fade" => Some(V::N(c.fade)),
+            _ => None,
+        },
+        Paint::Page(p) => match role {
+            "source" => Some(url(&Some(p.source.clone()))),
+            "pageIndex" => Some(V::N(p.page as f64)),
+            _ => None,
+        },
         Paint::Help(x) => match role {
-            "fontSource" => Some(url(&x.font)),
+            "fontSource" => Some(url(&x.font.file)),
+            "ownFace" => Some(V::B(x.font.own)),
             "px" => Some(V::N(x.px)),
             "color" => Some(V::C(x.label_color)),
             "iconColor" => Some(V::C(x.icon_color)),
@@ -160,10 +177,14 @@ pub fn element(p: &Placed, primary: Option<&Primary>, role: &str) -> V {
             "iconGap" => Some(V::N(x.icon_gap)),
             "entryScale" => Some(V::N(x.scale)),
             "filled" => Some(V::B(x.filled_glyphs)),
+            "barWidth" => Some(V::N(crate::help::places(x).width)),
+            "rowHeight" => Some(V::N(crate::help::row_height(x).unwrap_or(0.0))),
+            "labelPx" => Some(V::N(crate::help::label_px(x))),
             _ => background(&x.background, role),
         },
         Paint::Info(x) => match role {
-            "fontSource" => Some(url(&x.font)),
+            "fontSource" => Some(url(&x.font.file)),
+            "ownFace" => Some(V::B(x.font.own)),
             "px" => Some(V::N(x.px)),
             "color" => Some(V::C(x.color)),
             "background" => Some(V::C(x.background)),
@@ -173,7 +194,8 @@ pub fn element(p: &Placed, primary: Option<&Primary>, role: &str) -> V {
         },
         Paint::Status(x) => match role {
             "iconHeight" => Some(V::N(x.height)),
-            "fontSource" => Some(url(&x.font)),
+            "fontSource" => Some(url(&x.font.file)),
+            "ownFace" => Some(V::B(x.font.own)),
             "textScale" => Some(V::N(x.text_scale)),
             "color" => Some(V::C(x.color)),
             "entrySpacing" => Some(V::N(x.entry_spacing)),
@@ -209,7 +231,8 @@ fn picture(q: &emusen_esde::scene::Picture, role: &str) -> Option<V> {
 fn text(t: &emusen_esde::scene::Text, role: &str) -> Option<V> {
     Some(match role {
         "text" => V::S(t.text.clone()),
-        "fontSource" => url(&t.font),
+        "fontSource" => url(&t.font.file),
+        "ownFace" => V::B(t.font.own),
         "px" => V::N(t.px),
         "color" => V::C(t.color),
         "hAlign" => V::I(h(t.h_align)),
@@ -217,6 +240,8 @@ fn text(t: &emusen_esde::scene::Text, role: &str) -> Option<V> {
         "lineSpacing" => V::N(t.line_spacing),
         "wrap" => V::B(t.wrap),
         "ellipsis" => V::B(t.ellipsis),
+        "everyLine" => V::B(t.every_line),
+        "snapRows" => V::B(t.snap_rows),
         _ => return background(&t.background, role).or_else(|| scroll(&t.scroll, role)),
     })
 }
@@ -242,7 +267,8 @@ fn layout(pr: &Primary, role: &str) -> Option<V> {
             "background" => V::C(c.background.map_or(CLEAR, |t| t.color)),
             "backgroundEnd" => V::C(c.background.map_or(CLEAR, |t| t.end)),
             "backgroundVertical" => V::B(c.background.is_some_and(|t| t.vertical)),
-            "fontSource" => url(&c.text.font),
+            "fontSource" => url(&c.text.font.file),
+        "ownFace" => V::B(c.text.font.own),
             "px" => V::N(c.text.px),
             "lineSpacing" => V::N(c.text.line_spacing),
             "color" => V::C(c.text.color),
@@ -272,7 +298,8 @@ fn layout(pr: &Primary, role: &str) -> Option<V> {
                 "secondaryColor" => V::C(t.secondary_color),
                 "selectedColor" => V::C(t.selected_color),
                 "selectedSecondaryColor" => V::C(t.selected_secondary_color),
-                "fontSource" => url(&t.font),
+                "fontSource" => url(&t.font.file),
+        "ownFace" => V::B(t.font.own),
                 "px" => V::N(t.px),
                 "lineSpacing" => V::N(t.line_spacing),
                 "margin" => V::N(t.margin),
@@ -319,7 +346,8 @@ fn layout(pr: &Primary, role: &str) -> Option<V> {
             "selectorRadius" => V::N(g.selector_radius),
             "selectorOnTop" => V::B(g.selector_layer == "top"),
             "selectorInMiddle" => V::B(g.selector_layer == "middle"),
-            "fontSource" => url(&g.text.font),
+            "fontSource" => url(&g.text.font.file),
+        "ownFace" => V::B(g.text.font.own),
             "px" => V::N(g.text.px),
             "lineSpacing" => V::N(g.text.line_spacing),
             "color" => V::C(g.text.color),
@@ -431,6 +459,8 @@ pub fn part(p: &Paint, i: usize, role: &str, swap: bool) -> V {
                 "pair" => V::I(pair),
                 "label" => V::S(e.label.clone()),
                 "icon" => url(&e.icon),
+                "start" => V::N(crate::help::places(x).starts[i]),
+                "labelStart" => V::N(crate::help::places(x).labels[i]),
                 _ => V::None,
             }
         }),
@@ -450,24 +480,25 @@ pub fn part(p: &Paint, i: usize, role: &str, swap: bool) -> V {
 }
 
 /// Every role name the element model answers, in role order.
-pub const ELEMENT_ROLES: [&str; 107] = [
+pub const ELEMENT_ROLES: [&str; 118] = [
     "elementId", "paint", "name", "boxX", "boxY", "boxWidth", "boxHeight", "turn", "originX", "originY", "alpha",
     "source", "fit", "cropX", "cropY", "tileWidth", "tileHeight", "tileRight", "tileBottom", "tint", "tintEnd", "gradientVertical",
     "saturation", "radius", "nearest", "frame",
-    "text", "fontSource", "px", "color", "hAlign", "vAlign", "lineSpacing", "wrap", "ellipsis",
+    "text", "fontSource", "px", "color", "hAlign", "vAlign", "lineSpacing", "wrap", "ellipsis", "everyLine", "snapRows",
     "hasBackground", "background", "backgroundEnd", "backgroundVertical", "backgroundRadius", "padLeft", "padTop", "padRight", "padBottom",
     "scrolling", "scrollVertical", "scrollX", "repeatAt", "scrollY", "scrollOpacity",
     "value", "filledSource", "filledMark", "unfilledSource", "unfilledMark", "overlay",
-    "iconColor", "entrySpacing", "iconGap", "entryScale", "filled", "iconHeight", "textScale",
+    "iconColor", "entrySpacing", "iconGap", "entryScale", "filled", "barWidth", "iconHeight", "textScale",
     "leaving", "selected", "alignX", "alignY", "itemBackground",
     "firstRow", "rowHeight", "bandHeight", "contentY", "hasSelector", "selectorX", "selectorY", "selectorW", "selectorH", "selectorColor",
     "hasSelectedBackground", "selectedBackground", "selectedBackgroundRadius", "selectedBackgroundLeft", "selectedBackgroundRight",
     "primaryColor", "secondaryColor", "selectedColor", "selectedSecondaryColor", "margin", "markerWidth",
     "columns", "itemWidth", "itemHeight", "pitchX", "pitchY", "marginX", "marginY", "itemScale", "focusFrom", "fromLevel", "toLevel",
-    "progress", "unfocusedOpacity", "unfocusedSaturation", "unfocusedDim", "imageScale", "hasSelectedTint", "selectedTint",
+    "progress", "unfocusedOpacity", "unfocusedSaturation", "unfocusedDim", "imageScale", "hasSelectedTint", "selectedTint", "ownFace",
+    "pageIndex", "stretch", "audio", "volume", "blur", "labelPx", "fade",
 ];
 
-/// The grid's roles past the element list's first 107.
+/// The grid's roles past the element list's first 112.
 pub const GRID_ROLES: [&str; 9] = [
     "backgroundSource", "backgroundScale", "selectorSource", "selectorScale", "selectorRadius", "selectorOnTop", "selectorInMiddle",
     "selectedItemBackground", "textRadius",
@@ -480,8 +511,8 @@ pub const SLOT_ROLES: [&str; 22] = [
     "saturation", "tint", "reflected", "reflectionOpacity", "reflectionFalloff", "text", "image", "marker", "folder",
 ];
 
-pub const PART_ROLES: [&str; 34] = [
-    "button", "pair", "label", "icon", "mark", "text", "source",
+pub const PART_ROLES: [&str; 36] = [
+    "button", "pair", "label", "icon", "start", "labelStart", "mark", "text", "source",
     "cellX", "cellY", "cellW", "cellH",
     "iconSource", "iconMark", "iconX", "iconY", "iconW", "iconH", "iconTint",
     "controller", "controllerSource", "controllerMark", "controllerX", "controllerY", "controllerW", "controllerH", "controllerTint",

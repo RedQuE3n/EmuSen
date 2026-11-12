@@ -31,7 +31,7 @@ pub struct Start {
     /// The folders a theme may show pictures from: the media store, the artwork and ES-DE media folders (EmuSen_Qt.md §3.5).
     pub cover_stores: Vec<String>,
     /// An ES-DE theme is the library's look: `LibraryStyle` is Theme and `BigPictureTheme` names a folder, read as the library
-    /// model reads it (`esde_shelves::settings_of`), so the own look's screens are not made at the start (EmuSen_Qt.md §4.9).
+    /// model reads it (`esde_shelves::settings_of`), so the own look's screens are not made at the start (EmuSen_Qt.md §4.15).
     pub esde: bool,
     /// AppSettings.NavigationSounds: the ES-DE theme's navigation sounds, on unless the player turned them off.
     pub navigation_sounds: bool,
@@ -114,7 +114,7 @@ pub fn read(library: &Path) -> Start {
 }
 
 /// The start's facts as the window's initial properties, by the root's property names; the program adds the device's
-/// feed and the gate's pad, and a test loads the window with the same map (EmuSen_Qt.md §4.9).
+/// feed and the gate's pad, and a test loads the window with the same map (EmuSen_Qt.md §4.15).
 pub fn initial(start: &Start) -> QMap<QMapPair_QString_QVariant> {
     let mut initial = QMap::<QMapPair_QString_QVariant>::default();
     initial.insert(QString::from("platformLibrary"), QVariant::from(&QString::from(&start.platform_library)));

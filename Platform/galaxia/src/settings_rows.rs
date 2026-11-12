@@ -169,6 +169,18 @@ mod tests {
         ("GraphicsConfig.Consoles", "Overscan"),
     ];
 
+    /// The media viewer's settings, ES-DE's, which no C# row set: five of its media viewer settings menu and the video's
+    /// audio, which ES-DE offers under its sound settings; their rows are the tester's of 2026-11-09, R-20261109-m2
+    /// (EmuSen_Galaxia.md §3.15.1). The scanlines are not offered.
+    const VIEWER_KEYS: [&str; 6] = [
+        "BigPictureInterface.MediaViewerHelpPrompts",
+        "BigPictureInterface.MediaViewerShowTypes",
+        "BigPictureInterface.MediaViewerKeepVideoRunning",
+        "BigPictureInterface.MediaViewerStretchVideos",
+        "BigPictureInterface.MediaViewerVideoBlur",
+        "BigPictureInterface.MediaViewerVideoAudio",
+    ];
+
     /// Keys the C# rows set that have no row here, each with its owner (EmuSen_Galaxia.md §3.15).
     const NOT_ROWS: [(&str, &str); 14] = [
         ("RomDirectory", "a folder chosen through a picker"),
@@ -214,12 +226,13 @@ mod tests {
     }
 
     #[test]
-    fn every_key_the_csharp_rows_set_has_exactly_one_row_and_no_other_has_one() {
+    fn every_key_the_csharp_rows_set_and_the_viewer_s_has_exactly_one_row_and_no_other_has_one() {
         let rows = rows().unwrap();
-        for (section, key) in CSHARP_KEYS {
+        for (section, key) in CSHARP_KEYS.into_iter().chain(VIEWER_KEYS.map(|k| ("AppSettings", k))) {
             assert_eq!(rows.all().filter(|(s, r)| *s == section && r.key == key).count(), 1, "{section}.{key}");
         }
-        assert_eq!(rows.all().count(), CSHARP_KEYS.len(), "a row for a key no C# row sets");
+        assert_eq!(rows.all().count(), CSHARP_KEYS.len() + VIEWER_KEYS.len(), "a row for a key neither a C# row nor the viewer sets");
+        assert!(rows.all().filter(|(_, r)| r.group.as_deref() == Some("Media viewer")).all(|(_, r)| VIEWER_KEYS.contains(&r.key.as_str())));
         for (key, owner) in NOT_ROWS {
             assert!(rows.all().all(|(_, r)| r.key != key), "{key} is {owner}'s");
         }

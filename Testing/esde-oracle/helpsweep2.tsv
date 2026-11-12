@@ -1,0 +1,18 @@
+# helpsweep.tsv's own-face series again, theme.xml's help font removed too: four entries in ES-DE's own face at entryRelativeScale 1 across fontSize 0.0240-0.0260 (k), and at 0.8 across six sizes (j) (EmuSen_Qt.md §4.12.1).
+k00	0.0240	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+k01	0.0242	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+k02	0.0244	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+k03	0.0246	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+k04	0.0248	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+k05	0.0250	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+k06	0.0252	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+k07	0.0254	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+k08	0.0256	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+k09	0.0258	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+k10	0.0260	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+j0144	0.0144	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+j0160	0.0160	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+j0170	0.0170	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+j0180	0.0180	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+j0190	0.0190	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=
+j0200	0.0200	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	fontPath=

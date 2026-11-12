@@ -1,0 +1,15 @@
+# The settings the tester's ruling R-20261111-87 (with R-20261111-75) covers in the corpus measure (EmuSen_Qt.md §4.4):
+# the nine pairs once accepted, withdrawn into the unsupported count by 1993d98fe, and text.containerVerticalSnap, drawn
+# since 5b72c003e, which left that count as they joined it. A ruled write takes a theme's rise in unsupported pairs only
+# where it is exactly the withdrawn pairs the theme sets, less the drawn ones it sets.
+pair	way
+helpsystem.posDimmed	withdrawn
+helpsystem.originDimmed	withdrawn
+helpsystem.textColorDimmed	withdrawn
+helpsystem.iconColorDimmed	withdrawn
+helpsystem.fontSizeDimmed	withdrawn
+helpsystem.entrySpacingDimmed	withdrawn
+helpsystem.iconTextSpacingDimmed	withdrawn
+helpsystem.opacityDimmed	withdrawn
+sound.path	withdrawn
+text.containerVerticalSnap	drawn

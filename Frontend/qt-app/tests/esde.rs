@@ -1,4 +1,4 @@
-//! An ES-DE theme as the library's look (EmuSen_Qt.md §4.9): the program over a sandbox whose settings choose Art Book Next
+//! An ES-DE theme as the library's look (EmuSen_Qt.md §4.15): the program over a sandbox whose settings choose Art Book Next
 //! from the corpus, its library two synthetic NES images and a synthetic Super Nintendo image, played by VenusRT built
 //! from this commit with its sidecar (the client fixture's; no player's game and no published build is read). Moonrise
 //! gives way to the system view; a NES game with no engine fails, said as Mistress said it; Right steps the carousel; A
@@ -359,7 +359,8 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     until(&mut scene, 5, "the view at rest on the new order", |s| s.property("esdeModel", "moving") == "false");
     assert_eq!(scene.property("esdeModel", "selected"), "0", "the entry the act answered, moved to from the second");
     let tree = scene.tree();
-    let top = |name: &str| tree.nodes.iter().filter(|n| n.visible && n.text.as_deref() == Some(name)).map(|n| n.y).reduce(f64::min);
+    // The theme draws its words glyph by glyph; a reader hears them whole on the item that draws them.
+    let top = |name: &str| tree.nodes.iter().filter(|n| n.visible && n.heard == name).map(|n| n.y).reduce(f64::min);
     let (cobalt, brass) = (top("Cobalt Harbor"), top("Brass Lantern"));
     assert!(matches!((cobalt, brass), (Some(c), Some(b)) if c < b), "the view lists both, Cobalt Harbor first: {cobalt:?} {brass:?}");
     // Y makes Cobalt Harbor a favourite; Down to Brass Lantern; Filter, Favourites leaves Cobalt Harbor alone in the

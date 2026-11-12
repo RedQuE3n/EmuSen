@@ -52,6 +52,31 @@ pub(super) fn existing(path: Option<&ThemePath>) -> Option<String> {
     path.filter(|p| p.exists).map(|p| p.absolute.clone())
 }
 
+/// An element's face: the theme's `fontPath`, else ES-DE's default face where the host found one.
+pub(super) fn face_of(e: &Element, data: &Data) -> Face {
+    match existing(e.path("fontPath")) {
+        Some(file) => Face { file: Some(file), own: false },
+        None => Face { file: data.default_font.clone(), own: true },
+    }
+}
+
+/// A help element's face: the theme's `fontPath`, else ES-DE's help face, which rounds every advance as a theme's face
+/// does (EmuSen_Qt.md §4.12.1), else its default face.
+pub(super) fn help_face(e: &Element, data: &Data) -> Face {
+    match existing(e.path("fontPath")) {
+        Some(file) => Face { file: Some(file), own: false },
+        None => es_de_help_face(data),
+    }
+}
+
+/// ES-DE's own help face where the host found it, else its default face.
+pub(super) fn es_de_help_face(data: &Data) -> Face {
+    match &data.help_font {
+        Some(file) => Face { file: Some(file.clone()), own: false },
+        None => Face { file: data.default_font.clone(), own: true },
+    }
+}
+
 pub(super) fn color(e: &Element, property: &str, default: u32) -> Color {
     e.color(property).unwrap_or(Color(default))
 }
@@ -84,6 +109,14 @@ pub(super) fn media(e: &Element, kind: &str, game: Option<&Game>) -> Option<Stri
     let game = game?;
     let binding = e.bindings.iter().find(|b| b.kind == kind)?;
     binding.names.iter().find_map(|t| game.media.get(t).cloned())
+}
+
+/// The axes of a text, a date or the clock that take their extent from the words, as ES-DE 3.4.1 sizes them: no `size`
+/// sizes both, an axis given as 0 sizes that one, and two given axes size neither (es-core/src/GuiComponent.cpp
+/// `GuiComponent::applyTheme` sets the extent rule; es-core/src/components/TextComponent.cpp `TextComponent::onTextChanged`
+/// applies it; EmuSen_Qt.md §4.8.5).
+pub fn sized_by_words(e: &Element) -> (bool, bool) {
+    e.pair("size").map_or((true, true), |s| (s.x <= 0.0, s.y <= 0.0))
 }
 
 fn px(pair: Option<Pair>, w: f64, h: f64) -> Option<(f64, f64)> {
@@ -202,7 +235,7 @@ fn text(e: &Element, said: String, scroll: Option<TextScroll>, ctx: &Ctx) -> Dra
     let clock = e.kind() == "clock";
     let mut t = Text {
         text: said,
-        font: existing(e.path("fontPath")),
+        font: face_of(e, ctx.data),
         px: e.float("fontSize").unwrap_or(if clock { 0.035 } else { 0.045 }) as f64 * ctx.h,
         color: color(e, "color", if clock { 0xFFFF_FFFF } else { 0x0000_00FF }),
         h_align: h_align(e.string("horizontalAlignment")),
@@ -211,6 +244,8 @@ fn text(e: &Element, said: String, scroll: Option<TextScroll>, ctx: &Ctx) -> Dra
         wrap: size.0 > 0.0 && !clock,
         // An auto-sized text grows to its words, so it is never cut short (a 0 box would elide them all).
         ellipsis: !clock && size.0 > 0.0,
+        every_line: false,
+        snap_rows: false,
         background: if clock {
             padded(e, ctx, tint(e, "backgroundColor", "backgroundColorEnd", "backgroundGradientType"))
         } else {
@@ -226,12 +261,14 @@ fn text(e: &Element, said: String, scroll: Option<TextScroll>, ctx: &Ctx) -> Dra
         t.ellipsis = false;
         if vertical {
             t.v_align = VAlign::Top;
+            t.every_line = true;
+            t.snap_rows = size.1 > 0.0 && e.bool("containerVerticalSnap") != Some(false);
         } else {
             t.wrap = false;
         }
     }
-    let sizing = Sizing::Content { auto_w: size.0 <= 0.0, auto_h: size.1 <= 0.0 };
-    Draft { paint: Paint::Text(t), size, sizing, scroll: scroll.map(|s| (s, vertical)) }
+    let (auto_w, auto_h) = sized_by_words(e);
+    Draft { paint: Paint::Text(t), size, sizing: Sizing::Content { auto_w, auto_h }, scroll: scroll.map(|s| (s, vertical)) }
 }
 
 fn rating(e: &Element, ctx: &Ctx) -> Option<Draft> {
@@ -399,14 +436,14 @@ fn help_element(e: &Element, ctx: &Ctx) -> Option<Draft> {
     let bg = color(e, "backgroundColor", 0);
     let paint = Paint::Help(Help {
         entries,
-        font: existing(e.path("fontPath")),
-        px: e.float("fontSize").unwrap_or(0.035) as f64 * ctx.h,
+        font: help_face(e, ctx.data),
+        px: help::font_px(e, ctx.w, ctx.h),
         label_color: color(e, "textColor", 0x7777_77FF),
         icon_color: color(e, "iconColor", 0x7777_77FF),
         background: padded(e, ctx, Tint { color: bg, end: bg, vertical: false }),
-        entry_spacing: e.float("entrySpacing").unwrap_or(0.00833) as f64 * ctx.w,
-        icon_gap: e.float("iconTextSpacing").unwrap_or(0.00416) as f64 * ctx.w,
-        scale: e.float("entryRelativeScale").unwrap_or(1.0) as f64,
+        entry_spacing: help::spacing_px(e, "entrySpacing", ctx.w),
+        icon_gap: help::spacing_px(e, "iconTextSpacing", ctx.w),
+        scale: help::scale(e),
         filled_glyphs: true,
     });
     Some(Draft { paint, size: (0.0, 0.0), sizing: Sizing::Content { auto_w: true, auto_h: true }, scroll: None })
@@ -432,7 +469,7 @@ fn info(e: &Element, ctx: &Ctx) -> Option<Draft> {
     let size = element_size(e, ctx);
     let paint = Paint::Info(Info {
         items,
-        font: existing(e.path("fontPath")),
+        font: face_of(e, ctx.data),
         px: e.float("fontSize").unwrap_or(0.045) as f64 * ctx.h,
         color: color(e, "color", 0x0000_00FF),
         background: color(e, "backgroundColor", 0),
@@ -484,7 +521,7 @@ fn status(e: &Element, ctx: &Ctx) -> Option<Draft> {
     let paint = Paint::Status(Status {
         items,
         height: e.float("height").unwrap_or(0.035) as f64 * ctx.h,
-        font: existing(e.path("fontPath")),
+        font: face_of(e, ctx.data),
         text_scale: e.float("textRelativeScale").unwrap_or(0.9) as f64,
         color: color(e, "color", 0xFFFF_FFFF),
         background: padded(e, ctx, Tint { color: bg, end: bg, vertical: false }),

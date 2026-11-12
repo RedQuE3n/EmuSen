@@ -14,6 +14,7 @@ pub mod primary;
 pub mod selector;
 pub mod stage;
 pub mod view;
+pub mod viewer;
 pub mod words;
 
 pub use data::{ControllerType, Counts, Data, DateTime, DeviceStatus, Game, HelpContext, Indicators, System};
@@ -21,3 +22,4 @@ pub use frame::*;
 pub use motion::{ms, Easing, Glide, Motion, RepeatRule, TextScroll, Time};
 pub use stage::{Layer, Stage};
 pub use view::{ElementState, GridFocus, Rect, SceneView, Step};
+pub use viewer::{HelpPlace, Key, ManualView, Viewer, ViewerSettings};

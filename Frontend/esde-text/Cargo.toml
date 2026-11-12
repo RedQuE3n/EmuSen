@@ -1,0 +1,16 @@
+[package]
+name = "emusen-esde-text"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# ES-DE's text rules over a face (EmuSen_Qt.md §4.9): the whole size, the shaped and rounded pens, the line breaking, the
+# pitch, the whole lines and the ellipsis. Plain data in and out, no Qt; the painter draws what it lays out.
+[lib]
+name = "emusen_esde_text"
+
+[dependencies]
+# MIT. HarfBuzz's shaping in Rust, matching HarfBuzz 15.0's, at HarfBuzz's 64ths of a pixel; through it read-fonts
+# (MIT or Apache-2.0) reads the tables. Approved 2026-11-09 by the tester on the proof of EmuSen_Qt.md §4.9.4.
+harfrust = "=0.15.0"

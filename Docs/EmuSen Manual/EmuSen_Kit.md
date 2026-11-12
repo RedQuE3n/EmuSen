@@ -2200,7 +2200,11 @@ theme-audit records a theme's splash at a stated time and a screen with A held (
   installs it at 0; each later one moves it to `ms` 16 ms at a time, calling `advance()` and processing events at each step,
   as a display's frames would, so a `Behavior` or a `FrameAnimation` that a step starts runs from its own time rather than
   being jumped over. `None` uninstalls it, which leaves Qt's default timer driver in place, not a threaded render loop's own:
-  a caller holds the clock last. Every `QAbstractAnimation` and `FrameAnimation` is held; a `Timer` is not. Under a held clock
+  a caller holds the clock last. Every `QAbstractAnimation` is held, and a `FrameAnimation` is triggered on the held
+  clock's frames; a `Timer` is not. A `FrameAnimation`'s `frameTime` and `elapsedTime` are not held: Qt reads them from
+  a `QElapsedTimer` of its own (`qquickframeanimation.cpp`, `maybeTick`), found 2026-11-12 when the ES-DE view's clock,
+  which summed them, ran on through a held clock (EmuSen_Qt.md §4.8.4); a scene whose time must be held reads it from
+  an animation's value. Under a held clock
   nothing settles, so `rest()` must not be called (a running animation never ends); the audit waits a frame instead.
   The clock is the `Harness`'s, a field holding the C++ object (`harness_clock_hold` gives it, `harness_clock_move` moves it,
   dropping it uninstalls it), not a static of `harness.cpp` (changed 2026-11-09: the house rules forbid a mutable static used
@@ -2660,12 +2664,16 @@ Rust file that holds no bridge rebuilds in **11.4 s** (5.1 s with the cache warm
 the ten test binaries build and link in **2.3 s** together. With the cache warm a cold build is 19.7 s, which is the
 figure a day's work sees.
 
-**Rule Q.** `Testing/qmltypes/EmuSen.Kit-1.0.qmltypes` and `EmuSen.Kit-1.0.qmldir` are the registry as
+**Rule Q.** (EmuSen.Kit is 1.1 since 2026-11-11, `CHANGELOG-kit.md`; its QML files' surface is held beside the
+registry as `EmuSen.Kit-1.1.qmlfiles`, R-20261111-99, `EmuSen_Qt.md` §5.3.) `Testing/qmltypes/EmuSen.Kit-1.1.qmltypes`
+and `EmuSen.Kit-1.1.qmldir` are the registry as
 `qmltyperegistrar` and cxx-qt write them (`Frontend/target/cxxqt/qml_modules/EmuSen/Kit/`). `tests/qmltypes.rs`
 compares the build's files to the committed ones with line numbers and header file names dropped, since those move
-with every edit; a difference fails until it is reviewed, the minor bumped for an addition or the major for a removal,
-and the files copied. Until 1.0 the comparison is strict equality; the addition and removal distinction is a reviewer's
-step, not the test's.
+with every edit; a difference fails until it is reviewed, the minor bumped for any change, an addition, a change or a
+removal (R-20261111-107: no major before the first release), the change listed in `CHANGELOG-kit.md`, and the files
+copied. The comparison is strict equality with the committed files of the current version, so it cannot tell whether
+the version moved: a change may rewrite those files in place. The bump is a person's check at review and landing, a
+file under `Testing/qmltypes` changed at a version the trunk already has being its mark (`EmuSen_Qt.md` §5.3).
 
 **Tests** (`Frontend/kit-qt/tests`, 34 with §7.5's and §7.8's, no Qt application needed; the bridges themselves are
 exercised by the harness of step 9): `kinds` (the mirrors pair by pair), `column` (every colour of both variants, the metrics by form and text
@@ -2817,7 +2825,12 @@ by the program's Consoles test (the Super Nintendo's `✓ No firmware needed` dr
 token `poster` (1.5 s) has passed, the clip (`source`) plays, looped, and fades in over `posterFade`; when `playing` turns
 false, or the source changes, the player goes and the still stands alone. It is silent unless `muted` is false. Reduced
 motion keeps the still (`EmuSen_Interface.md` §5.9). `showing` says whether a frame of the clip stands over the still,
-`running` whether its player is made, `frames` how many frames the kit's sink has drawn. The player, decoder and drawing
+`running` whether its player is made, `frames` how many frames the kit's sink has drawn. Since 2026-11-11 the player
+(`VideoClip`, objectName `videoPlayback`) also says where the clip is (`position`, ms), whether its sound is let out
+(`heard`, its `AudioOutput`'s muted state) and at what share of full (`level`), so a test reads what the player sees and
+hears. Both `VideoTile` and `VideoClip` take `fade`, the ms the clip fades in over once its first frame shows, `posterFade`
+where none is given (ES-DE's media viewer gives 600, `EmuSen_Qt.md` §4.14). And `emusen_qt_test::clips::write` writes a test's clip, and `Scene::item_number` reads a number of an item found
+through the item tree, a Repeater's delegate among them. The player, decoder and drawing
 are **`VideoClip`** (qmldir), which the tile makes only while its clip is to play, so a window that shows no clip never
 starts Qt Multimedia: made with every window, it started Qt Multimedia in every run of the program (2026-11-09). The decoder is Qt Multimedia's over the system's FFmpeg (`EmuSen_Qt.md` §1.8.9). On an RHI
 backend `VideoOutput` draws; on the software backend, where `VideoOutput` draws nothing (measured 2026-11-09), the kit's
@@ -2828,7 +2841,7 @@ element, so a theme never imports QtMultimedia. The kit now links Qt's Multimedi
 `QtMultimedia`.
 
 **`PageFrame`** gained, for a game's page (`EmuSen_Qt.md` §7.8):
-- the hero's clip: `clipSource`, `clipPlaying` and `clipMuted` (not `clip`, which is every item's own), a `VideoTile` in place of the hero's picture under the OnArt
+- the hero's clip: `clipSource`, `clipPlaying`, `clipMuted` and `clipVolume` (a share of full, 1 by default; not `clip`, which is every item's own), a `VideoTile` in place of the hero's picture under the OnArt
   gradient, its still the `hero`; `videoTile` names it;
 - words beside a picture in place of tiles or rows, as the Overview shows them: `showsText`, `contentWords`,
   `contentPicture`, the picture 388 × 222 at the content's right and the words in the rest less a gap of 24, from
@@ -2854,6 +2867,36 @@ The module stays 1.0 (§7.6). `EmuSen.Theme` re-exports none of it.
 **Held to**: kit-gallery's screens test (the page with tiles and with rows, both variants, the four sizes) and the
 registry's comparison, and the program's game page test, which holds the clip on the software backend
 (`EmuSen_Qt.md` §7.8).
+
+### 7.54 A pair as one glyph, and a host's words on the help bar (stage 4, X; 2026-11-09)
+
+Two extensions under rule Q for the ES-DE painter's help bar (EmuSen_Qt.md §4.8.7), each declared after what was there;
+neither changes what an existing screen draws.
+
+- **The pair glyph** (approved by the tester 2026-11-09). ES-DE's help draws one icon for a pair of presses that make one
+  action: the d-pad with both arrows of its axis for Choose and the gamelist's System, and its `button_lr` and
+  `button_ltrt` for the shoulders and the triggers (THEMES.md, `customButtonIcon`'s keys). The kit drew a pair as two
+  glyphs side by side. kit-core's `glyph::paired(a, b, style)` gives one glyph for two controls when they are a d-pad
+  axis (left and right, up and down), the two shoulders or the two triggers, in either order, and none for any other
+  two. A d-pad axis is the single direction's plus with both of its directions marked: in the filled set the solid plus
+  with an arrow cut into both tips, in the outlined set the outlined plus with both arms filled. The shoulders and the
+  triggers are their two bodies side by side, each the shape of one at half its width, unlettered, the same in every
+  family (a body has room for one family's name, not two). kit-qt: `PadGlyphMarks.pair` (int, -1 for none, the
+  default) draws the pair's glyph where kit-core has one, and `paired` (read-only) says whether it does; `PadGlyph.pair`
+  and `paired` alias them, and the glyph's accessible name is both controls' ("D-pad left and D-pad right").
+  `HelpBar.pairGlyph` (false by default, so Mistress's own bars still draw two) draws an entry's `pair` as the one glyph
+  and leaves the second out where it is drawn.
+- **`HelpBar.label`**, a component that draws an entry's words in place of the kit's `Text`, given `text` and `color`
+  (null by default, the kit's `Text` in `labelFont`). The ES-DE painter gives it `GlyphLine`, ES-DE's own line layout,
+  since Qt's text layout has no form of it (EmuSen_Qt.md §4.8.7, item 3).
+
+**Held to**: kit-core's `tests/glyph.rs` `kit_7_54_a_pair_pressed_for_one_action_is_one_glyph` (the four pairs in both
+sets and either order, closed, inside the box, unlettered, every hole inside its shape, unlike the single control's
+glyph, the filled axis the single direction's plus with both tips' arrows; four other pairs give none); the registry
+under `Testing/qmltypes` (`PadGlyphMarks.pair`, `paired`); the ES-DE oracle, where the help bars of the four system
+views now span ES-DE's widths (CarAlt's Choose inks 1221–1237 as ES-DE's does). Measured on 2026-11-09 with two seeded
+faults, each reverted: the filled axis cut at one tip failed kit-core's test ("not the single control's glyph"), and
+`pairGlyph` left off in the ES-DE painter failed the oracle (the four system bars 22.3–40.9 units wider than ES-DE's).
 
 ### 7.55 The raised shadow as a token, and `RaisedShadow` on both backends (stage 5, piece K; 2026-11-09)
 
@@ -3508,6 +3551,60 @@ saw (fault 44, measured on 2026-11-11: `cards` fails at the Home card, "focuses 
 that assert set aside, the Home check fails alone, "focuses Games, not place.1"); and the same rule against qt-app's
 `console` on the GPU (fault 45, run on 2026-11-11 on 7d3b6571b: `console` panics at its List card made under the resting
 pointer, "focuses its first row", and the binary aborts). `cards` reaches Home through Consoles.
+
+### 7.60 The body face as bytes (stage 4, X2; 2026-11-09)
+
+The ES-DE painter lays a theme's words out by ES-DE's rules in a component of its own, `emusen-esde-text`
+(EmuSen_Qt.md §4.9), which reads a face's bytes rather than asking Qt. Where a theme names no font and ES-DE's own face
+is not installed, the words are the kit's body face, so the kit gives that face to Rust as well as to QML:
+`emusen_kit_qt::fonts::BODY` (Barlow Regular's bytes, the same file `fonts/Fonts.qrc` carries) and `BODY_URL` (the
+resource path QML loads it from). The kit stays the face's one owner; nothing else names the file.
+
+**Held to**: `emusen-esde-text`'s tests read the same file, and the ES-DE painter's `TextLayout` lays a theme without a
+font out on these bytes.
+
+### 7.61 A video tile fitted, and started at once (stage 4, X2; 2026-11-09)
+
+ES-DE's media viewer plays a game's video fitted inside the screen and at once (EmuSen_Qt.md §4.10), where a hero's
+tile crops its clip to fill and waits the poster's delay. `VideoTile` gains `fillMode` (`Image.PreserveAspectCrop` by
+default, as before; `Image.PreserveAspectFit` fits the clip and the still inside the tile) and `delay` (the poster's
+delay by default; 0 starts at once), which `VideoClip` takes on; `VideoFrames`, the software backend's sink, gains
+`fitted`. An addition: the defaults keep every tile as it was.
+
+**Held to**: the ES-DE oracle's media viewer states (the video's ink within two units of ES-DE's at both sizes), and the
+kit's own tests of the tile (unchanged defaults).
+
+### 7.70 The whole d-pad as one glyph, and a video tile stretched (stage 4, X3; 2026-11-09)
+
+ES-DE's media viewer names its pan, when a manual is zoomed, by the whole d-pad (EmuSen_Qt.md §4.13), and may stretch
+its video to the screen (§4.14). Two additions, the defaults unchanged:
+
+- `glyph::paired` takes Up with Left (either order) as the whole d-pad: the plus with all four directions marked, an
+  arrow cut into each tip when filled and each arm filled when outlined. Up with Left was no pair before, so no bar's
+  glyph changes; the other two directions with each other stay none (Right with Up is still refused).
+- `VideoTile`'s `fillMode` takes `Image.Stretch`: `VideoClip` gives the GPU tier's `VideoOutput.Stretch`, and
+  `VideoFrames`, the software backend's sink, gains `stretched`, the frame drawn to the whole item.
+
+**Held to**: kit-core's `kit_7_54_a_pair_pressed_for_one_action_is_one_glyph` (the whole d-pad among the pairs, its
+plus the single direction's with four arrows cut); the ES-DE oracle's `stretch` states, the video's ink within two units
+of ES-DE's.
+
+### 7.71 The share of its box the filled disc fills (stage 4, X7; 2026-11-11)
+
+Decided 2026-11-11 by the tester (R-20261111-24): the kit exposes, read-only, the share of its box the pad glyph's disc
+fills, so a host can size the glyph to a disc measured elsewhere without copying the kit's geometry. One addition, the
+defaults unchanged:
+
+- kit-core's `glyph::FILLED_DISC_SHARE`, the filled set's disc edge to edge over its box, is `2 × R` of
+  `glyph/filled.rs` (0.85), derived from the radius the set already draws with, not a second number.
+- `PadGlyphMarks.discShare` (read-only, constant) gives it to QML.
+
+The ES-DE painter's help bar is its user: ES-DE's icon disc reaches 58 of its 64 units, so the glyph is drawn at the icon's
+box × (58/64) / `discShare` (EmuSen_Qt.md §4.12.1).
+
+**Held to**: kit-core's `kit_7_71_the_filled_disc_fills_the_share_of_its_box_the_kit_publishes` (the drawn disc's extent
+against the constant); rule Q's registry (`discShare` declared last, no index moved); esde-qt's
+`the_watched_themes_hold_at_the_five_sizes`, which holds every help glyph to that size.
 
 ### 7.109 Each accepted class read in one place, the program's own words held whole, and the main-thread line accepted in tests only (2026-11-11)
 

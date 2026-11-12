@@ -30,8 +30,17 @@ fn dependencies(manifest: &str) -> Vec<String> {
 #[test]
 fn qt_4_8_the_painter_names_no_client_and_no_runtime() {
     let names = dependencies(MANIFEST);
-    assert_eq!(names, ["cxx", "cxx-qt", "cxx-qt-lib", "emusen-esde", "serde", "serde_json", "emusen-kit-qt", "emusen-kit-core"], "the painter's dependencies are its design's (EmuSen_Qt.md §4.8)");
-    for (crate_dir, manifest) in [("esde", include_str!("../../esde/Cargo.toml")), ("kit-qt", include_str!("../../kit-qt/Cargo.toml"))] {
+    // emusen-esde-text, ES-DE's text rules, since 2026-11-09 (EmuSen_Qt.md §4.9.2).
+    assert_eq!(
+        names,
+        ["cxx", "cxx-qt", "cxx-qt-lib", "emusen-esde", "emusen-esde-text", "serde", "serde_json", "emusen-kit-qt", "emusen-kit-core"],
+        "the painter's dependencies are its design's (EmuSen_Qt.md §4.8)"
+    );
+    for (crate_dir, manifest) in [
+        ("esde", include_str!("../../esde/Cargo.toml")),
+        ("esde-text", include_str!("../../esde-text/Cargo.toml")),
+        ("kit-qt", include_str!("../../kit-qt/Cargo.toml")),
+    ] {
         for name in dependencies(manifest) {
             assert!(
                 !["client", "crystal", "platform", "models", "play", "endymion"].iter().any(|w| name.contains(w)),
@@ -56,12 +65,12 @@ fn scripts(dir: &std::path::Path, found: &mut Vec<std::path::PathBuf>) {
 }
 
 #[test]
-fn qt_5_3_no_qml_of_ours_calls_the_deprecated_hover() {
-    let held = frontend().join("esde-qt").join("tests").join("qml").join("Deprecated.qml");
+fn qt_5_3_the_removed_hover_is_called_by_no_qml_and_offered_by_no_registry() {
     let mut found = Vec::new();
     scripts(&frontend(), &mut found);
     assert!(found.len() > 200, "the walk found the front end's QML ({} files)", found.len());
-    assert!(std::fs::read_to_string(&held).unwrap().contains(".hover("), "the scene that holds hover(row) calls it");
-    let callers: Vec<_> = found.iter().filter(|p| !p.ends_with("esde-qt/tests/qml/Deprecated.qml")).filter(|p| std::fs::read_to_string(p).unwrap().contains(".hover(")).collect();
-    assert!(callers.is_empty(), "EsdeModel.hover(row) is deprecated in EmuSen.Esde 1.1 (CHANGELOG-esde.md); these call it: {callers:?}");
+    let callers: Vec<_> = found.iter().filter(|p| std::fs::read_to_string(p).unwrap().contains(".hover(")).collect();
+    assert!(callers.is_empty(), "EsdeModel.hover(row) is gone in EmuSen.Esde 1.2 (R-20261111-108, CHANGELOG-esde.md); these call it: {callers:?}");
+    let registry = include_str!("../../../Testing/qmltypes/EmuSen.Esde-1.2.qmltypes");
+    assert!(registry.contains("name: \"hoverAt\"") && !registry.contains("name: \"hover\""), "the registry offers hoverAt and no hover");
 }

@@ -42,7 +42,7 @@ impl Measure {
         self.properties.values().filter(|s| **s == state).count()
     }
 
-    /// Drawn whole: it loads, and sets nothing unsupported or unknown and uses no undrawn kind.
+    /// Drawn whole: it loads, sets nothing unsupported or unknown, and uses no undrawn kind.
     pub fn whole(&self) -> bool {
         self.loads() && self.undrawn.is_empty() && self.properties.values().all(|s| *s == "set")
     }
@@ -119,8 +119,10 @@ pub fn measure(folder: &Path, systems: &[&str]) -> Measure {
                 }
                 for property in e.explicit.keys() {
                     let pair = format!("{}.{property}", e.kind());
-                    let drawn = e.kind() == "sound" || mapping::is_mapped(e.kind(), property);
-                    let state = if drawn { "set" } else { "unsupported" };
+                    let state = match mapping::status(e.kind(), property) {
+                        Some(mapping::Status::Drawn) => "set",
+                        _ => "unsupported",
+                    };
                     if m.properties.get(&pair).is_none_or(|s| *s == "set") {
                         m.properties.insert(pair, state);
                     }
@@ -187,8 +189,18 @@ pub enum Table {
     Properties,
 }
 
+/// Every theme under the folders, measured.
+pub fn measures(folders: &[PathBuf], systems: &[&str]) -> Vec<Measure> {
+    folders.iter().flat_map(|f| themes_in(f)).map(|t| measure(&t, systems)).collect()
+}
+
 /// Measures every theme under the folders and prints one table, header first; a last line totals the summary.
 pub fn report(folders: &[PathBuf], systems: &[&str], table: Table) -> Report {
+    report_of(&measures(folders, systems), table)
+}
+
+/// One table of measured themes, header first; a last line totals the summary.
+pub fn report_of(measures: &[Measure], table: Table) -> Report {
     let mut lines = vec![match table {
         Table::Summary => SUMMARY_HEADER,
         Table::Diagnostics => DIAGNOSTICS_HEADER,
@@ -196,18 +208,15 @@ pub fn report(folders: &[PathBuf], systems: &[&str], table: Table) -> Report {
     }
     .to_owned()];
     let (mut themes, mut loading, mut whole, mut drawn_kinds) = (0, 0, 0, 0);
-    for folder in folders {
-        for theme in themes_in(folder) {
-            let m = measure(&theme, systems);
-            themes += 1;
-            loading += usize::from(m.loads());
-            whole += usize::from(m.whole());
-            drawn_kinds += usize::from(m.undrawn.is_empty());
-            match table {
-                Table::Summary => lines.push(summary_row(&m)),
-                Table::Diagnostics => lines.extend(diagnostic_rows(&m)),
-                Table::Properties => lines.extend(property_rows(&m)),
-            }
+    for m in measures {
+        themes += 1;
+        loading += usize::from(m.loads());
+        whole += usize::from(m.whole());
+        drawn_kinds += usize::from(m.undrawn.is_empty());
+        match table {
+            Table::Summary => lines.push(summary_row(m)),
+            Table::Diagnostics => lines.extend(diagnostic_rows(m)),
+            Table::Properties => lines.extend(property_rows(m)),
         }
     }
     if table == Table::Summary {

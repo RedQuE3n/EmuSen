@@ -338,8 +338,18 @@ fn along(c: &Case, value: &str) -> UiButton {
     }
 }
 
+// A case pressed and read at a time: its motion runs on Qt's animation clock, which a harness can hold; a resting wait does not.
+fn held(c: &Case) -> bool {
+    c.at.is_some() && c.moves.is_some()
+}
+
+// The view's own clock since the press, which starts from 0 as the scene starts moving (View.qml's inner viewClock).
+fn since_press(scene: &mut Scene<'_>) -> f64 {
+    scene.property("viewClock", "tickedMs").parse().unwrap_or(f64::NAN)
+}
+
 /// One rendering of a case: the view emptied so the next install starts afresh, the theme and the rotated library
-/// installed, the case's move made, and the picture left on the window at the case's time.
+/// installed, the case's move made, and the picture left on the window at the case's time, a timed case's clock still held.
 fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &Assets) {
     common::write_theme(theme, "", &element(c, value, assets));
     if scene.property("esdeModel", "themed") == "true" {
@@ -355,6 +365,11 @@ fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &A
     assert!(scene.set_property("view", "settings", &settings(theme, &interface)));
     assert!(scene.set_property("view", "shelves", &shelves));
     until(scene, "the case's theme installed", |s| s.property("esdeModel", "themed") == "true");
+    // A timed move runs on the held clock, so its picture is the scene at `at` whatever the machine's load (EmuSen_Qt.md §4.8.5).
+    if held(c) {
+        until(scene, "the case at rest before its move", |s| s.property("esdeModel", "moving") == "false");
+        scene.hold_clock(Some(0));
+    }
     let started = std::time::Instant::now();
     match c.moves.as_deref() {
         Some("step") => scene.pad(along(c, value)),
@@ -363,6 +378,17 @@ fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &A
         _ => {}
     }
     match c.at {
+        Some(at) if held(c) => {
+            // Qt starts the view's clock a few ms off the held one, so the last step is what the view still lacks.
+            // A scene that has come to rest reads the same at any later time.
+            let near = i64::from(at) - 32;
+            scene.hold_clock(Some(near));
+            let moving = |s: &mut Scene<'_>| s.property("esdeModel", "moving") == "true";
+            let lacking = if moving(scene) { (f64::from(at) - since_press(scene)).round() as i64 } else { 32 };
+            scene.hold_clock(Some(near + lacking));
+            let t = since_press(scene);
+            assert!(!moving(scene) || (t - f64::from(at)).abs() < 0.5, "{c} = {value}: the scene read at {t} ms after the press, not {at}");
+        }
         Some(at) => {
             let left = at - started.elapsed().as_millis() as i32;
             scene.wait(left.max(0));
@@ -404,6 +430,8 @@ fn every_case_s_two_themes_load_without_errors() {
 fn every_drawn_pair_changes_the_painted_pixels() {
     assert!(emusen_esde_qt::marks::mark_named("star").is_some(), "the module is linked into this test");
     let _kwin = common::start();
+    // A held clock is refused under a threaded render loop, which installs its own animation driver (EmuSen_Kit.md §7.36).
+    std::env::set_var("QSG_RENDER_LOOP", "basic");
     let dir = Scratch::new("mapping");
     let assets = Assets::new(&dir.0);
     let only = std::env::var("ESDE_MAPPING_ONLY").ok();
@@ -425,11 +453,17 @@ fn every_drawn_pair_changes_the_painted_pixels() {
         if c.moves.as_deref() == Some("hold") {
             scene.pad_up(along(c, &c.a));
         }
+        if held(c) {
+            scene.hold_clock(None);
+        }
         render(&mut scene, c, &c.b, &tb, &assets);
         let problems: Vec<String> = problems.into_iter().chain(errors(&tb)).chain(Some(scene.property("esdeModel", "problem")).filter(|p| !p.is_empty())).collect();
         let differing = scene.difference(&picture, 0, 0, &[], "");
         if c.moves.as_deref() == Some("hold") {
             scene.pad_up(along(c, &c.b));
+        }
+        if held(c) {
+            scene.hold_clock(None);
         }
         if !problems.is_empty() {
             failures.push(format!("{c}: theme errors: {}", problems.join("; ")));

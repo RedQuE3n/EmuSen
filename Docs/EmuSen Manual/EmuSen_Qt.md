@@ -254,7 +254,7 @@ disassembly, board name and view; `emusen_firmware_find` and `_locate`; the chea
 (`emusen_cheats_parse`, `_write`); the HTTP client (`emusen_net_download_*`); the medium locks; Endymion's resampler, rate control,
 `pad_resolve`, `pad_combine`, `pad_controls_for`, `pads_use`,
 `pads_rescan_due`, the simulated pads' texts read, holds and device calls, the game player's resampler and rate calls not named in §1.8.6,
-the interface player's `volume` (its `decode` and `decode_take` are `sounds::decode` since 2026-11-09, §4.9); and the rest of Serenity (sources, the compiler,
+the interface player's `volume` (its `decode` and `decode_take` are `sounds::decode` since 2026-11-09, §4.15); and the rest of Serenity (sources, the compiler,
 reflection, the cache, the lend, the ring, and the chain's other calls); since interface 42 its `serenity` module covers
 the device made for an adopting host, its raw handles, a built-in filter's preset, and a chain advanced and drawn in place
 (§1.8). Each is wrapped when a screen needs it; stage 5's are below.
@@ -467,7 +467,7 @@ Virtual Keyboard is GPL-only in the open edition and docks nowhere]*), `Carousel
 `DatePicker`. Everything Qt Quick Controls already does (buttons, switches, sliders, combo boxes, tabs, scroll bars,
 menus, dialogs, tool tips, `TableView`, `TreeView`, `GridView`, `SplitView`) is Qt's, styled by §1.5.
 
-The module's surface is `import EmuSen.Kit 1.0` and its `.qmltypes` (rule Q). It knows nothing of consoles, games or the
+The module's surface is `import EmuSen.Kit` (1.1 since 2026-11-11), its `.qmltypes` and its QML files' surface (rule Q). It knows nothing of consoles, games or the
 runtime: the bodies draw any host's worlds, the frame walks any host's roles. `cargo deny`-style test: the kit's
 dependency tree names no runtime or client crate.
 
@@ -983,11 +983,14 @@ left out of `Tokens.qml` (the surface test).
 
 ### 3.3 Versioning
 
-The API is the module's version, `EmuSen.Theme 1.0`. A minor adds singletons, roles, actions, cues or tokens and never
-removes or renames one; a role or action no longer meant is kept and marked deprecated, in the changelog and its doc comment, for one minor,
-then removed at a major. A theme states the API it was written for in `theme.json` (`"api": "1.0"`); a theme written for
-a newer major than the build has is refused with words naming both; one written for an older minor loads, since minors
-are additive. Before 1.0 (§5.1) the same rules hold, with breaking changes allowed and listed in `CHANGELOG-theme-api.md`.
+The API is the module's version, `EmuSen.Theme 1.0`. Until the first release every change, an addition, a change, a
+removal or a rename, bumps the minor, and a role or action deprecated in one minor may be removed in any later one
+(decided 2026-11-11 by the tester, R-20261111-107, R-20261111-108, §5.3). After it, a minor adds singletons, roles,
+actions, cues or tokens and never removes or renames one; a role or action no longer meant is kept and marked
+deprecated, in the changelog and its doc comment, for one minor, then removed at a major. A theme states the API it was
+written for in `theme.json` (`"api": "1.0"`); a theme written for a newer major than the build has is refused with words
+naming both; one written for an older minor of the same major loads, its minors being additive after the first release;
+before it a later minor may have removed what the theme uses, each removal listed in the changelog. Before 1.0 (§5.1) the same rules hold, with breaking changes allowed and listed in `CHANGELOG-theme-api.md`.
 
 ### 3.4 The package
 
@@ -2027,7 +2030,29 @@ scene or painter change; the loader is done. The ranking is re-measured by the c
   66 load (held), drawn whole rises from 0 as §4.3's families land, and the watched subset's view difference stays under
   the C# painter's on the day of the switch, recorded as the baseline.
 - **Change detection.** The corpus TSV of each measurement is committed under `Testing/esde-corpus/<date>.tsv`; a row
-  that worsens fails the landing until explained.
+  that worsens fails the landing until explained. A worsening is explained one way: the tester rules on it, and the
+  oracle (`esde-qt/tests/oracle.rs`) is run with `EMUSEN_ESDE_CORPUS=ruled:<ruling id>`. A ruling covers only the
+  settings its file names, `Testing/esde-corpus/rulings/<ruling id>.tsv`: the `type.property` pairs it moved into the
+  unsupported count (`withdrawn`) and any it moved out by drawing them (`drawn`). Such a run writes the day's measure only
+  when its sole failures are *rises* in unsupported pairs, and each theme's rise is exactly the withdrawn pairs that
+  theme sets, less the drawn ones it sets, read from the theme's pairs as measured. A rise in unknown pairs, a rise of
+  any other size, a ruling with no file, a box off, a figure risen, a theme that stops loading or an undrawn kind gained
+  fails it and nothing is written; each uncovered rise is printed with the count the ruling accounts for. `ruled:` with
+  no id writes nothing. `EMUSEN_ESDE_CORPUS=1` writes only a run with no failure at all, a lower ceiling included.
+  A count that falls (`set`, `unknown`, `unsupported`) or a theme gone from the measure is said in every mode: it fails
+  a run that does not write, a theme gone fails any run, and a run that writes keeps each fall, as each rise, as a
+  `# fall:` or `# rise:` line under the first, where a passing run leaves them readable (`# ruled <id>: <n> rises` stays
+  the first line of a ruled write). The decision is `emusen_qt_test::corpus` (`record`, `Cover`, `falls`), held by its
+  four unit tests. Checked on 2026-11-12 against the corpus: `R-20261111-87.tsv` accounts for all 57 rises of 2026-11-11
+  against `2026-11-09.tsv`, and the measure has no fall against `2026-11-11.tsv`.
+- **The rise of 2026-11-11** (R-20261111-75, R-20261111-87). The nine pairs that were `accepted` (the help's eight
+  dimmed properties and a sound's path) are counted unsupported since 1993d98fe, and 57 themes rose against
+  `2026-11-09.tsv` by 1 to 7. In 53 the rise is exactly the number of those nine the theme sets. In four it is one less:
+  esboy (13 from 11, three of the nine set), forall (13 from 8, six set), psone-ish (10 from 8, three set) and x20s (10
+  from 8, three set). Each of the four also sets `text.containerVerticalSnap`, which was `later:container` when
+  `2026-11-09.tsv` was measured (fdcccba34) and is `drawn` since 5b72c003e, so it left the unsupported count as the nine
+  joined it. Art Book Next, colorful-simplified, tategriddy and texgriddy set it too, and of the nine only a sound's
+  path, so their counts are unchanged. Measured on 2026-11-11 from every theme's pairs and their states.
 
 ### 4.5 `emusen-esde` as built: the loader, the scene and `esde-check` **[M 2026-11-08]**
 
@@ -2202,12 +2227,13 @@ two views of a pan):
   ES-DE's, the kit's functions the kit's.
 
 **`scene/mapping.tsv`** is now one row per (element, property): all 472 catalogue pairs, each once, with a status. The
-test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted` holds it equal to the catalogue.
+test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_not_drawn` holds it equal to the catalogue.
 
 | Status | Pairs | Meaning |
 |---|---|---|
 | `drawn` | 347 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, measured 2026-11-08) |
-| `accepted` | 9 | the help's eight `*Dimmed` properties (decided 2026-11-08; the design counted six, `THEMES.md` lists eight: `posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`), and `sound.path`, which the host plays |
+| `later:help-dimmed` | 8 | the help's eight `*Dimmed` properties (`posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`): not drawn until each is checked (R-20261111-75, decided 2026-11-11; the `accepted` state of 2026-11-08 is withdrawn) |
+| `later:sound` | 1 | `sound.path`, which the host plays: not drawn until checked (R-20261111-75) |
 | `later:video` | 16 | the video family |
 | `later:gradients` | 22 | the `*ColorEnd` and `*GradientType` pairs the C# did not draw |
 | `later:item-text` | 19 | carousel and grid item text styles and scrolling, the collections' letter cases, name suffixes |
@@ -2222,8 +2248,16 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted` h
 | `later:grid-rows` | 1 | `fractionalRows`: the grid's record carries no row count, so a partial row is drawn either way |
 | `later:text-lines` | 1 | datetime's `lineSpacing`: one line at the top of its box is placed the same at every spacing |
 
-`check` counts a pair as `set` when it is drawn or accepted, `unsupported` otherwise; nothing reads `catalog.tsv`'s
-`deferred` column for it any more.
+`check` counts a pair as `set` when it is drawn and `unsupported` otherwise, `sound`'s pairs included; there is no
+state between (R-20261111-75, decided 2026-11-11: the nine pairs once marked `accepted` are counted as not drawn until
+each is checked). Nothing reads `catalog.tsv`'s `deferred` column for it any more. The corpus measure of 2026-11-09
+counted the nine as set: measured again on 2026-11-11 over the 71 themes, 57 rise in `unsupported`, 53 of them by
+exactly the pairs of the nine they set. The other four, ESboy, ForAll, PSOne-ish and X20s, rise by one fewer (2 of 3,
+5 of 6, 2 of 3, 2 of 3) because each also sets `text.containerVerticalSnap`, which was `later:container` on 2026-11-09
+and is `drawn` since that day's container snap (§4.12.3), so it left their unsupported pairs as the nine came in. Four
+more themes set it, Art Book Next, Colorful Simplified, Tategriddy and Texgriddy, and of the nine only `sound.path`, so
+theirs did not change at all (read 2026-11-11 from `esde-check`'s per-pair listing and the diff of `mapping.tsv` since
+2026-11-09, where it is the only other pair whose state changed).
 
 **`marks`** (`src/marks.rs`): 30 icons as `Mark { aspect, parts }`, each part rings of points in the unit box (the first
 the outline, the rest holes, filled even-odd) filled or stroked at a width in box heights, in the element's colour, the
@@ -2256,13 +2290,13 @@ the scene has no grouped custom collections, which belong to the shelves (the de
 
 No row worsened but one, and that one by loading: NXE Menu loads in all five runs with no error (was 20 errors, 2 unknown properties; its unsupported
 pairs rise from 10 to 12, the two carousel rows now known and `later`). 30 themes set
-fewer unsupported pairs, each by its help's dimmed properties now accepted (CarAlt 8 to 2, Epic Noir Revisited 8 to 2,
+fewer unsupported pairs, each by its help's dimmed properties then accepted, a state withdrawn on 2026-11-11 (R-20261111-75) (CarAlt 8 to 2, Epic Noir Revisited 8 to 2,
 Razor 4 to 2). Atelier and Analogue 3D Menu warn less (6,795 to 6,585 and 2,575 to 2,540), each by the two
 `customCollectionName` values no longer refused. Nine themes now set at most two unsupported pairs; the pairs most often
 unsupported are the video family's (`video.delay` in 55 themes, `pillarboxes` 49), then `carousel.imageInterpolation`
 (20) and `image.stationary` (18), the order the painter's design ranks the families in.
 
-**Proof.** 14 tests in `tests/frame.rs` (the mapping and its accepted pairs through `check`, the marks in their box,
+**Proof.** 14 tests in `tests/frame.rs` (the mapping and its pairs counted through `check`, the marks in their box,
 the carousel at rest and mid-step, a wheel and a reflecting row, the text list's window and marquee through a
 measurement, a `maxSize` picture and a text sized by its words, the help's words, buttons and icons under the swap,
 badges, status and rating, the overlays through a pan, the quick-scroll letters, the clock's wake); the crate's 157
@@ -2272,7 +2306,7 @@ tests pass. Seeded faults, each applied alone and reverted:
 |---|---|
 | carousel slots drawn nearest first | `a_carousel_s_selected_slot_grows…`, `a_carousel_mid_step…`, `a_wheel_turns…` |
 | a list's measurement kept after its name changes | `a_text_list_keeps_the_selection_mid_window_and_scrolls_its_name_once_measured` |
-| accepted pairs counted unsupported | `mapping_lists_every_catalogue_pair_once…`, `a_theme_setting_only_accepted_pairs_counts_none_unsupported` |
+| accepted pairs counted unsupported (the state withdrawn 2026-11-11, R-20261111-75; the tests renamed for it) | `mapping_lists_every_catalogue_pair_once…`, `a_theme_setting_the_dimmed_help_or_a_sound_counts_them_unsupported_and_not_whole` |
 | the swap moving the button but not its icon | `the_help_names_the_project_s_actions_on_the_buttons_and_icons_of_the_pad` |
 | overlays panned with the view | `the_overlays_hold_still_while_the_views_pan_and_both_primaries_are_drawn` |
 | the next change ignoring the scrolls | `a_text_list_keeps_the_selection_mid_window…` |
@@ -2405,7 +2439,7 @@ painter calls `esdeEnter(shelf, entry)` and `esdeLeave(shelf)`, and `esdeSearch(
 9,000 games first took 10.6 ms, every game's row written again in all games and favourites and each description
 carried; with the collections listing files and the description given on demand, 0.77 ms, under the 2 ms gate.
 
-**Measured again on 2026-11-10**, after §4.9's texts grew with the metadata (the shelves 6.4 MB, the media index 2.2 MB
+**Measured again on 2026-11-10**, after §4.15's texts grew with the metadata (the shelves 6.4 MB, the media index 2.2 MB
 at 9,000 games): 5.2–7.7 ms, the land gate red. Timed by phase, the comparisons took under 1 µs, the read's move in
 10 µs, and making the four texts QStrings (UTF-8 to UTF-16, 8.6 MB) 5.4 ms. The QStrings are now made on the thread
 that read them (`esde_texts.rs`). The type is sent between threads by one `unsafe impl Send`: each QString is made by
@@ -2419,7 +2453,7 @@ one function, `esde_texts::take`, which `apply` calls: the four comparisons, the
 (`LibraryView::swap_in`), and the changed QStrings moved into the properties, on a view that already holds the 9,000
 games, the next read differing by one favourite (the shelves replaced, the media index and presence compared in full).
 The rest of `apply` runs on the GUI thread too and is not timed by this test: the list model's reset over the rows,
-the four change signals (which ask `EsdeModel` for a load, §4.9), the loading state and the publish. So timed, `take`
+the four change signals (which ask `EsdeModel` for a load, §4.15), the loading state and the publish. So timed, `take`
 took 3.5 ms in a debug build, the old view's rows, catalog and lists and the replaced 13 MiB QString dropped on the GUI
 thread. What the read replaces is now handed back by `swap_in` and dropped on a thread of its own; the figures for
 `take` so far (177 µs best of three, and the seeded fault's below) come from single runs on a machine busy with other
@@ -2441,8 +2475,15 @@ The second half of the engine, as the painter's design laid it out: a crate of i
 `Frontend/esde-qt`, beside the plain-data `emusen-esde` the way `kit-qt` stands beside `kit-core`. It depends on cxx-qt,
 `emusen-esde` (the scene and its marks) and `emusen-kit-qt` (the body face, and from E2 the help bar and the pad
 router); `tests/lint.rs` holds its manifest to exactly those and the two EmuSen crates' manifests to no client, runtime
-or model crate. The registry is `Testing/qmltypes/EmuSen.Esde-1.1.*`, compared on every build as the kit's is (§5.3);
-its changes are listed in `Frontend/esde-qt/CHANGELOG-esde.md`.
+or model crate. The registry is `Testing/qmltypes/EmuSen.Esde-1.2.*`, compared on every build as the kit's is (§5.3),
+its line numbers left out in both of qmltyperegistrar's forms (a line of its own, and `; lineNumber: N` inside a signal's
+one-line entry; until 2026-11-11 the second form was compared, so an edit that only moved a bridge's lines failed the
+test). 1.1 added `hoverAt` and deprecated `hover(row)` (repair DC-B). The minor moved to 1.2 for what the help bar and
+the media viewer added (`EsdeModel.defaultFont`, `selectionSeed` and `reference` with their setters and signals, the
+invokable `manualPages`; `MarkShapes.aspect` and `baseline`; the type `TextLayout`), for the QML files' properties this
+stage changed or removed, and for the removal of the deprecated `hover(row)` (R-20261111-107, R-20261111-108). The
+QML files' properties are not in the registry; rule Q covers them (R-20261111-99, §5.3): they are held as
+`EmuSen.Esde-1.2.qmlfiles`. Its changes are listed in `Frontend/esde-qt/CHANGELOG-esde.md`.
 
 #### 4.8.1 The primitives
 
@@ -2486,7 +2527,8 @@ picture, not its box.
   as a `file:` URL.
 - **One report per extent.** `TextBlock` raises `measured` from `Text`'s `contentSizeChanged`, which Qt emits once per
   layout that changes either axis; the same words set again report nothing. A face file that does not load, or none
-  named, sets the kit's Barlow (decided 2026-11-08: the kit's face is the default). Qt's `FontLoader` keeps one font
+  named, sets the kit's Barlow (decided 2026-11-08: the kit's face is the default; since 2026-11-09 a theme that names no
+face takes ES-DE's Akrobat where the player has it installed, §4.8.7). Qt's `FontLoader` keeps one font
   per URL for the process, so a face is loaded once whatever the number of texts.
 
 #### 4.8.2 Proof (E1)
@@ -2550,9 +2592,9 @@ Qt application.
   clock, and only the scene knows the measured consequences of a hold (the metadata fading out from the first repeat,
   the list's fast tier jumping four entries). The router gives the first press and the release.
 - **The pointer makes the pad's calls.** `hoverAt(item, row)` steps to the row as the pad's step does, only while the
-  pointer itself moves (the window's fact, EmuSen_Kit.md §7.108). EmuSen.Esde is 1.1 for it. `hover(row)`, which
-  nothing of the repository calls, stays in 1.1, deprecated and selecting as it did in 1.0, and goes at the next major
-  (decided 2026-11-11; `CHANGELOG-esde.md`; held by `tests/deprecated.rs` and `lint.rs`). `tap(row)` is
+  pointer itself moves (the window's fact, EmuSen_Kit.md §7.108). EmuSen.Esde became 1.1 for it. `hover(row)`,
+  deprecated in 1.1, is gone in 1.2 (decided 2026-11-11 by the tester, R-20261111-108; `CHANGELOG-esde.md`; `lint.rs`'s
+  `qt_5_3_the_removed_hover_is_called_by_no_qml_and_offered_by_no_registry` holds that nothing calls or offers it). `tap(row)` is
   that and A, and a wheel notch is one step, back for a notch up.
 
 **Proof**, `tests/painter.rs` (6, on a synthetic theme the test writes, no Qt application): the settings under
@@ -2597,7 +2639,7 @@ pointer. Each list binds `revision: esde.revision` and refreshes on its change, 
 - **The router's tiers are not bound** (decided 2026-11-08). The scene repeats a held direction on its own clock
   (§4.8.3), so the router's repeat tiers would only produce repeats the painter ignores.
 - **The cue is a signal**, `cued(name)` with the scene's name (`navigate`, `select`, `back`, `quicksysselect`), since
-  two equal cues in a row must both sound; mapping a name to the theme's sound file is the host's (§4.9).
+  two equal cues in a row must both sound; mapping a name to the theme's sound file is the host's (§4.15).
 
 **`View.qml`** is a plain `Item` filling its parent: an `EsdeModel` sized by it, an `ElementModel`, and a `Repeater`
 whose delegate is a `DelegateChooser` on `paint`. `DelegateChooser` is in `QtQml.Models` since Qt 6.9 (measured on the
@@ -2609,8 +2651,14 @@ in the theme's face and colours, filled glyphs; a press of an entry is `pressed(
 `TextListView` and `GridElement`, over `ElementBox` (the box and its turn) and `Icon` (a theme file or a mark). The
 text list's file is not `TextListElement`: `qml-rules` reads any line containing `ListElement` as rows.
 
-- **The clock.** A `FrameAnimation` runs while `moving` and calls `tick(frameTime × 1000)`; a repeating `Timer` of
-  `nextChangeMs` runs while nothing moves and something will. At rest neither runs and the window swaps no frame.
+- **The clock.** A `NumberAnimation` on `clockMs` runs while `moving`, and each change calls `tick` with the
+  milliseconds it moved. The clock's `clockMs` and `tickedMs` live in an inner `QtObject` named `viewClock`, not on the
+  view's root, so the view does not offer them; the module's QML-files surface lists only that object name (decided
+  2026-11-12 by the tester, R-20261112-20); a repeating `Timer` of `nextChangeMs` runs while nothing moves and something will. At rest
+  neither runs and the window swaps no frame. Until 2026-11-12 a `FrameAnimation` ran and called `tick(frameTime × 1000)`;
+  Qt reads that `frameTime` from a `QElapsedTimer` of its own (`qquickframeanimation.cpp`, `maybeTick`), the wall clock,
+  so no animation driver held it, and a stall of the GUI thread moved the scene by the stall's length (§4.8.5's mapping
+  test). The animation's value follows the driver: Qt's own, a render loop's, or a test's held clock (EmuSen_Kit.md §7.36).
 - **The pad and the keyboard.** `Connections` on `Kit.PadRouter` while the view has focus (`pressed`, `released`);
   `Keys.onPressed` is `PadRouter.pushKey`.
 - **The pointer.** Each carousel slot, list row and grid cell carries a `HoverHandler` (`hoverAt(item, row)` on entering) and a
@@ -2639,7 +2687,7 @@ needs and releases the painter before any signal, and `measured` publishes from 
 
 | Seeded fault, applied alone and reverted | Caught by |
 |---|---|
-| the `FrameAnimation` running always | `assert_still`: 119 frames in 2 s at rest |
+| the `FrameAnimation` running always (now the clock's `NumberAnimation`) | `assert_still`: 119 frames in 2 s at rest |
 | `ElementModel` emitting no `dataChanged` | the metadata still "Game 0000" after the step |
 | a list row's hover one row off | the hover selecting row 4 |
 | the help's place not swapped | `a_help_entry_s_place_is_the_kit_button_that_draws_there_under_the_swap` |
@@ -2668,6 +2716,26 @@ no image crate is needed, the oracle library read as the three texts of §4.6).
   custom collection, a console of pads), each case's system and game rotated to the front so the view starts on them.
   Each case is rendered twice through the bridge at 640 × 400 and the two grabs must differ; each case's two themes
   load without an error; every drawn pair has a case, and a case's pair is drawn or later. 347 cases, 254 s.
+  **A timed move** (a time in `at` and a move: the item and row transitions, `scrollFadeIn`, `fastScrolling`) is pressed
+  and grabbed on the harness's held clock (EmuSen_Kit.md §7.36): the scene at rest, the clock is held at 0 before the
+  press and moved 16 ms at a time to 32 ms short of `at`; the last step is what the view's own clock (`viewClock`'s `tickedMs`, the
+  milliseconds it has ticked since the scene began to move) still lacks, and the grab is taken when it reads `at`
+  within half a millisecond, or once the scene is at rest again. Qt starts the view's clock animation a few
+  milliseconds off the held clock (102 against 100, measured 2026-11-12), and with the held clock alone a fault that
+  made `instant` glide (rows or grid items) passed, the two glides differing by those milliseconds. The test runs Qt's
+  basic render loop, under which a held clock is taken. The eleven timed cases without a move (the text list's and the text
+  container's scrolling, the animation's speed, direction and count) still wait `at` ms on the wall clock: part of their
+  time passes at rest, where the view's `Timer` of `nextChangeMs` ticks the scene, and a `Timer` is not held. Held,
+  `text.containerResetDelay` painted the same pixels for 0.5 and 10 (measured 2026-11-12): the reset after the
+  container's end pause never came. They are open: they share the wall clock's weakness while the rest `Timer` is one. Until 2026-11-12 the test pressed, waited `at` ms on the wall clock and
+  grabbed. Measured 2026-11-12 on the RX 6800, the six timed cases alone: a sleep of 400 ms or 1000 ms between the press
+  and the grab failed every run (2 of 2 each), with five of the six cases painting the same pixels on both sides, the
+  scene having finished its 250 ms glide on the wall clock before the grab; 200 ms and none failed none. The same
+  sleep with the held clock and the clock of §4.8.4 failed none (2 of 2 runs at 1000 ms). `grid.rowTransitions` also
+  drew nothing it was meant to: in a grid of 160-pixel items two rows fit the window, so Down from the first row
+  selected a row already in view and the grid did not scroll; its two pictures differed only by the focus glide's
+  timing (one level of colour over 33,347 pixels, the two pictures taken 2 ms apart on the scene's clock). The case
+  now sets `itemSize` to 0.3 0.6, one row in view, so Down scrolls.
   The first runs found 47 drawn pairs that painted nothing, and each was settled one way or the other:
 
 | Found | Settled |
@@ -2683,11 +2751,49 @@ no image crate is needed, the oracle library read as the three texts of §4.6).
   systems in the order ES-DE showed them and its counts (every game of a system, those inside folders too: 14 games and
   7 favourites on the SNES, as ES-DE's captures read). Held: nothing drawn but the elements, the help's entries and the
   primary's items inside the window and taking the pointer, a step and A and B answered, the pointer selecting, and
-  every element's box ÷ (W, H) equal within 0.001 across the sizes of one aspect ratio. A box sized by its laid-out
-  words (a help bar, a status row, an auto-sized text) may differ by a further 4 % of its extent: each run's advance is
-  rounded to whole pixels and hinted at its own size, so a 14 px bar is not two thirds of a 21 px one (CarAlt's help
-  measured 3.3 % apart at 1280 × 720 and 1920 × 1080), and ES-DE's own is not proportional either (Art Book Next's
-  gamelist help 0.2883 W at 1280 × 800, 0.2906 W at 1920 × 1200, 0.8 % apart, on its captures). A size is read only
+  every element's box ÷ (W, H) equal within one pixel of the smaller window across the sizes of one aspect ratio
+  (decided 2026-11-11 by the tester, R-20261111-88; until then 0.001 of the extent, a bound no rule gave). The pixel is
+  ES-DE's own: ES-DE 3.4.1 rounds a component's position and its origin's offset to whole pixels
+  (`GuiComponent::getTransform`, `es-core/src/GuiComponent.cpp`) and an image's corners (`ImageComponent::updateVertices`),
+  so each edge stands up to half a pixel from proportional at either size, and two sizes differ by up to one pixel at
+  the smaller. Seeded 2026-11-11: every box two pixels right at the sizes wider than 1600 (1.33 px at 1280 × 800 against
+  1920 × 1200), which must fail it. On an axis ES-DE sizes from the
+  laid-out words a box may differ by half a pixel for each letter it shows plus one pixel, in pixels of the smaller
+  window (decided 2026-11-11 by the tester, R-20261111-112, replacing an allowance of 4 % of its extent that no rule
+  gave): ES-DE 3.4.1 rounds each glyph's advance to a whole pixel (`Font::shapeText`, `es-core/src/resources/Font.cpp`),
+  so n letters may stand n halves of a pixel from proportional, beside the one pixel of placing. Which axes those are is
+  ES-DE's: a help strip's both (`HelpComponent::updateGrid`), a status row's width, its height being the theme's
+  (`SystemStatusComponent::updateGrid`), and a text's, a date's or the clock's on each axis its theme's `size` leaves at 0,
+  both when it gives none (`GuiComponent::applyTheme` sets the extent rule from `size`, `TextComponent::onTextChanged`
+  applies it). Every other axis, a description's or any text whose theme gives its width and height among them, is
+  held to R-20261111-88's one pixel. The scene's `paint::sized_by_words` is the one reading of that rule, which the
+  painter sizes by and the test reads from the theme as resolved at each size (held by `esde/tests/frame.rs`); until
+  2026-11-12 the test gave every text the letters' allowance, 121 px to Art Book Next's description of 240 letters and
+  283.5 px to Artflix's system description, whose sizes the theme gives. The letters are those of the visible words drawn
+  under the box in the item tree; the rule is `emusen_qt_test::worded`, held by its unit test, and the test writes every
+  help, status and text box at each size pair, with its rule, why, its letters and what each axis may move, to
+  `worded-boxes.tsv` beside its grabs.
+  *A help strip* (decided 2026-11-12 by the tester, R-20261112-3, replacing the open part of R-20261111-112): its
+  expected difference between two sizes is calculated from ES-DE 3.4.1's own rule, and only what is left over is held to
+  the letters' allowance above, with no wider allowance. ES-DE makes the strip's row 1.25 × the whole pixel rows of the
+  hinted S at the help's font size and each entry's icon box that row, divided by `entryRelativeScale` above 1
+  (`HelpComponent::applyTheme`, `mLetterHeight`, and `HelpComponent::updateGrid`, `es-core/src/components/HelpComponent.cpp`;
+  rule 4 of §4.12.4), whole rows that do not scale with the window, while its labels and spacings do. At each size the test
+  renders the S with FreeType in the strip's face (the theme's `fontPath`, else ES-DE's help face, else its default) at the
+  size `scene::help::font_px` reads, counts the entries drawn under the strip, and takes the icon boxes as a share of the
+  width and the row as a share of the height; the expected difference is the change in those shares in pixels of the
+  smaller window, on the width and the height, and −origin × each on the left and the top, as the strip is placed
+  (`scene::help::top_left`). Nothing of it is read from the painter's layout. `worded-boxes.tsv` gives every box its
+  expected edges and what is left on each axis (0 expected for any box but a help strip). The face is the one the painter
+  finds in the same process, so on a machine without ES-DE's fonts both draw and measure the help in the kit's body face.
+  Measured on 2026-11-12 on the RX 6800 at 90cd96902 (`worded-boxes.tsv`), the case that asked for the rule, Art Book
+  Next's system help at 1280 × 720 against 1920 × 1080, moved 14.67 px across for 27 letters: its S is 23 rows at
+  33.0 px and 34 at 49.5 px in the body face, an icon box of 28.75 px against 42.5 ÷ 1.5 = 28.33, so its four entries
+  are expected 1.67 px wider at the smaller window and 13.00 px is left against 14.5; every help strip of the three
+  watched themes is within its allowance. In Akrobat SemiBold, ES-DE's help face, the same S is 23 and 37 rows (28.75
+  against 30.83, 2.08 px narrower an entry), so the expected figure depends on the face drawn, which is why it is
+  calculated at each run and never written down.
+  A size is read only
   after its install has published, since the old frame stands until the new size's load comes back. The defects it
   found, each fixed and proved:
 
@@ -2724,7 +2830,7 @@ THEMES.md and USERGUIDE.md, settled or named:
 | Artflix's title reads SUPER NINTENDO where ES-DE reads NINTENDO SNES (SUPER NINTENDO) | not accepted as a difference: **settled 2026-11-09**. The systems table's `esde_full_name` held the project's short name; it now holds ES-DE 3.4.1's full name from its user guide, a data change in `Platform/systems/data` (§4.6, "A system's full name") |
 | The D-pad pair drawn as two glyphs (left lit, right lit) where ES-DE draws one cross | the kit has no glyph for an axis: **named, open** |
 | No VIEW MEDIA entry in a gamelist | the media viewer is not built; the entry would name a press that does nothing: **named, open** |
-| The help labels wider than ES-DE's | the kit's face where ES-DE uses its own (decided, design §12) |
+| The help labels wider than ES-DE's | the kit's face where ES-DE uses its own (the design's §12, not a ruling of the tester's; replaced 2026-11-09 by ES-DE's Akrobat where installed, §4.8.7) |
 | The clock's time | the wall clock at the grab |
 | CarAlt's system view: a band of the theme's yellow down the middle where ES-DE draws three games' screenshots | those screenshots are the system view's `cover1`–`cover3`, fed by a gameselector, which is later (13 pairs, §4.5.5); the yellow is the theme's own picture beneath them: **named, later** with the gameselector |
 | CarAlt's gamelist: the lower screenshot (`cover3`, zIndex 3) drawn over the theme's dark mask (`topline3`, `circle2.svg`, zIndex 3), where ES-DE draws the mask over it | the loader breaks a zIndex tie by first definition, a choice (EmuSen_BigPicture.md §12.2), and `topline3` is defined first; ES-DE 3.4.1 drew the later-defined `cover3` beneath. THEMES.md states no tie order, and one capture does not tell an order by name from others: **named, open**, to be settled on captures of more ties before the loader's rule changes |
@@ -2746,6 +2852,13 @@ THEMES.md and USERGUIDE.md, settled or named:
 green; emusen-qt-test `helpbar` and `menu` green; qt-app's acceptance green. One motion run failed once at its last
 check, a frame swapped in the 2 s still window with no animation running; the two runs after it passed. The theme shows a clock,
 whose minute can turn within the window: not reproduced, recorded here.
+
+**The vertical container's measure, found 2026-11-10.** `text.containerStartDelay` and `text.containerResetDelay` painted
+the same pixels at both values since the text was laid out by `esde-text` (§4.9): a text that is not yet scrolling was
+laid out to its box's height, whole lines only, so it never measured taller than its box and never began to scroll. A
+vertical container's text (`every_line`, the role `everyLine`) is now laid out with every line and clipped to its box,
+so what overflows is measured before its first scroll; both cases differ again on the RX 6800, and the horizontal
+container's gap case still does.
 
 #### 4.8.6 The oracle comparison and the corpus columns **[M 2026-11-09]**
 
@@ -2776,7 +2889,7 @@ game) at 1280 × 800 and 1920 × 1200, on the oracle's library, and holds the gr
   gained, a watched MAE up by more than 0.05 (two runs on 2026-11-09 differed by 0.02) or a count up by one fails.
   `a_row_that_worsens_is_named` holds that comparison without Qt.
 
-Written for a human look to `~/.cache/emusen/tmp/qt-s4/compare/oracle/`: `qt/` (the grabs), `difference/` (pixels over 8
+Written for a human look to `~/.cache/emusen/tmp/qt-s4/compare/<checkout>/oracle/`: `qt/` (the grabs), `difference/` (pixels over 8
 levels apart with no match within a pixel, from the harness's `difference`), `oracle.tsv` (every figure, clocks in and
 out), `corpus.tsv`, and `<theme>-<state>-<W>x<H>.png`, ES-DE | C# above, Qt | difference ×4 below with the strip blue,
 made from them by `sheet.py` there (outside the repository, as the E3 sheets are).
@@ -2959,7 +3072,971 @@ is empty. Eleven boxes stay named, each explained:
 day): 71 of 71 load, none drawn whole, and 61 use no undrawn kind (45 before: the 22 themes counting `gameselector`
 undrawn no longer do); no row worsened.
 
-### 4.9 Hosting the view in `emusen-qt` (H) **[M 2026-11-09]**
+**Superseded as the bar, 2026-11-09**: the C# painter's boxes and figures no longer hold the Qt painter; ES-DE's do
+(§4.8.7). The eleven boxes above are held to ES-DE's: the status's, the marquee's and `gamelistInfo`'s are within two
+units of it at both sizes and the clock's at 1280 × 800; the rest are in §4.8.7's last table.
+
+#### 4.8.7 ES-DE as the bar: the boxes, the pictures, the help bar's words and the pair glyph **[M 2026-11-09]**
+
+**Decided 2026-11-09 by the tester: the goal is 100 % compatibility with ES-DE themes.** The C# painter is no longer
+the bar. A difference from ES-DE 3.4.1 is a defect even where the C# painter has the same difference, and a difference
+explained is not a difference closed. The evidence is ES-DE's published documents (THEMES.md, USERGUIDE.md at v3.4.1)
+and the approved AppImage's captures of 2026-11-08 (`Testing/esde-oracle/README.md`), never ES-DE's source. **Decided
+2026-11-09 by the tester:** the font files bundled in that AppImage count as evidence too (fonts only; still never ES-DE's
+code or graphics); their metrics, read through Qt's `FontMetrics`, are kept below.
+
+**ES-DE's default face, read where the player has it.** A theme that names no font is drawn by ES-DE in Akrobat: the
+letter pens of Art Book Next's help labels (no `fontPath`, 25.67 px) are Akrobat's to the pixel (MENU's ink starts at
+0, 17, 29, 43 px against Akrobat's 0, 17, 29, 43; Ubuntu Condensed gives 0, 19, 31, 46, NanumSquare Neo 0, 25, 41, 61).
+Akrobat is published by Fontfabric under its *Commercial EULA for free fonts*
+(https://www.fontfabric.com/fontfabric-commercial-eula-for-free-fonts/, read 2026-11-09), which allows embedding the
+font in a product but not redistributing the font files themselves, nor derivative works, without Fontfabric's written
+consent (sections 04 and 05); it is not the OFL and says nothing of the GPL. **Decided 2026-11-09 by the tester:** the
+painter reads Akrobat at run time from where the player already has it and redistributes nothing; where it is not
+installed, the kit's body face stands, as §4.8.1 had it. So a theme without a font matches ES-DE only where Akrobat is
+installed, the help box of Art Book Next among them. `emusen_esde::fonts` has the one job: `locate` looks for
+`Akrobat-Regular.ttf` in an installed ES-DE's `resources/fonts` (the distribution's package under `/usr/share/es-de` and
+`/usr/local/share/es-de`, a home folder's `~/ES-DE`, the Flatpak `org.es_de.frontend` system-wide and per user, a running
+AppImage's `/tmp/.mount_ES-DE*` mount; USERGUIDE.md names `/usr/share/es-de` as the installation folder), and then asks
+fontconfig for the family (`fc-list :family=Akrobat:style=Regular file`); `default_font` does this once and caches the
+path (a `OnceLock`, written once, read after). The search runs on the load's data thread, never in the GUI thread's
+install: `painter::faces` finds the default face and the help's beside it there, and `Painter::install` takes them as
+given (`Painter.faces`). Measured on 2026-11-11, the first install had spent 8.47 ms (the gate's quiet pass, load 2.9)
+and 17.8 to 41.8 ms (a temporary folder of 136,165 entries, load 3.8) starting `fc-list` and listing the temporary
+folder for an AppImage's mount, against the 2 ms gate of `four_thousand_games_install_and_step_on_the_gui_thread_within_two_milliseconds`;
+with the search moved, 0.45 and 0.59 ms at load 6.0 and 7.5. The scene's `Data::default_font` carries it, and every text, list,
+carousel, grid and help element whose theme names no `fontPath` takes it (`paint::face_of`). `EsdeModel.defaultFont`
+(`View.defaultFont`) gives a file instead, for a host or a test; empty, the one found. The oracle gives it the AppImage's
+own file by path.
+
+**The boxes, held to ES-DE.** `oracle.rs` holds every element of a state's `.spec` to where ES-DE draws it, within two
+design units: the C# scene's box where the C# drew it where ES-DE does, and otherwise the box measured on ES-DE's capture,
+committed as `Testing/esde-baseline/esde-boxes.tsv` (22 rows, each with how it was measured). `NAMED_BOXES` is empty. The
+measures, on the 2026-11-08 captures:
+
+1. *A background's edges, less the theme's paddings* (Art Book Next's clock and system-view help bar): the sub-pixel edge
+   from the partly covered column or row beside each run of the background's colour, through a row and column clear of
+   words and of the rounded corners. The help bar at 1280 × 800 spans 341.44–939.0 × 704.47–761.0, so the element is
+   359.22, 716.14, 559.78 × 33.20 (Qt's 360.3, 717.0, 559.3 × 33.0).
+2. *The first icon's ink less its box's margin, and the anchored edge at the theme's `pos` and `origin`* (the help bars
+   with no background): the icon's box is 0.9 of `fontSize` × H (below), its disc centred in it.
+3. *Nothing drawn*: Art Book Next's `systemstatus` with no device reported is the element at its `pos` and `origin`,
+   0 × 0, as THEMES.md has it; ES-DE draws nothing there.
+4. *The drawn picture*: CarAlt's marquee spans 840–1160 × 52–172 (1260–1740 × 78–258 at 1920 × 1200), the box Qt draws;
+   the C#'s 320 × 160 at y 32 was not ES-DE's.
+5. *Ink to advance*: Artflix's `gamelistInfo` from its gamepad's ink at the theme's `pos` (1152) to the 7's advance,
+   82.5 units (82.0 at 1920 × 1200).
+
+**The help bar measured on the captures** (all twelve states; `fontSize` × H written fs, `entryRelativeScale` r):
+
+- *The icon's box is 0.9 fs square*, its disc 0.8 fs: CarAlt's disc 14.40 px at fs 18 and 21.73 at 27, Artflix's 16.2–16.5
+  at 20 and 24.4 at 30 (coverage-weighted widths), and CarAlt's d-pad pair fills 16.0 of the 16.2 box. The gaps measured
+  from the disc's ink are the theme's `iconTextSpacing` and `entrySpacing` plus that margin. Art Book Next's disc is
+  larger, 31.4–31.6 px at fs 36.67 (0.86 fs), in the same 0.9 fs box; the kit's filled disc (0.85 of its side) inks
+  0.77 fs there. `HelpElement` draws the glyph at the box's side (it had drawn it at the box over 0.88, 1.02 fs, which
+  made every entry 0.12 fs wider: CarAlt's bar 9.6 units wider than ES-DE's).
+- *The words are at fs × r unrounded, each glyph at a whole-pixel pen advanced by its advance rounded* (item 3 below).
+- *The 'S' is centred on the bar*: CarAlt's capitals stand on rows 778–787 beside a disc on 774.8–789.2, so the line is
+  placed by the reference 'S' (THEMES.md: the size "is based on the reference 'S' character") rather than by the face's
+  ascent and descent, which drew Qt's capitals 2 px high.
+
+**3. The help bar's labels with the theme's own font, 5–9 % narrower than ES-DE's.** CarAlt's labels are rost.otf at
+fs × r = 18 × 0.8 = 14.4 px. ES-DE's MENU spans 22 px of ink where Qt's spanned 20, SCREENSAVER 57 against 52. Two causes,
+proved on the pens:
+
+- *The size was rounded*: QML's `font.pixelSize` is an integer, so 14.4 drew at 14.
+- *The advances were fractional*: ES-DE places each glyph at a whole pixel and advances by the glyph's advance rounded.
+  The same glyph's ink profile repeats column for column wherever it stands (rost's E as 2.1, 8.6, 3.6, 3.0 of coverage
+  at 1173, 1178 and 1205), which only whole-pixel pens give, and the pens of SCREENSAVER's letters stand at 0, 5, 10, 16,
+  21, 26, 32, 37, 43, 49, 54 px: rost's advances at 14.4 px rounded one by one (5.20, 4.64, 5.53, 4.51 … px), where
+  fractional advances at 14.4 give 0, 5.2, 9.8, 15.4, 19.9 … and Qt's at 14 gave 0, 5.1, 9.6, 14.9, 19.3 …. Rounding at
+  14 gives 0, 5, 10, 15, 19, which the E at 15 rules out.
+
+Neither has a mode in Qt's text layout: a QML font's pixel size is whole, and `QTextLayout` gives a face's design
+advances or its hinted ones (full hinting at 14 px measured MENU 20.0 and SCREENSAVER 48.0 px, rost's hinter's widths,
+not ES-DE's), never design advances rounded one by one. So `GlyphLine.qml` (EmuSen.Esde 1.0, added) lays a line out as
+ES-DE does: each glyph a `Text` at its pen, the pens summed from `FontMetrics.advanceWidth` of the glyph at the whole
+size nearest, times the size over it, rounded; the glyph drawn at that whole size scaled to the exact one; no kerning;
+the reference character centred on the line's height (`EsdeModel.reference`, owned by `emusen_esde::fonts::REFERENCE`, since QML
+builds no words, §1.3). The kit's `HelpBar` draws an entry's words with the host's component where it is
+given one (`label`, EmuSen_Kit.md §7.54), so `HelpElement` gives it `GlyphLine` at fs × r. After: CarAlt's MENU ink
+1050.0–1073.1 against ES-DE's 1051.8–1074.0 and SCREENSAVER 1156.0–1215.2 against 1157.0–1215.1; every label of the
+twelve states within a pixel of ES-DE's ink width where the face is drawn at its nominal size (below for the two that
+are not). Seeded faults: the advances left fractional (CarAlt's bar 5.9 units narrower, Art Book Next's 3.2, Artflix's
+5.5, all failing); the glyph's side at the box over 0.88 again (the system bars 9.6–17.6 units wider, failing). The line reads the metrics through their own `font` in its bindings, since `advanceWidth` and `tightBoundingRect` are
+calls that Qt does not track: a first form laid out once and kept the old widths when the window's size changed, which
+`sizes.rs` caught (Artflix's help 0.23 of the width at 1920 × 1200 against 0.30 at 1280 × 800, eleven states).
+
+**4. The pair glyph** (approved by the tester 2026-11-09). ES-DE draws one icon for a pair of presses that make one
+action (Choose, the gamelist's System: a d-pad with both arrows of its axis; THEMES.md's `button_lr` and `button_ltrt`
+for the shoulders and the triggers). kit-core's `glyph::paired` gives one glyph for a d-pad axis, the two shoulders or
+the two triggers, and kit-qt's `PadGlyph.pair` draws it; the kit's `HelpBar.pairGlyph` draws an entry's pair as that one
+glyph, which `HelpElement` turns on (EmuSen_Kit.md §7.54). CarAlt's Choose now inks 1221–1237 against ES-DE's 1221–1237;
+it had drawn two glyphs over 1198–1238. Seeded faults: `pairGlyph` off (the four system bars 22.3–40.9 units wider,
+failing); the filled axis cut at one tip only (kit-core's `kit_7_54_a_pair_pressed_for_one_action_is_one_glyph`, failing).
+
+**gamelistinfo.** ES-DE draws Artflix's counts as a gamepad 22 × 11 px standing on the digits' baseline, the digits, a
+star 18 × 18 centred on them, and the 7 (1152–1234). The painter drew each mark in a square an em wide, centred on a
+line 1.5 em high, so the marks sat 7 px high and the gamepad was squeezed to 20 px. A mark now has its own width
+(`MarkShapes.aspect`, the gamepad 1.06 em) and stands on the words' first baseline at its own baseline share
+(`MarkShapes.baseline`, 0.85 of an info mark's em, owned by `marks::INFO_BASELINE`; `TextBlock.baselineY`), with ES-DE's
+gaps, 0.25 em from a mark to its words and 0.375 em between items: 82.1 units against ES-DE's 82.5. Seeded fault: the
+items' gap at 0.2 em (3.9 and 3.4 units narrower, failing). A first fault, the marks square again, moved the box by
+1.2 units and was not caught: the gamepad narrower and the star wider by about the same; the spacing fault replaced it.
+
+**A system's name in the oracle.** The oracle's library gave the SNES as "Super Nintendo", a copy of a name whose owner
+is the systems table (§4.6, "A system's full name"). `tests/common` now reads `esde_full_name` from
+`Platform/systems/data/<id>.json`, so Artflix's title reads NINTENDO SNES (SUPER NINTENDO) as in ES-DE's capture.
+
+**2. The pictures: the ceiling.** The MAE of a watched state is held to the last committed corpus measure (a rise of
+more than 0.05 fails, as before), and a fall of more than 0.05 fails too until the run that measures it commits it
+(`EMUSEN_ESDE_CORPUS=1`), so the ceiling falls with the figure; the C# figure is printed beside it and holds nothing.
+`a_row_that_worsens_is_named` holds `fell` with `worsened`.
+
+| Theme | State | 1280 before | 1280 after | 1920 before | 1920 after |
+|---|---|---|---|---|---|
+| Art Book Next | system | 0.99 | 0.99 | 0.37 | 0.36 |
+| Art Book Next | gamelist | 2.46 | 2.46 | 1.97 | 1.97 |
+| Artflix | system | 6.50 | **4.96** | 6.40 | **4.28** |
+| Artflix | gamelist | 8.30 | **8.23** | 8.27 | **7.59** |
+| CarAlt | system | 17.94 | **7.17** | 16.49 | 16.49 |
+| CarAlt | gamelist | 6.00 | 6.01 | 5.63 | 5.63 |
+
+The RX 6800 on 2026-11-09, before (the committed measure of the day, WiseMan 04a8ebd02) and after, committed as
+`Testing/esde-corpus/2026-11-09.tsv` (a re-measure of the day); lavapipe agreed within 0.07. Artflix's system view fell
+by a quarter and a third: its description and title are Akrobat as ES-DE draws them, and its title names the system as
+ES-DE does. Seeded fault: no default face (Art Book Next's help bars 39–73 units wider, failing).
+
+*CarAlt's system view at 1280 × 800 fell from 17.94 to 7.17* because the painter now shows the games ES-DE's capture
+shows. A gameselector's picks are random in ES-DE and seeded in the painter, so comparing them compared two draws, not
+two painters. `Testing/esde-baseline/picks.tsv` records the games each capture shows by element (read off the capture:
+Lumen Garden, Juniper Vault, Ember Circuit), and the oracle seeds the painter (`EsdeModel.selectionSeed`, added; 0 takes
+the install's time as before) with the first seed whose picks, by the scene's own `selector::game_for` on the systems
+the painter builds from the same texts, are those games, as it pins the clock to the capture's time. At 1920 × 1200
+ES-DE's capture shows Juniper Vault, Hollow Comet and Rune Gate, and Rune Gate is inside the folder Tower Set: ES-DE's
+selector draws from every game of the system, and the painter's system holds only the level the gamelist shows (the
+host's rows), so no seed gives that pick. That state keeps its time-seeded picks: **[blocked]**, needing the host's rows
+to carry a folder's games for the selectors (an addition to the shelves' text, §4.6) or the tester's word.
+
+**What is left, state by state, by its share of the error** (the error inside each element's box over the state's):
+
+| State | Largest causes |
+|---|---|
+| CarAlt system | at 1920 × 1200 the three covers (most of 16.5), the picks above; at 1280 × 800 the description and the bands' edges |
+| every other state | the texts' layout: descriptions (Artflix's 47 % of its system view, CarAlt's gamelist 43 %, Art Book Next's gamelist 32 %) wrap at other words, since ES-DE lays every text out by the rules of item 3 (Artflix's "developed by Nintendo … 1991 in North" is 508 px by ES-DE's rule and 497 by Qt's, so ES-DE wraps before "North" in its 512-px box and Qt after it) |
+
+**Boxes still off ES-DE, each [blocked]** (named nowhere; the oracle fails on them; six of the nine closed by §4.9–§4.10,
+the rest in §4.12):
+
+| Where | Off | Why |
+|---|---|---|
+| Artflix and CarAlt gamelists, `helpsystem_help` (four) | 50–119 units | ES-DE lists VIEW MEDIA (X, its media viewer); the painter has no media viewer, so the entry is left out (§4.8.5). Closing it needs the media viewer built |
+| Art Book Next at 1920 × 1200: the system and gamelist help bars, the clock | 8.9, 4.8, 2.8 | ES-DE draws these two TrueType faces (Akrobat, Mulish) about 2.6 % wider at 1920 × 1200 than their nominal size: the help's MENU pens fit 39.3–39.8 px for 38.5 (at 1280 × 800 25.4–25.9 for 25.67), and the same rule at 1280 × 800 is within a pixel. Not hinting as Qt applies it (full hinting at 38, 39 and 40 px gives 25, 17; 25, 18; 26, 18 for M, E where ES-DE's pens step 26, 18, 20), and neither face sets the integer-ppem flag. The CFF faces (rost, Exo 2) measure their nominal sizes at 1920 × 1200 |
+| Artflix system, `helpsystem_help` | 2.1 and 2.0 | SCREENSAVER's ink 102 px in ES-DE, 104 in Qt; Exo 2's MENU pens fit 19.0–19.5 px at a nominal 20 at 1280 × 800 (and 30 at 1920 × 1200), the same size-dependent widths as the row above |
+
+**Proof**, 2026-11-09: the oracle on lavapipe for each step and once on the RX 6800 (above), failing on the nine boxes of
+the last table and on nothing else; kit-core's `glyph` (7 tests, the pair's among them); the registries of `EmuSen.Kit`
+(`PadGlyphMarks.pair`, `paired`) and `EmuSen.Esde` (`EsdeModel.defaultFont`, `selectionSeed`, `reference`, `MarkShapes.aspect`,
+`baseline`, `GlyphLine`) committed under `Testing/qmltypes`, each addition declared last. Seven seeded faults, each
+reverted: six caught as written above (the pair glyph off, the fractional advances, the glyph's side, the info gap, no
+default face, the filled axis cut at one tip), and one, the info marks square, not caught and replaced.
+
+### 4.9 ES-DE's text rules: `emusen-esde-text` **[M 2026-11-09]**
+
+**Decided 2026-11-09 by the tester:** ES-DE's text layout is built as a component of its own, after the evaluation below,
+and applied to every text the painter draws. The rules were measured first (2026-11-09, on the captures of
+2026-11-08 and the faces ES-DE drew them with: its own Akrobat, and each theme's files).
+
+#### 4.9.1 The rules, measured
+
+ES-DE 3.4.1's AppImage leaves FreeType and HarfBuzz out and takes the system's (its `es-de` names `libfreetype.so.6` and
+`libharfbuzz.so.0`, and its `usr/lib` holds neither), so the captures were drawn by Fedora 44's FreeType 2.14.3 and
+HarfBuzz 14.1.0, the libraries a probe can call directly. The probe (`~/.cache/emusen/tmp/x2/ft/`, outside the
+repository) rasterises a word with FreeType and shapes it with HarfBuzz, and holds each glyph's ink, each word's ink
+width and each line's rows to the capture.
+
+1. **ES-DE's own face is drawn at its size rounded up to a whole pixel; a theme's face at its size as given.** ES-DE's own
+   face is the one it draws where the theme names no `fontPath` (Akrobat, §4.8.7). Art Book Next's help labels (25.67 px
+   at 1280 × 800, 38.499997 at 1920 × 1200: 0.04583333 × H × 0.7) ink MENU, SELECT, SCREENSAVER and CHOOSE 53, 67, 133,
+   74 px and 80, 103, 201, 111 px wide; FreeType at 26 px gives 53, 68, 134, 73, at 39 px 79, 103, 201, 112, and at
+   38.5 px 79, 99, 195, 109. Artflix's description (`fontSize` 0.024, 19.2 and 28.8 px) has a pitch of 22 and 32 px
+   with `lineSpacing` 1.1 (item 3), so 20 and 29 px: rounded up, as 19.2 rounded would be 19. The size is taken in
+   FreeType's 64ths of a pixel first, the fraction dropped: the theme's 0.02916667 × 1200 is 35.000004 px, and Art Book
+   Next's release date in its own Mulish inks 191 px, 35 px's width (36 px gives 198). A theme's face is not rounded:
+   Mulish's "None" at 23.33 px (0.02916667 × 800) inks 54 px, 23.33 px's pens (24 px gives 56), and CarAlt's rost at
+   21.6 px stands at 21.6 px's pens (0, 8, 15, 23, 30, 37, 46, 53, 60, 68, 75 for "Screensaver"; 22 px would end 69, 76).
+   The "2.6 % above nominal for TrueType faces" of §4.8.7 was this rule seen on Akrobat, and on the clock's box, which
+   was measured 2.7 units too wide (below).
+2. **Each glyph stands at a whole-pixel pen, advanced by its shaped advance rounded**, the face's kerning applied (HarfBuzz
+   shaping). Matched glyph by glyph at 39 px, SCREENSAVER's pens are 0, 18, 37, 56, 74, 92, 113, 131, 148, 166, 184 and
+   CHOOSE's 0, 19, 40, 60, 80, 97, as the rounded advances give; the summed advances rounded give 0, 18, 36, 55, 73 … and
+   are ruled out, at every size (CHOOSE would need 39.22–39.23 px and SCREENSAVER 39.41–39.50). A 2-D fit of rendered
+   lines to the captures agrees: SCREENSAVER 501 against 692, CHOOSE 248 against 362, Art Book Next's description line in
+   Mulish at 30 px 1.7 against 442 (summed of 0 to 1 per pixel over the line). Kerning shows in Exo 2: SCREENSAVER 102 px
+   of ink in ES-DE, 103 without the A–V pair, and FAVORITES two pixels narrower with its pairs.
+3. **In ES-DE's own face a space's advance is rounded down.** Artflix's description in Akrobat at 29 px puts its third
+   line's 13 words at 0, 65, 150, 182, 207, 255, 338, 444, 468, 522, 553, 603 and 645 px; words of rounded advances
+   joined by 6-px spaces give each within a pixel, and 7-px spaces (6.64 rounded) drift a pixel a word, to 656. That
+   line's ink is 762 px, inside the 768-px box, where 7-px spaces make it 776 and break it a word earlier. The 2-D fit:
+   6-px spaces 1317 against 3238 at 29 px, and 4-px spaces against 5 (4.58 rounded) 1410 against 1644 at 20 px. A theme's
+   face rounds its space as any glyph: Mulish's 7.66 px space at 30 px is 8 in the fit of 1.7 above. Why ES-DE's own face
+   differs is not shown by the captures; the rule is held as measured.
+4. **A line's pitch is the size drawn times `lineSpacing`**, each line's place rounded. Artflix's system description
+   at 1920 × 1200 is 28.8 px nominal: its capitals' tops stand on rows 359, 391, 423 and 455, a pitch of 32, which
+   29 × 1.1 = 31.9 gives (0, 32, 64, 96 rounded) and 28.8 × 1.1 = 31.68 does not (0, 32, 63, 95); at 1280 × 800 on 241,
+   263, 285 and 307, a pitch of 22, 20 × 1.1. The face's own line (ascender + descender at that size) is centred in it, as
+   §4.8.6 found: the first baseline is 25 px below the element's top, (31.9 − 36.2) / 2 + 27.2.
+5. **A text box of fixed height shows whole lines only.** The same description's box is 216 px high, 6.75 pitches, and
+   ES-DE shows six lines, the last whole, without an ellipsis, though the text goes on. A box one line high (THEMES.md:
+   "`h` <= `fontSize`") is cut with an ellipsis, "(...)", three full stops.
+
+#### 4.9.2 Which form, and why
+
+The painter laid text out with Qt's own `Text` (fractional advances at the integer size, Qt's line breaking and
+eliding) and the help labels with `GlyphLine`, a second set of rules in QML. Neither is ES-DE's, and two owners of one
+set of rules is the defect the house rules name. The evaluation:
+
+- *An extension of an existing surface* (more properties on `TextBlock`, the rules in its JavaScript) is refused: QML
+  is layout only (§1.3), and line breaking and ellipsis are words built in QML.
+- *A module of the scene* (`emusen_esde::scene`) is refused: the rules need a font's advances and kerning, so the scene
+  would read font files, a second job for a component whose fence (§4.2, `tests/fence.rs`) holds it to the XML reader.
+- **A component of its own** is chosen: the crate `emusen-esde-text` (`Frontend/esde-text`), one job, ES-DE's text rules
+  over a face: the size, the shaping and the pens, the line breaking, the pitch, the whole lines and the ellipsis. Plain
+  data in (a face's bytes, the words, the size, the box, `lineSpacing`, wrap and ellipsis) and out (lines of glyphs at
+  whole-pixel pens), no Qt, testable alone. Its dependency is `harfrust` (MIT, HarfBuzz's shaping in Rust) and through
+  it `read-fonts` (MIT or Apache-2.0, the font tables), approved 2026-11-09 by the tester on the proof of §4.9.4; it
+  replaced `rustybuzz` and `ttf-parser`, whose shaping the proof found off HarfBuzz's. A framework rather than
+  hand-written shaping, as the house rules ask.
+- The painter's side stays a painter's: `TextLayout`, an `EsdeModel`-free QML type of `EmuSen.Esde` that asks the crate for a
+  layout, and `GlyphText.qml`, which draws one glyph per pen with Qt's `Text` at the whole size nearest, scaled to the
+  layout's size (a theme's face at 14.4 px is drawn at 14 and scaled by 14.4 / 14, as `GlyphLine` drew it before).
+  `TextBlock` and the help bar's labels draw through it, so every text, list row, carousel and grid label, date, clock
+  and help label of an ES-DE theme has one owner of its rules. The kit's body face, drawn where a theme names no font
+  and Akrobat is not installed, reaches the crate as bytes from its owner, `emusen_kit_qt::fonts::BODY` (EmuSen_Kit.md
+  §7.60). Whether a face is ES-DE's own is the scene's fact (the theme named no `fontPath`): its records carry a `Face`,
+  the file and `own`, the role `ownFace`.
+
+#### 4.9.3 As built, and the oracle **[M 2026-11-09]**
+
+`emusen-esde-text` is `whole` (the size rule), `Face::shape` (HarfBuzz's clusters through HarfRust at HarfBuzz's scale,
+each advance in 64ths rounded, a space rounded down in ES-DE's own face) and `layout` (paragraphs at line breaks, greedy breaking at spaces
+with a long word broken where it overflows, trailing spaces out of a line's width, the pitch, whole lines only when the
+box has a height, one line and an ellipsis when it holds one, each line's place by its alignment rounded). Its tests
+(`tests/rules.rs`, 10) hold each rule of §4.9.1 on the kit's body face, the advances to a table of HarfBuzz's, and the
+crate's one dependency to `harfrust`. `TextLayout` is a list model of the glyphs, reset
+only when they change, so a binding's settling does not rebuild the words.
+
+The 2026-11-08 capture of Art Book Next's clock at 1920 × 1200 had been measured 63.86 units wide in
+`esde-boxes.tsv`; its background's right edge is column 167 on every row from 54 to 94 (the 1280 × 800 capture's is
+110, as written), so the box is 61.19 units, and Qt's 61.3 is within it. The row is corrected; the clock's glyphs in
+ES-DE's capture stand at 0, 21, 42, 50, 71 px, Mulish at 35 px, as Qt's do.
+
+**The words as heard (2026-11-11).** `GlyphText` draws each glyph as a `Text` of its own, so a reader of the scene
+(the harness's tree, a screen reader) found one glyph per item; the `GlyphText` itself now carries the layout's words
+whole as its `text`, which the harness hears, and esde-qt's view test and qt-app's hosted-view test read an element's
+words there, the outermost heard words of the element only.
+
+#### 4.9.4 Which shaping: the proof of 2026-11-09
+
+ES-DE shapes with the system's HarfBuzz at the scale of its size in 64ths of a pixel (§4.9.1), and rounds each advance.
+**Corrected 2026-11-10 (§4.12.1):** the advance ES-DE rounds is the exact one, not its 64ths: rost's `t` at 19.8 px
+(6.4944, 416/64 = 6.5 in 64ths) rounds to 6, and its `S` at 20.8 px (7.5088) to 8, as the help captures' places
+require; `esde-text` shapes at 65536 units to the pixel. The comparison below holds the shapers to HarfBuzz, which stands.
+Whatever shapes for the painter must give HarfBuzz's advances to the 64th, or a pen moves a pixel where a 64th rounds
+the other way. The proof: 263 strings (the help labels of ES-DE and the viewer in three letter cases, the oracle
+library's titles, file names, descriptions, developers, publishers, genres, dates and counts, and the SNES system
+descriptions the three watched themes carry, in eight languages), in ten faces (Akrobat Regular, SemiBold and Bold;
+the kit's Barlow; Art Book Next's Mulish Light and Medium and Changa One; Artflix's Exo 2 Regular and Bold Condensed;
+CarAlt's rost), at ES-DE's ten sizes (39, 26, 35, 30, 29, 20, 23.33, 21.6, 14.4 and 9.216 px), each shaped by
+Fedora 44's HarfBuzz 14.1.0 through its C interface (the reference) and by each candidate. Strings a face lacks a
+glyph for were left out (660), leaving 25,640 strings and 1,420,650 glyphs. A string's pens are the rounded advances
+summed, a space in ES-DE's own face rounded down.
+
+| Candidate | Glyphs equal to HarfBuzz's | Most off | Strings with identical pens |
+|---|---|---|---|
+| Qt 6.11.2, `QFont` without hinting at `setPointSizeF`, `QTextLayout`'s glyph runs differenced | 447,123 | 131/64 px | 17,052 |
+| Qt laid out at the em (pixel size = units per em) and scaled as HarfBuzz scales | 1,378,403 | 132/64 px | 25,341 |
+| `rustybuzz` 0.20, its font units times the size (the crate until this proof) | — | 1.18/64 px | 24,080 |
+| **HarfRust 0.15.0 at HarfBuzz's scale** | **1,420,650** | **0** | **25,640** |
+
+Qt fails for two reasons. A `QFont`'s engine is made at its pixel size rounded to a whole pixel (the glyph runs' raw
+font is 23, 22, 14 and 9 px for 23.33, 21.6, 14.4 and 9.216), so none of the 568,260 glyphs at the fractional sizes
+matches. At whole sizes, 405,255 glyphs are a 64th off (Qt truncates FreeType's linear advance where HarfBuzz rounds
+its own scaling), and Cyrillic in Exo 2 is shaped as runs of its own script, up to two pixels off. `rustybuzz` scales
+the summed font units once where HarfBuzz scales each advance and each kerning value, so 1,560 strings' pens differ.
+HarfRust, which follows HarfBuzz 15.0 and its rounding, matches every glyph. **Approved 2026-11-09 by the tester:**
+HarfRust and read-fonts replace `rustybuzz` and `ttf-parser`; their licences (MIT; MIT or Apache-2.0) and those of
+their dependencies (MIT, Apache-2.0, Zlib or Unicode-3.0) allow the project's GPL-3.0-or-later.
+
+### 4.10 ES-DE's media viewer **[M 2026-11-09]**
+
+**Approved 2026-11-09 by the tester:** ES-DE's VIEW MEDIA, as USERGUIDE.md ("Game media viewer") describes it, so the
+gamelist's help lists it where ES-DE's does. The evidence is ES-DE's user guide and 40 captures of ES-DE 3.4.1 taken on
+2026-11-09 with the oracle rig (`Testing/esde-oracle`, `gamelist:<j>:media:<n>`), CarAlt and Artflix at both sizes:
+the viewer's game at each of its nine steps, and X on the SNES's folder.
+
+**What the captures show.** The viewer is ES-DE's own, the same over both themes:
+
+- *The help*, a strip across the top, 0x222222, 32 px high at 1280 × 800 and 49 at 1920 × 1200, with BROWSE (the d-pad's
+  left and right), FIRST (the left trigger) and LAST (the right trigger) centred in it, words and icons 0xAAAAAA, the
+  words ES-DE's own face at 0.03 of the height (BROWSE, FIRST, LAST ink 73, 46, 40 px at 24 px and 109, 68, 59 at
+  36 px, as FreeType draws Akrobat at those sizes). The strip's height is 1.35 times the words' size, rounded (32.4 and
+  48.6), measured at the two sizes; ES-DE's user guide gives no rule for it.
+- *The item*, fitted inside the screen below the strip, centred, on black: the 512 × 448 screenshot 878 × 768 at
+  y 32 (1280 × 800), the 1280 × 720 fan art the full width at y 56, centred in 32–800.
+- *The order*, video, cover, back cover, title screen, screenshot, fan art, miximage, custom, ES-DE's user guide's list; right
+  at the last stays on it (the ninth step shows the custom picture again). The video plays at once.
+- *A game with no video* opens on its screenshot, which then stands first in its place: NES's Cobalt Harbor (cover,
+  title screen, screenshot, marquee, miximage, a manual) shows screenshot, cover, title screen, miximage, and stays on
+  the miximage (captures `nes-gamelist-1-media-0..4`, ES-DE 3.4.1, 2026-11-10).
+- *A folder*: X on Tower Set opens nothing, though the help lists VIEW MEDIA there too.
+- *Scanlines* over the video, the title screen and the screenshot (ES-DE's user guide's "Render scanlines" settings, on by
+  default): a brightness that rises and falls by about ±10 % with a period of about 4.5 rows at 1280 × 800 and 5.3 at
+  1920 × 1200, tied neither to the picture's rows nor to the screen's height alone. **[blocked]**, below.
+
+**The form.** The rules are the scene's, a module of one job, `scene::viewer` (the items of a game in ES-DE's order,
+browse and jump with their stops, the records over the screen); the stage holds the open viewer and draws its records
+above the view (`Stage::open_viewer`, closed by a change of view); the painter maps the buttons (left and right browse,
+the triggers jump, up, down and the shoulders, the manual's, do nothing, any other button closes; X opens it in the
+gamelist). The records are the existing primitives (two fills, a picture, the help element drawn by `HelpElement` in
+ES-DE's own face) and one new paint, `Paint::Clip`, a video drawn by `ClipElement.qml` through the kit's `VideoTile`, the
+one decoder, which gains `fillMode` and `delay` (EmuSen_Kit.md §7.61) so a clip can be fitted and start at once.
+`help.rs` lists View media (X) between Back and Favorites, as both themes' captures do.
+
+**Held to**: `frame.rs`'s `the_media_viewer_shows_a_game_s_media_in_es_de_s_order_and_stops_at_the_ends`; the oracle
+(below), which opens the viewer on the NES's first game in CarAlt and Artflix at both sizes, steps it nine times, and
+holds the help's ink and the item's ink to the capture's within two units, the whole picture's error in the corpus
+columns `mae_viewer_1280` and `mae_viewer_1920` (the mean of the nine), and X on the SNES's folder to open nothing.
+
+**[blocked], for the tester:**
+
+- *The scanlines.* ES-DE draws them by a shader whose law the captures do not give: the period is not the source's rows
+  (no correlation with the row phase at either size) and is not one fraction of the height (4.5 and 5.3 px). Drawing a
+  sine of a fitted period would be a fitted constant per size. The viewer's video, title screen and screenshot show
+  without them: their error is 5.6–6.8 against 0.1–1.0 for the other items.
+- *PDF manuals* and *the viewer's settings*: built since (§4.13, §4.14). The scanlines are not wanted (the tester,
+  2026-11-09) and are not offered.
+
+### 4.11 A system's games inside folders **[M 2026-11-09]**
+
+ES-DE's gameselectors draw from every game of the system: CarAlt's system view at 1920 × 1200 shows Rune Gate, a game
+inside the folder Tower Set (§4.8.7). The painter's system held only the level its list shows. **Approved 2026-11-09 by
+the tester:** the library's rows carry those games. A shelf of `esdeShelves` gains `unlisted`, the console's games the
+listing's level does not show (inside its folders, or outside the folder open), whole, as the host writes them
+(`gamelists::listing_json`; a collection carries none). `System::unlisted` holds them and `System::any_game` numbers the
+listed games and then these, the numbering `selector::pick` draws from (a folder and an uncounted game still never),
+so the shown views, the counts and the list are unchanged. The oracle's library gives the SNES's two games in Tower Set
+as `unlisted` with their media (the type folders read at every depth, as the host's index reads them), and
+`Testing/esde-baseline/picks.tsv` records the 1920 × 1200 capture's picks (Juniper Vault, Hollow Comet, Rune Gate), so
+that state is seeded to them as the 1280 × 800 one is.
+
+**Held to**: qt-models' `a_console_s_text_carries_the_games_its_level_does_not_list_for_es_de_s_gameselectors`;
+`frame.rs`'s `a_gameselector_picks_from_the_games_inside_folders_too`; the oracle's CarAlt system view at 1920 × 1200.
+
+### 4.12 The oracle after §4.9–§4.11 **[M 2026-11-09]**
+
+**The watched states** (MAE against ES-DE, the help's strip left out; before is the committed measure of 2026-11-09,
+the RX 6800 at WiseMan 1365c2771 with piece X; after is this branch, lavapipe, 2026-11-09):
+
+| Theme | State | 1280 before | 1280 after | 1920 before | 1920 after |
+|---|---|---|---|---|---|
+| Art Book Next | system | 0.99 | 0.98 | 0.36 | 0.37 |
+| Art Book Next | gamelist | 2.46 | 2.06 | 1.97 | 1.82 |
+| Artflix | system | 4.96 | 4.27 | 4.28 | 4.26 |
+| Artflix | gamelist | 8.23 | 8.10 | 7.59 | 7.60 |
+| CarAlt | system | 7.17 | 7.07 | 16.49 | 6.94 |
+| CarAlt | gamelist | 6.01 | 5.64 | 5.63 | 5.12 |
+
+The media viewer's states (§4.10), the mean of its nine steps: 2.19 at 1280 × 800 and 2.68 at 1920 × 1200 for both themes
+(the video, title screen and screenshot 5.6–6.8 without ES-DE's scanlines, the other items 0.1–1.0); no ink off.
+
+**The help's entries at whole pixels.** Measured entry by entry on Artflix's gamelist bar, where every icon is the same
+disc: from one disc to the next is the label's width plus 32 px at 1280 × 800 (OPTIONS 97 = 65 + 32, MENU 77, SELECT 85,
+BACK 71, VIEW MEDIA 122, FAVORITES 111) and plus 48 px at 1920 × 1200 (146, 116, 130, 107, 185, 169), where the icon's
+box, `iconTextSpacing` and `entrySpacing` add to 32.5 and 48.75: the fraction dropped at every entry, never the
+alternation that places at fractional sums would give. A label stands at the icon's box plus `iconTextSpacing`, the
+fraction dropped, too. `HelpElement` gives the kit's bar those whole-pixel gaps, reports the element's width with its last
+entry whole (nothing follows it), and starts the entries at the whole pixel at or before the element's place.
+Superseded on 2026-11-11 by ES-DE's own rule, read in its source (§4.12.4).
+
+**The nine boxes of §4.8.7.** Closed: Art Book Next's two help bars and its clock at 1920 × 1200 (the size rule, the
+whole-pixel entries, and the clock's row of `esde-boxes.tsv` corrected, §4.9.3), Artflix's system bar at both sizes
+(kerning, the size rule), and the four gamelist bars that lacked VIEW MEDIA (§4.10) save CarAlt's at 1280 × 800.
+Still off, **[blocked]** for the tester:
+
+| Where | Off | What is known |
+|---|---|---|
+| CarAlt system, `helpsystem_help`, 1280 × 800 | 2.2 | the bar 242.5 units where ES-DE's is 244.7 |
+| CarAlt gamelist, `helpsystem_help`, 1280 × 800 | 3.9 | 326.7 against 330.6 |
+
+Both are rost at a fractional size with `entryRelativeScale` 0.8 (the system's labels 14.4 px, the gamelist's
+0.0144 × 800 × 0.8 = 9.22 px). The tester's six captures of 2026-11-09 settle the icon's box: test copies of CarAlt
+(`Testing/esde-oracle/helpcopy.py`) whose gamelist help shows four like discs (A Select, B Back, X View Media, Y
+Favorites) at full opacity at `fontSize` 0.0144, 0.0170 and 0.0190, at both sizes. The discs' centres, from the ink of
+their top and bottom rows (only a disc reaches them), step by the label plus a part that, with the entries placed at
+fractional sums and drawn at whole pixels, must lie in 22.68–23.33 px for 0.0170 at 1280 × 800, where the icon's box
+(0.9 × 13.6 = 12.24), `iconTextSpacing` (5.32) and `entrySpacing` (5.12) add to 22.68: **the icon's box is not
+rounded** (rounded up, 13, the part is 23.44; rounded down, or the whole entry's part rounded down as Artflix's bar
+shows, it is 22, both outside). At 1920 × 1200 the same fit gives 30.34–30.99 for 0.0144 (exact sum 31.22),
+34.01–34.66 for 0.0170 (34.03) and 35.34–35.98 for 0.0190 (36.19): two inside the exact sum and two below it by a
+quarter to a third of a pixel, which no rounding of the box, the spacings or the whole entry fits at once, since the
+labels' own widths at fractional sizes (each glyph's advance rounded, 9.22–18.24 px) change by a pixel between the
+models tried. So the box's rounding is settled (none), and what is left is how ES-DE carries the fractions of a bar's
+entries when the face is drawn at a fractional size: Artflix's whole-size bars drop them at each entry, CarAlt's do not.
+The painter keeps Artflix's rule, which holds seven of the nine boxes; CarAlt's two at 1280 × 800 stay **[blocked]**
+with these measures (`~/.cache/emusen/tmp/x2/ft/caps.py`, outside the repository).
+
+**Seeded faults**, each applied alone and reverted:
+
+| Fault | Caught by |
+|---|---|
+| each advance rounded down rather than to the nearest | `emusen-esde-text`'s pen and space tests |
+| the size rounded to the nearest rather than up | `qt_4_9_the_size_is_rounded_up_to_a_whole_pixel` |
+| ES-DE's own face's space rounded to the nearest | `qt_4_9_es_de_s_own_face_rounds_a_space_down` |
+| the viewer's right wrapping to the first item | `the_media_viewer_shows_a_game_s_media_in_es_de_s_order_and_stops_at_the_ends` |
+| the host's shelf text without its unlisted games | qt-models' `a_console_s_text_carries_the_games_its_level_does_not_list…` |
+| the gameselectors drawing from the listed games only | the oracle: no seed gives the 1920 × 1200 capture's picks (Rune Gate is unlisted), the run fails |
+
+#### 4.12.1 The help bar's fractions: the one-variable captures of 2026-11-09 **[M 2026-11-09]**
+
+CarAlt's two bars at 1280 × 800 (rost at 14.4 and 9.22 px) are the last two boxes of §4.8.7. To separate the rule by
+which ES-DE carries a bar's fractions, ten help copies (`Testing/esde-oracle/helpstates.tsv`, run by `helpstates.sh`)
+change one thing at a time from a bar whose sizes are all whole: `b0`, `fontSize` 0.025 at 800 rows (text 20 px),
+`entryRelativeScale` 1, `iconTextSpacing` 5 px and `entrySpacing` 8 px; `t1`, `t2`, `t3` the text at 19.8, 19.5 and
+19.2 px (`entryRelativeScale` 0.99, 0.975, 0.96, which keeps the icons); `i1` the icons smaller (1.04); `s1`
+`iconTextSpacing` 5.5 px; `s2` `entrySpacing` 8.5 px; `l1`, `l2` `t1` in capitals and in lower case; `n1` `t1` with two
+entries. Captured with ES-DE 3.4.1 on 2026-11-09. Each disc's and label's ink was read from the columns (a run of ink split
+at gaps of 4 px or more), the disc's first column being its box's left edge:
+
+| State | Disc lefts | Disc to disc | Label ink starts after its disc by |
+|---|---|---|---|
+| b0 | 962, 1031, 1092, 1193 | 69, 61, 101 | 23 each |
+| t1 | 966, 1034, 1094, 1194 | 68, 60, 100 | 23 each |
+| t2 | 968, 1036, 1096, 1195 | 68, 60, 99 | 23 each |
+| t3 | 971, 1039, 1098, 1197 | 68, 59, 99 | 23 each |
+| i1 | 965, 1033, 1094, 1193 | 68, 61, 99 | 22, 23, 21, 23 |
+| s1 | 960, 1029, 1091, 1192 | 69, 62, 101 | 23, 24, 23, 24 |
+| s2 | 960, 1029, 1091, 1192 | 69, 62, 101 | 23, 24, 23, 24 |
+| l1 | 950, 1022, 1085, 1190 | 72, 63, 105 | 23 each |
+| l2 | 968, 1036, 1095, 1194 | 68, 59, 99 | 23 each |
+| n1 | 1154, 1222 | 68 | 23 each |
+
+What they settle:
+
+1. **Fractions are carried, not dropped at each entry.** `s1` and `s2` add half a pixel to each entry in different
+   places and give the same discs, 1.5 px more over three entries than `b0` (231 to 232), and both step their labels 23,
+   24, 23, 24 behind their discs: places summed as fractions and drawn at whole pixels.
+2. **A label's ink is drawn at its rounded pens at the fractional size** (§4.9.1): `t1` to `t3` draw Select's glyphs
+   at the same columns as `b0`, since every advance rounds alike at 19.2–20 px.
+3. **The disc is 18 px wide at 20 px whatever `entryRelativeScale` below 1 is**, as THEMES.md says, and 17 at 1.04.
+
+What they do not settle: the label's width in the bar's sum. At whole size (`b0`) the disc-to-disc steps less 31 px
+(18 + 5 + 8) are 38, 30 and 70 for Select, Back and View Media, HarfBuzz's fractional sums floored (38.88, 30.59, 70.23);
+at 19.8 px they are 37, 29 and 69 where those sums are 38.48, 30.30 and 69.52, and in capitals 41, 32 and 74 against
+39.75, 32.81 and 73.89. No rule tried places every disc of the ten states: the label as its rounded pens, its
+fractional sum, or that sum floored, rounded or ceiled; the icon box exact, floored, rounded or ceiled; each part
+snapped or the fractions carried and drawn at the floor or the nearest; the start snapped any of the four ways
+(`~/.cache/emusen/tmp/x3/helpfit.py`, `helpfit2.py`, `pitchfit.py`, outside the repository). The best leaves 16 of the
+38 discs a pixel or two off, all in the states whose text is scaled down. A fit of the icon box alone, every other
+part as above, gives 17.35–17.48 px for the states at 20 px and 0.849–0.887, 0.899–0.931 and 0.863–0.891 of
+`fontSize` × height for the earlier copies at 0.0144, 0.0170 and 0.0190 at 1920 × 1200, which do not meet. **[blocked]**
+for the tester: the rule is not derived, and the two boxes stay off by 2.2 and 3.9 units. The painter keeps Artflix's
+rule. What the next captures would separate is the label's width alone: one label (`entries` a) at `entryRelativeScale`
+1 and `fontSize` from 0.024 to 0.026 in steps of 0.0002 at 800 rows, so that only the text's size moves.
+
+**The captures of 2026-11-10 and what they settle.** `helpwidths.tsv` (one Select label, `fontSize` 0.0240 to 0.0260 in
+steps of 0.0002, every other size whole) and `helpscales.tsv` (one label at `fontSize` 0.025 with `entryRelativeScale` 0.80
+to 1.00; one label at `entryRelativeScale` 0.8 at six font sizes; two at 0.8), captured with ES-DE 3.4.1, CarAlt's copies
+at 1280 × 800. The fits are `~/.cache/emusen/tmp/x4/fit3.py`, `fit4.py` and `fit5.py`, outside the repository.
+
+1. **A label's width in the bar is its glyphs' advances, each rounded half up from its exact value.** The single label's
+   disc moves at 19.84, 20.32 and 20.8 px and nowhere else (37, 38, 39, 42 px of label), and in the eleven scales of
+   `entryRelativeScale` the disc's place plus that width is 1252 in every one. HarfBuzz's 64ths were the error in every
+   rule tried before: rost's `t` at 19.8 px is 6.4944, 6.5 in 64ths; it rounds down (37 for Select, not 38), and its `S`
+   at 20.8 px, 7.5088, rounds up. 64ths rounded half down fail at 17.6 px and half up at 18.0 px. `esde-text` now
+   shapes at 65536 units to the pixel (§4.9.4).
+2. **The last label ends at the element's edge**, no entry spacing after it: the label's ink starts at
+   round(0.995 × 1280 − width) in all 18 single-label copies.
+3. **Places are carried as fractions and drawn at the nearest pixel.** With the widths of 1, every disc of `b0`–`n1` and
+   `w00`–`w10` (49 of 49) is placed by an icon box of 0.870–0.876 × `fontSize` × height / max(1, `entryRelativeScale`),
+   `iconTextSpacing` and `entrySpacing` exact, the sum drawn rounded. Artflix's whole-size bars agree: label plus 32 px
+   from disc to disc at 1280 × 800 and plus 48 at 1920 × 1200 is a box of 17.5 and 26.25 px, 0.875 of 20 and 30 px, with
+   Artflix's 3.84 + 10.66 and 5.76 + 16 px of spacing.
+4. **`entryRelativeScale` below 1 leaves the icon alone**: the disc's raster is the same in all eleven scales.
+
+**Still open, [blocked] for the tester:** at `entryRelativeScale` 0.8, CarAlt's own scale, the icon box the multi-entry
+copies need is 0.862–0.878 × `fontSize` × height at 0.0144 but 0.90–0.926 at 0.0170 and 0.899–0.916 at 0.0190 (from the
+labels' places, which no longer depend on the disc's drawing), while the drawn disc is not the layout's box (16 px of
+ink at 20 px, 15 at 16 px). No single rule of the box closes the three, so CarAlt's two bars at 1280 × 800 stay off.
+
+**Tried on the oracle, 2026-11-10, and set aside.** The entries placed by esde-qt itself (each part at the nearest
+pixel of its carried place, a box of 0.875 × `fontSize` × height) closed CarAlt's gamelist bar at 1280 × 800 and left
+its system bar 2.0 off, but opened Art Book Next's help bars (3.9–4.2 units) and the viewer's help in Akrobat at
+1920 × 1200 (2.7–4.7 units, narrower than ES-DE's), which the committed rule holds. The box is not one share of the font
+size across faces. `helppairs.tsv` (14 copies) measured from the labels' pens (each label's ink edge less its first
+glyph's bearing, to a tenth of a pixel) gives per-entry parts that a share of `fontSize`, the face's line height, or
+the height of its hinted S at the label's size each fit within 2–4 %, none exactly. The patch is kept outside the
+repository (`~/.cache/emusen/tmp/x4/help-carried.patch`).
+
+**The icon's box, from the reference 'S' (measured 2026-11-10 on the captures above).** In rost the box steps from
+17.05–17.10 to 18.37–18.55 px between `fontSize` × height 20.16 and 20.32 and is flat on each side; the disc's ink steps
+from 16 to 17 px at the same place. The one measure of the face that steps there is the height of its `S` hinted at the
+help's size (FreeType 2.14.3, default load, CFF hinter): 14 px up to 20.24, 15 from 20.32; unhinted it slides (14.11 to
+14.22). The rule that places the label pens of 56 of rost's 57 multi-entry copies (`v`, `u`, `b0`–`n1`, `p`, `q`, `r`,
+`i1`, the `g` copies of `helpown.tsv`, the older 0144–0190 copies at 1920 × 1200):
+
+1. the icon's box is 1.25 × the hinted `S` height at `fontSize` × height (10, 12.5, 13.75, 15, 17.5, 18.75, 20 px for
+   `S` 8, 10, 11, 12, 14, 15, 16), whatever `entryRelativeScale` below 1 is, and divided by `entryRelativeScale` above 1
+   (17.16, 16.83, 16.20, 15.63, 14.58 px at 1.02, 1.04, 1.08, 1.12, 1.20, the `g` copies);
+2. the bar's sum (labels' widths, boxes, spacings) is the element's width, rounded to a whole pixel; the element is
+   laid back from its right edge and its start rounded to the nearest pixel; from there each part is carried as a
+   fraction and drawn at the nearest pixel.
+
+The fractional fits of before (0.870–0.876 × `fontSize` × height, 17.05–17.10) took the start unrounded; with it rounded,
+17.5 and 18.75 lie inside the intervals (17.17–17.52, 18.38–18.77). Of the anchorings tried, the start rounded from an
+unrounded width misses `g104`, `g120` and `i1` (the last label a pixel left), the start rounded up 16, left unrounded
+40; a whole width misses none but `v06`, where View Media's `d` is 7.4995 px and ES-DE's bar needs it rounded up (a width
+question, §4.9.4, not the box). Artflix's whole-size bars agree (17.5 and 26.25 px at 20 and 30 px). `r0144d`'s spacings
+are CarAlt's own (`entrySpacing` 0.004, `iconTextSpacing` 0.00406–0.00413 fits) and it is left out of the count. The
+scripts are `~/.cache/emusen/tmp/x5/e.py`, `anchor.py`, `g.py`, `own.py`, outside the repository.
+
+**ES-DE's own face (the `o`, `x` and `m` copies of `helpown.tsv`, captured 2026-11-10).** Its icon follows the same rule
+with Akrobat's `S` hinted by the bytecode interpreter at the fractional size (9, 9, 10, 10, 10, 12 px at 11.52–16 px; light
+hinting gives 8 and 9 at 11.52 and 13.6 and breaks the grouping): the discs' ink is 11, 11, 13, 13, 13 and 15 px and
+the label stands half a box, the spacing and half a disc after the disc's edge in every copy. A single label's width
+there is its glyphs' advances at the fractional size, each rounded (Select 45 to 46 px between 19.52 and 19.68 px, 21–31 px
+in the `m` copies), not at the size rounded up that ES-DE's other own-face text takes. One width stays open,
+**[blocked]** for the tester as a text question (§4.9): View Media alone in the own face is drawn wider than its rounded
+advances from 20.064 px up (`helpspace.tsv`'s `z` copies, `fontSize` 0.02500–0.02520 in steps of 0.00002: View's ink 34 px
+to 20.048 px and 35 from 20.064, Media's 42 to 20.112 and 43 from 20.128; the `x` copies reach 84–87 px of label where the
+rounded advances give 83–86), while the gap between the words stays 5–6 px, so the space is not the cause. The rule
+that widens it is not found; Select follows its rounded advances in every copy. The `y` copies (the label at
+`entryRelativeScale` 0.8, 15.36–16.64 px) are captured for the next fit.
+
+**View Media glyph by glyph (measured 2026-11-11 on the `x`, `y` and `z` copies).** Each glyph's pen was read by
+fitting FreeType's raster of the glyph at the label's size to the capture's column profile (`~/.cache/emusen/tmp/x6/`
+`pens.py`, `run2.py`, outside the repository). The steps from glyph to glyph exceed the glyph's rounded advance by a
+pixel at places that move with the size: w to M from 20.064 px (16.79 px of `w` and space, drawn 17 where the
+floored space gives 16), M to e from 20.128 (13.12 px drawn 14), V to i at 20.8 (9.36 drawn 10), and in the `y` copies
+M at 15.744, d at 16.128, V from 16.384 and e at 16.64. The same reading of the `o` copies, Select at 19.2–20.8 px,
+gives every step its rounded advance, its `e` and `l` at 9.36 px drawn 9 where View Media's V at 9.36 is drawn 10: the
+step of a glyph is not a function of its own advance, and the cause belongs to the label. Ruled out:
+
+1. FreeType's hinted advances: the default and light loads give the rounded advances at every size; the v35
+   interpreter's miss 20 of the 32 copies (`v35.py`).
+2. Kerning: HarfBuzz's one pair in the label, e–w, is −2 units (−0.04 px); ES-DE imports no `FT_Get_Kerning`
+   (its dynamic symbols: `hb_shape`, `hb_font_set_scale` and FreeType's `FT_Set_Char_Size`, `FT_Load_Char`,
+   `FT_Load_Glyph` only).
+3. One size for the advances, rounded: at 20.128 px M's 14 needs a size of 20.71 px or more and d's 9 one under
+   20.56 (`gfit.py`, `kfit.py`).
+4. Places carried as fractions from one anchor, with exact, 64ths or linear advances, the space exact, floored,
+   rounded or ceiled, and the pen snapped after the space or not: none places every copy; the best 20 of 32
+   (`joint.py`, `fam.py`). Within each word alone a carried fraction fits every copy but `x00` and `x01`
+   (`phase3.py`), which no single anchor joins.
+
+The captures of 2026-11-11, `helpwords.tsv` (`b`, Back alone, and `f`, Favorites alone, at the `z` sizes; `vw`,
+View Media alone at 18, 19, 21, 22, 23 and 24 px), read the same way (`words.py`): Back and Favorites, one word of
+four and of nine glyphs, take every glyph's rounded advance at all eleven sizes, so the label's length is not the
+cause. View Media widens at whole sizes too, by a pixel or two at 18, 19, 21, 22 and 23 px and not at 20 or 24
+(`vw18`: i at 3.44 px drawn 4, the label 67 px where its rounded advances give 66), so neither is the size's fraction.
+What is left belongs to the label of two words. A size for the whole label drawn larger (rasters and rounded
+advances at 1.0125–1.03 times the size) fits the column profiles a little better than the label's own size, but
+Select's profiles fit 1.01 times as well, so the rasters do not settle it (`gsize.py`), and a carried fraction from
+one free anchor fits 15 of the 39 View Media copies (`vwphase.py`).
+
+But Back and Favorites hold none of the glyphs that widen (V, w, M, d), so the glyphs and the word count are not yet
+separated. Checked on the face itself: it has no `hdmx`, `HVAR` or `kern` table; its GPOS pairs in View Media are only
+e–w (−2 units), and none touches V or M (HarfBuzz with and without `kern`, `kern.py`); FreeType's default and light
+advances are the rounded ones, and the hinter's `lsb_delta` and `rsb_delta` change sign with the size (`deltas.py`).
+Yet a constant extra advance per glyph in font units places every View Media copy save at w and the space: M 18.7–19.2
+units, V 7.8–10.3, d 3.0–5.5 (`pergl.py`). So a per-glyph cause is not ruled out by the face, and the captures of
+`helpglyphs.tsv` (Menu, holding M, at the `z` sizes; View Media in lower case, two words without V or M; the labels of
+`l`, `r`, `lt` and `rt`) separate it from the word count.
+
+The captures of `helpglyphs.tsv` (2026-11-11, `glyphs2.py`) settle it per glyph. Menu alone, one word, steps from M to e
+by 13 px up to 20.112 px and by 14 from 20.128, the very size where View Media's M widens; lower-case view media, two
+words without V or M, takes its rounded advances save the same w-and-space step from 20.064 px. The word count is
+ruled out; the labels of `l`, `r`, `lt` and `rt` draw nothing in this state. What makes M's step 14 is still not in
+the face (no table or metric differs: `hmtx` and `glyf` agree for every glyph, `tables.py`), but ES-DE's M raster is a
+column wider from the same size (12 columns, 11 to 20.112 px), where FreeType renders M 11 columns wide up to 20.9 px:
+the step follows the glyph as ES-DE rasterises it, not its advance.
+
+**The cause: the help is drawn in Akrobat SemiBold (measured 2026-11-11, `faces.py`, `semi.py`, `semi2.py`, `sbm.py`).**
+ES-DE's AppImage holds three Akrobat files, each one build (name table "Version 1.000"):
+
+| File | SHA-256 (first 16) | Weight | V | M | d | w | i | e | space |
+|---|---|---|---|---|---|---|---|---|---|
+| Akrobat-Regular.ttf | 9e35e6cd05f46f33 | 500 | 450 | 652 | 462 | 608 | 191 | 450 | 229 |
+| Akrobat-SemiBold.ttf | 3061b78a6a5f8420 | 600 | 460 | 671 | 465 | 623 | 203 | 452 | 222 |
+| Akrobat-Bold.ttf | 4433539f13f44ddb | 700 | 469 | 688 | 467 | 636 | 213 | 454 | 215 |
+
+SemiBold's advances less Regular's are the per-glyph extras the pens asked for (M +19 units in 18.7–19.2, V +10 in
+7.8–10.3, d +3 in 3.0–5.5, i +12 in 4.7–13.5). Each glyph's advance in SemiBold at the label's size, rounded half up,
+the space rounded like any glyph, places 90 of the 93 own-face copies read glyph by glyph (View Media's `x`, `y`, `z`,
+`vw`, `lc`; Menu; Back; Favorites; Select); Regular places 56 at best. SemiBold's M is rendered 12 columns wide from
+20.128 px and 11 to 20.112 px, the column the captures gained. The load flags were tried first and set aside: the
+default, light, no-hinting, no-autohint, mono, LCD and forced-autohint loads of Regular, at 20 to 20.9 px in 64ths,
+give M a 14 px advance from 20.70 px at the earliest (14 at every size with the autohinter) and 12 columns from
+20.19 or 20.89 px, never at 20.128 (`flags.py`; the face is TrueType, so the CFF driver's properties do not apply).
+The hinted `S` of the two faces agrees but at the edges of a step (26 of 800 sizes from 10 to 26 px), none of them a
+measured copy.
+
+The viewer's help at 1920 × 1200 agrees: FIRST and LAST are 70 and 61 px of ink in the capture, SemiBold's rounded
+advances give 70 and 61 and Regular's 68 and 59; BROWSE is 110 against 111 and 107 (`viewer.py`). Only the help is
+shown so far to be SemiBold; ES-DE's other text in its own face is not measured against it, and keeps the default face
+and the rules of §4.9.1.
+
+**The painter (built 2026-11-11).** `emusen_esde::fonts`, the one owner of the font paths, names the help's face
+(`HELP_FILE`, Akrobat-SemiBold.ttf) and finds it beside the default face it already finds (`help_font`); no font file
+enters the repository. `Data::help_font` carries it, and a help element whose theme names no `fontPath`, and the media
+viewer's help, take it as a face whose every advance, the space's too, is rounded half up at the label's own size (a
+theme face's rule, `own` false). Where the SemiBold is absent the help takes the default face as before and the log
+says so once. The icon's box follows the face it is drawn in: SemiBold's hinted `S` is Regular's at every measured
+size but 23 and 36 px (17 against 16, 26 against 25), the latter the viewer's help at 1920 × 1200.
+
+**The glyph at ES-DE's disc (decided 2026-11-11 by the tester, R-20261111-24; measured 2026-11-11).** ES-DE's help icon is
+a disc of radius 28 inside an outline of radius 28 and stroke 2 in a 64-unit box (its `button_*_XBOX.svg`, read as
+data), so its outer edge spans 58 of the box's 64 units: 0.906 × 51.25 = 47 px of ink on Art Book Next's 1920 × 1200
+bars, 0.906 × 17.5 = 16 px on Artflix's at 1280 × 800, as the captures show. ES-DE's icon files are not drawn; the kit's
+own filled glyph is, at the icon's box (the entry before its gap) × (58/64) / the kit's `discShare` (EmuSen_Kit.md §7.71,
+0.85), so its disc's edge lands where ES-DE's does. A theme's own picture for a button is drawn at the box. Drawing the
+glyph at the box alone (its disc 0.85 of it) left Art Book Next's discs 44 px to ES-DE's 47. Artflix's system MAE on the
+RX 6800 is 4.39 (1280) and 4.25 (1920) against the committed 4.27 and 4.07 with the glyph at 0.9 × the font's size (a
+run made before the box rule), at the box, and at this rule alike: the MAE leaves the help's strip out, so the glyph's
+size does not move it, and the rise came before. `sizes.rs`'s
+`the_watched_themes_hold_at_the_five_sizes` holds every drawn help glyph to this size.
+
+**The three boxes still off (measured 2026-11-11 on the committed captures).** Open, **[blocked]** for the tester: two of
+`esde-boxes.tsv`'s rows are mis-derived, and correcting them uncovers a third difference.
+
+| Box | The row | The capture | Ours |
+|---|---|---|---|
+| Art Book Next system, 1920 × 1200 | x 357.18, w 562.89 | the panel 509.125–1410.85 px, centred on 959.99 (pos and origin 0.5); less the theme's 25 px paddings, x 356.08, w 567.82 | x 356.0, w 568.0 |
+| Art Book Next system, 1280 × 800 | x 359.22, w 559.78 | the panel 341.43–939.0; x 358.10, w 564.24 | x 359.67, w 561.67 |
+| Art Book Next gamelist, 1920 × 1200 | x 60.0, w 371.47 | origin 0, so x is the pos, 58.33; SELECT's T inks to 649.46 px, its right bearing at the rounded advance 1.0 px: w 375.3 | x 58.3, w 374.7 |
+| Artflix gamelist, 1280 × 800 | x 267.9, w 744.2 | the bar one whole pixel left of ours, every part's place relative to its start equal | x 269.0, w 742.0 |
+
+The system rows subtracted 17.78 units on the left and 20.0 on the right where the theme's paddings are 16.67 each, so
+their centre (957.9 px) is not the theme's; the gamelist row took the first disc's ink as the element's edge. With the
+panel read at sub-pixel coverage, the system bar at 1920 × 1200 is ES-DE's within 0.2 units and the gamelist bar within
+0.6, but at 1280 × 800 ES-DE's labels sit 2 px left of ours at the first entry and 2 px right at the last, its discs 32 px
+of ink where 58/64 of the box (1.25 × the hinted `S`, 26 px at 36, 36.67 and 37 px alike) gives 29.5: the icon's box at
+that size is not yet derived. Artflix's bars at 1280 × 800 start a pixel left of ours (268 against 269, and 450 against
+451 in the system view) and its bars at 1920 × 1200 do not; neither rounding nor flooring of the start from the unrounded
+width, nor centring by the labels' exact widths, gives all three. Correcting the rows changes what the oracle compares
+against, which is the tester's to allow; the measures and the candidates are in `~/.cache/emusen/tmp/x7/boxes-table.md`
+and `edge3.py`, `ink2.py`, `runs.py`, outside the repository.
+
+**The advance's rounding, re-proved with SemiBold (`fixed.py`, pens re-read with SemiBold's rasters, `refit.py`).** Of
+the 93 copies: each advance exact and rounded half up, 90; the same in f32 arithmetic, 90; FreeType's fixed point (the
+16.16 scale of the size in 26.6, `FT_MulFix`, then `(x + 32) >> 6`) with the size rounded, floored or ceiled to 64ths,
+87, 88 and 81; carried fractions, exact or in 26.6, from the label's start or any phase, 29–62. `esde-text`'s rule of
+9687270e6 (§4.9.4) stands for the help in SemiBold; its proof on rost's copies was rost's own face and is unchanged.
+
+Open, **[blocked]** for the tester: the three copies SemiBold misses (`z04`, `lc04`, `y06`) are each a glyph whose
+exact advance is within 0.0005 px under a half (w 12.4999 px at 20.064, d 7.4995 at 16.128) and which ES-DE rounds
+up, as `v06`'s d in rost above; a size raised by 0.0015 px or more, or rounded up to 1/128 px, places all 93, but
+neither is derived. The three, with each rule's rounding of the glyph:
+
+| Copy | Glyph | Exact px | ES-DE | Exact rounded | 26.6 fixed point | The rule that rounds it up breaks |
+|---|---|---|---|---|---|---|
+| `z04` | w | 12.4999 | 13 | 12 | 13 | M at 20.112 px (13.4952 → 14, ES-DE 13; `z07`, `mn07`) |
+| `lc04` | w | 12.4999 | 13 | 12 | 13 | the same |
+| `y06` | d | 7.4995 | 8 | 7 | 8 | the same |
+
+**The hinter (measured 2026-11-10).** harfrust and read-fonts shape and read tables but do not hint, so the hinted height
+comes from the system's FreeType, the library the captures were drawn with (FreeType 2.14.3 on Fedora 44), loaded at run
+time as the platform client loads SQLite, with no crate of its own: `esde-qt`'s `hinted.rs` is its one owner and makes
+the one call measured, `FT_Set_Char_Size(face, 0, round(px × 64), 72, 72)`, `FT_Load_Char(face, 'S', FT_LOAD_DEFAULT)`,
+the slot's `metrics.height` over 64 (`emusen_esde::fonts::REFERENCE` the glyph; the kit's body face read from its bytes).
+A FreeType that does not start (`FT_Init_FreeType` failing) is the painter's `problem`, in `hinted::NOT_STARTED`'s
+words (`model.rs`'s `load_problem`, held by its unit test and `hinted`'s), and the icons take no room; nothing else
+stands in. Without `libfreetype.so.6` at all the program does not link, below.
+Qt's own FreeType through `QRawFont` with full hinting was tried first and set aside: it gives rost's `S` 14 px from 20.32
+to 20.64 px where FreeType's default load gives 15 and the captures `v07`–`v09` and `u07`–`u09` need 15 (a box of 18.75);
+its Akrobat heights agreed. Everything else is `help.rs`'s arithmetic in Rust: the box is `BOX_OVER_REFERENCE` (1.25)
+times that height, divided by `entryRelativeScale` above 1; the entries' places are carried from 0 and the width
+rounded; `HelpElement` rounds the bar's start (`barStart`) and draws each part at the nearest pixel from it.
+`tests/hinted.rs` pins the heights of rost at its 22 measured sizes and of Akrobat at its 17; `hinted.rs`'s unit tests
+hold the missing library's words and the body face; `help.rs`'s unit test pins copies `v05`'s and `g104`'s four pens.
+
+**Superseded on 2026-11-11 (§4.12.4).** The library is linked, not loaded; the size is truncated, not rounded; the
+height is the rendered bitmap's rows, not the metrics; the row is no longer 0.9 × the size; the width is not rounded and
+keeps its trailing spacing; and the start is ES-DE's two roundings, not `Math.round` of the box. Each from ES-DE's source.
+
+#### 4.12.2 Art Book Next's three help rows, re-measured **[M 2026-11-11]**
+
+Decided 2026-11-11 by the tester (R-20261111-49): the two Art Book Next rows of `Testing/esde-baseline/esde-boxes.tsv`
+that were derived wrongly are corrected to the measured values, and the real difference that then shows stays failing
+until it is fixed. Measured on the committed captures (`edge3.py`, `ink.py`, outside the repository); y and h unchanged.
+
+| Row | Was | Now | Derivation |
+|---|---|---|---|
+| system, 1920 × 1200 (`system-1920x1200.png`) | x 357.18, w 562.89 | x 356.08, w 567.82 | the panel's edges by the coverage of its edge column on rows 1075, 1100 and 1125: 509.125–1410.85 px, ÷ 1.5 = 339.42–940.57 units; less the theme's `backgroundHorizontalPadding`, 0.01302083 × 1280 = 16.667 units, each side: x = 339.42 + 16.667, w = 601.15 − 33.333 |
+| system, 1280 × 800 (`system-1280x800.png`) | x 359.22, w 559.78 | x 358.10, w 564.24 | the same on rows 725–745: 341.43–939.0 units; x = 341.43 + 16.667, w = 597.57 − 33.333 |
+| gamelist, 1920 × 1200 (`gamelist-1-1920x1200.png`) | x 60.00, w 371.47 | x 58.33, w 375.31 | no panel to read (its colour is the backdrop's): x the theme's `pos` 0.04557292 × 1280 (origin 0); the right edge SELECT's T, whose ink ends in column 649 at 70/152 coverage (649.46 px), plus T's right bearing at its rounded advance in Akrobat SemiBold at 55 px (advance 417/1000 → 23 px, xMax 400/1000 → 22.0 px: 1.0 px): (650.46 − 87.5) ÷ 1.5 |
+
+The old system rows took 17.78 units off the left and 20.0 off the right, which put the bar's centre at 957.9 px against
+the theme's `pos` 0.5 and `origin` 0.5; the old gamelist row took the first disc's ink (column 90) for the element's
+edge. With the rows as measured, the system bar at 1920 × 1200 and the gamelist bar are within a unit of ours (568.0
+and 374.7). Art Book Next's system bar at 1280 × 800 is 2.6 units narrower than ES-DE's: its discs are 32 columns of
+ink against our 29 (§4.12.4).
+
+#### 4.12.3 A vertical container's whole rows: Artflix's system view **[M 2026-11-11]**
+
+Commit e90417aa3 laid a vertical container's text out with every line and clipped it to its box, so its overflow is
+measured before the first scroll. Artflix's system view then rose from 4.27 to 4.39 (1280 × 800) and from 4.04 to 4.25
+(1920 × 1200) with the captures unchanged, the error in its top left. Grabbed against `system-1280x800.png` there, the
+system's description (`system-description`, a 0.4 × 0.18 container at 19.2 px and `lineSpacing` 1.1, 6.8 rows) showed a
+seventh row cut by the box's bottom edge, where ES-DE shows six whole rows and nothing below them; laid out to the box's
+height before e90417aa3, the layout had kept six rows by accident. THEMES.md gives the rule: `containerVerticalSnap`,
+true by default, cuts a vertical container's height to whole rows of text at its start and end positions without moving
+the element. The scene marks a vertical container of fixed height `snap_rows` unless the theme turns the snap off;
+`TextBlock` clips to `floor(height ÷ pitch)` rows of its layout's pitch (the box itself where not one row fits) and
+reports its words' height with the window's shortfall added, so the scroll's travel (measured less the box) ends on
+the last whole row. `mapping.tsv` marks the pair drawn (361 pairs).
+
+Measured on 2026-11-11 (the oracle on the RX 6800 at the merge with WiseMan 987c6a306): Artflix's system view is 4.27
+at 1280 × 800 and 4.04 at 1920 × 1200 again, its gamelist 8.10 and 7.58 as before; nothing e90417aa3 fixed is undone,
+since a container's words are still laid out whole and measured. Held by `frame.rs`'s
+`a_vertical_container_of_fixed_height_shows_whole_rows_unless_the_theme_turns_the_snap_off` and the mapping case
+`text.containerVerticalSnap` (a 0.3 × 0.2 container whose third row is cut, true against false).
+
+#### 4.12.4 The help strip by ES-DE 3.4.1's own rule **[M 2026-11-11]**
+
+Decided 2026-11-11 by the tester (R-20261111-80): ES-DE's source may be read, never copied, and what is learned is
+cited. Every rule below was read in ES-DE's tag `v3.4.1` (MIT; files under `es-core/src/`) and is written here and in the
+code in the project's own words. The two help boxes that failed at 1280 × 800 are fixed, not excepted (R-20261111-71);
+the painter is held to ES-DE 3.4.1, not to the C# painter (R-20261111-77).
+
+**The rule.** f32 throughout, as ES-DE computes it; "round" is half away from zero.
+
+1. *The font's size* (`resources/Font.cpp`, `Font::getFromTheme` and `Font::Font`; `resources/Font.h`, `getSmallFont`;
+   `components/HelpComponent.h`, the constructor's default font). A theme's `fontSize` × the screen's height (the
+   share held to 0.001–1.5, as ES-DE clamps it, by the loader from `catalog.tsv`); without one, 0.035 × the shorter
+   side. The font then clamps it to 3 px – 1.5 heights. It is not rounded. `emusen_esde::scene::help::font_px`.
+2. *What FreeType is given* (`Font.cpp`, `FontFace::FontFace`): `FT_Set_Char_Size(face, 0, trunc(size × 64), 0, 0)`,
+   the 26.6 height cut by the integer cast at the default 72 dpi. `esde-qt`'s `hinted::char_size`.
+3. *The letter height* (`Font.cpp`, `Font::Font` and `Font::getGlyph`): the rows of the `S` bitmap after
+   `FT_Load_Char(…, FT_LOAD_RENDER)`, whole pixels. `hinted::rows`.
+4. *The row and the icon* (`components/HelpComponent.cpp`, `applyTheme` and `updateGrid`): the row is 1.25 × that
+   letter height, taken at the size before `entryRelativeScale` (held to 0.2–3 by the loader), unrounded. Below a scale of 1 the
+   labels are drawn at size × scale and the icon is the row; at 1 or above the labels keep the size and the icon is
+   the row ÷ scale. The labels' size × scale is a font made anew, so it too is raised to 3 px where it falls below
+   (`Font::Font`). `help::row_height`, `help::icon_box`, `help::label_px`.
+5. *The spacings* (`HelpComponent.cpp`, `applyTheme`): `entrySpacing` and `iconTextSpacing` clamped to 0–0.04, defaults
+   0.00833 and 0.00416, × the screen's width, unrounded. The loader holds the shares and gives the defaults
+   (`catalog.tsv`, the one owner of each range); `scene::help::spacing_px` multiplies. A seeded fault that took the clamp
+   out of the scene was not caught on 2026-11-11 because the loader had already clamped: the clamp is the loader's alone.
+   The media viewer's help, which no theme styles, takes the same defaults from `catalog.tsv` through
+   `scene::help::default_spacing_px`, not figures of its own; a property `catalog.tsv` gives no default stops with its
+   name, where until 2026-11-12 it became a spacing of 0 unsaid (held by help.rs's `a_missing_catalogue_default_is_said`).
+6. *The grid's width* (`HelpComponent.cpp`, `updateGrid`): the sum over the entries of icon + label + `iconTextSpacing`
+   + `entrySpacing`, the spacing after the last entry included; each label's width is already whole (each glyph's
+   advance rounded, §4.9). Each part's place is the sum of those before it (`components/ComponentGrid.cpp`,
+   `getColWidth`, `updateCellComponent`), summed in f32. `help::places`; `HelpElement` reports this width and the row
+   as its measure.
+7. *The place* (`HelpComponent.cpp`, `updateGrid`; `GuiComponent.cpp`, `getTransform`): pos × the screen (ES-DE's
+   default (0.012, 0.9515) where the theme sets none), x moved by `entrySpacing` × origin.x; the drawn top left is
+   round(that place) + round(−origin × the grid's size), two roundings. Each part is drawn at round(top left + its
+   place). `scene::help::top_left`, applied by the scene's `draw` to a help once measured.
+8. *The strip seen* (`HelpComponent.cpp`, `render`): the background runs from the top left less its paddings, the
+   grid's width less one `entrySpacing` plus the paddings wide. The element's box is that strip, the grid less its
+   trailing spacing.
+
+Vertical orientation (ES-DE's width-based sizes) is not handled: the scene has no orientation. The dimmed variants
+(`*Dimmed`) are counted as not drawn (R-20261111-75, §4.5.5). How the icon and the label are centred in the row
+and the label's height (1.5 × the largest glyph) were read and not changed.
+
+**Art Book Next, system view, 1280 × 800** (`fontSize` 0.04583333, `entryRelativeScale` 0.7, `entrySpacing` 0.015625,
+`iconTextSpacing` 0.00651042, pos 0.5 0.9375, origin 0.5 1, Akrobat SemiBold, the prompts MENU, SELECT, SCREENSAVER,
+CHOOSE): 0.04583333 × 800 in f32 is 36.666664 px; × 64 is 2346.67, truncated to 2346, where FreeType 2.14.3 renders the
+`S` 27 rows (rounded, 2347, it renders 26: the cause of the old 559 against 564). The row is 33.75; the labels are 25.67
+px (56, 69, 135 and 76 px wide); the grid is 4 × 33.75 + 336 + 4 × 8.33 + 4 × 20 = 584.33; the top left is round(640 +
+10) + round(−292.17) = 358 and round(750) + round(−33.75) = 716; the strip is 564.33 wide. ES-DE's box measures 358.10,
+716.14, 564.24 (§4.12.2). At 1920 × 1200 both the truncated and the rounded size render 41 rows (3519 and 3520).
+
+**Artflix, gamelist, 1280 × 800.** The row of `Testing/esde-baseline/esde-boxes.tsv` (x 267.90, w 744.20) took its width
+by mirroring its left edge about 640. Measured on the capture (`gamelist-1-1280x800.png`, its committed hash) on
+2026-11-11: the strip's last glyph, RANDOM's M in Exo 2 Regular Condensed at 20 px, rendered as ES-DE renders it
+(bitmap_left 1, 13 columns, 14 rows), matches the capture's columns 997–1009 in all 14 rows; its pen is therefore 996,
+and its rounded advance (14.26 → 14) ends the label, and the strip, at **1010**. ES-DE's width is 1010 − 267.90 = 742.10,
+not 744.20; by the rule above the strip starts at 268 and is 742.35 wide. The method and figures are in
+`~/.cache/emusen/tmp/x9/artflix-row.md` (outside the repository). *Decided 2026-11-11 by the tester
+(R-20261111-85):* the row's width is corrected to 742.10, x kept, its note saying how the edge was measured.
+
+**Art Book Next, gamelist, 1280 × 800** (R-20261111-86, decided 2026-11-11: re-measured the same way; what the capture
+shows stands whether or not the drawing then passes). The row (x 59.00, w 368.20) took its right edge as the last
+label's ink less 2 px. The last glyph, SELECT's T in Akrobat SemiBold at 25.666664 px (0.04583333 × 800 × 0.7 in f32),
+rendered as ES-DE renders it (trunc(25.666664 × 64) = 1642, bitmap_left 0, 11 columns, 18 rows), matches the capture
+(`gamelist-1-1280x800.png`, its committed hash) in all 198 pixels with its column 0 at 419, to within half a level;
+its pen is 419 and its rounded advance (10.70 → 11) ends the label, and the strip, at **430**. Its x is the icon box's
+start, as its 1920 × 1200 sibling's is, measured on the capture: the first disc's edges, from the coverage of columns 59
+and 90 in rows 732–733 over the panel's 17, are 59.64 and 90.35, its centre 75.00, and half the 0.9 fs box (33.0 px,
+measure 2 of §4.8.7) puts the box at **58.50**; the row had held 59.00, the disc's first ink column, a definition its
+sibling does not use. The row is now x 58.50, w 371.50 (re-measured 2026-11-11 under R-20261111-86). Both rows' right
+edges add the last glyph's advance rounded per glyph by ES-DE's rule (`Font::shapeText`), the rule `esde-text` itself
+implements: up to half a pixel of each is that rule's, not the capture's, and each row's note says so. Artflix's x,
+267.90, is the 2026-11-08 measure (first ink less a 1.0 px margin); its disc's centre, 277.00, would put the box at
+268.00, within the row's two units, and the row is left as R-20261111-85 names it. The method is in
+`~/.cache/emusen/tmp/x10/abn-gamelist-row.md` (outside the repository).
+
+**What is still not known.** The FreeType inside the captured ES-DE build was not checked; the probes used Fedora's
+2.14.3. That it reproduces the 27-row `S` at 2346/64 and RANDOM's M to the pixel supports alike hinting; it is not
+proof. HarfBuzz's own rounding to 1/256 px was not read. No capture exists for the clamps, the default size's base or
+the default place: each is held by a unit test from the rule (`frame.rs`'s
+`the_help_s_size_spacings_and_scale_are_es_de_s_in_f32_with_its_clamps` and
+`the_help_strip_is_placed_by_es_de_s_rule_from_its_grid`, `scene::help`'s unit test).
+
+**The painter's loader.** Decided 2026-11-11 (R-20261111-72): FreeType's hinter is reached by linking the system's
+library, the one Qt already loads. `esde-qt`'s `build.rs` links `libfreetype.so.6` by that name (`rustc-link-lib` with
+the `+verbatim` modifier) and adds the folder `pkg-config --libs-only-L freetype2` names where pkg-config knows the
+library; building needs only the run-time library installed, no development package. Where neither pkg-config nor
+`ldconfig -p` finds `libfreetype.so.6` the build stops with words that name it and the packages that hold it, and where
+pkg-config alone does not know it the build says so as a warning (`build/freetype.rs`'s `plan`, held by
+`tests/freetype_link.rs`). `libloading` has left esde-qt
+and the lint `qt_4_8_the_painter_names_no_client_and_no_runtime` passes unchanged. `hinted.rs` declares the five
+FreeType calls it makes and reads the face and glyph slot through `#[repr(C)]` prefixes of `freetype.h`'s records.
+
+#### 4.12.5 Two rows corrected to the capture **[M 2026-11-12]**
+
+Decided 2026-11-12 by the tester: Art Book Next's clock row at 1280 × 800 is corrected to what the capture shows, and a
+real difference that then shows stays failing (R-20261112-4); the other fifteen rows re-checked that day stand, and
+Artflix's system help row at 1280 × 800 takes its width to the end of the last letter, as its gamelist twin does
+(R-20261112-5). Measured on 2026-11-12 on the committed captures (their hashes checked), with PIL and FreeType outside
+the repository (`~/.cache/emusen/tmp/x15/`).
+
+| Row | Was | Now | Derivation |
+|---|---|---|---|
+| Art Book Next, system, 1280 × 800, `clock_clock` | 38.12, 38.39, 61.22 × 22.42 | 38.12, 38.33, 60.21 × 22.89 | the background's edges, each the coverage of its boundary pixel on the green channel ((P − B) ÷ (F − B), B 2 px outside, F 2 px inside): left 26.46 (column 26 at 0.50 and 0.59 on rows 45 and 50, the other rows meeting the carousel's stripe), right 110.00 (column 109 the fill (20,21,16), column 110 the backdrop (67,83,3), rows 40–60, where 111.0 had been written), top 25.00, bottom 74.55 (row 74 at 0.55, columns 50–90, where 74.15 had been written); less the paddings 0.00911458 × 1280 = 11.667 and 0.01666667 × 800 = 13.333 |
+| Artflix, system, 1280 × 800, `helpsystem_help` | w 380.20 | w 379.10 | x kept; the right edge 829.00: CHOOSE's E in Exo 2 Regular Condensed at 20 px, its bitmap (ink 1–8 px from the pen) matched to the capture's columns 821–828 in rows 770–783, pen 820, plus its advance rounded per glyph (9.125 → 9); the old width mirrored the left edge about x 640 |
+
+The Artflix rows at 1920 × 1200 keep the mirrored edge; the capture puts the last letter's end at 832.00 units (system,
+E's pen 1234 + 14 px) and 1014.67 (gamelist, M's pen 1501 + 21 px), against the rows' 832.34 and 1015.00, and each
+row's note says so. CarAlt's four help rows take their right edge from the theme's `pos` with origin 1 (1273.6), as
+their notes say; no figure of theirs changed.
+
+With the two rows as measured, esde-qt's `oracle` passes (graphics-card gate of 2026-11-12, 22 tests, 0 failed): the
+painter's clock and Artflix's system strip lie within the oracle's two units of ES-DE's boxes, so no difference shows.
+
+### 4.13 The media viewer's PDF manual **[M 2026-11-09]**
+
+**Approved 2026-11-09 by the tester:** a game's PDF manual in the media viewer, through Qt PDF. The evidence is ES-DE's user
+guide ("Game media viewer") and 16 captures of ES-DE 3.4.1 taken on 2026-11-09
+(`Testing/esde-oracle/manualstates.sh`), CarAlt at both sizes, on the NES's Cobalt Harbor, to which `library.py` gives a
+manual of three labelled pages of 600 × 800 points.
+
+**What the captures show.**
+
+- *The media's help with a manual*: BROWSE, PDF MANUAL (the d-pad's up and down), FIRST, LAST.
+- *Up opens the manual* at its first page, fitted inside the screen below the strip and centred (576 × 768 at x 352,
+  1280 × 800; 863 × 1150 at 1920 × 1200). The help is BROWSE, GAME MEDIA, FIRST, LAST, ZOOM (the two shoulders), and the
+  strip's left holds PAGE 1 OF 3 in the help's face and colour, its pen at a hundredth of the screen's width (ink at 15
+  and 22 px). Right turns the page and stays on the last (manual:3 is manual:2).
+- *A zoom step* (the right shoulder) adds half the screen's height to the page's height, about the area's centre: the
+  page is 876 and 1176 px wide after one and two steps at 1280 × 800 (1313 and 1763 at 1920 × 1200), the fitted width
+  plus 300 (450) a step. The help is then PAN (the whole d-pad), RESET (the triggers), ZOOM.
+- *A pan step* moves the page an eighth of the screen's width: two rights at zoom 2 move its right edge from 1227 to 907
+  (1841 to 1361), past the page's own edge, which is not held.
+
+With a single page size and the 16:10 screens, a zoom step of half the height and one of 0.234 of the width agree, as
+do a pan step of an eighth of the width and a fifth of the height; the height and the width are the ones held. Captured
+on 2026-11-10: two downs at zoom 2 move the page up 320 px (479 at 1920 × 1200), the horizontal's step, and the left
+shoulder after two zoom steps gives the box of one step (202–1077, 304–1616), so it steps back as the right steps on. The
+most zoom steps are not captured.
+
+**The form.** The rules are the viewer's, in `scene::viewer`: `Viewer::press` takes the viewer's keys (`Key`, the
+painter's buttons mapped to left, right, up, down, first, last, zoom out and in) and returns whether the view changed,
+or none for a button that closes it; `ManualView` is the page, the zoom steps and the pan; the page's box is placed from
+the page's size in points, which the painter measures, and the page count, which it reports (`Stage::manual_pages`).
+One new paint, `Paint::Page`, a file's page drawn by `ManualElement.qml` through Qt PDF's `PdfDocument` and
+`PdfPageImage` (the QML module `QtQuick.Pdf`, no C++ headers). The PAN glyph is the kit's whole d-pad (EmuSen_Kit.md
+§7.70); the pairs of shoulders and triggers are the kit's pair glyphs.
+
+**Held to**: `frame.rs`'s `the_media_viewer_shows_a_game_s_pdf_manual_paged_zoomed_and_panned`, on records; the oracle,
+which walks the 16 states in CarAlt and holds the help's and the page's ink to the capture's within two units, the
+whole picture's error in `oracle.tsv`.
+
+### 4.14 The media viewer's settings **[M 2026-11-09]**
+
+**Decided 2026-11-09 by the tester (R-20261109-m2):** the viewer's settings in our Settings, without the scanlines;
+**decided 2026-11-11 (R-20261111-84)** that the six are kept where they are needed once ES-DE's source had been read to
+check each is sound. They are keys of `BigPictureInterface` with ES-DE's defaults (ES-DE 3.4.1 writes them in
+`es_settings.xml`, `Settings::setDefaults` in `es-core/src/Settings.cpp`): `MediaViewerHelpPrompts` (top),
+`MediaViewerShowTypes` (off), `MediaViewerKeepVideoRunning` (on), `MediaViewerStretchVideos` (off),
+`MediaViewerVideoBlur` (off) and `MediaViewerVideoAudio` (on). Five are the rows of ES-DE's media viewer settings menu
+(`GuiMediaViewerOptions`' constructor, which has seven, the two scanline settings being the others); the sixth, "Play
+audio for media viewer videos", ES-DE offers under its sound settings (`GuiMenu::openSoundOptions`), not among them. Their rows are data (EmuSen_Galaxia.md §3.15.1), on the page Media viewer that the
+Library section opens after Hidden games. The evidence is 14 captures of 2026-11-09 (`viewerstates.sh`), CarAlt at both sizes,
+the scanlines off in each so that only the setting differs.
+
+- *Help prompts at the bottom*: the strip at the screen's foot, the item fitted in the screen above it. *Disabled*: no
+  strip, the item fitted in the whole screen.
+- *Display media types*: the shown type's words at the strip's left where the manual's page words stand (VIDEO,
+  SCREENSHOT, …, ES-DE's user guide's list in capitals).
+- *Stretch videos*: the video fills the screen below the strip.
+- *Blur*: a horizontal Gaussian over the video. Fitted to the plain capture convolved and the blurred one (a box, a
+  triangle or a Gaussian, each centred or shifted, with a gain): a Gaussian of 2.5 px at 1280 × 800 and 3.7 px at
+  1920 × 1200, gain 1.000, mean squared error 0.19 and 0.12 of a level; a 512th of the screen's width at both.
+- *Keep videos running* and *audio* do not show in a still capture: the video plays on, unseen, while a picture is
+  shown (its record stays, at no opacity), or with the setting off it stops and starts again on return; audio off mutes
+  it. As ES-DE does it (`MediaViewer::showNext`, `showPrevious` and `playVideo`, `es-app/src/MediaViewer.cpp`, v3.4.1):
+  off, the video component is destroyed on leaving the video and made anew on return; on, `playVideo` returns early as
+  the video still exists, and `update` keeps it playing, its sound included.
+  *Found 2026-11-11 and fixed:* the scene kept the record, but `ElementModel` (`esde-qt/src/lists.rs`) reset the whole
+  model whenever the list of element ids changed, and going from the video to a picture adds the picture's record, so
+  Qt's Repeater made every delegate anew, the clip's player among them: with the setting on the clip started again
+  both ways (measured: 1533 ms played, then 1433 ms 1.5 s after a picture and back, `viewer-clip-before-fix.log`). The
+  model now removes and inserts only the rows that leave and come (the longest run of ids the two lists share, in
+  order, is kept), so a delegate whose element stays lives on; a reset is left only for a change of a primary's layout.
+- *Volume* (decided 2026-11-11 by the tester, R-20261111-91): the viewer's video plays at EmuSen's `Volume`
+  (`AppSettings`, a share of full, the Sound page's row), carried in `esdeSettings` as `volume`
+  (`esde_shelves::settings_of`) to the clip's `volume`; no setting of its own. ES-DE plays it at its video player volume,
+  `SoundVolumeVideos` (default 80), which EmuSen has no key for. The game page's own clip is heard at the same `Volume`
+  (decided 2026-11-11 by the tester, R-20261111-100): `GamePageModel.clipVolume`, read by `esde_shelves::volume_of`, the
+  one reading of the key, onto `PageFrame.clipVolume`, the clip no longer muted; held by qt-app's `game_page` test,
+  which reads the page player's `heard` and `level` at a Volume of 0.35.
+  *Found 2026-11-11 and fixed:* the settings reached `esdeSettings` only when the library was read again, and nothing
+  read it after Settings saved, so a Volume changed in Settings did not reach the viewer until the next start (measured:
+  `volume` 1.0 after Sound ▸ Volume was stepped to 0.95 and Settings closed). `SettingsModel` now signals `saved` as
+  Settings closes after a save, and `Main.qml` reads the library again on it; qt-app's `settings` test holds it.
+
+- *The fade-in* (decided 2026-11-11 by the tester, R-20261111-101): the video fades in over 600 ms once its first frame
+  shows, as ES-DE 3.4.1's does (`MEDIA_VIEWER_FADE_IN_TIME`, read in `VideoComponent::update`,
+  `es-core/src/components/VideoComponent.cpp`). The scene owns the figure (`viewer::FADE_IN_MS`, carried as the clip's
+  `fade`), and the kit's `VideoClip` and `VideoTile` take it as `fade`, the poster's fade (`posterFade`, 1,500 ms) where
+  none is given, as the game page's clip still is. Until then it took `posterFade`.
+
+**Named difference** (decided 2026-11-11 by the tester, R-20261111-102, following R-20261109-m2): the viewer has no
+scanline settings. ES-DE's two, `MediaViewerVideoScanlines` and `MediaViewerScreenshotScanlines`, default to on
+(`Settings::setDefaults`); this viewer matches ES-DE with both turned off, as the captures were taken.
+
+**The blur over the whole screen** (decided 2026-11-11 by the tester, R-20261111-103: "Match ES-DE: blur the whole
+screen"). ES-DE 3.4.1 draws the black ground and the video, then blurs the whole screen, the bars beside the video
+included, and draws the strip and its help over it, sharp (`MediaViewer::render`, `es-app/src/MediaViewer.cpp`; the
+pass over the full screen in `RendererOpenGL::shaderPostprocessing`, `es-core/src/renderers/RendererOpenGL.cpp`). EmuSen
+gives the same picture with one layer: the video's element is the full width of the screen below the strip, its bars
+transparent in the layer over the viewer's black ground, and a horizontal blur of that layer laid over black is the blur
+of ground, bars and video together, since black adds nothing to the sum. Read again on 2026-11-11, this was already so;
+the earlier note here that only the video was blurred took the element for the fitted frame. Held by manual.rs's
+case `the_viewer_s_blur_takes_the_bars_beside_a_narrow_video_and_leaves_them_sharp_when_off` (GPU tier), run after the
+PDF manual's case in the file's one test on one application and one scene: as two tests, `cargo test` ran them on two
+threads at once, each making its own `QGuiApplication`, and the second's warning that only one may exist was written into
+the harness's message list while the first read it, a segmentation fault (measured 2026-11-12; run one after the other,
+the second application ran the test's 7 GB scope out of memory). One application a process is the harness's rule
+(EmuSen_Kit.md §7.9). The case: a 64 × 48 clip,
+narrower than the screen, its bar 3 px from the clip's edge black with the setting off and lit with it on. Two
+differences stand, unruled: ES-DE's kernel is nine taps in two passes where EmuSen's is one Gaussian fitted to the
+captures (above), and ES-DE blurs vertically on a screen rotated by 90 or 270 degrees, where EmuSen has no rotation.
+
+**Held to**: `frame.rs`'s `the_media_viewer_follows_the_player_s_viewer_settings`; `settings_rows`' one-row test, which
+names the six keys; the oracle's seven settings states in CarAlt at both sizes; `viewer_clip.rs` (esde-qt, offscreen on
+the software backend), which plays a 20 s clip the test writes, goes to a picture and back and reads the clip's
+position, muted state and volume from the running player (`VideoClip`'s `position`, `heard` and `level`): on, the clip
+plays on behind the picture and is further on when shown again; off, no clip plays behind the picture and it starts
+again; audio on is heard at the player's Volume, off is muted. Seeded 2026-11-11: the model reset on a change of ids
+again (caught by `viewer_clip`).
+### 4.15 Hosting the view in `emusen-qt` (H) **[M 2026-11-09]**
 
 **The two choices, and how they relate.** The player's look is two settings that never stand for each other. An ES-DE
 theme is Mistress's pair: `LibraryStyle` is `Theme` and `BigPictureTheme` names a folder, read by one function,
@@ -3288,10 +4365,26 @@ at a major, the removal listed. Before 1.0 the same, with removals allowed and l
 ### 5.3 Rule Q: a versioned QML module
 
 The module's `qmldir` version is major.minor; the `.qmltypes` file `qmltyperegistrar` writes for it is committed under
-`Testing/qmltypes/<module>-<version>.qmltypes` and diffed in CI: a removed or changed type, property, role, signal or
-invokable fails the build unless the major moved; an addition bumps the minor. Deprecation is marked for one minor in the
+`Testing/qmltypes/<module>-<version>.qmltypes` and diffed in CI: any change to it, an added, changed or removed type,
+property, role, signal or invokable, fails the build until the committed file is the built one. That the version moved
+and the module's changelog lists the change is checked by a person, at review and at landing, not by the test: the test
+can compare only with files in the tree, which the same change may rewrite in place at an unchanged version, and the
+one record it cannot rewrite, the trunk's history, is a different commit on a branch, at a landing's merge and in CI.
+The mark of a missing bump is a file under `Testing/qmltypes` changed at a version the trunk already has
+(`git diff origin/WiseMan -- Testing/qmltypes`).
+Until the first release no change moves the major: an addition, a change and a removal each bump the minor (decided
+2026-11-11 by the tester, R-20261111-107). Deprecation is marked for one minor in the
 module's changelog and in the call's doc comment, the registry tool of Qt 6.11 having no field for it (decided
-2026-11-11). The same dump is the published reference for theme authors, with a generated page per type.
+2026-11-11); before the first release a call deprecated in one minor may be removed in any later minor (decided
+2026-11-11 by the tester, R-20261111-108). The same dump is the published reference for theme authors, with a generated page per type.
+
+The registry lists the C++ types only. Rule Q covers every property, signal and object name a QML-file type offers too,
+in every module that has a registry (decided 2026-11-11 by the tester, R-20261111-99): `emusen_qt_test::qml_surface`,
+the one reading of a QML file's surface, lists each root object's properties (their modifiers, type and name, not
+their bindings) and signals and every object name in the file, for each type the built qmldir lists; the text is
+committed as `Testing/qmltypes/<module>-<version>.qmlfiles` and each module's `tests/qmltypes.rs`
+(`qt_5_3_the_committed_qml_files_surface_is_the_built_one`) compares it on every build, writing the built one to
+`Frontend/target/<module>.qmlfiles` to copy after the review. `an_added_property_changes_the_surface` holds the reading.
 
 ### 5.4 How third parties build themes and plugins
 
@@ -5907,11 +7000,11 @@ builders' work paused (load average 2.8). Mistress's figures are its published b
 | Gate | emusen-qt, two rounds (2026-11-09) | Mistress, same theme | As read |
 |---|---|---|---|
 | Idle RSS 10 s after the window (anonymous) | 306, 305 MiB (172, 172) | 402 MiB (201) | under Mistress's on 2026-11-09; not read again since |
-| First press answered from the start | 0.861, 0.934 s | gate 0.95 s | under the gate in both rounds, by 16 ms in the slower; not read again since 2026-11-11's changes to the GUI thread's part of a refresh and of the view's load (§4.7, §4.9), which needs a quiet run |
+| First press answered from the start | 0.861, 0.934 s | gate 0.95 s | under the gate in both rounds, by 16 ms in the slower; not read again since 2026-11-11's changes to the GUI thread's part of a refresh and of the view's load (§4.7, §4.15), which needs a quiet run |
 | The gamelist, Down held 24.4 s, the worst frame | 35.9 ms (median 16.7 ms, 1,389 frames) | 96.8 ms (its grid, §9.3.1) | under Mistress's on 2026-11-09; not read again since |
 
 The causes found and fixed, the cold page cache's cost (about 0.8 s on the first read after a reboot, Mistress's
-alike) and what load does to the figures are in §4.9.
+alike) and what load does to the figures are in §4.15.
 
 ---
 

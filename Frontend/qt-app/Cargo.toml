@@ -29,7 +29,7 @@ emusen-qt-play = { path = "../qt-play" }
 emusen-theme-host = { path = "../theme-host" }
 # The views a theme reads, which the program feeds into the theme's engine (src/theme.rs, EmuSen_Qt.md §3.5.2).
 emusen-theme-qt = { path = "../theme-qt" }
-# The ES-DE theme's view in place of the library's screens when the player chose one (EmuSen_Qt.md §4.9).
+# The ES-DE theme's view in place of the library's screens when the player chose one (EmuSen_Qt.md §4.15).
 emusen-esde-qt = { path = "../esde-qt" }
 # The kit's cues the ES-DE theme's navigation sounds fall back to (src/cues.rs).
 emusen-kit-core.workspace = true

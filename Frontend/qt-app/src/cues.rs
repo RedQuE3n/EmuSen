@@ -1,4 +1,4 @@
-//! `EsdeCues`: an ES-DE theme's navigation sounds through Endymion's interface player (EmuSen_Qt.md §4.9). Each of
+//! `EsdeCues`: an ES-DE theme's navigation sounds through Endymion's interface player (EmuSen_Qt.md §4.15). Each of
 //! ES-DE's seven names plays the theme's own file where it has one, else the kit's cue that stands for it, as Mistress's
 //! `NavigationSounds` does; the player is made and the files decoded off the GUI thread, and come back through the queue.
 

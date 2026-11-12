@@ -14,6 +14,8 @@ Item {
     property alias swap: esde.swap
     property alias device: esde.device
     property alias now: esde.now
+    property alias defaultFont: esde.defaultFont
+    property alias selectionSeed: esde.selectionSeed
     property int family: Kit.Families.Generic
     readonly property alias scene: esde
     focus: true
@@ -28,9 +30,26 @@ Item {
         scene: esde
         revision: esde.revision
     }
-    FrameAnimation {
-        running: esde.moving
-        onTriggered: esde.tick(frameTime * 1000)
+    // The scene's clock is Qt's animation clock, kept in an inner object so View does not offer it (EmuSen_Qt.md §4.8.4).
+    QtObject {
+        id: clock
+        objectName: "viewClock"
+        property real clockMs: 0
+        property real tickedMs: 0
+        property NumberAnimation driver: NumberAnimation {
+            target: clock
+            property: "clockMs"
+            running: esde.moving
+            from: 0
+            to: 1e9
+            duration: 1e9
+            loops: Animation.Infinite
+        }
+        onClockMsChanged: {
+            if (clockMs > tickedMs)
+                esde.tick(clockMs - tickedMs)
+            tickedMs = clockMs
+        }
     }
     Timer {
         interval: Math.max(1, esde.nextChangeMs)
@@ -100,6 +119,14 @@ Item {
                 roleValue: ElementModel.Grid
                 GridElement { esde: esde }
             }
+            DelegateChoice {
+                roleValue: ElementModel.Clip
+                ClipElement { esde: esde }
+            }
+            DelegateChoice {
+                roleValue: ElementModel.Page
+                ManualElement { esde: esde }
+            }
         }
     }
     Item {
@@ -127,6 +154,7 @@ Item {
             visible: esde.lettersMark.length === 0
             text: esde.letters
             px: esde.lettersPx
+            ownFace: true
             color: Qt.rgba(1, 1, 1, 1)
             hAlign: TextBlock.Align.Center
         }

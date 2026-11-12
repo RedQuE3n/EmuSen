@@ -44,7 +44,7 @@ Window {
     readonly property ThemeHost themeHost: chosenTheme.item as ThemeHost
     // Why the reference is shown in place of the theme the settings choose, said once the splash has gone.
     property string themeWords
-    // An ES-DE theme is the library's look, as the start read the settings, and its navigation sounds are on (EmuSen_Qt.md §4.9).
+    // An ES-DE theme is the library's look, as the start read the settings, and its navigation sounds are on (EmuSen_Qt.md §4.15).
     property bool esdeChosen: false
     property bool navigationSounds: true
     readonly property Esde.View esdeView: esdeLoader.item as Esde.View
@@ -251,7 +251,7 @@ Window {
         }
     }
     // The ES-DE theme's view in place of Home, Choose a console and the grid while it is the library's look, in window pixels;
-    // kept under the cards and while a game plays, so the library comes back where it was left (EmuSen_Qt.md §4.9).
+    // kept under the cards and while a game plays, so the library comes back where it was left (EmuSen_Qt.md §4.15).
     Loader {
         id: esdeLoader
         objectName: "esde"
@@ -462,6 +462,8 @@ Window {
         onDoor: (name) => screens.act(name)
         onOpenFolder: (path) => folders.open(path)
         onChooseFolder: (key, start) => folders.choose(key, start)
+        // What Settings saved reaches the library's read as it closes: the media viewer plays at the Volume saved (EmuSen_Qt.md §4.14).
+        onSaved: library.refresh()
     }
     // The program's folder actions (EmuSen_Qt.md §7.7.E): one shown in the system's file manager, one chosen in the
     // system's own folder dialog (through the desktop portal where there is one), whose answer the row's model saves.

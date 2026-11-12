@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use emusen_esde::loader::{Choices, MediaPresence, SystemKind, ThemeSystem};
-use emusen_esde::scene::{Counts, DateTime, DeviceStatus, Game};
+use emusen_esde::scene::{Counts, DateTime, DeviceStatus, Game, HelpPlace, ViewerSettings};
 use emusen_esde::shelves::{GameRow, ShelfText, Text};
 use serde_json::Value;
 
@@ -16,6 +16,8 @@ pub struct Shelf {
     pub stars: bool,
     pub favorites_on_top: bool,
     pub counts: Option<Counts>,
+    /// The games the listed level does not show: inside its folders, or outside the folder open (EmuSen_Qt.md §4.11).
+    pub unlisted: Vec<Game>,
 }
 
 /// The ES-DE view's settings: the theme folder, the choices stored for it, and the interface's switches.
@@ -32,6 +34,8 @@ pub struct Settings {
     pub random: String,
     /// X starts the screensaver from the system view (ES-DE's Enable screensaver controls).
     pub screensaver_controls: bool,
+    /// The media viewer's settings (ES-DE's Media viewer settings).
+    pub viewer: ViewerSettings,
 }
 
 impl Default for Settings {
@@ -46,6 +50,7 @@ impl Default for Settings {
             startup_view: "system".into(),
             random: "games".into(),
             screensaver_controls: true,
+            viewer: ViewerSettings::default(),
         }
     }
 }
@@ -61,7 +66,7 @@ fn choice(v: &Value, key: &str) -> Option<String> {
 }
 
 /// One rule for the view's four texts and the device's: no text is the default (the property's own, before the host sets
-/// it), and a text that does not read is the words why, never read as the default (EmuSen_Qt.md §4.9).
+/// it), and a text that does not read is the words why, never read as the default (EmuSen_Qt.md §4.15).
 fn read(text_in: &str, what: &str) -> Result<Value, String> {
     match text_in.trim() {
         "" => Ok(Value::Null),
@@ -94,6 +99,15 @@ pub fn settings(text_in: &str) -> Result<Settings, String> {
         startup_view: text(&i, "StartupView").unwrap_or(d.startup_view),
         random: v.get("collections").and_then(|c| text(c, "RandomEntryButton")).unwrap_or(d.random),
         screensaver_controls: on("ScreensaverControls", d.screensaver_controls),
+        viewer: ViewerSettings {
+            help: text(&i, "MediaViewerHelpPrompts").map_or(d.viewer.help, |w| HelpPlace::of(&w)),
+            show_types: on("MediaViewerShowTypes", d.viewer.show_types),
+            keep_video_running: on("MediaViewerKeepVideoRunning", d.viewer.keep_video_running),
+            stretch_videos: on("MediaViewerStretchVideos", d.viewer.stretch_videos),
+            blur: on("MediaViewerVideoBlur", d.viewer.blur),
+            audio: on("MediaViewerVideoAudio", d.viewer.audio),
+            volume: v.get("volume").and_then(Value::as_f64).map_or(d.viewer.volume, |x| x.clamp(0.0, 1.0)),
+        },
     })
 }
 
@@ -193,7 +207,7 @@ fn game_of(v: &GameRow, media: &Value) -> Game {
 
 /// `esdeShelves` with `esdeMedia`: each shelf's system and games; a collection's game by its file alone takes the row its
 /// console's shelf carries (EmuSen_Qt.md §4.6). The text is read straight into rows, never into a tree of values, since
-/// at a library's scale the tree was 150 MiB for a 6.6 MB text (§4.9). A text that does not read is the words why, which
+/// at a library's scale the tree was 150 MiB for a 6.6 MB text (§4.15). A text that does not read is the words why, which
 /// the model shows, never an empty library; no shelves text is no shelves, and no media index text no media (a host that
 /// gives none).
 pub fn shelves(shelves_text: &str, media_text: &str) -> Result<Vec<Shelf>, String> {
@@ -231,7 +245,8 @@ pub fn shelves(shelves_text: &str, media_text: &str) -> Result<Vec<Shelf>, Strin
                 })
                 .collect();
             let counts = s.counts.map(|c| Counts { games: c.games, favorites: c.favorites, shown: c.shown, filtered: c.filtered, in_folder: c.in_folder });
-            Shelf { system: system_of(s, kind), games, stars: s.stars, favorites_on_top: s.favourites_on_top, counts }
+            let unlisted = s.unlisted.iter().map(|g| game_of(g, &media)).collect();
+            Shelf { system: system_of(s, kind), games, stars: s.stars, favorites_on_top: s.favourites_on_top, counts, unlisted }
         })
         .collect())
 }

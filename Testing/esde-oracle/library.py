@@ -2,7 +2,10 @@
 """The oracle's synthetic library: empty ROM files, ES-DE gamelists and a downloaded_media tree of flat-hue labelled
 PNGs, written under <out> and listed as plain data (library.tsv, media.tsv). The games, metadata, picture sizes and
 colours are those of the WiseMan fixture SyntheticLibrary, so ES-DE, the C# painter and the Qt painter read one library;
-the SNES system adds a folder with a folder link and one game with hidden metadata (EmuSen_BigPicture.md 31.1).
+the SNES system adds a folder with a folder link and one game with hidden metadata (EmuSen_BigPicture.md 31.1). The
+media viewer's game, the NES's first, has every type the viewer shows: a video (a still picture held for four seconds,
+encoded by ffmpeg), a back cover, fan art and a custom picture besides the five types every game has. The manual's game,
+the NES's third (Cobalt Harbor, entry 1 of its list, favourites first), has a PDF manual of three labelled pages.
 Nothing is read from a real library. Existing files are kept, so a second run changes nothing. See README.md.
 
 Usage: library.py <out>
@@ -12,6 +15,7 @@ Usage: library.py <out>
   <out>/library.tsv, <out>/media.tsv          what was written, one row each
 """
 import os
+import subprocess
 import sys
 from datetime import datetime
 from xml.sax.saxutils import escape
@@ -23,6 +27,10 @@ TITLES = ["Aurora Drift", "Brass Lantern", "Cobalt Harbor", "Dune Relay", "Ember
           "Hollow Comet", "Ivory Signal", "Juniper Vault", "Kestrel Run", "Lumen Garden"]
 GENRES = ["Platform", "Puzzle", "Racing", "Role playing", "Shooter", "Sports"]
 MEDIA = {"covers": (600, 800), "screenshots": (512, 448), "titlescreens": (512, 448), "marquees": (800, 300), "miximages": (640, 480)}
+# The types only the media viewer's game has (USERGUIDE.md, "Game media viewer"), kept off the SNES the watched states show.
+VIEWER_GAME, VIEWER_MEDIA = ("nes", 0), {"videos": (512, 448), "backcovers": (600, 800), "fanart": (1280, 720), "custom": (640, 480)}
+# The manual's game and its pages' size in points (USERGUIDE.md, "Game media viewer": up shows the PDF manual).
+MANUAL_GAME, MANUAL_PAGES, MANUAL_SIZE = ("nes", 2), 3, (600, 800)
 FOLDER, FOLDER_GAMES, HIDDEN = "Tower Set", ["Quartz Spire", "Rune Gate"], "Lumen Garden"
 DESCRIPTION = ("{t} is a game invented for EmuSen's tests. It has no story and no pictures of its own; every image shown for it is a "
                "flat colour with its name written on it. This second sentence is here so that the description is long enough to "
@@ -60,6 +68,15 @@ def games(system, ext):
     return listed
 
 
+def video(path, size, rgb, text):
+    """A still labelled picture held for four seconds as H.264, so a capture of the playing video is the same at any time."""
+    still = os.path.splitext(path)[0] + ".still.png"
+    label(still, size, rgb, text)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-loop", "1", "-i", still, "-t", "4", "-r", "30", "-c:v", "libx264", "-pix_fmt",
+                    "yuv420p", "-threads", "1", "-an", path], check=True)
+    os.remove(still)
+
+
 def label(path, size, rgb, text):
     w, h = size
     image = Image.new("RGB", size, rgb)
@@ -68,6 +85,17 @@ def label(path, size, rgb, text):
     font = ImageFont.load_default(size=max(12, h // 12))
     draw.multiline_text((w / 2, h / 2), text, fill=(255, 255, 255), font=font, anchor="mm", align="center")
     image.save(path)
+
+
+def manual(path, size, rgb, text):
+    """A PDF of MANUAL_PAGES labelled flat-hue pages, each page's hue stepped, at 72 dpi so a pixel is a point."""
+    pages = []
+    for k in range(MANUAL_PAGES):
+        page = os.path.splitext(path)[0] + f".{k}.png"
+        label(page, size, tuple((c + 40 * k) % 256 for c in rgb), f"{text}\npage {k + 1} of {MANUAL_PAGES}")
+        pages.append(Image.open(page).convert("RGB"))
+        os.remove(page)
+    pages[0].save(path, "PDF", save_all=True, append_images=pages[1:], resolution=72.0)
 
 
 GAME_KEYS = ["path", "name", "desc", "developer", "publisher", "genre", "players", "releasedate", "playcount", "rating",
@@ -99,14 +127,18 @@ def main(out):
             if not os.path.exists(rom):
                 open(rom, "wb").close()
             lib_rows.append("\t".join([system, g["path"], g["name"]] + [g[k] or "false" for k in ("favorite", "completed", "hidemetadata")]))
-            for folder, size in MEDIA.items():
+            types = dict(MEDIA, **(VIEWER_MEDIA if (system, g["index"]) == VIEWER_GAME else {}))
+            if (system, g["index"]) == MANUAL_GAME:
+                types["manuals"] = MANUAL_SIZE
+            for folder, size in types.items():
                 stem = os.path.splitext(g["path"])[0]
-                picture = os.path.join(out, "downloaded_media", system, folder, stem + ".png")
+                ext = {"videos": ".mp4", "manuals": ".pdf"}.get(folder, ".png")
+                picture = os.path.join(out, "downloaded_media", system, folder, stem + ext)
                 rgb = colour(g["index"], folder)
                 media_rows.append("\t".join([system, folder, os.path.relpath(picture, out), *map(str, size), *map(str, rgb)]))
                 if not os.path.exists(picture):
                     os.makedirs(os.path.dirname(picture), exist_ok=True)
-                    label(picture, size, rgb, f"{system} {folder}\n{g['name']}\n{size[0]}x{size[1]}")
+                    {"videos": video, "manuals": manual}.get(folder, label)(picture, size, rgb, f"{system} {folder}\n{g['name']}\n{size[0]}x{size[1]}")
         listing = os.path.join(out, "gamelists", system, "gamelist.xml")
         os.makedirs(os.path.dirname(listing), exist_ok=True)
         with open(listing, "w", encoding="utf-8") as f:

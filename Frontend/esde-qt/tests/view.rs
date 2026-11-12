@@ -70,7 +70,22 @@ fn words(scene: &mut Scene<'_>, name: &str) -> String {
             }
         }
     };
-    let found: Vec<String> = tree.nodes.iter().filter(|n| n.visible && n.text.as_deref().is_some_and(|t| !t.is_empty()) && under(&n.id)).filter_map(|n| n.text.clone()).collect();
+    // The words as a reader hears them, the outermost only: a glyph drawn inside words already heard is part of them.
+    let said = |n: &emusen_qt_test::tree::Node| n.visible && !n.heard.is_empty();
+    let inside_words = |n: &emusen_qt_test::tree::Node| {
+        let mut up = n.parent.clone();
+        while let Some(p) = tree.nodes.iter().find(|p| p.id == up) {
+            if said(p) {
+                return true;
+            }
+            if p.id == top {
+                break;
+            }
+            up = p.parent.clone();
+        }
+        false
+    };
+    let found: Vec<String> = tree.nodes.iter().filter(|n| said(n) && under(&n.id) && !inside_words(n)).map(|n| n.heard.clone()).collect();
     found.join("|")
 }
 

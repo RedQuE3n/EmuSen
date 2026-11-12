@@ -1,5 +1,5 @@
 //! A text the load cannot read is the model's problem, said in its words, never an empty view or a text read as nothing;
-//! no text at all is the property's default (EmuSen_Qt.md §4.9): driven through `EsdeModel`'s own load, offscreen. One
+//! no text at all is the property's default (EmuSen_Qt.md §4.15): driven through `EsdeModel`'s own load, offscreen. One
 //! test, as the harness is one per process.
 
 use emusen_qt_test::{Harness, Scene};

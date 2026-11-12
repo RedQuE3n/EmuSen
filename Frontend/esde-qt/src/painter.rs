@@ -4,8 +4,9 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 
+use emusen_esde::fonts;
 use emusen_esde::loader::{self, Choices, MediaPresence, Theme, ThemeSystem};
-use emusen_esde::scene::{Data, DateTime, DeviceStatus, Frame, HelpContext, Layout, PadButton, Row, Rows, Stage, System, Time};
+use emusen_esde::scene::{Data, DateTime, DeviceStatus, Frame, HelpContext, Key, Layout, PadButton, Row, Rows, Stage, System, Time};
 
 use emusen_kit_core::input::{PadControl, UiButton};
 
@@ -33,6 +34,20 @@ impl ThemeCache {
     }
 }
 
+/// ES-DE's default face and the help's beside it, for text whose theme names none (EmuSen_Qt.md §4.8.7).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Faces {
+    pub default: Option<String>,
+    pub help: Option<String>,
+}
+
+/// The faces looked for on disk, on the data thread: the host's default face, else the one `fonts` finds.
+pub fn faces(given: Option<String>) -> Faces {
+    let default = given.or_else(|| fonts::default_font().map(|p| p.to_string_lossy().into_owned()));
+    let help = default.as_deref().and_then(|d| fonts::help_font(std::path::Path::new(d))).map(|p| p.to_string_lossy().into_owned());
+    Faces { default, help }
+}
+
 /// The systems a refresh hands the GUI thread: the shelves each with its theme, built on the data thread.
 pub fn systems(cache: &ThemeCache, settings: &Settings, shelves: Vec<Shelf>, presence: &BTreeMap<String, MediaPresence>, w: i32, h: i32) -> Vec<System> {
     let choices = Choices { screen_width: w, screen_height: h, ..settings.choices.clone() };
@@ -41,7 +56,7 @@ pub fn systems(cache: &ThemeCache, settings: &Settings, shelves: Vec<Shelf>, pre
         .filter_map(|s| {
             let system = s.system?;
             let theme = cache.theme(&settings.theme, &system, &choices, presence.get(&system.name));
-            Some(System { stars: s.stars, favorites_on_top: s.favorites_on_top, counts: s.counts, ..System::new(system, theme, s.games) })
+            Some(System { stars: s.stars, favorites_on_top: s.favorites_on_top, counts: s.counts, unlisted: s.unlisted, ..System::new(system, theme, s.games) })
         })
         .collect()
 }
@@ -70,6 +85,10 @@ pub struct Painter {
     pub swap: bool,
     /// What the host reports of the device for systemstatus; none until it reports.
     pub device: DeviceStatus,
+    /// ES-DE's faces as the data thread found them (`faces`); none, the kit's body face.
+    pub faces: Faces,
+    /// The gameselectors' seed as the host gave it; none, the install's time.
+    pub selection_seed: Option<u64>,
 }
 
 impl Default for Painter {
@@ -80,7 +99,7 @@ impl Default for Painter {
 
 impl Painter {
     pub fn new(settings: Settings) -> Self {
-        Painter { stage: None, now: 0, frame: Frame::default(), held: None, settings, generation: 0, swap: false, device: DeviceStatus::default() }
+        Painter { stage: None, now: 0, frame: Frame::default(), held: None, settings, generation: 0, swap: false, device: DeviceStatus::default(), faces: Faces::default(), selection_seed: None }
     }
 
     /// Installs a refresh's systems, keeping the view and the selection where they still exist.
@@ -99,11 +118,14 @@ impl Painter {
         data.system_index = system.min(data.systems.len() - 1);
         data.game_index = game;
         data.now = now;
-        // The gameselectors' random picks start from the install's time, so a pinned time pins them too.
-        data.selection_seed = now.seconds() as u64;
+        // The gameselectors' random picks start from the host's seed, else the install's time, so a pinned time pins them too.
+        data.selection_seed = self.selection_seed.unwrap_or(now.seconds() as u64);
+        data.default_font = self.faces.default.clone();
+        data.help_font = self.faces.help.clone();
         data.show_clock = self.settings.show_clock;
         data.show_help = self.settings.show_help;
         data.scroll_overlay = self.settings.scroll_overlay;
+        data.viewer = self.settings.viewer;
         data.swap = self.swap;
         data.status = self.device;
         data.help = HelpContext {
@@ -209,6 +231,29 @@ impl Painter {
         let grid = self.primary_kind() == Some("grid");
         let gamelist = self.view() == "gamelist";
         let quick = self.settings.quick_select.clone();
+        if let Some(viewer) = self.stage.as_mut()?.viewer.as_mut() {
+            // The viewer's keys (scene::viewer::Key); any other button closes it.
+            let key = match button {
+                UiButton::Left => Some(Key::Left),
+                UiButton::Right => Some(Key::Right),
+                UiButton::Up => Some(Key::Up),
+                UiButton::Down => Some(Key::Down),
+                UiButton::First => Some(Key::First),
+                UiButton::Last => Some(Key::Last),
+                UiButton::PageUp => Some(Key::ZoomOut),
+                UiButton::PageDown => Some(Key::ZoomIn),
+                _ => None,
+            };
+            let moved = match key.and_then(|k| viewer.press(k)) {
+                Some(moved) => moved,
+                None => {
+                    self.stage.as_mut()?.viewer = None;
+                    false
+                }
+            };
+            self.refresh();
+            return moved.then_some(Action::Cue("navigate"));
+        }
         let action = match button {
             UiButton::Up | UiButton::Down | UiButton::Left | UiButton::Right => {
                 let along = matches!(button, UiButton::Up | UiButton::Down) == vertical || grid;
@@ -252,6 +297,7 @@ impl Painter {
                 current.jump(if button == UiButton::First { -n } else { n }, now).then_some(Action::Cue("navigate"))
             }
             UiButton::Search if gamelist => self.game_file().map(Action::Favourite),
+            UiButton::Screensaver if gamelist => self.stage.as_mut()?.open_viewer().then_some(Action::Cue("select")),
             UiButton::Menu => Some(Action::Menu),
             UiButton::Options => Some(Action::Options),
             _ => None,
@@ -329,6 +375,14 @@ impl Painter {
         changed
     }
 
+    pub fn manual_pages(&mut self, pages: usize) -> bool {
+        let changed = self.stage.as_mut().is_some_and(|s| s.manual_pages(pages));
+        if changed {
+            self.refresh();
+        }
+        changed
+    }
+
     pub fn rows(&self, rows: Rows) -> Vec<Row> {
         self.stage.as_ref().and_then(|s| s.rows(rows)).unwrap_or_default()
     }
@@ -351,11 +405,15 @@ pub fn help_buttons(place: PadButton, pair: bool, swap: bool) -> (i32, i32) {
         PadButton::Select => PadControl::Select,
         PadButton::Start => PadControl::Start,
         PadButton::StickClick => PadControl::LeftStick,
+        PadButton::Dpad => PadControl::Up,
     };
     let number = |c: PadControl| c.press().map_or(-1, |b| b.swapped(swap).index() as i32);
     let second = match (place, pair) {
         (PadButton::DpadUpDown, true) => number(PadControl::Down),
         (PadButton::DpadLeftRight, true) => number(PadControl::Right),
+        (PadButton::LeftShoulder, true) => number(PadControl::RightShoulder),
+        (PadButton::LeftTrigger, true) => number(PadControl::RightTrigger),
+        (PadButton::Dpad, true) => number(PadControl::Left),
         _ => -1,
     };
     (number(control), second)

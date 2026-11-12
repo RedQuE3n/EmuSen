@@ -47,6 +47,7 @@ ElementBox {
     required property real selectorRadius
     required property bool selectorOnTop
     required property url fontSource
+    required property bool ownFace
     required property real px
     required property real lineSpacing
     required property color color
@@ -150,6 +151,7 @@ ElementBox {
                 visible: cell.image.toString().length === 0
                 text: cell.text
                 fontSource: root.fontSource
+                ownFace: root.ownFace
                 px: root.px
                 lineSpacing: root.lineSpacing
                 hAlign: TextBlock.Align.Center

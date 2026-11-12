@@ -106,6 +106,12 @@ model! {
         screensaver_slideshow_recurse: bool = false,
         screensaver_slideshow_custom_dir: Text = text(""),
         screensaver_in_game_mode: bool = true,
+        media_viewer_help_prompts: Text = text("top"),
+        media_viewer_show_types: bool = false,
+        media_viewer_keep_video_running: bool = true,
+        media_viewer_stretch_videos: bool = false,
+        media_viewer_video_blur: bool = false,
+        media_viewer_video_audio: bool = true,
     }
 }
 

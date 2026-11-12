@@ -2698,14 +2698,21 @@ no image crate is needed, the oracle library read as the three texts of §4.6).
   under the box in the item tree; the rule is `emusen_qt_test::worded`, held by its unit test, and the test writes every
   help, status and text box at each size pair, with its rule, why, its letters and what each axis may move, to
   `worded-boxes.tsv` beside its grabs.
-  *The one box past it* (2026-11-11): Art Book Next's system help at 1280 × 720 against 1920 × 1080 moved 14.67 px for
-  27 letters (14.5). Read in ES-DE's source, the cause is ES-DE's own: the help's icon box is 1.25 × the rows of the
-  hinted S at the help's size (`HelpComponent::applyTheme`, `es-core/src/components/HelpComponent.cpp`; rule 4 of
-  §4.12.4), whole rows that do not scale with the window. In Akrobat SemiBold at the theme's 0.04583333 the S is 23 rows
-  at 33.0 px (1280 × 720) and 37 at 49.5 px (1920 × 1080): an icon box of 28.75 px against 46.25 ÷ 1.5 = 30.83, 2.08 px
-  per entry at the smaller window, and the bar shows four entries (MENU, SELECT, SCREENSAVER, CHOOSE, its pair glyph
-  one entry), about 8.3 px of the 14.67 before a letter is counted. EmuSen follows the same rule (`help::row_height`). Whether a help strip's allowance
-  counts its icons waits on the tester; the check stays failing with that reason printed.
+  *A help strip* (decided 2026-11-12 by the tester, R-20261112-3, replacing the open part of R-20261111-112): its
+  expected difference between two sizes is calculated from ES-DE 3.4.1's own rule, and only what is left over is held to
+  the letters' allowance above, with no wider allowance. ES-DE makes the strip's row 1.25 × the whole pixel rows of the
+  hinted S at the help's font size and each entry's icon box that row, divided by `entryRelativeScale` above 1
+  (`HelpComponent::applyTheme`, `mLetterHeight`, and `HelpComponent::updateGrid`, `es-core/src/components/HelpComponent.cpp`;
+  rule 4 of §4.12.4), whole rows that do not scale with the window, while its labels and spacings do. At each size the test
+  renders the S with FreeType in the strip's face (the theme's `fontPath`, else ES-DE's help face, else its default) at the
+  size `scene::help::font_px` reads, counts the entries drawn under the strip, and takes the icon boxes as a share of the
+  width and the row as a share of the height; the expected difference is the change in those shares in pixels of the
+  smaller window, on the width and the height, and −origin × each on the left and the top, as the strip is placed
+  (`scene::help::top_left`). Nothing of it is read from the painter's layout. `worded-boxes.tsv` gives every box its
+  expected edges and what is left on each axis (0 expected for any box but a help strip). Art Book Next's system help at
+  1280 × 720 against 1920 × 1080, which moved 14.67 px for 27 letters (14.5), is the case that asked for it: in Akrobat
+  SemiBold at the theme's 0.04583333 the S is 23 rows at 33.0 px and 37 at 49.5 px, an icon box of 28.75 px against
+  46.25 ÷ 1.5 = 30.83, 2.08 px per entry at the smaller window over its four entries.
   A size is read only
   after its install has published, since the old frame stands until the new size's load comes back. The defects it
   found, each fixed and proved:

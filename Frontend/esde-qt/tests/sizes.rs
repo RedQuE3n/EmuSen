@@ -2,8 +2,9 @@
 //! game, at the harness's `SIZES`, on the oracle's synthetic library, on the GPU tier. Held: pad reach, pointer reach, no
 //! chrome, nothing logged, and every element's rectangle ÷ (W, H) equal within one pixel of the smaller window across the
 //! sizes of one aspect ratio (a theme lays itself out per aspect ratio; ES-DE places at whole pixels, EmuSen_Qt.md §4.8.5;
-//! R-20261111-88), on an axis ES-DE sizes from the words within half a pixel a letter plus one (R-20261111-112). Each grab
-//! is written for the side-by-sides beside ES-DE's captures.
+//! R-20261111-88), on an axis ES-DE sizes from the words within half a pixel a letter plus one (R-20261111-112), a help
+//! strip after the difference its icon boxes and row make by ES-DE's rule (R-20261112-3). Each grab is written for the
+//! side-by-sides beside ES-DE's captures.
 
 mod common;
 
@@ -13,8 +14,9 @@ use common::{until, Scratch};
 use emusen_kit_core::input::UiButton;
 use emusen_qt_test::harness::SIZES;
 use emusen_qt_test::worded;
-use emusen_esde::loader::View;
+use emusen_esde::loader::{Element, View};
 use emusen_esde::scene::paint::sized_by_words;
+use emusen_esde_qt::painter::Faces;
 use emusen_qt_test::{Harness, Scene};
 
 /// Which rule an element's box is held to across sizes, axis by axis, and why.
@@ -32,7 +34,7 @@ struct Rule {
 // Any other box has no words and is held to one pixel (None).
 fn rule_of(cls: &str, name: &str, view: &View) -> Option<Rule> {
     if cls.contains("HelpElement") {
-        return Some(Rule { words: (true, true), why: "R-112: a help strip, sized by its entries (HelpComponent::updateGrid)" });
+        return Some(Rule { words: (true, true), why: "R-112 after R-20261112-3: a help strip, sized by its entries, its icon boxes and row from the hinted S (HelpComponent::updateGrid, applyTheme)" });
     }
     if cls.contains("StatusElement") {
         return Some(Rule { words: (true, false), why: "R-112 across, R-88 down: a status row, its width its entries' at the theme's height (SystemStatusComponent::updateGrid)" });
@@ -52,12 +54,56 @@ fn rule_of(cls: &str, name: &str, view: &View) -> Option<Rule> {
     })
 }
 
-// A box as a fraction of the window, the letters of the visible words under it, and its rule if it is text-like.
-type Boxes = BTreeMap<String, ((f64, f64, f64, f64), usize, Option<Rule>)>;
+/// A help strip's parts that do not scale with the window, as shares of it at one size: ES-DE 3.4.1 makes the row 1.25 ×
+/// the whole rows of the hinted S at the help's size and each entry's icon box that row, divided by entryRelativeScale
+/// above 1 (HelpComponent::applyTheme, mLetterHeight; HelpComponent::updateGrid), while the labels and spacings scale.
+#[derive(Clone, Copy, Debug)]
+struct HelpShare {
+    entries: usize,
+    /// The entries' icon boxes ÷ the window's width.
+    icons: f64,
+    /// The row ÷ the window's height.
+    row: f64,
+    origin: (f64, f64),
+}
+
+/// A drawn box as a fraction of the window, the letters of the visible words under it, its rule if it is text-like, and
+/// a help strip's unscaled parts.
+struct Measured {
+    at: (f64, f64, f64, f64),
+    letters: usize,
+    rule: Option<Rule>,
+    help: Option<Result<HelpShare, String>>,
+}
+
+type Boxes = BTreeMap<String, Measured>;
+
+/// A help strip's icon boxes and row at `w` × `h`, from the S's rows FreeType renders in the strip's face at its size, the
+/// face being the theme's fontPath, else ES-DE's help face, else its default (HelpComponent::applyTheme).
+fn help_share(e: &Element, entries: usize, faces: &Faces, w: f64, h: f64) -> Result<HelpShare, String> {
+    let face = e.path("fontPath").filter(|p| p.exists).map(|p| p.absolute.clone()).or_else(|| faces.help.clone()).or_else(|| faces.default.clone()).unwrap_or_default();
+    let px = emusen_esde::scene::help::font_px(e, w, h) as f32;
+    let reference = emusen_esde::fonts::REFERENCE.chars().next().unwrap();
+    let rows = emusen_esde_qt::hinted::rows(&face, px, reference)?.ok_or_else(|| format!("no {reference} in {face} at {px} px"))?;
+    let row = rows as f32 * emusen_esde_qt::help::ROW_OVER_REFERENCE;
+    let scale = emusen_esde::scene::help::scale(e) as f32;
+    let icon = if scale < 1.0 { row } else { row / scale };
+    let origin = e.pair("origin").unwrap_or_default();
+    Ok(HelpShare { entries, icons: entries as f64 * f64::from(icon) / w, row: f64::from(row) / h, origin: (f64::from(origin.x), f64::from(origin.y)) })
+}
+
+/// What ES-DE's rule makes a help strip's left, top, width and height differ by from `a` to `b`, in pixels of the smaller
+/// window: its width by the icon boxes' difference, its height by the row's, and its place by −origin × each, as the strip
+/// is placed (scene::help::top_left).
+fn help_expected(a: &HelpShare, b: &HelpShare, pixel: (f64, f64)) -> [f64; 4] {
+    let (dw, dh) = ((b.icons - a.icons) * pixel.0, (b.row - a.row) * pixel.1);
+    [-b.origin.0 * dw, -b.origin.1 * dh, dw, dh]
+}
 
 // Every drawn element's box as a fraction of the window, keyed by its name and its place among elements of that name,
-// with the letters of the visible words drawn under it, white space left out, and the rule `view` gives it.
-fn fractions(scene: &mut Scene<'_>, w: f64, h: f64, view: &View) -> Boxes {
+// with the letters of the visible words drawn under it, white space left out, the rule `view` gives it, and a help strip's
+// unscaled parts for the entries drawn under it.
+fn fractions(scene: &mut Scene<'_>, w: f64, h: f64, view: &View, faces: &Faces) -> Boxes {
     let tree = scene.tree();
     let parent: BTreeMap<&str, &str> = tree.nodes.iter().map(|n| (n.id.as_str(), n.parent.as_str())).collect();
     let under = |id: &str, top: &str| {
@@ -79,16 +125,17 @@ fn fractions(scene: &mut Scene<'_>, w: f64, h: f64, view: &View) -> Boxes {
         let k = seen.entry(n.name.clone()).or_default();
         let rule = rule_of(&n.cls, &n.name["element-".len()..], view);
         let letters = if rule.is_some_and(|r| r.words != (false, false)) { shown(&n.id) } else { 0 };
-        out.insert(format!("{}#{k}", n.name), ((n.x / w, n.y / h, n.w / w, n.h / h), letters, rule));
+        let help = n.cls.contains("HelpElement").then(|| {
+            let entries = tree.nodes.iter().filter(|e| e.visible && e.name.starts_with("help-") && under(&e.id, &n.id)).count();
+            let name = &n.name["element-".len()..];
+            let e = view.elements.iter().find(|e| e.name == name && e.kind() == "helpsystem").ok_or_else(|| format!("no helpsystem {name} in the resolved view"))?;
+            help_share(e, entries, faces, w, h)
+        });
+        out.insert(format!("{}#{k}", n.name), Measured { at: (n.x / w, n.y / h, n.w / w, n.h / h), letters, rule, help });
         *k += 1;
     }
     out
 }
-
-// Why a help strip may pass its letters' allowance: ES-DE's icon box is 1.25 × the rows of the hinted S at the help's
-// size (es-core/src/components/HelpComponent.cpp, applyTheme's mLetterHeight; EmuSen_Qt.md §4.12.4), whole rows that do
-// not scale with the window, and each entry has one. Whether help strips get a wider rule waits on the tester.
-const HELP_ICONS: &str = "; a help strip also carries one icon box per entry, 1.25 × the hinted S's whole rows (HelpComponent.cpp applyTheme), which do not scale with the window: whether help strips get a wider rule waits on the tester";
 
 fn ratio(w: i32, h: i32) -> (i32, i32) {
     let g = (1..=w.min(h)).rev().find(|d| w % d == 0 && h % d == 0).unwrap();
@@ -167,7 +214,8 @@ fn the_watched_themes_hold_at_the_five_sizes() {
     let mut harness = Harness::new();
     let mut failures = vec![];
     // Every text-like box at every size pair: its edges, its rule axis by axis and why, its letters and the most each axis may move.
-    let mut table = vec!["theme\tstate\tsize\tagainst\tbox\tx_px\ty_px\tw_px\th_px\trule\tletters\tallowed_across\tallowed_down\twithin".to_owned()];
+    let mut table = vec!["theme\tstate\tsize\tagainst\tbox\tx_px\ty_px\tw_px\th_px\trule\tletters\tallowed_across\tallowed_down\texpected_x\texpected_y\texpected_w\texpected_h\tleft_across\tleft_down\twithin".to_owned()];
+    let faces = emusen_esde_qt::painter::faces(None);
     let (w0, h0) = SIZES[0];
     let mut scene = harness.load(common::VIEW, w0, h0);
     for (theme, variant, scheme, font) in common::watched() {
@@ -211,7 +259,7 @@ fn the_watched_themes_hold_at_the_five_sizes() {
                     &emusen_esde::loader::Choices { screen_width: w, screen_height: h, ..picked.clone() },
                     None,
                 );
-                let boxes = fractions(&mut scene, f64::from(w), f64::from(h), resolved.view(view));
+                let boxes = fractions(&mut scene, f64::from(w), f64::from(h), resolved.view(view), &faces);
                 if boxes.is_empty() {
                     failures.push(format!("{at}: no element drawn"));
                 }
@@ -228,26 +276,39 @@ fn the_watched_themes_hold_at_the_five_sizes() {
                         for (name, b) in &boxes {
                             match held.get(name) {
                                 None => failures.push(format!("{at}: {name} drawn here but not at {first}")),
-                                Some((a, _, _)) => {
-                                    let (b, letters, texty) = b;
-                                    let rule = texty.unwrap_or(Rule { words: (false, false), why: "R-88: no words" });
-                                    let px = [(b.0 - a.0) * pixel.0, (b.1 - a.1) * pixel.1, (b.2 - a.2) * pixel.0, (b.3 - a.3) * pixel.1];
-                                    let allowed = |words: bool| if words { worded::allowance(*letters) } else { 1.0 };
+                                Some(a) => {
+                                    let rule = b.rule.unwrap_or(Rule { words: (false, false), why: "R-88: no words" });
+                                    let (b_at, a_at, letters) = (b.at, a.at, b.letters);
+                                    let px = [(b_at.0 - a_at.0) * pixel.0, (b_at.1 - a_at.1) * pixel.1, (b_at.2 - a_at.2) * pixel.0, (b_at.3 - a_at.3) * pixel.1];
+                                    // A help strip's expected difference is ES-DE's icon boxes and row (R-20261112-3); any other box's is none.
+                                    let expected = match (&a.help, &b.help) {
+                                        (Some(Ok(ha)), Some(Ok(hb))) if ha.entries == hb.entries => help_expected(ha, hb, pixel),
+                                        (Some(Ok(ha)), Some(Ok(hb))) => {
+                                            failures.push(format!("{at}: {name} draws {} entries against {} at {first}", hb.entries, ha.entries));
+                                            [0.0; 4]
+                                        }
+                                        (Some(Err(why)), _) | (_, Some(Err(why))) => {
+                                            failures.push(format!("{at}: {name}: the S's rows not measured: {why}"));
+                                            [0.0; 4]
+                                        }
+                                        _ => [0.0; 4],
+                                    };
+                                    let left: Vec<f64> = px.iter().zip(expected).map(|(m, e)| m - e).collect();
+                                    let allowed = |words: bool| if words { worded::allowance(letters) } else { 1.0 };
                                     let (across, down) = (allowed(rule.words.0), allowed(rule.words.1));
-                                    let off_across = px[0].abs().max(px[2].abs());
-                                    let off_down = px[1].abs().max(px[3].abs());
+                                    let off_across = left[0].abs().max(left[2].abs());
+                                    let off_down = left[1].abs().max(left[3].abs());
                                     let ok = off_across <= across && off_down <= down;
-                                    if texty.is_some() {
+                                    if b.rule.is_some() {
                                         table.push(format!(
-                                            "{theme}\t{state}\t{w}x{h}\t{first}\t{name}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{}\t{letters}\t{across:.1}\t{down:.1}\t{}",
-                                            px[0], px[1], px[2], px[3], rule.why, if ok { "yes" } else { "no" }
+                                            "{theme}\t{state}\t{w}x{h}\t{first}\t{name}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{}\t{letters}\t{across:.1}\t{down:.1}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{off_across:.2}\t{off_down:.2}\t{}",
+                                            px[0], px[1], px[2], px[3], rule.why, expected[0], expected[1], expected[2], expected[3], if ok { "yes" } else { "no" }
                                         ));
                                     }
                                     if !ok {
-                                        let why = if name.starts_with("element-help") { HELP_ICONS } else { "" };
                                         failures.push(format!(
-                                            "{at}: {name} {b:.4?} against {a:.4?} at {first}, {off_across:.2} px across and {off_down:.2} down at the smaller window, past {across:.1} and {down:.1} ({}; {letters} letters; ES-DE places at whole pixels, GuiComponent::getTransform, and rounds each glyph's advance, Font::shapeText, v3.4.1){why}",
-                                            rule.why
+                                            "{at}: {name} {b_at:.4?} against {a_at:.4?} at {first}, {:.2} px across and {:.2} down at the smaller window, {expected:.2?} expected by ES-DE's icon boxes and row, {off_across:.2} and {off_down:.2} left past {across:.1} and {down:.1} ({}; {letters} letters; ES-DE places at whole pixels, GuiComponent::getTransform, and rounds each glyph's advance, Font::shapeText, v3.4.1)",
+                                            px[0].abs().max(px[2].abs()), px[1].abs().max(px[3].abs()), rule.why
                                         ));
                                     }
                                 }

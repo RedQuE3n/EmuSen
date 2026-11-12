@@ -189,8 +189,18 @@ pub enum Table {
     Properties,
 }
 
+/// Every theme under the folders, measured.
+pub fn measures(folders: &[PathBuf], systems: &[&str]) -> Vec<Measure> {
+    folders.iter().flat_map(|f| themes_in(f)).map(|t| measure(&t, systems)).collect()
+}
+
 /// Measures every theme under the folders and prints one table, header first; a last line totals the summary.
 pub fn report(folders: &[PathBuf], systems: &[&str], table: Table) -> Report {
+    report_of(&measures(folders, systems), table)
+}
+
+/// One table of measured themes, header first; a last line totals the summary.
+pub fn report_of(measures: &[Measure], table: Table) -> Report {
     let mut lines = vec![match table {
         Table::Summary => SUMMARY_HEADER,
         Table::Diagnostics => DIAGNOSTICS_HEADER,
@@ -198,18 +208,15 @@ pub fn report(folders: &[PathBuf], systems: &[&str], table: Table) -> Report {
     }
     .to_owned()];
     let (mut themes, mut loading, mut whole, mut drawn_kinds) = (0, 0, 0, 0);
-    for folder in folders {
-        for theme in themes_in(folder) {
-            let m = measure(&theme, systems);
-            themes += 1;
-            loading += usize::from(m.loads());
-            whole += usize::from(m.whole());
-            drawn_kinds += usize::from(m.undrawn.is_empty());
-            match table {
-                Table::Summary => lines.push(summary_row(&m)),
-                Table::Diagnostics => lines.extend(diagnostic_rows(&m)),
-                Table::Properties => lines.extend(property_rows(&m)),
-            }
+    for m in measures {
+        themes += 1;
+        loading += usize::from(m.loads());
+        whole += usize::from(m.whole());
+        drawn_kinds += usize::from(m.undrawn.is_empty());
+        match table {
+            Table::Summary => lines.push(summary_row(m)),
+            Table::Diagnostics => lines.extend(diagnostic_rows(m)),
+            Table::Properties => lines.extend(property_rows(m)),
         }
     }
     if table == Table::Summary {

@@ -1980,12 +1980,20 @@ scene or painter change; the loader is done. The ranking is re-measured by the c
   the C# painter's on the day of the switch, recorded as the baseline.
 - **Change detection.** The corpus TSV of each measurement is committed under `Testing/esde-corpus/<date>.tsv`; a row
   that worsens fails the landing until explained. A worsening is explained one way: the tester rules on it, and the
-  oracle (`esde-qt/tests/oracle.rs`) is run with `EMUSEN_ESDE_CORPUS=ruled:<ruling id>`. Such a run writes the day's
-  measure only when its sole failures are *rises*, counts of unknown or unsupported pairs that grew; it prints each rise
-  and puts `# ruled <id>: <n> rises` on the file's first line. A box off, a figure risen, a theme that stops loading or an
-  undrawn kind gained still fails it and nothing is written; `ruled:` with no id writes nothing. `EMUSEN_ESDE_CORPUS=1`
-  writes only a run with no failure at all, a lower ceiling included. The decision is `emusen_qt_test::corpus`
-  (`record`, `is_rise`), held by its own two unit tests.
+  oracle (`esde-qt/tests/oracle.rs`) is run with `EMUSEN_ESDE_CORPUS=ruled:<ruling id>`. A ruling covers only the
+  settings its file names, `Testing/esde-corpus/rulings/<ruling id>.tsv`: the `type.property` pairs it moved into the
+  unsupported count (`withdrawn`) and any it moved out by drawing them (`drawn`). Such a run writes the day's measure only
+  when its sole failures are *rises* in unsupported pairs, and each theme's rise is exactly the withdrawn pairs that
+  theme sets, less the drawn ones it sets, read from the theme's pairs as measured. A rise in unknown pairs, a rise of
+  any other size, a ruling with no file, a box off, a figure risen, a theme that stops loading or an undrawn kind gained
+  fails it and nothing is written; each uncovered rise is printed with the count the ruling accounts for. `ruled:` with
+  no id writes nothing. `EMUSEN_ESDE_CORPUS=1` writes only a run with no failure at all, a lower ceiling included.
+  A count that falls (`set`, `unknown`, `unsupported`) or a theme gone from the measure is said in every mode: it fails
+  a run that does not write, a theme gone fails any run, and a run that writes keeps each fall, as each rise, as a
+  `# fall:` or `# rise:` line under the first, where a passing run leaves them readable (`# ruled <id>: <n> rises` stays
+  the first line of a ruled write). The decision is `emusen_qt_test::corpus` (`record`, `Cover`, `falls`), held by its
+  four unit tests. Checked on 2026-11-12 against the corpus: `R-20261111-87.tsv` accounts for all 57 rises of 2026-11-11
+  against `2026-11-09.tsv`, and the measure has no fall against `2026-11-11.tsv`.
 - **The rise of 2026-11-11** (R-20261111-75, R-20261111-87). The nine pairs that were `accepted` (the help's eight
   dimmed properties and a sound's path) are counted unsupported since 1993d98fe, and 57 themes rose against
   `2026-11-09.tsv` by 1 to 7. In 53 the rise is exactly the number of those nine the theme sets. In four it is one less:

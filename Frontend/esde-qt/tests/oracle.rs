@@ -6,7 +6,8 @@
 //! with the SHA-256 that `Testing/esde-oracle/captures.sha256` gives it. The corpus measure of `esde-check` gains the
 //! watched columns and is written for `Testing/esde-corpus`; a row that worsens against the last committed measure
 //! fails, a watched figure that falls fails until the lower one is committed, and only a run with no failure commits it,
-//! or one whose only failures are rises in unknown or unsupported pairs with `EMUSEN_ESDE_CORPUS=ruled:<ruling id>`.
+//! or one whose only failures are rises in unsupported pairs that the named ruling's settings account for, theme by
+//! theme, with `EMUSEN_ESDE_CORPUS=ruled:<ruling id>`; a count that falls or a theme gone is said in every mode.
 
 mod common;
 
@@ -16,7 +17,7 @@ use std::path::{Path, PathBuf};
 use common::Scratch;
 use cxx_qt_lib::{QDateTime, QImage};
 use emusen_esde::check::{self, Table};
-use emusen_qt_test::corpus::{Recording, is_rise, record};
+use emusen_qt_test::corpus::{self, Change, Cover, Recording, is_rise, record};
 use emusen_qt_test::mockup::{self, Edge};
 use emusen_qt_test::tree::Node;
 use emusen_qt_test::{Harness, Scene};
@@ -264,22 +265,10 @@ fn today() -> String {
     format!("{:04}-{:02}-{:02}", d.year(), d.month(), d.day())
 }
 
-/// The rows of a corpus measure by theme, its columns by header name.
-fn corpus_rows(text: &str) -> BTreeMap<String, BTreeMap<String, String>> {
-    let mut lines = text.lines().filter(|l| !l.starts_with('#') && !l.is_empty());
-    let header: Vec<&str> = lines.next().unwrap_or_default().split('\t').collect();
-    lines
-        .map(|l| {
-            let row: BTreeMap<String, String> = header.iter().zip(l.split('\t')).map(|(h, v)| ((*h).to_owned(), v.to_owned())).collect();
-            (row["theme"].clone(), row)
-        })
-        .collect()
-}
-
 /// Rows that worsened from `old` to `new`: a theme that stops loading, more unknown or unsupported pairs, an undrawn kind
 /// gained, a watched MAE or count of boxes off that rose. A theme new to the corpus is not a worsening.
 fn worsened(old: &str, new: &str) -> Vec<String> {
-    let (old, new) = (corpus_rows(old), corpus_rows(new));
+    let (old, new) = (corpus::rows(old), corpus::rows(new));
     let mut out = vec![];
     for (theme, now) in &new {
         let Some(was) = old.get(theme) else { continue };
@@ -555,7 +544,11 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
 
     // The corpus measure with the watched columns, held against the last committed one (today's too, when a re-measure).
     let corpus = PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/emusen/bigpicture/corpus/xml");
-    let report = check::report(&[corpus], &check::SYSTEMS, Table::Summary);
+    let measured = check::measures(&[corpus], &check::SYSTEMS);
+    let report = check::report_of(&measured, Table::Summary);
+    // Each theme's type.property pairs and their states, for what a ruling's settings account for.
+    let pairs: BTreeMap<String, BTreeMap<String, String>> =
+        measured.iter().map(|m| (m.theme.clone(), m.properties.iter().map(|(p, s)| (p.clone(), (*s).to_owned())).collect())).collect();
     let columns = ["mae_system_1280", "mae_gamelist_1280", "mae_system_1920", "mae_gamelist_1920", "rects_off", "mae_viewer_1280", "mae_viewer_1920", "viewer_off"];
     let measure: Vec<String> = report
         .text
@@ -578,19 +571,35 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
     let committed = repo().join("Testing/esde-corpus");
     let file = format!("{}.tsv", today());
     let how = Recording::of(std::env::var("EMUSEN_ESDE_CORPUS").ok().as_deref());
-    let mut rises = vec![];
+    let (mut rises, mut rise_lines, mut notes) = (vec![], vec![], vec![]);
     let mut earlier: Vec<PathBuf> = std::fs::read_dir(&committed).unwrap().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "tsv")).collect();
     earlier.sort();
     if let Some(last) = earlier.last() {
         let last_text = std::fs::read_to_string(last).unwrap();
+        let against = last.file_name().unwrap().to_string_lossy().into_owned();
         for w in worsened(&last_text, &measure) {
-            let line = format!("against {}: {w}", last.file_name().unwrap().to_string_lossy());
-            if is_rise(&w) { rises.push(line) } else { failures.push(line) }
+            let line = format!("against {against}: {w}");
+            match Change::parse(&w).filter(|_| is_rise(&w)) {
+                Some(c) => {
+                    rises.push(c);
+                    notes.push(format!("rise: {line}"));
+                    rise_lines.push(line);
+                }
+                None => failures.push(line),
+            }
+        }
+        // A fall in a count, or a theme gone, is said in every mode; it fails a run that does not write, and a theme gone fails any.
+        for f in corpus::falls(&last_text, &measure) {
+            let line = format!("against {against}: {f}");
+            if how == Recording::Off || f.ends_with("missing from the new measure") {
+                failures.push(format!("{line}: a fall (EmuSen_Qt.md §4.4)"));
+            }
+            notes.push(format!("fall: {line}"));
         }
         // The ceiling falls with the figure: a lower one is committed by the run that measures it.
         if how == Recording::Off {
             for w in fell(&last_text, &measure) {
-                failures.push(format!("against {}: {w}: commit the lower measure (EMUSEN_ESDE_CORPUS=1)", last.file_name().unwrap().to_string_lossy()));
+                failures.push(format!("against {against}: {w}: commit the lower measure (EMUSEN_ESDE_CORPUS=1)"));
             }
         }
     }
@@ -598,15 +607,21 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
         failures.push("a theme of the corpus does not load".to_owned());
     }
     std::fs::write(out.join("corpus.tsv"), &measure).unwrap();
-    // The committed measure is re-recorded only by a run that passed every check above, or failed only by rises it was ruled for.
-    for r in &rises {
-        eprintln!("rise: {r}");
+    // A rise fails unless the named ruling's settings account for it, theme by theme; then the run may write.
+    match &how {
+        Recording::Ruled(id) if !id.is_empty() => match Cover::read(&committed, id) {
+            Ok(cover) => failures.extend(cover.uncovered(&rises, &pairs).into_iter().map(|u| format!("not covered by {id}: {u}"))),
+            Err(e) => failures.push(e),
+        },
+        _ => failures.extend(rise_lines),
     }
-    if !record(&committed, &file, &measure, &rises, &failures, &how) {
+    for n in &notes {
+        eprintln!("{n}");
+    }
+    if !record(&committed, &file, &measure, &notes, &failures, &how) {
         if let Recording::Ruled(id) = &how {
-            failures.push(format!("EMUSEN_ESDE_CORPUS=ruled:{id}: nothing written ({} other failures{})", failures.len(), if id.is_empty() { ", no ruling named" } else { "" }));
+            failures.push(format!("EMUSEN_ESDE_CORPUS=ruled:{id}: nothing written ({} failures{})", failures.len(), if id.is_empty() { ", no ruling named" } else { "" }));
         }
-        failures.extend(rises);
     }
     eprintln!("{}", measure.lines().last().unwrap_or_default());
     eprintln!("{} failures\n{}", failures.len(), failures.join("\n"));
@@ -615,7 +630,7 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
 
 /// Watched figures that fell from `old` to `new` by more than a run's noise, so the committed ceiling would lag them.
 fn fell(old: &str, new: &str) -> Vec<String> {
-    let (old, new) = (corpus_rows(old), corpus_rows(new));
+    let (old, new) = (corpus::rows(old), corpus::rows(new));
     let mut out = vec![];
     for (theme, now) in &new {
         let Some(was) = old.get(theme) else { continue };
@@ -639,12 +654,6 @@ fn a_row_that_worsens_is_named() {
     assert!(worsened(new, new).is_empty());
     assert_eq!(fell(new, old), ["A: mae_system_1280 1.2 → 1"]);
     assert!(fell(old, new).is_empty());
-}
-
-#[test]
-fn a_ruling_s_line_is_not_read_as_the_header() {
-    let header = "theme\tloads\tunsupported\nt\tyes\t8\n";
-    assert_eq!(corpus_rows(&format!("# ruled R-1: 0 rises\n{header}"))["t"]["unsupported"], "8");
 }
 
 #[test]

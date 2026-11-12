@@ -54,7 +54,7 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
     assert_eq!(
         normalized(COMMITTED_TYPES),
         normalized(&built("plugin.qmltypes")),
-        "EmuSen.Kit's types changed: review it, bump the minor for an addition or the major for a removal, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Kit-1.1.qmltypes"
+        "EmuSen.Kit's types changed: review it, bump the minor for any change (R-20261111-107: no major before the first release), list it in the changelog, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Kit-1.1.qmltypes"
     );
 }
 
@@ -85,7 +85,7 @@ fn qt_5_3_the_committed_qml_files_surface_is_the_built_one() {
     assert_eq!(
         COMMITTED_QML_FILES,
         surface,
-        "EmuSen.Kit's QML files offer something else (R-20261111-99): review it, bump the minor for an addition or the major for a removal, then copy {} to Testing/qmltypes/EmuSen.Kit-1.1.qmlfiles",
+        "EmuSen.Kit's QML files offer something else (R-20261111-99): review it, bump the minor for any change (R-20261111-107: no major before the first release), list it in the changelog, then copy {} to Testing/qmltypes/EmuSen.Kit-1.1.qmlfiles",
         written.display()
     );
 }

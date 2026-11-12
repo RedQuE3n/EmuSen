@@ -985,7 +985,8 @@ left out of `Tokens.qml` (the surface test).
 
 The API is the module's version, `EmuSen.Theme 1.0`. A minor adds singletons, roles, actions, cues or tokens and never
 removes or renames one; a role or action no longer meant is kept and marked deprecated in the `.qmltypes` for one minor,
-then removed at a major. A theme states the API it was written for in `theme.json` (`"api": "1.0"`); a theme written for
+then removed at a major; until the first release it may be removed at any later minor, every change bumping the minor
+(R-20261111-107, R-20261111-108, §5.3). A theme states the API it was written for in `theme.json` (`"api": "1.0"`); a theme written for
 a newer major than the build has is refused with words naming both; one written for an older minor loads, since minors
 are additive. Before 1.0 (§5.1) the same rules hold, with breaking changes allowed and listed in `CHANGELOG-theme-api.md`.
 
@@ -4229,9 +4230,11 @@ at a major, the removal listed. Before 1.0 the same, with removals allowed and l
 ### 5.3 Rule Q: a versioned QML module
 
 The module's `qmldir` version is major.minor; the `.qmltypes` file `qmltyperegistrar` writes for it is committed under
-`Testing/qmltypes/<module>-<version>.qmltypes` and diffed in CI: a removed or changed type, property, role, signal or
-invokable fails the build unless the major moved; an addition bumps the minor. Deprecation is a `@deprecated` note in the
-registry for one minor. The same dump is the published reference for theme authors, with a generated page per type.
+`Testing/qmltypes/<module>-<version>.qmltypes` and diffed in CI: any change to it, an added, changed or removed type,
+property, role, signal or invokable, fails the build until the version moves and the module's changelog lists it.
+Until the first release no change moves the major: an addition, a change and a removal each bump the minor (decided
+2026-11-11 by the tester, R-20261111-107). Deprecation is a `@deprecated` note in the registry; before the first release
+a call deprecated in one minor may be removed in any later minor (decided 2026-11-11 by the tester, R-20261111-108). The same dump is the published reference for theme authors, with a generated page per type.
 
 The registry lists the C++ types only. Rule Q covers every property, signal and object name a QML-file type offers too,
 in every module that has a registry (decided 2026-11-11 by the tester, R-20261111-99): `emusen_qt_test::qml_surface`,

@@ -143,11 +143,14 @@ fn qt_7_7_h6_the_keyboard_plays_the_game_and_each_hotkey_acts() {
     choose_row(&mut scene, "Continue");
     console_owns_the_pad(&mut scene, &sdl, &pad, "PlayStation");
 
-    // F11 turns the window's full screen on and off.
+    // F11 turns the window's full screen on and off: what the program asks of the window, then what the compositor
+    // gives it, each held on its own.
     let windowed = scene.property("program", "visibility");
     tap(&mut scene, F11);
-    until(&mut scene, 5, &format!("F11 full screen (visibility {windowed} before)"), |s| s.property("program", "visibility") == FULL_SCREEN);
+    until(&mut scene, 5, "F11 asking for full screen", |s| s.property("program", "fullScreenAsked") == "true");
+    until(&mut scene, 5, &format!("the compositor giving full screen (visibility {windowed} before)"), |s| s.property("program", "visibility") == FULL_SCREEN);
     tap(&mut scene, F11);
+    until(&mut scene, 5, "F11 again asking for a window", |s| s.property("program", "fullScreenAsked") == "false");
     until(&mut scene, 5, "F11 again windowed", |s| s.property("program", "visibility") == windowed);
 
     quit_game(&mut scene, &sdl, &pad, "PlayStation (no disc)", "Home");

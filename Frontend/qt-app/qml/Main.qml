@@ -27,6 +27,8 @@ Window {
     property bool gameMode: false
     // AppSettings.GuideChords as the start read it: On, or Auto away from Steam's Game Mode.
     property bool guideChords: false
+    // What the Fullscreen hotkey last asked of the window, apart from the visibility the compositor gives it.
+    property bool fullScreenAsked: false
     // The EmuSen theme's folder, empty for the reference, and the folders its pictures may come from (EmuSen_Qt.md §3.5).
     property string theme
     property list<string> coverStores
@@ -192,7 +194,10 @@ Window {
             player.session.pause()
             screens.library()
         }
-        onFullScreenAsked: program.visibility = program.visibility === Window.FullScreen ? Window.Windowed : Window.FullScreen
+        onFullScreenAsked: {
+            program.fullScreenAsked = program.visibility !== Window.FullScreen
+            program.visibility = program.fullScreenAsked ? Window.FullScreen : Window.Windowed
+        }
     }
     // The grid's games: the section shown, sorted, narrowed and searched as the List card and the search ask; a theme's
     // Games screen draws them (EmuSen_Qt.md §3.2, Browse).

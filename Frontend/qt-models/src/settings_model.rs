@@ -332,6 +332,8 @@ pub struct SettingsModelRust {
     rows: Vec<settings::Row>,
     /// The reads asked for, so an older read that finishes late is dropped.
     asked: u64,
+    /// Whether the last read asked for is still to come back.
+    reading: bool,
     game_pads: u64,
     bindings_shown: bool,
     drawing: QString,
@@ -403,6 +405,7 @@ impl Default for SettingsModelRust {
             rows: view.rows(),
             view,
             asked: 0,
+            reading: false,
             game_pads: 0,
             bindings_shown: false,
             drawing: QString::default(),
@@ -520,6 +523,7 @@ impl qobject::SettingsModel {
         }
         let asked = self.asked.wrapping_add(1);
         self.as_mut().rust_mut().asked = asked;
+        self.as_mut().rust_mut().reading = true;
         // Cleared at the start of each attempt, so the same failure twice is said twice (EmuSen_Qt.md §7.9).
         self.as_mut().said(String::new());
         let thread = self.qt_thread();
@@ -540,6 +544,7 @@ impl qobject::SettingsModel {
                 if model.asked != asked {
                     return;
                 }
+                model.as_mut().rust_mut().reading = false;
                 match read {
                     Ok((read, chooser)) => {
                         model.as_mut().rust_mut().view.read = read;
@@ -617,7 +622,11 @@ impl qobject::SettingsModel {
                 let saved = ClientSettings::open(&self.platform_library.to_string()).and_then(|s| s.save(model, &document));
                 self.as_mut().said(saved.err().map(|e| format!("The settings could not be saved: {e}")).unwrap_or_default());
                 self.as_mut().applied();
-                self.shown(false);
+                self.as_mut().shown(false);
+                // A read begun before this save would bring the old value back: read again after it (EmuSen_Qt.md §7.7.H7).
+                if self.reading {
+                    self.refresh();
+                }
             }
             Outcome::Opened => self.shown(true),
             Outcome::Shown => self.shown(false),
@@ -639,8 +648,9 @@ impl qobject::SettingsModel {
                 let failed = set.is_err();
                 self.as_mut().said(set.err().map(|e| format!("The console's setting could not be stored: {e}")).unwrap_or_default());
                 self.as_mut().shown(false);
-                // The engine chosen changes the schema the page draws, and a refusal leaves the stored value as it was.
-                if failed || key == crate::consoles::ENGINE_KEY {
+                // The engine chosen changes the schema the page draws, a refusal leaves the stored value as it was, and a
+                // read begun before this store would bring the old value back.
+                if failed || key == crate::consoles::ENGINE_KEY || self.reading {
                     self.refresh();
                 }
             }

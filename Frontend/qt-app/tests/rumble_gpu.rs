@@ -33,32 +33,11 @@ fn running(pad: &VirtualPad) -> bool {
     pad.rumble() != (0, 0)
 }
 
-/// Escape over the game (the Exit to Library hotkey) to Home, Settings' Rumble row stepped from Home's Settings place,
-/// then B back to Home and the Home card's Continue to the game.
+/// Rumble's row turned on Settings with the game suspended under Home, and the switch reaching the session.
 fn rumble_row(scene: &mut Scene<'_>) {
     let was = scene.property("settingsModel", "rumble");
-    scene.key_hold(0x0100_0000, true);
-    scene.key_hold(0x0100_0000, false);
-    until(scene, "the game suspended under Home", |s| s.property("screens", "shown") == "Home" && s.property("session", "paused") == "true");
-    // Home's first place focused (the game suspended under Home takes the focus first), then Right to Settings' place.
-    until(scene, "Home's first place focused", |s| {
-        let tree = s.tree();
-        tree.find_named("place.0").is_some_and(|first| s.focus(&tree) == Some(first) || s.focus_item(&tree, first))
-    });
-    for _ in 0..emusen_qt_models::screens::SETTINGS_PLACE {
-        scene.pad(UiButton::Right);
-    }
-    scene.pad(UiButton::Accept);
-    wait_for(scene, "screens", "shown", "Settings", 2000);
-    bindings::focus_row(scene, "Your controller");
-    scene.pad(UiButton::Right);
-    until(scene, "the row turned", |s| s.property("settingsModel", "rumble") != was && s.property("session", "rumble") != was);
-    scene.pad(UiButton::Back);
-    wait_for(scene, "screens", "shown", "Home", 2000);
-    scene.pad(UiButton::Menu);
-    until(scene, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
-    common::console::choose_row(scene, "Continue");
-    until(scene, "the game again", |s| s.property("screens", "shown") == "Game" && s.property("session", "paused") == "false");
+    bindings::turn_row_with_game_suspended(scene, "Your controller");
+    until(scene, "the row's switch reaching the session", |s| s.property("settingsModel", "rumble") != was && s.property("session", "rumble") != was);
 }
 
 #[test]

@@ -97,6 +97,13 @@ pub fn blue(scene: &mut Scene<'_>, points: &[(f64, f64)]) -> f64 {
     seen.iter().map(|c| f64::from(c[2])).sum::<f64>() / seen.len().max(1) as f64
 }
 
+/// The green the grab finds over the picture, on average: the console core draws it by the button its second port's pad
+/// holds, as it draws the first port's in blue.
+pub fn green(scene: &mut Scene<'_>, points: &[(f64, f64)]) -> f64 {
+    let seen = seen(scene, points);
+    seen.iter().map(|c| f64::from(c[1])).sum::<f64>() / seen.len().max(1) as f64
+}
+
 /// The console's screen up, its picture drawn on the window as a grab reads it (more than one colour, not black), and
 /// the pad the console's: B, A and Start (the RetroPad's, South, East and Start), each held on the pad, reach the console
 /// as themselves, its picture turning blue while each is held (B bluer than Start, Start than A, as the core draws them) and back when it is let go, and not the program,
@@ -142,6 +149,20 @@ pub fn console_owns_the_pad(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, 
     // and Start its Start (0xA0), each drawn apart, so each button reached the core as itself.
     let (b, a, start) = (held[0], held[1], held[2]);
     assert!(b > start + 40.0 && start > a + 40.0, "blues: B (South) {b:.0}, A (East) {a:.0}, Start {start:.0}: the core told them apart");
+}
+
+/// The game hearing the pads again after a menu: its reader has read them once with the game owning them and nothing
+/// held, which ends the quiet a menu leaves (`GamePads::set_owned`); a press before that is held back until let go.
+#[track_caller]
+pub fn game_hears_the_pads(scene: &mut Scene<'_>) {
+    let address: u64 = scene.property("pads", "gamePads").parse().expect("the reader's hand-over");
+    // SAFETY: the address is PadReader.gamePads, whose reader outlives the window.
+    let pads = unsafe { emusen_qt_endymion::game::GamePads::at(address) }.expect("the reader's hand-over");
+    until(scene, 5, "the game owning the pads", |_| pads.owned());
+    let mut read = emusen_qt_endymion::game::Read::default();
+    pads.take(&mut read);
+    let owned_at = read.serial;
+    until(scene, 5, "the reader's next read for the game", |_| pads.take(&mut read) && read.serial > owned_at);
 }
 
 /// Guide pressed alone, held until the router reads it, then let go: with the Guide chords on, Guide alone opens the menu as it is let go (EmuSen_Kit.md §7.26).

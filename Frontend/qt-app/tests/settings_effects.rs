@@ -166,6 +166,25 @@ fn qt_7_7_h6_guide_chords_changed_on_the_row_hold_without_a_restart(sdl: &Sdl, h
     wait_for(&mut scene, "game", "guideChords", "true", 1000);
 }
 
+/// A row turned while the read Settings' opening begins is still to come back: that read, made before the save, does not
+/// bring the old value back (EmuSen_Qt.md §7.7.H7). The read is begun as opening begins it, and Right pressed, in one turn
+/// of the event loop, so the read cannot have come back first.
+fn qt_7_7_h7_a_row_turned_while_settings_is_read_keeps_its_value(sdl: &Sdl, harness: &mut emusen_qt_test::Harness) {
+    let _world = sandbox("qt-app-settings-opening", &[("snes", "Hero.sfc")]);
+    let pad = sdl.attach("Simulated pad", 0x045e, 0x028e);
+    let mut scene = harness.load(MAIN_URL, 1280, 800);
+    open_settings(&mut scene, WORLD, pad.id);
+    focus(&mut scene, "Your controller shakes");
+    assert!(scene.set_property_now("settingsModel", "open", "false"));
+    assert!(scene.set_property_now("settingsModel", "open", "true"));
+    scene.pad(UiButton::Right);
+    wait_for(&mut scene, "settingsModel", "rumble", "false", 2000);
+    scene.wait(500);
+    assert_eq!(scene.property("settingsModel", "rumble"), "false", "the read begun before the save brought the old value back");
+    assert_eq!(scene.property("session", "rumble"), "false");
+    assert_eq!(scene.property("settingsModel", "sentence"), "Your controller never shakes.");
+}
+
 /// One process, one Qt and one SDL: the rows in turn, each over its own world and window; those that run the router's
 /// clock for a real pad's presses last, since the harness's own presses keep it stopped.
 #[test]
@@ -175,6 +194,7 @@ fn qt_7_7_h3_the_controllers_rows_take_effect() {
     qt_7_7_h3_controller_type_chooses_the_help_bar_s_buttons(&sdl, &mut harness);
     qt_7_7_h3_stick_deadzone_moves_where_the_stick_counts_as_a_direction(&sdl, &mut harness);
     qt_7_7_h3_rumble_reaches_the_session(&sdl, &mut harness);
+    qt_7_7_h7_a_row_turned_while_settings_is_read_keeps_its_value(&sdl, &mut harness);
     qt_7_7_h6_guide_chords_changed_on_the_row_hold_without_a_restart(&sdl, &mut harness);
     qt_7_7_h3_controller_notices_tell_of_a_pad_come_and_gone_where_on(&sdl, &mut harness);
     qt_7_7_h3_only_the_first_controller_leaves_the_menus_one_pad(&sdl, &mut harness);

@@ -82,3 +82,63 @@ pub fn focus_row(scene: &mut Scene<'_>, words: &str) {
     }
     panic!("no row says '{words}'");
 }
+
+fn until(scene: &mut Scene<'_>, what: &str, mut done: impl FnMut(&mut Scene<'_>) -> bool) {
+    for _ in 0..100 {
+        if done(scene) {
+            return;
+        }
+        scene.wait(50);
+    }
+    panic!("{what} within 5 s");
+}
+
+/// From a running game, Escape (the Exit to Library hotkey) to Home with the game suspended, Settings from Home's
+/// Settings place, the Controllers row whose sentence begins `words` stepped once with Right until its drawn value
+/// changes, then B to Home and the Home card's Continue to the game, which owns the pad again.
+pub fn turn_row_with_game_suspended(scene: &mut Scene<'_>, words: &str) {
+    scene.key_hold(0x0100_0000, true);
+    scene.key_hold(0x0100_0000, false);
+    until(scene, "the game suspended under Home", |s| s.property("screens", "shown") == "Home" && s.property("session", "paused") == "true");
+    // Home's first place focused (the game suspended under Home takes the focus first), then Right to Settings' place.
+    until(scene, "Home's first place focused", |s| {
+        let tree = s.tree();
+        tree.find_named("place.0").is_some_and(|first| s.focus(&tree) == Some(first) || s.focus_item(&tree, first))
+    });
+    for _ in 0..emusen_qt_models::screens::SETTINGS_PLACE {
+        scene.pad(UiButton::Right);
+    }
+    scene.pad(UiButton::Accept);
+    wait_for(scene, "screens", "shown", "Settings", 2000);
+    focus_row(scene, words);
+    let before = focused_row_words(scene);
+    scene.pad(UiButton::Right);
+    until(scene, &format!("the row '{words}' turned from {before:?}"), |s| focused_row_words(s) != before);
+    scene.pad(UiButton::Back);
+    wait_for(scene, "screens", "shown", "Home", 2000);
+    scene.pad(UiButton::Menu);
+    until(scene, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
+    crate::common::console::choose_row(scene, "Continue");
+    until(scene, "the game again", |s| s.property("screens", "shown") == "Game" && s.property("session", "paused") == "false");
+    // The game hears the pad once its reader has read it again; a press before that is held back until let go.
+    until(scene, "the game owning the pad again", |s| s.pad_chord_only());
+    crate::common::console::game_hears_the_pads(scene);
+}
+
+/// The visible words inside the focused item, as drawn: a row's label and its value.
+pub fn focused_row_words(scene: &mut Scene<'_>) -> Vec<String> {
+    let tree = scene.tree();
+    let Some(at) = scene.focus(&tree) else { return Vec::new() };
+    let top = tree.nodes[at as usize].id.clone();
+    let inside = |id: &str| {
+        let mut at = id.to_owned();
+        while let Some(n) = tree.nodes.iter().find(|n| n.id == at) {
+            if n.id == top {
+                return true;
+            }
+            at = n.parent.clone();
+        }
+        false
+    };
+    tree.nodes.iter().filter(|n| n.visible && inside(&n.id)).filter_map(|n| n.text.clone().filter(|t| !t.is_empty())).collect()
+}

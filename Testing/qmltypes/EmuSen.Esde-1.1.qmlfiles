@@ -1,0 +1,356 @@
+Picture
+    property url source
+    property int fit
+    property real alignX
+    property real alignY
+    property real cropX
+    property real cropY
+    property real tileWidth
+    property real tileHeight
+    property bool tileRight
+    property bool tileBottom
+    property color tint
+    property color tintEnd
+    property bool gradientVertical
+    property real saturation
+    property real dim
+    property real radius
+    property bool nearest
+    property real fadeFrom
+    property real fadeFalloff
+    property real sourceScale
+    property bool flipped
+    readonly property alias status
+    readonly property alias ownWidth
+    readonly property alias ownHeight
+    readonly property real paintScale
+    readonly property bool fitted
+    readonly property real paintedWidth
+    readonly property real paintedHeight
+    readonly property bool tiled
+    readonly property bool vector
+    readonly property bool ownSize
+    readonly property real tileW
+    readonly property real tileH
+    readonly property real boxAspect
+    readonly property real ownAspect
+    readonly property real cropW
+    readonly property real cropH
+Mark
+    property alias mark
+    property alias color
+    readonly property alias aspect
+    readonly property alias baselineShare
+TextBlock
+    property string text
+    property url fontSource
+    property bool ownFace
+    property real px
+    property color color
+    property int hAlign
+    property int vAlign
+    property real lineSpacing
+    property bool wrap
+    property bool ellipsis
+    property bool everyLine
+    property bool snapRows
+    property bool hasBackground
+    property color background
+    property color backgroundEnd
+    property bool backgroundVertical
+    property real backgroundRadius
+    property real padLeft
+    property real padTop
+    property real padRight
+    property real padBottom
+    property bool scrolling
+    property bool scrollVertical
+    property real scrollX
+    property real repeatAt
+    property real scrollY
+    property real scrollOpacity
+    readonly property real laidHeight
+    readonly property real alignedY
+    readonly property real contentWidth
+    readonly property real contentHeight
+    readonly property int wholeRows
+    readonly property real windowHeight
+    readonly property real measuredHeight
+    readonly property string family
+    readonly property alias fontStatus
+    readonly property real baselineY
+    signal measured(real width, real height)
+Icon
+    property url source
+    property string mark
+    property color tint
+ElementBox
+    required property string elementId
+    required property string name
+    required property real boxX
+    required property real boxY
+    required property real boxWidth
+    required property real boxHeight
+    required property real turn
+    required property real originX
+    required property real originY
+    required property real alpha
+    property EsdeModel esde
+    objectName "element-" + root.name
+PictureElement
+    required property url source
+    required property int fit
+    required property real cropX
+    required property real cropY
+    required property real tileWidth
+    required property real tileHeight
+    required property bool tileRight
+    required property bool tileBottom
+    required property color tint
+    required property color tintEnd
+    required property bool gradientVertical
+    required property real saturation
+    required property real radius
+    required property bool nearest
+TextElement
+    required property string text
+    required property url fontSource
+    required property bool ownFace
+    required property real px
+    required property color color
+    required property int hAlign
+    required property int vAlign
+    required property real lineSpacing
+    required property bool wrap
+    required property bool ellipsis
+    required property bool everyLine
+    required property bool snapRows
+    required property bool hasBackground
+    required property color background
+    required property color backgroundEnd
+    required property bool backgroundVertical
+    required property real backgroundRadius
+    required property real padLeft
+    required property real padTop
+    required property real padRight
+    required property real padBottom
+    required property bool scrolling
+    required property bool scrollVertical
+    required property real scrollX
+    required property real repeatAt
+    required property real scrollY
+    required property real scrollOpacity
+RatingElement
+    required property real value
+    required property url filledSource
+    required property string filledMark
+    required property url unfilledSource
+    required property string unfilledMark
+    required property color tint
+    required property bool overlay
+    readonly property real star
+BadgesElement
+InfoElement
+    required property url fontSource
+    required property bool ownFace
+    required property real px
+    required property color color
+    required property color background
+    required property int hAlign
+    required property int vAlign
+    readonly property real lineSpacing
+    readonly property size extent
+StatusElement
+    required property real iconHeight
+    required property url fontSource
+    required property bool ownFace
+    required property real textScale
+    required property color color
+    required property real entrySpacing
+    required property bool hasBackground
+    required property color background
+    required property real backgroundRadius
+    required property real padLeft
+    required property real padTop
+    required property real padRight
+    required property real padBottom
+    readonly property size extent
+HelpElement
+    required property url fontSource
+    required property bool ownFace
+    required property real px
+    required property color color
+    required property color iconColor
+    required property real entrySpacing
+    required property real iconGap
+    required property real entryScale
+    required property bool filled
+    required property bool hasBackground
+    required property color background
+    required property color backgroundEnd
+    required property bool backgroundVertical
+    required property real backgroundRadius
+    required property real padLeft
+    required property real padTop
+    required property real padRight
+    required property real padBottom
+    property int family
+    readonly property string faceName
+    required property real rowHeight
+    readonly property real discEdge
+    required property real barWidth
+    required property real labelPx
+    readonly property real barStart
+    readonly property size extent
+    objectName "esdeHelp"
+    objectName "help-" + entry.label
+    objectName "helpPicture-" + entry.label
+    objectName "helpGlyph-" + entry.label
+CarouselElement
+    required property int selected
+    required property bool leaving
+    required property int fit
+    required property real alignX
+    required property real alignY
+    required property bool hasBackground
+    required property color background
+    required property color backgroundEnd
+    required property bool backgroundVertical
+    required property url fontSource
+    required property bool ownFace
+    required property real px
+    required property real lineSpacing
+    required property color color
+    required property color itemBackground
+    objectName "slot-" + slot.row
+    objectName "slot-" + slot.row
+TextListView
+    required property int selected
+    required property bool leaving
+    required property real rowHeight
+    required property real bandHeight
+    required property real contentY
+    required property bool hasSelector
+    required property real selectorX
+    required property real selectorY
+    required property real selectorW
+    required property real selectorH
+    required property color selectorColor
+    required property bool hasSelectedBackground
+    required property color selectedBackground
+    required property real selectedBackgroundRadius
+    required property real selectedBackgroundLeft
+    required property real selectedBackgroundRight
+    required property color primaryColor
+    required property color secondaryColor
+    required property color selectedColor
+    required property color selectedSecondaryColor
+    required property url fontSource
+    required property bool ownFace
+    required property real px
+    required property real lineSpacing
+    required property real margin
+    required property int hAlign
+    required property real markerWidth
+    required property bool scrolling
+    required property real scrollX
+    required property real repeatAt
+    objectName "esdeTextList"
+    objectName "row-" + line.index
+GridElement
+    required property int selected
+    required property bool leaving
+    required property int columns
+    required property real itemWidth
+    required property real itemHeight
+    required property real pitchX
+    required property real pitchY
+    required property real marginX
+    required property real marginY
+    required property real contentY
+    required property real itemScale
+    required property int focusFrom
+    required property real fromLevel
+    required property real toLevel
+    required property real progress
+    required property real unfocusedOpacity
+    required property real unfocusedSaturation
+    required property real unfocusedDim
+    required property int fit
+    required property real cropX
+    required property real cropY
+    required property bool nearest
+    required property real imageScale
+    required property real radius
+    required property color tint
+    required property color tintEnd
+    required property bool gradientVertical
+    required property bool hasSelectedTint
+    required property color selectedTint
+    required property real saturation
+    required property bool hasBackground
+    required property color background
+    required property url backgroundSource
+    required property real backgroundScale
+    required property real backgroundRadius
+    required property bool hasSelector
+    required property color selectorColor
+    required property url selectorSource
+    required property real selectorScale
+    required property real selectorRadius
+    required property bool selectorOnTop
+    required property url fontSource
+    required property bool ownFace
+    required property real px
+    required property real lineSpacing
+    required property color color
+    required property color itemBackground
+    required property color selectedColor
+    required property color selectedItemBackground
+    required property real textRadius
+    objectName "esdeGrid"
+    objectName "cell-" + cell.index
+View
+    property alias settings
+    property alias shelves
+    property alias media
+    property alias presence
+    property alias swap
+    property alias device
+    property alias now
+    property alias defaultFont
+    property alias selectionSeed
+    property int family
+    readonly property alias scene
+    objectName "esdeModel"
+    objectName "scrollLetters"
+GlyphLine
+    property string text
+    property color color
+    property string reference
+    property url fontSource
+    property string family
+    property real px
+    property bool ownFace
+    readonly property real stretch
+    readonly property rect referenceBox
+GlyphText
+    required property TextLayout laid
+    property string family
+    property string styleName
+    property color color
+    readonly property string text
+    readonly property int base
+    readonly property real stretch
+ClipElement
+    required property url source
+    required property bool stretch
+    required property bool audio
+    required property real volume
+    required property real blur
+    required property real fade
+ManualElement
+    required property url source
+    required property real pageIndex
+    readonly property size pageSize
+    objectName "manualPage"

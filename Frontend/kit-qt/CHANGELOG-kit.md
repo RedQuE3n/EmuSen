@@ -4,6 +4,19 @@ The kit is the QML module `EmuSen.Kit` (EmuSen_Qt.md §1.4), held by rule Q (§5
 writes it, is committed under `Testing/qmltypes/` and compared on every build. A minor adds and never removes; each
 entry names what was added and the section of `EmuSen_Kit.md` that records it.
 
+## 1.1, stage 4 piece X: the help bar's pair glyph, the clip's player and fade, the page's clip volume (2026-11-11)
+
+Additions only; no type, property, signal or invokable was removed or changed. Rule Q now holds the QML files' own
+surface too (R-20261111-99): each root object's properties and signals and every object name, read by
+`emusen_qt_test::qml_surface` and committed as `Testing/qmltypes/EmuSen.Kit-1.1.qmlfiles`. The minor moved for these:
+
+- **`PadGlyphMarks`** (registry): `pair`, `paired`, `discShare` and `setPair`; **`VideoFrames`** (registry): `fitted`
+  and `stretched`. `EmuSen_Kit.md` §7.71, §7.53.
+- **`HelpBar`**: `pairGlyph`, `label`. **`PadGlyph`**: `pair`, `paired` (read-only). §7.71.
+- **`VideoClip`**: the object name `videoPlayback`; `fillMode`, `delay`, `fade`; read-only `position`, `heard`, `level`.
+  **`VideoTile`**: `fillMode`, `delay`, `fade`. §7.53.
+- **`PageFrame`**: `clipVolume`, the share of full its clip is heard at (R-20261111-100). §7.53.
+
 ## 1.0, stage 4 piece H: a model's reset told to a view without QML state (2026-11-11)
 
 Additions only; no type, property, signal or invokable was removed or changed.

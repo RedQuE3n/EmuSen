@@ -2659,7 +2659,9 @@ Rust file that holds no bridge rebuilds in **11.4 s** (5.1 s with the cache warm
 the ten test binaries build and link in **2.3 s** together. With the cache warm a cold build is 19.7 s, which is the
 figure a day's work sees.
 
-**Rule Q.** `Testing/qmltypes/EmuSen.Kit-1.0.qmltypes` and `EmuSen.Kit-1.0.qmldir` are the registry as
+**Rule Q.** (EmuSen.Kit is 1.1 since 2026-11-11, `CHANGELOG-kit.md`; its QML files' surface is held beside the
+registry as `EmuSen.Kit-1.1.qmlfiles`, R-20261111-99, `EmuSen_Qt.md` §5.3.) `Testing/qmltypes/EmuSen.Kit-1.1.qmltypes`
+and `EmuSen.Kit-1.1.qmldir` are the registry as
 `qmltyperegistrar` and cxx-qt write them (`Frontend/target/cxxqt/qml_modules/EmuSen/Kit/`). `tests/qmltypes.rs`
 compares the build's files to the committed ones with line numbers and header file names dropped, since those move
 with every edit; a difference fails until it is reviewed, the minor bumped for an addition or the major for a removal,

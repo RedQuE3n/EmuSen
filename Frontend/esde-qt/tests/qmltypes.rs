@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Esde-1.1.qmltypes");
 const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Esde-1.1.qmldir");
+const COMMITTED_QML_FILES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Esde-1.1.qmlfiles");
 
 /// The registry without its line numbers and header file names, which move with every edit and mean nothing to a QML author.
 fn normalized(text: &str) -> String {
@@ -72,4 +73,17 @@ fn qt_5_3_the_registry_names_the_painter_s_types() {
     for file in ["Picture 1.1 qml/Picture.qml", "Mark 1.1 qml/Mark.qml", "TextBlock 1.1 qml/TextBlock.qml"] {
         assert!(COMMITTED_QMLDIR.contains(file), "{file} is in the qmldir");
     }
+}
+
+#[test]
+fn qt_5_3_the_committed_qml_files_surface_is_the_built_one() {
+    let surface = emusen_qt_test::qml_surface::module(&built("qmldir"), std::path::Path::new(env!("CARGO_MANIFEST_DIR")));
+    let written = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/EmuSen.Esde.qmlfiles");
+    std::fs::write(&written, &surface).unwrap();
+    assert_eq!(
+        COMMITTED_QML_FILES,
+        surface,
+        "EmuSen.Esde's QML files offer something else (R-20261111-99): review it, bump the minor for an addition or the major for a removal, then copy {} to Testing/qmltypes/EmuSen.Esde-1.1.qmlfiles",
+        written.display()
+    );
 }

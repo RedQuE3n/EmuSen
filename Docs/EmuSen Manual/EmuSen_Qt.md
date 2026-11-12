@@ -467,7 +467,7 @@ Virtual Keyboard is GPL-only in the open edition and docks nowhere]*), `Carousel
 `DatePicker`. Everything Qt Quick Controls already does (buttons, switches, sliders, combo boxes, tabs, scroll bars,
 menus, dialogs, tool tips, `TableView`, `TreeView`, `GridView`, `SplitView`) is Qt's, styled by §1.5.
 
-The module's surface is `import EmuSen.Kit 1.0` and its `.qmltypes` (rule Q). It knows nothing of consoles, games or the
+The module's surface is `import EmuSen.Kit` (1.1 since 2026-11-11), its `.qmltypes` and its QML files' surface (rule Q). It knows nothing of consoles, games or the
 runtime: the bodies draw any host's worlds, the frame walks any host's roles. `cargo deny`-style test: the kit's
 dependency tree names no runtime or client crate.
 
@@ -2408,7 +2408,8 @@ test). The minor moved to 1.1 for the additions made while the help bar and the 
 nothing removed or changed: `EsdeModel.defaultFont`, `selectionSeed` and `reference` (with `setDefaultFont`,
 `setSelectionSeed`, `defaultFontChanged`, `selectionSeedChanged`) and the invokable `manualPages`; `MarkShapes.aspect`
 and `baseline` (with their signals); and the type `TextLayout`. The QML files' properties are not in the registry; which
-of them rule Q covers waits on the tester.
+of them rule Q covers was ruled on 2026-11-11 (R-20261111-99, §5.3): they are held as `EmuSen.Esde-1.1.qmlfiles`, and
+`CHANGELOG-esde.md` lists what this minor added and what it removed, the removals waiting on the tester for the major.
 
 #### 4.8.1 The primitives
 
@@ -4178,6 +4179,14 @@ The module's `qmldir` version is major.minor; the `.qmltypes` file `qmltyperegis
 `Testing/qmltypes/<module>-<version>.qmltypes` and diffed in CI: a removed or changed type, property, role, signal or
 invokable fails the build unless the major moved; an addition bumps the minor. Deprecation is a `@deprecated` note in the
 registry for one minor. The same dump is the published reference for theme authors, with a generated page per type.
+
+The registry lists the C++ types only. Rule Q covers every property, signal and object name a QML-file type offers too,
+in every module that has a registry (decided 2026-11-11 by the tester, R-20261111-99): `emusen_qt_test::qml_surface`,
+the one reading of a QML file's surface, lists each root object's properties (their modifiers, type and name, not
+their bindings) and signals and every object name in the file, for each type the built qmldir lists; the text is
+committed as `Testing/qmltypes/<module>-<version>.qmlfiles` and each module's `tests/qmltypes.rs`
+(`qt_5_3_the_committed_qml_files_surface_is_the_built_one`) compares it on every build, writing the built one to
+`Frontend/target/<module>.qmlfiles` to copy after the review. `an_added_property_changes_the_surface` holds the reading.
 
 ### 5.4 How third parties build themes and plugins
 

@@ -12,6 +12,7 @@ pub mod harness;
 pub mod lint;
 pub mod mockup;
 pub mod moonrise;
+pub mod qml_surface;
 pub mod spec;
 pub mod tree;
 pub mod virtual_pad;

@@ -532,8 +532,8 @@ ThemeScreen {
                     Text {
                         objectName: "consoleDetailName"
                         x: 64
-                        // The face's own line box, 53, a unit above the canvas's 44 so it ends where the facts begin (EmuSen_Qt.md §3.4.2).
-                        y: 611
+                        // The face's own line box, 53, its baseline where the canvas's is (R-20261111-94, EmuSen_Qt.md §3.4.2).
+                        y: 607.6
                         width: coverRow.x - 96
                         text: root.focusedTile ? root.focusedTile.fullName : ""
                         elide: Text.ElideRight

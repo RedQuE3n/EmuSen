@@ -1212,7 +1212,8 @@ canvas's own; kit-core's test holds them within 0.01 unit.
 6. The canvas's 17-unit words (the counts, the maker labels and the engine line) are 19, since at 17 they fell under the
    floor at 1280 × 720; the counts are in Barlow Condensed, no wider than the canvas's, and a label's line grows upward
    from the layout's 20-unit box. The full name takes Barlow
-   Condensed's own line box, 53 from y 611, where the canvas's was 44 from 612 (2026-11-09, §3.4.1).
+   Condensed's own line box, 53, from y 607.6, in the canvas as on the screen, so its baseline stands at 651.6 where the
+   canvas's 44-unit line from 612 put it (decided 2026-11-11, R-20261111-94; the screen stood it from 611 until then).
 7. A world's `Walkable` is the body's box, the ring drawn 7 units about it when focused, and the name and count hang
    beneath it, outside the `Walkable`. The canvas's node was 140 units wide and held the words too. On the steep stretches of the outer
    orbits those nodes covered their neighbours, which the fit audit read as overlaps of empty corners.
@@ -1247,8 +1248,8 @@ each waiting on the tester:
   reached 7.4 units into the next orbit's count; at 96 with the body's box, the first focus (the NES) reached 3.5 units
   into Master System's count, 60 lines over eleven. Decided 2026-11-11 (R-20261111-92): the canvas draws it 88;
 - the full name's line box, 44 (item 6): Barlow Condensed Medium at 44 in Qt 6.11 lays a line 53 (ascent 44, descent
-  8.8), with `lineHeight: 44` fixed as without; a 44 box is cut at the foot by the fit rule, which judges the line box
-  (2 lines at 53);
+  8.8), with `lineHeight: 44` fixed as without; a 44 box is cut at the foot by the fit rule, which judges the line box.
+  Decided 2026-11-11 (R-20261111-94): the canvas gives it 53 with its baseline kept, and the screen moved to y 607.6;
 - the cover row: the canvas's Super Nintendo is 1.4 wide a unit tall; the systems table's `cover_aspect` 0.73 makes it
   1.37, so three covers 137 wide stand at 781, 930 and 1079 against 140 at 772, 924 and 1076 (12 lines);
 - the inner orbit's label (item 9): the window ended at 197 on the screen and at 178 in the canvas, so its label's right

@@ -4903,8 +4903,10 @@ bound through the bindings model and saved as the page saves them, pressed as th
 console core as its buttons, and not as player 2); `qt-models/tests/library.rs` and `esde.rs` (Exit to Library from the
 game's screen); the program's `settings_effects.rs` (Guide chords stepped to Off and back, the game's chords following),
 `controller_failures.rs` (pads that will not open, and bindings that cannot be saved, each said on the notice layer),
-`controls_gpu.rs` (on Vulkan: B's key reaching the console core, and every hotkey but Big Picture acting) and
-`rumble_gpu.rs` (Rumble turned on Settings' row with the game suspended under Home).
+`controls_gpu.rs` (on Vulkan: B's key reaching the console core, and every hotkey but Big Picture acting, Fullscreen's
+request and the compositor's full screen each held; passed on 2026-11-12). `rumble_gpu.rs` turns Rumble on Settings'
+row with the game suspended under Home, and on 2026-11-12 it failed there: the row did not turn within 5 s, so Rumble
+from its row with a game open is not yet shown.
 
 #### 7.7.K Cores' Update All…, and the cover's raised shadow (stage 5, piece K; 2026-11-09)
 

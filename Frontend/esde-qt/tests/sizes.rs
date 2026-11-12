@@ -32,6 +32,36 @@ fn fractions(scene: &mut Scene<'_>, w: f64, h: f64) -> Boxes {
     out
 }
 
+// The letters each worded element draws in a state, by element name in drawing order: the help's labels, a text's words,
+// a status row's texts, white space left out. Read from the painter's frame on the same texts the view installs.
+fn letters_of(folder: &std::path::Path, choices: &str, view: &str, texts: &(String, String, String), step: UiButton, (w, h): (i32, i32)) -> BTreeMap<String, Vec<usize>> {
+    use emusen_esde::scene::{DateTime, Paint};
+    use emusen_esde_qt::painter::{systems, Painter, ThemeCache};
+    use emusen_esde_qt::shelves;
+    let settings = shelves::settings(&common::interface_settings(folder, choices, view, "")).expect("the settings read");
+    let found = systems(&ThemeCache::default(), &settings, shelves::shelves(&texts.0, &texts.1).unwrap(), &shelves::presence(&texts.2).unwrap(), w, h);
+    let mut p = Painter::new(settings);
+    p.install(found, f64::from(w), f64::from(h), DateTime::new(2026, 11, 6, 12, 0, 0));
+    if view == "gamelist" {
+        p.pressed(step, false);
+    }
+    for _ in 0..20 {
+        p.tick(100.0);
+    }
+    let count = |t: &str| t.chars().filter(|c| !c.is_whitespace()).count();
+    let mut out: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+    for e in &p.frame.elements {
+        let n = match &e.paint {
+            Paint::Help(h) => h.entries.iter().map(|x| count(&x.label)).sum(),
+            Paint::Text(t) => count(&t.text),
+            Paint::Status(s) => s.items.iter().filter_map(|i| i.text.as_deref()).map(count).sum(),
+            _ => continue,
+        };
+        out.entry(format!("element-{}", e.name)).or_default().push(n);
+    }
+    out
+}
+
 fn ratio(w: i32, h: i32) -> (i32, i32) {
     let g = (1..=w.min(h)).rev().find(|d| w % d == 0 && h % d == 0).unwrap();
     (w / g, h / g)
@@ -108,6 +138,8 @@ fn the_watched_themes_hold_at_the_five_sizes() {
     let out = common::compare_dir();
     let mut harness = Harness::new();
     let mut failures = vec![];
+    // Every worded box at every size pair with no allowance, beside its letters, for the tester's ruling on WORDS.
+    let mut table = vec!["theme\tstate\tsize\tagainst\tbox\tx_px\ty_px\tw_px\th_px\tmost_px\tletters\thalf_per_letter_plus_one\twithin".to_owned()];
     let (w0, h0) = SIZES[0];
     let mut scene = harness.load(common::VIEW, w0, h0);
     for (theme, variant, scheme, font) in common::watched() {
@@ -128,6 +160,7 @@ fn the_watched_themes_hold_at_the_five_sizes() {
                 scene.pad(step);
             }
             let state = if view == "system" { "system".to_owned() } else { "gamelist-1".to_owned() };
+            let letters = letters_of(&folder, &choices, view, &texts, step, (w0, h0));
             let mut by_ratio: BTreeMap<(i32, i32), ((i32, i32), Boxes)> = BTreeMap::new();
             for (w, h) in SIZES {
                 let before = scene.property("esdeModel", "revision");
@@ -167,6 +200,17 @@ fn the_watched_themes_hold_at_the_five_sizes() {
                                     let off = [(b.0 - a.0, a.2, pixel.0), (b.1 - a.1, a.3, pixel.1), (b.2 - a.2, a.2, pixel.0), (b.3 - a.3, a.3, pixel.1)]
                                         .iter()
                                         .fold(0.0f64, |m, (d, extent, across)| m.max((d.abs() - words(*extent)) * across));
+                                    if *worded {
+                                        let (key, k) = name.rsplit_once('#').unwrap();
+                                        let n = letters.get(key).and_then(|v| v.get(k.parse::<usize>().unwrap()).copied());
+                                        let px = [(b.0 - a.0) * pixel.0, (b.1 - a.1) * pixel.1, (b.2 - a.2) * pixel.0, (b.3 - a.3) * pixel.1];
+                                        let most = px.iter().fold(0.0f64, |m, d| m.max(d.abs()));
+                                        let (count, bound) = n.map_or(("-".to_owned(), f64::NAN), |n| (n.to_string(), 0.5 * n as f64 + 1.0));
+                                        table.push(format!(
+                                            "{theme}\t{state}\t{w}x{h}\t{first}\t{name}\t{:.2}\t{:.2}\t{:.2}\t{:.2}\t{most:.2}\t{count}\t{bound:.1}\t{}",
+                                            px[0], px[1], px[2], px[3], if bound.is_nan() { "-" } else if most <= bound { "yes" } else { "no" }
+                                        ));
+                                    }
                                     if off > 1.0 {
                                         failures.push(format!(
                                             "{at}: {name} {b:.4?} against {a:.4?} at {first}, {off:.2} px off at the smaller window, past the one pixel ES-DE's whole-pixel placing allows (GuiComponent::getTransform, v3.4.1)"
@@ -238,6 +282,7 @@ fn the_watched_themes_hold_at_the_five_sizes() {
             scene.hover(-1.0, -1.0);
         }
     }
+    std::fs::write(out.join("worded-boxes.tsv"), table.join("\n") + "\n").unwrap();
     eprintln!("{} failures\n{}", failures.len(), failures.join("\n"));
     scene.assert_quiet();
     assert!(failures.is_empty(), "{}", failures.join("\n"));

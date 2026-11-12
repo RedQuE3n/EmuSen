@@ -4,6 +4,7 @@
 
 use emusen_kit_core::input::{PadControl, UiButton};
 use emusen_qt_test::virtual_pad::{Sdl, VirtualPad};
+use emusen_qt_test::tree::{Node, Tree};
 use emusen_qt_test::Scene;
 
 /// Waits up to `seconds` for a condition the scene answers, letting Qt run between looks.
@@ -41,12 +42,23 @@ pub fn choose_row(scene: &mut Scene<'_>, words: &str) {
 /// The centre of the shown card's row whose label reads `label`.
 pub fn row_centre(scene: &mut Scene<'_>, label: &str) -> (f64, f64) {
     let tree = scene.tree();
-    tree.nodes
-        .iter()
-        .filter(|n| n.visible && n.ty.starts_with("MenuRow"))
-        .find(|r| tree.nodes.iter().any(|n| n.parent == r.id && n.name == "label" && n.text.as_deref() == Some(label)))
+    card_rows(&tree)
+        .into_iter()
+        .find(|r| row_label(&tree, r) == Some(label))
         .map(|r| (r.x + r.w / 2.0, r.y + r.h / 2.0))
         .unwrap_or_else(|| panic!("no row reads {label}"))
+}
+
+/// The shown card's rows, top first: the one reading of them every row helper here makes.
+fn card_rows(tree: &Tree) -> Vec<&Node> {
+    let mut rows: Vec<&Node> = tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("MenuRow")).collect();
+    rows.sort_by(|a, b| a.y.total_cmp(&b.y));
+    rows
+}
+
+/// A card row's label.
+fn row_label<'t>(tree: &'t Tree, row: &Node) -> Option<&'t str> {
+    tree.nodes.iter().find(|n| n.parent == row.id && n.name == "label").and_then(|n| n.text.as_deref())
 }
 
 /// Points over the middle of the game's screen, where the console's picture is drawn whatever its shape.
@@ -129,27 +141,20 @@ pub fn guide_alone(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad) {
 
 /// The middles of the shown card's rows, top first.
 pub fn row_middles(scene: &mut Scene<'_>) -> Vec<(f64, f64)> {
-    let tree = scene.tree();
-    let mut rows: Vec<(f64, f64)> = tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("MenuRow")).map(|n| (n.x + n.w / 2.0, n.y + n.h / 2.0)).collect();
-    rows.sort_by(|a, b| a.1.total_cmp(&b.1));
-    rows
+    card_rows(&scene.tree()).iter().map(|n| (n.x + n.w / 2.0, n.y + n.h / 2.0)).collect()
 }
 
 /// Whether the shown card's row `index`, top first, lies under `at`.
 pub fn row_box_holds(scene: &mut Scene<'_>, index: usize, at: (f64, f64)) -> bool {
     let tree = scene.tree();
-    let mut rows: Vec<_> = tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("MenuRow")).collect();
-    rows.sort_by(|a, b| a.y.total_cmp(&b.y));
-    rows.get(index).is_some_and(|n| at.0 > n.x && at.0 < n.x + n.w && at.1 > n.y && at.1 < n.y + n.h)
+    card_rows(&tree).get(index).is_some_and(|n| at.0 > n.x && at.0 < n.x + n.w && at.1 > n.y && at.1 < n.y + n.h)
 }
 
 /// The label of the shown card's row `index`, top first.
 pub fn row_words(scene: &mut Scene<'_>, index: usize) -> String {
     let tree = scene.tree();
-    let mut rows: Vec<_> = tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("MenuRow")).collect();
-    rows.sort_by(|a, b| a.y.total_cmp(&b.y));
-    let row = rows.get(index).expect("the card's row");
-    tree.nodes.iter().find(|n| n.parent == row.id && n.name == "label").and_then(|n| n.text.clone()).unwrap_or_default()
+    let rows = card_rows(&tree);
+    row_label(&tree, rows.get(index).expect("the card's row")).unwrap_or_default().to_owned()
 }
 
 /// The chord's Pause Card over the console, named as Mistress named its session.
@@ -176,10 +181,7 @@ pub fn row_focused(scene: &mut Scene<'_>, words: &str) {
 /// Whether the shown card has a row whose label begins `label` ("Quit Game" for "Quit Game...").
 pub fn row_shown(scene: &mut Scene<'_>, label: &str) -> bool {
     let tree = scene.tree();
-    tree.nodes
-        .iter()
-        .filter(|n| n.visible && n.ty.starts_with("MenuRow"))
-        .any(|r| tree.nodes.iter().any(|n| n.parent == r.id && n.name == "label" && n.text.as_deref().is_some_and(|t| t.starts_with(label))))
+    card_rows(&tree).into_iter().any(|r| row_label(&tree, r).is_some_and(|t| t.starts_with(label)))
 }
 
 /// The chord's Pause Card over the console named `named`, Leave, Quit Game and Yes: the session closed and `to` shown.

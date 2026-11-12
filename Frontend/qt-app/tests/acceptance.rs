@@ -456,9 +456,8 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
         assert!(scene.pad_chord_only(), "the game owns the pad");
         // The router's clock back on the wall clock, as a real pad needs it, since the harness's presses stopped it.
         scene.run_pad_clock();
-        sdl.press(&pad, guide, true);
+        common::console::guide_alone(scene, &sdl, &pad);
         until(scene, "the chord pausing the game under the Pause Card", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Pause");
-        sdl.press(&pad, guide, false);
         until(scene, "the card in place", |s| s.property("cardCanvas", "slide") == "0");
     };
     chord(&mut scene);

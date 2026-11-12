@@ -3,6 +3,9 @@ use std::process::Command;
 
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 
+#[path = "build/freetype.rs"]
+mod freetype;
+
 // EmuSen.Esde 1.1, the painter's module (EmuSen_Qt.md §4.8); its .qmltypes is the module's surface.
 const ESDE_FILES: [&str; 20] = [
     "qml/Picture.qml",
@@ -52,14 +55,29 @@ fn baked_shader() -> PathBuf {
 }
 
 /// The system's FreeType linked by its run-time name, the library Qt already loads, so only libfreetype.so.6 need be
-/// installed; pkg-config, where it knows freetype2, adds the folder it is in (EmuSen_Qt.md §4.12.4).
+/// installed; pkg-config, where it knows freetype2, adds the folder it is in, and a missing library is named (EmuSen_Qt.md §4.12.4).
 fn link_freetype() {
-    if let Ok(out) = Command::new("pkg-config").args(["--libs-only-L", "freetype2"]).output() {
-        for dir in String::from_utf8_lossy(&out.stdout).split_whitespace().filter_map(|a| a.strip_prefix("-L")) {
-            println!("cargo:rustc-link-search=native={dir}");
+    let pkg_config = match Command::new("pkg-config").args(["--libs-only-L", "freetype2"]).output() {
+        Ok(out) if out.status.success() => Ok(String::from_utf8_lossy(&out.stdout).into_owned()),
+        Ok(out) => Err(String::from_utf8_lossy(&out.stderr).trim().to_owned()),
+        Err(e) => Err(format!("it did not run: {e}")),
+    };
+    let ldconfig = ["ldconfig", "/sbin/ldconfig"]
+        .iter()
+        .find_map(|cmd| Command::new(cmd).arg("-p").output().ok().filter(|o| o.status.success()))
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned());
+    match freetype::plan(pkg_config, ldconfig) {
+        Ok((dirs, warning)) => {
+            for dir in dirs {
+                println!("cargo:rustc-link-search=native={dir}");
+            }
+            if let Some(words) = warning {
+                println!("cargo:warning={words}");
+            }
         }
+        Err(words) => panic!("{words}"),
     }
-    println!("cargo:rustc-link-lib=dylib:+verbatim=libfreetype.so.6");
+    println!("cargo:rustc-link-lib=dylib:+verbatim={}", freetype::LIBRARY);
 }
 
 fn main() {

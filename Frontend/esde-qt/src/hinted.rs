@@ -61,6 +61,9 @@ pub fn char_size(px: f32) -> c_long {
     (px * 64.0) as c_long
 }
 
+/// The painter's problem when FreeType does not start.
+pub const NOT_STARTED: &str = "the help bar's icons are sized by FreeType, and FreeType did not start";
+
 struct FreeType {
     library: *mut c_void,
     faces: HashMap<String, Option<*mut FaceRec>>,
@@ -70,7 +73,7 @@ impl FreeType {
     fn open() -> Result<FreeType, String> {
         let mut library = std::ptr::null_mut();
         if unsafe { FT_Init_FreeType(&mut library) } != 0 {
-            return Err("the help bar's icons are sized by FreeType, and FreeType did not start".into());
+            return Err(NOT_STARTED.into());
         }
         Ok(FreeType { library, faces: HashMap::new() })
     }
@@ -146,6 +149,13 @@ mod tests {
         assert_eq!(char_size(px), 2346);
         assert_eq!(char_size(54.999_996), 3519);
         assert_eq!(char_size(20.0), 1280);
+    }
+
+    #[test]
+    fn a_library_that_did_not_start_is_an_error_that_says_so() {
+        FREETYPE.with(|ft| *ft.borrow_mut() = Some(Err(NOT_STARTED.to_owned())));
+        assert_eq!(ready(), Err(NOT_STARTED.to_owned()));
+        assert_eq!(rows("", 20.0, 'S'), Err(NOT_STARTED.to_owned()));
     }
 
     #[test]

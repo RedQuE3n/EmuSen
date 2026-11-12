@@ -163,6 +163,11 @@ pub struct EsdeModelRust {
 }
 
 /// The local time at `pinned` seconds since 1970, or the wall clock's at 0, for the clock element and the dates.
+/// A read load's problem: the painter's, or with themed systems and none, FreeType's when it did not start (EmuSen_Qt.md §4.12.4).
+fn load_problem(painter: String, themed: bool, freetype: Result<(), String>) -> String {
+    if painter.is_empty() && themed { freetype.err().unwrap_or_default() } else { painter }
+}
+
 fn local_now(pinned: i64) -> DateTime {
     let now = if pinned == 0 { QDateTime::current_date_time() } else { QDateTime::from_secs_since_epoch(pinned, &QTimeZone::system_time_zone()) };
     let (d, t) = (now.date(), now.time());
@@ -248,10 +253,7 @@ impl qobject::EsdeModel {
         }
         let (systems, problem) = match found {
             Ok(systems) => {
-                let mut problem = painter::problem(&systems);
-                if problem.is_empty() && !systems.is_empty() {
-                    problem = crate::hinted::ready().err().unwrap_or_default();
-                }
+                let problem = load_problem(painter::problem(&systems), !systems.is_empty(), crate::hinted::ready());
                 (systems, problem)
             }
             Err(words) => (Vec::new(), words),
@@ -376,5 +378,18 @@ impl qobject::EsdeModel {
     pub fn reload(self: Pin<&mut Self>) {
         self.cache.forget();
         self.load();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::load_problem;
+    use crate::hinted::NOT_STARTED;
+
+    #[test]
+    fn a_freetype_that_did_not_start_is_the_load_s_problem() {
+        assert_eq!(load_problem(String::new(), true, Err(NOT_STARTED.to_owned())), NOT_STARTED);
+        assert_eq!(load_problem(String::new(), true, Ok(())), "");
+        assert_eq!(load_problem("a theme's words".to_owned(), true, Err(NOT_STARTED.to_owned())), "a theme's words");
     }
 }

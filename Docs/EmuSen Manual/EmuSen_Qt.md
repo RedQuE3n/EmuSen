@@ -3628,7 +3628,9 @@ comes from the system's FreeType, the library the captures were drawn with (Free
 time as the platform client loads SQLite, with no crate of its own: `esde-qt`'s `hinted.rs` is its one owner and makes
 the one call measured, `FT_Set_Char_Size(face, 0, round(px × 64), 72, 72)`, `FT_Load_Char(face, 'S', FT_LOAD_DEFAULT)`,
 the slot's `metrics.height` over 64 (`emusen_esde::fonts::REFERENCE` the glyph; the kit's body face read from its bytes).
-Without `libfreetype.so.6` the painter's `problem` says so in words and the icons take no room; nothing else stands in.
+A FreeType that does not start (`FT_Init_FreeType` failing) is the painter's `problem`, in `hinted::NOT_STARTED`'s
+words (`model.rs`'s `load_problem`, held by its unit test and `hinted`'s), and the icons take no room; nothing else
+stands in. Without `libfreetype.so.6` at all the program does not link, below.
 Qt's own FreeType through `QRawFont` with full hinting was tried first and set aside: it gives rost's `S` 14 px from 20.32
 to 20.64 px where FreeType's default load gives 15 and the captures `v07`–`v09` and `u07`–`u09` need 15 (a box of 18.75);
 its Akrobat heights agreed. Everything else is `help.rs`'s arithmetic in Rust: the box is `BOX_OVER_REFERENCE` (1.25)
@@ -3763,7 +3765,10 @@ the default place: each is held by a unit test from the rule (`frame.rs`'s
 **The painter's loader.** Decided 2026-11-11 (R-20261111-72): FreeType's hinter is reached by linking the system's
 library, the one Qt already loads. `esde-qt`'s `build.rs` links `libfreetype.so.6` by that name (`rustc-link-lib` with
 the `+verbatim` modifier) and adds the folder `pkg-config --libs-only-L freetype2` names where pkg-config knows the
-library; building needs only the run-time library installed, no development package. `libloading` has left esde-qt
+library; building needs only the run-time library installed, no development package. Where neither pkg-config nor
+`ldconfig -p` finds `libfreetype.so.6` the build stops with words that name it and the packages that hold it, and where
+pkg-config alone does not know it the build says so as a warning (`build/freetype.rs`'s `plan`, held by
+`tests/freetype_link.rs`). `libloading` has left esde-qt
 and the lint `qt_4_8_the_painter_names_no_client_and_no_runtime` passes unchanged. `hinted.rs` declares the five
 FreeType calls it makes and reads the face and glyph slot through `#[repr(C)]` prefixes of `freetype.h`'s records.
 

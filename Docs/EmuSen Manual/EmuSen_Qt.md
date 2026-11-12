@@ -4977,8 +4977,8 @@ Return, Escape and the rest) stays the interface's, as Mistress's themed keys di
 
 Over the Pause Card the game is paused under the card: Exit to Library goes to the library as Back to Library does,
 Save State, Load State, Screenshot and Fullscreen act as over the library, and Pause / Resume and Frame Advance do
-nothing (a design note of 2026-11-12, with no ruling: Mistress's pad menu has no card, and resuming the game under the
-card would leave the card over a running game; the question is the tester's).
+nothing, decided 2026-11-12 (R-20261112-18): Mistress's pad menu has no card, and resuming the game under the card
+would leave the card over a running game.
 
 **A change reaching a running game.** What Settings ▸ Controllers hands the pads is one module, `qt-models`
 `pads_reach.rs`, which `SettingsModel` calls and the tests call: the binding files a change touched saved and the pads
@@ -5006,7 +5006,9 @@ line). The hotkey words are the actions' own names (§7.7.H7) and the descriptio
 `settings_controllers.rs` and `settings_effects.rs` wait on what they wait for (a line drawn, a row's value, the second
 pad seated: `PadReader.seated`, asked when read). SDL's left stick is numbered once, in `qt-endymion` `reading::sdl`,
 which the tests read; `game.rs`'s `LEFT_X` is the core ABI's PadAxis (`EMUSEN_AXIS_LEFT_X`), another numbering, which
-the front end has no crate to read from without a new dependency. The three quiet drops say where they are said: a
+the front end has no crate to read from without a new dependency. Decided 2026-11-12 (R-20261112-19): it gets its
+owner in a later piece, an export through the platform interface; until then this one copy stays, its line naming its
+owner. The three quiet drops say where they are said: a
 card's profile unread (`controllers_problem`), the Pause Card's controllers JSON (the program's own, read back whole),
 and a control Endymion gives no word (`unworded` when it is bound).
 

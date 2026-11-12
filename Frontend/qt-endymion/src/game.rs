@@ -16,7 +16,7 @@ use crate::seats::{Ask, Came, Connected, Player, Seats};
 pub const PLAYERS: usize = 8;
 /// PadButton's count, the RetroPad's sixteen.
 const BUTTONS: u32 = 16;
-/// PadAxis's LeftX: a game that reads it hears the left stick as a stick, not the d-pad.
+/// PadAxis's LeftX (a game reading it hears a stick, not the d-pad), copied from its owner, the core ABI's EMUSEN_AXIS_LEFT_X, until the platform interface exports it (R-20261112-19).
 const LEFT_X: u32 = 0;
 
 /// What a running game asks of the pads: its console and game, for the bindings; its ports; the axes it reads, by PadAxis.

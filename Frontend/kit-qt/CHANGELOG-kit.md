@@ -24,6 +24,8 @@ No type, property, signal or invokable was added, removed or changed in the regi
 - `SectionStrip` is interactive only while its names run past it (its read-only `overflows`, the one place the condition
   is written), and neither a mouse drag nor a finger's drag moves it; where its names fit a finger's drag is the page's.
   §7.105.
+- Where its names run past it, `SectionStrip` takes a finger's sideways drag only: an upright one that starts on it is
+  the page's, and a short tap still chooses a name. §7.105.
 - The window's fact answers no for a window whose watch no controller started, and the kit's Rust gives it to the ES-DE
   view (`frame::pointer_moving`, `frame::watch_windows`), whose hovers ask it as `hoverAt` does. §7.108.
 

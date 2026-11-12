@@ -3045,9 +3045,13 @@ into the strip whole, as every other view's current item. `acceptedButtons` is `
 move it (Qt 6.9's `Flickable.acceptedButtons`) and a click on a name still chooses it. That property is the mouse's
 alone: a finger's drag flicked an interactive strip (measured on 2026-11-11 with kit-gallery's `strip` and qt-test's
 `Scene::touch_drag`, one finger on a touch screen: `contentX` 0 before, 1618 after). A `DragHandler` for touch screens,
-with no target and `CanTakeOverFromAnything` alone, so that it yields its grab to nothing, takes a finger's drag while the
-names run past the strip, and the strip stays where it is; a tap shorter than the drag threshold still reaches the name.
-Where the names fit, the handler is off and a finger's drag from the strip is the page's. A ListView's
+with no target and `CanTakeOverFromAnything` alone, so that it yields its grab to nothing, takes a finger's sideways drag
+while the names run past the strip, and the strip stays where it is. Its upright axis is off (`yAxis.enabled: false`),
+so a finger's upright drag that starts on the strip is the page's, as it was before the strip took touch: without that,
+measured on 2026-11-11 with kit-gallery's `strip`, the handler took the upright drag too and the page under an
+overflowing strip did not move. A tap shorter than the drag threshold still reaches the name (`strip` taps NES on the
+page's overflowing strip and it is chosen). Where the names fit, the handler is off and a finger's drag from the strip
+is the page's. A ListView's
 `flickableDirection` set across was tried first: the ListView sets it again from its orientation, and set once made it
 turned the gate's reading of the strip to an upright scroller, so it was taken out. The condition is written once, in
 the strip's read-only `overflows`. Where the names fit,
@@ -3059,11 +3063,14 @@ moves nothing; it was taken out, and the harness reads `interactive` alone as be
 
 Held by kit-gallery's `strip` (`StripScene.qml`: thirteen names in a 600-unit strip: the gate reads it as a scroller the
 wheel moves and pointer reach finds no still scroller; a drag leaves it still; three notches move it; a click on a whole
-name chooses it; the walk's last section, PLAYSTATION 2, is brought in whole) and `strip_fits` (three names that fit,
+name chooses it; the walk's last section, PLAYSTATION 2, is brought in whole; on a page that scrolls, a finger's drag up
+from a second overflowing strip moves the page and not the strip, and a finger's short tap on NES chooses it) and
+`strip_fits` (three names that fit,
 on a page that scrolls: the gate reads no scroller, the wheel over the strip moves the page and not the strip, a drag
 leaves it still, a finger's drag up from it moves the page, and a click on SATURN chooses it). Seeded faults: the strip
 never interactive (`strip` fails), always interactive (`strip_fits` fails), dragged by the mouse (`strip` fails), and
-the touch handler gone (fault 49, `strip` fails at the finger's drag).
+the touch handler gone (fault 49, `strip` fails at the finger's drag), and the handler taking the upright drag too
+(fault 50, `strip` fails at the page's drag).
 
 qt-test's `Scene::number` reads a number property of a tree's item by its id, as the harness's own settle already did,
 so a test can read an item's `implicitWidth`, `contentX` or `x` where it has no objectName.

@@ -1,13 +1,13 @@
 import QtQuick
 import EmuSen.Kit as Kit
 
-// A section strip with more names than its width holds, and one whose names fit on a page that scrolls, for strip.rs (EmuSen_Kit.md §7.43, §7.105).
+// A section strip with more names than its width holds, one whose names fit on a page that scrolls, and one whose names run past it on a page that scrolls, for strip.rs and strip_fits.rs (EmuSen_Kit.md §7.43, §7.105).
 Window {
     id: scene
     objectName: "scene"
     visible: true
     width: 640
-    height: 240
+    height: 400
     color: Kit.Tokens.voidFill
     Kit.FrameController {
         id: controller
@@ -45,4 +45,27 @@ Window {
         }
     }
     readonly property string chosen: few.selectedSection
+    Kit.FrameController {
+        id: longer
+        objectName: "longer"
+        sections: ["All", "NES", "Super Nintendo", "Nintendo 64", "Game Boy", "Game Boy Color", "Game Boy Advance", "Genesis", "Sega CD", "Master System", "Saturn", "PlayStation", "PlayStation 2"]
+        selectedSection: "All"
+    }
+    Flickable {
+        objectName: "deep"
+        x: 16
+        y: 230
+        width: 600
+        height: 160
+        clip: true
+        contentWidth: 600
+        contentHeight: 640
+        Kit.SectionStrip {
+            objectName: "long"
+            y: 40
+            width: 600
+            height: 44
+            controller: longer
+        }
+    }
 }

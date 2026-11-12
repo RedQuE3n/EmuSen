@@ -19,10 +19,11 @@ ListView {
     preferredHighlightBegin: 0
     preferredHighlightEnd: root.width
     highlightMoveDuration: Kit.Tokens.instant
-    // A finger's drag is this handler's, which yields it to nothing, so the strip is not flicked by touch as by no mouse (EmuSen_Kit.md §7.105).
+    // A finger's sideways drag is this handler's, which yields it to nothing, so the strip is not flicked by touch as by no mouse; an upright one is the page's (EmuSen_Kit.md §7.105).
     DragHandler {
         enabled: root.overflows
         target: null
+        yAxis.enabled: false
         acceptedDevices: PointerDevice.TouchScreen
         grabPermissions: PointerHandler.CanTakeOverFromAnything
     }

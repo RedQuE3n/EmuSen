@@ -665,13 +665,11 @@ impl qobject::SettingsModel {
                 self.shown(false);
             }
             Outcome::Bindings(files) => {
-                let saved = ClientSettings::open(&self.platform_library.to_string()).and_then(|s| s.save_bindings(&self.view.read.bindings, &files));
-                self.as_mut().said(saved.err().map(|e| format!("The bindings could not be saved: {e}")).unwrap_or_default());
-                // A running game hears its pads through the files' bindings: bound again at once (EmuSen_Interface.md §20.3).
                 // SAFETY: the address is PadReader.gamePads, whose reader outlives the screens.
-                if let Some(pads) = unsafe { emusen_qt_endymion::game::GamePads::at(self.game_pads) } {
-                    pads.rebind();
-                }
+                let pads = unsafe { emusen_qt_endymion::game::GamePads::at(self.game_pads) };
+                let saved = ClientSettings::open(&self.platform_library.to_string())
+                    .and_then(|s| crate::pads_reach::bindings_saved(&s, &self.view.read.bindings, &files, pads.as_deref()));
+                self.as_mut().said(saved.err().map(|e| format!("The bindings could not be saved: {e}")).unwrap_or_default());
                 self.as_mut().shown(false);
                 self.refresh();
             }
@@ -755,13 +753,10 @@ impl qobject::SettingsModel {
 
     /// The settings the pads act on handed to the pads' reader, once read (Mistress's `SaveApp`: deadzone, stickdpad, mirror).
     fn settle_pads(mut self: Pin<&mut Self>) {
-        let Some((settings, unread)) = self.view.pad_settings() else { return };
-        if let Some(words) = unread {
-            self.as_mut().said(words);
-        }
         // SAFETY: the address is PadReader.gamePads, whose reader outlives the screens.
-        if let Some(pads) = unsafe { emusen_qt_endymion::game::GamePads::at(self.game_pads) } {
-            pads.settle(settings);
+        let pads = unsafe { emusen_qt_endymion::game::GamePads::at(self.game_pads) };
+        if let Some(words) = crate::pads_reach::settle(&self.view, pads.as_deref()) {
+            self.as_mut().said(words);
         }
     }
 

@@ -16,29 +16,30 @@ pub enum Hotkey {
     FrameAdvance,
 }
 
-/// Every action, in the header's order, by its word.
-const WORDS: [(Hotkey, &str); 10] = [
-    (Hotkey::FastForward, "FastForward"),
-    (Hotkey::Rewind, "Rewind"),
-    (Hotkey::SaveState, "SaveState"),
-    (Hotkey::LoadState, "LoadState"),
-    (Hotkey::TogglePause, "TogglePause"),
-    (Hotkey::ToggleFullscreen, "ToggleFullscreen"),
-    (Hotkey::ExitToLibrary, "ExitToLibrary"),
-    (Hotkey::Screenshot, "Screenshot"),
-    (Hotkey::ToggleBigPicture, "ToggleBigPicture"),
-    (Hotkey::FrameAdvance, "FrameAdvance"),
+/// Every action, in the header's order.
+const ALL: [Hotkey; 10] = [
+    Hotkey::FastForward,
+    Hotkey::Rewind,
+    Hotkey::SaveState,
+    Hotkey::LoadState,
+    Hotkey::TogglePause,
+    Hotkey::ToggleFullscreen,
+    Hotkey::ExitToLibrary,
+    Hotkey::Screenshot,
+    Hotkey::ToggleBigPicture,
+    Hotkey::FrameAdvance,
 ];
 
 impl Hotkey {
-    /// The action a file's word names, in any case, as Endymion reads it.
+    /// The action a file's word names, in any case, as Endymion reads it: the word is the action's own name, held
+    /// against Endymion's `bindings_defaults` by the tests (EmuSen_Qt.md §7.7.H7).
     pub fn named(word: &str) -> Option<Hotkey> {
-        WORDS.iter().find(|(_, w)| w.eq_ignore_ascii_case(word)).map(|(h, _)| *h)
+        ALL.into_iter().find(|h| h.word().eq_ignore_ascii_case(word))
     }
 
     /// The action's word in the files.
-    pub fn word(self) -> &'static str {
-        WORDS.iter().find(|(h, _)| *h == self).map_or("", |(_, w)| w)
+    pub fn word(self) -> String {
+        format!("{self:?}")
     }
 
     /// Whether the action lasts while its key is held (Fast Forward, Rewind) rather than firing once as it goes down

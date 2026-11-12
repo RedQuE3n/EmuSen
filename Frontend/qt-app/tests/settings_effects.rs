@@ -59,11 +59,12 @@ fn qt_7_7_h3_only_the_first_controller_leaves_the_menus_one_pad(sdl: &Sdl, harne
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     open_settings(&mut scene, WORLD, one.id);
     focus(&mut scene, "Only the first controller connected");
+    let before = bindings::focused_row_words(&mut scene);
     scene.pad(UiButton::Right);
-    scene.wait(300);
-    // A second pad connected now is not read by the menus.
+    bindings::until(&mut scene, "the row turned On", |s| bindings::focused_row_words(s) != before);
+    // A second pad connected now is seated (Players counts it) and yet not read by the menus.
     assert!(scene.set_property("program", "onlyPads", &format!("{} {}", one.id, two.id)));
-    scene.wait(500);
+    bindings::until(&mut scene, "the second pad seated", |s| s.property("pads", "seated") == "2");
     assert_eq!(scene.property("pads", "connected"), "1", "the menus read the first pad alone");
     // The second pad steers nothing: its Down does not move the focus.
     scene.run_pad_clock();
@@ -185,6 +186,56 @@ fn qt_7_7_h7_a_row_turned_while_settings_is_read_keeps_its_value(sdl: &Sdl, harn
     assert_eq!(scene.property("settingsModel", "sentence"), "Your controller never shakes.");
 }
 
+/// Qt's numbers for P, the full stop, F5, F8 and F11.
+const P: i32 = 0x50;
+const PERIOD: i32 = 0x2e;
+const F5: i32 = 0x0100_0034;
+const F8: i32 = 0x0100_0037;
+const F11: i32 = 0x0100_003a;
+
+fn tap(scene: &mut emusen_qt_test::Scene<'_>, key: i32) {
+    scene.key_hold(key, true);
+    scene.key_hold(key, false);
+}
+
+/// The hotkeys over the library with no game open, as Mistress's acted with the library up (EmuSen_Qt.md §7.7.H8): read
+/// from the program's start, Fullscreen turns the window from Home and from Settings, Save and Load State say no game is
+/// loaded, Pause and Frame Advance do nothing.
+fn qt_7_7_h8_the_hotkeys_act_over_the_library_with_no_game(sdl: &Sdl, harness: &mut emusen_qt_test::Harness) {
+    let _world = sandbox("qt-app-hotkeys-library", &[("snes", "Hero.sfc")]);
+    let pad = sdl.attach("Simulated pad", 0x045e, 0x028e);
+    let mut scene = harness.load(MAIN_URL, 1280, 800);
+    assert!(scene.set_property("program", "splash", "false"));
+    assert!(scene.set_property("settingsModel", "world", WORLD));
+    assert!(scene.set_property("program", "onlyPads", &pad.id.to_string()));
+    assert!(scene.set_property("program", "platformLibrary", emusen_client_fixture::library().to_str().unwrap()));
+    wait_for(&mut scene, "library", "loading", "false", 10000);
+    wait_for(&mut scene, "pads", "connected", "1", 5000);
+    wait_for(&mut scene, "screens", "shown", "Home", 2000);
+    tap(&mut scene, F11);
+    wait_for(&mut scene, "program", "fullScreenAsked", "true", 2000);
+    tap(&mut scene, F11);
+    wait_for(&mut scene, "program", "fullScreenAsked", "false", 2000);
+    tap(&mut scene, F5);
+    wait_for(&mut scene, "notices", "words", "Save State: no ROM loaded", 2000);
+    tap(&mut scene, F8);
+    wait_for(&mut scene, "notices", "words", "Load State: no ROM loaded", 2000);
+    tap(&mut scene, P);
+    tap(&mut scene, PERIOD);
+    assert_eq!(scene.property("screens", "shown"), "Home", "Pause and Frame Advance do nothing over the library");
+    assert_eq!(scene.property("session", "running"), "false");
+    // From Settings, a screen of the library's too.
+    for _ in 0..5 {
+        scene.pad(UiButton::Right);
+    }
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "screens", "shown", "Settings", 2000);
+    tap(&mut scene, F11);
+    wait_for(&mut scene, "program", "fullScreenAsked", "true", 2000);
+    tap(&mut scene, F11);
+    wait_for(&mut scene, "program", "fullScreenAsked", "false", 2000);
+}
+
 /// One process, one Qt and one SDL: the rows in turn, each over its own world and window; those that run the router's
 /// clock for a real pad's presses last, since the harness's own presses keep it stopped.
 #[test]
@@ -199,4 +250,5 @@ fn qt_7_7_h3_the_controllers_rows_take_effect() {
     qt_7_7_h3_controller_notices_tell_of_a_pad_come_and_gone_where_on(&sdl, &mut harness);
     qt_7_7_h3_only_the_first_controller_leaves_the_menus_one_pad(&sdl, &mut harness);
     qt_7_7_h3_swap_a_and_b_trades_the_menus_a_and_b_on_the_pad(&sdl, &mut harness);
+    qt_7_7_h8_the_hotkeys_act_over_the_library_with_no_game(&sdl, &mut harness);
 }

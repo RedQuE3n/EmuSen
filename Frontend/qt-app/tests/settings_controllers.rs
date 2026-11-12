@@ -6,7 +6,7 @@
 mod bindings;
 mod common;
 
-use bindings::{lines, nothing_named, open_settings, sentence, tabs};
+use bindings::{lines, nothing_named, open_settings, sentence, tabs, until};
 use common::{hold, sandbox, wait_for};
 use emusen_kit_core::input::UiButton;
 use emusen_qt::MAIN_URL;
@@ -54,17 +54,14 @@ fn qt_7_7_h_controllers_the_bindings_page_keys_and_hotkeys_hold_their_states_and
     sdl.press(&pad, 3, true);
     wait_for(&mut scene, "settingsModel", "listeningPad", "false", 2000);
     sdl.press(&pad, 3, false);
-    scene.wait(200);
-    assert!(lines(&mut scene).starts_with("Bound to the pad's North button."), "{}", lines(&mut scene));
+    until(&mut scene, "Y bound to North", |s| lines(s).starts_with("Bound to the pad's North button."));
     assert_eq!(scene.property("settingsModel", "bindingsShown"), "true", "the press stayed the binding's");
     // Y (the pad's North on the help bar) resets it.
     scene.pad(UiButton::Search);
-    scene.wait(300);
-    assert!(lines(&mut scene).starts_with("Bound to the pad's West button."), "{}", lines(&mut scene));
+    until(&mut scene, "Y reset to West", |s| lines(s).starts_with("Bound to the pad's West button."));
     // RB: the Sega CD's three-button pad, its own drawing.
     scene.pad(UiButton::PageDown);
-    scene.wait(200);
-    assert_eq!(tabs(&mut scene), "PLAYER 1, SEGA CD, PLAYSTATION, SUPER NINTENDO");
+    until(&mut scene, "RB to the Sega CD", |s| tabs(s) == "PLAYER 1, SEGA CD, PLAYSTATION, SUPER NINTENDO");
     assert_eq!(scene.property("controllerLayout", "name"), "Genesis 3-button controller");
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "settingsModel", "bindingsShown", "false", 1000);
@@ -90,7 +87,7 @@ fn qt_7_7_h_controllers_the_bindings_page_keys_and_hotkeys_hold_their_states_and
     scene.pad(UiButton::Down);
     wait_for(&mut scene, "settingsModel", "focused", "7", 1000);
     scene.pad(UiButton::Accept);
-    scene.wait(200);
+    until(&mut scene, "the Hotkeys page", |s| s.property("settingsModel", "bindingsShown") == "false" && s.property("settingsModel", "sentence").contains("Fast Forward") || bindings::focused_row_words(s).iter().any(|w| w == "Fast Forward"));
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "settingsModel", "listening", "true", 1000);
     scene.key(0x0100_0032, 0);

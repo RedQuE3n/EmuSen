@@ -36,6 +36,8 @@ pub mod qobject {
         #[qproperty(i32, connected, READ, NOTIFY)]
         #[qproperty(QString, problem, READ, NOTIFY)]
         #[qproperty(u64, game_pads, READ, CONSTANT)]
+        // The pads the seats hold, connected, asked when read (the menus may read fewer: Only the first controller).
+        #[qproperty(i32, seated, READ = seated_now)]
         /// The game hears nothing while true (`PadRouter.guideHeld`), and after it, nothing until every button is let go.
         #[qproperty(bool, game_muted)]
         type PadReader = super::PadReaderRust;
@@ -46,6 +48,8 @@ pub mod qobject {
         /// A button of the interface went down or up on the pads read, before the player's swap: what `PadRouter.push` takes.
         #[qsignal]
         fn button(self: Pin<&mut PadReader>, button: PadButton, down: bool);
+
+        fn seated_now(self: &PadReader) -> i32;
 
         /// The seats or the pads connected changed, or a button went down or up on one (EmuSen_Input.md §8.9).
         #[qsignal]
@@ -73,6 +77,12 @@ pub struct PadReaderRust {
     game_muted: bool,
     game: Arc<GamePads>,
     reader: Option<Reader>,
+}
+
+impl qobject::PadReader {
+    fn seated_now(&self) -> i32 {
+        self.game.connected().len() as i32
+    }
 }
 
 impl Default for PadReaderRust {

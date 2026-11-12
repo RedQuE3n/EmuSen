@@ -192,6 +192,12 @@
   },
   "controllers": {
     "seats_shown": 4,
+    "hidden": [
+      {"row": "AppSettings OnScreenKeyboard", "ruling": "R-20261112-13"},
+      {"row": "AppSettings ClaimPlayersByPress", "ruling": "R-20261112-14"},
+      {"row": "AppSettings ExternalControllerFirst", "ruling": "R-20261112-14"},
+      {"hotkey": "ToggleBigPicture", "ruling": "R-20261112-12"}
+    ],
     "tester_hold_ms": 1000,
     "words": {
       "players_value": "{set} of {count} set",
@@ -286,7 +292,6 @@
       ["ToggleFullscreen", "Fullscreen"],
       ["ExitToLibrary", "Exit to Library"],
       ["Screenshot", "Screenshot"],
-      ["ToggleBigPicture", "Big Picture"],
       ["FrameAdvance", "Frame Advance"]
     ],
     "sticks": {

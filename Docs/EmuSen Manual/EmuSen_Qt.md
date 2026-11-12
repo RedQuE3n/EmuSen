@@ -4617,7 +4617,8 @@ not turned by a step (the options test); a found file said as none found (the fi
 `SettingsBindings` and `PauseCardControllers` (1280 × 800 and 1920 × 1200), with `Every_consoles_bindings_page_fits`
 ported for every declared controller.
 
-**The drawings are data** (decided by the tester on 2026-11-09, D2): one file a controller id in
+**The drawings are data** (a design note of 2026-11-09, with no ruling in the log: a drawing is a file, so a console looks
+like itself and a new core's controller needs no code): one file a controller id in
 `Frontend/qt-models/data/controllers/<id>.json`, in the kit's drawing format (`EmuSen_Kit.md` §7.62), each region named by
 the canonical control the core declares for it (the Genesis pad's `A` is the region of `Y`, the PlayStation's Triangle
 of `X`, the N64's C buttons the right stick's directions `RightY-`…). The twelve files were made from LunaP's
@@ -4681,19 +4682,10 @@ next connected pad, Profile the game's own (Endymion's `Games` member; the runni
 card), Swap Players dimmed with no player 2. The card's pane draws a page's second line muted under its sentence
 (`PaneModel.muted`), as Mistress's two lines.
 
-**Compared with Mistress** (measured on 2026-11-09, the Qt recordings read by WiseMan's
-`Another_frontend_s_recordings_match_these_within_the_tolerances` on the WiseMan build of the day, no build).
-`InterfaceRules.All` found nothing in the six. Under the map of names of §7.7 (the kit's `settingsStrip`,
-`settingsList`, `settingsPane`, `settingsContent`, `settingsSentence`, `helpBar` for Mistress's `SettingsSections`,
-`SettingsRows`, `SettingsPane`, `SettingsContent`, the first `SettingsLine`, `SettingsHelpBar`; the card form's of §7.2):
-every row of `SettingsControllers` stands at Mistress's box with her label and value, the bindings page's strip
-(`SettingsContentTabs`), drawing (`BindingsDiagram`, 88,176 656 × 380) and caption (`SettingsContentCaption`) at hers, the
-pane's control name at hers, and the card's five rows at hers. **Differences that remain, each the class decided on
-2026-11-09 for §7.7 and §7.7.E:** the pane's sentence in the kit's face takes two lines where hers takes one, so the
-lines under it stand 33 units lower on Controllers and 4 to 7 on the bindings page; the card form's own boxes
-(`AdaptiveCard` 512 wide, `AdaptiveDetail`, the pane 7 units taller with the line's gap of 8 where hers is 6).
-That run is not repeated in the tree: the program's Controllers tests hold their states against an empty mockup
-(`Mockup::default()`), so they hold the gate's rules and no comparison with Mistress's recordings.
+**No picture to be held to.** These screens have no mockup and no recording in the tree: every `hold` of the
+Controllers tests (`settings_controllers.rs`, `card_controllers.rs`, `settings_drawings.rs`) passes an empty mockup
+(`Mockup::default()`), so each holds the gate's rules (fit, reach, chrome, names, palette, contrast) at the five sizes,
+and no comparison with a picture or with Mistress's recordings.
 
 **The input tester** (2026-11-10), as Mistress's `PollTester`, `LightBindings` and `BindingAxis` ran it: Select on the
 pad's bindings page starts it. A control lights while its key is held on the keyboard (the console's keyboard map, the
@@ -4713,11 +4705,11 @@ chosen, a profile opened, made, renamed, chosen to start games, deleted, the one
 where a console's games drive a motor, Keyboard keys and Hotkeys (listening, clearing, clashes named; a running game
 hears the keys and the hotkeys act, §7.7.H6), Reset every binding,
 every row of Galaxia's Controllers group (Swap A and B, Guide chords, Controller type, Only the first controller,
-Controller notices, On-screen keyboard, Left stick as the D-pad, Stick deadzone, Mirror player 1 to player 2) shown and
-saved, the bindings page (the strip, the drawing, a press listened for with its five seconds, Y reset, X the player or
+Controller notices, Left stick as the D-pad, Stick deadzone, Mirror player 1 to player 2) shown and saved, but the
+On-screen keyboard, hidden (R-20261112-13, §7.7.H8), the bindings page (the strip, the drawing, a press listened for with its five seconds, Y reset, X the player or
 clear, the shoulders, the directions over the drawing, the conflict line), the tester, and the card's Controllers page.
-What those saved rows change outside these pages is §7.7.H3's and §7.7.H6's; the on-screen keyboard row still picks
-nothing (§7.7.H6 names the call it waits for).
+What those saved rows change outside these pages is §7.7.H3's and §7.7.H6's; the rows that would only save are hidden
+(§7.7.H8).
 
 **Facts read from their owners** (2026-11-10). The profile every console has is named by Endymion: the source reads
 it once with the models, as the profile `bindings_choose` answers where no profile exists (Endymion's
@@ -4870,7 +4862,7 @@ auto-repeat doing nothing):
 | Screenshot | as the Pause Card's | `TakeScreenshot` |
 | Fullscreen | the window's full screen turned (`Main.qml`) | `ToggleFullScreen` |
 | Exit to Library | the game suspended to the library, as the card's Back to Library (the screens' `Library` from the game's screen too) | `ToggleLibrary` |
-| Big Picture | nothing: the program has no desktop view to leave to | `SetBigPicture` |
+| Big Picture | hidden from the Hotkeys page (R-20261112-12, §7.7.H8): the program has no desktop view to leave to | `SetBigPicture` |
 
 **Guide chords** are read as they are changed: `SettingsModel.guideChords` gives Mistress's rule (On, Off, Auto off under
 Steam's Game Mode, `settings::guide_chords_on`, which the start's reading uses too) from the stored value and the
@@ -4880,11 +4872,11 @@ window's `gameMode`, and the game's `guideChords` follows it once the settings a
 source size, and Qt 6's `QtQuick.Window` module only imports `QtQuick` (its qmldir's `import QtQuick auto`), where
 `Screen` is.
 
-**Not acting, each waiting on something outside these pages** (for the tester): Big Picture (above); the On-screen
-keyboard row, whose Steam choice needs a platform call that says whether Steam is there and asks for its keyboard
-(Mistress's `DeviceKeyboard.UnderSteam` and `AskSteam`), which the interface does not have; the Players page's "The
-first controller pressed is player 1" and "External controller first", which need rules Endymion's seats do not have
-(§7.7.H3). Left stick as the D-pad and Mirror player 1 to player 2 act (§7.7.H3), and since §7.7.H7 each is tested from
+**Hidden until built** (§7.7.H8): Big Picture (above, R-20261112-12); the On-screen keyboard row, whose Steam choice
+needs a platform call that says whether Steam is there and asks for its keyboard (Mistress's `DeviceKeyboard.UnderSteam`
+and `AskSteam`), allowed as a later piece (R-20261112-13); the Players page's "The first controller pressed is player 1"
+and "External controller first", which need seat rules Endymion's seats do not have, allowed as a later piece
+(R-20261112-14). Left stick as the D-pad and Mirror player 1 to player 2 act (§7.7.H3), and since §7.7.H7 each is tested from
 its row.
 
 **The failures §7.7.H5 left untested.** The pads that will not open are made so in the program by naming the reader a
@@ -4941,14 +4933,88 @@ shows both: the test's own `kwin_wayland --virtual` grants the request and Qt re
 compositor's answer, which the passing runs of 2026-11-12 saw; the request alone would not prove the window changed, so
 the assertion on the window's state stays.
 
-**The hotkeys' words** in `qt-endymion` `hotkeys.rs` restate the ten action words of Endymion's `HotkeyActions`. No
-owner exports them: the platform interface names them only in `emusen_platform.h`'s comment and gives no call that
-lists them. Each word maps to an action of the program's own, so the list is kept, and
-`qt_7_7_h6_every_action_of_endymions_hotkeys_has_its_action_here` holds it against the hotkeys' defaults that
-`bindings_defaults` returns.
+**The hotkeys' words.** Endymion gives the ten action words through `bindings_defaults` (HOTKEYS), whose keys they are;
+the Hotkeys page reads its rows from there (`Bindings::actions`). `qt-endymion` `hotkeys.rs` needs a map from each word to
+an action of the program's own; since §7.7.H8 the word is the action's own name (`Hotkey::word`), with no second list
+of strings, and `qt_7_7_h6_every_action_of_endymions_hotkeys_has_its_action_here` holds the names against
+`bindings_defaults`.
 
 **Held to** (measured on 2026-11-12). qt-app's `settings_effects` (the row turned while Settings is read), `rumble_gpu`
 and `controls_gpu` on the RX 6800; qt-models' `keyboard` (the stick and the mirror at the core).
+
+#### 7.7.H8 Rows that only save hidden, the hotkeys away from the game, and a change reaching a running game (stage 5, piece H3's fourth pass; 2026-11-12)
+
+**Four rows hidden** until what they need is built, as the tester ruled on 2026-11-12: the Big Picture hotkey
+(R-20261112-12: the program has no desktop view, so nothing binds or saves it), the On-screen keyboard (R-20261112-13:
+its Steam choice needs a platform call, allowed as a later piece), and the Players page's "The first controller pressed
+is player 1" and "External controller first" (R-20261112-14: they need seat rules, allowed as a later piece). The
+description lists them with their rulings (`controllers.hidden` in `data/settings_screen.json`), and the model leaves
+each out (`SettingsView::hidden`): a hidden row is not drawn, walked or saved from the screen; a hidden hotkey is no
+row, is named in no clash, and has no words in the description. A value an older file holds is left as it is, since a
+save writes the document read with one key changed. The rows each page may show are listed, each with the test that
+fails if the row only saved, in one file, `qt-models/tests/controllers_acts.tsv`; a test reads the rows the model gives
+on Controllers, Players and Hotkeys and finds each on that list, and another finds each named test in the tree.
+
+**The hotkeys away from the game**, as Mistress's window heard them (`EmuSen.Mistress/Views/MainWindow.axaml.cs`,
+`SetButtonFromKey`): its themed views' keys and its router's raised keys were never a hotkey's (:274-286); a console's
+key was the game's only while the library was hidden (:290); every other key reached the hotkeys (:305), the held two
+by :308-318 and the rest by the switch of :321-333. The hotkey list is now read when the program starts, on the pads'
+reader's first tick, not when a game opens (`GameReading::read`, `hotkeys_of`), and read again after a binding changes
+(`GamePads::rebind`). Every item of `Main.qml` sits under one item, `shell`, which hears a key no screen took: away from
+the game it hands the key to `SessionModel.awayKey`. A key the interface's map names (`qt_keys::press_of`: the arrows,
+Return, Escape and the rest) stays the interface's, as Mistress's themed keys did.
+
+| Hotkey | Over a game | Over the library (Home, Settings, the grid) | Mistress (MainWindow.axaml.cs) |
+|---|---|---|---|
+| Fast Forward, Rewind (held) | §7.7.H6 | nothing: the game is suspended | :308-318, the game paused under the library; `Notify` only over the game (MainWindow.Hud.cs:127) |
+| Save State | §7.7.H6 | saves the suspended game; with none, "Save State: no ROM loaded" | :323, `SaveState` :682-688 |
+| Load State | §7.7.H6 | loads into the suspended game; with none, "Load State: no ROM loaded" | :324, `LoadStateAsync` :714-720 |
+| Pause / Resume, Frame Advance | §7.7.H6 | nothing | :328, :329 (`!LibraryView.IsVisible`) |
+| Screenshot | §7.7.H6 | the suspended game's picture; with none, nothing | :326, `TakeScreenshot` (MainWindow.Hud.cs:131-133) |
+| Fullscreen | §7.7.H6 | the window's full screen turned | :331 |
+| Exit to Library | §7.7.H6 | the suspended game played again, as Continue (`gameAsked`); with none, nothing | :325, `ToggleLibrary` :1150-1160 |
+| Big Picture | hidden | hidden | :332 |
+
+Over the Pause Card the game is paused under the card: Exit to Library goes to the library as Back to Library does,
+Save State, Load State, Screenshot and Fullscreen act as over the library, and Pause / Resume and Frame Advance do
+nothing (a design note of 2026-11-12, with no ruling: Mistress's pad menu has no card, and resuming the game under the
+card would leave the card over a running game; the question is the tester's).
+
+**A change reaching a running game.** What Settings ▸ Controllers hands the pads is one module, `qt-models`
+`pads_reach.rs`, which `SettingsModel` calls and the tests call: the binding files a change touched saved and the pads
+bound again (`bindings_saved`, `GamePads::rebind`), and the pad settings read from the stored file and settled
+(`settle`). A moved seat goes to `GamePads::ask`. `qt-models/tests/reach.rs` makes each change through the screen's
+model over the stored files and presses it at the client fixture's console core: a button rebound, a profile made and
+chosen, a key rebound, a hotkey rebound, Reset every binding, a seat moved (the pad's B on port 1), and the Players
+page's Keyboard read back from the stored file to the router (no `settle` by hand). `controls_gpu.rs` rebinds Exit to
+Library on Settings' Hotkeys page with the game suspended and presses it in the game and over Home.
+`qt-endymion` `seats.rs`'s header no longer claims a game hearing the seats; reach.rs shows it.
+
+**The hotkeys by their effect** (`controls_gpu.rs`): Save State writes a file in Galaxia's save-states folder and Load
+State a second later puts the game's frame back to the save's; Fast Forward runs more than half as many frames again as
+the game's own speed in a second; Rewind takes the game's frame back while held; Screenshot writes a file in the
+screenshots folder. The game's frame is `SessionModel.frame`, the session service's reading (`info`), asked when the
+property is read, never pushed per frame.
+
+**The pictures.** `settings_drawings.rs` reads `fits` at each of the five sizes after the hold, each at its size (it
+read it once, at whatever size the last hold left). §7.7.H's comparison with Mistress's recordings is withdrawn: it is
+not in the tree and cites no ruling; these screens have no mockup or recording to be held to.
+
+**The lows.** Each "decided" with no ruling id is a design note with its reason (§7.7.H's drawings as data, Kit §7.62's
+line). The hotkey words are the actions' own names (§7.7.H7) and the description's actions are held against Endymion's
+`bindings_defaults` (`qt_7_7_h8_the_screens_hotkey_words_are_endymions_actions`). The fixed waits of the program's
+`settings_controllers.rs` and `settings_effects.rs` wait on what they wait for (a line drawn, a row's value, the second
+pad seated: `PadReader.seated`, asked when read). SDL's left stick is numbered once, in `qt-endymion` `reading::sdl`,
+which the tests read; `game.rs`'s `LEFT_X` is the core ABI's PadAxis (`EMUSEN_AXIS_LEFT_X`), another numbering, which
+the front end has no crate to read from without a new dependency. The three quiet drops say where they are said: a
+card's profile unread (`controllers_problem`), the Pause Card's controllers JSON (the program's own, read back whole),
+and a control Endymion gives no word (`unworded` when it is bound).
+
+**Held to** (written 2026-11-12). `qt-models/tests/controllers.rs` (no page shows a row that only saves; every named
+test in the tree; a hidden row's stored value kept; the screen's hotkey words are Endymion's actions);
+`qt-models/tests/reach.rs` (7); `qt-endymion/tests/keyboard.rs` (the hotkeys read at the start with no game and again
+once rebound); the program's `settings_effects.rs` (the hotkeys over the library with no game, from Home and from
+Settings), `settings_drawings.rs` and `controls_gpu.rs` (on Vulkan).
 
 #### 7.7.K Cores' Update All…, and the cover's raised shadow (stage 5, piece K; 2026-11-09)
 

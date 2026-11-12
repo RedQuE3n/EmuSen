@@ -79,9 +79,38 @@ fn qt_7_7_h6_a_consoles_key_is_held_for_the_game_and_a_hotkey_names_its_action()
     assert_eq!(game.key(word(0x0100_0047), true), KeyUse::Nothing, "F24 is bound to nothing");
     assert_eq!(emusen_qt_endymion::keys::word(0x0100_0000, 0).map(|w| game.key(w, true)), Some(KeyUse::Hotkey(Hotkey::ExitToLibrary)), "Escape over a game is Exit to Library's");
 
-    // A game closed: no key is anything until the next game's are read.
+    // A game closed: no console's key is anything until the next game's are read; the hotkeys stay.
     game.want(None);
     assert_eq!(game.key("N", true), KeyUse::Nothing);
+    assert_eq!(game.hotkey("F11"), Some(Hotkey::ToggleFullscreen), "the hotkeys outlive the game");
+}
+
+#[test]
+fn qt_7_7_h8_the_hotkeys_are_read_from_the_start_with_no_game_and_again_once_rebound() {
+    let _world = World::new("endymion-hotkeys-start");
+    let p = Platform::load(library()).unwrap();
+    let set = SimSet::new(&p).unwrap();
+    let pads = Pads::simulated(&p, &set).unwrap();
+    let game = GamePads::default();
+    let (mut reading, mut game_reading) = (Reading::default(), GameReading::default());
+    let opened = reading.start(&pads).unwrap();
+    game.keep_seats(&pads, &opened.devices).unwrap();
+    assert_eq!(game.hotkey("F5"), None, "nothing before the reader's first tick");
+    tick(&pads, &mut reading, &game, &mut game_reading);
+    // No game wants the pads, and yet each of Endymion's hotkeys is known by its key.
+    for (action, key) in p.bindings_defaults(files::HOTKEYS).unwrap().as_object().unwrap() {
+        assert_eq!(game.hotkey(key.as_str().unwrap()), Hotkey::named(action), "{key} runs {action} over the library");
+    }
+    // Save State moved to K, saved as the Hotkeys page saves it: known once the pads are bound again, not before.
+    let mut hotkeys = p.bindings_load(files::HOTKEYS, &[]).unwrap();
+    hotkeys["SaveState"] = "K".into();
+    p.bindings_save(files::HOTKEYS, &hotkeys).unwrap();
+    tick(&pads, &mut reading, &game, &mut game_reading);
+    assert_eq!(game.hotkey("K"), None, "the file is read once, not every tick");
+    game.rebind();
+    tick(&pads, &mut reading, &game, &mut game_reading);
+    assert_eq!(game.hotkey("K"), Some(Hotkey::SaveState));
+    assert_eq!(game.hotkey("F5"), None);
 }
 
 #[test]
@@ -93,7 +122,7 @@ fn qt_7_7_h6_every_action_of_endymions_hotkeys_has_its_action_here() {
     assert_eq!(actions.len(), 10, "{actions:?}");
     for action in actions {
         let hotkey = Hotkey::named(action).unwrap_or_else(|| panic!("{action} has no action here"));
-        assert_eq!(hotkey.word(), action);
+        assert_eq!(&hotkey.word(), action);
         assert_eq!(hotkey.held(), action == "FastForward" || action == "Rewind", "{action}: held only for Fast Forward and Rewind, as Mistress's IsHeld");
     }
 }

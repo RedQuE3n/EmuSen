@@ -83,7 +83,7 @@ pub fn focus_row(scene: &mut Scene<'_>, words: &str) {
     panic!("no row says '{words}'");
 }
 
-fn until(scene: &mut Scene<'_>, what: &str, mut done: impl FnMut(&mut Scene<'_>) -> bool) {
+pub fn until(scene: &mut Scene<'_>, what: &str, mut done: impl FnMut(&mut Scene<'_>) -> bool) {
     for _ in 0..100 {
         if done(scene) {
             return;
@@ -97,6 +97,18 @@ fn until(scene: &mut Scene<'_>, what: &str, mut done: impl FnMut(&mut Scene<'_>)
 /// Settings place, the Controllers row whose sentence begins `words` stepped once with Right until its drawn value
 /// changes, then B to Home and the Home card's Continue to the game, which owns the pad again.
 pub fn turn_row_with_game_suspended(scene: &mut Scene<'_>, words: &str) {
+    in_settings_with_game_suspended(scene, |scene| {
+        focus_row(scene, words);
+        let before = focused_row_words(scene);
+        scene.pad(UiButton::Right);
+        until(scene, &format!("the row '{words}' turned from {before:?}"), |s| focused_row_words(s) != before);
+    });
+}
+
+/// Escape suspends the game to Home; Settings opened from Home's place, `act` done on Controllers (ending there), then
+/// back to Home and Continue, waiting until the game hears the pads again.
+pub fn in_settings_with_game_suspended(scene: &mut Scene<'_>, act: impl FnOnce(&mut Scene<'_>)) {
+    until(scene, "the game in front", |s| s.property("screens", "shown") == "Game" && s.property("session", "paused") == "false");
     scene.key_hold(0x0100_0000, true);
     scene.key_hold(0x0100_0000, false);
     until(scene, "the game suspended under Home", |s| s.property("screens", "shown") == "Home" && s.property("session", "paused") == "true");
@@ -110,10 +122,7 @@ pub fn turn_row_with_game_suspended(scene: &mut Scene<'_>, words: &str) {
     }
     scene.pad(UiButton::Accept);
     wait_for(scene, "screens", "shown", "Settings", 2000);
-    focus_row(scene, words);
-    let before = focused_row_words(scene);
-    scene.pad(UiButton::Right);
-    until(scene, &format!("the row '{words}' turned from {before:?}"), |s| focused_row_words(s) != before);
+    act(scene);
     scene.pad(UiButton::Back);
     wait_for(scene, "screens", "shown", "Home", 2000);
     scene.pad(UiButton::Menu);

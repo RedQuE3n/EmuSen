@@ -63,6 +63,8 @@ pub mod qobject {
         #[qproperty(u32, speed, READ, NOTIFY)]
         /// What the last save, load or rewind came to, in the player's words.
         #[qproperty(QString, notice, READ, NOTIFY)]
+        // The session's frame as its service reads it, asked when read: for a test to count frames run and gone back.
+        #[qproperty(u64, frame, READ = frame_now)]
         /// Whether that notice says something was not done.
         #[qproperty(bool, notice_attention, cxx_name = "noticeAttention", READ, NOTIFY)]
         /// Whether the Resume question is waiting for an answer, the game held unplayed (EmuSen_Interface.md §18.3).
@@ -185,6 +187,22 @@ pub mod qobject {
         /// the game, or a hotkey's action (EmuSen_Qt.md §7.7.H6); whether the key was the game's or a hotkey's.
         #[qinvokable]
         fn key(self: Pin<&mut SessionModel>, key: i32, modifiers: i32, pressed: bool, repeated: bool) -> bool;
+
+        /// A key no screen took away from the game (over the library, Settings or a card), by Qt's number: a hotkey's
+        /// action as Mistress ran it there (EmuSen_Qt.md §7.7.H8); `library` false over the Pause Card, the game under
+        /// it. Whether the key was a hotkey's.
+        #[qinvokable]
+        #[cxx_name = "awayKey"]
+        fn away_key(self: Pin<&mut SessionModel>, key: i32, modifiers: i32, pressed: bool, repeated: bool, library: bool) -> bool;
+
+        #[rust_name = "frame_now"]
+        fn frameNow(self: &SessionModel) -> u64;
+
+        /// The Exit to Library hotkey over the library with a game suspended: back to the game, as Mistress's
+        /// `ToggleLibrary` returns to it.
+        #[qsignal]
+        #[cxx_name = "gameAsked"]
+        fn game_asked(self: Pin<&mut SessionModel>);
 
         /// The Exit to Library hotkey, whose action is the window's.
         #[qsignal]
@@ -728,8 +746,53 @@ impl qobject::SessionModel {
         }
     }
 
+    fn frame_now(&self) -> u64 {
+        let (Some(runtime), Some(session)) = (self.runtime.as_ref(), self.opened) else { return 0 };
+        runtime.session_service(session, 0).and_then(|service| service.info(session)).map_or(0, |info| info.frame)
+    }
+
+    fn away_key(self: Pin<&mut Self>, key: i32, modifiers: i32, pressed: bool, repeated: bool, library: bool) -> bool {
+        // The interface's own keys (the router's, a menu's) are never a hotkey's away from the game, as Mistress's
+        // themed keys and its router's raised keys were not (MainWindow.axaml.cs:274-286).
+        if emusen_kit_qt::qt_keys::press_of(key, modifiers).is_some() {
+            return false;
+        }
+        let Some(word) = keys::word(key, modifiers) else { return false };
+        // SAFETY: as in `game_input`.
+        let Some(hotkey) = (unsafe { GamePads::at(self.pads) }).and_then(|pads| pads.hotkey(word)) else { return false };
+        if pressed && !repeated {
+            self.away_hotkey(hotkey, library);
+        }
+        true
+    }
+
+    /// A hotkey's action away from the game, by the states of Mistress's `SetButtonFromKey` (the table in EmuSen_Qt.md
+    /// §7.7.H8): the game is suspended, so nothing is held faster or back, paused or stepped.
+    fn away_hotkey(mut self: Pin<&mut Self>, hotkey: Hotkey, library: bool) {
+        let open = self.opened.is_some();
+        match hotkey {
+            Hotkey::FastForward | Hotkey::Rewind | Hotkey::TogglePause | Hotkey::FrameAdvance | Hotkey::ToggleBigPicture => {}
+            Hotkey::SaveState if !open => self.say(pause::NO_GAME_SAVE.to_string(), false),
+            Hotkey::LoadState if !open => self.say(pause::NO_GAME_LOAD.to_string(), false),
+            Hotkey::SaveState => {
+                let slot = self.slot;
+                self.save_state(slot);
+            }
+            Hotkey::LoadState => {
+                let slot = self.slot;
+                self.load_state(slot);
+            }
+            Hotkey::Screenshot if open => self.screenshot(),
+            Hotkey::Screenshot => {}
+            Hotkey::ExitToLibrary if !library => self.exit_asked(),
+            Hotkey::ExitToLibrary if open => self.as_mut().game_asked(),
+            Hotkey::ExitToLibrary => {}
+            Hotkey::ToggleFullscreen => self.full_screen_asked(),
+        }
+    }
+
     /// A hotkey's action, held ones while the key is down and the rest as it goes down (Mistress's `SetButtonFromKey`).
-    fn hotkey_acted(mut self: Pin<&mut Self>, hotkey: Hotkey, pressed: bool) {
+    fn hotkey_acted(self: Pin<&mut Self>, hotkey: Hotkey, pressed: bool) {
         if !pressed && !hotkey.held() {
             return;
         }

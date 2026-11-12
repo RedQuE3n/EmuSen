@@ -196,7 +196,7 @@ fn qt_7_7_h_players_seats_a_pad_forgets_a_kept_seat_and_ends_with_galaxias_playe
     let rows = view.rows();
     assert_eq!((rows[0].label.as_str(), rows[0].value.as_str()), ("Simulated pad", "Player 1"));
     assert_eq!((rows[1].label.as_str(), rows[1].value.as_str()), ("Player 2: Old pad, disconnected", "Forget"));
-    assert_eq!(rows.iter().skip(2).map(|r| r.id.as_str()).collect::<Vec<_>>(), ["keyboardplayer", "claimplayersbypress", "externalcontrollerfirst"]);
+    assert_eq!(rows.iter().skip(2).map(|r| r.id.as_str()).collect::<Vec<_>>(), ["keyboardplayer"], "the two seat rules hidden (R-20261112-14)");
     assert_eq!(view.step(0, 1), Outcome::Seat(Ask::Move { key: 7, player: 2 }));
     assert_eq!(view.step(0, -1), Outcome::Seat(Ask::Move { key: 7, player: 0 }), "Left from Player 1 is None");
     assert_eq!(view.choose(1), Outcome::Seat(Ask::Forget { player: 2 }));
@@ -515,4 +515,87 @@ fn qt_7_7_h5_a_key_endymion_names_no_word_for_is_said_and_not_written() {
     assert_eq!(view.binding_act("clear"), Outcome::Failed(settings_controllers::unworded(&control)));
     assert_eq!(view.binding_act("reset"), Outcome::Failed(settings_controllers::unworded(&control)));
     assert_eq!(view.read.bindings.keys, before, "nothing written under the drawing's name");
+}
+
+/// The acts list: each row a page may show, with the test that shows it acts (tests/controllers_acts.tsv).
+fn acts(page: &str) -> Vec<(String, String)> {
+    include_str!("controllers_acts.tsv")
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.is_empty())
+        .map(|l| l.split('\t').collect::<Vec<_>>())
+        .filter(|f| f[0] == page)
+        .map(|f| (f[1].to_owned(), f[2].to_owned()))
+        .collect()
+}
+
+/// Each row the page shows is on the acts list, so none only saves.
+#[track_caller]
+fn every_row_acts(view: &SettingsView, page: &str) {
+    let listed = acts(page);
+    for row in view.rows() {
+        let found = listed.iter().any(|(id, _)| id.strip_suffix('*').map_or(*id == row.id, |stem| row.id.starts_with(stem)));
+        assert!(found, "{page}: the row {} ({}) is on no acts list: it would only save", row.id, row.label);
+    }
+}
+
+#[test]
+fn qt_7_7_h8_no_controllers_page_shows_a_row_that_only_saves() {
+    let mut view = view();
+    // Endymion's own hotkeys, so an action it adds is a row here.
+    let platform = emusen_platform_client::Platform::load(emusen_client_fixture::library()).unwrap();
+    view.read.bindings.hotkey_defaults = platform.bindings_defaults(emusen_platform_client::bindings::consts::HOTKEYS).unwrap();
+    view.seats.players.push(Player { player: 2, pad: Some("Old pad".into()), kept: true });
+    view.choose_section(0);
+    every_row_acts(&view, "controllers");
+    assert!(!view.rows().iter().any(|r| r.id == "keyboard"), "On-screen keyboard hidden (R-20261112-13)");
+    view.choose(index(&view, "players"));
+    every_row_acts(&view, "players");
+    view.back();
+    view.choose(index(&view, "hotkeys"));
+    every_row_acts(&view, "hotkeys");
+    assert!(!view.rows().iter().any(|r| r.id == "hk:ToggleBigPicture"), "Big Picture hidden (R-20261112-12)");
+    assert_eq!(view.rows().len(), 9, "Endymion's ten hotkeys but Big Picture");
+}
+
+#[test]
+fn qt_7_7_h8_every_test_the_acts_list_names_is_in_the_tree() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let mut sources = String::new();
+    for dir in ["qt-models/tests", "qt-app/tests", "qt-endymion/tests"] {
+        for file in std::fs::read_dir(root.join(dir)).unwrap().flatten().filter(|f| f.path().extension().is_some_and(|e| e == "rs")) {
+            sources.push_str(&std::fs::read_to_string(file.path()).unwrap());
+        }
+    }
+    for page in ["controllers", "players", "hotkeys"] {
+        for (row, test) in acts(page) {
+            assert!(sources.contains(&format!("fn {test}(")), "{page} {row}: no test {test}");
+        }
+    }
+}
+
+#[test]
+fn qt_7_7_h8_a_hidden_rows_stored_value_is_left_as_the_file_holds_it() {
+    let mut view = view();
+    view.read.app = json!({ "Rumble": true, "SwapPadButtons": false, "OnScreenKeyboard": "Steam", "ClaimPlayersByPress": true, "ExternalControllerFirst": true });
+    view.choose_section(0);
+    let Outcome::Saved(_, document) = view.step(index(&view, "swap"), 1) else { panic!("Swap A and B saves") };
+    assert_eq!(document["SwapPadButtons"], true);
+    for (key, kept) in [("OnScreenKeyboard", json!("Steam")), ("ClaimPlayersByPress", json!(true)), ("ExternalControllerFirst", json!(true))] {
+        assert_eq!(document[key], kept, "{key} as the older file holds it");
+    }
+}
+
+#[test]
+fn qt_7_7_h8_the_screens_hotkey_words_are_endymions_actions() {
+    let platform = emusen_platform_client::Platform::load(emusen_client_fixture::library()).unwrap();
+    let defaults = platform.bindings_defaults(emusen_platform_client::bindings::consts::HOTKEYS).unwrap();
+    let description: Value = serde_json::from_str(include_str!("../data/settings_screen.json")).unwrap();
+    let described: Vec<&str> = description["controllers"]["actions"].as_array().unwrap().iter().map(|p| p[0].as_str().unwrap()).collect();
+    let hidden: Vec<&str> = description["controllers"]["hidden"].as_array().unwrap().iter().filter_map(|h| h["hotkey"].as_str()).collect();
+    for action in &described {
+        assert!(defaults.get(*action).is_some(), "the screen words {action}, which Endymion has no hotkey for");
+    }
+    for action in defaults.as_object().unwrap().keys() {
+        assert!(described.contains(&action.as_str()) != hidden.contains(&action.as_str()), "{action}: worded on the screen or hidden, one of the two");
+    }
 }

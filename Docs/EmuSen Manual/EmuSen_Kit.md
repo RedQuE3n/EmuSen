@@ -2958,9 +2958,9 @@ scene that plays no clip:
 
 A controller drawn from data, its regions named by the controls a host's controller declares, a label beside the drawing
 for each with a leader to its region, the focused control ringed and the held ones lit; for the bindings page of
-`EmuSen_Input.md` §10.6 and `EmuSen_Qt.md` §7.7.H. **Decided by the tester on 2026-11-09 (D2):** drawings are data keyed
-by the controller id a core declares, the regions named by the declared controls, with a generic drawing for a
-controller that has none, so consoles look like themselves and a new core needs no code. Weighed as §1.3 of
+`EmuSen_Input.md` §10.6 and `EmuSen_Qt.md` §7.7.H. **Design note (2026-11-09; the rulings log holds no ruling for it):**
+drawings are data keyed by the controller id a core declares, the regions named by the declared controls, with a generic
+drawing for a controller that has none, so consoles look like themselves and a new core needs no code. Weighed as §1.3 of
 `EmuSen_Qt.md` asks: an extension of the kit, a new type over nothing it had; the kit names no controller and no console,
 and which file stands for which controller id is the host's.
 

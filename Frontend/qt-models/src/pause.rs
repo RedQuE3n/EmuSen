@@ -63,6 +63,9 @@ impl Ask {
 
 /// The slots Save and Load step through.
 pub const SLOTS: u32 = 8;
+/// Save and Load State's hotkeys with no game open, in Mistress's words (MainWindow.axaml.cs:686, 718).
+pub const NO_GAME_SAVE: &str = "Save State: no ROM loaded";
+pub const NO_GAME_LOAD: &str = "Load State: no ROM loaded";
 
 /// The speeds the Speed row steps through, in percent of the game's own; 0 is unthrottled (Mistress's `StepSpeed`).
 pub const SPEEDS: [u32; 3] = [25, 100, 300];

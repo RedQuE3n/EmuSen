@@ -324,9 +324,9 @@ impl Bindings {
             .collect()
     }
 
-    /// A console's clashes among its controls' keys and the hotkeys: each key held twice, with what holds it, by the
-    /// names given for its controls and actions.
-    pub fn conflicts(&self, console: &str, controls: &[(String, String)], actions: &dyn Fn(&str) -> String) -> Vec<(String, Vec<String>)> {
+    /// A console's clashes among its controls' keys and the actions' hotkeys: each key held twice, with what holds it,
+    /// by the names given for its controls and actions.
+    pub fn conflicts(&self, console: &str, controls: &[(String, String)], actions: &[(String, String)]) -> Vec<(String, Vec<String>)> {
         let mut owners: Vec<(String, Vec<String>)> = Vec::new();
         let mut add = |key: String, owner: String| match owners.iter_mut().find(|(k, _)| same(k, &key)) {
             Some((_, list)) => list.push(owner),
@@ -337,9 +337,9 @@ impl Bindings {
                 add(k, name.clone());
             }
         }
-        for action in self.actions() {
-            if let Some(k) = self.hotkey(&action) {
-                add(k, actions(&action));
+        for (action, words) in actions {
+            if let Some(k) = self.hotkey(action) {
+                add(k, words.clone());
             }
         }
         owners.into_iter().filter(|(_, o)| o.len() > 1).collect()

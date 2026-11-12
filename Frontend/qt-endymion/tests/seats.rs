@@ -1,6 +1,7 @@
 //! The seats on Endymion's simulated pads, through the platform library built from this commit (EmuSen_Input.md §8.9,
 //! EmuSen_Qt.md §7.7.H): a pad seated as it is opened, its seat kept when it goes and given back when it returns, a
-//! pad moved to another player trading with the one there, a kept seat let go of, and the game hearing the seats.
+//! pad moved to another player trading with the one there, and a kept seat let go of. A running game hearing a moved seat
+//! is qt-models' reach.rs (EmuSen_Qt.md §7.7.H8).
 
 use std::sync::Arc;
 

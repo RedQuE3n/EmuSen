@@ -36,6 +36,7 @@ pub mod marks;
 pub mod marks_object;
 pub mod pause;
 pub mod pause_model;
+pub mod pads_reach;
 pub mod pane_model;
 pub mod picture;
 pub mod pictures;

@@ -59,7 +59,8 @@ pub struct ControlWord {
 }
 
 impl ControlWord {
-    /// Endymion's answer read into words; an entry with no word is passed over.
+    /// Endymion's answer read into words; an entry with no word is passed over here and said where a control needs it
+    /// (`unworded`, EmuSen_Qt.md §7.7.H8).
     pub fn read(answer: &Value) -> Vec<ControlWord> {
         let number = |e: &Value, k: &str| e[k].as_u64().map(|n| n as u32);
         answer.as_array().into_iter().flatten().filter_map(|e| {
@@ -176,10 +177,16 @@ impl SettingsView {
         page.or_else(|| self.running_game().and_then(|(c, g)| self.game_profile(&c, &g).err()))
     }
 
+    /// Whether the description hides a row of Galaxia's ("row", "AppSettings Key") or a hotkey ("hotkey", its action):
+    /// one that would only save, until the tester's ruling named beside it is built (EmuSen_Qt.md §7.7.H).
+    pub(crate) fn hidden(&self, kind: &str, name: &str) -> bool {
+        self.description_at(&["controllers", "hidden"]).as_array().into_iter().flatten().any(|h| h[kind] == name)
+    }
+
     /// The emulator's actions in the screen's order, each with its words: those of the description that Endymion's
-    /// hotkeys have, then any other it has, by its own name.
+    /// hotkeys have, then any other it has, by its own name; none the description hides.
     fn actions(&self) -> Vec<(String, String)> {
-        let known = self.read.bindings.actions();
+        let known: Vec<String> = self.read.bindings.actions().into_iter().filter(|a| !self.hidden("hotkey", a)).collect();
         let mut out: Vec<(String, String)> = self
             .description_at(&["controllers", "actions"])
             .as_array()
@@ -209,6 +216,9 @@ impl SettingsView {
                     for (model, list) in models {
                         for row in list.as_array().into_iter().flatten().filter(|r| r["group"] == group.as_str()) {
                             let key = row["key"].as_str().unwrap_or_default();
+                            if self.hidden("row", &format!("{model} {key}")) {
+                                continue;
+                            }
                             rows.push(json!({ "id": key.to_lowercase(), "row": format!("{model} {key}") }));
                         }
                     }
@@ -229,9 +239,12 @@ impl SettingsView {
         })
     }
 
-    /// Whether a section row of the description is shown: Rumble where a console's games drive a motor (the game
-    /// running's console, else any).
+    /// Whether a section row of the description is shown: none the description hides, and Rumble where a console's
+    /// games drive a motor (the game running's console, else any).
     pub(crate) fn controller_shown(&self, entry: &Value) -> bool {
+        if entry["row"].as_str().is_some_and(|r| self.hidden("row", r)) {
+            return false;
+        }
         if entry["controllers"] != "rumble" {
             return true;
         }
@@ -331,7 +344,7 @@ impl SettingsView {
             return self.cw("hotkey_listening");
         }
         let Some(key) = self.read.bindings.hotkey(action) else { return self.cw("hotkey_unbound") };
-        let twice = self.read.bindings.actions().iter().filter(|a| self.read.bindings.hotkey(a).as_deref() == Some(key.as_str())).count() > 1;
+        let twice = self.actions().iter().filter(|(a, _)| self.read.bindings.hotkey(a).as_deref() == Some(key.as_str())).count() > 1;
         if twice || !self.consoles_holding(&key).is_empty() { fill(&self.cw("hotkey_clash"), &[("key", &key)]) } else { key }
     }
 
@@ -696,7 +709,7 @@ impl SettingsView {
 
     fn conflict_words(&self, console: &str) -> Option<String> {
         let controls: Vec<(String, String)> = self.controls_of(console).into_iter().filter_map(|c| Some((self.file_control(&c)?, self.control_words(&c)))).collect();
-        let found = self.read.bindings.conflicts(console, &controls, &|a| self.action_words(a));
+        let found = self.read.bindings.conflicts(console, &controls, &self.actions());
         if found.is_empty() {
             return None;
         }
@@ -1069,6 +1082,7 @@ impl SettingsView {
         let mut rows = Vec::new();
         let running = self.running_game();
         let players = running.as_ref().map_or(1, |(c, _)| self.players_of(c)).max(2);
+        // A failure leaves the rows without a profile; `controllers_problem` says it (EmuSen_Qt.md §7.7.H8).
         let profile = running.as_ref().and_then(|(c, g)| self.game_profile(c, g).ok());
         let profile_words = profile.as_ref().map(|p| fill(&self.card_word("seat_profile"), &[("profile", p)])).unwrap_or_default();
         for p in 1..=players as usize {

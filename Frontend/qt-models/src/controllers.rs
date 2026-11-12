@@ -1,5 +1,5 @@
-//! The controllers a console's engine declares, as Settings ▸ Controllers draws and binds them (EmuSen_Qt.md §7.7.H,
-//! decided 2026-11-09): the drawing that stands for a controller id, a data file of `data/controllers` named by the id;
+//! The controllers a console's engine declares, as Settings ▸ Controllers draws and binds them (EmuSen_Qt.md §7.7.H, its
+//! design note on drawings as data): the drawing that stands for a controller id, a data file of `data/controllers` named by the id;
 //! and the controls the drawing's regions are named by, the canonical controls by the core ABI's own names and each
 //! stick the console reads by its axes' names. A controller with no file is drawn as the kit's generic controller.
 

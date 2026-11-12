@@ -274,6 +274,7 @@ impl cxx_qt::Initialize for qobject::PauseModel {
         .release();
         self.as_mut()
             .on_controllers_changed(|mut model| {
+                // The program's own JSON, serde_json's of SettingsModel.cardControllers, which reads back whole (EmuSen_Qt.md §7.7.H8).
                 let rows = serde_json::from_str::<serde_json::Value>(&model.controllers.to_string()).unwrap_or_default();
                 model.as_mut().rust_mut().card.controllers = crate::settings_controllers::GameRow::list(&rows);
                 model.shown();

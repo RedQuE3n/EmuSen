@@ -11,7 +11,7 @@ use emusen_platform_client::Result;
 const BUTTONS: usize = UiButton::ALL.len();
 
 /// SDL's numbers for the controls the interface reads (SDL_gamepad.h, SDL 3.4), which Endymion's calls take.
-mod sdl {
+pub mod sdl {
     pub const LEFT_X: u32 = 0;
     pub const LEFT_Y: u32 = 1;
     pub const LEFT_TRIGGER: u32 = 4;

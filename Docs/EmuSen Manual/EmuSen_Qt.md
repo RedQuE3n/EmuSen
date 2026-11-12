@@ -1978,7 +1978,20 @@ scene or painter change; the loader is done. The ranking is re-measured by the c
   66 load (held), drawn whole rises from 0 as §4.3's families land, and the watched subset's view difference stays under
   the C# painter's on the day of the switch, recorded as the baseline.
 - **Change detection.** The corpus TSV of each measurement is committed under `Testing/esde-corpus/<date>.tsv`; a row
-  that worsens fails the landing until explained.
+  that worsens fails the landing until explained. A worsening is explained one way: the tester rules on it, and the
+  oracle (`esde-qt/tests/oracle.rs`) is run with `EMUSEN_ESDE_CORPUS=ruled:<ruling id>`. Such a run writes the day's
+  measure only when its sole failures are *rises*, counts of unknown or unsupported pairs that grew; it prints each rise
+  and puts `# ruled <id>: <n> rises` on the file's first line. A box off, a figure risen, a theme that stops loading or an
+  undrawn kind gained still fails it and nothing is written; `ruled:` with no id writes nothing. `EMUSEN_ESDE_CORPUS=1`
+  writes only a run with no failure at all, a lower ceiling included.
+- **The rise of 2026-11-11** (R-20261111-75, R-20261111-87). The nine pairs that were `accepted` (the help's eight
+  dimmed properties and a sound's path) are counted unsupported since 1993d98fe, and 57 themes rose against
+  `2026-11-09.tsv` by 1 to 7. In 53 the rise is exactly the number of those nine the theme sets. In four it is one less:
+  esboy (13 from 11, three of the nine set), forall (13 from 8, six set), psone-ish (10 from 8, three set) and x20s (10
+  from 8, three set). Each of the four also sets `text.containerVerticalSnap`, which was `later:container` when
+  `2026-11-09.tsv` was measured (fdcccba34) and is `drawn` since 5b72c003e, so it left the unsupported count as the nine
+  joined it. Art Book Next, colorful-simplified, tategriddy and texgriddy set it too, and of the nine only a sound's
+  path, so their counts are unchanged. Measured on 2026-11-11 from every theme's pairs and their states.
 
 ### 4.5 `emusen-esde` as built: the loader, the scene and `esde-check` **[M 2026-11-08]**
 

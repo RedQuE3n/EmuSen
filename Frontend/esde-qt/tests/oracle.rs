@@ -5,7 +5,8 @@
 //! absolute error, the help bar's strip left out, no higher than the last committed measure. Each capture is used only
 //! with the SHA-256 that `Testing/esde-oracle/captures.sha256` gives it. The corpus measure of `esde-check` gains the
 //! watched columns and is written for `Testing/esde-corpus`; a row that worsens against the last committed measure
-//! fails, a watched figure that falls fails until the lower one is committed, and only a run with no failure commits it.
+//! fails, a watched figure that falls fails until the lower one is committed, and only a run with no failure commits it,
+//! or one whose only failures are rises in unknown or unsupported pairs with `EMUSEN_ESDE_CORPUS=ruled:<ruling id>`.
 
 mod common;
 
@@ -169,13 +170,38 @@ fn captured(oracle: &Path, sums: &BTreeMap<String, String>, name: &str) -> Resul
     }
 }
 
-/// Writes the corpus measure as the committed one only when asked and every check of the run passed; whether it wrote.
-fn record(committed: &Path, file: &str, measure: &str, failures: &[String], asked: bool) -> bool {
-    let write = asked && failures.is_empty();
-    if write {
-        std::fs::write(committed.join(file), measure).unwrap();
+/// How a run may write the corpus measure: `EMUSEN_ESDE_CORPUS` unset, `1`, or `ruled:<ruling id>` (EmuSen_Qt.md §4.4).
+#[derive(Debug, PartialEq)]
+enum Recording {
+    Off,
+    Plain,
+    Ruled(String),
+}
+
+impl Recording {
+    fn of(var: Option<&str>) -> Self {
+        match var {
+            None => Self::Off,
+            Some(v) => v.strip_prefix("ruled:").map_or(Self::Plain, |id| Self::Ruled(id.trim().to_owned())),
+        }
     }
-    write
+}
+
+/// Writes the corpus measure as the committed one: plainly when asked and nothing failed, under a ruling when its rises are
+/// the only failures and the ruling is named, its id on the file's first line; whether it wrote.
+fn record(committed: &Path, file: &str, measure: &str, rises: &[String], failures: &[String], how: &Recording) -> bool {
+    let text = match how {
+        Recording::Plain if rises.is_empty() && failures.is_empty() => measure.to_owned(),
+        Recording::Ruled(id) if !id.is_empty() && failures.is_empty() => format!("# ruled {id}: {} rises\n{measure}", rises.len()),
+        _ => return false,
+    };
+    std::fs::write(committed.join(file), text).unwrap();
+    true
+}
+
+/// Whether a worsened line is a corpus rise: a count of unknown or unsupported pairs that grew.
+fn is_rise(line: &str) -> bool {
+    line.split(": ").nth(1).is_some_and(|c| c.starts_with("unknown ") || c.starts_with("unsupported "))
 }
 
 /// The spec's elements in drawing order: (key, kind, name, box in design units).
@@ -584,15 +610,18 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
     let measure = measure.join("\n") + "\n";
     let committed = repo().join("Testing/esde-corpus");
     let file = format!("{}.tsv", today());
+    let how = Recording::of(std::env::var("EMUSEN_ESDE_CORPUS").ok().as_deref());
+    let mut rises = vec![];
     let mut earlier: Vec<PathBuf> = std::fs::read_dir(&committed).unwrap().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "tsv")).collect();
     earlier.sort();
     if let Some(last) = earlier.last() {
         let last_text = std::fs::read_to_string(last).unwrap();
         for w in worsened(&last_text, &measure) {
-            failures.push(format!("against {}: {w}", last.file_name().unwrap().to_string_lossy()));
+            let line = format!("against {}: {w}", last.file_name().unwrap().to_string_lossy());
+            if is_rise(&w) { rises.push(line) } else { failures.push(line) }
         }
         // The ceiling falls with the figure: a lower one is committed by the run that measures it.
-        if std::env::var_os("EMUSEN_ESDE_CORPUS").is_none() {
+        if how == Recording::Off {
             for w in fell(&last_text, &measure) {
                 failures.push(format!("against {}: {w}: commit the lower measure (EMUSEN_ESDE_CORPUS=1)", last.file_name().unwrap().to_string_lossy()));
             }
@@ -602,8 +631,16 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
         failures.push("a theme of the corpus does not load".to_owned());
     }
     std::fs::write(out.join("corpus.tsv"), &measure).unwrap();
-    // The committed measure is re-recorded only by a run that passed every check above.
-    record(&committed, &file, &measure, &failures, std::env::var_os("EMUSEN_ESDE_CORPUS").is_some());
+    // The committed measure is re-recorded only by a run that passed every check above, or failed only by rises it was ruled for.
+    for r in &rises {
+        eprintln!("rise: {r}");
+    }
+    if !record(&committed, &file, &measure, &rises, &failures, &how) {
+        if let Recording::Ruled(id) = &how {
+            failures.push(format!("EMUSEN_ESDE_CORPUS=ruled:{id}: nothing written ({} other failures{})", failures.len(), if id.is_empty() { ", no ruling named" } else { "" }));
+        }
+        failures.extend(rises);
+    }
     eprintln!("{}", measure.lines().last().unwrap_or_default());
     eprintln!("{} failures\n{}", failures.len(), failures.join("\n"));
     assert!(failures.is_empty(), "{}", failures.join("\n"));
@@ -640,12 +677,33 @@ fn a_row_that_worsens_is_named() {
 #[test]
 fn a_failing_run_leaves_the_committed_measure_alone() {
     let scratch = Scratch::new("oracle-record");
-    assert!(!record(&scratch.0, "a.tsv", "m\n", &["a box off".to_owned()], true));
+    let rise = ["against x.tsv: t: unsupported 8 → 10".to_owned()];
+    assert!(!record(&scratch.0, "a.tsv", "m\n", &[], &["a box off".to_owned()], &Recording::Plain));
     assert!(!scratch.0.join("a.tsv").exists(), "a failing run re-recorded the baseline");
-    assert!(!record(&scratch.0, "b.tsv", "m\n", &[], false));
+    assert!(!record(&scratch.0, "b.tsv", "m\n", &[], &[], &Recording::Off));
+    assert!(!record(&scratch.0, "b.tsv", "m\n", &rise, &[], &Recording::Plain), "a plain run wrote over a rise");
     assert!(!scratch.0.join("b.tsv").exists());
-    assert!(record(&scratch.0, "c.tsv", "m\n", &[], true));
+    assert!(record(&scratch.0, "c.tsv", "m\n", &[], &[], &Recording::Plain));
     assert_eq!(std::fs::read_to_string(scratch.0.join("c.tsv")).unwrap(), "m\n");
+}
+
+#[test]
+fn a_ruled_rise_is_recorded_only_alone_and_with_its_ruling() {
+    let scratch = Scratch::new("oracle-ruled");
+    let rise = ["against x.tsv: t: unsupported 8 → 10".to_owned()];
+    let ruled = Recording::of(Some("ruled:R-20261111-87"));
+    assert_eq!(ruled, Recording::Ruled("R-20261111-87".to_owned()));
+    assert_eq!(Recording::of(Some("1")), Recording::Plain);
+    assert_eq!(Recording::of(None), Recording::Off);
+    assert!(record(&scratch.0, "rises.tsv", "m\n", &rise, &[], &ruled), "rises only: written");
+    assert_eq!(std::fs::read_to_string(scratch.0.join("rises.tsv")).unwrap(), "# ruled R-20261111-87: 1 rises\nm\n");
+    assert!(!record(&scratch.0, "boxes.tsv", "m\n", &rise, &["box: a box off".to_owned()], &ruled), "a rise and a box failure: not written");
+    assert!(!record(&scratch.0, "noid.tsv", "m\n", &rise, &[], &Recording::of(Some("ruled:"))), "no id: not written");
+    assert!(!scratch.0.join("boxes.tsv").exists() && !scratch.0.join("noid.tsv").exists());
+    assert!(is_rise("t: unsupported 8 → 10") && is_rise("t: unknown 0 → 1"));
+    assert!(!is_rise("t: rects_off 0 → 1") && !is_rise("t: no longer loads") && !is_rise("t: video undrawn"));
+    let header = "theme\tloads\tunsupported\nt\tyes\t8\n";
+    assert_eq!(corpus_rows(&format!("# ruled R-1: 0 rises\n{header}"))["t"]["unsupported"], "8", "the ruling's line is not read as the header");
 }
 
 #[test]

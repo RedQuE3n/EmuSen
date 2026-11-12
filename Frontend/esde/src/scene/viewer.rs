@@ -9,7 +9,7 @@ use super::data::{Data, Game};
 use super::draw::{key, Measures};
 use super::frame::{Background, Clip, Face, Fit, HAlign, Help, HelpEntry, PadButton, Page, Paint, Picture, Placed, Text, Tint, VAlign};
 
-/// The types the viewer shows, in its order: the user guide's list, and the order its captures step through.
+/// The types the viewer shows, in its order: ES-DE's user guide's list, and the order its captures step through.
 pub const ORDER: [&str; 8] = ["video", "cover", "backcover", "titlescreen", "screenshot", "fanart", "miximage", "custom"];
 
 /// Each type's words where the help names it (USERGUIDE.md, "Display media types"), in `ORDER`'s order.
@@ -150,7 +150,7 @@ impl Viewer {
         std::mem::replace(&mut self.index, to) != to
     }
 
-    /// A press, as the user guide's "Game media viewer" gives it: whether the view changed, or none when the button
+    /// A press, as ES-DE's user guide's "Game media viewer" gives it: whether the view changed, or none when the button
     /// closes the viewer. Up opens the manual and down leaves it; in it, left and right turn the page and the triggers
     /// go to the first and last, the shoulders zoom, and while zoomed the d-pad pans and a trigger resets the view.
     pub fn press(&mut self, key: Key) -> Option<bool> {

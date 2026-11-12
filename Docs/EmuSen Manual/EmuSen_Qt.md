@@ -3021,7 +3021,7 @@ painter reads Akrobat at run time from where the player already has it and redis
 installed, the kit's body face stands, as §4.8.1 had it. So a theme without a font matches ES-DE only where Akrobat is
 installed, the help box of Art Book Next among them. `emusen_esde::fonts` has the one job: `locate` looks for
 `Akrobat-Regular.ttf` in an installed ES-DE's `resources/fonts` (the distribution's package under `/usr/share/es-de` and
-`/usr/local/share/es-de`, the user's `~/ES-DE`, the Flatpak `org.es_de.frontend` system-wide and per user, a running
+`/usr/local/share/es-de`, a home folder's `~/ES-DE`, the Flatpak `org.es_de.frontend` system-wide and per user, a running
 AppImage's `/tmp/.mount_ES-DE*` mount; USERGUIDE.md names `/usr/share/es-de` as the installation folder), and then asks
 fontconfig for the family (`fc-list :family=Akrobat:style=Regular file`); `default_font` does this once and caches the
 path (a `OnceLock`, written once, read after). The search runs on the load's data thread, never in the GUI thread's
@@ -3296,7 +3296,7 @@ their dependencies (MIT, Apache-2.0, Zlib or Unicode-3.0) allow the project's GP
 ### 4.10 ES-DE's media viewer **[M 2026-11-09]**
 
 **Approved 2026-11-09 by the tester:** ES-DE's VIEW MEDIA, as USERGUIDE.md ("Game media viewer") describes it, so the
-gamelist's help lists it where ES-DE's does. The evidence is the user guide and 40 captures of ES-DE 3.4.1 taken on
+gamelist's help lists it where ES-DE's does. The evidence is ES-DE's user guide and 40 captures of ES-DE 3.4.1 taken on
 2026-11-09 with the oracle rig (`Testing/esde-oracle`, `gamelist:<j>:media:<n>`), CarAlt and Artflix at both sizes:
 the viewer's game at each of its nine steps, and X on the SNES's folder.
 
@@ -3306,16 +3306,16 @@ the viewer's game at each of its nine steps, and X on the SNES's folder.
   left and right), FIRST (the left trigger) and LAST (the right trigger) centred in it, words and icons 0xAAAAAA, the
   words ES-DE's own face at 0.03 of the height (BROWSE, FIRST, LAST ink 73, 46, 40 px at 24 px and 109, 68, 59 at
   36 px, as FreeType draws Akrobat at those sizes). The strip's height is 1.35 times the words' size, rounded (32.4 and
-  48.6), measured at the two sizes; the user guide gives no rule for it.
+  48.6), measured at the two sizes; ES-DE's user guide gives no rule for it.
 - *The item*, fitted inside the screen below the strip, centred, on black: the 512 × 448 screenshot 878 × 768 at
   y 32 (1280 × 800), the 1280 × 720 fan art the full width at y 56, centred in 32–800.
-- *The order*, video, cover, back cover, title screen, screenshot, fan art, miximage, custom, the user guide's list; right
+- *The order*, video, cover, back cover, title screen, screenshot, fan art, miximage, custom, ES-DE's user guide's list; right
   at the last stays on it (the ninth step shows the custom picture again). The video plays at once.
 - *A game with no video* opens on its screenshot, which then stands first in its place: NES's Cobalt Harbor (cover,
   title screen, screenshot, marquee, miximage, a manual) shows screenshot, cover, title screen, miximage, and stays on
   the miximage (captures `nes-gamelist-1-media-0..4`, ES-DE 3.4.1, 2026-11-10).
 - *A folder*: X on Tower Set opens nothing, though the help lists VIEW MEDIA there too.
-- *Scanlines* over the video, the title screen and the screenshot (the user guide's "Render scanlines" settings, on by
+- *Scanlines* over the video, the title screen and the screenshot (ES-DE's user guide's "Render scanlines" settings, on by
   default): a brightness that rises and falls by about ±10 % with a period of about 4.5 rows at 1280 × 800 and 5.3 at
   1920 × 1200, tied neither to the picture's rows nor to the screen's height alone. **[blocked]**, below.
 
@@ -3846,7 +3846,7 @@ painter's clock and Artflix's system strip lie within the oracle's two units of 
 
 ### 4.13 The media viewer's PDF manual **[M 2026-11-09]**
 
-**Approved 2026-11-09 by the tester:** a game's PDF manual in the media viewer, through Qt PDF. The evidence is the user
+**Approved 2026-11-09 by the tester:** a game's PDF manual in the media viewer, through Qt PDF. The evidence is ES-DE's user
 guide ("Game media viewer") and 16 captures of ES-DE 3.4.1 taken on 2026-11-09
 (`Testing/esde-oracle/manualstates.sh`), CarAlt at both sizes, on the NES's Cobalt Harbor, to which `library.py` gives a
 manual of three labelled pages of 600 × 800 points.
@@ -3898,7 +3898,7 @@ the scanlines off in each so that only the setting differs.
 - *Help prompts at the bottom*: the strip at the screen's foot, the item fitted in the screen above it. *Disabled*: no
   strip, the item fitted in the whole screen.
 - *Display media types*: the shown type's words at the strip's left where the manual's page words stand (VIDEO,
-  SCREENSHOT, …, the user guide's list in capitals).
+  SCREENSHOT, …, ES-DE's user guide's list in capitals).
 - *Stretch videos*: the video fills the screen below the strip.
 - *Blur*: a horizontal Gaussian over the video. Fitted to the plain capture convolved and the blurred one (a box, a
   triangle or a Gaussian, each centred or shifted, with a gain): a Gaussian of 2.5 px at 1280 × 800 and 3.7 px at

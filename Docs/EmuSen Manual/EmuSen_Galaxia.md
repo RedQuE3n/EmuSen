@@ -609,7 +609,7 @@ group Media viewer under `AppSettings`, keys of `BigPictureInterface` named and 
 `es_settings.xml` has them: `MediaViewerHelpPrompts` (`top`, `bottom` or `disabled`),
 `MediaViewerShowTypes`, `MediaViewerKeepVideoRunning`, `MediaViewerStretchVideos`, `MediaViewerVideoBlur` and
 `MediaViewerVideoAudio`. Five are rows of ES-DE 3.4.1's media viewer settings menu (`GuiMediaViewerOptions`); the sixth,
-"Play audio for media viewer videos", ES-DE offers under its sound settings (`GuiMenu::openSoundOptions`), and the user
+"Play audio for media viewer videos", ES-DE offers under its sound settings (`GuiMenu::openSoundOptions`), and ES-DE's user
 guide lists it there, not under "Media viewer settings" (read 2026-11-11). No C# row set them, so the one-row test names them beside the C# keys (`VIEWER_KEYS`), and a row of
 the group that is not one of them is refused. The C# model carries the same six members, so a file written by either
 keeps them. What each does is EmuSen_Qt.md §4.14.

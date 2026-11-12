@@ -4884,8 +4884,8 @@ source size, and Qt 6's `QtQuick.Window` module only imports `QtQuick` (its qmld
 keyboard row, whose Steam choice needs a platform call that says whether Steam is there and asks for its keyboard
 (Mistress's `DeviceKeyboard.UnderSteam` and `AskSteam`), which the interface does not have; the Players page's "The
 first controller pressed is player 1" and "External controller first", which need rules Endymion's seats do not have
-(§7.7.H3). Left stick as the D-pad and Mirror player 1 to player 2 act (§7.7.H3), but no core of the client fixture shows
-a d-pad or a second port where a program's test can see it, so neither is tested from its row.
+(§7.7.H3). Left stick as the D-pad and Mirror player 1 to player 2 act (§7.7.H3), and since §7.7.H7 each is tested from
+its row.
 
 **The failures §7.7.H5 left untested.** The pads that will not open are made so in the program by naming the reader a
 platform library that does not load (the reader opens the pads through that library), and the bindings unsaved by
@@ -4905,8 +4905,50 @@ game's screen); the program's `settings_effects.rs` (Guide chords stepped to Off
 `controller_failures.rs` (pads that will not open, and bindings that cannot be saved, each said on the notice layer),
 `controls_gpu.rs` (on Vulkan: B's key reaching the console core, and every hotkey but Big Picture acting, Fullscreen's
 request and the compositor's full screen each held; passed on 2026-11-12). `rumble_gpu.rs` turns Rumble on Settings'
-row with the game suspended under Home, and on 2026-11-12 it failed there: the row did not turn within 5 s, so Rumble
-from its row with a game open is not yet shown.
+row with the game suspended under Home; it failed there on 2026-11-12, for the cause §7.7.H7 found and repaired.
+
+#### 7.7.H7 A row turned while Settings is read, and the pad's rows from Settings (stage 5, piece H3's third pass; 2026-11-12)
+
+**The Rumble row that did not turn.** `rumble_gpu` stepped Rumble twice, each time from Home's Settings place with the
+game suspended; the second step failed about one run in two. Traced on the RX 6800 on 2026-11-12: the press reached the
+row (the frame offered Right, the row's walk returned `Stepped`, and `SettingsModel.step` saved `Rumble` true), yet the
+row went on saying Off. Opening Settings begins a read of the settings on a thread of its own (`SettingsModel::refresh`,
+for `open`), and when it comes back it replaces the view's documents whole. The second time, Right came about 6 ms after
+A opened Settings, before that read came back; the read, made before the save, then put the old value back on the
+screen and in `rumble`, while the file held the new one. The first time, three Downs to the row gave the read time to
+come back first; on the software backend it always did. A player who changes a row the moment Settings opens meets the
+same: the row undone on screen, the change kept on disk. It was the program's, not the test's walk.
+
+The repair: the model keeps whether its last read is still to come back (`reading`), and a save or a console's setting
+stored while it is reads again (`refresh`, whose new number drops the older read), so the read that stands began after
+the change. The test that fails without it, on the software backend: qt-app's `settings_effects`, whose
+`qt_7_7_h7_a_row_turned_while_settings_is_read_keeps_its_value` begins the read as opening Settings begins it and turns
+Rumble in the same turn of the event loop, so the read cannot come back first, then holds the row Off half a second
+later.
+
+**Left stick as the D-pad and Mirror player 1 to player 2 from their rows.** The client fixture's console core now has a
+d-pad and no stick, and draws its second port in green (§7.9's paragraph on the console core). `qt-models/tests/
+keyboard.rs` holds the effect at the core with the pads simulated: the stick pushed left is Left while the setting is
+on and nothing once it is off; B reaches port 0 alone, and port 1 too once mirrored. `controls_gpu.rs`, after the
+hotkeys, opens a game of the console core with a second controller and turns each row on Settings with the game
+suspended, as a player does: the stick is Left before and nothing after; B reaches port 0 alone before, and port 1 as
+well after. Each trip back to the game waits until the game's reader has read the pads with the game owning them, as
+a press before that falls in the game's quiet after a menu (`GamePads::set_owned`) and is never heard.
+
+**Full screen as the rig shows it.** `controls_gpu.rs` holds the Fullscreen hotkey twice over: what the program asks of
+the window (`fullScreenAsked`), and what the window reports (`visibility` FullScreen and back to what it was). The rig
+shows both: the test's own `kwin_wayland --virtual` grants the request and Qt reports the window's visibility from the
+compositor's answer, which the passing runs of 2026-11-12 saw; the request alone would not prove the window changed, so
+the assertion on the window's state stays.
+
+**The hotkeys' words** in `qt-endymion` `hotkeys.rs` restate the ten action words of Endymion's `HotkeyActions`. No
+owner exports them: the platform interface names them only in `emusen_platform.h`'s comment and gives no call that
+lists them. Each word maps to an action of the program's own, so the list is kept, and
+`qt_7_7_h6_every_action_of_endymions_hotkeys_has_its_action_here` holds it against the hotkeys' defaults that
+`bindings_defaults` returns.
+
+**Held to** (measured on 2026-11-12). qt-app's `settings_effects` (the row turned while Settings is read), `rumble_gpu`
+and `controls_gpu` on the RX 6800; qt-models' `keyboard` (the stick and the mirror at the core).
 
 #### 7.7.K Cores' Update All…, and the cover's raised shadow (stage 5, piece K; 2026-11-09)
 
@@ -5300,7 +5342,10 @@ The client fixture's console core (`console_core`, the platform's `crystal_conso
 test core under `AS_PLAYSTATION`, its one system the table's `psx`, which it starts empty) is what a console is started
 on in the tests. Under `AS_PLAYSTATION` its pad has B and Start besides A, and it draws its picture's blue by the
 button held (`PRESSED_BLUES`: A 0x40, Turbo 0x60, B 0xFF, Start 0xA0), so a test sees in a grab of the window which
-button reached the console; until 2026-11-11 any button drew it full, which proved a press and not which. Held by
+button reached the console; until 2026-11-11 any button drew it full, which proved a press and not which. Since
+2026-11-12 (§7.7.H7) its pad has the d-pad too (Up 0x80, Down 0x90, Left 0xC0, Right 0xE0) and no stick, as the
+PlayStation's first pad was digital, and it draws its picture's green by what its second port's pad holds, by the same
+blues; a game whose image begins with `TWO_PADS` has a controller in that port. Held by
 qt-models' `start_console` and `home_card_acts`, and on the GPU by qt-app's `console` (the own look: the List card's
 page held at the five sizes, the pointer and then the pad starting the console; Start's Home card, its Start Console
 row by the pad and then by the pointer; Back to Library and the Home card's Continue naming the console's session, held

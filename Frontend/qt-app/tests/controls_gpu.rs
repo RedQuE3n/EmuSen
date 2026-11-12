@@ -4,12 +4,13 @@
 //! each hotkey at Endymion's default key does what Mistress's did: Pause / Resume, Save State and Load State, Fast
 //! Forward and Rewind while held, Frame Advance, Screenshot, Fullscreen, and Exit to Library. A GPU job.
 
+mod bindings;
 mod common;
 
-use common::console::{blue, choose_row, console_owns_the_pad, list_card_start_console, picture_points, quit_game, until};
+use common::console::{blue, choose_row, green, console_owns_the_pad, list_card_start_console, picture_points, quit_game, until};
 use common::{approved_console_core, sandbox, wait_for};
 
-use emusen_client_fixture::library;
+use emusen_client_fixture::{image, library};
 use emusen_kit_core::input::UiButton;
 use emusen_platform_client::Platform;
 use emusen_qt::MAIN_URL;
@@ -29,6 +30,11 @@ const F8: i32 = 0x0100_0037;
 const F9: i32 = 0x0100_0038;
 const F11: i32 = 0x0100_003a;
 const ESCAPE: i32 = 0x0100_0000;
+/// The test core's image byte that gives its port 1 a controller (its `TWO_PADS`).
+const TWO_PADS: u8 = 0x22;
+/// SDL's left stick across and South button.
+const LEFT_X: i32 = 0;
+const SOUTH: i32 = 0;
 /// QWindow::FullScreen, as the harness names a property's enumeration value.
 const FULL_SCREEN: &str = "FullScreen";
 
@@ -154,6 +160,50 @@ fn qt_7_7_h6_the_keyboard_plays_the_game_and_each_hotkey_acts() {
     until(&mut scene, 5, "F11 again windowed", |s| s.property("program", "visibility") == windowed);
 
     quit_game(&mut scene, &sdl, &pad, "PlayStation (no disc)", "Home");
+
+    // A game of the console core whose port 1 holds a controller too: Left stick as the D-pad and Mirror player 1 to
+    // player 2, each turned on its Settings row with the game suspended, seen at the core (port 0 in the picture's
+    // blue, port 1 in its green).
+    let game = world.dir("Roms").join("Two Pads (Synthetic).tst");
+    std::fs::write(&game, image(&[TWO_PADS, 1, 2, 3])).unwrap();
+    assert!(scene.set_property("game", "game", game.to_str().unwrap()));
+    until(&mut scene, 20, "the two-pad game running", |s| s.property("session", "running") == "true" && s.property("screens", "shown") == "Game");
+    until(&mut scene, 20, "its first picture", |s| s.property("session", "firstPictureMs").parse::<f64>().is_ok_and(|ms| ms > 0.0));
+    let points = picture_points(&mut scene);
+    common::console::game_hears_the_pads(&mut scene);
+    let (rest, rest_green) = (blue(&mut scene, &points), green(&mut scene, &points));
+    scene.run_pad_clock();
+    // On by default: the stick pushed left is the d-pad's Left.
+    sdl.axis(&pad, LEFT_X, -32767);
+    until(&mut scene, 5, &format!("the stick reaching the console as Left (blue {rest:.0} at rest)"), |s| blue(s, &points) > rest + 60.0);
+    sdl.axis(&pad, LEFT_X, 0);
+    until(&mut scene, 5, "the stick let go", |s| blue(s, &points) < rest + 20.0);
+    bindings::turn_row_with_game_suspended(&mut scene, "In games whose console has no stick");
+    scene.run_pad_clock();
+    sdl.axis(&pad, LEFT_X, -32767);
+    scene.wait(800);
+    assert!(blue(&mut scene, &points) < rest + 20.0, "the stick is no d-pad once its row is Off");
+    sdl.axis(&pad, LEFT_X, 0);
+    // Off by default: B reaches port 0 alone; mirrored from its row, port 1 too.
+    sdl.press(&pad, SOUTH, true);
+    until(&mut scene, 5, "B reaching port 0", |s| blue(s, &points) > rest + 60.0);
+    assert!(green(&mut scene, &points) < rest_green + 20.0, "port 1 hears nothing of player 1 unmirrored");
+    sdl.press(&pad, SOUTH, false);
+    until(&mut scene, 5, "B let go", |s| blue(s, &points) < rest + 20.0);
+    bindings::turn_row_with_game_suspended(&mut scene, "Player 1's controller also plays as player 2");
+    scene.run_pad_clock();
+    sdl.press(&pad, SOUTH, true);
+    let start = std::time::Instant::now();
+    let mut seen = (0.0, 0.0);
+    while start.elapsed().as_secs() < 5 && seen.1 <= rest_green + 60.0 {
+        seen = (blue(&mut scene, &points), green(&mut scene, &points));
+        scene.wait(8);
+    }
+    assert!(seen.1 > rest_green + 60.0, "B reaching port 1 mirrored: blue {:.0}, green {:.0} (at rest {rest:.0}, {rest_green:.0})", seen.0, seen.1);
+    sdl.press(&pad, SOUTH, false);
+    until(&mut scene, 5, "B let go on both ports", |s| green(s, &points) < rest_green + 20.0 && blue(s, &points) < rest + 20.0);
+    assert!(scene.set_property("game", "game", ""));
+    until(&mut scene, 10, "the two-pad game closed", |s| s.property("session", "running") == "false");
     sdl.detach(pad);
     assert!(scene.set_property("program", "visible", "false"));
     scene.wait(50);

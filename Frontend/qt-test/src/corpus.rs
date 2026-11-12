@@ -209,7 +209,7 @@ mod tests {
         let rise = |was: f64, now: f64, column: &str| Change { theme: "t".into(), column: column.into(), was, now };
         assert!(cover.uncovered(&[rise(8.0, 10.0, "unsupported")], &two).is_empty());
         assert_eq!(cover.uncovered(&[rise(8.0, 11.0, "unsupported")], &two).len(), 1, "one more than its settings");
-        assert_eq!(cover.uncovered(&[rise(0.0, 1.0, "unknown")], &two).len(), 1, "an unknown rise is never a ruling's");
+        assert_eq!(cover.uncovered(&[rise(0.0, 2.0, "unknown")], &two).len(), 1, "an unknown rise is never a ruling's, even of the size its settings make");
         let snapped = pairs("t", &[("helpsystem.posDimmed", "unsupported"), ("sound.path", "unsupported"), ("text.containerVerticalSnap", "set")]);
         assert!(cover.uncovered(&[rise(8.0, 9.0, "unsupported")], &snapped).is_empty(), "one less where the drawn one is set");
         assert_eq!(cover.uncovered(&[rise(8.0, 9.0, "unsupported")], &pairs("u", &[])).len(), 1, "a theme that sets none of them");

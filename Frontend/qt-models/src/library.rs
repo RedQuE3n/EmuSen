@@ -462,7 +462,7 @@ pub struct Read {
 pub type Refreshed = Result<Read, String>;
 
 /// A source's first read for an ES-DE theme: the systems, the games and the player's records without the metadata, the
-/// plays or the media (so the grid's Most played, Year and Rating sort by name until then), which the whole read brings after it, so the theme's view is shown first (EmuSen_Qt.md §4.9).
+/// plays or the media (so the grid's Most played, Year and Rating sort by name until then), which the whole read brings after it, so the theme's view is shown first (EmuSen_Qt.md §4.15).
 pub struct FirstLook<'a>(pub &'a dyn LibrarySource);
 
 impl LibrarySource for FirstLook<'_> {
@@ -637,7 +637,7 @@ impl LibraryView {
         drop(self.swap_in(refreshed));
     }
 
-    /// `apply`, handing back what the read replaced, so the GUI thread can drop it elsewhere (EmuSen_Qt.md §4.9).
+    /// `apply`, handing back what the read replaced, so the GUI thread can drop it elsewhere (EmuSen_Qt.md §4.15).
     pub fn swap_in(&mut self, refreshed: Refreshed) -> Option<Read> {
         use std::mem::replace;
         match refreshed {

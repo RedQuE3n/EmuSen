@@ -160,19 +160,9 @@ pub fn approved_console_core(cores: &std::path::Path) {
 }
 
 #[allow(dead_code)]
-/// A clip of one colour, magenta, 64 × 48 at 30 frames a second for two seconds: a YUV4MPEG2 stream, the simplest a
-/// test can write by hand, under the name the media store looks for. FFmpeg finds the format by its content.
+/// The program's clip for a game, two seconds of magenta, under the name the media store looks for (emusen_qt_test::clips).
 pub fn write_clip(path: &std::path::Path) {
-    let (w, h) = (64usize, 48usize);
-    let mut bytes = b"YUV4MPEG2 W64 H48 F30:1 Ip A1:1 C420jpeg\n".to_vec();
-    for _ in 0..60 {
-        bytes.extend_from_slice(b"FRAME\n");
-        bytes.extend(std::iter::repeat_n(107u8, w * h));
-        bytes.extend(std::iter::repeat_n(202u8, w * h / 4));
-        bytes.extend(std::iter::repeat_n(222u8, w * h / 4));
-    }
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(path, bytes).unwrap();
+    emusen_qt_test::clips::write(path, 2);
 }
 
 /// One instant the program's clock is held at, in seconds since 1970 (Clock.now), for a test whose states must not

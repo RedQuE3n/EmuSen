@@ -45,6 +45,9 @@ pub mod qobject {
         #[qproperty(f64, width)]
         #[qproperty(f64, height)]
         #[qproperty(QColor, color)]
+        /// The mark's width over its height, and the share of its height down to the baseline it sits on beside words.
+        #[qproperty(f64, aspect, READ, NOTIFY)]
+        #[qproperty(f64, baseline, READ, NOTIFY)]
         type MarkShapes = super::MarkShapesRust;
     }
 
@@ -93,6 +96,8 @@ pub struct MarkShapesRust {
     width: f64,
     height: f64,
     color: QColor,
+    aspect: f64,
+    baseline: f64,
     rows: Vec<MarkRow>,
 }
 
@@ -117,10 +122,10 @@ pub fn row_of(part: &Part, width: f64, height: f64) -> MarkRow {
 
 impl MarkShapesRust {
     fn rebuild(&mut self) {
-        self.rows = match mark_named(&self.mark.to_string()) {
-            Some(id) if self.width > 0.0 && self.height > 0.0 => {
-                id.mark().parts.iter().map(|p| row_of(p, self.width, self.height)).collect()
-            }
+        let mark = mark_named(&self.mark.to_string()).map(MarkId::mark);
+        (self.aspect, self.baseline) = mark.as_ref().map_or((1.0, 1.0), |m| (m.aspect, m.baseline));
+        self.rows = match mark {
+            Some(m) if self.width > 0.0 && self.height > 0.0 => m.parts.iter().map(|p| row_of(p, self.width, self.height)).collect(),
             _ => Vec::new(),
         };
     }
@@ -137,9 +142,15 @@ impl cxx_qt::Initialize for qobject::MarkShapes {
 
 impl qobject::MarkShapes {
     fn refresh(mut self: Pin<&mut Self>) {
+        let was = (self.aspect, self.baseline);
         self.as_mut().begin_reset_model();
         self.as_mut().rust_mut().rebuild();
         self.as_mut().end_reset_model();
+        // Announced only when the mark's shape changes, never for a new size, so a width bound to the aspect reads no loop.
+        if (self.aspect, self.baseline) != was {
+            self.as_mut().aspect_changed();
+            self.as_mut().baseline_changed();
+        }
     }
 
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {

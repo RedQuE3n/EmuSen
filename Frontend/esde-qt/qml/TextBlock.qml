@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import EmuSen.Esde
 
 // A theme's text: its face, a fixed line height, a background grown by its padding, and the scene's scroll (EmuSen_Qt.md §4.8).
 Item {
@@ -12,6 +13,8 @@ Item {
     property string text
     // The theme's font file as a URL; empty, or a file that does not load, sets the kit's body face.
     property url fontSource
+    // ES-DE's own face (the theme named none), which it draws at its size rounded up to a whole pixel (EmuSen_Qt.md §4.9.1).
+    property bool ownFace
     property real px: 16
     property color color
     property int hAlign: TextBlock.Align.Start
@@ -20,6 +23,10 @@ Item {
     property real lineSpacing: 1.5
     property bool wrap: false
     property bool ellipsis: false
+    // A vertical container keeps every line, so what overflows its box is measured before it first scrolls.
+    property bool everyLine: false
+    // A vertical container shows whole rows at its start and end: its window is cut to them (EmuSen_Qt.md §4.12.3).
+    property bool snapRows: false
     property bool hasBackground: false
     property color background
     property color backgroundEnd: root.background
@@ -36,22 +43,37 @@ Item {
     property real repeatAt: 0
     property real scrollY: 0
     property real scrollOpacity: 1
-    // A fixed line's pitch, and the lines' height at it (one for no words): Qt's contentHeight adds a descent to a fixed height.
-    readonly property real pitch: root.lineSpacing > 0 ? root.px * root.lineSpacing : 0
-    readonly property real laidHeight: root.pitch > 0 ? Math.max(1, label.lineCount) * root.pitch : label.contentHeight
-    // Each fixed line holds the face's own line centred, as ES-DE draws it (EmuSen_Qt.md §4.8.6).
-    readonly property real halfLeading: root.pitch > 0 ? (root.pitch - metrics.height) / 2 : 0
-    readonly property real alignedY: root.pitch <= 0 || root.scrollVertical || root.vAlign === TextBlock.Align.Start ? 0 : Math.max(0, root.vAlign === TextBlock.Align.End ? root.height - root.laidHeight : (root.height - root.laidHeight) / 2)
-    readonly property alias contentWidth: label.contentWidth
-    readonly property alias contentHeight: label.contentHeight
-    readonly property string family: label.font.family
+    // The words laid out by ES-DE's rules, with the lines held as a whole in the box (EmuSen_Qt.md §4.9).
+    readonly property real laidHeight: laid.contentHeight
+    readonly property real alignedY: root.scrollVertical || root.vAlign === TextBlock.Align.Start ? 0 : Math.max(0, root.vAlign === TextBlock.Align.End ? root.height - root.laidHeight : (root.height - root.laidHeight) / 2)
+    readonly property real contentWidth: laid.contentWidth
+    readonly property real contentHeight: laid.contentHeight
+    readonly property int wholeRows: root.snapRows && laid.pitch > 0 ? Math.floor((root.height + 1e-6) / laid.pitch) : 0
+    readonly property real windowHeight: root.wholeRows > 0 ? Math.round(root.wholeRows * laid.pitch) : root.height
+    // The scroll travels the measured height less the box, so the window's shortfall is measured with the words.
+    readonly property real measuredHeight: laid.contentHeight + root.height - root.windowHeight
+    readonly property string family: face.status === FontLoader.Ready ? face.font.family : body.font.family
     readonly property alias fontStatus: face.status
+    // The first line's baseline, in the block's own coordinates.
+    readonly property real baselineY: root.alignedY + Math.round(laid.baseline)
     // The words' laid-out extent, once per change of it, for the scene's measured().
     signal measured(real width, real height)
+    onMeasuredHeightChanged: root.measured(laid.contentWidth, root.measuredHeight)
 
-    FontMetrics {
-        id: metrics
-        font: label.font
+    TextLayout {
+        id: laid
+        font: face.status === FontLoader.Ready ? root.fontSource : ""
+        text: root.text
+        px: root.px
+        ownFace: root.ownFace
+        // A scrolling line is laid out whole; a vertical scroll keeps every line.
+        boxWidth: root.scrolling && !root.scrollVertical ? 0 : root.width
+        boxHeight: root.scrolling || root.everyLine ? 0 : root.height
+        lineSpacing: root.lineSpacing
+        wrap: root.wrap
+        ellipsis: root.ellipsis && !root.scrolling
+        align: root.scrolling && !root.scrollVertical ? TextBlock.Align.Start : root.hAlign
+        onContentWidthChanged: root.measured(laid.contentWidth, root.measuredHeight)
     }
     FontLoader {
         id: face
@@ -75,40 +97,27 @@ Item {
         }
     }
     Item {
-        anchors.fill: parent
-        clip: root.scrolling
+        width: root.width
+        height: root.windowHeight
+        clip: root.scrolling || root.everyLine
         opacity: root.scrollOpacity
-        Text {
-            id: label
+        GlyphText {
+            id: words
             x: -root.scrollX
-            y: root.alignedY + root.halfLeading - root.scrollY
-            width: root.width
-            height: root.scrollVertical ? undefined : root.height
-            text: root.text
+            y: root.alignedY - root.scrollY
+            laid: laid
+            family: root.family
+            styleName: face.status === FontLoader.Ready ? face.font.styleName : body.font.styleName
             color: root.color
-            font.family: face.status === FontLoader.Ready ? face.font.family : body.font.family
-            font.styleName: face.status === FontLoader.Ready ? face.font.styleName : body.font.styleName
-            font.pixelSize: Math.max(1, Math.round(root.px))
-            lineHeightMode: root.lineSpacing > 0 ? Text.FixedHeight : Text.ProportionalHeight
-            lineHeight: root.lineSpacing > 0 ? root.px * root.lineSpacing : 1
-            wrapMode: root.wrap ? Text.WordWrap : Text.NoWrap
-            elide: root.ellipsis && !root.scrolling ? Text.ElideRight : Text.ElideNone
-            horizontalAlignment: root.scrolling && !root.scrollVertical ? Text.AlignLeft : root.hAlign === TextBlock.Align.End ? Text.AlignRight : root.hAlign === TextBlock.Align.Center ? Text.AlignHCenter : Text.AlignLeft
-            verticalAlignment: root.pitch > 0 || root.vAlign === TextBlock.Align.Start ? Text.AlignTop : root.vAlign === TextBlock.Align.End ? Text.AlignBottom : Text.AlignVCenter
-            onContentSizeChanged: root.measured(label.contentWidth, root.laidHeight)
         }
-        Text {
+        GlyphText {
             visible: root.repeatAt > 0
-            x: label.x + root.repeatAt
-            y: label.y
-            width: label.width
-            height: label.height
-            text: label.text
-            color: label.color
-            font: label.font
-            lineHeightMode: label.lineHeightMode
-            lineHeight: label.lineHeight
-            verticalAlignment: label.verticalAlignment
+            x: words.x + root.repeatAt
+            y: words.y
+            laid: laid
+            family: words.family
+            styleName: words.styleName
+            color: words.color
         }
     }
 }

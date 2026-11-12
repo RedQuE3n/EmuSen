@@ -1,4 +1,4 @@
-//! The view's load at a library's scale (EmuSen_Qt.md §4.9), through `EsdeModel`'s own load, offscreen: the GUI thread's
+//! The view's load at a library's scale (EmuSen_Qt.md §4.15), through `EsdeModel`'s own load, offscreen: the GUI thread's
 //! part of a load hands the four texts to the load's thread without turning them into Rust text. A timing test, run on
 //! a quiet machine. One test, as the harness is one per process.
 
@@ -8,7 +8,7 @@ const SCENE: &str = concat!("file://", env!("CARGO_MANIFEST_DIR"), "/tests/qml/L
 
 #[test]
 fn the_gui_thread_s_part_of_a_load_stays_under_two_milliseconds_at_nine_thousand_games() {
-    // The texts' sizes at 9,007 games (§4.9): the shelves 6.6 MB, the media index 2.2 MB.
+    // The texts' sizes at 9,007 games (§4.15): the shelves 6.6 MB, the media index 2.2 MB.
     let row = r#"{"file":"/roms/snes/Game 0000.sfc","name":"Game 0000","esde_system":"snes","description":"A game invented for EmuSen's tests, long enough to wrap.","developer":"Studio A","publisher":"Publisher P","genre":"Puzzle","players":"1","release_date":"19900101T000000","favourite":false},"#;
     let shelves = format!("[{{\"name\":\"snes\",\"games\":[{}]}}]", row.repeat(9000).trim_end_matches(','));
     let media = format!("{{\"m\":\"{}\"}}", "m".repeat(2_200_000));

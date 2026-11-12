@@ -11,6 +11,12 @@ Item {
     property bool playing: false
     property bool muted: true
     property real volume: 1
+    // How the clip and the still meet the tile: cropped to fill it (the default), fitted inside it or stretched to it; and how long after
+    // `playing` the clip starts, the poster's delay by default (EmuSen_Kit.md §7.61).
+    property int fillMode: Image.PreserveAspectCrop
+    property int delay: Kit.Tokens.poster
+    // How long the clip fades in over the still, in ms: the poster's fade by default.
+    property int fade: Kit.Tokens.posterFade
     // Whether the clip's player is made, and whether a frame of the clip stands over the still.
     readonly property bool running: clipLoader.status === Loader.Ready
     readonly property bool showing: (clipLoader.item as Kit.VideoClip)?.showing ?? false
@@ -21,7 +27,7 @@ Item {
         objectName: "videoStill"
         anchors.fill: parent
         source: root.still
-        fillMode: Image.PreserveAspectCrop
+        fillMode: root.fillMode
         asynchronous: true
     }
     // Reduced motion keeps the still (EmuSen_Interface.md §5.9).
@@ -34,6 +40,9 @@ Item {
             source: root.source
             muted: root.muted
             volume: root.volume
+            fillMode: root.fillMode
+            delay: root.delay
+            fade: root.fade
         }
     }
 }

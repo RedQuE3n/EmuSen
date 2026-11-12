@@ -58,7 +58,7 @@ fn close(a: f64, b: f64) -> bool {
 const CAROUSEL: &str = "<carousel name=\"c\"><pos>0 0</pos><size>1 1</size><maxItemCount>3</maxItemCount><itemScale>1.5</itemScale><unfocusedItemOpacity>0.3</unfocusedItemOpacity>";
 
 #[test]
-fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted() {
+fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_not_drawn() {
     let listed: Vec<(String, String)> = mapping::pairs().map(|(k, p, _)| (k.to_owned(), p.to_owned())).collect();
     let unique: BTreeSet<_> = listed.iter().cloned().collect();
     assert_eq!(unique.len(), listed.len(), "a pair listed twice");
@@ -67,11 +67,10 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted() {
     assert_eq!(unique, catalogue);
     let dimmed: Vec<_> = mapping::pairs().filter(|(k, p, _)| *k == "helpsystem" && p.ends_with("Dimmed")).collect();
     assert_eq!(dimmed.len(), 8);
-    assert!(dimmed.iter().all(|(_, _, s)| **s == Mapped::Accepted));
-    assert!(mapping::is_mapped("helpsystem", "textColorDimmed"));
+    assert!(dimmed.iter().all(|(_, _, s)| **s == Mapped::Later("help-dimmed".into())), "R-20261111-75: not drawn until checked");
+    assert_eq!(mapping::status("sound", "path"), Some(&Mapped::Later("sound".into())));
     assert_eq!(mapping::status("video", "delay"), Some(&Mapped::Later("video".into())));
-    assert!(!mapping::is_mapped("carousel", "itemLinearScale"));
-    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 360);
+    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 361);
     assert!(
         mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"),
         "the gameselector picks the system view's games; sound is played"
@@ -79,16 +78,24 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted() {
 }
 
 #[test]
-fn a_theme_setting_only_accepted_pairs_counts_none_unsupported() {
+fn a_theme_setting_the_dimmed_help_or_a_sound_counts_them_unsupported_and_not_whole() {
     let t = Synth::new();
     t.capabilities("").theme(
         "<view name=\"system\"><helpsystem name=\"help\"><textColorDimmed>FF0000</textColorDimmed><opacityDimmed>0.5</opacityDimmed></helpsystem></view>
-         <view name=\"gamelist\"><carousel name=\"c\"><itemLinearScale>0.1 0.1</itemLinearScale></carousel></view>",
+         <view name=\"all\"><sound name=\"systembrowse\"><path>./s.wav</path></sound></view>",
     );
     let m = check::measure(&t.root, &["nes"]);
-    assert_eq!(m.properties.get("helpsystem.textColorDimmed"), Some(&"set"));
-    assert_eq!(m.properties.get("carousel.itemLinearScale"), Some(&"unsupported"), "a later pair is unsupported, not unknown");
-    assert!(m.loads());
+    assert_eq!(m.properties.get("helpsystem.textColorDimmed"), Some(&"unsupported"));
+    assert_eq!(m.properties.get("sound.path"), Some(&"unsupported"));
+    assert_eq!(m.count("unsupported"), 3);
+    assert!(m.loads() && !m.whole());
+    let header: Vec<&str> = check::SUMMARY_HEADER.split('\t').collect();
+    assert!(!header.contains(&"accepted"), "no state between drawn and not drawn");
+    let row = check::summary_row(&m);
+    let cells: Vec<&str> = row.split('\t').collect();
+    assert_eq!(cells.len(), header.len());
+    assert_eq!(cells[header.iter().position(|c| *c == "unsupported").unwrap()], "3");
+    assert_eq!(cells[header.iter().position(|c| *c == "whole").unwrap()], "no");
 }
 
 #[test]
@@ -278,6 +285,23 @@ fn the_help_names_es_de_s_actions_on_the_buttons_and_icons_of_the_pad() {
 }
 
 #[test]
+fn the_help_takes_es_de_s_help_face_where_found_and_its_default_face_else() {
+    let t = Synth::new();
+    let gamelist = "<helpsystem name=\"h\"><entries>a,b</entries></helpsystem><text name=\"t\"><text>HELLO</text></text>";
+    let mut s = stage(&t, "", gamelist, "gamelist", 0);
+    s.current.data.default_font = Some("/f/Akrobat-Regular.ttf".to_owned());
+    let f = s.frame();
+    let Paint::Help(h) = &placed(&f, "h").paint else { panic!() };
+    assert_eq!(h.font, Face { file: Some("/f/Akrobat-Regular.ttf".to_owned()), own: true }, "no help face: the default face");
+    s.current.data.help_font = Some("/f/Akrobat-SemiBold.ttf".to_owned());
+    let f = s.frame();
+    let Paint::Help(h) = &placed(&f, "h").paint else { panic!() };
+    assert_eq!(h.font, Face { file: Some("/f/Akrobat-SemiBold.ttf".to_owned()), own: false }, "its advances rounded as a theme face's");
+    let Paint::Text(x) = &placed(&f, "t").paint else { panic!() };
+    assert_eq!(x.font.file.as_deref(), Some("/f/Akrobat-Regular.ttf"), "other text keeps the default face");
+}
+
+#[test]
 fn badges_lay_out_the_game_s_slots_and_status_shows_the_device() {
     let t = Synth::new();
     let gamelist = "<badges name=\"b\"><pos>0 0</pos><size>0.4 0.1</size><slots>favorite controller</slots><itemsPerLine>2</itemsPerLine><lines>1</lines><itemMargin>0 0</itemMargin></badges>
@@ -373,9 +397,9 @@ fn the_help_follows_es_de_s_order_and_the_player_s_switches() {
     assert_eq!(labels(&s), ["MENU", "SELECT", "SCREENSAVER", "CHOOSE", "RANDOM"]);
     let mut s = stage(&t, "", help, "gamelist", 0);
     s.current.data.help.random_games = true;
-    assert_eq!(labels(&s), ["OPTIONS", "MENU", "SELECT", "BACK", "FAVORITES", "SYSTEM", "RANDOM"]);
+    assert_eq!(labels(&s), ["OPTIONS", "MENU", "SELECT", "BACK", "VIEW MEDIA", "FAVORITES", "SYSTEM", "RANDOM"]);
     s.current.data.help.quick_select = "disabled".into();
-    assert_eq!(labels(&s), ["OPTIONS", "MENU", "SELECT", "BACK", "FAVORITES", "RANDOM"]);
+    assert_eq!(labels(&s), ["OPTIONS", "MENU", "SELECT", "BACK", "VIEW MEDIA", "FAVORITES", "RANDOM"]);
 }
 
 #[test]
@@ -476,4 +500,279 @@ fn a_gameselector_gives_the_system_view_its_games_by_entry() {
     })
     .frame();
     assert_eq!(shown(&f)[0], "Cobalt Harbor");
+}
+
+// ES-DE's media viewer (USERGUIDE.md, "Game media viewer"; EmuSen_Qt.md §4.10).
+#[test]
+fn the_media_viewer_shows_a_game_s_media_in_es_de_s_order_and_stops_at_the_ends() {
+    let t = Synth::new();
+    let mut s = stage(&t, "", "<helpsystem name=\"h\"/>", "gamelist", 0);
+    let mut data = s.current.data.clone();
+    let game = &mut data.systems[1].games[0];
+    for kind in ["custom", "screenshot", "video", "cover", "marquee", "fanart"] {
+        game.media.insert(kind.to_owned(), format!("/m/{kind}"));
+    }
+    data.systems[1].games[1].folder = true;
+    s.restart(data.clone(), "gamelist", 0);
+    assert!(s.open_viewer());
+    let v = s.viewer.clone().unwrap();
+    let kinds: Vec<&str> = v.entries.iter().map(|e| e.kind.as_str()).collect();
+    assert_eq!(kinds, ["video", "cover", "screenshot", "fanart", "custom"], "ES-DE's order; a marquee is not shown");
+    let item = |s: &Stage| placed(&s.frame(), "item").paint.clone();
+    let clip = Clip { source: "/m/video".into(), stretch: false, audio: true, volume: 1.0, blur: 0.0, fade: 600.0 };
+    assert_eq!(placed(&s.frame(), "video").paint, Paint::Clip(clip), "the video first, played");
+    let viewer = s.viewer.as_mut().unwrap();
+    assert!(!viewer.browse(-1), "left at the first stays");
+    assert!(viewer.jump(true));
+    assert!(!viewer.browse(1), "right at the last stays");
+    assert!(viewer.jump(false) && viewer.browse(1));
+    let Paint::Picture(p) = item(&s) else { panic!("a picture") };
+    assert_eq!((p.source.as_str(), p.fit), ("/m/cover", Fit::Contain));
+    let f = s.frame();
+    let (strip, it) = (placed(&f, "strip"), placed(&f, "item"));
+    assert_eq!((strip.h, it.y, it.h), (Viewer::strip(H), Viewer::strip(H), H - Viewer::strip(H)), "the item fills the screen below the strip");
+    assert!(f.elements.last().is_some_and(|e| e.name == "help"), "the help is drawn last, over the strip");
+    let Paint::Help(h) = &placed(&f, "help").paint else { panic!() };
+    assert_eq!(h.entries.iter().map(|e| e.label.as_str()).collect::<Vec<_>>(), ["BROWSE", "FIRST", "LAST"]);
+    assert!(h.font.own, "ES-DE's own face");
+    s.switch(0);
+    assert!(s.viewer.is_none(), "leaving the gamelist closes it");
+    let no_video = &mut data.systems[1].games[0].media;
+    no_video.remove("video");
+    no_video.insert("titlescreen".into(), "/m/titlescreen".into());
+    no_video.insert("miximage".into(), "/m/miximage".into());
+    s.restart(data.clone(), "gamelist", 0);
+    assert!(s.open_viewer());
+    let kinds: Vec<String> = s.viewer.as_ref().unwrap().entries.iter().map(|e| e.kind.clone()).collect();
+    assert_eq!(kinds, ["screenshot", "cover", "titlescreen", "fanart", "miximage", "custom"], "with no video the screenshot leads");
+    s.switch(0);
+    data.game_index = 1;
+    s.restart(data.clone(), "gamelist", 0);
+    assert!(!s.open_viewer(), "a folder opens nothing");
+    data.game_index = 2;
+    s.restart(data, "gamelist", 0);
+    assert!(!s.open_viewer(), "a game with no media opens nothing");
+}
+
+// The manual's mode, as ES-DE 3.4.1's captures of 2026-11-09 show it (EmuSen_Qt.md §4.13).
+#[test]
+fn the_media_viewer_shows_a_game_s_pdf_manual_paged_zoomed_and_panned() {
+    let t = Synth::new();
+    let mut s = stage(&t, "", "<helpsystem name=\"h\"/>", "gamelist", 0);
+    let mut data = s.current.data.clone();
+    let game = &mut data.systems[1].games[0];
+    game.media.insert("screenshot".into(), "/m/shot".into());
+    game.media.insert("manual".into(), "/m/manual.pdf".into());
+    s.restart(data, "gamelist", 0);
+    assert!(s.open_viewer());
+    let labels = |s: &Stage| {
+        let f = s.frame();
+        let Paint::Help(h) = &placed(&f, "help").paint else { panic!() };
+        h.entries.iter().map(|e| e.label.clone()).collect::<Vec<_>>()
+    };
+    assert_eq!(labels(&s), ["BROWSE", "PDF MANUAL", "FIRST", "LAST"], "a game with a manual offers it");
+    let press = |s: &mut Stage, k: Key| s.viewer.as_mut().unwrap().press(k);
+    assert_eq!(press(&mut s, Key::Up), Some(true));
+    assert_eq!(labels(&s), ["BROWSE", "GAME MEDIA", "FIRST", "LAST", "ZOOM"]);
+    let Paint::Page(p) = placed(&s.frame(), "item").paint.clone() else { panic!("the manual's page") };
+    assert_eq!((p.source.as_str(), p.page), ("/m/manual.pdf", 0));
+    assert!(s.frame().elements.iter().all(|e| e.name != "left"), "no page words before the painter has counted the pages");
+    assert!(s.manual_pages(3));
+    let words = |s: &Stage| match &placed(&s.frame(), "left").paint {
+        Paint::Text(t) => t.text.clone(),
+        _ => panic!(),
+    };
+    assert_eq!(words(&s), "PAGE 1 OF 3");
+    assert_eq!(press(&mut s, Key::Left), Some(false), "the first page stays");
+    assert_eq!(press(&mut s, Key::Last), Some(true));
+    assert_eq!(press(&mut s, Key::Right), Some(false), "the last page stays");
+    assert_eq!(words(&s), "PAGE 3 OF 3");
+    assert_eq!(press(&mut s, Key::First), Some(true));
+    // The page's size in points, as the painter reads it: 600 x 800, fitted to the screen below the strip.
+    let strip = Viewer::strip(H);
+    let id = placed(&s.frame(), "item").id;
+    assert!(s.measured(id, 600.0, 800.0));
+    let page = |s: &Stage| {
+        let f = s.frame();
+        let p = placed(&f, "item");
+        (p.x, p.y, p.w, p.h)
+    };
+    let fit = (H - strip) / 800.0;
+    let (x, y, w, h) = page(&s);
+    assert!(close(w, 600.0 * fit) && close(h, H - strip) && close(y, strip) && close(x, (W - w) / 2.0), "{:?}", page(&s));
+    assert_eq!(press(&mut s, Key::ZoomIn), Some(true));
+    assert_eq!(labels(&s), ["PAN", "RESET", "ZOOM"]);
+    let (x1, y1, w1, h1) = page(&s);
+    assert!(close(h1, (fit + 0.5 * H / 800.0) * 800.0) && close(x1 + w1 / 2.0, W / 2.0) && close(y1 + h1 / 2.0, strip + (H - strip) / 2.0), "a step is half the screen's height more, centred");
+    assert_eq!(press(&mut s, Key::Right), Some(true), "zoomed, right pans");
+    assert!(close(page(&s).0, x1 - W / 8.0), "an eighth of the screen's width a step");
+    assert_eq!(press(&mut s, Key::Down), Some(true), "zoomed, down pans");
+    assert!(close(page(&s).1, y1 - W / 8.0), "down moves the page up by the same step");
+    assert_eq!(press(&mut s, Key::ZoomIn), Some(true));
+    assert_eq!(press(&mut s, Key::ZoomOut), Some(true));
+    assert!(close(page(&s).3, h1), "the left shoulder steps the zoom back by one step");
+    assert_eq!(words(&s), "PAGE 1 OF 3", "panning turns no page");
+    assert_eq!(press(&mut s, Key::Last), Some(true), "a trigger resets the view");
+    assert_eq!(page(&s), (x, y, w, h));
+    assert_eq!(press(&mut s, Key::ZoomIn), Some(true));
+    assert_eq!(press(&mut s, Key::ZoomOut), Some(true));
+    assert_eq!(press(&mut s, Key::Right), Some(true), "zoomed out entirely, right turns the page again");
+    assert_eq!(words(&s), "PAGE 2 OF 3");
+    assert_eq!(press(&mut s, Key::Down), Some(true), "down returns to the media");
+    assert_eq!(labels(&s), ["BROWSE", "PDF MANUAL", "FIRST", "LAST"]);
+    assert!(matches!(placed(&s.frame(), "item").paint, Paint::Picture(_)));
+}
+
+// The player's viewer settings (USERGUIDE.md, "Media viewer settings"), as the captures of 2026-11-09 show each (EmuSen_Qt.md §4.14).
+#[test]
+fn the_media_viewer_follows_the_player_s_viewer_settings() {
+    let t = Synth::new();
+    let mut s = stage(&t, "", "<helpsystem name=\"h\"/>", "gamelist", 0);
+    let mut data = s.current.data.clone();
+    for kind in ["video", "screenshot"] {
+        data.systems[1].games[0].media.insert(kind.to_owned(), format!("/m/{kind}"));
+    }
+    let open = |s: &mut Stage, data: &Data, settings: ViewerSettings| {
+        let mut d = data.clone();
+        d.viewer = settings;
+        s.restart(d, "gamelist", 0);
+        assert!(s.open_viewer());
+    };
+    let strip = Viewer::strip(H);
+    let base = ViewerSettings::default();
+    open(&mut s, &data, ViewerSettings { help: HelpPlace::Bottom, ..base });
+    let f = s.frame();
+    assert!(close(placed(&f, "strip").y, H - strip) && close(placed(&f, "video").y, 0.0) && close(placed(&f, "video").h, H - strip), "the strip at the bottom");
+    // The help's spacings are ES-DE's defaults for a help element, THEMES.md's 0.00833 and 0.00416 of the width.
+    let Paint::Help(help) = &placed(&f, "help").paint else { panic!("the viewer's help") };
+    assert_eq!((help.entry_spacing, help.icon_gap), (f64::from(0.00833_f32 * W as f32), f64::from(0.00416_f32 * W as f32)));
+    open(&mut s, &data, ViewerSettings { help: HelpPlace::Off, ..base });
+    let f = s.frame();
+    assert!(f.elements.iter().all(|e| e.name != "strip" && e.name != "help") && close(placed(&f, "video").h, H), "no help, the whole screen");
+    open(&mut s, &data, ViewerSettings { show_types: true, ..base });
+    let left = |s: &Stage| match &placed(&s.frame(), "left").paint {
+        Paint::Text(t) => t.text.clone(),
+        _ => panic!(),
+    };
+    assert_eq!(left(&s), "VIDEO");
+    s.viewer.as_mut().unwrap().press(Key::Right);
+    assert_eq!(left(&s), "SCREENSHOT");
+    let video = placed(&s.frame(), "video").clone();
+    assert_eq!(video.opacity, 0.0, "the video runs on, unseen, while a picture is shown");
+    open(&mut s, &data, ViewerSettings { keep_video_running: false, stretch_videos: true, audio: false, blur: true, ..base });
+    let f = s.frame();
+    let Paint::Clip(c) = &placed(&f, "video").paint else { panic!() };
+    assert!(c.stretch && !c.audio && close(c.blur, W / 512.0), "the blur's sigma is a 512th of the width");
+    s.viewer.as_mut().unwrap().press(Key::Right);
+    assert!(s.frame().elements.iter().all(|e| e.name != "video"), "not kept running: the video stops on a picture");
+}
+
+// ES-DE's gameselectors draw from every game of the system, those its list's level does not show among them (EmuSen_Qt.md §4.11).
+#[test]
+fn a_gameselector_picks_from_the_games_inside_folders_too() {
+    let t = Synth::new();
+    let random = "<gameselector name=\"pick\"><gameCount>8</gameCount></gameselector>";
+    let inside = |d: &mut Data| {
+        for name in ["Quartz Spire", "Rune Gate"] {
+            let mut g = Game::new(name, &format!("{name}.nes"));
+            g.media.insert("screenshot".into(), format!("/shots/{name}.png"));
+            d.systems[1].unlisted.push(g);
+        }
+        d.systems[1].games[1].folder = true;
+    };
+    let names = shown(&selected(&t, random, 7, inside).frame());
+    assert_eq!(names.len(), 7, "five games and the two inside, the folder never: {names:?}");
+    assert!(names.contains(&"Rune Gate".to_owned()) && names.contains(&"Quartz Spire".to_owned()), "{names:?}");
+    assert!(!names.contains(&"Brass Lantern".to_owned()), "a folder is not picked");
+}
+
+#[test]
+fn a_vertical_container_of_fixed_height_shows_whole_rows_unless_the_theme_turns_the_snap_off() {
+    let t = Synth::new();
+    let text = |name: &str, extra: &str| {
+        format!("<text name=\"{name}\"><text>WORDS</text><pos>0 0</pos><size>0.4 0.2</size><container>true</container>{extra}</text>")
+    };
+    let gamelist = text("snapped", "")
+        + &text("off", "<containerVerticalSnap>false</containerVerticalSnap>")
+        + &text("across", "<containerType>horizontal</containerType>")
+        + "<text name=\"grows\"><text>WORDS</text><pos>0 0.5</pos><size>0.4 0</size><container>true</container></text>";
+    let f = stage(&t, "", &gamelist, "gamelist", 0).frame();
+    let snap = |name: &str| match &placed(&f, name).paint {
+        Paint::Text(x) => x.snap_rows,
+        _ => panic!("{name} is a text"),
+    };
+    assert!(snap("snapped"), "THEMES.md: containerVerticalSnap is true by default");
+    assert!(!snap("off"));
+    assert!(!snap("across"), "a horizontal container has no rows to snap");
+    assert!(!snap("grows"), "a box that grows to its words has no window to cut");
+}
+
+fn help_paint(t: &Synth, help: &str, size: Option<(f64, f64)>) -> Help {
+    let mut s = stage(t, "", &format!("<helpsystem name=\"h\"><entries>a,b</entries>{help}</helpsystem>"), "gamelist", 0);
+    if let Some((w, h)) = size {
+        (s.current.data.width, s.current.data.height) = (w, h);
+    }
+    let Paint::Help(h) = placed(&s.frame(), "h").paint.clone() else { panic!() };
+    h
+}
+
+// ES-DE 3.4.1's help numbers from a theme, in f32 (EmuSen_Qt.md §4.12.4; es-core HelpComponent.cpp applyTheme, Font.cpp
+// getFromTheme and Font::Font, Font.h getSmallFont). No capture holds the clamps; each is held here from the rule.
+#[test]
+fn the_help_s_size_spacings_and_scale_are_es_de_s_in_f32_with_its_clamps() {
+    let t = Synth::new();
+    let h = help_paint(&t, "<fontSize>0.04583333</fontSize><entrySpacing>0.015625</entrySpacing><iconTextSpacing>0.00651042</iconTextSpacing><entryRelativeScale>0.7</entryRelativeScale>", None);
+    assert_eq!(h.px, f64::from(0.045_833_33_f32 * H as f32), "fontSize × height in f32");
+    assert_eq!((h.entry_spacing, h.icon_gap), (f64::from(0.015_625_f32 * W as f32), f64::from(0.006_510_42_f32 * W as f32)));
+    assert_eq!(h.scale, f64::from(0.7_f32));
+    let h = help_paint(&t, "<fontSize>0.0001</fontSize><entrySpacing>0.06</entrySpacing><iconTextSpacing>0.05</iconTextSpacing><entryRelativeScale>0.1</entryRelativeScale>", None);
+    assert_eq!((h.px, h.entry_spacing, h.icon_gap, h.scale), (3.0, f64::from(0.04_f32 * W as f32), f64::from(0.04_f32 * W as f32), f64::from(0.2_f32)), "the floors and ceilings");
+    let h = help_paint(&t, "<fontSize>2</fontSize><entryRelativeScale>4</entryRelativeScale>", None);
+    assert_eq!((h.px, h.scale), (1.5 * H, 3.0), "1.5 heights, a scale of 3");
+    let h = help_paint(&t, "", None);
+    assert_eq!((h.px, h.entry_spacing, h.icon_gap), (f64::from(0.035_f32 * W.min(H) as f32), f64::from(0.008_33_f32 * W as f32), f64::from(0.004_16_f32 * W as f32)), "the defaults");
+    let h = help_paint(&t, "", Some((200.0, 320.0)));
+    assert_eq!(h.px, f64::from(0.035_f32 * 200.0), "the default size is of the shorter side, here the width");
+}
+
+// The strip measured as ES-DE's grid (its width with the trailing spacing, the row's height) is placed by two roundings
+// with the spacing's share of the origin, and its box is the strip seen (EmuSen_Qt.md §4.12.4; HelpComponent.cpp
+// updateGrid, GuiComponent.cpp getTransform).
+#[test]
+fn the_help_strip_is_placed_by_es_de_s_rule_from_its_grid() {
+    let t = Synth::new();
+    let help = "<helpsystem name=\"h\"><entries>a,b</entries><pos>0.5 0.9375</pos><origin>0.5 1</origin><entrySpacing>0.015625</entrySpacing></helpsystem>";
+    let mut s = stage(&t, "", help, "gamelist", 0);
+    let id = placed(&s.frame(), "h").id;
+    let es = f64::from(0.015_625_f32 * W as f32);
+    s.measured(id, 101.3 + es, 33.75);
+    let p = placed(&s.frame(), "h").clone();
+    let x = ((0.5 * W + es * 0.5) as f32).round() + (-0.5 * (101.3 + es) as f32).round();
+    let y = ((0.9375 * H) as f32).round() + (-33.75_f32).round();
+    assert_eq!((p.x, p.y, p.w, p.h), (f64::from(x), f64::from(y), 101.3 + es - es, 33.75));
+    let mut s = stage(&t, "", "<helpsystem name=\"h\"><entries>a,b</entries></helpsystem>", "gamelist", 0);
+    let id = placed(&s.frame(), "h").id;
+    s.measured(id, 80.0, 20.0);
+    let p = placed(&s.frame(), "h").clone();
+    assert_eq!((p.x, p.y), (f64::from((0.012 * W as f32).round()), f64::from((0.9515 * H as f32).round())), "ES-DE's default place, origin 0");
+}
+
+// Which axes of a text its words size, as ES-DE 3.4.1's GuiComponent::applyTheme and TextComponent::onTextChanged do: the
+// sizes test holds a box the theme sizes to one pixel and only a worded one to its letters (R-20261111-88, -112).
+#[test]
+fn a_text_s_words_size_only_the_axes_its_theme_leaves_at_zero() {
+    let t = Synth::new();
+    t.capabilities("").theme(
+        "<view name=\"system\"><text name=\"none\"><text>a</text></text><text name=\"both\"><size>0.4 0.2</size><text>a</text></text>\
+         <text name=\"tall\"><size>0.4 0</size><text>a</text></text><text name=\"zero\"><size>0 0</size><text>a</text></text>\
+         <datetime name=\"date\"><size>0.2 0.05</size></datetime></view>",
+    );
+    let theme = t.load();
+    let v = theme.view("system");
+    let of = |kind: &str, name: &str| paint::sized_by_words(v.find(kind, name).unwrap_or_else(|| panic!("{kind} {name}")));
+    assert_eq!(of("text", "none"), (true, true));
+    assert_eq!(of("text", "zero"), (true, true));
+    assert_eq!(of("text", "tall"), (false, true));
+    assert_eq!(of("text", "both"), (false, false));
+    assert_eq!(of("datetime", "date"), (false, false));
 }

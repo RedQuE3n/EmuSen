@@ -8,8 +8,6 @@ use std::sync::OnceLock;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Status {
     Drawn,
-    /// Set by a theme with no visible effect in EmuSen; counted as drawn.
-    Accepted,
     /// Not drawn yet; the family that will draw it.
     Later(String),
 }
@@ -28,7 +26,6 @@ fn table() -> &'static Vec<(String, String, Status)> {
                 };
                 let status = match status {
                     "drawn" => Status::Drawn,
-                    "accepted" => Status::Accepted,
                     later => Status::Later(later.strip_prefix("later:").unwrap_or_else(|| panic!("mapping.tsv: {later}")).to_owned()),
                 };
                 (kind.to_owned(), property.to_owned(), status)
@@ -54,9 +51,4 @@ pub fn status(kind: &str, property: &str) -> Option<&'static Status> {
 /// Whether the element kind is drawn at all: any of its pairs is; sound is played, not drawn, and gameselector draws nothing itself.
 pub fn is_drawn(kind: &str) -> bool {
     table().iter().any(|(k, _, s)| k == kind && *s == Status::Drawn)
-}
-
-/// Whether a property set on an element counts as supported: drawn or accepted.
-pub fn is_mapped(kind: &str, property: &str) -> bool {
-    matches!(status(kind, property), Some(Status::Drawn | Status::Accepted))
 }

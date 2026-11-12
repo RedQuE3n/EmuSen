@@ -6,10 +6,11 @@ import EmuSen.Kit as Kit
 Kit.Frame {
     id: root
     property url hero
-    // The hero's clip, which plays over the hero's picture while `clipPlaying` (Kit.VideoTile); silent unless `clipMuted` is false.
+    // The hero's clip, which plays over the hero's picture while `clipPlaying` (Kit.VideoTile); silent unless `clipMuted` is false, then at `clipVolume`.
     property url clipSource
     property bool clipPlaying: false
     property bool clipMuted: true
+    property real clipVolume: 1
     property url cover
     // The cover's width per unit of its height: 0.75 for a 3:4 box.
     property real coverAspect: 0.75
@@ -103,6 +104,7 @@ Kit.Frame {
                 source: root.clipSource
                 playing: root.clipPlaying
                 muted: root.clipMuted
+                volume: root.clipVolume
             }
             Rectangle {
                 anchors.fill: parent

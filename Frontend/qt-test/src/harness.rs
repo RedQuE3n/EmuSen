@@ -113,7 +113,7 @@ impl Harness {
     }
 
     /// `load_prepared`, the root's properties set to `initial` as it is made, as a program's start sets them with
-    /// QQmlApplicationEngine::setInitialProperties (EmuSen_Qt.md §4.9); later loads start from none.
+    /// QQmlApplicationEngine::setInitialProperties (EmuSen_Qt.md §4.15); later loads start from none.
     pub fn load_initial(
         &mut self,
         url: &str,
@@ -555,6 +555,12 @@ impl Scene<'_> {
             &QString::from(marks),
         );
         usize::try_from(n).ok()
+    }
+
+    /// A number property of the item with this id in the item tree, NaN where there is none: a Repeater's delegates are
+    /// reached through the tree only, never by objectName.
+    pub fn item_number(&mut self, id: &str, property: &str) -> f64 {
+        id.parse().map_or(f64::NAN, |id| ffi::harness_get(self.window(), id, &QString::from(property)))
     }
 
     /// A property of the object with this objectName (or the root's), as text.

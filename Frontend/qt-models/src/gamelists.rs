@@ -5,7 +5,7 @@
 //! them: the view model writes what they list as text, off the GUI thread.
 
 use crate::esde_shelves::EsdeGame;
-use emusen_esde::shelves::{CountsText, Entry, ShelfText};
+use emusen_esde::shelves::{CountsText, Entry, GameRow, ShelfText};
 use std::borrow::Cow;
 use serde_json::Value;
 use std::cmp::Ordering;
@@ -835,7 +835,7 @@ impl Gamelists {
 }
 
 /// A listing as the painter reads it, one shelf of the shelves' text, written into `out` with no tree made first
-/// (EmuSen_Qt.md §4.9).
+/// (EmuSen_Qt.md §4.15).
 pub fn write_listing(out: &mut Vec<u8>, shelf: &Shelf, listing: &Listing) {
     let c = &listing.counts;
     let text = ShelfText {
@@ -853,9 +853,20 @@ pub fn write_listing(out: &mut Vec<u8>, shelf: &Shelf, listing: &Listing) {
         stars: shelf.stars,
         system: Cow::Borrowed(&shelf.system),
         theme: Cow::Borrowed(&shelf.theme),
+        unlisted: unlisted(shelf, listing),
     };
     // Writing into a Vec fails only where the value cannot be written, which these plain fields never are.
     let _ = serde_json::to_writer(out, &text);
+}
+
+/// A console's games that the listing's level does not show (inside its folders, or outside the folder open), whole: ES-DE's gameselectors draw from
+/// every game of the system (EmuSen_Qt.md §4.11).
+fn unlisted<'a>(shelf: &'a Shelf, listing: &Listing) -> Vec<GameRow<'a>> {
+    if shelf.kind != Kind::Regular {
+        return Vec::new();
+    }
+    let listed: HashSet<&str> = listing.entries.iter().map(|g| g.file.as_str()).collect();
+    shelf.games.iter().filter(|g| !g.folder && !listed.contains(g.file.as_str())).map(EsdeGame::row).collect()
 }
 
 /// An entry of a listing: a console's game as its whole row; a collection's game by its file alone, its row the one

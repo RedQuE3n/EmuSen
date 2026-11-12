@@ -2,10 +2,11 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Esde
 
-// gamelistinfo: the counts and the filter's mark, each a mark an em high beside its words.
+// gamelistinfo: the counts and the filter's mark, each a mark an em high at its own width, on its words' baseline, spaced as ES-DE's captures measure (EmuSen_Qt.md §4.8.7).
 ElementBox {
     id: root
     required property url fontSource
+    required property bool ownFace
     required property real px
     required property color color
     required property color background
@@ -30,7 +31,7 @@ ElementBox {
         id: items
         x: root.hAlign === TextBlock.Align.End ? root.width - items.width : root.hAlign === TextBlock.Align.Center ? (root.width - items.width) / 2 : 0
         height: root.height
-        spacing: root.px * 0.3
+        spacing: root.px * 0.375
         Repeater {
             model: parts
             Row {
@@ -38,19 +39,22 @@ ElementBox {
                 required property string mark
                 required property string text
                 height: root.height
-                spacing: root.px * 0.2
+                spacing: root.px * 0.25
                 Mark {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: root.px
+                    id: icon
+                    y: words.baselineY - root.px * icon.baselineShare
+                    width: root.px * icon.aspect
                     height: root.px
                     mark: item.mark
                     color: root.color
                 }
                 TextBlock {
+                    id: words
                     width: contentWidth
                     height: root.height
                     text: item.text
                     fontSource: root.fontSource
+                    ownFace: root.ownFace
                     px: root.px
                     lineSpacing: root.lineSpacing
                     color: root.color

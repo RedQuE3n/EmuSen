@@ -7,6 +7,8 @@ use crate::world::Point;
 
 mod filled;
 
+pub use filled::DISC_SHARE as FILLED_DISC_SHARE;
+
 /// What a pad prints on its buttons; `Generic` is a pad whose printing is not known, drawn by position as the RetroPad names its buttons.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PadFamily {
@@ -299,19 +301,80 @@ fn face(family: PadFamily, control: PadControl) -> Glyph {
     }
 }
 
+const DPAD_ARM: f64 = 0.28;
+const DPAD_REACH: f64 = 0.46;
+
 /// A plus with its arms outlined and the arm of the direction filled.
 fn dpad(control: PadControl) -> Glyph {
-    let (arm, reach, inset) = (0.28, 0.46, 0.07);
-    let a = arm / 2.0;
-    let outline = plus(a, reach);
-    let (half, length) = (a - inset, reach - a - inset);
-    let filled = match control {
-        PadControl::Up => rect(C[0] - half, C[1] - reach + inset, 2.0 * half, length),
+    Glyph { marks: vec![stroked(plus(DPAD_ARM / 2.0, DPAD_REACH), THIN), solid(dpad_arm(control))], letter: None }
+}
+
+/// The filled inside of the d-pad's arm along a direction.
+fn dpad_arm(control: PadControl) -> Vec<Point> {
+    let inset = 0.07;
+    let a = DPAD_ARM / 2.0;
+    let (half, length) = (a - inset, DPAD_REACH - a - inset);
+    match control {
+        PadControl::Up => rect(C[0] - half, C[1] - DPAD_REACH + inset, 2.0 * half, length),
         PadControl::Down => rect(C[0] - half, C[1] + a, 2.0 * half, length),
-        PadControl::Left => rect(C[0] - reach + inset, C[1] - half, length, 2.0 * half),
+        PadControl::Left => rect(C[0] - DPAD_REACH + inset, C[1] - half, length, 2.0 * half),
         _ => rect(C[0] + a, C[1] - half, length, 2.0 * half),
-    };
-    Glyph { marks: vec![stroked(outline, THIN), solid(filled)], letter: None }
+    }
+}
+
+/// Two controls a help bar names as one action, drawn as one glyph (EmuSen_Kit.md §7.54).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Pair {
+    /// A d-pad axis: both of its directions.
+    Axis(PadControl, PadControl),
+    /// The two shoulders, or the two triggers.
+    Sides { trigger: bool },
+    /// The whole d-pad, named by Up with Left: its four directions as one.
+    Pad,
+}
+
+fn pair_of(a: PadControl, b: PadControl) -> Option<Pair> {
+    use PadControl::{Down, Left, LeftShoulder, LeftTrigger, Right, RightShoulder, RightTrigger, Up};
+    match (a, b) {
+        (Left, Right) | (Right, Left) => Some(Pair::Axis(Left, Right)),
+        (Up, Down) | (Down, Up) => Some(Pair::Axis(Up, Down)),
+        (LeftShoulder, RightShoulder) | (RightShoulder, LeftShoulder) => Some(Pair::Sides { trigger: false }),
+        (LeftTrigger, RightTrigger) | (RightTrigger, LeftTrigger) => Some(Pair::Sides { trigger: true }),
+        (Up, Left) | (Left, Up) => Some(Pair::Pad),
+        _ => None,
+    }
+}
+
+/// One glyph for two controls pressed for one action: a d-pad axis is the plus with both of its directions marked, Up
+/// with Left the whole d-pad with all four marked, and
+/// the two shoulders or the two triggers are their two bodies side by side, unlettered, the same in every family. None
+/// for any other two, which a bar draws as two glyphs (EmuSen_Kit.md §7.54).
+pub fn paired(a: PadControl, b: PadControl, style: GlyphStyle) -> Option<Glyph> {
+    let pair = pair_of(a, b)?;
+    Some(match style {
+        GlyphStyle::Filled => filled::paired(pair),
+        GlyphStyle::Outlined => match pair {
+            Pair::Axis(a, b) => Glyph {
+                marks: vec![stroked(plus(DPAD_ARM / 2.0, DPAD_REACH), THIN), solid(dpad_arm(a)), solid(dpad_arm(b))],
+                letter: None,
+            },
+            Pair::Sides { trigger } => Glyph { marks: sides(trigger).into_iter().map(|s| stroked(s, THIN)).collect(), letter: None },
+            Pair::Pad => Glyph {
+                marks: std::iter::once(stroked(plus(DPAD_ARM / 2.0, DPAD_REACH), THIN))
+                    .chain([PadControl::Up, PadControl::Down, PadControl::Left, PadControl::Right].map(|c| solid(dpad_arm(c))))
+                    .collect(),
+                letter: None,
+            },
+        },
+    })
+}
+
+/// The two bodies of a pair of shoulders or triggers, left and right, each the shape of one at half its width.
+fn sides(trigger: bool) -> [Vec<Point>; 2] {
+    let (w, h, r, gap) = (0.43, if trigger { 0.78 } else { 0.56 }, 0.15, 0.06);
+    let (top, bottom) = if trigger { (0.04, r) } else { (r, 0.04) };
+    let y = C[1] - h / 2.0;
+    [rounded(C[0] - gap / 2.0 - w, y, w, h, top, bottom), rounded(C[0] + gap / 2.0, y, w, h, top, bottom)]
 }
 
 /// A shoulder is a bar rounded at the top, a trigger taller and rounded at the bottom; each carries its family's name

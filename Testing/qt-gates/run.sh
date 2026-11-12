@@ -8,6 +8,8 @@
 # pad started only once the program holds the focus.
 # Usage: run.sh <run-dir> <seconds> <program> [<arg>...]
 #   PAD="wait:4 tap:start ..."  the pad's steps; none, no pad. The pad is made inside the program as it starts.
+#   UINPUT_PAD=<script>         a script that makes a uinput pad of its own and takes PAD's steps as its arguments, in
+#                               place of the FIFO, for a program that reads only real pads (ES-DE, ../esde-oracle/pad.py)
 #   RSS=<comm>                  the program's memory sampled every 0.5 s to rss.tsv (rss.py; <comm> its process name)
 #   BOX="r0-r1,g0-g1,b0-b1"     the game's colour box grab.py measures; INTERVAL grab interval in ms (35)
 #   WIDTH, HEIGHT               the virtual compositor's size (1920, 1200); FULL=1 keeps each grab at full size
@@ -41,7 +43,7 @@ if [ -z "\${DESK:-}" ]; then
   python3 -I "$here/grab.py" "$run/grabs" $((seconds + 2)) \${INTERVAL:-35} "\${BOX:-0-255,0-255,0-255}" > "$run/grabs.tsv" 2> "$run/grab.err" &
   grabber=\$!
 fi
-if [ -n "\${PAD:-}" ]; then rm -f "$run/pad.fifo"; mkfifo "$run/pad.fifo"; export EMUSEN_GATE_PAD="$run/pad.fifo"; fi
+if [ -n "\${PAD:-}" ] && [ -z "\${UINPUT_PAD:-}" ]; then rm -f "$run/pad.fifo"; mkfifo "$run/pad.fifo"; export EMUSEN_GATE_PAD="$run/pad.fifo"; fi
 date +%s.%N > "$run/start"
 end=\$((\$(date +%s%N) + $seconds * 1000000000))
 $(cat "$run/command") > "$run/program.log" 2>&1 &
@@ -53,7 +55,11 @@ fi
 if [ -n "\${PAD:-}" ]; then
   if [ -n "\${DESK:-}" ]; then for i in \$(seq 150); do [ -e "$run/active" ] && break; sleep 0.1; done; fi
   if [ -z "\${DESK:-}" ] || [ -e "$run/active" ]; then
-    python3 -I "$here/pad.py" "$run/pad.fifo" \$PAD > "$run/pad.log" 2>&1 & pad=\$!
+    if [ -n "\${UINPUT_PAD:-}" ]; then
+      python3 -I "\$UINPUT_PAD" \$PAD > "$run/pad.log" 2>&1 & pad=\$!
+    else
+      python3 -I "$here/pad.py" "$run/pad.fifo" \$PAD > "$run/pad.log" 2>&1 & pad=\$!
+    fi
   else
     echo "no pad: the program never held the focus" > "$run/pad.log"
   fi
@@ -91,5 +97,5 @@ fi
 # Services the session activated (the desktop portal, ksecretd) are started by systemd and outlive it; each carries
 # GATE_RUN, so this run's are stopped.
 for p in $(pgrep -u "$USER" .); do grep -qaz "^GATE_RUN=$run$" /proc/$p/environ 2>/dev/null && kill $p && echo "stopped: $p $(cat /proc/$p/comm 2>/dev/null)" >> "$run/kwin.log"; done
-# The pad lives inside the program; an input device of that name anywhere on the machine would be a fault.
+# The pad lives inside the program, or a uinput pad only while its steps run; one of that name left behind would be a fault.
 grep -c "gate pad" /proc/bus/input/devices | sed 's/^/input devices named gate pad: /' >> "$run/kwin.log"

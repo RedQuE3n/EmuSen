@@ -6,7 +6,7 @@ use crate::loader::{Element, SystemKind};
 use super::data::Data;
 use super::frame::*;
 use super::grid::{pixels, GridGeometry};
-use super::paint::{color, existing, h_align, media, tint, v_align};
+use super::paint::{color, existing, face_of, h_align, media, tint, v_align};
 use super::view::GridFocus;
 use super::words;
 
@@ -80,11 +80,11 @@ pub fn row(e: &Element, view: &str, data: &Data, i: usize) -> Option<Row> {
     })
 }
 
-fn item_text(e: &Element, h: f64, default_px: f32, scale: bool) -> ItemText {
+fn item_text(e: &Element, data: &Data, default_px: f32, scale: bool) -> ItemText {
     let relative = if scale { e.float("textRelativeScale").unwrap_or(1.0) } else { 1.0 };
     ItemText {
-        font: existing(e.path("fontPath")),
-        px: (e.float("fontSize").unwrap_or(default_px) * relative) as f64 * h,
+        font: face_of(e, data),
+        px: (e.float("fontSize").unwrap_or(default_px) * relative) as f64 * data.height,
         line_spacing: e.float("lineSpacing").unwrap_or(1.5) as f64,
         color: color(e, "textColor", 0x0000_00FF),
         background: color(e, "textBackgroundColor", 0),
@@ -308,7 +308,7 @@ pub fn carousel(e: &Element, data: &Data, count: usize, position: f64, bw: f64, 
     let fill = tint(e, "color", "colorEnd", "gradientType");
     let background = e.color("color").filter(|_| fill.color.a() > 0 || fill.end.a() > 0).map(|_| fill);
     let image_align = (if across && !wheel { HAlign::Center } else { item_h }, if !across && !wheel { VAlign::Center } else { item_v });
-    let mut text = item_text(e, sh, 0.085, true);
+    let mut text = item_text(e, data, 0.085, true);
     text.line_spacing = e.float("lineSpacing").unwrap_or(1.5) as f64;
     Carousel { slots: slots.into_iter().map(|(_, s)| s).collect(), background, fit: fit_of(e), image_align, text }
 }
@@ -346,7 +346,7 @@ pub fn textlist(e: &Element, data: &Data, count: usize, selected: usize, bw: f64
         secondary_color: color(e, "secondaryColor", 0x00FF_00FF),
         selected_color,
         selected_secondary_color: e.color("selectedSecondaryColor").unwrap_or(selected_color),
-        font: existing(e.path("fontPath")),
+        font: face_of(e, data),
         px,
         line_spacing,
         margin: e.float("horizontalMargin").unwrap_or(0.0) as f64 * sw,
@@ -358,7 +358,7 @@ pub fn textlist(e: &Element, data: &Data, count: usize, selected: usize, bw: f64
 
 /// A grid's layout and styles at its focus.
 pub fn grid(e: &Element, g: &GridGeometry, focus: GridFocus, data: &Data) -> Grid {
-    let (sw, sh) = (data.width, data.height);
+    let sw = data.width;
     let image_tint = tint(e, "imageColor", "imageColorEnd", "imageGradientType");
     Grid {
         columns: g.columns(),
@@ -391,7 +391,7 @@ pub fn grid(e: &Element, g: &GridGeometry, focus: GridFocus, data: &Data) -> Gri
         selector_scale: e.float("selectorRelativeScale").unwrap_or(1.0) as f64,
         selector_radius: e.float("selectorCornerRadius").unwrap_or(0.0) as f64 * sw,
         selector_layer: e.string("selectorLayer").unwrap_or("top").to_owned(),
-        text: item_text(e, sh, 0.045, true),
+        text: item_text(e, data, 0.045, true),
         text_selected_color: e.color("textSelectedColor"),
         text_selected_background: e.color("textSelectedBackgroundColor"),
         text_radius: e.float("textBackgroundCornerRadius").unwrap_or(0.0) as f64 * sw,

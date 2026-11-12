@@ -64,5 +64,18 @@ namespace EmuSen.Galaxia.Models
 
         // Mistress's own: whether it may start in a Steam Game Mode session, where Steam dims the screen too (Q34, left open).
         public bool ScreensaverInGameMode { get; set; } = true;
+
+        // ES-DE's media viewer settings, with ES-DE's defaults: EmuSen_Galaxia.md §3.15.1.
+        public string MediaViewerHelpPrompts { get; set; } = "top";
+
+        public bool MediaViewerShowTypes { get; set; }
+
+        public bool MediaViewerKeepVideoRunning { get; set; } = true;
+
+        public bool MediaViewerStretchVideos { get; set; }
+
+        public bool MediaViewerVideoBlur { get; set; }
+
+        public bool MediaViewerVideoAudio { get; set; } = true;
     }
 }

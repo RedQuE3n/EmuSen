@@ -164,6 +164,7 @@ impl GamePageSource for ClientSource {
             screenshot: media("screenshot"),
             // Settings ▸ Display ▸ Play videos off shows the still alone (EmuSen_Interface.md §5.9).
             clip: if settings.get("PlayVideos").and_then(Value::as_bool).unwrap_or(true) { media("video") } else { String::new() },
+            clip_volume: crate::esde_shelves::volume_of(&settings),
             states: self.states(game, &settings)?,
             ..Read::default()
         };

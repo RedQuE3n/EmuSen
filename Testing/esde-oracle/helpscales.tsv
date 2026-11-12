@@ -1,0 +1,20 @@
+# Single-entry help copies that separate entryRelativeScale's effect on the icon box and the label (EmuSen_Qt.md §4.12.1).
+# e: fontSize 0.025, entryRelativeScale 0.80 to 1.00; f: entryRelativeScale 0.8 at six font sizes; n2: two entries at 0.8.
+e00	0.025	entryRelativeScale=0.80	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+e01	0.025	entryRelativeScale=0.82	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+e02	0.025	entryRelativeScale=0.84	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+e03	0.025	entryRelativeScale=0.86	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+e04	0.025	entryRelativeScale=0.88	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+e05	0.025	entryRelativeScale=0.90	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+e06	0.025	entryRelativeScale=0.92	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+e07	0.025	entryRelativeScale=0.94	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+e08	0.025	entryRelativeScale=0.96	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+e09	0.025	entryRelativeScale=0.98	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+e10	0.025	entryRelativeScale=1.00	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+f0144	0.0144	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+f0160	0.0160	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+f0170	0.0170	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+f0180	0.0180	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+f0190	0.0190	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+f0200	0.0200	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a
+n2	0.025	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625	entries=a,b

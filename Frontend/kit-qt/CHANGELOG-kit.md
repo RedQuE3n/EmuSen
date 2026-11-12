@@ -1,8 +1,26 @@
 # EmuSen.Kit changes
 
 The kit is the QML module `EmuSen.Kit` (EmuSen_Qt.md §1.4), held by rule Q (§5.3): its registry, as qmltyperegistrar
-writes it, is committed under `Testing/qmltypes/` and compared on every build. A minor adds and never removes; each
-entry names what was added and the section of `EmuSen_Kit.md` that records it.
+writes it, is committed under `Testing/qmltypes/` and compared on every build. Until the first release every change, an
+addition, a change or a removal, bumps the minor (R-20261111-107, R-20261111-108); each entry names what changed and the
+section of `EmuSen_Kit.md` that records it.
+
+## 1.1, stage 4 piece X: the help bar's pair glyph, the clip's player and fade, the page's clip volume (2026-11-11)
+
+Additions only; no type, property, signal or invokable was removed or changed. Rule Q now holds the QML files' own
+surface too (R-20261111-99): each root object's properties and signals and every object name, read by
+`emusen_qt_test::qml_surface` and committed as `Testing/qmltypes/EmuSen.Kit-1.1.qmlfiles`. The minor moved for these:
+
+- **`PadGlyphMarks`** (registry): `pair`, `paired`, `discShare` and `setPair`; **`VideoFrames`** (registry): `fitted`
+  and `stretched`. `EmuSen_Kit.md` §7.71, §7.53.
+- **`HelpBar`**: `pairGlyph`, `label`. **`PadGlyph`**: `pair`, `paired` (read-only). §7.71.
+- **`VideoClip`**: the object name `videoPlayback`; `fillMode`, `delay`, `fade`; read-only `position`, `heard`, `level`.
+  **`VideoTile`**: `fillMode`, `delay`, `fade`. §7.53.
+- **`PageFrame`**: `clipVolume`, the share of full its clip is heard at (R-20261111-100). §7.53.
+- **`SectionStrip`**: read-only `overflows`, added on WiseMan in repair DC-B (§7.105) while the kit was 1.0 and held
+  in this minor's QML-file surface once the two met.
+- The minor is 1.1, one above WiseMan's 1.0: until the first release every interface change bumps the minor (decided
+  2026-11-11 by the tester, R-20261111-107).
 
 ## 1.0, stage 4 piece H: a model's reset told to a view without QML state (2026-11-11)
 
@@ -50,6 +68,23 @@ Additions only; no type, property, signal or invokable was removed or changed.
 - **`PageFrame.contentKindChanged()`** (qmldir, a signal): the content's kind changed; with the focus in the content it
   goes on to the list now shown, on its first item, or to the actions where words are shown. §7.58.
 
+## 1.0, stage 4 piece X7: the filled disc's share of its box (2026-11-11)
+
+Additions only; no type, property, signal or invokable was removed or changed.
+
+- **`glyph::FILLED_DISC_SHARE`** (Rust) and **`PadGlyphMarks.discShare`** (registry, read-only, constant): the share of
+  its box the filled set's disc fills, from the radius it is drawn with. `EmuSen_Kit.md` §7.71.
+
+## 1.0, stage 4 piece X2: the body face as bytes, and a fitted clip started at once (2026-11-09)
+
+Additions; every default keeps a tile as it was.
+
+- **`fonts::BODY`**, **`fonts::BODY_URL`** (Rust): the body face's bytes and its resource path, for a component that lays
+  words out itself. `EmuSen_Kit.md` §7.60.
+- **`VideoTile.fillMode`**, **`VideoTile.delay`**, **`VideoClip.fillMode`**, **`VideoClip.delay`** (qmldir): fitted
+  inside the tile, and started without the poster's delay. §7.61.
+- **`VideoFrames.fitted`** (registry): the software backend's frames fitted inside the item. §7.61.
+
 ## 1.0, stage 5 piece E: a sentence's tone, a value beside a short label, the rows' view (2026-11-09)
 
 Additions only; no type, property, signal or invokable was removed or changed.
@@ -58,6 +93,15 @@ Additions only; no type, property, signal or invokable was removed or changed.
   says otherwise. §7.52.
 - `MenuRow`'s value takes what its label leaves of the row, at least half; its surface is unchanged. §7.50.
 - `SettingsFrame`'s rows keep no current index of the view's own; its surface is unchanged. §7.51.
+
+## 1.0, stage 4 piece X: a pair as one glyph, and a host's words on the help bar (2026-11-09)
+
+Additions only; no type, property, signal or invokable was removed or changed.
+
+- **`PadGlyphMarks.pair`** and **`paired`** (registry): a second press drawn with `button` as one glyph where kit-core
+  has one for the two (a d-pad axis, the shoulders, the triggers), and whether it is. §7.54.
+- `PadGlyph.pair` and `paired`; `HelpBar.pairGlyph` (false by default) and `HelpBar.label` (null by default), QML
+  properties of the qmldir's types. §7.54.
 
 ## 1.0, stage 3: an orbit deleted with its screen (2026-11-09)
 

@@ -2669,10 +2669,22 @@ no image crate is needed, the oracle library read as the three texts of §4.6).
   so each edge stands up to half a pixel from proportional at either size, and two sizes differ by up to one pixel at
   the smaller. Seeded 2026-11-11: every box two pixels right at the sizes wider than 1600 (1.33 px at 1280 × 800 against
   1920 × 1200), which must fail it. A box sized by its laid-out
-  words (a help bar, a status row, an auto-sized text) may differ by a further 4 % of its extent: each run's advance is
-  rounded to whole pixels and hinted at its own size, so a 14 px bar is not two thirds of a 21 px one (CarAlt's help
-  measured 3.3 % apart at 1280 × 720 and 1920 × 1080), and ES-DE's own is not proportional either (Art Book Next's
-  gamelist help 0.2883 W at 1280 × 800, 0.2906 W at 1920 × 1200, 0.8 % apart, on its captures). A size is read only
+  words (a help bar, a status row, an auto-sized text) may differ by half a pixel for each letter it shows plus one
+  pixel, in pixels of the smaller window (decided 2026-11-11 by the tester, R-20261111-112, replacing an allowance of
+  4 % of its extent that no rule gave): ES-DE 3.4.1 rounds each glyph's advance to a whole pixel (`Font::shapeText`,
+  `es-core/src/resources/Font.cpp`), so n letters may stand n halves of a pixel from proportional, beside the one pixel of
+  placing. The letters are those of the visible words drawn under the box in the item tree, so every worded box has a
+  count; the rule is `emusen_qt_test::worded`, held by its unit test, and the test writes each worded box at each size
+  pair with its letters and allowance to `worded-boxes.tsv` beside its grabs.
+  *The one box past it* (2026-11-11): Art Book Next's system help at 1280 × 720 against 1920 × 1080 moved 14.67 px for
+  27 letters (14.5). Read in ES-DE's source, the cause is ES-DE's own: the help's icon box is 1.25 × the rows of the
+  hinted S at the help's size (`HelpComponent::applyTheme`, `es-core/src/components/HelpComponent.cpp`; rule 4 of
+  §4.12.4), whole rows that do not scale with the window. In Akrobat SemiBold at the theme's 0.04583333 the S is 23 rows
+  at 33.0 px (1280 × 720) and 37 at 49.5 px (1920 × 1080): an icon box of 28.75 px against 46.25 ÷ 1.5 = 30.83, 2.08 px
+  per entry at the smaller window, and the bar has five entries (start, back, a, x, left/right), about 10.4 px of the
+  14.67 before a letter is counted. EmuSen follows the same rule (`help::row_height`). Whether a help strip's allowance
+  counts its icons waits on the tester; the check stays failing with that reason printed.
+  A size is read only
   after its install has published, since the old frame stands until the new size's load comes back. The defects it
   found, each fixed and proved:
 

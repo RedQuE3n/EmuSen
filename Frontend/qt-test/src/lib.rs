@@ -17,6 +17,7 @@ pub mod qml_surface;
 pub mod spec;
 pub mod tree;
 pub mod virtual_pad;
+pub mod worded;
 
 pub use harness::{Harness, Scene};
 pub use tree::Tree;

@@ -1211,7 +1211,9 @@ canvas's own; kit-core's test holds them within 0.01 unit.
    52 + 11.5 units a letter of its name, the row centred with 48 between (`placesRow` in `consoles.html`), so its discs
    stand at 318, 522 and 737 though its browser draws the names 100.54, 108.71 and 165.92 wide (measured 2026-11-09 in
    headless Chrome). The screen sizes a place the same way, or by the name's own width where that is wider, so no name
-   runs into the next disc. Until 2026-11-11 each slot was the measured name, which stood the first disc at 326.6 and
+   runs into the next disc; the canvas has no such rule, and the widening stays (decided 2026-11-11, R-20261111-111). A
+   name wider than 11.5 units a letter widens its own slot, and the centred row grows by the difference, half to each
+   side, moving every place. Until 2026-11-11 each slot was the measured name, which stood the first disc at 326.6 and
    the second at 527.0: four lines a size against the canvas. Seeded back, the canvas test names them again.
 5. After the first focus, the shown makers move only when the focus leaves them, as spec §3.1 asks; the canvas centres
    the focused maker on every press.
@@ -1224,7 +1226,9 @@ canvas's own; kit-core's test holds them within 0.01 unit.
    beneath it, outside the `Walkable`. The canvas's node was 140 units wide and held the words too. On the steep stretches of the outer
    orbits those nodes covered their neighbours, which the fit audit read as overlaps of empty corners.
 8. The focused body is 88 units, in the canvas as on the screen (decided 2026-11-11, R-20261111-92; the canvas had drawn
-   96 until then), and the `Walkable` is the body's box rather than the ring's. At 96, with the ring's box as the `Walkable`, the focused world's box reached into the count of the world
+   96 until then), and the `Walkable` is the body's box rather than the ring's (decided 2026-11-11, R-20261111-109; with
+   the ring's box, 102, the audit names the focused tile over the inner orbit's count at every size, measured that day,
+   EmuSen_Kit.md §7.105). At 96, with the ring's box as the `Walkable`, the focused world's box reached into the count of the world
    on the orbit inside it: the focused NES's into Master System's count, 10 units at 1280 × 800, in the canvases'
    eleven, n30 and long, at every size (one line in n30, six a size in each variant in the others). The drawn ring stayed
    clear of the words; the boxes did not. At 88 the body's box ends 0.45 unit below that count's line box, and its own

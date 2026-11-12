@@ -65,34 +65,35 @@ pub fn qt_internal(message: &str, software: bool) -> bool {
         .any(|(text, class, software_only)| message.contains(text) && (software || !software_only) && accepted(*class).is_some())
 }
 
-/// Messages the tester holds, neither accepted nor a failure until she rules: each is counted and printed with its ruling
-/// by every test that sees it (EmuSen_Kit.md §7.101).
-pub const QT_HELD: [(&str, &str); 1] = [
+/// Messages accepted in test programs only, each with the class whose row accepts it: counted and printed with that
+/// row's ruling by every test that sees it, failing none; without the row, a failure (EmuSen_Kit.md §7.101, §7.105).
+pub const QT_TESTS_ONLY: [(&str, Class); 1] = [
     // QtCore's, once Qt Multimedia starts in a process whose application was made on a test runner's thread.
-    ("QApplication was not created in the main() thread", "R-20261111-42"),
+    ("QApplication was not created in the main() thread", Class::MainThreadLineInTests),
 ];
 
-/// The ruling that holds a message Qt logged, if `QT_HELD` names it.
-pub fn qt_held(message: &str) -> Option<&'static str> {
-    QT_HELD.iter().find(|(text, _)| message.contains(text)).map(|(_, ruling)| *ruling)
+/// The ruling that accepts a message Qt logged in a test program, if `QT_TESTS_ONLY` names it and its row is there.
+pub fn qt_tests_only(message: &str) -> Option<&'static str> {
+    QT_TESTS_ONLY.iter().find(|(text, _)| message.contains(text)).and_then(|(_, class)| accepted(*class)).map(|a| a.ruling)
 }
 
-/// Prints `held_lines` on the process's own stderr, past the test runner's capture, so a passing test shows them too.
-fn say_held(messages: &[String]) {
+/// Prints `tests_only_lines` on the process's own stderr, past the test runner's capture, so a passing test shows them too.
+fn say_tests_only(messages: &[String]) {
     use std::io::Write;
     let mut err = std::io::stderr().lock();
-    for line in held_lines(messages) {
-        writeln!(err, "{line}").expect("stderr takes the held line");
+    for line in tests_only_lines(messages) {
+        writeln!(err, "{line}").expect("stderr takes the line");
     }
 }
 
-/// One line for the held messages among `messages`, each counted: "held, R-…: 2 × the message"; none where none is held.
-pub fn held_lines(messages: &[String]) -> Vec<String> {
-    QT_HELD
+/// One line for each accepted test-only message among `messages`, counted: "accepted in tests, R-…: 2 × the message".
+pub fn tests_only_lines(messages: &[String]) -> Vec<String> {
+    QT_TESTS_ONLY
         .iter()
-        .filter_map(|(text, ruling)| {
+        .filter_map(|(text, class)| {
+            let ruling = accepted(*class)?.ruling;
             let seen = messages.iter().filter(|m| m.contains(text)).count();
-            (seen > 0).then(|| format!("held, {ruling}: {seen} × {text}"))
+            (seen > 0).then(|| format!("accepted in tests, {ruling}: {seen} × {text}"))
         })
         .collect()
 }
@@ -214,13 +215,13 @@ impl Harness {
         all.split('\u{1e}').filter(|m| !m.is_empty()).map(str::to_owned).collect()
     }
 
-    /// Fails on any message Qt logged that is not one of `QT_INTERNAL`'s, each named with the reason it is Qt's; one `QT_HELD`
-    /// names is printed with its count and ruling, and fails nothing (EmuSen_Kit.md §7.14, §7.101).
+    /// Fails on any message Qt logged that is not one of `QT_INTERNAL`'s, each named with the reason it is Qt's; one
+    /// `QT_TESTS_ONLY` accepts is printed with its count and ruling, and fails nothing (EmuSen_Kit.md §7.14, §7.105).
     pub fn assert_quiet(&mut self) {
         let software = self.software();
         let messages = self.messages();
-        say_held(&messages);
-        let ours: Vec<String> = messages.into_iter().filter(|m| !qt_internal(m, software) && qt_held(m).is_none()).collect();
+        say_tests_only(&messages);
+        let ours: Vec<String> = messages.into_iter().filter(|m| !qt_internal(m, software) && qt_tests_only(m).is_none()).collect();
         assert!(ours.is_empty(), "Qt logged {} warnings or errors:\n{}", ours.len(), ours.join("\n"));
     }
 
@@ -237,9 +238,9 @@ impl Harness {
 }
 
 impl Drop for Harness {
-    /// What Qt logged since a test last asked, the held messages among it counted and printed, as `assert_quiet` does.
+    /// What Qt logged since a test last asked, the test-only messages among it counted and printed, as `assert_quiet` does.
     fn drop(&mut self) {
-        say_held(&self.messages());
+        say_tests_only(&self.messages());
     }
 }
 

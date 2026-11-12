@@ -3104,14 +3104,14 @@ held within 0.001.
 `No RHI backend. Using CPU conversion.` is: the tester accepted it on the software backend only (R-20261111-41, 2026-11-11). On the GPU an RHI is there to convert on, so the same line means the clip's frames took the CPU path and fails the
 test. `Harness::software()` asks Qt for the scene graph backend in use (`QQuickWindow::sceneGraphBackend()`, settled once the first window is made), and
 `assert_quiet` filters by it; `qt_internal(message, software)` is the rule, held both ways by `tests/internal.rs`. The
-main-thread warning stayed filtered on every backend until the sixth pass; it is now held, not filtered (§7.105). The tester holds that line (R-20261111-42, 2026-11-11, held and not accepted)
+main-thread warning stayed filtered on every backend until the sixth pass; it is now accepted in test programs only (R-20261111-110, §7.105). The tester holds that line (R-20261111-42, 2026-11-11, held and not accepted)
 until it is proven whose it is. Read on 2026-11-11: its words are in `libQt6Core.so.6` once and in no other Qt library
 here, nor in any source of ours but `QT_INTERNAL` and its test, which only match it; §7.58's trace of 2026-11-09 has
 QtCore print it from `QCoreApplicationPrivate`'s constructor when qt-test's `Harness` makes the application on the
 thread libtest runs a test on, after Qt Multimedia's load-time initializer has adopted the process's main thread. So the
 words are Qt's, and the call that makes Qt print them is the harness's; the program, which makes its application on
-`main`, never prints it. It has no row in the accepted table, and since the sixth pass it is in `QT_HELD`, not
-`QT_INTERNAL` (§7.105).
+`main`, never prints it. Since the sixth pass it is in `QT_TESTS_ONLY`, not `QT_INTERNAL`, accepted in test programs only
+(R-20261111-110, §7.105).
 
 ### 7.102 The rules' exemptions reported item by item (repair piece DC-A; 2026-11-11)
 
@@ -3321,7 +3321,7 @@ the Consoles figures the run named are ruled the same day (`EmuSen_Qt.md` §3.4.
 acceptance test lists Home's scene colours as accepted by R-20261111-39 and, holding Home again with a table that
 accepts nothing (`Excuses::accepting(&[])`, since the sixth pass `Excuses::refusing_all()`), finds them as findings.
 
-### 7.105 Each accepted class read in one place, the program's own words held whole, and the held line said (repair piece DC-A, sixth pass; 2026-11-11)
+### 7.105 Each accepted class read in one place, the program's own words held whole, and the main-thread line accepted in tests only (repair piece DC-A, sixth pass; 2026-11-11)
 
 **One place a class.** Every row of `audit::ACCEPTED` is now read by the one place that accepts its class, so deleting a
 row turns that place's gate red, and no class is accepted anywhere else:
@@ -3334,6 +3334,7 @@ row turns that place's gate red, and no class is accepted anywhere else:
 | `CpuConversionLine` | R-20261111-41 | `QT_INTERNAL`'s entry, which names the class: `qt_internal` lets the line pass only while the row is there |
 | `DimmedAndMoving` | R-20261111-43 | theme-audit's `declined_places` and `rested`, which leave words out of the contrast rule only while the row is there |
 | `DataWordsElided` | R-20261111-44 | `Exempted::Elided`, data cut with an ellipsis, sorted by every gate as the others are |
+| `MainThreadLineInTests` | R-20261111-110 | qt-test's `QT_TESTS_ONLY`: Qt's main-thread warning, in test programs only (below) |
 
 The class of R-20261111-46, the 22 duplicate-code pairs of the cxx-qt bridges, cannot be routed through the table:
 `dupes.accept` is read by emusen-dev's `dupes` command (`Platform/emusen-dev-module`, man `dupes`), which links no
@@ -3369,10 +3370,16 @@ ancestor bears the scene's name; the kit's `Moonrise.qml` names its root `moonri
 already named their instances. An item named `moonriseCaption` anywhere else is held to the floor: theme-check's fixture
 `small-caption`, a Home of its own with that name, is now a finding at every size in both variants.
 
-**The held line** (R-20261111-42, held). `QT_INTERNAL` no longer holds the main-thread line. qt-test's `QT_HELD` names
-it with its ruling; `assert_quiet` and the harness's `Drop` count it and write `held, R-20261111-42: N × <words>` to the
-process's own stderr, past libtest's capture, so a passing test shows it too, and neither fails on it. Every test binary
-that links Qt Multimedia logs it once, at its first `Harness` (§7.101).
+**The main-thread line, in test programs only** (R-20261111-42 held it until the tester decided on 2026-11-11,
+R-20261111-110: accepted in test programs only). `QT_INTERNAL` no longer holds it. qt-test's `QT_TESTS_ONLY` names it
+with the class `MainThreadLineInTests`, whose row in the table gives R-20261111-110; `assert_quiet` and the harness's
+`Drop` count it and write `accepted in tests, R-20261111-110: N × <words>` to the process's own stderr, past libtest's
+capture, so a passing test shows it too, and neither fails on it; without the row, it fails `assert_quiet`. Every test
+binary that links Qt Multimedia logs it once, at its first `Harness` (§7.101). The program itself must never print it:
+qt-app's `program` test `kit_7_105_the_program_itself_never_prints_the_main_thread_line` runs the built `emusen-qt` (its
+own `main`), offscreen on the software scene with no platform library, so no device is opened, reads its stderr until it
+says it has made its application, and fails if the line is there. Seeded (the program first making a throwaway
+application on a thread of its own), the test names the line.
 
 **Accepted lists.** qt-test owns the one writer, `excuse::write_accepted`, into `~/.cache/emusen/tmp/accepted/`,
 one file a gate (`accepted-gate.txt` and so on); the gallery's three gates and the program's tests (an `Excuses` made with

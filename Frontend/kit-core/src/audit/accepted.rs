@@ -11,6 +11,7 @@ pub enum Class {
     CpuConversionLine,
     DimmedAndMoving,
     DataWordsElided,
+    MainThreadLineInTests,
 }
 
 /// One accepted class: the ruling's id in the rulings log and what it covers.
@@ -22,7 +23,7 @@ pub struct Accepted {
 }
 
 /// Every class the tester has accepted; a row is added only by a ruling of hers.
-pub const ACCEPTED: [Accepted; 8] = [
+pub const ACCEPTED: [Accepted; 9] = [
     Accepted {
         class: Class::RomFolderCutAtStart,
         ruling: "R-20261111-36",
@@ -43,6 +44,11 @@ pub const ACCEPTED: [Accepted; 8] = [
         covers: "dimmed (declined) places exempt from contrast, and moving words not judged",
     },
     Accepted { class: Class::DataWordsElided, ruling: "R-20261111-44", covers: "data words, such as a game's title, cut with an ellipsis" },
+    Accepted {
+        class: Class::MainThreadLineInTests,
+        ruling: "R-20261111-110",
+        covers: "Qt's main-thread warning in test programs only; the program itself never prints it",
+    },
 ];
 
 /// The row of `ACCEPTED` that accepts `class`, if any; no other table accepts anything.

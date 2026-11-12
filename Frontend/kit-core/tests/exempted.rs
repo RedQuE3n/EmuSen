@@ -117,6 +117,7 @@ fn kit_7_102_the_table_holds_the_classes_the_tester_accepted_and_no_other() {
             (Class::CpuConversionLine, "R-20261111-41"),
             (Class::DimmedAndMoving, "R-20261111-43"),
             (Class::DataWordsElided, "R-20261111-44"),
+            (Class::MainThreadLineInTests, "R-20261111-110"),
         ]
     );
     assert!(ACCEPTED.iter().all(|a| !a.covers.is_empty()), "each row says what it covers");

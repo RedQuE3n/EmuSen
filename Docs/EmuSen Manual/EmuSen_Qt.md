@@ -1271,18 +1271,12 @@ names no line (measured 2026-11-11, theme-audit's two `qt_3_4_2` tests passing):
 The figures and the probes are kept with the branch's evidence (`canvas-figures.md`); the acceptance test's Consoles
 mockup lines were the same figures.
 
-**The full name against the counts** (decided 2026-11-12, R-20261112-2: no exception). The full name's line box ran from
-x 64 to the covers (685 units), so over 120 consoles it met the count of a console resting low on the outer orbit
-(`consoleCount.4` at 1280 × 800, `.57` at 1920 × 1200, `.58` at 3840 × 2160), though no letter reached it. The box is
-now only as wide as its letters, and never wider than the room before the nearest shown count whose line meets the
-name's rows, read from the orbit layout's resting places (`roomBeforeCounts` in `Consoles.qml`); a longer name wraps
-to a second line or shrinks, no smaller than the counts' 19 units. The canvas's figure follows: the name's box is 279
-wide for SUPER NINTENDO (`Consoles.mockup.spec`, where it had no width). Measured 2026-11-12, offscreen: the default
-state of 120 consoles names no line; a name of 92 characters in the Super Nintendo's place wraps to two lines at every
-size, its box ending at the Game Boy's count (596.87 at 1280 × 800). Held by theme-audit's
-`qt_3_4_2_the_full_name_meets_no_count_over_120_consoles` and
-`qt_3_4_2_a_full_name_far_longer_than_any_wraps_or_shrinks_short_of_every_count`, and by the mockup's width in the
-two canvas tests.
+**The full name against the counts** (decided 2026-11-12, R-20261112-2: no exception). The full name's box is as wide
+as its letters and never wider than the room before the nearest count that shares its rows; a longer name wraps or
+shrinks rather than running under a count. Not yet built: the orbit layout does not yet give a theme the room before
+the nearest count. Until it does, the full name's line box runs from x 64 to the covers (685 units at 1280 × 800), and
+over 120 consoles theme-audit names it over a count resting low on the outer orbit (`consoleCount.4` at 1280 × 800,
+`.57` at 1920 × 1200, `.58` at 3840 × 2160; measured 2026-11-11), though no letter of the name reaches the count.
 
 **The sweep.** theme-check's 120-console sweep walked each row in one direction, then went Down. Over the orbits, Down
 lands nearest in x, so the sweep heard 52 consoles of 120. The sweep now walks each row to both of its ends, as its man

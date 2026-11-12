@@ -119,12 +119,7 @@ ThemeScreen {
         readonly property real cx: layout.centre + node.rx * Math.cos(node.angle)
         readonly property real cy: node.ry * Math.sin(node.angle)
         // The body's height: 88 focused, so its box clears the words of the orbit inside (EmuSen_Qt.md §3.4.2), 72 at rest and while pressed.
-        readonly property real restingSize: node.lit && !press.active ? 88 : 72
-        property real size: node.restingSize
-        // The count's line below the body, and its box, which the full name's room is read from.
-        readonly property real countBelow: 32
-        readonly property real countWidth: countRow.width
-        readonly property real countHeight: countRow.height
+        property real size: node.lit && !press.active ? 88 : 72
         objectName: "world." + node.index
         focus: Browse.section.length > 0 ? node.key === Browse.section : node.index === 0
         visible: node.shown || node.opacity > 0
@@ -236,7 +231,7 @@ ThemeScreen {
         Row {
             id: countRow
             x: (node.width - width) / 2
-            y: node.above + node.size / 2 + node.countBelow
+            y: node.above + node.size / 2 + 32
             height: 22.8
             spacing: 6
             Text {
@@ -244,8 +239,9 @@ ThemeScreen {
                 anchors.verticalCenter: parent.verticalCenter
                 text: Words.games(node.count)
                 color: night.muted
+                // 19 units, the smallest whole size over the capitals' floor at 1280 x 720, condensed to stay as wide as the canvas's 17 (EmuSen_Qt.md §3.4.1).
                 font.family: faces.condensedRegular
-                font.pixelSize: root.countSize
+                font.pixelSize: 19
                 lineHeight: 22.8
                 lineHeightMode: Text.FixedHeight
             }
@@ -277,24 +273,6 @@ ThemeScreen {
             // The focused item, a shelf or a console, and the first shelf (All games), whose count is every game.
             property var focusedTile: null
             property var allGames: null
-            // The counts' size, 19, the smallest whole size over the capitals' floor at 1280 x 720 (EmuSen_Qt.md §3.4.1); a longer full name shrinks no further.
-            readonly property int countSize: 19
-            // The room from `left` to the nearest shown count whose line meets the rows from `top` down `height`, at the layout's resting places (R-20261112-2).
-            function roomBeforeCounts(left, top, height) {
-                const shown = layout.shown, angles = layout.angles, orbitOf = layout.orbitOf, radiiX = layout.radiiX, radiiY = layout.radiiY
-                let room = Infinity
-                for (let i = 0; i < consoleTiles.count; i++) {
-                    const node = consoleTiles.itemAt(i)
-                    if (!node || !shown[i])
-                        continue
-                    const cx = layout.centre + radiiX[orbitOf[i]] * Math.cos(angles[i])
-                    const countTop = radiiY[orbitOf[i]] * Math.sin(angles[i]) + node.restingSize / 2 + node.countBelow
-                    const countLeft = cx - node.countWidth / 2
-                    if (countTop < top + height && countTop + node.countHeight > top && countLeft >= left)
-                        room = Math.min(room, countLeft - left)
-                }
-                return room
-            }
             OrbitLayout {
                 id: layout
                 width: root.width
@@ -552,29 +530,19 @@ ThemeScreen {
                         lineHeightMode: Text.FixedHeight
                     }
                     Text {
-                        id: detailName
                         objectName: "consoleDetailName"
                         x: 64
                         // The face's own line box, 53, its baseline where the canvas's is (R-20261111-94, EmuSen_Qt.md §3.4.2).
                         y: 607.6
-                        // As wide as its letters, never past the covers or the nearest count in its rows; a longer name wraps or shrinks (R-20261112-2).
-                        width: Math.min(Math.ceil(nameLetters.advanceWidth), coverRow.x - 96, root.roomBeforeCounts(detailName.x, detailName.y, detailName.height))
-                        height: Math.ceil(nameLetters.height)
+                        width: coverRow.x - 96
                         text: root.focusedTile ? root.focusedTile.fullName : ""
-                        wrapMode: Text.Wrap
-                        fontSizeMode: Text.Fit
-                        minimumPixelSize: root.countSize
+                        elide: Text.ElideRight
                         color: night.textStrong
                         font.family: faces.condensed
                         font.weight: Font.Medium
                         font.pixelSize: 44
                         font.letterSpacing: 2
                         font.capitalization: Font.AllUppercase
-                        TextMetrics {
-                            id: nameLetters
-                            font: detailName.font
-                            text: detailName.text
-                        }
                     }
                     Text {
                         objectName: "consoleDetailFacts"

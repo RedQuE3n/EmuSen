@@ -1,7 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Shapes
-import QtQuick.Window
 import EmuSen.Kit as Kit
 
 // A controller drawn from a drawing file, a label beside it for each control the host declares with its leader, the focused control ringed and the held ones lit (EmuSen_Kit.md §7.62).

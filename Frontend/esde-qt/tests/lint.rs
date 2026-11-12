@@ -65,12 +65,12 @@ fn scripts(dir: &std::path::Path, found: &mut Vec<std::path::PathBuf>) {
 }
 
 #[test]
-fn qt_5_3_no_qml_of_ours_calls_the_deprecated_hover() {
-    let held = frontend().join("esde-qt").join("tests").join("qml").join("Deprecated.qml");
+fn qt_5_3_the_removed_hover_is_called_by_no_qml_and_offered_by_no_registry() {
     let mut found = Vec::new();
     scripts(&frontend(), &mut found);
     assert!(found.len() > 200, "the walk found the front end's QML ({} files)", found.len());
-    assert!(std::fs::read_to_string(&held).unwrap().contains(".hover("), "the scene that holds hover(row) calls it");
-    let callers: Vec<_> = found.iter().filter(|p| !p.ends_with("esde-qt/tests/qml/Deprecated.qml")).filter(|p| std::fs::read_to_string(p).unwrap().contains(".hover(")).collect();
-    assert!(callers.is_empty(), "EsdeModel.hover(row) is deprecated in EmuSen.Esde 1.1 (CHANGELOG-esde.md); these call it: {callers:?}");
+    let callers: Vec<_> = found.iter().filter(|p| std::fs::read_to_string(p).unwrap().contains(".hover(")).collect();
+    assert!(callers.is_empty(), "EsdeModel.hover(row) is gone in EmuSen.Esde 1.2 (R-20261111-108, CHANGELOG-esde.md); these call it: {callers:?}");
+    let registry = include_str!("../../../Testing/qmltypes/EmuSen.Esde-1.2.qmltypes");
+    assert!(registry.contains("name: \"hoverAt\"") && !registry.contains("name: \"hover\""), "the registry offers hoverAt and no hover");
 }

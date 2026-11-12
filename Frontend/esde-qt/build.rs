@@ -6,7 +6,7 @@ use cxx_qt_build::{CxxQtBuilder, QmlModule};
 #[path = "build/freetype.rs"]
 mod freetype;
 
-// EmuSen.Esde 1.1, the painter's module (EmuSen_Qt.md §4.8); its .qmltypes is the module's surface.
+// EmuSen.Esde 1.2, the painter's module (EmuSen_Qt.md §4.8); its .qmltypes is the module's surface.
 const ESDE_FILES: [&str; 20] = [
     "qml/Picture.qml",
     "qml/Mark.qml",
@@ -84,7 +84,7 @@ fn main() {
     link_freetype();
     let shaders = baked_shader();
     CxxQtBuilder::new_qml_module(
-        QmlModule::new("EmuSen.Esde").version(1, 1).qml_files(ESDE_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtQml.Models").depend("QtQuick.Pdf").depend("EmuSen.Kit"),
+        QmlModule::new("EmuSen.Esde").version(1, 2).qml_files(ESDE_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtQml.Models").depend("QtQuick.Pdf").depend("EmuSen.Kit"),
     )
     .qrc(shaders)
     .files(["src/marks.rs", "src/model.rs", "src/lists.rs", "src/text.rs"])

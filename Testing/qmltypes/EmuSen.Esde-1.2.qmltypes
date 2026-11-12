@@ -414,8 +414,9 @@ Module {
             Parameter { name: "button"; type: "int" }
         }
         Method {
-            name: "hover"
+            name: "hoverAt"
             lineNumber: 373
+            Parameter { name: "item"; type: "QQuickItem"; isPointer: true }
             Parameter { name: "row"; type: "int" }
         }
         Method {

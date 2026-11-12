@@ -2533,9 +2533,9 @@ Qt application.
   clock, and only the scene knows the measured consequences of a hold (the metadata fading out from the first repeat,
   the list's fast tier jumping four entries). The router gives the first press and the release.
 - **The pointer makes the pad's calls.** `hoverAt(item, row)` steps to the row as the pad's step does, only while the
-  pointer itself moves (the window's fact, EmuSen_Kit.md §7.108). EmuSen.Esde is 1.1 for it. `hover(row)`, which
-  nothing of the repository calls, stays in 1.1, deprecated and selecting as it did in 1.0, and goes at the next major
-  (decided 2026-11-11; `CHANGELOG-esde.md`; held by `tests/deprecated.rs` and `lint.rs`). `tap(row)` is
+  pointer itself moves (the window's fact, EmuSen_Kit.md §7.108). EmuSen.Esde became 1.1 for it. `hover(row)`,
+  deprecated in 1.1, is gone in 1.2 (decided 2026-11-11 by the tester, R-20261111-108; `CHANGELOG-esde.md`; `lint.rs`'s
+  `qt_5_3_the_removed_hover_is_called_by_no_qml_and_offered_by_no_registry` holds that nothing calls or offers it). `tap(row)` is
   that and A, and a wheel notch is one step, back for a notch up.
 
 **Proof**, `tests/painter.rs` (6, on a synthetic theme the test writes, no Qt application): the settings under

@@ -299,6 +299,7 @@ SliderRow
     objectName "value"
 SectionStrip
     required property Kit.FrameController controller
+    readonly property bool overflows
 ToolScreen
     property string title
     property alias facts

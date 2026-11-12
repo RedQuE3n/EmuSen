@@ -16,6 +16,10 @@ surface too (R-20261111-99): each root object's properties and signals and every
 - **`VideoClip`**: the object name `videoPlayback`; `fillMode`, `delay`, `fade`; read-only `position`, `heard`, `level`.
   **`VideoTile`**: `fillMode`, `delay`, `fade`. §7.53.
 - **`PageFrame`**: `clipVolume`, the share of full its clip is heard at (R-20261111-100). §7.53.
+- **`SectionStrip`**: read-only `overflows`, added on WiseMan in repair DC-B (§7.105) while the kit was 1.0 and held
+  in this minor's QML-file surface once the two met.
+- The minor is 1.1, one above WiseMan's 1.0: until the first release every interface change bumps the minor (decided
+  2026-11-11 by the tester, R-20261111-107).
 
 ## 1.0, stage 4 piece H: a model's reset told to a view without QML state (2026-11-11)
 

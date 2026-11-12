@@ -151,11 +151,11 @@ pub fn hold_walking(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, nam
     scene.wait(100);
 }
 
-/// The theme's screen judged as theme-audit judges it: its words that are no fixed word of the host's are data, which
-/// may elide (R-20261111-44, EmuSen_Qt.md §3.7.2); words outside the theme host are the program's own, held whole.
+/// The theme's screen judged as theme-audit judges it: its words that are not the program's own (`words::is_own`) are
+/// data, which may elide (R-20261111-44, EmuSen_Qt.md §3.7.2); words outside the theme host are the program's own, held whole.
 fn theme_words(item: &mut emusen_kit_core::audit::Item) {
     if item.name == "reference" {
-        item.mark_data(&emusen_qt_models::words::is_fixed);
+        item.mark_data(&emusen_qt_models::words::is_own);
         return;
     }
     item.children.iter_mut().for_each(theme_words);

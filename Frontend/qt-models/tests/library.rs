@@ -352,6 +352,31 @@ fn the_themes_group_and_back_entries_go_where_the_canvases_put_them() {
 }
 
 #[test]
+fn qt_3_4_2_a_console_s_cover_shape_is_its_table_s_turned_with_one_fallback() {
+    use emusen_crystal_client::shapes::SystemRow;
+    use emusen_qt_models::library::cover_shape;
+    let snes = SystemRow { cover_aspect: 0.73, ..SystemRow::default() };
+    assert!((cover_shape(Some(&snes)) - 1.3699).abs() < 1e-4, "137 wide to 100 tall (R-20261111-95)");
+    assert_eq!(cover_shape(Some(&SystemRow::default())), 0.75, "a table with no shape gives 3 wide by 4 tall");
+    assert_eq!(cover_shape(None), 0.75, "as does no console");
+}
+
+#[test]
+fn qt_3_7_2_the_program_s_own_lines_are_not_data() {
+    use emusen_qt_models::words::{is_own, last_played, settings_line, status_line, summary, version_line};
+    let quiet = serde_json::json!({ "NavigationSounds": false });
+    let loud = serde_json::json!({ "BigPictureInterface": { "NavigationVolume": 60 } });
+    let own = [settings_line(true, &loud), settings_line(false, &quiet), settings_line(false, &serde_json::json!({})), status_line(0, "21:42"), status_line(2, "07:05"), version_line()];
+    assert_eq!(own[..2], ["Dark · 60% sound".to_owned(), "Light · sound off".to_owned()]);
+    for words in &own {
+        assert!(is_own(words), "{words} is the program's own, built from its settings, devices or clock (R-20261111-35)");
+    }
+    for data in [last_played(Some("Aurora Drift")), summary(11, 1566), "Dark · 160% sound".to_owned(), "Dusk · 60% sound".to_owned(), "2 games · 21:42".to_owned(), "21:4x".to_owned()] {
+        assert!(!is_own(&data), "{data} is data, or no line the program builds");
+    }
+}
+
+#[test]
 fn qt_3_7_2_fixed_words_are_told_from_data() {
     use emusen_qt_models::words::{games, is_fixed, CHOOSE_A_CONSOLE, FAVOURITES_LINE};
     for fixed in [CHOOSE_A_CONSOLE, FAVOURITES_LINE, "Recently played", "Settings", "Art and facts"] {

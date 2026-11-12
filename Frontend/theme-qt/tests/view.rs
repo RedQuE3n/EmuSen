@@ -111,7 +111,9 @@ fn qt_3_2_the_library_s_lists_over_the_real_clients() {
         let g = &games[0];
         assert!(text(&g[0]).ends_with("Synthetic.nes"), "the id is the game's file, which Actions take");
         assert_eq!((text(&g[1]), text(&g[7])), ("Synthetic", "nes"));
-        assert_eq!(g[3], Cell::Number(1.0 / read.nes_shape), "the cover's shape is the console's, width over height where the table gives height over width");
+        assert_eq!(read.nes_shape, 1.43, "the systems table's NES cover, height over width (Platform/systems/data/nes.json)");
+        let Cell::Number(shape) = g[3] else { panic!("the cover's shape is a number: {:?}", g[3]) };
+        assert!((shape - 0.6993).abs() < 1e-4, "the NES cover 0.6993 wide to 1 tall, the table's 1.43 turned: {shape}");
         assert_eq!((&g[6], text(&g[16])), (&Cell::Flag(false), ""), "never played, so no words for it");
     }
     assert!(view::games_of(v, "favourites", 0).is_empty() && view::games_of(v, "recent", 0).is_empty());

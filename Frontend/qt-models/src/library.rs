@@ -515,6 +515,15 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists) -> Refres
     Ok(Read { systems, catalog, rows, lists, esde_settings, esde, esde_state })
 }
 
+/// A cover's shape where the systems table gives none: 3 wide by 4 tall.
+pub const COVER_SHAPE: f64 = 0.75;
+
+/// A console's cover shape as a theme draws it, width over height: the systems table's `cover_aspect` (height over width)
+/// turned, or `COVER_SHAPE` where it gives none. The one place the turn is made (EmuSen_Qt.md §3.4.2).
+pub fn cover_shape(system: Option<&SystemRow>) -> f64 {
+    system.map(|s| s.cover_aspect).filter(|a| *a > 0.0).map_or(COVER_SHAPE, |a| 1.0 / a)
+}
+
 /// The view's state: the rows with the selection kept across refreshes, and the last refresh's problem.
 #[derive(Clone, Debug, Default)]
 pub struct LibraryView {

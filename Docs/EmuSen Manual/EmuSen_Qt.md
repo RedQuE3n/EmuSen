@@ -984,7 +984,7 @@ left out of `Tokens.qml` (the surface test).
 ### 3.3 Versioning
 
 The API is the module's version, `EmuSen.Theme 1.0`. A minor adds singletons, roles, actions, cues or tokens and never
-removes or renames one; a role or action no longer meant is kept and marked deprecated in the `.qmltypes` for one minor,
+removes or renames one; a role or action no longer meant is kept and marked deprecated, in the changelog and its doc comment, for one minor,
 then removed at a major. A theme states the API it was written for in `theme.json` (`"api": "1.0"`); a theme written for
 a newer major than the build has is refused with words naming both; one written for an older minor loads, since minors
 are additive. Before 1.0 (§5.1) the same rules hold, with breaking changes allowed and listed in `CHANGELOG-theme-api.md`.
@@ -3240,8 +3240,9 @@ at a major, the removal listed. Before 1.0 the same, with removals allowed and l
 
 The module's `qmldir` version is major.minor; the `.qmltypes` file `qmltyperegistrar` writes for it is committed under
 `Testing/qmltypes/<module>-<version>.qmltypes` and diffed in CI: a removed or changed type, property, role, signal or
-invokable fails the build unless the major moved; an addition bumps the minor. Deprecation is a `@deprecated` note in the
-registry for one minor. The same dump is the published reference for theme authors, with a generated page per type.
+invokable fails the build unless the major moved; an addition bumps the minor. Deprecation is marked for one minor in the
+module's changelog and in the call's doc comment, the registry tool of Qt 6.11 having no field for it (decided
+2026-11-11). The same dump is the published reference for theme authors, with a generated page per type.
 
 ### 5.4 How third parties build themes and plugins
 

@@ -11,6 +11,7 @@ ElementBox {
     required property bool audio
     required property real volume
     required property real blur
+    required property real fade
     Kit.VideoTile {
         anchors.fill: parent
         source: root.source
@@ -19,6 +20,7 @@ ElementBox {
         volume: root.volume
         fillMode: root.stretch ? Image.Stretch : Image.PreserveAspectFit
         delay: 0
+        fade: root.fade
         layer.enabled: root.blur > 0
         layer.effect: ShaderEffect {
             property real sigma: root.blur

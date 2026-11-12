@@ -28,6 +28,8 @@ const WORDS: f64 = 0.03;
 const STRIP_OVER_WORDS: f64 = 1.35;
 const LEFT_WORDS: f64 = 0.01;
 const ZOOM_STEP: f64 = 0.5;
+/// The video's fade-in, in ms: MEDIA_VIEWER_FADE_IN_TIME, read in VideoComponent::update (ES-DE 3.4.1, R-20261111-101).
+pub const FADE_IN_MS: f64 = 600.0;
 const PAN_STEP: f64 = 0.125;
 const BLUR_SIGMA: f64 = 1.0 / 512.0;
 
@@ -277,7 +279,7 @@ impl Viewer {
         let mut out = vec![fill("ground", 0.0, h, 0x0000_00FF)];
         let video = self.entries.iter().find(|e| e.kind == "video");
         let blur = if settings.blur { BLUR_SIGMA * w } else { 0.0 };
-        let clip = |source: &str| Paint::Clip(Clip { source: source.to_owned(), stretch: settings.stretch_videos, audio: settings.audio, volume: settings.volume, blur });
+        let clip = |source: &str| Paint::Clip(Clip { source: source.to_owned(), stretch: settings.stretch_videos, audio: settings.audio, volume: settings.volume, blur, fade: FADE_IN_MS });
         let (ax, ay, aw, ah) = area;
         match (self.reading, self.shown()) {
             (Some(view), _) => {

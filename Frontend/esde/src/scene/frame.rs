@@ -66,6 +66,8 @@ pub struct Clip {
     /// The share of full its sound plays at.
     pub volume: f64,
     pub blur: f64,
+    /// How long it fades in once its first frame shows, in ms.
+    pub fade: f64,
 }
 
 /// A PDF file's page, counted from 0.

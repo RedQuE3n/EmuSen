@@ -66,6 +66,7 @@ fn the_viewer_s_video_plays_on_behind_a_picture_when_kept_running_and_is_heard_a
     assert!(back >= before + 1200, "the clip resumes where it would be, not from the start: {before} then {back}");
     assert_eq!(playback(&mut scene, "heard"), Some(1.0), "the viewer's clip heard with its audio on");
     assert!(playback(&mut scene, "level").is_some_and(|v| (v - 0.35).abs() < 1e-6), "at the player's Volume, 35 %");
+    assert_eq!(playback(&mut scene, "fade"), Some(600.0), "faded in over ES-DE's 600 ms (R-20261111-101)");
     scene.pad(UiButton::Back);
     until(&mut scene, "the viewer closed", |s| position(s).is_none());
 

@@ -15,6 +15,8 @@ Item {
     // `playing` the clip starts, the poster's delay by default (EmuSen_Kit.md §7.61).
     property int fillMode: Image.PreserveAspectCrop
     property int delay: Kit.Tokens.poster
+    // How long the clip fades in over the still, in ms: the poster's fade by default.
+    property int fade: Kit.Tokens.posterFade
     // Whether the clip's player is made, and whether a frame of the clip stands over the still.
     readonly property bool running: clipLoader.status === Loader.Ready
     readonly property bool showing: (clipLoader.item as Kit.VideoClip)?.showing ?? false
@@ -40,6 +42,7 @@ Item {
             volume: root.volume
             fillMode: root.fillMode
             delay: root.delay
+            fade: root.fade
         }
     }
 }

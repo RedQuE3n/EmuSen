@@ -3820,18 +3820,21 @@ the scanlines off in each so that only the setting differs.
   (`esde_shelves::settings_of`) to the clip's `volume`; no setting of its own. ES-DE plays it at its video player volume,
   `SoundVolumeVideos` (default 80), which EmuSen has no key for.
 
+- *The fade-in* (decided 2026-11-11 by the tester, R-20261111-101): the video fades in over 600 ms once its first frame
+  shows, as ES-DE 3.4.1's does (`MEDIA_VIEWER_FADE_IN_TIME`, read in `VideoComponent::update`,
+  `es-core/src/components/VideoComponent.cpp`). The scene owns the figure (`viewer::FADE_IN_MS`, carried as the clip's
+  `fade`), and the kit's `VideoClip` and `VideoTile` take it as `fade`, the poster's fade (`posterFade`, 1,500 ms) where
+  none is given, as the game page's clip still is. Until then it took `posterFade`.
+
+**Named difference** (decided 2026-11-11 by the tester, R-20261111-102, following R-20261109-m2): the viewer has no
+scanline settings. ES-DE's two, `MediaViewerVideoScanlines` and `MediaViewerScreenshotScanlines`, default to on
+(`Settings::setDefaults`); this viewer matches ES-DE with both turned off, as the captures were taken.
+
 **Differences from ES-DE that wait on the tester** (read in ES-DE 3.4.1's source 2026-11-11, not ruled):
-- ES-DE's two viewer scanline settings, `MediaViewerVideoScanlines` and `MediaViewerScreenshotScanlines`, default to on
-  (`Settings::setDefaults`), and EmuSen offers neither (R-20261109-m2): this viewer matches ES-DE with both turned off,
-  as the captures were taken, not ES-DE's default look.
 - The blur: ES-DE blurs the whole screen, the black ground and the letterbox bars included, before the strip is drawn
   (`MediaViewer::render`, `RendererOpenGL::shaderPostprocessing`), with a 9-tap kernel in two passes; EmuSen lays one
   Gaussian pass over the video element only. ES-DE blurs vertically on a screen rotated by 90 or 270 degrees; EmuSen
   has no vertical blur, and no screen rotation.
-- The fade-in: ES-DE fades the viewer's video in over 600 ms (`MEDIA_VIEWER_FADE_IN_TIME`, `VideoComponent::update`,
-  `es-core/src/components/VideoComponent.cpp`). EmuSen's clip, the kit's `VideoClip`, fades in over the motion token
-  `posterFade`, 1500 ms, linear, once its first frame is drawn (checked 2026-11-11 in `kit-qt/qml/VideoClip.qml` and
-  `kit-core/src/motion.rs`).
 
 **Held to**: `frame.rs`'s `the_media_viewer_follows_the_player_s_viewer_settings`; `settings_rows`' one-row test, which
 names the six keys; the oracle's seven settings states in CarAlt at both sizes; `viewer_clip.rs` (esde-qt, offscreen on

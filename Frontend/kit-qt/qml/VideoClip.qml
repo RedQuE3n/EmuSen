@@ -13,6 +13,8 @@ Item {
     // VideoTile's fill and delay (EmuSen_Kit.md §7.61).
     property int fillMode: Image.PreserveAspectCrop
     property int delay: Kit.Tokens.poster
+    // How long the clip fades in once its first frame shows, in ms: the poster's fade by default (EmuSen_Kit.md §7.53).
+    property int fade: Kit.Tokens.posterFade
     readonly property bool software: GraphicsInfo.api === GraphicsInfo.Software
     readonly property bool showing: player.playbackState === MediaPlayer.PlayingState && (root.software ? frames.frames > 0 : player.position > 0)
     readonly property int frames: frames.frames
@@ -23,7 +25,7 @@ Item {
     opacity: root.showing ? 1 : 0
     Behavior on opacity {
         NumberAnimation {
-            duration: Kit.Tokens.posterFade
+            duration: root.fade
         }
     }
     VideoOutput {

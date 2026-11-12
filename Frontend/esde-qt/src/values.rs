@@ -159,6 +159,7 @@ pub fn element(p: &Placed, primary: Option<&Primary>, role: &str) -> V {
             "audio" => Some(V::B(c.audio)),
             "volume" => Some(V::N(c.volume)),
             "blur" => Some(V::N(c.blur)),
+            "fade" => Some(V::N(c.fade)),
             _ => None,
         },
         Paint::Page(p) => match role {
@@ -479,7 +480,7 @@ pub fn part(p: &Paint, i: usize, role: &str, swap: bool) -> V {
 }
 
 /// Every role name the element model answers, in role order.
-pub const ELEMENT_ROLES: [&str; 117] = [
+pub const ELEMENT_ROLES: [&str; 118] = [
     "elementId", "paint", "name", "boxX", "boxY", "boxWidth", "boxHeight", "turn", "originX", "originY", "alpha",
     "source", "fit", "cropX", "cropY", "tileWidth", "tileHeight", "tileRight", "tileBottom", "tint", "tintEnd", "gradientVertical",
     "saturation", "radius", "nearest", "frame",
@@ -494,7 +495,7 @@ pub const ELEMENT_ROLES: [&str; 117] = [
     "primaryColor", "secondaryColor", "selectedColor", "selectedSecondaryColor", "margin", "markerWidth",
     "columns", "itemWidth", "itemHeight", "pitchX", "pitchY", "marginX", "marginY", "itemScale", "focusFrom", "fromLevel", "toLevel",
     "progress", "unfocusedOpacity", "unfocusedSaturation", "unfocusedDim", "imageScale", "hasSelectedTint", "selectedTint", "ownFace",
-    "pageIndex", "stretch", "audio", "volume", "blur", "labelPx",
+    "pageIndex", "stretch", "audio", "volume", "blur", "labelPx", "fade",
 ];
 
 /// The grid's roles past the element list's first 112.

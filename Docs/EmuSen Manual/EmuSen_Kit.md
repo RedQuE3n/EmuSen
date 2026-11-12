@@ -2819,7 +2819,8 @@ motion keeps the still (`EmuSen_Interface.md` §5.9). `showing` says whether a f
 `running` whether its player is made, `frames` how many frames the kit's sink has drawn. Since 2026-11-11 the player
 (`VideoClip`, objectName `videoPlayback`) also says where the clip is (`position`, ms), whether its sound is let out
 (`heard`, its `AudioOutput`'s muted state) and at what share of full (`level`), so a test reads what the player sees and
-hears; and `emusen_qt_test::clips::write` writes a test's clip, and `Scene::item_number` reads a number of an item found
+hears. Both `VideoTile` and `VideoClip` take `fade`, the ms the clip fades in over once its first frame shows, `posterFade`
+where none is given (ES-DE's media viewer gives 600, `EmuSen_Qt.md` §4.14). And `emusen_qt_test::clips::write` writes a test's clip, and `Scene::item_number` reads a number of an item found
 through the item tree, a Repeater's delegate among them. The player, decoder and drawing
 are **`VideoClip`** (qmldir), which the tile makes only while its clip is to play, so a window that shows no clip never
 starts Qt Multimedia: made with every window, it started Qt Multimedia in every run of the program (2026-11-09). The decoder is Qt Multimedia's over the system's FFmpeg (`EmuSen_Qt.md` §1.8.9). On an RHI

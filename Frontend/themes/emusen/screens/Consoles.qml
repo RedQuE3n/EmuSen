@@ -52,7 +52,7 @@ ThemeScreen {
             radius: 20
             color: Qt.rgba(38 / 255, 38 / 255, 43 / 255, 0.5)
             border.width: 1
-            border.color: Qt.rgba(140 / 255, 150 / 255, 220 / 255, 0.18)
+            border.color: Qt.rgba(Tokens.muted.r, Tokens.muted.g, Tokens.muted.b, 0.18) // the muted token at 18% (R-20261111-96)
             Glyph {
                 anchors.centerIn: parent
                 width: 22

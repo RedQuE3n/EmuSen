@@ -1231,14 +1231,15 @@ canvas's own; kit-core's test holds them within 0.01 unit.
    focus at the middle world (left of the middle when the capacity is even). The canvas centred the focus, which
    showed one world fewer on an orbit of even capacity: the inner's 2, the middle's 6, and the outer's 10 at 16:9.
    kit-core's test holds a focused inner world's ring at or below 140 at the five sizes.
-10. Two colours on the screen are not the kit's tokens, and each is argued here:
+10. One colour on the screen is not the kit's tokens, argued here, and one was until 2026-11-11:
    - The engine's mark after a world's count and the foot's engine line (mark, name and tag) are drawn in the console's
      hue, as the canvas and `EmuSen_Interface.md` §24.6 draw them. A hue is the console's, as the world's body is, so
      both stand in the kit's `Scene` (`EmuSen_Kit.md` §7.20): the gate's palette leaves the colour to the theme and
      still holds the words to contrast. The stage 1 reference drew its engine row in a `Scene` for the same reason.
-   - The places' glass discs take the canvas's edge, its line ink #8C96DC at 18%, the ink the orbit lines are named
-     for in §7.1 step 4. The fill is the kit's raised surface at 50%. No token is that ink, and the kit's border at 18%
-     would not show on the sky. The acceptance test names the disc's edge with the orbit lines.
+   - The places' glass discs took the canvas's edge, its line ink #8C96DC at 18%, until 2026-11-11. Decided 2026-11-11
+     (R-20261111-96): the thin ring about each disc is the palette's muted token at the same 18%, so it is no longer a
+     colour outside the palette. The fill is the kit's raised surface at 50%. qt-app's `screens.rs` holds the edge to
+     the kit's muted token at 18%.
 
 **Against the canvas after R-20261111-34** (measured 2026-11-11, offscreen on the software backend, theme-audit's
 `qt_3_4_2` run: eleven consoles, the Super Nintendo focused). The places and the cover row's shape are fixed (items 4

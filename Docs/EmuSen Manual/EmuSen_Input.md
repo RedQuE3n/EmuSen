@@ -174,10 +174,12 @@ The defaults are Endymion's three tables (24 keys, 14 gamepad buttons, 10 hotkey
 
 **Which map a player plays with** (decided 2026-11-08, interface 43) is Endymion's alone: `emusen_endymion_bindings_choose` answers, from the two models a caller passes or from the files, the profile that applies (the game's own, known by its file's name without the extension, else the console's chosen one, else Default; or a profile named, any case, one not there being Default) and the player whose map that is in it (the player's own, else 1). `GamepadBindings.Resolve(console, game)` now takes the game's path, and `Resolve`, `ConsoleDefault`, the two- and three-argument `For`, `HasOwn`, `Own` and `Forget` ask `BindingFiles.Choose` and then take their own editable object by the answer, so a settings page that rebinds it still changes what is played; the C# rule is gone. The answers are kept by question until the model's consoles, players, profiles or games change (every method that changes them clears them), because `GamepadManager` asks for players 2 on every frame: the call serialises both models, which a frame must not. Mistress's `GameProfileKey` stays for `GameProfile`/`SetGameProfile`, which key the in-memory games by it; it gives what Endymion's `game_key` gives.
 
-**A game's name and what a pad holds** (interface 47, decided 2026-11-10 by the tester): `emusen_endymion_bindings_game_key`
-answers the name a game is known by in the profiles' `Games`, and `EMUSEN_ENDYMION_PADS_HELD` what a pad holds as one mask,
-SDL's buttons by number and the triggers past half at bits 30 and 31, so no front end keeps either rule
-(`EmuSen_RustPlatform.md` §55).
+**A game's name, what a pad holds and each control's word** (interface 47; the tester's ruling of 2026-11-11,
+R-20261111-113): `emusen_endymion_bindings_game_key` answers the name a game is known by in the profiles' `Games`,
+`EMUSEN_ENDYMION_PADS_HELD` what a pad holds as one mask, SDL's buttons by number and the triggers past half at bits 30
+and 31 (`EMUSEN_ENDYMION_HELD_LEFT_TRIGGER`, `_RIGHT_TRIGGER`), and `emusen_endymion_bindings_controls` each
+`PadControl`'s word in the binding files with the button it is or the stick's axis and way, so no front end keeps any
+of these rules (`EmuSen_RustPlatform.md` §55).
 
 **Every caller, 2026-11-08,** reaches the files through what stays: Mistress's `MainWindow` (the three `Load`s, and `Save` from the settings screens), `SettingsScreen.Keys` (`DefaultPadKeyMap.Bindings` for one control's reset), Hotaru's `GameWindow` (`GamepadBindings.Load`) and `HotaruKeyMap` (`DefaultPadKeyMap.Bindings`, its fixed map), `GamepadManager` (maps only), and WiseMan's tests, all through the same classes and so through `BindingFiles`. No Rust, script or tool read the files before; `EmuSen_Config_Reference.md` §3.6 and `EmuSen_Settings_Reference.md` §4.3 describe their shapes, which are unchanged.
 

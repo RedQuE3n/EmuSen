@@ -3003,18 +3003,21 @@ and which file stands for which controller id is the host's.
 - **`ControllerDrawing.qml`**: the leaders (Muted, the focused one's Accent), the picture as an `Image` of the SVG at the
   drawing's place, and a label for each control: its region's name and the host's words for it (`texts`) in Caption,
   measured and handed to the layout as it is made (`Repeater.itemAdded`) and whenever its width changes, its edge
-  Accent and 2 wide while focused; a click on a label raises `chosen`. Decided 2026-11-10: the labels bind the layout's
-  properties rather than place themselves, since the QML rules (§7.9) allow no function and nothing done on completion,
-  and qmllint (§7.6) found the token's colour bound to a string.
+  Accent and 2 wide while focused; a click on a label raises `chosen`. The labels bind the layout's properties rather
+  than place themselves, a design choice of 2026-11-10: the QML rules (§7.9) allow no function and nothing done on
+  completion, and qmllint (§7.6) found the token's colour bound to a string.
 
 **Why one picture and not a `Shape` per part** (measured on 2026-11-09): the drawing's colours are the console's
 (Nintendo's red, Sony's symbols), not the palette's, and LunaP drew them inside one control the recorder never read
 (`SettingsBindings-1280x800.spec`, `ControllerDiagram` with no paints). Drawn as a `Shape` per part, the gate's palette
-rule found every part of the SNES pad's drawing outside the palette; as one SVG picture it reads none, as Mistress's
-recording has it. The SVG is drawn by Qt's own SVG image reader (`qt6-qtsvg`'s `imageformats/libqsvg.so`), which a
-build that bundles Qt must bundle too. Words printed on the shell are part of the picture and read by no one.
+rule found every part of the SNES pad's drawing outside the palette. The tester ruled on 2026-11-11 (R-20261111-114)
+that a pad's drawing is a picture, like a cover: the palette and text-floor rules do not look inside it, and its labels,
+leaders and focus stay on the palette, where the gate holds them (`settings_drawings.rs`, whose findings excuse no label
+of the drawing's, `EmuSen_Qt.md` §7.7.H5). Words printed on the shell are part of the picture. The SVG is drawn by Qt's
+own SVG image reader (`qt6-qtsvg`'s `imageformats/libqsvg.so`), which a build that bundles Qt must bundle too.
+kit-core reads a drawing file with `serde_json`, a dependency the tester allowed on 2026-11-11 (R-20261111-115).
 
-**Held to**: kit-core's `tests/controller.rs` (9: a direction to the nearest declared control that way; a stick's knob placed by its directions' pushes; a file's items and layers, the shapes' path data and a union stroked
+**Held to**: kit-core's `tests/controller.rs` (11: a direction to the nearest declared control that way; a stick's knob placed by its directions' pushes; a file's items and layers, the shapes' path data and a union stroked
 first, the focus ring, the press and the arm's wash, a drawing standing for a controller only with every declared control,
 the generic drawing from the controls alone, labels inside the box, beside the drawing and apart, the walk); the
 program's `settings_drawings.rs` (every drawing at the gate's sizes, `EmuSen_Qt.md` §7.7.H).

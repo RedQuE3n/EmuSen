@@ -21,7 +21,7 @@ pub fn drawing(id: &str) -> Option<&'static str> {
 
 /// The drawing of the controller a console's player holds: its controller's own file, else the file of that controller on
 /// one of the console's systems (`<system>.<controller>`, as a hosted core's RetroPad on the Saturn is `saturn.retropad`,
-/// decided 2026-11-10 by the tester); none, the kit's generic drawing, where neither exists.
+/// the tester's R-20261111-113); none, the kit's generic drawing, where neither exists.
 pub fn drawing_on(console: &crate::consoles::Console, player: u32) -> Option<&'static str> {
     let id = controller_of(&console.controllers, player)?;
     drawing(id).or_else(|| console.systems.iter().find_map(|system| drawing(&format!("{system}.{id}"))))

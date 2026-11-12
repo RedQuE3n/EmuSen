@@ -4625,21 +4625,26 @@ of `X`, the N64's C buttons the right stick's directions `RightY-`…). The twel
 `psx.dualshock`, `sms.pad`, `sg1000.pad`; `ps2.digital` and `ps2.dualshock2` name `psx.pad`'s and `psx.dualshock`'s
 drawings with `{"same_as": …}`, one drawing for two ids). The DualShock's sticks gained their four directions as bands,
 since its declared axes make them controls. `qt-models`' build lists the folder, so a drawing added is a file and no code.
-A controller with no file of its own is next looked for on the console's systems, as `<system>.<controller>` (decided
-2026-11-10 by the tester): the libretro host's `retropad` on the Saturn is `saturn.retropad`, on the Dreamcast
+A controller with no file of its own is next looked for on the console's systems, as `<system>.<controller>` (the
+tester's ruling of 2026-11-11, R-20261111-113): the libretro host's `retropad` on the Saturn is `saturn.retropad`, on the Dreamcast
 `dreamcast.retropad`, made from LunaP's `Saturn` and `Dreamcast` art item for item, each button region named by the RetroPad
 control the hosted cores give it as Mistress's `ControllerDiagrams` mapped them (`EmuSen_Cores.md` §4.11: the Saturn's A
 on B, B on A, C on R, X on Y, Y on X, Z on L, L and R on L2 and R2; the Dreamcast's A on B, B on A, X on Y, Y on X, the
 triggers on L2 and R2, its stick the left one's directions). Any other controller with no file (the RetroPad on another
 console, the Atari and NEC cores', a new core's) is the kit's generic drawing from its declared controls alone
 (`controllers::drawing_on`). Held to `qt-models/tests/controllers.rs` (both drawings cover their hosted cores' controls;
-another console's RetroPad is generic) and the program's `settings_drawings.rs` (fifteen controllers at the gate's sizes);
-seeded and caught there: the console's file not looked for, and the Saturn's C named by a control the core does not give.
+another console's RetroPad is generic) and the program's `settings_drawings.rs` (fifteen controllers at the gate's sizes).
 
 **The controls a drawing is named by** are the systems row's `controllers` (frontend API 2.1): the buttons by the core
 ABI's own names (`emusen-native`'s `Control::NAMES`, which names itself the one owner every reader reads), then up, down,
 left and right of each stick the console reads, by the ABI's axis names (`LeftY-` is up), in Endymion's
-`PadControls.For` order. The controller a player's port holds is the row's `players[n]`.
+`PadControls.For` order. The controller a player's port holds is the row's `players[n]`. `qt-models` depends on
+`emusen-native` for these names alone (`controllers.rs`), which the tester allows only where the platform interface
+cannot give them (R-20261111-116): interface 47's `emusen_endymion_bindings_controls` gives each button's name and
+number, but each stick's direction only by axis number and way, never the axis's name (`LeftX` … `RightY`, the
+drawings' regions), and nothing of the triggers' axes. Reading the buttons from Endymion and the axes from the ABI
+would make two readers of one fact, so both are read from the ABI's `desc.rs`; an axis name in `bindings_controls`
+would let the dependency go, an interface change not made.
 
 **The seats** (`qt-endymion` `seats.rs`): the pads' reader keeps the eight seats the platform interface says the host
 holds (`emusen_endymion_slots_*` through `platform-client` `seats.rs`): a pad seated as a start or a poll opens it, its seat
@@ -4687,6 +4692,8 @@ pane's control name at hers, and the card's five rows at hers. **Differences tha
 2026-11-09 for §7.7 and §7.7.E:** the pane's sentence in the kit's face takes two lines where hers takes one, so the
 lines under it stand 33 units lower on Controllers and 4 to 7 on the bindings page; the card form's own boxes
 (`AdaptiveCard` 512 wide, `AdaptiveDetail`, the pane 7 units taller with the line's gap of 8 where hers is 6).
+That run is not repeated in the tree: the program's Controllers tests hold their states against an empty mockup
+(`Mockup::default()`), so they hold the gate's rules and no comparison with Mistress's recordings.
 
 **The input tester** (2026-11-10), as Mistress's `PollTester`, `LightBindings` and `BindingAxis` ran it: Select on the
 pad's bindings page starts it. A control lights while its key is held on the keyboard (the console's keyboard map, the
@@ -4703,7 +4710,9 @@ at once. Leaving clears what was held and puts the knobs at rest.
 `.Controllers.cs`, `.Keys.cs`, `.Game.cs`, `SettingsView.cs` and `MainWindow.Settings.cs`). Built: Players (seats, a
 pad's player stepped, a kept seat forgotten, a held button marking its row), Controller bindings, Profiles (the console
 chosen, a profile opened, made, renamed, chosen to start games, deleted, the one every console has held), Rumble shown
-where a console's games drive a motor, Keyboard keys, Hotkeys (listening, clearing, clashes named), Reset every binding,
+where a console's games drive a motor, Keyboard keys and Hotkeys (listening, clearing, clashes named; **saving only**:
+the keys are written to the binding files, but no game hears the keyboard, since the game's router is polled with no
+keyboard (`qt-models` `input.rs`), and nothing in the program reads a hotkey), Reset every binding,
 every row of Galaxia's Controllers group (Swap A and B, Guide chords, Controller type, Only the first controller,
 Controller notices, On-screen keyboard, Left stick as the D-pad, Stick deadzone, Mirror player 1 to player 2) shown and
 saved, the bindings page (the strip, the drawing, a press listened for with its five seconds, Y reset, X the player or
@@ -4716,13 +4725,13 @@ it once with the models, as the profile `bindings_choose` answers where no profi
 `DEFAULT_PROFILE`), and every page compares with that (`Bindings.default_profile`); the PROFILES model's member
 `"Default"` is the header's shape, as `"Profiles"` and `"Games"` are. A stick's direction counts as held past Endymion's
 stick deadzone (`emusen_endymion_pads_setting`, `SETTING_STICK_DEADZONE`), read by the pads' reader on each tick and
-handed over with the seats (`GamePads::stick_deadzone`), where Mistress's page held a 0.5 of its own. Decided
-2026-11-10 by the tester, the two that had no reader are read from Endymion since interface 47 (`EmuSen_RustPlatform.md`
+handed over with the seats (`GamePads::stick_deadzone`), where Mistress's page held a 0.5 of its own. As the tester
+approved on 2026-11-11 (R-20261111-113), the two that had no reader are read from Endymion since interface 47 (`EmuSen_RustPlatform.md`
 §55): a game's name in a console's profiles (`emusen_endymion_bindings_game_key`, through `Chooser::game_key`), and what a
 pad holds, SDL's buttons and the triggers past half (`EMUSEN_ENDYMION_PADS_HELD`). Keyboard keys finds the files' word for each control by Endymion's
 `emusen_endymion_bindings_controls`, so a stick's directions show and take their keys as Mistress's page did.
 
-**Held to** (measured on 2026-11-09). kit-core's `controller.rs` (8, Kit §7.62); `qt-models/tests/controllers.rs` (8: the tester lighting a key held and the pad, a stick's push and Endymion's deadzone; every
+**Held to** (written 2026-11-09 and 11-10). kit-core's `controller.rs` (11, Kit §7.62); `qt-models/tests/controllers.rs` (13 with §7.7.H5's four: the tester lighting a key held and the pad, a stick's push and Endymion's deadzone; every
 drawing file reads and covers its controller's declared controls; the section's seats, profile and Rumble shown where a
 console's games drive a motor; Players seating, Forget and Galaxia's player rows; a profile made, renamed, chosen and
 deleted; the bindings page's drawing, a button rebound by a press, reset, player 2's own map made from player 1's, the
@@ -4733,14 +4742,15 @@ five sizes and recorded; North pressed on an SDL virtual pad binds Y and the int
 RB to the Sega CD's three-button pad; F2 typed binds a key; F3 a hotkey), `settings_tester.rs` (South on an SDL virtual
 pad lights B and starts no listening, X held lights A, the stick's knob moves under the deadzone and right lights past
 it, a short B stays, B held a second leaves, Escape leaves), `settings_drawings.rs` (the bindings page of
-each of the thirteen controllers, the twelve with a file and a synthetic core's `test.pad` drawn generic, at the five
+each of the fifteen controllers, the twelve with a file, the Saturn's and the Dreamcast's RetroPads, and a synthetic
+core's `test.pad` drawn generic, at the five
 sizes: fit, pad reach, pointer reach, no chrome, names, palette, contrast) and `card_controllers.rs`
 (PauseCardControllers at the five sizes and recorded; Right seats the pad as player 2).
 
 #### 7.7.H3 Stage 5, piece H3: the controller settings take effect (2026-11-10)
 
-Decided 2026-11-10: what Mistress's Controllers settings did, the program does, with no new dependency. Each row is
-applied where its fact is owned, as Mistress's `SaveApp` and `TrackControllers` applied them, read through the platform
+The bar this piece was built to, set on 2026-11-10 from the tester's parity bar: what Mistress's Controllers settings
+did, the program does, with no new dependency. Each row is applied where its fact is owned, as Mistress's `SaveApp` and `TrackControllers` applied them, read through the platform
 client:
 
 | Row | Owner | How it reaches its owner | Mistress |
@@ -4755,8 +4765,9 @@ client:
 | Controller notices | the window's notices | `PadReader.notice`, raised over a game too where `SettingsModel.controllerNotices` is on | `OnPadChanged` |
 
 **The values** are read from Galaxia's model by the description's `applies` (`data/settings_screen.json`), as text size,
-the variant and reduced motion are; nothing restates a default. Controller type's choices are the kit's family names, so
-the choice is matched against `PadFamily` itself. The four settings the pads act on cross to the reader as one
+the variant and reduced motion are; nothing restates a default. Controller type's stored word is read as a family by the
+kit's names for its families (`PadFamily::named`); `qt-models/tests/settings.rs` holds every choice Galaxia offers but
+Automatic to one of them. The four settings the pads act on cross to the reader as one
 `PadSettings`, settled on the pads' hand-over (`GamePads::settle`) each time the settings are read or saved, and set on
 Endymion's pads at the reader's next tick (`apply_settings`), before the poll, so the poll that follows already reads by
 them.
@@ -4780,17 +4791,55 @@ in port 1's presence (RAM's `ABSENT` byte), which with one port it cannot.
 `qt-test`'s SDL virtual pads record the last rumble SDL gives them (`VirtualPad::rumble`, the descriptor's `Rumble`
 callback).
 
-**Held to** (measured on 2026-11-10). `qt-endymion/tests/settings.rs` (2: the three Endymion settings set and heard by
+**Held to** (written 2026-11-10). `qt-endymion/tests/settings.rs` (2: the three Endymion settings set and heard by
 the menus and the game, the mirror handed over; the notices' words as pads come and go, none at the start);
 `qt-models/tests/controller_settings.rs` (3: the core's motor on the simulated pad frame by frame, stopped while the
 game does not hold the pad and by the switch mid-game; none for a console with no motor; the mirror giving port 1 a
 controller); the program's `settings_effects.rs` (one test of six cases in turn, one Qt and one SDL, SDL virtual pads: Swap's South leaving Settings, Controller type's
 family on the help bar and the themes, Only the first controller's second pad unread, a notice where on and none where
 off, the deadzone stepped down lighting the tester's stick, Rumble reaching the session) and `rumble_gpu.rs` (on
-Vulkan: the game's motor on the virtual pad, stopped under the card and by the switch). Seeded and caught, each
-reverted: the three Endymion settings each left unset, the notice's rule for player 1 inverted, the mirror never set on
-the router, a motor's stop never sent, the swap left unbound, Controller type ignored, and the switch never reaching the
-runtime. qt-app's `acceptance.rs` on the RX 6800 passed (798 s).
+Vulkan: the game's motor on the virtual pad, stopped under the card and by the switch). Left stick as the D-pad and
+Mirror player 1 to player 2 are held below the Settings row only (`qt-endymion` `settings.rs`, `qt-models`
+`controller_settings.rs`, each through `GamePads::settle`); no test yet steps either row. By 2026-11-12 no seeded fault
+had been run against this piece and qt-app's `acceptance.rs` had not been run on it.
+
+#### 7.7.H5 The Controllers pages say what fails (stage 5, repair of piece H3; 2026-11-12)
+
+The program says each failure as §7.9 has the others said, and writes nothing under an empty key or a word put in a
+failure's place.
+
+| Failure | Words | Where made |
+|---|---|---|
+| Endymion's controls' words unread | "The settings could not be read: …" (the read fails; nothing falls back to the drawing's names) | `ClientSettings::chooser` |
+| A map Endymion cannot choose (`bindings_choose`) | "The controller's bindings could not be chosen: …"; the page shows no binding, Y and a press bind nothing, the card offers no Profile or Bindings row | `settings_controllers::unchosen` |
+| The pad's bindings unread (`bindings_bound`) | "The pad's bindings could not be read: …"; the tester lights nothing | `unbound` |
+| A game Endymion cannot name (`bindings_game_key`, or an empty name) | "The game's profile could not be stored: …"; no profile written | `unnamed` |
+| A control the binding files have no word for | "The binding files have no word for the control …, so its key could not be stored" | `unworded` |
+| A stored stick deadzone that is not a number | "The stick deadzone could not be read, so it was left as it was: …"; the other three pad settings still reach the pads, Endymion's deadzone left unset | `settings::unread_deadzone` |
+| The binding files unsaved | "The bindings could not be saved: …" | `SettingsModel::outcome` |
+| The pads unopened, or a tick unread | "The controllers could not be read: …", said once until they read again | `qt-endymion` `reader::unread`, raised by `Main.qml` |
+
+A view's failure reaches `SettingsModel.problem` as `Outcome::Failed`, or, for what a drawn page or the card shows, as
+`SettingsView::controllers_problem`, read each time they are drawn. The pads' reader's `problem` was set and never
+raised; `Main.qml` now raises it, and a pad's notice too goes through the one handler `said`. A pad's buttons and
+axes read for the seats now fail the reader's tick in place of reading as nothing held; Endymion answers those two
+calls with a failure only for a null handle or an unknown number (`emusen_endymion_pads_get`, `_pads_axis`,
+Platform/platform/src/endymion_devices.rs), which the reader never passes, so no test makes them fail. Controller type's
+choice is read through the kit's names for its families (`PadFamily::name`, `named`) in place of matching Rust's debug
+names. The tests' Endymion is Endymion: `qt-models/tests/controllers.rs` asks the platform library built from the commit
+for the map, the game's name and the default profile's name, where it had restated Endymion's rules.
+
+What stays copied, and why: `qt-endymion`'s `AXES` (6), since Endymion exports no axis count yet (the export the tester
+approved for repair DC-C, R-20261111-3); each core's declared buttons and axes restated in `qt-models`' drawing test and
+the program's `settings_drawings.json`, since the descriptors are given only by the built cores through the runtime;
+SDL's button numbers and the test core's image bytes in the tests, as every test of the program states them.
+
+**Held to** `qt-models/tests/controllers.rs` (a map unchosen said, no binding shown and nothing written by Y or a press;
+the tester's bindings unread; the card's profile unwritten for a game unnamed and its rows withheld for a map unchosen;
+a key with no word said and not written) and `qt-models/tests/settings.rs` (a deadzone that is not a number said, the
+other three settled; every Controller type of Galaxia's a family of the kit's but Automatic). The Settings tests of the
+program excuse a word under the floor at 1280 × 720 only inside the help bar (`tests/bindings/mod.rs` `named`), as
+`settings.rs` names that finding; a label beside the drawing is held at every size (R-20261111-114).
 
 #### 7.7.K Cores' Update All…, and the cover's raised shadow (stage 5, piece K; 2026-11-09)
 

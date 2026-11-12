@@ -948,14 +948,14 @@ int64_t emusen_endymion_bindings_choose(const uint8_t *gamepad, size_t gamepad_l
 
 /*
  * Since 47. The name a game is known by in a console's profiles (PROFILES' Games): its file's name without the extension,
- * from its path, by the length query. Decided 2026-11-10 by the tester, so no front end keeps its own copy of the rule.
+ * from its path, by the length query. Approved by the tester (R-20261111-113), so no front end keeps its own copy of the rule.
  */
 int64_t emusen_endymion_bindings_game_key(const uint8_t *path, size_t path_len, uint8_t *out, size_t len);
 
 /*
  * Since 47. Each PadControl as the binding files name it, in PadControl's order, by the length query, as
  * [{"word":"B","button":0},...,{"word":"LeftStickUp","axis":1,"toward":-1},...]: a button's PadButton, or the PadAxis a
- * stick's direction pushes and which way (-1 toward the axis's low end). Decided 2026-11-10 by the tester, so a page
+ * stick's direction pushes and which way (-1 toward the axis's low end). Approved by the tester (R-20261111-113), so a page
  * naming controls by the core's buttons and axes finds the word a file binds a key to.
  */
 int64_t emusen_endymion_bindings_controls(uint8_t *out, size_t len);

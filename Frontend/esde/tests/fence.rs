@@ -1,4 +1,4 @@
-// The fence of EmuSen_Qt.md §4.2: the loader and the scene are plain data, and the back end's dev module depends on the crate, so its tree names no Qt, no cxx-qt and no EmuSen crate.
+// The fence of EmuSen_Qt.md §4.2: the loader, the scene and the shelves' schema are plain data, and the back end's dev module depends on the crate, so its tree names no Qt, no cxx-qt and no EmuSen crate.
 
 const LOCK: &str = include_str!("../Cargo.lock");
 const MANIFEST: &str = include_str!("../Cargo.toml");
@@ -13,7 +13,11 @@ fn qt_4_2_the_dependency_tree_is_the_crate_and_its_xml_reader() {
         assert!(!lower.starts_with("emusen"), "an EmuSen crate in the tree: {name}");
         assert!(!lower.contains("qt") && !lower.contains("cxx"), "a Qt binding in the tree: {name}");
     }
-    assert_eq!(names.len(), 3, "the crate, quick-xml and memchr, and nothing else: {names:?}");
+    let known = [
+        "emusen-esde", "quick-xml", "memchr", "serde", "serde_core", "serde_derive", "proc-macro2", "quote", "syn", "unicode-ident",
+    ];
+    let unknown: Vec<&&str> = names.iter().filter(|n| !known.contains(n)).collect();
+    assert!(unknown.is_empty(), "the crate, quick-xml and serde with its derive, and nothing else: {unknown:?}");
 }
 
 #[test]

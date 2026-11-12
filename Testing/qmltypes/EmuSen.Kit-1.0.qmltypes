@@ -3415,6 +3415,36 @@ Module {
         }
     }
     Component {
+        file: "reset_gate.cxxqt.h"
+        lineNumber: 34
+        name: "ResetGate"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/ResetGate 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "model"
+            type: "QAbstractItemModel"
+            isPointer: true
+            read: "getModel"
+            write: "setModel"
+            notify: "modelChanged"
+            index: 0
+            lineNumber: 39
+        }
+        Property {
+            name: "settled"
+            type: "bool"
+            read: "getSettled"
+            notify: "settledChanged"
+            index: 1
+            lineNumber: 40
+            isReadonly: true
+        }
+        Signal { name: "modelChanged"; lineNumber: 47 }
+        Signal { name: "settledChanged"; lineNumber: 48 }
+    }
+    Component {
         file: "kinds.cxxqt.h"
         lineNumber: 36
         name: "Rings"

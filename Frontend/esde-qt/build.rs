@@ -3,7 +3,7 @@ use std::process::Command;
 
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 
-// EmuSen.Esde 1.0, the painter's module (EmuSen_Qt.md §4.8); its .qmltypes is the module's surface.
+// EmuSen.Esde 1.1, the painter's module (EmuSen_Qt.md §4.8); its .qmltypes is the module's surface.
 const ESDE_FILES: [&str; 16] = [
     "qml/Picture.qml",
     "qml/Mark.qml",
@@ -34,7 +34,8 @@ fn baked_shader() -> PathBuf {
     let baked = out.join("picture.frag.qsb");
     let status = Command::new(qsb).args(["--qt6", "-o"]).arg(&baked).arg("shaders/picture.frag").status().expect("qsb runs");
     assert!(status.success(), "qsb failed on shaders/picture.frag");
-    let qrc = out.join("Shaders.qrc");
+    // Named for the crate: Qt names a resource's initialiser after its file, and the kit's Shaders.qrc links into the same program.
+    let qrc = out.join("EsdeShaders.qrc");
     std::fs::write(&qrc, "<RCC>\n  <qresource prefix=\"/emusen/esde\">\n    <file>picture.frag.qsb</file>\n  </qresource>\n</RCC>\n")
         .expect("the shader's resource file");
     qrc
@@ -43,10 +44,10 @@ fn baked_shader() -> PathBuf {
 fn main() {
     let shaders = baked_shader();
     CxxQtBuilder::new_qml_module(
-        QmlModule::new("EmuSen.Esde").version(1, 0).qml_files(ESDE_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtQml.Models").depend("EmuSen.Kit"),
+        QmlModule::new("EmuSen.Esde").version(1, 1).qml_files(ESDE_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtQml.Models").depend("EmuSen.Kit"),
     )
     .qrc(shaders)
-    .files(["src/base.rs", "src/marks.rs", "src/model.rs", "src/lists.rs"])
+    .files(["src/marks.rs", "src/model.rs", "src/lists.rs"])
     .qt_module("Quick")
     .build()
     .export();

@@ -67,6 +67,20 @@ impl InterfacePlayer {
     }
 }
 
+/// A WAV file as `remember` keeps sounds, 48 kHz stereo 32-bit float; none where SDL cannot read it. SDL must be lent.
+/// The header leaves what does not fit waiting on this thread, so the first call asks the count and the second takes it.
+pub fn decode(platform: &Platform, path: &str) -> Result<Option<Vec<u8>>> {
+    let mut asked = false;
+    platform.read(|out, cap| {
+        if asked {
+            unsafe { platform.lib.emusen_endymion_ui_decode_take(out, cap) }
+        } else {
+            asked = true;
+            unsafe { platform.lib.emusen_endymion_ui_decode(path.as_ptr(), path.len(), out, cap) }
+        }
+    })
+}
+
 impl Drop for InterfacePlayer {
     fn drop(&mut self) {
         unsafe {

@@ -5,6 +5,7 @@
 #include "harness.h"
 
 #include <QtCore/QAbstractAnimation>
+#include <QtCore/QAbstractItemModel>
 #include <QtCore/QCoreApplication>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
@@ -12,9 +13,11 @@
 #include <QtCore/QLoggingCategory>
 #include <QtCore/QMutex>
 #include <QtCore/QMetaProperty>
+#include <QtCore/QSignalMapper>
 #include <QtGui/QAccessible>
 #include <QtGui/QColor>
 #include <QtGui/QFontMetricsF>
+#include <QtGui/QGuiApplication>
 #include <QtGui/QImage>
 #include <QtQml/QQmlContext>
 #include <QtQml/QQmlEngine>
@@ -445,6 +448,17 @@ void harness_hover(QObject& window, double x, double y)
     }
 }
 
+bool harness_hover_in(const QString& name, double x, double y)
+{
+    for (QWindow* window : QGuiApplication::allWindows()) {
+        if (auto* w = qobject_cast<QQuickWindow*>(window); w != nullptr && w->objectName() == name) {
+            QTest::mouseMove(w, QPoint(static_cast<int>(x), static_cast<int>(y)));
+            return true;
+        }
+    }
+    return false;
+}
+
 void harness_key(QObject& window, int key, int modifiers)
 {
     if (QQuickWindow* w = quick(window)) {
@@ -641,6 +655,62 @@ int harness_notified(QObject& root, const QString& object_name, const QString& p
     return watch != nullptr ? static_cast<int>(watch->spy.count()) : -1;
 }
 
+// A list model's changes told from now, as a view hears them: each dataChanged as "first-last", a reset as "reset"; a
+// child of the model, so it lives as long as it does.
+bool harness_watch_rows(QObject& root, const QString& object_name)
+{
+    auto* model = qobject_cast<QAbstractItemModel*>(named(root, object_name));
+    if (model == nullptr) {
+        return false;
+    }
+    auto* told = new QObject(model);
+    told->setObjectName(QStringLiteral("harness-rows"));
+    told->setProperty("told", QStringList());
+    auto add = [told](const QString& line) { told->setProperty("told", told->property("told").toStringList() << line); };
+    QObject::connect(model, &QAbstractItemModel::dataChanged, told, [add](const QModelIndex& first, const QModelIndex& last) {
+        add(QStringLiteral("%1-%2").arg(first.row()).arg(last.row()));
+    });
+    QObject::connect(model, &QAbstractItemModel::modelReset, told, [add] { add(QStringLiteral("reset")); });
+    return true;
+}
+
+// From now, each change signal of the object's property written into its watched model's list as the property's name, in
+// order with the rows and resets: what the model told inside a reset comes before that reset's line. False where the
+// object is no watched model or the property has no change signal.
+bool harness_watch_order(QObject& root, const QString& object_name, const QString& property)
+{
+    QObject* object = named(root, object_name);
+    QObject* told = object != nullptr ? object->findChild<QObject*>(QStringLiteral("harness-rows"), Qt::FindDirectChildrenOnly) : nullptr;
+    if (told == nullptr) {
+        return false;
+    }
+    const QMetaObject* meta = object->metaObject();
+    const QMetaProperty p = meta->property(meta->indexOfProperty(property.toUtf8().constData()));
+    if (!p.isValid() || !p.hasNotifySignal()) {
+        return false;
+    }
+    auto* mapper = new QSignalMapper(told);
+    mapper->setMapping(object, property);
+    const QMetaMethod map = mapper->metaObject()->method(mapper->metaObject()->indexOfSlot("map()"));
+    QObject::connect(mapper, &QSignalMapper::mappedString, told, [told](const QString& name) {
+        told->setProperty("told", told->property("told").toStringList() << name);
+    });
+    return static_cast<bool>(QObject::connect(object, p.notifySignal(), mapper, map));
+}
+
+// What the watched model told since the last read, comma-separated, emptied as read; empty where it is not watched.
+QString harness_rows_told(QObject& root, const QString& object_name)
+{
+    QObject* model = named(root, object_name);
+    QObject* told = model != nullptr ? model->findChild<QObject*>(QStringLiteral("harness-rows"), Qt::FindDirectChildrenOnly) : nullptr;
+    if (told == nullptr) {
+        return QString();
+    }
+    const QStringList lines = told->property("told").toStringList();
+    told->setProperty("told", QStringList());
+    return lines.join(QLatin1Char(','));
+}
+
 // One grab, many samples: "x,y;x,y" in, "#AARRGGBB;#AARRGGBB" out.
 QString harness_colours_at(QObject& window, const QString& points)
 {
@@ -736,4 +806,20 @@ void harness_drag(QObject& window, double x0, double y0, double x1, double y1)
         QTest::mouseMove(w, at(step / 8.0), 10);
     }
     QTest::mouseRelease(w, Qt::LeftButton, Qt::NoModifier, at(1));
+}
+
+void harness_touch_drag(QObject& window, double x0, double y0, double x1, double y1)
+{
+    QQuickWindow* w = quick(window);
+    if (w == nullptr) {
+        return;
+    }
+    static QPointingDevice* const finger = QTest::createTouchDevice();
+    const auto at = [&](double t) { return QPoint(static_cast<int>(x0 + (x1 - x0) * t), static_cast<int>(y0 + (y1 - y0) * t)); };
+    QTest::touchEvent(w, finger).press(0, at(0), w);
+    for (int step = 1; step <= 8; ++step) {
+        QTest::qWait(10);
+        QTest::touchEvent(w, finger).move(0, at(step / 8.0), w);
+    }
+    QTest::touchEvent(w, finger).release(0, at(1), w);
 }

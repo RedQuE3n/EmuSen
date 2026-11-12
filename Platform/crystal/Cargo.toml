@@ -47,6 +47,10 @@ flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 name = "crystal_test_core"
 crate-type = ["cdylib"]
 
+[[example]]
+name = "crystal_console_core"
+crate-type = ["cdylib"]
+
 [dev-dependencies]
 # Endymion's pads, so a test follows a core's motors to a simulated pad as a frontend hands them on (EmuSen_Input.md §9).
 emusen-endymion = { path = "../endymion" }

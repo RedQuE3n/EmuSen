@@ -43,6 +43,10 @@ pub trait LibrarySource: Send + Sync {
     fn started(&self, _path: &str) -> Result<(), String> {
         Ok(())
     }
+    /// Turns the game at `path` a favourite or back (games.db's `toggle_favourite`); a source with no records keeps none.
+    fn toggle_favourite(&self, _path: &str) -> Result<(), String> {
+        Ok(())
+    }
     /// The shelves' systems in the runtime's order, which Choose a console follows (EmuSen_Interface.md §24.1); none
     /// leaves the systems' own order.
     fn shelves(&self) -> Result<Vec<String>, String> {
@@ -54,11 +58,16 @@ pub trait LibrarySource: Send + Sync {
     }
     /// Each game's metadata as the scraper resolves it (EmuSen_Backend.md §30.3, `metadata`), by path; a source with no
     /// scraper has none, and the file names the game.
-    fn metadata(&self, _games: &[GameFile]) -> Result<Vec<(String, serde_json::Value)>, String> {
+    fn metadata(&self, _games: &[GameFile]) -> Result<Vec<(String, crate::esde_shelves::Metadata)>, String> {
         Ok(Vec::new())
     }
     /// How often and how long each played game was played, by path, as games.db records it.
     fn plays(&self, _games: &[GameFile]) -> Result<Vec<(String, Plays)>, String> {
+        Ok(Vec::new())
+    }
+    /// A system's firmware files with the status the runtime finds for each (`firmware_status`); none where it names
+    /// none, the runtime's words where it cannot say.
+    fn firmware(&self, _system: &str) -> Result<Vec<emusen_crystal_client::shapes::FirmwareFile>, String> {
         Ok(Vec::new())
     }
     /// The media found for the shelves named by their ES-DE systems: the media store's and the ES-DE folder's files, the
@@ -180,6 +189,12 @@ pub struct Catalog {
     pub played: Vec<(String, i64)>,
     /// The player's settings.
     pub settings: serde_json::Value,
+    /// How often and how long each played game was played, by path (games.db).
+    pub plays: Vec<(String, Plays)>,
+    /// Each game's metadata as the scraper resolves it, by path; read once a refresh for the grid's sorts and the ES-DE view.
+    pub metadata: Vec<(String, crate::esde_shelves::Metadata)>,
+    /// The firmware line of each system that starts empty, by its id: Start Console's pane (Mistress's `FirmwareLine`).
+    pub firmware: Vec<(String, String)>,
 }
 
 /// One game as the screens show it: its title from its file name, its console, its console's hue, its cover and its facts.
@@ -200,6 +215,12 @@ pub struct GameRow {
     pub facts: String,
     /// When it was last played, in seconds since 1970; 0 for never.
     pub played_at: i64,
+    /// How many times it was played (games.db); 0 for never.
+    pub plays: i64,
+    /// Its year of release, from the scraper's release date; empty where none is known.
+    pub year: String,
+    /// Its rating from 0 to 1, the scraper's; none where none is known.
+    pub rating: Option<f64>,
 }
 
 /// The media store's type for a cover.
@@ -251,6 +272,8 @@ fn game_rows(systems: &[SystemRow], catalog: &Catalog, now: i64) -> Vec<GameRow>
     let played: HashMap<&str, i64> = catalog.played.iter().map(|(p, at)| (p.as_str(), *at)).collect();
     let favourites: HashSet<&str> = catalog.favourites.iter().map(String::as_str).collect();
     let consoles: HashMap<&str, &SystemRow> = systems.iter().map(|s| (s.id.as_str(), s)).collect();
+    let plays: HashMap<&str, i64> = catalog.plays.iter().map(|(p, n)| (p.as_str(), n.count)).collect();
+    let metadata: HashMap<&str, &crate::esde_shelves::Metadata> = catalog.metadata.iter().map(|(p, m)| (p.as_str(), m)).collect();
     catalog
         .games
         .iter()
@@ -267,6 +290,9 @@ fn game_rows(systems: &[SystemRow], catalog: &Catalog, now: i64) -> Vec<GameRow>
                 hero: heroes.get(&g.path).cloned().unwrap_or_default(),
                 facts: [Some(console.clone()), when].into_iter().flatten().filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" · "),
                 played_at: played.get(g.path.as_str()).copied().unwrap_or(0),
+                plays: plays.get(g.path.as_str()).copied().unwrap_or(0),
+                year: metadata.get(g.path.as_str()).and_then(|m| crate::esde_shelves::release_date(m)).and_then(|d| crate::esde_shelves::year_of(&d)).unwrap_or_default(),
+                rating: metadata.get(g.path.as_str()).and_then(|m| crate::esde_shelves::rating(m)),
                 path: g.path.clone(),
                 system,
                 console,
@@ -293,21 +319,21 @@ pub fn lists_of(rows: &mut [LibraryRow], systems: &[SystemRow], catalog: &Catalo
     let mut lists = HashMap::new();
     let recent = recent_of(&all, catalog);
     for row in rows.iter_mut() {
-        let games: Vec<GameRow> = if row.key == RECENT {
-            recent.clone()
+        let games: Vec<&GameRow> = if row.key == RECENT {
+            recent.iter().collect()
         } else {
             sorted
                 .iter()
+                .copied()
                 .filter(|g| match row.key.as_str() {
                     "all" => true,
                     FAVOURITES => g.favourite,
                     system => g.system == system,
                 })
-                .map(|g| (*g).clone())
                 .collect()
         };
-        row.fan = crate::games::to_json(&games[..games.len().min(FAN)]);
-        lists.insert(row.key.clone(), crate::games::to_json(&games));
+        row.fan = crate::games::to_json(games[..games.len().min(FAN)].iter().copied());
+        lists.insert(row.key.clone(), crate::games::to_json(games));
     }
     lists.entry(RECENT.to_owned()).or_insert_with(|| crate::games::to_json(&recent));
     lists
@@ -435,16 +461,56 @@ pub struct Read {
 /// One refresh's answer, or the words for why it could not.
 pub type Refreshed = Result<Read, String>;
 
+/// A source's first read for an ES-DE theme: the systems, the games and the player's records without the metadata, the
+/// plays or the media (so the grid's Most played, Year and Rating sort by name until then), which the whole read brings after it, so the theme's view is shown first (EmuSen_Qt.md §4.9).
+pub struct FirstLook<'a>(pub &'a dyn LibrarySource);
+
+impl LibrarySource for FirstLook<'_> {
+    fn systems(&self) -> Result<Vec<SystemRow>, String> {
+        self.0.systems()
+    }
+    fn games(&self) -> Result<Vec<GameFile>, String> {
+        self.0.games()
+    }
+    fn favourites(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
+        self.0.favourites(games)
+    }
+    fn recent(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
+        self.0.recent(games)
+    }
+    fn engines(&self, systems: &[SystemRow]) -> Result<Vec<(String, Engine)>, String> {
+        self.0.engines(systems)
+    }
+    fn played(&self, games: &[GameFile]) -> Result<Vec<(String, i64)>, String> {
+        self.0.played(games)
+    }
+    fn shelves(&self) -> Result<Vec<String>, String> {
+        self.0.shelves()
+    }
+    fn settings(&self) -> Result<serde_json::Value, String> {
+        self.0.settings()
+    }
+    fn collections(&self) -> Result<Vec<Collection>, String> {
+        self.0.collections()
+    }
+    fn folder_links(&self) -> Result<Vec<(String, String)>, String> {
+        self.0.folder_links()
+    }
+}
+
 /// One refresh of a source, run off the GUI thread, every gamelist as it first lists.
 pub fn refresh(source: &dyn LibrarySource) -> Refreshed {
-    refresh_with(source, &Gamelists::default())
+    refresh_with(source, &Gamelists::default(), false)
 }
 
 /// One refresh, each gamelist listed with the choices the player made of it.
-pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists) -> Refreshed {
+/// The scraper's metadata is read where it is shown: for an ES-DE theme, and for the own look's grid while it sorts by
+/// Year or Rating (`by_facts`); games.db's plays, one answer, always.
+pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists, by_facts: bool) -> Refreshed {
     let systems = source.systems()?;
     let mut games = source.games()?;
     let settings = source.settings()?;
+    let themed = crate::esde_shelves::settings_of(&settings).themed;
     // A hidden game leaves every view until Settings lists hidden games again (Mistress's `Listed`).
     if !settings.get(SHOW_HIDDEN).and_then(serde_json::Value::as_bool).unwrap_or(false) {
         let hidden: HashSet<String> = source.hidden(&games)?.into_iter().collect();
@@ -457,7 +523,11 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists) -> Refres
     let played_games: Vec<GameFile> = games.iter().filter(|g| recent.contains(&g.path)).cloned().collect();
     let heroes = source.media(&systems, &played_games, &HERO)?;
     let played = source.played(&games)?;
-    let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings };
+    let plays = source.plays(&games)?;
+    let metadata = if themed || by_facts { source.metadata(&games)? } else { Vec::new() };
+    // Read for the consoles that start empty alone, a call each, so Start Console's pane says what the runtime finds.
+    let firmware = systems.iter().filter(|s| s.starts_empty && !s.engines.is_empty()).map(|s| (s.id.clone(), firmware_line(source.firmware(&s.id)))).collect();
+    let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings, plays, metadata, firmware };
     let shelves = source.shelves()?;
     let mut shelved: Vec<SystemRow> = systems.clone();
     shelved.sort_by_key(|s| shelves.iter().position(|id| id == &s.id).unwrap_or(usize::MAX));
@@ -472,6 +542,18 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists) -> Refres
         (Esde::default(), EsdeState::default())
     };
     Ok(Read { systems, catalog, rows, lists, esde_settings, esde, esde_state })
+}
+
+/// A system's firmware as Start Console's pane says it, in Mistress's words (her `FirmwareLine`): found, or not found;
+/// nothing where none is needed; and where the runtime cannot say, that it could not, never read as none needed.
+pub fn firmware_line(read: Result<Vec<emusen_crystal_client::shapes::FirmwareFile>, String>) -> String {
+    use crate::firmware::{have, Have};
+    match read.as_deref().map(have) {
+        Ok(Have::Found) => "✓ Firmware found.".to_owned(),
+        Ok(Have::Missing) => "✗ Not found: add it in Settings → Firmware".to_owned(),
+        Ok(Have::NotNeeded | Have::Nothing) => String::new(),
+        Err(why) => format!("⚠ EmuSen's runtime could not say whether you have it: {why}"),
+    }
 }
 
 /// The view's state: the rows with the selection kept across refreshes, and the last refresh's problem.
@@ -502,10 +584,34 @@ impl LibraryView {
         games_of_at(ALL, &self.systems, &self.catalog, words::now()).into_iter().find(|g| g.path == path)
     }
 
-    /// Whether a console of the systems table starts with nothing in it, where the List card and the Home card offer
-    /// Start Console (Mistress's `ConsolesThatStartEmpty`).
-    pub fn starts_empty(&self) -> bool {
-        self.systems.iter().any(|s| s.starts_empty)
+    /// The consoles that start with nothing in them, each once by its first system, in Mistress's order: by maker, then
+    /// year; each with the engine its row shows, else the first that runs it (Mistress's `StartConsoleEntries`).
+    pub fn startable(&self) -> Vec<crate::home_card::Startable> {
+        let mut seen: Vec<&SystemRow> = Vec::new();
+        for s in self.systems.iter().filter(|s| s.starts_empty && !s.engines.is_empty()) {
+            let console = if s.console.is_empty() { &s.id } else { &s.console };
+            if !seen.iter().any(|t| (if t.console.is_empty() { &t.id } else { &t.console }).eq_ignore_ascii_case(console)) {
+                seen.push(s);
+            }
+        }
+        seen.sort_by(|a, b| (a.manufacturer.to_lowercase(), a.release_year).cmp(&(b.manufacturer.to_lowercase(), b.release_year)));
+        let row = |id: &str| self.rows.rows().iter().find(|r| r.key == id).map(|r| r.engine_name.clone()).filter(|e| !e.is_empty());
+        seen.into_iter()
+            .map(|s| crate::home_card::Startable {
+                console: if s.console.is_empty() { s.id.clone() } else { s.console.clone() },
+                name: console_name(s),
+                engine: row(&s.id).unwrap_or_else(|| s.engines[0].clone()),
+                firmware: self.catalog.firmware.iter().find(|(id, _)| *id == s.id).map(|(_, line)| line.clone()).unwrap_or_default(),
+                system: s.id.clone(),
+            })
+            .collect()
+    }
+
+    /// The console an ES-DE shelf shows, where it starts empty: Start Console's row first in its Select menu (Mistress's
+    /// `AddStartConsoleOption`).
+    pub fn startable_on_shelf(&self, shelf: &str) -> Option<crate::home_card::Startable> {
+        let console = self.systems.iter().find(|s| s.esde_system == shelf).map(|s| if s.console.is_empty() { &s.id } else { &s.console })?;
+        self.startable().into_iter().find(|s| s.console.eq_ignore_ascii_case(console))
     }
 
     /// "11 consoles · 1,566 games": the consoles shown and every game.
@@ -526,20 +632,31 @@ impl LibraryView {
         view
     }
 
-    /// A refresh's answer applied: new rows with the selection kept, or the rows kept and the problem's words shown.
+    /// A refresh's answer applied: new rows with the selection kept, or the rows kept and the problem said (§7.9).
     pub fn apply(&mut self, refreshed: Refreshed) {
+        drop(self.swap_in(refreshed));
+    }
+
+    /// `apply`, handing back what the read replaced, so the GUI thread can drop it elsewhere (EmuSen_Qt.md §4.9).
+    pub fn swap_in(&mut self, refreshed: Refreshed) -> Option<Read> {
+        use std::mem::replace;
         match refreshed {
             Ok(read) => {
-                self.rows.replace(read.rows);
-                self.systems = read.systems;
-                self.catalog = read.catalog;
-                self.lists = read.lists;
-                self.esde_settings = read.esde_settings;
-                self.esde = read.esde;
-                self.esde_state = read.esde_state;
                 self.problem.clear();
+                Some(Read {
+                    rows: self.rows.replace(read.rows),
+                    systems: replace(&mut self.systems, read.systems),
+                    catalog: replace(&mut self.catalog, read.catalog),
+                    lists: replace(&mut self.lists, read.lists),
+                    esde_settings: replace(&mut self.esde_settings, read.esde_settings),
+                    esde: replace(&mut self.esde, read.esde),
+                    esde_state: replace(&mut self.esde_state, read.esde_state),
+                })
             }
-            Err(words) => self.problem = words,
+            Err(words) => {
+                self.problem = format!("The library could not be read: {words}");
+                None
+            }
         }
     }
 }

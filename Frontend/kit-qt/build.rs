@@ -93,6 +93,7 @@ fn main() {
         "src/tool.rs",
         "src/page.rs",
         "src/table.rs",
+        "src/reset_gate.rs",
         "src/controller.rs",
     ])
     .include_dir("cpp")

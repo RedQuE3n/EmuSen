@@ -59,7 +59,7 @@ fn list(values: Vec<f64>) -> QVariant {
     QVariant::from(&QList::from(&values))
 }
 
-/// A table's width, its rows and its columns (roles `key`, `fill`, `least`), the font its cells are drawn in, and each
+/// A table's width, its rows and its columns (roles `key`, `fill`, `least`, `shortKey`), the font its cells are drawn in, and each
 /// column's place from the table's left, as lists QML reads by a column's index.
 pub struct ColumnFitRust {
     width: f64,
@@ -106,18 +106,20 @@ impl qobject::ColumnFit {
         let keys = role_texts(columns, &QString::from("key"));
         let fills = role_texts(columns, &QString::from("fill"));
         let leasts = role_texts(columns, &QString::from("least"));
+        let shorts = role_texts(columns, &QString::from("shortKey"));
+        let widest = |key: &str| role_texts(rows, &QString::from(key)).iter().map(|w| qobject::text_width(&self.font, &QString::from(w.as_str()))).fold(0.0, f64::max);
         let measured = keys
             .iter()
             .enumerate()
             .map(|(i, key)| {
                 let weight = number(fills.get(i));
+                let short = shorts.get(i).filter(|s| !s.is_empty());
                 if weight > 0.0 {
-                    ColumnWidth::Fill { weight, least: number(leasts.get(i)) }
+                    ColumnWidth::Fill { weight, least: number(leasts.get(i)), words: widest(key) }
+                } else if let Some(short) = short {
+                    ColumnWidth::GivesWay { whole: widest(key), short: widest(short) }
                 } else {
-                    let words = role_texts(rows, &QString::from(key.as_str()));
-                    ColumnWidth::Content(
-                        words.iter().map(|w| qobject::text_width(&self.font, &QString::from(w.as_str()))).fold(0.0, f64::max),
-                    )
+                    ColumnWidth::Content(widest(key))
                 }
             })
             .collect();

@@ -66,6 +66,39 @@ fn cells_inside(tree: &Tree) -> Vec<String> {
     faults
 }
 
+/// The console column gives way (EmuSen_Kit.md §7.106): the core of twenty consoles shows its first and a count, the core
+/// of four its whole list or its first and a count, no row's console words are cut, and each cell that gives way shows
+/// its whole list exactly where the list fits the cell; the pane's caption names all twenty, whole.
+fn console_gives_way(tree: &Tree) -> Vec<String> {
+    let shown = |words: &str| tree.nodes.iter().any(|n| n.visible && n.text.as_deref() == Some(words) && !n.elided);
+    let mut faults = Vec::new();
+    for n in tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("ToneText")) {
+        let held = tree.nodes.iter().find(|c| c.parent == n.id && !c.visible && c.text.as_deref().is_some_and(|t| !t.is_empty()));
+        if let Some(whole) = held {
+            let fits = whole.w <= n.w + 0.01;
+            if fits != (n.text == whole.text) {
+                faults.push(format!("\"{}\" takes {:.1} of {:.1} and the cell reads {:?}", whole.text.as_deref().unwrap_or_default(), whole.w, n.w, n.text));
+            }
+        }
+    }
+    let (px, _, pw, _) = rect(tree, "toolPane");
+    let caption = tree.nodes.iter().find(|n| n.visible && n.text.as_deref().is_some_and(|t| t.starts_with("From libretro's buildbot")));
+    match caption {
+        Some(c) if c.text.as_deref().is_some_and(|t| t.ends_with("WonderSwan, WonderSwan Color")) && !c.elided && c.x + c.w <= px + pw + SLACK => {}
+        other => faults.push(format!("the pane's caption does not name the twenty consoles whole inside the pane: {other:?}")),
+    }
+    if !shown("Atari 2600 +19") {
+        faults.push("the core of twenty consoles does not read \"Atari 2600 +19\"".to_owned());
+    }
+    if !shown("Genesis, Sega CD, Master System, SG-1000") && !shown("Genesis +3") {
+        faults.push("the core of four consoles reads neither its whole list nor \"Genesis +3\"".to_owned());
+    }
+    if !shown("PlayStation 2") {
+        faults.push("a core of one console does not read it whole".to_owned());
+    }
+    faults
+}
+
 /// The cover's raised shadow as drawn: the frame 6 units under the cover's foot darker by an eighth or more than the same
 /// frame 40 units to the cover's left, beyond the shadow's reach; and soft, so 6 units past the offset shape's foot it is
 /// lighter than that and still a sixteenth darker than the clear frame (EmuSen_Interface.md §5.4, EmuSen_Kit.md §7.55).
@@ -147,7 +180,7 @@ fn qt_5_b_the_tool_screen_and_the_page_frame_on_the_gallery() {
                 let focus = scene.focus(&tree);
                 let name = format!("{screen_name}-{variant:?}-{w}x{h}");
                 let mut faults =
-                    if screen == 0 { pane_spans(&tree).into_iter().chain(cells_inside(&tree)).collect() } else { shadow_cast(&mut scene, &tree, &name) };
+                    if screen == 0 { pane_spans(&tree).into_iter().chain(cells_inside(&tree)).chain(console_gives_way(&tree)).collect() } else { shadow_cast(&mut scene, &tree, &name) };
                 if variant == Variant::Dark && (w, h) == (1280, 800) {
                     faults.extend(walks(&mut scene, screen));
                     tree = scene.tree();

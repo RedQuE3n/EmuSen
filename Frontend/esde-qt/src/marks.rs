@@ -12,7 +12,7 @@ use emusen_esde::marks::{MarkId, Part};
 pub mod qobject {
     unsafe extern "C++" {
         include!(<QtCore/QAbstractListModel>);
-        type QAbstractListModel = crate::base::ffi::QAbstractListModel;
+        type QAbstractListModel = emusen_kit_qt::base::ffi::QAbstractListModel;
     }
 
     unsafe extern "C++" {

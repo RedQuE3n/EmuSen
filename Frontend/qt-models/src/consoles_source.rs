@@ -21,7 +21,7 @@ impl ClientConsoles {
         let platform = emusen_platform_client::Platform::load(platform_library).map_err(words)?;
         let config = crate::clients::runtime_config(&platform, cores)?;
         let api = emusen_crystal_client::Api::load(platform_library).map_err(words)?;
-        Ok(ClientConsoles { runtime: Runtime::new(&api, &config).map_err(words)? })
+        Ok(ClientConsoles { runtime: crate::clients::runtime(&api, &config)?.0 })
     }
 
     /// A console's setting stored, or forgotten with none.

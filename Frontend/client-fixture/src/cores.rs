@@ -105,3 +105,57 @@ pub fn sha256(path: &Path) -> String {
     let out = Command::new("sha256sum").arg(path).output().expect("sha256sum");
     String::from_utf8_lossy(&out.stdout).split_whitespace().next().expect("a hash").to_string()
 }
+
+/// The Super Nintendo's engine, VenusRT, built from this commit with its sidecar written as a publish writes it (the
+/// conformance runner's `--sidecar`, xtask's `sidecars`); `EMUSEN_SNES_ENGINE` names a prebuilt library with its sidecar.
+pub fn snes_engine() -> &'static Path {
+    static BUILT: OnceLock<PathBuf> = OnceLock::new();
+    BUILT.get_or_init(|| {
+        if let Some(prebuilt) = std::env::var_os("EMUSEN_SNES_ENGINE") {
+            return PathBuf::from(prebuilt);
+        }
+        let lib = build("Nintendo/VenusRT - SNES", "venusrt", &["--lib"]).join("libvenusrt.so");
+        let runner = build("Shared/emusen-core-conform", "emusen_core_conform", &["--bin", "emusen-core-conform"]).join("emusen-core-conform");
+        let status = Command::new(runner).arg("--sidecar").arg(&lib).status().expect("the conformance runner runs");
+        assert!(status.success(), "VenusRT's sidecar was not written: {status}");
+        lib
+    })
+}
+
+/// An installation folder as `installation` makes, with VenusRT and its sidecar in it and vouched for by its manifest.
+pub fn installation_with_snes(dir: &Path) -> PathBuf {
+    let dir = installation(dir);
+    let lib = snes_engine();
+    let name = lib.file_name().unwrap();
+    std::fs::copy(lib, dir.join(name)).unwrap();
+    let sidecar = format!("{}.core.json", name.to_string_lossy());
+    std::fs::copy(lib.with_file_name(&sidecar), dir.join(&sidecar)).unwrap();
+    let manifest = dir.join("cores.manifest");
+    let mut text = std::fs::read_to_string(&manifest).unwrap();
+    text += &format!("{}  {}\n", sha256(lib), name.to_string_lossy());
+    std::fs::write(manifest, text).unwrap();
+    dir
+}
+
+/// A Super Nintendo image the test makes itself: a 128 KiB LoROM whose reset vector runs `SEI; CLC; XCE` and a branch to
+/// itself, its header's title, map mode, size and checksum filled in, so an engine starts it and draws black frames.
+pub fn snes_image(title: &str) -> Vec<u8> {
+    let mut rom = vec![0u8; 0x20000];
+    rom[..5].copy_from_slice(&[0x78, 0x18, 0xFB, 0x80, 0xFE]);
+    let header = 0x7FC0;
+    let mut name = [b' '; 21];
+    for (n, b) in name.iter_mut().zip(title.bytes()) {
+        *n = b;
+    }
+    rom[header..header + 21].copy_from_slice(&name);
+    rom[0x7FD5] = 0x20;
+    rom[0x7FD6] = 0x00;
+    rom[0x7FD7] = 0x07;
+    rom[0x7FD8] = 0x00;
+    rom[0x7FFC..0x7FFE].copy_from_slice(&0x8000u16.to_le_bytes());
+    rom[0x7FDC..0x7FE0].copy_from_slice(&[0xFF, 0xFF, 0x00, 0x00]);
+    let sum = rom.iter().fold(0u16, |s, &b| s.wrapping_add(u16::from(b)));
+    rom[0x7FDC..0x7FDE].copy_from_slice(&(!sum).to_le_bytes());
+    rom[0x7FDE..0x7FE0].copy_from_slice(&sum.to_le_bytes());
+    rom
+}

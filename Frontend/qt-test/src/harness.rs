@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use cxx_qt::casting::Upcast;
 use cxx_qt::QObject;
-use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
+use cxx_qt_lib::{QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString, QUrl};
 use emusen_kit_core::audit::{self, Edge, Fault, State};
 use emusen_kit_core::input::{ElementId, UiButton, WalkForm};
 use emusen_kit_core::tokens::{self, Colour, ColourToken, Variant};
@@ -109,9 +109,24 @@ impl Harness {
     /// `load`, with `prepare` given the window after it is made and before it is shown, as a host that adopts a device
     /// prepares its window (EmuSen_Kit.md §7.16).
     pub fn load_prepared(&mut self, url: &str, width: i32, height: i32, prepare: impl FnOnce(*mut QObject)) -> Scene<'_> {
+        self.load_initial(url, width, height, &QMap::default(), prepare)
+    }
+
+    /// `load_prepared`, the root's properties set to `initial` as it is made, as a program's start sets them with
+    /// QQmlApplicationEngine::setInitialProperties (EmuSen_Qt.md §4.9); later loads start from none.
+    pub fn load_initial(
+        &mut self,
+        url: &str,
+        width: i32,
+        height: i32,
+        initial: &QMap<QMapPair_QString_QVariant>,
+        prepare: impl FnOnce(*mut QObject),
+    ) -> Scene<'_> {
         self.created.store(0, Ordering::SeqCst);
-        let engine = self.engine.as_mut().expect("the QML engine");
-        engine.load(&QUrl::from(url));
+        let mut engine = self.engine.as_mut().expect("the QML engine");
+        engine.as_mut().set_initial_properties(initial);
+        engine.as_mut().load(&QUrl::from(url));
+        engine.as_mut().set_initial_properties(&QMap::default());
         let mut waited = 0;
         while self.created.load(Ordering::SeqCst) == 0 && waited < 3000 {
             ffi::harness_wait(20);
@@ -255,9 +270,21 @@ impl Scene<'_> {
         self.wait(20);
     }
 
+    /// The pointer moved to a point of another window of the scene's, named `window`, and left resting there.
+    pub fn hover_in(&mut self, window: &str, x: f64, y: f64) {
+        assert!(ffi::harness_hover_in(&QString::from(window), x, y), "no window named {window}");
+        self.wait(20);
+    }
+
     /// The left button pressed at one point, moved in steps to another and let go there.
     pub fn drag(&mut self, from: (f64, f64), to: (f64, f64)) {
         ffi::harness_drag(self.window(), from.0, from.1, to.0, to.1);
+        self.wait(20);
+    }
+
+    /// One finger pressed at one point, moved in steps to another and lifted there.
+    pub fn touch_drag(&mut self, from: (f64, f64), to: (f64, f64)) {
+        ffi::harness_touch_drag(self.window(), from.0, from.1, to.0, to.1);
         self.wait(20);
     }
 
@@ -535,9 +562,31 @@ impl Scene<'_> {
         ffi::harness_property(self.window(), &QString::from(object_name), &QString::from(property)).to_string()
     }
 
+    /// A number property of a tree's item by its id (a `Node`'s `id`, read as a number), in the item's own units; NaN where it has none.
+    pub fn number(&mut self, id: u64, property: &str) -> f64 {
+        ffi::harness_get(self.window(), id, &QString::from(property))
+    }
+
     /// Counts the property's change signal from now, as a QSignalSpy does; false where it has none to count.
     pub fn watch(&mut self, object_name: &str, property: &str) -> bool {
         ffi::harness_watch(self.window(), &QString::from(object_name), &QString::from(property))
+    }
+
+    /// Records a list model's changes from now, as a view hears them; false where the object is no item model.
+    pub fn watch_rows(&mut self, object_name: &str) -> bool {
+        ffi::harness_watch_rows(self.window(), &QString::from(object_name))
+    }
+
+    /// From now, each change signal of the watched model's own property written into `rows_told` as the property's name,
+    /// in order with the rows and resets; false where the model is not watched or the property has no change signal.
+    pub fn watch_order(&mut self, object_name: &str, property: &str) -> bool {
+        ffi::harness_watch_order(self.window(), &QString::from(object_name), &QString::from(property))
+    }
+
+    /// What the watched model told since the last read, as "first-last" for each dataChanged and "reset" for each reset,
+    /// comma-separated in order; empty where nothing was told or it is not watched.
+    pub fn rows_told(&mut self, object_name: &str) -> String {
+        ffi::harness_rows_told(self.window(), &QString::from(object_name)).to_string()
     }
 
     /// How many times a watched property said it changed since `watch`; none where it is not watched.

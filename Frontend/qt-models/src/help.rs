@@ -24,6 +24,8 @@ pub enum Screen {
     PausePage,
     /// A card over the library: the Home card and the List card (Mistress's `ShowCard` away from a game).
     Card,
+    /// Start Console's page of a card: A starts the console (Mistress's `AcceptWord`, "Start" on that page).
+    CardStart,
     /// The grid's search with the keyboard docked (`GamesScreen.HintsFor` in the keyboard).
     Search,
     /// The Pause Card's first page on Save State or Load State: Left and Right change the slot.
@@ -142,6 +144,7 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
         Screen::Question => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "No", None)],
         Screen::QuestionBack => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None)],
         Screen::Card => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None), (UiButton::Menu, "Close", Some(CLOSE))],
+        Screen::CardStart => &[(UiButton::Accept, "Start", None), (UiButton::Back, "Back", None), (UiButton::Menu, "Close", Some(CLOSE))],
         Screen::Search => &[
             (UiButton::Accept, "Type", None),
             (UiButton::Back, "Delete", None),

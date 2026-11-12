@@ -254,7 +254,7 @@ disassembly, board name and view; `emusen_firmware_find` and `_locate`; the chea
 (`emusen_cheats_parse`, `_write`); the HTTP client (`emusen_net_download_*`); the medium locks; Endymion's resampler, rate control,
 `pad_resolve`, `pad_combine`, `pad_controls_for`, `pads_use`,
 `pads_rescan_due`, the simulated pads' texts read, holds and device calls, the game player's resampler and rate calls not named in §1.8.6,
-the interface player's `decode`, `decode_take` and `volume`; and the rest of Serenity (sources, the compiler,
+the interface player's `volume` (its `decode` and `decode_take` are `sounds::decode` since 2026-11-09, §4.9); and the rest of Serenity (sources, the compiler,
 reflection, the cache, the lend, the ring, and the chain's other calls); since interface 42 its `serenity` module covers
 the device made for an adopting host, its raw handles, a built-in filter's preset, and a chain advanced and drawn in place
 (§1.8). Each is wrapped when a screen needs it; stage 5's are below.
@@ -984,7 +984,7 @@ left out of `Tokens.qml` (the surface test).
 ### 3.3 Versioning
 
 The API is the module's version, `EmuSen.Theme 1.0`. A minor adds singletons, roles, actions, cues or tokens and never
-removes or renames one; a role or action no longer meant is kept and marked deprecated in the `.qmltypes` for one minor,
+removes or renames one; a role or action no longer meant is kept and marked deprecated, in the changelog and its doc comment, for one minor,
 then removed at a major. A theme states the API it was written for in `theme.json` (`"api": "1.0"`); a theme written for
 a newer major than the build has is refused with words naming both; one written for an older minor loads, since minors
 are additive. Before 1.0 (§5.1) the same rules hold, with breaking changes allowed and listed in `CHANGELOG-theme-api.md`.
@@ -1031,7 +1031,7 @@ the reference's splash unchanged.
 
 **Free arrangement where the reference had it.** Home and Choose a console walk by `KeyNavigation` as they did; Home's
 `ThemeScreen.focusItems` names where its focus starts (Continue, else the shelf's first game, else Games), which the
-host gives the focus again when Start is pressed on Home (`Screens.homeAgain`). A list read anew is followed by the
+host gives the focus again when Start is pressed on Home (`Screens.homeAgain`). The EmuSen theme's Continue is enabled only while a game is suspended, so a moving pointer cannot focus it with none (`home_continue.rs`, 2026-11-11). A list read anew is followed by the
 Repeaters' own `itemAdded`, never by an item kept from before. Delegates' data is read through `var` properties, as
 `qmllint` cannot follow a cast to an inline component across the theme's own files.
 
@@ -1361,6 +1361,29 @@ the audit's own crowd, 120 consoles with 40 under one maker, passes in their pla
 its consoles); Down no longer stepping the rail (the sweep over `one-console` missed its console). Not proved offscreen:
 the splash at 1, 3 and 5 s (the audit records its finished frame only), the grid's rows for a tall and a square console
 (the synthetic library's consoles are all wide), and the bells, which no striker rings yet.
+
+**The states, measured 2026-11-09** (§3.7.2's `--states`, with the contrast rule). Four findings were the theme's and are
+fixed: (1) in `nogame` the Recent shelf was not reached from the first focus: its rows come after the `ListView` is made,
+which leaves `currentIndex` at −1, so Right on Recent gave the focus to a list with no current cover; the shelf now takes
+its first cover as current when rows come. (2) In `nogame` the shelf's covers ran past its right edge with no fade at
+1920 × 1080, 1280 × 720 and 3840 × 2160; the shelf now stands inside the kit's `EdgeFade` (`EmuSen_Kit.md` §7.35) and fades
+24 units at an edge it runs past, as the rail does (§1.6 of the spec). (3) In `empty` Games' `noGames` words lay under the
+floating label of the rail's focused entry; with no games the floating label is not drawn, since the heading names the
+section and the empty words stand where the label would. (4) On the GPU, by day, CONTINUE PLAYING read 4.37 to 4.49:1 over
+the paused frame's shadow and the EMUSEN tag 4.30:1 on its tint at 1280 × 720 (measured 2026-11-09): named differences
+9 and 10 below.
+
+9. By day the paused frame's shadow is black at 25%, not 45%: at 45% its blur darkened the sky under the eyebrow below
+   4.5:1. By night it stays at 45%.
+10. By day a core's engine line and its EMUSEN tag are written in hsl(h, 60%, 24%), not the spec's 30%: at 30% a yellow
+    hue reads 3.42:1 on the tag's tint over the sky's foot, at 24% the least over every hue is 4.87:1 (computed over the
+    hue circle in steps of 2°). The tag's ink is the line's, one colour.
+11. Games' floating label is not drawn while the grid is empty (finding 3).
+
+An `EdgeFade` whose edge changed as the window grew crashed the GPU run at the resize to 3840 × 2160 (the kit's layer
+turned off during the resize, fixed in the kit on 2026-11-09, `EmuSen_Kit.md` §7.35). Proof, measured 2026-11-09: offscreen, every state of §3.7.2 holds no finding but `many`'s reach, which is the rule's; on the GPU
+(`theme-audit --gpu`), the default state, `nogame`, `empty` and `pressed` hold none. Each finding above was the audit's on
+the theme before its fix, which a revert restores.
 
 #### 3.4.5 Constellation as built **[M 2026-11-09]**
 
@@ -2333,6 +2356,29 @@ painter calls `esdeEnter(shelf, entry)` and `esdeLeave(shelf)`, and `esdeSearch(
 9,000 games first took 10.6 ms, every game's row written again in all games and favourites and each description
 carried; with the collections listing files and the description given on demand, 0.77 ms, under the 2 ms gate.
 
+**Measured again on 2026-11-10**, after §4.9's texts grew with the metadata (the shelves 6.4 MB, the media index 2.2 MB
+at 9,000 games): 5.2–7.7 ms, the land gate red. Timed by phase, the comparisons took under 1 µs, the read's move in
+10 µs, and making the four texts QStrings (UTF-8 to UTF-16, 8.6 MB) 5.4 ms. The QStrings are now made on the thread
+that read them (`esde_texts.rs`). The type is sent between threads by one `unsafe impl Send`: each QString is made by
+the reading thread and moved whole into the model, no reference kept, and Qt's implicitly shared classes count their
+sharing atomically and may be passed between threads (Qt 6, "Implicit Sharing"); the GUI thread moves in the ones that
+changed: 16–19 µs in four runs of the test alone.
+
+**Measured again on 2026-11-11, on the real path.** The figure above timed a copy of what `LibraryModel.apply` does,
+against an empty view: it could not fail on the model, and every comparison stopped at the length. The test now times
+one function, `esde_texts::take`, which `apply` calls: the four comparisons, the read moved in
+(`LibraryView::swap_in`), and the changed QStrings moved into the properties, on a view that already holds the 9,000
+games, the next read differing by one favourite (the shelves replaced, the media index and presence compared in full).
+The rest of `apply` runs on the GUI thread too and is not timed by this test: the list model's reset over the rows,
+the four change signals (which ask `EsdeModel` for a load, §4.9), the loading state and the publish. So timed, `take`
+took 3.5 ms in a debug build, the old view's rows, catalog and lists and the replaced 13 MiB QString dropped on the GUI
+thread. What the read replaces is now handed back by `swap_in` and dropped on a thread of its own; the figures for
+`take` so far (177 µs best of three, and the seeded fault's below) come from single runs on a machine busy with other
+builds, and wait on a run on a quiet machine (`the_gui_thread_s_part_of_a_refresh_stays_under_two_milliseconds_at_nine_thousand_games`,
+the 2 ms gate). Making the four QStrings on the GUI thread again (a seeded fault) cost 0.9 and 2.5 ms in two such runs, too
+close to the gate for the time alone to catch it, so the test also checks that the shelves' property holds the very
+QString the reading thread made (its data's address), which the fault fails every time.
+
 **Proof.** `tests/gamelists.rs` re-expresses the rule cases of Mistress's `GamelistOptionsTests` (sorts, sort names,
 filters, letters, random, names, collection order and grouping, last played, a grouped collection's folder) and adds
 folders entered, left and walked up, a link, flatten, folders not on top, a grouped collection entered with its own
@@ -2346,7 +2392,8 @@ The second half of the engine, as the painter's design laid it out: a crate of i
 `Frontend/esde-qt`, beside the plain-data `emusen-esde` the way `kit-qt` stands beside `kit-core`. It depends on cxx-qt,
 `emusen-esde` (the scene and its marks) and `emusen-kit-qt` (the body face, and from E2 the help bar and the pad
 router); `tests/lint.rs` holds its manifest to exactly those and the two EmuSen crates' manifests to no client, runtime
-or model crate. The registry is `Testing/qmltypes/EmuSen.Esde-1.0.*`, compared on every build as the kit's is (§5.3).
+or model crate. The registry is `Testing/qmltypes/EmuSen.Esde-1.1.*`, compared on every build as the kit's is (§5.3);
+its changes are listed in `Frontend/esde-qt/CHANGELOG-esde.md`.
 
 #### 4.8.1 The primitives
 
@@ -2370,6 +2417,17 @@ picture, not its box.
   tile; Qt keeps the picture's aspect when it decodes, so `Cover` and `Fill` read the decoded aspect. A `nearest`
   picture is decoded at its own size: Qt scales a raster up only for `PreserveAspectFit` and `Crop`, and then smoothly
   (`QImage::scaled` with `SmoothTransformation`), which would blur pixel art before the GPU's nearest filter saw it.
+- **A raster is never decoded larger than itself or its box** (measured 2026-11-09). Under `PreserveAspectFit` or
+  `Crop`, Qt 6.11 scales a raster to the asked width even upward, and with both sides asked takes the larger of the two
+  ratios: Art Book Next's 454 × 1080 system art, contained in a 1,281 px slot of the carousel, was decoded at 1,281 ×
+  3,047 (15.6 MB, drawn at 504 × 1,200), nine of them 134 MiB of the program's heap and the first picture held back
+  while they were scaled. The hidden `Image` of a raster is now `Stretch`, which Qt scales down only, by one ratio for
+  both sides, never up: contained, it asks the box and is decoded to fit it or at its own size; covered, it asks the
+  width as before. A vector (`.svg`, `.svgz`) keeps the aspect modes, as it is drawn at the size asked. The painted size
+  of a contained or covered picture is computed from its own size as Qt computes `paintedWidth` and `paintedHeight`, so
+  the effect, the reflection and the scene's measurement see what they saw. The GPU scales the native raster up where
+  the box is larger, as ES-DE does. `primitives.rs` holds a picture smaller than its box at its own 64 × 64, contained
+  and covered, a 512 × 256 one contained in 128 × 128 at 128 × 64, and the painted rows of each.
 - **Qt hands a `color` uniform over premultiplied.** Measured 2026-11-08: a white picture tinted `80FF8000` read
   (64, 32, 0) over black when the shader multiplied RGB by the tint's alpha again, and reads (128, 64, 0) now. The
   shader multiplies by the colour as given.
@@ -2422,11 +2480,13 @@ Qt application.
 - **`shelves.rs`** reads §4.6's texts. `settings` takes `esdeSettings`: the theme folder, the choices under Mistress's
   keys (`Variant`, `ColorScheme`, `FontSize`, `AspectRatio`, `Language`, `Transitions`, as `BigPictureChoices` stores
   them) and the interface's switches (`DisplayClock`, `DisplayHelp`, `ListScrollOverlay`, `QuickSystemSelect`,
-  `StartupView`); a text that does not read gives the defaults. `shelves` takes `esdeShelves` and `esdeMedia` into the
+  `StartupView`); no text gives the defaults, and a text that does not read is the load's problem. `shelves` takes `esdeShelves` and `esdeMedia` into the
   scene's `ThemeSystem` and `Game`s: a collection's entry, carried by its file alone, takes the row its console's shelf
   carries, and its `source` is that console's system; a game's media is looked up by its folder and stem, then its
   stem, under its own console (§4.6); `last_played` (seconds since 1970) becomes a civil date in UTC by Howard
-  Hinnant's days-to-civil; `release_date` reads the metadata's `yyyy-MM-dd`. `presence` takes `esdePresence`.
+  Hinnant's days-to-civil; `release_date` reads the metadata's `yyyy-MM-dd`. `presence` takes `esdePresence`, and
+  `device` the device's status. All five follow one rule (`read`): no text is the property's default, and a text that
+  does not read is the words why, never the default.
 - **`painter.rs`**: `ThemeCache` keeps a resolved theme per (folder, system, choices, media presence), as
   `ThemedLibrary._themes` did, behind a mutex so the data thread fills it, with `forget` for a folder updated on disk;
   `systems` is the data thread's work, shelves and their themes. `Painter` holds the `Stage`, its clock in
@@ -2440,8 +2500,11 @@ Qt application.
 - **The hold is the scene's.** The router's repeats are not passed on: the scene repeats a held direction on its own
   clock, and only the scene knows the measured consequences of a hold (the metadata fading out from the first repeat,
   the list's fast tier jumping four entries). The router gives the first press and the release.
-- **The pointer makes the pad's calls.** `hover(row)` steps to the row as the pad's step does, `tap(row)` is that and A,
-  and a wheel notch is one step, back for a notch up.
+- **The pointer makes the pad's calls.** `hoverAt(item, row)` steps to the row as the pad's step does, only while the
+  pointer itself moves (the window's fact, EmuSen_Kit.md §7.108). EmuSen.Esde is 1.1 for it. `hover(row)`, which
+  nothing of the repository calls, stays in 1.1, deprecated and selecting as it did in 1.0, and goes at the next major
+  (decided 2026-11-11; `CHANGELOG-esde.md`; held by `tests/deprecated.rs` and `lint.rs`). `tap(row)` is
+  that and A, and a wheel notch is one step, back for a notch up.
 
 **Proof**, `tests/painter.rs` (6, on a synthetic theme the test writes, no Qt application): the settings under
 Mistress's keys and a text that does not read; a collection's entry and the media by folder then stem, the two dates;
@@ -2466,7 +2529,7 @@ pointer. Each list binds `revision: esde.revision` and refreshes on its change, 
 
 | Object | Holds | Changes |
 |---|---|---|
-| `EsdeModel` | writable `settings`, `shelves`, `media`, `presence` (the texts of §4.6), `width`, `height`, `swap`; read-only `themed`, `problem`, `view`, `moving`, `nextChangeMs`, `revision`, the quick-scroll `letters`, `lettersMark`, `lettersPx`, `lettersOpacity`; invokables `tick(ms)`, `pressed(button, repeat, jump)`, `released`, `hover(row)`, `tap(row)`, `wheel(notches)`, `measured(id, w, h)`, `reload()`; signals `played(path)`, `favourite(path)`, `menu`, `options`, `cued(name)` | a text or the size changing starts a load on a thread of its own (the texts read, `painter::systems` through the `ThemeCache`), handed back by `qt_thread().queue`; a load older than the last asked for is dropped |
+| `EsdeModel` | writable `settings`, `shelves`, `media`, `presence` (the texts of §4.6), `width`, `height`, `swap`; read-only `themed`, `problem`, `view`, `moving`, `nextChangeMs`, `revision`, the quick-scroll `letters`, `lettersMark`, `lettersPx`, `lettersOpacity`; invokables `tick(ms)`, `pressed(button, repeat, jump)`, `released`, `hoverAt(item, row)`, `tap(row)`, `wheel(notches)`, `measured(id, w, h)`, `reload()`; signals `played(path)`, `favourite(path)`, `menu`, `options`, `cued(name)` | a text or the size changing starts a load on a thread of its own (the texts read, `painter::systems` through the `ThemeCache`), handed back by `qt_thread().queue`; a load older than the last asked for is dropped |
 | `ElementModel` | one row per `Frame.elements`, roles flattened by `src/values.rs`, the `paint` role a `PaintKind` enum (`ElementModel.Picture` … `Grid`) the chooser reads, the primary's layout flattened onto its own row | a reset when the ids, paints or layouts change (a view switch, a system change); otherwise `dataChanged` for each row that differs |
 | `SlotsModel` | a carousel's slots (current or `leaving`) with their row's text and picture | a reset when the count or the rows change; `dataChanged` per moved slot |
 | `RowsModel` | a list's or grid's rows | replaced under a reset only when the `Rows` or the install changes; a step changes none |
@@ -2485,7 +2548,7 @@ pointer. Each list binds `revision: esde.revision` and refreshes on its change, 
 - **The router's tiers are not bound** (decided 2026-11-08). The scene repeats a held direction on its own clock
   (§4.8.3), so the router's repeat tiers would only produce repeats the painter ignores.
 - **The cue is a signal**, `cued(name)` with the scene's name (`navigate`, `select`, `back`, `quicksysselect`), since
-  two equal cues in a row must both sound; mapping a name to the theme's sound file is the host's (owed with H).
+  two equal cues in a row must both sound; mapping a name to the theme's sound file is the host's (§4.9).
 
 **`View.qml`** is a plain `Item` filling its parent: an `EsdeModel` sized by it, an `ElementModel`, and a `Repeater`
 whose delegate is a `DelegateChooser` on `paint`. `DelegateChooser` is in `QtQml.Models` since Qt 6.9 (measured on the
@@ -2501,7 +2564,7 @@ text list's file is not `TextListElement`: `qml-rules` reads any line containing
   `nextChangeMs` runs while nothing moves and something will. At rest neither runs and the window swaps no frame.
 - **The pad and the keyboard.** `Connections` on `Kit.PadRouter` while the view has focus (`pressed`, `released`);
   `Keys.onPressed` is `PadRouter.pushKey`.
-- **The pointer.** Each carousel slot, list row and grid cell carries a `HoverHandler` (`hover(row)` on entering) and a
+- **The pointer.** Each carousel slot, list row and grid cell carries a `HoverHandler` (`hoverAt(item, row)` on entering) and a
   `TapHandler` (`tap(row)`); a `WheelHandler` steps one item a notch; a right or back click is B.
 - **A carousel slot** is an item filling the element's box, scaled about the growth point and turned about the wheel's
   centre (the scene's origins are in the element's box, so neither needs translating), its `Picture` at the slot's box.
@@ -2602,7 +2665,7 @@ THEMES.md and USERGUIDE.md, settled or named:
 |---|---|
 | The help's words: LAUNCH, SYSTEM on the system view, JUMP, FIRST, LAST and CHOOSE in a gamelist, FAVORITE | ES-DE 3.4.1's entries in its order and words (`help.rs`): the system view MENU, SELECT, SCREENSAVER, CHOOSE; a gamelist OPTIONS, MENU, SELECT, BACK, FAVORITES, SYSTEM, RANDOM. A reads Select on every entry, as ES-DE's documentation of the A button and the captures have it. The project's words of `EmuSen_BigPicture.md` §15 stay the C# painter's |
 | No SCREENSAVER or RANDOM entry | the help reads the player's *Enable screensaver controls* (`ScreensaverControls`, on by default) and *Random entry button* (`RandomEntryButton`, games by default), and resolves *Quick system select*'s two "or" settings by the gamelist's primary (UG "Quick system select") |
-| Wi-Fi, a battery and 80 % drawn where ES-DE drew none | the view shows no indicator until the host reports the device on `EsdeModel.device` (a JSON text, `{"wifi":true,"battery":80}`; an addition to EmuSen.Esde 1.0's registry, copied to `Testing/qmltypes`) |
+| Wi-Fi, a battery and 80 % drawn where ES-DE drew none | the view shows no indicator until the host reports the device on `EsdeModel.device` (a JSON text, `{"wifi":true,"battery":80}`; an addition to EmuSen.Esde 1.0's registry, kept in 1.1's, `Testing/qmltypes/EmuSen.Esde-1.1.qmltypes`) |
 | CarAlt's title screen, screenshots and marquee tiled into strips | THEMES.md: `tile` "can only be used when `path` has been set", so a game's media is never tiled (`paint.rs`) |
 | Art Book Next's Tower Set drawn with a folder where ES-DE draws its folder-link mark | a folder with a link has the `FolderLink` marker (`primary.rs`); the mark is the scene's link, where ES-DE's symbol is an arrow into a bracket: **named, open** |
 | The list's names indented on a row with no marker (Brass Lantern), the selection bar beginning at the name, the star larger | ES-DE prefixes the marker to the name: a row with none starts at the margin, the bar covers marker and name, the marker is one `fontSize` square |
@@ -2847,6 +2910,309 @@ is empty. Eleven boxes stay named, each explained:
 day): 71 of 71 load, none drawn whole, and 61 use no undrawn kind (45 before: the 22 themes counting `gameselector`
 undrawn no longer do); no row worsened.
 
+### 4.9 Hosting the view in `emusen-qt` (H) **[M 2026-11-09]**
+
+**The two choices, and how they relate.** The player's look is two settings that never stand for each other. An ES-DE
+theme is Mistress's pair: `LibraryStyle` is `Theme` and `BigPictureTheme` names a folder, read by one function,
+`esde_shelves::settings_of`, which both the program's start and `LibraryModel` call. An EmuSen theme is
+`AppSettings.EmuSenTheme`, an id resolved through the themes store (§3.8). Where the pair chooses an ES-DE theme, its view
+is the library's look and the EmuSen theme is not hosted at all: the reference's Home, Choose a console and grid are not
+made, and the chosen package's engine is not started. Where the ES-DE theme fails, the own look comes back, which is the
+EmuSen theme the id names (else the reference). The Themes tab still offers no Use on an ES-DE theme, so it writes
+neither `LibraryStyle` nor `BigPictureTheme`; Mistress's Settings remain where the pair is chosen.
+
+**What the window holds** (`Main.qml`):
+
+| Part | As built |
+|---|---|
+| The start | `start.rs` reads `esde` (the pair) and `navigation_sounds` (`AppSettings.NavigationSounds`, on by default) beside `StartupSplash`; both are the window's initial properties `esdeChosen` and `navigationSounds`. The theme's choices and the interface's switches are `LibraryModel.esdeSettings`, written at each refresh, so the view's load starts with the first read of the library and never before |
+| The view | a `Loader` of one `Esde.View`, made while the pair chooses a theme (`esdeWanted`: the start's answer or `library.themed`), filling the window in pixels over the hosts; visible while it is the look and neither the game nor the Pause Card is shown, so the Home card and the List card draw over it under the Scrim; its four texts are `LibraryModel`'s |
+| The look | `esdeLook` = wanted and not failed; failed = the model's `problem` set, or a load published (`revision` > 0) with nothing themed (an empty library). `Screens.themed` is `esdeLook`, so the steps of §4.6 apply; the reference host's three roles and the chosen theme's `Loader` are made only while it is false |
+| Moonrise | waits for the look it gives way to: `done` also needs `lookSettled` (the own look, or the view themed or failed), so the splash never fades onto an empty window while the theme loads |
+| The pad | the view takes the focus while `Screens.Esde` is shown and the splash has gone; the router is pumped by a `Timer` while it holds the focus, as a `Frame`'s is; PadReader's presses reach it through the router as they reach the reference's screens |
+| The signals | `played` → the window's `play` (recorded, opened, the game's screen); `favourite` → `LibraryModel.toggleFavourite` (games.db's `toggle_favourite`, then the library read again; the shelves' text carries the heart); `menu` → `Screens.home()` (the Home card at its first page); `options` → `Screens.list()` (the List card); `cued` → `EsdeCues.play(name, view)` |
+| The List card | under the theme it reads `esdeListFacts(shelf, selected)` and acts through `esdeListAct`, the view selecting the entry the act answers (`EsdeModel.select`); the hidden own grid's `listAct` runs only under the own look (until 2026-11-11 a sort or Favourites under the theme also sorted or filtered the own grid). A sort or a filter answers the first entry: the view selects row 0 at once, and the rewritten shelves' load keeps the selected index, so the selection is the first entry of the new order |
+| A failure | the model's `problem` raised as a notice once the splash has gone, the own look shown |
+
+**Additions to surfaces** (rule Q, reviewed, additions only): `EsdeModel.shelf`, `selected`, `sounds` (read-only) and
+`select(row)` in `EmuSen.Esde` 1.0 (kept in 1.1's registry, `Testing/qmltypes/EmuSen.Esde-1.1.qmltypes`); `LibraryModel.toggleFavourite(path)`
+and `LibrarySource::toggle_favourite`, `Screens.home()` and `Screens.list()` in `EmuSen.Models` (QML builds no key
+text, §1.3, so Start and Select at the view are calls of their own); `sounds::decode` in `emusen-platform-client`.
+`emusen-esde-qt` no longer declares `QAbstractListModel` itself and names the kit's (`emusen_kit_qt::base`): with the
+program linking `emusen-esde-qt` and `emusen-qt-models` together, the two declarations' upcast shims clashed at the
+link of a test binary (`ld.lld: duplicate symbol … cxx_qt_ffi_QAbstractListModel_upcastPtr`), where the lazy archive
+order had hidden the kit's own until then. New references: `emusen-qt` on `emusen-esde-qt` (design §1) and on
+`emusen-kit-core` as a plain dependency (the cues it falls back to; it was a gate-pad and test dependency).
+
+**The sounds** (`src/cues.rs`, `EsdeCues`). ES-DE reads its seven navigation sounds once, from its first system's theme;
+the model gives that theme's files as `sounds`. The player is made off the GUI thread through qt-endymion's
+`open_player` (SDL lent, the kit's cues kept), each of the theme's WAV files decoded by `sounds::decode` (the header
+asks the count with no buffer and the rest is taken, since what does not fit waits on that thread) and kept as
+`theme:<name>`. A scene's `navigate` is `systembrowse` on the system view and `scroll` in a gamelist; a launch and a
+favourite are the host's own. A name the theme lacks falls back as Mistress's `NavigationSounds` does: scroll Move,
+systembrowse Section, select Choose, back Back, favorite Favourite, launch Launch, and quick system select the kit's own
+two bells (`QUICK_SELECT`). With NavigationSounds off nothing plays. Volume follows the player's default; the setting
+is stage 5's. Each sound played is told by `rung` (its key) and `rings` (a count), read-only, which the test reads; a
+sounds text that does not read, or a theme file that does not decode or is not kept, is said in `problem` and the
+other sounds kept (until 2026-11-11 one file's failure lost them all and a malformed text was taken as none), and
+`problem` is raised as a notice once the splash has gone, as the view's own problem is.
+
+**Proof, measured on 2026-11-09.** `qt-app/tests/esde.rs`, on Vulkan in a `kwin_wayland --virtual` of its own on the
+RX 6800. The sandbox's settings choose Art Book Next from the corpus with the options of
+`Testing/esde-baseline/states.tsv`; its library is two synthetic NES images and a synthetic Super Nintendo image (a
+LoROM whose reset runs to a loop, `client_fixture::cores::snes_image`), played by VenusRT built from this commit with its
+sidecar written by the conformance runner as a publish writes it, in an installation folder its manifest vouches for
+(`installation_with_snes`; since 2026-11-10, when the test read Super Mario World from the player's library and the
+published installation's engines, which a test may not). The start reads the pair; Moonrise gives way to the system view on the NES (release order), the own
+look's three roles unmade and the chosen theme's engine not started; the theme's sounds decode through the interface
+player on SDL's dummy driver; Right steps to the Super Nintendo; A opens its gamelist; Y writes the favourite and the
+shelves' text carries it; Start opens the Home card over the theme and B closes it; Select opens the List card and B
+closes it, the selection unchanged; A plays the game through the ring to its first picture, the view hidden; the menu
+chord on the virtual pad pauses it under the Pause Card, and Leave, Back to Library is the gamelist of the Super Nintendo
+at the same game, the view holding the pad again; the game closed, the view stays; a `BigPictureTheme` naming no folder,
+read again, gives way to Home with the loader's words ("no theme.xml for …") as a notice; Qt logs nothing. 12.7 s and
+11.8 s. One line follows the test's result at the process's exit, `QObject::~QObject: Timers cannot be stopped from
+another thread`, after the harness has stopped listening. It is not explained, and no one has ruled on it: it is
+listed for the tester and waits on her. `start.rs` (9), the cues' two rules
+(`cues::tests`), platform-client's `sound` (a WAV of 24 kHz mono decoded to 4,800 frames of 48 kHz stereo float, a
+missing file none), and the offscreen tests the change reaches (program, screens, start, splash, cards, theme,
+theme_feed, themes_tab; qt-models' library, esde, gamelists, qml, themes) green.
+
+On 2026-11-11 the test timed out twice at the first chord ("not within 10 s"; shown Game, the session running and not
+paused, the pad giving the chord alone). The cause was the test: since the window is made with the start's own initial
+properties (`start::initial`), `guideChords` is the start's, on outside Game Mode (`guide_chords_from`, Auto), where the
+test had made the window with the default, off. With the Guide chords on, Guide alone opens the menu as it is let go
+(EmuSen_Kit.md §7.26), and the test held Guide down while it waited for the pause. It now presses Guide, waits for the
+router to hold it, and lets it go, then waits for the Pause Card (`guide_alone`); the run passed in 14.5 s on the GPU.
+The second chord, after A resumes the game from the gamelist, also waits for the game to own the pad again
+(`pad_chord_only`) before the pad clock runs. A wait that times out names where the program stands (the screen shown,
+the session's running, paused and problem, and whether the pad gives the chord alone).
+
+Two of the test's checks could not fail, found on 2026-11-11 when their seeded faults passed. (1) "The own look's
+listing untouched" read an object named `games`, which no object is (the grid's model is `gridGames`), so it compared
+three empty texts; it now reads `gridGames` and first checks that the reading is not empty. (2) "Moonrise gives way only
+once the theme is drawn" (`lookSettled`) sampled Moonrise's `done` while the splash still ran, and the theme was drawn
+before the splash finished, so `done` without `lookSettled` gave way at the same moment. The test now skips the splash
+with A before it names the library, as a player can, and holds Moonrise standing with the splash finished and the theme
+not yet drawn. Seeded, each failing the test: the List card acting on the own grid as well (fault 10), and Moonrise's
+`done` without `lookSettled` (fault 17).
+
+| Seeded fault, applied alone and reverted | Caught by |
+|---|---|
+| a failed theme still the look (`esdeLook` without the failure) | `esde.rs`: the own look not shown within 20 s of the missing theme |
+| the reference's Home made under an ES-DE theme | `esde.rs`: `home.reference` active |
+| the theme's file never played, the kit's cue always | `cues::tests::the_themes_file_plays_where_it_gave_one_else_the_kits_cue` |
+
+**Not built, each listed for the tester, waiting on her ruling.** What each would take, read from the tree on
+2026-11-11; none is built:
+
+| ES-DE element the view does not draw, or open line | Where it stands | What building it takes |
+|---|---|---|
+| Entering a folder | the painter's `played` names a folder entry as it names a game; `LibraryModel.esdeEnter` and `esdeLeave` exist and are called by no host | in the host, `played` on a folder entry calls `esdeEnter(shelf, entry)` and B inside a folder `esdeLeave`, the view selecting the entry the rewritten shelves answer as the List card's acts do; a test that enters and leaves a folder on a library with one. QML wiring and one test |
+| A game's description | console rows carry none (`GameRow.description` left out, 6.6 MB kept off the text); `LibraryModel.esdeDescription(file)` gives one on demand; the painter never asks | the painter asks for the selected game's description when a theme has a description element, off the GUI thread, and hands it to the scene as the game's; a test that a theme's `md_description` reads it. A painter change in esde-qt and its wiring |
+| The device's indicators | `EsdeModel.device` is unbound in `Main.qml`, so no battery, controller or network mark is drawn | a device-status source: the platform library reports none to the front end today, so this is a new surface (battery, pads, network) proposed to the tester first, then bound |
+| The swap (A and B exchanged) | `EsdeModel.swap` is unbound; the program has no setting that swaps them | a setting of the player's (ES-DE's own is in its menu), read by the start, bound to the view and the router alike; the setting is the tester's to decide first |
+| `QObject::~QObject: Timers cannot be stopped from another thread` at the program's test's exit | logged after the harness stops listening, in `esde.rs` and `game_page.rs` alike; not explained | finding the object whose timer outlives its thread at exit (a probe that logs each `QObject` with a timer at the process's end); fixed where it lives once found |
+
+The List card's facts are read when its shelf or
+selection changes, not after an act rewrites the shelves while it stays open (a Sort, which keeps the card open, is
+then said with its old words until the selection moves). ES-DE's full system names
+("Nintendo SNES (Super Nintendo)") are a change to the systems table's `esde_full_name`, not made here.
+
+**The gates at the player's library's scale, measured on 2026-11-09.** `Testing/qt-gates/sandbox.sh`'s sandbox (the
+published tree of 2026-11-08 with `emusen-qt` in release with `gate-pad`, the player's 9,007 games bound read-only) with
+Art Book Next and its options in the settings; `gates.sh` for the first press and idle memory; the gamelist's hold by
+`run.sh` with `WAYLAND_DEBUG=client`, the program's commits on its window's surface. Mistress's figure is its published
+build idle on the same theme and library (no input), since its own look's 305 MiB is not the same work.
+
+| Gate | First run | After the first fixes | After the second pass | Mistress, same theme |
+|---|---|---|---|---|
+| Idle RSS, 10 s after the window (anonymous) | 872 MiB (737) | 685, 685 MiB (552) | 306 MiB (172) in each of four rounds | 402 MiB (201) |
+| First press answered from the start | 2.33, 3.32 s | 1.32, 1.28 s (window lit 0.79 s) | 0.861, 0.934 s (settled 0.824, 0.887 s; window lit 0.69 s) | gate 0.95 s |
+| The gamelist, Down held 24.4 s | 1,450, 1,382 frames; median 16.6, 16.8 ms; worst 95.5, 36.7 ms | not re-run | 1,389 frames; median 16.7 ms; worst 35.9 ms | worst 96.8 ms (§9.3.1, its grid) |
+
+**Causes, proved by probes at scale** (the library's reads timed and RSS read after each, in the sandbox; the view's
+load of the texts those reads wrote): the library's whole read took 1,160 ms, of which the per-game metadata 378 ms
+and the covers 316 ms, and its shelves text was 6.6 MB; the scraper's answers were held whole as JSON trees for all
+9,007 games (+141 MiB); the view parsed the 6.6 MB text into a tree (+143 MiB, 203 ms) and copied it again, and parsed
+it once for each of the four texts the library publishes one after another, two or three times at once. Freed, those
+trees stayed in glibc's arenas: `malloc_trim` took the library probe from 241 to 89 MiB and the view's from 180 to 53,
+which located the cost; trimming was not kept as the fix, being glibc's alone and hiding the pattern. **Fixed:** the
+view asks one load per turn of the event loop, however many texts changed; the shelves are read straight into typed
+rows (`serde` derive, no tree); each game's metadata is kept as its chosen values the moment it is read
+(`esde_shelves::Metadata`); and with an ES-DE theme the library's first read is a `FirstLook` (the systems, games and
+records without the metadata, plays or media, 395 ms against 1,160), shown first and replaced by the whole read
+(`the_first_look_lists_every_shelf_and_game_reading_no_metadata`). Offscreen, idle went 677 → 512 MiB with the theme
+and 203 → 189 with the own look.
+
+**The second pass, measured on 2026-11-09.** No heaptrack, massif or perf is installed on the desktop, so the heap was
+profiled by a sampling allocator interposed for the run (outside the tree: every 64 KiB allocated, the allocating stack
+kept until it is freed; live, cumulative and at the peak), glibc's own `malloc_stats` read through `gdb` at idle, and
+`/proc/<pid>/smaps` grouped by mapping; the start by a shim timing every file the program opens. Offscreen with the
+software scene graph, 12 s after the start:
+
+| Cause, as measured | Live heap it held | Fix |
+|---|---|---|
+| The carousel's nine system pictures, 454 × 1080, each decoded at 1,281 × 3,047 (15.6 MB) because Qt scales a raster up under `PreserveAspectFit` (§4.8.1) | 134 MiB, and the first picture waiting on their smooth scaling | a raster's hidden `Image` stretches, which Qt scales down only: 2 MB each |
+| The own look's library copied whole into the reference host's feed at each publish (`ThemeLibrary::show` cloned the `LibraryView`, the 6.6 MB shelves text, the ES-DE state and the thirteen list texts with it), although the reference's screens are not made under an ES-DE theme | 22 MiB live, and the clones' churn | the feed copies the rows, the systems and the catalog, all its views read (`theme-qt` `view.rs`) |
+| The shelves text built as a `serde_json::Value` tree of every listing (43 MiB at the refresh's peak) and the own look's thirteen lists likewise, each game cloned into its list first | the refresh thread's arena held 116 MiB of which 36 in use: glibc keeps a thread's arena at its peak | each row is serialised straight from the game it borrows (`RowText`, `ListingText`, `games::RowText`; since 2026-11-11 the shelves' are `emusen_esde::shelves`' `GameRow` and `ShelfText`, below), the keys in the order the sorted map wrote them: the 6.6 MB text is byte-identical on the 9,007 games, and every list read back equal |
+| The gamelists' sort compared names by allocating two `Vec<char>` per comparison (30 MiB of churn a refresh) | none live; 15 ms of the first read | the same comparison over the characters as they are read |
+
+Offscreen idle went 532 → 298 MiB (anonymous 409 → 175; glibc's arenas 393 MiB mapped with 268 in use → 175 with 123),
+and on the GPU 685 → 306 MiB (552 → 172), under Mistress's 402 (201). The first read with an ES-DE theme is 243 ms
+(systems 55 on the platform library's first call, the scan 107, the gamelists' listing and the text 30), from 280; the
+whole read 745 ms, from 875. The gates' sandbox and Art Book Next as before.
+
+Re-run after the pass: `qt-app/tests/esde.rs` on the GPU (15.6 s, the one line at exit still the
+`QObject::~QObject` one), and `esde-qt`'s `primitives`, `view`, `sizes`, `mapping` (3) and `motion` on the GPU, the
+shelves parser having changed; offscreen, `qt-models`' library, esde, gamelists, clients, cards and qml, `theme-qt`'s
+three and `esde-qt`'s lint, qmltypes and painter.
+
+| Seeded fault, applied alone and reverted | Caught by |
+|---|---|
+| a raster back on Qt's aspect modes (contained, decoded at the box's width) | `primitives.rs`: the 64 × 64 picture decoded at 400 × 400 |
+| a contained picture's painted size by the larger ratio | `primitives.rs`: painted 400 × 400 where 100 × 100 |
+| every shelf row written with its description | `esde.rs` (qt-models): `each_shelf_carries_its_es_de_names_and_its_games_every_field` |
+| the own look's feed without the catalog | `theme-qt` `qml.rs`: `gamesOf by the console's key` read 0 |
+| a list row's `played` written under another key | `library.rs`: every field of a row read back, added for it (the existing round trip had no row played) |
+
+**The first press.** Timed by the shim on the GPU (warm): the settings read at 0.02 s; the platform library loaded and
+Serenity's device made before the QML engine, the library's first read begun at 0.34 s; the theme's files read at
+0.70 s, once that read was published; the system pictures opened by 0.78 s and the window lit by 0.94 s, of which the
+nine pictures' upscaling was the part removed. With the other builders' audits and builds paused (load average 2.8),
+two rounds answered the press at 0.861 and 0.934 s (the gate 0.95 s), the window lit at 0.69 s, and the gamelist's
+hold drew its worst frame at 35.9 ms (Mistress's grid 96.8). Two caveats, measured. **A cold page cache:** the first
+run after an hour of the other builders' work answered at 1.97 and 1.93 s; the shim placed the whole difference in the
+first read, 1.26 s from 0.43 to 1.69 s against 0.36 s warm, during which the platform library's scan opened 14,469
+files of the ROM library to read their heads. The program's own caches were not rewritten (the QML cache, Mesa's and
+RADV's shader caches unchanged since 03:55), so the cost is the kernel's page cache of the library. One comparison
+proves it: with the library's pages dropped (`posix_fadvise(DONTNEED)` on each of its 9,328 files, opened read-only),
+the first read took 1,022 ms; run again at once, 248 ms. A player meets that ~0.8 s after a reboot, or after other
+work has pushed the library out of memory, and Mistress alike, its scan being the same platform library's. Stage 1's
+gates (§9.3.5) and these are measured warm, after `gates.sh warm` reads the library once, so the two compare alike.
+**Load:** with three of the other builders' audits running (load average 15) the rounds read 1.16 to 2.58 s and the
+hold's worst frame 200.9 ms, so the gate is read on a quiet machine, as §9.3 asks of every gate. The press's margin is small (16 ms in the slower round);
+what remains on its path is the platform library's first call (55 ms) and scan (107 ms), and the device made before
+the QML engine rather than beside it.
+
+Left as they are, measured: the automatic collections still hold a copy of each game's row (8 MiB live); the shelves
+text is held twice, as Rust's 6.6 MB and the property's QString of 13 MiB, since QML reads the property; the platform
+library's scan reads the head of every file of an extension two systems share at each read (826 MiB of reads over the
+two reads of a start), which is the platform library's and Mistress's alike. The side-by-sides: emusen-qt's system
+view, gamelist, Home card over the theme and Pause Card over a game are in `~/.cache/emusen/qt-s4-h-gates/runs/side-qt/`;
+Mistress's system view in `side-mistress/`. **A limit of the comparison:** Mistress's Home card and Pause Card are
+reached only by a pad or the keyboard, and the gates admit no input device and no synthetic input outside the program,
+so Mistress's side shows its system view alone. Whether Mistress's cards may be reached for the comparison with a pad
+is the tester's to decide; until then the cards are not compared.
+
+**The view's load off the GUI thread, measured on 2026-11-11.** `EsdeModel.load` turned its four QStrings back into Rust
+text on the GUI thread before starting its thread (UTF-16 to UTF-8, 8.6 MB at 9,007 games), after every publish: the
+copy the library's side had moved off (§4.7) was still made on this side. The GUI thread now hands the load's thread
+shared copies (`LoadTexts::of`, Qt's implicit sharing, sent by the same reasoning as `esde_texts.rs`), and the thread
+reads them as text. `esde-qt/tests/load.rs` drives `EsdeModel`'s own load in an offscreen scene (`tests/qml/Load.qml`)
+at the library's scale (a 6.6 MB shelves text, a 2.2 MB media index): each round sets a new shelves text with no wait
+and times the next turn of the event loop, in which the load asked for runs its GUI-thread part (the shared copies and
+the thread's start), then waits for the load to come back and be installed (`revision`). The 2 ms gate is a timing
+test and waits on a run on a quiet machine; the first figure (3.9 µs) timed `LoadTexts::of` alone, from a single run
+on a busy machine, and is withdrawn. With the conversion back on the GUI thread in `load` (a seeded fault), the turn
+holds the conversion of the four texts.
+
+**A text the load cannot read (2026-11-11).** `esde-qt/tests/problem.rs` drives the same scene: shelves that do not
+read install nothing and are the model's `problem` in their words ("The library's shelves could not be read"), and a
+media presence text that does not read is now said too ("The library's media presence could not be read"), where
+`shelves::presence` had read it as no media at all with no word. An empty presence text is still no media.
+
+**One rule for the texts (2026-11-11).** `shelves::settings` and `shelves::device` still read a text that did not read
+as the defaults with no word, and `shelves::shelves` failed on an empty shelves text though `EsdeModel.shelves` is empty
+by default, so a host that set the settings in an earlier turn than the shelves would have shown "The library's
+shelves could not be read" for a moment (the program sets all four together, so this was not seen in it). The five
+readers now share one rule, `shelves::read`: no text is the default, a text that does not read is the problem. Settings
+that do not read install nothing and are the problem ("The view's settings could not be read"); a device status that
+does not read shows no indicator and is the problem ("The device's status could not be read") until a status that
+reads, or none, replaces it, unless the last load has a problem of its own, which is said first; no shelves text is no
+shelves and no problem. `problem.rs` installs a library that reads before each text that does not, so its `themed ==
+false` checks can fail: before, every shelves text in the scene was unreadable or `[]`, `themed` was false in every
+outcome, and only the `problem` checks held the test. The theme is one written for the test, a carousel and a text
+list. Seeded on 2026-11-11: settings that do not read taken as the defaults; a device status that does not read said
+nothing; an empty shelves text an error again; a load that cannot read keeping the view it had; each failing
+`problem.rs`.
+
+**No media index text is no media (2026-11-11).** Since the shelves' row was given its one schema, `shelves::shelves`
+had read an empty media index text as JSON and failed ("The library's media index could not be read: EOF while parsing
+a value at line 1 column 0"), so a host that gives no index loaded nothing. The program never hands an empty text (the
+library's `esdeMedia` starts as `{}` and is written from a `MediaIndex`, empty when no ES-DE media folder is set), but
+`EsdeModel.media` is empty by default, and esde-qt's GPU view test sets none: the theme never loaded, and on
+2026-11-11 its "the theme loaded within 5 s" failure (on c4f5d01b6, and on this piece's tip) was first read as the
+time limit. An empty text is now no media and only a text that does not read is said, as for the presence.
+`problem.rs` holds both: a malformed index is the problem, and with no index text the load ends as it does with `{}`.
+Each `until` in esde-qt's tests now names the model's `problem` when it times out. Seeded on 2026-11-11: an empty
+index text read as JSON again, `problem.rs` failing.
+
+**The ES-DE test's checks that could not fail (2026-11-11).** A sort or Favourites answers the first entry, and the
+load keeps the selected index, so with the selection already on the first entry the checks that the view selects the
+entry the act answered passed with the List card's `select` calls removed. The test now moves the selection to the
+second entry before the sort, and to Brass Lantern (the second) before Favourites, so each check needs the act's
+selection; the order check reads both names' places and fails when either is missing from the tree, where a missing
+name had read as the bottom of the screen. Two fixed waits on absence went: Moonrise's `done` is a binding and is read
+as `finished` turns, and the step taken with NavigationSounds off is held by A's sound after it being the only one
+counted, the sounds being rung in order on the GUI thread. In the kit's gallery, the swapped tile model is waited for
+until the frame shows it. Seeded on 2026-11-11: the List card under the theme acting without selecting, the program's
+ES-DE test failing on the selection. That fault stops at the sort's check, so the Favourites check was seeded on its own
+on 2026-11-11: the library's Favourites act answering the selection it was handed in place of the first entry, the sort
+untouched; the test passed the sort's check and failed the Favourites one, the selection read "1" over one entry.
+
+**The shelves' row, written in one crate and read in another (2026-11-11).** qt-models writes each game's row
+(`esde_shelves::RowText`, a collection's member by its file) and esde-qt read it (`shelves::Row`): two hand-kept
+schemas of one text. The reader read every field with a default and the whole text with `unwrap_or_default`, so one
+field of another type emptied every shelf with no word: `play_count` and `play_time` are games.db's `i64` where written
+and were `u64` where read, and a negative count (games.db allows one) read as no library at all, the view then taken for
+an empty library and the own look shown with no notice. A single owner of the row would be a type in `emusen-esde`,
+the crate both depend on, which had no `serde`; it was made next (below). First made: the reader names every key the writer writes and refuses any other (`deny_unknown_fields`, the
+keys the view does not show named and passed over), takes the plays as `i64` (below zero read as none), and returns
+the words why a text does not read, which `EsdeModel` makes its `problem`, so the host gives way to the own look with
+the words as a notice rather than an empty view. `qt-app/tests/esde_rows.rs`, where the program links both crates,
+writes a library through qt-models' read (a game with every field the scraper and games.db give, a game with negative
+plays) and reads it through esde-qt's: every field the view shows as written, and a renamed key, a field of another
+type and a media index that does not read each an error.
+
+**The shelves' text has one owner (2026-11-11).** `emusen-esde` uses `serde`, a dependency the Frontend workspace
+already holds at the same version; as a new dependency of this crate it waits on the tester's approval. The text's
+schema moved there: `emusen_esde::shelves`
+holds `ShelfText` (a shelf, its counts as `CountsText`, its games), `GameRow` (a game's row or a folder entry's) and
+`Entry` (a row, or a collection's member by its file, system and sort name, which reads back as a row with no name).
+qt-models' `write_listing` and `EsdeGame::row` fill them borrowed (`Cow`, no copy of a game's text), esde-qt's
+`shelves` reads the same types owned, and an entry handed back to be entered (`LibraryModel.esdeEnter`) is read as a
+`GameRow` too (`EsdeGame::from_text`), where five of its keys had been read by literal (held by qt-models'
+`an_entry_is_read_back_through_the_shelves_row`); every type refuses a key it does not name, so a key renamed on one side is an
+error on the other, never a field read as absent. `emusen-esde`'s fence (`tests/fence.rs`) names the crates its tree
+may hold: quick-xml with memchr, and serde with its derive. `esde-qt/tests/shelves_text.rs` writes a
+shelf and reads it back equal (a member as a row with no name, negative plays kept) and a renamed key or a field of
+another type is an error; `esde_rows.rs` holds the two crates to it where the program links them. `in_collection`, which
+the reader takes and a hand-written text gives (`esde-qt/tests/mapping.rs`), is written only where true, and qt-models
+marks no game as in a custom collection yet, so its text is as it was. A text that leaves out `counts` still has the view count the games
+itself.
+
+**The start's properties in the test (2026-11-11).** The window's initial properties are one function, `start::initial`,
+which `main.rs` calls and adds the device's feed and the gate's pad to; the qt-test harness loads a scene with a map of
+initial properties (`Harness::load_initial`, QQmlApplicationEngine's `setInitialProperties`, cleared after the load), and
+`esde.rs` makes the window with `start::initial` of the start it read, the platform library left out so the test names
+the cores folder first. The test reads `esdeChosen` as the start set it, no longer setting it itself, and checks that
+Moonrise gives way only with the theme drawn: at the first turn its `done` holds, the view is `themed` (`lookSettled`).
+
+**Errors passed over, each answered (2026-11-11).** `gamelists::write_listing`'s `let _ = serde_json::to_writer`
+writes plain fields into a `Vec`, where serde_json fails only on a map with keys that are not strings or a `Serialize`
+that errors, neither of which the borrowed rows have. `esde_shelves::build`'s `String::from_utf8(..).unwrap_or_default()`
+reads back bytes serde_json wrote, which are UTF-8 by construction. `games::to_json`'s `"[]"` on error is the same plain
+rows. Each `let _ = qt.queue(..)` (`LibraryModel`, `EsdeCues`, `EsdeModel`) drops the answer only where the object
+has been destroyed, when there is no one left to tell. The sounds' text and files are now said (above).
+
+**Two names the program links twice, measured 2026-11-10.** With `emusen-esde-qt` in `emusen-qt`, its list model and
+qt-models' are both `RowsModel` and both crates bake a `Shaders.qrc`: the first collides at link time, and the second
+does not, Qt naming a resource's initialiser after its file, so one crate's shaders shadowed the other's (the kit's
+EdgeFade logged its shader missing in qt-app's acceptance). The ES-DE module's list model is `EsdeRowsModel` in Rust and
+C++, still `RowsModel` in QML (the registry's C++ name changes, its exports do not), and its resource is
+`EsdeShaders.qrc`.
+
 ---
 
 ## 5. The stable developer surface
@@ -2874,8 +3240,9 @@ at a major, the removal listed. Before 1.0 the same, with removals allowed and l
 
 The module's `qmldir` version is major.minor; the `.qmltypes` file `qmltyperegistrar` writes for it is committed under
 `Testing/qmltypes/<module>-<version>.qmltypes` and diffed in CI: a removed or changed type, property, role, signal or
-invokable fails the build unless the major moved; an addition bumps the minor. Deprecation is a `@deprecated` note in the
-registry for one minor. The same dump is the published reference for theme authors, with a generated page per type.
+invokable fails the build unless the major moved; an addition bumps the minor. Deprecation is marked for one minor in the
+module's changelog and in the call's doc comment, the registry tool of Qt 6.11 having no field for it (decided
+2026-11-11). The same dump is the published reference for theme authors, with a generated page per type.
 
 ### 5.4 How third parties build themes and plugins
 
@@ -3452,7 +3819,7 @@ Power's rows stands "EmuSen 0.9.1" in Muted at 26 (Mistress's `BigMenuFooter`; w
 800). The version's owner is still MSBuild's `Directory.Build.props`. `qt-models/build.rs` reads it from there rather
 than copying it, and the reading moves with the build host (§1.9). Start Console is offered on both cards wherever a
 console of the systems table starts with nothing in it (`starts_empty`, Mistress's `ConsolesThatStartEmpty`, through
-`LibraryModel.startsEmpty`).
+`LibraryModel.startsEmpty`; since §7.9 `LibraryModel.startable`, the consoles themselves).
 `start.rs` reads Game Mode as Mistress's `InGameModeSession` does: gamescope among `XDG_CURRENT_DESKTOP`'s names, else
 `SteamDeck=1`. Its facts come from `LibraryModel.homeCardFacts` (the suspended game, its paused words, the tools'
 summaries, Game Mode).
@@ -3490,9 +3857,11 @@ over either) are `~/.cache/emusen/tmp/qt-s2/compare/<State>-<size>-side.png`.
 **Differences that remain, each for the tester:**
 - Exit Big Picture closes the card and does nothing more: emusen-qt has only the big-screen form until stage 6.
 - The Tools page's rows, Settings ▸, Start Console ▸ (§18.3's page), Collections ▸ and the paused frame in Continue's
-  pane are declared and do nothing yet. Each opens a screen of a later stage.
-- Most played, Year and Rating sort by name, since the library reads no play counts, years or ratings yet. Mistress
-  falls back the same way for Rating.
+  pane are declared and do nothing yet. Each opens a screen of a later stage. (Since §7.9: Continue resumes the game,
+  Start Console starts the console chosen, and Tools ▸ Cores and ▸ Themes open their screens; Most played, Year and
+  Rating sort by their data.)
+- Most played, Year and Rating sorted by name, since the library read no play counts, years or ratings then (sorted by
+  their data since §7.9).
 - The Filter page lists no collections of the player's own, since the library does not read them yet.
 - The words of the screen under a card read under 4.5:1 through the scrim. Mistress's recordings hold the card alone, so
   the test names this (`cards.rs`' `named`), as it names the grid's 18-unit neighbours at 1280 × 720 that stage 1 named.
@@ -3704,13 +4073,13 @@ is seated is read from the pads' hand-over (`GamePads::seated`).
 
 **Change Disc** (§20.2): the game's own discs (`Basalt Run (Disc 1)` with `Inserted` on the one in, or the game's name
 for a single disc), then the console's other games in the library (`LibraryModel.gamesOf` of the facts' system, handed
-to `PauseModel.shelf`), then `Open the tray` while a disc is in. A on an own disc is `SessionModel.changeDisc` ("Disc 2
-is in"), on another game `insertDisc` ("Amber Coast is in"), on the tray `ejectDisc` ("The disc is out"), each off the
+to `PauseModel.shelf`), then `Eject disc` while a disc is in. A on an own disc is `SessionModel.changeDisc` ("Disc 2
+is in"), on another game `insertDisc` ("Amber Coast is in"), on Eject disc `ejectDisc` ("The disc is out"), each off the
 GUI thread with the card closed, as Mistress's rows close it; A on the disc already in only closes the card. The help
 reads Put in, Back and Screenshot, Start not offered (`help::Screen::PauseDisc`). The pane is Mistress's `ShowCover`: the
 cover at 180 square, the generated card edged in Border where there is none, and beside it, 24 across and 48 down, the
-disc's name and the sentence in Muted at 22 ("A opens the tray, swaps the disc and closes it, as the console sees it.",
-or "In the console now. B goes back."); the tray's pane is its sentence alone. `Any file…` is the desktop form's
+disc's name and the sentence in Muted at 22 ("A swaps to this disc, as the console sees it.",
+or "In the console now. B goes back."); Eject disc's pane is its sentence alone (the words decided 2026-11-11: the program loads disc images and has no tray). `Any file…` is the desktop form's
 (stage 6).
 
 **Swap Players 1 and 2** closes the card and swaps the first two players' pads in the hand-over from the next read, for
@@ -4659,6 +5028,81 @@ nothing). Once on 2026-11-09 (the blast radius's run, under other builds' load) 
 unreached: the walk's Right from Slot 3 landed on a delegate the list made as it scrolled, which the walk read as no
 element; every other run, before and after, held every tile reached.
 
+**The content is told of a changed mark in place (2026-11-11).** `GamePageModel.shown` is documented as resetting
+where the section turned and otherwise updating in place, but it reset the content whenever any item differed. Each
+step of Resume moves the mark from one state's tile to another, so each step reset the tiles and every tile delegate
+was made again. Measured 2026-11-11, with each reset logged against the times the gate read its tree: the gate's walk
+over Resume made six resets at every window size, within about 1 s after the tree was read. Once each page list held
+its model only while shown (Kit §7.58), only the tile delegates were freed and made, and the new ones took the freed
+addresses in another order. The walk names an element by its address, so it took a new tile for an old one, and the
+gate named a tile unreached: 2857 at 1920 × 1200 in the landing of 2026-11-11, and 2863 at 1280 × 800 when it was
+reproduced. With the rows' delegates made too, as before, the addresses did not line up, so the defect did not show.
+`content_change` now resets only when the section turned or the items' keys differ in count or order. Otherwise it
+announces `dataChanged` over the rows that changed, so each delegate and the list's current item stay. It is held by
+the models' unit test `a_mark_moved_between_the_same_tiles_is_heard_in_place`; qt-app's page test then holds every
+States tile reached at every size, and the focus back on Slot 3 after a step of Resume. Since 2026-11-11 the change
+is told run by run: one `dataChanged` for each run of neighbouring rows that changed, so a row between two changed
+ones is not told (it had been, the range spanning first to last). `only_the_rows_that_changed_are_told_in_place_and_others_reset`
+covers a label alone, a picture alone, two rows apart, empty to empty (nothing), empty to some and some to empty
+(reset), and one key replaced at the same count (reset). These test the decision. That the list hears exactly those
+calls is tested in the program's page test (`qt-app/tests/game_page.rs`, offscreen): the qt-test harness records a list
+model's `dataChanged` ranges and resets as a view hears them (`Scene::watch_rows`, `rows_told`), and a step of Resume
+and its step back are each heard as the one run of the two neighbouring tiles the mark moved between (`1-2`), with no
+reset. Two neighbouring tiles cannot tell runs from a first-to-last span, so the test then steps Resume on to the
+automatic state, the newest state (Resume's first) drawn after the last slot in use: the mark moves from the first
+tile to the fourth, heard as two runs, `0-0,3-3`, where a span would be `0-3` and a loop telling only the first run
+`0-0`; and back. Seeded on 2026-11-11: the model telling only the first run, the page test failing there.
+
+**The focus after a state is deleted (2026-11-11).** Mistress's page kept the focus on the item it was on while that
+item was still listed, and put it on the first item when the focused one went (`PageLayout.FillContent`:
+`_focusKey = keys.FirstOrDefault()` where the key is gone; with no items, on the actions). A state is deleted from its
+own tile (X on the focused tile), so the focused tile is always the one that goes, and the focus goes to the first
+tile. The program does the same: the content's reset lets the tiles' list drop its model (Kit §7.58), and when the model
+comes back the list's current index is set to the first tile. The page test deletes Slot 1 (the first tile) and then
+Slot 3 (the third), and after each the tiles hold the focus on the first tile; a list that kept its index through the
+reset would be on the third. Before Kit §7.58 the program's tiles kept their model through the reset; seeded back
+(a seeded fault), the second deletion leaves the focus on the third tile (index 2), so WiseMan's page before this piece differed from
+Mistress's and this piece keeps Mistress's.
+
+**No call back into the page while it is telling (2026-11-11).** When the tiles' list lets its model go at
+`modelAboutToBeReset`, its current index becomes -1, and `GamePage.qml` told the page the new focus at once: a call
+into `GamePageModel.focus` from inside `GamePageModel`'s own `begin_reset_model`, a second `&mut` to an object whose
+method is still running, and the page's help changed (and was heard) from inside that reset. The rule is kept where the
+state is: `focus` told while the page is telling QML of a change keeps what it was told, and the page applies it once
+the telling has finished (the help worked out once, after every signal of the change has been sent); told at any other
+time it applies at once. The guard first covered the reset alone, from `begin_reset_model` to `end_reset_model`, but
+the reset is not the only signal a binding follows back: `shown` also sends `actions_changed`, `shows_changed` and
+`words_changed` while it holds the page, and when `shows` turns from tiles to words with a tile focused, the frame hands
+the focus to the actions (`PageFrame.contentKindChanged`) and the page heard `focus` before `words_changed` was sent.
+Every method that sends the page's signals (`shown`, `apply`, `said`, `ask`, `answer`, `outcome`, the start of a new
+game, and the queued end of a state's play) now runs inside `telling`, a depth count: the outermost one, as it ends,
+works out the help once. `GamePage.qml` tells the
+focus directly as it moves, with no deferral of its own (an earlier zero-interval `Timer` standing in for the
+`Qt.callLater` the QML rules forbid, and an `assert!` in `focus` that aborted the process across the FFI, are gone).
+Held to: the page test writes the page's `help` into the model's watched rows in order (`Scene::watch_order`, a
+`QSignalMapper` on the property's change signal, so the line is written as the signal is sent) and, deleting Slot 3,
+requires the reset's line first: a help told inside the reset is sent while the reset is under way and comes before
+it. It then watches `shows` and `words` too and turns from States, a tile focused, to the Overview: the lines are
+`shows`, then `words`, then `help` once and last, and the actions hold the focus. The press waits for the question's
+answers to leave the screen, as the test's X presses do: pressed at once after the deletion, the shoulder was not the
+page's and the section did not turn (seen on 2026-11-11; pressed after the answers had gone, it turned at the first
+press). With the guard narrowed back to the reset (a seeded fault, 2026-11-11), the page told
+`reset,help,help,shows,words`: the help twice, from inside the turn, before the rest was told. (A count of the help's changes taken at `modelAboutToBeReset` was tried first and could not fail: the tiles' gate
+is connected to that signal before the harness is, so the focus is told and the help sent before the harness hears
+the reset begin.) Seeded on 2026-11-11: `focus` applying at once inside the reset. The page test's waits that guarded a value wait for it (the tiles holding the focus, the
+actions changed, the help declaring X as Delete…, the question gone from the screen). The 500 ms after two steps of the
+television standard back to back waited for nothing: measured on 2026-11-11 with the model's changes recorded
+(`watch_rows`), across those 500 ms the page told no row and its actions did not change. Each step is saved and shown in
+place as it is pressed (`outcome`: the library's change, then `shown`); a read-back that comes back after the next step is
+dropped by `refresh`'s `asked`, and one that is applied reads what is already shown, so it changes nothing. The fixed
+wait is gone. The old test's 500 ms did hold one case: a stale read-back that landed within them and changed the row
+would have failed the row's words. The test now reads what the model tells until the rows settle (nothing more told for
+300 ms, at most 5 s) and requires exactly `2-2,2-2`, the standard's row in place twice: a read-back that comes back
+late and tells the row again adds a line, at any time before the rows settle. Whether a stale read-back arrives late
+is a race between the two reading threads and the presses. Seeded on 2026-11-11, `refresh` applying every read-back
+(the `asked` check removed): in one run the page test failed there, told `2-2,2-2,2-2,2-2`, the stale read-back and the
+fresh one each telling the row again; one run cannot show that the race goes that way every time.
+
 Seeded faults, each reverted:
 - the refresh keeping hidden games: the models' library test, the Game Boy's games still counted;
 - `Words` ignoring `now`: theme-qt's qml test, `Paused 20755 days ago`;
@@ -4666,6 +5110,317 @@ Seeded faults, each reverted:
 - the walk pressing once: the program's page test, the gate naming Favourite unreached at both sizes;
 - the page not opening on Play: the program's page test, the focus still on Favourite;
 - the page's state not handed to the session: the program's page test, `startState` empty with the game shown.
+
+### 7.9 Repair piece DC-B: the program does what it offers and says when it fails (2026-11-11)
+
+A review of the landed program on 2026-11-11 proved rows that were drawn and did nothing, and failures the player never
+saw. The bar is Mistress's: what she did, the program does, and a row that is drawn acts.
+
+**1. Failures are shown.** Every model that can fail has a `problem` (SessionModel, LibraryModel, SettingsModel,
+GamePageModel, ToolModel) or a notice (LaunchModel); until now no screen read any of them. `Main.qml` now raises each
+`problem` through the kit's one notice layer (`Kit.NoticeModel`, EmuSen_Kit.md §7.26), in Attention's tone,
+over whatever screen the player is on; the session's over running gameplay too, as Mistress's `PadNotice` showed a
+failed load over the big screen. The words:
+
+| Failure | Words | Where made |
+|---|---|---|
+| A game that does not open, or stops on a failure | "Failed to load {title}: {why}" (Mistress's `LoadGame`) | `session::failing` |
+| A console that does not start | "Failed to start {console}: {why}" (Mistress's `StartConsole`) | `session::failing` |
+| The library unread | "The library could not be read: {why}" | `LibraryView::apply` |
+| The settings unsaved, or unread | "The settings could not be saved: {why}", "… read: …" | `SettingsModel::outcome` |
+| A console's setting, a memory card | "The console's setting could not be stored: …", "The memory card could not be made: …" | the same |
+| A game's page's change | "The game could not be hidden: …", "The state could not be deleted: …", and one line a change | `game_page::change_failed` |
+| A game's page unread | "The game's page could not be read: …" | `GamePageModel` |
+| Cores unopened | the source's words | `ToolModel` |
+
+A game that fails to open now gives way to the library's screen (`SessionModel.openFailed` → `Screens.failed`, the ask
+`Closed`), where before the program showed the game's screen with nothing on it; the launch asks for the game's screen
+before it names the game, so a failure at once is answered after it. The failed game is named no longer, so choosing it
+again opens it afresh. Each opening clears `problem` first, so the same failure twice is said twice; so do Settings (each
+read, save, console setting and memory card) and a game's page at each read. A change on the page needs no clear of
+its own: every change that fails is followed by a read, which clears it first (the clears added before a change and
+before a state's start were taken out on 2026-11-11, since `failures` passed without them). A state started from the
+page is never refused: `ClientSource::other_copy` answers every failure as "not known", as Mistress's
+`StateRecordsOnApi.Read` did, so its words "The state could not be read" are made by no source.
+
+Every notice of the program is raised through one handler, `Main.qml`'s signal `said`, which raises none for empty words,
+so a model's cleared `problem` says nothing; the kit's `Notices` is as it was. Held by qt-app's `failures` (software
+tier): a settings save, a hide and a state's deletion each made to fail twice and found on the notice layer twice,
+Cores that cannot be opened and a library that cannot be read found once; and by `console_fails` (software tier): a
+game's page whose settings cannot be read, opened twice and said twice.
+
+**2. The Home card's Continue and Start Console.** Continue's action (`home_card::RESUME`) is the game's screen in both
+looks (`screens::card_act`), and `Screens` says `resumed`, on which the program resumes the session; with no game
+running it closes the card. Start Console turns to a page of its own (Mistress's `StartConsolePage`): each console that
+starts empty, by its first system, ordered by maker and then year, its name and the engine its row shows, and in the
+pane Mistress's two sentences and her firmware line ("✓ Firmware found.", "✗ Not found: add it in Settings → Firmware",
+nothing where none is named; where the runtime cannot say, that it could not, never read as none needed), which the
+library reads at each refresh for those consoles alone (`LibrarySource::firmware`, `library::firmware_line`). The help
+bar names A "Start" on that page (`Pages::help`, `help::Screen::CardStart`; Mistress's `AcceptWord`). The row is offered
+while the page lists a console, the one fact both read (`LibraryModel.startable`); a console with no engine is listed by
+neither. Its rows' action is `startConsole:<console>`: `Screens` asks for the game's screen first and then says
+`consoleStarted`, as a game's launch asks for it before it names the game, and the program calls `SessionModel.openConsole`, which closes any session, opens the
+runtime's with the console and no path (`session::Opening::Console`), asks no Resume question and names no game; a start
+that fails gives way to the library's screen. As in Mistress, nothing is asked first: her `StartConsole` runs "no
+firmware or resume question", and the runtime's own refusal (an engine waiting for approval, the console's firmware)
+is said as "Failed to start {console}: …". Until 2026-11-11 `consoleStarted` came first, so a start that failed at once
+(the session's runtime, picture or pads not made) was answered before the screen was asked for, and the game's screen
+was left with nothing on it; `console_fails` (software tier, where no picture is named, so every start fails at once)
+holds the library's screen and the words in both looks. The session names its console (`SessionModel.console`), so the Home card's
+Continue and the Pause Card call it "PlayStation (no disc)" (`session::console_session_name`, Mistress's
+`ConsoleSessionName`; the Pause Card is titled so, `pause::Card::title`). The List card's Start Console is the same page; under an ES-DE theme the gamelist of a console that
+starts empty leads its Select menu with "Start {console} With No Disc" (`LibraryView::startable_on_shelf`, Mistress's
+`AddStartConsoleOption`).
+
+Three defects stood between the row and the console's screen, each fixed where it lives. The library and a game's page
+made their runtime with the cores folder alone, which leaves out the player's cores, while the session's included them;
+both now take the configuration every model takes (`clients::source_for`, over `runtime_config`), so the console core
+approved in the player's folder was listed. crystal-client read a session's `discs.index` as a `u32`, and the runtime
+writes -1 for an empty drive, so every console started empty failed as "session_info answered JSON this program cannot
+read"; an empty drive is now no index (`shapes::Discs`, its test `an_empty_drive_is_no_index`). And the Pause Card,
+titled by the library's title of the game, had none for a console.
+
+The client fixture's console core (`console_core`, the platform's `crystal_console_core` example: emusen-native's v1
+test core under `AS_PLAYSTATION`, its one system the table's `psx`, which it starts empty) is what a console is started
+on in the tests. Under `AS_PLAYSTATION` its pad has B and Start besides A, and it draws its picture's blue by the
+button held (`PRESSED_BLUES`: A 0x40, Turbo 0x60, B 0xFF, Start 0xA0), so a test sees in a grab of the window which
+button reached the console; until 2026-11-11 any button drew it full, which proved a press and not which. Held by
+qt-models' `start_console` and `home_card_acts`, and on the GPU by qt-app's `console` (the own look: the List card's
+page held at the five sizes, the pointer and then the pad starting the console; Start's Home card, its Start Console
+row by the pad and then by the pointer; Back to Library and the Home card's Continue naming the console's session, held
+at the five sizes, and resuming it. Each time the console's picture is found drawn on a grab of the window, and B and
+Start, each held, turn it blue, B bluer than Start, and let go turn it back, while the program stays on the console's
+screen; the Pause Card; Quit Game back to Home; and, with a game from the grid suspended, the Home card's Start Console
+row by the pad, the suspended game giving way to the console, whose Quit Game leaves no session) and `esde` (the Home card's row by the pad and by the pointer, the PlayStation gamelist's
+Select row by the pointer, each to the console's screen proven the same way and Quit Game back to the theme, and the
+Home card's Continue naming and resuming the console's session, held at the five sizes). Until the merge of WiseMan on
+2026-11-11, `esde` started the console with its game suspended; that merge resumes and quits the game there first, and
+`console` holds the suspended case since.
+
+The Home card's facts were read once: `homeCardFacts` read the library's consoles and tools from the model itself, so
+its binding followed only the session and the clock, and a card opened before either changed offered no Start Console
+however many consoles the library had listed since (found on 2026-11-11 by `console_fails`, the ES-DE theme's Home card
+showing none). The consoles that start empty and the tools' summaries are now arguments (`library.startable`,
+`library.toolSummaries`), so the card follows them.
+
+**Start on Home opens the Home card at its first page** (decided 2026-11-11). Until then the own look's card opened only
+at Power, from Home's Power place, where B closes it, so its first page, with Continue and Start Console, was not
+reached in the own look. Mistress's Start, read in her source: on Choose a console and on the games screen it went Home
+(`ConsolesPadCommand`, `OwnScreenPadCommand`: `ShowHome`); on Home, the desktop's Home opened the pad's menu at its
+first page (`OpenPadMenu`), and the big screen's moved the focus to Home's start (`FocusStart`); on the classic library
+list, `OpenPadMenu`. The program keeps Start on Choose a console, the grid and the search going Home, and Start on Home
+now opens the card at its first page (`screens::step`, `home_card::FIRST`) where it took the focus back to Games; Home's
+`homeAgain` count, which only that did, is gone. B on the first page closes the card to Home, and Home's Power place
+still opens it at Power. Held by qt-models' `cards`, qt-app's `cards` (Start on Home, the first page's rows, B back) and
+`console` (above).
+
+Not built, for the tester: the own look's Home shows a suspended game's Continue through the theme feed's
+`showSession`, which names a game by its path; a console's session has none, so the own look's Home screen offers no
+Continue for it, where Mistress's did (the Home card's Continue does). Naming it there is a change to the theme API.
+
+**3. Tools ▸ Cores and ▸ Themes.** In both looks the Home card's Cores and Themes rows open Cores and the Themes tab
+(`screens::card_act`). B comes back to where the card was opened, the library's screen, the card having closed as it
+opened them (`screens::tool_back`, from the screen each was opened over); the Themes tab opened from Settings still
+goes back to Settings, and Cores from Home's place to Home. Under an ES-DE theme Cores had no way back at all; it now
+has the theme's view.
+
+**4. Most played, Year and Rating.** A refresh reads games.db's plays (one answer) and, where it is shown, the scraper's
+metadata, once (`Catalog.plays`, `Catalog.metadata`), which the ES-DE view now takes from the catalog rather than
+reading again. The metadata is a call a game, so the own look reads it only while the grid sorts by Year or Rating:
+`GameModel.byFacts` says so, `LibraryModel.byFacts` follows it and reads the library again when it turns on, and every
+refresh after keeps reading it while it stays on (`library::refresh_with`'s `by_facts`). Each
+grid row carries its play count, its year and its rating (`GameRow.plays`, `.year`, `.rating`), read through the one
+reader of the release date and the rating (`esde_shelves::release_date`, `::rating`, `::year_of`, which a game's page's
+year also uses). The sorts are Mistress's `GamesScreen.Sorted`: most played first, oldest year first, highest rating
+first, each stable over the name's order so a tie keeps it, and a game without the datum last. The ES-DE theme's first
+read (`FirstLook`) reads no metadata or plays, so until the whole read arrives these three sort by name.
+
+While Year or Rating is chosen, the own look reads every game's metadata at each refresh, off the interface thread, as
+an ES-DE theme does; how long that takes on a large library is not measured yet.
+
+**5. Errors no longer dropped.** Three of these failures no player can meet, each read from the platform's source on
+2026-11-11 and said at the call: their words are tested as sentences (qt-models' `failures`), and no test makes them
+happen in the program, since nothing the front end passes makes the call fail.
+- `runtime.rescan()` before a game opens: a failure is said with the open's words ("The engines could not be listed
+  again, so one approved or installed since the last game may not be used: …"), and the game opens on what was listed.
+  The platform answers the call with a failure only for a null runtime (`emusen_crystal_rescan`,
+  Platform/platform/src/crystal.rs), and crystal-client passes the handle of a made `Runtime`, never null.
+- Cores' rescan (`Backend::rescan`, now a `Result`): a failure is Cores' notice.
+- Cores' firmware status (`Backend::firmware`, now a `Result`): a failure is never read as "no firmware". The pane says
+  "⚠ EmuSen's runtime could not say whether you have one", and the Firmware page, offered for it, leads with a row
+  "Firmware not read" whose pane holds the runtime's words.
+- The launch's firmware check (`firmware_needed`): a failure is no longer "no firmware needed". The player is told
+  ("The firmware this game needs could not be checked, so it opens without asking: …", `launch::firmware_unchecked`,
+  in Attention's tone, `LaunchModel.noticeAttention`) and the game's own open says the rest. The platform answers it with
+  a failure only for an empty path, a null runtime or text that is not UTF-8 (`emusen_crystal_firmware_needed`); the
+  launch passes a library row's path, never empty, as a Rust string, and a made runtime.
+- The launch's firmware folder (`DIR_FIRMWARE`): with no folder set, the question says "the firmware folder" in
+  general words, as before; a folder that cannot be read is said too. Galaxia answers that call with a failure only for a
+  folder number it does not have (`emusen_galaxia_directory`, Platform/platform/src/galaxia.rs); an unset folder is
+  `ABSENT`, which platform-client reads as none, and the path it writes is `to_string_lossy`'s, always UTF-8.
+- Start Console's firmware line where the runtime cannot say ("⚠ EmuSen's runtime could not say whether you have it:
+  …") is new: Mistress's pane showed nothing there. Listed for the tester, as what the player sees.
+- Only the runtime's -1 (its `disc_index` with the drive empty) reads as an empty drive. Any other index below zero is
+  not read, and the rest of the session's answer still is: `shapes::Discs` has no index and keeps the one written
+  (`unread_index`), and the Pause Card's Change Disc says "Not known" on each of the game's own discs and offers Eject disc
+  (`pause::UNREAD_DISC`). Until 2026-11-11 such an index failed the whole `session_info` read and with it the
+  session. Held by `an_empty_drive_is_no_index` and qt-models' `pause`.
+- The Home card's lists of consoles that start empty and of the tools' lines, which the program writes itself: one that
+  cannot be read is said under the first page's rows ("The consoles that start with no disc could not be read: …",
+  "The tools' lines could not be read: …"; `home_card::read_lists`), as the List card says a console it cannot read,
+  where until 2026-11-11 it was read as none. Held by qt-models' `home_card_acts`.
+- A console a theme's gamelist's facts name and that cannot be read is said under the List card's rows ("The console
+  this list starts could not be read: …", `list_card::console_unread`) rather than its row dropped unsaid.
+- The firmware statuses `present` and `missing` have one owner, crystal-client's `FirmwareFile::PRESENT` and `MISSING`,
+  read through qt-models' `firmware::have` by Start Console's line and Cores' pane alike. Start Console's line is
+  Mistress's `FirmwareLine` words ("✗ Not found: add it in Settings → Firmware"); Qt's Cores words the same need "⚠ None
+  found yet…", so the line no longer says it is worded as Cores words it.
+- The session's Resume setting (`resume_setting`): settings that cannot be read are taken as Ask, so the player is asked
+  rather than a state being loaded or left unasked, even where the player had chosen Restart or Load. Kept, with this
+  reason.
+
+**6.** `Ask::Place`'s and `Ask::Act`'s comments no longer say Games is the only place built.
+
+**7. The runtimes keep their state records.** Item 1's notices showed a failure every Delete State had met unseen:
+"The state could not be deleted: no SQLite was lent to this runtime, so it keeps no records of states". Every runtime
+the program made passed `emusen_crystal_config.sqlite` as null (crystal-client's `Runtime::new`), though the C ABI has
+carried the lend since 1.2, so the runtime kept no states.db: Delete State removed the files and was then refused. Now
+crystal-client's `Runtime::lent` takes a `LentLibrary` (a loader's handle, lent for the runtime's life; `Runtime::new`
+is `lent` with none, so `Config` and every caller of `new` are unchanged), and qt-models makes every runtime of the
+program through `clients::runtime`, which lends the one SQLite the front end already loads through platform-client's
+`Lent` (`clients::lent_sqlite`). platform-client's `Lent::handle` became public for it: crystal-client does not depend
+on platform-client, so the handle has to cross as a raw pointer, which is what the C field takes.
+Where `libsqlite3.so.0` cannot be loaded, the runtime is lent nothing and games still open (`clients::runtime_lending`);
+the session says it once, as its runtime is made: "The states' records are not kept, since SQLite could not be loaded:
+…". The library keeps games.db on SQLite and still fails without it, so without SQLite the program lists no game: the
+player cannot choose one, and every screen that lists games says the library could not be read. What opens without
+SQLite is a game the session is handed by its path, as `runtime_records` does; no screen of the program hands one
+without the library. `clients::lent_sqlite` is private, and the
+soname is `clients::SQLITE`. Held by qt-models' `runtime_records` (a runtime made without the lend is refused; each of the
+models' configurations forgets a state's record; without SQLite a game opens and the words are said).
+
+**Not built here, each for the tester:** the Tools page's other rows (Scraper, Packages, Library Manager, Cheats,
+Collections, Compressed Discs, Shell), whose screens the program does not have yet; the List card's Collections; the
+scraper's field names `releasedate` and `rating`, which `esde_shelves` names again because no surface gives the front
+end the scraper's `metadata::FIELDS`.
+
+**The ES-DE view under a card.** The gate's hold of the Home card over an ES-DE theme gave 45 findings at the five sizes
+(overlaps of the theme's items with the card's rows, and the theme's colours outside the kit's palette). The view was
+drawn and enabled under every card and screen over it, so the theme's items were reachable there. It now declares
+itself a backdrop whenever another screen is shown and is disabled there (`esdeLoader.backdrop`), as the own look's
+screens are under a card (ThemeHost's slots). Decided 2026-11-11: the ES-DE view as a backdrop under cards and other
+screens stands. Held on 2026-11-11 with no finding at the five sizes: the Home card over the suspended game and over the
+console's session, the Themes tab, and the PlayStation gamelist's Select menu.
+
+**Cores' console column gives way** (decided 2026-11-11). Cores over the theme gave 55 findings on 2026-11-11: 50 words
+cut with an ellipsis (ten a size) and 5 the section strip's wheel (one a size), and the own look the same 50 cuts. qt-app's
+`cores_fit` (software) and `cores_fit_gpu` (Vulkan) read each cell's width and its words' `implicitWidth` as laid out;
+the two backends gave the same numbers to the hundredth. At 1280 × 800, in design units, the Barlow face at the row's
+size, the list's room is 595 (691 less the lead, the trail and two gaps):
+
+| Words | Column | Takes | Given before | Given now |
+|---|---|---|---|---|
+| ● Default (the status column's widest) | Status | 107.27 | 77.14 | 108 |
+| Genesis, Sega CD, Master System, SG-1000 (Genesis Plus GX) | Console | 458.09 | 327.86 | 278, so "Genesis +3" |
+| Game Boy, Game Boy Color (SameBoy) | Console | 291.36 | 327.86 | 278, so "Game Boy +1" |
+| Mupen64Plus-Next | Core (fill, least 190) | 208.48 | 190 | 209 |
+
+`ColumnFit` measured the columns right: each content column was given 0.714 of its widest words, rounded up. The core
+column's least (190, Interface §15.2's measure of `Mupen64Plus-Next`) and the two content columns (459 and 108) needed
+757, so `fit_columns` scaled every content column into the rest and cut the short status words too, and the core's name
+at its least of 190 was under the 208.48 it takes in this face. Now the console column gives way first (EmuSen_Kit.md
+§7.106): it takes its whole words where the room holds them beside the status words and the core column's least or
+words, whichever is larger, and otherwise what is left, never less than its widest short words. A row whose whole list
+does not fit the width given shows its first console and a count ("Genesis +3"); a core of one console shows its name.
+The status words and the core's names are never cut at the gate's sizes. The wording has one owner, Cores' model
+(`words::first_console`, beside `words::consoles`), which gives each console cell both words (`Words::giving_way`); the
+column declares that it gives way (`Column::gives_way`), and the kit's `ToolScreen` picks the words by the width laid out.
+The order is the core's, as Mistress's `CoreRow.ConsolesOf` kept it: its systems in the order it declares them, each
+console once (`row::Consoles::of`). The pane's caption lists them all. At 1920 × 1080, 1280 × 720 and 3840 × 2160 the
+console column is given 364 and SameBoy's two consoles (291.36) are read whole; at 1280 × 800 and 1920 × 1200 it is
+given 278 and they read "Game Boy +1". Genesis Plus GX's four (458.09) fit at no gate size and read "Genesis +3" at all
+five (measured on 2026-11-11, `cores-fit-software.tsv`).
+
+Two measures were wrong besides, each fixed in the kit. `ColumnFit` measured words with `QFontMetricsF`, which disagrees
+with `Text`'s design-metric layout by up to half a unit; and a fill column had no measure of its words, so nothing kept
+`Mupen64Plus-Next` whole (EmuSen_Kit.md §7.106). The strip's wheel was the kit's too (§7.105): where the names run past
+the strip it is a scroller, which the wheel and the walk move and a drag does not, and where they fit it is no scroller.
+The gate's rule for a flickable's wheel, which an earlier pass of this piece had widened to fit the strip, is back as it
+was.
+
+`cores_fit` and `cores_fit_gpu` now fail on any finding the gate gives on Cores in either look at any size, not the
+wheel's alone, and on any cell given less than its words take, a status column given other than its widest words, or a
+core of several consoles read as neither its whole list nor its first console and a count. They hold both sides of
+giving way: a cell that gives way must read its whole list exactly where the list's width fits the cell (the width of
+the hidden whole text, `ToolScreen`'s `whole`, against the cell's), SameBoy's two consoles must be read whole at some
+size and as "Game Boy +1" at another, in each look, and a core of one console (NES, Super Nintendo) whole at every size.
+kit-core's `table`, kit-gallery's `screens` (one console, two, four and twenty, the four fit sizes, both variants, the
+same rule for each cell, and the pane of the twenty-console core, whose caption names all twenty, wrapped and never
+cut) and qt-models' `cores` (the wording, twenty consoles in the core's order) hold the rest. No core of the program's
+data declares twenty consoles, so the twenty-console row and pane are held on the gallery, not in qt-app.
+
+**The game page's States hold, and idle's stillness.** qt-app's `game_page` failed at GamePageStates ("the pad does not
+reach" three State tiles) and `idle` at Home's `assert_still` (two frames swapped, the Settings rows' words dirty) once
+each under load on this branch. No wait was added. Each now says, when it fails, what the program held then: the screen
+shown, the library's, session's, page's and settings' problems, and the focus with the items it sits in (`common::state`;
+`game_page` adds every walkable's box and whether it is shown, `idle` wraps `assert_still`).
+
+**A card after a session holds the focus.** In qt-app's `console` on the GPU, the List card opened over the grid after a
+console session had ended took no press: the focus was on the window's root item, and the walk read Home's status line
+("1 controller · 12:00"), the first words after it. The pointer still rested where the first walk had clicked a row. The
+theme's grid cell that came under it while the grid was disabled under the card took the pointer's focus, and Qt Quick
+gave a disabled item's focus to the root. A failed start on the software backend does not reproduce it, since the grid
+is not remade under the resting pointer. The fix is the kit's: the pointer focuses only an enabled item (EmuSen_Kit.md
+§7.107). The Home card's first page was walked by the pad and the pointer after a session in the same runs, and its
+focus was on its first row each time.
+
+A card made under a resting pointer still took the pointer's focus while the pad was in use: the row Start's Home card
+slid under the pointer, and on Home rebuilt after a session the tile that came there. Whether the pointer moved is now
+the window's fact, not each controller's, and only a real pointer event moves it (EmuSen_Kit.md §7.108). The same walk
+runs with the pointer left resting under the ES-DE theme across a game's session (`esde`: the Home card's Continue
+focused, Down and Up moving), in the own look with a game suspended and the pointer left at a point the List card's
+controller never saw (`console`: the List card over the grid, its first row focused, Down moving), and on the software
+tier with controllers that have never seen the pointer (`cards`: the Home card opened under it focuses its first row,
+and Home shown again from Consoles focuses Games, not the place under it). EmuSen_Kit.md §7.108 gives the seeded
+faults, the rule of 0efa4a08f among them.
+
+The fifth pass recorded that Home's Continue took the pointer's focus "while no game was suspended". It is a defect of
+the reference theme, not of the kit: `themes/emusen/screens/Home.qml` keeps its Continue walkable enabled with no game,
+where the walk never reaches it (`focusItems`, `activeFocusOnTab: Session.hasGame`) and its A does nothing, so a moving
+pointer gives the focus, and its ring, to a box A cannot act on. A resting pointer no longer does (§7.108). It is not
+changed here; the tester is asked.
+
+**Changes the player sees beyond the three rulings, for the tester.** Three changes of this piece are not covered by
+R-20261111-25, -26 or -27: every card's line under its rows now wraps instead of being cut (`MenuCard.qml`); Change
+Disc says "Not known" on each of a game's discs and offers "Eject disc" when the runtime's disc index cannot be read
+(`pause.rs`, `UNREAD_DISC`); and Cores' pane, when the runtime cannot say whether the firmware is there, now gives the
+runtime's words ("⚠ EmuSen's runtime could not say whether you have one: …. Firmware, under X, says more.") where it
+dropped them.
+
+**The Home card says only lists it could not read.** The library's `toolSummaries` is empty until each tool's stage fills
+it, and `home_card::read_lists` read the empty text as JSON it could not read. The Home card's first page then said "The
+tools' lines could not be read: EOF while parsing…" under its rows, cut with an ellipsis. qt-app's `console` gate found
+it at all five sizes (HomeCardContinueConsole). An empty text is now none (qt-models' `home_card_acts`), as for
+the ES-DE media index. The card's line under its rows wraps instead of being cut, so a list that really cannot be read
+is said whole (qt-app's `cards`, HomeCardUnread, held at the five sizes).
+
+**Held to** (measured on 2026-11-11, on the branch's last code): qt-models' `sorts`, `home_card_acts`, `failures`,
+`cores`, `start_console` and `runtime_records`, and on the GPU `session`; qt-app's `repairs` (the three sorts by pad and
+pointer, Most played with a tie, the List card held at the five sizes), `cards` (HomeCardUnread among its holds),
+`failures`, `console_fails` and `cores_fit` on the software tier, and on the GPU `console` (every walk named above, the
+List card's second opening after a session among them), `esde`, `cores_fit_gpu` and `acceptance`; kit-gallery's `strip`,
+`strip_fits`, `disabled`, `pointer` and `screens`. qt-app's `esde` ran to its end for the first time: after the Cores assert, its missing-theme
+fallback and `assert_quiet` passed with nothing to report. Everything it walks passes: a NES game with no engine fails and
+is said, the theme back; Continue resuming the game; Tools ▸ Cores by the pointer and ▸ Themes by the pad, B back to the
+theme; the Home card and Themes held at the five sizes; Start Console from the Home card by the pad and by the pointer and
+from the Select menu by the pointer.
+
+On the GPU run of 7d3b6571b (2026-11-11), after the merge of WiseMan, `esde` failed at its last step: the library's
+games removed and the library read again, the own look did not come in place of the theme within 20 s, the program on
+the theme's view with no session. The step came from WiseMan and removed the three NES and Super Nintendo files it knew;
+this branch's `esde` had added a PlayStation disc (`Basalt Run.iso`) for the console's gamelist, so one game and its
+shelf were left, and the theme rightly stayed. The step now removes the disc too and first waits for the library read
+with no game on any shelf, so a library that is not empty is named as such and not as the look failing to give way.
 
 ---
 
@@ -5274,6 +6029,21 @@ without the feature (`a_build_without_the_feature_has_no_gate_pad`: the words in
 trailing word accepted (the feature's parse test); `/dev` bound whole into the box (the box refused to start, exit 3);
 the FIFO not named to the program (`pad.py` never ready, `press.py` found no settle); and the pad's `a` sent as East
 (the route ended at Home: lit share 0.727 where the card's is 0.483).
+
+#### 9.3.7 The gates with an ES-DE theme as the library's look **[M 2026-11-09]**
+
+Art Book Next over the player's 9,007 games in `sandbox.sh`'s sandbox, `emusen-qt` in release with `gate-pad`, on the
+RX 6800 in a `kwin_wayland --virtual` of its own at 1920 × 1200, warm (`gates.sh warm` first) and with the other
+builders' work paused (load average 2.8). Mistress's figures are its published build on the same theme and library.
+
+| Gate | emusen-qt, two rounds (2026-11-09) | Mistress, same theme | As read |
+|---|---|---|---|
+| Idle RSS 10 s after the window (anonymous) | 306, 305 MiB (172, 172) | 402 MiB (201) | under Mistress's on 2026-11-09; not read again since |
+| First press answered from the start | 0.861, 0.934 s | gate 0.95 s | under the gate in both rounds, by 16 ms in the slower; not read again since 2026-11-11's changes to the GUI thread's part of a refresh and of the view's load (§4.7, §4.9), which needs a quiet run |
+| The gamelist, Down held 24.4 s, the worst frame | 35.9 ms (median 16.7 ms, 1,389 frames) | 96.8 ms (its grid, §9.3.1) | under Mistress's on 2026-11-09; not read again since |
+
+The causes found and fixed, the cold page cache's cost (about 0.8 s on the first read after a reboot, Mistress's
+alike) and what load does to the figures are in §4.9.
 
 ---
 

@@ -10,6 +10,22 @@ use serde_json::Value;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
+/// A library the host has loaded and lends for the runtime's life (`emusen_crystal_config.sqlite`): its loader's handle.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LentLibrary(NonNull<std::ffi::c_void>);
+
+// A loader's handle, never closed, which the runtime reads from any thread.
+unsafe impl Send for LentLibrary {}
+unsafe impl Sync for LentLibrary {}
+
+impl LentLibrary {
+    /// # Safety
+    /// `handle` is a loader's handle (`dlopen`'s) that stays loaded for the life of every runtime made with it.
+    pub unsafe fn from_handle(handle: *mut std::ffi::c_void) -> Option<LentLibrary> {
+        NonNull::new(handle).map(LentLibrary)
+    }
+}
+
 /// How a runtime is made; `None` for a directory list is the implementation's default.
 #[derive(Clone, Debug, Default)]
 pub struct Config {
@@ -69,8 +85,13 @@ impl Drop for Inner {
 pub struct Runtime(pub(crate) Arc<Inner>);
 
 impl Runtime {
-    /// A runtime made by the library `api` loaded.
+    /// A runtime made by the library `api` loaded, lent no SQLite, so it keeps no state records.
     pub fn new(api: &Arc<Api>, config: &Config) -> Result<Runtime> {
+        Runtime::lent(api, config, None)
+    }
+
+    /// A runtime lent the host's SQLite (`emusen_crystal_config.sqlite`), so it keeps its state records (states.db).
+    pub fn lent(api: &Arc<Api>, config: &Config, sqlite: Option<LentLibrary>) -> Result<Runtime> {
         let cores = config.cores.as_ref().map(to_json);
         let player = config.player_cores.as_ref().map(to_json);
         let (c, cl) = text(cores.as_deref());
@@ -78,7 +99,7 @@ impl Runtime {
         let raw_config = raw::emusen_crystal_config {
             size: std::mem::size_of::<raw::emusen_crystal_config>() as u32,
             flags: if config.development { raw::EMUSEN_CRYSTAL_CONFIG_DEVELOPMENT } else { 0 },
-            sqlite: std::ptr::null_mut(),
+            sqlite: sqlite.map_or(std::ptr::null_mut(), |l| l.0.as_ptr()),
             cores: c,
             cores_len: cl,
             player_cores: p,

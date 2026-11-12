@@ -29,9 +29,10 @@ pub trait Backend {
     fn firmware_folder(&self) -> Option<String>;
     fn approve(&self, sha256: &str) -> Result<(), String>;
     fn revoke(&self, sha256: &str) -> Result<(), String>;
-    /// A system's firmware files and their status; none where the runtime cannot say.
-    fn firmware(&self, system: &str) -> Option<Vec<FirmwareFile>>;
-    fn rescan(&self);
+    /// A system's firmware files and their status, none where the system names none; the runtime's words where it fails.
+    fn firmware(&self, system: &str) -> Result<Vec<FirmwareFile>, String>;
+    /// The engines listed again; the runtime's words where it fails.
+    fn rescan(&self) -> Result<(), String>;
     fn start(&self, request: &Value) -> Result<Box<dyn Job>, String>;
     /// The cores folder's disk: its free and total bytes.
     fn space(&self) -> Option<(u64, u64)>;
@@ -90,12 +91,12 @@ impl Backend for Clients {
         self.runtime.core_revoke(sha256).map_err(words)
     }
 
-    fn firmware(&self, system: &str) -> Option<Vec<FirmwareFile>> {
-        self.runtime.firmware_status(system).ok().flatten().map(|s| s.firmware)
+    fn firmware(&self, system: &str) -> Result<Vec<FirmwareFile>, String> {
+        self.runtime.firmware_status(system).map(|s| s.map(|s| s.firmware).unwrap_or_default()).map_err(words)
     }
 
-    fn rescan(&self) {
-        let _ = self.runtime.rescan();
+    fn rescan(&self) -> Result<(), String> {
+        self.runtime.rescan().map(drop).map_err(words)
     }
 
     fn start(&self, request: &Value) -> Result<Box<dyn Job>, String> {
@@ -195,11 +196,14 @@ impl Backend for Scripted {
         Ok(())
     }
 
-    fn firmware(&self, system: &str) -> Option<Vec<FirmwareFile>> {
-        serde_json::from_value(self.world.get("firmware")?.get(system)?.clone()).ok()
+    fn firmware(&self, system: &str) -> Result<Vec<FirmwareFile>, String> {
+        let Some(files) = self.world.get("firmware").and_then(|f| f.get(system)) else { return Ok(Vec::new()) };
+        serde_json::from_value(files.clone()).map_err(|e| e.to_string())
     }
 
-    fn rescan(&self) {}
+    fn rescan(&self) -> Result<(), String> {
+        Ok(())
+    }
 
     fn start(&self, request: &Value) -> Result<Box<dyn Job>, String> {
         let op = request.get("op").and_then(Value::as_str).unwrap_or_default();

@@ -5,6 +5,8 @@
 // The modules the scene imports register through the program's crate, which a test must link.
 extern crate emusen_qt;
 
+mod common;
+
 use emusen_kit_core::input::UiButton;
 
 const SCENE: &str = r#"import QtQuick
@@ -39,18 +41,7 @@ Window {
 
 /// The card's rows as shown: each row's label and value words, in order.
 fn rows(scene: &mut emusen_qt_test::Scene<'_>) -> Vec<String> {
-    let tree = scene.tree();
-    let words = |parent: &str, name: &str| {
-        tree.nodes.iter().find(|n| n.parent == parent && n.name == name).and_then(|n| n.text.clone()).unwrap_or_default()
-    };
-    let mut rows: Vec<(f64, String)> = tree
-        .nodes
-        .iter()
-        .filter(|n| n.visible && n.ty.starts_with("MenuRow"))
-        .map(|n| (n.y, format!("{} | {}", words(&n.id, "label"), words(&n.id, "value"))))
-        .collect();
-    rows.sort_by(|a, b| a.0.total_cmp(&b.0));
-    rows.into_iter().map(|(_, r)| r).collect()
+    common::console::card_words(scene).into_iter().map(|(label, value)| format!("{label} | {value}")).collect()
 }
 
 fn help(scene: &mut emusen_qt_test::Scene<'_>) -> Vec<String> {

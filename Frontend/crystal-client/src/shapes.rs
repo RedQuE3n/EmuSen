@@ -225,15 +225,41 @@ pub struct Port {
     pub controller: Option<String>,
 }
 
-/// The session's discs.
+/// The session's discs; `index` is none with no disc in the drive, which the runtime writes as -1 (a console started
+/// empty, a disc taken out). Any other index below zero is not read: `index` is none and `unread_index` holds it, and
+/// the rest of the answer is read as written.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
-#[serde(default)]
+#[serde(from = "DiscsAnswer")]
 pub struct Discs {
     pub count: u32,
     pub index: Option<u32>,
+    pub unread_index: Option<i64>,
     pub can_change: bool,
     pub lid_open: bool,
 }
+
+/// The discs as the runtime writes them, before the index is read.
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct DiscsAnswer {
+    count: u32,
+    index: Option<i64>,
+    can_change: bool,
+    lid_open: bool,
+}
+
+impl From<DiscsAnswer> for Discs {
+    fn from(a: DiscsAnswer) -> Discs {
+        let read = match a.index {
+            None | Some(EMPTY_DRIVE) => Ok(None),
+            Some(i) => u32::try_from(i).map(Some).map_err(|_| i),
+        };
+        Discs { count: a.count, index: read.unwrap_or(None), unread_index: read.err(), can_change: a.can_change, lid_open: a.lid_open }
+    }
+}
+
+/// The index the runtime writes for a drive with no disc in it.
+const EMPTY_DRIVE: i64 = -1;
 
 /// The picture's shape.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
@@ -365,6 +391,21 @@ pub struct FirmwareFile {
     pub required: bool,
     pub status: String,
     pub need: String,
+}
+
+impl FirmwareFile {
+    /// The status of a file the player's folders hold.
+    pub const PRESENT: &'static str = "present";
+    /// The status of a required file not found.
+    pub const MISSING: &'static str = "missing";
+
+    pub fn present(&self) -> bool {
+        self.status == Self::PRESENT
+    }
+
+    pub fn missing(&self) -> bool {
+        self.status == Self::MISSING
+    }
 }
 
 /// The cheat codecs' catalogue and each system's pair.
@@ -500,4 +541,20 @@ pub struct SessionCodecs {
     pub auto: Option<CheatCodec>,
     pub explicit: Option<CheatCodec>,
     pub systems: Vec<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Discs;
+
+    #[test]
+    fn an_empty_drive_is_no_index() {
+        let read = |text: &str| serde_json::from_str::<Discs>(text).unwrap().index;
+        assert_eq!(read(r#"{"count":0,"index":-1}"#), None);
+        assert_eq!(read(r#"{"count":2,"index":1}"#), Some(1));
+        assert_eq!(read(r#"{"count":0}"#), None);
+        let other = serde_json::from_str::<Discs>(r#"{"count":2,"index":-2,"can_change":true}"#).expect("the rest of the answer read");
+        assert_eq!((other.index, other.unread_index, other.count, other.can_change), (None, Some(-2), 2, true), "only the runtime's -1 is an empty drive");
+        assert_eq!(serde_json::from_str::<Discs>(r#"{"count":0,"index":-1}"#).unwrap().unread_index, None);
+    }
 }

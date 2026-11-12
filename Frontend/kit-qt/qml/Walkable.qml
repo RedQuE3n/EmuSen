@@ -22,9 +22,8 @@ FocusScope {
     onActiveFocusChanged: if (root.activeFocus) Kit.ViewCurrent.take(root)
     HoverHandler {
         id: hover
+        // Only the pointer's own move focuses: what comes under a pointer at rest takes nothing (EmuSen_Kit.md §7.39, §7.108).
         onHoveredChanged: root.controller.hoverAt(root, hover.hovered, hover.point.scenePosition)
-        // What comes under a pointer that stays where it is takes no focus: the controller keeps where it was (EmuSen_Kit.md §7.39).
-        onPointChanged: if (hover.hovered) root.controller.pointerMoved(hover.point.scenePosition)
     }
     TapHandler {
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.BackButton

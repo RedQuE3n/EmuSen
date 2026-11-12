@@ -2,15 +2,37 @@
 //! game, written from the library view's rows and read back the same way.
 
 use crate::library::GameRow;
-use serde_json::{json, Value};
+use serde::Serialize;
+use serde_json::Value;
 
-/// The games as the JSON array GameModel reads.
-pub fn to_json(games: &[GameRow]) -> String {
-    let rows: Vec<Value> = games
-        .iter()
-        .map(|g| json!({ "path": g.path, "system": g.system, "title": g.title, "hue": g.hue, "favourite": g.favourite, "cover": g.cover, "hero": g.hero, "console": g.console, "facts": g.facts, "played": g.played_at }))
-        .collect();
-    Value::Array(rows).to_string()
+/// The games as the JSON array GameModel reads, written straight from the rows (EmuSen_Qt.md §4.9).
+pub fn to_json<'a>(games: impl IntoIterator<Item = &'a GameRow>) -> String {
+    let rows: Vec<RowText> = games.into_iter().map(RowText::of).collect();
+    serde_json::to_string(&rows).unwrap_or_else(|_| "[]".into())
+}
+
+/// A game's object in that text, borrowed; the keys in the order a JSON object's sorted map gave them.
+#[derive(Serialize)]
+struct RowText<'a> {
+    console: &'a str,
+    cover: &'a str,
+    facts: &'a str,
+    favourite: bool,
+    hero: &'a str,
+    hue: f64,
+    path: &'a str,
+    played: i64,
+    plays: i64,
+    rating: Option<f64>,
+    system: &'a str,
+    title: &'a str,
+    year: &'a str,
+}
+
+impl<'a> RowText<'a> {
+    fn of(g: &'a GameRow) -> RowText<'a> {
+        RowText { console: &g.console, cover: &g.cover, facts: &g.facts, favourite: g.favourite, hero: &g.hero, hue: g.hue, path: &g.path, played: g.played_at, plays: g.plays, rating: g.rating, system: &g.system, title: &g.title, year: &g.year }
+    }
 }
 
 /// The games less the one at `path`, as Home's shelf leaves out the suspended game; all of them for an empty path.
@@ -34,6 +56,9 @@ pub fn from_json(text: &str) -> Vec<GameRow> {
             console: words(v, "console"),
             facts: words(v, "facts"),
             played_at: v.get("played").and_then(Value::as_i64).unwrap_or_default(),
+            plays: v.get("plays").and_then(Value::as_i64).unwrap_or_default(),
+            year: words(v, "year"),
+            rating: v.get("rating").and_then(Value::as_f64),
         })
         .collect()
 }

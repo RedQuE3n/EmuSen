@@ -22,6 +22,7 @@ bool harness_made_since(QObject& window);
 bool harness_turning(QObject& window, std::uint64_t id);
 void harness_click(QObject& window, double x, double y, int button);
 void harness_hover(QObject& window, double x, double y);
+bool harness_hover_in(const QString& name, double x, double y);
 void harness_key(QObject& window, int key, int modifiers);
 void harness_key_hold(QObject& window, int key, bool down);
 std::unique_ptr<HeldClock> harness_clock_hold();
@@ -47,6 +48,9 @@ bool harness_set_property(QObject& root, const QString& object_name, const QStri
 bool harness_destroy(QObject& root, const QString& object_name);
 bool harness_watch(QObject& root, const QString& object_name, const QString& property);
 int harness_notified(QObject& root, const QString& object_name, const QString& property);
+bool harness_watch_rows(QObject& root, const QString& object_name);
+bool harness_watch_order(QObject& root, const QString& object_name, const QString& property);
+QString harness_rows_told(QObject& root, const QString& object_name);
 QString harness_colours_at(QObject& window, const QString& points);
 void harness_hide_words(QObject& window, bool hidden);
 std::uint64_t harness_frames(QObject& window);
@@ -54,3 +58,4 @@ QString harness_running(QObject& window);
 int harness_difference(QObject& window, const QString& reference, int tolerance, int reach, const QString& loose, const QString& marks);
 // A left-button drag in steps, as a hand moves a slider's handle (EmuSen_Kit.md §7.42).
 void harness_drag(QObject& window, double x0, double y0, double x1, double y1);
+void harness_touch_drag(QObject& window, double x0, double y0, double x1, double y1);

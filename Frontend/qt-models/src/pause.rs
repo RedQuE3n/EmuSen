@@ -147,6 +147,8 @@ impl CardFacts {
 pub struct DiscFacts {
     pub count: u32,
     pub index: Option<u32>,
+    /// The runtime named a disc in the drive by an index this program cannot read.
+    pub unread: bool,
     pub can_change: bool,
     pub lid_open: bool,
 }
@@ -180,7 +182,7 @@ impl Facts {
         json!({ "slot": self.slot, "slots": slots, "rewindWhy": self.rewind_why, "rewindSeconds": self.rewind_seconds,
                 "held": self.held, "now": self.now, "hz": self.hz, "speed": self.speed, "pictures": self.pictures,
                 "path": self.path, "system": self.system, "secondPlayer": self.second_player, "cards": self.cards.to_json(),
-                "discs": { "count": self.discs.count, "index": self.discs.index, "canChange": self.discs.can_change, "lidOpen": self.discs.lid_open } })
+                "discs": { "count": self.discs.count, "index": self.discs.index, "unread": self.discs.unread, "canChange": self.discs.can_change, "lidOpen": self.discs.lid_open } })
         .to_string()
     }
 
@@ -214,6 +216,7 @@ impl Facts {
             discs: DiscFacts {
                 count: v["discs"]["count"].as_u64().unwrap_or(0) as u32,
                 index: v["discs"]["index"].as_u64().map(|i| i as u32),
+                unread: v["discs"]["unread"].as_bool().unwrap_or(false),
                 can_change: v["discs"]["canChange"].as_bool().unwrap_or(false),
                 lid_open: v["discs"]["lidOpen"].as_bool().unwrap_or(false),
             },
@@ -261,10 +264,13 @@ pub fn facts_of(info: &SessionInfo, reel: Option<&RewindReel>) -> Facts {
     let held = reel.map_or_else(Vec::new, |r| r.moments.iter().filter(|m| m.picture.is_some()).map(|m| m.frame).collect());
     let hz = if info.frame_rate_hz > 0.0 { info.frame_rate_hz } else { 60.0 };
     let d = &info.discs;
-    let discs = DiscFacts { count: d.count, index: d.index, can_change: d.can_change, lid_open: d.lid_open };
+    let discs = DiscFacts { count: d.count, index: d.index, unread: d.unread_index.is_some(), can_change: d.can_change, lid_open: d.lid_open };
     let path = info.game.as_ref().map(|g| g.path.clone()).unwrap_or_default();
     Facts { rewind_why, rewind_seconds, held, now: info.total_frames, hz, path, system: info.system.clone(), discs, ..Facts::default() }
 }
+
+/// An own disc's value where the runtime named the disc in the drive by an index this program cannot read.
+pub const UNREAD_DISC: &str = "Not known";
 
 /// What a slot with nothing in it, or a picture not to be had, says.
 pub const EMPTY: &str = "Empty";
@@ -327,7 +333,9 @@ pub const CONTROLLER: &str = "controller";
 pub const SWAPPED: &str = "Players 1 and 2 swapped";
 
 /// What A does on Change Disc, as Mistress says it (`DiscSentence`).
-pub const DISC_SENTENCE: &str = "A opens the tray, swaps the disc and closes it, as the console sees it.";
+pub const DISC_SENTENCE: &str = "A swaps to this disc, as the console sees it.";
+/// What A does on the eject row.
+pub const EJECT_SENTENCE: &str = "A takes the disc out and leaves none in, as the console sees it.";
 
 /// What Guide held with a button asks of the running game (EmuSen_BigPicture.md §48.7): Up saves to the slot, Down
 /// loads it, the right shoulder takes a screenshot; the kit says only which button was chorded.
@@ -588,10 +596,16 @@ impl Card {
         }
     }
 
+    /// The game's name the card is titled by: the library's title of it, else its own (a console started empty has no
+    /// game the library names).
+    fn named(&self, game: &str) -> String {
+        if game.is_empty() { self.own_title() } else { game.to_owned() }
+    }
+
     /// The page's title over its rows: the game's on the first, the page's own name on the others.
     pub fn title(&self, game: &str) -> String {
         match self.page {
-            Page::First => game.to_string(),
+            Page::First => self.named(game),
             Page::Leave => "Leave".to_string(),
             Page::Reel => "Rewind".to_string(),
             Page::Options => "Game Options".to_string(),
@@ -608,7 +622,7 @@ impl Card {
         match self.page {
             Page::First => String::new(),
             Page::Ask(ask) => ask.page().breadcrumb,
-            _ => game.to_string(),
+            _ => self.named(game),
         }
     }
 
@@ -899,8 +913,12 @@ impl Card {
         Pane { kind: PaneKind::Slots, tiles, sentence, ..Pane::none() }
     }
 
-    /// The game's title: its file name without the extension, as the library titles it.
+    /// The game's title: its file name without the extension, as the library titles it; a console started with nothing
+    /// in it by its session's name (Mistress's `RunningGameTitle`).
     fn own_title(&self) -> String {
+        if self.facts.path.is_empty() && !self.facts.cards.console.is_empty() {
+            return crate::session::console_session_name(&self.facts.cards.console);
+        }
         crate::library::title_of(&self.facts.path)
     }
 
@@ -922,12 +940,12 @@ impl Card {
             .map(|i| {
                 let name = if discs.count > 1 { format!("{title} (Disc {})", i + 1) } else { title.clone() };
                 let inserted = discs.index == Some(i) && !discs.lid_open;
-                row(OWN_DISC, &name, if inserted { "Inserted".to_string() } else { String::new() })
+                row(OWN_DISC, &name, if inserted { "Inserted".to_string() } else if discs.unread { UNREAD_DISC.to_string() } else { String::new() })
             })
             .collect();
         rows.extend(self.others().into_iter().map(|g| row(OTHER_DISC, &g.title, String::new())));
-        if discs.index.is_some() {
-            rows.push(row(TRAY, "Open the tray", String::new()));
+        if discs.index.is_some() || discs.unread {
+            rows.push(row(TRAY, "Eject disc", String::new()));
         }
         rows
     }
@@ -960,7 +978,7 @@ impl Card {
         } else if let Some(game) = others.get(i - own) {
             (game.cover.clone(), game.title.clone(), DISC_SENTENCE)
         } else {
-            let sentence = "A opens the tray and leaves it open, with no disc in, as the console sees it.".to_string();
+            let sentence = EJECT_SENTENCE.to_string();
             return Pane { kind: PaneKind::Sentence, sentence, ..Pane::none() };
         };
         Pane { kind: PaneKind::Cover, big, title: name, sentence: sentence.to_string(), ..Pane::none() }

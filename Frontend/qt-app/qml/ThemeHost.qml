@@ -136,8 +136,6 @@ Item {
         target: themed.screens
         function onShownChanged() { feed.showBrowse(themed.grid, themed.screens.key, themed.searching, themed.typing, themed.listOpen) }
         function onKeyChanged() { feed.showBrowse(themed.grid, themed.screens.key, themed.searching, themed.typing, themed.listOpen) }
-        // Start on Home takes the focus back to where Home starts: the first of the screen's focusItems.
-        function onHomeAgainChanged() { themed.homeScreen?.focusItems[0]?.forceActiveFocus() }
     }
     Slot {
         id: homeSlot

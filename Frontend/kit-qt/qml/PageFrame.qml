@@ -18,10 +18,10 @@ Kit.Frame {
     property string facts
     // Roles `label`, `value`, `button` (a pad button, or below zero for none) and `filled` (the screen's main action).
     property alias actionModel: actionList.model
-    // Roles `label`, `line` and `picture`.
-    property alias tileModel: tileList.model
-    // Roles `label`, `value`, `steps` and `opens`.
-    property alias rowModel: rowList.model
+    // Roles `label`, `line` and `picture`; the tiles' view holds it only while tiles are shown (EmuSen_Kit.md §7.58).
+    property var tileModel
+    // Roles `label`, `value`, `steps` and `opens`; the rows' view holds it only while rows are shown.
+    property var rowModel
     // Tiles where true, rows where false.
     property bool showsTiles: true
     // Words and a picture in place of tiles or rows, as a game's Overview shows them.
@@ -63,6 +63,15 @@ Kit.Frame {
         const list = root.showsTiles ? tileList : rowList
         list.currentIndex = 0
         list.forceActiveFocus()
+    }
+    // Each list lets its model go while the model resets, so no delegate is in flight across another section's content (EmuSen_Kit.md §7.58).
+    Kit.ResetGate {
+        id: tileGate
+        model: root.tileModel ?? null
+    }
+    Kit.ResetGate {
+        id: rowGate
+        model: root.rowModel ?? null
     }
     Kit.PageLayout {
         id: places
@@ -251,6 +260,7 @@ Kit.Frame {
                 // A model that fills after the view was made leaves it with no current item, so no delegate would take the focus.
                 onCountChanged: if (currentIndex < 0 && count > 0) currentIndex = 0
                 objectName: "pageTiles"
+                model: root.showsTiles && !root.showsText && tileGate.settled ? root.tileModel : null
                 anchors.fill: parent
                 leftMargin: root.ringRoom
                 rightMargin: root.ringRoom
@@ -342,6 +352,7 @@ Kit.Frame {
                 // A model that fills after the view was made leaves it with no current item, so no delegate would take the focus.
                 onCountChanged: if (currentIndex < 0 && count > 0) currentIndex = 0
                 objectName: "pageRows"
+                model: !root.showsTiles && !root.showsText && rowGate.settled ? root.rowModel : null
                 anchors.fill: parent
                 clip: true
                 keyNavigationEnabled: true

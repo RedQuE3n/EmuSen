@@ -28,6 +28,7 @@ element tile.3 x=292.54 y=413.63 w=72 h=72
 element consoleBody.0 x=292.54 y=413.63 w=72 h=72
 element consoleName.0 y=493.63 h=24 token=TextStrong words=data
 element consoleCount.0 y=517.63 h=22.8 token=Muted words=data
+note tile.4 waits on the tester: the body's box (88 at 434.72, 458.1), as below and as the screen builds, or the ring's (102 at 427.72, 451.1); R-20261111-92 rules the body's size only
 element tile.4 x=434.72 y=458.1 w=88 h=88
 element consoleBody.1 x=434.72 y=458.1 w=88 h=88
 element consoleRing.1 x=427.72 y=451.1 w=102 h=102 token=Accent

@@ -3742,9 +3742,16 @@ shows stands whether or not the drawing then passes). The row (x 59.00, w 368.20
 label's ink less 2 px. The last glyph, SELECT's T in Akrobat SemiBold at 25.666664 px (0.04583333 × 800 × 0.7 in f32),
 rendered as ES-DE renders it (trunc(25.666664 × 64) = 1642, bitmap_left 0, 11 columns, 18 rows), matches the capture
 (`gamelist-1-1280x800.png`, its committed hash) in all 198 pixels with its column 0 at 419, to within half a level;
-its pen is 419 and its rounded advance (10.70 → 11) ends the label, and the strip, at **430**. The row is now x 59.00
-(the first icon's first ink, unchanged), w 371.00. The method is in `~/.cache/emusen/tmp/x10/abn-gamelist-row.md`
-(outside the repository).
+its pen is 419 and its rounded advance (10.70 → 11) ends the label, and the strip, at **430**. Its x is the icon box's
+start, as its 1920 × 1200 sibling's is, measured on the capture: the first disc's edges, from the coverage of columns 59
+and 90 in rows 732–733 over the panel's 17, are 59.64 and 90.35, its centre 75.00, and half the 0.9 fs box (33.0 px,
+measure 2 of §4.8.7) puts the box at **58.50**; the row had held 59.00, the disc's first ink column, a definition its
+sibling does not use. The row is now x 58.50, w 371.50 (re-measured 2026-11-11 under R-20261111-86). Both rows' right
+edges add the last glyph's advance rounded per glyph by ES-DE's rule (`Font::shapeText`), the rule `esde-text` itself
+implements: up to half a pixel of each is that rule's, not the capture's, and each row's note says so. Artflix's x,
+267.90, is the 2026-11-08 measure (first ink less a 1.0 px margin); its disc's centre, 277.00, would put the box at
+268.00, within the row's two units, and the row is left as R-20261111-85 names it. The method is in
+`~/.cache/emusen/tmp/x10/abn-gamelist-row.md` (outside the repository).
 
 **What is still not known.** The FreeType inside the captured ES-DE build was not checked; the probes used Fedora's
 2.14.3. That it reproduces the 27-row `S` at 2346/64 and RANDOM's M to the pixel supports alike hinting; it is not

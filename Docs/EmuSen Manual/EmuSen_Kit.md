@@ -3309,8 +3309,9 @@ finding (Settings' ROM folder is still named, by its excuse, R-20261111-36). The
 and is no longer a finding. (2) The colour on `placeDisc.0` to `.2` is printed `#2E8C96DC`, kit-core's `#AARRGGBB`: alpha
 0x2E (0.18) over (140, 150, 220). It is a literal of the reference theme, the disc's border in
 `Frontend/themes/emusen/screens/Consoles.qml` (`border.color: Qt.rgba(140 / 255, 150 / 255, 220 / 255, 0.18)`), the
-same on every place's disc; it is no console's colour and no token. It is not exempted: the acceptance run names it
-until the tester rules on it. The seven counted classes `acceptance.rs` leaves out of its Consoles comparison
+same on every place's disc; it is no console's colour and no token. It was not exempted. Decided 2026-11-11
+(R-20261111-96): the border is the palette's muted token at the same 18%, so it is no longer a colour outside the palette;
+the Consoles figures the run named are ruled the same day (`EmuSen_Qt.md` §3.4.2). The seven counted classes `acceptance.rs` leaves out of its Consoles comparison
 (`COUNTED`) need the canvas's eleven consoles; the acceptance library shelves three consoles, and theme-audit's
 `qt_3_4_2` test holds them on the same screen file over the catalogue `eleven` (the line's comment says so). Held: the
 acceptance test lists Home's scene colours as accepted by R-20261111-39 and, holding Home again with a table that

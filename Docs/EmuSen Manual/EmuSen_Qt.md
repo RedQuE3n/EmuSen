@@ -1243,8 +1243,9 @@ canvas's own; kit-core's test holds them within 0.01 unit.
 
 **Against the canvas after R-20261111-34** (measured 2026-11-11, offscreen on the software backend, theme-audit's
 `qt_3_4_2` run: eleven consoles, the Super Nintendo focused). The places and the cover row's shape are fixed (items 4
-above and `CoverRow`). 44 lines remain, 22 a size, in four figures the screen cannot meet without a finding elsewhere,
-each waiting on the tester:
+above and `CoverRow`). 44 lines remained, 22 a size, in four figures the screen could not meet without a finding
+elsewhere; the tester ruled on each on 2026-11-11, and with the canvas and its mockup changed to the rulings the run
+names no line (measured 2026-11-11, theme-audit's two `qt_3_4_2` tests passing):
 - the focused body, 96 (item 8): at the canvas's own figures (body 96, the `Walkable` the ring's 110) the focused box
   reached 7.4 units into the next orbit's count; at 96 with the body's box, the first focus (the NES) reached 3.5 units
   into Master System's count, 60 lines over eleven. Decided 2026-11-11 (R-20261111-92): the canvas draws it 88;
@@ -1256,8 +1257,8 @@ each waiting on the tester:
   (R-20261111-95): the canvas follows the systems data, and the data is unchanged;
 - the inner orbit's label (item 9): the window ended at 197 on the screen and at 178 in the canvas, so its label's right
   edge stood at 725.35 against 753.72. Decided 2026-11-11 (R-20261111-93): the canvas ends it at 197.
-The figures, the probes and what the canvas would have to say for each are kept with the branch's evidence
-(`canvas-figures.md`); the acceptance test's Consoles mockup lines are the same figures.
+The figures and the probes are kept with the branch's evidence (`canvas-figures.md`); the acceptance test's Consoles
+mockup lines were the same figures.
 
 **The sweep.** theme-check's 120-console sweep walked each row in one direction, then went Down. Over the orbits, Down
 lands nearest in x, so the sweep heard 52 consoles of 120. The sweep now walks each row to both of its ends, as its man

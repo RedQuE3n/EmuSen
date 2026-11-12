@@ -1,5 +1,6 @@
 # Choose a console as the orbits, the approved canvas as numbers (EmuSen_Qt.md §8.2, §3.4.2): written by hand from the canvas
 # reference-consoles/consoles.html (1280 x 800 design units, approved 2026-11-08), its boxes worked out as EmuSen_Qt.md §7.1 step 2 says.
+# The canvas's focused body, inner window, full name's line and cover shape changed to the rulings of 2026-11-11 (R-20261111-92 to 95).
 # Boxes in design units; a text's box is its line box. Edges left out are free.
 mockup 1
 canvas Consoles 1280 800

@@ -149,6 +149,35 @@ pub const FAULT_OUTPUT_UNDECLARED: u64 = 1 << 40;
 /// refused with `STATUS_OLD_HOST`, which `status_text` does not answer. Only C12 plays that host, so C11 sees the code
 /// only where C12's statuses reach it.
 pub const FAULT_OLD_HOST_UNANSWERED: u64 = 1 << 41;
+/// Not a fault: the one system is the PlayStation's table id, `psx`, so a host whose systems table names it starts that
+/// console with nothing in it on this core (the client fixture's console core).
+pub const AS_PLAYSTATION: u64 = 1 << 42;
+
+/// The one system's id: `test`, or `psx` under `AS_PLAYSTATION`.
+fn system_id() -> &'static str {
+    if faults() & AS_PLAYSTATION != 0 { "psx" } else { "test" }
+}
+
+/// The pad's buttons: A and Turbo, and under `AS_PLAYSTATION` B and Start besides, so a host's B and Start reach it.
+fn buttons() -> Vec<Button> {
+    let mut buttons = vec![Button { bit: 0, control: Some(Control::A), label: "A".into() }, Button { bit: 1, control: None, label: "Turbo".into() }];
+    if faults() & AS_PLAYSTATION != 0 {
+        buttons.extend([Button { bit: 2, control: Some(Control::B), label: "B".into() }, Button { bit: 3, control: Some(Control::Start), label: "Start".into() }]);
+    }
+    buttons
+}
+
+/// The picture's blue under `AS_PLAYSTATION`, by the button of the first pad held, so a host sees which button reaches
+/// the console in the picture: A 0x40, Turbo 0x60, B 0xFF, Start 0xA0, the highest bit held telling; none with none
+/// held, and none for every other build.
+pub const PRESSED_BLUES: [u8; 4] = [0x40, 0x60, 0xFF, 0xA0];
+
+fn pressed_blue(pad: u32) -> u8 {
+    if faults() & AS_PLAYSTATION == 0 {
+        return 0;
+    }
+    (0..PRESSED_BLUES.len()).rev().find(|bit| pad & (1 << bit) != 0).map_or(0, |bit| PRESSED_BLUES[bit])
+}
 /// The status of that fault, a core's own code that no text names.
 pub const STATUS_OLD_HOST: i32 = -1999;
 /// Not a fault, since 1.13: an image whose payload begins with `HELD_CHEATS` holds the cheats at the end of every
@@ -363,7 +392,7 @@ impl TestCore {
             holds: body.first() == Some(&HELD_CHEATS),
             cheats_held: false,
             reads: std::cell::Cell::new(0),
-            system: "test",
+            system: system_id(),
             old_host: faults() & FAULT_OLD_HOST_UNANSWERED != 0 && r.host_abi_version == (1 << 16) | 99,
         };
         m.draw();
@@ -432,7 +461,8 @@ impl TestCore {
         let n = (self.width() * 4) as usize;
         let green = if self.settling > 0 { 0x80 } else { 0 };
         let late = if faults() & FAULT_STATE_LOST_LATE != 0 && self.frames >= STATE_LOST_FROM { self.held } else { 0 };
-        self.picture = (0..n).flat_map(|i| [(self.frames as u8).wrapping_add(i as u8).wrapping_add(late), green, 0, 255]).collect();
+        let blue = pressed_blue(self.pads[0]);
+        self.picture = (0..n).flat_map(|i| [(self.frames as u8).wrapping_add(i as u8).wrapping_add(late), green, blue, 255]).collect();
         self.raw = (self.raw_mask & 1 != 0).then(|| {
             let mut red: Vec<u8> = self.picture.chunks_exact(4).map(|p| p[0]).collect();
             red[0] = red[0].wrapping_add((faults() & FAULT_RAW_DISAGREES != 0) as u8);
@@ -534,7 +564,7 @@ impl Core for TestCore {
                 "A counter that exercises every export of the core ABI.".into()
             }),
             systems: vec![System {
-                id: "test".into(),
+                id: system_id().into(),
                 name: "Test system".into(),
                 extensions: vec![".tst".into()],
                 regions: vec![Region::Ntsc],
@@ -542,7 +572,7 @@ impl Core for TestCore {
                     id: "test.pad".into(),
                     label: "Controller".into(),
                     ports: vec![0, 1],
-                    buttons: vec![Button { bit: 0, control: Some(Control::A), label: "A".into() }, Button { bit: 1, control: None, label: "Turbo".into() }],
+                    buttons: buttons(),
                     axes: vec![AxisControl { axis: Axis::LeftX as u32, control: Some(Axis::LeftX), trigger: false, label: "Stick".into() }],
                 }],
                 firmware: vec![Firmware {
@@ -611,7 +641,7 @@ impl Core for TestCore {
     }
 
     fn starts_empty(system: &str) -> bool {
-        system == "test"
+        system == system_id()
     }
 
     fn create_empty(_system: &str, r: &Create<'_>) -> Result<Self, i32> {
@@ -984,7 +1014,7 @@ impl Core for TestCore {
     fn battery_files(system: &str) -> Option<Vec<Battery>> {
         let inside = Battery::console(2, ".mem").label("Inside the console");
         let inside = if faults() & FAULT_MEDIUM_DISAGREES != 0 { inside.medium("test.card").port(7) } else { inside.medium("test.memory") };
-        (system == "test").then(|| vec![Battery::game(0, ".srm"), Battery::removable(1, ".card").medium("test.card").label("Card slot"), inside])
+        (system == system_id()).then(|| vec![Battery::game(0, ".srm"), Battery::removable(1, ".card").medium("test.card").label("Card slot"), inside])
     }
 
     fn drives(&self) -> Vec<Drive> {

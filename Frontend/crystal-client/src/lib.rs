@@ -17,7 +17,7 @@ pub use api::Api;
 pub use error::{Error, Result, status_name};
 pub use events::{Event, Subscription, kinds};
 pub use frame::{FrameInfo, RawInfo, frame_info, raw_info};
-pub use runtime::{Config, Open, Runtime, Scope};
+pub use runtime::{Config, LentLibrary, Open, Runtime, Scope};
 pub use service::{SessionService, flags as service_flags};
 
 /// The header's numbers a caller passes: open's flags, the speeds, the card manager's ops and the session service's ops.

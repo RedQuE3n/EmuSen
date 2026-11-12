@@ -6,6 +6,8 @@
 
 mod common;
 
+use common::console::{row_middles, until};
+
 use common::{draw_covers, hold, sandbox, wait_for};
 use emusen_client_fixture::library;
 use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
@@ -66,16 +68,7 @@ fn focused(scene: &mut Scene<'_>) -> String {
 
 /// The shown card's rows: each row's label and value, in order.
 fn rows(scene: &mut Scene<'_>) -> Vec<String> {
-    let tree = scene.tree();
-    let words = |parent: &str, name: &str| tree.nodes.iter().find(|n| n.parent == parent && n.name == name).and_then(|n| n.text.clone()).unwrap_or_default();
-    let mut rows: Vec<(f64, String)> = tree
-        .nodes
-        .iter()
-        .filter(|n| n.visible && n.ty.starts_with("MenuRow"))
-        .map(|n| (n.y, [words(&n.id, "label"), words(&n.id, "value")].join(" | ").trim_end_matches(" | ").to_owned()))
-        .collect();
-    rows.sort_by(|a, b| a.0.total_cmp(&b.0));
-    rows.into_iter().map(|(_, r)| r).collect()
+    common::console::card_words(scene).into_iter().map(|(label, value)| if value.is_empty() { label } else { format!("{label} | {value}") }).collect()
 }
 
 fn titled(scene: &mut Scene<'_>, card: &str) -> (String, String) {
@@ -117,6 +110,13 @@ fn cover_of(scene: &mut Scene<'_>, index: usize) -> (String, f64, f64, Vec<Optio
     let (heard, x, y, w, h) = (p.heard.clone(), p.x, p.y, p.w, p.h);
     let points: Vec<(f64, f64)> = (0..5).flat_map(|i| (0..5).map(move |j| (x + 12.0 + (w - 24.0) * f64::from(i) / 4.0, y + 12.0 + (h - 24.0) * f64::from(j) / 4.0))).collect();
     (heard, w, h, scene.colours_at(&points))
+}
+
+/// The first of Home's places other than `not`, by its name, and its middle.
+fn other_place(scene: &mut Scene<'_>, not: &str) -> (String, (f64, f64)) {
+    let tree = scene.tree();
+    let place = tree.nodes.iter().find(|n| n.visible && n.name.starts_with("place.") && n.name != not).expect("another of Home's places");
+    (place.name.clone(), (place.x + place.w / 2.0, place.y + place.h / 2.0))
 }
 
 fn settle(scene: &mut Scene<'_>) {
@@ -184,8 +184,9 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     scene.pad(UiButton::Back);
     settle(&mut scene);
     assert!(scene.set_property("homeCardModel", "facts", &given));
-    scene.pad(UiButton::Menu);
-    scene.wait(50);
+    let tree = scene.tree();
+    let games = tree.find_named("place.0").expect("Home's Games");
+    assert!(scene.focus_item(&tree, games));
 
     // Home's Power place opens the Home card at Power, with Home as the way back (HomeCardPower).
     for _ in 0..6 {
@@ -221,10 +222,66 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     settle(&mut scene);
     assert_eq!(scene.property("screens", "shown"), "Home");
     wait_for(&mut scene, "home", "activeFocus", "true", 1000);
-    // Start on Home takes the focus back to where Home starts.
+    // Start on Home opens the Home card at its first page (decided 2026-11-11), Continue's or Start Console's row first
+    // where either is offered and the library's rows here; B closes it to Home.
     scene.pad(UiButton::Menu);
-    scene.wait(50);
-    assert_eq!(focused(&mut scene), "place.0", "Start puts the focus back on Games");
+    until(&mut scene, 5, "Start's Home card", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
+    assert_eq!(scene.property("homeCardModel", "page"), emusen_qt_models::home_card::FIRST, "the card's first page");
+    assert!(rows(&mut scene).iter().any(|r| r == "Tools"), "the first page's rows: {:?}", rows(&mut scene));
+    let first = rows(&mut scene)[0].clone();
+    until(&mut scene, 5, &format!("the focus on the first row, {first}"), |s| common::console::focused_words(s).starts_with(first.split(" | ").next().unwrap_or_default()));
+    // A pointer at rest focuses nothing; only its own move does (EmuSen_Kit.md §7.108). Neither the card's controller nor
+    // Home's has seen the pointer. Moved over Home to where the card's second row lies and left there, the card Start
+    // opens under it focuses its first row.
+    let second = row_middles(&mut scene)[1];
+    scene.pad(UiButton::Back);
+    until(&mut scene, 5, "B closing the card to Home", |s| s.property("screens", "shown") == "Home" && s.property("homeCardCanvas", "visible") == "false");
+    wait_for(&mut scene, "home", "activeFocus", "true", 1000);
+    scene.hover(second.0, second.1 - 4.0);
+    scene.hover(second.0, second.1);
+    scene.pad(UiButton::Menu);
+    until(&mut scene, 5, "Start's Home card again", |s| s.property("screens", "shown") == "HomeCard");
+    scene.wait(200);
+    let now = common::console::focused_words(&mut scene);
+    assert!(now.starts_with(first.split(" | ").next().unwrap_or_default()), "the card made under the resting pointer focuses its first row, {first}, not {now:?}");
+    until(&mut scene, 5, "the card in place", |s| s.property("homeCardCanvas", "slide") == "0");
+    assert_eq!(row_middles(&mut scene)[1], second, "the card's second row under the resting pointer");
+    scene.pad(UiButton::Back);
+    until(&mut scene, 5, "B closing the card to Home", |s| s.property("screens", "shown") == "Home" && s.property("homeCardCanvas", "visible") == "false");
+    wait_for(&mut scene, "home", "activeFocus", "true", 1000);
+    // Home's Games opens Consoles; the pointer moves there to where another of Home's places lies and is left there; B
+    // shows Home again under it, its focus on Games as Home gives it, not on the place under the pointer.
+    let tree = scene.tree();
+    let games = tree.find_named("place.0").expect("Home's Games");
+    assert!(scene.focus_item(&tree, games));
+    let (other, rest) = other_place(&mut scene, "place.0");
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "screens", "shown", "Consoles", 1000);
+    scene.hover(rest.0, rest.1 - 4.0);
+    scene.hover(rest.0, rest.1);
+    scene.pad(UiButton::Back);
+    until(&mut scene, 5, "B back to Home", |s| s.property("screens", "shown") == "Home");
+    wait_for(&mut scene, "home", "activeFocus", "true", 1000);
+    scene.wait(200);
+    assert_eq!(focused(&mut scene), "place.0", "Home shown under the resting pointer focuses Games, not {other} under the pointer");
+    // A list the card cannot read is said under its rows whole, on as many lines as its words take, never cut.
+    let mut unread: serde_json::Value = serde_json::from_str(&given).unwrap();
+    let said = "The tools' lines could not be read: expected value at line 1 column 1, so the Tools row shows no summary.";
+    unread["unread"] = serde_json::json!(said);
+    assert!(scene.set_property("homeCardModel", "facts", &unread.to_string()));
+    scene.pad(UiButton::Menu);
+    until(&mut scene, 5, "Start's Home card", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
+    let tree = scene.tree();
+    let footer = tree.nodes.iter().find(|n| n.visible && n.name == "cardFooter" && n.text.as_deref() == Some(said)).expect("the words under the rows");
+    assert!(footer.h > 60.0, "the words run on to a second line, {} high", footer.h);
+    hold(&mut scene, "HomeCardUnread", &mockup::Mockup::default(), named, &mut report);
+    scene.pad(UiButton::Back);
+    until(&mut scene, 5, "B closing the card to Home", |s| s.property("screens", "shown") == "Home");
+    assert!(scene.set_property("homeCardModel", "facts", &given));
+    wait_for(&mut scene, "home", "activeFocus", "true", 1000);
+    let tree = scene.tree();
+    let games = tree.find_named("place.0").expect("Home's Games");
+    assert!(scene.focus_item(&tree, games));
 
     // Games, All Games (focused by name: the first focus is the first console, EmuSen_Qt.md §3.4.2), the grid; Start goes Home.
     all_games(&mut scene);

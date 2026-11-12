@@ -1,4 +1,4 @@
-// The width a font gives a line of words, which cxx-qt-lib does not bind (QFontMetricsF); the reason is EmuSen_Kit.md §7.43.
+// The width a line of words takes as Qt Quick's Text lays it out, which cxx-qt-lib does not bind (QTextLayout); the reason is EmuSen_Kit.md §7.43 and §7.106.
 #pragma once
 
 #include <QtGui/QFont>

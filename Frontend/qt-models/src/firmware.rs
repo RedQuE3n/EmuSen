@@ -6,6 +6,31 @@
 use crate::tools::Tone;
 use emusen_crystal_client::shapes::{FirmwareFile, FirmwareItem};
 
+/// What a system's firmware files say together, as Start Console's pane and Cores' pane each say it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Have {
+    /// A file is found.
+    Found,
+    /// None is found and one is required.
+    Missing,
+    /// Files are named and none is required.
+    NotNeeded,
+    /// No file is named.
+    Nothing,
+}
+
+pub fn have(files: &[FirmwareFile]) -> Have {
+    if files.iter().any(FirmwareFile::present) {
+        Have::Found
+    } else if files.iter().any(FirmwareFile::missing) {
+        Have::Missing
+    } else if files.is_empty() {
+        Have::Nothing
+    } else {
+        Have::NotNeeded
+    }
+}
+
 /// One need of a console's firmware and the files that meet it.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Need {
@@ -19,12 +44,12 @@ pub struct Need {
 impl Need {
     /// The file the player's folders hold, if one.
     pub fn found(&self) -> Option<&FirmwareFile> {
-        self.files.iter().find(|f| f.status == "present")
+        self.files.iter().find(|f| f.present())
     }
 
     /// No file is found and one is required.
     pub fn missing(&self) -> bool {
-        self.found().is_none() && self.files.iter().any(|f| f.status == "missing")
+        self.found().is_none() && self.files.iter().any(|f| f.missing())
     }
 
     /// The copy recognised, by its file's name less the extension in capitals ("SCPH-1001").

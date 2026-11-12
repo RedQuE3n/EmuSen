@@ -338,6 +338,8 @@ impl qobject::SettingsModel {
         }
         let asked = self.asked.wrapping_add(1);
         self.as_mut().rust_mut().asked = asked;
+        // Cleared at the start of each attempt, so the same failure twice is said twice (EmuSen_Qt.md §7.9).
+        self.as_mut().said(String::new());
         let thread = self.qt_thread();
         let (cores, world) = (self.cores.to_string(), self.world.to_string());
         std::thread::spawn(move || {
@@ -358,7 +360,7 @@ impl qobject::SettingsModel {
                         model.as_mut().rust_mut().view.read = read;
                         model.as_mut().said(String::new());
                     }
-                    Err(words) => model.as_mut().said(words),
+                    Err(words) => model.as_mut().said(format!("The settings could not be read: {words}")),
                 }
                 model.as_mut().applied();
                 model.shown(false);
@@ -409,6 +411,9 @@ impl qobject::SettingsModel {
     }
 
     fn outcome(mut self: Pin<&mut Self>, outcome: Outcome) {
+        if matches!(outcome, Outcome::Saved(..) | Outcome::Set { .. } | Outcome::NewCard(_)) {
+            self.as_mut().said(String::new());
+        }
         match outcome {
             Outcome::Nothing => {}
             Outcome::Saved(model, document) => {
@@ -416,7 +421,7 @@ impl qobject::SettingsModel {
                 if saved.is_ok() {
                     self.as_mut().saved();
                 }
-                self.as_mut().said(saved.err().unwrap_or_default());
+                self.as_mut().said(saved.err().map(|e| format!("The settings could not be saved: {e}")).unwrap_or_default());
                 self.as_mut().applied();
                 self.shown(false);
             }
@@ -438,7 +443,7 @@ impl qobject::SettingsModel {
             Outcome::Set { console, key, value } => {
                 let set = ClientConsoles::open(&self.platform_library.to_string(), &self.cores.to_string()).and_then(|c| c.set(&console, &key, value.as_deref()));
                 let failed = set.is_err();
-                self.as_mut().said(set.err().unwrap_or_default());
+                self.as_mut().said(set.err().map(|e| format!("The console's setting could not be stored: {e}")).unwrap_or_default());
                 self.as_mut().shown(false);
                 // The engine chosen changes the schema the page draws, and a refusal leaves the stored value as it was.
                 if failed || key == crate::consoles::ENGINE_KEY {
@@ -447,7 +452,7 @@ impl qobject::SettingsModel {
             }
             Outcome::NewCard(path) => {
                 let made = ClientConsoles::open(&self.platform_library.to_string(), &self.cores.to_string()).and_then(|c| c.new_card(&path));
-                self.as_mut().said(made.err().unwrap_or_default());
+                self.as_mut().said(made.err().map(|e| format!("The memory card could not be made: {e}")).unwrap_or_default());
                 self.refresh();
             }
             Outcome::Reread => self.refresh(),

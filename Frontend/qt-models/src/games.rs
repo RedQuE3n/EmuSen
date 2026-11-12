@@ -22,13 +22,16 @@ struct RowText<'a> {
     hue: f64,
     path: &'a str,
     played: i64,
+    plays: i64,
+    rating: Option<f64>,
     system: &'a str,
     title: &'a str,
+    year: &'a str,
 }
 
 impl<'a> RowText<'a> {
     fn of(g: &'a GameRow) -> RowText<'a> {
-        RowText { console: &g.console, cover: &g.cover, facts: &g.facts, favourite: g.favourite, hero: &g.hero, hue: g.hue, path: &g.path, played: g.played_at, system: &g.system, title: &g.title }
+        RowText { console: &g.console, cover: &g.cover, facts: &g.facts, favourite: g.favourite, hero: &g.hero, hue: g.hue, path: &g.path, played: g.played_at, plays: g.plays, rating: g.rating, system: &g.system, title: &g.title, year: &g.year }
     }
 }
 
@@ -53,6 +56,9 @@ pub fn from_json(text: &str) -> Vec<GameRow> {
             console: words(v, "console"),
             facts: words(v, "facts"),
             played_at: v.get("played").and_then(Value::as_i64).unwrap_or_default(),
+            plays: v.get("plays").and_then(Value::as_i64).unwrap_or_default(),
+            year: words(v, "year"),
+            rating: v.get("rating").and_then(Value::as_f64),
         })
         .collect()
 }

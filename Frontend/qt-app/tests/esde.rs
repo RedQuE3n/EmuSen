@@ -1,27 +1,32 @@
 //! An ES-DE theme as the library's look (EmuSen_Qt.md §4.15): the program over a sandbox whose settings choose Art Book Next
 //! from the corpus, its library two synthetic NES images and a synthetic Super Nintendo image, played by VenusRT built
 //! from this commit with its sidecar (the client fixture's; no player's game and no published build is read). Moonrise
-//! gives way to the system view; Right steps the carousel; A opens the
-//! gamelist and A on the game plays it through the ring; the chord pauses it under the Pause Card, and Back to Library is
-//! the gamelist at the same game; Start is the Home card, Select the List card, Y the favourite; a theme that is not there
-//! gives way to the own look with a notice; nothing is logged. On Vulkan in a compositor of the test's own, as the
+//! gives way to the system view; a NES game with no engine fails, said as Mistress said it; Right steps the carousel; A
+//! opens the gamelist and A on the game plays it through the ring; the chord pauses it under the Pause Card, and Back to Library is
+//! the gamelist at the same game, where the Home card, made under a pointer left resting since the List card, holds the focus on Continue and resumes it and its Tools ▸ Cores and ▸ Themes open those
+//! screens and come back, the card, Cores and Themes held at the gate's five sizes over the theme; Start Console starts
+//! the client fixture's PlayStation from the Home card by the pad and by the pointer, and the PlayStation's gamelist's
+//! Select menu starts it by the pointer, its picture found on a grab of the window and its pad's B and Start turning
+//! that picture blue, until Quit Game brings the theme back (EmuSen_Qt.md §7.9); Start is the Home card, Select
+//! the List card, which sorts and filters the theme's gamelist, Y the favourite, each step's sound heard; a theme that is not there gives way to the own look with a notice; nothing is logged. On Vulkan in a compositor of the test's own, as the
 //! acceptance runs. Run it with the ROM library bound read-only (`bwrap --ro-bind`), as the gates do.
 
 mod common;
 
-use common::{sandbox, wait_for};
+use common::console::{console_owns_the_pad, guide_alone, pause, quit_game, row_centre, row_focused, row_middles};
+use common::{approved_console_core, hold, sandbox, wait_for};
 use cxx_qt_lib::QString;
 
 use emusen_client_fixture::cores::{installation_with_snes, snes_image};
 use emusen_client_fixture::library;
-use emusen_kit_core::input::{PadControl, UiButton};
+use emusen_kit_core::input::UiButton;
 use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
 use emusen_platform_client::Platform;
 use emusen_qt::{start, MAIN_URL};
 use emusen_qt_play::host::Host;
 use emusen_qt_test::compositor::Compositor;
-use emusen_qt_test::virtual_pad::{Sdl, VirtualPad};
-use emusen_qt_test::{Harness, Scene};
+use emusen_qt_test::virtual_pad::Sdl;
+use emusen_qt_test::{mockup, Harness, Scene};
 use serde_json::json;
 use std::path::PathBuf;
 
@@ -29,12 +34,9 @@ use std::path::PathBuf;
 const THEME: &str = "art-book-next-es-de";
 const CHOICES: [(&str, &str); 3] = [("Variant", "gamelist-list-metadata-cover"), ("ColorScheme", "dark-screenshots"), ("FontSize", "medium")];
 
-/// Guide pressed alone over the game, held until the router reads it, then let go: with the Guide chords on, as the start
-/// gives them outside Game Mode, Guide alone opens the menu as it is let go (EmuSen_Kit.md §7.26).
-fn guide_alone(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, guide: i32) {
-    sdl.press(pad, guide, true);
-    until(scene, 5, "the router holding Guide", |s| s.pad_held(UiButton::Guide));
-    sdl.press(pad, guide, false);
+/// No finding is named for the tester: the gate holds every state whole.
+fn nothing_named(_: &str, _: &emusen_qt_test::tree::Tree, _: (i32, i32)) -> bool {
+    false
 }
 
 fn home() -> PathBuf {
@@ -107,6 +109,18 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     let world = sandbox("qt-app-esde", &[("nes", "Brass Lantern.nes"), ("nes", "Cobalt Harbor.nes")]);
     std::fs::write(world.dir("Roms/snes").join("Aurora Drift.sfc"), snes_image("AURORA DRIFT")).unwrap();
     let cores = installation_with_snes(&world.dir("lib"));
+    // The client fixture's console core, a PlayStation that starts empty, approved; and a PlayStation disc, so the theme
+    // has the console's gamelist, whose Select menu offers it.
+    approved_console_core(&cores);
+    std::fs::write(world.dir("Roms/psx").join("Basalt Run.iso"), b"not a disc").unwrap();
+    let mut settings = platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
+    let folder = theme.to_str().unwrap();
+    settings["LibraryStyle"] = json!("Theme");
+    settings["BigPictureTheme"] = json!(folder);
+    settings["BigPicture"] = json!({ folder: CHOICES.iter().map(|(k, v)| (k.to_string(), json!(v))).collect::<serde_json::Map<_, _>>() });
+    platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
+    let read = start::read(library());
+    assert!(read.esde && read.navigation_sounds, "the start reads the ES-DE theme as the library's look");
     let mut settings = platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
     let folder = theme.to_str().unwrap();
     settings["LibraryStyle"] = json!("Theme");
@@ -163,6 +177,19 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
         assert_eq!(s.property("cues", "rung"), key(name), "the {name} sound");
     };
 
+    // A game that fails to open, a NES image with no engine for it here: said in Mistress's form, the theme back in place
+    // of a game screen with nothing on it (EmuSen_Qt.md §7.9); B goes back to the systems.
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "esdeModel", "view", "gamelist", 1000);
+    until(&mut scene, 5, "the slide at rest", |s| s.property("esdeModel", "moving") == "false");
+    scene.pad(UiButton::Accept);
+    until(&mut scene, 20, "the failure said", |s| s.property("notices", "shown") == "true" && s.property("notices", "words").starts_with("Failed to load Brass Lantern: "));
+    assert_eq!(scene.property("notices", "attention"), "true");
+    until(&mut scene, 5, "the theme back", |s| s.property("screens", "shown") == "Esde" && s.property("session", "running") == "false");
+    until(&mut scene, 10, "the notice gone", |s| s.property("notices", "shown") == "false");
+    scene.pad(UiButton::Back);
+    until(&mut scene, 5, "the systems again", |s| s.property("esdeModel", "view") == "system" && s.property("esdeModel", "moving") == "false");
+
     // Right steps the carousel; A opens the gamelist on the game.
     let before = rings(&mut scene);
     scene.pad(UiButton::Right);
@@ -191,6 +218,13 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     until(&mut scene, 5, "the Home card closed to the theme", |s| s.property("screens", "shown") == "Esde" && s.property("homeCardCanvas", "visible") == "false");
     scene.pad(UiButton::Options);
     until(&mut scene, 5, "the List card in place", |s| s.property("screens", "shown") == "List" && s.property("listCardCanvas", "slide") == "0");
+    // The pointer moves over the card's second row and is left resting there through the game's session, so the cards
+    // that open after it are made under a resting pointer (EmuSen_Kit.md §7.107, §7.108).
+    let first = focused_words(&mut scene);
+    let middles = row_middles(&mut scene);
+    scene.hover(middles[1].0, middles[1].1 - 4.0);
+    scene.hover(middles[1].0, middles[1].1);
+    until(&mut scene, 5, "the moving pointer focusing the second row", |s| focused_words(s) != first);
     scene.pad(UiButton::Back);
     until(&mut scene, 5, "the List card closed to the theme", |s| s.property("screens", "shown") == "Esde" && s.property("listCardCanvas", "visible") == "false");
     assert_eq!((scene.property("esdeModel", "view"), scene.property("esdeModel", "selected")), ("gamelist".into(), selected.clone()));
@@ -209,10 +243,9 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     assert_eq!(scene.property("esde", "visible"), "false", "the theme hidden under the game");
 
     // Guide alone pauses it under the Pause Card; Leave, Back to Library is the gamelist at the same game.
-    let guide = emusen_qt_endymion::reading::sdl_button(PadControl::Guide).unwrap();
     assert!(scene.pad_chord_only(), "the game owns the pad");
     scene.run_pad_clock();
-    guide_alone(&mut scene, &sdl, &pad, guide);
+    guide_alone(&mut scene, &sdl, &pad);
     until(&mut scene, 10, "the chord pausing the game under the Pause Card", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Pause");
     until(&mut scene, 5, "the card in place", |s| s.property("cardCanvas", "slide") == "0");
     choose_row(&mut scene, "Leave");
@@ -226,12 +259,60 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
         "the gamelist at the same game"
     );
     assert_eq!(scene.property("esde", "activeFocus"), "true", "the theme takes the pad again");
+
+    // Start's Home card leads with Continue over the suspended game, held at the gate's five sizes; A resumes the game.
+    scene.pad(UiButton::Menu);
+    until(&mut scene, 5, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
+    assert!(focused_words(&mut scene).starts_with("Continue"), "the focus on Continue: {}", focused_words(&mut scene));
+    // Made under the resting pointer, the card holds the focus: Down moves it and Up brings it back to Continue.
+    scene.pad(UiButton::Down);
+    until(&mut scene, 5, "Down moving the focus on the card", |s| !focused_words(s).starts_with("Continue") && common::console::focus_within(s, "homeCardCanvas"));
+    scene.pad(UiButton::Up);
+    until(&mut scene, 5, "Up back on Continue", |s| focused_words(s).starts_with("Continue"));
+    let mut report = Vec::new();
+    hold(&mut scene, "EsdeHomeCardContinue", &mockup::Mockup::default(), nothing_named, &mut report);
+    scene.resize(1280, 800);
+    scene.wait(150);
+    scene.pad(UiButton::Accept);
+    until(&mut scene, 5, "Continue resuming the game", |s| s.property("screens", "shown") == "Game" && s.property("session", "paused") == "false");
+    until(&mut scene, 5, "the game owning the pad again", |s| s.pad_chord_only());
+    scene.run_pad_clock();
+    guide_alone(&mut scene, &sdl, &pad);
+    until(&mut scene, 10, "Guide pausing it again", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Pause");
+    until(&mut scene, 5, "the card in place", |s| s.property("cardCanvas", "slide") == "0");
+    choose_row(&mut scene, "Leave");
+    wait_for(&mut scene, "pause", "title", "Leave", 1000);
+    choose_row(&mut scene, "Back to Library");
+    until(&mut scene, 5, "the theme again", |s| s.property("screens", "shown") == "Esde" && s.property("cardCanvas", "visible") == "false");
+    until(&mut scene, 5, "the theme holding the pad", |s| s.property("esde", "activeFocus") == "true");
+
+    // Tools ▸ Cores, chosen by the pointer, opens Cores, and B comes back to the theme; Tools ▸ Themes, by the pad, the
+    // Themes tab, and B the same; each held at the gate's five sizes over the theme.
+    for (tool, by_pointer, screen) in [("Cores", true, "Cores"), ("Themes", false, "Themes")] {
+        scene.pad(UiButton::Menu);
+        until(&mut scene, 5, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
+        choose_row(&mut scene, "Tools");
+        until(&mut scene, 5, "the Tools page", |s| s.property("homeCardModel", "page") == "tools");
+        if by_pointer {
+            let row = row_centre(&mut scene, tool);
+            scene.click(row.0, row.1);
+        } else {
+            choose_row(&mut scene, tool);
+        }
+        until(&mut scene, 5, "the tool's screen", |s| s.property("screens", "shown") == screen);
+        scene.wait(300);
+        hold(&mut scene, &format!("Esde{screen}"), &mockup::Mockup::default(), nothing_named, &mut report);
+        scene.pad(UiButton::Back);
+        until(&mut scene, 5, "B back to the theme", |s| s.property("screens", "shown") == "Esde");
+    }
+
+    until(&mut scene, 5, "the theme holding the pad after the tools", |s| s.property("esde", "activeFocus") == "true");
     // A on the suspended game resumes it; the chord, Leave, Quit Game and Yes close it, and the theme comes back.
     scene.pad(UiButton::Accept);
     until(&mut scene, 10, "the game resumed", |s| s.property("screens", "shown") == "Game" && s.property("session", "paused") == "false");
     until(&mut scene, 5, "the game owning the pad again", |s| s.pad_chord_only());
     scene.run_pad_clock();
-    guide_alone(&mut scene, &sdl, &pad, guide);
+    guide_alone(&mut scene, &sdl, &pad);
     until(&mut scene, 10, "the chord pausing the game again", |s| s.property("screens", "shown") == "Pause");
     until(&mut scene, 5, "the card in place", |s| s.property("cardCanvas", "slide") == "0");
     choose_row(&mut scene, "Leave");
@@ -306,6 +387,68 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     assert!(scene.set_property("cues", "sounds", "{"));
     until(&mut scene, 5, "the sounds' problem as a notice", |s| s.property("notices", "words").contains("sounds could not be read"));
 
+    // Start Console by the pad: the Home card's row and its page, A on the PlayStation; the console's screen is shown and
+    // owns the pad; the Pause Card's Quit Game closes it to the theme.
+    scene.pad(UiButton::Menu);
+    until(&mut scene, 5, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
+    choose_row(&mut scene, "Start Console");
+    until(&mut scene, 5, "Start Console's page", |s| s.property("homeCardModel", "page") == emusen_qt_models::home_card::START_CONSOLE);
+    row_focused(&mut scene, "PlayStation");
+    choose_row(&mut scene, "PlayStation");
+    console_owns_the_pad(&mut scene, &sdl, &pad, "PlayStation");
+    assert_eq!(scene.property("esde", "visible"), "false", "the theme hidden under the console");
+    quit_game(&mut scene, &sdl, &pad, "PlayStation (no disc)", "Esde");
+
+    // Start Console by the pointer: the Home card's row clicked, then the PlayStation's; Quit Game to the theme again.
+    scene.pad(UiButton::Menu);
+    until(&mut scene, 5, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
+    let (x, y) = row_centre(&mut scene, "Start Console");
+    scene.click(x, y);
+    until(&mut scene, 5, "Start Console's page", |s| s.property("homeCardModel", "page") == emusen_qt_models::home_card::START_CONSOLE);
+    row_focused(&mut scene, "PlayStation");
+    let (x, y) = row_centre(&mut scene, "PlayStation");
+    scene.click(x, y);
+    console_owns_the_pad(&mut scene, &sdl, &pad, "PlayStation");
+    quit_game(&mut scene, &sdl, &pad, "PlayStation (no disc)", "Esde");
+
+    // The PlayStation's gamelist: Select's menu leads with Start PlayStation With No Disc, which the pointer chooses.
+    scene.pad(UiButton::Back);
+    until(&mut scene, 5, "the systems", |s| s.property("esdeModel", "view") == "system" && s.property("esdeModel", "moving") == "false");
+    for _ in 0..4 {
+        if scene.property("esdeModel", "shelf") == "psx" {
+            break;
+        }
+        scene.pad(UiButton::Right);
+        until(&mut scene, 5, "the step at rest", |s| s.property("esdeModel", "moving") == "false");
+    }
+    assert_eq!(scene.property("esdeModel", "shelf"), "psx");
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "esdeModel", "view", "gamelist", 1000);
+    until(&mut scene, 5, "the slide at rest", |s| s.property("esdeModel", "moving") == "false");
+    scene.pad(UiButton::Options);
+    until(&mut scene, 5, "the List card in place", |s| s.property("screens", "shown") == "List" && s.property("listCardCanvas", "slide") == "0");
+    hold(&mut scene, "EsdeListCardStartConsole", &mockup::Mockup::default(), nothing_named, &mut report);
+    let (x, y) = row_centre(&mut scene, "Start PlayStation With No Disc");
+    let top = row_middles(&mut scene)[0].1;
+    assert_eq!(y, top, "the console's row leads the menu");
+    scene.click(x, y);
+    console_owns_the_pad(&mut scene, &sdl, &pad, "PlayStation");
+    // Back to Library, the Home card's Continue names the console's session, held at the five sizes, and resumes it.
+    pause(&mut scene, &sdl, &pad, "PlayStation (no disc)");
+    choose_row(&mut scene, "Leave");
+    wait_for(&mut scene, "pause", "title", "Leave", 1000);
+    choose_row(&mut scene, "Back to Library");
+    until(&mut scene, 5, "Back to Library showing the theme", |s| s.property("screens", "shown") == "Esde" && s.property("cardCanvas", "visible") == "false");
+    scene.pad(UiButton::Menu);
+    until(&mut scene, 5, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
+    assert!(focused_words(&mut scene).starts_with("Continue"), "the focus on Continue: {}", focused_words(&mut scene));
+    assert!(scene.tree().nodes.iter().any(|n| n.visible && n.text.as_deref() == Some("PlayStation (no disc)")), "Continue names the console's session");
+    hold(&mut scene, "EsdeHomeCardContinueConsole", &mockup::Mockup::default(), nothing_named, &mut report);
+    scene.pad(UiButton::Accept);
+    until(&mut scene, 5, "Continue resuming the console", |s| s.property("screens", "shown") == "Game" && s.property("session", "paused") == "false");
+    quit_game(&mut scene, &sdl, &pad, "PlayStation (no disc)", "Esde");
+    assert!(report.is_empty(), "{} faults:\n{}", report.len(), report.join("\n"));
+
     // A theme that is not there gives way to the own look, with the loader's words as a notice.
     settings["BigPictureTheme"] = json!(world.root.join("no-such-theme").to_str().unwrap());
     platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
@@ -321,11 +464,17 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     assert!(scene.set_property("library", "platformLibrary", ""));
     assert!(scene.set_property("library", "platformLibrary", library().to_str().unwrap()));
     until(&mut scene, 20, "the theme back", |s| s.property("screens", "shown") == "Esde");
-    for (folder, file) in [("nes", "Brass Lantern.nes"), ("nes", "Cobalt Harbor.nes"), ("snes", "Aurora Drift.sfc")] {
+    // Every game the sandbox holds, the PlayStation's disc with them, so the theme has no shelf left to show.
+    for (folder, file) in [("nes", "Brass Lantern.nes"), ("nes", "Cobalt Harbor.nes"), ("snes", "Aurora Drift.sfc"), ("psx", "Basalt Run.iso")] {
         std::fs::remove_file(world.dir(&format!("Roms/{folder}")).join(file)).unwrap();
     }
     assert!(scene.set_property("library", "platformLibrary", ""));
     assert!(scene.set_property("library", "platformLibrary", library().to_str().unwrap()));
+    let no_game = |s: &mut Scene<'_>| {
+        let shelves: serde_json::Value = serde_json::from_str(&s.property("library", "esdeShelves")).unwrap_or_default();
+        shelves.as_array().is_some_and(|all| all.iter().all(|x| x["games"].as_array().is_none_or(|g| g.is_empty())))
+    };
+    until(&mut scene, 20, "the library read with no game on any shelf", |s| s.property("library", "loading") == "false" && no_game(s));
     until(&mut scene, 20, "the own look in place of the empty theme", |s| s.property("screens", "shown") == "Home");
     assert_eq!((scene.property("esdeModel", "themed"), scene.property("esdeModel", "problem")), ("false".into(), String::new()));
 

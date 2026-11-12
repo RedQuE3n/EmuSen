@@ -45,6 +45,33 @@ pub struct GameIo {
     pub sound: Option<GameSound>,
 }
 
+/// What a session opens: a game by its file, or a console with nothing in it (Mistress's `StartConsole`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Opening {
+    Game(String),
+    Console(String),
+}
+
+impl From<&str> for Opening {
+    fn from(path: &str) -> Opening {
+        Opening::Game(path.to_owned())
+    }
+}
+
+/// What a failure to open is said after, in Mistress's words: "Failed to load {the game's title}" or "Failed to start
+/// {console}" (EmuSen_Qt.md §7.9).
+pub fn failing(opening: &Opening) -> String {
+    match opening {
+        Opening::Game(path) => format!("Failed to load {}", crate::library::title_of(path)),
+        Opening::Console(console) => format!("Failed to start {console}"),
+    }
+}
+
+/// A console session's name, where a game's title would be: "PlayStation (no disc)" (Mistress's `ConsoleSessionName`).
+pub fn console_session_name(console: &str) -> String {
+    format!("{console} (no disc)")
+}
+
 /// A game running on its frame thread.
 pub struct Session {
     control: Arc<Control>,
@@ -52,13 +79,13 @@ pub struct Session {
 }
 
 impl Session {
-    /// Opens `path` with `engine` (none for the settings' choice) and runs it until closed; `device` is the presenter's
+    /// Opens a game or a console (`opening`) with `engine` (none for the settings' choice) and runs it until closed; `device` is the presenter's
     /// Serenity device, lent to the machine; `io` the pads and the sound player the window has; `clock` Serenity's
     /// display clock, fed the window's swaps (EmuSen_Qt.md §1.8.3); `held` opens it paused, for a question asked first.
     #[allow(clippy::too_many_arguments)]
     pub fn start(
         runtime: Runtime,
-        path: String,
+        opening: Opening,
         engine: Option<String>,
         device: Option<NonNull<std::ffi::c_void>>,
         handoff: Handoff,
@@ -67,6 +94,10 @@ impl Session {
         held: bool,
         report: impl Fn(Report) + Send + 'static,
     ) -> Session {
+        let (path, console) = match opening {
+            Opening::Game(path) => (Some(path), None),
+            Opening::Console(console) => (None, Some(console)),
+        };
         let control = Arc::new(Control::default());
         control.paused.store(held, Ordering::Relaxed);
         // The device's handle crosses to the frame thread as a number; the handle locks itself (emusen_platform.h).
@@ -77,7 +108,7 @@ impl Session {
                 let device = NonNull::new(device as *mut std::ffi::c_void);
                 // A machine whose core draws on a ring of its own is lent one wherever the window has a device (§1.8.7).
                 let flags = if device.is_some() { emusen_crystal_client::consts::OPEN_RING } else { 0 };
-                let open = Open { flags, path: Some(path), engine, device, ..Open::default() };
+                let open = Open { flags, path, console, engine, device, ..Open::default() };
                 run(&runtime, open, &handoff, io, clock, &control, &report)
             }
         });

@@ -151,7 +151,7 @@ impl GamePageSource for ClientSource {
         let mut read = Read {
             title: Some(value("name")).filter(|n| !n.is_empty()).unwrap_or_else(|| title_of(&game.path)),
             console: system.map(console_name).unwrap_or_default(),
-            year: value("releasedate").chars().take(4).collect(),
+            year: crate::esde_shelves::year_of(&value(crate::esde_shelves::RELEASE_DATE)).unwrap_or_default(),
             developer: value("developer"),
             publisher: value("publisher"),
             description: value("description"),

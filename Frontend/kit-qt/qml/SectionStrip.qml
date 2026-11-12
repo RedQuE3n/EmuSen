@@ -3,12 +3,14 @@ import QtQuick
 import QtQuick.Controls
 import EmuSen.Kit as Kit
 
-// A screen's section strip: the frame's sections in Caption upper case, the chosen one strong over the accent bar, only whole names drawn; a click chooses one as the shoulders step them (EmuSen_Kit.md §7.43).
+// A screen's section strip: the frame's sections in Caption upper case, the chosen one strong over the accent bar, only whole names drawn; a click chooses one as the shoulders step them, and only where the names run past the strip is it a scroller, moved by the wheel and the walk, never dragged by mouse or finger (EmuSen_Kit.md §7.43, §7.105).
 ListView {
     id: root
     required property Kit.FrameController controller
     orientation: ListView.Horizontal
-    interactive: false
+    readonly property bool overflows: root.contentWidth > root.width
+    interactive: root.overflows
+    acceptedButtons: Qt.NoButton
     clip: true
     spacing: Kit.Tokens.base * 2
     model: root.controller.sections
@@ -17,6 +19,23 @@ ListView {
     preferredHighlightBegin: 0
     preferredHighlightEnd: root.width
     highlightMoveDuration: Kit.Tokens.instant
+    // A finger's sideways drag is this handler's, which yields it to nothing, so the strip is not flicked by touch as by no mouse; an upright one is the page's (EmuSen_Kit.md §7.105).
+    DragHandler {
+        enabled: root.overflows
+        target: null
+        yAxis.enabled: false
+        acceptedDevices: PointerDevice.TouchScreen
+        grabPermissions: PointerHandler.CanTakeOverFromAnything
+    }
+    // A horizontal ListView takes no turn of an upright wheel: the wheel's turn moves the names along, within their ends.
+    WheelHandler {
+        enabled: root.overflows
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        onWheel: (event) => {
+            const delta = event.angleDelta.x !== 0 ? event.angleDelta.x : event.angleDelta.y
+            root.contentX = Math.max(root.originX, Math.min(root.originX + root.contentWidth - root.width, root.contentX - delta))
+        }
+    }
     delegate: TabButton {
         id: tab
         required property string modelData

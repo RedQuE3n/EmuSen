@@ -49,3 +49,28 @@ fn qt_4_8_the_painter_names_no_client_and_no_runtime() {
         }
     }
 }
+
+/// The `.qml` and `.js` files under `dir`, build output left out.
+fn scripts(dir: &std::path::Path, found: &mut Vec<std::path::PathBuf>) {
+    for entry in std::fs::read_dir(dir).unwrap().map(Result::unwrap) {
+        let path = entry.path();
+        if path.is_dir() {
+            if entry.file_name() != "target" {
+                scripts(&path, found);
+            }
+        } else if path.extension().is_some_and(|e| e == "qml" || e == "js") {
+            found.push(path);
+        }
+    }
+}
+
+#[test]
+fn qt_5_3_no_qml_of_ours_calls_the_deprecated_hover() {
+    let held = frontend().join("esde-qt").join("tests").join("qml").join("Deprecated.qml");
+    let mut found = Vec::new();
+    scripts(&frontend(), &mut found);
+    assert!(found.len() > 200, "the walk found the front end's QML ({} files)", found.len());
+    assert!(std::fs::read_to_string(&held).unwrap().contains(".hover("), "the scene that holds hover(row) calls it");
+    let callers: Vec<_> = found.iter().filter(|p| !p.ends_with("esde-qt/tests/qml/Deprecated.qml")).filter(|p| std::fs::read_to_string(p).unwrap().contains(".hover(")).collect();
+    assert!(callers.is_empty(), "EsdeModel.hover(row) is deprecated in EmuSen.Esde 1.1 (CHANGELOG-esde.md); these call it: {callers:?}");
+}

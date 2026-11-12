@@ -5,10 +5,38 @@
 use crate::library::{GameRow, FAVOURITES, RECENT};
 use std::cmp::Reverse;
 
-/// The sorts the List card's Sort steps through, in order.
-pub const SORTS: [&str; 5] = ["Name", "Last played", "Most played", "Year", "Rating"];
+/// A sort of the grid, which the List card's Sort steps through.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sort {
+    Name,
+    LastPlayed,
+    MostPlayed,
+    Year,
+    Rating,
+}
 
-/// How a section is listed: the sort by its index in `SORTS`, whether the Filter page's Favourites narrows it, and the
+impl Sort {
+    /// The sorts in the order Sort steps through them; a listing names one by its index here.
+    pub const ALL: [Sort; 5] = [Sort::Name, Sort::LastPlayed, Sort::MostPlayed, Sort::Year, Sort::Rating];
+
+    /// The sort at `index` in `ALL`, the last for an index past it.
+    pub fn at(index: usize) -> Sort {
+        Sort::ALL[index.min(Sort::ALL.len() - 1)]
+    }
+
+    /// The words the List card shows for it.
+    pub fn words(self) -> &'static str {
+        match self {
+            Sort::Name => "Name",
+            Sort::LastPlayed => "Last played",
+            Sort::MostPlayed => "Most played",
+            Sort::Year => "Year",
+            Sort::Rating => "Rating",
+        }
+    }
+}
+
+/// How a section is listed: the sort by its index in `Sort::ALL`, whether the Filter page's Favourites narrows it, and the
 /// search's words.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Listing {
@@ -24,14 +52,19 @@ impl Listing {
     }
 }
 
+/// Whether the sort orders by the scraper's facts, which the library reads only while one does.
+pub fn by_facts(sort: usize) -> bool {
+    matches!(Sort::at(sort), Sort::Year | Sort::Rating)
+}
+
 /// The sort `by` steps from `sort`, wrapping both ways.
 pub fn step_sort(sort: usize, by: i32) -> usize {
-    (sort as i32 + by).rem_euclid(SORTS.len() as i32) as usize
+    (sort as i32 + by).rem_euclid(Sort::ALL.len() as i32) as usize
 }
 
 /// The section's games as shown: the favourites where narrowed, those whose title holds the search's words in any case,
 /// then sorted; the recently played keep their own order under the name sort, and every other sort breaks a tie by
-/// name. The library reads no play counts, years or ratings yet, so those sorts are the name's (EmuSen_Qt.md §7.1).
+/// name, a game without the sort's datum after those with it (Mistress's `GamesScreen.Sorted`; EmuSen_Qt.md §7.9).
 pub fn shown(games: &[GameRow], section: &str, listing: &Listing) -> Vec<GameRow> {
     let words = listing.search.trim().to_lowercase();
     let favourites_only = listing.favourites_only && section != FAVOURITES;
@@ -41,8 +74,16 @@ pub fn shown(games: &[GameRow], section: &str, listing: &Listing) -> Vec<GameRow
         return out;
     }
     out.sort_by_cached_key(|g| g.title.to_lowercase());
-    if SORTS[listing.sort.min(SORTS.len() - 1)] == "Last played" {
-        out.sort_by_key(|g| Reverse(g.played_at));
+    // Each sort is stable over the name's order, so a tie keeps it.
+    match Sort::at(listing.sort) {
+        Sort::LastPlayed => out.sort_by_key(|g| Reverse(g.played_at)),
+        Sort::MostPlayed => out.sort_by_key(|g| Reverse(g.plays)),
+        Sort::Year => out.sort_by(|a, b| (a.year.is_empty(), &a.year).cmp(&(b.year.is_empty(), &b.year))),
+        Sort::Rating => out.sort_by(|a, b| match (a.rating, b.rating) {
+            (Some(x), Some(y)) => y.total_cmp(&x),
+            (x, y) => y.is_some().cmp(&x.is_some()),
+        }),
+        Sort::Name => {}
     }
     out
 }

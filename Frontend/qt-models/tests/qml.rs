@@ -20,6 +20,12 @@ fn qml_reads_the_library_model_s_rows_through_its_roles() {
     assert_eq!(scene.property("scene", "thirdShown"), "Recently played", "the delegate shows the name role");
     assert_eq!(scene.property("scene", "selectedKey"), "all");
     assert_eq!(scene.property("scene", "selectedIndex"), "0");
+    // The Home card's facts follow the lists the binding is given, not what the model held when it was first read.
+    let given = r#"[{"console":"psx","name":"PlayStation","engine":"V1ConsoleCore"}]"#;
+    assert!(scene.set_property("scene", "startableGiven", given));
+    assert!(scene.set_property("scene", "toolsGiven", r#"{"cores":{"brief":"2 engines"}}"#));
+    let facts: serde_json::Value = serde_json::from_str(&scene.property("scene", "homeFacts")).unwrap();
+    assert_eq!((facts["startable"][0]["name"].as_str(), facts["tools"]["cores"]["brief"].as_str()), (Some("PlayStation"), Some("2 engines")), "{facts}");
 
     // The real clients named through the model's properties, on a scratch tree holding one synthetic NES game.
     let world = World::new("models-qml");

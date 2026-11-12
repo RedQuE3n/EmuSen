@@ -309,7 +309,7 @@ fn the_list_card_s_sort_and_filter_change_the_text_s_order_and_its_facts() {
     };
     let (esde, state) = build(base.clone(), &lists);
     assert_eq!(order(&esde.shelves), ["Aurora", "Brass"]);
-    let facts = esde_facts(&state.summaries["snes"], 1);
+    let facts = esde_facts(&state.summaries["snes"], 1, None);
     assert_eq!((facts["sort"].as_str(), facts["letter"].as_str(), facts["count"].as_str(), facts["letters"].as_str()), (Some("Name, ascending"), Some("B"), Some("2 games"), Some("★ · B")));
     assert_eq!(facts["sorts"].as_array().unwrap().len(), 20, "a console offers every order but System");
 
@@ -320,7 +320,7 @@ fn the_list_card_s_sort_and_filter_change_the_text_s_order_and_its_facts() {
     lists.favourites_only(&snes, true);
     let (esde, state2) = build(base.clone(), &lists);
     assert_eq!(order(&esde.shelves), ["Aurora"], "Favourites narrows the list");
-    let facts = esde_facts(&state2.summaries["snes"], 0);
+    let facts = esde_facts(&state2.summaries["snes"], 0, None);
     assert_eq!((facts["filter"].as_str(), facts["count"].as_str()), (Some("Favourites"), Some("1 of 2 games")));
     lists.favourites_only(&snes, false);
     assert_eq!(order(&build(base, &lists).0.shelves), ["Aurora", "Brass"]);

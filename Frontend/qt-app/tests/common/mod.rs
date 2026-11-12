@@ -1,5 +1,8 @@
 //! What the program's tests share: a sandbox home with synthetic games, and waiting on a property.
 
+pub mod console;
+pub mod cores_fit;
+
 use emusen_client_fixture::{library, World};
 use emusen_crystal_client::Config;
 use emusen_qt_models::clients::ClientSource;
@@ -142,6 +145,21 @@ pub fn hold_in(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, named: N
 pub use emusen_qt_test::covers::draw as draw_covers;
 
 #[allow(dead_code)]
+/// The client fixture's console core, a PlayStation that starts empty, in the player's cores folder (Galaxia's), approved
+/// by its hash on the configuration the program makes with `cores` as the installation's folder, as Cores approves one.
+pub fn approved_console_core(cores: &std::path::Path) {
+    let platform = Platform::load(library()).unwrap();
+    let player = platform.directory(emusen_platform_client::galaxia::consts::DIR_CORES).unwrap().expect("the player's cores folder");
+    std::fs::create_dir_all(&player).unwrap();
+    let core = player.join(emusen_client_fixture::console_core().file_name().unwrap());
+    std::fs::copy(emusen_client_fixture::console_core(), &core).unwrap();
+    let config = emusen_qt_models::clients::runtime_config(&platform, cores.to_str().unwrap()).unwrap();
+    let api = emusen_crystal_client::Api::load(library()).unwrap();
+    let rt = emusen_crystal_client::Runtime::new(&api, &config).unwrap();
+    rt.core_approve(&emusen_client_fixture::cores::sha256(&core)).unwrap_or_else(|e| panic!("{e}; the runtime lists {:?}", rt.cores()));
+}
+
+#[allow(dead_code)]
 /// The program's clip for a game, two seconds of magenta, under the name the media store looks for (emusen_qt_test::clips).
 pub fn write_clip(path: &std::path::Path) {
     emusen_qt_test::clips::write(path, 2);
@@ -151,3 +169,22 @@ pub fn write_clip(path: &std::path::Path) {
 /// depend on the minute they are read in.
 #[allow(dead_code)]
 pub const HELD_NOW: &str = "1793966400";
+
+#[allow(dead_code)]
+/// What the program holds at a failure, for the message that reports it: the screen shown, each model's problem, and the
+/// item holding the focus with those it sits in.
+pub fn state(scene: &mut Scene<'_>) -> String {
+    let problems: Vec<String> = ["library", "session", "pageModel", "settingsModel"].iter().map(|m| format!("{m} {:?}", scene.property(m, "problem"))).collect();
+    format!("shown {:?}; problems: {}; the focus: {:?}", scene.property("screens", "shown"), problems.join(", "), console::focus_chain(scene))
+}
+
+#[allow(dead_code)]
+/// `assert_still`, its failure saying what the program held then (`state`).
+#[track_caller]
+pub fn assert_still_saying(scene: &mut Scene<'_>, what: &str) {
+    let still = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| scene.assert_still(what)));
+    if let Err(failure) = still {
+        let said = failure.downcast_ref::<String>().cloned().or_else(|| failure.downcast_ref::<&str>().map(|s| (*s).to_owned())).unwrap_or_default();
+        panic!("{said}\nat the failure: {}", state(scene));
+    }
+}

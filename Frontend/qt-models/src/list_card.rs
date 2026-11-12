@@ -3,7 +3,7 @@
 //! each row does. The grid carries the actions out (`GameModel.listAct`).
 
 use crate::card::{Choice, Page, Pages, Pane, Row};
-use crate::listing::SORTS;
+use crate::listing::Sort;
 use serde_json::Value;
 
 pub const CARD: &str = "list";
@@ -16,7 +16,7 @@ pub const SEARCH: &str = "search";
 pub const SORT: &str = "sort";
 pub const JUMP: &str = "jump";
 pub const RANDOM: &str = "random";
-pub const START_CONSOLE: &str = "startConsole";
+pub const START_CONSOLE: &str = crate::home_card::START_CONSOLE;
 pub const COLLECTIONS: &str = "collections";
 /// The Filter page's rows: every game, and Favourites.
 pub const EVERY_GAME: &str = "every";
@@ -57,10 +57,10 @@ fn sort_sentence(sort: &str) -> String {
 fn first_page(f: &Value) -> Page {
     let sort = words(f, "sort");
     let filter = words(f, "filter");
-    // A theme's gamelist names its own orders (gamelists.rs); the grid's are SORTS.
+    // A theme's gamelist names its own orders (gamelists.rs); the grid's are `Sort::ALL`.
     let offered: Vec<&str> = match f.get("sorts").and_then(Value::as_array) {
         Some(sorts) => sorts.iter().filter_map(Value::as_str).collect(),
-        None => SORTS.to_vec(),
+        None => Sort::ALL.iter().map(|s| s.words()).collect(),
     };
     let others: Vec<&str> = offered.into_iter().filter(|s| *s != sort).collect();
     let shows = match filter {
@@ -68,18 +68,41 @@ fn first_page(f: &Value) -> Page {
         "Favourites" => "Shows the section's favourites.".to_owned(),
         collection => format!("Shows {collection}."),
     };
-    let mut rows = vec![
+    let mut rows = Vec::new();
+    let mut footer = String::new();
+    // A theme's gamelist of a console that starts empty offers it first (Mistress's `AddStartConsoleOption`); a console
+    // the facts name and that cannot be read is said under the rows, never dropped unsaid.
+    match f.get("console").cloned().map(serde_json::from_value::<crate::home_card::Startable>) {
+        Some(Ok(s)) => {
+            let page = crate::home_card::start_console_page(std::slice::from_ref(&s), "List");
+            let pane = page.rows.into_iter().next().map(|r| r.pane).unwrap_or_default();
+            rows.push(Row::new(&crate::home_card::start_console_action(&s.console), &format!("Start {} With No Disc", s.name)).pane(pane));
+        }
+        Some(Err(why)) => footer = console_unread(&why.to_string()),
+        None => {}
+    }
+    rows.extend([
         Row::new(SEARCH, "Search").opens().pane(Pane::said("Type part of a name; the covers narrow as you type.", "The keyboard docks at the foot of the screen.")),
         Row::new(SORT, "Sort").value(sort).steps().pane(Pane::said(&sort_sentence(sort), &format!("Also: {}", others.join(" · ")))),
         Row::new(FILTER, "Filter").value(filter).opens().pane(Pane::said(&shows, "Choose Favourites to narrow it, or a collection to show it in the strip's place.")),
         Row::new(JUMP, "Jump to").value(words(f, "letter")).steps().pane(Pane::said("Moves to the first game under the letter.", words(f, "letters"))),
         Row::new(RANDOM, "Random game").pane(Pane::said("Moves to a game chosen at random.", "A plays it.")),
-    ];
-    if f.get("startConsole").and_then(Value::as_bool).unwrap_or(false) {
+    ]);
+    if !startable(f).is_empty() {
         rows.push(Row::new(START_CONSOLE, "Start Console").opens().pane(Pane::said("Starts a console with no disc in it.", "Change Disc on the Pause Card puts a game in.")));
     }
     rows.push(Row::new(COLLECTIONS, "Collections").opens().pane(Pane::said("Your collections, and the automatic ones.", "A opens a collection as a section of the library.")));
-    Page { title: format!("{} · {}", words(f, "section"), words(f, "count")), breadcrumb: "List".to_owned(), rows, footer: String::new() }
+    Page { title: format!("{} · {}", words(f, "section"), words(f, "count")), breadcrumb: "List".to_owned(), rows, footer }
+}
+
+/// The words under the List card's rows where the console its gamelist starts could not be read.
+pub fn console_unread(why: &str) -> String {
+    format!("The console this list starts could not be read: {why}")
+}
+
+/// The consoles Start Console lists, from the facts.
+fn startable(f: &Value) -> Vec<crate::home_card::Startable> {
+    f.get("startable").cloned().and_then(|s| serde_json::from_value(s).ok()).unwrap_or_default()
 }
 
 /// The Filter page: every game, then Favourites except in the Favourites section; the player's collections follow
@@ -93,7 +116,7 @@ fn filter_page(f: &Value) -> Page {
 }
 
 /// The List card's facts for a theme's gamelist, from what its last listing summed up, the entry at `focused` selected.
-pub fn esde_facts(s: &crate::esde_shelves::Summary, focused: usize) -> Value {
+pub fn esde_facts(s: &crate::esde_shelves::Summary, focused: usize, console: Option<&crate::home_card::Startable>) -> Value {
     let sorts: Vec<String> = crate::gamelists::GameSort::all(s.collection).into_iter().map(|o| o.label()).collect();
     serde_json::json!({
         "section": s.full_name,
@@ -104,6 +127,7 @@ pub fn esde_facts(s: &crate::esde_shelves::Summary, focused: usize) -> Value {
         "letter": s.entry_letters.get(focused).cloned().unwrap_or_default(),
         "letters": s.letters.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>().join(" · "),
         "favouritesSection": s.favourites_shelf,
+        "console": console,
     })
 }
 
@@ -117,6 +141,7 @@ impl Pages for ListCard {
     fn page(&self, key: &str, facts: &Value) -> Page {
         match key {
             FILTER => filter_page(facts),
+            START_CONSOLE => crate::home_card::start_console_page(&startable(facts), "List"),
             _ => first_page(facts),
         }
     }
@@ -124,7 +149,9 @@ impl Pages for ListCard {
     fn choose(&self, page: &str, row: &str) -> Choice {
         match (page, row) {
             (FILTER, filter) => Choice::Act(filter.to_owned()),
-            (_, FILTER) => Choice::Turn(FILTER.to_owned()),
+            (_, FILTER | START_CONSOLE) => Choice::Turn(row.to_owned()),
+            (START_CONSOLE, console) => Choice::Act(console.to_owned()),
+            (FIRST, row) if crate::home_card::console_to_start(row).is_some() => Choice::Act(row.to_owned()),
             (_, SORT | JUMP) => Choice::Stay(stepped(row, 1)),
             (_, SEARCH | RANDOM) => Choice::Act(row.to_owned()),
             _ => Choice::Owed,
@@ -133,5 +160,10 @@ impl Pages for ListCard {
 
     fn step(&self, page: &str, row: &str, by: i32) -> Option<String> {
         (page == FIRST && matches!(row, SORT | JUMP)).then(|| stepped(row, by))
+    }
+
+    /// Start Console's page names A "Start" (Mistress's `AcceptWord`).
+    fn help(&self, page: &str) -> crate::help::Screen {
+        if page == START_CONSOLE { crate::help::Screen::CardStart } else { crate::help::Screen::Card }
     }
 }

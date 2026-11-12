@@ -2623,10 +2623,14 @@ no image crate is needed, the oracle library read as the three texts of §4.6).
   custom collection, a console of pads), each case's system and game rotated to the front so the view starts on them.
   Each case is rendered twice through the bridge at 640 × 400 and the two grabs must differ; each case's two themes
   load without an error; every drawn pair has a case, and a case's pair is drawn or later. 347 cases, 254 s.
-  **A timed case** (a time in `at`: the item and row transitions, `scrollFadeIn`, `fastScrolling`) is pressed and
-  grabbed on the harness's held clock (EmuSen_Kit.md §7.36): the clock is held at 0 before the press and moved to `at`
-  16 ms at a time, so the picture is the scene at `at` whatever the machine's load, and the test runs Qt's basic render
-  loop, under which a held clock is taken. Until 2026-11-12 the test pressed, waited `at` ms on the wall clock and
+  **A timed move** (a time in `at` and a move: the item and row transitions, `scrollFadeIn`, `fastScrolling`) is pressed
+  and grabbed on the harness's held clock (EmuSen_Kit.md §7.36): the clock is held at 0 before the press and moved to
+  `at` 16 ms at a time, so the picture is the scene at `at` whatever the machine's load, and the test runs Qt's basic
+  render loop, under which a held clock is taken. The eleven timed cases without a move (the text list's and the text
+  container's scrolling, the animation's speed, direction and count) still wait `at` ms on the wall clock: part of their
+  time passes at rest, where the view's `Timer` of `nextChangeMs` ticks the scene, and a `Timer` is not held. Held,
+  `text.containerResetDelay` painted the same pixels for 0.5 and 10 (measured 2026-11-12): the reset after the
+  container's end pause never came. They are open: they share the wall clock's weakness while the rest `Timer` is one. Until 2026-11-12 the test pressed, waited `at` ms on the wall clock and
   grabbed. Measured 2026-11-12 on the RX 6800, the six timed cases alone: a sleep of 400 ms or 1000 ms between the press
   and the grab failed every run (2 of 2 each), with five of the six cases painting the same pixels on both sides, the
   scene having finished its 250 ms glide on the wall clock before the grab; 200 ms and none failed none. The same

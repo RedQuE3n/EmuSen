@@ -338,6 +338,11 @@ fn along(c: &Case, value: &str) -> UiButton {
     }
 }
 
+// A case pressed and read at a time: its motion runs on Qt's animation clock, which a harness can hold; a resting wait does not.
+fn held(c: &Case) -> bool {
+    c.at.is_some() && c.moves.is_some()
+}
+
 /// One rendering of a case: the view emptied so the next install starts afresh, the theme and the rotated library
 /// installed, the case's move made, and the picture left on the window at the case's time, a timed case's clock still held.
 fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &Assets) {
@@ -355,10 +360,11 @@ fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &A
     assert!(scene.set_property("view", "settings", &settings(theme, &interface)));
     assert!(scene.set_property("view", "shelves", &shelves));
     until(scene, "the case's theme installed", |s| s.property("esdeModel", "themed") == "true");
-    // A timed case moves on the held clock, so its picture is the scene at `at` whatever the machine's load (EmuSen_Qt.md §4.8.5).
-    if c.at.is_some() {
+    // A timed move runs on the held clock, so its picture is the scene at `at` whatever the machine's load (EmuSen_Qt.md §4.8.5).
+    if held(c) {
         scene.hold_clock(Some(0));
     }
+    let started = std::time::Instant::now();
     match c.moves.as_deref() {
         Some("step") => scene.pad(along(c, value)),
         Some("down") => scene.pad(UiButton::Down),
@@ -366,7 +372,11 @@ fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &A
         _ => {}
     }
     match c.at {
-        Some(at) => scene.hold_clock(Some(i64::from(at))),
+        Some(at) if held(c) => scene.hold_clock(Some(i64::from(at))),
+        Some(at) => {
+            let left = at - started.elapsed().as_millis() as i32;
+            scene.wait(left.max(0));
+        }
         None => {
             until(scene, "the case at rest", |s| s.property("esdeModel", "moving") == "false");
             scene.wait(150);
@@ -427,7 +437,7 @@ fn every_drawn_pair_changes_the_painted_pixels() {
         if c.moves.as_deref() == Some("hold") {
             scene.pad_up(along(c, &c.a));
         }
-        if c.at.is_some() {
+        if held(c) {
             scene.hold_clock(None);
         }
         render(&mut scene, c, &c.b, &tb, &assets);
@@ -436,7 +446,7 @@ fn every_drawn_pair_changes_the_painted_pixels() {
         if c.moves.as_deref() == Some("hold") {
             scene.pad_up(along(c, &c.b));
         }
-        if c.at.is_some() {
+        if held(c) {
             scene.hold_clock(None);
         }
         if !problems.is_empty() {

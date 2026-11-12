@@ -21,6 +21,8 @@ pub enum Exempted {
     SmallText { item: ElementId, capitals: f64, class: Class },
     /// Words marked as data (a title, a name from the library) cut with an ellipsis.
     Elided { item: ElementId },
+    /// A disabled control's words under their contrast over all but `CONTRAST_SPARE` of what is behind them.
+    Disabled { item: ElementId, ratio: f64, needed: f64 },
 }
 
 impl Exempted {
@@ -32,6 +34,7 @@ impl Exempted {
             Exempted::Scene { .. } => "a colour outside the palette in a scene",
             Exempted::SmallText { .. } => "too small to read, a named exception",
             Exempted::Elided { .. } => "data cut with an ellipsis",
+            Exempted::Disabled { .. } => "low contrast on a disabled control",
         }
     }
 
@@ -43,6 +46,7 @@ impl Exempted {
             Exempted::Scene { .. } => Class::SceneColour,
             Exempted::SmallText { class, .. } => *class,
             Exempted::Elided { .. } => Class::DataWordsElided,
+            Exempted::Disabled { .. } => Class::DimmedAndMoving,
         }
     }
 
@@ -58,7 +62,8 @@ impl Exempted {
             | Exempted::Fading { item, .. }
             | Exempted::Scene { item, .. }
             | Exempted::SmallText { item, .. }
-            | Exempted::Elided { item } => *item,
+            | Exempted::Elided { item }
+            | Exempted::Disabled { item, .. } => *item,
         }
     }
 }
@@ -72,6 +77,7 @@ impl fmt::Display for Exempted {
             Exempted::Scene { item, colour } => write!(f, "{kind}: {} {}", item.0, colour.to_hex()),
             Exempted::SmallText { item, capitals, .. } => write!(f, "{kind}: {} with capitals of {capitals:.2}", item.0),
             Exempted::Elided { item } => write!(f, "{kind}: {}", item.0),
+            Exempted::Disabled { item, ratio, needed } => write!(f, "{kind}: {} at {ratio:.2}:1, needs {needed}:1", item.0),
         }
     }
 }
@@ -83,7 +89,9 @@ pub fn exempted(root: &Item, declared: Option<&[Colour]>, smallest: f64) -> Vec<
     root.visit(&mut |item, ancestors| {
         if let Some((ratios, needed)) = item.legibility.as_ref().and_then(ratios) {
             let spare = ratios[((ratios.len() as f64) * CONTRAST_SPARE).floor() as usize];
-            if fading_out(item, ancestors) && spare < needed {
+            if item.legibility.as_ref().is_some_and(|w| w.disabled) && spare < needed {
+                out.push(Exempted::Disabled { item: item.id, ratio: spare, needed });
+            } else if fading_out(item, ancestors) && spare < needed {
                 out.push(Exempted::Fading { item: item.id, ratio: spare, needed });
             } else if ratios[0] < needed && spare >= needed {
                 out.push(Exempted::Spare { item: item.id, worst: ratios[0], needed });
@@ -99,7 +107,7 @@ pub fn exempted(root: &Item, declared: Option<&[Colour]>, smallest: f64) -> Vec<
             && item.is_drawn()
             && smallest > 0.0
             && text.cap_height < smallest - CAPS_SLACK
-            && let Some(class) = small_text_exception(item, ancestors)
+            && let Some(class) = small_text_exception(item)
         {
             out.push(Exempted::SmallText { item: item.id, capitals: text.cap_height, class });
         }

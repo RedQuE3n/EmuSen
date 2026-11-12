@@ -50,51 +50,81 @@ pub const DIRECTIONS: [UiButton; 4] = [UiButton::Up, UiButton::Down, UiButton::L
 /// The walk's presses on a screen whose shoulders are its own declared actions, as the search's keys and covers are.
 pub const WITH_SHOULDERS: [UiButton; 6] = [UiButton::Up, UiButton::Down, UiButton::Left, UiButton::Right, UiButton::PageUp, UiButton::PageDown];
 
-/// Messages Qt logs of its own accord that no code of ours causes, each with the accepted class that lets it pass and
-/// whether it is Qt's only on the software backend (EmuSen_Kit.md §7.14, §7.101).
-pub const QT_INTERNAL: [(&str, Class, bool); 1] = [
+/// The classes of message Qt logs of its own accord that no code of ours causes, each with whether it is Qt's only on the
+/// software backend; the words are the class's row's in kit-core's `ACCEPTED`, so no text is accepted here (EmuSen_Kit.md §7.14, §7.101, §7.105).
+pub const QT_INTERNAL: [(Class, bool); 1] = [
     // Qt Multimedia converting a clip's frame to a picture where there is no RHI, the software backend's path (EmuSen_Kit.md §7.50).
-    ("No RHI backend. Using CPU conversion.", Class::CpuConversionLine, true),
+    (Class::CpuConversionLine, true),
 ];
 
-/// Whether a message Qt logged is one of `QT_INTERNAL`'s on the backend the scene graph draws on, its class accepted by a
-/// row of kit-core's `ACCEPTED` (EmuSen_Kit.md §7.105).
+/// The lines a class's row accepts, none without the row.
+fn lines_of(class: Class) -> &'static [&'static str] {
+    accepted(class).map_or(&[], |a| a.lines)
+}
+
+/// Whether a message Qt logged is one of `QT_INTERNAL`'s classes' lines on the backend the scene graph draws on.
 pub fn qt_internal(message: &str, software: bool) -> bool {
-    QT_INTERNAL
-        .iter()
-        .any(|(text, class, software_only)| message.contains(text) && (software || !software_only) && accepted(*class).is_some())
+    QT_INTERNAL.iter().any(|(class, software_only)| (software || !software_only) && lines_of(*class).iter().any(|text| message.contains(text)))
 }
 
-/// Messages accepted in test programs only, each with the class whose row accepts it: counted and printed with that
-/// row's ruling by every test that sees it, failing none; without the row, a failure (EmuSen_Kit.md §7.101, §7.105).
-pub const QT_TESTS_ONLY: [(&str, Class); 1] = [
+/// The classes of message accepted in test programs only: counted and written with the row's ruling by every test that sees
+/// one, failing none; without the row, a failure (EmuSen_Kit.md §7.101, §7.105).
+pub const QT_TESTS_ONLY: [Class; 1] = [
     // QtCore's, once Qt Multimedia starts in a process whose application was made on a test runner's thread.
-    ("QApplication was not created in the main() thread", Class::MainThreadLineInTests),
+    Class::MainThreadLineInTests,
 ];
 
-/// The ruling that accepts a message Qt logged in a test program, if `QT_TESTS_ONLY` names it and its row is there.
+/// The ruling that accepts a message Qt logged in a test program, if a `QT_TESTS_ONLY` class's row holds its words.
 pub fn qt_tests_only(message: &str) -> Option<&'static str> {
-    QT_TESTS_ONLY.iter().find(|(text, _)| message.contains(text)).and_then(|(_, class)| accepted(*class)).map(|a| a.ruling)
+    QT_TESTS_ONLY.iter().filter_map(|class| accepted(*class)).find(|a| a.lines.iter().any(|text| message.contains(text))).map(|a| a.ruling)
 }
 
-/// Prints `tests_only_lines` on the process's own stderr, past the test runner's capture, so a passing test shows them too.
+/// Prints `tests_only_lines` on the process's own stderr, past the test runner's capture, and adds the counts to the test
+/// program's list beside the gates' accepted lists, which a gate leaves whether or not its runner shows the output.
 fn say_tests_only(messages: &[String]) {
     use std::io::Write;
     let mut err = std::io::stderr().lock();
     for line in tests_only_lines(messages) {
         writeln!(err, "{line}").expect("stderr takes the line");
     }
+    if !std::thread::panicking() {
+        let (program, run, test) = tests_only_process();
+        crate::excuse::tally_tests_only(&crate::excuse::accepted_dir(), &program, &run, &test, &tests_only_counts(messages));
+    }
+}
+
+/// This process's test program, run and test, as its counts are listed: nextest's names where it runs the test, else the
+/// program's file, the process and the test's thread.
+pub fn tests_only_process() -> (String, String, String) {
+    let program = std::env::var("NEXTEST_BINARY_ID")
+        .ok()
+        .or_else(|| {
+            let stem = std::env::current_exe().ok()?.file_stem()?.to_string_lossy().into_owned();
+            // Cargo's file name ends in a hash of the build, which a list does not keep.
+            Some(stem.rsplit_once('-').filter(|(_, h)| h.len() == 16 && h.bytes().all(|b| b.is_ascii_hexdigit())).map_or(stem.clone(), |(n, _)| n.to_owned()))
+        })
+        .unwrap_or_default();
+    let run = std::env::var("NEXTEST_RUN_ID").unwrap_or_else(|_| std::process::id().to_string());
+    let test = std::env::var("NEXTEST_TEST_NAME").ok().or_else(|| std::thread::current().name().map(str::to_owned)).unwrap_or_default();
+    (program, run, test)
+}
+
+/// Each test-only line's ruling, words and count among `messages`, nought included.
+pub fn tests_only_counts(messages: &[String]) -> Vec<(&'static str, &'static str, usize)> {
+    QT_TESTS_ONLY
+        .iter()
+        .filter_map(|class| accepted(*class))
+        .flat_map(|row| row.lines.iter().map(move |text| (row.ruling, *text)))
+        .map(|(ruling, text)| (ruling, text, messages.iter().filter(|m| m.contains(text)).count()))
+        .collect()
 }
 
 /// One line for each accepted test-only message among `messages`, counted: "accepted in tests, R-…: 2 × the message".
 pub fn tests_only_lines(messages: &[String]) -> Vec<String> {
-    QT_TESTS_ONLY
-        .iter()
-        .filter_map(|(text, class)| {
-            let ruling = accepted(*class)?.ruling;
-            let seen = messages.iter().filter(|m| m.contains(text)).count();
-            (seen > 0).then(|| format!("accepted in tests, {ruling}: {seen} × {text}"))
-        })
+    tests_only_counts(messages)
+        .into_iter()
+        .filter(|(_, _, seen)| *seen > 0)
+        .map(|(ruling, text, seen)| format!("accepted in tests, {ruling}: {seen} × {text}"))
         .collect()
 }
 

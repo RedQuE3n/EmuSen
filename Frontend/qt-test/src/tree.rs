@@ -35,7 +35,7 @@ pub struct Node {
     pub picture: bool,
     #[serde(default)]
     pub backdrop: bool,
-    /// The words' colour with the item's opacity in its alpha, empty for a disabled control's.
+    /// The words' colour with the item's opacity in its alpha.
     #[serde(default)]
     pub ink: Option<String>,
     #[serde(default)]
@@ -96,6 +96,9 @@ pub struct Node {
     pub fade_right: bool,
     #[serde(default)]
     pub heard: String,
+    /// The URL of the QML file the item is written in.
+    #[serde(default)]
+    pub source: String,
     #[serde(default)]
     pub role: i32,
     #[serde(default)]
@@ -214,7 +217,7 @@ fn item(index: u32, node: &Node) -> Item {
     if SCENES.contains(&node.ty.as_str()) {
         item = item.scene();
     }
-    item
+    item.written_in(&node.source)
 }
 
 /// The tree with its ids: the root `Item` and, by the items' numbers, the Qt pointers the harness focuses by.
@@ -289,7 +292,7 @@ impl Tree {
     pub fn set_behind(&mut self, index: u32, behind: Vec<Colour>) {
         let node = &self.nodes[index as usize];
         let Some(ink) = node.ink.as_deref().and_then(colour) else { return };
-        let legibility = Legibility { ink, size: node.size, bold: node.bold, behind };
+        let legibility = Legibility { ink, size: node.size, bold: node.bold, behind, disabled: !node.enabled };
         if let Some(item) = find_mut(&mut self.root, index) {
             item.legibility = Some(legibility);
         }

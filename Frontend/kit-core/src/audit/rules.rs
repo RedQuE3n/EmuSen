@@ -53,12 +53,13 @@ pub const LARGE_TEXT: f64 = 24.0;
 pub const LARGE_BOLD_TEXT: f64 = 18.66;
 
 /// Contrast (WCAG 2.1, 1.4.3): words drawn over what is behind them reach 4.5:1, or 3:1 for large type, over all but the spare share;
-/// words crossing a scroller's faded edge are fading out there and are not held to it.
+/// words crossing a scroller's faded edge are fading out there, and a disabled control's words are inactive, so neither is
+/// held to it here: `exempted` names each that falls under it.
 pub fn contrast(root: &Item) -> Vec<Fault> {
     let mut faults = Vec::new();
     root.visit(&mut |item, ancestors| {
         let Some(words) = &item.legibility else { return };
-        if super::fit::fading_out(item, ancestors) {
+        if words.disabled || super::fit::fading_out(item, ancestors) {
             return;
         }
         let Some((ratios, needed)) = ratios(words) else { return };

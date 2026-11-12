@@ -25,7 +25,7 @@ pub struct Excuse {
     /// Why, and who decided it and when, or `no ruling`.
     pub why: &'static str,
     /// The accepted class it stands for, whose row in kit-core's `ACCEPTED` gives its ruling; without that row it excuses
-    /// nothing (EmuSen_Kit.md §7.105). None for an excuse no ruling stands behind.
+    /// nothing, and an excuse naming no class fails its test (EmuSen_Kit.md §7.105).
     pub class: Option<Class>,
 }
 
@@ -180,8 +180,50 @@ pub fn write_accepted(dir: &std::path::Path, gate: &str, lines: &[String]) {
     println!("{} accepted, listed in {}:\n{}", lines.len(), file.display(), lines.join("\n"));
 }
 
+/// Where a test program's counts of the test-only lines are listed in `dir`.
+pub fn tests_only_list(dir: &std::path::Path, program: &str) -> std::path::PathBuf {
+    let name: String = program.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).collect();
+    accepted_list(dir, &format!("tests-only-{name}"))
+}
+
+/// Adds one test's count of each test-only line (`harness::QT_TESTS_ONLY`) to its test program's list in `dir`, so a gate
+/// whose runner shows a passing test's output to no one still leaves, per program, how many and under which ruling
+/// (EmuSen_Kit.md §7.105). The list starts afresh in each run; runs of one program's tests at once wait on its lock.
+pub fn tally_tests_only(dir: &std::path::Path, program: &str, run: &str, test: &str, seen: &[(&str, &str, usize)]) {
+    use std::io::{Read, Seek, Write};
+    let file = tests_only_list(dir, program);
+    let written = std::fs::create_dir_all(dir).and_then(|()| {
+        let mut f = std::fs::File::options().read(true).write(true).create(true).truncate(false).open(&file)?;
+        f.lock()?;
+        let mut was = String::new();
+        f.read_to_string(&mut was)?;
+        let head = format!("run {run}");
+        let mut tests: Vec<String> = if was.lines().next() == Some(head.as_str()) {
+            was.lines().filter(|l| l.starts_with("test ")).map(str::to_owned).collect()
+        } else {
+            Vec::new()
+        };
+        tests.extend(seen.iter().map(|(_, text, n)| format!("test {test}: {n} × {text}")));
+        let mut totals = Vec::new();
+        for (ruling, text, _) in seen {
+            let sum: usize = tests.iter().filter_map(|l| l.strip_suffix(&format!(" × {text}"))?.rsplit(": ").next()?.parse::<usize>().ok()).sum();
+            totals.push(format!("accepted in tests, {ruling}: {sum} × {text}"));
+        }
+        let body = format!("{head}\n{}\n{}\n", totals.join("\n"), tests.join("\n"));
+        f.set_len(0)?;
+        f.rewind()?;
+        f.write_all(body.as_bytes())
+    });
+    if let Err(e) = written {
+        panic!("{program}'s test-only count not written to {}: {e}", file.display());
+    }
+}
+
 impl Excuses {
+    /// Fails, naming each, on an excuse that names no class of the table.
     pub fn new(list: &[Excuse]) -> Excuses {
+        let classless: Vec<String> = list.iter().filter(|e| e.class.is_none()).map(|e| format!("{} on {}", e.finding, e.item)).collect();
+        assert!(classless.is_empty(), "{} excuses name no class of kit-core's table:\n{}", classless.len(), classless.join("\n"));
         Excuses { list: list.iter().cloned().map(|e| (e, 0, 0)).collect(), refusing: Vec::new(), listed: Vec::new(), gate: None }
     }
 
@@ -220,23 +262,18 @@ impl Excuses {
         &self.listed
     }
 
-    /// Whether one of the excuses names this finding at this size; the first that does is counted used, and one that
-    /// stands for an accepted class is listed with its ruling. An excuse whose class no row accepts excuses nothing.
+    /// Whether one of the excuses names this finding at this size; the first that does is counted used and listed with its
+    /// class's ruling. An excuse whose class no row accepts excuses nothing.
     pub fn excuses(&mut self, finding: &Finding, size: (i32, i32)) -> bool {
         for (excuse, used, ambiguous) in &mut self.list {
             if !excuse.size.is_none_or(|s| s == size) {
                 continue;
             }
-            let ruled = excuse.class.map(|c| accepted(c).filter(|a| !self.refusing.contains(&a.class)));
-            if ruled.is_some_and(|row| row.is_none()) {
-                continue;
-            }
+            let Some(row) = excuse.class.and_then(accepted).filter(|a| !self.refusing.contains(&a.class)) else { continue };
             match names(excuse, finding) {
                 Verdict::Names => {
                     *used += 1;
-                    if let Some(Some(row)) = ruled {
-                        self.listed.push(format!("{}x{}: accepted by {}: {}", size.0, size.1, row.ruling, finding.line));
-                    }
+                    self.listed.push(format!("{}x{}: accepted by {}: {}", size.0, size.1, row.ruling, finding.line));
                     return true;
                 }
                 Verdict::Ambiguous => *ambiguous += 1,

@@ -20,11 +20,11 @@ fn gate(fault: Fault) -> Finding {
 }
 
 fn excuse(finding: &'static str, item: &'static str, with: &'static str, words: &'static str) -> Excuse {
-    Excuse { finding, item, with, words, with_words: "", size: None, why: "test", class: None }
+    Excuse { finding, item, with, words, with_words: "", size: None, why: "test", class: Some(Class::SpareTenth) }
 }
 
 const SMALL_COUNT: Excuse =
-    Excuse { finding: "too small to read", item: "count", with: "", words: "", with_words: "", size: Some((1280, 720)), why: "test", class: None };
+    Excuse { finding: "too small to read", item: "count", with: "", words: "", with_words: "", size: Some((1280, 720)), why: "test", class: Some(Class::SpareTenth) };
 
 #[test]
 fn kit_7_100_an_excuse_names_its_item_its_finding_and_its_size() {
@@ -182,4 +182,10 @@ fn kit_7_105_an_excuse_standing_for_an_accepted_class_excuses_only_while_its_row
     let stale = e.stale();
     std::mem::forget(e);
     assert_eq!(stale.len(), 1);
+}
+
+#[test]
+#[should_panic(expected = "1 excuses name no class of kit-core's table:\ntoo small to read on count")]
+fn kit_7_105_an_excuse_naming_no_class_fails_its_test() {
+    let _e = Excuses::new(&[Excuse { class: None, ..SMALL_COUNT }]);
 }

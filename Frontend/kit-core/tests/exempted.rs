@@ -1,13 +1,13 @@
 // EmuSen_Kit.md §7.102: every item a rule's exemption lets pass is reported by itself, and only where the strict rule fails it.
 
-use emusen_kit_core::audit::{ACCEPTED, Axes, Class, Edges, Exempted, Fault, Item, Kind, Legibility, Rect, SMALL_TEXT_EXCEPTIONS, Text, accepted, exempted, fit};
+use emusen_kit_core::audit::{ACCEPTED, MOONRISE_SOURCE, Axes, Class, Edges, Exempted, Fault, Item, Kind, Legibility, Rect, SMALL_TEXT_EXCEPTIONS, Text, accepted, exempted, fit};
 use emusen_kit_core::input::ElementId;
 use emusen_kit_core::tokens::{Colour, ColourToken, Variant, colour};
 
 const PANEL: Rect = Rect::new(0.0, 0.0, 1280.0, 800.0);
 
 fn words(id: u32, x: f64, ink: Colour, behind: Vec<Colour>) -> Item {
-    Item::new(id, Kind::Words, Rect::new(x, 300.0, 200.0, 30.0)).legible(Legibility { ink, size: 16.0, bold: false, behind })
+    Item::new(id, Kind::Words, Rect::new(x, 300.0, 200.0, 30.0)).legible(Legibility { ink, size: 16.0, bold: false, behind, disabled: false })
 }
 
 #[test]
@@ -51,16 +51,19 @@ fn kit_7_102_a_scene_s_colour_outside_the_palette_is_named() {
 
 #[test]
 fn kit_7_102_a_named_small_text_under_the_floor_is_named() {
-    let small = |scene: &str, name: &str| {
-        Item::new(1, Kind::Panel, PANEL).named(scene).child(
+    // Each item is written in a file: the kit's Moonrise.qml, or a theme's Home with a wrapper it names "moonrise".
+    let small = |file: &str, name: &str| {
+        let source = if file == "moonrise" { MOONRISE_SOURCE } else { "file:///themes/t/screens/Home.qml" };
+        Item::new(1, Kind::Panel, PANEL).named("moonrise").written_in(source).child(
             Item::new(2, Kind::Words, Rect::new(10.0, 10.0, 200.0, 20.0))
                 .named(name)
+                .written_in(source)
                 .words(Text { cap_height: 9.0, width: 100.0, height: 18.0, ellipsis: false, data: false, own: None }),
         )
     };
     assert!(matches!(exempted(&small("moonrise", "moonriseCaption"), Some(&[]), 11.64)[..], [Exempted::SmallText { item: ElementId(2), .. }]));
     assert!(exempted(&small("moonrise", "other"), Some(&[]), 11.64).is_empty(), "another item is the floor's finding, not an exemption");
-    assert!(exempted(&small("Home", "moonriseCaption"), Some(&[]), 11.64).is_empty(), "the caption's name outside Moonrise is the floor's finding");
+    assert!(exempted(&small("Home", "moonriseCaption"), Some(&[]), 11.64).is_empty(), "a theme's caption under a wrapper named moonrise is the floor's finding");
     assert!(exempted(&small("moonrise", "moonriseCaption"), Some(&[]), 0.0).is_empty(), "no floor, nothing exempted");
 }
 
@@ -121,6 +124,15 @@ fn kit_7_102_the_table_holds_the_classes_the_tester_accepted_and_no_other() {
         ]
     );
     assert!(ACCEPTED.iter().all(|a| !a.covers.is_empty()), "each row says what it covers");
+    let lines: Vec<(Class, &[&str])> = ACCEPTED.iter().filter(|a| !a.lines.is_empty()).map(|a| (a.class, a.lines)).collect();
+    assert_eq!(
+        lines,
+        [
+            (Class::CpuConversionLine, &["No RHI backend. Using CPU conversion."][..]),
+            (Class::MainThreadLineInTests, &["QApplication was not created in the main() thread"][..]),
+        ],
+        "the log lines a row accepts are its own, word for word: a line added under a class changes this table"
+    );
 }
 
 #[test]
@@ -132,9 +144,32 @@ fn kit_7_102_each_exemption_is_of_its_class_and_accepted_by_its_ruling() {
         (Exempted::Scene { item: id, colour: Colour::hex("#2E8C96") }, "R-20261111-39"),
         (Exempted::SmallText { item: id, capitals: 10.0, class: SMALL_TEXT_EXCEPTIONS[0].2 }, "R-20261111-40"),
         (Exempted::Elided { item: id }, "R-20261111-44"),
+        (Exempted::Disabled { item: id, ratio: 2.0, needed: 4.5 }, "R-20261111-43"),
     ];
     for (e, ruling) in found {
         assert_eq!(e.accepted().map(|a| a.ruling), Some(ruling), "{e}");
         assert_eq!(accepted(e.class()).map(|a| a.ruling), Some(ruling));
     }
+}
+
+#[test]
+fn kit_7_105_a_disabled_control_s_words_under_their_contrast_are_named_not_faults() {
+    let (faint, white) = (Colour::hex("#C8C8C8"), Colour::hex("#FFFFFF"));
+    let state = |disabled: bool| {
+        let words = Item::new(2, Kind::Words, Rect::new(10.0, 300.0, 200.0, 30.0))
+            .legible(Legibility { ink: faint, size: 16.0, bold: false, behind: vec![white; 20], disabled });
+        Item::new(1, Kind::Panel, PANEL).child(words)
+    };
+    assert!(matches!(emusen_kit_core::audit::contrast(&state(false))[..], [Fault::LowContrast { item: ElementId(2), .. }]), "enabled, a fault");
+    assert!(exempted(&state(false), None, 0.0).is_empty());
+    assert!(emusen_kit_core::audit::contrast(&state(true)).is_empty(), "disabled, left to exempted");
+    let found = exempted(&state(true), None, 0.0);
+    assert!(matches!(found[..], [Exempted::Disabled { item: ElementId(2), .. }]), "{found:?}");
+    assert_eq!(found[0].accepted().map(|a| a.ruling), Some("R-20261111-43"));
+    assert!(found[0].to_string().starts_with("low contrast on a disabled control: 2 at "));
+    let passing = Item::new(1, Kind::Panel, PANEL).child(
+        Item::new(2, Kind::Words, Rect::new(10.0, 300.0, 200.0, 30.0))
+            .legible(Legibility { ink: Colour::hex("#000000"), size: 16.0, bold: false, behind: vec![white; 20], disabled: true }),
+    );
+    assert!(exempted(&passing, None, 0.0).is_empty(), "a disabled control's words that pass are nothing to name");
 }

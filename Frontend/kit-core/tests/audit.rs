@@ -229,8 +229,10 @@ fn settings_4_83_2_words_cut_with_an_ellipsis_past_their_box_at_the_foot_or_too_
     excepted.children[2].children[0].text = Some(Text { cap_height: 11.0, width: 100.0, height: 20.0, ellipsis: false, data: false, own: None });
     assert_eq!(fit_faults(&excepted), vec![Fault::TooSmall { item: id(21), capitals: 11.0 }], "the caption's name outside Moonrise is held to the floor");
     excepted.children[2].name = "moonrise".to_owned();
+    assert_eq!(fit_faults(&excepted).len(), 1, "a theme's own item named moonrise is no Moonrise");
+    excepted.children[2].children[0].source = emusen_kit_core::audit::MOONRISE_SOURCE.to_owned();
     let faults = fit_faults(&excepted);
-    assert!(faults.is_empty(), "Moonrise's caption, in Moonrise, is a named exception to the floor: {faults:?}");
+    assert!(faults.is_empty(), "Moonrise's caption, written in the kit's Moonrise.qml, is a named exception to the floor: {faults:?}");
 
     let mut at_the_floor = clean();
     at_the_floor.children[2].children[0].text = Some(text(11.61, 150.0, 26.0));
@@ -343,7 +345,7 @@ fn interface_spec_4_4_every_painted_colour_is_declared_and_a_scene_is_exempt() {
 
 fn words_over(ink: Colour, size: f64, bold: bool, behind: &[Colour]) -> Item {
     let words =
-        Item::new(2, Kind::Words, Rect::new(10.0, 10.0, 200.0, 30.0)).legible(Legibility { ink, size, bold, behind: behind.to_vec() });
+        Item::new(2, Kind::Words, Rect::new(10.0, 10.0, 200.0, 30.0)).legible(Legibility { ink, size, bold, behind: behind.to_vec(), disabled: false });
     Item::new(1, Kind::Panel, PANEL).child(words)
 }
 
@@ -391,7 +393,7 @@ fn kit_7_35_words_crossing_a_faded_edge_are_fading_out_and_not_held_to_contrast(
     let faint = Colour::hex("#949494");
     let white = Colour::hex("#FFFFFF");
     let strip = |fades: bool, x: f64| {
-        let words = Item::new(3, Kind::Words, Rect::new(x, 300.0, 200.0, 30.0)).legible(Legibility { ink: faint, size: 16.0, bold: false, behind: vec![white] });
+        let words = Item::new(3, Kind::Words, Rect::new(x, 300.0, 200.0, 30.0)).legible(Legibility { ink: faint, size: 16.0, bold: false, behind: vec![white], disabled: false });
         Item::new(1, Kind::Panel, PANEL).child(
             Item::new(2, Kind::Scroller, Rect::new(0.0, 200.0, 1280.0, 300.0))
                 .scrolling(Axes { horizontal: true, vertical: false })

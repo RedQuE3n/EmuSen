@@ -190,7 +190,7 @@ impl<'a> Writer<'a> {
         if !item.hit_testable {
             flag(&mut f, "nohit");
         }
-        if let Some(class) = small_text_exception(item, ancestors) {
+        if let Some(class) = small_text_exception(item) {
             f.insert("allow", accepted(class).map_or("no ruling", |a| a.ruling).to_owned());
         }
         let in_popup = ancestors.iter().skip(1).any(|a| a.kind == Kind::Popup);

@@ -120,6 +120,8 @@ pub struct Legibility {
     pub bold: bool,
     /// What is behind the words, sampled across their box with no words drawn.
     pub behind: Vec<Colour>,
+    /// The words are a disabled control's: the contrast rule leaves them to `exempted`, which names each (EmuSen_Kit.md §7.105).
+    pub disabled: bool,
 }
 
 /// An item's place in a stack a kit layout declares (EmuSen_Kit.md §7.33): the stack and the member it lies in, as the
@@ -161,6 +163,8 @@ pub struct Item {
     /// Words' drawn glyphs' four corners in the scene, where a stack's rule looks for them; None where unmeasured.
     pub inked: Option<[(f64, f64); 4]>,
     pub stacking: Option<Stacking>,
+    /// The QML file the item is written in, as Qt gives its URL; empty where unknown. A theme package cannot write into the kit's.
+    pub source: String,
     pub children: Vec<Item>,
 }
 
@@ -191,12 +195,19 @@ impl Item {
             corners: None,
             inked: None,
             stacking: None,
+            source: String::new(),
             children: Vec::new(),
         }
     }
 
     pub fn named(mut self, name: &str) -> Item {
         self.name = name.to_owned();
+        self
+    }
+
+    /// Written in the QML file of this URL.
+    pub fn written_in(mut self, source: &str) -> Item {
+        self.source = source.to_owned();
         self
     }
 

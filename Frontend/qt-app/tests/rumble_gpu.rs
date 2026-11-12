@@ -40,7 +40,12 @@ fn rumble_row(scene: &mut Scene<'_>) {
     scene.key_hold(0x0100_0000, true);
     scene.key_hold(0x0100_0000, false);
     until(scene, "the game suspended under Home", |s| s.property("screens", "shown") == "Home" && s.property("session", "paused") == "true");
-    for _ in 0..5 {
+    // Home's first place focused (the game suspended under Home takes the focus first), then Right to Settings' place.
+    until(scene, "Home's first place focused", |s| {
+        let tree = s.tree();
+        tree.find_named("place.0").is_some_and(|first| s.focus(&tree) == Some(first) || s.focus_item(&tree, first))
+    });
+    for _ in 0..emusen_qt_models::screens::SETTINGS_PLACE {
         scene.pad(UiButton::Right);
     }
     scene.pad(UiButton::Accept);

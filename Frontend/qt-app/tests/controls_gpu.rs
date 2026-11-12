@@ -29,8 +29,8 @@ const F8: i32 = 0x0100_0037;
 const F9: i32 = 0x0100_0038;
 const F11: i32 = 0x0100_003a;
 const ESCAPE: i32 = 0x0100_0000;
-/// QWindow::FullScreen.
-const FULL_SCREEN: &str = "5";
+/// QWindow::FullScreen, as the harness names a property's enumeration value.
+const FULL_SCREEN: &str = "FullScreen";
 
 /// A key held then let go, as a player taps it.
 fn tap(scene: &mut Scene<'_>, key: i32) {

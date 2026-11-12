@@ -147,5 +147,5 @@ fn qt_4_9_the_rules_shape_with_harfrust_alone() {
     let manifest = include_str!("../Cargo.toml");
     let table = manifest.split("\n[").find(|t| t.starts_with("dependencies]")).unwrap_or_default();
     let names: Vec<&str> = table.lines().skip(1).filter(|l| !l.starts_with('#')).filter_map(|l| l.split_once('=')).map(|(n, _)| n.trim()).collect();
-    assert_eq!(names, ["harfrust"], "the approved shaping, and through it read-fonts (EmuSen_Qt.md §4.9.4)");
+    assert_eq!(names, ["harfrust"], "the shaping approved 2026-11-11 (R-20261111-74), and through it read-fonts (EmuSen_Qt.md §4.9.4)");
 }

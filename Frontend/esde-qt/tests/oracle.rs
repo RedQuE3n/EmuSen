@@ -326,7 +326,7 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
     let esde = esde_boxes();
     let picks = captured_picks();
     let sums = manifest();
-    // ES-DE's default face, read from the approved AppImage's fonts by path as an installed ES-DE's would be (EmuSen_Qt.md §4.8.7).
+    // ES-DE's default face, read from the oracle's AppImage's fonts by path as an installed ES-DE's would be (EmuSen_Qt.md §4.8.7).
     let face = oracle.join("bin/AppDir/usr/share/es-de/resources/fonts").join(emusen_esde::fonts::FILE);
     assert!(face.is_file(), "ES-DE's face at {}: Testing/esde-oracle/README.md", face.display());
     let mut harness = Harness::new();

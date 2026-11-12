@@ -1983,7 +1983,8 @@ scene or painter change; the loader is done. The ranking is re-measured by the c
   measure only when its sole failures are *rises*, counts of unknown or unsupported pairs that grew; it prints each rise
   and puts `# ruled <id>: <n> rises` on the file's first line. A box off, a figure risen, a theme that stops loading or an
   undrawn kind gained still fails it and nothing is written; `ruled:` with no id writes nothing. `EMUSEN_ESDE_CORPUS=1`
-  writes only a run with no failure at all, a lower ceiling included.
+  writes only a run with no failure at all, a lower ceiling included. The decision is `emusen_qt_test::corpus`
+  (`record`, `is_rise`), held by its own two unit tests.
 - **The rise of 2026-11-11** (R-20261111-75, R-20261111-87). The nine pairs that were `accepted` (the help's eight
   dimmed properties and a sound's path) are counted unsupported since 1993d98fe, and 57 themes rose against
   `2026-11-09.tsv` by 1 to 7. In 53 the rise is exactly the number of those nine the theme sets. In four it is one less:

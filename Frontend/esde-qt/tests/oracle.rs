@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use common::Scratch;
 use cxx_qt_lib::{QDateTime, QImage};
 use emusen_esde::check::{self, Table};
+use emusen_qt_test::corpus::{Recording, is_rise, record};
 use emusen_qt_test::mockup::{self, Edge};
 use emusen_qt_test::tree::Node;
 use emusen_qt_test::{Harness, Scene};
@@ -168,40 +169,6 @@ fn captured(oracle: &Path, sums: &BTreeMap<String, String>, name: &str) -> Resul
         Some(sum) => Err(format!("{name}: its SHA-256 {sum} is not the manifest's {listed}")),
         None => Err(format!("{}: not read", path.display())),
     }
-}
-
-/// How a run may write the corpus measure: `EMUSEN_ESDE_CORPUS` unset, `1`, or `ruled:<ruling id>` (EmuSen_Qt.md §4.4).
-#[derive(Debug, PartialEq)]
-enum Recording {
-    Off,
-    Plain,
-    Ruled(String),
-}
-
-impl Recording {
-    fn of(var: Option<&str>) -> Self {
-        match var {
-            None => Self::Off,
-            Some(v) => v.strip_prefix("ruled:").map_or(Self::Plain, |id| Self::Ruled(id.trim().to_owned())),
-        }
-    }
-}
-
-/// Writes the corpus measure as the committed one: plainly when asked and nothing failed, under a ruling when its rises are
-/// the only failures and the ruling is named, its id on the file's first line; whether it wrote.
-fn record(committed: &Path, file: &str, measure: &str, rises: &[String], failures: &[String], how: &Recording) -> bool {
-    let text = match how {
-        Recording::Plain if rises.is_empty() && failures.is_empty() => measure.to_owned(),
-        Recording::Ruled(id) if !id.is_empty() && failures.is_empty() => format!("# ruled {id}: {} rises\n{measure}", rises.len()),
-        _ => return false,
-    };
-    std::fs::write(committed.join(file), text).unwrap();
-    true
-}
-
-/// Whether a worsened line is a corpus rise: a count of unknown or unsupported pairs that grew.
-fn is_rise(line: &str) -> bool {
-    line.split(": ").nth(1).is_some_and(|c| c.starts_with("unknown ") || c.starts_with("unsupported "))
 }
 
 /// The spec's elements in drawing order: (key, kind, name, box in design units).
@@ -675,35 +642,9 @@ fn a_row_that_worsens_is_named() {
 }
 
 #[test]
-fn a_failing_run_leaves_the_committed_measure_alone() {
-    let scratch = Scratch::new("oracle-record");
-    let rise = ["against x.tsv: t: unsupported 8 → 10".to_owned()];
-    assert!(!record(&scratch.0, "a.tsv", "m\n", &[], &["a box off".to_owned()], &Recording::Plain));
-    assert!(!scratch.0.join("a.tsv").exists(), "a failing run re-recorded the baseline");
-    assert!(!record(&scratch.0, "b.tsv", "m\n", &[], &[], &Recording::Off));
-    assert!(!record(&scratch.0, "b.tsv", "m\n", &rise, &[], &Recording::Plain), "a plain run wrote over a rise");
-    assert!(!scratch.0.join("b.tsv").exists());
-    assert!(record(&scratch.0, "c.tsv", "m\n", &[], &[], &Recording::Plain));
-    assert_eq!(std::fs::read_to_string(scratch.0.join("c.tsv")).unwrap(), "m\n");
-}
-
-#[test]
-fn a_ruled_rise_is_recorded_only_alone_and_with_its_ruling() {
-    let scratch = Scratch::new("oracle-ruled");
-    let rise = ["against x.tsv: t: unsupported 8 → 10".to_owned()];
-    let ruled = Recording::of(Some("ruled:R-20261111-87"));
-    assert_eq!(ruled, Recording::Ruled("R-20261111-87".to_owned()));
-    assert_eq!(Recording::of(Some("1")), Recording::Plain);
-    assert_eq!(Recording::of(None), Recording::Off);
-    assert!(record(&scratch.0, "rises.tsv", "m\n", &rise, &[], &ruled), "rises only: written");
-    assert_eq!(std::fs::read_to_string(scratch.0.join("rises.tsv")).unwrap(), "# ruled R-20261111-87: 1 rises\nm\n");
-    assert!(!record(&scratch.0, "boxes.tsv", "m\n", &rise, &["box: a box off".to_owned()], &ruled), "a rise and a box failure: not written");
-    assert!(!record(&scratch.0, "noid.tsv", "m\n", &rise, &[], &Recording::of(Some("ruled:"))), "no id: not written");
-    assert!(!scratch.0.join("boxes.tsv").exists() && !scratch.0.join("noid.tsv").exists());
-    assert!(is_rise("t: unsupported 8 → 10") && is_rise("t: unknown 0 → 1"));
-    assert!(!is_rise("t: rects_off 0 → 1") && !is_rise("t: no longer loads") && !is_rise("t: video undrawn"));
+fn a_ruling_s_line_is_not_read_as_the_header() {
     let header = "theme\tloads\tunsupported\nt\tyes\t8\n";
-    assert_eq!(corpus_rows(&format!("# ruled R-1: 0 rises\n{header}"))["t"]["unsupported"], "8", "the ruling's line is not read as the header");
+    assert_eq!(corpus_rows(&format!("# ruled R-1: 0 rises\n{header}"))["t"]["unsupported"], "8");
 }
 
 #[test]

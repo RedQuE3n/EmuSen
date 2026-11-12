@@ -11,6 +11,7 @@ use emusen_client_fixture::World;
 use emusen_kit_core::input::UiButton;
 use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
 use emusen_platform_client::Platform;
+use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::harness::SIZES;
 use emusen_qt_test::Scene;
 use serde_json::json;
@@ -41,11 +42,6 @@ pub fn world(name: &str) -> (World, PathBuf) {
     let cores = installation_with_snes(&world.dir("lib"));
     approved_console_core(&cores);
     (world, cores)
-}
-
-/// No finding is named for the tester: the gate holds every state whole.
-fn nothing_named(_: &str, _: &emusen_qt_test::tree::Tree, _: (i32, i32)) -> bool {
-    false
 }
 
 /// The list's cells as laid out: each one's place and words, from the tree.
@@ -96,7 +92,7 @@ pub fn cells(scene: &mut Scene<'_>, held: &str, report: &mut Vec<String>) -> Vec
     }
     scene.resize(1280, 800);
     steady(scene);
-    hold(scene, held, &emusen_qt_test::mockup::Mockup::default(), nothing_named, report);
+    hold(scene, held, &emusen_qt_test::mockup::Mockup::default(), &mut Excuses::none(), report);
     out
 }
 

@@ -250,7 +250,7 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     let tree = scene.tree();
     let footer = tree.nodes.iter().find(|n| n.visible && n.name == "cardFooter" && n.text.as_deref() == Some(said)).expect("the words under the rows");
     assert!(footer.h > 60.0, "the words run on to a second line, {} high", footer.h);
-    hold(&mut scene, "HomeCardUnread", &mockup::Mockup::default(), named, &mut report);
+    hold(&mut scene, "HomeCardUnread", &mockup::Mockup::default(), &mut excuses, &mut report);
     scene.pad(UiButton::Back);
     until(&mut scene, 5, "B closing the card to Home", |s| s.property("screens", "shown") == "Home");
     assert!(scene.set_property("homeCardModel", "facts", &given));

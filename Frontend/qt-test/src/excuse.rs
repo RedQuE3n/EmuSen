@@ -3,7 +3,7 @@
 
 use crate::mockup::Difference;
 use crate::tree::Node;
-use emusen_kit_core::audit::{ACCEPTED, Class, Exempted, Fault, SMALL_TEXT_EXCEPTIONS, accepted};
+use emusen_kit_core::audit::{ACCEPTED, Accepted, Class, Exempted, Fault, SMALL_TEXT_EXCEPTIONS, accepted};
 use emusen_kit_core::input::ElementId;
 
 /// One finding a test does not count.
@@ -219,6 +219,11 @@ pub fn tally_tests_only(dir: &std::path::Path, program: &str, run: &str, test: &
     }
 }
 
+/// Whether an accepted class's row covers the kind of finding an excuse names.
+fn covers(row: &Accepted, excuse: &Excuse) -> bool {
+    row.findings.contains(&excuse.finding)
+}
+
 impl Excuses {
     /// Fails, naming each, on an excuse that names no class of the table.
     pub fn new(list: &[Excuse]) -> Excuses {
@@ -263,21 +268,21 @@ impl Excuses {
     }
 
     /// Whether one of the excuses names this finding at this size; the first that does is counted used and listed with its
-    /// class's ruling. An excuse whose class no row accepts excuses nothing.
+    /// class's ruling. An excuse whose class no row accepts, or whose row does not cover its kind of finding, excuses nothing.
     pub fn excuses(&mut self, finding: &Finding, size: (i32, i32)) -> bool {
         for (excuse, used, ambiguous) in &mut self.list {
             if !excuse.size.is_none_or(|s| s == size) {
                 continue;
             }
-            let Some(row) = excuse.class.and_then(accepted).filter(|a| !self.refusing.contains(&a.class)) else { continue };
-            match names(excuse, finding) {
-                Verdict::Names => {
+            let row = excuse.class.and_then(accepted).filter(|a| !self.refusing.contains(&a.class) && covers(a, excuse));
+            match (names(excuse, finding), row) {
+                (Verdict::Names, Some(row)) => {
                     *used += 1;
                     self.listed.push(format!("{}x{}: accepted by {}: {}", size.0, size.1, row.ruling, finding.line));
                     return true;
                 }
-                Verdict::Ambiguous => *ambiguous += 1,
-                Verdict::Other => {}
+                (Verdict::Ambiguous, _) => *ambiguous += 1,
+                _ => {}
             }
         }
         false
@@ -291,8 +296,12 @@ impl Excuses {
             .map(|(e, _, ambiguous)| {
                 let with = if e.with.is_empty() { String::new() } else { format!(" with {}", e.with) };
                 let at = e.size.map_or(String::new(), |(w, h)| format!(" at {w}x{h}"));
-                let why = if *ambiguous > 0 { ", its item's name shared by others and no words given" } else { "" };
-                format!("{} on {}{with}{at}: excused nothing{why}", e.finding, e.item)
+                let why = if *ambiguous > 0 { ", its item's name shared by others and no words given".to_owned() } else { String::new() };
+                let class = match e.class.and_then(accepted).filter(|a| !covers(a, e)) {
+                    Some(row) => format!(", its class {:?} ({}) covering no {}", row.class, row.ruling, e.finding),
+                    None => String::new(),
+                };
+                format!("{} on {}{with}{at}: excused nothing{why}{class}", e.finding, e.item)
             })
             .collect()
     }

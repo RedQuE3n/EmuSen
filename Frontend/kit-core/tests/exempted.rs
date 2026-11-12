@@ -149,7 +149,28 @@ fn kit_7_102_each_exemption_is_of_its_class_and_accepted_by_its_ruling() {
     for (e, ruling) in found {
         assert_eq!(e.accepted().map(|a| a.ruling), Some(ruling), "{e}");
         assert_eq!(accepted(e.class()).map(|a| a.ruling), Some(ruling));
+        assert_eq!(e.accepted().map(|a| a.findings), Some(&[e.kind()][..]), "{e}: its row covers its kind, and that alone");
     }
+}
+
+#[test]
+fn kit_7_109_each_class_covers_its_own_kinds_of_finding_and_no_other() {
+    let covered: Vec<(Class, &[&str])> = ACCEPTED.iter().map(|a| (a.class, a.findings)).collect();
+    assert_eq!(
+        covered,
+        [
+            (Class::RomFolderCutAtStart, &[Fault::Ellipsis { item: ElementId(1) }.kind()][..]),
+            (Class::SpareTenth, &[Exempted::SPARE][..]),
+            (Class::FadedEdge, &[Exempted::FADING][..]),
+            (Class::SceneColour, &[Exempted::SCENE][..]),
+            (Class::MoonriseCaption, &[Exempted::SMALL_TEXT][..]),
+            (Class::CpuConversionLine, &[][..]),
+            (Class::DimmedAndMoving, &[Exempted::DISABLED][..]),
+            (Class::DataWordsElided, &[Exempted::ELIDED][..]),
+            (Class::MainThreadLineInTests, &[][..]),
+        ],
+        "a class excuses only the findings its ruling covers; the log lines' classes excuse no finding of the rules"
+    );
 }
 
 #[test]

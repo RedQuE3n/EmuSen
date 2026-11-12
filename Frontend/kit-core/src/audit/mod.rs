@@ -53,6 +53,9 @@ pub enum Fault {
 }
 
 impl Fault {
+    /// The ellipsis' name, which the accepted classes' rows list too.
+    pub const ELLIPSIS: &'static str = "cut with an ellipsis";
+
     /// The finding's name, the same for every fault of its kind; most lines begin with it.
     pub fn kind(&self) -> &'static str {
         match self {
@@ -62,7 +65,7 @@ impl Fault {
             Fault::Overlap { .. } => "overlap",
             Fault::ScrollsInTooLittleRoom { .. } => "scrolls in too little room",
             Fault::CutAtEdge { .. } => "cut at an edge with no fade",
-            Fault::Ellipsis { .. } => "cut with an ellipsis",
+            Fault::Ellipsis { .. } => Fault::ELLIPSIS,
             Fault::RunsPastItsBox { .. } => "runs past its box",
             Fault::CutAtFoot { .. } => "cut at the foot",
             Fault::TooSmall { .. } => "too small to read",

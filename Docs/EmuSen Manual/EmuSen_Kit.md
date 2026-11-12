@@ -3604,6 +3604,16 @@ one file a gate (`accepted-gate.txt` and so on); the gallery's three gates and t
 `.listing("qt-app-…")` writes on drop) use it, and a list that cannot be written fails its gate. An `Excuse` that stands
 for a class lists the finding it excused with the class's ruling.
 
+**A class excuses only what its ruling covers.** Each row of `ACCEPTED` lists the kinds of finding an excuse under its
+class may excuse (`Accepted::findings`), read from the kinds' owners (`Fault::ELLIPSIS`, `Exempted::SPARE` and the
+other exemptions' names): `RomFolderCutAtStart` an ellipsis, each exemption's class its own exemption, and the two log
+lines' classes no finding of the rules. An excuse whose class does not cover its kind excuses nothing, and its stale
+line says so (`…: excused nothing, its class SpareTenth (R-20261111-37) covering no too small to read`). Until
+2026-11-12 the class was only checked to have a row, so a contrast class could excuse small words, a cut or a pad that
+does not reach. Held by kit-core's `kit_7_109_each_class_covers_its_own_kinds_of_finding_and_no_other` and qt-test's
+`kit_7_109_an_excuse_whose_class_does_not_cover_its_finding_excuses_nothing_and_says_so`. The one excuse a gate holds,
+qt-app `settings.rs`' ROM folder (an ellipsis under `RomFolderCutAtStart`), is covered.
+
 **Use reads the table.** qt-app's `themes_tab` test hands two packages to the real theme-audit (built beside the test):
 theme-check's fixture `elided-title`, whose titles are cut (R-20261111-44), which Use takes, and `small-caption`, which
 it refuses, its findings naming `moonriseCaption`. Emptying the table refuses the first.

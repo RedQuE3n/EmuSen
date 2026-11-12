@@ -20,16 +20,17 @@ fn gate(fault: Fault) -> Finding {
 }
 
 fn excuse(finding: &'static str, item: &'static str, with: &'static str, words: &'static str) -> Excuse {
-    Excuse { finding, item, with, words, with_words: "", size: None, why: "test", class: Some(Class::SpareTenth) }
+    Excuse { finding, item, with, words, with_words: "", size: None, why: "test", class: Some(Class::RomFolderCutAtStart) }
 }
 
-const SMALL_COUNT: Excuse =
-    Excuse { finding: "too small to read", item: "count", with: "", words: "", with_words: "", size: Some((1280, 720)), why: "test", class: Some(Class::SpareTenth) };
+// An ellipsis, the one kind of the rules' own findings an accepted class (R-20261111-36's) covers.
+const COUNT_CUT: Excuse =
+    Excuse { finding: "cut with an ellipsis", item: "count", with: "", words: "", with_words: "", size: Some((1280, 720)), why: "test", class: Some(Class::RomFolderCutAtStart) };
 
 #[test]
 fn kit_7_100_an_excuse_names_its_item_its_finding_and_its_size() {
-    let small = |id| gate(Fault::TooSmall { item: ElementId(id), capitals: 10.72 });
-    let mut e = Excuses::new(&[SMALL_COUNT]);
+    let small = |id| gate(Fault::Ellipsis { item: ElementId(id) });
+    let mut e = Excuses::new(&[COUNT_CUT]);
     assert!(!e.excuses(&small(1), (1280, 720)), "another item");
     assert!(!e.excuses(&gate(Fault::LowContrast { item: ElementId(2), ratio: 3.1, needed: 4.5 }), (1280, 720)), "another finding");
     assert!(!e.excuses(&small(2), (1280, 800)), "another size");
@@ -103,9 +104,9 @@ fn kit_7_100_an_exemption_is_excused_by_its_own_kind_and_item() {
 }
 
 #[test]
-#[should_panic(expected = "1 stale excuses:\ntoo small to read on count at 1280x720: excused nothing")]
+#[should_panic(expected = "1 stale excuses:\ncut with an ellipsis on count at 1280x720: excused nothing")]
 fn kit_7_100_an_excuse_that_excused_nothing_fails_the_test() {
-    let _e = Excuses::new(&[SMALL_COUNT]);
+    let _e = Excuses::new(&[COUNT_CUT]);
 }
 
 #[test]
@@ -147,7 +148,7 @@ fn kit_7_100_a_pair_s_second_item_is_told_by_its_name_and_words_as_the_first() {
     assert!(!e.excuses(&overlap(3, 4), (1280, 800)));
     let stale = e.stale();
     std::mem::forget(e);
-    assert_eq!(stale, ["overlap on ring with value: excused nothing, its item's name shared by others and no words given"]);
+    assert_eq!(stale, ["overlap on ring with value: excused nothing, its item's name shared by others and no words given, its class RomFolderCutAtStart (R-20261111-36) covering no overlap"]);
 }
 
 #[test]
@@ -185,7 +186,20 @@ fn kit_7_109_an_excuse_standing_for_an_accepted_class_excuses_only_while_its_row
 }
 
 #[test]
-#[should_panic(expected = "1 excuses name no class of kit-core's table:\ntoo small to read on count")]
+#[should_panic(expected = "1 excuses name no class of kit-core's table:\ncut with an ellipsis on count")]
 fn kit_7_109_an_excuse_naming_no_class_fails_its_test() {
-    let _e = Excuses::new(&[Excuse { class: None, ..SMALL_COUNT }]);
+    let _e = Excuses::new(&[Excuse { class: None, ..COUNT_CUT }]);
+}
+
+#[test]
+fn kit_7_109_an_excuse_whose_class_does_not_cover_its_finding_excuses_nothing_and_says_so() {
+    let small = gate(Fault::TooSmall { item: ElementId(2), capitals: 10.72 });
+    let mut e = Excuses::new(&[Excuse { finding: "too small to read", class: Some(Class::SpareTenth), ..COUNT_CUT }]);
+    assert!(!e.excuses(&small, (1280, 720)), "a contrast class excuses no small words");
+    let stale = e.stale();
+    std::mem::forget(e);
+    assert_eq!(stale, ["too small to read on count at 1280x720: excused nothing, its class SpareTenth (R-20261111-37) covering no too small to read"]);
+    let spare = Finding::exempted(&Exempted::Spare { item: ElementId(2), worst: 3.0, needed: 4.5 }, &nodes());
+    let mut e = Excuses::new(&[Excuse { finding: "low contrast in the spare tenth", class: Some(Class::SpareTenth), ..COUNT_CUT }]);
+    assert!(e.excuses(&spare, (1280, 720)), "the kind its class covers");
 }

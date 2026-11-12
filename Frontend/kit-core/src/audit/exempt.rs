@@ -26,15 +26,23 @@ pub enum Exempted {
 }
 
 impl Exempted {
+    /// Each exemption's name, which its line begins with and the accepted classes' rows list.
+    pub const SPARE: &'static str = "low contrast in the spare tenth";
+    pub const FADING: &'static str = "low contrast at a faded edge";
+    pub const SCENE: &'static str = "a colour outside the palette in a scene";
+    pub const SMALL_TEXT: &'static str = "too small to read, a named exception";
+    pub const ELIDED: &'static str = "data cut with an ellipsis";
+    pub const DISABLED: &'static str = "low contrast on a disabled control";
+
     /// The exemption's name, as its line begins with it.
     pub fn kind(&self) -> &'static str {
         match self {
-            Exempted::Spare { .. } => "low contrast in the spare tenth",
-            Exempted::Fading { .. } => "low contrast at a faded edge",
-            Exempted::Scene { .. } => "a colour outside the palette in a scene",
-            Exempted::SmallText { .. } => "too small to read, a named exception",
-            Exempted::Elided { .. } => "data cut with an ellipsis",
-            Exempted::Disabled { .. } => "low contrast on a disabled control",
+            Exempted::Spare { .. } => Exempted::SPARE,
+            Exempted::Fading { .. } => Exempted::FADING,
+            Exempted::Scene { .. } => Exempted::SCENE,
+            Exempted::SmallText { .. } => Exempted::SMALL_TEXT,
+            Exempted::Elided { .. } => Exempted::ELIDED,
+            Exempted::Disabled { .. } => Exempted::DISABLED,
         }
     }
 

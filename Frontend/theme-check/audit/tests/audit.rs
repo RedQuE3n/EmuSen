@@ -528,3 +528,77 @@ fn kit_7_102_moonrise_s_caption_name_in_a_theme_s_own_moonrise_is_not_accepted()
     let small: Vec<&str> = ran.out.lines().filter(|l| l.contains("small-caption/screens/Home.qml") && l.contains("too small") && l.contains("moonriseCaption")).collect();
     assert_eq!(small.len(), 10, "the floor's finding at five sizes in both variants:\n{}", ran.out);
 }
+
+/// The reference package copied to a folder of `name` with Choose a console alone in its manifest.
+fn consoles_alone(name: &str) -> PathBuf {
+    let package = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../themes/emusen");
+    let dir = std::env::temp_dir().join(format!("theme-audit-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    copy_tree(&package, &dir);
+    let manifest = std::fs::read_to_string(dir.join("theme.json")).unwrap();
+    let alone = manifest.replace(r#""screens": ["home", "consoles", "games"]"#, r#""screens": ["consoles"]"#);
+    assert_ne!(alone, manifest, "the manifest names its three screens");
+    std::fs::write(dir.join("theme.json"), alone).unwrap();
+    dir
+}
+
+/// A recorded item's box, `at=x,y,w,h`, and its laid-out words, `layout=w,h`, by its name in a state's spec.
+fn boxes(spec: &str, prefix: &str) -> Vec<(String, [f64; 4], [f64; 2])> {
+    let field = |line: &str, key: &str| -> Vec<f64> {
+        line.split_whitespace().find_map(|w| w.strip_prefix(key)).map(|v| v.split(',').map(|n| n.parse().unwrap()).collect()).unwrap_or_default()
+    };
+    spec.lines()
+        .filter_map(|line| {
+            let name = line.split_whitespace().find_map(|w| w.strip_prefix("name="))?;
+            if !name.starts_with(prefix) {
+                return None;
+            }
+            let (at, layout) = (field(line, "at="), field(line, "layout="));
+            Some((name.to_owned(), [at[0], at[1], at[2], at[3]], [layout[0], layout[1]]))
+        })
+        .collect()
+}
+
+#[test]
+fn qt_3_4_2_a_full_name_far_longer_than_any_wraps_or_shrinks_short_of_every_count() {
+    // The canvas's eleven consoles with the Super Nintendo's name far longer than any console's, and it focused.
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let dir = consoles_alone("longest-name");
+    let long = "Super Nintendo Entertainment System with the Satellaview and the Super Game Boy Two Attached";
+    let eleven = std::fs::read_to_string(root.join("Testing/themes/catalogues/eleven.tsv")).unwrap();
+    let catalogue = eleven.replace("\tSuper Nintendo\t", &format!("\t{long}\t"));
+    assert_ne!(catalogue, eleven, "the catalogue names the Super Nintendo");
+    std::fs::write(dir.join("longest.tsv"), catalogue).unwrap();
+    let states = dir.join("states");
+    let ran = Ran::judged(Command::new(PROGRAM).arg("--catalogue").arg(dir.join("longest.tsv")).args(["--focus", long, "--state"]).arg(&states).arg(&dir));
+    assert_eq!(ran.held("Consoles").0, 10, "Choose a console at five sizes in both variants: {}", ran.err);
+    let named: Vec<&str> = ran.out.lines().filter(|l| l.contains("consoleDetailName")).collect();
+    assert!(named.is_empty(), "the full name is cut or meets nothing (R-20261112-2):\n{}", named.join("\n"));
+    for variant in ["dark", "light"] {
+        for (w, h) in [(1280, 800), (1920, 1200), (1920, 1080), (1280, 720), (3840, 2160)] {
+            let file = states.join(format!("Consoles-{variant}-longest-{w}x{h}.spec"));
+            let spec = std::fs::read_to_string(&file).unwrap_or_else(|_| panic!("{} recorded", file.display()));
+            let (_, name, words) = boxes(&spec, "consoleDetailName").pop().unwrap_or_else(|| panic!("{variant} {w}x{h}: the full name drawn"));
+            assert!(spec.contains(&format!("text=\"{long}\"")), "{variant} {w}x{h}: the whole name, never cut");
+            assert!(words[0] <= name[2] + 1.0 && words[1] <= name[3] + 1.0, "{variant} {w}x{h}: the words {words:?} inside their box {name:?}");
+            let counts = boxes(&spec, "consoleCount.");
+            let meets: Vec<_> = counts
+                .iter()
+                .filter(|(_, c, _)| c[1] < name[1] + name[3] && c[1] + c[3] > name[1] && c[0] >= name[0] && c[0] < name[0] + name[2] - 1.0)
+                .collect();
+            assert!(meets.is_empty(), "{variant} {w}x{h}: the name's box {name:?} runs under {meets:?}");
+            assert!(counts.iter().any(|(_, c, _)| c[1] < name[1] + name[3] && c[1] + c[3] > name[1] && c[0] >= name[0]), "{variant} {w}x{h}: a count shares the name's rows, so the bound is held");
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn qt_3_4_2_the_full_name_meets_no_count_over_120_consoles() {
+    let dir = consoles_alone("detail-120");
+    let ran = Ran::judged(Command::new(PROGRAM).arg(&dir));
+    assert_eq!(ran.held("Consoles").0, 10, "{}", ran.err);
+    let named: Vec<&str> = ran.out.lines().filter(|l| l.contains("consoleDetailName")).collect();
+    assert!(named.is_empty(), "the full name's box over a count in the default state (R-20261112-2):\n{}", named.join("\n"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

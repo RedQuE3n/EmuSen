@@ -71,7 +71,8 @@ element consoleBody.10 x=697.43 y=173.34 w=45 h=72
 element consoleName.10 y=253.34 h=24 token=TextStrong words=data
 element consoleCount.10 y=277.34 h=22.8 token=Muted words=data
 note the full name in Barlow Condensed's own line box, 53, its baseline at 651.6 where the canvas's 44-unit line from 612 put it (R-20261111-94)
-element consoleDetailName x=64 y=607.6 h=53 token=TextStrong words=data
+note the full name's box only as wide as its letters, 279 for SUPER NINTENDO, and never past the nearest count in its rows; a longer name wraps or shrinks (R-20261112-2)
+element consoleDetailName x=64 y=607.6 w=279 h=53 token=TextStrong words=data
 element consoleDetailFacts x=64 y=664 h=26.4 token=Muted words=data
 element consoleDetailEngine x=64 y=696 h=20
 note three covers whole at 100 tall, 12 apart, their feet at 716; the Super Nintendo's shape is the systems table's, 1 / 0.73, so each is 137 wide (R-20261111-95)

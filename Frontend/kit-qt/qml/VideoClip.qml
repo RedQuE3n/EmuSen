@@ -6,6 +6,7 @@ import EmuSen.Kit as Kit
 // VideoTile's player, made only while a clip is to play, so a window that shows none never starts Qt Multimedia: the clip after the poster's delay, looped, drawn by VideoOutput on the GPU and by VideoFrames on the software backend (EmuSen_Kit.md §7.53).
 Item {
     id: root
+    objectName: "videoPlayback"
     property url source
     property bool muted: true
     property real volume: 1
@@ -15,6 +16,10 @@ Item {
     readonly property bool software: GraphicsInfo.api === GraphicsInfo.Software
     readonly property bool showing: player.playbackState === MediaPlayer.PlayingState && (root.software ? frames.frames > 0 : player.position > 0)
     readonly property int frames: frames.frames
+    // Where the clip is, in ms, whether its sound is let out and at what share of full: what the player sees and hears of it (EmuSen_Kit.md §7.53).
+    readonly property real position: player.position
+    readonly property bool heard: !sound.muted
+    readonly property real level: sound.volume
     opacity: root.showing ? 1 : 0
     Behavior on opacity {
         NumberAnimation {
@@ -41,6 +46,7 @@ Item {
         loops: MediaPlayer.Infinite
         videoOutput: root.software ? frames.videoSink : output
         audioOutput: AudioOutput {
+            id: sound
             muted: root.muted
             volume: root.volume
         }

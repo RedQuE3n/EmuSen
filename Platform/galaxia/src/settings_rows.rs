@@ -169,8 +169,9 @@ mod tests {
         ("GraphicsConfig.Consoles", "Overscan"),
     ];
 
-    /// The media viewer's settings, ES-DE's (USERGUIDE.md, "Media viewer settings"), which no C# row set; their rows
-    /// are the tester's of 2026-11-09 (EmuSen_Galaxia.md §3.15.1). The scanlines are not offered.
+    /// The media viewer's settings, ES-DE's, which no C# row set: five of its media viewer settings menu and the video's
+    /// audio, which ES-DE offers under its sound settings; their rows are the tester's of 2026-11-09, R-20261109-m2
+    /// (EmuSen_Galaxia.md §3.15.1). The scanlines are not offered.
     const VIEWER_KEYS: [&str; 6] = [
         "BigPictureInterface.MediaViewerHelpPrompts",
         "BigPictureInterface.MediaViewerShowTypes",

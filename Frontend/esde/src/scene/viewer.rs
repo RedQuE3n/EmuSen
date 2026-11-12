@@ -51,9 +51,9 @@ impl HelpPlace {
     }
 }
 
-/// The player's viewer settings (USERGUIDE.md, "Media viewer settings"), with ES-DE's defaults; the scanlines are not
-/// offered (EmuSen_Galaxia.md §3.15.1).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// The player's viewer settings, with ES-DE's defaults: five of ES-DE's media viewer settings menu, its scanlines not
+/// offered, and the video's audio, which ES-DE offers under its sound settings (EmuSen_Galaxia.md §3.15.1).
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewerSettings {
     pub help: HelpPlace,
     pub show_types: bool,
@@ -61,11 +61,13 @@ pub struct ViewerSettings {
     pub stretch_videos: bool,
     pub blur: bool,
     pub audio: bool,
+    /// The share of full the video's sound plays at: EmuSen's Volume, which ES-DE's own video volume has no row beside.
+    pub volume: f64,
 }
 
 impl Default for ViewerSettings {
     fn default() -> Self {
-        ViewerSettings { help: HelpPlace::Top, show_types: false, keep_video_running: true, stretch_videos: false, blur: false, audio: true }
+        ViewerSettings { help: HelpPlace::Top, show_types: false, keep_video_running: true, stretch_videos: false, blur: false, audio: true, volume: 1.0 }
     }
 }
 
@@ -275,7 +277,7 @@ impl Viewer {
         let mut out = vec![fill("ground", 0.0, h, 0x0000_00FF)];
         let video = self.entries.iter().find(|e| e.kind == "video");
         let blur = if settings.blur { BLUR_SIGMA * w } else { 0.0 };
-        let clip = |source: &str| Paint::Clip(Clip { source: source.to_owned(), stretch: settings.stretch_videos, audio: settings.audio, blur });
+        let clip = |source: &str| Paint::Clip(Clip { source: source.to_owned(), stretch: settings.stretch_videos, audio: settings.audio, volume: settings.volume, blur });
         let (ax, ay, aw, ah) = area;
         match (self.reading, self.shown()) {
             (Some(view), _) => {

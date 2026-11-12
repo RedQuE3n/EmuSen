@@ -519,7 +519,7 @@ fn the_media_viewer_shows_a_game_s_media_in_es_de_s_order_and_stops_at_the_ends(
     let kinds: Vec<&str> = v.entries.iter().map(|e| e.kind.as_str()).collect();
     assert_eq!(kinds, ["video", "cover", "screenshot", "fanart", "custom"], "ES-DE's order; a marquee is not shown");
     let item = |s: &Stage| placed(&s.frame(), "item").paint.clone();
-    let clip = Clip { source: "/m/video".into(), stretch: false, audio: true, blur: 0.0 };
+    let clip = Clip { source: "/m/video".into(), stretch: false, audio: true, volume: 1.0, blur: 0.0 };
     assert_eq!(placed(&s.frame(), "video").paint, Paint::Clip(clip), "the video first, played");
     let viewer = s.viewer.as_mut().unwrap();
     assert!(!viewer.browse(-1), "left at the first stays");

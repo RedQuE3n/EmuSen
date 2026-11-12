@@ -3753,11 +3753,14 @@ whole picture's error in `oracle.tsv`.
 
 ### 4.14 The media viewer's settings **[M 2026-11-09]**
 
-**Approved 2026-11-09 by the tester:** the viewer's settings as the user guide lists them ("Media viewer settings"),
-in our Settings, without the scanlines. They are keys of `BigPictureInterface` with ES-DE's defaults (ES-DE writes them in
-`es_settings.xml`): `MediaViewerHelpPrompts` (top), `MediaViewerShowTypes` (off), `MediaViewerKeepVideoRunning` (on),
-`MediaViewerStretchVideos` (off), `MediaViewerVideoBlur` (off) and `MediaViewerVideoAudio` (on, the user guide's "Play
-audio for media viewer videos"). Their rows are data (EmuSen_Galaxia.md §3.15.1), on the page Media viewer that the
+**Decided 2026-11-09 by the tester (R-20261109-m2):** the viewer's settings in our Settings, without the scanlines;
+**decided 2026-11-11 (R-20261111-84)** that the six are kept where they are needed once ES-DE's source had been read to
+check each is sound. They are keys of `BigPictureInterface` with ES-DE's defaults (ES-DE 3.4.1 writes them in
+`es_settings.xml`, `Settings::setDefaults` in `es-core/src/Settings.cpp`): `MediaViewerHelpPrompts` (top),
+`MediaViewerShowTypes` (off), `MediaViewerKeepVideoRunning` (on), `MediaViewerStretchVideos` (off),
+`MediaViewerVideoBlur` (off) and `MediaViewerVideoAudio` (on). Five are the rows of ES-DE's media viewer settings menu
+(`GuiMediaViewerOptions`' constructor, which has seven, the two scanline settings being the others); the sixth, "Play
+audio for media viewer videos", ES-DE offers under its sound settings (`GuiMenu::openSoundOptions`), not among them. Their rows are data (EmuSen_Galaxia.md §3.15.1), on the page Media viewer that the
 Library section opens after Hidden games. The evidence is 14 captures of 2026-11-09 (`viewerstates.sh`), CarAlt at both sizes,
 the scanlines off in each so that only the setting differs.
 
@@ -3771,10 +3774,40 @@ the scanlines off in each so that only the setting differs.
   1920 × 1200, gain 1.000, mean squared error 0.19 and 0.12 of a level; a 512th of the screen's width at both.
 - *Keep videos running* and *audio* do not show in a still capture: the video plays on, unseen, while a picture is
   shown (its record stays, at no opacity), or with the setting off it stops and starts again on return; audio off mutes
-  it.
+  it. As ES-DE does it (`MediaViewer::showNext`, `showPrevious` and `playVideo`, `es-app/src/MediaViewer.cpp`, v3.4.1):
+  off, the video component is destroyed on leaving the video and made anew on return; on, `playVideo` returns early as
+  the video still exists, and `update` keeps it playing, its sound included.
+  *Found 2026-11-11 and fixed:* the scene kept the record, but `ElementModel` (`esde-qt/src/lists.rs`) reset the whole
+  model whenever the list of element ids changed, and going from the video to a picture adds the picture's record, so
+  Qt's Repeater made every delegate anew, the clip's player among them: with the setting on the clip started again
+  both ways (measured: 1533 ms played, then 1433 ms 1.5 s after a picture and back, `viewer-clip-before-fix.log`). The
+  model now removes and inserts only the rows that leave and come (the longest run of ids the two lists share, in
+  order, is kept), so a delegate whose element stays lives on; a reset is left only for a change of a primary's layout.
+- *Volume* (decided 2026-11-11 by the tester, R-20261111-91): the viewer's video plays at EmuSen's `Volume`
+  (`AppSettings`, a share of full, the Sound page's row), carried in `esdeSettings` as `volume`
+  (`esde_shelves::settings_of`) to the clip's `volume`; no setting of its own. ES-DE plays it at its video player volume,
+  `SoundVolumeVideos` (default 80), which EmuSen has no key for.
+
+**Differences from ES-DE that wait on the tester** (read in ES-DE 3.4.1's source 2026-11-11, not ruled):
+- ES-DE's two viewer scanline settings, `MediaViewerVideoScanlines` and `MediaViewerScreenshotScanlines`, default to on
+  (`Settings::setDefaults`), and EmuSen offers neither (R-20261109-m2): this viewer matches ES-DE with both turned off,
+  as the captures were taken, not ES-DE's default look.
+- The blur: ES-DE blurs the whole screen, the black ground and the letterbox bars included, before the strip is drawn
+  (`MediaViewer::render`, `RendererOpenGL::shaderPostprocessing`), with a 9-tap kernel in two passes; EmuSen lays one
+  Gaussian pass over the video element only. ES-DE blurs vertically on a screen rotated by 90 or 270 degrees; EmuSen
+  has no vertical blur, and no screen rotation.
+- The fade-in: ES-DE fades the viewer's video in over 600 ms (`MEDIA_VIEWER_FADE_IN_TIME`, `VideoComponent::update`,
+  `es-core/src/components/VideoComponent.cpp`). EmuSen's clip, the kit's `VideoClip`, fades in over the motion token
+  `posterFade`, 1500 ms, linear, once its first frame is drawn (checked 2026-11-11 in `kit-qt/qml/VideoClip.qml` and
+  `kit-core/src/motion.rs`).
 
 **Held to**: `frame.rs`'s `the_media_viewer_follows_the_player_s_viewer_settings`; `settings_rows`' one-row test, which
-names the six keys; the oracle's seven settings states in CarAlt at both sizes.
+names the six keys; the oracle's seven settings states in CarAlt at both sizes; `viewer_clip.rs` (esde-qt, offscreen on
+the software backend), which plays a 20 s clip the test writes, goes to a picture and back and reads the clip's
+position, muted state and volume from the running player (`VideoClip`'s `position`, `heard` and `level`): on, the clip
+plays on behind the picture and is further on when shown again; off, no clip plays behind the picture and it starts
+again; audio on is heard at the player's Volume, off is muted. Seeded 2026-11-11: the model reset on a change of ids
+again (caught by `viewer_clip`).
 ### 4.15 Hosting the view in `emusen-qt` (H) **[M 2026-11-09]**
 
 **The two choices, and how they relate.** The player's look is two settings that never stand for each other. An ES-DE

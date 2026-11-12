@@ -2816,7 +2816,11 @@ by the program's Consoles test (the Super Nintendo's `✓ No firmware needed` dr
 token `poster` (1.5 s) has passed, the clip (`source`) plays, looped, and fades in over `posterFade`; when `playing` turns
 false, or the source changes, the player goes and the still stands alone. It is silent unless `muted` is false. Reduced
 motion keeps the still (`EmuSen_Interface.md` §5.9). `showing` says whether a frame of the clip stands over the still,
-`running` whether its player is made, `frames` how many frames the kit's sink has drawn. The player, decoder and drawing
+`running` whether its player is made, `frames` how many frames the kit's sink has drawn. Since 2026-11-11 the player
+(`VideoClip`, objectName `videoPlayback`) also says where the clip is (`position`, ms), whether its sound is let out
+(`heard`, its `AudioOutput`'s muted state) and at what share of full (`level`), so a test reads what the player sees and
+hears; and `emusen_qt_test::clips::write` writes a test's clip, and `Scene::item_number` reads a number of an item found
+through the item tree, a Repeater's delegate among them. The player, decoder and drawing
 are **`VideoClip`** (qmldir), which the tile makes only while its clip is to play, so a window that shows no clip never
 starts Qt Multimedia: made with every window, it started Qt Multimedia in every run of the program (2026-11-09). The decoder is Qt Multimedia's over the system's FFmpeg (`EmuSen_Qt.md` §1.8.9). On an RHI
 backend `VideoOutput` draws; on the software backend, where `VideoOutput` draws nothing (measured 2026-11-09), the kit's

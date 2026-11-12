@@ -136,6 +136,18 @@ pub mod qobject {
         #[cxx_name = "endResetModel"]
         fn end_reset_model(self: Pin<&mut ElementModel>);
         #[inherit]
+        #[cxx_name = "beginRemoveRows"]
+        fn begin_remove_rows(self: Pin<&mut ElementModel>, parent: &QModelIndex, first: i32, last: i32);
+        #[inherit]
+        #[cxx_name = "endRemoveRows"]
+        fn end_remove_rows(self: Pin<&mut ElementModel>);
+        #[inherit]
+        #[cxx_name = "beginInsertRows"]
+        fn begin_insert_rows(self: Pin<&mut ElementModel>, parent: &QModelIndex, first: i32, last: i32);
+        #[inherit]
+        #[cxx_name = "endInsertRows"]
+        fn end_insert_rows(self: Pin<&mut ElementModel>);
+        #[inherit]
         fn index(self: &ElementModel, row: i32, column: i32, parent: &QModelIndex) -> QModelIndex;
         #[inherit]
         #[qsignal]
@@ -286,6 +298,30 @@ impl RowCache {
     }
 }
 
+/// The longest run of keys the two lists share in order, as (old index, new index) pairs: the rows a change keeps.
+fn common<K: PartialEq>(old: &[K], new: &[K]) -> Vec<(usize, usize)> {
+    let (n, m) = (old.len(), new.len());
+    let mut length = vec![0u32; (n + 1) * (m + 1)];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            length[i * (m + 1) + j] =
+                if old[i] == new[j] { length[(i + 1) * (m + 1) + j + 1] + 1 } else { length[(i + 1) * (m + 1) + j].max(length[i * (m + 1) + j + 1]) };
+        }
+    }
+    let (mut i, mut j, mut out) = (0, 0, Vec::new());
+    while i < n && j < m {
+        if old[i] == new[j] {
+            out.push((i, j));
+            (i, j) = (i + 1, j + 1);
+        } else if length[(i + 1) * (m + 1) + j] >= length[i * (m + 1) + j + 1] {
+            i += 1;
+        } else {
+            j += 1;
+        }
+    }
+    out
+}
+
 pub struct ElementModelRust {
     scene: *mut EsdeModel,
     revision: i32,
@@ -316,8 +352,10 @@ impl cxx_qt::Initialize for qobject::ElementModel {
 }
 
 impl qobject::ElementModel {
-    /// The frame's elements: a reset when the list of ids or kinds changes, else `dataChanged` for each row that moved.
-    /// The painter is read and released before any signal, since a delegate may call back into it (a measurement).
+    /// The frame's elements: an element that leaves is a removed row and one that comes an inserted row, so that every
+    /// other delegate lives on (a playing clip among them, EmuSen_Qt.md §4.14), then `dataChanged` for each kept row
+    /// that moved; a reset only when a primary's layout changes. The painter is read and released before any signal,
+    /// since a delegate may call back into it (a measurement).
     fn refresh(mut self: Pin<&mut Self>) {
         let Some(shared) = self.shared.clone() else { return };
         let (elements, primaries) = {
@@ -325,10 +363,7 @@ impl qobject::ElementModel {
             (p.frame.elements.clone(), [p.frame.primary.clone(), p.frame.leaving_primary.clone()])
         };
         let layout = |x: &Option<Primary>| x.as_ref().map(|x| std::mem::discriminant(&x.layout));
-        let same = elements.len() == self.shown.len()
-            && elements.iter().zip(&self.shown).all(|(a, b)| a.id == b.id && std::mem::discriminant(&a.paint) == std::mem::discriminant(&b.paint))
-            && primaries.iter().zip(&self.primaries).all(|(a, b)| layout(a) == layout(b));
-        if !same {
+        if !primaries.iter().zip(&self.primaries).all(|(a, b)| layout(a) == layout(b)) {
             self.as_mut().begin_reset_model();
             self.as_mut().rust_mut().shown = elements;
             self.as_mut().rust_mut().primaries = primaries;
@@ -336,13 +371,30 @@ impl qobject::ElementModel {
             return;
         }
         let primary_moved = [0, 1].map(|i| primaries[i] != self.primaries[i]);
+        self.as_mut().rust_mut().primaries = primaries;
+        let key = |p: &Placed| (p.id, std::mem::discriminant(&p.paint));
+        if !(elements.len() == self.shown.len() && elements.iter().zip(&self.shown).all(|(a, b)| key(a) == key(b))) {
+            let old: Vec<_> = self.shown.iter().map(key).collect();
+            let new: Vec<_> = elements.iter().map(key).collect();
+            let kept = common(&old, &new);
+            let root = QModelIndex::default();
+            for i in (0..old.len()).rev().filter(|i| !kept.iter().any(|k| k.0 == *i)) {
+                self.as_mut().begin_remove_rows(&root, i as i32, i as i32);
+                self.as_mut().rust_mut().shown.remove(i);
+                self.as_mut().end_remove_rows();
+            }
+            for j in (0..new.len()).filter(|j| !kept.iter().any(|k| k.1 == *j)) {
+                self.as_mut().begin_insert_rows(&root, j as i32, j as i32);
+                self.as_mut().rust_mut().shown.insert(j, elements[j].clone());
+                self.as_mut().end_insert_rows();
+            }
+        }
         let moved: Vec<usize> = (0..elements.len())
-            .filter(|&i| self.shown[i] != elements[i] || matches!(elements[i].paint, Paint::Primary { leaving } if primary_moved[leaving as usize]))
+            .filter(|&j| self.shown[j] != elements[j] || matches!(elements[j].paint, Paint::Primary { leaving } if primary_moved[leaving as usize]))
             .collect();
         self.as_mut().rust_mut().shown = elements;
-        self.as_mut().rust_mut().primaries = primaries;
-        for i in moved {
-            let at = self.index(i as i32, 0, &QModelIndex::default());
+        for j in moved {
+            let at = self.index(j as i32, 0, &QModelIndex::default());
             self.as_mut().data_changed(&at, &at, &QList::default());
         }
     }
@@ -542,5 +594,19 @@ impl qobject::PartsModel {
 
     pub fn row_count(&self, _parent: &QModelIndex) -> i32 {
         self.paint.as_ref().map_or(0, values::part_count) as i32
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::common;
+
+    #[test]
+    fn a_change_keeps_the_rows_both_lists_share_in_order() {
+        assert_eq!(common(&[1, 2, 5], &[1, 2, 3, 5]), [(0, 0), (1, 1), (2, 3)], "a row inserted keeps the rest");
+        assert_eq!(common(&[1, 2, 3, 5], &[1, 2, 5]), [(0, 0), (1, 1), (3, 2)], "a row removed keeps the rest");
+        assert_eq!(common(&[1, 2, 5], &[1, 3, 5]), [(0, 0), (2, 2)], "a row replaced is one removed and one inserted");
+        assert_eq!(common::<u8>(&[], &[1]), []);
+        assert_eq!(common(&[3, 1, 2], &[1, 2, 3]), [(1, 0), (2, 1)]);
     }
 }

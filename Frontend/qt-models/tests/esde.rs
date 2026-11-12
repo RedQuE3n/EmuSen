@@ -93,6 +93,7 @@ fn themed() -> Value {
         "BigPicture": { "/themes/art-book-next": { "Variant": "textlist", "ColorScheme": "dark" } },
         "BigPictureInterface": { "DisplayClock": true, "StartupView": "gamelist" },
         "ShowHiddenGames": false,
+        "Volume": 0.35,
     })
 }
 
@@ -235,6 +236,7 @@ fn the_settings_are_the_theme_s_stored_choices_and_the_interface_s() {
     assert_eq!(text["choices"], json!({ "Variant": "textlist", "ColorScheme": "dark" }), "keyed by the folder less its trailing separator");
     assert_eq!(text["interface"]["StartupView"], "gamelist");
     assert_eq!((text["style"].as_str(), text["show_hidden"].as_bool()), (Some("Theme"), Some(false)));
+    assert_eq!(text["volume"], json!(0.35), "the player's Volume, which the viewer's video plays at");
     assert_eq!(theme_key("/t/x//"), "/t/x");
     assert_eq!(theme_key(""), "");
     let none = settings_of(&Value::Null);

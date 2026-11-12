@@ -9,12 +9,14 @@ ElementBox {
     required property url source
     required property bool stretch
     required property bool audio
+    required property real volume
     required property real blur
     Kit.VideoTile {
         anchors.fill: parent
         source: root.source
         playing: true
         muted: !root.audio
+        volume: root.volume
         fillMode: root.stretch ? Image.Stretch : Image.PreserveAspectFit
         delay: 0
         layer.enabled: root.blur > 0

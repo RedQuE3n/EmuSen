@@ -57,12 +57,14 @@ pub enum Paint {
 }
 
 /// The media viewer's video under the player's settings: stretched to the box or fitted inside it, with its sound or
-/// without, and its horizontal blur's Gaussian sigma in pixels, 0 for none (USERGUIDE.md, "Media viewer settings").
+/// without at a share of full, and its horizontal blur's Gaussian sigma in pixels, 0 for none (EmuSen_Qt.md §4.14).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Clip {
     pub source: String,
     pub stretch: bool,
     pub audio: bool,
+    /// The share of full its sound plays at.
+    pub volume: f64,
     pub blur: f64,
 }
 

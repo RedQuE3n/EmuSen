@@ -106,6 +106,7 @@ pub fn settings(text_in: &str) -> Result<Settings, String> {
             stretch_videos: on("MediaViewerStretchVideos", d.viewer.stretch_videos),
             blur: on("MediaViewerVideoBlur", d.viewer.blur),
             audio: on("MediaViewerVideoAudio", d.viewer.audio),
+            volume: v.get("volume").and_then(Value::as_f64).map_or(d.viewer.volume, |x| x.clamp(0.0, 1.0)),
         },
     })
 }

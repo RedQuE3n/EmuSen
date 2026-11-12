@@ -27,9 +27,12 @@ pub struct Plays {
 pub struct EsdeSettings {
     /// `LibraryStyle` is "Theme" and `BigPictureTheme` names a folder.
     pub themed: bool,
-    /// `{"style", "theme", "choices", "interface", "collections", "show_hidden"}`.
+    /// `{"style", "theme", "choices", "interface", "collections", "show_hidden", "volume"}`.
     pub text: String,
 }
+
+/// `AppSettings`' volume, a share of full: the one EmuSen plays sound at, the media viewer's video's included (EmuSen_Qt.md §4.14).
+pub const VOLUME: &str = "Volume";
 
 /// The settings for the ES-DE view: the choices are those stored under the theme folder's full path less a trailing
 /// separator, as Mistress's `ThemeSettingsWindow.Key` keys them.
@@ -46,6 +49,7 @@ pub fn settings_of(settings: &Value) -> EsdeSettings {
         "interface": object(settings.get("BigPictureInterface")),
         "collections": object(settings.get("BigPictureCollections")),
         "show_hidden": settings.get(crate::library::SHOW_HIDDEN).and_then(Value::as_bool).unwrap_or(false),
+        "volume": settings.get(VOLUME).and_then(Value::as_f64),
     });
     EsdeSettings { themed: style == "Theme" && !theme.trim().is_empty(), text: out.to_string() }
 }

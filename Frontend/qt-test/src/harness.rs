@@ -545,6 +545,12 @@ impl Scene<'_> {
         usize::try_from(n).ok()
     }
 
+    /// A number property of the item with this id in the item tree, NaN where there is none: a Repeater's delegates are
+    /// reached through the tree only, never by objectName.
+    pub fn item_number(&mut self, id: &str, property: &str) -> f64 {
+        id.parse().map_or(f64::NAN, |id| ffi::harness_get(self.window(), id, &QString::from(property)))
+    }
+
     /// A property of the object with this objectName (or the root's), as text.
     pub fn property(&mut self, object_name: &str, property: &str) -> String {
         ffi::harness_property(self.window(), &QString::from(object_name), &QString::from(property)).to_string()

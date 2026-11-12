@@ -13,8 +13,31 @@ fn normalized(text: &str) -> String {
             let trimmed = line.trim_start();
             !(trimmed.starts_with("lineNumber:") || trimmed.starts_with("file:"))
         })
+        .map(without_line_number)
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// A line without the `; lineNumber: N` qmltyperegistrar writes inside a one-line entry such as a signal's.
+fn without_line_number(line: &str) -> String {
+    const MARK: &str = "; lineNumber: ";
+    match line.find(MARK) {
+        Some(at) => {
+            let rest = &line[at + MARK.len()..];
+            let digits = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
+            format!("{}{}", &line[..at], &rest[digits..])
+        }
+        None => line.to_owned(),
+    }
+}
+
+#[test]
+fn qt_5_3_line_numbers_are_dropped_in_both_forms() {
+    let moved = "Component {\n    lineNumber: 12\n    Signal { name: \"sceneChanged\"; lineNumber: 282 }\n}";
+    let here = "Component {\n    lineNumber: 40\n    Signal { name: \"sceneChanged\"; lineNumber: 302 }\n}";
+    assert_eq!(normalized(moved), normalized(here));
+    assert_eq!(normalized(here), "Component {\n    Signal { name: \"sceneChanged\" }\n}");
+    assert_ne!(normalized(here), normalized(&here.replace("sceneChanged", "sceneMoved")), "a renamed signal still differs");
 }
 
 fn built(name: &str) -> String {

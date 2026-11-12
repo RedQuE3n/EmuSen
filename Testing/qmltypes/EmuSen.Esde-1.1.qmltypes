@@ -449,7 +449,7 @@ Module {
     }
     Component {
         file: "lists.cxxqt.h"
-        lineNumber: 264
+        lineNumber: 284
         name: "EsdeRowsModel"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -463,7 +463,7 @@ Module {
             write: "setScene"
             notify: "sceneChanged"
             index: 0
-            lineNumber: 269
+            lineNumber: 289
         }
         Property {
             name: "revision"
@@ -472,7 +472,7 @@ Module {
             write: "setRevision"
             notify: "revisionChanged"
             index: 1
-            lineNumber: 270
+            lineNumber: 290
         }
         Property {
             name: "leaving"
@@ -481,24 +481,24 @@ Module {
             write: "setLeaving"
             notify: "leavingChanged"
             index: 2
-            lineNumber: 271
+            lineNumber: 291
         }
-        Signal { name: "sceneChanged"; lineNumber: 282 }
-        Signal { name: "revisionChanged"; lineNumber: 283 }
-        Signal { name: "leavingChanged"; lineNumber: 284 }
+        Signal { name: "sceneChanged"; lineNumber: 302 }
+        Signal { name: "revisionChanged"; lineNumber: 303 }
+        Signal { name: "leavingChanged"; lineNumber: 304 }
         Method {
             name: "setScene"
-            lineNumber: 277
+            lineNumber: 297
             Parameter { name: "value"; type: "EsdeModel"; isPointer: true }
         }
         Method {
             name: "setRevision"
-            lineNumber: 279
+            lineNumber: 299
             Parameter { name: "value"; type: "int" }
         }
         Method {
             name: "setLeaving"
-            lineNumber: 281
+            lineNumber: 301
             Parameter { name: "value"; type: "bool" }
         }
     }
@@ -621,7 +621,7 @@ Module {
     }
     Component {
         file: "lists.cxxqt.h"
-        lineNumber: 337
+        lineNumber: 357
         name: "PartsModel"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -635,7 +635,7 @@ Module {
             write: "setScene"
             notify: "sceneChanged"
             index: 0
-            lineNumber: 342
+            lineNumber: 362
         }
         Property {
             name: "revision"
@@ -644,7 +644,7 @@ Module {
             write: "setRevision"
             notify: "revisionChanged"
             index: 1
-            lineNumber: 343
+            lineNumber: 363
         }
         Property {
             name: "element"
@@ -653,30 +653,30 @@ Module {
             write: "setElement"
             notify: "elementChanged"
             index: 2
-            lineNumber: 344
+            lineNumber: 364
         }
-        Signal { name: "sceneChanged"; lineNumber: 355 }
-        Signal { name: "revisionChanged"; lineNumber: 356 }
-        Signal { name: "elementChanged"; lineNumber: 357 }
+        Signal { name: "sceneChanged"; lineNumber: 375 }
+        Signal { name: "revisionChanged"; lineNumber: 376 }
+        Signal { name: "elementChanged"; lineNumber: 377 }
         Method {
             name: "setScene"
-            lineNumber: 350
+            lineNumber: 370
             Parameter { name: "value"; type: "EsdeModel"; isPointer: true }
         }
         Method {
             name: "setRevision"
-            lineNumber: 352
+            lineNumber: 372
             Parameter { name: "value"; type: "int" }
         }
         Method {
             name: "setElement"
-            lineNumber: 354
+            lineNumber: 374
             Parameter { name: "value"; type: "QString" }
         }
     }
     Component {
         file: "lists.cxxqt.h"
-        lineNumber: 191
+        lineNumber: 211
         name: "SlotsModel"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -690,7 +690,7 @@ Module {
             write: "setScene"
             notify: "sceneChanged"
             index: 0
-            lineNumber: 196
+            lineNumber: 216
         }
         Property {
             name: "revision"
@@ -699,7 +699,7 @@ Module {
             write: "setRevision"
             notify: "revisionChanged"
             index: 1
-            lineNumber: 197
+            lineNumber: 217
         }
         Property {
             name: "leaving"
@@ -708,24 +708,24 @@ Module {
             write: "setLeaving"
             notify: "leavingChanged"
             index: 2
-            lineNumber: 198
+            lineNumber: 218
         }
-        Signal { name: "sceneChanged"; lineNumber: 209 }
-        Signal { name: "revisionChanged"; lineNumber: 210 }
-        Signal { name: "leavingChanged"; lineNumber: 211 }
+        Signal { name: "sceneChanged"; lineNumber: 229 }
+        Signal { name: "revisionChanged"; lineNumber: 230 }
+        Signal { name: "leavingChanged"; lineNumber: 231 }
         Method {
             name: "setScene"
-            lineNumber: 204
+            lineNumber: 224
             Parameter { name: "value"; type: "EsdeModel"; isPointer: true }
         }
         Method {
             name: "setRevision"
-            lineNumber: 206
+            lineNumber: 226
             Parameter { name: "value"; type: "int" }
         }
         Method {
             name: "setLeaving"
-            lineNumber: 208
+            lineNumber: 228
             Parameter { name: "value"; type: "bool" }
         }
     }

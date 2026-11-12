@@ -2401,7 +2401,14 @@ The second half of the engine, as the painter's design laid it out: a crate of i
 `Frontend/esde-qt`, beside the plain-data `emusen-esde` the way `kit-qt` stands beside `kit-core`. It depends on cxx-qt,
 `emusen-esde` (the scene and its marks) and `emusen-kit-qt` (the body face, and from E2 the help bar and the pad
 router); `tests/lint.rs` holds its manifest to exactly those and the two EmuSen crates' manifests to no client, runtime
-or model crate. The registry is `Testing/qmltypes/EmuSen.Esde-1.0.*`, compared on every build as the kit's is (§5.3).
+or model crate. The registry is `Testing/qmltypes/EmuSen.Esde-1.1.*`, compared on every build as the kit's is (§5.3),
+its line numbers left out in both of qmltyperegistrar's forms (a line of its own, and `; lineNumber: N` inside a signal's
+one-line entry; until 2026-11-11 the second form was compared, so an edit that only moved a bridge's lines failed the
+test). The minor moved to 1.1 for the additions made while the help bar and the media viewer were built, all additions,
+nothing removed or changed: `EsdeModel.defaultFont`, `selectionSeed` and `reference` (with `setDefaultFont`,
+`setSelectionSeed`, `defaultFontChanged`, `selectionSeedChanged`) and the invokable `manualPages`; `MarkShapes.aspect`
+and `baseline` (with their signals); and the type `TextLayout`. The QML files' properties are not in the registry; which
+of them rule Q covers waits on the tester.
 
 #### 4.8.1 The primitives
 

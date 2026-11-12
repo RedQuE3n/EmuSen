@@ -6,7 +6,7 @@ license.workspace = true
 publish.workspace = true
 links = "emusen-esde-qt"
 
-# The ES-DE painter, the QML module EmuSen.Esde 1.0 (EmuSen_Qt.md §4.8): the scene's records of emusen-esde put on Qt Quick items.
+# The ES-DE painter, the QML module EmuSen.Esde 1.1 (EmuSen_Qt.md §4.8): the scene's records of emusen-esde put on Qt Quick items.
 [lib]
 name = "emusen_esde_qt"
 

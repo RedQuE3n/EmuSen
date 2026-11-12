@@ -16,7 +16,7 @@ ThemeScreen {
             objectName: "moonriseCaption"
             x: 672
             y: 400
-            text: "Moonrise"
+            text: Words.noGames
             color: Tokens.text
             font.family: "Barlow"
             font.pixelSize: 12

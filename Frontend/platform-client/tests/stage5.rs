@@ -205,6 +205,32 @@ fn openvgdb_hashes_a_dump_without_its_header_and_presets_are_read_and_merged() {
     assert!(matches!(serenity::parameters_merge(&p, &json!([])), Err(Error::Status { .. })));
 }
 
+/// The keys the front end's settings rows are expected to hold, named: every key a C# settings row set (read on
+/// 2026-11-09) and the media viewer's six (R-20261109-m2), by section (EmuSen_Galaxia.md §3.15.1).
+const APP_KEYS: [&str; 62] = [
+    "Rumble", "SwapPadButtons", "GuideChords", "ControllerType", "FirstControllerOnly", "ControllerNotifications",
+    "OnScreenKeyboard", "AnalogStickAsDpad", "StickDeadzone", "MirrorPlayer1ToPlayer2", "KeyboardPlayer",
+    "ClaimPlayersByPress", "ExternalControllerFirst", "TextSize", "HomeArt", "ReducedMotion", "StartupSplash",
+    "Appearance", "PlayVideos", "ShowStatusBar", "ShowStatusText", "ShowFpsBar", "Volume", "NavigationSounds",
+    "BigPictureInterface.NavigationVolume", "SoundOutputDevice", "ShowHiddenGames", "Scraping", "ScrapeRegion",
+    "ScrapeRegionFallback", "ScrapeLanguage", "ScrapeGameNames", "ScrapeRefresh", "OpenEmuFallback", "ScrapeCovers",
+    "ScrapeScreenshots", "ScrapeMarquees", "ScrapeMiximages", "ScrapeTitleScreens", "ScrapeBackCovers",
+    "ScrapePhysicalMedia", "ScrapeFanArt", "ScrapeManuals", "ScrapeVideos", "Scrape3DBoxes",
+    "BigPictureCollections.GroupCustomCollections", "BigPictureCollections.FavoritesFirst",
+    "BigPictureCollections.FavoritesFirstCustom", "BigPictureCollections.StarsCustom",
+    "BigPictureCollections.DefaultSortOrder", "BigPictureCollections.FoldersOnTop",
+    "BigPictureCollections.RandomEntryButton", "BigScreen", "PauseInBackground", "ResumeOnLaunch",
+    "MaxPlayTimeTracking", "BigPictureInterface.MediaViewerHelpPrompts", "BigPictureInterface.MediaViewerShowTypes",
+    "BigPictureInterface.MediaViewerKeepVideoRunning", "BigPictureInterface.MediaViewerStretchVideos",
+    "BigPictureInterface.MediaViewerVideoBlur", "BigPictureInterface.MediaViewerVideoAudio",
+];
+const GRAPHICS_KEYS: [&str; 1] = [
+    "SyncToDisplay",
+];
+const CONSOLE_KEYS: [&str; 2] = [
+    "PictureShape", "Overscan",
+];
+
 #[test]
 fn the_front_ends_settings_rows_come_from_galaxia_by_length_then_fill() {
     let _world = World::new("settings-rows");
@@ -219,6 +245,13 @@ fn the_front_ends_settings_rows_come_from_galaxia_by_length_then_fill() {
     for section in sections(&committed) {
         let section = section.as_str();
         assert_eq!(keys(&rows, section), keys(&committed, section), "{section}: every row Galaxia holds, by name, and no other");
+    }
+    for (section, named) in [("AppSettings", &APP_KEYS[..]), ("GraphicsConfig", &GRAPHICS_KEYS[..]), ("GraphicsConfig.Consoles", &CONSOLE_KEYS[..])] {
+        let mut served = keys(&rows, section);
+        let mut named: Vec<String> = named.iter().map(|k| (*k).to_owned()).collect();
+        served.sort();
+        named.sort();
+        assert_eq!(served, named, "{section}: the rows served are the keys named here, none missing and none other");
     }
     let schema = ["key", "label", "hint", "kind", "default", "min", "max", "choices", "choice_labels", "group", "shown_with", "locked"];
     let swap = app.iter().find(|r| r["key"] == "SwapPadButtons").unwrap();

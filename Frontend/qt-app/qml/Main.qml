@@ -188,14 +188,11 @@ Window {
         }
         // The window's hotkeys: Exit to Library suspends the game to the library as the card's Back to Library does,
         // Fullscreen turns the window's full screen, as Mistress's `ToggleFullScreen`.
-        onHotkey: (action) => {
-            if (action === "ExitToLibrary") {
-                player.session.pause()
-                screens.library()
-            } else if (action === "ToggleFullscreen") {
-                program.visibility = program.visibility === Window.FullScreen ? Window.Windowed : Window.FullScreen
-            }
+        onExitAsked: {
+            player.session.pause()
+            screens.library()
         }
+        onFullScreenAsked: program.visibility = program.visibility === Window.FullScreen ? Window.Windowed : Window.FullScreen
     }
     // The grid's games: the section shown, sorted, narrowed and searched as the List card and the search ask; a theme's
     // Games screen draws them (EmuSen_Qt.md §3.2, Browse).

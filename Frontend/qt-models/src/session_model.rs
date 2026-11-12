@@ -186,9 +186,15 @@ pub mod qobject {
         #[qinvokable]
         fn key(self: Pin<&mut SessionModel>, key: i32, modifiers: i32, pressed: bool, repeated: bool) -> bool;
 
-        /// A hotkey whose action is the window's (ToggleFullscreen, ExitToLibrary), by the files' word.
+        /// The Exit to Library hotkey, whose action is the window's.
         #[qsignal]
-        fn hotkey(self: Pin<&mut SessionModel>, action: QString);
+        #[cxx_name = "exitAsked"]
+        fn exit_asked(self: Pin<&mut SessionModel>);
+
+        /// The Fullscreen hotkey, whose action is the window's.
+        #[qsignal]
+        #[cxx_name = "fullScreenAsked"]
+        fn full_screen_asked(self: Pin<&mut SessionModel>);
     }
 
     impl cxx_qt::Threading for SessionModel {}
@@ -753,9 +759,10 @@ impl qobject::SessionModel {
             Hotkey::TogglePause => self.toggle_pause(),
             Hotkey::FrameAdvance => self.frame_advance(),
             Hotkey::Screenshot => self.screenshot(),
-            Hotkey::ToggleFullscreen | Hotkey::ExitToLibrary | Hotkey::ToggleBigPicture => {
-                self.as_mut().hotkey(QString::from(hotkey.word()));
-            }
+            Hotkey::ExitToLibrary => self.exit_asked(),
+            Hotkey::ToggleFullscreen => self.full_screen_asked(),
+            // The program has no desktop view to leave to (EmuSen_Qt.md §7.7.H6).
+            Hotkey::ToggleBigPicture => {}
         }
     }
 

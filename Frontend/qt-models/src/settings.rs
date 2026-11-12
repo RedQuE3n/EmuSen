@@ -1031,7 +1031,8 @@ impl SettingsView {
             mirror: self.applies_as("mirror"),
             keyboard_player,
         };
-        let unread = [deadzone.is_none().then(|| unread_deadzone(&stored)), keyboard_player.is_none().then(|| unread_keyboard_player(&player))];
+        // An empty player is none stored, which leaves the router's as it is unsaid, as Galaxia's model always holds one.
+        let unread = [deadzone.is_none().then(|| unread_deadzone(&stored)), (keyboard_player.is_none() && !player.is_empty()).then(|| unread_keyboard_player(&player))];
         let words: Vec<String> = unread.into_iter().flatten().collect();
         Some((settings, (!words.is_empty()).then(|| words.join("; "))))
     }

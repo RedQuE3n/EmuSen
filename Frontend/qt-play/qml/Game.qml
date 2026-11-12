@@ -21,8 +21,9 @@ Item {
     readonly property alias picture: picture
     readonly property bool ownsPad: session.running && !session.paused && root.inFront
     signal menu()
-    // A hotkey whose action is the window's, by the binding files' word (ToggleFullscreen, ExitToLibrary, ToggleBigPicture).
-    signal hotkey(string action)
+    // The hotkeys whose actions are the window's: Exit to Library and Fullscreen.
+    signal exitAsked()
+    signal fullScreenAsked()
 
     // The keyboard over the game: the console's keys to the game, the hotkeys to their actions (EmuSen_Qt.md §7.7.H6).
     Keys.onPressed: (event) => event.accepted = session.running && session.key(event.key, event.modifiers, true, event.isAutoRepeat)
@@ -56,7 +57,8 @@ Item {
     SessionModel {
         id: session
         objectName: "session"
-        onHotkey: (action) => root.hotkey(action)
+        onExitAsked: root.exitAsked()
+        onFullScreenAsked: root.fullScreenAsked()
         platformLibrary: root.platformLibrary
         feed: root.feed
         cores: root.cores

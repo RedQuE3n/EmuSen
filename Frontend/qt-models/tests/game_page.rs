@@ -3,6 +3,7 @@
 //! into the page and back to where it was opened.
 
 use emusen_qt_models::cheats::Switch;
+use emusen_qt_models::display::Crop;
 use emusen_qt_models::game_page::*;
 use emusen_qt_models::help::Screen;
 use emusen_qt_models::screens::{page_origin, page_step, step, step_in, Ask, Shown, GAME_PAGE};
@@ -29,8 +30,23 @@ fn read() -> Read {
             Choice { value: Some("snes9x".into()), text: "Snes9x".into() },
         ],
         cheats: vec![switch("Infinite lives", true), switch("Moon jump", false), switch("All keys", false)],
-        crop: Some(false),
+        crop: Some(offer(None)),
         ..Read::default()
+    }
+}
+
+/// Settings' overscan choices as Display crop offers them, the television's edge a share of 7 % past the glass.
+fn tv() -> Crop {
+    let edge = (1.0 - 1.0 / 1.07) / 2.0;
+    Crop { left: edge, top: edge, right: edge, bottom: edge }
+}
+
+fn offer(own: Option<Crop>) -> CropOffer {
+    CropOffer {
+        label: "Crop overscan".into(),
+        choices: vec![("Whole picture".into(), Crop::default()), ("TV overscan".into(), tv())],
+        custom: "Custom crop".into(),
+        own,
     }
 }
 
@@ -105,8 +121,8 @@ fn qt_7_8_options_rows_step_the_engine_and_hide_the_rows_that_open_nothing() {
     page.choose_section(2);
     let Content::Rows(rows) = page.content() else { panic!("rows") };
     let words: Vec<String> = rows.iter().map(|r| format!("{} | {}", r.label, r.value)).collect();
-    // Display crop and Package open nothing yet, so they are not shown though the game has a crop.
-    assert_eq!(words, ["Engine | Venus (default)", "Cheats | 1 of 3 on"]);
+    // Package is shown only where its job can run.
+    assert_eq!(words, ["Engine | Venus (default)", "Display crop | Console's", "Cheats | 1 of 3 on"]);
     assert!(rows[0].steps);
     assert_eq!(page.step_row(0, 1), Outcome::Changed(Change::Engine(Some("venus".into()))));
     assert_eq!(page.step_row(0, -1), Outcome::Changed(Change::Engine(Some("snes9x".into()))), "stepping wraps");
@@ -128,7 +144,7 @@ fn qt_7_8_options_rows_step_the_engine_and_hide_the_rows_that_open_nothing() {
 fn qt_cheats_options_opens_the_games_cheats_each_a_switch_saved_as_it_turns() {
     let mut page = GamePage::new(read(), NOW);
     page.choose_section(2);
-    assert_eq!(page.choose_row(1), Outcome::Cheats, "A on Cheats opens its page");
+    assert_eq!(page.choose_row(2), Outcome::Cheats, "A on Cheats opens its page");
     page.cheating = true;
     let Content::Rows(rows) = page.content() else { panic!("rows") };
     let words: Vec<String> = rows.iter().map(|r| format!("{} | {}", r.label, r.value)).collect();
@@ -143,7 +159,7 @@ fn qt_cheats_options_opens_the_games_cheats_each_a_switch_saved_as_it_turns() {
     assert_eq!(rows[1].value, "On", "taken into the page at once");
     assert!(page.back(), "B goes back to Options");
     let Content::Rows(rows) = page.content() else { panic!("rows") };
-    assert_eq!(rows[1].value, "2 of 3 on");
+    assert_eq!(rows[2].value, "2 of 3 on");
     assert!(!page.back(), "B on Options leaves the page");
     page.cheating = true;
     page.choose_section(0);
@@ -198,6 +214,7 @@ fn qt_7_8_g2_the_standard_the_package_the_players_screenshots_scrape_and_open_fo
     r.standard = Some("pal".into());
     r.package = Package::Linked;
     r.layers = 2;
+    r.crop = None;
     let mut page = GamePage::new(r, NOW);
     page.choose_section(2);
     let Content::Rows(rows) = page.content() else { panic!("rows") };
@@ -335,4 +352,78 @@ fn qt_7_8_2_edit_details_types_each_detail_and_puts_back_what_was_scraped() {
     page.editing = true;
     page.choose_section(3);
     assert!(!page.editing, "another section leaves Edit Details");
+}
+
+#[test]
+fn display_crop_steps_the_games_own_crop_through_settings_overscan_choices() {
+    let mut page = GamePage::new(read(), NOW);
+    page.choose_section(2);
+    assert_eq!(page.choose_row(1), Outcome::Crop, "A on Display crop opens its page");
+    page.cropping = true;
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    assert_eq!(rows.iter().map(|r| format!("{} | {}", r.label, r.value)).collect::<Vec<_>>(), ["Crop overscan | Console's"]);
+    assert!(rows[0].steps && !rows[0].opens);
+    assert_eq!(page.help(None, 0), Screen::GamePageValue);
+    assert_eq!(page.step_row(0, 1), Outcome::Changed(Change::Crop(Some(Crop::default()))), "Right: the whole picture");
+    assert_eq!(page.step_row(0, -1), Outcome::Changed(Change::Crop(Some(tv()))), "Left wraps to TV overscan");
+    page.changed(&Change::Crop(Some(tv())));
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    assert_eq!(rows[0].value, "TV overscan", "taken into the page at once");
+    assert_eq!(page.step_row(0, 1), Outcome::Changed(Change::Crop(None)), "past the last, the console's again");
+    // A crop of the player's own, which no choice names, is said as Settings says one and steps to the ends.
+    let own = Crop { left: 0.1, top: 0.0, right: 0.0, bottom: 0.0 };
+    page.changed(&Change::Crop(Some(own)));
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    assert_eq!(rows[0].value, "Custom crop");
+    assert_eq!(page.step_row(0, 1), Outcome::Changed(Change::Crop(None)));
+    assert_eq!(page.step_row(0, -1), Outcome::Changed(Change::Crop(Some(tv()))));
+    assert_eq!(change_failed(&Change::Crop(None), "locked"), "The game's crop could not be stored: locked");
+    assert!(page.back(), "B goes back to Options");
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    assert_eq!(rows[1].value, "This game's");
+    assert!(!page.back(), "B on Options leaves the page");
+}
+
+#[test]
+fn package_shows_the_games_package_and_runs_its_job_with_its_progress() {
+    let make = PackageJob { key: MAKE, request: serde_json::json!({ "op": "pkg-make", "paths": ["SNES/a.sfc"] }) };
+    let mut r = read();
+    r.crop = None;
+    r.package_job = Some(make.clone());
+    let mut page = GamePage::new(r, NOW);
+    page.choose_section(2);
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    assert_eq!(rows.last().map(|r| format!("{} | {}", r.label, r.value)).as_deref(), Some("Package | Not a package"));
+    assert_eq!(page.choose_row(rows.len() - 1), Outcome::Package, "A on Package opens its page");
+    page.packaging = true;
+    let words = |page: &GamePage| match page.content() {
+        Content::Rows(rows) => rows.iter().map(|r| format!("{} | {}", r.label, r.value)).collect::<Vec<_>>(),
+        _ => panic!("rows"),
+    };
+    assert_eq!(words(&page), ["Package | Not a package", "Make Package | …"]);
+    assert_eq!(page.choose_row(0), Outcome::Nothing, "the package's state is only said");
+    assert_eq!(page.choose_row(1), Outcome::Job(make), "A starts the job");
+    // Its progress as the jobs tools say it, then how it ended.
+    let mut run = emusen_qt_models::tools::jobs::Run::default();
+    run.take(&serde_json::json!({ "event": "start", "op": "pkg-make", "packages": 1, "refused": [] }), &[]);
+    page.job = Some((MAKE, true, run.clone()));
+    assert_eq!(words(&page)[1], "Make Package | 0 of 1");
+    assert_eq!(page.choose_row(1), Outcome::StopJob, "A while it runs stops it");
+    run.take(&serde_json::json!({ "event": "package", "source": "SNES/a.sfc", "state": "made" }), &[]);
+    run.take(&serde_json::json!({ "event": "end", "op": "pkg-make", "counts": { "made": 1 }, "seconds": 0.1 }), &[]);
+    page.job = Some((MAKE, false, run));
+    assert_eq!(words(&page)[1], "Make Package | Done");
+    // Read again, the game is a linked package, and its job checks it.
+    let mut r = page.read.clone();
+    r.package = Package::Linked;
+    r.package_job = Some(PackageJob { key: CHECK, request: serde_json::json!({ "op": "pkg-check", "paths": ["/p/a"] }) });
+    page.reread(r);
+    assert_eq!(words(&page), ["Package | Linked", "Check Package | …"], "the make's run is not the check's");
+    assert!(page.back());
+    // A game whose package job cannot run has no Package row.
+    let mut r = read();
+    r.package_job = None;
+    let mut page = GamePage::new(r, NOW);
+    page.choose_section(2);
+    assert!(words(&page).iter().all(|w| !w.starts_with("Package")));
 }

@@ -357,6 +357,8 @@ Window {
                 media: library.esdeMedia
                 presence: library.esdePresence
                 family: program.padFamily
+                // A card or another screen over the view is ES-DE's open menu: the help takes its dimmed look.
+                menuOpen: esdeLoader.backdrop
             }
         }
         // The view hears the pad through the router, which pumps while the view holds the focus, as a Frame's does.

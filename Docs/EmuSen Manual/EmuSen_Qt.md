@@ -2545,10 +2545,19 @@ pictures, and each rule read in ES-DE 3.4.1's source (read, never copied).
 |---|---|---|
 | `stationary` of image, video, animation, badges, text, datetime, gamelistinfo, rating | during a slide between the system and gamelist views, `betweenViews` and `always` keep the element where it rests in either view (`draw::Transit`, `Stage::drawn`); `never` and `withinView` pan with the view | `GamelistView::render`, `SystemView::renderElements` (stationaryApplicable) |
 | image `renderDuringTransitions` | false: not drawn, in either view, while the views pan | the same (renderChildCondFunc) |
+| helpsystem `posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed` | while a menu is open over the view, each in place of its own property, which it falls back to when unset (`help::now_of`) | `HelpComponent::applyTheme`, `updateGrid`, `setOpacity`; `Window::isBackgroundDimmed` |
+| helpsystem `entryLayout` | `textFirst`: each entry's label, its gap, then its icon, the grid's width unchanged (`help::places_with`, `HelpElement.qml`) | `HelpComponent::updateGrid` |
+| `scope` of helpsystem, clock and systemstatus | `menu` shows only while a menu is open, `view` only while none is, `none` never | `Window::render`, `renderHelpPromptsEarly` |
 
 The mapping test's `switch` move presses accept in the system view or back in the gamelist with a slide transitions
 profile in the case's `capabilities.xml`, and reads the picture at the case's time on the held clock.
 `esde/tests/scene.rs` `a_stationary_element_rests_and_a_transit_hidden_one_waits_while_the_views_pan` holds the rule.
+
+**A menu over the view.** ES-DE dims the view behind any menu on its window's stack. The program's equivalent is a
+card or another screen over the theme's view (`Main.qml`'s `esdeLoader.backdrop`), which sets `View.menuOpen`
+(EmuSen.Esde 1.6), `Data::menu_open` in the scene. Not built: the help keeps the view's entries under a card, where ES-DE
+lists the open menu's own prompts. The mapping test's `menu` move sets it before the picture; the rules are
+held by `esde/tests/frame.rs` `a_menu_over_the_view_dims_the_help_and_swaps_the_scoped_ones`.
 
 **Not drawn.** `withinView` belongs to a move within one view, system to system or gamelist to gamelist, and the scene
 draws both of those moves instantly (a new selection in the system view, `Painter::change_system`), so it has nothing to

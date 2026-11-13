@@ -13,6 +13,7 @@ Item {
     property alias presence: esde.presence
     property alias swap: esde.swap
     property alias device: esde.device
+    property alias menuOpen: esde.menuOpen
     property alias now: esde.now
     property alias defaultFont: esde.defaultFont
     property alias selectionSeed: esde.selectionSeed

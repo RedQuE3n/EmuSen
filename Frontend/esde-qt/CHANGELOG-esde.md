@@ -4,6 +4,13 @@ The ES-DE painter is the QML module `EmuSen.Esde` (EmuSen_Qt.md §4.8), held by 
 qmltyperegistrar writes it, and its QML files' surface (R-20261111-99) are committed under `Testing/qmltypes/` and
 compared on every build. Each entry names what changed and the section that records it.
 
+## 1.6: the dimmed help, the textlist's selector, the carousel's layout, GIF timing (2026-11-13)
+
+- Registry, added: `EsdeModel.menuOpen` (a menu or card of the program's over the view, ES-DE's dimmed background).
+  §4.5.9.
+- QML files, added: `View.menuOpen`. §4.5.9.
+- Nothing removed or changed.
+
 ## 1.5, piece P11: the item texts of the carousel and grid (2026-11-13)
 
 - QML files, added: `TextBlock.oneLine`, `whole` and `lineShift`; `CarouselElement.selectedColor`,

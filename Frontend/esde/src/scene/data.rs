@@ -210,6 +210,9 @@ pub struct Data {
     pub hide_metadata: bool,
     pub show_clock: bool,
     pub show_help: bool,
+    /// A menu or card of the program's is open over the view: ES-DE's `Window::isBackgroundDimmed`, which the help's
+    /// `*Dimmed` properties and the `scope` of the help, clock and status follow.
+    pub menu_open: bool,
     pub motion: Motion,
     pub status: DeviceStatus,
     pub status_shown: Indicators,
@@ -241,6 +244,7 @@ impl Data {
             hide_metadata: false,
             show_clock: true,
             show_help: true,
+            menu_open: false,
             motion: Motion::esde(),
             status: DeviceStatus { wifi: Some(true), battery_percent: Some(80), ..DeviceStatus::default() },
             status_shown: Indicators::default(),

@@ -389,6 +389,8 @@ fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &A
     assert!(scene.set_property("view", "media", &assets.media(&files)));
     let interface = format!("\"DisplayClock\":true,\"StartupView\":\"{}\"", view_of(c));
     assert!(scene.set_property("view", "now", common::HELD_NOW));
+    // A case that opens a menu draws the view as a card over it leaves it (the help's dimmed look, EmuSen_Qt.md §4.5.9).
+    assert!(scene.set_property("view", "menuOpen", if c.moves.as_deref() == Some("menu") { "true" } else { "false" }));
     assert!(scene.set_property("view", "settings", &settings(theme, &interface)));
     assert!(scene.set_property("view", "shelves", &shelves));
     until(scene, "the case's theme installed", |s| s.property("esdeModel", "themed") == "true");

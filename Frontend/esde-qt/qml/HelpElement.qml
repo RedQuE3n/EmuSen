@@ -87,13 +87,19 @@ ElementBox {
                 readonly property url picture: entry.model.icon ?? ""
                 required property real start
                 required property real labelStart
+                required property real iconStart
+                required property real iconWidth
+                // entryLayout textFirst: the label, its gap, then the icon (HelpComponent::updateGrid).
+                readonly property bool textFirst: entry.iconStart > entry.labelStart
+                // The icon box's left within the entry: 0 before its label, past the label and gap after it.
+                readonly property real iconLeft: entry.textFirst ? Math.round(root.barStart + entry.iconStart) - root.boxX - entry.x : 0
                 // The icon's box, the entry before its gap; the kit's glyph drawn so its disc's edge is ES-DE's (EmuSen_Qt.md §4.12.1).
-                readonly property real box: entry.labelStart - entry.start - root.iconGap
+                readonly property real box: entry.textFirst ? entry.iconWidth : entry.labelStart - entry.start - root.iconGap
                 readonly property real side: entry.box * root.discEdge / kitMarks.discShare
                 // Each part at the nearest whole pixel of the window, its place carried from the bar's start (EmuSen_Qt.md §4.12.1).
                 objectName: "help-" + entry.label
                 x: Math.round(root.barStart + entry.start) - root.boxX
-                width: words.x + words.width
+                width: entry.textFirst ? entry.iconLeft + entry.box : words.x + words.width
                 height: root.rowHeight
                 focusPolicy: Qt.NoFocus
                 background: null
@@ -112,7 +118,7 @@ ElementBox {
                 Kit.PadGlyph {
                     id: glyph
                     objectName: "helpGlyph-" + entry.label
-                    x: (Math.round(root.barStart + entry.labelStart) - root.boxX - entry.x - root.iconGap - width) / 2
+                    x: entry.textFirst ? entry.iconLeft + (entry.box - width) / 2 : (Math.round(root.barStart + entry.labelStart) - root.boxX - entry.x - root.iconGap - width) / 2
                     anchors.verticalCenter: parent.verticalCenter
                     visible: entry.picture.toString().length === 0
                     width: entry.side

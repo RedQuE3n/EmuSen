@@ -331,6 +331,8 @@ pub struct Help {
     pub scale: f64,
     /// Letter-labelled filled discs, as ES-DE draws its help.
     pub filled_glyphs: bool,
+    /// entryLayout textFirst: each entry's label, then its icon.
+    pub text_first: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]

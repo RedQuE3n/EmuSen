@@ -346,3 +346,12 @@ text	stationary	never	betweenViews	-	-	-	-	-	150	switch	-	-
 datetime	stationary	never	always	-	-	-	-	-	150	switch	-	-
 gamelistinfo	stationary	never	betweenViews	-	-	-	-	-	150	switch	-	-
 rating	stationary	never	always	-	-	-	-	-	150	switch	-	-
+helpsystem	posDimmed	0 0	0.3 0.5	-	-	-	-	-	-	menu	-	-
+helpsystem	originDimmed	0 0	1 1	-	-	-	-	pos=0.5 0.5;posDimmed=0.5 0.5	-	menu	-	-
+helpsystem	textColorDimmed	FFFFFF	FF0000	-	-	-	-	-	-	menu	-	-
+helpsystem	iconColorDimmed	FFFFFF	FF0000	-	-	-	-	-	-	menu	-	-
+helpsystem	fontSizeDimmed	0.1	0.05	-	-	-	-	-	-	menu	-	-
+helpsystem	entrySpacingDimmed	0.01	0.04	-	-	-	-	-	-	menu	-	-
+helpsystem	iconTextSpacingDimmed	0	0.04	-	-	-	-	-	-	menu	-	-
+helpsystem	opacityDimmed	1	0.5	-	-	-	-	-	-	menu	-	-
+helpsystem	entryLayout	iconFirst	textFirst	-	-	-	-	-	-	-	-	-

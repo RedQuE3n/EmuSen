@@ -192,7 +192,9 @@ impl SceneView {
             (placed.w, placed.h) = (bw, bh);
             // The help is measured as ES-DE's grid, its trailing spacing in; its box is the strip seen (EmuSen_Qt.md §4.12.4).
             if let Paint::Help(h) = &draft.paint {
-                (placed.x, placed.y) = super::help::top_left(e.pair("pos"), origin, h.entry_spacing, (bw, bh), data.width, data.height);
+                let now = |p: &str| super::help::now_of(e, p, data.menu_open);
+                let origin = e.pair(&now("origin")).unwrap_or_default();
+                (placed.x, placed.y) = super::help::top_left(e.pair(&now("pos")), origin, h.entry_spacing, (bw, bh), data.width, data.height);
                 placed.w = (bw - h.entry_spacing).max(0.0);
             }
             let mut wait = None;

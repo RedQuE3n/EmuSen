@@ -569,6 +569,8 @@ pub fn part(p: &Paint, i: usize, role: &str, swap: bool) -> V {
                 "icon" => url(&e.icon),
                 "start" => V::N(crate::help::places(x).starts[i]),
                 "labelStart" => V::N(crate::help::places(x).labels[i]),
+                "iconStart" => V::N(crate::help::places(x).icons[i]),
+                "iconWidth" => V::N(crate::help::places(x).icon),
                 _ => V::None,
             }
         }),
@@ -622,8 +624,8 @@ pub const SLOT_ROLES: [&str; 25] = [
     "saturation", "tint", "tintEnd", "gradientVertical", "reflected", "reflectionOpacity", "reflectionFalloff", "text", "image", "marker", "folder", "chosen",
 ];
 
-pub const PART_ROLES: [&str; 42] = [
-    "button", "pair", "label", "icon", "start", "labelStart", "mark", "text", "source",
+pub const PART_ROLES: [&str; 44] = [
+    "button", "pair", "label", "icon", "start", "labelStart", "iconStart", "iconWidth", "mark", "text", "source",
     "cellX", "cellY", "cellW", "cellH",
     "iconSource", "iconMark", "iconX", "iconY", "iconW", "iconH", "iconTint", "iconTintEnd", "iconVertical",
     "controller", "controllerSource", "controllerMark", "controllerX", "controllerY", "controllerW", "controllerH", "controllerTint",

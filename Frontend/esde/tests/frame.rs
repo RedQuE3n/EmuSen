@@ -58,7 +58,7 @@ fn close(a: f64, b: f64) -> bool {
 const CAROUSEL: &str = "<carousel name=\"c\"><pos>0 0</pos><size>1 1</size><maxItemCount>3</maxItemCount><itemScale>1.5</itemScale><unfocusedItemOpacity>0.3</unfocusedItemOpacity>";
 
 #[test]
-fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_not_drawn() {
+fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_drawn_once_checked() {
     let listed: Vec<(String, String)> = mapping::pairs().map(|(k, p, _)| (k.to_owned(), p.to_owned())).collect();
     let unique: BTreeSet<_> = listed.iter().cloned().collect();
     assert_eq!(unique.len(), listed.len(), "a pair listed twice");
@@ -67,13 +67,13 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_not_
     assert_eq!(unique, catalogue);
     let dimmed: Vec<_> = mapping::pairs().filter(|(k, p, _)| *k == "helpsystem" && p.ends_with("Dimmed")).collect();
     assert_eq!(dimmed.len(), 8);
-    assert!(dimmed.iter().all(|(_, _, s)| **s == Mapped::Later("help-dimmed".into())), "R-20261111-75: not drawn until checked");
+    assert!(dimmed.iter().all(|(_, _, s)| **s == Mapped::Drawn), "each checked by its mapping case (§4.5.9)");
     assert_eq!(mapping::status("sound", "path"), Some(&Mapped::Later("sound".into())));
     assert_eq!(mapping::status("video", "delay"), Some(&Mapped::Drawn));
     // Heard, not seen: no picture shows it, and no state stands between drawn and not drawn (R-20261111-75).
     assert_eq!(mapping::status("video", "audio"), Some(&Mapped::Later("video".into())));
     assert_eq!(mapping::status("video", "scanlines"), Some(&Mapped::Later("video".into())));
-    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 441);
+    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 450);
     assert!(
         mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"),
         "the gameselector picks the system view's games; sound is played"
@@ -81,23 +81,24 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_not_
 }
 
 #[test]
-fn a_theme_setting_the_dimmed_help_or_a_sound_counts_them_unsupported_and_not_whole() {
+fn a_theme_setting_a_pair_not_drawn_or_a_sound_counts_them_unsupported_and_not_whole() {
     let t = Synth::new();
     t.capabilities("").theme(
-        "<view name=\"system\"><helpsystem name=\"help\"><textColorDimmed>FF0000</textColorDimmed><opacityDimmed>0.5</opacityDimmed></helpsystem></view>
+        "<view name=\"system\"><textlist name=\"l\"><fadeAbovePrimary>true</fadeAbovePrimary></textlist><helpsystem name=\"help\"><textColorDimmed>FF0000</textColorDimmed><opacityDimmed>0.5</opacityDimmed></helpsystem></view>
          <view name=\"all\"><sound name=\"systembrowse\"><path>./s.wav</path></sound></view>",
     );
     let m = check::measure(&t.root, &["nes"]);
-    assert_eq!(m.properties.get("helpsystem.textColorDimmed"), Some(&"unsupported"));
+    assert_eq!(m.properties.get("helpsystem.textColorDimmed"), Some(&"set"));
+    assert_eq!(m.properties.get("textlist.fadeAbovePrimary"), Some(&"unsupported"));
     assert_eq!(m.properties.get("sound.path"), Some(&"unsupported"));
-    assert_eq!(m.count("unsupported"), 3);
+    assert_eq!(m.count("unsupported"), 2);
     assert!(m.loads() && !m.whole());
     let header: Vec<&str> = check::SUMMARY_HEADER.split('\t').collect();
     assert!(!header.contains(&"accepted"), "no state between drawn and not drawn");
     let row = check::summary_row(&m);
     let cells: Vec<&str> = row.split('\t').collect();
     assert_eq!(cells.len(), header.len());
-    assert_eq!(cells[header.iter().position(|c| *c == "unsupported").unwrap()], "3");
+    assert_eq!(cells[header.iter().position(|c| *c == "unsupported").unwrap()], "2");
     assert_eq!(cells[header.iter().position(|c| *c == "whole").unwrap()], "no");
 }
 
@@ -995,4 +996,40 @@ fn a_grid_draws_whole_rows_only_unless_fractional_rows_is_set() {
     // Rows 60 px high in a box of 200: three whole rows, 180 px, or the whole box.
     assert!(close(grid(false), 180.0), "{}", grid(false));
     assert!(close(grid(true), 200.0), "{}", grid(true));
+}
+
+// ES-DE 3.4.1's `HelpComponent::updateGrid` and `Window::render`: with a menu open over the view the help takes its
+// `*Dimmed` properties, each falling back to its own, and a help of scope menu shows only then, one of scope view only before.
+#[test]
+fn a_menu_over_the_view_dims_the_help_and_swaps_the_scoped_ones() {
+    let t = Synth::new();
+    let help = "<helpsystem name=\"h\"><pos>0.1 0.5</pos><posDimmed>0.4 0.2</posDimmed><textColor>FFFFFF</textColor><textColorDimmed>FF0000</textColorDimmed>\
+                <fontSize>0.1</fontSize><fontSizeDimmed>0.05</fontSizeDimmed><entrySpacingDimmed>0.03</entrySpacingDimmed><opacity>0.9</opacity>\
+                <opacityDimmed>0.4</opacityDimmed><entryLayout>textFirst</entryLayout><scope>shared</scope></helpsystem>\
+                <helpsystem name=\"m\"><scope>menu</scope></helpsystem><helpsystem name=\"v\"><scope>view</scope></helpsystem>";
+    let mut s = stage(&t, "", help, "gamelist", 0);
+    let shown = |s: &Stage| s.frame().elements.iter().map(|p| p.name.clone()).collect::<Vec<_>>();
+    let help_of = |f: &Frame| match &placed(f, "h").paint {
+        Paint::Help(h) => h.clone(),
+        other => panic!("{other:?}"),
+    };
+    let f = s.frame();
+    let open = help_of(&f);
+    assert!(open.text_first);
+    assert_eq!(open.label_color, Color(0xFFFF_FFFF));
+    assert!(close(open.px, 0.1 * H));
+    assert!(close(placed(&f, "h").opacity, 0.9));
+    assert!(close(placed(&f, "h").y, (0.5 * H as f32).round() as f64));
+    assert!(shown(&s).contains(&"v".to_owned()) && !shown(&s).contains(&"m".to_owned()));
+    s.current.data.menu_open = true;
+    let f = s.frame();
+    let dim = help_of(&f);
+    assert_eq!(dim.label_color, Color(0xFF00_00FF));
+    assert_eq!(dim.icon_color, open.icon_color, "iconColorDimmed falls back to iconColor");
+    assert!(close(dim.px, 0.05 * H));
+    assert!(close(dim.entry_spacing, f64::from(0.03 * W as f32)));
+    assert!(close(dim.icon_gap, open.icon_gap));
+    assert!(close(placed(&f, "h").opacity, 0.4));
+    assert!(close(placed(&f, "h").y, (0.2 * H as f32).round() as f64));
+    assert!(shown(&s).contains(&"m".to_owned()) && !shown(&s).contains(&"v".to_owned()));
 }

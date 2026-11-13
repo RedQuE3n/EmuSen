@@ -364,6 +364,7 @@ View
     property alias presence
     property alias swap
     property alias device
+    property alias menuOpen
     property alias now
     property alias defaultFont
     property alias selectionSeed

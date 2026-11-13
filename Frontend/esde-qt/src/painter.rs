@@ -85,6 +85,8 @@ pub struct Painter {
     pub swap: bool,
     /// What the host reports of the device for systemstatus; none until it reports.
     pub device: DeviceStatus,
+    /// A menu or card is open over the view, which dims its help (`Data::menu_open`).
+    pub menu_open: bool,
     /// ES-DE's faces as the data thread found them (`faces`); none, the kit's body face.
     pub faces: Faces,
     /// The gameselectors' seed as the host gave it; none, the install's time.
@@ -99,7 +101,7 @@ impl Default for Painter {
 
 impl Painter {
     pub fn new(settings: Settings) -> Self {
-        Painter { stage: None, now: 0, frame: Frame::default(), held: None, settings, generation: 0, swap: false, device: DeviceStatus::default(), faces: Faces::default(), selection_seed: None }
+        Painter { stage: None, now: 0, frame: Frame::default(), held: None, settings, generation: 0, swap: false, device: DeviceStatus::default(), menu_open: false, faces: Faces::default(), selection_seed: None }
     }
 
     /// Installs a refresh's systems, keeping the view and the selection where they still exist.
@@ -128,6 +130,7 @@ impl Painter {
         data.viewer = self.settings.viewer;
         data.swap = self.swap;
         data.status = self.device;
+        data.menu_open = self.menu_open;
         data.help = HelpContext {
             random_games: self.settings.random != "disabled",
             random_systems: self.settings.random == "gamessystems",
@@ -149,6 +152,15 @@ impl Painter {
         self.swap = swap;
         if let Some(stage) = &mut self.stage {
             stage.current.data.swap = swap;
+        }
+        self.refresh();
+    }
+
+    /// A menu or card of the program's opened over the view, or closed.
+    pub fn set_menu_open(&mut self, open: bool) {
+        self.menu_open = open;
+        if let Some(stage) = &mut self.stage {
+            stage.current.data.menu_open = open;
         }
         self.refresh();
     }

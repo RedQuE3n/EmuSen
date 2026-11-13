@@ -397,8 +397,12 @@ impl SceneView {
         if self.view == "gamelist" && game.is_some_and(|g| g.hide_metadata) && hidden_with_metadata(e) {
             return Some("the entry hides its metadata".into());
         }
-        if let Some(scope @ ("none" | "menu")) = e.string("scope") {
-            return Some(format!("scope {scope}"));
+        // The help, clock and status by their scope against a menu over the view (ES-DE 3.4.1's `Window::render`).
+        match e.string("scope") {
+            Some("none") => return Some("scope none".into()),
+            Some("menu") if !self.data.menu_open => return Some("scope menu, and no menu is open".into()),
+            Some("view") if self.data.menu_open => return Some("scope view, and a menu is open".into()),
+            _ => {}
         }
         if e.float("opacity") == Some(0.0) {
             return Some("opacity is 0".into());
@@ -455,7 +459,8 @@ impl SceneView {
                 if skipped.is_none() && matches!(e.kind(), "text" | "datetime") && text.is_none() {
                     skipped = Some("nothing to show".into());
                 }
-                let mut opacity = e.float("opacity").unwrap_or(1.0) as f64;
+                let opacity_of = if e.kind() == "helpsystem" { super::help::now_of(e, "opacity", self.data.menu_open) } else { "opacity".into() };
+                let mut opacity = e.float(&opacity_of).unwrap_or(1.0) as f64;
                 if self.fades_in(e) {
                     opacity *= fade_in;
                 }

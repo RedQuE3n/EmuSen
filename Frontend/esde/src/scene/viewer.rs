@@ -328,6 +328,7 @@ impl Viewer {
             background: None,
             entry_spacing: spacing,
             icon_gap: super::help::default_spacing_px("iconTextSpacing", w),
+            text_first: false,
             scale: 1.0,
             filled_glyphs: true,
         });

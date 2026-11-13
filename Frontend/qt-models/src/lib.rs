@@ -49,6 +49,7 @@ pub mod resume;
 pub mod schema;
 pub mod row_roles;
 pub mod rows_model;
+pub mod scrape_run;
 pub mod screens;
 pub mod screenshots;
 pub mod session;

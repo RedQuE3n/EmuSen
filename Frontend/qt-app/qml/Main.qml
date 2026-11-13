@@ -473,7 +473,7 @@ Window {
             onOpenFolder: (path) => folders.open(path)
             onSaid: (words) => program.said(words, true, false)
         }
-        // A tool of jobs on the same tool screen: Library Manager, Compressed Discs or Packages, as Screens names it (tools/jobs.rs).
+        // A tool of jobs on the same tool screen: Library Manager, Compressed Discs or Packages, or the Scraper, as Screens names it (tools/jobs.rs, tools/scraper.rs).
         ToolScreen {
             objectName: "jobs"
             kind: ToolModel.Jobs
@@ -481,8 +481,12 @@ Window {
             jobs: screens.tool
             screens: screens
             platformLibrary: program.platformLibrary
+            cores: library.cores
+            scraperTest: program.scraperTest
             padFamily: program.padFamily
             splashShown: program.splashShown
+            // The Scraper's run ended: the library shows what it fetched.
+            onLibraryChanged: library.refresh()
         }
         PageScreen {
             objectName: "gamePage"

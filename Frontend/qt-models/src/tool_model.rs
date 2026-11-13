@@ -10,6 +10,7 @@ use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QList, QString, QStringList};
 use serde_json::{json, Value};
+use std::sync::Arc;
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -25,7 +26,7 @@ pub mod qobject {
     enum Tool {
         NoTool,
         Cores,
-        /// A tool of jobs, named by `jobs` (tools/jobs.rs).
+        /// A tool of jobs (tools/jobs.rs), or the Scraper (tools/scraper.rs), named by `jobs`.
         Jobs,
     }
 
@@ -33,8 +34,11 @@ pub mod qobject {
         #[qobject]
         #[qml_element]
         #[qproperty(Tool, tool)]
-        /// The tool of jobs shown, by its key, while `tool` is Jobs.
+        /// The tool of jobs shown, or the Scraper, by its key, while `tool` is Jobs.
         #[qproperty(QString, jobs)]
+        /// The scraper's test seam, its settings' `test` member as JSON (a loopback server and its root); empty for
+        /// ScreenScraper itself.
+        #[qproperty(QString, scraper_test, cxx_name = "scraperTest")]
         #[qproperty(QString, platform_library, cxx_name = "platformLibrary")]
         /// The runtime's cores folder, as the library's; empty for the installation's own.
         #[qproperty(QString, cores)]
@@ -150,6 +154,10 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "openFolder"]
         fn open_folder(self: Pin<&mut ToolModel>, path: QString);
+        /// A run ended that changed the library (the Scraper's), so the library is read again.
+        #[qsignal]
+        #[cxx_name = "libraryChanged"]
+        fn library_changed(self: Pin<&mut ToolModel>);
     }
 
     impl cxx_qt::Initialize for ToolModel {}
@@ -161,6 +169,7 @@ use qobject::Tool as Shown;
 pub struct ToolModelRust {
     tool: Shown,
     jobs: QString,
+    scraper_test: QString,
     platform_library: QString,
     cores: QString,
     world: QString,
@@ -216,6 +225,7 @@ impl Default for ToolModelRust {
         ToolModelRust {
             tool: Shown::NoTool,
             jobs: QString::default(),
+            scraper_test: QString::default(),
             platform_library: QString::default(),
             cores: QString::default(),
             world: QString::default(),
@@ -295,6 +305,12 @@ fn cores_source(platform_library: &str, cores: &str, world: &str) -> Result<Box<
     Ok(Box::new(Cores::new(backend, Host::default())))
 }
 
+/// The Scraper over the clients, its runs given the scraper's test seam where `test` names one.
+fn scraper_source(platform_library: &str, cores: &str, test: &str) -> Result<Box<dyn Source>, String> {
+    let source = Arc::new(crate::clients::source_for(platform_library, cores)?);
+    Ok(Box::new(crate::tools::scraper::Scraper::new(source, serde_json::from_str(test).ok())))
+}
+
 /// The tool of jobs of `key`, its jobs started by the platform library's tools, or from the world a file holds.
 fn jobs_source(platform_library: &str, world: &str, key: &str) -> Result<Box<dyn Source>, String> {
     let starter: crate::tools::jobs::Starter = if world.is_empty() {
@@ -334,6 +350,7 @@ impl qobject::ToolModel {
         if self.shown.is_none() {
             let made = match self.tool {
                 Shown::Cores => cores_source(&self.platform_library.to_string(), &self.cores.to_string(), &self.world.to_string()),
+                Shown::Jobs if jobs == crate::home_card::SCRAPER => scraper_source(&self.platform_library.to_string(), &self.cores.to_string(), &self.scraper_test.to_string()),
                 Shown::Jobs => jobs_source(&self.platform_library.to_string(), &self.world.to_string(), &jobs),
                 _ => Err("no tool is named".to_owned()),
             };
@@ -549,6 +566,7 @@ impl qobject::ToolModel {
         };
         let question = tool.question().cloned();
         let busy = source.running();
+        let changed_library = self.busy && !busy && source.changes_library();
         let apply_enabled = tool.can_apply();
         put!(self, title, title, title_changed);
         put!(self, facts, facts, facts_changed);
@@ -600,5 +618,8 @@ impl qobject::ToolModel {
             None => put!(self, asking, false, asking_changed),
         }
         put!(self, busy, busy, busy_changed);
+        if changed_library {
+            self.as_mut().library_changed();
+        }
     }
 }

@@ -373,14 +373,26 @@ pub fn textlist(e: &Element, data: &Data, count: usize, selected: usize, bw: f64
     let selector = Tint { color: selector_color, end: e.color("selectorColorEnd").unwrap_or(selector_color), vertical };
     let y = (selected as f64 - first_row as f64) * row_h + e.float("selectorVerticalOffset").unwrap_or(0.0) as f64 * sh;
     let back = color(e, "selectedBackgroundColor", 0);
+    let back_secondary = e.color("selectedSecondaryBackgroundColor").unwrap_or(back);
     let m = e.pair("selectedBackgroundMargins").unwrap_or_default();
+    // The bar's width and shift are shares of the screen's width (ES-DE 3.4.1 `TextListComponent::applyTheme`); a picture
+    // takes the bar's place, tinted by the bar's colours across, its width at 0 following its aspect.
+    let selector_image = existing(e.path("selectorImagePath"));
+    let shift = e.float("selectorHorizontalOffset").unwrap_or(0.0) as f64 * sw;
+    let selector_w = e.float("selectorWidth").map_or(bw, |f| f as f64 * sw);
+    let image_tint = Tint { vertical: false, ..selector };
     TextList {
         first_row,
         row_h,
         band_h: selector_h,
         content_y: first_row as f64 * row_h,
-        selector: ((selector.color.a() > 0 || selector.end.a() > 0) && selected < count).then_some(Bar { x: 0.0, y, w: bw, h: selector_h, tint: selector }),
-        selected_background: (back.a() > 0).then(|| {
+        selector: ((selector_image.is_some() || selector.color.a() > 0 || selector.end.a() > 0) && selected < count)
+            .then_some(Bar { x: shift, y, w: selector_w, h: selector_h, tint: if selector_image.is_some() { image_tint } else { selector } }),
+        selector_image,
+        selector_tile: e.bool("selectorImageTile") == Some(true),
+        selected_secondary_background: back_secondary,
+        selected_background_shift: shift,
+        selected_background: (back.a() > 0 || back_secondary.a() > 0).then(|| {
             (
                 back,
                 e.float("selectedBackgroundCornerRadius").unwrap_or(0.0) as f64 * sw,

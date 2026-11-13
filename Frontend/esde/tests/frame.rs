@@ -73,7 +73,7 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_drawn_once_che
     // Heard, not seen: no picture shows it, and no state stands between drawn and not drawn (R-20261111-75).
     assert_eq!(mapping::status("video", "audio"), Some(&Mapped::Later("video".into())));
     assert_eq!(mapping::status("video", "scanlines"), Some(&Mapped::Later("video".into())));
-    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 450);
+    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 455);
     assert!(
         mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"),
         "the gameselector picks the system view's games; sound is played"
@@ -1032,4 +1032,30 @@ fn a_menu_over_the_view_dims_the_help_and_swaps_the_scoped_ones() {
     assert!(close(placed(&f, "h").opacity, 0.4));
     assert!(close(placed(&f, "h").y, (0.2 * H as f32).round() as f64));
     assert!(shown(&s).contains(&"m".to_owned()) && !shown(&s).contains(&"v".to_owned()));
+}
+
+// ES-DE 3.4.1's `TextListComponent::applyTheme` and `render`: the bar's width and shift are shares of the screen's width,
+// a picture takes its place tinted across by its colours, and a folder's selected background has its own colour.
+#[test]
+fn a_text_list_s_selector_takes_its_width_shift_picture_and_the_folder_s_background() {
+    let t = Synth::new();
+    t.asset("bar.png");
+    let list = "<textlist name=\"l\"><pos>0 0</pos><size>0.5 0.5</size><fontSize>0.1</fontSize><selectorWidth>0.25</selectorWidth>\
+        <selectorHorizontalOffset>-0.1</selectorHorizontalOffset><selectorImagePath>./bar.png</selectorImagePath><selectorImageTile>true</selectorImageTile>\
+        <selectorColor>FF0000</selectorColor><selectorColorEnd>0000FF</selectorColorEnd><selectorGradientType>vertical</selectorGradientType>\
+        <selectedBackgroundColor>00FF00</selectedBackgroundColor><selectedSecondaryBackgroundColor>FFFF00</selectedSecondaryBackgroundColor></textlist>";
+    let s = stage(&t, "", list, "gamelist", 0);
+    let Layout::TextList(l) = &s.frame().primary.unwrap().layout else { panic!() };
+    let bar = l.selector.unwrap();
+    assert!(close(bar.w, 0.25 * W) && close(bar.x, -0.1 * W));
+    assert!(l.selector_image.as_deref().is_some_and(|p| p.ends_with("bar.png")) && l.selector_tile);
+    assert_eq!(bar.tint, Tint { color: Color(0xFF00_00FF), end: Color(0x0000_FFFF), vertical: false }, "a picture is tinted across");
+    assert_eq!(l.selected_background.unwrap().0, Color(0x00FF_00FF));
+    assert_eq!(l.selected_secondary_background, Color(0xFFFF_00FF));
+    assert!(close(l.selected_background_shift, -0.1 * W));
+    let plain = "<textlist name=\"l\"><pos>0 0</pos><size>0.5 0.5</size><selectedBackgroundColor>00FF00</selectedBackgroundColor></textlist>";
+    let s = stage(&t, "", plain, "gamelist", 0);
+    let Layout::TextList(l) = &s.frame().primary.unwrap().layout else { panic!() };
+    assert!(close(l.selector.unwrap().w, 0.5 * W) && l.selector_image.is_none());
+    assert_eq!(l.selected_secondary_background, Color(0x00FF_00FF), "the folder's falls back to the primary's");
 }

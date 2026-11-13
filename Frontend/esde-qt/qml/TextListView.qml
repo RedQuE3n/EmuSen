@@ -23,6 +23,10 @@ ElementBox {
     required property real selectedBackgroundRadius
     required property real selectedBackgroundLeft
     required property real selectedBackgroundRight
+    required property color selectedSecondaryBackground
+    required property real selectedBackgroundShift
+    required property url selectorSource
+    required property bool selectorTile
     required property color primaryColor
     required property color secondaryColor
     required property color selectedColor
@@ -37,15 +41,15 @@ ElementBox {
     required property bool scrolling
     required property real scrollX
     required property real repeatAt
-    clip: true
     RowsModel {
         id: rows
         scene: root.esde
         revision: root.esde ? root.esde.revision : 0
         leaving: root.leaving
     }
+    // The bar is drawn outside the rows' clip, as ES-DE draws it before pushing its clip (TextListComponent::render).
     Rectangle {
-        visible: root.hasSelector
+        visible: root.hasSelector && root.selectorSource.toString().length === 0
         x: root.selectorX
         y: root.selectorY
         width: root.selectorW
@@ -56,9 +60,24 @@ ElementBox {
             GradientStop { position: 1; color: root.selectorColorEnd }
         }
     }
+    Picture {
+        id: selectorPicture
+        objectName: "esdeTextListSelector"
+        visible: root.hasSelector && root.selectorSource.toString().length > 0
+        x: root.selectorX
+        y: root.selectorY
+        width: root.selectorW > 0 ? root.selectorW : root.selectorH * selectorPicture.ownWidth / Math.max(1, selectorPicture.ownHeight)
+        height: root.selectorH
+        source: root.selectorSource
+        fit: root.selectorTile ? Picture.Fit.Tile : Picture.Fit.Fill
+        tint: root.selectorColor
+        tintEnd: root.selectorColorEnd
+        gradientVertical: false
+    }
     ListView {
         objectName: "esdeTextList"
         anchors.fill: parent
+        clip: true
         interactive: false
         cacheBuffer: 0
         model: rows
@@ -82,13 +101,13 @@ ElementBox {
                 onTapped: root.esde.tap(line.index)
             }
             Rectangle {
-                visible: line.chosen && root.hasSelectedBackground
-                x: root.margin - root.selectedBackgroundLeft
+                visible: line.chosen && root.hasSelectedBackground && (line.folder ? root.selectedSecondaryBackground : root.selectedBackground).a > 0
+                x: root.margin - root.selectedBackgroundLeft + root.selectedBackgroundShift
                 y: 0
                 width: line.room + Math.min(name.contentWidth, name.width) + root.selectedBackgroundLeft + root.selectedBackgroundRight
                 height: root.bandHeight
                 radius: root.selectedBackgroundRadius
-                color: root.selectedBackground
+                color: line.folder ? root.selectedSecondaryBackground : root.selectedBackground
             }
             Mark {
                 x: root.margin

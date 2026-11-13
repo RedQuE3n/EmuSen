@@ -273,6 +273,10 @@ TextListView
     required property real selectedBackgroundRadius
     required property real selectedBackgroundLeft
     required property real selectedBackgroundRight
+    required property color selectedSecondaryBackground
+    required property real selectedBackgroundShift
+    required property url selectorSource
+    required property bool selectorTile
     required property color primaryColor
     required property color secondaryColor
     required property color selectedColor
@@ -287,6 +291,7 @@ TextListView
     required property bool scrolling
     required property real scrollX
     required property real repeatAt
+    objectName "esdeTextListSelector"
     objectName "esdeTextList"
     objectName "row-" + line.index
 GridElement

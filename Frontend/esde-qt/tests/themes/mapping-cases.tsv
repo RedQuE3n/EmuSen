@@ -355,3 +355,8 @@ helpsystem	entrySpacingDimmed	0.01	0.04	-	-	-	-	-	-	menu	-	-
 helpsystem	iconTextSpacingDimmed	0	0.04	-	-	-	-	-	-	menu	-	-
 helpsystem	opacityDimmed	1	0.5	-	-	-	-	-	-	menu	-	-
 helpsystem	entryLayout	iconFirst	textFirst	-	-	-	-	-	-	-	-	-
+textlist	selectorWidth	0.3	0.8	-	-	-	-	selectorColor=FF0000	-	-	-	-
+textlist	selectorHorizontalOffset	0	0.2	-	-	-	-	selectorColor=FF0000;selectorWidth=0.3	-	-	-	-
+textlist	selectorImagePath	{A}	{B}	-	-	-	-	selectorColor=FFFFFF;selectorHeight=0.2	-	-	-	-
+textlist	selectorImageTile	false	true	-	-	-	-	selectorImagePath={A};selectorColor=FFFFFF;selectorHeight=0.2	-	-	-	-
+textlist	selectedSecondaryBackgroundColor	00000000	FF0000	-	6	5	-	selectorColor=00000000	-	-	-	-

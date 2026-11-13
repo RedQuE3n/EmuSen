@@ -489,8 +489,16 @@ pub struct TextList {
     pub band_h: f64,
     pub content_y: f64,
     pub selector: Option<Bar>,
+    /// selectorImagePath, drawn in the bar's place and tinted by its colours; a bar of width 0 follows its aspect.
+    pub selector_image: Option<String>,
+    /// selectorImageTile: the picture repeated at its own size.
+    pub selector_tile: bool,
     /// The selected row's background, fitted to its text and grown by margins (left, right).
     pub selected_background: Option<(Color, f64, (f64, f64))>,
+    /// selectedSecondaryBackgroundColor: a folder's selected background, else the primary one's colour.
+    pub selected_secondary_background: Color,
+    /// selectorHorizontalOffset, which moves the selected background with the bar.
+    pub selected_background_shift: f64,
     pub primary_color: Color,
     pub secondary_color: Color,
     pub selected_color: Color,

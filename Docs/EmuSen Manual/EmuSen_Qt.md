@@ -2547,6 +2547,9 @@ pictures, and each rule read in ES-DE 3.4.1's source (read, never copied).
 | image `renderDuringTransitions` | false: not drawn, in either view, while the views pan | the same (renderChildCondFunc) |
 | helpsystem `posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed` | while a menu is open over the view, each in place of its own property, which it falls back to when unset (`help::now_of`) | `HelpComponent::applyTheme`, `updateGrid`, `setOpacity`; `Window::isBackgroundDimmed` |
 | helpsystem `entryLayout` | `textFirst`: each entry's label, its gap, then its icon, the grid's width unchanged (`help::places_with`, `HelpElement.qml`) | `HelpComponent::updateGrid` |
+| textlist `selectorWidth`, `selectorHorizontalOffset` | shares of the screen's width; unset, the bar is the list's width and unshifted. The shift moves the selected background with the bar. The bar is drawn outside the rows' clip, as ES-DE draws it before pushing its clip | `TextListComponent::applyTheme`, `render` |
+| textlist `selectorImagePath`, `selectorImageTile` | a picture in the bar's place, stretched to it or repeated at its own size, tinted by `selectorColor` to `selectorColorEnd` across (an image's colour shift ignores `selectorGradientType`); a width of 0 follows the picture's aspect | the same (mSelectorImage) |
+| textlist `selectedSecondaryBackgroundColor` | the selected folder's background, falling back to `selectedBackgroundColor` | the same |
 | `scope` of helpsystem, clock and systemstatus | `menu` shows only while a menu is open, `view` only while none is, `none` never | `Window::render`, `renderHelpPromptsEarly` |
 
 The mapping test's `switch` move presses accept in the system view or back in the gamelist with a slide transitions

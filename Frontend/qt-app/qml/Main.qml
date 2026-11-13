@@ -395,59 +395,13 @@ Window {
             gameShown: program.gameShown
             splashShown: program.splashShown
         }
-        // The List card over the grid (EmuSen_Interface.md §18.1): its actions are the grid's model's, and its jumps move the
-        // focus the theme's Games screen follows.
-        Kit.NormalizedCanvas {
-            id: listCardCanvas
-            objectName: "listCardCanvas"
-            readonly property alias slide: listCard.slide
-            visible: listCard.open || listCard.leaving
-            CardModel {
-                id: listCardModel
-                objectName: "listCardModel"
-                card: CardModel.List
-                shown: screens.shown === Screens.List
-                facts: program.esdeLook ? library.esdeListFacts(program.esdeView?.scene.shelf ?? "", program.esdeView?.scene.selected ?? 0) : games.listFacts
-                // Under an ES-DE theme the own grid is hidden and acted on by nothing; the theme's gamelist is acted on below.
-                onActed: (key) => { if (!program.esdeLook) games.focused = games.listAct(key) }
-                onStayed: (key) => { if (!program.esdeLook) games.focused = games.listAct(key) }
-                onClosed: screens.close()
-            }
-            Connections {
-                target: listCardModel
-                function onActed(key) { screens.act(key) }
-            }
-            // Under an ES-DE theme the card acts on the shown gamelist, and the view selects the entry it answers.
-            Connections {
-                target: listCardModel
-                enabled: program.esdeLook
-                function onActed(key) { program.esdeView.scene.select(library.esdeListAct(program.esdeView.scene.shelf, key, program.esdeView.scene.selected)) }
-                function onStayed(key) { program.esdeView.scene.select(library.esdeListAct(program.esdeView.scene.shelf, key, program.esdeView.scene.selected)) }
-            }
-            MenuCard {
-                id: listCard
-                anchors.fill: parent
-                open: screens.shown === Screens.List
-                focus: open
-                padFamily: program.padFamily
-                rows: listCardModel
-                title: listCardModel.title
-                breadcrumb: listCardModel.breadcrumb
-                footer: listCardModel.footer
-                current: listCardModel.current
-                paneLines: listCardModel.paneLines
-                paneMuted: listCardModel.paneMuted
-                panePicture: listCardModel.panePicture
-                paneCaption: listCardModel.paneCaption
-                help: HelpModel {
-                    screen: listCardModel.help
-                }
-                onChosen: (index) => listCardModel.choose(index)
-                onStepped: (index, by, held) => listCardModel.step(index, by)
-                onFocused: (index) => listCardModel.select(index)
-                onBacked: listCardModel.back()
-                onActed: (key) => screens.act(key)
-            }
+        ListCardScreen {
+            screens: screens
+            library: library
+            games: games
+            padFamily: program.padFamily
+            esdeLook: program.esdeLook
+            esdeView: program.esdeView
         }
         // Settings, from Home's Settings place and the Home card's Settings row (EmuSen_Qt.md §7.7); its Library ▸ Themes opens
         // the Themes tab.

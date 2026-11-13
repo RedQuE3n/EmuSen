@@ -42,6 +42,8 @@ pub mod qobject {
         /// The large picture's address, empty for none.
         #[qproperty(QString, big, READ, NOTIFY)]
         #[qproperty(QString, sentence, READ, NOTIFY)]
+        /// A muted line under the sentence, as Mistress's second line of a page's pane (EmuSen_Qt.md §7.7.H).
+        #[qproperty(QString, muted, READ, NOTIFY)]
         /// What a tile without a picture says inside its outline.
         #[qproperty(QString, blank, READ, NOTIFY)]
         /// A disc's cover beside its name (`title`) and the sentence; a cover-less disc draws the generated card.
@@ -88,6 +90,7 @@ pub struct PaneModelRust {
     slots: bool,
     big: QString,
     sentence: QString,
+    muted: QString,
     blank: QString,
     cover: bool,
     title: QString,
@@ -173,6 +176,11 @@ impl qobject::PaneModel {
         if self.cover != cover {
             self.as_mut().rust_mut().cover = cover;
             self.as_mut().cover_changed();
+        }
+        let muted = QString::from(&words(&v["muted"]));
+        if self.muted != muted {
+            self.as_mut().rust_mut().muted = muted;
+            self.as_mut().muted_changed();
         }
         let title = QString::from(&words(&v["title"]));
         if self.title != title {

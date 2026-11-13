@@ -42,6 +42,8 @@ pub mod qobject {
         #[qproperty(QString, clock)]
         /// Reduced motion, as the window binds the kit's tokens.
         #[qproperty(bool, reduced_motion, cxx_name = "reducedMotion")]
+        /// Swap A and B in menus, as the window binds its own PadRouter, for the engine's (EmuSen_Qt.md §7.7.H3).
+        #[qproperty(bool, swap)]
         /// The program's clock's time, in seconds since 1970, 0 for the wall clock: the theme's `Words.now`.
         #[qproperty(i64, now)]
         type ThemeFeed = super::ThemeFeedRust;
@@ -158,6 +160,7 @@ pub struct ThemeFeedRust {
     family: i32,
     clock: QString,
     reduced_motion: bool,
+    swap: bool,
     now: i64,
     /// The feed as the sink sees it, emptied when the feed goes, so a sink that outlives it takes nothing.
     me: Rc<Cell<*mut qobject::ThemeFeed>>,
@@ -174,6 +177,7 @@ impl Default for ThemeFeedRust {
             family: 0,
             clock: QString::default(),
             reduced_motion: false,
+            swap: false,
             now: 0,
             me: Rc::new(Cell::new(std::ptr::null_mut())),
         }
@@ -281,6 +285,7 @@ impl cxx_qt::Initialize for qobject::ThemeFeed {
         self.as_mut().on_family_changed(|feed| feed.feed_device()).release();
         self.as_mut().on_clock_changed(|feed| feed.feed_device()).release();
         self.as_mut().on_reduced_motion_changed(|feed| feed.feed_motion()).release();
+        self.as_mut().on_swap_changed(|feed| feed.feed_swap()).release();
         self.as_mut().on_now_changed(|feed| {
             feed.feed_words();
             feed.feed_browse();
@@ -398,6 +403,12 @@ impl qobject::ThemeFeed {
         }
     }
 
+    fn feed_swap(&self) {
+        if let Some(router) = self.engine().and_then(host::pad_router) {
+            router.set_swap_accept_back(self.swap);
+        }
+    }
+
     /// The theme's own colours on its engine's tokens; the program's engine, whose cards a theme never styles, keeps the kit's.
     fn feed_tokens(&self) {
         // Safety: the host is the window's, alive as long as the feed it is handed to.
@@ -414,6 +425,7 @@ impl qobject::ThemeFeed {
         }
         self.feed_words();
         self.feed_motion();
+        self.feed_swap();
         self.feed_tokens();
         self.feed_device();
         self.feed_library();

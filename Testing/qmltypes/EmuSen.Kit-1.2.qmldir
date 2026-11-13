@@ -1,0 +1,42 @@
+module EmuSen.Kit
+optional plugin EmuSen_Kit
+classname EmuSen_Kit_plugin
+typeinfo plugin.qmltypes
+depends QtQuick
+depends QtQuick.Shapes
+depends QtMultimedia
+prefer :/qt/qml/EmuSen/Kit/
+Walkable 1.2 qml/Walkable.qml
+Body 1.2 qml/Body.qml
+Sky 1.2 qml/Sky.qml
+Moonrise 1.2 qml/Moonrise.qml
+Frame 1.2 qml/Frame.qml
+Card 1.2 qml/Card.qml
+Sheet 1.2 qml/Sheet.qml
+Question 1.2 qml/Question.qml
+HelpBar 1.2 qml/HelpBar.qml
+MenuPanel 1.2 qml/MenuPanel.qml
+MenuRow 1.2 qml/MenuRow.qml
+WholeRow 1.2 qml/WholeRow.qml
+Carousel 1.2 qml/Carousel.qml
+NormalizedCanvas 1.2 qml/NormalizedCanvas.qml
+PadGlyph 1.2 qml/PadGlyph.qml
+Scene 1.2 qml/Scene.qml
+Keyboard 1.2 qml/Keyboard.qml
+NoticeLayer 1.2 qml/NoticeLayer.qml
+RoundPicture 1.2 qml/RoundPicture.qml
+CoverTile 1.2 qml/CoverTile.qml
+OrbitSlot 1.2 qml/OrbitSlot.qml
+EdgeFade 1.2 qml/EdgeFade.qml
+SettingsFrame 1.2 qml/SettingsFrame.qml
+ChoiceRow 1.2 qml/ChoiceRow.qml
+SliderRow 1.2 qml/SliderRow.qml
+SectionStrip 1.2 qml/SectionStrip.qml
+ToolScreen 1.2 qml/ToolScreen.qml
+PageFrame 1.2 qml/PageFrame.qml
+ToneText 1.2 qml/ToneText.qml
+ActionButton 1.2 qml/ActionButton.qml
+VideoTile 1.2 qml/VideoTile.qml
+VideoClip 1.2 qml/VideoClip.qml
+RaisedShadow 1.2 qml/RaisedShadow.qml
+ControllerDrawing 1.2 qml/ControllerDrawing.qml

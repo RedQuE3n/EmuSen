@@ -158,19 +158,32 @@ fn system_id() -> &'static str {
     if faults() & AS_PLAYSTATION != 0 { "psx" } else { "test" }
 }
 
-/// The pad's buttons: A and Turbo, and under `AS_PLAYSTATION` B and Start besides, so a host's B and Start reach it.
+/// The pad's buttons: A and Turbo, and under `AS_PLAYSTATION` B, Start and the d-pad besides, so a host's B, Start and
+/// d-pad reach it.
 fn buttons() -> Vec<Button> {
     let mut buttons = vec![Button { bit: 0, control: Some(Control::A), label: "A".into() }, Button { bit: 1, control: None, label: "Turbo".into() }];
     if faults() & AS_PLAYSTATION != 0 {
         buttons.extend([Button { bit: 2, control: Some(Control::B), label: "B".into() }, Button { bit: 3, control: Some(Control::Start), label: "Start".into() }]);
+        let dpad = [(Control::Up, "Up"), (Control::Down, "Down"), (Control::Left, "Left"), (Control::Right, "Right")];
+        buttons.extend(dpad.into_iter().zip(4..).map(|((control, label), bit)| Button { bit, control: Some(control), label: label.into() }));
     }
     buttons
 }
 
+/// The pad's stick, none under `AS_PLAYSTATION` (since 2026-11-12): the PlayStation's first pad is digital, so a host
+/// may stand the left stick in for its d-pad.
+fn axes() -> Vec<AxisControl> {
+    if faults() & AS_PLAYSTATION != 0 {
+        return Vec::new();
+    }
+    vec![AxisControl { axis: Axis::LeftX as u32, control: Some(Axis::LeftX), trigger: false, label: "Stick".into() }]
+}
+
 /// The picture's blue under `AS_PLAYSTATION`, by the button of the first pad held, so a host sees which button reaches
-/// the console in the picture: A 0x40, Turbo 0x60, B 0xFF, Start 0xA0, the highest bit held telling; none with none
-/// held, and none for every other build.
-pub const PRESSED_BLUES: [u8; 4] = [0x40, 0x60, 0xFF, 0xA0];
+/// the console in the picture: A 0x40, Turbo 0x60, B 0xFF, Start 0xA0, Up 0x80, Down 0x90, Left 0xC0, Right 0xE0, the
+/// highest bit held telling; none with none held, and none for every other build. Its green is the same reading of the
+/// second port's pad (since 2026-11-12), so a host's routing to port 1 is seen too.
+pub const PRESSED_BLUES: [u8; 8] = [0x40, 0x60, 0xFF, 0xA0, 0x80, 0x90, 0xC0, 0xE0];
 
 fn pressed_blue(pad: u32) -> u8 {
     if faults() & AS_PLAYSTATION == 0 {
@@ -187,6 +200,13 @@ pub const HELD_CHEATS: u8 = 0xC4;
 /// its state, longer than a frame, so that a host's rule for a snapshot longer than a frame can be held through its API.
 pub const SLOW_SNAPSHOT: u8 = 0x5D;
 pub const SLOW_SNAPSHOT_MS: u64 = 40;
+/// Not a fault, since 2026-11-10: an image whose payload begins with `MOTOR_CONSOLE` reports `MOTOR_SYSTEM`, a console
+/// whose games drive a motor, so a host's rumble gate opens by the systems table (EmuSen_Input.md §9.2).
+pub const MOTOR_CONSOLE: u8 = 0x64;
+pub const MOTOR_SYSTEM: &str = "n64";
+/// Not a fault, since 2026-11-10: an image whose payload begins with `TWO_PADS` has a controller in port 1 as well, so a
+/// host's routing of a second port (its presence in RAM's `ABSENT` byte) can be seen.
+pub const TWO_PADS: u8 = 0x22;
 /// The test core's one unit (since 1.13): the timer, its count and the frames it has run.
 pub const TIMER_UNIT: u32 = 256;
 /// RAM's byte whose bit n says port n has no controller (`PRESENCE`, since 1.13), kept in the state as a console keeps it.
@@ -292,6 +312,8 @@ pub struct TestCore {
     interrupted: i64,
     /// `HELPER`: the second processor listed.
     helper: bool,
+    /// Port 1 holds a controller too (`TWO_PADS`).
+    two_pads: bool,
     /// `HELD_CHEATS`: whether every fourth frame holds the cheats, and whether the last frame did.
     holds: bool,
     cheats_held: bool,
@@ -389,10 +411,11 @@ impl TestCore {
             unlogged_interrupts: body.first() == Some(&UNLOGGED_INTERRUPT),
             interrupted: -1,
             helper: body.first() == Some(&HELPER),
+            two_pads: body.first() == Some(&TWO_PADS),
             holds: body.first() == Some(&HELD_CHEATS),
             cheats_held: false,
             reads: std::cell::Cell::new(0),
-            system: system_id(),
+            system: if body.first() == Some(&MOTOR_CONSOLE) { MOTOR_SYSTEM } else { system_id() },
             old_host: faults() & FAULT_OLD_HOST_UNANSWERED != 0 && r.host_abi_version == (1 << 16) | 99,
         };
         m.draw();
@@ -410,7 +433,7 @@ impl TestCore {
                 Video { base_width: 8, base_height: 4, max_width: 16, max_height: 4, aspect: (4, 3), formats: vec![pixel::RGBA8888] }
             },
             audio: Audio { rate: self.rate, channels: vec!["Tone".into()] },
-            ports: vec![Port { port: 0, controller: Some("test.pad".into()) }, Port { port: 1, controller: None }],
+            ports: vec![Port { port: 0, controller: Some("test.pad".into()) }, Port { port: 1, controller: self.two_pads.then(|| "test.pad".into()) }],
             spaces: vec![Space { cheats: true, ..Space::new(0, "RAM") }, Space { read_only: true, byte_order: (TEST_CAPABILITIES != 0).then(|| if faults() & FAULT_BYTE_ORDER_MISSPELT != 0 { "Big" } else { BYTE_ORDER_BIG }), ..Space::new(1, "ROM") }],
             processors: std::iter::once(Processor { id: 0, name: "Counter".into(), pc_bits: 8, registers: vec![("F".into(), 64)], code_space: None })
                 .chain(self.helper.then(|| Processor { id: 1, name: "Helper".into(), pc_bits: 8, registers: Vec::new(), code_space: None }))
@@ -459,7 +482,7 @@ impl TestCore {
             return self.paint();
         }
         let n = (self.width() * 4) as usize;
-        let green = if self.settling > 0 { 0x80 } else { 0 };
+        let green = if self.settling > 0 { 0x80 } else { pressed_blue(self.pads[1]) };
         let late = if faults() & FAULT_STATE_LOST_LATE != 0 && self.frames >= STATE_LOST_FROM { self.held } else { 0 };
         let blue = pressed_blue(self.pads[0]);
         self.picture = (0..n).flat_map(|i| [(self.frames as u8).wrapping_add(i as u8).wrapping_add(late), green, blue, 255]).collect();
@@ -573,7 +596,7 @@ impl Core for TestCore {
                     label: "Controller".into(),
                     ports: vec![0, 1],
                     buttons: buttons(),
-                    axes: vec![AxisControl { axis: Axis::LeftX as u32, control: Some(Axis::LeftX), trigger: false, label: "Stick".into() }],
+                    axes: axes(),
                 }],
                 firmware: vec![Firmware {
                     which: 16,

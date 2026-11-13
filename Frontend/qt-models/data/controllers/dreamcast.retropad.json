@@ -1,0 +1,24 @@
+{
+  "name": "Dreamcast controller",
+  "design": [1000, 760],
+  "items": [
+    {"part": {"path": "M 500,170 C 500,120 506,60 520,4"}, "stroke": "#5A5A62", "width": 9},
+    {"region": "L2", "shape": {"box": [150, 40, 210, 72, 26]}, "name": "L Trigger", "fill": "#A8A8B0", "stroke": "#5A5A62", "width": 3, "caption": "L", "caption_size": 26, "caption_colour": "#3A3A42", "side": "top"},
+    {"region": "R2", "shape": {"box": [640, 40, 210, 72, 26]}, "name": "R Trigger", "fill": "#A8A8B0", "stroke": "#5A5A62", "width": 3, "caption": "R", "caption_size": 26, "caption_colour": "#3A3A42", "side": "top"},
+    {"part": {"path": "M 210,160 C 380,142 620,142 790,160 C 890,172 945,232 958,330 C 975,470 962,600 902,690 C 862,742 792,734 762,664 C 732,602 692,562 622,558 L 378,558 C 308,562 268,602 238,664 C 208,734 138,742 98,690 C 38,600 25,470 42,330 C 55,232 110,172 210,160 Z"}, "fill": "#D6D6DA", "stroke": "#5A5A62", "width": 5},
+    {"part": {"box": [392, 186, 216, 270, 18]}, "fill": "#4A4A52"},
+    {"part": {"box": [410, 202, 180, 236, 16]}, "fill": "#ECECEF", "stroke": "#5A5A62", "width": 2},
+    {"part": {"box": [440, 226, 120, 86, 6]}, "fill": "#8FA07A", "stroke": "#5A5A62", "width": 2},
+    {"word": "VMU", "at": [500, 360], "size": 18, "colour": "#4A4A55"},
+    {"stick": [240, 300, 58, 36, 20], "gate_fill": "#4A4A52", "knob_fill": "#9A9AA2", "edge": "#5A5A62", "band": "#A6A6AE", "arrow": "#4A4A52", "controls": ["LeftY-", "LeftY+", "LeftX-", "LeftX+"], "names": ["Stick up", "Stick down", "Stick left", "Stick right"]},
+    {"part": {"circle": [270, 486, 82]}, "fill": "#BDBDC3"},
+    {"dpad": [270, 486, 48, 70], "controls": ["Up", "Down", "Left", "Right"], "fill": "#4A4A52", "arrow": "#8A8A92", "radius": 8},
+    {"part": {"circle": [760, 330, 118]}, "fill": "#BDBDC3"},
+    {"round": [760, 254, 32], "region": "X", "colour": "#2E9A57", "name": "Y", "caption": "Y", "size": 26},
+    {"round": [684, 330, 32], "region": "Y", "colour": "#E0B030", "name": "X", "caption": "X", "size": 26, "caption_colour": "#3A3A42"},
+    {"round": [836, 330, 32], "region": "A", "colour": "#3456C8", "name": "B", "caption": "B", "size": 26},
+    {"round": [760, 406, 32], "region": "B", "colour": "#C8363A", "name": "A", "caption": "A", "size": 26},
+    {"region": "Start", "shape": {"pill": [500, 506, 70, 30, 0]}, "fill": "#4A4A52"},
+    {"word": "START", "at": [500, 540], "size": 15, "colour": "#4A4A55"}
+  ]
+}

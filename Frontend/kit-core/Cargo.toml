@@ -12,3 +12,5 @@ name = "emusen_kit_core"
 [dependencies]
 # Colour conversions and WCAG 2.1 contrast, so the kit does not hand-roll either (EmuSen_Kit.md §1.2).
 palette = { version = "0.7", default-features = false, features = ["std"] }
+# A controller's drawing file read as JSON (EmuSen_Kit.md §7.62).
+serde_json = "1"

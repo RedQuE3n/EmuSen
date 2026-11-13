@@ -1,0 +1,20 @@
+{
+  "name": "Controller",
+  "design": [1000, 720],
+  "items": [
+    {"region": "L2", "name": "L2", "shape": {"path": "M 190,150 C 200,90 250,62 320,60 C 345,60 352,80 350,112 L 346,150 Z"}, "fill": "#6A6C76", "stroke": "#3E4048", "width": 3, "side": "top"},
+    {"region": "R2", "name": "R2", "shape": {"path": "M 810,150 C 800,90 750,62 680,60 C 655,60 648,80 650,112 L 654,150 Z"}, "fill": "#6A6C76", "stroke": "#3E4048", "width": 3, "side": "top"},
+    {"region": "L", "name": "L1", "shape": {"path": "M 150,196 C 175,150 240,134 300,134 L 336,138 C 348,140 350,160 336,166 C 280,170 215,180 170,212 Z"}, "fill": "#5E6069", "stroke": "#3E4048", "width": 3, "side": "top"},
+    {"region": "R", "name": "R1", "shape": {"path": "M 850,196 C 825,150 760,134 700,134 L 664,138 C 652,140 650,160 664,166 C 720,170 785,180 830,212 Z"}, "fill": "#5E6069", "stroke": "#3E4048", "width": 3, "side": "top"},
+    {"part": {"path": "M 260,160 C 380,142 620,142 740,160 C 850,176 905,220 935,320 C 975,460 1000,590 950,650 C 905,705 830,690 790,620 C 755,560 715,528 660,528 L 340,528 C 285,528 245,560 210,620 C 170,690 95,705 50,650 C 0,590 25,460 65,320 C 95,220 150,176 260,160 Z"}, "fill": "#8D8F99", "stroke": "#3E4048", "width": 5},
+    {"stick": [250, 320, 66, 42, 20], "controls": ["LeftY-", "LeftY+", "LeftX-", "LeftX+"], "names": ["Left stick up", "Left stick down", "Left stick left", "Left stick right"], "gate_fill": "#2E2F35", "knob_fill": "#4A4C55", "edge": "#3E4048", "band": "#6E7079", "arrow": "#C4C6CE", "click": "L3"},
+    {"dpad": [375, 460, 46, 68], "controls": ["Up", "Down", "Left", "Right"], "fill": "#2E2F35", "arrow": "#6A6C76", "radius": 8},
+    {"stick": [625, 460, 66, 42, 20], "controls": ["RightY-", "RightY+", "RightX-", "RightX+"], "names": ["Right stick up", "Right stick down", "Right stick left", "Right stick right"], "gate_fill": "#2E2F35", "knob_fill": "#4A4C55", "edge": "#3E4048", "band": "#6E7079", "arrow": "#C4C6CE", "click": "R3"},
+    {"round": [750, 250, 32], "region": "X", "colour": "#2E2F35", "caption": "X", "size": 28},
+    {"round": [816, 316, 32], "region": "A", "colour": "#2E2F35", "caption": "A", "size": 28},
+    {"round": [750, 382, 32], "region": "B", "colour": "#2E2F35", "caption": "B", "size": 28},
+    {"round": [684, 316, 32], "region": "Y", "colour": "#2E2F35", "caption": "Y", "size": 28},
+    {"region": "Select", "shape": {"pill": [430, 300, 44, 26, 0]}, "fill": "#2E2F35"},
+    {"region": "Start", "shape": {"pill": [570, 300, 44, 26, 0]}, "fill": "#2E2F35"}
+  ]
+}

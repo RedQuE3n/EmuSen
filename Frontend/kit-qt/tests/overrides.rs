@@ -37,7 +37,7 @@ fn kit_7_2_every_number_and_switch_token_takes_a_theme_s_override_in_its_variant
     assert!(tokens.len() > 50, "the registry's number and switch tokens: {tokens:?}");
     let kit: Vec<String> = tokens.iter().map(|(name, _)| read(&mut scene, name)).collect();
     let given = |t: &str, kit: &str| match t {
-        "double" => "7.25".to_owned(),
+        "double" => "7.5".to_owned(),
         "int" => "7".to_owned(),
         _ => (kit != "true").to_string(),
     };
@@ -56,7 +56,7 @@ fn kit_7_2_every_number_and_switch_token_takes_a_theme_s_override_in_its_variant
     assert_eq!(read(&mut scene, "quick"), "0");
     assert_eq!(read(&mut scene, "quickFade"), "120");
     assert_eq!(read(&mut scene, "breathes"), "false");
-    assert_eq!(read(&mut scene, "tileRadius"), "7.25");
+    assert_eq!(read(&mut scene, "tileRadius"), "7.5");
     // None set: the kit's own again.
     scene.kit_tokens().expect("the kit's tokens").set_reduced_motion(false);
     scene.kit_tokens().expect("the kit's tokens").set_overrides(Vec::new());

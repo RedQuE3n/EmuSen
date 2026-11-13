@@ -1,11 +1,12 @@
 //! The game picture's feed (EmuSen_Qt.md §1.8): the newest frame a frame thread handed over, advanced into a Serenity
 //! chain and drawn in place on the render thread, where `GamePicture` asks for it; and each swap's time, the display
 //! clock the frame thread paces by. The chain is made, used and dropped on the render thread alone, since its calls
-//! submit to the queue the scene graph submits to.
+//! submit to the queue the scene graph submits to; a preset asked for in its place is built there at the next draw.
 
 use emusen_kit_qt::picture::{Feed, Picture};
 use emusen_platform_client::serenity::{Chain, Device};
 use std::ffi::c_void;
+use std::path::{Path, PathBuf};
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
@@ -71,15 +72,28 @@ struct Shared {
     running: AtomicBool,
     /// Held by a draw from taking the newest frame to its end, so a withdrawal can wait it out.
     drawing: Mutex<()>,
+    /// A preset and the uniforms set over it, asked for in place of the chain's, not yet built.
+    through: Mutex<Option<Through>>,
+    /// The folder built-in filters' presets are written under.
+    presets: PathBuf,
+}
+
+/// A preset document and the uniforms the chain is given over the preset's values.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct Through {
+    preset: Vec<u8>,
+    uniforms: Vec<(String, f32)>,
 }
 
 /// The render thread's own: the chain and the frame it last advanced from.
 struct Render {
     device: Arc<Device>,
-    preset: Vec<u8>,
+    through: Through,
     chain: Option<Chain>,
     current: Frame,
     advanced: bool,
+    /// Whether `current` came since it was last advanced into a chain, so a chain built again over it counts no new frame.
+    fresh: bool,
     fresh_since_swap: bool,
     problem: Option<String>,
 }
@@ -102,8 +116,9 @@ pub struct Handoff {
 }
 
 impl PictureFeed {
-    /// A feed drawing through `preset` (a document Serenity's preset readers give) on `device`.
-    pub fn new(device: Arc<Device>, preset: Vec<u8>) -> PictureFeed {
+    /// A feed drawing through `preset` (a document Serenity's preset readers give) on `device`; the presets of the
+    /// filters asked for later are written under `presets`.
+    pub fn new(device: Arc<Device>, preset: Vec<u8>, presets: PathBuf) -> PictureFeed {
         let shared = Arc::new(Shared {
             newest: Mutex::default(),
             swaps: Mutex::new(0),
@@ -112,9 +127,19 @@ impl PictureFeed {
             counts: Counts::default(),
             running: AtomicBool::new(false),
             drawing: Mutex::new(()),
+            through: Mutex::new(None),
+            presets,
         });
-        let render =
-            Render { device, preset, chain: None, current: Frame::default(), advanced: false, fresh_since_swap: false, problem: None };
+        let render = Render {
+            device,
+            through: Through { preset, uniforms: Vec::new() },
+            chain: None,
+            current: Frame::default(),
+            advanced: false,
+            fresh: false,
+            fresh_since_swap: false,
+            problem: None,
+        };
         let context = Box::new(Context { shared, render: Mutex::new(render) });
         let pointer = std::ptr::from_ref::<Context>(&context).cast_mut().cast::<c_void>();
         let feed = Box::new(Feed { context: pointer, draw, swapped });
@@ -222,6 +247,18 @@ impl Handoff {
         self.shared.counts.last_swap.load(Ordering::Relaxed)
     }
 
+    /// The picture drawn through `preset` from the next draw, `uniforms` set over the preset's values; nothing changes
+    /// when it is what the chain draws through already. A picture from a ring, whose slot is given back once drawn, is
+    /// drawn through it from the next frame (EmuSen_Qt.md §1.8.10).
+    pub fn draw_through(&self, preset: Vec<u8>, uniforms: Vec<(String, f32)>) {
+        *locked(&self.shared.through) = Some(Through { preset, uniforms });
+    }
+
+    /// The folder the filters' presets are written under.
+    pub fn presets(&self) -> &Path {
+        &self.shared.presets
+    }
+
     /// Whether a frame thread runs, so that a swap with no new frame counts as a repeat.
     pub fn set_running(&self, running: bool) {
         self.shared.running.store(running, Ordering::Relaxed);
@@ -241,6 +278,7 @@ extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Pict
             std::mem::swap(&mut newest.0, &mut render.current);
             newest.1 = false;
             render.advanced = false;
+            render.fresh = true;
             *locked(&context.shared.taken) += 1;
             context.shared.swapped.notify_all();
         }
@@ -248,8 +286,16 @@ extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Pict
     if render.current.width <= 0 {
         return 0;
     }
+    let ring = matches!(render.current.source, Source::Ring { .. });
+    if !(ring && render.advanced) {
+        if let Some(through) = locked(&context.shared.through).take().filter(|t| *t != render.through) {
+            render.through = through;
+            render.chain = None;
+            render.advanced = false;
+        }
+    }
     if render.chain.is_none() {
-        match Chain::new(&render.device, &render.preset) {
+        match build(&render.device, &render.through) {
             Ok(chain) => render.chain = Some(chain),
             Err(e) => {
                 render.problem = Some(e.to_string());
@@ -266,6 +312,9 @@ extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Pict
             return -1;
         }
         render.advanced = true;
+        if !std::mem::take(&mut render.fresh) {
+            return show(chain, width, height, out, &mut render.problem);
+        }
         render.fresh_since_swap = true;
         let counts = &context.shared.counts;
         counts.shown.fetch_add(1, Ordering::Relaxed);
@@ -276,6 +325,29 @@ extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Pict
             Source::Pixels => 0,
         };
     }
+    show(chain, width, height, out, &mut render.problem)
+}
+
+/// The chain for a preset, its uniforms set over the preset's values where its passes declare them.
+fn build(device: &Arc<Device>, through: &Through) -> emusen_platform_client::Result<Chain> {
+    let mut chain = Chain::new(device, &through.preset)?;
+    if !through.uniforms.is_empty() {
+        let mut parameters = chain.parameters()?;
+        if parameters.iter().any(|(id, _)| through.uniforms.iter().any(|(u, _)| u == id)) {
+            for (id, value) in &mut parameters {
+                if let Some((_, given)) = through.uniforms.iter().find(|(u, _)| u == id) {
+                    *value = *given;
+                }
+            }
+            let values: Vec<f32> = parameters.into_iter().map(|(_, v)| v).collect();
+            chain.set_parameters(&values)?;
+        }
+    }
+    Ok(chain)
+}
+
+/// Every pass drawn for a view of `width` by `height`, the picture handed to GamePicture.
+fn show(chain: &mut Chain, width: i32, height: i32, out: *mut Picture, problem: &mut Option<String>) -> i32 {
     match chain.draw(width, height) {
         Ok(drawn) => {
             // SAFETY: GamePicture passes its own picture to fill.
@@ -285,7 +357,7 @@ extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Pict
             1
         }
         Err(e) => {
-            render.problem = Some(e.to_string());
+            *problem = Some(e.to_string());
             -1
         }
     }

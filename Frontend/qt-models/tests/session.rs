@@ -63,7 +63,7 @@ fn a_game_s_pictures_are_drawn_in_place_paced_and_paused() {
     let raw = device.raw();
     assert!(raw.instance != 0 && raw.physical != 0 && raw.device != 0 && raw.queue != 0, "{raw:?}");
     let preset = builtin_preset(&platform, "effect.None.nearest", None, world.dir("presets").to_str().unwrap()).unwrap();
-    let picture = PictureFeed::new(device.clone(), preset);
+    let picture = PictureFeed::new(device.clone(), preset, world.dir("presets"));
     let handoff = picture.handoff();
     let feed = feed_of(&picture);
 

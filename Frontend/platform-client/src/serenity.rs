@@ -99,24 +99,18 @@ pub struct Drawn {
 /// A built-in filter's preset written under `root` (by its catalog key, such as `effect.None.nearest`) and read as
 /// the document a chain is built from.
 pub fn builtin_preset(platform: &Platform, key: &str, console: Option<&str>, root: &str) -> Result<Vec<u8>> {
+    filter_preset(platform, key, console, None, root)
+}
+
+/// A built-in filter's preset on `console` with the player's `chosen` values (`{id: an f32's bits}`, none for its
+/// defaults there), written under `root` and read as the document a chain is built from (`emusen_serenity_filter_write`).
+pub fn filter_preset(platform: &Platform, key: &str, console: Option<&str>, chosen: Option<&serde_json::Value>, root: &str) -> Result<Vec<u8>> {
     let filter = serde_json::json!({ "key": key }).to_string();
     let (c, cl) = crate::out::text(console);
+    let chosen = chosen.map(serde_json::Value::to_string);
+    let (v, vl) = chosen.as_deref().map_or((std::ptr::null(), 0), |v| (v.as_ptr(), v.len()));
     let path = platform.read(|out, cap| unsafe {
-        platform.lib.emusen_serenity_filter_write(
-            filter.as_ptr(),
-            filter.len(),
-            c,
-            cl,
-            std::ptr::null(),
-            0,
-            1,
-            0.0,
-            0.0,
-            root.as_ptr(),
-            root.len(),
-            out,
-            cap,
-        )
+        platform.lib.emusen_serenity_filter_write(filter.as_ptr(), filter.len(), c, cl, v, vl, 1, 0.0, 0.0, root.as_ptr(), root.len(), out, cap)
     })?;
     preset_text(platform, &String::from_utf8_lossy(&path.unwrap_or_default()))
 }
@@ -175,6 +169,22 @@ impl Chain {
             crate::error::status(raw::EMUSEN_PLATFORM_DEVICE, words)
         })?;
         Ok(Chain { platform: platform.clone(), handle, _device: device.clone() })
+    }
+
+    /// Every parameter the passes declare, in the chain's order, with its value as the preset gives it.
+    pub fn parameters(&self) -> Result<Vec<(String, f32)>> {
+        let bytes = self
+            .platform
+            .read(|out, cap| unsafe { self.platform.lib.emusen_serenity_chain_parameters(self.handle.as_ptr(), out, cap) })?
+            .unwrap_or_default();
+        let all: Vec<serde_json::Value> = crate::out::json("serenity_chain_parameters", &bytes)?;
+        Ok(all.iter().map(|p| (p["id"].as_str().unwrap_or_default().to_owned(), f32::from_bits(p["initial"].as_u64().unwrap_or_default() as u32))).collect())
+    }
+
+    /// A value for each parameter, in the order `parameters` gives them, read by the next draw.
+    pub fn set_parameters(&mut self, values: &[f32]) -> Result<()> {
+        let n = unsafe { self.platform.lib.emusen_serenity_chain_set_parameters(self.handle.as_ptr(), values.as_ptr(), values.len()) };
+        self.platform.status(n.into()).map(drop)
     }
 
     /// A new frame, RGBA8, each row shown `row_repeat` times.

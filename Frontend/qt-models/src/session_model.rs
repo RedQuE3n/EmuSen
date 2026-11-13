@@ -1,11 +1,14 @@
 //! `SessionModel`, the running game (EmuSen_Qt.md §1.2, §1.8.2): open a game, run, pause, close. session.rs's frame
 //! thread put on Qt; its reports come back through qt_thread().queue, the one way in.
 
-use crate::picture::PictureFeed;
+use crate::display::{self, Display};
+use crate::picture::{Handoff, PictureFeed};
+use crate::settings::{Model, SettingsSource};
+use crate::settings_source::ClientSettings;
 use crate::session::{GameIo, Opening, Report, Session};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{DateFormat, QDateTime, QString};
+use cxx_qt_lib::{DateFormat, QDateTime, QRectF, QString};
 use crate::input::GameInput;
 use crate::pause::{self, SlotFact};
 use crate::resume::{self, Answer, Start};
@@ -23,6 +26,8 @@ pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qrectf.h");
+        type QRectF = cxx_qt_lib::QRectF;
         include!("emusen-kit-qt/src/kinds.cxxqt.h");
         #[namespace = "Pad"]
         type PadButton = emusen_kit_qt::kinds::ffi::PadButton;
@@ -50,6 +55,8 @@ pub mod qobject {
         #[qproperty(f64, first_picture_ms, cxx_name = "firstPictureMs", READ, NOTIFY)]
         /// The picture's width over its height as shown; 0 before the first picture, where it fills its item.
         #[qproperty(f64, picture_aspect, cxx_name = "pictureAspect", READ, NOTIFY)]
+        /// The part of the drawn picture the window shows, each a share of it: the crop a filter does not make itself.
+        #[qproperty(QRectF, picture_crop, cxx_name = "pictureCrop", READ, NOTIFY)]
         /// What the Pause Card's words are made from, read as the game pauses (pause.rs's facts as plain data).
         #[qproperty(QString, card_facts, cxx_name = "cardFacts", READ, NOTIFY)]
         /// The state slot Save and Load act on, 1 to 8, kept while the program runs.
@@ -109,6 +116,17 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "chooseSpeed"]
         fn choose_speed(self: Pin<&mut SessionModel>, percent: u32);
+
+        /// The display settings of the open game's console read again (Settings saved, the game resumed): the picture is
+        /// drawn through what they ask for from its next draw, and its shape and crop follow.
+        #[qinvokable]
+        #[cxx_name = "readPicture"]
+        fn read_picture(self: Pin<&mut SessionModel>);
+
+        /// The picture's settings read anew: the picture is drawn again, a still one too.
+        #[qsignal]
+        #[cxx_name = "pictureRead"]
+        fn picture_read(self: Pin<&mut SessionModel>);
 
         /// The game or console named did not open, or stopped on a failure: `problem` says why.
         #[qsignal]
@@ -194,6 +212,16 @@ pub struct SessionModelRust {
     failing: String,
     first_picture_ms: f64,
     picture_aspect: f64,
+    picture_crop: QRectF,
+    /// The frame's shape on its console's screen and with its pixels square, as the frame thread last reported them.
+    shapes: (f64, f64),
+    /// The open session's console, and what its display settings ask for.
+    display_console: Option<String>,
+    display: Display,
+    /// Serenity's catalogue, read once.
+    catalogue: Option<serde_json::Value>,
+    /// The feed's hand-off, to ask for the picture's preset.
+    handoff: Option<Handoff>,
     card_facts: QString,
     slot: u32,
     speed: u32,
@@ -239,6 +267,12 @@ impl Default for SessionModelRust {
             failing: String::new(),
             first_picture_ms: 0.0,
             picture_aspect: 0.0,
+            picture_crop: QRectF::new(0.0, 0.0, 1.0, 1.0),
+            shapes: (0.0, 0.0),
+            display_console: None,
+            display: Display::default(),
+            catalogue: None,
+            handoff: None,
             card_facts: QString::default(),
             slot: 1,
             speed: 100,
@@ -348,6 +382,9 @@ impl qobject::SessionModel {
         let Some((handoff, device)) = (unsafe { PictureFeed::at(self.feed) }) else {
             return self.as_mut().failed("No picture is named.".to_owned());
         };
+        self.as_mut().rust_mut().handoff = Some(handoff.clone());
+        self.as_mut().rust_mut().display_console = None;
+        self.as_mut().rust_mut().display = Display::default();
         // Said once, as the runtime is made: a runtime lent no SQLite keeps no records of states (§7.9).
         let mut unkept = None;
         if self.runtime.is_none() {
@@ -621,6 +658,50 @@ impl qobject::SessionModel {
         if let Some(session) = &self.session {
             session.set_paused(false);
             self.as_mut().set_paused(false);
+            self.as_mut().read_picture();
+        }
+    }
+
+    fn read_picture(mut self: Pin<&mut Self>) {
+        let (Some(console), Some(handoff)) = (self.display_console.clone(), self.handoff.clone()) else { return };
+        match self.as_mut().display_preset(&console, &handoff) {
+            Ok((display, preset)) => {
+                handoff.draw_through(preset, display.uniforms());
+                self.as_mut().rust_mut().display = display;
+                self.as_mut().place_picture();
+                self.picture_read();
+            }
+            Err(words) => self.set_problem(QString::from(&format!("The picture's display settings could not be read: {words}"))),
+        }
+    }
+
+    /// What `console`'s display settings ask for, and the preset written for it under the feed's folder.
+    fn display_preset(mut self: Pin<&mut Self>, console: &str, handoff: &Handoff) -> Result<(Display, Vec<u8>), String> {
+        let platform = self.as_mut().platform()?;
+        let settings = ClientSettings::open(&self.platform_library.to_string())?;
+        if self.catalogue.is_none() {
+            self.as_mut().rust_mut().catalogue = Some(settings.catalogue()?);
+        }
+        let catalogue = self.catalogue.as_ref().ok_or("no catalogue")?;
+        let display = display::read(catalogue, &settings.load(Model::Graphics)?, console);
+        let root = handoff.presets().to_string_lossy();
+        let chosen = display.chosen_json();
+        let preset = emusen_platform_client::serenity::filter_preset(&platform, &display.filter, Some(console), chosen.as_ref(), &root);
+        Ok((display, preset.map_err(|e| e.to_string())?))
+    }
+
+    /// The picture's shape and crop from the frame's shapes and the console's display settings.
+    fn place_picture(mut self: Pin<&mut Self>) {
+        let shown = self.display.shown(self.shapes.0, self.shapes.1);
+        if self.picture_aspect != shown.aspect {
+            self.as_mut().rust_mut().picture_aspect = shown.aspect;
+            self.as_mut().picture_aspect_changed();
+        }
+        let [x, y, w, h] = shown.clip.kept();
+        let crop = QRectF::new(x, y, w, h);
+        if self.picture_crop != crop {
+            self.as_mut().rust_mut().picture_crop = crop;
+            self.picture_crop_changed();
         }
     }
 
@@ -656,13 +737,16 @@ impl qobject::SessionModel {
                     self.as_mut().rust_mut().served = served;
                 }
                 self.as_mut().apply_speed();
+                let console = self.runtime.as_ref().and_then(|r| r.session_info(session).ok()).map(|info| info.console);
+                self.as_mut().rust_mut().display_console = console;
+                self.as_mut().read_picture();
                 self.as_mut().set_running(true);
                 self.as_mut().left_off(session);
             }
             Report::FirstPicture { after } => self.as_mut().set_first_picture_ms(after.as_secs_f64() * 1000.0),
-            Report::Shape { aspect } => {
-                self.as_mut().rust_mut().picture_aspect = aspect;
-                self.picture_aspect_changed();
+            Report::Shape { screen, square } => {
+                self.as_mut().rust_mut().shapes = (screen, square);
+                self.as_mut().place_picture();
             }
             Report::Failed(words) => {
                 self.as_mut().failed(words);

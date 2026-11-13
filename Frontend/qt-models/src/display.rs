@@ -1,0 +1,208 @@
+//! What a console's game picture is drawn through, read from the player's display settings (EmuSen_Qt.md §1.8.10): the
+//! screen filter its `ScreenFilter` names with the values `ShaderParameters` holds, the overscan its `Overscan` crops,
+//! and its `PictureShape`. Plain data in, plain data out: Serenity's catalogue and the graphics model, as the platform
+//! library gives them, and the rectangle and crop the window draws by.
+
+use serde_json::{json, Value};
+use std::collections::BTreeMap;
+
+/// The filter a console with none chosen, or one no longer offered for it, is drawn through: its pixels as they are.
+pub const PLAIN: &str = "effect.None.nearest";
+
+/// The filter uniforms a filter that crops itself reads its crop from (Serenity's `filters::write`).
+pub const CROP_UNIFORMS: [&str; 4] = ["emusen_crop_left", "emusen_crop_top", "emusen_crop_width", "emusen_crop_height"];
+
+/// The share of the picture hidden at each edge.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Crop {
+    pub left: f64,
+    pub top: f64,
+    pub right: f64,
+    pub bottom: f64,
+}
+
+impl Crop {
+    pub fn is_none(&self) -> bool {
+        *self == Crop::default()
+    }
+
+    /// The part of the picture left: (x, y, width, height), each a share of the whole.
+    pub fn kept(&self) -> [f64; 4] {
+        [self.left, self.top, 1.0 - self.left - self.right, 1.0 - self.top - self.bottom]
+    }
+}
+
+/// A console's picture as its settings ask for it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Display {
+    /// The catalogue key of the filter drawn through.
+    pub filter: String,
+    /// The player's values for the filter's settings, by id.
+    pub chosen: BTreeMap<String, f32>,
+    /// What the overscan setting hides.
+    pub crop: Crop,
+    /// Whether the filter crops the picture itself, by its uniforms, rather than the window by a clip.
+    pub filter_crops: bool,
+    /// Each of the frame's pixels square, rather than the screen the console was made for.
+    pub square: bool,
+}
+
+impl Default for Display {
+    fn default() -> Display {
+        Display { filter: PLAIN.to_owned(), chosen: BTreeMap::new(), crop: Crop::default(), filter_crops: false, square: false }
+    }
+}
+
+/// Where the picture is drawn: its width over its height, and what the window clips from the picture it draws.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Shown {
+    pub aspect: f64,
+    pub clip: Crop,
+}
+
+fn text(v: Option<&Value>) -> String {
+    match v {
+        Some(Value::String(s)) => s.clone(),
+        Some(Value::Number(n)) => n.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// A stored number, written with a point or a comma.
+fn number(t: &str) -> Option<f64> {
+    t.trim().replace(',', ".").parse::<f64>().ok().filter(|n| n.is_finite())
+}
+
+fn bits(v: &Value) -> Option<f64> {
+    v.as_u64().map(f64::from_bits)
+}
+
+/// `console`'s picture from Serenity's `catalogue` (`emusen_serenity_filters`) and the graphics model `graphics`.
+pub fn read(catalogue: &Value, graphics: &Value, console: &str) -> Display {
+    let setting = |key: &str| text(graphics.get("Consoles").and_then(|c| c.get(console)).and_then(|c| c.get(key)));
+    let filters = catalogue["filters"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let suits = |f: &&Value| f["consoles"].as_array().is_none_or(|list| list.iter().any(|c| c == console));
+    let stored = setting("ScreenFilter");
+    let filter = filters.iter().filter(suits).find(|f| f["name"] == stored.as_str() || f["key"] == stored.as_str());
+    let filter = filter.or_else(|| filters.iter().find(|f| f["key"] == PLAIN));
+    let mut display = Display::default();
+    if let Some(filter) = filter {
+        display.filter = text(filter.get("key"));
+        display.filter_crops = filter["crops_itself"] == true;
+        let held = graphics.get("ShaderParameters").and_then(|p| p.get(console)).and_then(|p| p.get(text(filter.get("name"))));
+        for s in filter["settings"].as_array().map(Vec::as_slice).unwrap_or_default() {
+            let id = text(s.get("id"));
+            if let Some(value) = number(&text(held.and_then(|h| h.get(&id)))) {
+                display.chosen.insert(id, value as f32);
+            }
+        }
+    }
+    let television = catalogue["screens"].as_array().is_some_and(|all| all.iter().any(|s| s["console"] == console && s["kind"] == "Television"));
+    if television {
+        let most = bits(&catalogue["crop"]["most_at_an_edge"]).unwrap_or(0.0);
+        display.crop = match setting("Overscan").as_str() {
+            "tv" => {
+                let past = bits(&catalogue["crop"]["television"]).unwrap_or(0.0);
+                let edge = ((1.0 - 1.0 / (1.0 + past)) / 2.0).clamp(0.0, most);
+                Crop { left: edge, top: edge, right: edge, bottom: edge }
+            }
+            "custom" => {
+                let edge = |key: &str| (number(&setting(key)).unwrap_or(0.0) / 100.0).clamp(0.0, most);
+                Crop { left: edge("CropLeft"), top: edge("CropTop"), right: edge("CropRight"), bottom: edge("CropBottom") }
+            }
+            _ => Crop::default(),
+        };
+    }
+    display.square = setting("PictureShape") == "square";
+    display
+}
+
+impl Display {
+    /// The values the preset is written with, as `emusen_serenity_filter_write` takes them; none for the defaults.
+    pub fn chosen_json(&self) -> Option<Value> {
+        (!self.chosen.is_empty()).then(|| Value::Object(self.chosen.iter().map(|(id, v)| (id.clone(), json!(v.to_bits()))).collect()))
+    }
+
+    /// The uniforms the chain is given over its preset's: the crop, for a filter that crops itself.
+    pub fn uniforms(&self) -> Vec<(String, f32)> {
+        if !self.filter_crops {
+            return Vec::new();
+        }
+        CROP_UNIFORMS.iter().zip(self.crop.kept()).map(|(id, v)| ((*id).to_owned(), v as f32)).collect()
+    }
+
+    /// The picture's place for a frame whose console's screen is `screen` wide over high and whose pixels drawn square
+    /// are `square`: the shape the setting asks for, narrowed by the crop, and the crop the window clips when the filter
+    /// does not make it.
+    pub fn shown(&self, screen: f64, square: f64) -> Shown {
+        let whole = if self.square && square > 0.0 { square } else { screen };
+        let [_, _, w, h] = self.crop.kept();
+        let aspect = if whole > 0.0 && h > 0.0 { whole * w / h } else { whole };
+        Shown { aspect, clip: if self.filter_crops { Crop::default() } else { self.crop } }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn catalogue() -> Value {
+        let b = |v: f64| json!(v.to_bits());
+        json!({
+            "filters": [
+                {"key": "CRT", "name": "CRT", "consoles": ["NES", "PlayStation"], "crops_itself": true,
+                 "settings": [{"id": "quality"}, {"id": "mask"}]},
+                {"key": "LCD", "name": "Game Boy LCD", "consoles": ["GB"], "crops_itself": false, "settings": []},
+                {"key": PLAIN, "name": "None", "consoles": null, "crops_itself": false, "settings": []}
+            ],
+            "screens": [{"console": "PlayStation", "kind": "Television"}, {"console": "GB", "kind": "Lcd"}],
+            "crop": {"television": b(0.07), "most_at_an_edge": b(0.25)}
+        })
+    }
+
+    #[test]
+    fn a_console_with_nothing_chosen_is_drawn_plain_whole_and_at_its_screen_s_shape() {
+        let d = read(&catalogue(), &json!({}), "PlayStation");
+        assert_eq!(d, Display::default());
+        assert_eq!(d.shown(4.0 / 3.0, 2.0), Shown { aspect: 4.0 / 3.0, clip: Crop::default() });
+        assert_eq!((d.chosen_json(), d.uniforms()), (None, Vec::new()));
+    }
+
+    #[test]
+    fn the_crt_chosen_is_drawn_with_the_player_s_values_and_crops_itself() {
+        let graphics = json!({
+            "Consoles": {"PlayStation": {"ScreenFilter": "CRT", "Overscan": "tv"}},
+            "ShaderParameters": {"PlayStation": {"CRT": {"quality": "2", "unknown": "5"}}}
+        });
+        let d = read(&catalogue(), &graphics, "PlayStation");
+        assert_eq!(d.filter, "CRT");
+        assert_eq!(d.chosen_json(), Some(json!({"quality": 2.0f32.to_bits()})), "only the filter's own settings");
+        let edge = (1.0 - 1.0 / 1.07) / 2.0;
+        assert_eq!(d.crop, Crop { left: edge, top: edge, right: edge, bottom: edge });
+        let shown = d.shown(4.0 / 3.0, 2.0);
+        assert_eq!(shown.clip, Crop::default(), "the CRT crops the picture itself");
+        assert!((shown.aspect - 4.0 / 3.0).abs() < 1e-12, "an even crop keeps the shape: {}", shown.aspect);
+        let uniforms = d.uniforms();
+        assert_eq!(uniforms.iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>(), CROP_UNIFORMS);
+        assert_eq!(uniforms.iter().map(|(_, v)| *v).collect::<Vec<_>>(), [edge as f32, edge as f32, (1.0 - 2.0 * edge) as f32, (1.0 - 2.0 * edge) as f32]);
+    }
+
+    #[test]
+    fn a_custom_crop_is_clipped_by_the_window_for_a_plain_picture_and_held_to_a_quarter() {
+        let graphics = json!({"Consoles": {"PlayStation": {"Overscan": "custom", "CropLeft": "10", "CropRight": "99", "CropTop": "2,5", "PictureShape": "square"}}});
+        let d = read(&catalogue(), &graphics, "PlayStation");
+        assert_eq!(d.filter, PLAIN);
+        assert_eq!(d.crop, Crop { left: 0.1, top: 0.025, right: 0.25, bottom: 0.0 });
+        let shown = d.shown(4.0 / 3.0, 2.0);
+        assert_eq!(shown.clip, d.crop);
+        assert!((shown.aspect - 2.0 * 0.65 / 0.975).abs() < 1e-12, "square pixels, narrowed by the crop: {}", shown.aspect);
+    }
+
+    #[test]
+    fn a_filter_for_another_console_and_an_lcd_s_overscan_are_not_drawn() {
+        let graphics = json!({"Consoles": {"GB": {"ScreenFilter": "CRT", "Overscan": "tv"}, "PlayStation": {"ScreenFilter": "Game Boy LCD"}}});
+        let gb = read(&catalogue(), &graphics, "GB");
+        assert_eq!((gb.filter.as_str(), gb.crop), (PLAIN, Crop::default()), "the CRT is not offered for the GB, nor a crop for its LCD");
+        assert_eq!(read(&catalogue(), &graphics, "PlayStation").filter, PLAIN);
+    }
+}

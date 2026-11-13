@@ -462,8 +462,12 @@ Window {
         onDoor: (name) => screens.act(name)
         onOpenFolder: (path) => folders.open(path)
         onChooseFolder: (key, start) => folders.choose(key, start)
-        // What Settings saved reaches the library's read as it closes: the media viewer plays at the Volume saved (EmuSen_Qt.md §4.14).
-        onSaved: library.refresh()
+        // What Settings saved reaches the library's read as it closes: the media viewer plays at the Volume saved (EmuSen_Qt.md §4.14),
+        // and a suspended game's picture is drawn as its display settings now ask (§1.8.10).
+        onSaved: {
+            library.refresh()
+            player.session.readPicture()
+        }
     }
     // The program's folder actions (EmuSen_Qt.md §7.7.E): one shown in the system's file manager, one chosen in the
     // system's own folder dialog (through the desktop portal where there is one), whose answer the row's model saves.

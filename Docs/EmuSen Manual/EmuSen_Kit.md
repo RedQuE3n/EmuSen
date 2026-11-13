@@ -1345,6 +1345,15 @@ thread): each tick reads the pads for the interface, as before, and for a runnin
   only once let go and pressed again, so neither the walk nor a repeat sees game input and nothing held over the game
   presses when the interface has the pad back. The kit knows no game: a host binds it (`Play.qml`: the game running and
   not paused), and answers the chord (`SessionModel.togglePause` until the Pause Card exists).
+- **One chord until it is let go** (kit-core's `Grammar::forget`; corrected 2026-11-13). The chord's buttons go down
+  over the game, so the grammar is told to forget them as held; that also lowered its record of the chord, and the
+  chord was reported again at every pump while the buttons stayed down, each one pausing or resuming the game, so how
+  the hold ended decided whether the game was left paused. `forget` now keeps a chord seen down until it is let go:
+  at a pump whose buttons are up (`menu_chord`), or within the router's queue, where a release and a press between two
+  pumps leave the buttons down at both (`Grammar::chord_let_go`, called as the queue is applied), so a quick second
+  press is a new chord. Held to kit-qt's `router` test
+  `kit_7_17_the_chord_held_over_a_game_is_reported_once_until_let_go` (Guide, and Options with Menu; with the interface
+  taking the pad and without; let go and pressed again between two pumps), which failed before the correction.
 
 **Held to** (measured on 2026-11-08, the platform library from the same commit): kit-qt's `router` test
 `kit_7_17_…` (Down held over the game gives no press or repeat; the chord reaches the program; Down still held when the

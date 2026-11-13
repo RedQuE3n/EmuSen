@@ -28,6 +28,8 @@ Item {
     property bool gradientVertical: false
     property real saturation: 1
     property real dim: 1
+    // THEMES.md brightness, -2 to 2; 0 for none.
+    property real brightness: 0
     property real radius: 0
     property bool nearest: false
     // The reflection's ramp: the opacity at the top edge, falling to nothing at 1 / fadeFalloff of the height.
@@ -86,6 +88,7 @@ Item {
         readonly property real tiled: root.tiled ? 1 : 0
         readonly property real fadeFrom: root.fadeFrom
         readonly property real fadeFalloff: root.fadeFalloff
+        readonly property real brightness: root.brightness
         visible: image.status === Image.Ready
         width: root.fit === Picture.Fit.Contain ? root.paintedWidth : root.width
         height: root.fit === Picture.Fit.Contain ? root.paintedHeight : root.height

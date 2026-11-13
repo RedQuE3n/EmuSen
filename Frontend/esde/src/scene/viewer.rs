@@ -302,6 +302,7 @@ impl Viewer {
                     saturation: 1.0,
                     corner_radius: 0.0,
                     nearest: false,
+                    brightness: 0.0,
                     frame: None,
                 };
                 out.push(placed("item", ax, ay, aw, ah, 1.0, Paint::Picture(picture)));

@@ -14,6 +14,7 @@ Picture
     property bool gradientVertical
     property real saturation
     property real dim
+    property real brightness
     property real radius
     property bool nearest
     property real fadeFrom
@@ -350,6 +351,54 @@ ClipElement
     required property real volume
     required property real blur
     required property real fade
+VideoElement
+    required property url source
+    required property int fit
+    required property real cropX
+    required property real cropY
+    required property color tint
+    required property color tintEnd
+    required property bool gradientVertical
+    required property real saturation
+    required property real radius
+    required property bool nearest
+    required property real brightness
+    required property url videoSource
+    required property bool playing
+    required property bool audio
+    required property real volume
+    required property real fade
+    required property bool blackFrame
+    required property bool pillarboxes
+    required property real thresholdX
+    required property real thresholdY
+    required property int iterations
+    required property bool thenStill
+    required property int videoFit
+    required property real targetWidth
+    required property real targetHeight
+    required property real areaWidth
+    required property real areaHeight
+    required property real anchorX
+    required property real anchorY
+    required property real placeX
+    required property real placeY
+    required property real videoCropX
+    required property real videoCropY
+    required property real videoRadius
+    required property bool videoNearest
+    required property color videoTint
+    required property color videoTintEnd
+    required property bool videoGradientVertical
+    required property real videoSaturation
+    readonly property bool started
+    property int plays
+    readonly property bool done
+    objectName "videoStill"
+    objectName "themeVideo"
+    objectName "themeVideoPlayback"
+    objectName "themeVideoFrame"
+    objectName "themeVideoPlayer"
 ManualElement
     required property url source
     required property real pageIndex

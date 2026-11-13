@@ -110,7 +110,7 @@ Item {
     // right, on a black bar where Status bar is on; in design units, as the notices are.
     Kit.NormalizedCanvas {
         id: lines
-        readonly property bool shown: root.inFront && session.running
+        readonly property bool showing: root.inFront && session.running
         Rectangle {
             objectName: "statusBar"
             anchors.left: parent.left
@@ -133,7 +133,7 @@ Item {
             elide: Text.ElideRight
             color: "#ffffff"
             font.pixelSize: Kit.Tokens.fontCaption
-            visible: lines.shown && root.showStatusText && text.length > 0
+            visible: lines.showing && root.showStatusText && text.length > 0
         }
         Text {
             id: fpsLine
@@ -145,7 +145,7 @@ Item {
             text: session.fpsWords
             color: "#ffffff"
             font.pixelSize: Kit.Tokens.fontCaption
-            visible: lines.shown && root.showFps && !session.paused
+            visible: lines.showing && root.showFps && !session.paused
         }
     }
 }

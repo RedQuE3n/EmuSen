@@ -206,7 +206,7 @@ impl GamePageSource for ClientSource {
         let Some(s) = system else { return Ok(read) };
         // The engines: the console's own first, then each it may run on (Mistress's IGamePageHost.Engines).
         let cores = self.runtime.cores().map_err(words)?;
-        let stored = self.runtime.settings_get(0, Scope::Console, Some(&s.id), "Engine").map_err(words)?;
+        let stored = self.runtime.settings_get(0, Scope::Console, Some(crate::consoles::settings_console(s)), crate::consoles::ENGINE_KEY).map_err(words)?;
         let own = stored.filter(|e| !e.is_empty()).or_else(|| s.engines.first().cloned());
         let name = |id: &str| engine_shown(id, &cores).name;
         read.engines = match (&own, s.engines.len()) {

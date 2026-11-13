@@ -7239,7 +7239,12 @@ program is that of the Genesis cartridge, booted by Nephrite's open BIOS; the Pl
 over SIO0 without calling the kernel; the Nintendo 64's is boot code that also keeps its audio interface fed with
 silence, since the console makes no samples unless a game plays some. The pad is pressed ten seconds into a game,
 after the Sega CD's disc has booted. The hosted row's game is a disc image the test core takes; the PlayStation's Engine
-setting names the test core, stored under the console's name as its settings page stores it, just before that row.
+setting names the test core, stored through Settings' own source under the console Settings lists, just before that row.
+
+A console's settings are stored under the console's name, which is not always its system's id (`PlayStation`, `psx`):
+Settings writes it and the runtime's `engine_for` reads it so. The game page's Engine row and the library's engine for a
+console read it under the system's id until 2026-11-13, so a console's chosen engine was shown as its first one;
+`qt-models/tests/console_engine.rs` shows both, and `consoles::settings_console` is now the one place that names the key.
 
 Measured on 2026-11-13 on the RX 6800:
 

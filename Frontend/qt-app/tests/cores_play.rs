@@ -5,8 +5,8 @@
 //! by the player, the pad's South held reaching the core (the image's program draws another colour while it is held),
 //! the chord's Pause Card holding the game still and Resume playing on, a state saved and loaded from the card, and Quit
 //! Game back to the library. The pad is pressed ten seconds into a game, so a boot that reads a disc has ended. The
-//! hosted row's game runs on the test core because the PlayStation's Engine setting names it, stored as the console's
-//! settings page stores it, just before that row. A system the core marks in development, one the systems table lacks,
+//! hosted row's game runs on the test core because the PlayStation's Engine setting names it, stored through Settings'
+//! own source under the console Settings lists, just before that row. A system the core marks in development, one the systems table lacks,
 //! and one no image is made for are listed with the reason. One line per row is printed: passed, or the step that
 //! failed and why; the test fails on any row that failed. On Vulkan in a compositor of the test's own; a GPU job.
 
@@ -19,7 +19,7 @@ use common::{sandbox, wait_for};
 use emusen_client_fixture::cores::{hosted, libretro_entry_as, sha256, RING_GAME};
 use emusen_client_fixture::play::{image, installation_with_cores, v1_cores};
 use emusen_client_fixture::library;
-use emusen_crystal_client::{Api, Config, Runtime, Scope};
+use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_qt_models::clients::ClientSource;
 use emusen_qt_models::library::LibrarySource;
 use emusen_kit_core::input::{PadControl, UiButton};
@@ -333,11 +333,12 @@ fn every_rust_core_plays_a_game_in_the_program() {
             }
         };
         if game == hosted_game(&rows) {
-            // The PlayStation's engine chosen as the test core, as Settings' console page chooses it, for its game alone.
-            let rt = runtime();
-            let engine = rt.cores().unwrap().into_iter().find(|c| c.library.as_deref().is_some_and(|l| l.contains("testcore"))).and_then(|c| c.engine).expect("the test core listed");
-            let console = rt.route(game.to_str().unwrap()).unwrap().console.expect("the game's console");
-            rt.settings_set(0, Scope::Console, Some(&console), "Engine", Some(&engine)).unwrap();
+            // The PlayStation's engine chosen as the test core by Settings' own source, under the console Settings lists.
+            let settings = emusen_qt_models::consoles_source::ClientConsoles { runtime: runtime() };
+            let engine = settings.runtime.cores().unwrap().into_iter().find(|c| c.library.as_deref().is_some_and(|l| l.contains("testcore"))).and_then(|c| c.engine).expect("the test core listed");
+            let read = emusen_qt_models::consoles::read(&settings).unwrap();
+            let console = read.consoles.iter().find(|c| c.systems.iter().any(|s| s == "psx")).expect("the PlayStation listed").console.clone();
+            settings.set(&console, emusen_qt_models::consoles::ENGINE_KEY, Some(&engine)).unwrap();
         }
         let mut step = "start";
         let played = play(&mut scene, &sdl, &pad, cover_index, game, &mut step);

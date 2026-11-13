@@ -623,11 +623,10 @@ impl GamePage {
             });
         }
         if !r.cheats.is_empty() {
-            let on = r.cheats.iter().filter(|c| c.on).count();
             rows.push(Row {
                 key: CHEATS,
                 label: "Cheats".into(),
-                value: format!("{on} of {} on", r.cheats.len()),
+                value: crate::cheats::count_words(&r.cheats),
                 steps: false,
                 opens: true,
                 sentence: "The game's cheats, on or off; the same switches the Pause Card shows.",

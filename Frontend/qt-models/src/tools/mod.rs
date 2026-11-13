@@ -2,9 +2,10 @@
 //! the kit's `ToolScreen` for any tool, the `Source` each tool implements, and `Tool`, which holds what every tool's
 //! screen holds the same way (the section, the filter, the sort, the search, the focus, the marks, the open card and
 //! the question). Cores is one source; `jobs` another, the tools that are lists of the platform library's jobs; `scraper`
-//! the third, the Scraper's runs.
+//! the third, the Scraper's runs; `cheats` the cheat database and the library's games it has files for.
 //! No Qt here.
 
+pub mod cheats;
 pub mod cores;
 pub mod jobs;
 pub mod scraper;

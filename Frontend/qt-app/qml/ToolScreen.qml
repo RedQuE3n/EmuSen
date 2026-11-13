@@ -3,7 +3,8 @@ import QtQuick
 import EmuSen.Models
 
 // A tool on the tool screen with its own ToolModel: Cores from Home's place, or a tool of jobs (Library Manager, Compressed
-// Discs or Packages) or the Scraper as Screens names it (EmuSen_Interface.md §15; EmuSen_Qt.md §7.7; tools/jobs.rs, tools/scraper.rs).
+// Discs or Packages), the Scraper or Cheats as Screens names it (EmuSen_Interface.md §15; EmuSen_Qt.md §7.7; tools/jobs.rs,
+// tools/scraper.rs, tools/cheats.rs).
 Cores {
     id: toolScreen
     required property Screens screens

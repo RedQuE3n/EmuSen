@@ -6371,8 +6371,8 @@ object name; `Screens` opens it as `Tool`, naming the tool in `Screens.tool`, fr
 and the Home card's Tools page, and B returns as from Cores. A job keeps running when the screen is left, and a tool
 opened before is kept with its runs.
 
-A tool with no screen yet (Cheats, Collections, Shell) is not listed on the Home card's Tools page; the Scraper has
-its screen since §7.7.U. Held to by `qt-models/tests/tool_jobs.rs` (the real platform library over a scratch library, a
+A tool with no screen yet (Collections, Shell) is not listed on the Home card's Tools page; the Scraper has
+its screen since §7.7.U and Cheats since §7.7.V. Held to by `qt-models/tests/tool_jobs.rs` (the real platform library over a scratch library, a
 scripted world for the question and Stop, and the screens' steps) and `qt-app/tests/tools.rs` (the pad opens Library
 Manager from Home, runs its first job, sees the progress then the lines, X lists them, B returns Home; Compressed Discs
 from the Home card lists a generated disc the same way).
@@ -6401,6 +6401,26 @@ run paused, held, resumed and done with every game given a cover; a cancelled ru
 request from the settings; the screens' steps) and `qt-app/tests/scraper.rs` (the pad opens the Scraper from Home,
 stops a run over one console from the List card with the covers fetched kept, then runs the whole library, pauses,
 holds, resumes and reaches done, and the grid draws every cover).
+
+#### 7.7.V Cheats on the tool screen (2026-11-13)
+
+Cheats is a fourth source of the tool screen, `tools/cheats.rs`, on the same `ToolModel` (`jobs` names `cheats`),
+opened from the Home card's Tools page, which now lists it. As the screen opens it reads, on a thread of its own, the
+player's cheat database through the base's own calls: its folder and attribution from the session table's
+`DB_STATUS` (the AppSettings folder, else Galaxia's `Cheats`), its files from `emusen_cheats_database_entries`, and
+for each library game whose console names cheat systems (the systems table's `cheat_systems`) the database's own
+`find` on the game's file name, kept to the first file under one of those systems. The bar says `No cheat database at
+<folder>` or `N cheat file(s) in <folder>`, as `cheat db status` does; the header gives the files and the date of the
+newest (its time as the archive gave it). Each row is a game the database has a file for, sectioned by console; its
+value is `N of M on` for the game's own list (the one the Pause Card and the game page switch; the words are
+`cheats::count_words`, shared with the game page), or `No list yet`; the pane names the database's file, and X lists
+the game's own cheats. Getting or updating the database and making a game's list from its file are not offered: the
+base's one install, `DB_UPDATE`, fetches libretro's address with no progress and no stop, and the conversion of a
+`.cht` file's cheats to a game's list (`CheatRegistry::to_file`) has no call; both await an addition to the base.
+Held to by `qt-app/tests/cheats_tool.rs` (the pad opens Cheats from the Home card; with no database it says where one
+would be; with `.cht` files written into that folder as an install leaves them it lists the SNES game under its
+console and not a game of another console with a file of its name; a game's own list then reads `1 of 2 on` and X
+lists it).
 
 ### 7.8 Stage 5, piece G: a game's page and its clip (2026-11-09)
 

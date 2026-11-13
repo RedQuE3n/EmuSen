@@ -117,7 +117,7 @@ impl SceneView {
                 let (selected, count) = (self.index(), self.count());
                 let (layout, content, wait) = match s.kind.as_str() {
                     "carousel" => {
-                        let mut c = primary::carousel(e, data, count, selected, s.offset, rect_w, rect_h);
+                        let mut c = primary::carousel(e, data, count, selected, s.offset, self.target() < s.offset, rect_w, rect_h);
                         let room = c.slots.iter().find(|x| x.chosen).map(|x| x.w);
                         let row = primary::row(e, &self.view, data, selected);
                         let (content, wait) = item_marquee(row, &mut c.text, s.scroll, room, measures.get(&id), since);

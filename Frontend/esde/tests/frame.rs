@@ -73,7 +73,7 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_drawn_once_che
     // Heard, not seen: no picture shows it, and no state stands between drawn and not drawn (R-20261111-75).
     assert_eq!(mapping::status("video", "audio"), Some(&Mapped::Later("video".into())));
     assert_eq!(mapping::status("video", "scanlines"), Some(&Mapped::Later("video".into())));
-    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 455);
+    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 459);
     assert!(
         mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"),
         "the gameselector picks the system view's games; sound is played"
@@ -1058,4 +1058,38 @@ fn a_text_list_s_selector_takes_its_width_shift_picture_and_the_folder_s_backgro
     let Layout::TextList(l) = &s.frame().primary.unwrap().layout else { panic!() };
     assert!(close(l.selector.unwrap().w, 0.5 * W) && l.selector_image.is_none());
     assert_eq!(l.selected_secondary_background, Color(0x00FF_00FF), "the folder's falls back to the primary's");
+}
+
+// ES-DE 3.4.1's `CarouselComponent::render` for the row types: the selected item's offset, each item turned about its own
+// centre, the per-item diagonal shift, and the stacking order.
+#[test]
+fn a_row_carousel_takes_its_selected_offset_axis_rotation_diagonal_and_stacking() {
+    let t = Synth::new();
+    let slots = |extra: &str| {
+        let system = format!("{CAROUSEL}<itemSize>0.2 0.3</itemSize>{extra}</carousel>");
+        let s = stage(&t, &system, "", "system", 0);
+        let Layout::Carousel(c) = s.frame().primary.unwrap().layout else { panic!() };
+        c.slots
+    };
+    let plain = slots("");
+    let chosen = |v: &[Slot]| v.iter().find(|s| s.chosen).cloned().unwrap();
+    let right = |v: &[Slot]| v.iter().filter(|s| !s.chosen).min_by(|a, b| (a.x - chosen(v).x - W / 3.0).abs().total_cmp(&(b.x - chosen(v).x - W / 3.0).abs())).cloned().unwrap();
+    let moved = slots("<selectedItemOffset>0.1 0.2</selectedItemOffset>");
+    assert!(close(chosen(&moved).x - chosen(&plain).x, 0.1 * W) && close(chosen(&moved).y - chosen(&plain).y, 0.2 * W));
+    assert!(close(right(&moved).x, right(&plain).x), "only the selected item moves");
+    let turned = slots("<itemAxisRotation>30</itemAxisRotation>");
+    for s in &turned {
+        assert!(close(s.rotation, 30.0) && close(s.rotation_origin.0, s.x + s.w / 2.0) && close(s.rotation_origin.1, s.y + s.h / 2.0));
+    }
+    let slanted = slots("<itemDiagonalOffset>0.1</itemDiagonalOffset>");
+    assert!(close(chosen(&slanted).y, chosen(&plain).y));
+    assert!(close(right(&slanted).y, right(&plain).y - 0.1 * H), "the next item one step up");
+    let xs = |v: &[Slot]| v.iter().map(|s| s.x).collect::<Vec<_>>();
+    let up = xs(&slots("<itemStacking>ascending</itemStacking>"));
+    assert!(up.windows(2).all(|w| w[0] < w[1]), "{up:?}");
+    let down = slots("<itemStacking>descendingRaised</itemStacking>");
+    assert!(down.last().unwrap().chosen);
+    let rest = xs(&down[..down.len() - 1]);
+    assert!(rest.windows(2).all(|w| w[0] > w[1]), "{rest:?}");
+    assert!(chosen(&plain) == *plain.last().unwrap(), "centered keeps the selection on top");
 }

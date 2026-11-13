@@ -456,7 +456,7 @@ pub struct Slot {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Carousel {
-    /// Farthest from the selection first.
+    /// In drawing order: farthest from the selection first, or as itemStacking orders a row.
     pub slots: Vec<Slot>,
     pub background: Option<Tint>,
     pub fit: Fit,

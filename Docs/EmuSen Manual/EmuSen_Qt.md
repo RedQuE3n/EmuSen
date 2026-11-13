@@ -2550,6 +2550,10 @@ pictures, and each rule read in ES-DE 3.4.1's source (read, never copied).
 | textlist `selectorWidth`, `selectorHorizontalOffset` | shares of the screen's width; unset, the bar is the list's width and unshifted. The shift moves the selected background with the bar. The bar is drawn outside the rows' clip, as ES-DE draws it before pushing its clip | `TextListComponent::applyTheme`, `render` |
 | textlist `selectorImagePath`, `selectorImageTile` | a picture in the bar's place, stretched to it or repeated at its own size, tinted by `selectorColor` to `selectorColorEnd` across (an image's colour shift ignores `selectorGradientType`); a width of 0 follows the picture's aspect | the same (mSelectorImage) |
 | textlist `selectedSecondaryBackgroundColor` | the selected folder's background, falling back to `selectedBackgroundColor` | the same |
+| carousel `selectedItemOffset` | the selected item moves by the pair in proportion as it nears the centre, both axes a share of the screen's width for a horizontal carousel and of its height for a vertical one; row types only | `CarouselComponent::applyTheme`, `render` |
+| carousel `itemAxisRotation` | each item of a row type turned by the angle about its own unscaled centre, after its growth | `render` |
+| carousel `itemDiagonalOffset` | each item shifted by the share × its distance from the centre, up for a horizontal carousel (the screen's height) and left for a vertical one (its width); the shift turns with the item | `render` (comp->setPosition) |
+| carousel `itemStacking` | `ascending` draws the row in order, `descending` reversed, the `Raised` forms the centre item last; the centre is the item at the position's floor while it moves toward lower positions and at its ceiling otherwise | `render` (belowCenter, mPositiveDirection) |
 | `scope` of helpsystem, clock and systemstatus | `menu` shows only while a menu is open, `view` only while none is, `none` never | `Window::render`, `renderHelpPromptsEarly` |
 
 The mapping test's `switch` move presses accept in the system view or back in the gamelist with a slide transitions
@@ -2562,7 +2566,12 @@ card or another screen over the theme's view (`Main.qml`'s `esdeLoader.backdrop`
 lists the open menu's own prompts. The mapping test's `menu` move sets it before the picture; the rules are
 held by `esde/tests/frame.rs` `a_menu_over_the_view_dims_the_help_and_swaps_the_scoped_ones`.
 
-**Not drawn.** `withinView` belongs to a move within one view, system to system or gamelist to gamelist, and the scene
+The carousel's four are added to the scene's own slots (`primary::carousel`), which the painter binds and animates
+nothing of; a `PathView` would lay the items out a second time beside the scene's layout, so none is used.
+
+**Not drawn.** `itemLinearScale` and `itemLinearSpacing` are in the catalogue but not in ES-DE 3.4.1's property table
+(es-core/src/ThemeData.cpp) nor in its THEMES.md, so they have no rule to follow and stay `later:carousel-layout`, as
+`scaleFactor` stays `later:picture`. `withinView` belongs to a move within one view, system to system or gamelist to gamelist, and the scene
 draws both of those moves instantly (a new selection in the system view, `Painter::change_system`), so it has nothing to
 hold still; the stage has no slide or fade between two systems. The three `fadeAbovePrimary` pairs act only in a fade
 between two systems (`SystemView::render`, `renderElements`: mFadeOpacity), which the scene does not draw either; they

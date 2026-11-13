@@ -12,9 +12,9 @@ carousel	defaultFolderImage	drawn
 carousel	maxItemCount	drawn
 carousel	itemsBeforeCenter	drawn
 carousel	itemsAfterCenter	drawn
-carousel	itemStacking	later:carousel-layout
+carousel	itemStacking	drawn
 carousel	selectedItemMargins	drawn
-carousel	selectedItemOffset	later:carousel-layout
+carousel	selectedItemOffset	drawn
 carousel	itemSize	drawn
 carousel	itemScale	drawn
 carousel	itemLinearScale	later:carousel-layout
@@ -22,7 +22,7 @@ carousel	itemLinearSpacing	later:carousel-layout
 carousel	itemRotation	drawn
 carousel	itemRotationOrigin	drawn
 carousel	itemAxisHorizontal	drawn
-carousel	itemAxisRotation	later:carousel-layout
+carousel	itemAxisRotation	drawn
 carousel	imageFit	drawn
 carousel	imageCropPos	drawn
 carousel	imageInterpolation	drawn
@@ -36,7 +36,7 @@ carousel	imageSelectedGradientType	drawn
 carousel	imageBrightness	drawn
 carousel	imageSaturation	drawn
 carousel	itemTransitions	drawn
-carousel	itemDiagonalOffset	later:carousel-layout
+carousel	itemDiagonalOffset	drawn
 carousel	itemHorizontalAlignment	drawn
 carousel	itemVerticalAlignment	drawn
 carousel	wheelHorizontalAlignment	drawn

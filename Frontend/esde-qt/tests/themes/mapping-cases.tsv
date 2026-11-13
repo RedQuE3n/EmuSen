@@ -360,3 +360,7 @@ textlist	selectorHorizontalOffset	0	0.2	-	-	-	-	selectorColor=FF0000;selectorWid
 textlist	selectorImagePath	{A}	{B}	-	-	-	-	selectorColor=FFFFFF;selectorHeight=0.2	-	-	-	-
 textlist	selectorImageTile	false	true	-	-	-	-	selectorImagePath={A};selectorColor=FFFFFF;selectorHeight=0.2	-	-	-	-
 textlist	selectedSecondaryBackgroundColor	00000000	FF0000	-	6	5	-	selectorColor=00000000	-	-	-	-
+carousel	itemStacking	ascending	descending	-	-	-	-	itemSize=0.5 0.6;unfocusedItemOpacity=0.5;imageFit=fill	-	-	-	-
+carousel	selectedItemOffset	0 0	0.1 0.1	-	-	-	-	-	-	-	-	-
+carousel	itemAxisRotation	0	30	-	-	-	-	-	-	-	-	-
+carousel	itemDiagonalOffset	0	0.1	-	-	-	-	-	-	-	-	-

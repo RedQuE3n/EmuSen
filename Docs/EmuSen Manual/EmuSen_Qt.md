@@ -2303,12 +2303,12 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_n
 
 | Status | Pairs | Meaning |
 |---|---|---|
-| `drawn` | 347 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, measured 2026-11-08) |
+| `drawn` | 432 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, 347 measured 2026-11-08), and the families drawn since (§4.5.6 to §4.5.8) |
 | `later:help-dimmed` | 8 | the help's eight `*Dimmed` properties (`posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`): not drawn until each is checked (R-20261111-75, decided 2026-11-11; the `accepted` state of 2026-11-08 is withdrawn) |
 | `later:sound` | 1 | `sound.path`, which the host plays: not drawn until checked (R-20261111-75) |
 | `later:video` | 2 | the video's `scanlines` and `audio`; the other fourteen of the family drawn or moved to `stationary` (§4.5.6, 2026-11-12) |
 | `later:gradients` | 0 | the 22 `*ColorEnd` and `*GradientType` pairs, drawn since 2026-11-13 (§4.5.7) |
-| `later:item-text` | 19 | carousel and grid item text styles and scrolling, the collections' letter cases, name suffixes |
+| `later:item-text` | 0 | the 19 carousel, grid and text list item text pairs, drawn since 2026-11-13 (§4.5.8) |
 | `later:picture` | 2 | `scaleFactor` of image and animation, which ES-DE 3.4.1 does not read: its property table (es-core/src/ThemeData.cpp) has no `scaleFactor`, so what a theme means by it has no source to follow. The other 14 drawn since 2026-11-13 (§4.5.7) |
 | `later:stationary` | 12 | `stationary` (the video's since 2026-11-12), `renderDuringTransitions`, `fadeAbovePrimary` |
 | `later:carousel-layout` | 6 | `itemStacking`, `selectedItemOffset`, `itemLinearScale`, `itemLinearSpacing`, `itemAxisRotation`, `itemDiagonalOffset` |
@@ -2316,9 +2316,9 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_n
 | `later:help-layout` | 1 | `entryLayout` |
 | `later:gameselector` | 13 | the gameselector's picks (`selection`, `gameCount`, `allowDuplicates`) and the elements that read them (`gameselector`, `gameselectorEntry` of image, video, text, datetime and rating): the scene shows no game in the system view (§4.8.5) |
 | `later:animation-timing` | 3 | a GIF's `speed`, `direction` and `iterationCount`: the scene gives the painter no frame, so a GIF stands on its first |
-| `later:container` | 2 | a text container's `containerVerticalSnap` (not read) and `containerScrollSpeed` (read, no visible change by 1 s) |
-| `later:grid-rows` | 1 | `fractionalRows`: the grid's record carries no row count, so a partial row is drawn either way |
-| `later:text-lines` | 1 | datetime's `lineSpacing`: one line at the top of its box is placed the same at every spacing |
+| `later:container` | 0 | `containerVerticalSnap` drawn since 2026-11-09 (§4.12.3), `containerScrollSpeed` since 2026-11-13 (§4.5.8) |
+| `later:grid-rows` | 0 | `fractionalRows`, drawn since 2026-11-13 (§4.5.8) |
+| `later:text-lines` | 0 | datetime's `lineSpacing`, drawn since 2026-11-13 (§4.5.8) |
 
 `check` counts a pair as `set` when it is drawn and `unsupported` otherwise, `sound`'s pairs included; there is no
 state between (R-20261111-75, decided 2026-11-11: the nine pairs once marked `accepted` are counted as not drawn until
@@ -2385,8 +2385,7 @@ tests pass. Seeded faults, each applied alone and reverted:
 | `maxSize` contained by the larger ratio | `a_picture_with_max_size_is_contained_once_its_own_size_is_known` |
 
 **Left for later, named:** a GIF's frame at the time (`Picture::frame` is none until the painter reports the file's
-frame delays); the system view's gameselector picks (the host's); the grid's and carousel's per-row text styles beyond
-the C#'s (`later:item-text`). A frame allocates its records each tick; the bridge's models change rows in place
+frame delays); the system view's gameselector picks (the host's). A frame allocates its records each tick; the bridge's models change rows in place
 (design §4), and whether the scene's own allocation shows in a frame's cost is measured with the painter, not assumed.
 
 #### 4.5.6 A theme's video element **[M 2026-11-12]**
@@ -2473,6 +2472,42 @@ drawn below its own size is therefore smooth whatever the theme says, which is w
 further from ES-DE's capture. Qt's texture has one filter for both, so `Picture` samples linearly when the picture is
 drawn below its own size on either axis and keeps nearest only when it is enlarged. The video's still keeps the linear
 sampling of §4.5.6; giving it `interpolation` under this rule is a change to the video's pairs, not made here.
+
+#### 4.5.8 Item texts, collection letter cases and whole grid rows **[M 2026-11-13]**
+
+Twenty-two pairs moved from `later:` to `drawn`: the 19 of `later:item-text` and the three rows of `later:container`,
+`later:grid-rows` and `later:text-lines`. Each is a case of `tests/themes/mapping-cases.tsv`; the rules are held by
+`esde/tests/frame.rs` (`a_carousel_s_and_a_grid_s_selected_name_takes_its_colours_and_scrolls_once_measured`,
+`a_carousel_s_names_stay_wrapped_and_still_without_horizontal_scrolling`,
+`a_grid_draws_whole_rows_only_unless_fractional_rows_is_set`) and `esde/tests/scene.rs`
+(`collections_take_their_own_letter_case_and_the_suffix_is_cased_apart`,
+`capitalize_lowers_the_rest_and_raises_each_word_as_unicode_bounds_it`). Every rule was read in ES-DE 3.4.1's source.
+
+| Pairs | Rule | ES-DE 3.4.1 source |
+|---|---|---|
+| carousel `textSelectedColor`, `textSelectedBackgroundColor` | the selected item's text, only while it is within one item of the centre (`chosen` on its slot); each falls back to the item's own colour | `CarouselComponent::render`, `applyTheme` |
+| carousel `textBackgroundCornerRadius` | clamped to 0–0.5 of the screen width, in the slot's own box (the item is drawn at its scale, as §4.5.7's image radius) | `CarouselComponent::applyTheme` |
+| carousel and grid `textHorizontalScrolling`, `…Speed`, `…Delay`, `…Gap` | off by default; on, every name is one line cut at its item's edge, aligned only while it fits, and the selected name loops once the painter measures it wider than its item, at the text list's measured rate (§14.7) per em of the item's font, which `textRelativeScale` leaves alone | `TextComponent::setHorizontalScrolling`, `update`, `render`; `CarouselComponent::update`, `GridComponent::update` (the cursor's item alone updates) |
+| carousel, grid, text list `letterCaseAutoCollections`, `letterCaseCustomCollections` | in the system view a collection's name takes its kind's case (`sameAs letterCase` when unset); in the gamelist view a custom collection listed as a folder takes `letterCaseCustomCollections` | `SystemView::populate` (letterCaseFunc), `GamelistBase::populateList` |
+| carousel `systemNameSuffix`, `letterCaseSystemNameSuffix` | a game of a collection (not a folder) gains ` [system]` after its name is cased; the suffix is upper case or capitalized as set and as written otherwise. The grid and text list follow the same order now (the whole name was cased before) | `GamelistBase::populateList` (nameSuffixFunc) |
+| grid `fractionalRows` | unset, the cells are cut at the whole rows' height (`Grid.clip_height`, `GridElement.clipHeight`) once the box is taller than an item | `GridComponent::render` |
+| text `containerScrollSpeed` | multiplies a container's scroll speed (read since §4.12.3); its case is read before the slower speed reaches the end | `TextComponent::applyTheme` |
+| datetime `lineSpacing` | the line's height, and so a single line's baseline, `(height × lineSpacing + bearing) / 2` | `Font::buildTextCache` |
+
+**Capitalize.** `Utils::String::toCapitalized` lowers the text and raises the character at each boundary of ICU's word
+break iterator, so `words::cased` now lowers the rest of each word and treats a word as Unicode's segmentation does
+(UAX #29: an apostrophe, full stop or colon between letters, a comma or full stop between digits, stays inside; digits
+and letters join). The text list's ASCII mark for a game in the edited collection is `! ` with its space, as
+`GamelistBase::populateList` writes it.
+
+**Measured 2026-11-13.** The mapping test's 22 new cases each paint two different pictures (a grid's scroll cases set a
+0.1 font, since the selected system's name fits its item at 0.05). The corpus measure `Testing/esde-corpus/2026-11-13c.tsv`
+(named to sort after that day's two earlier measures, which it keeps) has 60 themes falling in `unsupported`, 112 pairs
+in all, against `2026-11-13b.tsv`, and no rise in any column.
+
+**Not drawn: video `audio`.** It is read and heard (`VideoElement.qml` mutes its `AudioOutput`), but the mapping test
+proves a pair by two different pictures, and sound makes none; it stays `later:video` (R-20261111-75 keeps no state
+between drawn and not drawn).
 
 ### 4.6 The library as an ES-DE theme sees it, and its screen **[M 2026-11-08]**
 

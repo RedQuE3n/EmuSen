@@ -6747,7 +6747,9 @@ Seeded faults, each reverted:
   of the game's own fetched pictures its cover.
 - Tests: qt-models' `game_page` (both pages' rows, steps and the job's words) and `display` (the game's crop on a
   television alone), qt-app's `game_page_rows` (in the program: a crop stored for one game and not the other, a package
-  made and then checked to done).
+  made and then checked to done) and `game_crop_gpu` (a GPU job: on VenusRT, a Super Nintendo image the test makes
+  draws red with its left quarter forced black; the console's custom 25% crop cuts the quarter, the game's own Whole
+  picture brings it back on its next start, and a second game keeps the console's crop).
 
 ### 7.9 Repair piece DC-B: the program does what it offers and says when it fails (2026-11-11)
 

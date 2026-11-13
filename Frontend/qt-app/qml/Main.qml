@@ -447,30 +447,16 @@ Window {
             onBacked: screens.back()
             onActed: (key) => screens.act(key)
         }
-        // The Themes tab, under Settings ▸ Library ▸ Themes (EmuSen_Qt.md §3.8): Use stores a theme's id and the chosen
-        // theme's host switches at once; an ES-DE theme's Use and its choices restyle the library at once.
-        ThemesModel {
-            id: themesModel
-            objectName: "themesModel"
-            platformLibrary: program.platformLibrary
-            reference: ReferenceTheme.manifest
-            referenceFolder: ReferenceTheme.folder
-            open: screens.shown === Screens.Themes
-            onUsed: (folder) => program.theme = folder
-            // The start's choice of an ES-DE theme is let go once another look is stored; the library's read decides the rest.
-            onRestyled: (esde) => {
-                program.esdeChosen = program.esdeChosen && esde
-                library.restyle()
-            }
-        }
-        Themes {
+        ThemesScreen {
             objectName: "themes"
-            visible: screens.shown === Screens.Themes
-            themes: themesModel
+            screens: screens
+            library: library
+            platformLibrary: program.platformLibrary
             padFamily: program.padFamily
-            inputs: visible && !program.splashShown
-            onBacked: screens.back()
-            onActed: (key) => screens.act(key)
+            splashShown: program.splashShown
+            onUsed: (folder) => program.theme = folder
+            // The start's choice of an ES-DE theme is let go once another look is stored.
+            onRestyled: (esde) => program.esdeChosen = program.esdeChosen && esde
         }
         // Cores on the tool screen, from Home's place (EmuSen_Interface.md §15; EmuSen_Qt.md §7.7).
         ToolModel {

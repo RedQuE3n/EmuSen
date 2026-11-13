@@ -12,6 +12,8 @@ use crate::resume::{self, Answer, Start};
 use crate::pictures::{self, PictureSource, Shown};
 use cxx_qt::casting::Upcast;
 use emusen_crystal_client::{Api, Config, Runtime};
+use crate::play::PlaySettings;
+use crate::settings_source::ClientSettings;
 use emusen_platform_client::audio::{GameSound, SoundSettings};
 use emusen_platform_client::pace::DisplayClock;
 use emusen_platform_client::{galaxia, Lent, Platform};
@@ -41,6 +43,24 @@ pub mod qobject {
         /// The player's Rumble switch as Settings binds it, which a running game takes at once (EmuSen_Input.md §9.7); a game
         /// opened reads the setting itself, so the value before Settings has read it acts on nothing.
         #[qproperty(bool, rumble, READ, WRITE = set_rumble, NOTIFY)]
+        /// The game's Volume, Output as stored, Sync to display and Pause in background as Settings binds them, which a
+        /// running game takes at once; a game opened reads the settings itself (EmuSen_Qt.md §1.8.6).
+        #[qproperty(f64, volume, READ, WRITE = set_volume, NOTIFY)]
+        #[qproperty(QString, output, READ, WRITE = set_output, NOTIFY)]
+        #[qproperty(bool, sync_to_display, cxx_name = "syncToDisplay", READ, WRITE = set_sync_to_display, NOTIFY)]
+        #[qproperty(bool, pause_in_background, cxx_name = "pauseInBackground", READ, WRITE = set_pause_in_background, NOTIFY)]
+        /// Whether another window is in front of the program's: a game running then is paused where Pause in background
+        /// says so, and resumed when the program is in front again.
+        #[qproperty(bool, background, READ, WRITE = set_background, NOTIFY)]
+        /// The open game's sound player as it holds itself: its volume, and the device it plays on, empty for the system default.
+        #[qproperty(f64, sound_volume, cxx_name = "soundVolume", READ, NOTIFY)]
+        #[qproperty(QString, sound_device, cxx_name = "soundDevice", READ, NOTIFY)]
+        /// Frames run per second over the last second the game ran.
+        #[qproperty(f64, fps, READ, NOTIFY)]
+        /// That rate as the line over the game says it.
+        #[qproperty(QString, fps_words, cxx_name = "fpsWords", READ, NOTIFY)]
+        /// The status line's words: the game's name, Paused, or the last thing a save, load or failure said.
+        #[qproperty(QString, status, READ, NOTIFY)]
         #[qproperty(QString, game, READ, WRITE = set_game, NOTIFY)]
         /// The console started with nothing in it (`openConsole`), by the name it was started by; empty for a game.
         #[qproperty(QString, console, READ, NOTIFY)]
@@ -81,6 +101,21 @@ pub mod qobject {
 
         #[cxx_name = "setRumble"]
         fn set_rumble(self: Pin<&mut SessionModel>, on: bool);
+
+        #[cxx_name = "setVolume"]
+        fn set_volume(self: Pin<&mut SessionModel>, volume: f64);
+
+        #[cxx_name = "setOutput"]
+        fn set_output(self: Pin<&mut SessionModel>, output: QString);
+
+        #[cxx_name = "setSyncToDisplay"]
+        fn set_sync_to_display(self: Pin<&mut SessionModel>, on: bool);
+
+        #[cxx_name = "setPauseInBackground"]
+        fn set_pause_in_background(self: Pin<&mut SessionModel>, on: bool);
+
+        #[cxx_name = "setBackground"]
+        fn set_background(self: Pin<&mut SessionModel>, on: bool);
 
         /// The game named by its path: naming one opens it, as `open` does; an empty name closes it.
         #[cxx_name = "setGame"]
@@ -225,6 +260,20 @@ pub struct SessionModelRust {
     engine: QString,
     pads: u64,
     rumble: bool,
+    volume: f64,
+    output: QString,
+    sync_to_display: bool,
+    pause_in_background: bool,
+    background: bool,
+    sound_volume: f64,
+    sound_device: QString,
+    fps: f64,
+    fps_words: QString,
+    status: QString,
+    /// Whether the game was paused because the program went to the background, so it resumes as it comes back.
+    backgrounded: bool,
+    /// Output's own initial value, the system default, read once from Galaxia's model.
+    output_default: Option<String>,
     game: QString,
     console: QString,
     start_state: QString,
@@ -274,6 +323,18 @@ impl Default for SessionModelRust {
             engine: QString::default(),
             pads: 0,
             rumble: false,
+            volume: 1.0,
+            output: QString::default(),
+            sync_to_display: true,
+            pause_in_background: true,
+            background: false,
+            sound_volume: 0.0,
+            sound_device: QString::default(),
+            fps: 0.0,
+            fps_words: QString::default(),
+            status: QString::default(),
+            backgrounded: false,
+            output_default: None,
             game: QString::default(),
             console: QString::default(),
             start_state: QString::default(),
@@ -319,8 +380,11 @@ fn when_words(saved_at: Option<&str>) -> String {
 impl qobject::SessionModel {
     fn set_problem(mut self: Pin<&mut Self>, value: QString) {
         if self.problem != value {
-            self.as_mut().rust_mut().problem = value;
-            self.problem_changed();
+            self.as_mut().rust_mut().problem = value.clone();
+            self.as_mut().problem_changed();
+            if !value.is_empty() && self.session.is_some() {
+                self.set_status(value.to_string());
+            }
         }
     }
 
@@ -346,7 +410,24 @@ impl qobject::SessionModel {
     fn set_paused(mut self: Pin<&mut Self>, value: bool) {
         if self.paused != value {
             self.as_mut().rust_mut().paused = value;
-            self.paused_changed();
+            self.as_mut().paused_changed();
+            if self.session.is_some() {
+                let words = if value { pause::PAUSED.to_owned() } else { self.as_mut().title() };
+                self.set_status(words);
+            }
+        }
+    }
+
+    /// The open game's name as the status line says it: its title, or the console started empty.
+    fn title(self: Pin<&mut Self>) -> String {
+        if self.console.is_empty() { crate::library::title_of(&self.game.to_string()) } else { crate::session::console_session_name(&self.console.to_string()) }
+    }
+
+    fn set_status(mut self: Pin<&mut Self>, words: String) {
+        let words = QString::from(&words);
+        if self.status != words {
+            self.as_mut().rust_mut().status = words;
+            self.status_changed();
         }
     }
 
@@ -417,6 +498,8 @@ impl qobject::SessionModel {
             Ok(pads) => pads,
             Err(words) => return self.as_mut().failed(words),
         };
+        // The settings a game takes as it opens; unread, the last ones bound stand, and the failure is said.
+        let unread = self.as_mut().read_play().err().map(|e| format!("The sound and display settings could not be read: {e}"));
         let (sound, unsounded) = match self.as_mut().game_sound() {
             Ok(sound) => (Some(sound), None),
             Err(words) => (None, Some(format!("The game plays without sound: {words}"))),
@@ -446,10 +529,13 @@ impl qobject::SessionModel {
             Opening::Console(_) => String::new(),
         };
         self.as_mut().set_resume_subject(QString::from(&subject));
-        let session = Session::start(runtime, opening, engine, device, handoff, GameIo { pads, sound }, clock, held, report);
+        let sync = self.sync_to_display;
+        let session = Session::start(runtime, opening, engine, device, handoff, GameIo { pads, sound, sync }, clock, held, report);
         self.as_mut().set_sounding(sounding);
         self.as_mut().rust_mut().session = Some(session);
-        let said: Vec<String> = [unkept, unlisted, unsounded].into_iter().flatten().collect();
+        let title = self.as_mut().title();
+        self.as_mut().set_status(title);
+        let said: Vec<String> = [unkept, unlisted, unread, unsounded].into_iter().flatten().collect();
         self.as_mut().set_problem(QString::from(&said.join(" ")));
         self.as_mut().set_paused(false);
         self.as_mut().set_first_picture_ms(0.0);
@@ -558,12 +644,113 @@ impl qobject::SessionModel {
         GameInput::new(pads, &platform).map(Some).map_err(|e| e.to_string())
     }
 
-    /// The game's sound player on SDL lent to the library, at audio.json's defaults until the settings are read (§1.8.6).
-    fn game_sound(self: Pin<&mut Self>) -> Result<GameSound, String> {
-        let platform = self.platform()?;
+    /// The settings a game takes as it opens, through Settings' own reading (`play`), the properties set from them.
+    fn read_play(mut self: Pin<&mut Self>) -> Result<(), String> {
+        let platform = self.as_mut().platform()?;
+        let play = PlaySettings::read(&ClientSettings::on(platform.clone()))?;
+        if self.output_default.is_none() {
+            let description: serde_json::Value = serde_json::from_str(crate::settings::DESCRIPTION).map_err(|e| e.to_string())?;
+            let initial = platform.model_new(galaxia::consts::MODEL_APP_SETTINGS).map_err(|e| e.to_string())?;
+            let graphics = platform.model_new(galaxia::consts::MODEL_GRAPHICS_CONFIG).map_err(|e| e.to_string())?;
+            self.as_mut().rust_mut().output_default = Some(PlaySettings::of(&description, &initial, &graphics).output);
+        }
+        self.as_mut().set_volume(play.volume);
+        self.as_mut().set_output(QString::from(&play.output));
+        self.as_mut().set_sync_to_display(play.sync_to_display);
+        self.set_pause_in_background(play.pause_in_background);
+        Ok(())
+    }
+
+    /// The device Output names, none for its initial value, the system default.
+    fn device(&self) -> Option<String> {
+        crate::play::device(&self.output.to_string(), self.output_default.as_deref().unwrap_or_default())
+    }
+
+    /// The game's sound player on SDL lent to the library, at audio.json's defaults, on the device and at the volume
+    /// the settings give (§1.8.6).
+    fn game_sound(mut self: Pin<&mut Self>) -> Result<GameSound, String> {
+        let platform = self.as_mut().platform()?;
         let words = |e: emusen_platform_client::Error| e.to_string();
         platform.lend_sdl(&Lent::open("libSDL3.so.0").map_err(words)?).map_err(words)?;
-        GameSound::new(&platform, SoundSettings::default()).map_err(words)
+        let mut sound = GameSound::new(&platform, SoundSettings::default()).map_err(words)?;
+        sound.set_volume(self.volume as f32).map_err(words)?;
+        let device = crate::session::play_on(&mut sound, self.device())?;
+        self.as_mut().heard_volume(sound.volume());
+        self.heard_device(device);
+        Ok(sound)
+    }
+
+    fn heard_volume(mut self: Pin<&mut Self>, volume: f32) {
+        let volume = f64::from(volume);
+        if self.sound_volume != volume {
+            self.as_mut().rust_mut().sound_volume = volume;
+            self.sound_volume_changed();
+        }
+    }
+
+    fn heard_device(mut self: Pin<&mut Self>, device: Option<String>) {
+        let device = QString::from(&device.unwrap_or_default());
+        if self.sound_device != device {
+            self.as_mut().rust_mut().sound_device = device;
+            self.sound_device_changed();
+        }
+    }
+
+    fn set_volume(mut self: Pin<&mut Self>, volume: f64) {
+        if self.volume != volume {
+            self.as_mut().rust_mut().volume = volume;
+            self.as_mut().volume_changed();
+        }
+        if let Some(session) = &self.session {
+            session.set_volume(volume as f32);
+        }
+    }
+
+    fn set_output(mut self: Pin<&mut Self>, output: QString) {
+        if self.output == output {
+            return;
+        }
+        self.as_mut().rust_mut().output = output;
+        self.as_mut().output_changed();
+        if let Some(session) = &self.session {
+            session.set_device(self.device());
+        }
+    }
+
+    fn set_sync_to_display(mut self: Pin<&mut Self>, on: bool) {
+        if self.sync_to_display != on {
+            self.as_mut().rust_mut().sync_to_display = on;
+            self.as_mut().sync_to_display_changed();
+        }
+        if let Some(session) = &self.session {
+            session.set_sync(on);
+        }
+    }
+
+    fn set_pause_in_background(mut self: Pin<&mut Self>, on: bool) {
+        if self.pause_in_background != on {
+            self.as_mut().rust_mut().pause_in_background = on;
+            self.pause_in_background_changed();
+        }
+    }
+
+    /// The program gone to the background pauses a game running in front, where Pause in background is on; come back,
+    /// the game it paused runs again, and one paused before stays paused.
+    fn set_background(mut self: Pin<&mut Self>, on: bool) {
+        if self.background == on {
+            return;
+        }
+        self.as_mut().rust_mut().background = on;
+        self.as_mut().background_changed();
+        if on {
+            let playing = self.session.is_some() && !self.paused && !self.stepped && self.holding.is_none() && self.from_state.is_none();
+            if self.pause_in_background && playing {
+                self.as_mut().pause();
+                self.as_mut().rust_mut().backgrounded = true;
+            }
+        } else if std::mem::take(&mut self.as_mut().rust_mut().backgrounded) && self.paused {
+            self.resume();
+        }
     }
 
     /// The platform library, loaded once.
@@ -675,6 +862,7 @@ impl qobject::SessionModel {
     }
 
     fn resume(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().backgrounded = false;
         if self.jobs > 0 || self.holding.is_some() || self.from_state.is_some() {
             self.as_mut().rust_mut().resume_waiting = true;
             return;
@@ -727,7 +915,8 @@ impl qobject::SessionModel {
             self.as_mut().notice_attention_changed();
         }
         self.as_mut().rust_mut().notice = QString::from(&words);
-        self.notice_changed();
+        self.as_mut().notice_changed();
+        self.set_status(words);
     }
 
     fn key(self: Pin<&mut Self>, key: i32, modifiers: i32, pressed: bool, repeated: bool) -> bool {
@@ -831,6 +1020,7 @@ impl qobject::SessionModel {
 
     fn close(mut self: Pin<&mut Self>) {
         self.as_mut().rust_mut().stepped = false;
+        self.as_mut().rust_mut().backgrounded = false;
         *self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         drop(self.as_mut().rust_mut().session.take());
         self.as_mut().rust_mut().opened = None;
@@ -840,6 +1030,17 @@ impl qobject::SessionModel {
         self.as_mut().set_running(false);
         self.as_mut().set_paused(false);
         self.as_mut().set_sounding(false);
+        self.as_mut().set_fps(0.0);
+        self.set_status(String::new());
+    }
+
+    fn set_fps(mut self: Pin<&mut Self>, fps: f64) {
+        if self.fps != fps {
+            self.as_mut().rust_mut().fps = fps;
+            self.as_mut().rust_mut().fps_words = QString::from(&pause::fps_words(fps));
+            self.as_mut().fps_changed();
+            self.fps_words_changed();
+        }
     }
 
     fn reported(mut self: Pin<&mut Self>, report: Report) {
@@ -868,6 +1069,9 @@ impl qobject::SessionModel {
             }
             Report::Closed => self.as_mut().set_running(false),
             Report::Said(words) => self.as_mut().say(words, true),
+            Report::Volume(volume) => self.as_mut().heard_volume(volume),
+            Report::Device(device) => self.as_mut().heard_device(device),
+            Report::Rate { fps } => self.as_mut().set_fps(fps),
         }
     }
 
@@ -1028,9 +1232,10 @@ impl qobject::SessionModel {
         if !words.is_empty() {
             let words = QString::from(&words);
             if self.notice != words {
-                self.as_mut().rust_mut().notice = words;
+                self.as_mut().rust_mut().notice = words.clone();
             }
             self.as_mut().notice_changed();
+            self.as_mut().set_status(words.to_string());
         }
         if self.paused {
             self.as_mut().read_card_facts();

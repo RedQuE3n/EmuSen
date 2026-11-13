@@ -338,6 +338,14 @@ pub const SWAPPED: &str = "Players 1 and 2 swapped";
 /// Said as a Frame Advance holds the game after its frame, as Mistress's status line said it.
 pub const ADVANCED: &str = "Paused: advanced one frame";
 
+/// The status line while the game is held.
+pub const PAUSED: &str = "Paused";
+
+/// The frame rate over the game, in whole frames a second.
+pub fn fps_words(fps: f64) -> String {
+    format!("{} FPS", fps.round())
+}
+
 /// Said as the Fast Forward hotkey goes down, as Mistress's `Notify` said it.
 pub const FAST_FORWARD: &str = "Fast forward";
 

@@ -168,6 +168,31 @@ Window {
             value: settingsModel.rumble
             when: settingsModel.ready
         }
+        // Volume, Output, Sync to display and Pause in background changed while a game runs reach it at once.
+        Binding {
+            target: player.session
+            property: "volume"
+            value: settingsModel.volume
+            when: settingsModel.ready
+        }
+        Binding {
+            target: player.session
+            property: "output"
+            value: settingsModel.output
+            when: settingsModel.ready
+        }
+        Binding {
+            target: player.session
+            property: "syncToDisplay"
+            value: settingsModel.syncToDisplay
+            when: settingsModel.ready
+        }
+        Binding {
+            target: player.session
+            property: "pauseInBackground"
+            value: settingsModel.pauseInBackground
+            when: settingsModel.ready
+        }
         // Home's lines that change with the time: the status line and the paused game's facts.
         Clock {
             id: clock
@@ -191,6 +216,9 @@ Window {
             inFront: program.gameShown && !player.session.resumeAsked
             // As the start read them until the settings are read, then as they say, changed on the screen or not.
             guideChords: settingsModel.ready ? settingsModel.guideChords : program.guideChords
+            showStatusText: settingsModel.showStatusText
+            showFps: settingsModel.showFps
+            showStatusBar: settingsModel.showStatusBar
             focus: program.gameShown && !player.session.resumeAsked
             feed: program.feed
             platformLibrary: program.platformLibrary

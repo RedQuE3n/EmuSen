@@ -80,7 +80,7 @@ fn a_game_s_pictures_are_drawn_in_place_paced_and_paused() {
         None,
         std::ptr::NonNull::new(device.as_ptr().cast_mut()),
         handoff.clone(),
-        GameIo { pads: None, sound: Some(sound) },
+        GameIo { pads: None, sound: Some(sound), sync: true },
         DisplayClock::new(&platform),
         false,
         move |r| {
@@ -111,6 +111,29 @@ fn a_game_s_pictures_are_drawn_in_place_paced_and_paused() {
     let frames = picture.counts().handed.load(Ordering::Relaxed);
     let sounded = session.sounded();
     assert!(frames > 0 && sounded >= frames * (32000 / 60), "{sounded} stereo frames of sound played over {frames} frames");
+
+    // Sync to display off: the frame thread runs on the game's own clock, whatever the swaps.
+    session.set_sync(false);
+    std::thread::sleep(Duration::from_millis(50));
+    let before = picture.counts().handed.load(Ordering::Relaxed);
+    for n in 30..60 {
+        (feed.swapped)(feed.context, start + n * 16_666_667);
+        (feed.draw)(feed.context, 80, 60, &mut out);
+        std::thread::sleep(Duration::from_millis(4));
+    }
+    let free = picture.counts().handed.load(Ordering::Relaxed) - before;
+    assert!(free <= 16, "{free} frames over 30 swaps 4 ms apart: the frame thread followed the swaps with Sync to display off");
+    session.set_sync(true);
+    let start = start + 30 * 16_666_667;
+
+    // A volume and a device asked of the running game reach its player between two frames; a name no device has leaves
+    // the system default playing.
+    let mut heard = std::iter::from_fn(|| told.recv_timeout(Duration::from_secs(5)).ok());
+    session.set_volume(0.5);
+    assert!(heard.find_map(|r| if let Report::Volume(v) = r { Some(v) } else { None }) == Some(0.5));
+    session.set_device(Some("No such device".into()));
+    assert!(heard.find_map(|r| if let Report::Device(d) = r { Some(d) } else { None }) == Some(None));
+    drop(heard);
 
     session.set_paused(true);
     std::thread::sleep(Duration::from_millis(100));

@@ -23,6 +23,11 @@ impl ClientSettings {
         Ok(ClientSettings { platform: Platform::load(platform_library).map_err(words)? })
     }
 
+    /// Over a platform library already loaded.
+    pub fn on(platform: std::sync::Arc<Platform>) -> ClientSettings {
+        ClientSettings { platform }
+    }
+
     /// A model's file by Galaxia's number for it, as the name a model's load and save take: both sit in the config
     /// directory itself.
     fn name(&self, which: u32) -> Result<String, String> {

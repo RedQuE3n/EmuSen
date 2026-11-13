@@ -694,9 +694,23 @@ resampling. The parts, each with one job:
 - `SessionModel` lends SDL to the library and makes the player at open; where it cannot be made the game plays without
   sound and `problem` says so. `sounding` says whether the open game's sound reaches a player.
 
+**The player's settings, since 2026-11-12.** A game takes Volume, Output, Sync to display and Pause in background as
+it opens and follows each change while it runs or is suspended. `play.rs`'s `PlaySettings` reads them, and the frame
+rate, messages and status bar switches, through the Settings description's `applies`, the one place each key is named;
+`SettingsModel` and `SessionModel` both read through it, and the program binds Settings' values to the session as it
+binds Rumble. The player is made at the stored volume and on the stored device (Output's initial value, read from
+Galaxia's model, is the system default); a later change is handed to the frame thread through the session's control
+and taken between two frames, paused or not, and the player's own volume and device come back as `soundVolume` and
+`soundDevice`. Sync to display off runs the frames on the game's clock without asking Serenity's `pace_locks`. The
+window binds `background` to its own `Window.active`; a game running in front is paused as
+another window takes the front, where Pause in background is on, and only a game paused so resumes. The status line
+(`status`: the game's name, Paused, or the last thing said) and the frame rate (`fps`, counted on the frame thread
+each second it runs) are drawn at the foot of the game in `Game.qml`, on a black bar where Status bar is on. Proof:
+`qt-app`'s `sound_gpu` and `qt-models`' `session`, on the RX 6800.
+
 **Owed, stated:** audio.json is not yet read, so the player uses `AudioPlayer`'s own defaults, which are audio.json's
-(32 kHz, 256 ms, a deviation of 0.005, 4,096 frames); the output device, the volume and mute of `appsettings.json` and
-audio.json's `MasterVolume`, `Muted` and `AudioEnabled` wait for the settings screens. The C# clamps audio.json's values
+(32 kHz, 256 ms, a deviation of 0.005, 4,096 frames); the mute of `appsettings.json`, audio.json's `MasterVolume`,
+`Muted` and `AudioEnabled`, and Output for the interface's own sounds are not applied. The C# clamps audio.json's values
 in `AudioConfig.Bounded`, which has no Rust owner yet; reading the file in Qt needs that rule moved into Galaxia's model
 first, so that the bounds are not copied.
 

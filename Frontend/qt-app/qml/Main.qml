@@ -540,27 +540,14 @@ Window {
                 onActed: (key) => screens.act(key)
             }
         }
-        // The Pause Card, opened by the chord over the game; the game resumes once the card has slid away (EmuSen_Interface.md §20.6).
-        Kit.NormalizedCanvas {
-            id: cardCanvas
-            objectName: "cardCanvas"
-            readonly property alias slide: card.slide
-            visible: card.open || card.leaving
-            PauseCard {
-                id: card
-                anchors.fill: parent
-                library: library
-                session: player.session
-                settings: settingsModel
-                padFamily: program.padFamily
-                open: program.pauseShown
-                focus: program.pauseShown
-                onResumed: screens.play()
-                onBackToLibrary: screens.library()
-                onQuitGame: player.session.close()
-                onQuitAll: screens.quit()
-                onGone: if (program.gameShown) player.session.resume()
-            }
+        PauseScreen {
+            screens: screens
+            library: library
+            session: player.session
+            settings: settingsModel
+            padFamily: program.padFamily
+            pauseShown: program.pauseShown
+            gameShown: program.gameShown
         }
         ResumeQuestion {
             session: player.session

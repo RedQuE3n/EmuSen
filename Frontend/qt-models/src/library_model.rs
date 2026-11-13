@@ -417,7 +417,9 @@ impl qobject::LibraryModel {
             let n = systems.get(&system).and_then(serde_json::Value::as_u64).unwrap_or(0) + 1;
             systems.insert(system, n.into());
         }
-        QString::from(serde_json::json!({ "games": self.view.catalog.games.len(), "running": title, "systems": systems }).to_string().as_str())
+        // The running game's path and system, which Settings ▸ Controllers opens on (EmuSen_Qt.md §7.7.H).
+        let system = self.view.catalog.games.iter().find(|g| g.path == running).and_then(|g| g.system.clone()).unwrap_or_default();
+        QString::from(serde_json::json!({ "games": self.view.catalog.games.len(), "running": title, "systems": systems, "game": running, "system": system }).to_string().as_str())
     }
 
     pub fn home_card_facts(&self, suspended: &QString, console: &QString, paused: &QString, game_mode: bool, startable: &QString, tools: &QString) -> QString {

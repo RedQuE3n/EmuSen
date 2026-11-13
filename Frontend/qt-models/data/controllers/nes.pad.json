@@ -1,0 +1,27 @@
+{
+  "name": "NES controller",
+  "design": [1000, 470],
+  "items": [
+    {"part": {"path": "M 160,82 C 160,50 150,30 130,6"}, "stroke": "#55555F", "width": 9},
+    {"part": {"box": [20, 80, 960, 360, 26]}, "fill": "#C4C4CA", "stroke": "#55555F", "width": 5},
+    {"part": {"box": [52, 118, 896, 284, 14]}, "fill": "#232327"},
+    {"part": {"box": [96, 156, 212, 212, 18]}, "fill": "#3B3B42"},
+    {"dpad": [202, 262, 64, 94], "controls": ["Up", "Down", "Left", "Right"], "fill": "#18181B", "arrow": "#6A6A74", "radius": 8, "stroke": "#5A5A64"},
+    {"part": {"box": [366, 150, 268, 220, 12]}, "fill": "#A9A9B1"},
+    {"part": {"box": [380, 176, 240, 14, 4]}, "fill": "#8B8B94"},
+    {"part": {"box": [380, 206, 240, 14, 4]}, "fill": "#8B8B94"},
+    {"part": {"box": [380, 236, 240, 14, 4]}, "fill": "#8B8B94"},
+    {"word": "SELECT", "at": [446, 280], "size": 18, "colour": "#C8323A"},
+    {"word": "START", "at": [554, 280], "size": 18, "colour": "#C8323A"},
+    {"part": {"box": [402, 300, 88, 44, 22]}, "fill": "#6F6F78"},
+    {"part": {"box": [510, 300, 88, 44, 22]}, "fill": "#6F6F78"},
+    {"region": "Select", "shape": {"box": [410, 310, 72, 24, 12]}, "fill": "#1E1E22"},
+    {"region": "Start", "shape": {"box": [518, 310, 72, 24, 12]}, "fill": "#1E1E22"},
+    {"part": {"box": [674, 196, 124, 124, 14]}, "fill": "#A9A9B1"},
+    {"part": {"box": [812, 196, 124, 124, 14]}, "fill": "#A9A9B1"},
+    {"round": [736, 258, 46], "region": "B", "colour": "#C8323A"},
+    {"round": [874, 258, 46], "region": "A", "colour": "#C8323A"},
+    {"word": "B", "at": [736, 356], "size": 30, "colour": "#C8323A"},
+    {"word": "A", "at": [874, 356], "size": 30, "colour": "#C8323A"}
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "name": "Master System control pad",
+  "design": [1000, 590],
+  "items": [
+    {"part": {"box": [300, 16, 400, 112, 16]}, "fill": "#26262B", "stroke": "#6A6A74", "width": 4},
+    {"part": {"box": [314, 30, 372, 6, 3]}, "fill": "#B8323A"},
+    {"part": {"pill": [420, 66, 100, 42, 0]}, "fill": "#222226"},
+    {"region": "Start", "shape": {"pill": [420, 66, 82, 26, 0]}, "name": "Pause", "fill": "#4A4A53", "stroke": "#2C2C31", "width": 2, "side": "top"},
+    {"word": "PAUSE", "at": [420, 108], "size": 16, "colour": "#B8B8C2"},
+    {"part": {"pill": [580, 66, 100, 42, 0]}, "fill": "#222226"},
+    {"region": "Select", "shape": {"pill": [580, 66, 82, 26, 0]}, "name": "Reset", "fill": "#4A4A53", "stroke": "#2C2C31", "width": 2, "side": "top"},
+    {"word": "RESET", "at": [580, 108], "size": 16, "colour": "#B8B8C2"},
+    {"part": {"path": "M 980,330 C 990,330 994,318 998,300"}, "stroke": "#6A6A74", "width": 9},
+    {"part": {"box": [20, 170, 960, 400, 36]}, "fill": "#2E2E33", "stroke": "#6A6A74", "width": 5},
+    {"part": {"box": [96, 256, 268, 268, 36]}, "fill": "#222226"},
+    {"part": {"box": [118, 278, 224, 224, 26.88]}, "fill": "#4A4A53", "stroke": "#5E5E68", "width": 3},
+    {"region": "Up", "shape": {"path": "M 118,278 L 342,278 L 230,390 Z"}, "arm": true, "mark": {"arrow": [230.0, 320.56, 33.6, 0, -1]}, "mark_colour": "#2A2A30"},
+    {"region": "Down", "shape": {"path": "M 118,502 L 342,502 L 230,390 Z"}, "arm": true, "mark": {"arrow": [230.0, 459.44, 33.6, 0, 1]}, "mark_colour": "#2A2A30"},
+    {"region": "Left", "shape": {"path": "M 118,278 L 118,502 L 230,390 Z"}, "arm": true, "mark": {"arrow": [160.56, 390.0, 33.6, -1, 0]}, "mark_colour": "#2A2A30"},
+    {"region": "Right", "shape": {"path": "M 342,278 L 342,502 L 230,390 Z"}, "arm": true, "mark": {"arrow": [299.44, 390.0, 33.6, 1, 0]}, "mark_colour": "#2A2A30"},
+    {"mark": {"circle": [230, 390, 16.8]}, "fill": "#18181B", "stroke": "#5E5E68", "width": 2},
+    {"part": {"pill": [770, 390, 330, 140, 0]}, "fill": "#222226"},
+    {"round": [690, 390, 52], "region": "B", "colour": "#55555F", "name": "1", "caption": "1", "size": 36},
+    {"round": [850, 390, 52], "region": "A", "colour": "#55555F", "name": "2", "caption": "2", "size": 36}
+  ]
+}

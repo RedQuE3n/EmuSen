@@ -1,0 +1,30 @@
+{
+  "name": "Game Boy",
+  "design": [640, 1000],
+  "items": [
+    {"part": {"path": "M 60,20 H 580 Q 610,20 610,50 V 820 Q 610,980 450,980 H 60 Q 30,980 30,950 V 50 Q 30,20 60,20 Z"}, "fill": "#C9C6BE", "stroke": "#5A5850", "width": 5},
+    {"part": {"box": [58, 44, 524, 6, 3]}, "fill": "#ADA9A0"},
+    {"part": {"path": "M 84,86 H 556 Q 576,86 576,106 V 420 Q 576,480 516,480 H 104 Q 84,480 84,460 V 106 Q 84,86 104,86 Z"}, "fill": "#5A5B6E"},
+    {"part": {"box": [170, 126, 310, 280, 6]}, "fill": "#9DAE72"},
+    {"part": {"circle": [122, 236, 8]}, "fill": "#D23A3A"},
+    {"word": "POWER", "at": [122, 264], "size": 14, "colour": "#C9C6BE"},
+    {"dpad": [170, 650, 60, 92], "controls": ["Up", "Down", "Left", "Right"], "fill": "#2A2A30", "arrow": "#5E5E68", "radius": 8},
+    {"part": {"pill": [462, 640, 250, 118, -28]}, "fill": "#ADA9A0"},
+    {"round": [408, 670, 44], "region": "B", "colour": "#8E2A5C"},
+    {"round": [518, 612, 44], "region": "A", "colour": "#8E2A5C"},
+    {"word": "B", "at": [404, 745], "size": 26, "colour": "#2F3A78", "angle": -28},
+    {"word": "A", "at": [514, 687], "size": 26, "colour": "#2F3A78", "angle": -28},
+    {"part": {"pill": [250, 838, 78, 30, -28]}, "fill": "#ADA9A0"},
+    {"part": {"pill": [352, 838, 78, 30, -28]}, "fill": "#ADA9A0"},
+    {"region": "Select", "shape": {"pill": [250, 838, 62, 18, -28]}, "fill": "#8A8C98"},
+    {"region": "Start", "shape": {"pill": [352, 838, 62, 18, -28]}, "fill": "#8A8C98"},
+    {"word": "SELECT", "at": [256, 884], "size": 15, "colour": "#2F3A78", "angle": -28},
+    {"word": "START", "at": [358, 884], "size": 15, "colour": "#2F3A78", "angle": -28},
+    {"mark": {"pill": [478, 890, 86, 9, -62]}, "fill": "#8F8B82"},
+    {"mark": {"pill": [500, 882, 86, 9, -62]}, "fill": "#8F8B82"},
+    {"mark": {"pill": [522, 874, 86, 9, -62]}, "fill": "#8F8B82"},
+    {"mark": {"pill": [544, 866, 86, 9, -62]}, "fill": "#8F8B82"},
+    {"mark": {"pill": [566, 858, 86, 9, -62]}, "fill": "#8F8B82"},
+    {"mark": {"pill": [588, 850, 86, 9, -62]}, "fill": "#8F8B82"}
+  ]
+}

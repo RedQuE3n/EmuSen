@@ -434,6 +434,30 @@ pub fn save(tree: &Tree, file: File, document: &str) -> Result<(), Unsaved> {
     }
 }
 
+/// Since interface 47: each `PadControl` as the binding files name it, in its order, with the `PadButton` it is or the
+/// `PadAxis` it pushes and which way (-1 toward the axis's low end, as up is on a stick's Y), so a page that names
+/// controls by the core's buttons and axes finds a control's word (`EmuSen_Input.md` §7.2).
+pub fn controls() -> Value {
+    let entries = PadControls::WORDS.iter().map(|&(word, n)| {
+        let n = n as u32;
+        match crate::pad::as_button(n) {
+            Some(button) => serde_json::json!({ "word": word, "button": button }),
+            None => {
+                let pushed = (0..crate::pad::AXES as u32).find_map(|axis| match crate::pad::directions(axis) {
+                    Some((low, _)) if low == n => Some((axis, -1)),
+                    Some((_, high)) if high == n => Some((axis, 1)),
+                    _ => None,
+                });
+                match pushed {
+                    Some((axis, toward)) => serde_json::json!({ "word": word, "axis": axis, "toward": toward }),
+                    None => serde_json::json!({ "word": word }),
+                }
+            }
+        }
+    });
+    Value::Array(entries.collect())
+}
+
 /// The name a game is known by in a console's profiles: its file's name without the extension, as its own settings are kept.
 pub fn game_key(path: &str) -> &str {
     let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
@@ -570,6 +594,11 @@ mod tests {
         assert_eq!(choose(&gamepad, &none, "SNES", 3, "Default"), choice("Default", 1), "player 3 with player 1's");
         assert_eq!(serde_json::to_string(&choice("Mine", 3)).unwrap(), r#"{"profile":"Mine","mapPlayer":3}"#);
         assert_eq!(game_key("/a.b/Game.v1.sfc"), "Game.v1");
+        let controls = controls();
+        assert_eq!(controls.as_array().map(Vec::len), Some(crate::pad::CONTROLS));
+        assert_eq!(controls[8], serde_json::json!({ "word": "A", "button": 8 }));
+        assert_eq!(controls[16], serde_json::json!({ "word": "LeftStickUp", "axis": 1, "toward": -1 }));
+        assert_eq!(controls[23], serde_json::json!({ "word": "RightStickRight", "axis": 2, "toward": 1 }));
         assert_eq!(game_key(".hidden"), ".hidden");
     }
 

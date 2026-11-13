@@ -17,6 +17,15 @@ pub const STRIDE_SECONDS: f64 = 5.0;
 /// Seconds closer than this are one time: a moment exactly five seconds on lies an ulp short of `from + 5` (EmuSen_Qt.md §7.5).
 const SAME_MOMENT: f64 = 1e-9;
 
+/// Rewind held steps back this many times faster than the snapshots were taken (Mistress's `HeldRewindSpeedup`).
+pub const HELD_SPEEDUP: f64 = 4.0;
+
+/// The frames between two steps back while Rewind is held, for snapshots `interval` frames apart: one step every
+/// interval / speedup frames, so a sparse history does not rewind in a blur (Mistress's held rewind).
+pub fn held_step(interval: u32) -> u32 {
+    ((f64::from(interval) / HELD_SPEEDUP).round() as u32).max(1)
+}
+
 /// The frames between two snapshots for a game at `hz`.
 pub fn interval_for(hz: f64) -> u32 {
     if hz > 0.0 { (hz / SNAPSHOTS_PER_SECOND).round().max(1.0) as u32 } else { 30 }
@@ -24,9 +33,9 @@ pub fn interval_for(hz: f64) -> u32 {
 
 /// Rewind kept for a session as Mistress keeps it for every game (`WireSession`): a snapshot every half second of
 /// console time, the history's budget the runtime's own, each snapshot with its picture.
-pub fn keep(runtime: &emusen_crystal_client::Runtime, session: u32) -> emusen_crystal_client::Result<()> {
-    let hz = runtime.session_info(session)?.frame_rate_hz;
-    runtime.rewind_set(session, true, interval_for(hz), 0, PICTURE_WIDTH)
+pub fn keep(runtime: &emusen_crystal_client::Runtime, session: u32) -> emusen_crystal_client::Result<u32> {
+    let interval = interval_for(runtime.session_info(session)?.frame_rate_hz);
+    runtime.rewind_set(session, true, interval, 0, PICTURE_WIDTH).map(|()| interval)
 }
 
 /// One moment of the reel: its frame and how far back it is; the present is `now`.

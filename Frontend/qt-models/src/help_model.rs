@@ -61,6 +61,12 @@ pub mod qobject {
         GamePageNone,
         /// Start Console's page of a card (EmuSen_Qt.md §7.9), after every screen before it so their numbers stay.
         CardStart,
+        SettingsBindings,
+        SettingsBindingsOne,
+        SettingsKeys,
+        SettingsListening,
+        SettingsTesting,
+        SettingsHotkeys,
     }
 
     extern "RustQt" {
@@ -160,6 +166,12 @@ impl qobject::HelpModel {
             HelpScreen::ToolSearch => Screen::ToolSearch,
             HelpScreen::SettingsConsole => Screen::SettingsConsole,
             HelpScreen::SettingsChoices => Screen::SettingsChoices,
+            HelpScreen::SettingsBindings => Screen::SettingsBindings,
+            HelpScreen::SettingsBindingsOne => Screen::SettingsBindingsOne,
+            HelpScreen::SettingsKeys => Screen::SettingsKeys,
+            HelpScreen::SettingsListening => Screen::SettingsListening,
+            HelpScreen::SettingsTesting => Screen::SettingsTesting,
+            HelpScreen::SettingsHotkeys => Screen::SettingsHotkeys,
             HelpScreen::GamePage => Screen::GamePage,
             HelpScreen::GamePageResume => Screen::GamePageResume,
             HelpScreen::GamePageResumeSlots => Screen::GamePageResumeSlots,
@@ -225,6 +237,12 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::ToolSearch => HelpScreen::ToolSearch,
         Screen::SettingsConsole => HelpScreen::SettingsConsole,
         Screen::SettingsChoices => HelpScreen::SettingsChoices,
+        Screen::SettingsBindings => HelpScreen::SettingsBindings,
+        Screen::SettingsBindingsOne => HelpScreen::SettingsBindingsOne,
+        Screen::SettingsKeys => HelpScreen::SettingsKeys,
+        Screen::SettingsListening => HelpScreen::SettingsListening,
+        Screen::SettingsTesting => HelpScreen::SettingsTesting,
+        Screen::SettingsHotkeys => HelpScreen::SettingsHotkeys,
         Screen::GamePage => HelpScreen::GamePage,
         Screen::GamePageResume => HelpScreen::GamePageResume,
         Screen::GamePageResumeSlots => HelpScreen::GamePageResumeSlots,

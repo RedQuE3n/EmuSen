@@ -79,6 +79,14 @@ fn galaxia_names_its_files_and_endymion_reads_and_writes_the_binding_files() {
     assert!(matches!(p.bindings_defaults(bind::PROFILES), Err(Error::Status { .. })));
     let Err(Error::Status { words, .. }) = p.bindings_save(bind::KEYS, &json!({ "NES": { "Up": "Upp" } })) else { panic!("a misspelled key is not saved") };
     assert!(words.contains("'Upp' is not a valid Key. Did you mean 'Up'?"), "{words}");
+    // A game's name in the profiles is Endymion's (since 47): the file's name without its last extension.
+    assert_eq!(p.bindings_game_key("/a.b/Game.v1.sfc").unwrap(), "Game.v1");
+    assert_eq!(p.bindings_game_key("C:\\Roms\\Hero.cue").unwrap(), "Hero");
+    assert_eq!(p.bindings_game_key(".hidden").unwrap(), ".hidden");
+    // Each control's word with the button it is or the stick's way (since 47).
+    let controls = p.bindings_controls().unwrap();
+    assert_eq!(controls[0], json!({ "word": "B", "button": 0 }));
+    assert_eq!(controls[19], json!({ "word": "LeftStickRight", "axis": 0, "toward": 1 }));
 }
 
 #[test]

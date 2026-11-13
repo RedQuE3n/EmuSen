@@ -4,14 +4,19 @@
 
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use emusen_platform_client::pads::{consts, Pads};
-use emusen_platform_client::Result;
+use emusen_platform_client::bindings::consts as files;
+use emusen_platform_client::pads::{consts, PadEvent, Pads};
+use emusen_platform_client::{Error, Result};
+
+use crate::hotkeys::Hotkey;
+use crate::notices;
+use crate::seats::{Ask, Came, Connected, Player, Seats};
 
 /// The most players a game hears (Endymion's seats).
 pub const PLAYERS: usize = 8;
 /// PadButton's count, the RetroPad's sixteen.
 const BUTTONS: u32 = 16;
-/// PadAxis's LeftX: a game that reads it hears the left stick as a stick, not the d-pad.
+/// PadAxis's LeftX (a game reading it hears a stick, not the d-pad), copied from its owner, the core ABI's EMUSEN_AXIS_LEFT_X, until the platform interface exports it (R-20261112-19).
 const LEFT_X: u32 = 0;
 
 /// What a running game asks of the pads: its console and game, for the bindings; its ports; the axes it reads, by PadAxis.
@@ -23,7 +28,9 @@ pub struct Want {
     pub axes: Vec<u32>,
 }
 
-/// One read as the game hears it: a mask by PadButton and the read axes for each player read, and the players seated.
+/// One read as the game hears it: a mask by PadButton and the read axes for each player read, the players seated,
+/// whether player 1 also plays as player 2 (Mirror player 1 to player 2, the router's to apply), the keys held as a mask
+/// by PadControl, and the player the keyboard plays as (0 leaves the router's as it is).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Read {
     pub serial: u64,
@@ -31,7 +38,34 @@ pub struct Read {
     pub held: [u16; PLAYERS],
     pub axes: Vec<f64>,
     pub seated: u32,
+    pub mirror: bool,
+    pub keyboard: u32,
+    pub keyboard_player: u32,
 }
+
+/// What a key is to the running game: a control of its console's on the keyboard, an emulator action, or nothing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KeyUse {
+    Control,
+    Hotkey(Hotkey),
+    Nothing,
+}
+
+/// The player's Controllers settings the pads act on (EmuSen_Qt.md §7.7.H3): the first three Endymion's, set on the pads
+/// by the reader; the mirror the game's router's.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PadSettings {
+    pub first_controller_only: bool,
+    pub stick_as_dpad: bool,
+    /// None leaves Endymion's as it is, where the stored value could not be read.
+    pub stick_deadzone: Option<f64>,
+    pub mirror: bool,
+    /// The player the keyboard plays as, from 1; None leaves the router's as it is, where the stored value could not be read.
+    pub keyboard_player: Option<u32>,
+}
+
+/// A port's two motor levels, strong then weak, 0 to 65535.
+pub type Motors = (u16, u16);
 
 #[derive(Default)]
 struct State {
@@ -44,6 +78,27 @@ struct State {
     /// The game hears nothing while the interface holds a button of its own (Guide, for its chords).
     muted: bool,
     read: Read,
+    /// The seats, kept by the reader; a page's asks waiting for its next tick; the seats as a page reads them.
+    seats: Seats,
+    asks: Vec<Ask>,
+    players: Vec<Player>,
+    connected: Vec<Connected>,
+    stick_deadzone: f64,
+    /// Settings waiting for the reader's next tick; the mirror as last settled.
+    settings: Option<PadSettings>,
+    mirror: bool,
+    keyboard_player: u32,
+    /// The game's console's keys, each by the files' word with its PadControl's bit; the hotkeys by their keys, read
+    /// from the program's start whether a game runs or not, and read again after each serial (EmuSen_Qt.md §7.7.H8).
+    keys: Vec<(String, u32)>,
+    hotkeys: Vec<(String, Hotkey)>,
+    hotkeys_serial: u64,
+    /// The game's keys held, by PadControl.
+    keyboard: u32,
+    /// Each port's motors as the game last drove them.
+    motors: [Motors; PLAYERS],
+    /// The pads that came and went, in the notices' words, until the reader takes them.
+    notices: Vec<String>,
 }
 
 /// The hand-over between the pads' reader and a game: what the game wants, whether it hears the pads, the newest read.
@@ -62,7 +117,47 @@ impl GamePads {
         let mut state = self.state();
         state.want = want;
         state.want_serial += 1;
+        state.motors = [(0, 0); PLAYERS];
+        (state.keys, state.keyboard) = (Vec::new(), 0);
         state.read = Read { serial: state.read.serial, ..Read::default() };
+    }
+
+    /// The hotkeys, and a running game's buttons and keys, bound again from the binding files on the next tick, as after
+    /// a profile or a binding changed.
+    pub fn rebind(&self) {
+        let mut state = self.state();
+        state.hotkeys_serial += 1;
+        if state.want.is_some() {
+            state.want_serial += 1;
+        }
+    }
+
+    /// The player's settings, set on the pads at the reader's next tick (Mistress's `ApplyKeys` and `SaveApp`).
+    pub fn settle(&self, settings: PadSettings) {
+        let mut state = self.state();
+        state.mirror = settings.mirror;
+        if let Some(player) = settings.keyboard_player {
+            state.keyboard_player = player;
+        }
+        state.settings = Some(settings);
+    }
+
+    /// The reader's tick for the settings: any settled since the last set on Endymion's pads.
+    pub fn apply_settings(&self, pads: &Pads) -> Result<()> {
+        let Some(s) = self.state().settings.take() else { return Ok(()) };
+        pads.set_setting(consts::SETTING_FIRST_CONTROLLER_ONLY, f64::from(u8::from(s.first_controller_only)))?;
+        pads.set_setting(consts::SETTING_STICK_AS_DPAD, f64::from(u8::from(s.stick_as_dpad)))?;
+        match s.stick_deadzone {
+            Some(deadzone) => pads.set_setting(consts::SETTING_STICK_DEADZONE, deadzone),
+            None => Ok(()),
+        }
+    }
+
+    /// The game's motors after a frame, port 0 first; the reader drives each player's pad by its port's (EmuSen_Input.md §9.7).
+    pub fn drive(&self, motors: &[Motors]) {
+        let mut state = self.state();
+        state.motors = [(0, 0); PLAYERS];
+        state.motors.iter_mut().zip(motors).for_each(|(m, l)| *m = *l);
     }
 
     /// Whether the game hears the pads (running and on screen); nothing is handed over while it does not. Given back to
@@ -71,6 +166,10 @@ impl GamePads {
         let mut state = self.state();
         if owned && !state.owned {
             state.quiet = true;
+        }
+        if !owned {
+            // A key let go while a menu has the keyboard never reaches the game, so none is held for it.
+            state.keyboard = 0;
         }
         state.owned = owned;
     }
@@ -89,6 +188,43 @@ impl GamePads {
         state.muted = muted;
     }
 
+    /// A key pressed or let go over the running game, by the files' word (`keys::heard`): held for the game where its
+    /// console binds it (Mistress's `_keyboardHeld`), else the hotkey it runs, else nothing.
+    pub fn key(&self, word: &str, pressed: bool) -> KeyUse {
+        let mut state = self.state();
+        let bits = state.keys.iter().filter(|(k, _)| k.eq_ignore_ascii_case(word)).fold(0, |m, (_, bit)| m | bit);
+        if bits != 0 {
+            if pressed {
+                state.keyboard |= bits;
+            } else {
+                state.keyboard &= !bits;
+            }
+            return KeyUse::Control;
+        }
+        state.hotkeys.iter().find(|(k, _)| k.eq_ignore_ascii_case(word)).map_or(KeyUse::Nothing, |(_, h)| KeyUse::Hotkey(*h))
+    }
+
+    /// The hotkey a key runs where no game takes the key (over the library), by the files' word.
+    pub fn hotkey(&self, word: &str) -> Option<Hotkey> {
+        self.state().hotkeys.iter().find(|(k, _)| k.eq_ignore_ascii_case(word)).map(|(_, h)| *h)
+    }
+
+    /// The keys bound for the game's console, as the reader read them from the files.
+    fn set_keys(&self, serial: u64, keys: Vec<(String, u32)>) {
+        let mut state = self.state();
+        if state.want_serial == serial {
+            state.keys = keys;
+        }
+    }
+
+    /// The hotkeys, as the reader read them from the files.
+    fn set_hotkeys(&self, serial: u64, hotkeys: Vec<(String, Hotkey)>) {
+        let mut state = self.state();
+        if state.hotkeys_serial == serial {
+            state.hotkeys = hotkeys;
+        }
+    }
+
     /// Players 1 and 2 swap pads from the next tick; false where player 2 has none.
     pub fn swap_players(&self) -> bool {
         let mut state = self.state();
@@ -99,9 +235,58 @@ impl GamePads {
         true
     }
 
+    /// The notices of pads that came and went since the last taken (EmuSen_Input.md §8.13.5).
+    pub fn notices(&self) -> Vec<String> {
+        std::mem::take(&mut self.state().notices)
+    }
+
     /// The players seated at the newest read, a bit each.
     pub fn seated(&self) -> u32 {
         self.state().read.seated
+    }
+
+    /// A page's ask of the seats, done on the reader's next tick.
+    pub fn ask(&self, ask: Ask) {
+        self.state().asks.push(ask);
+    }
+
+    /// The seats as a page shows them, player 1 first.
+    pub fn players(&self) -> Vec<Player> {
+        self.state().players.clone()
+    }
+
+    /// Every pad connected, with its player and whether a button is held on it.
+    pub fn connected(&self) -> Vec<Connected> {
+        self.state().connected.clone()
+    }
+
+    /// Endymion's stick deadzone at the newest tick: past it a stick is heard as a direction.
+    pub fn stick_deadzone(&self) -> f64 {
+        self.state().stick_deadzone
+    }
+
+    /// The reader's tick for the seats: the pads opened and closed seated, the asks done, the page's view brought up to
+    /// date; whether the view changed.
+    pub fn keep_seats(&self, pads: &Pads, events: &[PadEvent]) -> Result<bool> {
+        let mut state = self.state();
+        let mut came: Vec<Came> = Vec::new();
+        state.seats.apply(pads, events, &mut came)?;
+        let first = state.seats.keys()[0].is_some();
+        state.notices.extend(came.iter().map(|c| notices::said(c, first)));
+        for ask in std::mem::take(&mut state.asks) {
+            state.seats.ask(pads.platform(), ask)?;
+        }
+        let (players, connected) = (state.seats.players(), state.seats.connected(Some(pads))?);
+        let deadzone = pads.setting(consts::SETTING_STICK_DEADZONE)?;
+        let changed = players != state.players || connected != state.connected || deadzone != state.stick_deadzone;
+        state.stick_deadzone = deadzone;
+        state.players = players;
+        state.connected = connected;
+        Ok(changed)
+    }
+
+    fn seat_keys(&self) -> [Option<u64>; PLAYERS] {
+        self.state().seats.keys()
     }
 
     /// The newest read into `out` when it is newer than `out`'s; true when it was.
@@ -139,43 +324,58 @@ pub struct GameReading {
     want_serial: u64,
     want: Option<Want>,
     bound: [[i32; BUTTONS as usize]; PLAYERS],
-    seats: Vec<u64>,
+    seats: [Option<u64>; PLAYERS],
     read: Read,
+    /// The motor levels last sent each player's pad.
+    sent: [Motors; PLAYERS],
+    /// The hotkeys' serial last read; none before the first tick.
+    hotkeys_serial: Option<u64>,
 }
 
 impl GameReading {
-    /// One tick: the pads as the game hears them handed over, when a game wants them. Players are seated in the order the
-    /// pads were opened, player 1 alone where the first controller only is read.
+    /// One tick: the pads as the game hears them handed over, when a game wants them. Players are the seats' (EmuSen_Input.md
+    /// §8.9), player 1 alone where the first controller only is read.
     pub fn read(&mut self, pads: &Pads, game: &GamePads) -> Result<()> {
-        let (serial, want, swapped) = {
+        let hotkeys = game.state().hotkeys_serial;
+        if self.hotkeys_serial != Some(hotkeys) {
+            game.set_hotkeys(hotkeys, hotkeys_of(pads.platform())?);
+            self.hotkeys_serial = Some(hotkeys);
+        }
+        let (serial, want, swapped, mirror, owned, motors) = {
             let state = game.state();
-            (state.want_serial, (state.want_serial != self.want_serial).then(|| state.want.clone()), state.swapped)
+            (state.want_serial, (state.want_serial != self.want_serial).then(|| state.want.clone()), state.swapped, state.mirror, state.owned, state.motors)
         };
         if let Some(want) = want {
-            self.bind(pads, want)?;
+            self.bind(pads, game, serial, want)?;
             self.want_serial = serial;
         }
         let Some(want) = &self.want else { return Ok(()) };
-        let open = pads.open()?;
-        let first_only = pads.setting(consts::SETTING_FIRST_CONTROLLER_ONLY)? != 0.0;
-        let seated = open.len().min(if first_only { 1 } else { PLAYERS });
-        let swap = swapped && seated >= 2;
-        let seat_of = |player: usize| open[if swap && player < 2 { 1 - player } else { player }];
-        if self.seats.len() != seated || (0..seated).any(|p| self.seats[p] != seat_of(p)) {
-            self.seats.clear();
-            self.seats.extend((0..seated).map(seat_of));
-            for (player, &key) in self.seats.iter().enumerate() {
-                pads.set_player_index(key, player as i32)?;
+        let mut keys = game.seat_keys();
+        if pads.setting(consts::SETTING_FIRST_CONTROLLER_ONLY)? != 0.0 {
+            keys[1..].iter_mut().for_each(|k| *k = None);
+        }
+        if swapped && keys[0].is_some() && keys[1].is_some() {
+            keys.swap(0, 1);
+        }
+        if self.seats != keys {
+            for (player, key) in keys.iter().enumerate() {
+                if let Some(key) = key {
+                    pads.set_player_index(*key, player as i32)?;
+                }
             }
+            self.seats = keys;
         }
         let players = want.ports.min(PLAYERS);
+        drive(pads, &self.seats, &mut self.sent, players, if owned { motors } else { [(0, 0); PLAYERS] })?;
         let read = &mut self.read;
         read.players = players;
+        read.mirror = mirror;
         read.held = [0; PLAYERS];
         read.axes.clear();
         read.axes.resize(players * want.axes.len(), 0.0);
         read.seated = 0;
-        for (player, &key) in self.seats.iter().enumerate().take(players) {
+        for (player, key) in self.seats.iter().enumerate().take(players) {
+            let Some(key) = *key else { continue };
             read.seated |= 1 << player;
             for button in 0..BUTTONS {
                 if pads.pressed(key, button, self.bound[player][button as usize])? {
@@ -190,10 +390,12 @@ impl GameReading {
         if state.want_serial != serial || !state.owned {
             return Ok(());
         }
+        (read.keyboard, read.keyboard_player) = (state.keyboard, state.keyboard_player);
         if state.quiet || state.muted {
-            if state.muted || read.held.iter().any(|&h| h != 0) {
+            if state.muted || read.keyboard != 0 || read.held.iter().any(|&h| h != 0) {
                 read.held = [0; PLAYERS];
                 read.axes.iter_mut().for_each(|a| *a = 0.0);
+                read.keyboard = 0;
             } else {
                 state.quiet = false;
             }
@@ -203,15 +405,65 @@ impl GameReading {
         Ok(())
     }
 
-    /// A game's wants taken: each player's buttons bound by Endymion's rules, the left stick a stick where the game reads it.
-    fn bind(&mut self, pads: &Pads, want: Option<Want>) -> Result<()> {
+    /// A game's wants taken: each player's buttons bound by Endymion's rules, the left stick a stick where the game reads
+    /// it, and the console's keys read from the files for the keyboard (EmuSen_Qt.md §7.7.H6).
+    fn bind(&mut self, pads: &Pads, game: &GamePads, serial: u64, want: Option<Want>) -> Result<()> {
         if let Some(want) = &want {
             for (player, bound) in self.bound.iter_mut().enumerate() {
                 *bound = pads.platform().bindings_bound(&want.console, player as i32 + 1, want.game.as_deref())?;
             }
             pads.set_setting(consts::SETTING_LEFT_STICK_IS_ANALOG, f64::from(u8::from(want.axes.contains(&LEFT_X))))?;
+            game.set_keys(serial, keys_of(pads.platform(), &want.console)?);
         }
         self.want = want;
         Ok(())
     }
+}
+
+/// Each seated player's pad given its port's motors: a level held sent every tick, within SDL's 100 ms, and a level gone
+/// to zero sent once (Mistress's `PassRumbleLevels`).
+fn drive(pads: &Pads, seats: &[Option<u64>; PLAYERS], sent: &mut [Motors; PLAYERS], players: usize, motors: [Motors; PLAYERS]) -> Result<()> {
+    for (player, key) in seats.iter().enumerate() {
+        let level = if player < players { motors[player] } else { (0, 0) };
+        if let Some(key) = *key {
+            if level != (0, 0) || sent[player] != (0, 0) {
+                pads.rumble(key, level.0, level.1)?;
+            }
+        }
+        sent[player] = level;
+    }
+    Ok(())
+}
+
+/// A console's keys, each the word of the key the files bind with its PadControl's bit (the place of the control's word
+/// in Endymion's `bindings_controls`), read as the program reads the files.
+pub fn keys_of(platform: &emusen_platform_client::Platform, console: &str) -> Result<Vec<(String, u32)>> {
+    let controls = platform.bindings_controls()?;
+    let controls = controls.as_array().ok_or_else(|| unread("bindings_controls", "not a list"))?;
+    let model = platform.bindings_load(files::KEYS, &[console])?;
+    let map = model.as_object().and_then(|m| m.iter().find(|(c, _)| c.eq_ignore_ascii_case(console))).map(|(_, map)| map);
+    let mut keys = Vec::new();
+    for (control, key) in map.and_then(|m| m.as_object()).into_iter().flatten() {
+        let Some(key) = key.as_str().filter(|k| !k.is_empty()) else { continue };
+        let at = controls.iter().position(|c| c["word"].as_str().is_some_and(|w| w.eq_ignore_ascii_case(control)));
+        let at = at.ok_or_else(|| unread("bindings_load", format!("the {console}'s key {key} is bound to {control}, which Endymion names no control")))?;
+        keys.push((key.to_owned(), 1u32 << at));
+    }
+    Ok(keys)
+}
+
+/// The hotkeys by their keys, read as the program reads the files.
+pub fn hotkeys_of(platform: &emusen_platform_client::Platform) -> Result<Vec<(String, Hotkey)>> {
+    let mut hotkeys = Vec::new();
+    for (action, key) in platform.bindings_load(files::HOTKEYS, &[])?.as_object().into_iter().flatten() {
+        let Some(key) = key.as_str().filter(|k| !k.is_empty()) else { continue };
+        let hotkey = Hotkey::named(action).ok_or_else(|| unread("bindings_load", format!("the hotkey {key} runs {action}, which this program has no action for")))?;
+        hotkeys.push((key.to_owned(), hotkey));
+    }
+    Ok(hotkeys)
+}
+
+/// A binding file's model this program cannot use, said as the platform client says a shape it cannot read.
+fn unread(call: &'static str, words: impl Into<String>) -> Error {
+    Error::Shape { call, words: words.into() }
 }

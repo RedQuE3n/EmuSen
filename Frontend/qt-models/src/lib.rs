@@ -1,6 +1,7 @@
 //! emusen-qt-models: the view models of EmuSen_Qt.md §1.2, the module EmuSen.Models 1.0. Each model's behaviour is plain
 //! Rust over a source the client crates or a test's fake answer; its bridge only puts that on Qt.
 
+pub mod bindings;
 pub mod card;
 pub mod cards;
 pub mod card_model;
@@ -9,6 +10,7 @@ pub mod clock;
 pub mod edits;
 pub mod consoles;
 pub mod consoles_source;
+pub mod controllers;
 pub mod esde_shelves;
 pub mod esde_texts;
 pub mod firmware;
@@ -34,6 +36,7 @@ pub mod marks;
 pub mod marks_object;
 pub mod pause;
 pub mod pause_model;
+pub mod pads_reach;
 pub mod pane_model;
 pub mod picture;
 pub mod pictures;
@@ -49,6 +52,7 @@ pub mod screenshots;
 pub mod session;
 pub mod session_model;
 pub mod settings;
+pub mod settings_controllers;
 pub mod settings_model;
 pub mod settings_saves;
 pub mod settings_source;

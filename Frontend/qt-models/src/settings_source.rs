@@ -1,8 +1,11 @@
 //! The Settings screen's source over the platform library (EmuSen_Qt.md §7.7): Galaxia's rows and models, Serenity's
 //! catalogue and Endymion's sound devices, each through `emusen-platform-client`.
 
+use crate::bindings::{Bindings, Choice, File};
 use crate::clients::app_settings;
 use crate::settings::{Model, SettingsSource};
+use crate::settings_controllers::{Chooser, ControlWord};
+use emusen_platform_client::bindings::consts as files;
 use emusen_platform_client::galaxia::consts::{DIR_FIRMWARE, FILE_GRAPHICS, FILE_SETTINGS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
 use emusen_platform_client::{serenity, Platform};
 use serde_json::Value;
@@ -25,6 +28,73 @@ impl ClientSettings {
     fn name(&self, which: u32) -> Result<String, String> {
         let file = self.platform.file(which).map_err(words)?;
         file.file_name().and_then(|n| n.to_str()).map(str::to_owned).ok_or_else(|| format!("{} names no file", file.display()))
+    }
+}
+
+impl ClientSettings {
+    /// Endymion's four binding models for the consoles named, and the three maps' defaults.
+    pub fn bindings(&self, consoles: &[&str]) -> Result<Bindings, String> {
+        let p = &self.platform;
+        Ok(Bindings {
+            keys: p.bindings_load(files::KEYS, consoles).map_err(words)?,
+            gamepad: p.bindings_load(files::GAMEPAD, consoles).map_err(words)?,
+            profiles: p.bindings_load(files::PROFILES, consoles).map_err(words)?,
+            hotkeys: p.bindings_load(files::HOTKEYS, consoles).map_err(words)?,
+            key_defaults: p.bindings_defaults(files::KEYS).map_err(words)?,
+            pad_defaults: p.bindings_defaults(files::GAMEPAD).map_err(words)?,
+            hotkey_defaults: p.bindings_defaults(files::HOTKEYS).map_err(words)?,
+            default_profile: default_profile(p)?,
+        })
+    }
+
+    /// The binding files a change touched, saved through Endymion.
+    pub fn save_bindings(&self, bindings: &Bindings, touched: &[File]) -> Result<(), String> {
+        for file in touched {
+            let which = crate::settings::SettingsView::bindings_files(&[*file])[0];
+            self.platform.bindings_save(which, crate::settings::SettingsView::bindings_model(bindings, *file)).map_err(words)?;
+        }
+        Ok(())
+    }
+
+    /// The chooser over this platform library, with Endymion's controls' words; their failure fails the read.
+    pub fn chooser(&self) -> Result<std::sync::Arc<dyn Chooser>, String> {
+        let controls = ControlWord::read(&self.platform.bindings_controls().map_err(words)?);
+        Ok(std::sync::Arc::new(Endymion(self.platform.clone(), controls)))
+    }
+}
+
+/// The profile every console has, as Endymion names it: the one `bindings_choose` answers where no profile exists.
+fn default_profile(p: &Platform) -> Result<String, String> {
+    let none = serde_json::json!({});
+    let answer = p.bindings_choose(Some(&none), Some(&none), "", 1, None, None).map_err(words)?;
+    answer["profile"].as_str().map(str::to_owned).ok_or_else(|| format!("bindings_choose named no profile: {answer}"))
+}
+
+/// Endymion's `bindings_choose` over a platform library.
+struct Endymion(std::sync::Arc<Platform>, Vec<ControlWord>);
+
+impl Chooser for Endymion {
+    fn choose(&self, gamepad: &Value, profiles: &Value, console: &str, player: u32, profile: Option<&str>, game: Option<&str>) -> Result<Choice, String> {
+        let answer = self.0.bindings_choose(Some(gamepad), Some(profiles), console, player as i32, game, profile).map_err(words)?;
+        match (answer["profile"].as_str(), answer["mapPlayer"].as_u64()) {
+            (Some(profile), Some(map_player)) => Ok(Choice { profile: profile.to_owned(), map_player: map_player as u32 }),
+            _ => Err(format!("bindings_choose named no profile and player: {answer}")),
+        }
+    }
+
+    fn bound(&self, console: &str, player: u32) -> Result<[i32; 16], String> {
+        self.0.bindings_bound(console, player as i32, None).map_err(words)
+    }
+
+    fn game_key(&self, path: &str) -> Result<String, String> {
+        match self.0.bindings_game_key(path).map_err(words)? {
+            key if key.is_empty() => Err(format!("Endymion named {path} by no name")),
+            key => Ok(key),
+        }
+    }
+
+    fn controls(&self) -> &[ControlWord] {
+        &self.1
     }
 }
 

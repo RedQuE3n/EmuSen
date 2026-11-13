@@ -27,6 +27,8 @@ pub enum Report {
     Shape { aspect: f64 },
     Failed(String),
     Closed,
+    /// Words over the game for something that did not happen, the game playing on.
+    Said(String),
 }
 
 /// What the model asks of the frame thread.
@@ -34,6 +36,8 @@ pub enum Report {
 struct Control {
     stop: AtomicBool,
     paused: AtomicBool,
+    /// Rewind held: each frame is a step back in place of a frame (Mistress's `_rewindHeld`).
+    rewinding: AtomicBool,
     /// Stereo frames of sound the player has taken in, by its own count.
     sounded: AtomicU64,
 }
@@ -119,6 +123,11 @@ impl Session {
         self.control.paused.store(paused, Ordering::Relaxed);
     }
 
+    /// While Rewind is held the game steps back through its history in place of running (EmuSen_Qt.md §7.7.H6).
+    pub fn set_rewinding(&self, rewinding: bool) {
+        self.control.rewinding.store(rewinding, Ordering::Relaxed);
+    }
+
     pub fn paused(&self) -> bool {
         self.control.paused.load(Ordering::Relaxed)
     }
@@ -158,8 +167,9 @@ fn run(
         let _ = runtime.close(session);
         return report(Report::Failed(words));
     }
-    // An engine that withholds rewind says why in session_info, which the card shows; the game plays on without it.
-    let _ = crate::reel::keep(runtime, session);
+    // An engine that withholds rewind says why in session_info, which the card shows; the game plays on without it,
+    // and Rewind held says so.
+    let rewind_every = crate::reel::keep(runtime, session).map(crate::reel::held_step);
     report(Report::Opened { session });
     let mut info = frame_info();
     let mut frame = Frame::default();
@@ -174,6 +184,8 @@ fn run(
     let mut was_held = false;
     // Whether the game ran a frame: a game closed before it played leaves where it was left off as it was.
     let mut played = false;
+    // Frames since the last step back while Rewind is held, and whether its failure was said.
+    let (mut rewound, mut rewind_said) = (0u32, false);
     while !stop.load(Ordering::Relaxed) {
         let held = paused.load(Ordering::Relaxed);
         if let Some(input) = input.as_mut() {
@@ -196,13 +208,36 @@ fn run(
             continue;
         }
         handoff.set_running(true);
-        if let Some(Err(words)) = input.as_mut().map(|input| input.frame(runtime, session)) {
-            *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(words);
-            break;
-        }
-        if let Err(e) = runtime.frame(session, &mut info) {
-            *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(e.to_string());
-            break;
+        let rewinding = control.rewinding.load(Ordering::Relaxed);
+        if rewinding {
+            // Rewind held takes the frame's place: a step back every `held_step` frames, nothing heard of the pads.
+            info.rendered = 0;
+            rewound += 1;
+            match &rewind_every {
+                Ok(every) if rewound >= *every => {
+                    rewound = 0;
+                    if let Err(e) = runtime.rewind_step(session, 1, &mut info) {
+                        *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(e.to_string());
+                        break;
+                    }
+                }
+                Ok(_) => {}
+                Err(e) if !rewind_said => {
+                    rewind_said = true;
+                    report(Report::Said(format!("Rewind is not kept for this game: {e}")));
+                }
+                Err(_) => {}
+            }
+        } else {
+            (rewound, rewind_said) = (0, false);
+            if let Some(Err(words)) = input.as_mut().map(|input| input.frame(runtime, session)) {
+                *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(words);
+                break;
+            }
+            if let Err(e) = runtime.frame(session, &mut info) {
+                *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(e.to_string());
+                break;
+            }
         }
         played = true;
         let mut handed = false;
@@ -226,7 +261,7 @@ fn run(
             }
         }
         // A speed whose sound is not played (turbo, unthrottled) drains it and drops it, as the runtime's frame says.
-        let playing = if info.play_audio != 0 { sound.as_mut() } else { None };
+        let playing = if info.play_audio != 0 && !rewinding { sound.as_mut() } else { None };
         if let Err(words) = play_sound(runtime, session, &mut audio, playing, &control.sounded) {
             *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(words);
             break;

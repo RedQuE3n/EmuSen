@@ -1,0 +1,23 @@
+{
+  "name": "Saturn control pad",
+  "design": [1000, 600],
+  "items": [
+    {"part": {"path": "M 500,150 C 500,110 506,60 520,4"}, "stroke": "#6A6A74", "width": 9},
+    {"region": "L2", "shape": {"box": [150, 52, 220, 46, 18]}, "name": "L", "fill": "#5E5E68", "stroke": "#6A6A74", "width": 3, "caption": "L", "caption_size": 24, "caption_colour": "#E4E4EA", "side": "top"},
+    {"region": "R2", "shape": {"box": [630, 52, 220, 46, 18]}, "name": "R", "fill": "#5E5E68", "stroke": "#6A6A74", "width": 3, "caption": "R", "caption_size": 24, "caption_colour": "#E4E4EA", "side": "top"},
+    {"part": {"union": [{"circle": [270, 350, 200]}, {"circle": [730, 350, 200]}, {"box": [270, 150, 460, 400, 0]}]}, "fill": "#3A3A41", "stroke": "#6A6A74", "width": 5},
+    {"part": {"circle": [270, 340, 128]}, "fill": "#2A2A30"},
+    {"part": {"circle": [270, 340, 110]}, "fill": "#45454E"},
+    {"dpad": [270, 340, 64, 96], "controls": ["Up", "Down", "Left", "Right"], "fill": "#18181B", "arrow": "#6A6A74", "radius": 10, "stroke": "#5A5A64"},
+    {"part": {"pill": [500, 250, 96, 40, 0]}, "fill": "#2A2A30"},
+    {"region": "Start", "shape": {"pill": [500, 250, 78, 24, 0]}, "fill": "#5A5A64"},
+    {"word": "START", "at": [500, 292], "size": 17, "colour": "#B8B8C2"},
+    {"part": {"box": [588, 196, 316, 230, 70]}, "fill": "#2A2A30"},
+    {"round": [652, 262, 28], "region": "Y", "colour": "#5A5A64", "name": "X", "caption": "X", "size": 24},
+    {"round": [746, 244, 28], "region": "X", "colour": "#5A5A64", "name": "Y", "caption": "Y", "size": 24},
+    {"round": [840, 262, 28], "region": "L", "colour": "#5A5A64", "name": "Z", "caption": "Z", "size": 24},
+    {"round": [644, 362, 40], "region": "B", "colour": "#5A5A64", "name": "A", "caption": "A", "size": 32},
+    {"round": [746, 344, 40], "region": "A", "colour": "#5A5A64", "name": "B", "caption": "B", "size": 32},
+    {"round": [848, 362, 40], "region": "R", "colour": "#5A5A64", "name": "C", "caption": "C", "size": 32}
+  ]
+}

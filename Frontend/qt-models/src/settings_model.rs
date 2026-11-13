@@ -32,6 +32,9 @@ pub mod qobject {
         type QStringList = cxx_qt_lib::QStringList;
         include!("cxx-qt-lib/qvector.h");
         type QVector_i32 = cxx_qt_lib::QVector<i32>;
+        include!("emusen-kit-qt/src/kinds.cxxqt.h");
+        #[namespace = "Pad"]
+        type PadButton = emusen_kit_qt::kinds::ffi::PadButton;
     }
 
     extern "RustQt" {
@@ -55,6 +58,8 @@ pub mod qobject {
         #[qproperty(QStringList, trail, READ, NOTIFY)]
         /// The focused row, which the frame's walk sets; the pane is its.
         #[qproperty(i32, focused)]
+        /// The focused row's sentence, or the bindings page's, which has no row (EmuSen_Qt.md §7.7.H).
+        #[qproperty(QString, sentence, READ, NOTIFY)]
         #[qproperty(QStringList, pane_lines, cxx_name = "paneLines", READ, NOTIFY)]
         #[qproperty(QStringList, pane_muted, cxx_name = "paneMuted", READ, NOTIFY)]
         /// The tone (Kit.Tones) of the focused row's sentence; `lineTone` gives each further line's.
@@ -71,8 +76,43 @@ pub mod qobject {
         #[qproperty(QString, text_size, cxx_name = "textSize", READ, NOTIFY)]
         #[qproperty(bool, light, READ, NOTIFY)]
         #[qproperty(bool, reduced_motion, cxx_name = "reducedMotion", READ, NOTIFY)]
+        /// And of the pads (EmuSen_Qt.md §7.7.H3): Swap A and B in menus, Controller type's family (Kit.Families; -1 for
+        /// Automatic), Controller notices and Rumble; the rest the pads' hand-over is given (`gamePads`).
+        #[qproperty(bool, swap_buttons, cxx_name = "swapButtons", READ, NOTIFY)]
+        #[qproperty(i32, controller_family, cxx_name = "controllerFamily", READ, NOTIFY)]
+        #[qproperty(bool, controller_notices, cxx_name = "controllerNotices", READ, NOTIFY)]
+        #[qproperty(bool, rumble, READ, NOTIFY)]
+        /// Whether Guide's chords are read, by Guide chords and `gameMode`, the program's Steam Game Mode (EmuSen_Qt.md §7.7.H6).
+        #[qproperty(bool, guide_chords, cxx_name = "guideChords", READ, NOTIFY)]
+        #[qproperty(bool, game_mode, cxx_name = "gameMode")]
         /// The help bar's screen (HelpModel's numbers).
         #[qproperty(i32, help, READ, NOTIFY)]
+        /// The pads' hand-over (`PadReader.gamePads`), whose seats the Players page shows and changes (EmuSen_Qt.md §7.7.H).
+        #[qproperty(u64, game_pads, cxx_name = "gamePads")]
+        /// The bindings page: whether it is shown, its drawing file, controls, labels' words, focused and held controls,
+        /// its strip and caption, and whether a press is listened for or the tester runs.
+        #[qproperty(bool, bindings_shown, cxx_name = "bindingsShown", READ, NOTIFY = drawn)]
+        #[qproperty(QString, drawing, READ, NOTIFY = drawn)]
+        #[qproperty(QStringList, drawing_controls, cxx_name = "drawingControls", READ, NOTIFY = drawn)]
+        #[qproperty(QStringList, drawing_texts, cxx_name = "drawingTexts", READ, NOTIFY = drawn)]
+        #[qproperty(i32, drawing_focus, cxx_name = "drawingFocus", READ, NOTIFY = drawn)]
+        #[qproperty(QStringList, drawing_held, cxx_name = "drawingHeld", READ, NOTIFY = drawn)]
+        #[qproperty(QStringList, binding_tabs, cxx_name = "bindingTabs", READ, NOTIFY = drawn)]
+        #[qproperty(QString, binding_caption, cxx_name = "bindingCaption", READ, NOTIFY = drawn)]
+        #[qproperty(bool, listening, READ, NOTIFY = drawn)]
+        #[qproperty(bool, listening_pad, cxx_name = "listeningPad", READ, NOTIFY = drawn)]
+        #[qproperty(bool, testing, READ, NOTIFY = drawn)]
+        /// The tester: how far each control is pushed (the drawing's knobs), whether the interface's B is held to leave
+        /// it, and how long it is held to leave.
+        #[qproperty(QVariant, drawing_pushes, cxx_name = "drawingPushes", READ, NOTIFY = drawn)]
+        #[qproperty(bool, tester_back, cxx_name = "testerBack", READ, NOTIFY = drawn)]
+        #[qproperty(i32, tester_hold_ms, cxx_name = "testerHoldMs", READ, NOTIFY = drawn)]
+        /// The Pause Card's Game Options ▸ Controllers rows, as plain data for `PauseModel.controllers` (EmuSen_Interface.md §20.3).
+        #[qproperty(QString, card_controllers, cxx_name = "cardControllers", READ, NOTIFY = drawn)]
+        /// A page's question waiting for typed words: whether one is, its title and its prompt.
+        #[qproperty(bool, typing, READ, NOTIFY = asked)]
+        #[qproperty(QString, typing_title, cxx_name = "typingTitle", READ, NOTIFY = asked)]
+        #[qproperty(QString, typing_prompt, cxx_name = "typingPrompt", READ, NOTIFY = asked)]
         /// Why a read or a save failed, in the platform's words; empty when it did not.
         #[qproperty(QString, problem, READ, NOTIFY)]
         type SettingsModel = super::SettingsModelRust;
@@ -153,6 +193,81 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "openFolder"]
         fn open_folder(self: Pin<&mut SettingsModel>, path: QString);
+
+        /// The bindings page's drawing changed.
+        #[qsignal]
+        fn drawn(self: Pin<&mut SettingsModel>);
+
+        /// Words to type for a page (a profile's name), starting with `start`; `typing`, `typingTitle` and
+        /// `typingPrompt` say the question, and `typed` answers.
+        #[qsignal]
+        #[cxx_name = "typeWords"]
+        fn type_words(self: Pin<&mut SettingsModel>, start: QString);
+
+        /// The question's words changed.
+        #[qsignal]
+        fn asked(self: Pin<&mut SettingsModel>);
+
+        /// A declared action the page did not take, for the screens (Start, Home).
+        #[qsignal]
+        fn passed(self: Pin<&mut SettingsModel>, key: QString);
+
+        /// A pad's button while a key is listened for: B lets the listening go.
+        #[qinvokable]
+        #[cxx_name = "padPressed"]
+        fn pad_pressed(self: Pin<&mut SettingsModel>, button: PadButton);
+
+        /// A row of the card's Controllers page stepped (`by` ±1) or chosen (`by` 0).
+        #[qinvokable]
+        #[cxx_name = "cardAct"]
+        fn card_act(self: Pin<&mut SettingsModel>, index: i32, by: i32);
+
+        /// The words typed for the page that asked, or none for a question let go.
+        #[qinvokable]
+        fn typed(self: Pin<&mut SettingsModel>, words: &QString);
+
+        /// The seats read again from the pads' hand-over, as the pads' reader says they changed.
+        #[qinvokable]
+        #[cxx_name = "seatsChanged"]
+        fn seats_changed(self: Pin<&mut SettingsModel>);
+
+        /// A direction on the bindings page (`dx`, `dy`): the nearest control that way on the drawing.
+        #[qinvokable]
+        #[cxx_name = "bindingMove"]
+        fn binding_move(self: Pin<&mut SettingsModel>, dx: i32, dy: i32);
+
+        /// A control of the bindings page focused by the pointer.
+        #[qinvokable]
+        #[cxx_name = "bindingFocus"]
+        fn binding_focus(self: Pin<&mut SettingsModel>, index: i32);
+
+        /// A on the bindings page: a press listened for.
+        #[qinvokable]
+        #[cxx_name = "bindingAccept"]
+        fn binding_accept(self: Pin<&mut SettingsModel>);
+
+        /// One of the help bar's declared actions on the bindings page or Hotkeys (reset, player, clear, test); one the
+        /// page does not take is `passed` on.
+        #[qinvokable]
+        fn act(self: Pin<&mut SettingsModel>, key: &QString);
+
+        /// A key pressed while a press is listened for, by Qt's number and modifiers: bound, or Escape cancelling;
+        /// true when it was taken.
+        #[qinvokable]
+        #[cxx_name = "heardKey"]
+        fn heard_key(self: Pin<&mut SettingsModel>, key: i32, modifiers: i32) -> bool;
+
+        /// A key let go while the tester runs; true when it was taken.
+        #[qinvokable]
+        #[cxx_name = "releasedKey"]
+        fn released_key(self: Pin<&mut SettingsModel>, key: i32, modifiers: i32) -> bool;
+
+        /// A button of the interface down or up on the pads while the tester runs, before the player's swap (`swap`):
+        /// whether it is B, held to leave the tester. True for a release, which the router still hears, so that no
+        /// button stays held there.
+        #[qinvokable]
+        #[cxx_name = "testerButton"]
+        fn tester_button(self: Pin<&mut SettingsModel>, button: PadButton, down: bool, swap: bool) -> bool;
     }
 
     unsafe extern "RustQt" {
@@ -195,6 +310,7 @@ pub struct SettingsModelRust {
     section: i32,
     trail: QStringList,
     focused: i32,
+    sentence: QString,
     pane_lines: QStringList,
     pane_muted: QStringList,
     sentence_tone: i32,
@@ -208,12 +324,43 @@ pub struct SettingsModelRust {
     text_size: QString,
     light: bool,
     reduced_motion: bool,
+    swap_buttons: bool,
+    controller_family: i32,
+    controller_notices: bool,
+    rumble: bool,
+    guide_chords: bool,
+    game_mode: bool,
     help: i32,
     problem: QString,
     view: SettingsView,
     rows: Vec<settings::Row>,
     /// The reads asked for, so an older read that finishes late is dropped.
     asked: u64,
+    /// Whether the last read asked for is still to come back.
+    reading: bool,
+    game_pads: u64,
+    bindings_shown: bool,
+    drawing: QString,
+    drawing_controls: QStringList,
+    drawing_texts: QStringList,
+    drawing_focus: i32,
+    drawing_held: QStringList,
+    drawing_pushes: QVariant,
+    tester_back: bool,
+    tester_hold_ms: i32,
+    binding_tabs: QStringList,
+    binding_caption: QString,
+    listening: bool,
+    listening_pad: bool,
+    testing: bool,
+    card_controllers: QString,
+    typing: bool,
+    typing_title: QString,
+    typing_prompt: QString,
+    /// The page's question waiting for typed words.
+    typed_for: Option<crate::settings_controllers::Typed>,
+    /// Each pad's buttons at the last read of the seats, so a press listened for is the one newly down.
+    pressed: Vec<(u64, u32)>,
     /// A value saved since Settings opened, told as `saved` when it closes.
     saved_since_open: bool,
 }
@@ -240,6 +387,7 @@ impl Default for SettingsModelRust {
             section: 0,
             trail: QStringList::default(),
             focused: 0,
+            sentence: QString::default(),
             pane_lines: QStringList::default(),
             pane_muted: QStringList::default(),
             sentence_tone: 0,
@@ -253,11 +401,39 @@ impl Default for SettingsModelRust {
             text_size: QString::default(),
             light: false,
             reduced_motion: false,
+            swap_buttons: false,
+            controller_family: -1,
+            controller_notices: false,
+            rumble: false,
+            guide_chords: false,
+            game_mode: false,
             help: shown_screen(Screen::Settings),
             problem: QString::default(),
             rows: view.rows(),
             view,
             asked: 0,
+            reading: false,
+            game_pads: 0,
+            bindings_shown: false,
+            drawing: QString::default(),
+            drawing_controls: QStringList::default(),
+            drawing_texts: QStringList::default(),
+            drawing_focus: -1,
+            drawing_held: QStringList::default(),
+            drawing_pushes: QVariant::from(&QList::<f64>::default()),
+            tester_back: false,
+            tester_hold_ms: 0,
+            binding_tabs: QStringList::default(),
+            binding_caption: QString::default(),
+            listening: false,
+            listening_pad: false,
+            testing: false,
+            card_controllers: QString::default(),
+            typing: false,
+            typing_title: QString::default(),
+            typing_prompt: QString::default(),
+            typed_for: None,
+            pressed: Vec::new(),
         }
     }
 }
@@ -286,6 +462,19 @@ impl cxx_qt::Initialize for qobject::SettingsModel {
                 let section = model.section.max(0) as usize;
                 model.as_mut().rust_mut().view.choose_section(section);
                 model.shown(true);
+            })
+            .release();
+        self.as_mut()
+            .on_game_mode_changed(|model| {
+                if model.ready {
+                    model.applied();
+                }
+            })
+            .release();
+        self.as_mut()
+            .on_game_pads_changed(|mut model| {
+                model.as_mut().settle_pads();
+                model.seats_changed();
             })
             .release();
         self.on_focused_changed(|model| model.pane()).release();
@@ -343,26 +532,32 @@ impl qobject::SettingsModel {
         }
         let asked = self.asked.wrapping_add(1);
         self.as_mut().rust_mut().asked = asked;
+        self.as_mut().rust_mut().reading = true;
         // Cleared at the start of each attempt, so the same failure twice is said twice (EmuSen_Qt.md §7.9).
         self.as_mut().said(String::new());
         let thread = self.qt_thread();
         let (cores, world) = (self.cores.to_string(), self.world.to_string());
         std::thread::spawn(move || {
-            let read = ClientSettings::open(&library).and_then(|source| settings::read(&source)).and_then(|mut read| {
+            let read = ClientSettings::open(&library).and_then(|source| {
+                let mut read = settings::read(&source)?;
                 read.consoles = if world.is_empty() {
                     crate::consoles::read(&ClientConsoles::open(&library, &cores)?)?
                 } else {
                     crate::consoles::read(&ScriptedConsoles::open(&world)?)?
                 };
-                Ok(read)
+                let names: Vec<&str> = read.consoles.consoles.iter().map(|c| c.console.as_str()).collect();
+                read.bindings = source.bindings(&names)?;
+                Ok((read, source.chooser()?))
             });
             let _ = thread.queue(move |mut model| {
                 if model.asked != asked {
                     return;
                 }
+                model.as_mut().rust_mut().reading = false;
                 match read {
-                    Ok(read) => {
+                    Ok((read, chooser)) => {
                         model.as_mut().rust_mut().view.read = read;
+                        model.as_mut().rust_mut().view.chooser = Some(chooser);
                         model.as_mut().said(String::new());
                     }
                     Err(words) => model.as_mut().said(format!("The settings could not be read: {words}")),
@@ -384,6 +579,10 @@ impl qobject::SettingsModel {
     }
 
     pub fn back(mut self: Pin<&mut Self>) {
+        if self.as_mut().rust_mut().view.back_taken() {
+            self.shown(false);
+            return;
+        }
         match self.as_mut().rust_mut().view.back() {
             Some(row) => {
                 self.as_mut().shown(true);
@@ -402,6 +601,13 @@ impl qobject::SettingsModel {
     }
 
     pub fn shoulder(mut self: Pin<&mut Self>, by: i32) -> bool {
+        if self.view.binding_open() {
+            let stepped = self.as_mut().rust_mut().view.binding_shoulder(by);
+            if stepped {
+                self.shown(false);
+            }
+            return stepped;
+        }
         let stepped = self.as_mut().rust_mut().view.shoulder(by);
         if stepped {
             self.shown(true);
@@ -428,7 +634,11 @@ impl qobject::SettingsModel {
                 }
                 self.as_mut().said(saved.err().map(|e| format!("The settings could not be saved: {e}")).unwrap_or_default());
                 self.as_mut().applied();
-                self.shown(false);
+                self.as_mut().shown(false);
+                // A read begun before this save would bring the old value back: read again after it (EmuSen_Qt.md §7.7.H7).
+                if self.reading {
+                    self.refresh();
+                }
             }
             Outcome::Opened => self.shown(true),
             Outcome::Shown => self.shown(false),
@@ -450,8 +660,9 @@ impl qobject::SettingsModel {
                 let failed = set.is_err();
                 self.as_mut().said(set.err().map(|e| format!("The console's setting could not be stored: {e}")).unwrap_or_default());
                 self.as_mut().shown(false);
-                // The engine chosen changes the schema the page draws, and a refusal leaves the stored value as it was.
-                if failed || key == crate::consoles::ENGINE_KEY {
+                // The engine chosen changes the schema the page draws, a refusal leaves the stored value as it was, and a
+                // read begun before this store would bring the old value back.
+                if failed || key == crate::consoles::ENGINE_KEY || self.reading {
                     self.refresh();
                 }
             }
@@ -461,6 +672,36 @@ impl qobject::SettingsModel {
                 self.refresh();
             }
             Outcome::Reread => self.refresh(),
+            Outcome::Failed(words) => {
+                self.as_mut().said(words);
+                self.shown(false);
+            }
+            Outcome::Bindings(files) => {
+                // SAFETY: the address is PadReader.gamePads, whose reader outlives the screens.
+                let pads = unsafe { emusen_qt_endymion::game::GamePads::at(self.game_pads) };
+                let saved = ClientSettings::open(&self.platform_library.to_string())
+                    .and_then(|s| crate::pads_reach::bindings_saved(&s, &self.view.read.bindings, &files, pads.as_deref()));
+                self.as_mut().said(saved.err().map(|e| format!("The bindings could not be saved: {e}")).unwrap_or_default());
+                self.as_mut().shown(false);
+                self.refresh();
+            }
+            Outcome::Seat(ask) => {
+                // SAFETY: the address is PadReader.gamePads, whose reader outlives the screens.
+                if let Some(pads) = unsafe { emusen_qt_endymion::game::GamePads::at(self.game_pads) } {
+                    pads.ask(ask);
+                }
+            }
+            Outcome::Type { title, prompt, start, typed } => {
+                {
+                    let mut r = self.as_mut().rust_mut();
+                    r.typed_for = Some(typed);
+                    r.typing = true;
+                    r.typing_title = QString::from(title.as_str());
+                    r.typing_prompt = QString::from(prompt.as_str());
+                }
+                self.as_mut().asked();
+                self.type_words(QString::from(start.as_str()));
+            }
             Outcome::All(all) => {
                 for one in all {
                     self.as_mut().outcome(one);
@@ -492,9 +733,42 @@ impl qobject::SettingsModel {
             self.as_mut().rust_mut().reduced_motion = reduced;
             self.as_mut().reduced_motion_changed();
         }
+        let (swap, notices, rumble) = (self.view.swap_buttons(), self.view.controller_notices(), self.view.rumble());
+        let family = self.view.controller_family().map_or(-1, |f| emusen_kit_qt::kinds::family_of(f).repr);
+        if self.swap_buttons != swap {
+            self.as_mut().rust_mut().swap_buttons = swap;
+            self.as_mut().swap_buttons_changed();
+        }
+        if self.controller_family != family {
+            self.as_mut().rust_mut().controller_family = family;
+            self.as_mut().controller_family_changed();
+        }
+        if self.controller_notices != notices {
+            self.as_mut().rust_mut().controller_notices = notices;
+            self.as_mut().controller_notices_changed();
+        }
+        if self.rumble != rumble {
+            self.as_mut().rust_mut().rumble = rumble;
+            self.as_mut().rumble_changed();
+        }
+        let chords = self.view.guide_chords(self.game_mode);
+        if self.guide_chords != chords {
+            self.as_mut().rust_mut().guide_chords = chords;
+            self.as_mut().guide_chords_changed();
+        }
+        self.as_mut().settle_pads();
         if !self.ready {
             self.as_mut().rust_mut().ready = true;
             self.ready_changed();
+        }
+    }
+
+    /// The settings the pads act on handed to the pads' reader, once read (Mistress's `SaveApp`: deadzone, stickdpad, mirror).
+    fn settle_pads(mut self: Pin<&mut Self>) {
+        // SAFETY: the address is PadReader.gamePads, whose reader outlives the screens.
+        let pads = unsafe { emusen_qt_endymion::game::GamePads::at(self.game_pads) };
+        if let Some(words) = crate::pads_reach::settle(&self.view, pads.as_deref()) {
+            self.as_mut().said(words);
         }
     }
 
@@ -540,12 +814,193 @@ impl qobject::SettingsModel {
             self.as_mut().rust_mut().help = help;
             self.as_mut().help_changed();
         }
+        self.as_mut().draw();
         self.pane();
+    }
+
+    /// The bindings page's drawing from the view.
+    fn draw(mut self: Pin<&mut Self>) {
+        let drawn = self.view.drawn();
+        let shown = drawn.is_some();
+        let d = drawn.unwrap_or_default();
+        let (listening, listening_pad, testing) = (self.view.listening(), self.view.listening_pad(), self.view.testing());
+        let hold = self.view.tester_hold_ms();
+        let card = serde_json::Value::Array(self.view.game_rows().iter().map(|g| g.to_json()).collect()).to_string();
+        let mut r = self.as_mut().rust_mut();
+        r.bindings_shown = shown;
+        r.drawing = QString::from(d.drawing.as_str());
+        r.drawing_controls = list(d.controls.into_iter());
+        r.drawing_texts = list(d.texts.into_iter());
+        r.drawing_focus = d.focus;
+        r.drawing_held = list(d.held.into_iter());
+        r.drawing_pushes = QVariant::from(&d.pushes.iter().copied().collect::<QList<f64>>());
+        r.tester_back = r.tester_back && testing;
+        r.tester_hold_ms = hold;
+        r.binding_tabs = list(d.tabs.into_iter());
+        r.binding_caption = QString::from(d.caption.as_str());
+        r.listening = listening;
+        r.listening_pad = listening_pad;
+        r.testing = testing;
+        r.card_controllers = QString::from(card.as_str());
+        let problem = self.view.controllers_problem();
+        if let Some(words) = problem {
+            self.as_mut().said(words);
+        }
+        self.drawn();
+    }
+
+    pub fn card_act(mut self: Pin<&mut Self>, index: i32, by: i32) {
+        let outcome = self.as_mut().rust_mut().view.game_act(index.max(0) as usize, by);
+        let opened = matches!(&outcome, Outcome::Door(d) if d == crate::settings_controllers::CARD_BINDINGS);
+        if opened {
+            self.as_mut().shown(true);
+        }
+        self.outcome(outcome);
+    }
+
+    pub fn typed(mut self: Pin<&mut Self>, words: &QString) {
+        let Some(typed) = self.as_mut().rust_mut().typed_for.take() else { return };
+        self.as_mut().rust_mut().typing = false;
+        self.as_mut().asked();
+        let outcome = self.as_mut().rust_mut().view.typed(&typed, &words.to_string());
+        self.outcome(outcome);
+    }
+
+    pub fn seats_changed(mut self: Pin<&mut Self>) {
+        // SAFETY: the address is PadReader.gamePads, whose reader outlives the screens.
+        let Some(pads) = (unsafe { emusen_qt_endymion::game::GamePads::at(self.game_pads) }) else { return };
+        let seated = crate::settings_controllers::Seated { players: pads.players(), pads: pads.connected(), deadzone: pads.stick_deadzone() };
+        let before = std::mem::take(&mut self.as_mut().rust_mut().pressed);
+        let now: Vec<(u64, u32)> = seated.pads.iter().map(|p| (p.key, p.buttons)).collect();
+        self.as_mut().rust_mut().pressed = now.clone();
+        let fresh = now.iter().find_map(|(key, mask)| {
+            let was = before.iter().find(|(k, _)| k == key).map_or(0, |(_, m)| *m);
+            let down = mask & !was;
+            (down != 0).then_some(down)
+        });
+        let (held, pushes) = (self.view.held_from(&seated), self.view.pushes_from(&seated));
+        let held = match held {
+            Ok(held) => held,
+            Err(words) => {
+                self.as_mut().said(words);
+                Vec::new()
+            }
+        };
+        {
+            let mut r = self.as_mut().rust_mut();
+            r.view.seats = seated;
+            r.view.held = held;
+            r.view.pushes = pushes;
+        }
+        if let (true, Some(down)) = (self.view.listening_pad(), fresh) {
+            let outcome = self.as_mut().rust_mut().view.heard_down(down);
+            self.outcome(outcome);
+            return;
+        }
+        self.shown(false);
+    }
+
+    pub fn binding_move(mut self: Pin<&mut Self>, dx: i32, dy: i32) {
+        if self.as_mut().rust_mut().view.binding_move(dx, dy) {
+            self.shown(false);
+        }
+    }
+
+    pub fn binding_focus(mut self: Pin<&mut Self>, index: i32) {
+        if self.as_mut().rust_mut().view.binding_focus(index.max(0) as usize) {
+            self.shown(false);
+        }
+    }
+
+    pub fn binding_accept(mut self: Pin<&mut Self>) {
+        if self.as_mut().rust_mut().view.binding_accept() {
+            // The buttons held as listening starts are not the press listened for.
+            self.as_mut().seats_changed();
+            self.shown(false);
+        }
+    }
+
+    pub fn act(mut self: Pin<&mut Self>, key: &QString) {
+        let words = key.to_string();
+        let outcome = if self.view.binding_open() {
+            self.as_mut().rust_mut().view.binding_act(&words)
+        } else if words == crate::help::CLEAR {
+            let focused = self.focused.max(0) as usize;
+            self.as_mut().rust_mut().view.clear_hotkey(focused)
+        } else {
+            Outcome::Nothing
+        };
+        if outcome == Outcome::Nothing {
+            self.passed(key.clone());
+            return;
+        }
+        self.outcome(outcome);
+    }
+
+    pub fn pad_pressed(self: Pin<&mut Self>, button: qobject::PadButton) {
+        if emusen_kit_qt::kinds::ui_button(button) == Some(emusen_kit_core::input::UiButton::Back) {
+            self.back();
+        }
+    }
+
+    pub fn heard_key(mut self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool {
+        if self.view.testing() {
+            return self.tester_key(key, modifiers, true);
+        }
+        if !self.view.listening() || self.view.listening_pad() {
+            return false;
+        }
+        let outcome = match emusen_qt_endymion::keys::heard(key, modifiers) {
+            emusen_qt_endymion::keys::Heard::Nothing => return true,
+            emusen_qt_endymion::keys::Heard::Escape => self.as_mut().rust_mut().view.heard_key(None),
+            emusen_qt_endymion::keys::Heard::Key(word) => self.as_mut().rust_mut().view.heard_key(Some(word)),
+        };
+        self.outcome(outcome);
+        true
+    }
+
+    pub fn released_key(self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool {
+        self.view.testing() && self.tester_key(key, modifiers, false)
+    }
+
+    /// A key down or up while the tester runs: Escape stops it, any other key lights what it is bound to.
+    fn tester_key(mut self: Pin<&mut Self>, key: i32, modifiers: i32, down: bool) -> bool {
+        match emusen_qt_endymion::keys::heard(key, modifiers) {
+            emusen_qt_endymion::keys::Heard::Nothing => {}
+            emusen_qt_endymion::keys::Heard::Escape if down => self.as_mut().back(),
+            emusen_qt_endymion::keys::Heard::Escape => {}
+            emusen_qt_endymion::keys::Heard::Key(word) => {
+                match self.as_mut().rust_mut().view.tester_key(word, down) {
+                    Ok(true) => self.shown(false),
+                    Ok(false) => {}
+                    Err(words) => {
+                        self.as_mut().said(words);
+                        self.shown(false);
+                    }
+                }
+            }
+        }
+        true
+    }
+
+    pub fn tester_button(mut self: Pin<&mut Self>, button: qobject::PadButton, down: bool, swap: bool) -> bool {
+        let back = emusen_kit_qt::kinds::ui_button(button).map(|b| b.swapped(swap)) == Some(emusen_kit_core::input::UiButton::Back);
+        let held = back && down && self.view.testing();
+        if back && self.tester_back != held {
+            self.as_mut().rust_mut().tester_back = held;
+            self.as_mut().drawn();
+        }
+        !down
     }
 
     /// The focused row's pane.
     fn pane(mut self: Pin<&mut Self>) {
         let pane = self.view.pane(self.focused.max(0) as usize);
+        let sentence = QString::from(pane.sentence.as_str());
+        if self.sentence != sentence {
+            self.as_mut().rust_mut().sentence = sentence;
+            self.as_mut().sentence_changed();
+        }
         // The kit's Tones are numbered in the order tools::Tone lists them.
         let tones: Vec<i32> = pane.tones.iter().map(|t| *t as i32).collect();
         let sentence_tone = tones.first().copied().unwrap_or(0);
@@ -573,6 +1028,7 @@ impl qobject::SettingsModel {
             Preview::Meter => 2,
             Preview::Variants => 3,
             Preview::Sizes => 4,
+            Preview::Heading => 5,
         };
         if self.preview != preview {
             self.as_mut().rust_mut().preview = preview;

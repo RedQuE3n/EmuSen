@@ -42,6 +42,8 @@ pub mod qobject {
         Drawer,
         Controllers,
         Cheats,
+        Display,
+        Sound,
     }
 
     extern "RustQt" {
@@ -59,6 +61,8 @@ pub mod qobject {
         #[qproperty(QString, shelf)]
         /// Game Options ▸ Controllers' rows as Settings' description gives them (`SettingsModel.cardControllers`).
         #[qproperty(QString, controllers)]
+        /// Game Options ▸ Display's or Sound's rows as Settings' description gives them (`SettingsModel.cardSettings`).
+        #[qproperty(QString, settings)]
         #[qproperty(QString, title, READ, NOTIFY)]
         #[qproperty(QString, breadcrumb, READ, NOTIFY)]
         /// The row focused; a page opens on its own.
@@ -201,6 +205,22 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "cheatAsked"]
         fn cheat_asked(self: Pin<&mut PauseModel>, index: i32, on: bool);
+
+        /// Display's or Sound's page (`page`, "display" or "sound") turned to, for `SettingsModel.cardOpen` with the
+        /// running console.
+        #[qsignal]
+        #[cxx_name = "settingsPageAsked"]
+        fn settings_page_asked(self: Pin<&mut PauseModel>, page: QString, system: QString);
+
+        /// A row of Display's or Sound's page stepped (`by` ±1) or chosen (`by` 0), for `SettingsModel.cardSettingsAct`.
+        #[qsignal]
+        #[cxx_name = "settingsAsked"]
+        fn settings_asked(self: Pin<&mut PauseModel>, index: i32, by: i32);
+
+        /// B on a page a door of Display's opened, for `SettingsModel.cardBack`.
+        #[qsignal]
+        #[cxx_name = "settingsBackAsked"]
+        fn settings_back_asked(self: Pin<&mut PauseModel>);
     }
 
     unsafe extern "RustQt" {
@@ -233,6 +253,7 @@ pub struct PauseModelRust {
     system: QString,
     shelf: QString,
     controllers: QString,
+    settings: QString,
     title: QString,
     breadcrumb: QString,
     current: i32,
@@ -253,6 +274,7 @@ impl Default for PauseModelRust {
             system: QString::default(),
             shelf: QString::default(),
             controllers: QString::default(),
+            settings: QString::default(),
             title: QString::default(),
             breadcrumb: QString::default(),
             current: 0,
@@ -286,6 +308,16 @@ impl cxx_qt::Initialize for qobject::PauseModel {
                 model.shown();
             })
             .release();
+        self.as_mut()
+            .on_settings_changed(|mut model| {
+                let rows = crate::settings_card::CardRows::from_json(&model.settings.to_string());
+                if model.as_mut().rust_mut().card.take_settings(rows) {
+                    model.turned();
+                } else {
+                    model.shown();
+                }
+            })
+            .release();
         self.on_shelf_changed(|mut model| {
             let mut shelf = crate::games::from_json(&model.shelf.to_string());
             shelf.iter_mut().for_each(|g| g.cover = crate::game_model::cover_url(&g.cover));
@@ -308,6 +340,8 @@ fn shown_page(page: Page) -> PausePage {
         Page::Drawer(_) => PausePage::Drawer,
         Page::Controllers => PausePage::Controllers,
         Page::Cheats => PausePage::Cheats,
+        Page::Settings(crate::settings_card::CardPage::Display) => PausePage::Display,
+        Page::Settings(crate::settings_card::CardPage::Sound) => PausePage::Sound,
     }
 }
 
@@ -432,6 +466,12 @@ impl qobject::PauseModel {
                 self.as_mut().cheat_asked(index as i32, on);
                 self.shown();
             }
+            Outcome::SettingsPage { page, console } => {
+                self.as_mut().turned();
+                self.settings_page_asked(QString::from(page.key()), QString::from(console.as_str()));
+            }
+            Outcome::Settings { index, by } => self.settings_asked(index as i32, by),
+            Outcome::SettingsBack => self.settings_back_asked(),
         }
     }
 

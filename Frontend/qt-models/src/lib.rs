@@ -56,6 +56,7 @@ pub mod screenshots;
 pub mod session;
 pub mod session_model;
 pub mod settings;
+pub mod settings_card;
 pub mod settings_controllers;
 pub mod settings_model;
 pub mod settings_saves;

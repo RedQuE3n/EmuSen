@@ -5432,8 +5432,8 @@ went to 9.7 s, not 9.2 s, because 250/60 + 5 lies an ulp above 550/60. Mistress'
 the defect is hers too; `reel.rs` now takes two moments within a nanosecond as one time (`SAME_MOMENT`).
 
 **Differences from Mistress, for the tester:**
-- Controllers, Display, Sound, Memory Cards and Cheats are declared and do nothing yet. Their pages are pages of
-  Settings' one description (§20.3, §20.7 to §20.9) and Cheats is the cheats window; both are stage 5's.
+- Controllers, Display, Sound, Memory Cards and Cheats were declared and did nothing at first. Their pages are pages of
+  Settings' one description (§20.3, §20.7 to §20.9) and Cheats is the cheats window; all five now open (§7.7.H).
 - Her render of Game Options is older than the recording: it shows a Volume row where §20.8 put Sound ▸. The Qt page
   follows the recording. Over the test core, which claims a drive, the page also holds Memory Cards, and the first page
   Change Disc, which Mistress's render (made over a core without one) has not.
@@ -6015,6 +6015,17 @@ next connected pad, Profile the game's own (Endymion's `Games` member; the runni
 `GamePads::rebind`), Bindings opening Settings' drawing page over the card (`Screens` route `cardBindings`, B back to the
 card), Swap Players dimmed with no player 2. The card's pane draws a page's second line muted under its sentence
 (`PaneModel.muted`), as Mistress's two lines.
+
+**The Pause Card's Game Options ▸ Display and Sound** (2026-11-13): Settings' own rows for the running game, read from
+the same description (`settings_card.rs`). Display is the running console's page of Settings ▸ Consoles, Sound is the
+Sound section, each down to the rows the description marks `pause`: on a television CRT profile, Shader levers, Crop
+overscan and Picture shape; on another screen Screen and Picture shape; Volume and Output on Sound (the interface's
+sounds are not the game's). The card's pages are Settings' pages kept apart from the screen's (`CardPlace`), so a row
+is stepped or chosen by Settings' own `step` and `choose` and stored where Settings stores it; Settings ▸ Display ▸
+Shaders' choice of a pack preset stays on Settings. Shader levers opens its page under the card's, titled by Settings,
+B closing it onto its door. A display setting stored reads the paused picture again at once (`readPicture`); a lever
+sets the chain itself (`setLever`); Volume and Output reach the session by the bindings Settings already drives.
+`SettingsModel.cardSettings` carries the rows, `cardOpen`, `cardSettingsAct` and `cardBack` the card's asks.
 
 **No picture to be held to.** These screens have no mockup and no recording in the tree: every `hold` of the
 Controllers tests (`settings_controllers.rs`, `card_controllers.rs`, `settings_drawings.rs`) passes an empty mockup

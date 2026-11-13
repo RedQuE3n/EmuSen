@@ -2332,7 +2332,7 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_n
 |---|---|---|
 | `drawn` | 459 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, 347 measured 2026-11-08), and the families drawn since (§4.5.6 to §4.5.9) |
 | `heard:<test>` | 2 | proven by what is heard, not by a picture (R-20261112-26): `sound.path` and video `audio`, each naming the test that hears it (§4.5.9) |
-| `later:help-dimmed` | 0 | the help's eight `*Dimmed` properties (`posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`): not drawn until each is checked (R-20261111-75, decided 2026-11-11; the `accepted` state of 2026-11-08 is withdrawn) |
+| `later:help-dimmed` | 0 | the help's eight `*Dimmed` properties, drawn since 2026-11-13 (§4.5.9) |
 | `later:sound` | 0 | `sound.path`, heard since 2026-11-13 (§4.5.9) |
 | `later:video` | 1 | the video's `scanlines` (`audio` heard since 2026-11-13, §4.5.9); the other fourteen of the family drawn or moved to `stationary` (§4.5.6, 2026-11-12) |
 | `later:gradients` | 0 | the 22 `*ColorEnd` and `*GradientType` pairs, drawn since 2026-11-13 (§4.5.7) |
@@ -2553,7 +2553,7 @@ pictures, and each rule read in ES-DE 3.4.1's source (read, never copied).
 | carousel `selectedItemOffset` | the selected item moves by the pair in proportion as it nears the centre, both axes a share of the screen's width for a horizontal carousel and of its height for a vertical one; row types only | `CarouselComponent::applyTheme`, `render` |
 | carousel `itemAxisRotation` | each item of a row type turned by the angle about its own unscaled centre, after its growth | `render` |
 | carousel `itemDiagonalOffset` | each item shifted by the share × its distance from the centre, up for a horizontal carousel (the screen's height) and left for a vertical one (its width); the shift turns with the item | `render` (comp->setPosition) |
-| carousel `itemStacking` | `ascending` draws the row in order, `descending` reversed, the `Raised` forms the centre item last; the centre is the item at the position's floor while it moves toward lower positions and at its ceiling otherwise | `render` (belowCenter, mPositiveDirection) |
+| carousel `itemStacking` | `ascending` draws the row in order, `descending` reversed, the `Raised` forms the centre item last; the centre is the item at the position's floor while it moves toward lower positions, and at its ceiling while it moves toward higher ones or rests | `render` (belowCenter, mPositiveDirection) |
 | `scope` of helpsystem, clock and systemstatus | `menu` shows only while a menu is open, `view` only while none is, `none` never | `Window::render`, `renderHelpPromptsEarly` |
 
 The mapping test's `switch` move presses accept in the system view or back in the gamelist with a slide transitions

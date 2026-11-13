@@ -367,7 +367,7 @@ pub fn carousel(e: &Element, data: &Data, count: usize, cursor: usize, position:
             ));
         }
         // itemStacking: the row in order, or reversed, the centre item last when raised; the centre is the item at the
-        // position's floor while it falls and its ceiling otherwise (`render`, belowCenter and mPositiveDirection).
+        // position's floor while it falls, its ceiling while it rises (`render`, belowCenter and mPositiveDirection).
         let centre = if fraction > 0.0 && !falling { 1 } else { 0 };
         match stacking {
             "ascending" | "ascendingRaised" => slots.sort_by_key(|s| s.1),

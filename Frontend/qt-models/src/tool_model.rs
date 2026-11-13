@@ -25,12 +25,16 @@ pub mod qobject {
     enum Tool {
         NoTool,
         Cores,
+        /// A tool of jobs, named by `jobs` (tools/jobs.rs).
+        Jobs,
     }
 
     extern "RustQt" {
         #[qobject]
         #[qml_element]
         #[qproperty(Tool, tool)]
+        /// The tool of jobs shown, by its key, while `tool` is Jobs.
+        #[qproperty(QString, jobs)]
         #[qproperty(QString, platform_library, cxx_name = "platformLibrary")]
         /// The runtime's cores folder, as the library's; empty for the installation's own.
         #[qproperty(QString, cores)]
@@ -156,6 +160,7 @@ use qobject::Tool as Shown;
 
 pub struct ToolModelRust {
     tool: Shown,
+    jobs: QString,
     platform_library: QString,
     cores: QString,
     world: QString,
@@ -199,6 +204,9 @@ pub struct ToolModelRust {
     question_choices: QStringList,
     question_back: i32,
     shown: Option<Tool<Box<dyn Source>>>,
+    /// The key of the tool of jobs shown, and the others opened before, kept with their running jobs and last runs.
+    shown_jobs: String,
+    parked: std::collections::HashMap<String, Tool<Box<dyn Source>>>,
     /// While the properties are put, the list's own moves (a reset's, or following `current`) are not the player's.
     filling: bool,
 }
@@ -207,6 +215,7 @@ impl Default for ToolModelRust {
     fn default() -> Self {
         ToolModelRust {
             tool: Shown::NoTool,
+            jobs: QString::default(),
             platform_library: QString::default(),
             cores: QString::default(),
             world: QString::default(),
@@ -250,6 +259,8 @@ impl Default for ToolModelRust {
             question_choices: QStringList::default(),
             question_back: -1,
             shown: None,
+            shown_jobs: String::new(),
+            parked: std::collections::HashMap::new(),
             filling: false,
         }
     }
@@ -284,6 +295,18 @@ fn cores_source(platform_library: &str, cores: &str, world: &str) -> Result<Box<
     Ok(Box::new(Cores::new(backend, Host::default())))
 }
 
+/// The tool of jobs of `key`, its jobs started by the platform library's tools, or from the world a file holds.
+fn jobs_source(platform_library: &str, world: &str, key: &str) -> Result<Box<dyn Source>, String> {
+    let starter: crate::tools::jobs::Starter = if world.is_empty() {
+        let platform = emusen_platform_client::Platform::load(platform_library).map_err(|e| e.to_string())?;
+        Box::new(move |request| crate::tools::cores::backend::platform_job(&platform, request))
+    } else {
+        let scripted = Scripted::open(world)?;
+        Box::new(move |request| scripted.start(request))
+    };
+    crate::tools::jobs::Jobs::new(key, starter).map(|j| Box::new(j) as Box<dyn Source>).ok_or_else(|| format!("{key} is no tool of jobs"))
+}
+
 macro_rules! put {
     ($model:expr, $field:ident, $value:expr, $signal:ident) => {{
         let value = $value;
@@ -299,9 +322,19 @@ impl qobject::ToolModel {
         if !self.open {
             return;
         }
+        let jobs = self.jobs.to_string();
+        if self.tool == Shown::Jobs && self.shown_jobs != jobs {
+            let mut rust = self.as_mut().rust_mut();
+            let was = std::mem::replace(&mut rust.shown_jobs, jobs.clone());
+            if let Some(tool) = rust.shown.take() {
+                rust.parked.insert(was, tool);
+            }
+            rust.shown = rust.parked.remove(&jobs);
+        }
         if self.shown.is_none() {
             let made = match self.tool {
                 Shown::Cores => cores_source(&self.platform_library.to_string(), &self.cores.to_string(), &self.world.to_string()),
+                Shown::Jobs => jobs_source(&self.platform_library.to_string(), &self.world.to_string(), &jobs),
                 _ => Err("no tool is named".to_owned()),
             };
             match made {

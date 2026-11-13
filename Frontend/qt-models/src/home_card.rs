@@ -137,6 +137,19 @@ const TOOL_ROWS: [(&str, &str, &str, &str); 5] = [
 const OTHER_TOOLS: [(&str, &str); 4] =
     [(THEMES, "Themes"), ("collections", "Collections"), ("compressed", "Compressed Discs"), ("shell", "Shell")];
 
+/// Compressed Discs' sentence, as the tools with summaries have theirs.
+const COMPRESSED_SENTENCE: &str = "Converts the library's disc games to CHD and checks the converted discs.";
+
+/// A tool's name and what it does, by its row's key; none for no tool.
+pub fn tool_words(key: &str) -> Option<(&'static str, &'static str)> {
+    TOOL_ROWS.iter().find(|r| r.0 == key).map(|r| (r.1, r.3)).or_else(|| OTHER_TOOLS.iter().find(|r| r.0 == key).map(|r| (r.1, if r.0 == "compressed" { COMPRESSED_SENTENCE } else { "" })))
+}
+
+/// Whether a tool has a screen; one that has none yet is not listed (screens::tool_screen).
+fn screened(key: &str) -> bool {
+    crate::screens::tool_screen(key).is_some()
+}
+
 /// The order the Tools row's value is taken in: the first tool whose line needs the player (`AttentionValue`).
 const ATTENTION_ORDER: [&str; 5] = ["cores", "library", "scraper", "packages", "cheats"];
 
@@ -154,7 +167,7 @@ fn hint(name: &str) -> String {
 
 /// The tools' lines as the Tools row's pane lists them: each name, and its line or what it does.
 fn tool_lines(tools: &Value) -> Pane {
-    let lines = TOOL_ROWS.iter().map(|(key, name, about, _)| (name.to_string(), summary(tools, key, "marked").or(summary(tools, key, "brief")).unwrap_or(about).to_owned()));
+    let lines = TOOL_ROWS.iter().filter(|r| screened(r.0)).map(|(key, name, about, _)| (name.to_string(), summary(tools, key, "marked").or(summary(tools, key, "brief")).unwrap_or(about).to_owned()));
     Pane { lines: lines.collect(), ..Pane::default() }
 }
 
@@ -179,7 +192,7 @@ fn first_page(f: &Facts) -> Page {
         rows.push(Row::new(START_CONSOLE, "Start Console").opens());
     }
     let tools_at = rows.len();
-    let attention = ATTENTION_ORDER.iter().filter(|k| needs_player(&f.tools, k)).find_map(|k| summary(&f.tools, k, "markedBrief").or(summary(&f.tools, k, "brief")));
+    let attention = ATTENTION_ORDER.iter().filter(|k| screened(k) && needs_player(&f.tools, k)).find_map(|k| summary(&f.tools, k, "markedBrief").or(summary(&f.tools, k, "brief")));
     rows.push(Row::new(TOOLS, "Tools").value(attention.unwrap_or_default()).opens().pane(tool_lines(&f.tools)));
     if tools_at > 0 {
         end_section_before(&mut rows, tools_at);
@@ -194,6 +207,7 @@ fn first_page(f: &Facts) -> Page {
 fn tools_page(f: &Facts) -> Page {
     let mut rows: Vec<Row> = TOOL_ROWS
         .iter()
+        .filter(|r| screened(r.0))
         .map(|(key, name, _, sentence)| {
             let said = summary(&f.tools, key, "sentence").unwrap_or(sentence);
             Row::new(key, name).value(summary(&f.tools, key, "markedBrief").or(summary(&f.tools, key, "brief")).unwrap_or_default()).opens().pane(Pane {
@@ -202,7 +216,7 @@ fn tools_page(f: &Facts) -> Page {
             })
         })
         .collect();
-    rows.extend(OTHER_TOOLS.iter().map(|(key, name)| Row::new(key, name).opens().pane(Pane::said(name, &hint(name)))));
+    rows.extend(OTHER_TOOLS.iter().filter(|r| screened(r.0)).map(|(key, name)| Row::new(key, name).opens().pane(Pane::said(name, &hint(name)))));
     Page { title: "Tools".to_owned(), breadcrumb: TITLE.to_owned(), rows, footer: String::new() }
 }
 

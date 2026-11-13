@@ -36,6 +36,8 @@ Window {
     property string onlyPads
     // A file holding Cores' world in place of the back end's, as the recordings script theirs; empty for the back end.
     property string coresWorld
+    // The scraper's test seam, its settings' `test` member as JSON (a loopback server and its root), as a test names it.
+    property string scraperTest
     // The splash keeps the focus, and every press, until it has faded, so the press that skipped it is never a screen's.
     readonly property bool splashShown: program.splash && (!moonrise.done || moonrise.opacity > 0)
     // The help bar's family: Controller type's, or with Automatic the pad last used; a generic pad's glyphs drawn as the Xbox pad's lettered ones, as Mistress does.
@@ -168,6 +170,31 @@ Window {
             value: settingsModel.rumble
             when: settingsModel.ready
         }
+        // Volume, Output, Sync to display and Pause in background changed while a game runs reach it at once.
+        Binding {
+            target: player.session
+            property: "volume"
+            value: settingsModel.volume
+            when: settingsModel.ready
+        }
+        Binding {
+            target: player.session
+            property: "output"
+            value: settingsModel.output
+            when: settingsModel.ready
+        }
+        Binding {
+            target: player.session
+            property: "syncToDisplay"
+            value: settingsModel.syncToDisplay
+            when: settingsModel.ready
+        }
+        Binding {
+            target: player.session
+            property: "pauseInBackground"
+            value: settingsModel.pauseInBackground
+            when: settingsModel.ready
+        }
         // Home's lines that change with the time: the status line and the paused game's facts.
         Clock {
             id: clock
@@ -191,6 +218,9 @@ Window {
             inFront: program.gameShown && !player.session.resumeAsked
             // As the start read them until the settings are read, then as they say, changed on the screen or not.
             guideChords: settingsModel.ready ? settingsModel.guideChords : program.guideChords
+            showStatusText: settingsModel.showStatusText
+            showFps: settingsModel.showFps
+            showStatusBar: settingsModel.showStatusBar
             focus: program.gameShown && !player.session.resumeAsked
             feed: program.feed
             platformLibrary: program.platformLibrary
@@ -509,8 +539,12 @@ Window {
             onDoor: (name) => screens.act(name)
             onOpenFolder: (path) => folders.open(path)
             onChooseFolder: (key, start) => folders.choose(key, start)
-            // What Settings saved reaches the library's read as it closes: the media viewer plays at the Volume saved (EmuSen_Qt.md §4.14).
-            onSaved: library.refresh()
+            // What Settings saved reaches the library's read as it closes: the media viewer plays at the Volume saved (EmuSen_Qt.md §4.14),
+            // and a suspended game's picture is drawn as its display settings now ask (§1.8.10).
+            onSaved: {
+                library.refresh()
+                player.session.readPicture()
+            }
         }
         // The program's folder actions (EmuSen_Qt.md §7.7.E): one shown in the system's file manager, one chosen in the
         // system's own folder dialog (through the desktop portal where there is one), whose answer the row's model saves.
@@ -580,8 +614,25 @@ Window {
             inputs: visible && !program.splashShown
             onBacked: screens.back()
         }
+        // A tool of jobs on the same tool screen: Library Manager, Compressed Discs or Packages, as Screens names it (tools/jobs.rs).
+        ToolModel {
+            id: jobsModel
+            objectName: "jobsModel"
+            tool: ToolModel.Jobs
+            jobs: screens.tool
+            platformLibrary: program.platformLibrary
+            open: screens.shown === Screens.Tool
+        }
+        Cores {
+            objectName: "jobs"
+            visible: screens.shown === Screens.Tool
+            tool: jobsModel
+            padFamily: program.padFamily
+            inputs: visible && !program.splashShown
+            onBacked: screens.back()
+        }
         // A game's page, from X on Home and the grid, a theme's openPage and the Home card's Selected game (EmuSen_Qt.md §7.8);
-        // its doors open later pieces' pages.
+        // its media viewer, scrape and Edit Details are its own (§7.8.2).
         GamePageModel {
             id: pageModel
             objectName: "pageModel"
@@ -591,10 +642,17 @@ Window {
             onPlayed: (path, state) => state.length > 0 ? program.playFrom(path, state) : program.play(path)
             onHidden: screens.back()
             onOpenFolder: (path) => folders.open(path)
+            // The recorded ScreenScraper a test names for the scraper; empty for ScreenScraper itself.
+            scraperTest: program.scraperTest
         }
         Connections {
             target: pageModel
             function onHidden() { library.refresh() }
+        }
+        // A name edited on the page is the grid's too (EmuSen_Qt.md §7.8.2).
+        Connections {
+            target: pageModel
+            function onEdited() { library.refresh() }
         }
         GamePage {
             objectName: "gamePage"

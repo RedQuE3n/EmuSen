@@ -14,6 +14,9 @@ Window {
     property double feed: 0
     property string platformLibrary
     property string game
+    // A console started with nothing in it, by its key, as Start Console starts one.
+    property string consoleKey
+    onConsoleKeyChanged: if (root.consoleKey !== "") player.session.openConsole(root.consoleKey)
     property string cores
     property string engine
     property string onlyPads

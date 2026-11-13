@@ -8,7 +8,6 @@ use cxx_qt::casting::Upcast;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
 use emusen_qt_models::game_model::qobject::GameModel;
-use emusen_qt_models::library::LibraryView;
 use emusen_qt_models::library_model::qobject::{LibraryModel, QAbstractListModel};
 use emusen_qt_models::{help, screens, words};
 use emusen_theme_qt::actions::{Action, ActionSink};
@@ -319,8 +318,8 @@ impl qobject::ThemeFeed {
 
     fn feed_library(&self) {
         let (Some(library), Some(engine)) = (self.library(), self.engine()) else { return };
-        if let Some(view) = host::library(engine) {
-            view.show(library.view(), &library.home_lines().to_string());
+        if let Some(mut view) = host::library(engine) {
+            view.as_mut().show(library.view(), &library.home_lines().to_string());
         }
     }
 

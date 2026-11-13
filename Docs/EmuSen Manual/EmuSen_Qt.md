@@ -694,9 +694,23 @@ resampling. The parts, each with one job:
 - `SessionModel` lends SDL to the library and makes the player at open; where it cannot be made the game plays without
   sound and `problem` says so. `sounding` says whether the open game's sound reaches a player.
 
+**The player's settings, since 2026-11-12.** A game takes Volume, Output, Sync to display and Pause in background as
+it opens and follows each change while it runs or is suspended. `play.rs`'s `PlaySettings` reads them, and the frame
+rate, messages and status bar switches, through the Settings description's `applies`, the one place each key is named;
+`SettingsModel` and `SessionModel` both read through it, and the program binds Settings' values to the session as it
+binds Rumble. The player is made at the stored volume and on the stored device (Output's initial value, read from
+Galaxia's model, is the system default); a later change is handed to the frame thread through the session's control
+and taken between two frames, paused or not, and the player's own volume and device come back as `soundVolume` and
+`soundDevice`. Sync to display off runs the frames on the game's clock without asking Serenity's `pace_locks`. The
+window binds `background` to its own `Window.active`; a game running in front is paused as
+another window takes the front, where Pause in background is on, and only a game paused so resumes. The status line
+(`status`: the game's name, Paused, or the last thing said) and the frame rate (`fps`, counted on the frame thread
+each second it runs) are drawn at the foot of the game in `Game.qml`, on a black bar where Status bar is on. Proof:
+`qt-app`'s `sound_gpu` and `qt-models`' `session`, on the RX 6800.
+
 **Owed, stated:** audio.json is not yet read, so the player uses `AudioPlayer`'s own defaults, which are audio.json's
-(32 kHz, 256 ms, a deviation of 0.005, 4,096 frames); the output device, the volume and mute of `appsettings.json` and
-audio.json's `MasterVolume`, `Muted` and `AudioEnabled` wait for the settings screens. The C# clamps audio.json's values
+(32 kHz, 256 ms, a deviation of 0.005, 4,096 frames); the mute of `appsettings.json`, audio.json's `MasterVolume`,
+`Muted` and `AudioEnabled`, and Output for the interface's own sounds are not applied. The C# clamps audio.json's values
 in `AudioConfig.Bounded`, which has no Rust owner yet; reading the file in Qt needs that rule moved into Galaxia's model
 first, so that the bounds are not copied.
 
@@ -818,6 +832,23 @@ FFmpeg carries a GPL build and owes its source; an LGPL build would be `ffmpeg-f
 handheld: whether SteamOS's image carries Qt Multimedia and which FFmpeg it links is **not measured** (owed with the
 handheld's next measurement, §9.3); the AppImage bundles Qt's Multimedia plugin either way. The cost of decoding there is
 `EmuSen_BigPicture.md`'s P5 (under 5% of one core for a `video-normalized` clip), still to be measured on the Legion Go S.
+
+#### 1.8.10 The picture follows the display settings **[M 2026-11-12]**
+
+When a game opens, the session reads its console from `session_info` and `qt-models/src/display.rs` reads that console's
+display settings from the graphics model against Serenity's catalogue: the filter its `ScreenFilter` names, if the
+catalogue offers it for the console (else `effect.None.nearest`), with the values `ShaderParameters` holds for that
+filter's own settings; the crop its `Overscan` asks for, on a console whose screen the catalogue lists as a television
+(`tv` hides the catalogue's `crop.television` share at each edge, `custom` the `CropLeft`/`CropRight`/`CropTop`/
+`CropBottom` percentages, each held to `crop.most_at_an_edge`); and `PictureShape` (`tv`, the console's screen, or
+`square`, the frame's pixels square). The preset is written by `emusen_serenity_filter_write` under the feed's folder
+and handed to the feed, which builds the chain on the render thread at its next draw; a picture from a ring, whose
+slot is given back once drawn, is drawn through the new chain from its next frame. A filter that crops itself (the
+CRT, `crops_itself`) is given the crop as its `emusen_crop_*` uniforms; for any other the window clips: `Game.qml`'s
+`shown` item has the cropped shape and clips a `GamePicture` drawn whole past its edges, the bars around both black.
+The settings are read again when the game resumes and when Settings closes after a save (`readPicture`), and a still
+picture is drawn again then. Not yet followed: a RetroArch preset the Shaders screen stored, and
+a hosted core's `console_picture` setting, which the C# kept on while the CRT was chosen.
 
 ### 1.9 Homes for the front-end logic still in C#
 
@@ -6212,6 +6243,27 @@ kit-qt, qt-models, theme-qt, kit-gallery, esde-qt and the testing module on the 
 **Seeded faults**, each reverted, each caught: Update All planning every libretro core rather than those with an update
 (both Update All tests); its Yes sending `core-rm` (the two-update test); No running the update as Yes does (the same).
 
+#### 7.7.T The tools of jobs: Library Manager, Compressed Discs and Packages (2026-11-12)
+
+A tool that is a list of the platform library's jobs is one source of the tool screen, `tools/jobs.rs`, driven by
+`tools/jobs.json`: each tool a list of jobs, each job its name, what it does, its request to the library tool, an
+optional question asked before it starts (the jobs that write a great deal: convert, pkg-make) and the states whose
+lines are not kept (`rom-dups`' `hashed`). Each row is a job; A starts it, and on the running job's row A is Stop
+(`ToolJob::stop`). The events are pulled on the screen's timer as Cores' are: the `start` event's count and each item's
+end give the bar's share done, the pane says the item being worked on, the latest result line and the `end` event's
+counts or error, and X lists every line of the last run. Rows are not marked, so the help bar has no Apply. The program
+holds a second `ToolModel` (`tool: Jobs`, `jobs` the key) on the same `Cores.qml` screen, its parts named from its
+object name; `Screens` opens it as `Tool`, naming the tool in `Screens.tool`, from Home's Packages and Library places
+and the Home card's Tools page, and B returns as from Cores. A job keeps running when the screen is left, and a tool
+opened before is kept with its runs.
+
+A tool with no screen yet (Scraper, Cheats, Collections, Shell) is not listed on the Home card's Tools page. The
+Scraper's Home place is drawn as before and opens nothing until the Scraper has its screen: drawn unavailable, its
+words fell under the contrast the program's acceptance holds (measured 2026-11-13: 3.2:1 and 1.8:1 against 4.5:1). Held to by `qt-models/tests/tool_jobs.rs` (the real platform library over a scratch library, a
+scripted world for the question and Stop, and the screens' steps) and `qt-app/tests/tools.rs` (the pad opens Library
+Manager from Home, runs its first job, sees the progress then the lines, X lists them, B returns Home; Compressed Discs
+from the Home card lists a generated disc the same way).
+
 ### 7.8 Stage 5, piece G: a game's page and its clip (2026-11-09)
 
 `EmuSen_Interface.md` §2.5, §4 screen 3, §5.9, §18.2; the oracle is Mistress's recordings `GamePage`, `GamePageStates`,
@@ -6490,6 +6542,33 @@ Seeded faults, each reverted:
 - the walk pressing once: the program's page test, the gate naming Favourite unreached at both sizes;
 - the page not opening on Play: the program's page test, the focus still on Favourite;
 - the page's state not handed to the session: the program's page test, `startState` empty with the game shown.
+
+#### 7.8.2 Piece P5: the page's media viewer, Scrape This Game and Edit Details (2026-11-12)
+
+- **The media viewer** is ES-DE's (`emusen_esde::scene::Viewer`, §4.10, §4.13) over the page's media: A on a picture of
+  Media opens it on that picture, Left and Right step the pictures and the clip in the page's order and stop at the ends,
+  the triggers go to the first and last, Up opens the game's PDF manual (the media store's `manual`, now a tile of Media
+  too) and Down leaves it, Left and Right turn its pages and the shoulders zoom it, B closes the viewer. A picture is a
+  Qt Quick `Image`, a clip the kit's `VideoTile` heard at the player's Volume, the manual's page the kit's `PdfPage`
+  (EmuSen_Kit.md §7.110), which esde-qt's `ManualElement` now draws through too. It is drawn on Void with a caption bar
+  80 tall on CaptionSurface over the help bar (EmuSen_Interface.md §18.2): the item's words and where it stands, or the
+  manual's page.
+- **Scrape This Game** opens the process's one scraper again with its store (no longer for its sources alone), with the
+  player's ScreenScraper developer file, queues the game alone (`start`, `one`) and follows `wait` and `progress` off the
+  GUI thread; the row says the run's step and then how it came out, A on it while it runs asks to stop it (`cancel`),
+  and when it ends the scraper is opened for its sources alone again and the page is read again, so a picture fetched
+  is shown. The program's `scraperTest` is the scraper's test seam, which a test sets to the recorded ScreenScraper the
+  platform's scraping test answers from (`Platform/platform/examples/recorded_scraper`).
+- **Edit Details** is Details' deeper page: Name, Description, Release date, Developer, Publisher, Genre and Players,
+  each with the value the scraper's `metadata` resolves; A types it on the docked keyboard, Done saves it at once as a
+  games.db edit (empty words put back what was scraped), Y puts back what was scraped, B goes back to Details. A name
+  edited names the game in the grid too: the library reads games.db's `name` edits.
+- **Not opened yet**, so not shown: Options' Cheats, Display crop and Package, and Details' Cover art. The viewer's
+  `X Set as cover` and `Y Delete…` of §18.2 are not built. The run fetches the scraper's default kinds, not the
+  player's Scrape kinds settings, which nothing maps to the scraper's kinds yet.
+- Tests: qt-models' `game_page` (the viewer over the media, the run's words, Edit Details' rows), qt-app's `page_doors`
+  (the viewer paged by the pad, a scrape against the recorded server to done with the cover shown, a name typed, stored
+  and named in the grid).
 
 ### 7.9 Repair piece DC-B: the program does what it offers and says when it fails (2026-11-11)
 

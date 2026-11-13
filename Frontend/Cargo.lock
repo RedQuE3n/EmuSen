@@ -482,6 +482,7 @@ dependencies = [
  "emusen-qt-endymion",
  "emusen-qt-models",
  "emusen-qt-test",
+ "serde_json",
 ]
 
 [[package]]

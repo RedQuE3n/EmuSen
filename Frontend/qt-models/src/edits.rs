@@ -3,6 +3,8 @@
 
 /// The game left out of every library view until Settings lists hidden games again.
 pub const HIDDEN: &str = "hidden";
+/// The name the player gave the game.
+pub const NAME: &str = "name";
 /// The engine the game runs on, where the player chose one.
 pub const ALT_EMULATOR: &str = "altemulator";
 /// A flag that is set, as ES-DE's gamelists and games.db store it.

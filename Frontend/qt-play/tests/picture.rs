@@ -64,12 +64,26 @@ fn flat_blocks(scene: &mut Scene<'_>) -> Vec<bool> {
     colours.chunks(3).map(|c| c.iter().all(|p| p.is_some() && *p == c[0])).collect()
 }
 
-/// The mean of red, green and blue over the shown rectangle's middle, as a grab reads it.
-fn brightness(scene: &mut Scene<'_>) -> f64 {
+/// The mean blue over the middle of each of the frame's inner pixels, 27 points a pixel so that a mask's stripes and
+/// the scanlines average out, as one grab reads it. The core's red rises with every frame, so two frames are compared on
+/// its blue, which is one value for every pixel of every frame: 0xFF while its B is held, 0 otherwise (the test core's
+/// `pressed_blue`).
+fn blue(scene: &mut Scene<'_>) -> f64 {
     let (x, y, w, h) = place(scene, "shown");
-    let points: Vec<(f64, f64)> = (1..8).flat_map(|i| (1..4).map(move |j| (x + w * f64::from(i) / 8.0, y + h * f64::from(j) / 4.0))).collect();
+    let (bw, bh) = (w / FRAME.0, h / FRAME.1);
+    let mut points = Vec::new();
+    for column in 1..7 {
+        for row in 1..3 {
+            for fx in 0..9 {
+                for fy in [0.3, 0.5, 0.7] {
+                    points.push((x + (f64::from(column) + 0.3 + 0.05 * f64::from(fx)) * bw, y + (f64::from(row) + fy) * bh));
+                }
+            }
+        }
+    }
     let seen: Vec<_> = scene.colours_at(&points).into_iter().flatten().collect();
-    seen.iter().map(|c| f64::from(c.r) + f64::from(c.g) + f64::from(c.b)).sum::<f64>() / (3.0 * seen.len().max(1) as f64)
+    assert_eq!(seen.len(), points.len(), "the grab read every point of the picture's middle");
+    seen.iter().map(|c| f64::from(c.b)).sum::<f64>() / seen.len() as f64
 }
 
 fn near(a: f64, b: f64) -> bool {
@@ -133,14 +147,34 @@ fn the_picture_is_drawn_through_the_console_s_filter_crop_and_shape_as_the_setti
     let handoff = feed.handoff();
     assert!(!handoff.set_value("no_such_parameter", 1.0), "an undeclared parameter is refused");
     assert!(handoff.declared().iter().any(|d| d == "contrast"), "the CRT declares its contrast: {:?}", handoff.declared());
-    let before = brightness(&mut scene);
+    // Read on the core's blue (see `blue`), of 255. Its B is the pad's South by the default bindings. A game given the
+    // pad back hears nothing until every button is let go, and it is given back as its loop turns after the resume: so
+    // South goes down once pictures are drawn again, the blue is waited for, and South comes up while paused, where the
+    // interface does not take a button that went down under the game.
+    let none = blue(&mut scene);
+    let south = sdl_button(PadControl::South).unwrap();
+    let pictures = |more: u64, scene: &mut Scene<'_>, what: &str| {
+        let shown = feed.counts().shown.load(Ordering::Relaxed);
+        until(scene, what, |_| feed.counts().shown.load(Ordering::Relaxed) > shown + more);
+    };
+    let held_blue = |scene: &mut Scene<'_>, what: &str| {
+        chord(scene, &sdl, &pad, false);
+        pictures(5, scene, "pictures after the resume");
+        sdl.press(&pad, south, true);
+        until(scene, "the held button's blue drawn", |s| blue(s) > none + 50.0);
+        pictures(30, scene, what);
+        chord(scene, &sdl, &pad, true);
+        let level = blue(scene);
+        sdl.press(&pad, south, false);
+        level
+    };
+    let before = held_blue(&mut scene, "pictures with B held");
+    assert!(before > none + 150.0, "the held button's full blue is drawn through the CRT: {none} with none held, {before} held");
     assert!(handoff.set_value("contrast", 0.5));
-    let shown = feed.counts().shown.load(Ordering::Relaxed);
-    chord(&mut scene, &sdl, &pad, false);
-    until(&mut scene, "pictures at the lower contrast", |_| feed.counts().shown.load(Ordering::Relaxed) > shown + 30);
-    chord(&mut scene, &sdl, &pad, true);
-    let after = brightness(&mut scene);
-    assert!(after < before * 0.9, "the lever darkened the picture at once: {before} then {after}");
+    let after = held_blue(&mut scene, "pictures at the lower contrast");
+    // The CRT's light is (contrast × v + black)^gamma: at half contrast and gamma 2.4 a fifth of the light, about half the level drawn.
+    let part = (after - none) / (before - none);
+    assert!(part > 0.3 && part < 0.7, "the lever darkened the picture at once, by what half contrast comes to: {none} with none held, {before} then {after}");
     assert_eq!(feed.problem(), None, "the values set on the chain drawn");
 
     // Plain again, a custom crop of 10% at the left and 20% at the right, and square pixels: 8 by 4 is 2:1, 70% of it 1.4:1.

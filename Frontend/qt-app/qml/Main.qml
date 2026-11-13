@@ -387,89 +387,13 @@ Window {
             running: !program.splashShown && program.esdeWanted && (program.esdeView?.scene.problem.length ?? 0) > 0
             onTriggered: program.said(program.esdeView.scene.problem, true, false)
         }
-        // The grid's search: its words, which the keyboard types and the grid's model narrows by, the field over the one row of
-        // covers and the keyboard docked beneath, over the theme's Games screen (EmuSen_Interface.md §18.1; EmuSen_Qt.md §7.6).
-        Kit.KeyboardModel {
-            id: typist
-            objectName: "typist"
-            onTextChanged: games.search = typist.text
-            onClosed: screens.back()
-        }
-        Connections {
-            target: games
-            function onSearchChanged() { typist.setText(games.search, games.search.length) }
-        }
-        Connections {
-            target: referenceHost
-            function onSearchingChanged() { typist.setText(games.search, games.search.length) }
-        }
-        Kit.NormalizedCanvas {
-            id: searchCanvas
-            objectName: "searchCanvas"
-            visible: !program.gameShown && referenceHost.searching
-            Kit.Frame {
-                id: searchFrame
-                anchors.fill: parent
-                surfaceDrawn: false
-                padFamily: program.padFamily
-                helpFont: Qt.font({ family: searchFaces.regular, pixelSize: 20 })
-                helpSpacing: 40
-                helpGlyphGap: 10
-                // Its help stands while the keyboard holds the focus; on the covers the theme's own does.
-                helpShown: screens.shown === Screens.Search
-                focus: !program.splashShown && screens.shown === Screens.Search
-                controller.navigationShown: false
-                help: HelpModel {
-                    screen: HelpModel.Search
-                }
-                // The keyboard's own actions, Y Space and X Done, and the screen's, the shoulders to the covers; its close is the screen's way out.
-                Connections {
-                    target: searchFrame.controller
-                    function onActionInvoked(key) { typist.act(key) }
-                }
-                Connections {
-                    target: searchFrame.controller
-                    function onActionInvoked(key) { screens.act(key) }
-                }
-                Item {
-                    x: -searchFrame.safeX
-                    y: -searchFrame.safeY
-                    width: searchCanvas.width
-                    height: searchCanvas.height
-                    // The search's field over the one row of covers, never focused: the keyboard types into it (LunaP's GallerySearch).
-                    TextField {
-                        objectName: "GallerySearch"
-                        x: 64
-                        y: 100
-                        width: 1152
-                        height: 44
-                        focusPolicy: Qt.NoFocus
-                        activeFocusOnTab: false
-                        readOnly: true
-                        leftPadding: 16
-                        rightPadding: 16
-                        text: typist.text
-                        cursorPosition: typist.caret
-                        color: Kit.Tokens.textStrong
-                        font.family: searchFaces.regular
-                        font.pixelSize: 22
-                        Accessible.name: Words.search
-                    }
-                    Kit.Keyboard {
-                        id: keyboard
-                        objectName: "GalleryKeyboard"
-                        model: typist
-                        y: 398
-                        width: searchCanvas.width
-                        focus: true
-                        labelFont: Qt.font({ family: searchFaces.regular, pixelSize: Kit.Tokens.fontBody })
-                        onActiveFocusChanged: if (referenceHost.searching && keyboard.activeFocus !== referenceHost.typing) screens.keysFocused(keyboard.activeFocus)
-                    }
-                }
-            }
-            Faces {
-                id: searchFaces
-            }
+        SearchScreen {
+            screens: screens
+            games: games
+            host: referenceHost
+            padFamily: program.padFamily
+            gameShown: program.gameShown
+            splashShown: program.splashShown
         }
         // The List card over the grid (EmuSen_Interface.md §18.1): its actions are the grid's model's, and its jumps move the
         // focus the theme's Games screen follows.

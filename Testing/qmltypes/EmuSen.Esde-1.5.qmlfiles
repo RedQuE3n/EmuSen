@@ -56,6 +56,7 @@ TextBlock
     property real lineSpacing
     property bool wrap
     property bool ellipsis
+    property bool oneLine
     property bool everyLine
     property bool snapRows
     property bool hasBackground
@@ -76,6 +77,8 @@ TextBlock
     readonly property real laidHeight
     readonly property real alignedY
     readonly property real contentWidth
+    readonly property bool whole
+    readonly property real lineShift
     readonly property real contentHeight
     readonly property int wholeRows
     readonly property real windowHeight
@@ -242,6 +245,13 @@ CarouselElement
     required property real lineSpacing
     required property color color
     required property color itemBackground
+    required property color selectedColor
+    required property color selectedItemBackground
+    required property real textRadius
+    required property bool oneLine
+    required property bool scrolling
+    required property real scrollX
+    required property real repeatAt
     objectName "slot-" + slot.row
     objectName "slot-" + slot.row
 TextListView
@@ -340,6 +350,11 @@ GridElement
     required property color selectedColor
     required property color selectedItemBackground
     required property real textRadius
+    required property bool oneLine
+    required property bool scrolling
+    required property real scrollX
+    required property real repeatAt
+    required property real clipHeight
     objectName "esdeGrid"
     objectName "cell-" + cell.index
 View

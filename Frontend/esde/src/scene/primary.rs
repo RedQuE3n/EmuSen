@@ -20,12 +20,17 @@ pub fn rows(e: &Element, view: &str, data: &Data) -> Vec<Row> {
     (0..n).filter_map(|i| row(e, view, data, i)).collect()
 }
 
-/// One row of a primary element's list.
+/// One row of a primary element's list. A collection's name takes its own letter case in the system view, a custom
+/// collection listed as a folder in the gamelist view; a game in a collection then gains its system's suffix, cased on its
+/// own (ES-DE 3.4.1 `SystemView::populate`'s letterCaseFunc, `GamelistBase::populateList`).
 pub fn row(e: &Element, view: &str, data: &Data, i: usize) -> Option<Row> {
-    let case = e.string("letterCase");
-    let cased = |t: &str| words::cased(t, case);
     if systems_view(view) {
         let s = data.systems.get(i)?;
+        let case = match s.system.kind {
+            SystemKind::CustomCollection => e.string("letterCaseCustomCollections"),
+            SystemKind::AutoCollection => e.string("letterCaseAutoCollections"),
+            SystemKind::Regular => e.string("letterCase"),
+        };
         let own = s.theme.system_view.primary();
         let pick = own.filter(|o| o.kind() == e.kind()).or(if e.kind() == "grid" { Some(e) } else { own });
         let image = match e.kind() {
@@ -36,19 +41,22 @@ pub fn row(e: &Element, view: &str, data: &Data, i: usize) -> Option<Row> {
             "textlist" => s.system.full_name.clone(),
             _ => pick.and_then(|o| o.string("text")).map(str::to_owned).unwrap_or_else(|| s.system.full_name.clone()),
         };
-        return Some(Row { text: cased(&text), image, marker: Marker::None, folder: false });
+        return Some(Row { text: words::cased(&text, case), image, marker: Marker::None, folder: false });
     }
     let system = data.system();
     let g = system.games.get(i)?;
-    let collection = system.system.kind != SystemKind::Regular;
-    let suffix_case = e.string("letterCaseSystemNameSuffix").or(Some("uppercase"));
-    let suffixed = |on: bool| {
-        let source = g.source.as_ref().unwrap_or(&system.system);
-        if on && collection && !g.folder {
-            format!("{} [{}]", g.name, words::cased(&source.name, suffix_case))
-        } else {
-            g.name.clone()
+    let case = if system.system.kind == SystemKind::CustomCollection && g.folder {
+        e.string("letterCaseCustomCollections")
+    } else {
+        e.string("letterCase")
+    };
+    let named = |name: &str| {
+        let mut text = words::cased(name, case);
+        if system.is_collection() && !g.folder && e.bool("systemNameSuffix") != Some(false) {
+            let source = g.source.as_ref().unwrap_or(&system.system);
+            text.push_str(&words::system_suffix(&source.name, e.string("letterCaseSystemNameSuffix")));
         }
+        text
     };
     let fallback = existing(e.path("defaultImage"));
     // A folder's picture falls back to defaultFolderImage, then defaultImage (ES-DE 3.4.1 `GamelistBase::populateList`).
@@ -69,12 +77,10 @@ pub fn row(e: &Element, view: &str, data: &Data, i: usize) -> Option<Row> {
             } else {
                 Marker::None
             };
-            let text = suffixed(e.bool("systemNameSuffix") == Some(true));
-            let text = if g.in_collection && ascii { format!("!{text}") } else { text };
-            Row { text: cased(&text), image: None, marker, folder: g.folder }
+            let name = if g.in_collection && ascii { format!("! {}", g.name) } else { g.name.clone() };
+            Row { text: named(&name), image: None, marker, folder: g.folder }
         }
-        "grid" => Row { text: cased(&suffixed(e.bool("systemNameSuffix") != Some(false))), image: image(), marker: Marker::None, folder: g.folder },
-        _ => Row { text: cased(&g.name), image: image(), marker: Marker::None, folder: g.folder },
+        _ => Row { text: named(&g.name), image: image(), marker: Marker::None, folder: g.folder },
     })
 }
 
@@ -93,14 +99,27 @@ fn selected_tint(e: &Element, start: Color) -> Option<Tint> {
     Some(Tint { color, end: end.unwrap_or(color), vertical: e.string("imageSelectedGradientType") == Some("vertical") })
 }
 
-fn item_text(e: &Element, data: &Data, default_px: f32, scale: bool) -> ItemText {
-    let relative = if scale { e.float("textRelativeScale").unwrap_or(1.0) } else { 1.0 };
+/// fontSize's default for an item's text, a fraction of the screen's height.
+pub(super) fn item_font(e: &Element) -> f64 {
+    e.float("fontSize").unwrap_or(if e.kind() == "carousel" { 0.085 } else { 0.045 }) as f64
+}
+
+// ES-DE 3.4.1 `CarouselComponent::applyTheme` and `GridComponent::applyTheme`: the selected colours fall back to the
+// item's own, and the corner radius is clamped to half the screen's width.
+fn item_text(e: &Element, data: &Data) -> ItemText {
+    let relative = e.float("textRelativeScale").unwrap_or(1.0) as f64;
+    let (text, background) = (color(e, "textColor", 0x0000_00FF), color(e, "textBackgroundColor", 0));
     ItemText {
         font: face_of(e, data),
-        px: (e.float("fontSize").unwrap_or(default_px) * relative) as f64 * data.height,
+        px: item_font(e) * relative * data.height,
         line_spacing: e.float("lineSpacing").unwrap_or(1.5) as f64,
-        color: color(e, "textColor", 0x0000_00FF),
-        background: color(e, "textBackgroundColor", 0),
+        color: text,
+        background,
+        selected_color: e.color("textSelectedColor").unwrap_or(text),
+        selected_background: e.color("textSelectedBackgroundColor").unwrap_or(background),
+        radius: e.float("textBackgroundCornerRadius").unwrap_or(0.0).clamp(0.0, 0.5) as f64 * data.width,
+        one_line: e.bool("textHorizontalScrolling").unwrap_or(false),
+        marquee: None,
     }
 }
 
@@ -112,8 +131,8 @@ fn fit_of(e: &Element) -> Fit {
     }
 }
 
-/// A carousel at a position in items (fractional while it moves, not wrapped) in its box of `bw` × `bh` pixels.
-pub fn carousel(e: &Element, data: &Data, count: usize, position: f64, bw: f64, bh: f64) -> Carousel {
+/// A carousel at a position in items (fractional while it moves, not wrapped) in its box of `bw` × `bh` pixels, `cursor` its selected row.
+pub fn carousel(e: &Element, data: &Data, count: usize, cursor: usize, position: f64, bw: f64, bh: f64) -> Carousel {
     let (sw, sh) = (data.width, data.height);
     let kind = e.string("type").unwrap_or("horizontal");
     let wheel = kind.ends_with("Wheel");
@@ -295,6 +314,7 @@ pub fn carousel(e: &Element, data: &Data, count: usize, position: f64, bw: f64, 
                 (k as f64 - fraction).abs(),
                 Slot {
                     row,
+                    chosen: row == cursor && d.abs() < 1.0,
                     x: b.0 + dx,
                     y: b.1 + dy,
                     w: b.2,
@@ -322,8 +342,7 @@ pub fn carousel(e: &Element, data: &Data, count: usize, position: f64, bw: f64, 
     let fill = tint(e, "color", "colorEnd", "gradientType");
     let background = e.color("color").filter(|_| fill.color.a() > 0 || fill.end.a() > 0).map(|_| fill);
     let image_align = (if across && !wheel { HAlign::Center } else { item_h }, if !across && !wheel { VAlign::Center } else { item_v });
-    let mut text = item_text(e, data, 0.085, true);
-    text.line_spacing = e.float("lineSpacing").unwrap_or(1.5) as f64;
+    let text = item_text(e, data);
     Carousel {
         slots: slots.into_iter().map(|(_, s)| s).collect(),
         background,
@@ -425,9 +444,7 @@ pub fn grid(e: &Element, g: &GridGeometry, focus: GridFocus, data: &Data) -> Gri
         selector_scale: e.float("selectorRelativeScale").unwrap_or(1.0) as f64,
         selector_radius: e.float("selectorCornerRadius").unwrap_or(0.0) as f64 * sw,
         selector_layer: e.string("selectorLayer").unwrap_or("top").to_owned(),
-        text: item_text(e, data, 0.045, true),
-        text_selected_color: e.color("textSelectedColor"),
-        text_selected_background: e.color("textSelectedBackgroundColor"),
-        text_radius: e.float("textBackgroundCornerRadius").unwrap_or(0.0) as f64 * sw,
+        text: item_text(e, data),
+        clip_height: g.clip_height(),
     }
 }

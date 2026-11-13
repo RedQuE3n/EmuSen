@@ -536,3 +536,50 @@ fn the_system_name_suffix_is_for_collections_only() {
     assert_eq!(said(5).as_deref(), Some("Ember Circuit [ALL]"));
     assert_eq!(words::cased("ember circuit", Some("capitalize")), "Ember Circuit");
 }
+
+// ES-DE 3.4.1 SystemView::populate and GamelistBase::populateList: collections take their own letter case, and a game's
+// name is cased before its system suffix, which is cased on its own.
+#[test]
+fn collections_take_their_own_letter_case_and_the_suffix_is_cased_apart() {
+    let t = Synth::new();
+    let element = "<carousel name=\"c\"><pos>0 0</pos><size>1 1</size><letterCase>lowercase</letterCase>\
+                   <letterCaseAutoCollections>uppercase</letterCaseAutoCollections><letterCaseCustomCollections>capitalize</letterCaseCustomCollections>\
+                   <letterCaseSystemNameSuffix>capitalize</letterCaseSystemNameSuffix></carousel>";
+    t.capabilities("").theme(&format!("<view name=\"system\">{element}</view><view name=\"gamelist\">{element}</view>"));
+    let choices = Choices { screen_width: W as i32, screen_height: H as i32, ..Choices::default() };
+    let kinds = [
+        ThemeSystem::new("snes", "Super Nintendo", "snes"),
+        ThemeSystem::of_kind("all", "All Games", "auto-allgames", SystemKind::AutoCollection),
+        ThemeSystem::of_kind("mine", "my FAVOURITE ones", "custom-collections", SystemKind::CustomCollection),
+    ];
+    let systems: Vec<System> = kinds
+        .iter()
+        .map(|s| {
+            let mut list = games(".sfc");
+            list[0].source = Some(ThemeSystem::new("snes", "Super Nintendo", "snes"));
+            list[1].folder = true;
+            System::new(s.clone(), t.load_with(&choices, s, None), list)
+        })
+        .collect();
+    let rows = |view: &str, system: usize| {
+        let mut data = Data::new(systems.clone(), W, H);
+        data.system_index = system;
+        let s = Stage::new(data, view, 0);
+        let p = s.frame().primary.unwrap();
+        s.rows(p.rows).unwrap().into_iter().map(|r| r.text).collect::<Vec<_>>()
+    };
+    assert_eq!(rows("system", 0), ["super nintendo", "ALL GAMES", "My Favourite Ones"]);
+    assert_eq!(rows("gamelist", 0)[0], "aurora drift", "a regular system's games take no suffix");
+    assert_eq!(rows("gamelist", 1)[0], "aurora drift [Snes]", "the suffix keeps its own case");
+    assert_eq!(rows("gamelist", 1)[1], "brass lantern", "a folder takes no suffix");
+    assert_eq!(rows("gamelist", 2)[1], "Brass Lantern", "a folder in a custom collection takes its case");
+}
+
+#[test]
+fn capitalize_lowers_the_rest_and_raises_each_word_as_unicode_bounds_it() {
+    assert_eq!(words::cased("SUPER mario BROS. 3", Some("capitalize")), "Super Mario Bros. 3");
+    assert_eq!(words::cased("don't stop-me now", Some("capitalize")), "Don't Stop-Me Now");
+    assert_eq!(words::cased("3d world (usa)", Some("capitalize")), "3d World (Usa)");
+    assert_eq!(words::system_suffix("snes", Some("lowercase")), " [snes]");
+    assert_eq!(words::system_suffix("snes", None), " [SNES]");
+}

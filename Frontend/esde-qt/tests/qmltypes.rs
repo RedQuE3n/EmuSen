@@ -2,9 +2,9 @@
 
 use std::path::PathBuf;
 
-const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Esde-1.4.qmltypes");
-const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Esde-1.4.qmldir");
-const COMMITTED_QML_FILES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Esde-1.4.qmlfiles");
+const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Esde-1.5.qmltypes");
+const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Esde-1.5.qmldir");
+const COMMITTED_QML_FILES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Esde-1.5.qmlfiles");
 
 /// The registry without its line numbers and header file names, which move with every edit and mean nothing to a QML author.
 fn normalized(text: &str) -> String {
@@ -54,7 +54,7 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
     assert_eq!(
         normalized(COMMITTED_TYPES),
         normalized(&built("plugin.qmltypes")),
-        "EmuSen.Esde's types changed: review it, bump the minor for any change (R-20261111-107: no major before the first release), list it in the changelog, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Esde-1.4.qmltypes"
+        "EmuSen.Esde's types changed: review it, bump the minor for any change (R-20261111-107: no major before the first release), list it in the changelog, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Esde-1.5.qmltypes"
     );
 }
 
@@ -63,14 +63,14 @@ fn qt_5_3_the_committed_qmldir_is_the_built_one() {
     assert_eq!(
         normalized(COMMITTED_QMLDIR),
         normalized(&built("qmldir")),
-        "EmuSen.Esde's qmldir changed: review the .qml types it lists, then copy it to Testing/qmltypes/EmuSen.Esde-1.4.qmldir"
+        "EmuSen.Esde's qmldir changed: review the .qml types it lists, then copy it to Testing/qmltypes/EmuSen.Esde-1.5.qmldir"
     );
 }
 
 #[test]
 fn qt_5_3_the_registry_names_the_painter_s_types() {
     assert!(COMMITTED_TYPES.contains("exports: [\"EmuSen.Esde/MarkShapes 1.0\"]"));
-    for file in ["Picture 1.4 qml/Picture.qml", "Mark 1.4 qml/Mark.qml", "TextBlock 1.4 qml/TextBlock.qml"] {
+    for file in ["Picture 1.5 qml/Picture.qml", "Mark 1.5 qml/Mark.qml", "TextBlock 1.5 qml/TextBlock.qml"] {
         assert!(COMMITTED_QMLDIR.contains(file), "{file} is in the qmldir");
     }
 }
@@ -83,7 +83,7 @@ fn qt_5_3_the_committed_qml_files_surface_is_the_built_one() {
     assert_eq!(
         COMMITTED_QML_FILES,
         surface,
-        "EmuSen.Esde's QML files offer something else (R-20261111-99): review it, bump the minor for any change (R-20261111-107: no major before the first release), list it in the changelog, then copy {} to Testing/qmltypes/EmuSen.Esde-1.4.qmlfiles",
+        "EmuSen.Esde's QML files offer something else (R-20261111-99): review it, bump the minor for any change (R-20261111-107: no major before the first release), list it in the changelog, then copy {} to Testing/qmltypes/EmuSen.Esde-1.5.qmlfiles",
         written.display()
     );
 }

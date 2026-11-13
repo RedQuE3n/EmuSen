@@ -404,7 +404,7 @@ pub struct Primary {
     pub layout: Layout,
 }
 
-/// Text set in an item: font, size, colour and background.
+/// Text set in a carousel's or grid's item: font, size, colours and background, the selected item's own, and its scroll.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ItemText {
     pub font: Face,
@@ -412,6 +412,14 @@ pub struct ItemText {
     pub line_spacing: f64,
     pub color: Color,
     pub background: Color,
+    pub selected_color: Color,
+    pub selected_background: Color,
+    /// textBackgroundCornerRadius in pixels.
+    pub radius: f64,
+    /// textHorizontalScrolling: every name on one line, cut at its item's edge.
+    pub one_line: bool,
+    /// The selected name's scroll while it is wider than its item.
+    pub marquee: Option<Scroll>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -425,6 +433,8 @@ pub enum Layout {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Slot {
     pub row: usize,
+    /// The selected item within one item of the centre, which takes the selected text colours.
+    pub chosen: bool,
     pub x: f64,
     pub y: f64,
     pub w: f64,
@@ -534,9 +544,8 @@ pub struct Grid {
     /// bottom, middle or top.
     pub selector_layer: String,
     pub text: ItemText,
-    pub text_selected_color: Option<Color>,
-    pub text_selected_background: Option<Color>,
-    pub text_radius: f64,
+    /// The height of the box the cells are drawn in, from its top.
+    pub clip_height: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]

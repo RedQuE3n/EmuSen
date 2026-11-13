@@ -37,9 +37,9 @@ fn blue(c: (u8, u8, u8)) -> bool {
     c.2 > 180 && c.0 < 80 && c.1 < 80
 }
 
-/// The gamelist under a theme whose video element has `more` beside its box, still type and default clip.
-fn open(scene: &mut Scene<'_>, root: &Scratch, more: &str) -> std::time::Instant {
-    let theme = root.path("theme");
+/// The gamelist under a theme in a folder of its own whose video element has `more` beside its box, still type and default clip.
+fn open(scene: &mut Scene<'_>, root: &Scratch, name: &str, more: &str) -> std::time::Instant {
+    let theme = root.path(name);
     let video = format!(
         "<view name=\"gamelist\"><textlist name=\"games\"><pos>0.02 0.1</pos><size>0.4 0.8</size></textlist>\
          <video name=\"clip\"><pos>0.5 0.1</pos><size>0.4 0.5</size><imageType>screenshot</imageType><default>{}</default>\
@@ -73,7 +73,7 @@ fn a_theme_s_video_shows_its_still_until_the_delay_then_plays_its_frames_in_the_
     assert!(scene.set_property("view", "media", &format!("{{\"nes\":{{\"screenshot\":{{\"nes-0000\":\"{}\"}}}}}}", shot.display())));
 
     // The theme's 2 s delay: the still, and no player, until it has passed.
-    let shown = open(&mut scene, &root, "<delay>2</delay>");
+    let shown = open(&mut scene, &root, "theme-a", "<delay>2</delay>");
     until(&mut scene, "the still drawn", |s| green(colour(s)));
     let mut seen = vec![];
     while shown.elapsed().as_millis() < 1700 {
@@ -87,7 +87,7 @@ fn a_theme_s_video_shows_its_still_until_the_delay_then_plays_its_frames_in_the_
     assert!(playback(&mut scene, "level").is_some_and(|v| (v - 0.35).abs() < 1e-6), "at the player's Volume, 35 %");
 
     // audio off: silent. One iteration with onIterationsDone image: the still again once the clip has ended.
-    open(&mut scene, &root, "<delay>0.5</delay><audio>false</audio><iterationCount>1</iterationCount><onIterationsDone>image</onIterationsDone>");
+    open(&mut scene, &root, "theme-b", "<delay>0.5</delay><audio>false</audio><iterationCount>1</iterationCount><onIterationsDone>image</onIterationsDone>");
     until(&mut scene, "the clip playing", |s| red(colour(s)));
     assert_eq!(playback(&mut scene, "heard"), Some(0.0), "the theme's audio off");
     until(&mut scene, "the clip ended and its player gone", |s| playback(s, "position").is_none());

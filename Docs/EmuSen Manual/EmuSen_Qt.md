@@ -1711,14 +1711,20 @@ manifest gives them, and `Package::overrides` lists every one as the host sets i
 text: a colour as written, a number, `true` or `false`). The program's `ThemeFeed` sets them on the kit's `Tokens` of the theme's
 engine when it attaches (`emusen_theme_qt::host::set_token_overrides`, reaching that engine's singleton through
 `QQmlEngine::singletonInstance`), and theme-audit does the same before it judges a screen. The kit's `Tokens::set_overrides` is
-the one place a name and a value become a token: a colour replaces the column's palette or raised-shadow colour, and a number, a
-whole number or a switch replaces that token's value, whatever the form, text scale or reduced motion; a value not of its token's
-kind is left alone there. No override ever reaches the program's engine, which draws the cards: a theme never styles a card
+the one place a name and a value become a token, through `Column::themed`: a colour replaces the column's palette or
+raised-shadow colour, and a number, a whole number or a switch becomes the base kit-core makes that token from, so the player's
+text size and reduced motion act on it as on the kit's own. A type size (`fontDisplay` to `fontGlyph`) is
+scaled by the text size and rounded to a half unit (`scaled_text`); `headerSize` is scaled on the desktop and fixed on the big
+screen (`header_of`); a movement's duration is nothing under reduced motion (`movement`), a fade's 120 ms (`fade_of`), and
+`breathes` is false under it (`breathes_if`); spacing, focus marks, shadow metrics, curves and the breath's delay, period and
+low are the theme's under both. A value not of its token's kind is left alone. No override ever reaches the program's engine, which draws the cards: a theme never styles a card
 (§3.1). Before a theme is offered, theme-check refuses an override that names no token of the kit's registry, or gives a value
 of the wrong kind, with its line and words (`theme-check/src/tokens.rs`, `tests/check.rs`), and holds colours to the contrast
 floors. Proof: `qt-app/tests/theme.rs`, a fixture package overriding the dark accent, shadow colour, `tileRadius` (21) and
 `breathes` (false), whose screen reads all four while the program's tokens keep the kit's; `kit-qt/tests/overrides.rs`, every
-number and switch token of the registry taking a dark override, and a light one, an unknown name and a wrong kind left alone.
+number and switch token of the registry taking a dark override, and a light one, an unknown name and a wrong kind left alone;
+`kit-qt/tests/column.rs`, a theme's `fontBody` at three text sizes, its durations and breathing under reduced motion, and the
+tokens neither touches.
 
 **Not yet.** The `Screen` type and the splash's `length`, `still` and `finished` (T); the Themes tab and the setting that chooses a
 theme (S); a themed Games screen opens no List card until `Actions.openListCard` exists (T, R). What the sandbox does not do is

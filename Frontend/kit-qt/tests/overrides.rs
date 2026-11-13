@@ -51,10 +51,12 @@ fn kit_7_2_every_number_and_switch_token_takes_a_theme_s_override_in_its_variant
     for ((name, t), kit) in tokens.iter().zip(&kit) {
         assert_eq!(read(&mut scene, name), given(t, kit), "{name}, a {t}, is the theme's");
     }
-    // A change of the column (reduced motion) keeps the theme's values.
+    // Under reduced motion the theme's durations and its breathing are reduced as the kit's are; its radius stays.
     scene.kit_tokens().expect("the kit's tokens").set_reduced_motion(true);
-    assert_eq!(read(&mut scene, "quick"), "7");
-    assert_eq!(read(&mut scene, "breathes"), given("bool", &kit[tokens.iter().position(|(n, _)| n == "breathes").unwrap()]));
+    assert_eq!(read(&mut scene, "quick"), "0");
+    assert_eq!(read(&mut scene, "quickFade"), "120");
+    assert_eq!(read(&mut scene, "breathes"), "false");
+    assert_eq!(read(&mut scene, "tileRadius"), "7.25");
     // None set: the kit's own again.
     scene.kit_tokens().expect("the kit's tokens").set_reduced_motion(false);
     scene.kit_tokens().expect("the kit's tokens").set_overrides(Vec::new());

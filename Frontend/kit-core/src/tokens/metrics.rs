@@ -135,23 +135,39 @@ pub fn clamp_text_scale(scale: f64) -> f64 {
     if scale.is_finite() { scale.clamp(1.0, MAX_TEXT_SCALE) } else { 1.0 }
 }
 
-/// A form's type scale at a text scale, each size rounded to the nearest half unit, halves away from zero.
-pub fn type_scale(form: Form, text_scale: f64) -> TypeScale {
-    let base = match form {
+/// A form's type sizes at text scale 1: the bases `type_scale` scales.
+pub const fn base_type(form: Form) -> TypeScale {
+    match form {
         Form::BigScreen => BIG_SCREEN_TYPE,
         Form::Desktop => DESKTOP_TYPE,
-    };
-    let s = clamp_text_scale(text_scale);
-    let r = |v: f64| (v * s * 2.0).round() / 2.0;
-    TypeScale {
-        display: r(base.display),
-        title: r(base.title),
-        strong: r(base.strong),
-        row: r(base.row),
-        body: r(base.body),
-        caption: r(base.caption),
-        glyph: r(base.glyph),
     }
+}
+
+/// A type size from its base at a text scale: the base times the clamped scale, rounded to the nearest half unit, halves away
+/// from zero.
+pub fn scaled_text(base: f64, text_scale: f64) -> f64 {
+    (base * clamp_text_scale(text_scale) * 2.0).round() / 2.0
+}
+
+impl TypeScale {
+    /// Every size of these bases at a text scale (`scaled_text`).
+    pub fn scaled(&self, text_scale: f64) -> TypeScale {
+        let r = |v: f64| scaled_text(v, text_scale);
+        TypeScale {
+            display: r(self.display),
+            title: r(self.title),
+            strong: r(self.strong),
+            row: r(self.row),
+            body: r(self.body),
+            caption: r(self.caption),
+            glyph: r(self.glyph),
+        }
+    }
+}
+
+/// A form's type scale at a text scale, each size rounded to the nearest half unit, halves away from zero.
+pub fn type_scale(form: Form, text_scale: f64) -> TypeScale {
+    base_type(form).scaled(text_scale)
 }
 
 /// A form's spacing.
@@ -172,12 +188,25 @@ pub const fn raised_shadow(_form: Form) -> Shadow {
     RAISED_SHADOW
 }
 
-/// A section heading's size until the header role replaces it: the desktop's Strong, the menus' 28 on the big screen.
-pub fn header_size(form: Form, text_scale: f64) -> f64 {
+/// A section heading's size at text scale 1: the menus' 28 on the big screen, the desktop's Strong.
+pub const fn header_base(form: Form) -> f64 {
     match form {
         Form::BigScreen => 28.0,
-        Form::Desktop => type_scale(form, text_scale).strong,
+        Form::Desktop => DESKTOP_TYPE.strong,
     }
+}
+
+/// A section heading's size from its base at a text scale: fixed on the big screen, scaled as a type size on the desktop.
+pub fn header_of(form: Form, base: f64, text_scale: f64) -> f64 {
+    match form {
+        Form::BigScreen => base,
+        Form::Desktop => scaled_text(base, text_scale),
+    }
+}
+
+/// A section heading's size until the header role replaces it: the desktop's Strong, the menus' 28 on the big screen.
+pub fn header_size(form: Form, text_scale: f64) -> f64 {
+    header_of(form, header_base(form), text_scale)
 }
 
 /// The big screen's safe area for a screen of a size: 5% of each dimension, rounded to whole units.

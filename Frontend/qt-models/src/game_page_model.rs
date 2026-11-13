@@ -155,6 +155,10 @@ pub mod qobject {
         #[qsignal]
         fn returned(self: Pin<&mut GamePageModel>);
 
+        /// B with nothing of the page's own to go back from: the page is left.
+        #[qsignal]
+        fn left(self: Pin<&mut GamePageModel>);
+
         /// The question was answered: the page takes the focus back from it.
         #[qsignal]
         fn answered(self: Pin<&mut GamePageModel>);
@@ -918,6 +922,8 @@ impl qobject::GamePageModel {
         if went {
             self.as_mut().rust_mut().focus = (None, 0);
             self.shown(true);
+        } else {
+            self.as_mut().left();
         }
         went
     }

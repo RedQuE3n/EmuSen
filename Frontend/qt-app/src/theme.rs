@@ -8,7 +8,6 @@ use cxx_qt::casting::Upcast;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
 use emusen_qt_models::game_model::qobject::GameModel;
-use emusen_qt_models::library::LibraryView;
 use emusen_qt_models::library_model::qobject::{LibraryModel, QAbstractListModel};
 use emusen_qt_models::{help, screens, words};
 use emusen_theme_qt::actions::{Action, ActionSink};

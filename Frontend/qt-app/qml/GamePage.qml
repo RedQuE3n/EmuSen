@@ -92,10 +92,12 @@ Kit.NormalizedCanvas {
         Connections {
             target: screen.page
             function onReturned() { frame.forceActiveFocus() }
+            // B with nothing of the page's own open leaves the page.
+            function onLeft() { screen.backed() }
         }
         Connections {
             target: frame.controller
-            function onBackDeclined() { screen.page.back() || screen.backed() }
+            function onBackDeclined() { screen.page.back() }
         }
         // Asked before deleting a state or hiding the game: No first and focused, B answers No (EmuSen_Interface.md §15.6).
         Kit.Question {

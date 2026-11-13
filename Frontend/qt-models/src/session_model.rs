@@ -16,7 +16,6 @@ use crate::pictures::{self, PictureSource, Shown};
 use cxx_qt::casting::Upcast;
 use emusen_crystal_client::{Api, Config, Runtime};
 use crate::play::PlaySettings;
-use crate::settings_source::ClientSettings;
 use emusen_platform_client::audio::{GameSound, SoundSettings};
 use emusen_platform_client::pace::DisplayClock;
 use emusen_platform_client::{galaxia, Lent, Platform};
@@ -909,6 +908,7 @@ impl qobject::SessionModel {
             self.as_mut().set_paused(false);
             self.as_mut().read_picture();
         }
+        self.unstep();
     }
 
     fn read_picture(mut self: Pin<&mut Self>) {
@@ -952,7 +952,6 @@ impl qobject::SessionModel {
             self.as_mut().rust_mut().picture_crop = crop;
             self.picture_crop_changed();
         }
-        self.unstep();
     }
 
     fn toggle_pause(self: Pin<&mut Self>) {

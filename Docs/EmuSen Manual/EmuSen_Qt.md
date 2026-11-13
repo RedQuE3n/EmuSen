@@ -2339,7 +2339,11 @@ the pillarbox area and threshold, the fade, the iterations and the look, and `dr
 passed since the game was selected, waking the painter then through `next_change_ms`. The delay follows ES-DE 3.4.1's
 `VideoComponent::applyTheme` and `update` (es-core/src/components/VideoComponent.cpp): it counts only when `imageType`
 is set, and the video starts at once when no still was found unless the type is `none`. Interpolation defaults to nearest
-unless the rotation is off the right angles, for the still too, as `applyTheme` sets it.
+unless the rotation is off the right angles, as `applyTheme` sets it, and is applied to the video only. ES-DE sets it on
+the still too, but the painter's nearest still measured further from ES-DE's capture than its linear one: Art Book
+Next's gamelist at 1280 × 800, its cover's region (x 740 to 1213, y 58 to 520), mean absolute error 1.66 nearest against
+1.26 linear (measured 2026-11-13; the whole picture 2.06 with the nearest still, 1.97 with the linear one). ES-DE's nearest still is drawn smoothly in its
+capture, and why is not known: its texture loading (es-core/src/resources/TextureData.cpp) is where to look.
 
 `VideoElement.qml` is the painter's: the still (a `Picture`, which now takes `brightness`, 0.3 a step on each channel
 before saturation and tint, as THEMES.md describes it) until `playing`, then a QtMultimedia `MediaPlayer` made through a

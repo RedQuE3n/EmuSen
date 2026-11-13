@@ -198,9 +198,9 @@ fn video(e: &Element, ctx: &Ctx) -> Option<Draft> {
     let mut still = still_source.map(|s| picture(e, s, fit, "imageCropPos", "imageCornerRadius", ctx));
     let brightness = e.float("brightness").unwrap_or(0.0).clamp(-2.0, 2.0) as f64;
     let nearest = interpolation_nearest(e);
+    // The still keeps linear sampling whatever `interpolation` says: nearest measured further from ES-DE's capture (EmuSen_Qt.md §4.5.6).
     if let Some(p) = &mut still {
         p.brightness = brightness;
-        p.nearest = nearest;
     }
     let Some(source) = source else { return still.map(|p| Draft { paint: Paint::Picture(p), size, sizing, scroll: None }) };
     let (video_fit, target) = video_target(e, ctx);

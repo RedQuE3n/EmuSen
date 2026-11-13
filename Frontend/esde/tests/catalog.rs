@@ -319,7 +319,8 @@ fn every_literal_default_is_in_the_effective_values_of_an_element_that_sets_noth
         .flat_map(|e| e.properties.iter().filter(|p| p.default.is_some()).map(|p| (e.kind.clone(), p.name.clone())))
         .collect();
     assert!(literal.difference(&covered).next().is_none(), "{:?}", literal.difference(&covered).collect::<Vec<_>>());
-    assert_eq!(covered.len(), 340);
+    // 339 since 2026-11-13: textlist selectorColorEnd follows selectorColor, as ES-DE 3.4.1's TextListComponent::applyTheme sets it.
+    assert_eq!(covered.len(), 339);
 }
 
 #[test]
@@ -327,7 +328,7 @@ fn defaults_stated_as_another_property_follow_that_property() {
     let t = Synth::new();
     t.capabilities("").theme(
         r#"<view name="gamelist">
-            <textlist name="l"><primaryColor>112233</primaryColor><selectedBackgroundColor>44556677</selectedBackgroundColor></textlist>
+            <textlist name="l"><primaryColor>112233</primaryColor><selectedBackgroundColor>44556677</selectedBackgroundColor><selectorColor>00000000</selectorColor></textlist>
             <image name="i"><color>AABBCC</color></image>
             <helpsystem name="h"><pos>0.3 0.4</pos><opacity>0.5</opacity></helpsystem>
             <video name="v"><maxSize>0.5 0.5</maxSize></video>
@@ -339,6 +340,7 @@ fn defaults_stated_as_another_property_follow_that_property() {
     assert_eq!(list.color("selectedColor").unwrap().to_string(), "112233FF");
     assert_eq!(list.color("selectedSecondaryColor").unwrap().to_string(), "112233FF");
     assert_eq!(list.color("selectedSecondaryBackgroundColor").unwrap().to_string(), "44556677");
+    assert_eq!(list.color("selectorColorEnd").unwrap().to_string(), "00000000");
     assert_eq!(view.find("image", "i").unwrap().color("colorEnd").unwrap().to_string(), "AABBCCFF");
     assert_eq!(view.find("helpsystem", "h").unwrap().pair("posDimmed"), Some(Pair::new(0.3, 0.4)));
     assert_eq!(view.find("helpsystem", "h").unwrap().float("opacityDimmed"), Some(0.5));

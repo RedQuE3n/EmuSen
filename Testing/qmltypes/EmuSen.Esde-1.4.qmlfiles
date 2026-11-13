@@ -21,6 +21,9 @@ Picture
     property real fadeFalloff
     property real sourceScale
     property bool flipped
+    property bool mirror
+    property bool mirrorVertically
+    property bool mipmap
     readonly property alias status
     readonly property alias ownWidth
     readonly property alias ownHeight
@@ -85,6 +88,9 @@ Icon
     property url source
     property string mark
     property color tint
+    property color tintEnd
+    property bool gradientVertical
+    property bool nearest
 ElementBox
     required property string elementId
     required property string name
@@ -113,6 +119,10 @@ PictureElement
     required property real saturation
     required property real radius
     required property bool nearest
+    required property real brightness
+    required property bool mirror
+    required property bool mirrorVertically
+    required property bool mipmap
 TextElement
     required property string text
     required property url fontSource
@@ -149,8 +159,10 @@ RatingElement
     required property string unfilledMark
     required property color tint
     required property bool overlay
+    required property bool nearest
     readonly property real star
 BadgesElement
+    required property bool nearest
 InfoElement
     required property url fontSource
     required property bool ownFace
@@ -170,6 +182,8 @@ StatusElement
     required property real entrySpacing
     required property bool hasBackground
     required property color background
+    required property color backgroundEnd
+    required property bool backgroundVertical
     required property real backgroundRadius
     required property real padLeft
     required property real padTop
@@ -213,6 +227,11 @@ CarouselElement
     required property int fit
     required property real alignX
     required property real alignY
+    required property real cropX
+    required property real cropY
+    required property bool nearest
+    required property real radius
+    required property real brightness
     required property bool hasBackground
     required property color background
     required property color backgroundEnd
@@ -237,6 +256,8 @@ TextListView
     required property real selectorW
     required property real selectorH
     required property color selectorColor
+    required property color selectorColorEnd
+    required property bool selectorVertical
     required property bool hasSelectedBackground
     required property color selectedBackground
     required property real selectedBackgroundRadius
@@ -288,14 +309,24 @@ GridElement
     required property bool gradientVertical
     required property bool hasSelectedTint
     required property color selectedTint
+    required property color selectedTintEnd
+    required property bool selectedGradientVertical
+    required property real brightness
     required property real saturation
     required property bool hasBackground
     required property color background
+    required property color backgroundEnd
+    required property bool backgroundVertical
     required property url backgroundSource
     required property real backgroundScale
     required property real backgroundRadius
     required property bool hasSelector
     required property color selectorColor
+    required property color selectorColorEnd
+    required property bool selectorVertical
+    required property color selectorImageTint
+    required property color selectorImageTintEnd
+    required property bool selectorImageVertical
     required property url selectorSource
     required property real selectorScale
     required property real selectorRadius

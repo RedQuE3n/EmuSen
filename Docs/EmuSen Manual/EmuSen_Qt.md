@@ -2289,9 +2289,9 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_n
 | `later:help-dimmed` | 8 | the help's eight `*Dimmed` properties (`posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`): not drawn until each is checked (R-20261111-75, decided 2026-11-11; the `accepted` state of 2026-11-08 is withdrawn) |
 | `later:sound` | 1 | `sound.path`, which the host plays: not drawn until checked (R-20261111-75) |
 | `later:video` | 2 | the video's `scanlines` and `audio`; the other fourteen of the family drawn or moved to `stationary` (§4.5.6, 2026-11-12) |
-| `later:gradients` | 22 | the `*ColorEnd` and `*GradientType` pairs the C# did not draw |
+| `later:gradients` | 0 | the 22 `*ColorEnd` and `*GradientType` pairs, drawn since 2026-11-13 (§4.5.7) |
 | `later:item-text` | 19 | carousel and grid item text styles and scrolling, the collections' letter cases, name suffixes |
-| `later:picture` | 16 | interpolation, corner radius and brightness where not drawn, flips, mipmap, `scaleFactor`, `gameOverridePath`, `defaultFolderImage` |
+| `later:picture` | 2 | `scaleFactor` of image and animation, which ES-DE 3.4.1 does not read: its property table (es-core/src/ThemeData.cpp) has no `scaleFactor`, so what a theme means by it has no source to follow. The other 14 drawn since 2026-11-13 (§4.5.7) |
 | `later:stationary` | 12 | `stationary` (the video's since 2026-11-12), `renderDuringTransitions`, `fadeAbovePrimary` |
 | `later:carousel-layout` | 6 | `itemStacking`, `selectedItemOffset`, `itemLinearScale`, `itemLinearSpacing`, `itemAxisRotation`, `itemDiagonalOffset` |
 | `later:textlist-selector` | 5 | the selector image, width and offset, the secondary selected background |
@@ -2385,7 +2385,7 @@ unless the rotation is off the right angles, as `applyTheme` sets it, and is app
 the still too, but the painter's nearest still measured further from ES-DE's capture than its linear one: Art Book
 Next's gamelist at 1280 × 800, its cover's region (x 740 to 1213, y 58 to 520), mean absolute error 1.66 nearest against
 1.26 linear (measured 2026-11-13; the whole picture 2.06 with the nearest still, 1.97 with the linear one). ES-DE's nearest still is drawn smoothly in its
-capture, and why is not known: its texture loading (es-core/src/resources/TextureData.cpp) is where to look.
+capture: ES-DE minifies linearly whatever the interpolation (found 2026-11-13, §4.5.7).
 
 `VideoElement.qml` is the painter's: the still (a `Picture`, which now takes `brightness`, 0.3 a step on each channel
 before saturation and tint, as THEMES.md describes it) until `playing`, then a QtMultimedia `MediaPlayer` made through a
@@ -2405,6 +2405,56 @@ each a case of `tests/themes/mapping-cases.tsv`.
 Not drawn: `scanlines`, whose ES-DE shader is a GPL phosphor shader not ours to copy, so how a theme's video scanlines
 look is the tester's to rule; `audio`, heard and not seen, which the table has no state for (R-20261111-75); ES-DE's
 "Play audio for gamelist and system view videos" (`ViewsVideoAudio`), which no EmuSen setting offers yet.
+
+#### 4.5.7 Gradients and picture properties **[M 2026-11-13]**
+
+Thirty-six pairs moved from `later:` to `drawn`: the 22 of the gradient family and 14 of the picture family. Each is a
+case of `tests/themes/mapping-cases.tsv` (two values, two different pictures on the GPU tier), and the rules below that
+are ES-DE's and not THEMES.md's are held by `esde/tests/frame.rs`
+(`es_de_s_gradient_defaults_hold_for_the_selected_item_the_grid_s_selector_picture_and_the_help`,
+`an_image_s_flips_brightness_mipmap_and_game_override_reach_its_picture`). Every rule was read in ES-DE 3.4.1's source.
+
+**Gradients.** A record that had one colour now carries a `Tint` (start, end, vertical): the carousel's slots, the
+text list's selector bar (whose end now follows `selectorColor` in `catalog.tsv`, as `TextListComponent::applyTheme` sets it, where THEMES.md states 333333FF: with the literal default a theme's clear selector drew a grey ramp across Art Book Next's list), the grid's selected tint, background and selector, the badges' three overlays, the help's and
+the status's fills. ES-DE draws a gradient by colouring the quad's corners (`Renderer::drawRect` in
+es-core/src/renderers/Renderer.cpp; `ImageComponent::updateColors`): horizontal runs left to right, vertical top to
+bottom, across the drawn box. A plain fill is a `Rectangle` with a `Gradient` and its `orientation`, Qt's own; a
+picture's is the picture shader's, which now grades across the drawn box (`qt_TexCoord0`) rather than the texture's
+coordinates, so a cover crop, a tile or a flip leaves the gradient where ES-DE puts it. A carousel reflection swaps a
+vertical gradient's colours, as ES-DE's `CarouselComponent::render` does. QtQuick.Shapes' `LinearGradient` was the other
+form read (Qt 6.11's `ShapePath.fillGradient`); it grades a fill only (6.11 has no stroke gradient), so a built-in mark
+with a gradient is drawn white into a layer and multiplied by the picture shader in `Icon.qml`, one shader for both.
+
+ES-DE's defaults, from the `applyTheme` of each component: an end or a gradient type counts only when its colour is set
+for the help, the status and the grid's fills (`HelpComponent`, `SystemStatusComponent`, `GridComponent`); the selected
+item's tint applies when `imageSelectedColor` or `imageSelectedColorEnd` is set, its end the selected colour unless
+given, horizontal unless `imageSelectedGradientType` says vertical, whatever `imageGradientType` says; with only the
+end set, the grid starts from `imageColor` and the carousel from white, since `CarouselComponent::applyTheme` takes the
+selected colour's default before it reads `imageColor`. A grid's `backgroundImage` and `selectorImage` replace their
+fill and are tinted by its colours; the selector picture takes `selectorColorEnd` only where the background's two
+colours differ, as `GridComponent::applyTheme` tests the background's pair there.
+
+**Picture properties.** `brightness` (image, animation) and `imageBrightness` (carousel, grid) use the picture
+shader's brightness of §4.5.6, clamped to −2 to 2 as `GuiComponent::applyTheme` clamps it. `flipHorizontal` and
+`flipVertical` mirror the texture coordinates inside the crop (`ImageComponent::updateVertices`), so `Picture.mirror`
+and `mirrorVertically` turn the shader's `uvRect`, Qt's `Image.mirror` being a property of the drawn node, which the
+shader pass does not draw. `mipmap` renders the picture at its own size into a `ShaderEffectSource` with `mipmap: true`, which the shader samples: `Image.mipmap` was tried first and Qt refused it at run time ("QSGPlainTexture: Mipmap settings changed without having image data available", 2026-11-13), the texture being made before the setting reached it. The carousel takes `imageCropPos` (with `imageFit` cover, clamped
+0 to 1), `imageInterpolation` (linear unless nearest), `imageCornerRadius` (0 to 0.5 of the screen width; ES-DE scales
+it by `itemScale` with the item it draws at that scale, so in the slot's own box it is the width share) and
+`defaultFolderImage` (a folder's picture before `defaultImage`, as `GamelistBase::populateList` gives it, shared with the
+grid). `gameOverridePath` replaces an image's `path` in the gamelist view with `<dir>/<system>/<file stem>` and the first
+of .jpg, .png, .webp, .gif and .svg found (`ImageComponent::setGameOverrideImage`). Badges and ratings take
+`interpolation`: nearest unless the rotation is off the right angles, the video's rule (`BadgeComponent`,
+`RatingComponent::applyTheme`).
+
+**What `interpolation` does in ES-DE.** It sets the magnification filter only. `TextureData::uploadAndBind`
+(es-core/src/resources/TextureData.cpp) calls `createTexture` with linear minification always, and
+`RendererOpenGL::createTexture` (es-core/src/renderers/RendererOpenGL.cpp) sets `GL_TEXTURE_MIN_FILTER` to
+`GL_LINEAR_MIPMAP_LINEAR` with mipmaps and `GL_LINEAR` without, and `GL_TEXTURE_MAG_FILTER` from the flag. A picture
+drawn below its own size is therefore smooth whatever the theme says, which is why §4.5.6's nearest still measured
+further from ES-DE's capture. Qt's texture has one filter for both, so `Picture` samples linearly when the picture is
+drawn below its own size on either axis and keeps nearest only when it is enlarged. The video's still keeps the linear
+sampling of §4.5.6; giving it `interpolation` under this rule is a change to the video's pairs, not made here.
 
 ### 4.6 The library as an ES-DE theme sees it, and its screen **[M 2026-11-08]**
 

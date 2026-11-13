@@ -151,9 +151,13 @@ pub fn element(p: &Placed, primary: Option<&Primary>, role: &str) -> V {
             "unfilledMark" => Some(icon_mark(&r.unfilled)),
             "tint" => Some(V::C(r.tint)),
             "overlay" => Some(V::B(r.overlay)),
+            "nearest" => Some(V::B(r.nearest)),
             _ => None,
         },
-        Paint::Badges(_) => None,
+        Paint::Badges(b) => match role {
+            "nearest" => Some(V::B(b.nearest)),
+            _ => None,
+        },
         Paint::Clip(c) => match role {
             "source" => Some(url(&Some(c.source.clone()))),
             "stretch" => Some(V::B(c.stretch)),
@@ -226,6 +230,9 @@ fn picture(q: &emusen_esde::scene::Picture, role: &str) -> Option<V> {
         "radius" => V::N(q.corner_radius),
         "nearest" => V::B(q.nearest),
         "brightness" => V::N(q.brightness),
+        "mirror" => V::B(q.flip.0),
+        "mirrorVertically" => V::B(q.flip.1),
+        "mipmap" => V::B(q.mipmap),
         "frame" => V::I(q.frame.map_or(-1, |f| f as i32)),
         _ => return tint(&q.tint, role),
     })
@@ -290,6 +297,8 @@ fn video(x: &Video, role: &str) -> Option<V> {
                     corner_radius: 0.0,
                     nearest: false,
                     brightness: 0.0,
+                    flip: (false, false),
+                    mipmap: false,
                     frame: None,
                 };
                 return picture(&none, role);
@@ -337,6 +346,11 @@ fn layout(pr: &Primary, role: &str) -> Option<V> {
             "background" => V::C(c.background.map_or(CLEAR, |t| t.color)),
             "backgroundEnd" => V::C(c.background.map_or(CLEAR, |t| t.end)),
             "backgroundVertical" => V::B(c.background.is_some_and(|t| t.vertical)),
+            "cropX" => V::N(c.crop_pos.0),
+            "cropY" => V::N(c.crop_pos.1),
+            "nearest" => V::B(c.nearest),
+            "radius" => V::N(c.image_radius),
+            "brightness" => V::N(c.brightness),
             "fontSource" => url(&c.text.font.file),
         "ownFace" => V::B(c.text.font.own),
             "px" => V::N(c.text.px),
@@ -346,7 +360,7 @@ fn layout(pr: &Primary, role: &str) -> Option<V> {
             _ => return None,
         }),
         Layout::TextList(t) => {
-            let bar = t.selector.unwrap_or(emusen_esde::scene::Bar { x: 0.0, y: 0.0, w: 0.0, h: 0.0, color: CLEAR });
+            let bar = t.selector.unwrap_or(emusen_esde::scene::Bar { x: 0.0, y: 0.0, w: 0.0, h: 0.0, tint: Tint { color: CLEAR, end: CLEAR, vertical: false } });
             let sb = t.selected_background.unwrap_or((CLEAR, 0.0, (0.0, 0.0)));
             Some(match role {
                 "firstRow" => V::I(t.first_row as i32),
@@ -358,7 +372,9 @@ fn layout(pr: &Primary, role: &str) -> Option<V> {
                 "selectorY" => V::N(bar.y),
                 "selectorW" => V::N(bar.w),
                 "selectorH" => V::N(bar.h),
-                "selectorColor" => V::C(bar.color),
+                "selectorColor" => V::C(bar.tint.color),
+                "selectorColorEnd" => V::C(bar.tint.end),
+                "selectorVertical" => V::B(bar.tint.vertical),
                 "hasSelectedBackground" => V::B(t.selected_background.is_some()),
                 "selectedBackground" => V::C(sb.0),
                 "selectedBackgroundRadius" => V::N(sb.1),
@@ -402,15 +418,25 @@ fn layout(pr: &Primary, role: &str) -> Option<V> {
             "imageScale" => V::N(g.image_scale),
             "radius" => V::N(g.image_radius),
             "hasSelectedTint" => V::B(g.selected_tint.is_some()),
-            "selectedTint" => V::C(g.selected_tint.unwrap_or(g.tint.color)),
+            "selectedTint" => V::C(g.selected_tint.unwrap_or(g.tint).color),
+            "selectedTintEnd" => V::C(g.selected_tint.unwrap_or(g.tint).end),
+            "selectedGradientVertical" => V::B(g.selected_tint.unwrap_or(g.tint).vertical),
             "saturation" => V::N(g.saturation),
+            "brightness" => V::N(g.brightness),
             "hasBackground" => V::B(g.background.is_some()),
-            "background" => V::C(g.background.unwrap_or(CLEAR)),
+            "background" => V::C(g.background.map_or(CLEAR, |t| t.color)),
+            "backgroundEnd" => V::C(g.background.map_or(CLEAR, |t| t.end)),
+            "backgroundVertical" => V::B(g.background.is_some_and(|t| t.vertical)),
             "backgroundSource" => url(&g.background_image),
             "backgroundScale" => V::N(g.background_scale),
             "backgroundRadius" => V::N(g.background_radius),
             "hasSelector" => V::B(g.selector.is_some()),
-            "selectorColor" => V::C(g.selector.unwrap_or(CLEAR)),
+            "selectorColor" => V::C(g.selector.map_or(CLEAR, |t| t.color)),
+            "selectorColorEnd" => V::C(g.selector.map_or(CLEAR, |t| t.end)),
+            "selectorVertical" => V::B(g.selector.is_some_and(|t| t.vertical)),
+            "selectorImageTint" => V::C(g.selector_image_tint.color),
+            "selectorImageTintEnd" => V::C(g.selector_image_tint.end),
+            "selectorImageVertical" => V::B(g.selector_image_tint.vertical),
             "selectorSource" => url(&g.selector_image),
             "selectorScale" => V::N(g.selector_scale),
             "selectorRadius" => V::N(g.selector_radius),
@@ -464,7 +490,9 @@ pub fn slot(s: &Slot, r: Option<&Row>, role: &str) -> V {
         "alpha" => V::N(s.opacity),
         "dim" => V::N(s.dim),
         "saturation" => V::N(s.saturation),
-        "tint" => V::C(s.tint),
+        "tint" => V::C(s.tint.color),
+        "tintEnd" => V::C(s.tint.end),
+        "gradientVertical" => V::B(s.tint.vertical),
         "reflected" => V::B(s.reflection.is_some()),
         "reflectionOpacity" => V::N(s.reflection.map_or(0.0, |r| r.0)),
         "reflectionFalloff" => V::N(s.reflection.map_or(0.0, |r| r.1)),
@@ -490,7 +518,8 @@ fn overlay(o: &Option<emusen_esde::scene::Overlay>, prefix: &str, role: &str) ->
             "" => V::B(false),
             "Source" => V::U(String::new()),
             "Mark" => V::S(String::new()),
-            "Tint" => V::C(CLEAR),
+            "Tint" | "TintEnd" => V::C(CLEAR),
+            "Vertical" => V::B(false),
             _ => V::N(0.0),
         });
     };
@@ -502,7 +531,9 @@ fn overlay(o: &Option<emusen_esde::scene::Overlay>, prefix: &str, role: &str) ->
         "Y" => V::N(o.y),
         "W" => V::N(o.w),
         "H" => V::N(o.h),
-        "Tint" => V::C(o.tint),
+        "Tint" => V::C(o.tint.color),
+        "TintEnd" => V::C(o.tint.end),
+        "Vertical" => V::B(o.tint.vertical),
         _ => return None,
     })
 }
@@ -550,7 +581,7 @@ pub fn part(p: &Paint, i: usize, role: &str, swap: bool) -> V {
 }
 
 /// Every role name the element model answers, in role order.
-pub const ELEMENT_ROLES: [&str; 145] = [
+pub const ELEMENT_ROLES: [&str; 150] = [
     "elementId", "paint", "name", "boxX", "boxY", "boxWidth", "boxHeight", "turn", "originX", "originY", "alpha",
     "source", "fit", "cropX", "cropY", "tileWidth", "tileHeight", "tileRight", "tileBottom", "tint", "tintEnd", "gradientVertical",
     "saturation", "radius", "nearest", "frame",
@@ -567,25 +598,28 @@ pub const ELEMENT_ROLES: [&str; 145] = [
     "progress", "unfocusedOpacity", "unfocusedSaturation", "unfocusedDim", "imageScale", "hasSelectedTint", "selectedTint", "ownFace",
     "pageIndex", "stretch", "audio", "volume", "blur", "labelPx", "fade",
     "hasStill", "videoSource", "playing", "blackFrame", "pillarboxes", "thresholdX", "thresholdY", "iterations", "thenStill", "videoFit", "targetWidth", "targetHeight", "areaWidth", "areaHeight", "anchorX", "anchorY", "placeX", "placeY", "videoCropX", "videoCropY", "videoRadius", "videoNearest", "videoTint", "videoTintEnd", "videoGradientVertical", "videoSaturation", "brightness",
+    "mirror", "mirrorVertically", "mipmap", "selectorColorEnd", "selectorVertical",
 ];
 
 /// The grid's roles, numbered on past the element list's.
-pub const GRID_ROLES: [&str; 9] = [
+pub const GRID_ROLES: [&str; 14] = [
     "backgroundSource", "backgroundScale", "selectorSource", "selectorScale", "selectorRadius", "selectorOnTop", "selectorInMiddle",
-    "selectedItemBackground", "textRadius",
+    "selectedItemBackground", "textRadius", "selectedTintEnd", "selectedGradientVertical", "selectorImageTint", "selectorImageTintEnd",
+    "selectorImageVertical",
 ];
 
 pub const ROW_ROLES: [&str; 4] = ["text", "image", "marker", "folder"];
 
-pub const SLOT_ROLES: [&str; 22] = [
+pub const SLOT_ROLES: [&str; 24] = [
     "row", "boxX", "boxY", "boxWidth", "boxHeight", "grow", "growX", "growY", "turn", "turnX", "turnY", "alpha", "dim",
-    "saturation", "tint", "reflected", "reflectionOpacity", "reflectionFalloff", "text", "image", "marker", "folder",
+    "saturation", "tint", "tintEnd", "gradientVertical", "reflected", "reflectionOpacity", "reflectionFalloff", "text", "image", "marker", "folder",
 ];
 
-pub const PART_ROLES: [&str; 36] = [
+pub const PART_ROLES: [&str; 42] = [
     "button", "pair", "label", "icon", "start", "labelStart", "mark", "text", "source",
     "cellX", "cellY", "cellW", "cellH",
-    "iconSource", "iconMark", "iconX", "iconY", "iconW", "iconH", "iconTint",
+    "iconSource", "iconMark", "iconX", "iconY", "iconW", "iconH", "iconTint", "iconTintEnd", "iconVertical",
     "controller", "controllerSource", "controllerMark", "controllerX", "controllerY", "controllerW", "controllerH", "controllerTint",
-    "link", "linkSource", "linkMark", "linkX", "linkY", "linkW", "linkH", "linkTint",
+    "controllerTintEnd", "controllerVertical",
+    "link", "linkSource", "linkMark", "linkX", "linkY", "linkW", "linkH", "linkTint", "linkTintEnd", "linkVertical",
 ];

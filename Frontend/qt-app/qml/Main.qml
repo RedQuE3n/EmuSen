@@ -387,143 +387,21 @@ Window {
             running: !program.splashShown && program.esdeWanted && (program.esdeView?.scene.problem.length ?? 0) > 0
             onTriggered: program.said(program.esdeView.scene.problem, true, false)
         }
-        // The grid's search: its words, which the keyboard types and the grid's model narrows by, the field over the one row of
-        // covers and the keyboard docked beneath, over the theme's Games screen (EmuSen_Interface.md §18.1; EmuSen_Qt.md §7.6).
-        Kit.KeyboardModel {
-            id: typist
-            objectName: "typist"
-            onTextChanged: games.search = typist.text
-            onClosed: screens.back()
+        SearchScreen {
+            screens: screens
+            games: games
+            host: referenceHost
+            padFamily: program.padFamily
+            gameShown: program.gameShown
+            splashShown: program.splashShown
         }
-        Connections {
-            target: games
-            function onSearchChanged() { typist.setText(games.search, games.search.length) }
-        }
-        Connections {
-            target: referenceHost
-            function onSearchingChanged() { typist.setText(games.search, games.search.length) }
-        }
-        Kit.NormalizedCanvas {
-            id: searchCanvas
-            objectName: "searchCanvas"
-            visible: !program.gameShown && referenceHost.searching
-            Kit.Frame {
-                id: searchFrame
-                anchors.fill: parent
-                surfaceDrawn: false
-                padFamily: program.padFamily
-                helpFont: Qt.font({ family: searchFaces.regular, pixelSize: 20 })
-                helpSpacing: 40
-                helpGlyphGap: 10
-                // Its help stands while the keyboard holds the focus; on the covers the theme's own does.
-                helpShown: screens.shown === Screens.Search
-                focus: !program.splashShown && screens.shown === Screens.Search
-                controller.navigationShown: false
-                help: HelpModel {
-                    screen: HelpModel.Search
-                }
-                // The keyboard's own actions, Y Space and X Done, and the screen's, the shoulders to the covers; its close is the screen's way out.
-                Connections {
-                    target: searchFrame.controller
-                    function onActionInvoked(key) { typist.act(key) }
-                }
-                Connections {
-                    target: searchFrame.controller
-                    function onActionInvoked(key) { screens.act(key) }
-                }
-                Item {
-                    x: -searchFrame.safeX
-                    y: -searchFrame.safeY
-                    width: searchCanvas.width
-                    height: searchCanvas.height
-                    // The search's field over the one row of covers, never focused: the keyboard types into it (LunaP's GallerySearch).
-                    TextField {
-                        objectName: "GallerySearch"
-                        x: 64
-                        y: 100
-                        width: 1152
-                        height: 44
-                        focusPolicy: Qt.NoFocus
-                        activeFocusOnTab: false
-                        readOnly: true
-                        leftPadding: 16
-                        rightPadding: 16
-                        text: typist.text
-                        cursorPosition: typist.caret
-                        color: Kit.Tokens.textStrong
-                        font.family: searchFaces.regular
-                        font.pixelSize: 22
-                        Accessible.name: Words.search
-                    }
-                    Kit.Keyboard {
-                        id: keyboard
-                        objectName: "GalleryKeyboard"
-                        model: typist
-                        y: 398
-                        width: searchCanvas.width
-                        focus: true
-                        labelFont: Qt.font({ family: searchFaces.regular, pixelSize: Kit.Tokens.fontBody })
-                        onActiveFocusChanged: if (referenceHost.searching && keyboard.activeFocus !== referenceHost.typing) screens.keysFocused(keyboard.activeFocus)
-                    }
-                }
-            }
-            Faces {
-                id: searchFaces
-            }
-        }
-        // The List card over the grid (EmuSen_Interface.md §18.1): its actions are the grid's model's, and its jumps move the
-        // focus the theme's Games screen follows.
-        Kit.NormalizedCanvas {
-            id: listCardCanvas
-            objectName: "listCardCanvas"
-            readonly property alias slide: listCard.slide
-            visible: listCard.open || listCard.leaving
-            CardModel {
-                id: listCardModel
-                objectName: "listCardModel"
-                card: CardModel.List
-                shown: screens.shown === Screens.List
-                facts: program.esdeLook ? library.esdeListFacts(program.esdeView?.scene.shelf ?? "", program.esdeView?.scene.selected ?? 0) : games.listFacts
-                // Under an ES-DE theme the own grid is hidden and acted on by nothing; the theme's gamelist is acted on below.
-                onActed: (key) => { if (!program.esdeLook) games.focused = games.listAct(key) }
-                onStayed: (key) => { if (!program.esdeLook) games.focused = games.listAct(key) }
-                onClosed: screens.close()
-            }
-            Connections {
-                target: listCardModel
-                function onActed(key) { screens.act(key) }
-            }
-            // Under an ES-DE theme the card acts on the shown gamelist, and the view selects the entry it answers.
-            Connections {
-                target: listCardModel
-                enabled: program.esdeLook
-                function onActed(key) { program.esdeView.scene.select(library.esdeListAct(program.esdeView.scene.shelf, key, program.esdeView.scene.selected)) }
-                function onStayed(key) { program.esdeView.scene.select(library.esdeListAct(program.esdeView.scene.shelf, key, program.esdeView.scene.selected)) }
-            }
-            MenuCard {
-                id: listCard
-                anchors.fill: parent
-                open: screens.shown === Screens.List
-                focus: open
-                padFamily: program.padFamily
-                rows: listCardModel
-                title: listCardModel.title
-                breadcrumb: listCardModel.breadcrumb
-                footer: listCardModel.footer
-                current: listCardModel.current
-                paneLines: listCardModel.paneLines
-                paneMuted: listCardModel.paneMuted
-                panePicture: listCardModel.panePicture
-                paneCaption: listCardModel.paneCaption
-                help: HelpModel {
-                    screen: listCardModel.help
-                }
-                onChosen: (index) => listCardModel.choose(index)
-                onStepped: (index, by, held) => listCardModel.step(index, by)
-                onFocused: (index) => listCardModel.select(index)
-                onBacked: listCardModel.back()
-                onActed: (key) => screens.act(key)
-            }
+        ListCardScreen {
+            screens: screens
+            library: library
+            games: games
+            padFamily: program.padFamily
+            esdeLook: program.esdeLook
+            esdeView: program.esdeView
         }
         // Settings, from Home's Settings place and the Home card's Settings row (EmuSen_Qt.md §7.7); its Library ▸ Themes opens
         // the Themes tab.
@@ -569,247 +447,81 @@ Window {
             onBacked: screens.back()
             onActed: (key) => screens.act(key)
         }
-        // The Themes tab, under Settings ▸ Library ▸ Themes (EmuSen_Qt.md §3.8): Use stores a theme's id and the chosen
-        // theme's host switches at once; an ES-DE theme's Use and its choices restyle the library at once.
-        ThemesModel {
-            id: themesModel
-            objectName: "themesModel"
-            platformLibrary: program.platformLibrary
-            reference: ReferenceTheme.manifest
-            referenceFolder: ReferenceTheme.folder
-            open: screens.shown === Screens.Themes
-            onUsed: (folder) => program.theme = folder
-            // The start's choice of an ES-DE theme is let go once another look is stored; the library's read decides the rest.
-            onRestyled: (esde) => {
-                program.esdeChosen = program.esdeChosen && esde
-                library.restyle()
-            }
-        }
-        Themes {
+        ThemesScreen {
             objectName: "themes"
-            visible: screens.shown === Screens.Themes
-            themes: themesModel
+            screens: screens
+            library: library
+            platformLibrary: program.platformLibrary
             padFamily: program.padFamily
-            inputs: visible && !program.splashShown
-            onBacked: screens.back()
-            onActed: (key) => screens.act(key)
+            splashShown: program.splashShown
+            onUsed: (folder) => program.theme = folder
+            // The start's choice of an ES-DE theme is let go once another look is stored.
+            onRestyled: (esde) => program.esdeChosen = program.esdeChosen && esde
         }
         // Cores on the tool screen, from Home's place (EmuSen_Interface.md §15; EmuSen_Qt.md §7.7).
-        ToolModel {
-            id: coresModel
-            objectName: "coresModel"
-            tool: ToolModel.Cores
+        ToolScreen {
+            objectName: "cores"
+            kind: ToolModel.Cores
+            shownAs: Screens.Cores
+            screens: screens
             platformLibrary: program.platformLibrary
             cores: library.cores
             world: program.coresWorld
-            open: screens.shown === Screens.Cores
+            padFamily: program.padFamily
+            splashShown: program.splashShown
             // Open Folder on a firmware page, through the program's one action for it (EmuSen_Qt.md §7.7.E).
             onOpenFolder: (path) => folders.open(path)
-        }
-        Cores {
-            objectName: "cores"
-            visible: screens.shown === Screens.Cores
-            tool: coresModel
-            padFamily: program.padFamily
-            inputs: visible && !program.splashShown
-            onBacked: screens.back()
+            onSaid: (words) => program.said(words, true, false)
         }
         // A tool of jobs on the same tool screen: Library Manager, Compressed Discs or Packages, as Screens names it (tools/jobs.rs).
-        ToolModel {
-            id: jobsModel
-            objectName: "jobsModel"
-            tool: ToolModel.Jobs
-            jobs: screens.tool
-            platformLibrary: program.platformLibrary
-            open: screens.shown === Screens.Tool
-        }
-        Cores {
+        ToolScreen {
             objectName: "jobs"
-            visible: screens.shown === Screens.Tool
-            tool: jobsModel
-            padFamily: program.padFamily
-            inputs: visible && !program.splashShown
-            onBacked: screens.back()
-        }
-        // A game's page, from X on Home and the grid, a theme's openPage and the Home card's Selected game (EmuSen_Qt.md §7.8);
-        // its media viewer, scrape and Edit Details are its own (§7.8.2).
-        GamePageModel {
-            id: pageModel
-            objectName: "pageModel"
+            kind: ToolModel.Jobs
+            shownAs: Screens.Tool
+            jobs: screens.tool
+            screens: screens
             platformLibrary: program.platformLibrary
-            cores: library.cores
-            game: screens.shown === Screens.Page ? library.gameFile(program.inHand) : ""
-            onPlayed: (path, state) => state.length > 0 ? program.playFrom(path, state) : program.play(path)
-            onHidden: screens.back()
-            onOpenFolder: (path) => folders.open(path)
-            // The recorded ScreenScraper a test names for the scraper; empty for ScreenScraper itself.
-            scraperTest: program.scraperTest
-        }
-        Connections {
-            target: pageModel
-            function onHidden() { library.refresh() }
-        }
-        // A name edited on the page is the grid's too (EmuSen_Qt.md §7.8.2).
-        Connections {
-            target: pageModel
-            function onEdited() { library.refresh() }
-        }
-        GamePage {
-            objectName: "gamePage"
-            visible: screens.shown === Screens.Page
-            page: pageModel
             padFamily: program.padFamily
-            inputs: visible && !program.splashShown
-            onBacked: screens.back()
-            onActed: (key) => screens.act(key)
+            splashShown: program.splashShown
         }
-        // The Home card over Home, opened at Power by its place (EmuSen_Interface.md §2.3; EmuSen_BigPicture.md §51.2).
-        Kit.NormalizedCanvas {
-            id: homeCardCanvas
-            objectName: "homeCardCanvas"
-            readonly property alias slide: homeCard.slide
-            visible: homeCard.open || homeCard.leaving
-            CardModel {
-                id: homeCardModel
-                objectName: "homeCardModel"
-                card: CardModel.Home
-                start: screens.page
-                shown: screens.shown === Screens.HomeCard
-                // Every fact is an argument, so the card follows the library's consoles and tools as they are read.
-                facts: library.homeCardFacts(player.session.running ? player.session.game : "", player.session.running ? player.session.console : "", clock.paused, program.gameMode, library.startable, library.toolSummaries)
-                onActed: (key) => screens.act(key)
-                onClosed: screens.close()
-            }
-            MenuCard {
-                id: homeCard
-                anchors.fill: parent
-                open: screens.shown === Screens.HomeCard
-                focus: open
-                padFamily: program.padFamily
-                rows: homeCardModel
-                title: homeCardModel.title
-                breadcrumb: homeCardModel.breadcrumb
-                footer: homeCardModel.footer
-                current: homeCardModel.current
-                paneLines: homeCardModel.paneLines
-                paneMuted: homeCardModel.paneMuted
-                panePicture: homeCardModel.panePicture
-                paneCaption: homeCardModel.paneCaption
-                help: HelpModel {
-                    screen: homeCardModel.help
-                }
-                onChosen: (index) => homeCardModel.choose(index)
-                onStepped: (index, by, held) => homeCardModel.step(index, by)
-                onFocused: (index) => homeCardModel.select(index)
-                onBacked: homeCardModel.back()
-                onActed: (key) => screens.act(key)
-            }
+        PageScreen {
+            objectName: "gamePage"
+            screens: screens
+            library: library
+            platformLibrary: program.platformLibrary
+            inHand: program.inHand
+            scraperTest: program.scraperTest
+            padFamily: program.padFamily
+            splashShown: program.splashShown
+            onPlay: (path) => program.play(path)
+            onPlayFrom: (path, state) => program.playFrom(path, state)
+            onOpenFolder: (path) => folders.open(path)
+            onSaid: (words) => program.said(words, true, false)
         }
-        // The Pause Card, opened by the chord over the game; the game resumes once the card has slid away (EmuSen_Interface.md §20.6).
-        Kit.NormalizedCanvas {
-            id: cardCanvas
-            objectName: "cardCanvas"
-            readonly property alias slide: card.slide
-            visible: card.open || card.leaving
-            PauseCard {
-                id: card
-                anchors.fill: parent
-                library: library
-                session: player.session
-                settings: settingsModel
-                padFamily: program.padFamily
-                open: program.pauseShown
-                focus: program.pauseShown
-                onResumed: screens.play()
-                onBackToLibrary: screens.library()
-                onQuitGame: player.session.close()
-                onQuitAll: screens.quit()
-                onGone: if (program.gameShown) player.session.resume()
-            }
+        HomeCardScreen {
+            screens: screens
+            library: library
+            session: player.session
+            clock: clock
+            gameMode: program.gameMode
+            padFamily: program.padFamily
         }
-        // The Resume question at a game's start, over the game held unplayed until it is answered (EmuSen_Interface.md §18.3).
-        Kit.NormalizedCanvas {
-            id: resumeCanvas
-            objectName: "resumeCanvas"
-            visible: player.session.resumeAsked
-            QuestionModel {
-                id: resumeWords
-                subject: player.session.resumeSubject
-            }
-            Kit.Frame {
-                id: resumeFrame
-                anchors.fill: parent
-                form: Kit.Forms.BigScreen
-                surfaceDrawn: false
-                helpShown: false
-                focus: player.session.resumeAsked
-                controller.navigationShown: false
-                Kit.Question {
-                    id: resumeQuestion
-                    objectName: "resumeQuestion"
-                    controller: resumeFrame.controller
-                    title: resumeWords.title
-                    sentences: resumeWords.sentences
-                    caption: resumeWords.caption
-                    choices: resumeWords.choices
-                    backIndex: resumeWords.backIndex
-                    padFamily: program.padFamily
-                    titleFont: Qt.font({ family: resumeFaces.condensedRegular, pixelSize: Kit.Tokens.fontTitle })
-                    bodyFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontBody })
-                    captionFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontCaption })
-                    rowFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontRow })
-                    helpFont: Qt.font({ family: resumeFaces.regular, pixelSize: 20 })
-                    help: HelpModel {
-                        screen: HelpModel.QuestionBack
-                    }
-                    onChosen: (index) => player.session.answerResume(index)
-                }
-                // Opened each time it is asked; a Binding, since B closing the popup would undo a plain one.
-                Binding {
-                    resumeQuestion.visible: player.session.resumeAsked
-                }
-            }
-            Faces {
-                id: resumeFaces
-            }
+        PauseScreen {
+            screens: screens
+            library: library
+            session: player.session
+            settings: settingsModel
+            padFamily: program.padFamily
+            pauseShown: program.pauseShown
+            gameShown: program.gameShown
         }
-        // The questions before a game opens: its core's approval, then the firmware it needs (EmuSen_Qt.md §7.7).
-        Kit.NormalizedCanvas {
-            id: launchCanvas
-            objectName: "launchCanvas"
-            visible: launch.asking
-            Kit.Frame {
-                id: launchFrame
-                anchors.fill: parent
-                form: Kit.Forms.BigScreen
-                surfaceDrawn: false
-                helpShown: false
-                focus: launch.asking
-                controller.navigationShown: false
-                Kit.Question {
-                    id: launchQuestion
-                    objectName: "launchQuestion"
-                    controller: launchFrame.controller
-                    title: launch.title
-                    sentences: launch.sentences
-                    caption: launch.caption
-                    choices: launch.choices
-                    backIndex: launch.backIndex
-                    padFamily: program.padFamily
-                    titleFont: Qt.font({ family: resumeFaces.condensedRegular, pixelSize: Kit.Tokens.fontTitle })
-                    bodyFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontBody })
-                    captionFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontCaption })
-                    rowFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontRow })
-                    helpFont: Qt.font({ family: resumeFaces.regular, pixelSize: 20 })
-                    help: HelpModel {
-                        screen: launch.help
-                    }
-                    onChosen: (index) => launch.answer(index)
-                }
-                Binding {
-                    launchQuestion.visible: launch.asking
-                }
-            }
+        ResumeQuestion {
+            session: player.session
+            padFamily: program.padFamily
+        }
+        LaunchQuestion {
+            launch: launch
+            padFamily: program.padFamily
         }
         // The session's notices (saved, loaded, the screenshot, what failed), at the top right over everything; over running
         // gameplay they are the game's own, so they show (EmuSen_Interface.md §18.6).
@@ -845,28 +557,13 @@ Window {
             target: settingsModel
             function onProblemChanged() { program.said(settingsModel.problem, true, false) }
         }
-        Connections {
-            target: pageModel
-            function onProblemChanged() { program.said(pageModel.problem, true, false) }
-        }
-        Connections {
-            target: coresModel
-            function onProblemChanged() { program.said(coresModel.problem, true, false) }
-        }
         // The pads unread: opening them or a tick failed, said once until they read again (EmuSen_Qt.md §7.7.H5).
         Connections {
             target: pads
             function onProblemChanged() { program.said(pads.problem, true, false) }
         }
-        Kit.NormalizedCanvas {
-            id: noticeCanvas
-            objectName: "noticeCanvas"
-            Kit.NoticeLayer {
-                model: notices
-                width: noticeCanvas.width
-                height: noticeCanvas.height
-                labelFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontBody })
-            }
+        NoticeScreen {
+            notices: notices
         }
         Kit.Moonrise {
             id: moonrise

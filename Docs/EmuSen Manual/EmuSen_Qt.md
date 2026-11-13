@@ -1053,7 +1053,7 @@ resources by `qt-app/themes.qrc` at `qrc:/emusen/themes/emusen/` (`emusen_qt::RE
 **What moved and what stayed.** The three screens and their parts left `EmuSen.App` (`Home.qml`, `Consoles.qml`,
 `GameGrid.qml`, `Cover.qml`, `CoverFan.qml`, `Glyph.qml`, `EngineMark.qml`, `GameCard.qml`, `RoundPicture.qml`); the cover
 and the rounded picture became the kit's `CoverTile` and `RoundPicture` (`EmuSen_Kit.md` §7.29). What a theme never draws
-stayed with the program, in `Main.qml`: the List card, and the grid's search (its words, the field and the docked
+stayed with the program: the List card (`ListCardScreen.qml`), and the grid's search (`SearchScreen.qml`: its words, the field and the docked
 keyboard with its help bar), drawn over the theme's Games screen; and the grid's games themselves, the program's
 `GameModel`, which the List card and the search sort, narrow and move, and which a theme reads through `Browse`. The
 program's clock (Home's status line, the paused game's words, the Home card's facts) is the window's own.
@@ -1982,7 +1982,7 @@ library it is the row in use and no EmuSen row is. Under it the tab lists every 
 kit `MenuRow` that steps; A, Left and Right step it round (help bar `ThemesChoice`), and it is stored at once under
 `BigPicture[<theme folder>]` by the key `esde-qt`'s `shelves::settings` reads. A row shows the theme's English label,
 else the value's own name. Each store raises `restyled(esde)`; `Main.qml` lets go of the start's ES-DE choice when another
-look is stored and calls `LibraryModel.restyle()`, which re-reads the settings off the GUI thread: while a theme stays the
+look is stored and `ThemesScreen.qml` calls `LibraryModel.restyle()`, which re-reads the settings off the GUI thread: while a theme stays the
 look only the view's settings text changes, and `EsdeModel` reloads on it; a change of look is a refresh. Nothing waits
 for a restart. `qt-app/tests/themes_esde.rs` holds it with the pad.
 
@@ -5411,7 +5411,7 @@ Galaxia's `ResumeOnLaunch` (`Ask`, `Resume`, `Restart`) read through the platfor
 - **Where it was left off is written as the game closes**, on the frame thread once it has stopped (Mistress writes it
   with the emulation thread stopped), only for a game that ran a frame, so B on the question leaves the old state in
   place. A failure to write it is reported as the session's problem.
-- `Main.qml` draws the question on a `Kit.Frame` of its own over the held game (`QuestionBack`'s bar, A Choose · B
+- `ResumeQuestion.qml` draws the question on a `Kit.Frame` of its own over the held game (`QuestionBack`'s bar, A Choose · B
   Back), and the game gives up the pad while it is asked (`inFront`).
 
 **Notices in the program and their shadow.** The session's words (`State saved to slot 1`, `Rewound`, `Screenshot
@@ -6623,7 +6623,7 @@ saw. The bar is Mistress's: what she did, the program does, and a row that is dr
 
 **1. Failures are shown.** Every model that can fail has a `problem` (SessionModel, LibraryModel, SettingsModel,
 GamePageModel, ToolModel) or a notice (LaunchModel); until now no screen read any of them. `Main.qml` now raises each
-`problem` through the kit's one notice layer (`Kit.NoticeModel`, EmuSen_Kit.md §7.26), in Attention's tone,
+`problem` (the game page's and Cores' as their screens, `PageScreen.qml` and `ToolScreen.qml`, signal `said`) through the kit's one notice layer (`Kit.NoticeModel`, EmuSen_Kit.md §7.26), in Attention's tone,
 over whatever screen the player is on; the session's over running gameplay too, as Mistress's `PadNotice` showed a
 failed load over the big screen. The words:
 

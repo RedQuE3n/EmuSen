@@ -1351,7 +1351,7 @@ Horizon is the package `Frontend/themes/horizon/`, the design of `horizon.md` (2
 horizon line high at y 440, the focused game or console risen over it at the right as a world in a 300 disc, its words in
 the sky at the left, and the things browsed standing on the land on one foot line (700) under a clamped camera. Its
 `theme.json` lists `home`, `consoles`, `games` and `splash`, the variants dark and light, and one token override,
-`light.accent` #B4442A (Dawn), set on the theme's engine only (§3.5.1). Its mockups are
+`light.accent` #B4442A (Dawn), set on the theme's engine and, chosen, on the program's (§3.5.1). Its mockups are
 `Testing/themes/horizon-{home,consoles,games}.mockup.spec`, held within two units of theme-audit's recordings.
 
 **Parts.** `Backdrop` (the kit's night `Sky` drawn twice, once as the gradient alone and once with the stars clipped at
@@ -1735,11 +1735,22 @@ text size and reduced motion act on it as on the kit's own. A type size (`fontDi
 scaled by the text size and rounded to a half unit (`scaled_text`); `headerSize` is scaled on the desktop and fixed on the big
 screen (`header_of`); a movement's duration is nothing under reduced motion (`movement`), a fade's 120 ms (`fade_of`), and
 `breathes` is false under it (`breathes_if`); spacing, focus marks, shadow metrics, curves and the breath's delay, period and
-low are the theme's under both. A value not of its token's kind is left alone. No override ever reaches the program's engine, which draws the cards: a theme never styles a card
-(§3.1). Before a theme is offered, theme-check refuses an override that names no token of the kit's registry, or gives a value
+low are the theme's under both. A value not of its token's kind is left alone. **The chosen theme's overrides reach the
+program's engine too** (decided by the tester, 2026-11-13, R-20261113-5 and R-20261113-6): Settings, the List card, the Home
+card, the game page, the Pause Card, the tools and the notices, which the program draws itself, take the chosen theme's colours
+and sizes; a theme still draws only its four screens, and `EmuSen.Theme` is unchanged. qt-app's `ThemeStyle` (`src/style.rs`),
+which `Main.qml` hands the chosen theme's host, sets the host's `overrides()` on its own engine's `Tokens` by the same
+`set_token_overrides`, again on each new engine the host makes (a theme chosen in the Themes tab), and none, so the kit's,
+while no theme, the reference or an ES-DE theme is the look; the `Tokens` variant takes each variant's values as on the
+theme's engine. The game's own layers (its picture, its black bars, its status lines) read no token and stay as they are.
+Until 2026-11-13 no override reached the program's engine. Before a theme is offered, theme-check refuses an override that names no token of the kit's registry, or gives a value
 of the wrong kind, with its line and words (`theme-check/src/tokens.rs`, `tests/check.rs`), and holds colours to the contrast
 floors. Proof: `qt-app/tests/theme.rs`, a fixture package overriding the dark accent, shadow colour, `tileRadius` (21) and
-`breathes` (false), whose screen reads all four while the program's tokens keep the kit's; `kit-qt/tests/overrides.rs`, every
+`breathes` (false), whose screen and the program's tokens read all four, and a theme with none giving the kit's back;
+`qt-app/tests/theme_reach.rs`, Settings' and the Home card's focused rows drawn in the chosen theme's accent in each variant and
+in the kit's for none, and Settings, a tool, the Home card, the List card, the game page and the Pause Card holding the gate's
+fit and contrast findings to the kit's own under each in-repo theme that overrides a token, dark and light (the Pause Card in
+`theme_reach_pause.rs`, its scene given each theme's overrides); `kit-qt/tests/overrides.rs`, every
 number and switch token of the registry taking a dark override, and a light one, an unknown name and a wrong kind left alone;
 `kit-qt/tests/column.rs`, a theme's `fontBody` at three text sizes, its durations and breathing under reduced motion, and the
 tokens neither touches.

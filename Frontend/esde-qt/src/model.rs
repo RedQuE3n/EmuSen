@@ -209,8 +209,10 @@ impl cxx_qt::Initialize for qobject::EsdeModel {
         .release();
         self.as_mut().on_menu_open_changed(|mut m| {
             let open = *m.menu_open();
-            m.as_mut().rust_mut().shared.borrow_mut().set_menu_open(open);
-            m.publish();
+            // With no theme loaded there is nothing to draw again, and a revision would read as a theme that loaded empty.
+            if m.as_mut().rust_mut().shared.borrow_mut().set_menu_open(open) {
+                m.publish();
+            }
         })
         .release();
         self.as_mut().on_swap_changed(|mut m| {

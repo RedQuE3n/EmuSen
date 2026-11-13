@@ -158,13 +158,13 @@ impl Painter {
         self.refresh();
     }
 
-    /// A menu or card of the program's opened over the view, or closed.
-    pub fn set_menu_open(&mut self, open: bool) {
+    /// A menu or card of the program's opened over the view, or closed; whether a theme was there to draw it on.
+    pub fn set_menu_open(&mut self, open: bool) -> bool {
         self.menu_open = open;
-        if let Some(stage) = &mut self.stage {
-            stage.current.data.menu_open = open;
-        }
+        let Some(stage) = &mut self.stage else { return false };
+        stage.current.data.menu_open = open;
         self.refresh();
+        true
     }
 
     /// The device's radios and battery as the host reports them.

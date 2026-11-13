@@ -784,6 +784,12 @@ void runningUnder(QQuickItem* item, const QString& named, QStringList& out)
     for (QQuickItem* child : item->childItems()) {
         runningUnder(child, here, out);
     }
+    // An item the scene holds out of the window's items (a theme's screen not shown) still runs its animations, which drive frames.
+    for (QQuickItem* child : item->findChildren<QQuickItem*>(Qt::FindDirectChildrenOnly)) {
+        if (child->parentItem() == nullptr) {
+            runningUnder(child, here, out);
+        }
+    }
 }
 
 }

@@ -1802,7 +1802,11 @@ own `focus`, which broke its binding. Out of the window's items, the climb ends 
 the window's changes. `focusPolicy` governs tabbing and clicks only. The defect it closes, seen 2026-11-13: the
 in-repo themes call `forceActiveFocus` in their screens (Horizon's Consoles shelf, Meridian's entries, Orrery's wheel), so
 using Horizon from the Themes tab moved the pad's focus to its hidden Consoles and left the tab deaf, and choosing any of
-the four over Settings took Settings' focus (`qt-app/tests/themes_focus.rs`, which fails without the change).
+the four over Settings took Settings' focus (`qt-app/tests/themes_focus.rs`, which fails without the change). The scope
+is also invisible while out, since an item with no parent is visible by its own flag alone. Its animations still run and
+drive the window's frames, so the harness's `running` (which `rest` and `assert_still` read) now also walks the items an
+item holds out of the window's: without that, `acceptance.rs` failed `assert_still` under the List card in two runs of two,
+11 frames in 2 s with nothing dirty, and passed with it (measured 2026-11-13).
 
 **Where covers come from.** A theme reads pictures only inside its folder and the cover stores (§3.5.1); the reference
 is held to that too, so the window's `coverStores` (the start's media store, `ArtworkDirectory` and

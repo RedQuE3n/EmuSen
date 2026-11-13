@@ -60,6 +60,8 @@ Item {
         FocusScope {
             id: scope
             parent: placing.shown ? placing : null
+            // Without a parent an item is visible by its own flag alone, and a screen's animations bound to it would run on.
+            visible: placing.shown
             width: placing.width
             height: placing.height
             focus: true

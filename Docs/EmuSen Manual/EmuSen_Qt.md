@@ -6226,9 +6226,9 @@ object name; `Screens` opens it as `Tool`, naming the tool in `Screens.tool`, fr
 and the Home card's Tools page, and B returns as from Cores. A job keeps running when the screen is left, and a tool
 opened before is kept with its runs.
 
-A tool with no screen yet (Scraper, Cheats, Collections, Shell) is not listed on the Home card's Tools page, and its
-Home place (the Scraper's) is declined to the theme (`screens::declined_places`, `ThemeLibrary::show_declined`), which
-draws it unavailable. Held to by `qt-models/tests/tool_jobs.rs` (the real platform library over a scratch library, a
+A tool with no screen yet (Scraper, Cheats, Collections, Shell) is not listed on the Home card's Tools page. The
+Scraper's Home place is drawn as before and opens nothing until the Scraper has its screen: drawn unavailable, its
+words fell under the contrast the program's acceptance holds (measured 2026-11-13: 3.2:1 and 1.8:1 against 4.5:1). Held to by `qt-models/tests/tool_jobs.rs` (the real platform library over a scratch library, a
 scripted world for the question and Stop, and the screens' steps) and `qt-app/tests/tools.rs` (the pad opens Library
 Manager from Home, runs its first job, sees the progress then the lines, X lists them, B returns Home; Compressed Discs
 from the Home card lists a generated disc the same way).

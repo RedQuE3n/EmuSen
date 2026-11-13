@@ -6701,7 +6701,7 @@ Seeded faults, each reverted:
   each with the value the scraper's `metadata` resolves; A types it on the docked keyboard, Done saves it at once as a
   games.db edit (empty words put back what was scraped), Y puts back what was scraped, B goes back to Details. A name
   edited names the game in the grid too: the library reads games.db's `name` edits.
-- **Not opened yet**, so not shown: Options' Display crop and Package, and Details' Cover art (Cheats is §7.8.3's). The viewer's
+- **Not opened yet**, so not shown: Details' Cover art (Cheats is §7.8.3's; Display crop and Package §7.8.4's). The viewer's
   `X Set as cover` and `Y Delete…` of §18.2 are not built. The run fetches the scraper's default kinds, not the
   player's Scrape kinds settings, which nothing maps to the scraper's kinds yet.
 - Tests: qt-models' `game_page` (the viewer over the media, the run's words, Edit Details' rows), qt-app's `page_doors`
@@ -6726,6 +6726,28 @@ Seeded faults, each reverted:
 - Tests: qt-models' `pause` and `game_page` (the pages' rows and turns), qt-app's `game_page_cheats` (the page's switch
   saved to the list) and `cheats_gpu` (a GPU job: on the test core, a poke switched on from the card holds the counted
   RAM byte in a saved state, switched off the count runs on, and the game started again has the switch as saved).
+
+#### 7.8.4 The page's Display crop and Package (2026-11-13)
+
+- **Display crop** (Options, for a console with a television: Serenity's catalogue `screens`) opens a deeper page of
+  one stepped row, Galaxia's Overscan row (its label and choice labels, `emusen_galaxia_settings_rows`): Console's, then
+  each choice that hides a fixed part as `display::overscan` sizes it from the catalogue (Whole picture, TV overscan).
+  A step is stored at once in games.db for that game alone (`set_crop`, percentages at each edge; Console's is
+  `clear_crop`); a crop no choice names reads as Settings' Custom crop, whose edges no Qt row sets yet. On the next
+  start the session reads the game's crop as it opens (`clients::game_crop`) and `display::read_for_game` draws it in
+  place of the console's overscan, held to the catalogue's most at an edge.
+- **Package** (Options, where the library tool can run the game's job) opens a deeper page: the package's state in the
+  row's words, then Make Package (`pkg-make` of the game's path under the library folder, linked) for a game with none,
+  else Check Package (`pkg-check` of its folder). A starts the job, A again while it runs stops it; its events are drained
+  off the GUI thread into the jobs tools' `Run`, and the row says its state as their rows do (`jobs::state_words`). When
+  it ends the page is read again, and a package made asks the library to scan again. A package made since the scan
+  claims the game while `pkg-ls` finds the game as recorded, so it reads as Linked, not Changed.
+- **Cover art** is not built: the base keeps a game's cover choice only as another game's (`coverfrom`, read by the
+  scraper's `locate`) or as a file in the player's art folder (`art_added` names one to the index); no call makes one
+  of the game's own fetched pictures its cover.
+- Tests: qt-models' `game_page` (both pages' rows, steps and the job's words) and `display` (the game's crop on a
+  television alone), qt-app's `game_page_rows` (in the program: a crop stored for one game and not the other, a package
+  made and then checked to done).
 
 ### 7.9 Repair piece DC-B: the program does what it offers and says when it fails (2026-11-11)
 

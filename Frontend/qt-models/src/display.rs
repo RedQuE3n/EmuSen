@@ -90,6 +90,11 @@ fn bits(v: &Value) -> Option<f64> {
 
 /// `console`'s picture from Serenity's `catalogue` (`emusen_serenity_filters`) and the graphics model `graphics`.
 pub fn read(catalogue: &Value, graphics: &Value, console: &str) -> Display {
+    read_for_game(catalogue, graphics, console, None)
+}
+
+/// `console`'s picture for a game whose own crop, games.db's, is `game`: it stands in for the console's overscan.
+pub fn read_for_game(catalogue: &Value, graphics: &Value, console: &str, game: Option<Crop>) -> Display {
     let setting = |key: &str| text(graphics.get("Consoles").and_then(|c| c.get(console)).and_then(|c| c.get(key)));
     let filters = catalogue["filters"].as_array().map(Vec::as_slice).unwrap_or_default();
     let suits = |f: &&Value| f["consoles"].as_array().is_none_or(|list| list.iter().any(|c| c == console));
@@ -102,7 +107,7 @@ pub fn read(catalogue: &Value, graphics: &Value, console: &str) -> Display {
                 display.chosen.insert(id.clone(), value as f32);
             }
         }
-        return with_place(display, catalogue, &setting, console);
+        return with_place(display, catalogue, &setting, console, game);
     }
     let filter = filters.iter().filter(suits).find(|f| f["name"] == stored.as_str() || f["key"] == stored.as_str());
     let filter = filter.or_else(|| filters.iter().find(|f| f["key"] == PLAIN));
@@ -118,29 +123,71 @@ pub fn read(catalogue: &Value, graphics: &Value, console: &str) -> Display {
             }
         }
     }
-    with_place(display, catalogue, &setting, console)
+    with_place(display, catalogue, &setting, console, game)
 }
 
-/// The crop and the shape the console's settings ask for, on a display whose filter is read.
-fn with_place(mut display: Display, catalogue: &Value, setting: &dyn Fn(&str) -> String, console: &str) -> Display {
-    let television = catalogue["screens"].as_array().is_some_and(|all| all.iter().any(|s| s["console"] == console && s["kind"] == "Television"));
-    if television {
-        let most = bits(&catalogue["crop"]["most_at_an_edge"]).unwrap_or(0.0);
-        display.crop = match setting("Overscan").as_str() {
-            "tv" => {
-                let past = bits(&catalogue["crop"]["television"]).unwrap_or(0.0);
-                let edge = ((1.0 - 1.0 / (1.0 + past)) / 2.0).clamp(0.0, most);
-                Crop { left: edge, top: edge, right: edge, bottom: edge }
-            }
-            "custom" => {
-                let edge = |key: &str| (number(&setting(key)).unwrap_or(0.0) / 100.0).clamp(0.0, most);
-                Crop { left: edge("CropLeft"), top: edge("CropTop"), right: edge("CropRight"), bottom: edge("CropBottom") }
-            }
-            _ => Crop::default(),
+/// Whether `console` drove a television, so its picture has an overscan to crop.
+pub fn television(catalogue: &Value, console: &str) -> bool {
+    catalogue["screens"].as_array().is_some_and(|all| all.iter().any(|s| s["console"] == console && s["kind"] == "Television"))
+}
+
+/// The most a crop may hide at one edge.
+fn most(catalogue: &Value) -> f64 {
+    bits(&catalogue["crop"]["most_at_an_edge"]).unwrap_or(0.0)
+}
+
+/// The `Overscan` value for a crop of the player's own edges, its `Crop*` settings.
+pub const CUSTOM: &str = "custom";
+
+/// What an `Overscan` value hides: none, the part a television showed, or the `Crop*` settings' percentages.
+pub fn overscan(catalogue: &Value, value: &str, setting: &dyn Fn(&str) -> String) -> Crop {
+    let most = most(catalogue);
+    match value {
+        "tv" => {
+            let past = bits(&catalogue["crop"]["television"]).unwrap_or(0.0);
+            let edge = ((1.0 - 1.0 / (1.0 + past)) / 2.0).clamp(0.0, most);
+            Crop { left: edge, top: edge, right: edge, bottom: edge }
+        }
+        CUSTOM => {
+            let edge = |key: &str| (number(&setting(key)).unwrap_or(0.0) / 100.0).clamp(0.0, most);
+            Crop { left: edge("CropLeft"), top: edge("CropTop"), right: edge("CropRight"), bottom: edge("CropBottom") }
+        }
+        _ => Crop::default(),
+    }
+}
+
+/// The crop and the shape the console's settings ask for, on a display whose filter is read; a game's own crop in
+/// place of the console's overscan.
+fn with_place(mut display: Display, catalogue: &Value, setting: &dyn Fn(&str) -> String, console: &str, game: Option<Crop>) -> Display {
+    if television(catalogue, console) {
+        let most = most(catalogue);
+        display.crop = match game {
+            Some(c) => Crop { left: c.left.clamp(0.0, most), top: c.top.clamp(0.0, most), right: c.right.clamp(0.0, most), bottom: c.bottom.clamp(0.0, most) },
+            None => overscan(catalogue, &setting("Overscan"), setting),
         };
     }
     display.square = setting("PictureShape") == "square";
     display
+}
+
+impl Crop {
+    /// A game's crop as games.db holds it, a percentage at each edge (the library's `crop` read); none for none.
+    pub fn from_record(record: &Value) -> Option<Crop> {
+        let edge = |k: &str| record.get(k).and_then(Value::as_f64).map(|v| v / 100.0);
+        Some(Crop { left: edge("left")?, top: edge("top")?, right: edge("right")?, bottom: edge("bottom")? })
+    }
+
+    /// The library's `set_crop` change of `path` to this crop, in percentages.
+    pub fn set_record(&self, path: &str) -> Value {
+        json!({ "op": "set_crop", "path": path, "left": self.left * 100.0, "right": self.right * 100.0, "top": self.top * 100.0, "bottom": self.bottom * 100.0 })
+    }
+
+    /// The same crop within a rounding's reach.
+    pub fn near(&self, other: &Crop) -> bool {
+        let a = [self.left, self.top, self.right, self.bottom];
+        let b = [other.left, other.top, other.right, other.bottom];
+        a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1e-9)
+    }
 }
 
 impl Display {
@@ -241,6 +288,21 @@ mod tests {
         assert!(!d.filter_crops && d.crop.left > 0.0, "the window clips the overscan of a preset's picture");
         assert_eq!(pack_preset("slang:"), None);
         assert_eq!(pack_preset("CRT"), None);
+    }
+
+    #[test]
+    fn a_game_s_own_crop_stands_in_for_its_console_s_overscan_on_a_television_alone() {
+        let graphics = json!({"Consoles": {"PlayStation": {"Overscan": "tv"}, "GB": {}}});
+        let own = Crop::from_record(&json!({"left": 10.0, "right": 40.0, "top": 0.0, "bottom": 2.5})).unwrap();
+        assert_eq!(own, Crop { left: 0.1, top: 0.0, right: 0.4, bottom: 0.025 });
+        let d = read_for_game(&catalogue(), &graphics, "PlayStation", Some(own));
+        assert_eq!(d.crop, Crop { left: 0.1, top: 0.0, right: 0.25, bottom: 0.025 }, "held to a quarter at an edge");
+        assert_eq!(read_for_game(&catalogue(), &graphics, "PlayStation", None).crop, overscan(&catalogue(), "tv", &|_| String::new()));
+        assert_eq!(read_for_game(&catalogue(), &graphics, "GB", Some(own)).crop, Crop::default(), "an LCD has no overscan");
+        assert_eq!(Crop::from_record(&Value::Null), None);
+        let record = own.set_record("/r/a.bin");
+        assert_eq!((record["op"].as_str(), record["left"].as_f64(), record["bottom"].as_f64()), (Some("set_crop"), Some(10.0), Some(2.5)));
+        assert!(Crop::from_record(&record).unwrap().near(&own));
     }
 
     #[test]

@@ -372,6 +372,13 @@ fn lexical(path: &std::path::Path) -> String {
     out.to_string_lossy().into_owned()
 }
 
+/// A game's own crop, games.db's, read on the front end's SQLite; none where it has none.
+pub fn game_crop(platform: &Arc<Platform>, path: &str) -> Result<Option<crate::display::Crop>, String> {
+    let sqlite = lent_sqlite()?;
+    let library = Library::open(platform, &platform.file(FILE_GAMES).map_err(words)?, &sqlite).map_err(words)?;
+    Ok(crate::display::Crop::from_record(&library.get(&json!({ "what": "crop", "path": path })).map_err(words)?))
+}
+
 /// The system's soname of SQLite, which the Qt front end lends to the platform library and to the runtime (EmuSen_Qt.md §1.1.2).
 pub const SQLITE: &str = "libsqlite3.so.0";
 

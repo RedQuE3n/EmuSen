@@ -2,10 +2,12 @@
 //! sources-alone handle, the record and the edits from games.db, the states by Galaxia's save paths, the engines from
 //! the runtime, the profiles from Endymion's store, the cheats from Galaxia's cheat file, the crop's and the television
 //! standard's offer from Serenity's catalogue, the standard from games.db, the player's screenshots from Galaxia's
-//! folder, the package from the library tool's `pkg-ls` and Galaxia's claim index. Nothing here needs a session.
+//! folder, the package from the library tool's `pkg-ls` and Galaxia's claim index, and its job (`pkg-make` or `pkg-check`)
+//! started through the library tool; the crop's choices are Galaxia's Overscan row's. Nothing here needs a session.
 
 use crate::clients::{app_settings, engine_shown, ClientSource};
-use crate::game_page::{Change, Choice, Detail, GamePageSource, Media, MediaKind, Package, Read, Slot, State, DETAILS};
+use crate::display::Crop;
+use crate::game_page::{Change, Choice, CropOffer, Detail, GamePageSource, Media, MediaKind, Package, PackageJob, Read, Slot, State, CHECK, DETAILS, MAKE};
 use crate::library::{console_name, title_of, HERO};
 use emusen_crystal_client::Scope;
 use emusen_platform_client::bindings::consts::PROFILES;
@@ -81,21 +83,28 @@ impl ClientSource {
 
     /// The game's package and its layers: the package the scan found the game in, else one that claims the game but
     /// refused it, its file changed (Mistress's `GamePackageDetail`, `Refused`); each read by the library tool's `pkg-ls`.
-    fn package(&self, game: &GameFile) -> Result<(Package, usize), String> {
+    fn package(&self, game: &GameFile) -> Result<(Package, usize, Option<PackageJob>), String> {
         let (folder, refused) = match &game.package {
             Some(folder) => (folder.clone(), false),
             None => {
                 let scan = self.scan_request()?;
-                let (Some(packages), Some(compressed)) = (scan.packages.as_deref(), scan.compressed.as_deref()) else { return Ok((Package::None, 0)) };
-                let roots = Roots { packages, library: scan.roots.first().map(String::as_str), compressed };
+                let library = scan.roots.first().cloned();
+                // A game the library folder holds is made a package by its path there (the library tool's `pkg-make`).
+                let make = library.as_deref().and_then(|root| std::path::Path::new(&game.path).strip_prefix(root).ok()).map(|rel| PackageJob {
+                    key: MAKE,
+                    request: json!({ "op": "pkg-make", "paths": [rel.to_string_lossy()] }),
+                });
+                let (Some(packages), Some(compressed)) = (scan.packages.as_deref(), scan.compressed.as_deref()) else { return Ok((Package::None, 0, make)) };
+                let roots = Roots { packages, library: library.as_deref(), compressed };
                 let index = self.platform.package_index(roots).map_err(words)?;
                 let claims = |p: &&Value| p["claims"].as_array().is_some_and(|c| c.iter().any(|c| c.as_str() == Some(game.path.as_str())));
                 match index["packages"].as_array().and_then(|all| all.iter().find(claims)).and_then(|p| p["folder"].as_str()) {
                     Some(folder) => (folder.to_owned(), true),
-                    None => return Ok((Package::None, 0)),
+                    None => return Ok((Package::None, 0, make)),
                 }
             }
         };
+        let check = PackageJob { key: CHECK, request: json!({ "op": "pkg-check", "paths": [folder] }) };
         let job = ToolJob::start(&self.platform, &json!({ "op": "pkg-ls", "paths": [folder] })).map_err(words)?;
         let mut listed = Value::Null;
         loop {
@@ -106,12 +115,30 @@ impl ClientSource {
             }
         }
         let layers = listed["patches"].as_array().map_or(0, Vec::len);
-        let kind = match (refused, listed["mode"].as_str()) {
+        // A package made since the scan claims the game too: it is the game's while pkg-ls finds the game as it recorded.
+        let kind = match (refused && listed["state"] != "ok", listed["mode"].as_str()) {
             (true, _) => Package::Changed,
             (false, Some("self-contained")) => Package::SelfContained,
             (false, _) => Package::Linked,
         };
-        Ok((kind, layers))
+        Ok((kind, layers, Some(check)))
+    }
+
+    /// The game's crop as Display crop offers it: Galaxia's Overscan row's choices that hide a fixed part, each as
+    /// Serenity's catalogue sizes it, and the game's own crop from games.db.
+    fn crop(&self, game: &GameFile, catalogue: &Value) -> Result<CropOffer, String> {
+        let rows = self.platform.settings_rows().map_err(words)?;
+        let row = rows["GraphicsConfig.Consoles"].as_array().and_then(|all| all.iter().find(|r| r["key"] == "Overscan")).cloned().unwrap_or(Value::Null);
+        let texts = |k: &str| row[k].as_array().into_iter().flatten().map(|v| v.as_str().unwrap_or_default().to_owned()).collect::<Vec<_>>();
+        let mut offer = CropOffer { label: row["label"].as_str().unwrap_or_default().to_owned(), ..CropOffer::default() };
+        for (value, label) in texts("choices").into_iter().zip(texts("choice_labels")) {
+            match value.as_str() {
+                crate::display::CUSTOM => offer.custom = label,
+                _ => offer.choices.push((label, crate::display::overscan(catalogue, &value, &|_| String::new()))),
+            }
+        }
+        offer.own = Crop::from_record(&self.library.get(&json!({ "what": "crop", "path": game.path })).map_err(words)?);
+        Ok(offer)
     }
 
     /// Whether a scrape run is going, by the scrape service's progress.
@@ -174,7 +201,7 @@ impl GamePageSource for ClientSource {
         read.media = self.screenshots(game)?;
         read.media.extend(MEDIA.iter().filter_map(|(kind, what)| Some(media(kind)).filter(|f| !f.is_empty()).map(|path| Media { path, kind: *what })));
         read.engine = Some(value(crate::edits::ALT_EMULATOR)).filter(|e| !e.is_empty());
-        (read.package, read.layers) = self.package(game)?;
+        (read.package, read.layers, read.package_job) = self.package(game)?;
         read.scraping = self.scraping();
         let Some(s) = system else { return Ok(read) };
         // The engines: the console's own first, then each it may run on (Mistress's IGamePageHost.Engines).
@@ -195,10 +222,8 @@ impl GamePageSource for ClientSource {
         (read.profiles, read.profile) = self.profiles(&s.console, &game.path);
         read.cheats = crate::cheats::List::of(&self.platform, &s.console, &game.path)?.map(|l| l.switches()).unwrap_or_default();
         let catalogue = serenity::catalogue(&self.platform).map_err(words)?;
-        let television = catalogue["screens"].as_array().is_some_and(|all| all.iter().any(|c| c["console"] == s.console.as_str() && c["kind"] == "Television"));
-        if television {
-            let crop = self.library.get(&json!({ "what": "crop", "path": game.path })).map_err(words)?;
-            read.crop = Some(!crop.is_null());
+        if crate::display::television(&catalogue, &s.console) {
+            read.crop = Some(self.crop(game, &catalogue)?);
             // The standard is offered for a console that drove a television, as every filter of a tube is (Mistress's `StandardOffered`).
             let standard = self.library.get(&json!({ "what": "standard", "path": game.path })).map_err(words)?;
             let values: Vec<String> = standard["values"].as_array().into_iter().flatten().filter_map(|v| v.as_str().map(str::to_owned)).collect();
@@ -206,6 +231,10 @@ impl GamePageSource for ClientSource {
             read.standard = standard["value"].as_str().map(str::to_owned);
         }
         Ok(read)
+    }
+
+    fn start_job(&self, request: &Value) -> Result<Box<dyn crate::tools::cores::backend::Job + Send>, String> {
+        crate::tools::cores::backend::sent_job(&self.platform, request)
     }
 
     fn other_copy(&self, game: &GameFile, state: &str) -> Result<Option<String>, String> {
@@ -251,6 +280,8 @@ impl GamePageSource for ClientSource {
                 }
                 list.save(&self.platform)
             }
+            Change::Crop(Some(crop)) => self.library.change(&crop.set_record(path)).map(drop).map_err(words),
+            Change::Crop(None) => self.library.change(&json!({ "op": "clear_crop", "path": path })).map(drop).map_err(words),
             Change::Hide => {
                 let at = crate::words::utc(crate::words::now());
                 self.library.change(&json!({ "op": "save_edits", "path": path, "changes": { crate::edits::HIDDEN: crate::edits::YES }, "at": at })).map(drop).map_err(words)

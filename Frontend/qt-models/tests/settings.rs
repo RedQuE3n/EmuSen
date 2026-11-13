@@ -27,7 +27,7 @@ impl SettingsSource for Fake {
         Ok(())
     }
     fn catalogue(&self) -> Result<Value, String> {
-        let balanced = 1.0f64.to_bits();
+        let balanced = 1.0f32.to_bits();
         Ok(json!({
             "filters": [
                 {"key": "CRT", "name": "CRT", "settings": [{"id": "quality", "initial": balanced, "choices": ["Performance", "Balanced", "Accurate"]}]},

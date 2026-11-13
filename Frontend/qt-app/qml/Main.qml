@@ -415,6 +415,8 @@ Window {
             gamePads: pads.gamePads
             gameMode: program.gameMode
             onDoor: (name) => screens.act(name)
+            // A shader's lever moved: the running game's picture follows it at once (EmuSen_Qt.md §1.8.10).
+            onLever: (system, id, value) => player.session.setLever(system, id, value)
             onOpenFolder: (path) => folders.open(path)
             onChooseFolder: (key, start) => folders.choose(key, start)
             // What Settings saved reaches the library's read as it closes: the media viewer plays at the Volume saved (EmuSen_Qt.md §4.14),

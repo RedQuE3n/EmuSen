@@ -116,6 +116,10 @@ pub fn filter_preset(platform: &Platform, key: &str, console: Option<&str>, chos
 }
 
 /// A `.slangp` preset read through its `#reference` chain, as the document a chain is built from.
+pub fn preset_document(platform: &Platform, path: &str) -> Result<Vec<u8>> {
+    preset_text(platform, path)
+}
+
 fn preset_text(platform: &Platform, path: &str) -> Result<Vec<u8>> {
     Ok(platform.read(|out, cap| unsafe { platform.lib.emusen_serenity_preset_load(path.as_ptr(), path.len(), out, cap) })?.unwrap_or_default())
 }
@@ -131,6 +135,13 @@ pub fn catalogue(platform: &Platform) -> Result<serde_json::Value> {
 /// 32 bits; a read that fails is a document too, `{"fail", "message", ...}`, as the header gives it.
 pub fn preset_load(platform: &Platform, path: &str) -> Result<serde_json::Value> {
     crate::out::json("serenity_preset_load", &preset_text(platform, path)?)
+}
+
+/// A `.slang` source with its includes in place: `{"path", "vertex", "fragment", "name", "format", "parameters"}`, a
+/// float as its 32 bits; a read that fails is a document too, `{"fail", "message", ...}`, as the header gives it.
+pub fn source_load(platform: &Platform, path: &str) -> Result<serde_json::Value> {
+    let bytes = platform.read(|out, cap| unsafe { platform.lib.emusen_serenity_source_load(path.as_ptr(), path.len(), out, cap) })?.unwrap_or_default();
+    crate::out::json("serenity_source_load", &bytes)
 }
 
 /// The parameters the passes declare, merged, the first declaration winning and the overrides' values as defaults:

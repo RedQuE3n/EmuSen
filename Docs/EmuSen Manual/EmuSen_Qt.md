@@ -847,8 +847,26 @@ slot is given back once drawn, is drawn through the new chain from its next fram
 CRT, `crops_itself`) is given the crop as its `emusen_crop_*` uniforms; for any other the window clips: `Game.qml`'s
 `shown` item has the cropped shape and clips a `GamePicture` drawn whole past its edges, the bars around both black.
 The settings are read again when the game resumes and when Settings closes after a save (`readPicture`), and a still
-picture is drawn again then. Not yet followed: a RetroArch preset the Shaders screen stored, and
-a hosted core's `console_picture` setting, which the C# kept on while the CRT was chosen.
+picture is drawn again then. Not yet followed: a hosted core's `console_picture` setting, which the C# kept on while the
+CRT was chosen.
+
+A preset of the shader pack (Galaxia's `DIR_SHADERS`) is stored in `ScreenFilter` as `slang:` and its path in the pack
+(`display::PACK_PREFIX`); it is read with `emusen_serenity_preset_load` and drawn as it is, the values `ShaderParameters`
+holds under that stored value given as uniforms over the preset's own, and an overscan crop clipped by the window.
+Settings ▸ Display ▸ Shaders (`qt-models/src/settings_shaders.rs`) lists a console's recent shaders (`RecentShaders`,
+the newest five), the catalogue's filters that suit it and the pack's presets under a heading for each folder, and stores
+the one chosen; Shader levers, from Display or a console's page, lists the levers of the shader the console draws with:
+a built-in filter's settings from the catalogue at the console's defaults, a pack preset's parameters as its passes
+declare them (`emusen_serenity_source_load`, merged by `emusen_serenity_parameters_merge`), a range of no width as a
+heading. The catalogue's settings are used for a built-in filter because the chain it is written as declares each of its
+values with a range of a million either side and no step (`filters/write.rs`). A lever moved is saved at once and, for
+a game of that console, set on the running chain by `Handoff::set_value` without building it again when the chain
+declares it (a structural setting is not declared, and the picture is read again instead). The game's picture is not
+drawn behind Settings yet (its preview is the caption alone), so the change is seen when the game is shown again.
+Tests: `qt-models/tests/settings_shaders.rs` (7, one of them over the platform library) and the program's
+`shaders_gpu.rs` (on Vulkan: a preset of the test's own chosen with the pad, the picture read back tinted, its lever
+moved to nothing and the picture read back plain, both read again when Settings opens again), and `qt-play/tests/picture.rs`
+(the CRT's contrast set on the running chain and the picture read back darker; an undeclared parameter refused).
 
 ### 1.9 Homes for the front-end logic still in C#
 

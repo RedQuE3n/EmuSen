@@ -167,6 +167,12 @@ pub mod qobject {
         #[cxx_name = "readPicture"]
         fn read_picture(self: Pin<&mut SessionModel>);
 
+        /// A lever of `console`'s shader moved to `value`: set on the picture's chain at once when the game drawn is of
+        /// that console and its chain declares `id`, else the picture read again from the settings saved.
+        #[qinvokable]
+        #[cxx_name = "setLever"]
+        fn set_lever(self: Pin<&mut SessionModel>, console: &QString, id: &QString, value: f64);
+
         /// The picture's settings read anew: the picture is drawn again, a still one too.
         #[qsignal]
         #[cxx_name = "pictureRead"]
@@ -922,6 +928,16 @@ impl qobject::SessionModel {
         self.unstep();
     }
 
+    fn set_lever(self: Pin<&mut Self>, console: &QString, id: &QString, value: f64) {
+        let (Some(shown), Some(handoff)) = (self.display_console.clone(), self.handoff.clone()) else { return };
+        if shown != console.to_string() {
+            return;
+        }
+        if !handoff.set_value(&id.to_string(), value as f32) {
+            self.read_picture();
+        }
+    }
+
     fn read_picture(mut self: Pin<&mut Self>) {
         let (Some(console), Some(handoff)) = (self.display_console.clone(), self.handoff.clone()) else { return };
         match self.as_mut().display_preset(&console, &handoff) {
@@ -944,9 +960,18 @@ impl qobject::SessionModel {
         }
         let catalogue = self.catalogue.as_ref().ok_or("no catalogue")?;
         let display = display::read(catalogue, &settings.load(Model::Graphics)?, console);
-        let root = handoff.presets().to_string_lossy();
-        let chosen = display.chosen_json();
-        let preset = emusen_platform_client::serenity::filter_preset(&platform, &display.filter, Some(console), chosen.as_ref(), &root);
+        let preset = match &display.preset {
+            Some(path) => {
+                let pack = platform.directory(emusen_platform_client::galaxia::consts::DIR_SHADERS).map_err(|e| e.to_string())?;
+                let pack = pack.ok_or("the shader pack's folder is not known")?;
+                emusen_platform_client::serenity::preset_document(&platform, &pack.join(path).to_string_lossy())
+            }
+            None => {
+                let root = handoff.presets().to_string_lossy();
+                let chosen = display.chosen_json();
+                emusen_platform_client::serenity::filter_preset(&platform, &display.filter, Some(console), chosen.as_ref(), &root)
+            }
+        };
         Ok((display, preset.map_err(|e| e.to_string())?))
     }
 

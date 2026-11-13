@@ -8,6 +8,10 @@
     "game": "game",
     "games": "games"
   },
+  "shaders": {
+    "words": {"recent": "Recently used", "builtin": "Built into EmuSen", "pack": "The shader pack", "none": "This shader has no levers.", "own": "{value} is the shader's own value."},
+    "pane": {"preview": "picture", "caption": "{running} · live preview"}
+  },
   "applies": {
     "text_size": "AppSettings TextSize",
     "light": ["AppSettings Appearance", "light"],

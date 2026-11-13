@@ -109,7 +109,7 @@ fn qt_1_8_6_the_game_s_sound_and_window_follow_the_settings() {
     assert_eq!(scene.property("session", "soundDevice"), device);
     // The messages over the game, the frame rate not.
     until(&mut scene, "the status line drawn", |s| s.property("statusLine", "visible") == "true");
-    assert_eq!(scene.property("statusLine", "text"), "Sound");
+    assert_eq!(scene.property("statusLine", "text"), emusen_qt_models::library::title_of(game.to_str().unwrap()));
     assert_eq!(scene.property("fpsLine", "visible"), "false");
 
     // The window away: the game pauses, and runs again as it comes back.

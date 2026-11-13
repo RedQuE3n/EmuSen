@@ -62,6 +62,12 @@ fn mae(a: &[[u8; 3]], b: &[[u8; 3]], w: i32, strip: (i32, i32)) -> f64 {
     total as f64 / n.max(1) as f64
 }
 
+/// Whether every clip player in the scene has played past its start, and there is one: the viewer's clip shows a frame.
+fn clip_playing(scene: &mut Scene<'_>) -> bool {
+    let players: Vec<String> = scene.tree().nodes.iter().filter(|n| n.name == "videoPlayback").map(|n| n.id.clone()).collect();
+    !players.is_empty() && players.iter().all(|id| scene.item_number(id, "position") > 0.0)
+}
+
 /// The bounds of the pixels between rows `rows` whose brightest channel stands over `over`: x0, y0, x1, y1.
 fn ink(p: &[[u8; 3]], w: i32, rows: (i32, i32), over: u8) -> [i32; 4] {
     let mut b = [i32::MAX, i32::MAX, -1, -1];
@@ -504,6 +510,10 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
                 for b in &presses {
                     scene.pad(*b);
                     scene.wait(100);
+                }
+                if name0.contains("media-0") {
+                    // A viewer still black is at rest too, and was grabbed as the clip: its first frame is waited for.
+                    common::until(&mut scene, &format!("{at}: the viewer's clip playing"), clip_playing);
                 }
                 if !common::settle_within(&mut scene, &scratch.0, if name0.contains("media-0") { 8 } else { 2 }) {
                     failures.push(format!("{at}: the picture did not settle in 10 s"));

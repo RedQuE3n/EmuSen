@@ -7,6 +7,6 @@ Window {
     visible: true
     width: 320
     height: 240
-    property string asked: "base"
+    property string asked
     readonly property string answer: String(Kit.Tokens[asked])
 }

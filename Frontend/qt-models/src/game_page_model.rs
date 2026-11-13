@@ -955,31 +955,21 @@ impl qobject::GamePageModel {
         self.as_mut().ran(Some((true, "Starting".into())), "running");
         let thread = self.qt_thread();
         std::thread::spawn(move || {
-            if let Err(why) = source.scrape_start(&file, test.as_ref()) {
+            if let Err(why) = crate::scrape_run::start(&source, std::slice::from_ref(&file), true, test.as_ref()) {
                 let _ = thread.queue(move |mut model| {
                     model.as_mut().ran(Some((false, "It could not start".into())), "idle");
                     model.said(format!("The scrape could not start: {why}"));
                 });
                 return;
             }
-            let mut serial = 0;
-            let ended = loop {
-                serial = source.scrape_wait(serial, 250).unwrap_or(serial);
-                let progress = match source.scrape_progress() {
-                    Ok(p) => p,
-                    Err(why) => break Err(why),
-                };
-                let (going, words) = crate::game_page::run_words(&progress, &file.path);
+            let path = file.path.clone();
+            let followed = crate::scrape_run::follow(&source, |progress| {
+                let (going, words) = crate::game_page::run_words(&progress, &path);
                 let state = progress["state"].as_str().unwrap_or("idle").to_owned();
-                let told = (going, words.clone(), state.clone());
-                let _ = thread.queue(move |model| model.ran(Some((told.0, told.1)), &told.2));
-                if !going {
-                    break Ok(());
-                }
-            };
-            let closed = source.scrape_end();
+                let _ = thread.queue(move |model| model.ran(Some((going, words)), &state));
+            });
             let _ = thread.queue(move |mut model| {
-                if let Some(why) = ended.err().or(closed.err()) {
+                if let Err(why) = followed {
                     model.as_mut().said(format!("The scrape could not be followed: {why}"));
                 }
                 model.refresh();

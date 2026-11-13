@@ -175,7 +175,7 @@ fn home_and_the_home_card_open_the_tools_of_jobs_and_b_comes_back() {
     assert_eq!(step(Shown::Home, &Ask::Place(2)), Some((Shown::Tool, Some("packages".into()))));
     assert_eq!(step(Shown::Home, &Ask::Place(3)), Some((Shown::Tool, Some("library".into()))));
     assert_eq!(step(Shown::Home, &Ask::Place(4)), Some((Shown::Cores, None)));
-    assert_eq!(step(Shown::Home, &Ask::Place(1)), None, "the Scraper has no screen yet");
+    assert_eq!(step(Shown::Home, &Ask::Place(1)), Some((Shown::Tool, Some("scraper".into()))), "the Scraper on the same tool screen");
     assert_eq!(step(Shown::Tool, &Ask::Back), Some((Shown::Home, None)));
     for themed in [false, true] {
         let library = if themed { Shown::Esde } else { Shown::Home };

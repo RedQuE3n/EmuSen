@@ -6303,12 +6303,36 @@ object name; `Screens` opens it as `Tool`, naming the tool in `Screens.tool`, fr
 and the Home card's Tools page, and B returns as from Cores. A job keeps running when the screen is left, and a tool
 opened before is kept with its runs.
 
-A tool with no screen yet (Scraper, Cheats, Collections, Shell) is not listed on the Home card's Tools page. The
-Scraper's Home place is drawn as before and opens nothing until the Scraper has its screen: drawn unavailable, its
-words fell under the contrast the program's acceptance holds (measured 2026-11-13: 3.2:1 and 1.8:1 against 4.5:1). Held to by `qt-models/tests/tool_jobs.rs` (the real platform library over a scratch library, a
+A tool with no screen yet (Cheats, Collections, Shell) is not listed on the Home card's Tools page; the Scraper has
+its screen since §7.7.U. Held to by `qt-models/tests/tool_jobs.rs` (the real platform library over a scratch library, a
 scripted world for the question and Stop, and the screens' steps) and `qt-app/tests/tools.rs` (the pad opens Library
 Manager from Home, runs its first job, sees the progress then the lines, X lists them, B returns Home; Compressed Discs
 from the Home card lists a generated disc the same way).
+
+#### 7.7.U The Scraper runs a scrape of the library (2026-11-13)
+
+The Scraper is a third source of the tool screen, `tools/scraper.rs`, on the same `ToolModel` as the tools of jobs
+(`jobs` names `scraper`), opened from Home's Scraper place and the Home card's Tools page. Its rows are All games and
+each console of the library's shelves; A starts a run over the row's games, A on the running row pauses and resumes it
+(the scrape service's `pause`), and Select's List card has Stop the scrape while it runs, which asks the game page's
+question and cancels; what was fetched is kept. The bar says `Scraping: done of total` and its share, `Paused: ...`
+while paused, and how the run ended; the pane names the game in hand and its step, the latest result, the service's
+last failure and why a run could not start; X lists each game's result. A run's end has the library read again
+(`ToolModel.libraryChanged`), so the grid draws what was fetched.
+
+A scrape run as the models hold it has one owner, `scrape_run.rs`, which the game page's Scrape This Game and the
+Scraper share: the `start` request, the run followed through `wait` and `progress` until it ends and the scraper put
+back to finding pictures alone, and the words a progress says. The request carries what the Scraping settings ask
+for: `refresh` from Refresh what is kept, `enabled` from Use ScreenScraper, and the choices' region, language, other
+regions after and workers (0 asks for as many as the account allows, which the scraper holds to its maxthreads). Its
+kinds are those of the scraper's kinds table (`get kinds`) whose switch `Scrape<folder>` is on, the settings naming each
+kind by its media folder (`ScrapeCovers`, `Scrape3DBoxes`); before this the game page asked for the scraper's own four.
+A run over many games is not `one`, so the scraper skips each game that already has every kind asked for. Held to by
+`qt-models/tests/tool_scraper.rs` (the real platform library, a scratch library and the recorded ScreenScraper: a
+run paused, held, resumed and done with every game given a cover; a cancelled run keeping what it fetched; the start
+request from the settings; the screens' steps) and `qt-app/tests/scraper.rs` (the pad opens the Scraper from Home,
+stops a run over one console from the List card with the covers fetched kept, then runs the whole library, pauses,
+holds, resumes and reaches done, and the grid draws every cover).
 
 ### 7.8 Stage 5, piece G: a game's page and its clip (2026-11-09)
 

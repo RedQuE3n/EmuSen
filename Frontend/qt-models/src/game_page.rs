@@ -378,37 +378,8 @@ pub fn kind_word(kind: MediaKind) -> &'static str {
     }
 }
 
-/// What a scrape's progress (emusen.scrape `progress`, EmuSen_Backend.md §30.3) says of the run: whether it is still
-/// going, and its words: the step on the game while it goes, how it came out once it has ended.
-pub fn run_words(progress: &serde_json::Value, game: &str) -> (bool, String) {
-    // The media store's own type names, which the scraper's kinds table holds no words for.
-    let kind = |k: &serde_json::Value| k.as_str().unwrap_or("").to_owned();
-    match progress["state"].as_str().unwrap_or("idle") {
-        "running" => {
-            let current = &progress["current"];
-            let words = match current["step"].as_str() {
-                Some("downloading") => format!("Fetching the {}", kind(&current["kind"])),
-                Some("arrived") => format!("Fetched the {}", kind(&current["kind"])),
-                Some(_) => "Looking it up".into(),
-                None => "Starting".into(),
-            };
-            (true, words)
-        }
-        "cancelled" | "stopped" => (false, "Stopped".into()),
-        _ => {
-            let result = progress["results"].as_array().and_then(|all| all.iter().rev().find(|r| r["path"] == game));
-            let words = match result.map(|r| (r["outcome"].as_str().unwrap_or(""), r["kinds"].as_array())) {
-                Some(("found", Some(kinds))) if !kinds.is_empty() => format!("Found: {}", kinds.iter().map(kind).collect::<Vec<_>>().join(", ")),
-                Some(("found", _)) => "Found, nothing new".into(),
-                Some(("unknown", _)) => "Not found".into(),
-                Some(("stopped", _)) => "Stopped".into(),
-                Some((_, _)) => result.and_then(|r| r["detail"].as_str()).filter(|d| !d.is_empty()).map_or_else(|| "It failed".into(), |d| format!("It failed: {d}")),
-                None => progress["why"].as_str().map_or_else(|| "Done".into(), |why| format!("It could not run: {why}")),
-            };
-            (false, words)
-        }
-    }
-}
+/// What a scrape's progress says of one game's run (`scrape_run`, its one owner).
+pub use crate::scrape_run::run_words;
 
 /// "1 Nov 2026".
 fn date(at: i64) -> String {
@@ -685,7 +656,7 @@ impl GamePage {
                 Outcome::Type { field: row.key, title: format!("{} › {}", self.read.title, row.label), start }
             }
             Some(row) if row.key == SCRAPE && self.running() => {
-                Outcome::Stop(ask("Stop the scrape?", "What was fetched before it stops is kept.", "Stop"))
+                Outcome::Stop(crate::scrape_run::stop_question())
             }
             // Another run going (the Scraper tool's) holds Scrape This Game until it ends.
             Some(row) if row.key == SCRAPE && self.read.scraping => Outcome::Nothing,

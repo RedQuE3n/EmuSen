@@ -293,7 +293,7 @@ fn moonrise_has_a_planet_for_each_system_with_an_engine_games_or_not() {
 fn the_screens_switch_by_what_was_asked() {
     use emusen_qt_models::screens::{step, Ask, Shown};
     assert_eq!(step(Shown::Home, &Ask::Place(0)), Some((Shown::Consoles, None)));
-    assert_eq!(step(Shown::Home, &Ask::Place(1)), None, "the scraper is a later stage's");
+    assert_eq!(step(Shown::Home, &Ask::Place(1)), Some((Shown::Tool, Some("scraper".into()))), "the Scraper's tool screen");
     assert_eq!(step(Shown::Consoles, &Ask::Open("nes".into())), Some((Shown::Grid, Some("nes".into()))));
     assert_eq!(step(Shown::Consoles, &Ask::Act("favourites".into())), Some((Shown::Grid, Some("favourites".into()))));
     assert_eq!(step(Shown::Consoles, &Ask::Act("random".into())), None, "a later stage's action changes nothing yet");

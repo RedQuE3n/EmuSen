@@ -1,11 +1,13 @@
 //! The tool screen as plain data (EmuSen_Interface.md §15.2–15.6, §16; EmuSen_Qt.md §1.2.2): what `ToolModel` puts on
 //! the kit's `ToolScreen` for any tool, the `Source` each tool implements, and `Tool`, which holds what every tool's
 //! screen holds the same way (the section, the filter, the sort, the search, the focus, the marks, the open card and
-//! the question). Cores is one source; `jobs` is the other, the tools that are lists of the platform library's jobs.
+//! the question). Cores is one source; `jobs` another, the tools that are lists of the platform library's jobs; `scraper`
+//! the third, the Scraper's runs.
 //! No Qt here.
 
 pub mod cores;
 pub mod jobs;
+pub mod scraper;
 
 use crate::card::Row as CardRow;
 use crate::question::{confirm, Question};
@@ -180,6 +182,10 @@ pub trait Source {
     /// Whether rows are marked and applied as a plan; a tool whose rows each start at once has no Apply.
     fn plans(&self) -> bool {
         true
+    }
+    /// Whether a run's end leaves the library changed, so the library is read again.
+    fn changes_library(&self) -> bool {
+        false
     }
 }
 
@@ -729,5 +735,8 @@ impl Source for Box<dyn Source> {
     }
     fn plans(&self) -> bool {
         (**self).plans()
+    }
+    fn changes_library(&self) -> bool {
+        (**self).changes_library()
     }
 }

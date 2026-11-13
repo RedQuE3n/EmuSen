@@ -536,7 +536,7 @@ Window {
             onActed: (key) => screens.act(key)
         }
         // The Themes tab, under Settings ▸ Library ▸ Themes (EmuSen_Qt.md §3.8): Use stores a theme's id and the chosen
-        // theme's host switches at once.
+        // theme's host switches at once; an ES-DE theme's Use and its choices restyle the library at once.
         ThemesModel {
             id: themesModel
             objectName: "themesModel"
@@ -545,6 +545,11 @@ Window {
             referenceFolder: ReferenceTheme.folder
             open: screens.shown === Screens.Themes
             onUsed: (folder) => program.theme = folder
+            // The start's choice of an ES-DE theme is let go once another look is stored; the library's read decides the rest.
+            onRestyled: (esde) => {
+                program.esdeChosen = program.esdeChosen && esde
+                library.restyle()
+            }
         }
         Themes {
             objectName: "themes"

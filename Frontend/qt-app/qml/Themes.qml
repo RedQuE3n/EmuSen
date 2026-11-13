@@ -4,7 +4,7 @@ import QtQuick.Controls
 import EmuSen.Kit as Kit
 import EmuSen.Models
 
-// The Themes tab on the frame: the two kinds above, the themes of the kind listed, the focused one's preview, line and check beside them; A uses a theme checked clean, X checks it (EmuSen_Qt.md §3.8).
+// The Themes tab on the frame: the two kinds above, the themes of the kind listed, the ES-DE theme in use followed by its choices, the focused one's preview, line and check beside them; A uses a theme checked clean, X checks it, A, Left and Right step a choice (EmuSen_Qt.md §3.8).
 Kit.NormalizedCanvas {
     id: tab
     required property ThemesModel themes
@@ -68,10 +68,22 @@ Kit.NormalizedCanvas {
                 controller: frame.controller
                 label: row.model.label
                 value: row.model.value
+                steps: row.model.steps
                 labelFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontRow })
                 current: ListView.isCurrentItem
                 focus: ListView.isCurrentItem
                 onActivated: tab.themes.accept()
+                // Left and Right step a choice and pass on elsewhere.
+                Keys.onLeftPressed: (event) => {
+                    event.accepted = row.steps
+                    if (row.steps)
+                        tab.themes.step(row.index, -1)
+                }
+                Keys.onRightPressed: (event) => {
+                    event.accepted = row.steps
+                    if (row.steps)
+                        tab.themes.step(row.index, 1)
+                }
                 // The model holds the focused row and the view's current row is bound to it, so the binding is never overwritten.
                 onActiveFocusChanged: tab.themes.focused = row.activeFocus ? row.index : tab.themes.focused
             }

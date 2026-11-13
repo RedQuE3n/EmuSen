@@ -73,14 +73,20 @@ pub fn app_settings(platform: &Platform) -> Result<Value, String> {
 
 /// The player's settings with one key changed, saved through Galaxia's model, which writes every other key as it read it.
 pub fn store_app_setting(platform: &Platform, key: &str, value: Value) -> Result<(), String> {
+    change_app_settings(platform, |settings| settings[key] = value).map(|_| ())
+}
+
+/// The player's settings changed by `change` and saved in one write, as `store_app_setting` saves one key; gives what was saved.
+pub fn change_app_settings(platform: &Platform, change: impl FnOnce(&mut Value)) -> Result<Value, String> {
     let file = platform.file(FILE_SETTINGS).map_err(words)?;
     let name = file.file_name().and_then(|n| n.to_str()).ok_or_else(|| format!("{} names no settings file", file.display()))?;
     let mut settings = match app_settings(platform)? {
         Value::Null => platform.model_new(MODEL_APP_SETTINGS).map_err(words)?,
         read => read,
     };
-    settings[key] = value;
-    platform.model_save(MODEL_APP_SETTINGS, None, name, &settings).map_err(words)
+    change(&mut settings);
+    platform.model_save(MODEL_APP_SETTINGS, None, name, &settings).map_err(words)?;
+    Ok(settings)
 }
 
 impl LibrarySource for ClientSource {

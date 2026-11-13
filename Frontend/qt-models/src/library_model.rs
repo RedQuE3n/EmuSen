@@ -109,6 +109,11 @@ pub mod qobject {
         #[qinvokable]
         fn refresh(self: Pin<&mut LibraryModel>);
 
+        /// The settings read again after the library's look was stored: the ES-DE view's settings alone while a theme
+        /// stays the look, nothing while none is, else a refresh, which builds or drops the theme's texts.
+        #[qinvokable]
+        fn restyle(self: Pin<&mut LibraryModel>);
+
         #[cxx_name = "setByFacts"]
         fn set_by_facts(self: Pin<&mut LibraryModel>, value: bool);
 
@@ -387,6 +392,36 @@ impl qobject::LibraryModel {
             let texts = texts_of(&refreshed);
             let _ = qt.queue(move |model| model.apply(None, refreshed, texts));
         });
+    }
+
+    pub fn restyle(self: Pin<&mut Self>) {
+        let Some(source) = self.source.clone() else { return };
+        let (qt, was) = (self.qt_thread(), self.view.esde_settings.themed);
+        std::thread::spawn(move || {
+            let settings = source.settings();
+            let now = settings.as_ref().ok().map(|s| crate::esde_shelves::settings_of(s).themed);
+            let _ = qt.queue(move |model| match (was, now, settings) {
+                (true, Some(true), Ok(settings)) => model.restyled(settings),
+                (false, Some(false), _) => {}
+                _ => model.refresh(),
+            });
+        });
+    }
+
+    /// The ES-DE view's settings as `restyle` read them, the theme staying the look.
+    fn restyled(mut self: Pin<&mut Self>, settings: serde_json::Value) {
+        let esde = crate::esde_shelves::settings_of(&settings);
+        let changed = esde.text != self.view.esde_settings.text;
+        {
+            let mut m = self.as_mut().rust_mut();
+            let m = &mut *m;
+            if changed {
+                m.esde_settings = QString::from(esde.text.as_str());
+            }
+            m.view.esde_settings = esde;
+            m.view.catalog.settings = settings;
+        }
+        self.announce_esde([changed, false, false, false]);
     }
 
     pub fn heading_of(&self, key: &QString) -> QString {

@@ -5,7 +5,7 @@
 use emusen_client_fixture::{library, World};
 use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
 use emusen_platform_client::Platform;
-use emusen_qt_models::screens::{declined_places, step, step_in, tool_back, Ask, Shown};
+use emusen_qt_models::screens::{step, step_in, tool_back, Ask, Shown};
 use emusen_qt_models::tools::cores::backend::{platform_job, Backend, Scripted};
 use emusen_qt_models::tools::jobs::{self, Jobs};
 use emusen_qt_models::tools::{Source, Tone, Tool};
@@ -176,7 +176,6 @@ fn home_and_the_home_card_open_the_tools_of_jobs_and_b_comes_back() {
     assert_eq!(step(Shown::Home, &Ask::Place(3)), Some((Shown::Tool, Some("library".into()))));
     assert_eq!(step(Shown::Home, &Ask::Place(4)), Some((Shown::Cores, None)));
     assert_eq!(step(Shown::Home, &Ask::Place(1)), None, "the Scraper has no screen yet");
-    assert_eq!(declined_places(), ["scraper"], "so Home's place for it is declined");
     assert_eq!(step(Shown::Tool, &Ask::Back), Some((Shown::Home, None)));
     for themed in [false, true] {
         let library = if themed { Shown::Esde } else { Shown::Home };

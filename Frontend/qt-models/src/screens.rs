@@ -86,11 +86,6 @@ pub fn tool_screen(key: &str) -> Option<Shown> {
     }
 }
 
-/// Home's places whose tool has no screen yet, by key: the host declines them, so the theme draws them unavailable.
-pub fn declined_places() -> Vec<String> {
-    crate::words::HOME_TOOLS.iter().filter(|k| tool_screen(k).is_none()).map(|k| (*k).to_owned()).collect()
-}
-
 /// A tool's screen with the tool named, by its key; none for a tool with no screen.
 fn open_tool(key: &str) -> Option<(Shown, Option<String>)> {
     tool_screen(key).map(|shown| (shown, (shown == Shown::Tool).then(|| key.to_owned())))

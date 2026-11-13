@@ -9,6 +9,7 @@ use crate::cheats::{on_words, Switch};
 use crate::help::Screen;
 use crate::library::GameRow;
 use crate::reel::{self, Reel};
+use crate::settings_card::{CardPage, CardRows};
 use emusen_crystal_client::shapes::{RewindReel, SessionInfo};
 use emusen_kit_core::input::UiButton;
 use serde_json::{json, Value};
@@ -34,6 +35,8 @@ pub enum Page {
     Controllers,
     /// Game Options ▸ Cheats: the game's own list, each cheat a switch (cheats.rs).
     Cheats,
+    /// Game Options ▸ Display and Sound: Settings' own rows for the running game (`settings_card.rs`).
+    Settings(CardPage),
 }
 
 /// Leave's questions, each asked before an end (Mistress's `LeaveRows`).
@@ -343,6 +346,8 @@ pub const TRAY: &str = "tray";
 pub const CONTROLLER: &str = "controller";
 /// A cheat of Cheats' page, each found by its place on the page.
 pub const CHEAT: &str = "cheat";
+/// A row of Display's or Sound's page, each found by its place on the page.
+pub const SETTING: &str = "setting";
 
 /// What Swap Players says once done. Mistress names each player's pad; the pads' names do not reach the session yet.
 pub const SWAPPED: &str = "Players 1 and 2 swapped";
@@ -439,6 +444,12 @@ pub enum Outcome {
     Controllers { index: usize, by: i32 },
     /// The game's cheat at that place of its list switched on or off; the card stays.
     Cheat { index: usize, on: bool },
+    /// Display's or Sound's page turned to, for Settings to read its rows for the running console.
+    SettingsPage { page: CardPage, console: String },
+    /// A row of Display's or Sound's page stepped (`by` ±1) or chosen (`by` 0), for Settings to carry out.
+    Settings { index: usize, by: i32 },
+    /// B on a page a door of Display's opened, for Settings to close.
+    SettingsBack,
 }
 
 /// The context pane's kind.
@@ -520,11 +531,13 @@ pub struct Card {
     pub shelf: Vec<GameRow>,
     /// Controllers' rows, as Settings' description gives them (`SettingsModel.cardControllers`).
     pub controllers: Vec<crate::settings_controllers::GameRow>,
+    /// Display's or Sound's rows, as Settings' description gives them (`SettingsModel.cardSettings`).
+    pub settings: CardRows,
 }
 
 impl Default for Card {
     fn default() -> Self {
-        Card { page: Page::First, current: 0, reel: None, facts: Facts::default(), shelf: Vec::new(), controllers: Vec::new() }
+        Card { page: Page::First, current: 0, reel: None, facts: Facts::default(), shelf: Vec::new(), controllers: Vec::new(), settings: CardRows::default() }
     }
 }
 
@@ -588,6 +601,11 @@ impl Card {
                 .iter()
                 .map(|r| Row { steps: r.steps, opens: r.opens, dimmed: r.dimmed, ..row(CONTROLLER, &r.label, r.value.clone()) })
                 .collect(),
+            Page::Settings(_) => self
+                .settings_rows()
+                .iter()
+                .map(|r| Row { steps: r.steps, opens: r.opens, dimmed: r.dimmed, ..row(SETTING, &r.label, r.value.clone()) })
+                .collect(),
             Page::Cards => self
                 .facts
                 .cards
@@ -646,6 +664,9 @@ impl Card {
             Page::Cards => "Memory Cards".to_string(),
             Page::Controllers => "Controllers".to_string(),
             Page::Cheats => "Cheats".to_string(),
+            Page::Settings(_) if !self.settings.title.is_empty() => self.settings.title.clone(),
+            Page::Settings(CardPage::Display) => "Display".to_string(),
+            Page::Settings(CardPage::Sound) => "Sound".to_string(),
             Page::Drawer(at) => self.facts.cards.media.get(at).map(|m| format!("{}s", m.title)).unwrap_or_default(),
             Page::Ask(ask) => ask.page().title,
         }
@@ -713,6 +734,15 @@ impl Card {
                 Some(_) => Outcome::Controllers { index: self.current, by: 0 },
                 None => Outcome::Nothing,
             },
+            DISPLAY | SOUND if self.page == Page::Options => {
+                let page = if key == DISPLAY { CardPage::Display } else { CardPage::Sound };
+                self.turn(Page::Settings(page), 0);
+                Outcome::SettingsPage { page, console: self.facts.cards.console.clone() }
+            }
+            SETTING if matches!(self.page, Page::Settings(_)) => match self.settings_rows().get(self.current) {
+                Some(r) if !r.dimmed => Outcome::Settings { index: self.current, by: 0 },
+                _ => Outcome::Nothing,
+            },
             MEMORY_CARDS if self.page == Page::Options => {
                 self.turn(Page::Cards, 0);
                 Outcome::Shown
@@ -772,6 +802,7 @@ impl Card {
             Some(MEMORY_CARD) => self.step_card(index, by),
             Some(CHEAT) => self.switch(index),
             Some(CONTROLLER) if self.controllers.get(index).is_some_and(|r| r.steps) => Outcome::Controllers { index, by },
+            Some(SETTING) if self.settings_rows().get(index).is_some_and(|r| r.steps) => Outcome::Settings { index, by },
             Some(MOMENT | GO_BACK | HOLD) => self.reel_moved(|r| r.step(by, held)),
             _ => Outcome::Nothing,
         }
@@ -821,6 +852,9 @@ impl Card {
             Page::Cards => (Page::Options, MEMORY_CARDS),
             Page::Controllers => (Page::Options, CONTROLLERS),
             Page::Cheats => (Page::Options, CHEATS),
+            Page::Settings(_) if !self.settings.title.is_empty() => return Outcome::SettingsBack,
+            Page::Settings(CardPage::Display) => (Page::Options, DISPLAY),
+            Page::Settings(CardPage::Sound) => (Page::Options, SOUND),
             Page::Drawer(_) => (Page::Cards, MEMORY_CARD),
             Page::Ask(ask) => (Page::Leave, ask.key()),
         };
@@ -858,8 +892,31 @@ impl Card {
                 None => Pane::none(),
             },
             (Page::Drawer(_), _) => Pane { kind: PaneKind::Sentence, sentence: cards::DRAWER_CARD.to_owned(), ..Pane::none() },
+            (Page::Settings(_), _) => match self.settings_rows().get(self.current) {
+                Some(r) => Pane { kind: PaneKind::Sentence, sentence: r.sentence.clone(), muted: r.muted.clone(), ..Pane::none() },
+                None => Pane::none(),
+            },
             _ => Pane::none(),
         }
+    }
+
+    /// Display's or Sound's rows, once Settings has read them for the page shown: none while they are another page's.
+    fn settings_rows(&self) -> &[crate::settings_controllers::GameRow] {
+        match self.page {
+            Page::Settings(page) if self.settings.page == page.key() => &self.settings.rows,
+            _ => &[],
+        }
+    }
+
+    /// Settings' rows for Display or Sound taken: a page a door opened or closed puts the focus where Settings says.
+    pub fn take_settings(&mut self, rows: CardRows) -> bool {
+        let turned = rows.title != self.settings.title || rows.page != self.settings.page;
+        self.settings = rows;
+        if turned && matches!(self.page, Page::Settings(_)) {
+            self.current = self.settings.focus;
+        }
+        self.current = self.current.min(self.rows().len().saturating_sub(1));
+        turned
     }
 
     /// A card row's words, as Settings' Memory cards gives them in a game.

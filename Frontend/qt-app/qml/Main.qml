@@ -106,6 +106,7 @@ Window {
             id: screens
             objectName: "screens"
             gameRunning: player.session.running
+            lastPlayed: library.lastPlayed
             found: games.count > 0
             themed: program.esdeLook
             onQuit: Qt.quit()
@@ -250,6 +251,7 @@ Window {
             section: screens.key
             sectionName: library.headingOf(screens.key)
             startable: library.startable
+            collections: library.collections
             onPassedBack: screens.back()
             // A section read anew starts at its first game, as the grid's own did.
             onCountChanged: games.focused = games.count > 0 ? 0 : -1
@@ -374,6 +376,13 @@ Window {
             platformLibrary: program.esdeWanted ? program.platformLibrary : ""
             sounds: program.esdeView?.scene.sounds ?? ""
             on: program.navigationSounds
+        }
+        // Sound volume, once Settings has read the settings; a step of its row is heard from the next sound.
+        Binding {
+            target: cues
+            property: "volume"
+            value: settingsModel.navigationVolume
+            when: settingsModel.ready
         }
         // A sound of the theme's that did not open or play, said once the splash has gone.
         Timer {
@@ -547,6 +556,8 @@ Window {
             function onNoticeChanged() { program.said(player.session.notice, player.session.noticeAttention, true) }
             // Exit to Library's key over the library: the suspended game again, as Continue plays it.
             function onGameAsked() { screens.resume() }
+            // A game stopped: how long it ran is its play time, up to Play time counted up to.
+            function onPlayed(path, seconds) { library.played(path, seconds, settingsModel.playHours) }
         }
         // What failed, from every model that can fail, said where the player is: a game that does not open (over the game),
         // the library unread, a setting, a game's page's change, or Cores; a cleared problem raises nothing (EmuSen_Qt.md §7.9).

@@ -142,3 +142,35 @@ fn start_and_the_cards_follow_mistress_routes() {
     assert_eq!(step(Shown::Grid, &Ask::Keys(false)), None);
     assert_eq!(step(Shown::Game, &act("home")), None, "inside a game Start is the Pause Card's chord, not Home");
 }
+
+#[test]
+fn collections_opens_the_filter_page_whose_collections_narrow_the_section_to_their_members() {
+    use emusen_qt_models::gamelists::Collection;
+    let list = pages_of(list_card::CARD).unwrap();
+    assert_eq!(list.choose(list_card::FIRST, list_card::COLLECTIONS), Choice::Turn(list_card::FILTER.to_owned()));
+    let text = list_card::collections_text(&[Collection { id: 7, name: "Couch".into(), members: vec!["/r/brass.nes".into()] }]);
+    let listed = list_card::collections_of(&text);
+    let f = json!({ "favouritesSection": false, "collections": [{ "key": listed[0].key, "name": listed[0].name }] });
+    assert_eq!(labels(list_card::CARD, list_card::FILTER, &f), ["Every game", "Favourites", "Couch"]);
+    let key = listed[0].key.clone();
+    assert!(list_card::is_collection(&key) && !list_card::is_collection(list_card::FAVOURITES_ONLY));
+    assert_eq!(list.choose(list_card::FILTER, &key), Choice::Act(key.clone()), "the grid narrows to it");
+    assert_eq!(action_of(&key), (key.as_str(), 0), "a collection's key is no step");
+    let games = [game("brass", false, 0), game("Aurora", true, 0)];
+    let only = Listing { collection: Some(listed[0].members.iter().cloned().collect()), ..Listing::default() };
+    assert_eq!(shown(&games, "all", &only).iter().map(|g| g.title.as_str()).collect::<Vec<_>>(), ["brass"]);
+    assert!(only.narrowed(), "the count says how many of the section");
+}
+
+#[test]
+fn settings_doors_open_the_compressed_discs_tool_and_the_last_games_cheats_and_b_returns_to_settings() {
+    use emusen_qt_models::screens::{step_in, tool_back};
+    let act = |k: &str| Ask::Act(k.to_owned());
+    assert_eq!(step(Shown::Settings, &act("compressed")), Some((Shown::Tool, Some("compressed".into()))));
+    assert_eq!(step_in(true, Shown::Settings, &act("compressed")), Some((Shown::Tool, Some("compressed".into()))), "under an ES-DE theme too");
+    assert_eq!(tool_back(false, Some(Shown::Settings), Shown::Tool, &Ask::Back), Some(Shown::Settings));
+    assert_eq!(tool_back(true, Some(Shown::Settings), Shown::Tool, &Ask::Back), Some(Shown::Settings));
+    assert_eq!(tool_back(false, Some(Shown::Home), Shown::Tool, &Ask::Back), Some(Shown::Home), "from Home, Home");
+    assert_eq!(step(Shown::Settings, &act("cheats")), Some((Shown::Page, Some("cheats".into()))));
+    assert_eq!(step(Shown::Settings, &act("logging")), None, "a door with no screen yet opens nothing");
+}

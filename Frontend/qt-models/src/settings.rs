@@ -754,8 +754,11 @@ impl SettingsView {
     }
 
     /// A row of the description a console's state declines: a door whose filter is not chosen, a folder to forget that
-    /// is not set.
+    /// is not set, a door whose fact (`needs`) counts none: Cheats with no game played or none in its list.
     fn declined(&self, entry: &Value) -> bool {
+        if let Some(fact) = entry["needs"].as_str() {
+            return !self.facts[fact].as_u64().is_some_and(|n| n > 0);
+        }
         if let Some(filter) = entry["while"].as_str() {
             let name = self.filter_name(&json!(filter));
             return !self.consoles("this").iter().all(|c| at(&self.read.graphics, &format!("Consoles.{c}.ScreenFilter")).map(text_of).as_deref() == Some(name.as_str()));
@@ -1041,6 +1044,23 @@ impl SettingsView {
 
     fn applies_as(&self, name: &str) -> bool {
         applies_as_in(&self.description, &self.read.app, &self.read.graphics, name)
+    }
+
+    /// A key's stored text by its name in `applies`, its row's initial value where none is stored.
+    fn applied_or_initial(&self, name: &str) -> Option<String> {
+        let reference = self.description["applies"][name].as_str()?;
+        let keyed = self.keyed(&json!({ "row": reference }))?;
+        self.stored(&keyed).into_iter().next()
+    }
+
+    /// How loud the navigation sounds play, a share of full, from Sound volume's percent.
+    pub fn navigation_volume(&self) -> f64 {
+        self.applied_or_initial("navigation_volume").and_then(|t| t.parse::<f64>().ok()).map_or(1.0, |p| (p / 100.0).clamp(0.0, 1.0))
+    }
+
+    /// Play time counted up to, in hours: 0 counts none, 24 or more no limit (games.db's `played`); none until read.
+    pub fn play_hours(&self) -> Option<i32> {
+        self.applied_or_initial("play_hours").and_then(|t| t.parse::<f64>().ok()).map(|h| h as i32)
     }
 
     /// What a running game and its window take from these settings.

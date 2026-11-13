@@ -178,6 +178,11 @@ pub mod qobject {
         #[cxx_name = "pictureRead"]
         fn picture_read(self: Pin<&mut SessionModel>);
 
+        /// A game that ran has stopped: its path and how long it ran, in seconds, which the library records as play time
+        /// under the player's limit (LibraryModel.played).
+        #[qsignal]
+        fn played(self: Pin<&mut SessionModel>, path: QString, seconds: f64);
+
         /// The game or console named did not open, or stopped on a failure: `problem` says why.
         #[qsignal]
         #[cxx_name = "openFailed"]
@@ -353,6 +358,8 @@ pub struct SessionModelRust {
     cheats: Option<crate::cheats::Given>,
     /// The runtime holding the game after a Frame Advance, until a resume lets it run (Mistress's `AdvanceOneFrame`).
     stepped: bool,
+    /// The game running and when it began to, for the play time recorded when it stops.
+    playing: Option<(QString, std::time::Instant)>,
 }
 
 impl Default for SessionModelRust {
@@ -412,6 +419,7 @@ impl Default for SessionModelRust {
             session: None,
             cheats: None,
             stepped: false,
+            playing: None,
         }
     }
 }
@@ -449,9 +457,20 @@ impl qobject::SessionModel {
     }
 
     fn set_running(mut self: Pin<&mut Self>, value: bool) {
-        if self.running != value {
-            self.as_mut().rust_mut().running = value;
-            self.running_changed();
+        if self.running == value {
+            return;
+        }
+        let game = self.game.clone();
+        let ran = if value {
+            self.as_mut().rust_mut().playing = Some((game, std::time::Instant::now())).filter(|(g, _)| !g.is_empty());
+            None
+        } else {
+            self.as_mut().rust_mut().playing.take()
+        };
+        self.as_mut().rust_mut().running = value;
+        self.as_mut().running_changed();
+        if let Some((path, since)) = ran {
+            self.played(path, since.elapsed().as_secs_f64());
         }
     }
 

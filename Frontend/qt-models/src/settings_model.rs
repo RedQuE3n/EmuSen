@@ -91,6 +91,9 @@ pub mod qobject {
         #[qproperty(bool, show_fps, cxx_name = "showFps", READ, NOTIFY = play_changed)]
         #[qproperty(bool, show_status_text, cxx_name = "showStatusText", READ, NOTIFY = play_changed)]
         #[qproperty(bool, show_status_bar, cxx_name = "showStatusBar", READ, NOTIFY = play_changed)]
+        /// How loud the navigation sounds play, a share of full (Sound volume), and Play time counted up to, in hours.
+        #[qproperty(f64, navigation_volume, cxx_name = "navigationVolume", READ, NOTIFY)]
+        #[qproperty(i32, play_hours, cxx_name = "playHours", READ, NOTIFY)]
         /// Whether Guide's chords are read, by Guide chords and `gameMode`, the program's Steam Game Mode (EmuSen_Qt.md §7.7.H6).
         #[qproperty(bool, guide_chords, cxx_name = "guideChords", READ, NOTIFY)]
         #[qproperty(bool, game_mode, cxx_name = "gameMode")]
@@ -358,6 +361,8 @@ pub struct SettingsModelRust {
     show_fps: bool,
     show_status_text: bool,
     show_status_bar: bool,
+    navigation_volume: f64,
+    play_hours: i32,
     guide_chords: bool,
     game_mode: bool,
     help: i32,
@@ -442,6 +447,8 @@ impl Default for SettingsModelRust {
             show_fps: false,
             show_status_text: false,
             show_status_bar: false,
+            navigation_volume: 1.0,
+            play_hours: 0,
             guide_chords: false,
             game_mode: false,
             help: shown_screen(Screen::Settings),
@@ -810,6 +817,15 @@ impl qobject::SettingsModel {
             (model.volume, model.output, model.sync_to_display, model.pause_in_background) = (play.volume, output, play.sync_to_display, play.pause_in_background);
             (model.show_fps, model.show_status_text, model.show_status_bar) = (play.show_fps, play.show_status_text, play.show_status_bar);
             self.as_mut().play_changed();
+        }
+        let volume = self.view.navigation_volume();
+        if self.navigation_volume != volume {
+            self.as_mut().rust_mut().navigation_volume = volume;
+            self.as_mut().navigation_volume_changed();
+        }
+        if let Some(hours) = self.view.play_hours().filter(|h| *h != self.play_hours) {
+            self.as_mut().rust_mut().play_hours = hours;
+            self.as_mut().play_hours_changed();
         }
         let chords = self.view.guide_chords(self.game_mode);
         if self.guide_chords != chords {

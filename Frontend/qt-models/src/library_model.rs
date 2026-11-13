@@ -67,6 +67,10 @@ pub mod qobject {
         #[qproperty(QString, summary, READ, NOTIFY)]
         #[qproperty(i32, places, READ, NOTIFY)]
         #[qproperty(QString, recent, READ, NOTIFY)]
+        /// The game last played, by its path; empty where none was.
+        #[qproperty(QString, last_played, cxx_name = "lastPlayed", READ, NOTIFY)]
+        /// The player's collections as the List card's Filter page lists them: `[{"key", "name", "members"}]`.
+        #[qproperty(QString, collections, READ, NOTIFY)]
         #[qproperty(QString, cores)]
         #[qproperty(QString, tool_summaries, cxx_name = "toolSummaries")]
         #[qproperty(bool, dark)]
@@ -154,6 +158,11 @@ pub mod qobject {
         #[qinvokable]
         fn started(self: Pin<&mut LibraryModel>, path: &QString);
 
+        /// Records `seconds` of play of the game at `path` under the player's limit of `max_hours` (Play time counted up
+        /// to), then reads the games again, so its page and the sorts show the time.
+        #[qinvokable]
+        fn played(self: Pin<&mut LibraryModel>, path: &QString, seconds: f64, max_hours: i32);
+
         /// Turns the game at `path` a favourite or back, then reads the games again, as the ES-DE view's favourite asks.
         #[qinvokable]
         #[cxx_name = "toggleFavourite"]
@@ -235,6 +244,8 @@ pub struct LibraryModelRust {
     places: i32,
     /// The recently played games as GameModel reads them, the most recent first.
     recent: QString,
+    last_played: QString,
+    collections: QString,
     /// The cores directory the runtime scans; empty for the installation's own.
     cores: QString,
     /// The tools' summaries as Home shows them, `{"scraper": {"brief", "attention"}, ...}`; empty until a tool says.
@@ -269,6 +280,8 @@ impl Default for LibraryModelRust {
             summary: QString::default(),
             places: 0,
             recent: QString::default(),
+            last_played: QString::default(),
+            collections: QString::default(),
             cores: QString::default(),
             tool_summaries: QString::default(),
             dark: true,
@@ -454,7 +467,11 @@ impl qobject::LibraryModel {
         }
         // The running game's path and system, which Settings ▸ Controllers opens on (EmuSen_Qt.md §7.7.H).
         let system = self.view.catalog.games.iter().find(|g| g.path == running).and_then(|g| g.system.clone()).unwrap_or_default();
-        QString::from(serde_json::json!({ "games": self.view.catalog.games.len(), "running": title, "systems": systems, "game": running, "system": system }).to_string().as_str())
+        // The game last played and its cheats, which Settings' Cheats opens or is held without.
+        let last = self.view.catalog.recent.first().cloned().unwrap_or_default();
+        let facts = serde_json::json!({ "games": self.view.catalog.games.len(), "running": title, "systems": systems, "game": running, "system": system,
+            "last": last, "lastCheats": self.view.catalog.last_cheats });
+        QString::from(facts.to_string().as_str())
     }
 
     pub fn home_card_facts(&self, suspended: &QString, console: &QString, paused: &QString, game_mode: bool, startable: &QString, tools: &QString) -> QString {
@@ -484,6 +501,16 @@ impl qobject::LibraryModel {
         let (qt, path, gamelists, by_facts) = (self.qt_thread(), path.to_string(), self.view.gamelists.clone(), self.by_facts);
         std::thread::spawn(move || {
             let refreshed = source.started(&path).and_then(|()| refresh_with(source.as_ref(), &gamelists, by_facts));
+            let texts = texts_of(&refreshed);
+            let _ = qt.queue(move |model| model.apply(None, refreshed, texts));
+        });
+    }
+
+    pub fn played(self: Pin<&mut Self>, path: &QString, seconds: f64, max_hours: i32) {
+        let Some(source) = self.source.clone() else { return };
+        let (qt, path, gamelists, by_facts) = (self.qt_thread(), path.to_string(), self.view.gamelists.clone(), self.by_facts);
+        std::thread::spawn(move || {
+            let refreshed = source.played_for(&path, seconds, max_hours).and_then(|_| refresh_with(source.as_ref(), &gamelists, by_facts));
             let texts = texts_of(&refreshed);
             let _ = qt.queue(move |model| model.apply(None, refreshed, texts));
         });
@@ -727,6 +754,16 @@ impl qobject::LibraryModel {
         if self.recent != recent {
             self.as_mut().rust_mut().recent = recent;
             self.as_mut().recent_changed();
+        }
+        let last = QString::from(self.view.catalog.recent.first().map_or("", String::as_str));
+        if self.last_played != last {
+            self.as_mut().rust_mut().last_played = last;
+            self.as_mut().last_played_changed();
+        }
+        let collections = QString::from(crate::list_card::collections_text(&self.view.catalog.collections).as_str());
+        if self.collections != collections {
+            self.as_mut().rust_mut().collections = collections;
+            self.as_mut().collections_changed();
         }
         let tools = serde_json::from_str(&self.tool_summaries.to_string()).unwrap_or(serde_json::Value::Null);
         let settings = crate::words::settings_line(self.dark, &self.view.catalog.settings);

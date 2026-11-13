@@ -254,6 +254,15 @@ impl LibrarySource for ClientSource {
         Ok(out)
     }
 
+    fn cheats(&self, console: &str, path: &str) -> Result<usize, String> {
+        Ok(crate::cheats::List::of(&self.platform, console, path)?.map_or(0, |l| l.entries().len()))
+    }
+
+    fn played_for(&self, path: &str, seconds: f64, max_hours: i32) -> Result<Option<f64>, String> {
+        let kept = self.library.change(&json!({ "op": "played", "path": path, "seconds": seconds, "max_hours": max_hours })).map_err(words)?;
+        Ok(kept.as_f64())
+    }
+
     fn folder_links(&self) -> Result<Vec<(String, String)>, String> {
         let edits = self.library.get(&json!({ "what": "all_edits" })).map_err(words)?;
         let link = |(folder, e): (&String, &Value)| {

@@ -420,9 +420,11 @@ impl GamePage {
         GamePage { read, section: 0, resume_at: 0, now, editing: false, cheating: false, run: None }
     }
 
-    /// A new read of the same game, the section and Resume's state kept where they still stand.
+    /// A new read of the same game, the section and Resume's state kept where they still stand; Cheats gives way to
+    /// Options where the game has none to show.
     pub fn reread(&mut self, read: Read) {
         self.resume_at = self.resume_at.min(read.states.len().saturating_sub(1));
+        self.cheating &= !read.cheats.is_empty();
         self.read = read;
     }
 
@@ -451,6 +453,14 @@ impl GamePage {
     /// The strip's names, States with its count where it has any; a reader hears the count, the strip draws the name.
     pub fn sections(&self) -> Vec<String> {
         SECTIONS.iter().map(|s| s.name().to_owned()).collect()
+    }
+
+    /// The page opened at a part of it by a door: `cheats` is Options' Cheats; anything else the page's start.
+    pub fn open_at(&mut self, part: &str) {
+        if part == CHEATS {
+            self.section = SECTIONS.iter().position(|s| *s == Section::Options).unwrap_or(0);
+            self.cheating = true;
+        }
     }
 
     pub fn choose_section(&mut self, index: usize) {

@@ -83,6 +83,15 @@ pub trait LibrarySource: Send + Sync {
     fn collections(&self) -> Result<Vec<Collection>, String> {
         Ok(Vec::new())
     }
+    /// How many cheats the game at `path` on `console` has in its own list (cheats.rs); a source with no lists has none.
+    fn cheats(&self, _console: &str, _path: &str) -> Result<usize, String> {
+        Ok(0)
+    }
+    /// Records `seconds` played of the game at `path`, under the player's limit of `max_hours` (games.db's `played`); the
+    /// seconds kept, none where tracking is off or the launch ran past the limit. A source with no records keeps none.
+    fn played_for(&self, _path: &str, _seconds: f64, _max_hours: i32) -> Result<Option<f64>, String> {
+        Ok(None)
+    }
     /// Each ES-DE folder link the player set, by the folder's path on disk, to the linked game's file.
     fn folder_links(&self) -> Result<Vec<(String, String)>, String> {
         Ok(Vec::new())
@@ -201,6 +210,10 @@ pub struct Catalog {
     pub firmware: Vec<(String, String)>,
     /// The names the player gave games, by path; a game with none is named by its file.
     pub names: Vec<(String, String)>,
+    /// The player's collections and their members (games.db).
+    pub collections: Vec<Collection>,
+    /// How many cheats the game last played has in its list; 0 where none was played.
+    pub last_cheats: usize,
 }
 
 /// One game as the screens show it: its title from its file name, its console, its console's hue, its cover and its facts.
@@ -499,6 +512,9 @@ impl LibrarySource for FirstLook<'_> {
     fn collections(&self) -> Result<Vec<Collection>, String> {
         self.0.collections()
     }
+    fn cheats(&self, console: &str, path: &str) -> Result<usize, String> {
+        self.0.cheats(console, path)
+    }
     fn folder_links(&self) -> Result<Vec<(String, String)>, String> {
         self.0.folder_links()
     }
@@ -534,7 +550,14 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists, by_facts:
     // Read for the consoles that start empty alone, a call each, so Start Console's pane says what the runtime finds.
     let firmware = systems.iter().filter(|s| s.starts_empty && !s.engines.is_empty()).map(|s| (s.id.clone(), firmware_line(source.firmware(&s.id)))).collect();
     let names = source.names(&games)?;
-    let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings, plays, metadata, firmware, names };
+    let collections = source.collections()?;
+    let last = recent.first().and_then(|p| games.iter().find(|g| &g.path == p));
+    let console = last.and_then(|g| systems.iter().find(|s| Some(&s.id) == g.system.as_ref()));
+    let last_cheats = match (last, console) {
+        (Some(g), Some(s)) => source.cheats(&s.console, &g.path)?,
+        _ => 0,
+    };
+    let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings, plays, metadata, firmware, names, collections, last_cheats };
     let shelves = source.shelves()?;
     let mut shelved: Vec<SystemRow> = systems.clone();
     shelved.sort_by_key(|s| shelves.iter().position(|id| id == &s.id).unwrap_or(usize::MAX));

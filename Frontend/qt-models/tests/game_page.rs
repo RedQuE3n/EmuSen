@@ -336,3 +336,16 @@ fn qt_7_8_2_edit_details_types_each_detail_and_puts_back_what_was_scraped() {
     page.choose_section(3);
     assert!(!page.editing, "another section leaves Edit Details");
 }
+
+#[test]
+fn opened_at_cheats_the_page_shows_options_cheats_and_gives_way_to_options_without_any() {
+    use emusen_qt_models::game_page::{GamePage, Section, CHEATS};
+    let mut page = GamePage::new(Read::default(), 0);
+    page.open_at(CHEATS);
+    assert_eq!((page.shown(), page.cheating), (Section::Options, true));
+    page.reread(Read::default());
+    assert!(!page.cheating, "no cheats to show: Options");
+    let mut other = GamePage::new(Read::default(), 0);
+    other.open_at("");
+    assert_eq!((other.shown(), other.cheating), (Section::Overview, false), "no part: the page's start");
+}

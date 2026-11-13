@@ -109,6 +109,17 @@ pub fn search_shoulder(on_keys: bool, key: &str) -> Option<bool> {
 }
 /// Settings' door to the Themes tab, by its name in the screen's description.
 pub const THEMES: &str = "themes";
+/// Settings' door to the cheats of the game last played: that game's page, opened at Options' Cheats.
+pub const CHEATS: &str = crate::game_page::CHEATS;
+
+/// What a door of Settings opens beside the Themes tab: a tool it names, or the last game's cheats; none for a door with
+/// no screen yet.
+fn settings_door(key: &str) -> Option<(Shown, Option<String>)> {
+    if key == CHEATS {
+        return Some((Shown::Page, Some(CHEATS.to_owned())));
+    }
+    open_tool(key)
+}
 /// The Pause Card's Controllers ▸ Bindings: Settings' drawing page over the card, B back to it (EmuSen_Interface.md §20.3).
 pub const CARD_BINDINGS: &str = crate::settings_controllers::CARD_BINDINGS;
 
@@ -130,6 +141,7 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Settings, Ask::Back) => Some((Shown::Home, None)),
         (Shown::Settings | Shown::Themes, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
         (Shown::Settings, Ask::Act(key)) if key == THEMES => Some((Shown::Themes, None)),
+        (Shown::Settings, Ask::Act(key)) => settings_door(key),
         // The Themes tab is a page of Settings: B goes back to it.
         (Shown::Themes, Ask::Back) => Some((Shown::Settings, None)),
         (Shown::Grid, Ask::Act(key)) if key == LIST => Some((Shown::List, None)),
@@ -179,9 +191,11 @@ fn card_act(themed: bool, key: &str) -> Option<(Shown, Option<String>)> {
 }
 
 /// Where B on Cores or the Themes tab returns where the Home card opened it: the library's screen, the card having
-/// closed as it opened it; `None` where something else opened it, whose own rule stands.
+/// closed as it opened it; Settings where its door opened a tool; `None` where something else opened it, whose own rule
+/// stands.
 pub fn tool_back(themed: bool, opened_over: Option<Shown>, shown: Shown, ask: &Ask) -> Option<Shown> {
     match (opened_over, shown, ask) {
+        (Some(Shown::Settings), Shown::Cores | Shown::Tool, Ask::Back) => Some(Shown::Settings),
         (Some(Shown::HomeCard), Shown::Cores | Shown::Themes | Shown::Tool, Ask::Back) => Some(library_of(themed)),
         (_, Shown::Cores | Shown::Tool, Ask::Back) => Some(library_of(themed)),
         _ => None,
@@ -240,6 +254,7 @@ pub fn step_in(themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<S
         (true, Shown::Settings, Ask::Back) => Some((Shown::Esde, None)),
         (true, Shown::Settings | Shown::Themes, Ask::Act(key)) if key == HOME => Some((Shown::Esde, None)),
         (true, Shown::Settings, Ask::Act(key)) if key == THEMES => Some((Shown::Themes, None)),
+        (true, Shown::Settings, Ask::Act(key)) => settings_door(key),
         (true, Shown::Themes, Ask::Back) => Some((Shown::Settings, None)),
         // The cards close to the theme's view on B, Start or any of their actions, which the host carries out.
         (true, Shown::HomeCard | Shown::List, Ask::Back | Ask::Close | Ask::Act(_)) => Some((Shown::Esde, None)),
@@ -292,6 +307,12 @@ pub mod qobject {
         #[qproperty(bool, themed)]
         /// The tool of jobs the tool screen shows, by its key.
         #[qproperty(QString, tool, READ, NOTIFY)]
+        /// The game last played (LibraryModel.lastPlayed), whose page Settings' Cheats opens.
+        #[qproperty(QString, last_played, cxx_name = "lastPlayed")]
+        /// The game a door opened a page for, the game in hand's page where empty; and the part of the page it opened
+        /// at (`cheats`), empty for the page's first.
+        #[qproperty(QString, page_game, cxx_name = "pageGame", READ, NOTIFY)]
+        #[qproperty(QString, page_at, cxx_name = "pageAt", READ, NOTIFY)]
         type Screens = super::ScreensRust;
     }
 
@@ -363,6 +384,9 @@ pub struct ScreensRust {
     found: bool,
     themed: bool,
     tool: QString,
+    last_played: QString,
+    page_game: QString,
+    page_at: QString,
     /// The screen a game's page was opened over.
     page_origin: Shown,
     /// The screen Cores or the Themes tab was opened over.
@@ -381,6 +405,9 @@ impl Default for ScreensRust {
             found: false,
             themed: false,
             tool: QString::default(),
+            last_played: QString::default(),
+            page_game: QString::default(),
+            page_at: QString::default(),
             page_origin: Shown::Home,
             tool_origin: None,
             over_card: false,
@@ -533,6 +560,17 @@ impl qobject::Screens {
         }
         if shown == Shown::Page && was != Shown::Page {
             self.as_mut().rust_mut().page_origin = page_origin(self.themed, was);
+            // Opened at a part by a door, for the game it names; else the game in hand's page from its start.
+            let at = QString::from(key.as_deref().unwrap_or_default());
+            let game = if key.is_some() { self.last_played.clone() } else { QString::default() };
+            if self.page_at != at {
+                self.as_mut().rust_mut().page_at = at;
+                self.as_mut().page_at_changed();
+            }
+            if self.page_game != game {
+                self.as_mut().rust_mut().page_game = game;
+                self.as_mut().page_game_changed();
+            }
         }
         if let (Shown::HomeCard, Some(page)) = (shown, &key) {
             let page = QString::from(page.as_str());
@@ -546,7 +584,7 @@ impl qobject::Screens {
                 self.as_mut().rust_mut().tool = tool;
                 self.as_mut().tool_changed();
             }
-        } else if let Some(key) = key {
+        } else if let Some(key) = key.filter(|_| shown != Shown::Page) {
             let key = QString::from(key.as_str());
             if self.key != key {
                 self.as_mut().rust_mut().key = key;

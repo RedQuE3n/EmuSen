@@ -5608,12 +5608,24 @@ and the text sizes' lines at hers. **Differences that remain, each for the teste
   `Off`): the library's collections and the runtime's log switch are not read here yet (pieces M and the shell's).
 - Display ▸ CRT shader's caption reads "The last game · Off CRT", since the sandbox has played nothing, where Mistress's
   fixture names its game; the box follows the words.
-- Not built in this piece, each a door that goes nowhere yet: Shader levers and Shaders (piece J), Cheats, Compressed discs (pieces I and L), Logging and Shell, and the Scraping page's doors (Member account,
+- Not built in this piece, each a door that goes nowhere yet: Shader levers and Shaders (piece J), Cheats, Compressed discs (pieces I and L; built since, below), Logging and Shell, and the Scraping page's doors (Member account,
   Resume, Cancel, Status, Scraper; piece M) and the Collections page's own (piece M). Controllers holds its keys' rows
   only, its doors being piece H's. Consoles and the folder rows were built with piece E
   (§7.7.E). Light or dark's `System` reads as dark and
   Reduced motion's `System` as full motion, since the desktop's preference has no Rust reader yet (§7.1). Volume under
   Steam's Game Mode, which Mistress turns into a sentence about the device's quick menu, is a row like any other here.
+- Built 2026-11-13: Compressed discs opens the Compressed Discs tool (its door is the tool's key, `compressed`), and B
+  there comes back to Settings on the same row (`screens::tool_back`). Cheats opens the page of the game last played
+  (`LibraryModel.lastPlayed`) at Options' Cheats, through `Screens.pageGame` and `pageAt`; B goes back to Options, then
+  to Settings. The row is held, as a door whose filter is not chosen is, while the game last played has no cheats or
+  none was played: its `needs` names the settings facts' `lastCheats`, which a refresh counts from the game's own list.
+  Sound volume sets the ES-DE theme's navigation sounds' player (`EsdeCues.volume`, read back as `heldVolume`) at once
+  through the interface player's own volume call; the own look rings no navigation sound yet. Play time counted up to is
+  given to games.db's `played` when a game stops (`SessionModel.played`, `LibraryModel.played`), which keeps nothing
+  past the limit; the base owns the rule (`records::tracked`). The List card's Collections opens its Filter page, which
+  lists the player's collections after Favourites; one chosen narrows the section to its members until B or another
+  filter. Under an ES-DE theme its gamelists list no collections there, as they are shelves of their own. Held by
+  qt-app's `settings_doors` and qt-models' `cards`, `settings`, `game_page` and `clients`.
 
 **Held to** (measured on 2026-11-09). `qt-models/tests/settings.rs` (8, no Qt, over Galaxia's committed rows): every
 row the description names resolves; Sound's values and its meter, a step saved in each type, a device added to the

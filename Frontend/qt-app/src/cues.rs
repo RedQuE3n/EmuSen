@@ -28,6 +28,10 @@ pub mod qobject {
         #[qproperty(QString, sounds)]
         /// AppSettings.NavigationSounds: off plays nothing.
         #[qproperty(bool, on)]
+        /// Sound volume, a share of full (SettingsModel.navigationVolume): the player plays at it from the next sound.
+        #[qproperty(f64, volume)]
+        /// The volume the player holds, as it was last set; -1 before it is open.
+        #[qproperty(f64, held_volume, cxx_name = "heldVolume", READ, NOTIFY)]
         #[qproperty(QString, problem, READ, NOTIFY)]
         /// The key of the sound last played and how many have played, as the player was asked.
         #[qproperty(QString, rung, READ, NOTIFY)]
@@ -81,11 +85,12 @@ pub fn key_of(name: &str, themed: &[String]) -> Option<String> {
     Some(if themed.iter().any(|t| t == name) { format!("theme:{name}") } else { cue.map_or(QUICK_SELECT, bell_player::key).to_owned() })
 }
 
-#[derive(Default)]
 pub struct EsdeCuesRust {
     platform_library: QString,
     sounds: QString,
     on: bool,
+    volume: f64,
+    held_volume: f64,
     problem: QString,
     rung: QString,
     rings: i32,
@@ -94,6 +99,24 @@ pub struct EsdeCuesRust {
     themed: Vec<String>,
     /// The latest opening asked for; an older one that finishes later is dropped.
     opening: u64,
+}
+
+impl Default for EsdeCuesRust {
+    fn default() -> Self {
+        EsdeCuesRust {
+            platform_library: QString::default(),
+            sounds: QString::default(),
+            on: false,
+            volume: 1.0,
+            held_volume: -1.0,
+            problem: QString::default(),
+            rung: QString::default(),
+            rings: 0,
+            player: None,
+            themed: Vec::new(),
+            opening: 0,
+        }
+    }
 }
 
 /// The player with the kit's cues, and each of the theme's files decoded and kept under its name; a sounds text or a
@@ -130,6 +153,7 @@ impl cxx_qt::Initialize for qobject::EsdeCues {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().on_platform_library_changed(|cues| cues.reopen()).release();
         self.as_mut().on_sounds_changed(|cues| cues.reopen()).release();
+        self.as_mut().on_volume_changed(|cues| cues.hold_volume()).release();
     }
 }
 
@@ -181,12 +205,27 @@ impl qobject::EsdeCues {
                     Ok((player, themed, problems)) => {
                         cues.as_mut().rust_mut().player = Some(player);
                         cues.as_mut().rust_mut().themed = themed;
+                        cues.as_mut().hold_volume();
                         cues.publish(QString::from(problems.as_str()));
                     }
                     Err(words) => cues.publish(QString::from(words.as_str())),
                 }
             });
         });
+    }
+
+    /// The player set to the volume asked; a refusal is said as the player's other failures are.
+    fn hold_volume(mut self: Pin<&mut Self>) {
+        let volume = self.volume.clamp(0.0, 1.0);
+        let Some(set) = self.player.as_ref().map(|p| p.set_volume(volume as f32)) else { return };
+        match set {
+            Ok(()) if self.held_volume != volume => {
+                self.as_mut().rust_mut().held_volume = volume;
+                self.as_mut().held_volume_changed();
+            }
+            Ok(()) => {}
+            Err(e) => self.publish(QString::from(e.to_string().as_str())),
+        }
     }
 
     fn publish(mut self: Pin<&mut Self>, problem: QString) {

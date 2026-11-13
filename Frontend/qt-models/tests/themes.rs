@@ -138,7 +138,7 @@ fn settings_opens_from_home_and_the_home_card_and_holds_the_themes_tab_under_it(
     assert_eq!(step(Shown::Settings, &act(THEMES)), Some((Shown::Themes, None)), "Library ▸ Themes");
     assert_eq!(step(Shown::Settings, &Ask::Back), Some((Shown::Home, None)));
     assert_eq!(step(Shown::Settings, &act("home")), Some((Shown::Home, None)));
-    assert_eq!(step(Shown::Settings, &act("cheats")), None, "a door of a later piece goes nowhere yet");
+    assert_eq!(step(Shown::Settings, &act("shell")), None, "a door of a later piece goes nowhere yet");
     assert_eq!(step(Shown::Themes, &Ask::Back), Some((Shown::Settings, None)), "B goes back to Settings");
     assert_eq!(step(Shown::Themes, &act("home")), Some((Shown::Home, None)));
     assert_eq!(step(Shown::Themes, &act("check")), None, "Check is the tab's own");

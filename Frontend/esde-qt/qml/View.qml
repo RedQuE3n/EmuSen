@@ -124,6 +124,10 @@ Item {
                 ClipElement { esde: esde }
             }
             DelegateChoice {
+                roleValue: ElementModel.Video
+                VideoElement { esde: esde }
+            }
+            DelegateChoice {
                 roleValue: ElementModel.Page
                 ManualElement { esde: esde }
             }

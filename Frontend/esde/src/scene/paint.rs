@@ -152,6 +152,7 @@ fn picture(e: &Element, source: String, fit: Fit, crop: &str, corner: &str, ctx:
         saturation: e.float("saturation").unwrap_or(1.0) as f64,
         corner_radius: e.float(corner).unwrap_or(0.0) as f64 * ctx.w,
         nearest: false,
+        brightness: 0.0,
         frame: None,
     }
 }
@@ -175,9 +176,13 @@ fn image(e: &Element, ctx: &Ctx) -> Option<Draft> {
     Some(Draft { paint: Paint::Picture(p), size, sizing, scroll: None })
 }
 
-// A video with no video playing: its image, fitted by the image sizes, which default to the video's own unless any is set.
+// A video element: its still, fitted by the image sizes, which default to the video's own unless any is set, and the
+// video where one is found: `path` (which ignores the game's media), else the game's video, else `default`.
 fn video(e: &Element, ctx: &Ctx) -> Option<Draft> {
-    let source = media(e, "videoFallbackImage", ctx.game).or_else(|| existing(e.path("defaultImage")))?;
+    let fixed = e.explicit.contains_key("path");
+    let game_video = || ctx.game.and_then(|g| g.media.get("video").cloned());
+    let source = if fixed { existing(e.path("path")) } else { game_video().or_else(|| existing(e.path("default"))) };
+    let still_source = if fixed { None } else { media(e, "videoFallbackImage", ctx.game) }.or_else(|| existing(e.path("defaultImage")));
     let own = ["imageSize", "imageMaxSize", "imageCropSize"].iter().any(|p| e.explicit.contains_key(*p));
     let pick = |name: &str| {
         if own {
@@ -190,8 +195,79 @@ fn video(e: &Element, ctx: &Ctx) -> Option<Draft> {
         }
     };
     let (fit, size, sizing) = sized(pick("imageSize"), pick("imageMaxSize"), pick("imageCropSize"), ctx.w, ctx.h);
-    let p = picture(e, source, fit, "imageCropPos", "imageCornerRadius", ctx);
-    Some(Draft { paint: Paint::Picture(p), size, sizing, scroll: None })
+    let mut still = still_source.map(|s| picture(e, s, fit, "imageCropPos", "imageCornerRadius", ctx));
+    let brightness = e.float("brightness").unwrap_or(0.0).clamp(-2.0, 2.0) as f64;
+    let nearest = interpolation_nearest(e);
+    if let Some(p) = &mut still {
+        p.brightness = brightness;
+        p.nearest = nearest;
+    }
+    let Some(source) = source else { return still.map(|p| Draft { paint: Paint::Picture(p), size, sizing, scroll: None }) };
+    let (video_fit, target) = video_target(e, ctx);
+    // ES-DE ignores the delay when no imageType is set, and starts at once when no still was found unless the type is none.
+    let types = e.list("imageType");
+    let waits = !types.is_empty() && (still.is_some() || types.iter().any(|t| t == "none"));
+    let delay = if waits { e.float("delay").unwrap_or(1.5).clamp(0.0, 15.0) as f64 * 1000.0 } else { 0.0 };
+    let threshold = e.pair("pillarboxThreshold").map_or((0.85, 0.90), |p| (p.x.clamp(0.2, 1.0) as f64, p.y.clamp(0.2, 1.0) as f64));
+    let iterations = e.uint("iterationCount").unwrap_or(0).min(10);
+    let pos = e.pair("pos").unwrap_or_default();
+    let origin = e.pair("origin").unwrap_or_default();
+    let v = Video {
+        source,
+        playing: delay == 0.0,
+        delay,
+        audio: e.bool("audio").unwrap_or(true),
+        volume: ctx.data.viewer.volume,
+        fade: e.float("fadeInTime").unwrap_or(1.0).clamp(0.0, 8.0) as f64 * 1000.0,
+        black: e.string("fadeInType") != Some("transparent"),
+        pillarboxes: e.bool("pillarboxes").unwrap_or(true),
+        pillarbox_threshold: threshold,
+        iterations,
+        then_still: iterations > 0 && e.string("onIterationsDone") == Some("image") && !fixed,
+        fit: video_fit,
+        target,
+        area: if (pos.x != 0.0 || pos.y != 0.0) && target != (0.0, 0.0) { target } else { (0.0, 0.0) },
+        anchor: (pos.x as f64 * ctx.w, pos.y as f64 * ctx.h),
+        origin: (origin.x as f64, origin.y as f64),
+        crop_pos: e.pair("cropPos").map_or((0.5, 0.5), |p| (p.x.clamp(0.0, 1.0) as f64, p.y.clamp(0.0, 1.0) as f64)),
+        tint: tint(e, "color", "colorEnd", "gradientType"),
+        saturation: e.float("saturation").unwrap_or(1.0) as f64,
+        brightness,
+        corner_radius: e.float("videoCornerRadius").unwrap_or(0.0).clamp(0.0, 0.5) as f64 * ctx.w,
+        nearest,
+        still,
+    };
+    // With no still the box is the video's target, so the element still has a place before the video's size is known.
+    let (size, sizing) = if v.still.is_some() { (size, sizing) } else { (target, Sizing::Fixed) };
+    Some(Draft { paint: Paint::Video(v), size, sizing, scroll: None })
+}
+
+// THEMES.md, video interpolation: nearest unless the rotation is off the right angles.
+fn interpolation_nearest(e: &Element) -> bool {
+    match e.string("interpolation") {
+        Some("nearest") => true,
+        Some("linear") => false,
+        _ => e.float("rotation").unwrap_or(0.0).rem_euclid(90.0) == 0.0,
+    }
+}
+
+// The video's own sizing from size, maxSize and cropSize, in that precedence (THEMES.md, video size).
+fn video_target(e: &Element, ctx: &Ctx) -> (VideoFit, (f64, f64)) {
+    if let Some((w, h)) = px(e.pair("size"), ctx.w, ctx.h) {
+        return match (w > 0.0, h > 0.0) {
+            (true, true) => (VideoFit::Stretch, (w, h)),
+            (true, false) => (VideoFit::Width, (w, 0.0)),
+            (false, true) => (VideoFit::Height, (0.0, h)),
+            (false, false) => (VideoFit::Stretch, (0.01 * ctx.w, 0.01 * ctx.h)),
+        };
+    }
+    if let Some(m) = px(e.pair("maxSize"), ctx.w, ctx.h) {
+        return (VideoFit::Contain, m);
+    }
+    if let Some(c) = px(e.pair("cropSize"), ctx.w, ctx.h) {
+        return (VideoFit::Cover, c);
+    }
+    (VideoFit::Own, (0.0, 0.0))
 }
 
 // An animated GIF; a Lottie file is not drawn (EmuSen_Qt.md §4.5.5, the Lottie family).

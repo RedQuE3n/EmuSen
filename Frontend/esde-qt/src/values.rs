@@ -2,7 +2,7 @@
 //! (EmuSen_Qt.md §4.8.4). Paths become `file:` URLs here, since QML builds no strings.
 
 use emusen_esde::loader::Color;
-use emusen_esde::scene::{Background, Badge, Fit, HAlign, Icon, Layout, Paint, Placed, Primary, Row, Scroll, Slot, Tint, VAlign};
+use emusen_esde::scene::{Background, Badge, Fit, HAlign, Icon, Layout, Paint, Placed, Primary, Row, Scroll, Slot, Tint, VAlign, Video, VideoFit};
 
 /// One role's value, converted to a QVariant by the model.
 #[derive(Clone, Debug, PartialEq)]
@@ -113,6 +113,7 @@ pub fn paint_kind(p: &Placed, primary: Option<&Primary>) -> &'static str {
         Paint::Info(_) => "info",
         Paint::Status(_) => "status",
         Paint::Clip(_) => "clip",
+        Paint::Video(_) => "video",
         Paint::Page(_) => "page",
         Paint::Primary { .. } => match primary.map(|p| &p.layout) {
             Some(Layout::Carousel(_)) => "carousel",
@@ -162,6 +163,7 @@ pub fn element(p: &Placed, primary: Option<&Primary>, role: &str) -> V {
             "fade" => Some(V::N(c.fade)),
             _ => None,
         },
+        Paint::Video(x) => video(x, role),
         Paint::Page(p) => match role {
             "source" => Some(url(&Some(p.source.clone()))),
             "pageIndex" => Some(V::N(p.page as f64)),
@@ -223,8 +225,76 @@ fn picture(q: &emusen_esde::scene::Picture, role: &str) -> Option<V> {
         "saturation" => V::N(q.saturation),
         "radius" => V::N(q.corner_radius),
         "nearest" => V::B(q.nearest),
+        "brightness" => V::N(q.brightness),
         "frame" => V::I(q.frame.map_or(-1, |f| f as i32)),
         _ => return tint(&q.tint, role),
+    })
+}
+
+fn video_fit(f: VideoFit) -> i32 {
+    match f {
+        VideoFit::Stretch => 0,
+        VideoFit::Width => 1,
+        VideoFit::Height => 2,
+        VideoFit::Contain => 3,
+        VideoFit::Cover => 4,
+        VideoFit::Own => 5,
+    }
+}
+
+// A theme's video: its own roles, then its still's as a picture's, the still's look the element's own where it has none.
+fn video(x: &Video, role: &str) -> Option<V> {
+    Some(match role {
+        "hasStill" => V::B(x.still.is_some()),
+        "videoSource" => V::U(x.source.clone()),
+        "playing" => V::B(x.playing),
+        "audio" => V::B(x.audio),
+        "volume" => V::N(x.volume),
+        "fade" => V::N(x.fade),
+        "blackFrame" => V::B(x.black),
+        "pillarboxes" => V::B(x.pillarboxes),
+        "thresholdX" => V::N(x.pillarbox_threshold.0),
+        "thresholdY" => V::N(x.pillarbox_threshold.1),
+        "iterations" => V::I(x.iterations as i32),
+        "thenStill" => V::B(x.then_still),
+        "videoFit" => V::I(video_fit(x.fit)),
+        "targetWidth" => V::N(x.target.0),
+        "targetHeight" => V::N(x.target.1),
+        "areaWidth" => V::N(x.area.0),
+        "areaHeight" => V::N(x.area.1),
+        "anchorX" => V::N(x.anchor.0),
+        "anchorY" => V::N(x.anchor.1),
+        "placeX" => V::N(x.origin.0),
+        "placeY" => V::N(x.origin.1),
+        "videoCropX" => V::N(x.crop_pos.0),
+        "videoCropY" => V::N(x.crop_pos.1),
+        "videoRadius" => V::N(x.corner_radius),
+        "videoNearest" => V::B(x.nearest),
+        "videoTint" => V::C(x.tint.color),
+        "videoTintEnd" => V::C(x.tint.end),
+        "videoGradientVertical" => V::B(x.tint.vertical),
+        "videoSaturation" => V::N(x.saturation),
+        "brightness" => V::N(x.brightness),
+        _ => match &x.still {
+            Some(p) => return picture(p, role),
+            // No still: an empty picture, so the delegate's still roles keep their types.
+            None => {
+                let none = emusen_esde::scene::Picture {
+                    source: String::new(),
+                    fit: Fit::Contain,
+                    crop_pos: (0.5, 0.5),
+                    tile_size: (0.0, 0.0),
+                    tile_align: (HAlign::Left, VAlign::Bottom),
+                    tint: Tint::WHITE,
+                    saturation: 1.0,
+                    corner_radius: 0.0,
+                    nearest: false,
+                    brightness: 0.0,
+                    frame: None,
+                };
+                return picture(&none, role);
+            }
+        },
     })
 }
 
@@ -480,7 +550,7 @@ pub fn part(p: &Paint, i: usize, role: &str, swap: bool) -> V {
 }
 
 /// Every role name the element model answers, in role order.
-pub const ELEMENT_ROLES: [&str; 118] = [
+pub const ELEMENT_ROLES: [&str; 145] = [
     "elementId", "paint", "name", "boxX", "boxY", "boxWidth", "boxHeight", "turn", "originX", "originY", "alpha",
     "source", "fit", "cropX", "cropY", "tileWidth", "tileHeight", "tileRight", "tileBottom", "tint", "tintEnd", "gradientVertical",
     "saturation", "radius", "nearest", "frame",
@@ -496,9 +566,10 @@ pub const ELEMENT_ROLES: [&str; 118] = [
     "columns", "itemWidth", "itemHeight", "pitchX", "pitchY", "marginX", "marginY", "itemScale", "focusFrom", "fromLevel", "toLevel",
     "progress", "unfocusedOpacity", "unfocusedSaturation", "unfocusedDim", "imageScale", "hasSelectedTint", "selectedTint", "ownFace",
     "pageIndex", "stretch", "audio", "volume", "blur", "labelPx", "fade",
+    "hasStill", "videoSource", "playing", "blackFrame", "pillarboxes", "thresholdX", "thresholdY", "iterations", "thenStill", "videoFit", "targetWidth", "targetHeight", "areaWidth", "areaHeight", "anchorX", "anchorY", "placeX", "placeY", "videoCropX", "videoCropY", "videoRadius", "videoNearest", "videoTint", "videoTintEnd", "videoGradientVertical", "videoSaturation", "brightness",
 ];
 
-/// The grid's roles past the element list's first 112.
+/// The grid's roles, numbered on past the element list's.
 pub const GRID_ROLES: [&str; 9] = [
     "backgroundSource", "backgroundScale", "selectorSource", "selectorScale", "selectorRadius", "selectorOnTop", "selectorInMiddle",
     "selectedItemBackground", "textRadius",

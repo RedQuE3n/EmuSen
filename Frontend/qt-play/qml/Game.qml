@@ -17,6 +17,10 @@ Item {
     property bool inFront: true
     // Guide held with Up, Down or the right shoulder saves, loads or takes a screenshot over the game (EmuSen_Kit.md §7.26).
     property bool guideChords: false
+    // The lines over the game the settings turn on: the messages, the frame rate, and the bar behind them.
+    property bool showStatusText: false
+    property bool showFps: false
+    property bool showStatusBar: false
     readonly property alias session: session
     readonly property alias picture: picture
     readonly property bool ownsPad: session.running && !session.paused && root.inFront
@@ -66,6 +70,8 @@ Item {
         pads: root.pads
         // A still picture is drawn again through what the settings now ask for.
         onPictureRead: picture.update()
+        // Another window in front of the game's, which Pause in background acts on (the window's own active state).
+        background: !root.Window.active
     }
 
     // The bars are the game's and always black, whatever the theme: nothing white or themed ever shows beside the picture.
@@ -97,6 +103,49 @@ Item {
             feed: root.feed
             // Redrawn at each swap only while the game runs; paused or with no game its last picture stands still (EmuSen_Qt.md §9.3.2).
             live: root.feed !== 0 && session.running && !session.paused
+        }
+    }
+
+    // The status line over the game in front: the messages at the bottom left, the frame rate while it runs at the bottom
+    // right, on a black bar where Status bar is on; in design units, as the notices are.
+    Kit.NormalizedCanvas {
+        id: lines
+        readonly property bool shown: root.inFront && session.running
+        Rectangle {
+            objectName: "statusBar"
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: Kit.Tokens.fontCaption + 2 * Kit.Tokens.base * 2
+            color: "#000000"
+            opacity: 0.6
+            visible: root.showStatusBar && (statusLine.visible || fpsLine.visible)
+        }
+        Text {
+            id: statusLine
+            objectName: "statusLine"
+            anchors.left: parent.left
+            anchors.leftMargin: Kit.Tokens.base * 3
+            anchors.right: fpsLine.left
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: Kit.Tokens.base * 2
+            text: session.status
+            elide: Text.ElideRight
+            color: "#ffffff"
+            font.pixelSize: Kit.Tokens.fontCaption
+            visible: lines.shown && root.showStatusText && text.length > 0
+        }
+        Text {
+            id: fpsLine
+            objectName: "fpsLine"
+            anchors.right: parent.right
+            anchors.rightMargin: Kit.Tokens.base * 3
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: Kit.Tokens.base * 2
+            text: session.fpsWords
+            color: "#ffffff"
+            font.pixelSize: Kit.Tokens.fontCaption
+            visible: lines.shown && root.showFps && !session.paused
         }
     }
 }

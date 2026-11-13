@@ -40,6 +40,7 @@ pub mod pause_model;
 pub mod pads_reach;
 pub mod pane_model;
 pub mod picture;
+pub mod play;
 pub mod pictures;
 pub mod reel;
 pub mod question;

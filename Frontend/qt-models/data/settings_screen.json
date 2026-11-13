@@ -21,7 +21,13 @@
     "mirror": ["AppSettings MirrorPlayer1ToPlayer2", true],
     "rumble": ["AppSettings Rumble", true],
     "keyboard_player": "AppSettings KeyboardPlayer",
-    "guide_chords": "AppSettings GuideChords"
+    "guide_chords": "AppSettings GuideChords",
+    "output": "AppSettings SoundOutputDevice",
+    "sync_to_display": ["GraphicsConfig SyncToDisplay", true],
+    "pause_in_background": ["AppSettings PauseInBackground", true],
+    "show_fps": ["AppSettings ShowFpsBar", true],
+    "show_status_text": ["AppSettings ShowStatusText", true],
+    "show_status_bar": ["AppSettings ShowStatusBar", true]
   },
   "sections": [
     {

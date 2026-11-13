@@ -35,6 +35,9 @@ pub enum Shown {
     Settings,
     /// Cores on the tool screen, from Home's place (EmuSen_Interface.md §15.8).
     Cores,
+    /// A tool of jobs on the tool screen (Library Manager, Compressed Discs, Packages), from Home's place or the Home card's
+    /// Tools page; `Screens.tool` names which.
+    Tool,
     /// A game's page, from X on Home or the grid, a theme's `openPage` and the Home card's Selected game (EmuSen_Qt.md
     /// §7.8); B returns to where it was opened.
     Page,
@@ -71,6 +74,27 @@ pub enum Ask {
 pub const SETTINGS_PLACE: usize = 5;
 pub const POWER_PLACE: usize = 6;
 pub const CORES_PLACE: usize = 4;
+
+/// The screen a tool opens, by its key: Cores, the Themes tab, or the tool screen for a tool of jobs; none for a tool with
+/// no screen yet, which Home and the Home card do not offer.
+pub fn tool_screen(key: &str) -> Option<Shown> {
+    match key {
+        crate::home_card::CORES => Some(Shown::Cores),
+        crate::home_card::THEMES => Some(Shown::Themes),
+        _ if crate::tools::jobs::tools().iter().any(|t| t == key) => Some(Shown::Tool),
+        _ => None,
+    }
+}
+
+/// Home's places whose tool has no screen yet, by key: the host declines them, so the theme draws them unavailable.
+pub fn declined_places() -> Vec<String> {
+    crate::words::HOME_TOOLS.iter().filter(|k| tool_screen(k).is_none()).map(|k| (*k).to_owned()).collect()
+}
+
+/// A tool's screen with the tool named, by its key; none for a tool with no screen.
+fn open_tool(key: &str) -> Option<(Shown, Option<String>)> {
+    tool_screen(key).map(|shown| (shown, (shown == Shown::Tool).then(|| key.to_owned())))
+}
 
 /// The grid's List card and the search, by the actions that open them.
 pub const LIST: &str = "list";
@@ -138,19 +162,20 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Pause, Ask::Act(key)) if key == CARD_BINDINGS => Some((Shown::Settings, None)),
         (Shown::Game | Shown::Pause, Ask::Library) => Some((Shown::Home, None)),
         (Shown::Game | Shown::Pause, Ask::Closed) => Some((Shown::Home, None)),
-        (Shown::Home, Ask::Place(CORES_PLACE)) => Some((Shown::Cores, None)),
-        (Shown::Cores, Ask::Back) => Some((Shown::Home, None)),
+        (Shown::Home, Ask::Place(at)) if (1..=crate::words::HOME_TOOLS.len()).contains(at) => open_tool(crate::words::HOME_TOOLS[at - 1]),
+        (Shown::Cores | Shown::Tool, Ask::Back) => Some((Shown::Home, None)),
         _ => None,
     }
 }
 
 /// The Home card's row's action besides Settings and a game's page: Continue the game and a console started its screen,
-/// Tools ▸ Cores and ▸ Themes their screens; every other row closes the card to the library's screen (EmuSen_Qt.md §7.9).
+/// a tool of the Tools page its screen; every other row closes the card to the library's screen (EmuSen_Qt.md §7.9).
 fn card_act(themed: bool, key: &str) -> Option<(Shown, Option<String>)> {
+    if let Some(tool) = open_tool(key) {
+        return Some(tool);
+    }
     let shown = match key {
         crate::home_card::RESUME => Shown::Game,
-        crate::home_card::CORES => Shown::Cores,
-        crate::home_card::THEMES => Shown::Themes,
         _ if crate::home_card::console_to_start(key).is_some() => Shown::Game,
         _ => library_of(themed),
     };
@@ -161,8 +186,8 @@ fn card_act(themed: bool, key: &str) -> Option<(Shown, Option<String>)> {
 /// closed as it opened it; `None` where something else opened it, whose own rule stands.
 pub fn tool_back(themed: bool, opened_over: Option<Shown>, shown: Shown, ask: &Ask) -> Option<Shown> {
     match (opened_over, shown, ask) {
-        (Some(Shown::HomeCard), Shown::Cores | Shown::Themes, Ask::Back) => Some(library_of(themed)),
-        (_, Shown::Cores, Ask::Back) => Some(library_of(themed)),
+        (Some(Shown::HomeCard), Shown::Cores | Shown::Themes | Shown::Tool, Ask::Back) => Some(library_of(themed)),
+        (_, Shown::Cores | Shown::Tool, Ask::Back) => Some(library_of(themed)),
         _ => None,
     }
 }
@@ -254,6 +279,7 @@ pub mod qobject {
         Settings,
         Cores,
         Page,
+        Tool,
     }
 
     extern "RustQt" {
@@ -268,6 +294,8 @@ pub mod qobject {
         #[qproperty(bool, found)]
         /// Whether an ES-DE theme is the library's look (LibraryModel.themed): its view stands for the library's screens.
         #[qproperty(bool, themed)]
+        /// The tool of jobs the tool screen shows, by its key.
+        #[qproperty(QString, tool, READ, NOTIFY)]
         type Screens = super::ScreensRust;
     }
 
@@ -338,6 +366,7 @@ pub struct ScreensRust {
     page: QString,
     found: bool,
     themed: bool,
+    tool: QString,
     /// The screen a game's page was opened over.
     page_origin: Shown,
     /// The screen Cores or the Themes tab was opened over.
@@ -355,6 +384,7 @@ impl Default for ScreensRust {
             page: QString::default(),
             found: false,
             themed: false,
+            tool: QString::default(),
             page_origin: Shown::Home,
             tool_origin: None,
             over_card: false,
@@ -389,6 +419,7 @@ fn shown_of(screen: Screen) -> Shown {
         Screen::Settings => Shown::Settings,
         Screen::Cores => Shown::Cores,
         Screen::Page => Shown::Page,
+        Screen::Tool => Shown::Tool,
         _ => Shown::Home,
     }
 }
@@ -409,6 +440,7 @@ fn screen_of(shown: Shown) -> Screen {
         Shown::Settings => Screen::Settings,
         Shown::Cores => Screen::Cores,
         Shown::Page => Screen::Page,
+        Shown::Tool => Screen::Tool,
     }
 }
 
@@ -496,7 +528,7 @@ impl qobject::Screens {
             _ => tool_back(self.themed, self.tool_origin, was, &ask).map(|s| (s, None)).or_else(|| step_in(self.themed, was, &ask)),
         };
         let Some((shown, key)) = stepped else { return };
-        if matches!(shown, Shown::Cores | Shown::Themes) && shown != was {
+        if matches!(shown, Shown::Cores | Shown::Themes | Shown::Tool) && shown != was {
             self.as_mut().rust_mut().tool_origin = Some(was);
         }
         let over_card = was == Shown::Pause && shown == Shown::Settings;
@@ -511,6 +543,12 @@ impl qobject::Screens {
             if self.page != page {
                 self.as_mut().rust_mut().page = page;
                 self.as_mut().page_changed();
+            }
+        } else if let (Shown::Tool, Some(tool)) = (shown, &key) {
+            let tool = QString::from(tool.as_str());
+            if self.tool != tool {
+                self.as_mut().rust_mut().tool = tool;
+                self.as_mut().tool_changed();
             }
         } else if let Some(key) = key {
             let key = QString::from(key.as_str());

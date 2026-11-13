@@ -580,6 +580,23 @@ Window {
             inputs: visible && !program.splashShown
             onBacked: screens.back()
         }
+        // A tool of jobs on the same tool screen: Library Manager, Compressed Discs or Packages, as Screens names it (tools/jobs.rs).
+        ToolModel {
+            id: jobsModel
+            objectName: "jobsModel"
+            tool: ToolModel.Jobs
+            jobs: screens.tool
+            platformLibrary: program.platformLibrary
+            open: screens.shown === Screens.Tool
+        }
+        Cores {
+            objectName: "jobs"
+            visible: screens.shown === Screens.Tool
+            tool: jobsModel
+            padFamily: program.padFamily
+            inputs: visible && !program.splashShown
+            onBacked: screens.back()
+        }
         // A game's page, from X on Home and the grid, a theme's openPage and the Home card's Selected game (EmuSen_Qt.md §7.8);
         // its doors open later pieces' pages.
         GamePageModel {

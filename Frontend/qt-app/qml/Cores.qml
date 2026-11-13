@@ -3,7 +3,7 @@ import QtQuick
 import EmuSen.Kit as Kit
 import EmuSen.Models
 
-// Cores on the kit's tool screen (EmuSen_Interface.md §15; EmuSen_Qt.md §7.7): every word, row and column from the ToolModel; A the row's action, X its page and Select the List card as cards over it, Start the plan, and the tool's questions in the question form.
+// A tool on the kit's tool screen, Cores and the tools of jobs alike (EmuSen_Interface.md §15; EmuSen_Qt.md §7.7): every word, row and column from the ToolModel; A the row's action, X its page and Select the List card as cards over it, Start the plan, and the tool's questions in the question form.
 Kit.NormalizedCanvas {
     id: screen
     required property ToolModel tool
@@ -14,7 +14,7 @@ Kit.NormalizedCanvas {
     signal backed()
     Kit.ToolScreen {
         id: frame
-        objectName: "coresScreen"
+        objectName: `${screen.objectName}Screen`
         // Under a card or a question the screen is drawn and nothing on it is reached: a backdrop to the gate, as ThemeHost's screens are.
         property bool backdrop: screen.tool.cardOpen || screen.tool.asking
         anchors.fill: parent
@@ -88,7 +88,7 @@ Kit.NormalizedCanvas {
         }
         Kit.Question {
             id: question
-            objectName: "coresQuestion"
+            objectName: `${screen.objectName}Question`
             controller: frame.controller
             title: screen.tool.questionTitle
             sentences: screen.tool.questionSentences
@@ -123,7 +123,7 @@ Kit.NormalizedCanvas {
     }
     Kit.Frame {
         id: searchFrame
-        objectName: "coresSearch"
+        objectName: `${screen.objectName}Search`
         anchors.fill: parent
         visible: screen.tool.searching
         surfaceDrawn: false
@@ -154,7 +154,7 @@ Kit.NormalizedCanvas {
             height: screen.height
             Kit.Keyboard {
                 id: keyboard
-                objectName: "coresKeyboard"
+                objectName: `${screen.objectName}Keyboard`
                 model: typist
                 y: 398
                 width: screen.width
@@ -167,7 +167,7 @@ Kit.NormalizedCanvas {
     // A row's page under X and the List card under Select, on the Card form over the screen (EmuSen_Interface.md §15.5).
     MenuCard {
         id: card
-        objectName: "coresCard"
+        objectName: `${screen.objectName}Card`
         anchors.fill: parent
         visible: card.open || card.leaving
         open: screen.tool.cardOpen

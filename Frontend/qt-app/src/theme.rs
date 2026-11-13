@@ -319,8 +319,10 @@ impl qobject::ThemeFeed {
 
     fn feed_library(&self) {
         let (Some(library), Some(engine)) = (self.library(), self.engine()) else { return };
-        if let Some(view) = host::library(engine) {
-            view.show(library.view(), &library.home_lines().to_string());
+        if let Some(mut view) = host::library(engine) {
+            view.as_mut().show(library.view(), &library.home_lines().to_string());
+            // A place whose tool has no screen yet is declined, so the theme draws it unavailable.
+            view.show_declined(&emusen_qt_models::screens::declined_places());
         }
     }
 

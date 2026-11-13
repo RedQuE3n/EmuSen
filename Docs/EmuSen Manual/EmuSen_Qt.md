@@ -6212,6 +6212,27 @@ kit-qt, qt-models, theme-qt, kit-gallery, esde-qt and the testing module on the 
 **Seeded faults**, each reverted, each caught: Update All planning every libretro core rather than those with an update
 (both Update All tests); its Yes sending `core-rm` (the two-update test); No running the update as Yes does (the same).
 
+#### 7.7.T The tools of jobs: Library Manager, Compressed Discs and Packages (2026-11-12)
+
+A tool that is a list of the platform library's jobs is one source of the tool screen, `tools/jobs.rs`, driven by
+`tools/jobs.json`: each tool a list of jobs, each job its name, what it does, its request to the library tool, an
+optional question asked before it starts (the jobs that write a great deal: convert, pkg-make) and the states whose
+lines are not kept (`rom-dups`' `hashed`). Each row is a job; A starts it, and on the running job's row A is Stop
+(`ToolJob::stop`). The events are pulled on the screen's timer as Cores' are: the `start` event's count and each item's
+end give the bar's share done, the pane says the item being worked on, the latest result line and the `end` event's
+counts or error, and X lists every line of the last run. Rows are not marked, so the help bar has no Apply. The program
+holds a second `ToolModel` (`tool: Jobs`, `jobs` the key) on the same `Cores.qml` screen, its parts named from its
+object name; `Screens` opens it as `Tool`, naming the tool in `Screens.tool`, from Home's Packages and Library places
+and the Home card's Tools page, and B returns as from Cores. A job keeps running when the screen is left, and a tool
+opened before is kept with its runs.
+
+A tool with no screen yet (Scraper, Cheats, Collections, Shell) is not listed on the Home card's Tools page, and its
+Home place (the Scraper's) is declined to the theme (`screens::declined_places`, `ThemeLibrary::show_declined`), which
+draws it unavailable. Held to by `qt-models/tests/tool_jobs.rs` (the real platform library over a scratch library, a
+scripted world for the question and Stop, and the screens' steps) and `qt-app/tests/tools.rs` (the pad opens Library
+Manager from Home, runs its first job, sees the progress then the lines, X lists them, B returns Home; Compressed Discs
+from the Home card lists a generated disc the same way).
+
 ### 7.8 Stage 5, piece G: a game's page and its clip (2026-11-09)
 
 `EmuSen_Interface.md` §2.5, §4 screen 3, §5.9, §18.2; the oracle is Mistress's recordings `GamePage`, `GamePageStates`,

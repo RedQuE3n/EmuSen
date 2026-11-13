@@ -559,7 +559,7 @@ pub fn run(folder: &Path, shown: &str, asked: &Asked<'_>) -> Result<Audited, Str
     let mut scene = harness.load(&format!("file://{}", file.display()), 1280, 800);
     // The covers' folder, the one a theme may show pictures from, as the program's start reads it from the settings.
     scene.set_property("host", "coverStores", &library.media.display().to_string());
-    let overrides = package.colour_overrides();
+    let overrides = package.overrides();
     let night = |t: ColourToken| {
         let given = overrides.iter().find(|(light, name, _)| !light && name == t.property());
         given.and_then(|(_, _, value)| Colour::parse(value)).unwrap_or(colour(Variant::Dark, t))

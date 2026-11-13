@@ -213,10 +213,9 @@ pub struct TokensRust {
     breath_period: i32,
     breath_low: f64,
     breathes: bool,
-    // A theme's colours per variant, set by the host on the theme's engine only; never on the program's, whose cards a theme never styles.
-    overrides: Vec<(core_tokens::Variant, C, core_tokens::Colour)>,
-    // A theme's raised shadow colour per variant, set as the palette's are (shadowColor in its theme.json).
-    shadow_overrides: Vec<(core_tokens::Variant, core_tokens::Colour)>,
+    // A theme's overrides per variant, a `Tokens` property and its value as theme.json writes it; set by the host on the theme's
+    // engine only, never on the program's, whose cards a theme never styles.
+    overrides: Vec<(core_tokens::Variant, String, String)>,
 }
 
 impl Default for TokensRust {
@@ -305,7 +304,6 @@ impl Default for TokensRust {
             breath_low: 1.0,
             breathes: true,
             overrides: Vec::new(),
-            shadow_overrides: Vec::new(),
         };
         tokens.apply(&Column::compute(kinds::token_form(tokens.form), kinds::token_variant(tokens.variant), 1.0, false));
         tokens
@@ -394,6 +392,102 @@ impl TokensRust {
     }
 }
 
+/// Where a number or switch token is held, by its kind: what an override of it is read as.
+enum Slot<'a> {
+    Number(&'a mut f64),
+    Whole(&'a mut i32),
+    Switch(&'a mut bool),
+}
+
+impl TokensRust {
+    /// The number or switch token a `Tokens` property names; the colours are the column's (`ColourToken::named`).
+    fn slot(&mut self, property: &str) -> Option<Slot<'_>> {
+        Some(match property {
+            "fontDisplay" => Slot::Number(&mut self.font_display),
+            "fontTitle" => Slot::Number(&mut self.font_title),
+            "fontStrong" => Slot::Number(&mut self.font_strong),
+            "fontRow" => Slot::Number(&mut self.font_row),
+            "fontBody" => Slot::Number(&mut self.font_body),
+            "fontCaption" => Slot::Number(&mut self.font_caption),
+            "fontGlyph" => Slot::Number(&mut self.font_glyph),
+            "headerSize" => Slot::Number(&mut self.header_size),
+            "base" => Slot::Number(&mut self.base),
+            "rowHeight" => Slot::Number(&mut self.row_height),
+            "controlHeight" => Slot::Number(&mut self.control_height),
+            "paneGutter" => Slot::Number(&mut self.pane_gutter),
+            "paneGap" => Slot::Number(&mut self.pane_gap),
+            "cardWidth" => Slot::Number(&mut self.card_width),
+            "titleRow" => Slot::Number(&mut self.title_row),
+            "helpBar" => Slot::Number(&mut self.help_bar),
+            "tileWidth" => Slot::Number(&mut self.tile_width),
+            "tileHeight" => Slot::Number(&mut self.tile_height),
+            "tileGap" => Slot::Number(&mut self.tile_gap),
+            "rowRadius" => Slot::Number(&mut self.row_radius),
+            "tileRadius" => Slot::Number(&mut self.tile_radius),
+            "safeAreaX" => Slot::Number(&mut self.safe_area_x),
+            "safeAreaY" => Slot::Number(&mut self.safe_area_y),
+            "ringThickness" => Slot::Number(&mut self.ring_thickness),
+            "ringOffset" => Slot::Number(&mut self.ring_offset),
+            "barWidth" => Slot::Number(&mut self.bar_width),
+            "tileScale" => Slot::Number(&mut self.tile_scale),
+            "hoverBorder" => Slot::Number(&mut self.hover_border),
+            "breathLow" => Slot::Number(&mut self.breath_low),
+            "shadowOpacity" => Slot::Number(&mut self.shadow_opacity),
+            "shadowOffsetX" => Slot::Number(&mut self.shadow_offset_x),
+            "shadowOffsetY" => Slot::Number(&mut self.shadow_offset_y),
+            "shadowBlur" => Slot::Number(&mut self.shadow_blur),
+            "instant" => Slot::Whole(&mut self.instant),
+            "quick" => Slot::Whole(&mut self.quick),
+            "enter" => Slot::Whole(&mut self.enter),
+            "exit" => Slot::Whole(&mut self.exit),
+            "pan" => Slot::Whole(&mut self.pan),
+            "reel" => Slot::Whole(&mut self.reel),
+            "fade" => Slot::Whole(&mut self.fade),
+            "poster" => Slot::Whole(&mut self.poster),
+            "quickFade" => Slot::Whole(&mut self.quick_fade),
+            "enterFade" => Slot::Whole(&mut self.enter_fade),
+            "exitFade" => Slot::Whole(&mut self.exit_fade),
+            "panFade" => Slot::Whole(&mut self.pan_fade),
+            "reelFade" => Slot::Whole(&mut self.reel_fade),
+            "posterFade" => Slot::Whole(&mut self.poster_fade),
+            "instantCurve" => Slot::Whole(&mut self.instant_curve),
+            "quickCurve" => Slot::Whole(&mut self.quick_curve),
+            "enterCurve" => Slot::Whole(&mut self.enter_curve),
+            "exitCurve" => Slot::Whole(&mut self.exit_curve),
+            "panCurve" => Slot::Whole(&mut self.pan_curve),
+            "reelCurve" => Slot::Whole(&mut self.reel_curve),
+            "fadeCurve" => Slot::Whole(&mut self.fade_curve),
+            "posterCurve" => Slot::Whole(&mut self.poster_curve),
+            "breathDelay" => Slot::Whole(&mut self.breath_delay),
+            "breathPeriod" => Slot::Whole(&mut self.breath_period),
+            "breathes" => Slot::Switch(&mut self.breathes),
+            _ => return None,
+        })
+    }
+
+    /// A theme's value in place of the column's, read as the token's kind; a colour, or a value not of the kind, is left alone.
+    fn set_named(&mut self, property: &str, value: &str) {
+        match self.slot(property) {
+            Some(Slot::Number(held)) => {
+                if let Some(v) = value.parse::<f64>().ok().filter(|v| v.is_finite()) {
+                    *held = v;
+                }
+            }
+            Some(Slot::Whole(held)) => {
+                if let Ok(v) = value.parse::<i32>() {
+                    *held = v;
+                }
+            }
+            Some(Slot::Switch(held)) => {
+                if let Ok(v) = value.parse::<bool>() {
+                    *held = v;
+                }
+            }
+            None => {}
+        }
+    }
+}
+
 impl cxx_qt::Initialize for qobject::Tokens {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().on_form_changed(|this| this.refresh()).release();
@@ -418,26 +512,32 @@ impl qobject::Tokens {
         core_tokens::safe_area_of(height, height).top
     }
 
-    /// A theme's colour overrides, each for one variant, consulted before the kit's column: the palette's, and the raised
-    /// shadow's colour; the host sets them on the theme's engine as `theme.json` names them, already held to the contrast
-    /// floors by theme-check (EmuSen_Kit.md §7.2, §7.55).
-    pub fn set_overrides(
-        mut self: Pin<&mut Self>,
-        overrides: Vec<(core_tokens::Variant, C, core_tokens::Colour)>,
-        shadow: Vec<(core_tokens::Variant, core_tokens::Colour)>,
-    ) {
+    /// A theme's overrides, each for one variant: a `Tokens` property and its value as `theme.json` writes it, consulted before
+    /// the kit's column. Colours (the palette's and the raised shadow's) replace the column's; a number or a switch replaces its
+    /// token's value, whatever the form, text scale or reduced motion. The host sets them on the theme's engine, already held to
+    /// the registry and the contrast floors by theme-check (EmuSen_Kit.md §7.2, §7.55; EmuSen_Qt.md §3.5.1).
+    pub fn set_overrides(mut self: Pin<&mut Self>, overrides: Vec<(core_tokens::Variant, String, String)>) {
         self.as_mut().rust_mut().overrides = overrides;
-        self.as_mut().rust_mut().shadow_overrides = shadow;
         self.refresh();
     }
 
     fn refresh(mut self: Pin<&mut Self>) {
         let variant = kinds::token_variant(self.variant);
-        let mine: Vec<(C, core_tokens::Colour)> =
-            self.overrides.iter().filter(|(v, _, _)| *v == variant).map(|(_, token, colour)| (*token, *colour)).collect();
-        let shadow = self.shadow_overrides.iter().find(|(v, _)| *v == variant).map(|(_, colour)| *colour);
-        let column = Column::compute(kinds::token_form(self.form), variant, self.text_scale, self.reduced_motion).overridden(&mine, shadow);
-        self.as_mut().rust_mut().apply(&column);
+        let mine: Vec<(String, String)> =
+            self.overrides.iter().filter(|(v, _, _)| *v == variant).map(|(_, name, value)| (name.clone(), value.clone())).collect();
+        let colours: Vec<(C, core_tokens::Colour)> =
+            mine.iter().filter_map(|(name, value)| Some((C::named(name)?, core_tokens::Colour::parse(value)?))).collect();
+        let shadow = mine
+            .iter()
+            .find(|(name, _)| name == core_tokens::Shadow::COLOUR_PROPERTY)
+            .and_then(|(_, value)| core_tokens::Colour::parse(value));
+        let column =
+            Column::compute(kinds::token_form(self.form), variant, self.text_scale, self.reduced_motion).overridden(&colours, shadow);
+        let mut rust = self.as_mut().rust_mut();
+        rust.apply(&column);
+        for (name, value) in &mine {
+            rust.set_named(name, value);
+        }
         self.announce();
     }
 

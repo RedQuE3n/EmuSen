@@ -1,7 +1,7 @@
 import QtQuick
 import EmuSen.Theme
 
-// A stub of the host's tests whose theme.json overrides the dark accent and shadow colour: each probe is drawn in the theme's.
+// A stub of the host's tests whose theme.json overrides the dark accent, shadow colour, a number and a switch: each probe reads the theme's.
 ThemeScreen {
     objectName: "accentHome"
     role: ThemeScreen.Home
@@ -17,5 +17,10 @@ ThemeScreen {
         width: 40
         height: 40
         color: Tokens.shadowColor
+    }
+    Item {
+        objectName: "tokenProbe"
+        readonly property real tileRadius: Tokens.tileRadius
+        readonly property bool breathes: Tokens.breathes
     }
 }

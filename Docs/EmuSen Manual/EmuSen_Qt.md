@@ -1706,14 +1706,19 @@ Home in place of the reference's and the omitted Choose a console the reference'
 shown, switching twice leaving one engine. The stub themes are plain QtQuick under `theme-host/tests/themes/` until `EmuSen.Theme`
 lands.
 
-**A theme's token overrides (2026-11-08).** `package.rs` keeps `theme.json`'s overrides as the manifest gives them, and
-`Package::colour_overrides` lists the colours (light or dark, the `Tokens` name, the value). The program's `ThemeFeed` sets
-them on the kit's `Tokens` of the theme's engine when it attaches (`emusen_theme_qt::host::set_token_overrides`, the one
-place a name and a value become a kit token and colour), and theme-audit does the same before it judges a screen. No
-override ever reaches the program's engine, which draws the cards: a theme never styles a card (§3.1). Overrides are bounded
-by theme-check's contrast floors before a theme is offered. A number or a switch override is checked by theme-check but not
-yet set on an engine. Proof: `qt-app/tests/theme.rs`, a fixture package overriding the dark accent, whose screen draws
-#B4442A while the program's tokens keep #4C9AE8.
+**A theme's token overrides (2026-11-08; numbers and switches 2026-11-13).** `package.rs` keeps `theme.json`'s overrides as the
+manifest gives them, and `Package::overrides` lists every one as the host sets it (light or dark, the `Tokens` name, the value as
+text: a colour as written, a number, `true` or `false`). The program's `ThemeFeed` sets them on the kit's `Tokens` of the theme's
+engine when it attaches (`emusen_theme_qt::host::set_token_overrides`, reaching that engine's singleton through
+`QQmlEngine::singletonInstance`), and theme-audit does the same before it judges a screen. The kit's `Tokens::set_overrides` is
+the one place a name and a value become a token: a colour replaces the column's palette or raised-shadow colour, and a number, a
+whole number or a switch replaces that token's value, whatever the form, text scale or reduced motion; a value not of its token's
+kind is left alone there. No override ever reaches the program's engine, which draws the cards: a theme never styles a card
+(§3.1). Before a theme is offered, theme-check refuses an override that names no token of the kit's registry, or gives a value
+of the wrong kind, with its line and words (`theme-check/src/tokens.rs`, `tests/check.rs`), and holds colours to the contrast
+floors. Proof: `qt-app/tests/theme.rs`, a fixture package overriding the dark accent, shadow colour, `tileRadius` (21) and
+`breathes` (false), whose screen reads all four while the program's tokens keep the kit's; `kit-qt/tests/overrides.rs`, every
+number and switch token of the registry taking a dark override, and a light one, an unknown name and a wrong kind left alone.
 
 **Not yet.** The `Screen` type and the splash's `length`, `still` and `finished` (T); the Themes tab and the setting that chooses a
 theme (S); a themed Games screen opens no List card until `Actions.openListCard` exists (T, R). What the sandbox does not do is

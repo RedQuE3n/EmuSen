@@ -56,6 +56,14 @@ fn qt_3_5_the_theme_s_screens_replace_the_reference_s_and_a_failed_theme_shows_t
     let registry = emusen_kit_core::tokens::raised_shadow(emusen_kit_core::tokens::Form::Desktop).colour;
     let kit = scene.kit_tokens().map(|t| (t.shadow_color().red(), t.shadow_color().green(), t.shadow_color().blue()));
     assert_eq!(kit, Some((i32::from(registry.r), i32::from(registry.g), i32::from(registry.b))), "the program's shadow is the registry's");
+    // A number and a switch too (EmuSen_Qt.md §3.5.1): the theme's screen reads its own, the program's tokens the kit's.
+    assert_eq!(scene.property("tokenProbe", "tileRadius"), "21", "{}", scene.property("theme", "warnings"));
+    assert_eq!(scene.property("tokenProbe", "breathes"), "false");
+    let kit = scene.kit_tokens().map(|t| (*t.tile_radius(), *t.breathes(), *t.reduced_motion(), *t.form()));
+    let (radius, breathes, reduced, form) = kit.expect("the program's tokens");
+    let form = emusen_kit_qt::kinds::token_form(form);
+    assert_eq!((radius, breathes), (emusen_kit_core::tokens::spacing(form).tile_radius, emusen_kit_core::motion::breathes(reduced)), "the program's are the kit's");
+    assert_ne!(radius, 21.0, "the fixture's radius is not the kit's");
 
     // Switching at run time makes a new engine and lets the last one go; no theme, no engine.
     choose(&mut scene, "stub");

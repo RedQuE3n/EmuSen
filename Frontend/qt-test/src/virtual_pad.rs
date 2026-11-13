@@ -2,6 +2,7 @@
 //! `PadReader` shown these alone (EmuSen_Kit.md §7.15); no pad on the desk is opened.
 
 use std::ffi::{c_char, c_void, CString};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 /// SDL_VirtualJoystickDesc (SDL_joystick.h, SDL 3.4), 136 bytes on a 64-bit target.
 #[repr(C)]
@@ -32,16 +33,33 @@ const SDL_JOYSTICK_TYPE_GAMEPAD: u16 = 1;
 const GAMEPAD_AXES: u16 = 6;
 const GAMEPAD_BUTTONS: u16 = 26;
 
-/// SDL3, the same library the platform library is lent, with the calls that attach, press and detach a virtual pad.
+/// SDL3, the same library the platform library is lent, with the calls that attach, press, move and detach a virtual pad.
 pub struct Sdl {
     lib: libloading::Library,
 }
 
-/// A virtual pad: its id and the joystick the test opened to press it.
+/// A virtual pad: its id, the joystick the test opened to press it, and the motors' last levels SDL gave it.
 pub struct VirtualPad {
     pub id: u32,
     joystick: *mut c_void,
     _name: CString,
+    motors: &'static AtomicU32,
+}
+
+impl VirtualPad {
+    /// The levels of the last rumble SDL sent the pad, its low-frequency (strong) motor then its high (weak).
+    pub fn rumble(&self) -> (u16, u16) {
+        let both = self.motors.load(Ordering::Acquire);
+        ((both >> 16) as u16, both as u16)
+    }
+}
+
+/// SDL_VirtualJoystickDesc's Rumble: the levels kept where the pad's userdata points.
+extern "C" fn rumbled(userdata: *mut c_void, low: u16, high: u16) -> bool {
+    // SAFETY: userdata is the pad's `motors`, leaked, so alive as long as SDL may call.
+    let motors = unsafe { &*(userdata as *const AtomicU32) };
+    motors.store(u32::from(low) << 16 | u32::from(high), Ordering::Release);
+    true
 }
 
 // SDL takes its joystick lock in every call on a joystick, so a pad may be pressed from another thread than its own.
@@ -59,6 +77,10 @@ impl Sdl {
 
     pub fn attach(&self, name: &str, vendor_id: u16, product_id: u16) -> VirtualPad {
         let name = CString::new(name).unwrap();
+        let motors: &'static AtomicU32 = Box::leak(Box::new(AtomicU32::new(0)));
+        let mut callbacks = [std::ptr::null(); 8];
+        // Update, SetPlayerIndex, then Rumble.
+        callbacks[2] = rumbled as *const c_void;
         let desc = VirtualJoystickDesc {
             version: std::mem::size_of::<VirtualJoystickDesc>() as u32,
             kind: SDL_JOYSTICK_TYPE_GAMEPAD,
@@ -77,8 +99,8 @@ impl Sdl {
             name: name.as_ptr(),
             touchpads: std::ptr::null(),
             sensors: std::ptr::null(),
-            userdata: std::ptr::null_mut(),
-            callbacks: [std::ptr::null(); 8],
+            userdata: motors as *const AtomicU32 as *mut c_void,
+            callbacks,
         };
         unsafe {
             let attach: libloading::Symbol<unsafe extern "C" fn(*const VirtualJoystickDesc) -> u32> =
@@ -88,7 +110,7 @@ impl Sdl {
             assert_ne!(id, 0, "a virtual pad attached");
             let joystick = open(id);
             assert!(!joystick.is_null(), "the virtual pad opened");
-            VirtualPad { id, joystick, _name: name }
+            VirtualPad { id, joystick, _name: name, motors }
         }
     }
 
@@ -96,6 +118,13 @@ impl Sdl {
         let set: libloading::Symbol<unsafe extern "C" fn(*mut c_void, i32, bool) -> bool> =
             unsafe { self.lib.get(b"SDL_SetJoystickVirtualButton") }.unwrap();
         assert!(unsafe { set(pad.joystick, button, down) });
+    }
+
+    /// An axis of the pad moved, SDL's sixteen bits (the sticks -32768 to 32767, the triggers 0 to 32767).
+    pub fn axis(&self, pad: &VirtualPad, axis: i32, value: i16) {
+        let set: libloading::Symbol<unsafe extern "C" fn(*mut c_void, i32, i16) -> bool> =
+            unsafe { self.lib.get(b"SDL_SetJoystickVirtualAxis") }.unwrap();
+        assert!(unsafe { set(pad.joystick, axis, value) });
     }
 
     pub fn detach(&self, pad: VirtualPad) {

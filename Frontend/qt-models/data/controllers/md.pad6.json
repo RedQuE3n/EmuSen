@@ -1,0 +1,23 @@
+{
+  "name": "Genesis 6-button controller",
+  "design": [1000, 540],
+  "items": [
+    {"part": {"path": "M 500,84 C 500,50 510,30 524,4"}, "stroke": "#6A6A74", "width": 9},
+    {"region": "Select", "shape": {"arcband": [760, 290, 208, 234, 294, 332]}, "name": "Mode", "fill": "#55555F", "stroke": "#6A6A74", "width": 3},
+    {"part": {"union": [{"circle": [240, 290, 220]}, {"circle": [760, 290, 220]}, {"path": "M 240,74 Q 500,44 760,74 L 760,440 Q 500,330 240,440 Z"}]}, "fill": "#34343A", "stroke": "#6A6A74", "width": 5},
+    {"part": {"circle": [240, 290, 132]}, "fill": "#26262B"},
+    {"part": {"circle": [240, 290, 112]}, "fill": "#3F3F47"},
+    {"dpad": [240, 290, 66, 100], "controls": ["Up", "Down", "Left", "Right"], "fill": "#18181B", "arrow": "#6A6A74", "radius": 10, "stroke": "#5A5A64"},
+    {"part": {"pill": [500, 232, 96, 40, 0]}, "fill": "#26262B"},
+    {"region": "Start", "shape": {"pill": [500, 232, 78, 24, 0]}, "fill": "#55555F"},
+    {"word": "START", "at": [500, 274], "size": 17, "colour": "#B8B8C2"},
+    {"part": {"pill": [750, 250, 232, 76, -24]}, "fill": "#26262B"},
+    {"part": {"pill": [770, 340, 270, 96, -24]}, "fill": "#26262B"},
+    {"round": [682, 280, 27], "region": "L", "colour": "#55555F", "name": "X", "caption": "X", "size": 24},
+    {"round": [750, 250, 27], "region": "X", "colour": "#55555F", "name": "Y", "caption": "Y", "size": 24},
+    {"round": [818, 220, 27], "region": "R", "colour": "#55555F", "name": "Z", "caption": "Z", "size": 24},
+    {"round": [691, 375, 36], "region": "Y", "colour": "#55555F", "name": "A", "caption": "A", "size": 30},
+    {"round": [770, 340, 36], "region": "B", "colour": "#55555F", "caption": "B", "size": 30},
+    {"round": [849, 305, 36], "region": "A", "colour": "#55555F", "name": "C", "caption": "C", "size": 30}
+  ]
+}

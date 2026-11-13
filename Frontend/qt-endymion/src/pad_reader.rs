@@ -36,6 +36,8 @@ pub mod qobject {
         #[qproperty(i32, connected, READ, NOTIFY)]
         #[qproperty(QString, problem, READ, NOTIFY)]
         #[qproperty(u64, game_pads, READ, CONSTANT)]
+        // The pads the seats hold, connected, asked when read (the menus may read fewer: Only the first controller).
+        #[qproperty(i32, seated, READ = seated_now)]
         /// The game hears nothing while true (`PadRouter.guideHeld`), and after it, nothing until every button is let go.
         #[qproperty(bool, game_muted)]
         type PadReader = super::PadReaderRust;
@@ -46,6 +48,16 @@ pub mod qobject {
         /// A button of the interface went down or up on the pads read, before the player's swap: what `PadRouter.push` takes.
         #[qsignal]
         fn button(self: Pin<&mut PadReader>, button: PadButton, down: bool);
+
+        fn seated_now(self: &PadReader) -> i32;
+
+        /// The seats or the pads connected changed, or a button went down or up on one (EmuSen_Input.md §8.9).
+        #[qsignal]
+        fn seats_changed(self: Pin<&mut PadReader>);
+
+        /// A pad came or went, in the notice's words (EmuSen_Input.md §8.13.5); the pads present at the start say nothing.
+        #[qsignal]
+        fn notice(self: Pin<&mut PadReader>, words: QString);
     }
 
     impl cxx_qt::Threading for PadReader {}
@@ -65,6 +77,12 @@ pub struct PadReaderRust {
     game_muted: bool,
     game: Arc<GamePads>,
     reader: Option<Reader>,
+}
+
+impl qobject::PadReader {
+    fn seated_now(&self) -> i32 {
+        self.game.connected().len() as i32
+    }
 }
 
 impl Default for PadReaderRust {
@@ -135,10 +153,16 @@ impl qobject::PadReader {
     fn apply(mut self: Pin<&mut Self>, delivery: Delivery) {
         let tick = match delivery {
             Ok(tick) => tick,
-            Err(words) => return self.publish_problem(QString::from(words.as_str())),
+            Err(words) => return self.publish_problem(QString::from(crate::reader::unread(&words).as_str())),
         };
         for event in &tick.events {
             self.as_mut().button(kinds::pad_button(event.button), event.down);
+        }
+        if tick.seats {
+            self.as_mut().seats_changed();
+        }
+        for words in &tick.notices {
+            self.as_mut().notice(QString::from(words.as_str()));
         }
         if let Some(family) = tick.family.map(kinds::family_of).filter(|f| *f != self.family) {
             self.as_mut().rust_mut().family = family;

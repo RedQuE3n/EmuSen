@@ -7,7 +7,9 @@
 use crate::consoles::{self, Console, ConsoleRead};
 use crate::tools::Tone;
 use crate::{cards, firmware, schema, words};
+use emusen_kit_core::glyph::PadFamily;
 use emusen_kit_core::settings::RowKind;
+use emusen_qt_endymion::game::PadSettings;
 use emusen_kit_core::tokens::text_scale_of;
 use serde_json::{json, Value};
 
@@ -46,6 +48,8 @@ pub struct Read {
     pub folders: std::collections::BTreeMap<String, String>,
     /// The consoles and what their engines declare, read through the runtime (EmuSen_Qt.md §7.7.E).
     pub consoles: ConsoleRead,
+    /// Endymion's four binding models (EmuSen_Qt.md §7.7.H).
+    pub bindings: crate::bindings::Bindings,
 }
 
 /// Reads the source once; a model with no file yet reads as null, and its keys show their defaults.
@@ -58,6 +62,7 @@ pub fn read(source: &dyn SettingsSource) -> Result<Read, String> {
         outputs: source.outputs(),
         folders: source.folders(),
         consoles: ConsoleRead::default(),
+        bindings: crate::bindings::Bindings::default(),
     })
 }
 
@@ -86,6 +91,8 @@ pub enum Preview {
     Variants,
     /// A line at each text size.
     Sizes,
+    /// The focused control's name, large, as the bindings page's pane begins (its words are the caption).
+    Heading,
 }
 
 /// The focused row's pane: the sentence, plain lines after it, muted lines after those, and the preview.
@@ -130,6 +137,14 @@ pub enum Outcome {
     ChooseFolder { key: String, start: String },
     /// Several at once, in order: a console reset forgets its keys and its picture.
     All(Vec<Outcome>),
+    /// One of Endymion's binding files changed, to be saved and read again (EmuSen_Qt.md §7.7.H).
+    Bindings(Vec<crate::bindings::File>),
+    /// An ask of the seats, for the pads' reader.
+    Seat(emusen_qt_endymion::seats::Ask),
+    /// Words to type for a page: the question's title, its prompt and the words it starts with.
+    Type { title: String, prompt: String, start: String, typed: crate::settings_controllers::Typed },
+    /// Nothing done, and the words of what failed, said as the program's other failures are (EmuSen_Qt.md §7.9).
+    Failed(String),
 }
 
 /// A page open under a section.
@@ -151,12 +166,18 @@ pub enum Page {
     Save(String, String, String),
     /// The question before a save is deleted, by the save's id.
     Delete(String, String, String),
+    /// Controllers ▸ Players, Profiles, a console's profile, Hotkeys, and the bindings page (EmuSen_Qt.md §7.7.H).
+    Players,
+    Profiles,
+    Profile(String, String),
+    Hotkeys,
+    Bindings,
 }
 
 impl Page {
     fn console(&self) -> Option<&str> {
         match self {
-            Page::Group(_) => None,
+            Page::Group(_) | Page::Players | Page::Profiles | Page::Profile(..) | Page::Hotkeys | Page::Bindings => None,
             Page::Console(c) | Page::Engine(c) | Page::Firmware(c) | Page::Cards(c) | Page::Drawer(c, _) => Some(c),
             Page::Saves(c, _) | Page::Save(c, _, _) | Page::Delete(c, _, _) => Some(c),
         }
@@ -164,7 +185,7 @@ impl Page {
 }
 
 /// The screen: the description, the last read, the section and the pages open under it.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct SettingsView {
     description: Value,
     pub read: Read,
@@ -177,6 +198,21 @@ pub struct SettingsView {
     pub(crate) chosen_card: Option<String>,
     pub(crate) target_card: Option<String>,
     pub(crate) said: String,
+    /// The seats and the pads connected, as the pads' reader gave them (EmuSen_Qt.md §7.7.H).
+    pub seats: crate::settings_controllers::Seated,
+    /// Endymion's choice of a player's map, over the platform library.
+    pub chooser: Option<std::sync::Arc<dyn crate::settings_controllers::Chooser>>,
+    /// The controls the tester sees held, how far each is pushed (a stick's directions), and the keys held, by the
+    /// binding files' words.
+    pub held: Vec<String>,
+    pub pushes: Vec<f64>,
+    pub keys_held: Vec<String>,
+    pub(crate) stepped_console: Option<String>,
+    pub(crate) binding: Option<crate::settings_controllers::Binding>,
+    /// The hotkey whose row listens for a key.
+    pub(crate) listening: Option<String>,
+    /// Opened from the Pause Card on its drawing page: B leaves Settings for the card.
+    pub(crate) from_card: bool,
 }
 
 impl Default for SettingsView {
@@ -253,7 +289,30 @@ struct Keyed<'a> {
 impl SettingsView {
     pub fn new() -> SettingsView {
         let description = serde_json::from_str(DESCRIPTION).expect("the settings screen's description is JSON");
-        SettingsView { description, read: Read::default(), section: 0, pages: Vec::new(), facts: Value::Null, chosen_card: None, target_card: None, said: String::new() }
+        SettingsView {
+            description,
+            read: Read::default(),
+            section: 0,
+            pages: Vec::new(),
+            facts: Value::Null,
+            chosen_card: None,
+            target_card: None,
+            said: String::new(),
+            seats: Default::default(),
+            chooser: None,
+            held: Vec::new(),
+            pushes: Vec::new(),
+            keys_held: Vec::new(),
+            stepped_console: None,
+            binding: None,
+            listening: None,
+            from_card: false,
+        }
+    }
+
+    /// A member of the description by its path.
+    pub(crate) fn description_at(&self, path: &[&str]) -> &Value {
+        path.iter().fold(&self.description, |v, k| &v[*k])
     }
 
     fn word(&self, name: &str) -> String {
@@ -277,6 +336,9 @@ impl SettingsView {
     /// The help bar the page shown takes.
     pub fn help(&self) -> crate::help::Screen {
         use crate::help::Screen;
+        if let Some(screen) = self.controller_help() {
+            return screen;
+        }
         match self.page() {
             None => Screen::Settings,
             Some(Page::Console(_)) if self.pages.len() == 1 => Screen::SettingsConsole,
@@ -298,11 +360,32 @@ impl SettingsView {
     pub fn choose_section(&mut self, section: usize) {
         self.section = section.min(self.sections().len().saturating_sub(1));
         self.pages.clear();
+        self.binding = None;
+        self.listening = None;
+        self.from_card = false;
     }
 
     /// B: the page closed, and the index of the row that opened it; none on a section, where B is the screens'.
     pub fn back(&mut self) -> Option<usize> {
-        self.pages.pop().map(|(_, _, at)| at)
+        if self.from_card {
+            // From the card, B leaves Settings on the drawing page, back to the card.
+            self.from_card = false;
+            self.pages.clear();
+            self.binding = None;
+            self.held.clear();
+            return None;
+        }
+        let (page, _, at) = self.pages.pop()?;
+        if page == Page::Bindings {
+            self.binding = None;
+            self.held.clear();
+        }
+        Some(at)
+    }
+
+    /// B taken by the page itself: a press listened for, or the tester, let go of; else B closes the page.
+    pub fn back_taken(&mut self) -> bool {
+        self.controller_back().unwrap_or(false)
     }
 
     pub(crate) fn open(&mut self, page: Page, label: String, at: usize) -> Outcome {
@@ -312,6 +395,9 @@ impl SettingsView {
 
     /// The rows shown: the section's from the description, or a page's: a group's every row of Galaxia's, or a console's.
     fn entries(&self) -> Vec<Value> {
+        if let Some(rows) = self.page().and_then(|p| self.controller_entries(p)) {
+            return rows;
+        }
         match self.page() {
             Some(Page::Group(group)) => {
                 let mut rows = Vec::new();
@@ -328,7 +414,7 @@ impl SettingsView {
             None if self.description["sections"][self.section]["from"] == "consoles" => {
                 self.read.consoles.consoles.iter().map(|c| json!({ "id": format!("console:{}", c.console), "console": c.console })).collect()
             }
-            None => self.description["sections"][self.section]["rows"].as_array().cloned().unwrap_or_default(),
+            None => self.description["sections"][self.section]["rows"].as_array().into_iter().flatten().filter(|e| self.controller_shown(e)).cloned().collect(),
         }
     }
 
@@ -410,7 +496,7 @@ impl SettingsView {
                 m.map(cards::drawer_rows).unwrap_or_default().iter().enumerate().map(|(at, r)| json!({ "id": r.id, "drawer": at })).collect()
             }
             Page::Saves(..) | Page::Save(..) | Page::Delete(..) => self.saves_entries(),
-            Page::Group(_) => Vec::new(),
+            _ => Vec::new(),
         }
     }
 
@@ -598,6 +684,9 @@ impl SettingsView {
     }
 
     fn row(&self, entry: &Value) -> Row {
+        if let Some(row) = self.controller_row(entry) {
+            return row;
+        }
         if let Some(row) = self.console_row(entry) {
             return row;
         }
@@ -715,7 +804,11 @@ impl SettingsView {
 
     /// The pane of a row shown, by its index.
     pub fn pane(&self, index: usize) -> Pane {
-        let Some(entry) = self.entries().get(index).cloned() else { return Pane::default() };
+        let entry = self.entries().get(index).cloned();
+        if let Some(pane) = self.controller_pane(entry.as_ref()) {
+            return pane;
+        }
+        let Some(entry) = entry else { return Pane::default() };
         if let Some(words) = self.console_pane(&entry) {
             let mut lines = words.lines.into_iter();
             return Pane { sentence: lines.next().unwrap_or_default(), lines: lines.collect(), muted: words.muted, tones: words.tones, ..Pane::default() };
@@ -780,6 +873,9 @@ impl SettingsView {
     /// Left or Right on a row of values: the next value, saved; a row set across consoles takes it on each.
     pub fn step(&mut self, index: usize, by: i32) -> Outcome {
         let Some(entry) = self.entries().get(index).cloned() else { return Outcome::Nothing };
+        if let Some(outcome) = self.controller_step(&entry, by) {
+            return outcome;
+        }
         if let Some(outcome) = self.console_step(&entry, by) {
             return outcome;
         }
@@ -842,6 +938,9 @@ impl SettingsView {
     /// A on a row: a value steps on, a page opens, a door is the screens' to open.
     pub fn choose(&mut self, index: usize) -> Outcome {
         let Some(entry) = self.entries().get(index).cloned() else { return Outcome::Nothing };
+        if let Some(outcome) = self.controller_choose(&entry, index) {
+            return outcome;
+        }
         if let Some(outcome) = self.console_choose(&entry, index) {
             return outcome;
         }
@@ -896,6 +995,72 @@ impl SettingsView {
     pub fn reduced_motion(&self) -> bool {
         self.applies_as("reduced_motion")
     }
+
+    /// Whether A and B, and X and Y, trade places in the menus (Swap A and B in menus).
+    pub fn swap_buttons(&self) -> bool {
+        self.applies_as("swap_buttons")
+    }
+
+    /// The help bar's pad family chosen by Controller type; none for Automatic, which follows the pad last pressed.
+    pub fn controller_family(&self) -> Option<PadFamily> {
+        PadFamily::named(&self.applied("controller_type")?)
+    }
+
+    /// Whether a pad's coming and going raises a notice (Controller notices).
+    pub fn controller_notices(&self) -> bool {
+        self.applies_as("controller_notices")
+    }
+
+    /// Whether the controllers' motors run where a game drives them (Rumble).
+    pub fn rumble(&self) -> bool {
+        self.applies_as("rumble")
+    }
+
+    /// The settings the pads act on: Only the first controller, Left stick as the D-pad, Stick deadzone, Mirror player 1
+    /// to player 2, the Players page's Keyboard; none until the settings are read. A stored deadzone or player that is not
+    /// a number is left unset, in words.
+    pub fn pad_settings(&self) -> Option<(PadSettings, Option<String>)> {
+        let stored = self.applied("stick_deadzone").filter(|v| !v.is_empty())?;
+        let deadzone = stored.parse::<f64>().ok();
+        let player = self.applied("keyboard_player").unwrap_or_default();
+        let keyboard_player = player.parse::<u32>().ok().filter(|p| (1..=emusen_qt_endymion::game::PLAYERS as u32).contains(p));
+        let settings = PadSettings {
+            first_controller_only: self.applies_as("first_controller_only"),
+            stick_as_dpad: self.applies_as("stick_as_dpad"),
+            stick_deadzone: deadzone,
+            mirror: self.applies_as("mirror"),
+            keyboard_player,
+        };
+        // An empty player is none stored, which leaves the router's as it is unsaid, as Galaxia's model always holds one.
+        let unread = [deadzone.is_none().then(|| unread_deadzone(&stored)), (keyboard_player.is_none() && !player.is_empty()).then(|| unread_keyboard_player(&player))];
+        let words: Vec<String> = unread.into_iter().flatten().collect();
+        Some((settings, (!words.is_empty()).then(|| words.join("; "))))
+    }
+
+    /// Whether Guide's chords are read, by the stored Guide chords and whether Steam's Game Mode holds the session.
+    pub fn guide_chords(&self, game_mode: bool) -> bool {
+        guide_chords_on(self.applied("guide_chords").as_deref(), game_mode)
+    }
+}
+
+/// The Guide chords as Mistress's `GuideChordsOn` reads the stored word: "On", "Off", or Auto (the default), off under
+/// Steam's Game Mode, where Steam holds Guide's chords.
+pub fn guide_chords_on(stored: Option<&str>, game_mode: bool) -> bool {
+    match stored {
+        Some("On") => true,
+        Some("Off") => false,
+        _ => !game_mode,
+    }
+}
+
+/// The words for a stored stick deadzone that is not a number, said as the program's other failures are.
+pub fn unread_deadzone(stored: &str) -> String {
+    format!("The stick deadzone could not be read, so it was left as it was: \"{stored}\" is not a number")
+}
+
+/// The words for a stored keyboard player that is not a player's number.
+pub fn unread_keyboard_player(stored: &str) -> String {
+    format!("The keyboard's player could not be read, so it was left as it was: \"{stored}\" is not a player")
 }
 
 /// A console's words with its names filled: `{console}` and the names given.

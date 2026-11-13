@@ -32,6 +32,10 @@ pub enum PadEvent {
     Closed { key: u64 },
 }
 
+/// The bits of `Pads::held` a trigger past half its travel takes, past every SDL gamepad button's.
+pub const HELD_LEFT_TRIGGER: u32 = 1 << 30;
+pub const HELD_RIGHT_TRIGGER: u32 = 1 << 31;
+
 /// The reading rules' settings, as the C# has them by default.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Settings {
@@ -324,13 +328,31 @@ impl Pads {
         if self.settings.first_controller_only { self.open.len().min(1) } else { self.open.len() }
     }
 
+    /// Whether a trigger, by its PadAxis, is past half its travel: L2 or R2 held, as the game hears them.
+    fn trigger_held(&mut self, key: u64, axis: u32) -> bool {
+        self.axis(key, axis) >= 0.5
+    }
+
+    /// Since interface 47: what a pad holds in one mask, each of SDL's gamepad buttons at its number's bit and each trigger
+    /// past half its travel at `HELD_LEFT_TRIGGER` and `HELD_RIGHT_TRIGGER`; 0 for a pad not open.
+    pub fn held(&mut self, key: u64) -> u32 {
+        let mut mask = (0..SDL_BUTTONS).filter(|b| self.raw_pressed(key, *b)).fold(0u32, |m, b| m | 1 << b);
+        if self.trigger_held(key, pad::LEFT_TRIGGER) {
+            mask |= HELD_LEFT_TRIGGER;
+        }
+        if self.trigger_held(key, pad::RIGHT_TRIGGER) {
+            mask |= HELD_RIGHT_TRIGGER;
+        }
+        mask
+    }
+
     /// A pad's button as the game hears it: the stick standing in for the d-pad, a trigger past half its travel, else the bound SDL button.
     pub fn is_pressed(&mut self, key: u64, button: u32, bound: Option<i32>) -> bool {
         let s = self.settings;
         if s.analog_stick_as_dpad && !s.left_stick_is_analog && self.stick_direction_pressed(key, button) {
             return true;
         }
-        if (button == pad::L2 || button == pad::R2) && self.axis(key, if button == pad::L2 { pad::LEFT_TRIGGER } else { pad::RIGHT_TRIGGER }) >= 0.5 {
+        if (button == pad::L2 || button == pad::R2) && self.trigger_held(key, if button == pad::L2 { pad::LEFT_TRIGGER } else { pad::RIGHT_TRIGGER }) {
             return true;
         }
         match bound {
@@ -417,6 +439,23 @@ mod tests {
         pads.close_all();
         let devices = lock_set(&set);
         assert_eq!((devices.opens, devices.closes, devices.initialized), (2, 2, false));
+    }
+
+    #[test]
+    fn held_is_every_sdl_button_by_its_bit_and_the_triggers_past_half_past_them() {
+        let only = pad("Only");
+        let set = set(&[&only]);
+        let mut pads = Pads::new(Box::new(set.clone()));
+        pads.start();
+        assert_eq!(pads.held(1), 0);
+        lock(&only).press(0);
+        lock(&only).press(SDL_BUTTONS - 1);
+        lock(&only).set_axis(5, 0.6);
+        assert_eq!(pads.held(1), 1 | 1 << (SDL_BUTTONS - 1) | HELD_RIGHT_TRIGGER);
+        lock(&only).set_axis(5, 0.4);
+        lock(&only).set_axis(4, 0.5);
+        assert_eq!(pads.held(1), 1 | 1 << (SDL_BUTTONS - 1) | HELD_LEFT_TRIGGER, "a trigger as the game hears L2 and R2");
+        assert_eq!(pads.held(9), 0, "no such pad");
     }
 
     #[test]

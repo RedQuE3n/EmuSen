@@ -8,6 +8,8 @@ MenuCard {
     id: root
     required property LibraryModel library
     required property SessionModel session
+    // Settings' one description, whose Game Options ▸ Controllers page the card draws (EmuSen_Interface.md §20.3).
+    property SettingsModel settings: null
     readonly property alias model: pause
     readonly property int coverRow: games.revision >= 0 ? games.rowOf(root.session.game) : -1
     signal resumed()
@@ -53,6 +55,8 @@ MenuCard {
         onEjectAsked: root.session.ejectDisc()
         onSwapAsked: root.session.swapPlayers()
         onSettingAsked: (key, value) => root.session.setConsoleSetting(key, value)
+        controllers: root.settings ? root.settings.cardControllers : ""
+        onControllersAsked: (index, by) => root.settings?.cardAct(index, by)
     }
     GameModel {
         id: games

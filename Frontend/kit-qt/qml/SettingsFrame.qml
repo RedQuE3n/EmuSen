@@ -20,6 +20,11 @@ Kit.Frame {
     property alias preview: previewSlot.data
     // Further lines of the pane, under the sentence.
     property alias lines: linesSlot.data
+    // A page of content in place of the rows, as the bindings page's drawing, when shown (EmuSen_Kit.md §7.63).
+    property bool pageShown: false
+    property alias pageContent: contentSlot.data
+    // The pane's sentence while the page is shown, which has no row to give it.
+    property string pageSentence
     readonly property alias layout: layout
     readonly property alias currentRow: layout.current
     signal sectionChosen(int section)
@@ -84,13 +89,33 @@ Kit.Frame {
             }
         }
     }
+    Rectangle {
+        objectName: "settingsContent"
+        visible: root.pageShown
+        x: layout.side - root.safeX
+        y: layout.contentTop - root.safeY
+        width: layout.rowsWidth
+        height: layout.paneHeight
+        radius: Kit.Tokens.tileRadius
+        color: Kit.Tokens.surfaceRaised
+        Item {
+            id: contentSlot
+            objectName: "settingsContentSlot"
+            x: layout.paneInset
+            y: layout.paneInset
+            width: parent.width - 2 * layout.paneInset
+            height: parent.height - 2 * layout.paneInset
+        }
+    }
     FocusScope {
         objectName: "settingsRows"
+        visible: !root.pageShown
         x: layout.side - root.safeX
         y: layout.contentTop - root.safeY
         width: layout.rowsWidth
         height: Math.min(layout.count, layout.rowsShown) * Kit.Tokens.rowHeight
-        focus: true
+        // The rows hold the focus again as the page closes.
+        focus: !root.pageShown
         Keys.onPressed: (event) => event.accepted = layout.key(event.key, event.modifiers)
         ListView {
             id: list
@@ -209,7 +234,7 @@ Kit.Frame {
             Kit.ToneText {
                 objectName: "settingsSentence"
                 width: parent.width
-                text: layout.sentence
+                text: root.pageShown ? root.pageSentence : layout.sentence
                 wrapMode: Text.Wrap
                 tone: root.sentenceTone
                 font.pixelSize: Kit.Tokens.fontBody

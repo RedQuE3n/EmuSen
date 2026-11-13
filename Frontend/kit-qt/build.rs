@@ -4,7 +4,7 @@ use std::process::Command;
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 
 // The kit's own components (EmuSen_Qt.md §1.4); the EmuSen style travels as a resource module, style/EmuSen.qrc (§1.5), and the splash's two faces as fonts/Fonts.qrc (EmuSen_Kit.md §7.10).
-const KIT_FILES: [&str; 33] = [
+const KIT_FILES: [&str; 34] = [
     "qml/Walkable.qml",
     "qml/Body.qml",
     "qml/Sky.qml",
@@ -38,6 +38,7 @@ const KIT_FILES: [&str; 33] = [
     "qml/VideoTile.qml",
     "qml/VideoClip.qml",
     "qml/RaisedShadow.qml",
+    "qml/ControllerDrawing.qml",
 ];
 
 /// Qt's shader baker over EdgeFade's fragment shader, into a resource beside the module's own at qrc:/qt/qml/EmuSen/Kit/shaders/ (EmuSen_Kit.md §7.35).
@@ -60,7 +61,7 @@ fn baked_shader() -> PathBuf {
 fn main() {
     let shaders = baked_shader();
     CxxQtBuilder::new_qml_module(
-        QmlModule::new("EmuSen.Kit").version(1, 1).qml_files(KIT_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtMultimedia"),
+        QmlModule::new("EmuSen.Kit").version(1, 2).qml_files(KIT_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtMultimedia"),
     )
     .qrc("style/EmuSen.qrc")
     .qrc("fonts/Fonts.qrc")
@@ -93,6 +94,7 @@ fn main() {
         "src/page.rs",
         "src/table.rs",
         "src/reset_gate.rs",
+        "src/controller.rs",
     ])
     .include_dir("cpp")
     .cpp_files(["cpp/kit_glue.cpp", "cpp/game_picture.h", "cpp/game_picture.cpp", "cpp/edge_mask.h", "cpp/edge_mask.cpp", "cpp/inside_clips.h", "cpp/inside_clips.cpp", "cpp/text_width.h", "cpp/text_width.cpp", "cpp/video_frames.h", "cpp/video_frames.cpp"])

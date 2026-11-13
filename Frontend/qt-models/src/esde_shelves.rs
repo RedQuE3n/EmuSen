@@ -31,6 +31,14 @@ pub struct EsdeSettings {
     pub text: String,
 }
 
+/// `AppSettings`' look of the library and its two values, the ES-DE theme's folder, and every theme's choices keyed by
+/// its folder (`theme_key`), as Galaxia's model holds them.
+pub const STYLE: &str = "LibraryStyle";
+pub const STYLE_THEME: &str = "Theme";
+pub const STYLE_OWN: &str = "Mistress";
+pub const THEME: &str = "BigPictureTheme";
+pub const CHOICES: &str = "BigPicture";
+
 /// `AppSettings`' volume, a share of full: the one EmuSen plays sound at, the media viewer's video's included (EmuSen_Qt.md §4.14).
 pub const VOLUME: &str = "Volume";
 
@@ -44,9 +52,9 @@ pub fn volume_of(settings: &Value) -> f64 {
 pub fn settings_of(settings: &Value) -> EsdeSettings {
     let text = |key: &str| settings.get(key).and_then(Value::as_str).unwrap_or("").to_owned();
     let object = |v: Option<&Value>| v.filter(|v| v.is_object()).cloned().unwrap_or_else(|| json!({}));
-    let (style, theme) = (text("LibraryStyle"), text("BigPictureTheme"));
+    let (style, theme) = (text(STYLE), text(THEME));
     let key = theme_key(&theme);
-    let choices = object(settings.get("BigPicture").and_then(|m| m.get(&key)));
+    let choices = object(settings.get(CHOICES).and_then(|m| m.get(&key)));
     let out = json!({
         "style": style,
         "theme": theme,
@@ -56,7 +64,7 @@ pub fn settings_of(settings: &Value) -> EsdeSettings {
         "show_hidden": settings.get(crate::library::SHOW_HIDDEN).and_then(Value::as_bool).unwrap_or(false),
         "volume": settings.get(VOLUME).and_then(Value::as_f64),
     });
-    EsdeSettings { themed: style == "Theme" && !theme.trim().is_empty(), text: out.to_string() }
+    EsdeSettings { themed: style == STYLE_THEME && !theme.trim().is_empty(), text: out.to_string() }
 }
 
 /// A theme folder's key among the stored choices: its absolute path without a trailing separator.

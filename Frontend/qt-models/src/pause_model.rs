@@ -40,6 +40,7 @@ pub mod qobject {
         Disc,
         Cards,
         Drawer,
+        Controllers,
     }
 
     extern "RustQt" {
@@ -55,6 +56,8 @@ pub mod qobject {
         #[qproperty(QString, system, READ, NOTIFY)]
         /// The console's games in the library (`LibraryModel.gamesOf(system)`), for Change Disc.
         #[qproperty(QString, shelf)]
+        /// Game Options ▸ Controllers' rows as Settings' description gives them (`SettingsModel.cardControllers`).
+        #[qproperty(QString, controllers)]
         #[qproperty(QString, title, READ, NOTIFY)]
         #[qproperty(QString, breadcrumb, READ, NOTIFY)]
         /// The row focused; a page opens on its own.
@@ -187,6 +190,11 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "settingAsked"]
         fn setting_asked(self: Pin<&mut PauseModel>, key: QString, value: QString);
+
+        /// A row of Controllers' page stepped (`by` ±1) or chosen (`by` 0), for `SettingsModel.cardAct`.
+        #[qsignal]
+        #[cxx_name = "controllersAsked"]
+        fn controllers_asked(self: Pin<&mut PauseModel>, index: i32, by: i32);
     }
 
     unsafe extern "RustQt" {
@@ -218,6 +226,7 @@ pub struct PauseModelRust {
     facts: QString,
     system: QString,
     shelf: QString,
+    controllers: QString,
     title: QString,
     breadcrumb: QString,
     current: i32,
@@ -237,6 +246,7 @@ impl Default for PauseModelRust {
             facts: QString::default(),
             system: QString::default(),
             shelf: QString::default(),
+            controllers: QString::default(),
             title: QString::default(),
             breadcrumb: QString::default(),
             current: 0,
@@ -262,6 +272,14 @@ impl cxx_qt::Initialize for qobject::PauseModel {
             model.shown();
         })
         .release();
+        self.as_mut()
+            .on_controllers_changed(|mut model| {
+                // The program's own JSON, serde_json's of SettingsModel.cardControllers, which reads back whole (EmuSen_Qt.md §7.7.H8).
+                let rows = serde_json::from_str::<serde_json::Value>(&model.controllers.to_string()).unwrap_or_default();
+                model.as_mut().rust_mut().card.controllers = crate::settings_controllers::GameRow::list(&rows);
+                model.shown();
+            })
+            .release();
         self.on_shelf_changed(|mut model| {
             let mut shelf = crate::games::from_json(&model.shelf.to_string());
             shelf.iter_mut().for_each(|g| g.cover = crate::game_model::cover_url(&g.cover));
@@ -282,6 +300,7 @@ fn shown_page(page: Page) -> PausePage {
         Page::Disc => PausePage::Disc,
         Page::Cards => PausePage::Cards,
         Page::Drawer(_) => PausePage::Drawer,
+        Page::Controllers => PausePage::Controllers,
     }
 }
 
@@ -401,6 +420,7 @@ impl qobject::PauseModel {
                 self.as_mut().setting_asked(QString::from(key.as_str()), QString::from(value.as_str()));
                 self.shown();
             }
+            Outcome::Controllers { index, by } => self.as_mut().controllers_asked(index as i32, by),
         }
     }
 

@@ -171,14 +171,29 @@ Item {
                 }
             }
         }
-        Text {
-            objectName: "PaneSentence"
-            width: 592
-            text: paneModel.sentence
-            color: Kit.Tokens.text
-            font.family: faces.regular
-            font.pixelSize: 22
-            wrapMode: Text.Wrap
+        // The sentence, and a page's second line under it, muted, a line's gap apart as Mistress's pane draws them
+        // (EmuSen_Qt.md §7.7.H).
+        Column {
+            spacing: 8
+            Text {
+                objectName: "PaneSentence"
+                width: 592
+                text: paneModel.sentence
+                color: Kit.Tokens.text
+                font.family: faces.regular
+                font.pixelSize: 22
+                wrapMode: Text.Wrap
+            }
+            Text {
+                objectName: "PaneMuted"
+                width: 592
+                visible: text.length > 0
+                text: paneModel.muted
+                color: Kit.Tokens.muted
+                font.family: faces.regular
+                font.pixelSize: 22
+                wrapMode: Text.Wrap
+            }
         }
     }
 }

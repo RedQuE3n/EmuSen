@@ -96,3 +96,15 @@ fn with_a_theme_chosen_the_real_library_s_rows_carry_their_es_de_names() {
     assert_eq!((game["name"].as_str(), game["play_count"].as_i64(), game["favourite"].as_bool()), (Some("Synthetic"), Some(0), Some(false)));
     eprintln!("the row: {game}");
 }
+
+#[test]
+fn qt_7_7_h_the_profile_every_console_has_is_named_by_endymion() {
+    let _world = World::new("models-default-profile");
+    let source = emusen_qt_models::settings_source::ClientSettings::open(library().to_str().unwrap()).unwrap();
+    let bindings = source.bindings(&["SNES"]).unwrap();
+    let platform = Platform::load(library()).unwrap();
+    let none = serde_json::json!({});
+    let named = platform.bindings_choose(Some(&none), Some(&none), "SNES", 1, None, Some("no such profile")).unwrap();
+    assert_eq!(bindings.default_profile, named["profile"].as_str().unwrap(), "the name bindings_choose gives a profile the console lacks");
+    assert_eq!(bindings.profiles("SNES"), [bindings.default_profile.clone()]);
+}

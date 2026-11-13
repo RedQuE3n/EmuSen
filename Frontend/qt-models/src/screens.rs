@@ -89,6 +89,8 @@ pub fn search_shoulder(on_keys: bool, key: &str) -> Option<bool> {
 }
 /// Settings' door to the Themes tab, by its name in the screen's description.
 pub const THEMES: &str = "themes";
+/// The Pause Card's Controllers ▸ Bindings: Settings' drawing page over the card, B back to it (EmuSen_Interface.md §20.3).
+pub const CARD_BINDINGS: &str = crate::settings_controllers::CARD_BINDINGS;
 
 /// The screen shown after an ask, and the grid's row (the page a card opens at, for a card); `None` leaves both as they
 /// were.
@@ -133,7 +135,8 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Grid, Ask::Back) => Some((Shown::Consoles, None)),
         (Shown::Home | Shown::Grid | Shown::Pause | Shown::List | Shown::Search | Shown::SearchGrid, Ask::Play) => Some((Shown::Game, None)),
         (Shown::Game, Ask::Menu) => Some((Shown::Pause, None)),
-        (Shown::Pause, Ask::Library) => Some((Shown::Home, None)),
+        (Shown::Pause, Ask::Act(key)) if key == CARD_BINDINGS => Some((Shown::Settings, None)),
+        (Shown::Game | Shown::Pause, Ask::Library) => Some((Shown::Home, None)),
         (Shown::Game | Shown::Pause, Ask::Closed) => Some((Shown::Home, None)),
         (Shown::Home, Ask::Place(CORES_PLACE)) => Some((Shown::Cores, None)),
         (Shown::Cores, Ask::Back) => Some((Shown::Home, None)),
@@ -220,7 +223,8 @@ pub fn step_in(themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<S
         // The cards close to the theme's view on B, Start or any of their actions, which the host carries out.
         (true, Shown::HomeCard | Shown::List, Ask::Back | Ask::Close | Ask::Act(_)) => Some((Shown::Esde, None)),
         (true, Shown::Game, Ask::Menu) => Some((Shown::Pause, None)),
-        (true, Shown::Pause, Ask::Library) => Some((Shown::Esde, None)),
+        (true, Shown::Pause, Ask::Act(key)) if key == CARD_BINDINGS => Some((Shown::Settings, None)),
+        (true, Shown::Game | Shown::Pause, Ask::Library) => Some((Shown::Esde, None)),
         (true, Shown::Game | Shown::Pause, Ask::Closed) => Some((Shown::Esde, None)),
         _ => None,
     }
@@ -283,6 +287,9 @@ pub mod qobject {
         /// A game chosen, or Continue: the game's screen.
         #[qinvokable]
         fn play(self: Pin<&mut Screens>);
+        /// The suspended game shown again and resumed: a library's Continue, or Exit to Library's key over the library.
+        #[qinvokable]
+        fn resume(self: Pin<&mut Screens>);
         /// The menu chord over the game: the Pause Card.
         #[qinvokable]
         fn menu(self: Pin<&mut Screens>);
@@ -308,7 +315,7 @@ pub mod qobject {
         /// Quit EmuSen answered Yes: the program ends.
         #[qsignal]
         fn quit(self: Pin<&mut Screens>);
-        /// The Home card's Continue: the suspended game resumes as its screen is shown.
+        /// The Home card's Continue or resume(): the suspended game resumes as its screen is shown.
         #[qsignal]
         fn resumed(self: Pin<&mut Screens>);
         /// Start Console's row chosen: the console starts with nothing in it, by its key.
@@ -335,6 +342,8 @@ pub struct ScreensRust {
     page_origin: Shown,
     /// The screen Cores or the Themes tab was opened over.
     tool_origin: Option<Shown>,
+    /// Settings opened over the Pause Card, whose B returns to it.
+    over_card: bool,
 }
 
 impl Default for ScreensRust {
@@ -348,6 +357,7 @@ impl Default for ScreensRust {
             themed: false,
             page_origin: Shown::Home,
             tool_origin: None,
+            over_card: false,
         }
     }
 }
@@ -441,6 +451,11 @@ impl qobject::Screens {
         self.ask(Ask::Play);
     }
 
+    pub fn resume(mut self: Pin<&mut Self>) {
+        self.as_mut().resumed();
+        self.ask(Ask::Play);
+    }
+
     pub fn menu(self: Pin<&mut Self>) {
         self.ask(Ask::Menu);
     }
@@ -477,11 +492,16 @@ impl qobject::Screens {
         let was = shown_of(self.shown);
         let stepped = match was {
             Shown::Page => page_step(self.themed, self.page_origin, &ask).map(|s| (s, None)),
+            Shown::Settings if self.over_card && ask == Ask::Back => Some((Shown::Pause, None)),
             _ => tool_back(self.themed, self.tool_origin, was, &ask).map(|s| (s, None)).or_else(|| step_in(self.themed, was, &ask)),
         };
         let Some((shown, key)) = stepped else { return };
         if matches!(shown, Shown::Cores | Shown::Themes) && shown != was {
             self.as_mut().rust_mut().tool_origin = Some(was);
+        }
+        let over_card = was == Shown::Pause && shown == Shown::Settings;
+        if self.over_card != over_card && (over_card || shown != Shown::Settings) {
+            self.as_mut().rust_mut().over_card = over_card;
         }
         if shown == Shown::Page && was != Shown::Page {
             self.as_mut().rust_mut().page_origin = page_origin(self.themed, was);

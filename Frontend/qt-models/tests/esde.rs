@@ -277,7 +277,7 @@ fn the_index_walks_each_root_s_type_folders_the_first_root_winning() {
 #[test]
 fn the_theme_s_view_stands_for_the_library_s_screens() {
     let home = Some(emusen_qt_models::home_card::FIRST.to_owned());
-    let table: [(Shown, Ask, Option<(Shown, Option<String>)>, &str); 16] = [
+    let table: [(Shown, Ask, Option<(Shown, Option<String>)>, &str); 17] = [
         (Shown::Home, Ask::Restyled, Some((Shown::Esde, None)), "Moonrise gives way to the theme's view"),
         (Shown::Grid, Ask::Restyled, Some((Shown::Esde, None)), "a library screen of the own look"),
         (Shown::Game, Ask::Restyled, None, "the game stays"),
@@ -292,6 +292,7 @@ fn the_theme_s_view_stands_for_the_library_s_screens() {
         (Shown::Esde, Ask::Play, Some((Shown::Game, None)), "a game played"),
         (Shown::Game, Ask::Menu, Some((Shown::Pause, None)), ""),
         (Shown::Pause, Ask::Library, Some((Shown::Esde, None)), "Back to Library"),
+        (Shown::Game, Ask::Library, Some((Shown::Esde, None)), "the Exit to Library hotkey"),
         (Shown::Game, Ask::Closed, Some((Shown::Esde, None)), "the game closed"),
         (Shown::Esde, Ask::Place(0), None, "Home's places are not the theme's"),
     ];

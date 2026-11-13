@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.0.qmltypes");
 const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.0.qmldir");
-const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.1.qmltypes");
+const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.2.qmltypes");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 
 /// The registry without its line numbers and header file names, which move with every edit and mean nothing to a QML author.

@@ -109,6 +109,11 @@ pub mod qobject {
         #[qinvokable]
         fn refresh(self: Pin<&mut LibraryModel>);
 
+        /// The settings read again after the library's look was stored: the ES-DE view's settings alone while a theme
+        /// stays the look, nothing while none is, else a refresh, which builds or drops the theme's texts.
+        #[qinvokable]
+        fn restyle(self: Pin<&mut LibraryModel>);
+
         #[cxx_name = "setByFacts"]
         fn set_by_facts(self: Pin<&mut LibraryModel>, value: bool);
 
@@ -389,6 +394,36 @@ impl qobject::LibraryModel {
         });
     }
 
+    pub fn restyle(self: Pin<&mut Self>) {
+        let Some(source) = self.source.clone() else { return };
+        let (qt, was) = (self.qt_thread(), self.view.esde_settings.themed);
+        std::thread::spawn(move || {
+            let settings = source.settings();
+            let now = settings.as_ref().ok().map(|s| crate::esde_shelves::settings_of(s).themed);
+            let _ = qt.queue(move |model| match (was, now, settings) {
+                (true, Some(true), Ok(settings)) => model.restyled(settings),
+                (false, Some(false), _) => {}
+                _ => model.refresh(),
+            });
+        });
+    }
+
+    /// The ES-DE view's settings as `restyle` read them, the theme staying the look.
+    fn restyled(mut self: Pin<&mut Self>, settings: serde_json::Value) {
+        let esde = crate::esde_shelves::settings_of(&settings);
+        let changed = esde.text != self.view.esde_settings.text;
+        {
+            let mut m = self.as_mut().rust_mut();
+            let m = &mut *m;
+            if changed {
+                m.esde_settings = QString::from(esde.text.as_str());
+            }
+            m.view.esde_settings = esde;
+            m.view.catalog.settings = settings;
+        }
+        self.announce_esde([changed, false, false, false]);
+    }
+
     pub fn heading_of(&self, key: &QString) -> QString {
         let key = key.to_string();
         self.view.rows.rows().iter().find(|r| r.key == key).map_or_else(QString::default, |r| QString::from(r.heading.as_str()))
@@ -417,7 +452,9 @@ impl qobject::LibraryModel {
             let n = systems.get(&system).and_then(serde_json::Value::as_u64).unwrap_or(0) + 1;
             systems.insert(system, n.into());
         }
-        QString::from(serde_json::json!({ "games": self.view.catalog.games.len(), "running": title, "systems": systems }).to_string().as_str())
+        // The running game's path and system, which Settings ▸ Controllers opens on (EmuSen_Qt.md §7.7.H).
+        let system = self.view.catalog.games.iter().find(|g| g.path == running).and_then(|g| g.system.clone()).unwrap_or_default();
+        QString::from(serde_json::json!({ "games": self.view.catalog.games.len(), "running": title, "systems": systems, "game": running, "system": system }).to_string().as_str())
     }
 
     pub fn home_card_facts(&self, suspended: &QString, console: &QString, paused: &QString, game_mode: bool, startable: &QString, tools: &QString) -> QString {

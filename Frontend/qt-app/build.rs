@@ -5,7 +5,7 @@ fn main() {
     CxxQtBuilder::new_qml_module(
         QmlModule::new("EmuSen.App")
             .version(1, 0)
-            .qml_files(["qml/Main.qml", "qml/Faces.qml", "qml/PauseCard.qml", "qml/MenuCard.qml", "qml/CardPane.qml", "qml/ThemeHost.qml", "qml/Themes.qml", "qml/Settings.qml", "qml/Cores.qml", "qml/GamePage.qml", "qml/SearchScreen.qml", "qml/ListCardScreen.qml", "qml/ThemesScreen.qml", "qml/ToolScreen.qml", "qml/PageScreen.qml", "qml/PauseScreen.qml", "qml/ResumeQuestion.qml", "qml/LaunchQuestion.qml", "qml/NoticeScreen.qml"])
+            .qml_files(["qml/Main.qml", "qml/Faces.qml", "qml/PauseCard.qml", "qml/MenuCard.qml", "qml/CardPane.qml", "qml/ThemeHost.qml", "qml/Themes.qml", "qml/Settings.qml", "qml/Cores.qml", "qml/GamePage.qml", "qml/SearchScreen.qml", "qml/ListCardScreen.qml", "qml/ThemesScreen.qml", "qml/ToolScreen.qml", "qml/PageScreen.qml", "qml/HomeCardScreen.qml", "qml/PauseScreen.qml", "qml/ResumeQuestion.qml", "qml/LaunchQuestion.qml", "qml/NoticeScreen.qml"])
             .depend("QtQuick")
             .depend("QtQuick.Shapes")
             .depend("QtQuick.Effects")

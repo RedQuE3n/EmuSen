@@ -498,47 +498,13 @@ Window {
             onOpenFolder: (path) => folders.open(path)
             onSaid: (words) => program.said(words, true, false)
         }
-        // The Home card over Home, opened at Power by its place (EmuSen_Interface.md §2.3; EmuSen_BigPicture.md §51.2).
-        Kit.NormalizedCanvas {
-            id: homeCardCanvas
-            objectName: "homeCardCanvas"
-            readonly property alias slide: homeCard.slide
-            visible: homeCard.open || homeCard.leaving
-            CardModel {
-                id: homeCardModel
-                objectName: "homeCardModel"
-                card: CardModel.Home
-                start: screens.page
-                shown: screens.shown === Screens.HomeCard
-                // Every fact is an argument, so the card follows the library's consoles and tools as they are read.
-                facts: library.homeCardFacts(player.session.running ? player.session.game : "", player.session.running ? player.session.console : "", clock.paused, program.gameMode, library.startable, library.toolSummaries)
-                onActed: (key) => screens.act(key)
-                onClosed: screens.close()
-            }
-            MenuCard {
-                id: homeCard
-                anchors.fill: parent
-                open: screens.shown === Screens.HomeCard
-                focus: open
-                padFamily: program.padFamily
-                rows: homeCardModel
-                title: homeCardModel.title
-                breadcrumb: homeCardModel.breadcrumb
-                footer: homeCardModel.footer
-                current: homeCardModel.current
-                paneLines: homeCardModel.paneLines
-                paneMuted: homeCardModel.paneMuted
-                panePicture: homeCardModel.panePicture
-                paneCaption: homeCardModel.paneCaption
-                help: HelpModel {
-                    screen: homeCardModel.help
-                }
-                onChosen: (index) => homeCardModel.choose(index)
-                onStepped: (index, by, held) => homeCardModel.step(index, by)
-                onFocused: (index) => homeCardModel.select(index)
-                onBacked: homeCardModel.back()
-                onActed: (key) => screens.act(key)
-            }
+        HomeCardScreen {
+            screens: screens
+            library: library
+            session: player.session
+            clock: clock
+            gameMode: program.gameMode
+            padFamily: program.padFamily
         }
         PauseScreen {
             screens: screens

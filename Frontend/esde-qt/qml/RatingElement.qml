@@ -12,6 +12,7 @@ ElementBox {
     required property string unfilledMark
     required property color tint
     required property bool overlay
+    required property bool nearest
     readonly property real star: root.width / 5
     Item {
         x: root.overlay ? 0 : root.width * root.value
@@ -28,6 +29,7 @@ ElementBox {
                     source: root.unfilledSource
                     mark: root.unfilledMark
                     tint: root.tint
+                    nearest: root.nearest
                 }
             }
         }
@@ -45,6 +47,7 @@ ElementBox {
                     source: root.filledSource
                     mark: root.filledMark
                     tint: root.tint
+                    nearest: root.nearest
                 }
             }
         }

@@ -33,7 +33,8 @@ void main() {
     c.rgb += 0.3 * brightness * c.a;
     float luma = dot(c.rgb, vec3(0.299, 0.587, 0.114));
     c.rgb = mix(vec3(luma), c.rgb, saturation);
-    vec4 t = mix(tint, tintEnd, vertical > 0.5 ? uv.y : uv.x);
+    // The gradient runs across the drawn box, as ES-DE colours the quad's corners, whatever the crop, tile or flip (EmuSen_Qt.md §4.5.7).
+    vec4 t = mix(tint, tintEnd, vertical > 0.5 ? qt_TexCoord0.y : qt_TexCoord0.x);
     // Qt hands a color uniform over premultiplied (measured 2026-11-08: 80FF8000 read 64 levels when multiplied by its alpha again).
     c *= t;
     c.rgb *= dim;

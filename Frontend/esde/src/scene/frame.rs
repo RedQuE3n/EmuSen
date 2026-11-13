@@ -183,6 +183,10 @@ pub struct Picture {
     pub nearest: bool,
     /// Added to each colour channel at 0.3 a step (THEMES.md, brightness); 0 for none.
     pub brightness: f64,
+    /// flipHorizontal and flipVertical: the texture mirrored within its box.
+    pub flip: (bool, bool),
+    /// THEMES.md mipmap: smoother when drawn far below its own size.
+    pub mipmap: bool,
     /// A GIF's frame at the time; None until the painter reports the file's frame delays.
     pub frame: Option<u32>,
 }
@@ -250,6 +254,8 @@ pub struct Rating {
     pub tint: Color,
     /// The filled stars over the unfilled (true) or beside them.
     pub overlay: bool,
+    /// interpolation nearest: a star file drawn larger than its own size keeps its pixels.
+    pub nearest: bool,
 }
 
 /// An icon in a box of the element's, and the colour it is multiplied by.
@@ -260,7 +266,7 @@ pub struct Overlay {
     pub y: f64,
     pub w: f64,
     pub h: f64,
-    pub tint: Color,
+    pub tint: Tint,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -277,6 +283,8 @@ pub struct Badge {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Badges {
     pub slots: Vec<Badge>,
+    /// interpolation nearest: a picture file drawn larger than its own size keeps its pixels.
+    pub nearest: bool,
 }
 
 /// A pad button by its place, as THEMES.md's help entries name them (a, b, x, y in Xbox positions).
@@ -429,7 +437,7 @@ pub struct Slot {
     /// Multiplies the colour of a picture or a text.
     pub dim: f64,
     pub saturation: f64,
-    pub tint: Color,
+    pub tint: Tint,
     /// A horizontal row's mirror image under the fitted picture: its opacity at the picture's edge and how fast it fades.
     pub reflection: Option<(f64, f64)>,
 }
@@ -442,6 +450,12 @@ pub struct Carousel {
     pub fit: Fit,
     /// Where a contained picture sits in its item box.
     pub image_align: (HAlign, VAlign),
+    /// Where a covered picture is cropped from, fractions of the source.
+    pub crop_pos: (f64, f64),
+    pub nearest: bool,
+    /// imageCornerRadius in pixels of the item box.
+    pub image_radius: f64,
+    pub brightness: f64,
     pub text: ItemText,
 }
 
@@ -452,7 +466,7 @@ pub struct Bar {
     pub y: f64,
     pub w: f64,
     pub h: f64,
-    pub color: Color,
+    pub tint: Tint,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -503,13 +517,17 @@ pub struct Grid {
     pub image_scale: f64,
     pub image_radius: f64,
     pub tint: Tint,
-    pub selected_tint: Option<Color>,
+    /// The selected item's tint, when imageSelectedColor or imageSelectedColorEnd is set.
+    pub selected_tint: Option<Tint>,
     pub saturation: f64,
-    pub background: Option<Color>,
+    pub brightness: f64,
+    pub background: Option<Tint>,
     pub background_image: Option<String>,
     pub background_scale: f64,
     pub background_radius: f64,
-    pub selector: Option<Color>,
+    pub selector: Option<Tint>,
+    /// What the selector picture is multiplied by, which takes selectorColorEnd only where the background is graded.
+    pub selector_image_tint: Tint,
     pub selector_image: Option<String>,
     pub selector_scale: f64,
     pub selector_radius: f64,

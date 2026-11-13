@@ -10,6 +10,11 @@ ElementBox {
     required property int fit
     required property real alignX
     required property real alignY
+    required property real cropX
+    required property real cropY
+    required property bool nearest
+    required property real radius
+    required property real brightness
     required property bool hasBackground
     required property color background
     required property color backgroundEnd
@@ -55,6 +60,8 @@ ElementBox {
             required property real dim
             required property real saturation
             required property color tint
+            required property color tintEnd
+            required property bool gradientVertical
             required property bool reflected
             required property real reflectionOpacity
             required property real reflectionFalloff
@@ -89,6 +96,13 @@ ElementBox {
                 alignX: root.alignX
                 alignY: root.alignY
                 tint: slot.tint
+                tintEnd: slot.tintEnd
+                gradientVertical: slot.gradientVertical
+                cropX: root.cropX
+                cropY: root.cropY
+                nearest: root.nearest
+                radius: root.radius
+                brightness: root.brightness
                 saturation: slot.saturation
                 dim: slot.dim
                 sourceScale: slot.grow
@@ -111,6 +125,13 @@ ElementBox {
                 alignY: 0
                 flipped: true
                 tint: slot.tint
+                tintEnd: slot.tintEnd
+                gradientVertical: slot.gradientVertical
+                cropX: root.cropX
+                cropY: root.cropY
+                nearest: root.nearest
+                radius: root.radius
+                brightness: root.brightness
                 saturation: slot.saturation
                 dim: slot.dim
                 sourceScale: slot.grow

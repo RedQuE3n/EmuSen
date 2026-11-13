@@ -148,7 +148,7 @@ selectorHeight	float	-	-	OneAndAHalfFontSize	0	1	-	-	single	-	-	-	-	-	-
 selectorHorizontalOffset	float	0	-	-	-1	1	-	-	single	-	-	-	-	-	-
 selectorVerticalOffset	float	0	-	-	-1	1	-	-	single	-	-	-	-	-	-
 selectorColor	color	333333FF	-	-	-	-	-	-	single	-	-	-	-	-	-
-selectorColorEnd	color	333333FF	-	-	-	-	-	-	single	-	-	-	-	-	-
+selectorColorEnd	color	-	selectorColor	-	-	-	-	-	single	-	-	-	-	-	-
 selectorGradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
 selectorImagePath	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
 selectorImageTile	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-

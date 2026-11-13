@@ -34,14 +34,24 @@ ElementBox {
     required property bool gradientVertical
     required property bool hasSelectedTint
     required property color selectedTint
+    required property color selectedTintEnd
+    required property bool selectedGradientVertical
+    required property real brightness
     required property real saturation
     required property bool hasBackground
     required property color background
+    required property color backgroundEnd
+    required property bool backgroundVertical
     required property url backgroundSource
     required property real backgroundScale
     required property real backgroundRadius
     required property bool hasSelector
     required property color selectorColor
+    required property color selectorColorEnd
+    required property bool selectorVertical
+    required property color selectorImageTint
+    required property color selectorImageTintEnd
+    required property bool selectorImageVertical
     required property url selectorSource
     required property real selectorScale
     required property real selectorRadius
@@ -93,13 +103,18 @@ ElementBox {
             TapHandler {
                 onTapped: root.esde.tap(cell.index)
             }
+            // A background or selector picture stands in for its fill, and the fill's colours tint it (ES-DE 3.4.1 GridComponent; EmuSen_Qt.md §4.5.7).
             Rectangle {
                 anchors.centerIn: parent
-                visible: root.hasBackground
+                visible: root.hasBackground && root.backgroundSource.toString().length === 0
                 width: cell.width * root.backgroundScale
                 height: cell.height * root.backgroundScale
                 radius: root.backgroundRadius
-                color: root.background
+                gradient: Gradient {
+                    orientation: root.backgroundVertical ? Gradient.Vertical : Gradient.Horizontal
+                    GradientStop { position: 0; color: root.background }
+                    GradientStop { position: 1; color: root.backgroundEnd }
+                }
             }
             Picture {
                 anchors.centerIn: parent
@@ -107,15 +122,22 @@ ElementBox {
                 height: cell.height * root.backgroundScale
                 source: root.backgroundSource
                 radius: root.backgroundRadius
+                tint: root.hasBackground ? root.background : Qt.rgba(1, 1, 1, 1)
+                tintEnd: root.hasBackground ? root.backgroundEnd : Qt.rgba(1, 1, 1, 1)
+                gradientVertical: root.backgroundVertical
             }
             Rectangle {
                 anchors.centerIn: parent
-                visible: root.hasSelector && cell.chosen
+                visible: root.hasSelector && cell.chosen && root.selectorSource.toString().length === 0
                 z: root.selectorOnTop ? 2 : 0
                 width: cell.width * root.selectorScale
                 height: cell.height * root.selectorScale
                 radius: root.selectorRadius
-                color: root.selectorColor
+                gradient: Gradient {
+                    orientation: root.selectorVertical ? Gradient.Vertical : Gradient.Horizontal
+                    GradientStop { position: 0; color: root.selectorColor }
+                    GradientStop { position: 1; color: root.selectorColorEnd }
+                }
             }
             Picture {
                 anchors.centerIn: parent
@@ -125,6 +147,9 @@ ElementBox {
                 height: cell.height * root.selectorScale
                 source: root.selectorSource
                 radius: root.selectorRadius
+                tint: root.selectorImageTint
+                tintEnd: root.selectorImageTintEnd
+                gradientVertical: root.selectorImageVertical
             }
             Picture {
                 anchors.centerIn: parent
@@ -139,8 +164,9 @@ ElementBox {
                 nearest: root.nearest
                 radius: root.radius
                 tint: cell.chosen && root.hasSelectedTint ? root.selectedTint : root.tint
-                tintEnd: cell.chosen && root.hasSelectedTint ? root.selectedTint : root.tintEnd
-                gradientVertical: root.gradientVertical
+                tintEnd: cell.chosen && root.hasSelectedTint ? root.selectedTintEnd : root.tintEnd
+                gradientVertical: cell.chosen && root.hasSelectedTint ? root.selectedGradientVertical : root.gradientVertical
+                brightness: root.brightness
                 saturation: root.saturation * (root.unfocusedSaturation + (1 - root.unfocusedSaturation) * cell.level)
                 dim: cell.dim
                 sourceScale: root.itemScale

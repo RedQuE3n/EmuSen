@@ -18,6 +18,10 @@ ElementBox {
     required property real saturation
     required property real radius
     required property bool nearest
+    required property real brightness
+    required property bool mirror
+    required property bool mirrorVertically
+    required property bool mipmap
     Picture {
         id: picture
         anchors.fill: parent
@@ -35,6 +39,10 @@ ElementBox {
         saturation: root.saturation
         radius: root.radius
         nearest: root.nearest
+        brightness: root.brightness
+        mirror: root.mirror
+        mirrorVertically: root.mirrorVertically
+        mipmap: root.mipmap
         onOwnHeightChanged: root.esde.measured(root.elementId, picture.ownWidth, picture.ownHeight)
         // A new picture of the same size is reported too, since the scene keys a measurement by what it shows.
         onStatusChanged: if (picture.status === Image.Ready) root.esde.measured(root.elementId, picture.ownWidth, picture.ownHeight)

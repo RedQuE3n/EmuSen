@@ -142,6 +142,7 @@ impl Assets {
         let p = |n: &str| dir.join(n);
         common::bmp(&p("a.bmp"), 60, 80, |x, y| [[[255, 140, 0], [0, 128, 128]], [[128, 0, 128], [255, 215, 0]]][(y >= 40) as usize][(x >= 30) as usize]);
         common::halves(&p("b.bmp"), 80, 50, [128, 0, 128], [255, 215, 0]);
+        common::bmp(&p("fine.bmp"), 64, 64, |x, y| if (x + y) % 2 == 0 { [255, 255, 255] } else { [0, 0, 0] });
         common::halves(&p("screenshot.bmp"), 80, 70, [128, 0, 128], [255, 215, 0]);
         common::halves(&p("marquee.bmp"), 100, 30, [220, 20, 60], [128, 128, 0]);
         common::halves(&p("other.bmp"), 70, 70, [70, 130, 180], [250, 128, 114]);
@@ -163,6 +164,9 @@ impl Assets {
         svg("icon-1.svg", "<circle cx='10' cy='10' r='9' fill='#fff' fill-opacity='0.5'/>");
         svg("icon-2.svg", "<rect x='2' y='2' width='16' height='16' fill='#888'/>");
         svg("icon-3.svg", "<path d='M10 1L19 19H1Z' fill='#fff'/>");
+        // gameOverridePath's folder: <system>/<the case game's file stem>, as ES-DE looks it up.
+        std::fs::create_dir_all(p("overrides/snes")).unwrap();
+        svg("overrides/snes/Ember Circuit (Synthetic).svg", "<rect x='0' y='0' width='20' height='10' fill='#0f0'/>");
         Assets { dir: dir.to_owned() }
     }
 
@@ -171,6 +175,8 @@ impl Assets {
         let fonts = concat!(env!("CARGO_MANIFEST_DIR"), "/../kit-qt/fonts/");
         text.replace("{A}", &p("a.bmp"))
             .replace("{B}", &p("b.bmp"))
+            .replace("{C}", &p("fine.bmp"))
+            .replace("{O}", &p("overrides"))
             .replace("{X}", "/nonexistent/emusen/scene/missing.png")
             .replace("{G2}", &p("checker.gif"))
             .replace("{G}", &p("four.gif"))

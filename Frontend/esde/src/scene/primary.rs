@@ -1,7 +1,7 @@
 //! The primary elements' layouts at a time, translated from the C# PrimaryElements and GridElements and LunaP's
 //! ImageCarousel and TextRowList (EmuSen_BigPicture.md §13.2, §16, §36.3, §39.2; EmuSen_Qt.md §4.5.5).
 
-use crate::loader::{Element, SystemKind};
+use crate::loader::{Color, Element, SystemKind};
 
 use super::data::Data;
 use super::frame::*;
@@ -51,6 +51,8 @@ pub fn row(e: &Element, view: &str, data: &Data, i: usize) -> Option<Row> {
         }
     };
     let fallback = existing(e.path("defaultImage"));
+    // A folder's picture falls back to defaultFolderImage, then defaultImage (ES-DE 3.4.1 `GamelistBase::populateList`).
+    let image = || media(e, "media", Some(g)).or(if g.folder { existing(e.path("defaultFolderImage")).or_else(|| fallback.clone()) } else { fallback.clone() });
     Some(match e.kind() {
         "textlist" => {
             let ascii = e.string("collectionIndicators") == Some("ascii");
@@ -71,13 +73,24 @@ pub fn row(e: &Element, view: &str, data: &Data, i: usize) -> Option<Row> {
             let text = if g.in_collection && ascii { format!("!{text}") } else { text };
             Row { text: cased(&text), image: None, marker, folder: g.folder }
         }
-        "grid" => {
-            let folder_image = existing(e.path("defaultFolderImage")).or_else(|| fallback.clone());
-            let image = media(e, "media", Some(g)).or(if g.folder { folder_image } else { fallback });
-            Row { text: cased(&suffixed(e.bool("systemNameSuffix") != Some(false))), image, marker: Marker::None, folder: g.folder }
-        }
-        _ => Row { text: cased(&g.name), image: media(e, "media", Some(g)).or(fallback), marker: Marker::None, folder: g.folder },
+        "grid" => Row { text: cased(&suffixed(e.bool("systemNameSuffix") != Some(false))), image: image(), marker: Marker::None, folder: g.folder },
+        _ => Row { text: cased(&g.name), image: image(), marker: Marker::None, folder: g.folder },
     })
+}
+
+/// The selected item's tint when imageSelectedColor or imageSelectedColorEnd is set: the end the selected colour unless
+/// given, the colour `start` when only the end is, horizontal unless imageSelectedGradientType says vertical, whatever
+/// imageGradientType says (ES-DE 3.4.1 `CarouselComponent::applyTheme` and `render`, `GridComponent::applyTheme` and
+/// `render`; EmuSen_Qt.md §4.5.7).
+fn selected_tint(e: &Element, start: Color) -> Option<Tint> {
+    // The catalogue's sameAs fills both from imageColor, so what the theme set is read from `explicit`.
+    let set = |p: &str| e.explicit.contains_key(p).then(|| e.color(p)).flatten();
+    let (color, end) = (set("imageSelectedColor"), set("imageSelectedColorEnd"));
+    if color.is_none() && end.is_none() {
+        return None;
+    }
+    let color = color.unwrap_or(start);
+    Some(Tint { color, end: end.unwrap_or(color), vertical: e.string("imageSelectedGradientType") == Some("vertical") })
 }
 
 fn item_text(e: &Element, data: &Data, default_px: f32, scale: bool) -> ItemText {
@@ -111,8 +124,9 @@ pub fn carousel(e: &Element, data: &Data, count: usize, position: f64, bw: f64, 
     let unfocused_sat = (e.float("unfocusedItemSaturation").unwrap_or(1.0) as f64).clamp(0.0, 1.0);
     let unfocused_dim = (e.float("unfocusedItemDimming").unwrap_or(1.0) as f64).clamp(0.0, 1.0);
     let saturation = (e.float("imageSaturation").unwrap_or(1.0) as f64).clamp(0.0, 1.0);
-    let base_tint = color(e, "imageColor", 0xFFFF_FFFF);
-    let selected_tint = e.color("imageSelectedColor").unwrap_or(base_tint);
+    let base_tint = tint(e, "imageColor", "imageColorEnd", "imageGradientType");
+    // ES-DE's carousel takes the selected colour's default before it reads imageColor, so white.
+    let selected_tint = selected_tint(e, Tint::WHITE.color).unwrap_or(base_tint);
     let item_v = v_align(e.string("itemVerticalAlignment"), VAlign::Center);
     let item_h = if kind == "horizontalWheel" { HAlign::Center } else { h_align(e.string("itemHorizontalAlignment").or(Some("center"))) };
     let item = pixels(e.pair("itemSize"), sw, sh).unwrap_or((0.0, 0.0));
@@ -310,7 +324,17 @@ pub fn carousel(e: &Element, data: &Data, count: usize, position: f64, bw: f64, 
     let image_align = (if across && !wheel { HAlign::Center } else { item_h }, if !across && !wheel { VAlign::Center } else { item_v });
     let mut text = item_text(e, data, 0.085, true);
     text.line_spacing = e.float("lineSpacing").unwrap_or(1.5) as f64;
-    Carousel { slots: slots.into_iter().map(|(_, s)| s).collect(), background, fit: fit_of(e), image_align, text }
+    Carousel {
+        slots: slots.into_iter().map(|(_, s)| s).collect(),
+        background,
+        fit: fit_of(e),
+        image_align,
+        crop_pos: e.pair("imageCropPos").map_or((0.5, 0.5), |p| (p.x.clamp(0.0, 1.0) as f64, p.y.clamp(0.0, 1.0) as f64)),
+        nearest: e.string("imageInterpolation") == Some("nearest"),
+        image_radius: e.float("imageCornerRadius").unwrap_or(0.0).clamp(0.0, 0.5) as f64 * sw,
+        brightness: e.float("imageBrightness").unwrap_or(0.0).clamp(-2.0, 2.0) as f64,
+        text,
+    }
 }
 
 /// A text list with its selection, in a box `bw` × `bh` pixels; the selection kept at the middle row once the list is longer than its window.
@@ -326,6 +350,8 @@ pub fn textlist(e: &Element, data: &Data, count: usize, selected: usize, bw: f64
     let primary = color(e, "primaryColor", 0x0000_FFFF);
     let selected_color = e.color("selectedColor").unwrap_or(primary);
     let selector_color = color(e, "selectorColor", 0x3333_33FF);
+    let vertical = e.string("selectorGradientType") == Some("vertical");
+    let selector = Tint { color: selector_color, end: e.color("selectorColorEnd").unwrap_or(selector_color), vertical };
     let y = (selected as f64 - first_row as f64) * row_h + e.float("selectorVerticalOffset").unwrap_or(0.0) as f64 * sh;
     let back = color(e, "selectedBackgroundColor", 0);
     let m = e.pair("selectedBackgroundMargins").unwrap_or_default();
@@ -334,7 +360,7 @@ pub fn textlist(e: &Element, data: &Data, count: usize, selected: usize, bw: f64
         row_h,
         band_h: selector_h,
         content_y: first_row as f64 * row_h,
-        selector: (selector_color.a() > 0 && selected < count).then_some(Bar { x: 0.0, y, w: bw, h: selector_h, color: selector_color }),
+        selector: ((selector.color.a() > 0 || selector.end.a() > 0) && selected < count).then_some(Bar { x: 0.0, y, w: bw, h: selector_h, tint: selector }),
         selected_background: (back.a() > 0).then(|| {
             (
                 back,
@@ -360,6 +386,12 @@ pub fn textlist(e: &Element, data: &Data, count: usize, selected: usize, bw: f64
 pub fn grid(e: &Element, g: &GridGeometry, focus: GridFocus, data: &Data) -> Grid {
     let sw = data.width;
     let image_tint = tint(e, "imageColor", "imageColorEnd", "imageGradientType");
+    // Each fill only with its colour set; the selector picture takes its end only where the background is graded (ES-DE
+    // 3.4.1 `GridComponent::applyTheme`; EmuSen_Qt.md §4.5.7).
+    let background = e.color("backgroundColor").map(|_| tint(e, "backgroundColor", "backgroundColorEnd", "backgroundGradientType"));
+    let selector = e.color("selectorColor").map(|_| tint(e, "selectorColor", "selectorColorEnd", "selectorGradientType"));
+    let graded = background.is_some_and(|b| b.color != b.end);
+    let selector_image_tint = selector.map_or(Tint::WHITE, |t| if graded { t } else { Tint { end: t.color, vertical: false, ..t } });
     Grid {
         columns: g.columns(),
         item: g.item,
@@ -380,13 +412,15 @@ pub fn grid(e: &Element, g: &GridGeometry, focus: GridFocus, data: &Data) -> Gri
         image_scale: e.float("imageRelativeScale").unwrap_or(1.0) as f64,
         image_radius: e.float("imageCornerRadius").unwrap_or(0.0) as f64 * sw,
         tint: image_tint,
-        selected_tint: e.color("imageSelectedColor").filter(|c| *c != image_tint.color),
+        selected_tint: selected_tint(e, image_tint.color),
         saturation: e.float("imageSaturation").unwrap_or(1.0) as f64,
-        background: e.color("backgroundColor"),
+        brightness: e.float("imageBrightness").unwrap_or(0.0).clamp(-2.0, 2.0) as f64,
+        background,
         background_image: existing(e.path("backgroundImage")),
         background_scale: e.float("backgroundRelativeScale").unwrap_or(1.0) as f64,
         background_radius: e.float("backgroundCornerRadius").unwrap_or(0.0) as f64 * sw,
-        selector: e.color("selectorColor"),
+        selector,
+        selector_image_tint,
         selector_image: existing(e.path("selectorImage")),
         selector_scale: e.float("selectorRelativeScale").unwrap_or(1.0) as f64,
         selector_radius: e.float("selectorCornerRadius").unwrap_or(0.0) as f64 * sw,

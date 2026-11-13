@@ -459,41 +459,30 @@ Window {
             onRestyled: (esde) => program.esdeChosen = program.esdeChosen && esde
         }
         // Cores on the tool screen, from Home's place (EmuSen_Interface.md §15; EmuSen_Qt.md §7.7).
-        ToolModel {
-            id: coresModel
-            objectName: "coresModel"
-            tool: ToolModel.Cores
+        ToolScreen {
+            objectName: "cores"
+            kind: ToolModel.Cores
+            shownAs: Screens.Cores
+            screens: screens
             platformLibrary: program.platformLibrary
             cores: library.cores
             world: program.coresWorld
-            open: screens.shown === Screens.Cores
+            padFamily: program.padFamily
+            splashShown: program.splashShown
             // Open Folder on a firmware page, through the program's one action for it (EmuSen_Qt.md §7.7.E).
             onOpenFolder: (path) => folders.open(path)
-        }
-        Cores {
-            objectName: "cores"
-            visible: screens.shown === Screens.Cores
-            tool: coresModel
-            padFamily: program.padFamily
-            inputs: visible && !program.splashShown
-            onBacked: screens.back()
+            onSaid: (words) => program.said(words, true, false)
         }
         // A tool of jobs on the same tool screen: Library Manager, Compressed Discs or Packages, as Screens names it (tools/jobs.rs).
-        ToolModel {
-            id: jobsModel
-            objectName: "jobsModel"
-            tool: ToolModel.Jobs
-            jobs: screens.tool
-            platformLibrary: program.platformLibrary
-            open: screens.shown === Screens.Tool
-        }
-        Cores {
+        ToolScreen {
             objectName: "jobs"
-            visible: screens.shown === Screens.Tool
-            tool: jobsModel
+            kind: ToolModel.Jobs
+            shownAs: Screens.Tool
+            jobs: screens.tool
+            screens: screens
+            platformLibrary: program.platformLibrary
             padFamily: program.padFamily
-            inputs: visible && !program.splashShown
-            onBacked: screens.back()
+            splashShown: program.splashShown
         }
         // A game's page, from X on Home and the grid, a theme's openPage and the Home card's Selected game (EmuSen_Qt.md §7.8);
         // its media viewer, scrape and Edit Details are its own (§7.8.2).
@@ -712,10 +701,6 @@ Window {
         Connections {
             target: pageModel
             function onProblemChanged() { program.said(pageModel.problem, true, false) }
-        }
-        Connections {
-            target: coresModel
-            function onProblemChanged() { program.said(coresModel.problem, true, false) }
         }
         // The pads unread: opening them or a tick failed, said once until they read again (EmuSen_Qt.md §7.7.H5).
         Connections {

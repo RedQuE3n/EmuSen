@@ -3,6 +3,7 @@
 //! images. Nothing here names a runtime crate: the library is reached as the front end reaches it, by its path.
 
 pub mod cores;
+pub mod scraper;
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

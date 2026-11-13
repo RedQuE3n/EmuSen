@@ -1,10 +1,11 @@
 //! The tool screen as plain data (EmuSen_Interface.md §15.2–15.6, §16; EmuSen_Qt.md §1.2.2): what `ToolModel` puts on
 //! the kit's `ToolScreen` for any tool, the `Source` each tool implements, and `Tool`, which holds what every tool's
 //! screen holds the same way (the section, the filter, the sort, the search, the focus, the marks, the open card and
-//! the question). Cores is the first source; Packages, Library, the Scraper, the Cheats database and Collections follow.
+//! the question). Cores is one source; `jobs` is the other, the tools that are lists of the platform library's jobs.
 //! No Qt here.
 
 pub mod cores;
+pub mod jobs;
 
 use crate::card::Row as CardRow;
 use crate::question::{confirm, Question};
@@ -171,6 +172,14 @@ pub trait Source {
     /// A row of a row's page stepped by Left or Right (or A, by one): the page's rows again, none where it does not step.
     fn step(&mut self, _key: &str, _item: &str, _by: i32) -> Option<Vec<CardRow>> {
         None
+    }
+    /// A row's action on A while a job runs (Stop on the running job's row); none by default.
+    fn running_action(&self, _key: &str) -> Option<Action> {
+        None
+    }
+    /// Whether rows are marked and applied as a plan; a tool whose rows each start at once has no Apply.
+    fn plans(&self) -> bool {
+        true
     }
 }
 
@@ -349,7 +358,7 @@ impl<S: Source> Tool<S> {
     /// The focused row's action on A, none while a job runs.
     pub fn action(&self) -> Option<Action> {
         if self.source.running() {
-            return None;
+            return self.focused_key().and_then(|k| self.source.running_action(&k));
         }
         self.focused_key().and_then(|k| self.source.action(&k))
     }
@@ -367,7 +376,7 @@ impl<S: Source> Tool<S> {
             entries.push((UiButton::Screensaver, "More".to_owned(), Some(MORE)));
         }
         entries.push((UiButton::Options, "List".to_owned(), Some(LIST)));
-        if !running {
+        if !running && self.source.plans() {
             entries.push((UiButton::Menu, APPLY_LABEL.to_owned(), Some(APPLY)));
         }
         entries
@@ -714,5 +723,11 @@ impl Source for Box<dyn Source> {
     }
     fn step(&mut self, key: &str, item: &str, by: i32) -> Option<Vec<CardRow>> {
         (**self).step(key, item, by)
+    }
+    fn running_action(&self, key: &str) -> Option<Action> {
+        (**self).running_action(key)
+    }
+    fn plans(&self) -> bool {
+        (**self).plans()
     }
 }

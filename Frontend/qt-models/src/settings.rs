@@ -240,6 +240,24 @@ fn same(stored: &str, choice: &str) -> bool {
 }
 
 /// A member of a model by its key, a nested model's as `Model.Field`.
+/// A key's stored text in the two models, by its `Model Key` as the description's `applies` names it; none where the
+/// name is not one.
+pub fn applied_in(description: &Value, app: &Value, graphics: &Value, name: &str) -> Option<String> {
+    let (model, key) = description["applies"][name].as_str().or_else(|| description["applies"][name][0].as_str())?.split_once(' ')?;
+    Some(at(document_of(model, app, graphics), key).map(text_of).unwrap_or_default())
+}
+
+/// Whether that stored text is the value `applies` names beside the key.
+pub fn applies_as_in(description: &Value, app: &Value, graphics: &Value, name: &str) -> bool {
+    let wanted = text_of(&description["applies"][name][1]);
+    applied_in(description, app, graphics, name).is_some_and(|v| v == wanted)
+}
+
+/// The model a `Model Key` names: graphics.json's for `GraphicsConfig` and its consoles, else the app's.
+fn document_of<'a>(model: &str, app: &'a Value, graphics: &'a Value) -> &'a Value {
+    if model.starts_with("GraphicsConfig") { graphics } else { app }
+}
+
 fn at<'a>(document: &'a Value, key: &str) -> Option<&'a Value> {
     key.split('.').try_fold(document, |v, part| v.get(part))
 }
@@ -538,11 +556,7 @@ impl SettingsView {
     }
 
     fn document(&self, model: &str) -> &Value {
-        if model.starts_with("GraphicsConfig") {
-            &self.read.graphics
-        } else {
-            &self.read.app
-        }
+        document_of(model, &self.read.app, &self.read.graphics)
     }
 
     /// The stored texts of a key's row: one, or one per console it is set for, a blank or a console without one at the
@@ -972,8 +986,7 @@ impl SettingsView {
 
     /// A key's stored text, by its `Model Key`, as the description's `applies` names it.
     fn applied(&self, name: &str) -> Option<String> {
-        let (model, key) = self.description["applies"][name].as_str().or_else(|| self.description["applies"][name][0].as_str())?.split_once(' ')?;
-        Some(at(self.document(model), key).map(text_of).unwrap_or_default())
+        applied_in(&self.description, &self.read.app, &self.read.graphics, name)
     }
 
     /// The text size chosen, by the word the setting stores; the kit gives its scale (`text_scale_of`).
@@ -982,8 +995,12 @@ impl SettingsView {
     }
 
     fn applies_as(&self, name: &str) -> bool {
-        let wanted = text_of(&self.description["applies"][name][1]);
-        self.applied(name).is_some_and(|v| v == wanted)
+        applies_as_in(&self.description, &self.read.app, &self.read.graphics, name)
+    }
+
+    /// What a running game and its window take from these settings.
+    pub fn play(&self) -> crate::play::PlaySettings {
+        crate::play::PlaySettings::of(&self.description, &self.read.app, &self.read.graphics)
     }
 
     /// Whether the light variant is chosen; System reads as dark until the desktop's choice has a reader.

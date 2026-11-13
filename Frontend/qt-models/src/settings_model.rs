@@ -82,6 +82,15 @@ pub mod qobject {
         #[qproperty(i32, controller_family, cxx_name = "controllerFamily", READ, NOTIFY)]
         #[qproperty(bool, controller_notices, cxx_name = "controllerNotices", READ, NOTIFY)]
         #[qproperty(bool, rumble, READ, NOTIFY)]
+        /// And of a running game and its window (EmuSen_Qt.md §1.8.6): the game's Volume, Output as stored, Sync to
+        /// display, Pause in background, and the frame rate, messages and bar over the game.
+        #[qproperty(f64, volume, READ, NOTIFY = play_changed)]
+        #[qproperty(QString, output, READ, NOTIFY = play_changed)]
+        #[qproperty(bool, sync_to_display, cxx_name = "syncToDisplay", READ, NOTIFY = play_changed)]
+        #[qproperty(bool, pause_in_background, cxx_name = "pauseInBackground", READ, NOTIFY = play_changed)]
+        #[qproperty(bool, show_fps, cxx_name = "showFps", READ, NOTIFY = play_changed)]
+        #[qproperty(bool, show_status_text, cxx_name = "showStatusText", READ, NOTIFY = play_changed)]
+        #[qproperty(bool, show_status_bar, cxx_name = "showStatusBar", READ, NOTIFY = play_changed)]
         /// Whether Guide's chords are read, by Guide chords and `gameMode`, the program's Steam Game Mode (EmuSen_Qt.md §7.7.H6).
         #[qproperty(bool, guide_chords, cxx_name = "guideChords", READ, NOTIFY)]
         #[qproperty(bool, game_mode, cxx_name = "gameMode")]
@@ -197,6 +206,11 @@ pub mod qobject {
         /// The bindings page's drawing changed.
         #[qsignal]
         fn drawn(self: Pin<&mut SettingsModel>);
+
+        /// What a running game takes from the settings changed.
+        #[qsignal]
+        #[cxx_name = "playChanged"]
+        fn play_changed(self: Pin<&mut SettingsModel>);
 
         /// Words to type for a page (a profile's name), starting with `start`; `typing`, `typingTitle` and
         /// `typingPrompt` say the question, and `typed` answers.
@@ -328,6 +342,13 @@ pub struct SettingsModelRust {
     controller_family: i32,
     controller_notices: bool,
     rumble: bool,
+    volume: f64,
+    output: QString,
+    sync_to_display: bool,
+    pause_in_background: bool,
+    show_fps: bool,
+    show_status_text: bool,
+    show_status_bar: bool,
     guide_chords: bool,
     game_mode: bool,
     help: i32,
@@ -405,6 +426,13 @@ impl Default for SettingsModelRust {
             controller_family: -1,
             controller_notices: false,
             rumble: false,
+            volume: 1.0,
+            output: QString::default(),
+            sync_to_display: true,
+            pause_in_background: true,
+            show_fps: false,
+            show_status_text: false,
+            show_status_bar: false,
             guide_chords: false,
             game_mode: false,
             help: shown_screen(Screen::Settings),
@@ -750,6 +778,15 @@ impl qobject::SettingsModel {
         if self.rumble != rumble {
             self.as_mut().rust_mut().rumble = rumble;
             self.as_mut().rumble_changed();
+        }
+        let play = self.view.play();
+        let output = QString::from(&play.output);
+        let now = (self.volume, &self.output, self.sync_to_display, self.pause_in_background, self.show_fps, self.show_status_text, self.show_status_bar);
+        if now != (play.volume, &output, play.sync_to_display, play.pause_in_background, play.show_fps, play.show_status_text, play.show_status_bar) {
+            let mut model = self.as_mut().rust_mut();
+            (model.volume, model.output, model.sync_to_display, model.pause_in_background) = (play.volume, output, play.sync_to_display, play.pause_in_background);
+            (model.show_fps, model.show_status_text, model.show_status_bar) = (play.show_fps, play.show_status_text, play.show_status_bar);
+            self.as_mut().play_changed();
         }
         let chords = self.view.guide_chords(self.game_mode);
         if self.guide_chords != chords {

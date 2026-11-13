@@ -38,3 +38,5 @@ emusen-qt-test.workspace = true
 emusen-client-fixture = { path = "../client-fixture" }
 emusen-crystal-client = { path = "../crystal-client" }
 emusen-kit-core.workspace = true
+# The graphics model a test saves for the console it starts (tests/picture.rs).
+serde_json.workspace = true

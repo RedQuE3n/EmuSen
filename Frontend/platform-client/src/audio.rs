@@ -111,6 +111,11 @@ impl GameSound {
         self.platform.status(unsafe { self.platform.lib.emusen_endymion_audio_set_volume(self.audio.as_ptr(), volume) }.into()).map(drop)
     }
 
+    /// The volume the player plays at, as it holds it.
+    pub fn volume(&self) -> f32 {
+        unsafe { self.platform.lib.emusen_endymion_audio_volume(self.audio.as_ptr()) }
+    }
+
     fn get(&self, which: u32) -> Result<i64> {
         self.platform.status(unsafe { self.platform.lib.emusen_endymion_audio_get(self.audio.as_ptr(), which) })
     }

@@ -24,6 +24,10 @@ pub trait LibrarySource: Send + Sync {
     fn hidden(&self, _games: &[GameFile]) -> Result<Vec<String>, String> {
         Ok(Vec::new())
     }
+    /// The names the player gave games in Edit Details (games.db's `name` edit), by path; a source with no records has none.
+    fn names(&self, _games: &[GameFile]) -> Result<Vec<(String, String)>, String> {
+        Ok(Vec::new())
+    }
     /// The paths of `games` that have been played, the most recent first.
     fn recent(&self, games: &[GameFile]) -> Result<Vec<String>, String>;
     /// The engine each system runs now, by system id: the player's stored choice, else the console's default
@@ -195,6 +199,8 @@ pub struct Catalog {
     pub metadata: Vec<(String, crate::esde_shelves::Metadata)>,
     /// The firmware line of each system that starts empty, by its id: Start Console's pane (Mistress's `FirmwareLine`).
     pub firmware: Vec<(String, String)>,
+    /// The names the player gave games, by path; a game with none is named by its file.
+    pub names: Vec<(String, String)>,
 }
 
 /// One game as the screens show it: its title from its file name, its console, its console's hue, its cover and its facts.
@@ -268,7 +274,7 @@ pub fn games_of_at(key: &str, systems: &[SystemRow], catalog: &Catalog, now: i64
 /// Every game as a row, in the catalog's order: one pass, each fact found by its path in a map.
 fn game_rows(systems: &[SystemRow], catalog: &Catalog, now: i64) -> Vec<GameRow> {
     let by_path = |pairs: &[(String, String)]| -> HashMap<String, String> { pairs.iter().cloned().collect() };
-    let (covers, heroes) = (by_path(&catalog.covers), by_path(&catalog.heroes));
+    let (covers, heroes, names) = (by_path(&catalog.covers), by_path(&catalog.heroes), by_path(&catalog.names));
     let played: HashMap<&str, i64> = catalog.played.iter().map(|(p, at)| (p.as_str(), *at)).collect();
     let favourites: HashSet<&str> = catalog.favourites.iter().map(String::as_str).collect();
     let consoles: HashMap<&str, &SystemRow> = systems.iter().map(|s| (s.id.as_str(), s)).collect();
@@ -283,7 +289,7 @@ fn game_rows(systems: &[SystemRow], catalog: &Catalog, now: i64) -> Vec<GameRow>
             let console = of.map(|s| console_name(s)).unwrap_or_default();
             let when = played.get(g.path.as_str()).map(|at| words::ago(*at, now));
             GameRow {
-                title: title_of(&g.path),
+                title: names.get(&g.path).cloned().unwrap_or_else(|| title_of(&g.path)),
                 hue: of.map_or(0.0, |s| s.look.hue),
                 favourite: favourites.contains(g.path.as_str()),
                 cover: covers.get(&g.path).cloned().unwrap_or_default(),
@@ -527,7 +533,8 @@ pub fn refresh_with(source: &dyn LibrarySource, gamelists: &Gamelists, by_facts:
     let metadata = if themed || by_facts { source.metadata(&games)? } else { Vec::new() };
     // Read for the consoles that start empty alone, a call each, so Start Console's pane says what the runtime finds.
     let firmware = systems.iter().filter(|s| s.starts_empty && !s.engines.is_empty()).map(|s| (s.id.clone(), firmware_line(source.firmware(&s.id)))).collect();
-    let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings, plays, metadata, firmware };
+    let names = source.names(&games)?;
+    let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings, plays, metadata, firmware, names };
     let shelves = source.shelves()?;
     let mut shelved: Vec<SystemRow> = systems.clone();
     shelved.sort_by_key(|s| shelves.iter().position(|id| id == &s.id).unwrap_or(usize::MAX));

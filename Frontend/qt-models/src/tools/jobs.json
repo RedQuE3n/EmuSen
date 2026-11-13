@@ -1,0 +1,110 @@
+[
+  {
+    "tool": "library",
+    "jobs": [
+      {
+        "key": "check",
+        "name": "Check every dump",
+        "about": "Reads every file in the library and checks its size, its sheet, its archive and, for a CHD, the CHD itself.",
+        "doing": "Checking",
+        "request": {
+          "op": "rom-check",
+          "paths": [
+            "/"
+          ],
+          "recursive": true
+        }
+      },
+      {
+        "key": "dups",
+        "name": "Find duplicates",
+        "about": "Hashes every file in the library and lists each dump found more than once.",
+        "doing": "Hashing",
+        "request": {
+          "op": "rom-dups"
+        },
+        "quiet": [
+          "hashed"
+        ]
+      }
+    ]
+  },
+  {
+    "tool": "compressed",
+    "jobs": [
+      {
+        "key": "ls",
+        "name": "List disc games",
+        "about": "Lists the library's disc games, each with its state: converted, changed since, its CHD missing, or not converted.",
+        "doing": "Listing",
+        "request": {
+          "op": "ls",
+          "paths": []
+        }
+      },
+      {
+        "key": "convert",
+        "name": "Convert every disc",
+        "about": "Converts each disc game to CHD in the Compressed folder; each is checked three ways and given a package.",
+        "doing": "Converting",
+        "request": {
+          "op": "convert",
+          "paths": []
+        },
+        "ask": [
+          "Every disc game in the library is converted to CHD. A large library takes hours; Stop ends it after the disc it is on."
+        ]
+      },
+      {
+        "key": "check",
+        "name": "Check converted discs",
+        "about": "Checks each converted disc again: chdman's verify, every track, and the table of contents.",
+        "doing": "Checking",
+        "request": {
+          "op": "check",
+          "paths": []
+        }
+      }
+    ]
+  },
+  {
+    "tool": "packages",
+    "jobs": [
+      {
+        "key": "ls",
+        "name": "List packages",
+        "about": "Lists every package with its state (ok, moved, missing or changed), and the games no package claims.",
+        "doing": "Listing",
+        "request": {
+          "op": "pkg-ls",
+          "unpackaged": true
+        }
+      },
+      {
+        "key": "check",
+        "name": "Check every package",
+        "about": "Hashes each package's game and every file against its manifest.",
+        "doing": "Checking",
+        "request": {
+          "op": "pkg-check",
+          "paths": []
+        }
+      },
+      {
+        "key": "make",
+        "name": "Make packages",
+        "about": "Makes a linked package for each game in the library that has none.",
+        "doing": "Making",
+        "request": {
+          "op": "pkg-make",
+          "paths": [
+            "/"
+          ]
+        },
+        "ask": [
+          "A package is made for each game in the library that has none, linked to the game where it lies."
+        ]
+      }
+    ]
+  }
+]

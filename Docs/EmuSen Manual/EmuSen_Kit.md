@@ -3804,3 +3804,11 @@ theme-qt's `view::games` and qt-models' game page, its starting value included, 
 lacks has the shape 0.75 where it had 0 until 2026-11-11; the reference look's cover rows drew such a cover square and
 Horizon's games drew it with no width, and both now draw it 3:4 (theme-qt's view test). theme-qt's view test holds the
 NES's figure to 0.6993, written down, not computed.
+
+### 7.110 PdfPage: a page of a PDF drawn through Qt PDF (2026-11-12)
+
+`PdfPage` draws one page of a PDF file stretched to its box with Qt PDF's `PdfDocument` and `PdfPageImage`, and gives
+the file's `pages` and the page's `pageSize` in points, so its host fits the box. It is the media viewers' manual: the
+game page's viewer (EmuSen_Qt.md §7.8.2) and esde-qt's `ManualElement`, which drew the same two Qt PDF types itself
+until 2026-11-12. The kit's module now depends on `QtQuick.Pdf`, which esde-qt already did; nothing links Qt PDF that
+did not before. Kit 1.3.

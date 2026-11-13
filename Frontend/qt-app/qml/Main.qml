@@ -325,6 +325,17 @@ Window {
                 }
             }
         }
+        // The chosen theme's token overrides on the program's engine too, which Settings, the cards, the page, the Pause Card, the
+        // tools and the notices read; the kit's with none, the reference's or an ES-DE theme (EmuSen_Qt.md §3.5.1).
+        ThemeStyle {
+            id: themeStyle
+            objectName: "themeStyle"
+            host: program.themeHost?.host ?? null
+        }
+        Connections {
+            target: program.themeHost?.host ?? null
+            function onGenerationChanged() { themeStyle.restyle() }
+        }
         // The ES-DE theme's view in place of Home, Choose a console and the grid while it is the library's look, in window pixels;
         // kept under the cards and while a game plays, so the library comes back where it was left (EmuSen_Qt.md §4.15).
         Loader {
@@ -415,6 +426,8 @@ Window {
             gamePads: pads.gamePads
             gameMode: program.gameMode
             onDoor: (name) => screens.act(name)
+            // A shader's lever moved: the running game's picture follows it at once (EmuSen_Qt.md §1.8.10).
+            onLever: (system, id, value) => player.session.setLever(system, id, value)
             onOpenFolder: (path) => folders.open(path)
             onChooseFolder: (key, start) => folders.choose(key, start)
             // What Settings saved reaches the library's read as it closes: the media viewer plays at the Volume saved (EmuSen_Qt.md §4.14),
@@ -473,7 +486,7 @@ Window {
             onOpenFolder: (path) => folders.open(path)
             onSaid: (words) => program.said(words, true, false)
         }
-        // A tool of jobs on the same tool screen: Library Manager, Compressed Discs or Packages, as Screens names it (tools/jobs.rs).
+        // A tool of jobs on the same tool screen: Library Manager, Compressed Discs or Packages, or the Scraper, as Screens names it (tools/jobs.rs, tools/scraper.rs).
         ToolScreen {
             objectName: "jobs"
             kind: ToolModel.Jobs
@@ -481,8 +494,12 @@ Window {
             jobs: screens.tool
             screens: screens
             platformLibrary: program.platformLibrary
+            cores: library.cores
+            scraperTest: program.scraperTest
             padFamily: program.padFamily
             splashShown: program.splashShown
+            // The Scraper's run ended: the library shows what it fetched.
+            onLibraryChanged: library.refresh()
         }
         PageScreen {
             objectName: "gamePage"

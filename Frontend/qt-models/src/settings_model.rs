@@ -118,6 +118,8 @@ pub mod qobject {
         #[qproperty(i32, tester_hold_ms, cxx_name = "testerHoldMs", READ, NOTIFY = drawn)]
         /// The Pause Card's Game Options ▸ Controllers rows, as plain data for `PauseModel.controllers` (EmuSen_Interface.md §20.3).
         #[qproperty(QString, card_controllers, cxx_name = "cardControllers", READ, NOTIFY = drawn)]
+        /// The Pause Card's Game Options ▸ Display or Sound rows, as plain data for `PauseModel.settings` (settings_card.rs).
+        #[qproperty(QString, card_settings, cxx_name = "cardSettings", READ, NOTIFY = drawn)]
         /// A page's question waiting for typed words: whether one is, its title and its prompt.
         #[qproperty(bool, typing, READ, NOTIFY = asked)]
         #[qproperty(QString, typing_title, cxx_name = "typingTitle", READ, NOTIFY = asked)]
@@ -163,6 +165,15 @@ pub mod qobject {
         /// A on a row.
         #[qinvokable]
         fn choose(self: Pin<&mut SettingsModel>, row: i32);
+
+        /// A slider row moved to `amount`, by the pad's walk or the pointer.
+        #[qinvokable]
+        fn slide(self: Pin<&mut SettingsModel>, row: i32, amount: f64);
+
+        /// A lever of the shader of `system` (a console by its stored name) moved to `value` and saved: a game of that
+        /// console draws with it at once.
+        #[qsignal]
+        fn lever(self: Pin<&mut SettingsModel>, system: QString, id: QString, value: f64);
 
         /// B: the page closed, or `left` raised on a section.
         #[qinvokable]
@@ -235,6 +246,22 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "cardAct"]
         fn card_act(self: Pin<&mut SettingsModel>, index: i32, by: i32);
+
+        /// The card's Display (`page` "display", on `console`'s rows) or Sound opened.
+        #[qinvokable]
+        #[cxx_name = "cardOpen"]
+        fn card_open(self: Pin<&mut SettingsModel>, page: &QString, console: &QString);
+
+        /// A row of the card's Display or Sound stepped (`by` ±1) or chosen (`by` 0); true where it stored a display
+        /// setting the picture is to be read again for.
+        #[qinvokable]
+        #[cxx_name = "cardSettingsAct"]
+        fn card_settings_act(self: Pin<&mut SettingsModel>, index: i32, by: i32) -> bool;
+
+        /// B on a page a door of the card's Display opened: the page closed.
+        #[qinvokable]
+        #[cxx_name = "cardBack"]
+        fn card_back(self: Pin<&mut SettingsModel>);
 
         /// The words typed for the page that asked, or none for a question let go.
         #[qinvokable]
@@ -375,6 +402,7 @@ pub struct SettingsModelRust {
     listening_pad: bool,
     testing: bool,
     card_controllers: QString,
+    card_settings: QString,
     typing: bool,
     typing_title: QString,
     typing_prompt: QString,
@@ -457,6 +485,7 @@ impl Default for SettingsModelRust {
             listening_pad: false,
             testing: false,
             card_controllers: QString::default(),
+            card_settings: QString::default(),
             typing: false,
             typing_title: QString::default(),
             typing_prompt: QString::default(),
@@ -516,6 +545,10 @@ const KIND: i32 = 3;
 const HELD: i32 = 4;
 const MARKED: i32 = 5;
 const KEY: i32 = 6;
+const MINIMUM: i32 = 7;
+const MAXIMUM: i32 = 8;
+const STEP: i32 = 9;
+const AMOUNT: i32 = 10;
 
 impl qobject::SettingsModel {
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
@@ -529,13 +562,17 @@ impl qobject::SettingsModel {
             HELD => QVariant::from(&row.held),
             MARKED => QVariant::from(&row.marked),
             KEY => text(&row.id),
+            MINIMUM..=AMOUNT => self.view.slider(index.row() as usize).map_or_else(QVariant::default, |s| QVariant::from(&s[(role - MINIMUM) as usize])),
             _ => QVariant::default(),
         }
     }
 
     pub fn role_names(&self) -> QHash<QHashPair_i32_QByteArray> {
         let mut roles = QHash::<QHashPair_i32_QByteArray>::default();
-        for (role, name) in [(LABEL, "label"), (VALUE, "value"), (SENTENCE, "sentence"), (KIND, "kind"), (HELD, "held"), (MARKED, "marked"), (KEY, "key")] {
+        for (role, name) in [(LABEL, "label"), (VALUE, "value"), (SENTENCE, "sentence"), (KIND, "kind"), (HELD, "held"), (MARKED, "marked"), (KEY, "key")]
+            .into_iter()
+            .chain([(MINIMUM, "minimum"), (MAXIMUM, "maximum"), (STEP, "step"), (AMOUNT, "amount")])
+        {
             roles.insert(role, QByteArray::from(name));
         }
         roles
@@ -603,6 +640,11 @@ impl qobject::SettingsModel {
 
     pub fn choose(mut self: Pin<&mut Self>, row: i32) {
         let outcome = self.as_mut().rust_mut().view.choose(row.max(0) as usize);
+        self.outcome(outcome);
+    }
+
+    pub fn slide(mut self: Pin<&mut Self>, row: i32, amount: f64) {
+        let outcome = self.as_mut().rust_mut().view.slide(row.max(0) as usize, amount);
         self.outcome(outcome);
     }
 
@@ -700,6 +742,7 @@ impl qobject::SettingsModel {
                 self.refresh();
             }
             Outcome::Reread => self.refresh(),
+            Outcome::Lever { console, id, value } => self.lever(QString::from(console.as_str()), QString::from(id.as_str()), f64::from(value)),
             Outcome::Failed(words) => {
                 self.as_mut().said(words);
                 self.shown(false);
@@ -863,6 +906,7 @@ impl qobject::SettingsModel {
         let (listening, listening_pad, testing) = (self.view.listening(), self.view.listening_pad(), self.view.testing());
         let hold = self.view.tester_hold_ms();
         let card = serde_json::Value::Array(self.view.game_rows().iter().map(|g| g.to_json()).collect()).to_string();
+        let card_settings = self.as_mut().rust_mut().view.card_rows().to_json().to_string();
         let mut r = self.as_mut().rust_mut();
         r.bindings_shown = shown;
         r.drawing = QString::from(d.drawing.as_str());
@@ -879,6 +923,7 @@ impl qobject::SettingsModel {
         r.listening_pad = listening_pad;
         r.testing = testing;
         r.card_controllers = QString::from(card.as_str());
+        r.card_settings = QString::from(card_settings.as_str());
         let problem = self.view.controllers_problem();
         if let Some(words) = problem {
             self.as_mut().said(words);
@@ -893,6 +938,31 @@ impl qobject::SettingsModel {
             self.as_mut().shown(true);
         }
         self.outcome(outcome);
+    }
+
+    pub fn card_open(mut self: Pin<&mut Self>, page: &QString, console: &QString) {
+        let Some(page) = crate::settings_card::CardPage::of(&page.to_string()) else { return };
+        self.as_mut().rust_mut().view.card_open(page, &console.to_string());
+        self.draw();
+    }
+
+    pub fn card_settings_act(mut self: Pin<&mut Self>, index: i32, by: i32) -> bool {
+        let outcome = self.as_mut().rust_mut().view.card_settings_act(index.max(0) as usize, by);
+        let parts = match &outcome {
+            Outcome::All(all) => all.clone(),
+            one => vec![one.clone()],
+        };
+        // A lever is set on the picture's chain by itself (`lever`); any other display setting stored reads it again.
+        let picture = parts.iter().any(|o| matches!(o, Outcome::Saved(crate::settings::Model::Graphics, _)))
+            && !parts.iter().any(|o| matches!(o, Outcome::Lever { .. }));
+        self.outcome(outcome);
+        picture
+    }
+
+    pub fn card_back(mut self: Pin<&mut Self>) {
+        if self.as_mut().rust_mut().view.card_back() {
+            self.draw();
+        }
     }
 
     pub fn typed(mut self: Pin<&mut Self>, words: &QString) {

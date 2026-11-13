@@ -301,7 +301,7 @@ fn items(content: &Content) -> Vec<Item> {
             .collect(),
         Content::Rows(rows) => rows
             .iter()
-            .map(|r| Item { key: r.key.into(), label: r.label.into(), value: r.value.clone(), steps: r.steps, opens: r.opens, ..Item::default() })
+            .map(|r| Item { key: r.key.into(), label: r.label.clone(), value: r.value.clone(), steps: r.steps, opens: r.opens, ..Item::default() })
             .collect(),
     }
 }
@@ -371,7 +371,7 @@ mod tests {
 }
 
 /// What a Yes to the page's question does: a change saved, or the game started from a state.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 enum Pending {
     Change(crate::game_page::Change),
     Play(String),
@@ -436,6 +436,8 @@ pub struct GamePageModelRust {
     typing_start: QString,
     /// The detail the typed words are for.
     typing_for: Option<&'static str>,
+    /// Set to ask the package's job running to stop.
+    job_stop: Option<Arc<std::sync::atomic::AtomicBool>>,
 }
 
 impl Default for GamePageModelRust {
@@ -492,6 +494,7 @@ impl Default for GamePageModelRust {
             typing_title: QString::default(),
             typing_start: QString::default(),
             typing_for: None,
+            job_stop: None,
         }
     }
 }
@@ -503,7 +506,11 @@ impl cxx_qt::Initialize for qobject::GamePageModel {
                 // A new game opens on its Overview, the focus on Play (EmuSen_Interface.md §4 screen 3).
                 model.as_mut().rust_mut().page.section = 0;
                 model.as_mut().rust_mut().page.editing = false;
+                model.as_mut().rust_mut().page.cheating = false;
+                model.as_mut().rust_mut().page.cropping = false;
+                model.as_mut().rust_mut().page.packaging = false;
                 model.as_mut().rust_mut().page.run = None;
+                model.as_mut().rust_mut().page.job = None;
                 model.as_mut().rust_mut().focus = (Some(0), 0);
                 model.as_mut().view_close();
                 if model.section != 0 {
@@ -758,6 +765,27 @@ impl qobject::GamePageModel {
                     model.as_mut().rust_mut().focus = (None, 0);
                     model.as_mut().shown(true);
                 }
+                Outcome::Cheats => {
+                    model.as_mut().rust_mut().page.cheating = true;
+                    model.as_mut().rust_mut().focus = (None, 0);
+                    model.as_mut().shown(true);
+                }
+                Outcome::Crop => {
+                    model.as_mut().rust_mut().page.cropping = true;
+                    model.as_mut().rust_mut().focus = (None, 0);
+                    model.as_mut().shown(true);
+                }
+                Outcome::Package => {
+                    model.as_mut().rust_mut().page.packaging = true;
+                    model.as_mut().rust_mut().focus = (None, 0);
+                    model.as_mut().shown(true);
+                }
+                Outcome::Job(job) => model.package_job(job),
+                Outcome::StopJob => {
+                    if let Some(stop) = &model.job_stop {
+                        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                }
                 Outcome::View(index) => {
                     let viewer = model.page.viewer(index);
                     model.as_mut().rust_mut().viewer = viewer;
@@ -955,36 +983,95 @@ impl qobject::GamePageModel {
         self.as_mut().ran(Some((true, "Starting".into())), "running");
         let thread = self.qt_thread();
         std::thread::spawn(move || {
-            if let Err(why) = source.scrape_start(&file, test.as_ref()) {
+            if let Err(why) = crate::scrape_run::start(&source, std::slice::from_ref(&file), true, test.as_ref()) {
                 let _ = thread.queue(move |mut model| {
                     model.as_mut().ran(Some((false, "It could not start".into())), "idle");
                     model.said(format!("The scrape could not start: {why}"));
                 });
                 return;
             }
-            let mut serial = 0;
-            let ended = loop {
-                serial = source.scrape_wait(serial, 250).unwrap_or(serial);
-                let progress = match source.scrape_progress() {
-                    Ok(p) => p,
-                    Err(why) => break Err(why),
-                };
-                let (going, words) = crate::game_page::run_words(&progress, &file.path);
+            let path = file.path.clone();
+            let followed = crate::scrape_run::follow(&source, |progress| {
+                let (going, words) = crate::game_page::run_words(&progress, &path);
                 let state = progress["state"].as_str().unwrap_or("idle").to_owned();
-                let told = (going, words.clone(), state.clone());
-                let _ = thread.queue(move |model| model.ran(Some((told.0, told.1)), &told.2));
-                if !going {
-                    break Ok(());
-                }
-            };
-            let closed = source.scrape_end();
+                let _ = thread.queue(move |model| model.ran(Some((going, words)), &state));
+            });
             let _ = thread.queue(move |mut model| {
-                if let Some(why) = ended.err().or(closed.err()) {
+                if let Err(why) = followed {
                     model.as_mut().said(format!("The scrape could not be followed: {why}"));
                 }
                 model.refresh();
             });
         });
+    }
+
+    /// The package's job: started through the source, its events drained off the GUI thread and told to the job's row,
+    /// and the page read again once it ends, so the package's row says what it now is.
+    fn package_job(mut self: Pin<&mut Self>, job: crate::game_page::PackageJob) {
+        let Some(source) = self.source.clone() else { return };
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        self.as_mut().rust_mut().job_stop = Some(stop.clone());
+        self.as_mut().rust_mut().page.job = Some((job.key, true, crate::tools::jobs::Run::default()));
+        self.as_mut().shown(false);
+        let (key, file) = (job.key, self.file.path.clone());
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            let ended: Result<(), String> = (|| {
+                let mut running = source.start_job(&job.request)?;
+                let mut asked = false;
+                loop {
+                    if !asked && stop.load(std::sync::atomic::Ordering::Relaxed) {
+                        asked = true;
+                        running.stop()?;
+                    }
+                    let mut events = Vec::new();
+                    let done = running.drain(&mut events)?;
+                    if !events.is_empty() {
+                        let _ = thread.queue(move |model| model.job_told(key, events));
+                    }
+                    if done {
+                        return Ok(());
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+            })();
+            let _ = thread.queue(move |mut model| {
+                if model.file.path != file {
+                    return;
+                }
+                if let Some((_, running, run)) = model.as_mut().rust_mut().page.job.as_mut() {
+                    *running = false;
+                    if let Err(why) = &ended {
+                        run.outcome = Some(crate::tools::Words::new(why.clone(), crate::tools::Tone::Error));
+                    }
+                }
+                let failed = model.page.job.as_ref().and_then(|(_, _, run)| run.outcome.clone()).filter(|o| o.tone == crate::tools::Tone::Error);
+                if let Some(o) = failed {
+                    model.as_mut().said(format!("The package's job failed: {}", o.words));
+                }
+                model.as_mut().shown(false);
+                // A package made changes what the library's scan finds of the game.
+                if key == crate::game_page::MAKE {
+                    model.as_mut().edited();
+                }
+                model.refresh();
+            });
+        });
+    }
+
+    /// The package's job's events taken into its run.
+    fn job_told(mut self: Pin<&mut Self>, key: &'static str, events: Vec<serde_json::Value>) {
+        {
+            let mut model = self.as_mut().rust_mut();
+            let Some((k, _, run)) = model.page.job.as_mut() else { return };
+            if *k != key {
+                return;
+            }
+            for e in &events {
+                run.take(e, &[]);
+            }
+        }
+        self.shown(false);
     }
 
     /// The page's scrape told: the Scrape row's words and the service's state.

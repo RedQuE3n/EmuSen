@@ -164,12 +164,24 @@ impl Grammar {
         pressed
     }
 
-    /// Nothing is a press until it has been let go, so the button that closed a menu does not reach what is under it.
+    /// Nothing is a press until it has been let go, so the button that closed a menu does not reach what is under it. A
+    /// chord seen down stays one chord until `menu_chord` sees it let go, whatever `held` leaves out.
     pub fn forget(&mut self, held: impl Fn(UiButton) -> bool) {
         for button in UiButton::ALL {
             self.held[button.index()] = held(button);
         }
-        self.chord_held = Self::chord(&held);
+        self.chord_held = self.chord_held || Self::chord(&held);
+    }
+
+    /// The chord seen let go between two calls of `menu_chord`, as a queue of events can show where the buttons' state
+    /// at the next call cannot: let go and pressed again before it, it is a new chord.
+    pub fn chord_let_go(&mut self) {
+        self.chord_held = false;
+    }
+
+    /// Whether the menu chord is down among the buttons `held` says are.
+    pub fn chord_down(held: impl Fn(UiButton) -> bool) -> bool {
+        Self::chord(&held)
     }
 
     fn chord(held: &impl Fn(UiButton) -> bool) -> bool {

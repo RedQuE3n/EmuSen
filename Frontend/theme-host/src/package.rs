@@ -8,7 +8,8 @@ use emusen_theme_manifest::{parse, Screen, TokenOverride, TokenValue, Variant};
 pub struct Package {
     pub name: String,
     pub screens: Vec<Screen>,
-    /// The token overrides `theme.json` names, each for a variant, which the host's program sets on the theme's engine only.
+    /// The token overrides `theme.json` names, each for a variant, which the host's program sets on the theme's engine and,
+    /// for the chosen theme, on its own (decided by the tester, 2026-11-13).
     pub tokens: Vec<TokenOverride>,
 }
 
@@ -24,14 +25,18 @@ pub fn read(text: &str) -> Result<Package, String> {
 }
 
 impl Package {
-    /// The colour overrides as written: light or not, the `Tokens` property and its value; numbers and switches are not yet set
-    /// on a theme's engine (EmuSen_Qt.md §3.5.1).
-    pub fn colour_overrides(&self) -> Vec<(bool, String, String)> {
+    /// Every token override as the host sets it on a theme's engine: light or not, the `Tokens` property, and its value as
+    /// text (a colour as written, a number, `true` or `false`) for the kit to read as the token's kind (EmuSen_Qt.md §3.5.1).
+    pub fn overrides(&self) -> Vec<(bool, String, String)> {
         self.tokens
             .iter()
-            .filter_map(|o| match &o.value {
-                TokenValue::Text(text) => Some((o.variant == Variant::Light, o.name.clone(), text.clone())),
-                _ => None,
+            .map(|o| {
+                let value = match &o.value {
+                    TokenValue::Text(text) => text.clone(),
+                    TokenValue::Number(n) => n.to_string(),
+                    TokenValue::Switch(b) => b.to_string(),
+                };
+                (o.variant == Variant::Light, o.name.clone(), value)
             })
             .collect()
     }

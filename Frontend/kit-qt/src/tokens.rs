@@ -213,10 +213,9 @@ pub struct TokensRust {
     breath_period: i32,
     breath_low: f64,
     breathes: bool,
-    // A theme's colours per variant, set by the host on the theme's engine only; never on the program's, whose cards a theme never styles.
-    overrides: Vec<(core_tokens::Variant, C, core_tokens::Colour)>,
-    // A theme's raised shadow colour per variant, set as the palette's are (shadowColor in its theme.json).
-    shadow_overrides: Vec<(core_tokens::Variant, core_tokens::Colour)>,
+    // A theme's overrides per variant, a `Tokens` property and its value as theme.json writes it; set by the host on the theme's
+    // engine and, for the chosen theme, on the program's (decided by the tester, 2026-11-13).
+    overrides: Vec<(core_tokens::Variant, String, String)>,
 }
 
 impl Default for TokensRust {
@@ -305,7 +304,6 @@ impl Default for TokensRust {
             breath_low: 1.0,
             breathes: true,
             overrides: Vec::new(),
-            shadow_overrides: Vec::new(),
         };
         tokens.apply(&Column::compute(kinds::token_form(tokens.form), kinds::token_variant(tokens.variant), 1.0, false));
         tokens
@@ -418,25 +416,20 @@ impl qobject::Tokens {
         core_tokens::safe_area_of(height, height).top
     }
 
-    /// A theme's colour overrides, each for one variant, consulted before the kit's column: the palette's, and the raised
-    /// shadow's colour; the host sets them on the theme's engine as `theme.json` names them, already held to the contrast
-    /// floors by theme-check (EmuSen_Kit.md §7.2, §7.55).
-    pub fn set_overrides(
-        mut self: Pin<&mut Self>,
-        overrides: Vec<(core_tokens::Variant, C, core_tokens::Colour)>,
-        shadow: Vec<(core_tokens::Variant, core_tokens::Colour)>,
-    ) {
+    /// A theme's overrides, each for one variant: a `Tokens` property and its value as `theme.json` writes it, made into the
+    /// column by `Column::themed`, where a number or switch is the base the text scale and reduced motion act on as on the
+    /// kit's. The host sets them on the theme's engine and the chosen theme's on the program's, already held to the registry
+    /// and the contrast floors by theme-check (EmuSen_Kit.md §7.2, §7.55; EmuSen_Qt.md §3.5.1).
+    pub fn set_overrides(mut self: Pin<&mut Self>, overrides: Vec<(core_tokens::Variant, String, String)>) {
         self.as_mut().rust_mut().overrides = overrides;
-        self.as_mut().rust_mut().shadow_overrides = shadow;
         self.refresh();
     }
 
     fn refresh(mut self: Pin<&mut Self>) {
         let variant = kinds::token_variant(self.variant);
-        let mine: Vec<(C, core_tokens::Colour)> =
-            self.overrides.iter().filter(|(v, _, _)| *v == variant).map(|(_, token, colour)| (*token, *colour)).collect();
-        let shadow = self.shadow_overrides.iter().find(|(v, _)| *v == variant).map(|(_, colour)| *colour);
-        let column = Column::compute(kinds::token_form(self.form), variant, self.text_scale, self.reduced_motion).overridden(&mine, shadow);
+        let mine: Vec<(String, String)> =
+            self.overrides.iter().filter(|(v, _, _)| *v == variant).map(|(_, name, value)| (name.clone(), value.clone())).collect();
+        let column = Column::themed(kinds::token_form(self.form), variant, self.text_scale, self.reduced_motion, &mine);
         self.as_mut().rust_mut().apply(&column);
         self.announce();
     }

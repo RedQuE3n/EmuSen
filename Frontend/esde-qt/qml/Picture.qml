@@ -39,6 +39,11 @@ Item {
     property real sourceScale: 1
     // Drawn upside down, as a reflection is; the ramp still starts at the top of what is drawn.
     property bool flipped: false
+    // THEMES.md flipHorizontal and flipVertical: the texture mirrored in its box, the gradient and the box left as they are.
+    property bool mirror: false
+    property bool mirrorVertically: false
+    // THEMES.md mipmap: a picture drawn below its own size samples Qt's mipmaps.
+    property bool mipmap: false
     readonly property alias status: image.status
     readonly property alias ownWidth: image.implicitWidth
     readonly property alias ownHeight: image.implicitHeight
@@ -60,29 +65,46 @@ Item {
 
     Image {
         id: image
-        visible: false
+        // ES-DE filters a texture drawn below its own size linearly whatever the interpolation, which sets magnification only (EmuSen_Qt.md §4.5.7).
+        readonly property real drawnWidth: (root.tiled ? root.tileW : root.fit === Picture.Fit.Contain ? root.paintedWidth : root.width) * root.sourceScale
+        readonly property real drawnHeight: (root.tiled ? root.tileH : root.fit === Picture.Fit.Contain ? root.paintedHeight : root.height) * root.sourceScale
+        readonly property bool minified: !root.vector && (image.implicitWidth * root.cropW > image.drawnWidth + 0.5 || image.implicitHeight * root.cropH > image.drawnHeight + 0.5)
+        // Shown only for the mipmapped copy below to draw it, which hides it from the scene again.
+        visible: root.mipmap
         width: root.width
         height: root.height
         source: root.source
         asynchronous: true
         cache: true
-        smooth: !root.ownSize
+        smooth: !root.nearest || image.minified
         // A raster is never decoded larger than its own size or the box; Qt's aspect modes would scale it up (EmuSen_Qt.md §4.8.1).
         fillMode: !root.vector ? Image.Stretch : root.fit === Picture.Fit.Contain ? Image.PreserveAspectFit : root.fit === Picture.Fit.Cover ? Image.PreserveAspectCrop : Image.Stretch
         // A vector contained or covered, and any picture covered, asks only a width, keeping the aspect the scene measures (EmuSen_Qt.md §4.8.5).
         sourceSize.width: root.ownSize ? 0 : root.tiled ? root.tileWidth : Math.round((root.fit === Picture.Fit.Cover ? Math.max(root.width, 2 * root.height) : root.width) * root.sourceScale)
         sourceSize.height: root.ownSize || root.fit === Picture.Fit.Cover || (root.vector && root.fit === Picture.Fit.Contain) ? 0 : root.tiled ? root.tileHeight : Math.ceil(root.height * root.sourceScale)
     }
+    // THEMES.md mipmap: the picture rendered at its own size into a texture Qt mipmaps, since an Image's mipmap set after its texture exists is refused by Qt (EmuSen_Qt.md §4.5.7).
+    ShaderEffectSource {
+        id: mipmapped
+        sourceItem: root.mipmap ? image : null
+        hideSource: true
+        visible: false
+        mipmap: true
+        smooth: true
+        textureSize: Qt.size(image.implicitWidth, image.implicitHeight)
+    }
     ShaderEffect {
-        readonly property var source: image
-        readonly property color tint: root.tint
-        readonly property color tintEnd: root.tiled ? root.tint : root.tintEnd
+        readonly property var source: root.mipmap ? mipmapped : image
+        // A reflection's vertical gradient is turned with it, as ES-DE swaps the two colours for its reflections.
+        readonly property color tint: root.flipped && root.gradientVertical ? root.tintEnd : root.tint
+        readonly property color tintEnd: root.flipped && root.gradientVertical ? root.tint : root.tintEnd
         readonly property real vertical: root.gradientVertical ? 1 : 0
         readonly property real saturation: Math.max(0, Math.min(1, root.saturation))
         readonly property real dim: root.dim
         readonly property real radius: root.radius
         readonly property size size: Qt.size(width, height)
-        readonly property rect uvRect: Qt.rect((1 - root.cropW) * root.cropX, (1 - root.cropH) * root.cropY + (root.flipped ? root.cropH : 0), root.cropW, root.flipped ? -root.cropH : root.cropH)
+        readonly property bool turnedY: root.mirrorVertically !== root.flipped
+        readonly property rect uvRect: Qt.rect((1 - root.cropW) * root.cropX + (root.mirror ? root.cropW : 0), (1 - root.cropH) * root.cropY + (turnedY ? root.cropH : 0), root.mirror ? -root.cropW : root.cropW, turnedY ? -root.cropH : root.cropH)
         readonly property size tiles: root.tiled ? Qt.size(width / root.tileW, height / root.tileH) : Qt.size(1, 1)
         readonly property point tileOrigin: root.tiled ? Qt.point(root.tileRight ? (width % root.tileW) / root.tileW : 0, root.tileBottom ? (height % root.tileH) / root.tileH : 0) : Qt.point(0, 0)
         readonly property real tiled: root.tiled ? 1 : 0

@@ -408,10 +408,10 @@ impl qobject::ThemeFeed {
         }
     }
 
-    /// The theme's own colours on its engine's tokens; the program's engine, whose cards a theme never styles, keeps the kit's.
+    /// The theme's own tokens on its engine's; `ThemeStyle` sets the chosen theme's on the program's engine by the same call.
     fn feed_tokens(&self) {
         // Safety: the host is the window's, alive as long as the feed it is handed to.
-        let overrides = unsafe { self.host.as_ref() }.map(|h| h.colour_overrides()).unwrap_or_default();
+        let overrides = unsafe { self.host.as_ref() }.map(|h| h.overrides()).unwrap_or_default();
         if let Some(engine) = self.engine() {
             host::set_token_overrides(engine, &overrides);
         }

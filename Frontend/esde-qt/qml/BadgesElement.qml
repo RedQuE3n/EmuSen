@@ -5,6 +5,7 @@ import EmuSen.Esde
 // The game's badges in the cells the scene laid out, each with its controller and folder-link overlays.
 ElementBox {
     id: root
+    required property bool nearest
     PartsModel {
         id: parts
         scene: root.esde
@@ -22,6 +23,8 @@ ElementBox {
             required property real iconW
             required property real iconH
             required property color iconTint
+            required property color iconTintEnd
+            required property bool iconVertical
             required property url controllerSource
             required property string controllerMark
             required property real controllerX
@@ -29,6 +32,8 @@ ElementBox {
             required property real controllerW
             required property real controllerH
             required property color controllerTint
+            required property color controllerTintEnd
+            required property bool controllerVertical
             required property url linkSource
             required property string linkMark
             required property real linkX
@@ -36,6 +41,8 @@ ElementBox {
             required property real linkW
             required property real linkH
             required property color linkTint
+            required property color linkTintEnd
+            required property bool linkVertical
             anchors.fill: parent
             Icon {
                 x: badge.iconX
@@ -45,6 +52,9 @@ ElementBox {
                 source: badge.iconSource
                 mark: badge.iconMark
                 tint: badge.iconTint
+                tintEnd: badge.iconTintEnd
+                gradientVertical: badge.iconVertical
+                nearest: root.nearest
             }
             Icon {
                 x: badge.controllerX
@@ -54,6 +64,9 @@ ElementBox {
                 source: badge.controllerSource
                 mark: badge.controllerMark
                 tint: badge.controllerTint
+                tintEnd: badge.controllerTintEnd
+                gradientVertical: badge.controllerVertical
+                nearest: root.nearest
             }
             Icon {
                 x: badge.linkX
@@ -63,6 +76,9 @@ ElementBox {
                 source: badge.linkSource
                 mark: badge.linkMark
                 tint: badge.linkTint
+                tintEnd: badge.linkTintEnd
+                gradientVertical: badge.linkVertical
+                nearest: root.nearest
             }
         }
     }

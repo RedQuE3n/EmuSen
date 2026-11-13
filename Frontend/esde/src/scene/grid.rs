@@ -91,6 +91,15 @@ impl GridGeometry {
         }
     }
 
+    /// The height drawn: whole rows only unless fractionalRows, once the box is taller than an item (ES-DE 3.4.1
+    /// `GridComponent::render`'s clip).
+    pub fn clip_height(&self) -> f64 {
+        if self.fractional_rows || self.height <= self.item.1 {
+            return self.height;
+        }
+        self.shown_rows() * self.pitch().1 + 2.0 * self.margin().1 - self.spacing.1
+    }
+
     pub fn row_of(&self, index: usize) -> usize {
         index / self.columns()
     }

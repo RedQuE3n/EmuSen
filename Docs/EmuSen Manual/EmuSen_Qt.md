@@ -847,8 +847,26 @@ slot is given back once drawn, is drawn through the new chain from its next fram
 CRT, `crops_itself`) is given the crop as its `emusen_crop_*` uniforms; for any other the window clips: `Game.qml`'s
 `shown` item has the cropped shape and clips a `GamePicture` drawn whole past its edges, the bars around both black.
 The settings are read again when the game resumes and when Settings closes after a save (`readPicture`), and a still
-picture is drawn again then. Not yet followed: a RetroArch preset the Shaders screen stored, and
-a hosted core's `console_picture` setting, which the C# kept on while the CRT was chosen.
+picture is drawn again then. Not yet followed: a hosted core's `console_picture` setting, which the C# kept on while the
+CRT was chosen.
+
+A preset of the shader pack (Galaxia's `DIR_SHADERS`) is stored in `ScreenFilter` as `slang:` and its path in the pack
+(`display::PACK_PREFIX`); it is read with `emusen_serenity_preset_load` and drawn as it is, the values `ShaderParameters`
+holds under that stored value given as uniforms over the preset's own, and an overscan crop clipped by the window.
+Settings ▸ Display ▸ Shaders (`qt-models/src/settings_shaders.rs`) lists a console's recent shaders (`RecentShaders`,
+the newest five), the catalogue's filters that suit it and the pack's presets under a heading for each folder, and stores
+the one chosen; Shader levers, from Display or a console's page, lists the levers of the shader the console draws with:
+a built-in filter's settings from the catalogue at the console's defaults, a pack preset's parameters as its passes
+declare them (`emusen_serenity_source_load`, merged by `emusen_serenity_parameters_merge`), a range of no width as a
+heading. The catalogue's settings are used for a built-in filter because the chain it is written as declares each of its
+values with a range of a million either side and no step (`filters/write.rs`). A lever moved is saved at once and, for
+a game of that console, set on the running chain by `Handoff::set_value` without building it again when the chain
+declares it (a structural setting is not declared, and the picture is read again instead). The game's picture is not
+drawn behind Settings yet (its preview is the caption alone), so the change is seen when the game is shown again.
+Tests: `qt-models/tests/settings_shaders.rs` (7, one of them over the platform library) and the program's
+`shaders_gpu.rs` (on Vulkan: a preset of the test's own chosen with the pad, the picture read back tinted, its lever
+moved to nothing and the picture read back plain, both read again when Settings opens again), and `qt-play/tests/picture.rs`
+(the CRT's contrast set on the running chain and the picture read back darker; an undeclared parameter refused).
 
 ### 1.9 Homes for the front-end logic still in C#
 
@@ -1333,7 +1351,7 @@ Horizon is the package `Frontend/themes/horizon/`, the design of `horizon.md` (2
 horizon line high at y 440, the focused game or console risen over it at the right as a world in a 300 disc, its words in
 the sky at the left, and the things browsed standing on the land on one foot line (700) under a clamped camera. Its
 `theme.json` lists `home`, `consoles`, `games` and `splash`, the variants dark and light, and one token override,
-`light.accent` #B4442A (Dawn), set on the theme's engine only (§3.5.1). Its mockups are
+`light.accent` #B4442A (Dawn), set on the theme's engine and, chosen, on the program's (§3.5.1). Its mockups are
 `Testing/themes/horizon-{home,consoles,games}.mockup.spec`, held within two units of theme-audit's recordings.
 
 **Parts.** `Backdrop` (the kit's night `Sky` drawn twice, once as the gradient alone and once with the stars clipped at
@@ -1706,14 +1724,36 @@ Home in place of the reference's and the omitted Choose a console the reference'
 shown, switching twice leaving one engine. The stub themes are plain QtQuick under `theme-host/tests/themes/` until `EmuSen.Theme`
 lands.
 
-**A theme's token overrides (2026-11-08).** `package.rs` keeps `theme.json`'s overrides as the manifest gives them, and
-`Package::colour_overrides` lists the colours (light or dark, the `Tokens` name, the value). The program's `ThemeFeed` sets
-them on the kit's `Tokens` of the theme's engine when it attaches (`emusen_theme_qt::host::set_token_overrides`, the one
-place a name and a value become a kit token and colour), and theme-audit does the same before it judges a screen. No
-override ever reaches the program's engine, which draws the cards: a theme never styles a card (§3.1). Overrides are bounded
-by theme-check's contrast floors before a theme is offered. A number or a switch override is checked by theme-check but not
-yet set on an engine. Proof: `qt-app/tests/theme.rs`, a fixture package overriding the dark accent, whose screen draws
-#B4442A while the program's tokens keep #4C9AE8.
+**A theme's token overrides (2026-11-08; numbers and switches 2026-11-13).** `package.rs` keeps `theme.json`'s overrides as the
+manifest gives them, and `Package::overrides` lists every one as the host sets it (light or dark, the `Tokens` name, the value as
+text: a colour as written, a number, `true` or `false`). The program's `ThemeFeed` sets them on the kit's `Tokens` of the theme's
+engine when it attaches (`emusen_theme_qt::host::set_token_overrides`, reaching that engine's singleton through
+`QQmlEngine::singletonInstance`), and theme-audit does the same before it judges a screen. The kit's `Tokens::set_overrides` is
+the one place a name and a value become a token, through `Column::themed`: a colour replaces the column's palette or
+raised-shadow colour, and a number, a whole number or a switch becomes the base kit-core makes that token from, so the player's
+text size and reduced motion act on it as on the kit's own. A type size (`fontDisplay` to `fontGlyph`) is
+scaled by the text size and rounded to a half unit (`scaled_text`); `headerSize` is scaled on the desktop and fixed on the big
+screen (`header_of`); a movement's duration is nothing under reduced motion (`movement`), a fade's 120 ms (`fade_of`), and
+`breathes` is false under it (`breathes_if`); spacing, focus marks, shadow metrics, curves and the breath's delay, period and
+low are the theme's under both. A value not of its token's kind is left alone. **The chosen theme's overrides reach the
+program's engine too** (decided by the tester, 2026-11-13, R-20261113-5 and R-20261113-6): Settings, the List card, the Home
+card, the game page, the Pause Card, the tools and the notices, which the program draws itself, take the chosen theme's colours
+and sizes; a theme still draws only its four screens, and `EmuSen.Theme` is unchanged. qt-app's `ThemeStyle` (`src/style.rs`),
+which `Main.qml` hands the chosen theme's host, sets the host's `overrides()` on its own engine's `Tokens` by the same
+`set_token_overrides`, again on each new engine the host makes (a theme chosen in the Themes tab), and none, so the kit's,
+while no theme, the reference or an ES-DE theme is the look; the `Tokens` variant takes each variant's values as on the
+theme's engine. The game's own layers (its picture, its black bars, its status lines) read no token and stay as they are.
+Until 2026-11-13 no override reached the program's engine. Before a theme is offered, theme-check refuses an override that names no token of the kit's registry, or gives a value
+of the wrong kind, with its line and words (`theme-check/src/tokens.rs`, `tests/check.rs`), and holds colours to the contrast
+floors. Proof: `qt-app/tests/theme.rs`, a fixture package overriding the dark accent, shadow colour, `tileRadius` (21) and
+`breathes` (false), whose screen and the program's tokens read all four, and a theme with none giving the kit's back;
+`qt-app/tests/theme_reach.rs`, Settings' and the Home card's focused rows drawn in the chosen theme's accent in each variant and
+in the kit's for none, and Settings, a tool, the Home card, the List card, the game page, a notice over Settings and the
+Pause Card, with each theme's own screens loaded behind, holding the gate's fit and contrast findings to the kit's own under each in-repo theme that overrides a token, dark and light (the Pause Card in
+`theme_reach_pause.rs`, its scene given each theme's overrides); `kit-qt/tests/overrides.rs`, every
+number and switch token of the registry taking a dark override, and a light one, an unknown name and a wrong kind left alone;
+`kit-qt/tests/column.rs`, a theme's `fontBody` at three text sizes, its durations and breathing under reduced motion, and the
+tokens neither touches.
 
 **Not yet.** The `Screen` type and the splash's `length`, `still` and `finished` (T); the Themes tab and the setting that chooses a
 theme (S); a themed Games screen opens no List card until `Actions.openListCard` exists (T, R). What the sandbox does not do is
@@ -1751,6 +1791,22 @@ role the chosen theme omits, and every role once it fails, is the reference's, a
 slot under a card (Home under the Home card, the grid under the List card) is disabled and declares `backdrop`, as the
 rules read a backdrop; the grid's slot gives up the keys while the search's keyboard or the List card holds them. Object
 names carry the host's: `host.theme`, `home.reference`.
+
+**A screen not shown takes no focus (2026-11-13).** A slot's screen is made in a `FocusScope` (`Placing.screen`) that is
+out of the window's items while the slot is not shown (`parent: null`) and back under the slot once it is. Qt's
+`Item.forceActiveFocus()` "sets focus on the item and ensures that all ancestor FocusScope objects in the object hierarchy
+are also given" focus (doc.qt.io, Qt 6 QML `Item`, read 2026-11-13), so a scope cannot hold it back, and `enabled: false`
+does not either: it clears the item's own active focus, but the climb still gives focus to every enabled scope above it.
+Both were tried: with the slot disabled the focus went to the window's `chosenTheme` Loader, and the climb set the slot's
+own `focus`, which broke its binding. Out of the window's items, the climb ends at the screen's own scope, so nothing of
+the window's changes. `focusPolicy` governs tabbing and clicks only. The defect it closes, seen 2026-11-13: the
+in-repo themes call `forceActiveFocus` in their screens (Horizon's Consoles shelf, Meridian's entries, Orrery's wheel), so
+using Horizon from the Themes tab moved the pad's focus to its hidden Consoles and left the tab deaf, and choosing any of
+the four over Settings took Settings' focus (`qt-app/tests/themes_focus.rs`, which fails without the change). The scope
+is also invisible while out, since an item with no parent is visible by its own flag alone. Its animations still run and
+drive the window's frames, so the harness's `running` (which `rest` and `assert_still` read) now also walks the items an
+item holds out of the window's: without that, `acceptance.rs` failed `assert_still` under the List card in two runs of two,
+11 frames in 2 s with nothing dirty, and passed with it (measured 2026-11-13).
 
 **Where covers come from.** A theme reads pictures only inside its folder and the cover stores (§3.5.1); the reference
 is held to that too, so the window's `coverStores` (the start's media store, `ArtworkDirectory` and
@@ -2274,22 +2330,22 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_n
 
 | Status | Pairs | Meaning |
 |---|---|---|
-| `drawn` | 347 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, measured 2026-11-08) |
+| `drawn` | 432 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, 347 measured 2026-11-08), and the families drawn since (§4.5.6 to §4.5.8) |
 | `later:help-dimmed` | 8 | the help's eight `*Dimmed` properties (`posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`): not drawn until each is checked (R-20261111-75, decided 2026-11-11; the `accepted` state of 2026-11-08 is withdrawn) |
 | `later:sound` | 1 | `sound.path`, which the host plays: not drawn until checked (R-20261111-75) |
 | `later:video` | 2 | the video's `scanlines` and `audio`; the other fourteen of the family drawn or moved to `stationary` (§4.5.6, 2026-11-12) |
-| `later:gradients` | 22 | the `*ColorEnd` and `*GradientType` pairs the C# did not draw |
-| `later:item-text` | 19 | carousel and grid item text styles and scrolling, the collections' letter cases, name suffixes |
-| `later:picture` | 16 | interpolation, corner radius and brightness where not drawn, flips, mipmap, `scaleFactor`, `gameOverridePath`, `defaultFolderImage` |
+| `later:gradients` | 0 | the 22 `*ColorEnd` and `*GradientType` pairs, drawn since 2026-11-13 (§4.5.7) |
+| `later:item-text` | 0 | the 19 carousel, grid and text list item text pairs, drawn since 2026-11-13 (§4.5.8) |
+| `later:picture` | 2 | `scaleFactor` of image and animation, which ES-DE 3.4.1 does not read: its property table (es-core/src/ThemeData.cpp) has no `scaleFactor`, so what a theme means by it has no source to follow. The other 14 drawn since 2026-11-13 (§4.5.7) |
 | `later:stationary` | 12 | `stationary` (the video's since 2026-11-12), `renderDuringTransitions`, `fadeAbovePrimary` |
 | `later:carousel-layout` | 6 | `itemStacking`, `selectedItemOffset`, `itemLinearScale`, `itemLinearSpacing`, `itemAxisRotation`, `itemDiagonalOffset` |
 | `later:textlist-selector` | 5 | the selector image, width and offset, the secondary selected background |
 | `later:help-layout` | 1 | `entryLayout` |
 | `later:gameselector` | 13 | the gameselector's picks (`selection`, `gameCount`, `allowDuplicates`) and the elements that read them (`gameselector`, `gameselectorEntry` of image, video, text, datetime and rating): the scene shows no game in the system view (§4.8.5) |
 | `later:animation-timing` | 3 | a GIF's `speed`, `direction` and `iterationCount`: the scene gives the painter no frame, so a GIF stands on its first |
-| `later:container` | 2 | a text container's `containerVerticalSnap` (not read) and `containerScrollSpeed` (read, no visible change by 1 s) |
-| `later:grid-rows` | 1 | `fractionalRows`: the grid's record carries no row count, so a partial row is drawn either way |
-| `later:text-lines` | 1 | datetime's `lineSpacing`: one line at the top of its box is placed the same at every spacing |
+| `later:container` | 0 | `containerVerticalSnap` drawn since 2026-11-09 (§4.12.3), `containerScrollSpeed` since 2026-11-13 (§4.5.8) |
+| `later:grid-rows` | 0 | `fractionalRows`, drawn since 2026-11-13 (§4.5.8) |
+| `later:text-lines` | 0 | datetime's `lineSpacing`, drawn since 2026-11-13 (§4.5.8) |
 
 `check` counts a pair as `set` when it is drawn and `unsupported` otherwise, `sound`'s pairs included; there is no
 state between (R-20261111-75, decided 2026-11-11: the nine pairs once marked `accepted` are counted as not drawn until
@@ -2356,8 +2412,7 @@ tests pass. Seeded faults, each applied alone and reverted:
 | `maxSize` contained by the larger ratio | `a_picture_with_max_size_is_contained_once_its_own_size_is_known` |
 
 **Left for later, named:** a GIF's frame at the time (`Picture::frame` is none until the painter reports the file's
-frame delays); the system view's gameselector picks (the host's); the grid's and carousel's per-row text styles beyond
-the C#'s (`later:item-text`). A frame allocates its records each tick; the bridge's models change rows in place
+frame delays); the system view's gameselector picks (the host's). A frame allocates its records each tick; the bridge's models change rows in place
 (design §4), and whether the scene's own allocation shows in a frame's cost is measured with the painter, not assumed.
 
 #### 4.5.6 A theme's video element **[M 2026-11-12]**
@@ -2374,7 +2429,7 @@ unless the rotation is off the right angles, as `applyTheme` sets it, and is app
 the still too, but the painter's nearest still measured further from ES-DE's capture than its linear one: Art Book
 Next's gamelist at 1280 × 800, its cover's region (x 740 to 1213, y 58 to 520), mean absolute error 1.66 nearest against
 1.26 linear (measured 2026-11-13; the whole picture 2.06 with the nearest still, 1.97 with the linear one). ES-DE's nearest still is drawn smoothly in its
-capture, and why is not known: its texture loading (es-core/src/resources/TextureData.cpp) is where to look.
+capture: ES-DE minifies linearly whatever the interpolation (found 2026-11-13, §4.5.7).
 
 `VideoElement.qml` is the painter's: the still (a `Picture`, which now takes `brightness`, 0.3 a step on each channel
 before saturation and tint, as THEMES.md describes it) until `playing`, then a QtMultimedia `MediaPlayer` made through a
@@ -2394,6 +2449,92 @@ each a case of `tests/themes/mapping-cases.tsv`.
 Not drawn: `scanlines`, whose ES-DE shader is a GPL phosphor shader not ours to copy, so how a theme's video scanlines
 look is the tester's to rule; `audio`, heard and not seen, which the table has no state for (R-20261111-75); ES-DE's
 "Play audio for gamelist and system view videos" (`ViewsVideoAudio`), which no EmuSen setting offers yet.
+
+#### 4.5.7 Gradients and picture properties **[M 2026-11-13]**
+
+Thirty-six pairs moved from `later:` to `drawn`: the 22 of the gradient family and 14 of the picture family. Each is a
+case of `tests/themes/mapping-cases.tsv` (two values, two different pictures on the GPU tier), and the rules below that
+are ES-DE's and not THEMES.md's are held by `esde/tests/frame.rs`
+(`es_de_s_gradient_defaults_hold_for_the_selected_item_the_grid_s_selector_picture_and_the_help`,
+`an_image_s_flips_brightness_mipmap_and_game_override_reach_its_picture`). Every rule was read in ES-DE 3.4.1's source.
+
+**Gradients.** A record that had one colour now carries a `Tint` (start, end, vertical): the carousel's slots, the
+text list's selector bar (whose end now follows `selectorColor` in `catalog.tsv`, as `TextListComponent::applyTheme` sets it, where THEMES.md states 333333FF: with the literal default a theme's clear selector drew a grey ramp across Art Book Next's list), the grid's selected tint, background and selector, the badges' three overlays, the help's and
+the status's fills. ES-DE draws a gradient by colouring the quad's corners (`Renderer::drawRect` in
+es-core/src/renderers/Renderer.cpp; `ImageComponent::updateColors`): horizontal runs left to right, vertical top to
+bottom, across the drawn box. A plain fill is a `Rectangle` with a `Gradient` and its `orientation`, Qt's own; a
+picture's is the picture shader's, which now grades across the drawn box (`qt_TexCoord0`) rather than the texture's
+coordinates, so a cover crop, a tile or a flip leaves the gradient where ES-DE puts it. A carousel reflection swaps a
+vertical gradient's colours, as ES-DE's `CarouselComponent::render` does. QtQuick.Shapes' `LinearGradient` was the other
+form read (Qt 6.11's `ShapePath.fillGradient`); it grades a fill only (6.11 has no stroke gradient), so a built-in mark
+with a gradient is drawn white into a layer and multiplied by the picture shader in `Icon.qml`, one shader for both.
+
+ES-DE's defaults, from the `applyTheme` of each component: an end or a gradient type counts only when its colour is set
+for the help, the status and the grid's fills (`HelpComponent`, `SystemStatusComponent`, `GridComponent`); the selected
+item's tint applies when `imageSelectedColor` or `imageSelectedColorEnd` is set, its end the selected colour unless
+given, horizontal unless `imageSelectedGradientType` says vertical, whatever `imageGradientType` says; with only the
+end set, the grid starts from `imageColor` and the carousel from white, since `CarouselComponent::applyTheme` takes the
+selected colour's default before it reads `imageColor`. A grid's `backgroundImage` and `selectorImage` replace their
+fill and are tinted by its colours; the selector picture takes `selectorColorEnd` only where the background's two
+colours differ, as `GridComponent::applyTheme` tests the background's pair there.
+
+**Picture properties.** `brightness` (image, animation) and `imageBrightness` (carousel, grid) use the picture
+shader's brightness of §4.5.6, clamped to −2 to 2 as `GuiComponent::applyTheme` clamps it. `flipHorizontal` and
+`flipVertical` mirror the texture coordinates inside the crop (`ImageComponent::updateVertices`), so `Picture.mirror`
+and `mirrorVertically` turn the shader's `uvRect`, Qt's `Image.mirror` being a property of the drawn node, which the
+shader pass does not draw. `mipmap` renders the picture at its own size into a `ShaderEffectSource` with `mipmap: true`, which the shader samples: `Image.mipmap` was tried first and Qt refused it at run time ("QSGPlainTexture: Mipmap settings changed without having image data available", 2026-11-13), the texture being made before the setting reached it. The carousel takes `imageCropPos` (with `imageFit` cover, clamped
+0 to 1), `imageInterpolation` (linear unless nearest), `imageCornerRadius` (0 to 0.5 of the screen width; ES-DE scales
+it by `itemScale` with the item it draws at that scale, so in the slot's own box it is the width share) and
+`defaultFolderImage` (a folder's picture before `defaultImage`, as `GamelistBase::populateList` gives it, shared with the
+grid). `gameOverridePath` replaces an image's `path` in the gamelist view with `<dir>/<system>/<file stem>` and the first
+of .jpg, .png, .webp, .gif and .svg found (`ImageComponent::setGameOverrideImage`). Badges and ratings take
+`interpolation`: nearest unless the rotation is off the right angles, the video's rule (`BadgeComponent`,
+`RatingComponent::applyTheme`).
+
+**What `interpolation` does in ES-DE.** It sets the magnification filter only. `TextureData::uploadAndBind`
+(es-core/src/resources/TextureData.cpp) calls `createTexture` with linear minification always, and
+`RendererOpenGL::createTexture` (es-core/src/renderers/RendererOpenGL.cpp) sets `GL_TEXTURE_MIN_FILTER` to
+`GL_LINEAR_MIPMAP_LINEAR` with mipmaps and `GL_LINEAR` without, and `GL_TEXTURE_MAG_FILTER` from the flag. A picture
+drawn below its own size is therefore smooth whatever the theme says, which is why §4.5.6's nearest still measured
+further from ES-DE's capture. Qt's texture has one filter for both, so `Picture` samples linearly when the picture is
+drawn below its own size on either axis and keeps nearest only when it is enlarged. The video's still keeps the linear
+sampling of §4.5.6; giving it `interpolation` under this rule is a change to the video's pairs, not made here.
+
+#### 4.5.8 Item texts, collection letter cases and whole grid rows **[M 2026-11-13]**
+
+Twenty-two pairs moved from `later:` to `drawn`: the 19 of `later:item-text` and the three rows of `later:container`,
+`later:grid-rows` and `later:text-lines`. Each is a case of `tests/themes/mapping-cases.tsv`; the rules are held by
+`esde/tests/frame.rs` (`a_carousel_s_and_a_grid_s_selected_name_takes_its_colours_and_scrolls_once_measured`,
+`a_carousel_s_names_stay_wrapped_and_still_without_horizontal_scrolling`,
+`a_grid_draws_whole_rows_only_unless_fractional_rows_is_set`) and `esde/tests/scene.rs`
+(`collections_take_their_own_letter_case_and_the_suffix_is_cased_apart`,
+`capitalize_lowers_the_rest_and_raises_each_word_as_unicode_bounds_it`). Every rule was read in ES-DE 3.4.1's source.
+
+| Pairs | Rule | ES-DE 3.4.1 source |
+|---|---|---|
+| carousel `textSelectedColor`, `textSelectedBackgroundColor` | the selected item's text, only while it is within one item of the centre (`chosen` on its slot); each falls back to the item's own colour | `CarouselComponent::render`, `applyTheme` |
+| carousel `textBackgroundCornerRadius` | clamped to 0–0.5 of the screen width, in the slot's own box (the item is drawn at its scale, as §4.5.7's image radius) | `CarouselComponent::applyTheme` |
+| carousel and grid `textHorizontalScrolling`, `…Speed`, `…Delay`, `…Gap` | off by default; on, every name is one line cut at its item's edge, aligned only while it fits, and the selected name loops once the painter measures it wider than its item, at the text list's measured rate (§14.7) per em of the item's font, which `textRelativeScale` leaves alone | `TextComponent::setHorizontalScrolling`, `update`, `render`; `CarouselComponent::update`, `GridComponent::update` (the cursor's item alone updates) |
+| carousel, grid, text list `letterCaseAutoCollections`, `letterCaseCustomCollections` | in the system view a collection's name takes its kind's case (`sameAs letterCase` when unset); in the gamelist view a custom collection listed as a folder takes `letterCaseCustomCollections` | `SystemView::populate` (letterCaseFunc), `GamelistBase::populateList` |
+| carousel `systemNameSuffix`, `letterCaseSystemNameSuffix` | a game of a collection (not a folder) gains ` [system]` after its name is cased; the suffix is upper case or capitalized as set and as written otherwise. The grid and text list follow the same order now (the whole name was cased before) | `GamelistBase::populateList` (nameSuffixFunc) |
+| grid `fractionalRows` | unset, the cells are cut at the whole rows' height (`Grid.clip_height`, `GridElement.clipHeight`) once the box is taller than an item | `GridComponent::render` |
+| text `containerScrollSpeed` | multiplies a container's scroll speed (read since §4.12.3); its case is read before the slower speed reaches the end | `TextComponent::applyTheme` |
+| datetime `lineSpacing` | the line's height, and so a single line's baseline, `(height × lineSpacing + bearing) / 2` | `Font::buildTextCache` |
+
+**Capitalize.** `Utils::String::toCapitalized` lowers the text and raises the character at each boundary of ICU's word
+break iterator, so `words::cased` now lowers the rest of each word and treats a word as Unicode's segmentation does
+(UAX #29: an apostrophe, full stop or colon between letters, a comma or full stop between digits, stays inside; digits
+and letters join). The text list's ASCII mark for a game in the edited collection is `! ` with its space, as
+`GamelistBase::populateList` writes it.
+
+**Measured 2026-11-13.** The mapping test's 22 new cases each paint two different pictures (a grid's scroll cases set a
+0.1 font, since the selected system's name fits its item at 0.05). The corpus measure `Testing/esde-corpus/2026-11-13c.tsv`
+(named to sort after that day's two earlier measures, which it keeps) has 60 themes falling in `unsupported`, 112 pairs
+in all, against `2026-11-13b.tsv`, and no rise in any column.
+
+**Not drawn: video `audio`.** It is read and heard (`VideoElement.qml` mutes its `AudioOutput`), but the mapping test
+proves a pair by two different pictures, and sound makes none; it stays `later:video` (R-20261111-75 keeps no state
+between drawn and not drawn).
 
 ### 4.6 The library as an ES-DE theme sees it, and its screen **[M 2026-11-08]**
 
@@ -5318,8 +5459,8 @@ went to 9.7 s, not 9.2 s, because 250/60 + 5 lies an ulp above 550/60. Mistress'
 the defect is hers too; `reel.rs` now takes two moments within a nanosecond as one time (`SAME_MOMENT`).
 
 **Differences from Mistress, for the tester:**
-- Controllers, Display, Sound, Memory Cards and Cheats are declared and do nothing yet. Their pages are pages of
-  Settings' one description (§20.3, §20.7 to §20.9) and Cheats is the cheats window; both are stage 5's.
+- Controllers, Display, Sound, Memory Cards and Cheats were declared and did nothing at first. Their pages are pages of
+  Settings' one description (§20.3, §20.7 to §20.9) and Cheats is the cheats window; all five now open (§7.7.H).
 - Her render of Game Options is older than the recording: it shows a Volume row where §20.8 put Sound ▸. The Qt page
   follows the recording. Over the test core, which claims a drive, the page also holds Memory Cards, and the first page
   Change Disc, which Mistress's render (made over a core without one) has not.
@@ -5902,6 +6043,17 @@ next connected pad, Profile the game's own (Endymion's `Games` member; the runni
 card), Swap Players dimmed with no player 2. The card's pane draws a page's second line muted under its sentence
 (`PaneModel.muted`), as Mistress's two lines.
 
+**The Pause Card's Game Options ▸ Display and Sound** (2026-11-13): Settings' own rows for the running game, read from
+the same description (`settings_card.rs`). Display is the running console's page of Settings ▸ Consoles, Sound is the
+Sound section, each down to the rows the description marks `pause`: on a television CRT profile, Shader levers, Crop
+overscan and Picture shape; on another screen Screen and Picture shape; Volume and Output on Sound (the interface's
+sounds are not the game's). The card's pages are Settings' pages kept apart from the screen's (`CardPlace`), so a row
+is stepped or chosen by Settings' own `step` and `choose` and stored where Settings stores it; Settings ▸ Display ▸
+Shaders' choice of a pack preset stays on Settings. Shader levers opens its page under the card's, titled by Settings,
+B closing it onto its door. A display setting stored reads the paused picture again at once (`readPicture`); a lever
+sets the chain itself (`setLever`); Volume and Output reach the session by the bindings Settings already drives.
+`SettingsModel.cardSettings` carries the rows, `cardOpen`, `cardSettingsAct` and `cardBack` the card's asks.
+
 **No picture to be held to.** These screens have no mockup and no recording in the tree: every `hold` of the
 Controllers tests (`settings_controllers.rs`, `card_controllers.rs`, `settings_drawings.rs`) passes an empty mockup
 (`Mockup::default()`), so each holds the gate's rules (fit, reach, chrome, names, palette, contrast) at the five sizes,
@@ -6292,12 +6444,56 @@ object name; `Screens` opens it as `Tool`, naming the tool in `Screens.tool`, fr
 and the Home card's Tools page, and B returns as from Cores. A job keeps running when the screen is left, and a tool
 opened before is kept with its runs.
 
-A tool with no screen yet (Scraper, Cheats, Collections, Shell) is not listed on the Home card's Tools page. The
-Scraper's Home place is drawn as before and opens nothing until the Scraper has its screen: drawn unavailable, its
-words fell under the contrast the program's acceptance holds (measured 2026-11-13: 3.2:1 and 1.8:1 against 4.5:1). Held to by `qt-models/tests/tool_jobs.rs` (the real platform library over a scratch library, a
+A tool with no screen yet (Collections, Shell) is not listed on the Home card's Tools page; the Scraper has
+its screen since §7.7.U and Cheats since §7.7.V. Held to by `qt-models/tests/tool_jobs.rs` (the real platform library over a scratch library, a
 scripted world for the question and Stop, and the screens' steps) and `qt-app/tests/tools.rs` (the pad opens Library
 Manager from Home, runs its first job, sees the progress then the lines, X lists them, B returns Home; Compressed Discs
 from the Home card lists a generated disc the same way).
+
+#### 7.7.U The Scraper runs a scrape of the library (2026-11-13)
+
+The Scraper is a third source of the tool screen, `tools/scraper.rs`, on the same `ToolModel` as the tools of jobs
+(`jobs` names `scraper`), opened from Home's Scraper place and the Home card's Tools page. Its rows are All games and
+each console of the library's shelves; A starts a run over the row's games, A on the running row pauses and resumes it
+(the scrape service's `pause`), and Select's List card has Stop the scrape while it runs, which asks the game page's
+question and cancels; what was fetched is kept. The bar says `Scraping: done of total` and its share, `Paused: ...`
+while paused, and how the run ended; the pane names the game in hand and its step, the latest result, the service's
+last failure and why a run could not start; X lists each game's result. A run's end has the library read again
+(`ToolModel.libraryChanged`), so the grid draws what was fetched.
+
+A scrape run as the models hold it has one owner, `scrape_run.rs`, which the game page's Scrape This Game and the
+Scraper share: the `start` request, the run followed through `wait` and `progress` until it ends and the scraper put
+back to finding pictures alone, and the words a progress says. The request carries what the Scraping settings ask
+for: `refresh` from Refresh what is kept, `enabled` from Use ScreenScraper, and the choices' region, language, other
+regions after and workers (0 asks for as many as the account allows, which the scraper holds to its maxthreads). Its
+kinds are those of the scraper's kinds table (`get kinds`) whose switch `Scrape<folder>` is on, the settings naming each
+kind by its media folder (`ScrapeCovers`, `Scrape3DBoxes`); before this the game page asked for the scraper's own four.
+A run over many games is not `one`, so the scraper skips each game that already has every kind asked for. Held to by
+`qt-models/tests/tool_scraper.rs` (the real platform library, a scratch library and the recorded ScreenScraper: a
+run paused, held, resumed and done with every game given a cover; a cancelled run keeping what it fetched; the start
+request from the settings; the screens' steps) and `qt-app/tests/scraper.rs` (the pad opens the Scraper from Home,
+stops a run over one console from the List card with the covers fetched kept, then runs the whole library, pauses,
+holds, resumes and reaches done, and the grid draws every cover).
+
+#### 7.7.V Cheats on the tool screen (2026-11-13)
+
+Cheats is a fourth source of the tool screen, `tools/cheats.rs`, on the same `ToolModel` (`jobs` names `cheats`),
+opened from the Home card's Tools page, which now lists it. As the screen opens it reads, on a thread of its own, the
+player's cheat database through the base's own calls: its folder and attribution from the session table's
+`DB_STATUS` (the AppSettings folder, else Galaxia's `Cheats`), its files from `emusen_cheats_database_entries`, and
+for each library game whose console names cheat systems (the systems table's `cheat_systems`) the database's own
+`find` on the game's file name, kept to the first file under one of those systems. The bar says `No cheat database at
+<folder>` or `N cheat file(s) in <folder>`, as `cheat db status` does; the header gives the files and the date of the
+newest (its time as the archive gave it). Each row is a game the database has a file for, sectioned by console; its
+value is `N of M on` for the game's own list (the one the Pause Card and the game page switch; the words are
+`cheats::count_words`, shared with the game page), or `No list yet`; the pane names the database's file, and X lists
+the game's own cheats. Getting or updating the database and making a game's list from its file are not offered: the
+base's one install, `DB_UPDATE`, fetches libretro's address with no progress and no stop, and the conversion of a
+`.cht` file's cheats to a game's list (`CheatRegistry::to_file`) has no call; both await an addition to the base.
+Held to by `qt-app/tests/cheats_tool.rs` (the pad opens Cheats from the Home card; with no database it says where one
+would be; with `.cht` files written into that folder as an install leaves them it lists the SNES game under its
+console and not a game of another console with a file of its name; a game's own list then reads `1 of 2 on` and X
+lists it).
 
 ### 7.8 Stage 5, piece G: a game's page and its clip (2026-11-09)
 
@@ -6598,12 +6794,55 @@ Seeded faults, each reverted:
   each with the value the scraper's `metadata` resolves; A types it on the docked keyboard, Done saves it at once as a
   games.db edit (empty words put back what was scraped), Y puts back what was scraped, B goes back to Details. A name
   edited names the game in the grid too: the library reads games.db's `name` edits.
-- **Not opened yet**, so not shown: Options' Cheats, Display crop and Package, and Details' Cover art. The viewer's
+- **Not opened yet**, so not shown: Details' Cover art (Cheats is §7.8.3's; Display crop and Package §7.8.4's). The viewer's
   `X Set as cover` and `Y Delete…` of §18.2 are not built. The run fetches the scraper's default kinds, not the
   player's Scrape kinds settings, which nothing maps to the scraper's kinds yet.
 - Tests: qt-models' `game_page` (the viewer over the media, the run's words, Edit Details' rows), qt-app's `page_doors`
   (the viewer paged by the pad, a scrape against the recorded server to done with the cover shown, a name typed, stored
   and named in the grid).
+
+#### 7.8.3 Piece P6: a game's cheats while it runs (2026-11-13)
+
+- **The game's own list** is the file Galaxia names for it (`emusen_galaxia_cheat_game_list`: `<game>.json` in
+  `cheats/<console>`), read and saved as the `CheatFile` model; `qt-models/src/cheats.rs` is its one reader and writer.
+- **Given at the start.** On the frame thread, after the session opens and before `Opened` and its first frame, each
+  cheat of the list is given to the session alone (`cheat_op` `IMPORT` with a one-cheat file), so the session's id of
+  each is known from `LIST`; a cheat switched on is in force from the first frame. A cheat the session refuses has no
+  id and is switched in its file only.
+- **Pause Card ▸ Game Options ▸ Cheats** lists the game's cheats, each a stepped row reading On or Off as a settings
+  switch does; A, Left or Right turns it at once (`ENABLE` or `DISABLE` by its id) and saves the list, the card staying.
+  The Cheats row is dimmed, and opens nothing, for a game with no cheats in its list.
+- **Game page ▸ Options ▸ Cheats** ("1 of 3 on") is shown where the list holds cheats, and opens the same switches as
+  Options' deeper page; a turn changes the file only, taken by the game's next start.
+- **Not built here:** adding, editing or removing a code, the database's download and the Cheats tool. Hosted libretro
+  cores take no cheats (the base's open defect: `cheat_space` null, `retro_cheat_set` unused).
+- Tests: qt-models' `pause` and `game_page` (the pages' rows and turns), qt-app's `game_page_cheats` (the page's switch
+  saved to the list) and `cheats_gpu` (a GPU job: on the test core, a poke switched on from the card holds the counted
+  RAM byte in a saved state, switched off the count runs on, and the game started again has the switch as saved).
+
+#### 7.8.4 The page's Display crop and Package (2026-11-13)
+
+- **Display crop** (Options, for a console with a television: Serenity's catalogue `screens`) opens a deeper page of
+  one stepped row, Galaxia's Overscan row (its label and choice labels, `emusen_galaxia_settings_rows`): Console's, then
+  each choice that hides a fixed part as `display::overscan` sizes it from the catalogue (Whole picture, TV overscan).
+  A step is stored at once in games.db for that game alone (`set_crop`, percentages at each edge; Console's is
+  `clear_crop`); a crop no choice names reads as Settings' Custom crop, whose edges no Qt row sets yet. On the next
+  start the session reads the game's crop as it opens (`clients::game_crop`) and `display::read_for_game` draws it in
+  place of the console's overscan, held to the catalogue's most at an edge.
+- **Package** (Options, where the library tool can run the game's job) opens a deeper page: the package's state in the
+  row's words, then Make Package (`pkg-make` of the game's path under the library folder, linked) for a game with none,
+  else Check Package (`pkg-check` of its folder). A starts the job, A again while it runs stops it; its events are drained
+  off the GUI thread into the jobs tools' `Run`, and the row says its state as their rows do (`jobs::state_words`). When
+  it ends the page is read again, and a package made asks the library to scan again. A package made since the scan
+  claims the game while `pkg-ls` finds the game as recorded, so it reads as Linked, not Changed.
+- **Cover art** is not built: the base keeps a game's cover choice only as another game's (`coverfrom`, read by the
+  scraper's `locate`) or as a file in the player's art folder (`art_added` names one to the index); no call makes one
+  of the game's own fetched pictures its cover.
+- Tests: qt-models' `game_page` (both pages' rows, steps and the job's words) and `display` (the game's crop on a
+  television alone), qt-app's `game_page_rows` (in the program: a crop stored for one game and not the other, a package
+  made and then checked to done) and `game_crop_gpu` (a GPU job: on VenusRT, a Super Nintendo image the test makes
+  draws red with its left quarter forced black; the console's custom 25% crop cuts the quarter, the game's own Whole
+  picture brings it back on its next start, and a second game keeps the console's crop).
 
 ### 7.9 Repair piece DC-B: the program does what it offers and says when it fails (2026-11-11)
 

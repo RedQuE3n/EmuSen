@@ -6,7 +6,7 @@ use crate::clients::app_settings;
 use crate::settings::{Model, SettingsSource};
 use crate::settings_controllers::{Chooser, ControlWord};
 use emusen_platform_client::bindings::consts as files;
-use emusen_platform_client::galaxia::consts::{DIR_FIRMWARE, FILE_GRAPHICS, FILE_SETTINGS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
+use emusen_platform_client::galaxia::consts::{DIR_FIRMWARE, DIR_SHADERS, FILE_GRAPHICS, FILE_SETTINGS, MODEL_APP_SETTINGS, MODEL_GRAPHICS_CONFIG};
 use emusen_platform_client::{serenity, Platform};
 use serde_json::Value;
 
@@ -138,5 +138,55 @@ impl SettingsSource for ClientSettings {
     fn folders(&self) -> std::collections::BTreeMap<String, String> {
         let firmware = self.platform.directory(DIR_FIRMWARE).ok().flatten();
         firmware.into_iter().map(|d| ("firmware".to_owned(), d.display().to_string())).collect()
+    }
+
+    fn pack(&self) -> Vec<String> {
+        let Some(root) = self.platform.directory(DIR_SHADERS).ok().flatten() else { return Vec::new() };
+        let mut out = Vec::new();
+        presets_under(&root, &root, &mut out);
+        out.sort_by_key(|p| p.to_lowercase());
+        out
+    }
+
+    fn preset_parameters(&self, path: &str) -> Result<Vec<Value>, String> {
+        let root = self.platform.directory(DIR_SHADERS).map_err(words)?.ok_or("the shader pack's folder is not known")?;
+        let preset = serenity::preset_load(&self.platform, &root.join(path).to_string_lossy()).map_err(words)?;
+        failed(&preset)?;
+        let mut sources = Vec::new();
+        for pass in preset["passes"].as_array().into_iter().flatten() {
+            let source = serenity::source_load(&self.platform, &text(&pass["shader"])).map_err(words)?;
+            failed(&source)?;
+            sources.push(source["parameters"].clone());
+        }
+        let merged = serenity::parameters_merge(&self.platform, &serde_json::json!({ "sources": sources, "overrides": preset["parameters"] })).map_err(words)?;
+        Ok(merged.as_array().cloned().unwrap_or_default())
+    }
+}
+
+fn text(value: &Value) -> String {
+    value.as_str().unwrap_or_default().to_owned()
+}
+
+/// A reader's document of failure as its words.
+fn failed(document: &Value) -> Result<(), String> {
+    match document.get("fail") {
+        Some(_) => Err(format!("{}", document["message"].as_str().unwrap_or("the preset could not be read"))),
+        None => Ok(()),
+    }
+}
+
+/// Every `.slangp` file under `folder`, by its path from `root` with `/` between its folders; a link is not followed.
+fn presets_under(root: &std::path::Path, folder: &std::path::Path, out: &mut Vec<String>) {
+    let Ok(entries) = std::fs::read_dir(folder) else { return };
+    for entry in entries.flatten() {
+        let Ok(kind) = entry.file_type() else { continue };
+        let path = entry.path();
+        if kind.is_dir() {
+            presets_under(root, &path, out);
+        } else if kind.is_file() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("slangp")) {
+            if let Ok(relative) = path.strip_prefix(root) {
+                out.push(relative.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/"));
+            }
+        }
     }
 }

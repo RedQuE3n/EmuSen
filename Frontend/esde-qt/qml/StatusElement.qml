@@ -13,6 +13,8 @@ ElementBox {
     required property real entrySpacing
     required property bool hasBackground
     required property color background
+    required property color backgroundEnd
+    required property bool backgroundVertical
     required property real backgroundRadius
     required property real padLeft
     required property real padTop
@@ -30,8 +32,12 @@ ElementBox {
         width: root.width + root.padLeft + root.padRight
         height: root.height + root.padTop + root.padBottom
         visible: root.hasBackground && shown.count > 0
-        color: root.background
         radius: root.backgroundRadius
+        gradient: Gradient {
+            orientation: root.backgroundVertical ? Gradient.Vertical : Gradient.Horizontal
+            GradientStop { position: 0; color: root.background }
+            GradientStop { position: 1; color: root.backgroundEnd }
+        }
     }
     // The icons' row is the element's size, 0 × 0 with none: the scene places it by its origin once measured (EmuSen_Qt.md §4.8.5).
     readonly property size extent: Qt.size(items.width, shown.count > 0 ? root.iconHeight : 0)

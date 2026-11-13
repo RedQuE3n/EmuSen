@@ -87,6 +87,15 @@ pub(super) fn tint(e: &Element, start: &str, end: &str, gradient: &str) -> Tint 
     Tint { color, end: e.color(end).unwrap_or(color), vertical: e.string(gradient) == Some("vertical") }
 }
 
+/// The help's and the status's fill, whose end and gradient ES-DE 3.4.1 reads only with a backgroundColor
+/// (`HelpComponent::applyTheme`, `SystemStatusComponent::applyTheme`); none is clear.
+fn background_tint(e: &Element) -> Tint {
+    match e.explicit.get("backgroundColor") {
+        Some(_) => tint(e, "backgroundColor", "backgroundColorEnd", "backgroundGradientType"),
+        None => Tint { color: Color(0), end: Color(0), vertical: false },
+    }
+}
+
 pub(super) fn h_align(value: Option<&str>) -> HAlign {
     match value {
         Some("center") => HAlign::Center,
@@ -152,14 +161,28 @@ fn picture(e: &Element, source: String, fit: Fit, crop: &str, corner: &str, ctx:
         saturation: e.float("saturation").unwrap_or(1.0) as f64,
         corner_radius: e.float(corner).unwrap_or(0.0) as f64 * ctx.w,
         nearest: false,
-        brightness: 0.0,
+        brightness: e.float("brightness").unwrap_or(0.0).clamp(-2.0, 2.0) as f64,
+        flip: (false, false),
+        mipmap: false,
         frame: None,
     }
 }
 
+// THEMES.md gameOverridePath: <dir>/<the game's system>/<its file's stem> with the first of these extensions found, in the
+// gamelist view for an image without imageType (ES-DE 3.4.1 `ImageComponent::setGameOverrideImage`, `GamelistView::updateView`).
+fn game_override(e: &Element, ctx: &Ctx) -> Option<String> {
+    let dir = e.path("gameOverridePath").filter(|_| ctx.view == "gamelist")?;
+    let g = ctx.game?;
+    let system = g.source.as_ref().unwrap_or(&ctx.system.system);
+    let stem = std::path::Path::new(&g.file).file_stem()?.to_string_lossy().into_owned();
+    let base = std::path::Path::new(&dir.absolute).join(&system.name).join(stem);
+    [".jpg", ".png", ".webp", ".gif", ".svg"].iter().map(|x| format!("{}{x}", base.display())).find(|p| std::path::Path::new(p).is_file())
+}
+
 fn image(e: &Element, ctx: &Ctx) -> Option<Draft> {
     let typed = !e.list("imageType").is_empty();
-    let source = if typed { media(e, "media", ctx.game) } else { existing(e.path("path")) }.or_else(|| existing(e.path("default")))?;
+    let fixed = || game_override(e, ctx).or_else(|| existing(e.path("path")));
+    let source = if typed { media(e, "media", ctx.game) } else { fixed() }.or_else(|| existing(e.path("default")))?;
     let (mut fit, size, sizing) = sized(e.pair("size"), e.pair("maxSize"), e.pair("cropSize"), ctx.w, ctx.h);
     let mut p = picture(e, source, fit, "cropPos", "cornerRadius", ctx);
     // THEMES.md: tile "can only be used when path has been set", so a game's media is never tiled.
@@ -173,6 +196,8 @@ fn image(e: &Element, ctx: &Ctx) -> Option<Draft> {
         );
     }
     p.nearest = e.string("interpolation") == Some("nearest");
+    p.flip = (e.bool("flipHorizontal") == Some(true), e.bool("flipVertical") == Some(true));
+    p.mipmap = e.bool("mipmap") == Some(true);
     Some(Draft { paint: Paint::Picture(p), size, sizing, scroll: None })
 }
 
@@ -195,13 +220,10 @@ fn video(e: &Element, ctx: &Ctx) -> Option<Draft> {
         }
     };
     let (fit, size, sizing) = sized(pick("imageSize"), pick("imageMaxSize"), pick("imageCropSize"), ctx.w, ctx.h);
-    let mut still = still_source.map(|s| picture(e, s, fit, "imageCropPos", "imageCornerRadius", ctx));
+    // The still keeps linear sampling whatever `interpolation` says: nearest measured further from ES-DE's capture (EmuSen_Qt.md §4.5.6).
+    let still = still_source.map(|s| picture(e, s, fit, "imageCropPos", "imageCornerRadius", ctx));
     let brightness = e.float("brightness").unwrap_or(0.0).clamp(-2.0, 2.0) as f64;
     let nearest = interpolation_nearest(e);
-    // The still keeps linear sampling whatever `interpolation` says: nearest measured further from ES-DE's capture (EmuSen_Qt.md §4.5.6).
-    if let Some(p) = &mut still {
-        p.brightness = brightness;
-    }
     let Some(source) = source else { return still.map(|p| Draft { paint: Paint::Picture(p), size, sizing, scroll: None }) };
     let (video_fit, target) = video_target(e, ctx);
     // ES-DE ignores the delay when no imageType is set, and starts at once when no still was found unless the type is none.
@@ -242,7 +264,8 @@ fn video(e: &Element, ctx: &Ctx) -> Option<Draft> {
     Some(Draft { paint: Paint::Video(v), size, sizing, scroll: None })
 }
 
-// THEMES.md, video interpolation: nearest unless the rotation is off the right angles.
+// THEMES.md's interpolation of a video, a badge and a rating: nearest unless the rotation is off the right angles (ES-DE
+// 3.4.1 `VideoComponent`, `BadgeComponent` and `RatingComponent::applyTheme`).
 fn interpolation_nearest(e: &Element) -> bool {
     match e.string("interpolation") {
         Some("nearest") => true,
@@ -367,6 +390,7 @@ fn rating(e: &Element, ctx: &Ctx) -> Option<Draft> {
         unfilled: icon("unfilledPath"),
         tint: color(e, "color", 0xFFFF_FFFF),
         overlay: e.bool("overlay").unwrap_or(true),
+        nearest: interpolation_nearest(e),
     });
     Some(Draft { paint, size: (w, h), sizing: Sizing::Fixed, scroll: None })
 }
@@ -471,13 +495,13 @@ fn badges(e: &Element, ctx: &Ctx) -> Option<Draft> {
     let link_icon = existing(e.path("customFolderLinkIcon"));
     let found = |map: Option<&std::collections::BTreeMap<String, ThemePath>>, key: &str| map.and_then(|m| existing(m.get(key)));
     let (tint, controller_tint, link_tint) = (
-        color(e, "badgeIconColor", 0xFFFF_FFFF),
-        color(e, "controllerIconColor", 0xFFFF_FFFF),
-        color(e, "folderLinkIconColor", 0xFFFF_FFFF),
+        tint(e, "badgeIconColor", "badgeIconColorEnd", "badgeIconGradientType"),
+        tint(e, "controllerIconColor", "controllerIconColorEnd", "controllerIconGradientType"),
+        tint(e, "folderLinkIconColor", "folderLinkIconColorEnd", "folderLinkIconGradientType"),
     );
     let controller_pos = e.pair("controllerPos").unwrap_or(Pair::new(0.5, 0.5));
     let link_pos = e.pair("folderLinkPos").unwrap_or(Pair::new(0.5, 0.5));
-    let at = |b: (f64, f64, f64, f64), icon: Icon, tint: Color| Overlay { icon, x: b.0, y: b.1, w: b.2, h: b.3, tint };
+    let at = |b: (f64, f64, f64, f64), icon: Icon, tint: Tint| Overlay { icon, x: b.0, y: b.1, w: b.2, h: b.3, tint };
     let slots = shown
         .iter()
         .take(count)
@@ -501,7 +525,7 @@ fn badges(e: &Element, ctx: &Ctx) -> Option<Draft> {
             Badge { cell, icon, controller, link }
         })
         .collect();
-    Some(Draft { paint: Paint::Badges(Badges { slots }), size: (bw, bh), sizing: Sizing::Fixed, scroll: None })
+    Some(Draft { paint: Paint::Badges(Badges { slots, nearest: interpolation_nearest(e) }), size: (bw, bh), sizing: Sizing::Fixed, scroll: None })
 }
 
 fn help_element(e: &Element, ctx: &Ctx) -> Option<Draft> {
@@ -509,14 +533,13 @@ fn help_element(e: &Element, ctx: &Ctx) -> Option<Draft> {
     if entries.is_empty() {
         return None;
     }
-    let bg = color(e, "backgroundColor", 0);
     let paint = Paint::Help(Help {
         entries,
         font: help_face(e, ctx.data),
         px: help::font_px(e, ctx.w, ctx.h),
         label_color: color(e, "textColor", 0x7777_77FF),
         icon_color: color(e, "iconColor", 0x7777_77FF),
-        background: padded(e, ctx, Tint { color: bg, end: bg, vertical: false }),
+        background: padded(e, ctx, background_tint(e)),
         entry_spacing: help::spacing_px(e, "entrySpacing", ctx.w),
         icon_gap: help::spacing_px(e, "iconTextSpacing", ctx.w),
         scale: help::scale(e),
@@ -593,14 +616,13 @@ fn status(e: &Element, ctx: &Ctx) -> Option<Draft> {
         }
     }
     // With nothing to show the element still stands at its place, an empty row with no background (THEMES.md, systemstatus).
-    let bg = color(e, "backgroundColor", 0);
     let paint = Paint::Status(Status {
         items,
         height: e.float("height").unwrap_or(0.035) as f64 * ctx.h,
         font: face_of(e, ctx.data),
         text_scale: e.float("textRelativeScale").unwrap_or(0.9) as f64,
         color: color(e, "color", 0xFFFF_FFFF),
-        background: padded(e, ctx, Tint { color: bg, end: bg, vertical: false }),
+        background: padded(e, ctx, background_tint(e)),
         entry_spacing: e.float("entrySpacing").unwrap_or(0.005) as f64 * ctx.w,
     });
     Some(Draft { paint, size: (0.0, 0.0), sizing: Sizing::Content { auto_w: true, auto_h: true }, scroll: None })

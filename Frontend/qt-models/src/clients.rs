@@ -54,11 +54,11 @@ impl ClientSource {
         self.scraper.as_ref().map(|s| &s.service)
     }
 
-    /// A scrape of one game started: the scraper opened again with its store, the player's ScreenScraper developer file
-    /// read, and `test` as its test seam where one is given; the game queued as one chosen alone (EmuSen_Backend.md §30.3).
-    pub fn scrape_start(&self, game: &GameFile, test: Option<&Value>) -> Result<(), String> {
+    /// A run started on `request` (emusen_scrape_service.h `start`): the scraper opened again with its store, the player's
+    /// ScreenScraper developer file read, and `test` as its test seam where one is given; how many games it queued
+    /// (EmuSen_Backend.md §30.3).
+    pub fn scrape_start(&self, request: &Value, test: Option<&Value>) -> Result<i64, String> {
         let scraper = self.scraper.as_ref().ok_or("the scraper could not be opened")?;
-        let system = game.system.as_deref().ok_or("the game has no console")?;
         let mut config = scraper.config.clone();
         config.settings["sources_alone"] = json!(false);
         config.settings["developer_files"] = json!(true);
@@ -66,10 +66,9 @@ impl ClientSource {
             config.settings["test"] = test.clone();
         }
         self.reopen(scraper, &config)?;
-        let started = scraper.service.start(&json!({ "games": [{ "path": game.path, "system": system }], "one": true }));
-        match started {
+        match scraper.service.start(request) {
             Ok(0) => Err("the scraper queued nothing".into()),
-            Ok(_) => Ok(()),
+            Ok(n) => Ok(n),
             Err(why) => Err(why.to_string()),
         }
     }
@@ -89,6 +88,11 @@ impl ClientSource {
     /// The run as it stands, every result of it.
     pub fn scrape_progress(&self) -> Result<Value, String> {
         self.scraper().ok_or("the scraper could not be opened")?.progress(0).map_err(words)
+    }
+
+    /// The run paused, or resumed; true when that changed it.
+    pub fn scrape_pause(&self, paused: bool) -> Result<bool, String> {
+        self.scraper().ok_or("the scraper could not be opened")?.pause(paused).map_err(words)
     }
 
     /// The run stopped; what was fetched is kept.
@@ -366,6 +370,13 @@ fn lexical(path: &std::path::Path) -> String {
         }
     }
     out.to_string_lossy().into_owned()
+}
+
+/// A game's own crop, games.db's, read on the front end's SQLite; none where it has none.
+pub fn game_crop(platform: &Arc<Platform>, path: &str) -> Result<Option<crate::display::Crop>, String> {
+    let sqlite = lent_sqlite()?;
+    let library = Library::open(platform, &platform.file(FILE_GAMES).map_err(words)?, &sqlite).map_err(words)?;
+    Ok(crate::display::Crop::from_record(&library.get(&json!({ "what": "crop", "path": path })).map_err(words)?))
 }
 
 /// The system's soname of SQLite, which the Qt front end lends to the platform library and to the runtime (EmuSen_Qt.md §1.1.2).

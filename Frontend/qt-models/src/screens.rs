@@ -75,12 +75,13 @@ pub const SETTINGS_PLACE: usize = 5;
 pub const POWER_PLACE: usize = 6;
 pub const CORES_PLACE: usize = 4;
 
-/// The screen a tool opens, by its key: Cores, the Themes tab, or the tool screen for a tool of jobs; none for a tool with
+/// The screen a tool opens, by its key: Cores, the Themes tab, or the tool screen for the Scraper, Cheats or a tool of jobs; none for a tool with
 /// no screen yet, which Home and the Home card do not offer.
 pub fn tool_screen(key: &str) -> Option<Shown> {
     match key {
         crate::home_card::CORES => Some(Shown::Cores),
         crate::home_card::THEMES => Some(Shown::Themes),
+        crate::home_card::SCRAPER | crate::home_card::CHEATS => Some(Shown::Tool),
         _ if crate::tools::jobs::tools().iter().any(|t| t == key) => Some(Shown::Tool),
         _ => None,
     }

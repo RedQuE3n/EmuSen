@@ -111,9 +111,17 @@ impl Router {
     pub fn pump(&mut self, now: Duration) -> Pumped {
         let before = self.held;
         let mut keyed = Vec::new();
+        // Guide is not part of the menu chord while it is read for its own chords over a game.
+        let guide_read = self.guide_chords && self.chord_only;
         while let Some(queued) = self.queue.pop_front() {
             match queued {
-                Queued::Pad(event) => self.held[event.button.index()] = event.down,
+                Queued::Pad(event) => {
+                    self.held[event.button.index()] = event.down;
+                    let held = self.held;
+                    if !Grammar::chord_down(|button: UiButton| (button != UiButton::Guide || !guide_read) && held[button.index()]) {
+                        self.grammar.chord_let_go();
+                    }
+                }
                 Queued::Key(button) if !self.chord_only => keyed.push(button),
                 Queued::Key(_) => {}
             }

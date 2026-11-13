@@ -66,7 +66,12 @@ impl Job for Running {
 
 /// A job of the platform library's tools started from its request: the core tool's, the library tool's.
 pub fn platform_job(platform: &Arc<Platform>, request: &Value) -> Result<Box<dyn Job>, String> {
-    ToolJob::start(platform, request).map(|j| Box::new(Running(j)) as Box<dyn Job>).map_err(words)
+    sent_job(platform, request).map(|j| j as Box<dyn Job>)
+}
+
+/// The same, to be drained on another thread.
+pub fn sent_job(platform: &Arc<Platform>, request: &Value) -> Result<Box<dyn Job + Send>, String> {
+    ToolJob::start(platform, request).map(|j| Box::new(Running(j)) as Box<dyn Job + Send>).map_err(words)
 }
 
 impl Backend for Clients {

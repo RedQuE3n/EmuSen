@@ -507,13 +507,16 @@ impl SceneView {
         Some(words::cased(&said, e.string("letterCase")))
     }
 
-    // A textlist's selected name and a text container scroll by the theme's delays, speed and gap and ES-DE's measured rates (§14.7).
+    // A textlist's, carousel's or grid's selected name and a text container scroll by the theme's delays, speed and gap
+    // and ES-DE's measured rates (§14.7); an item's name at its font's size, as ES-DE 3.4.1's `TextComponent` sets its
+    // speed from the font, which textRelativeScale leaves alone.
     fn scroll_of(&self, e: &Element, h: f64) -> Option<TextScroll> {
         let m = &self.motion;
         let seconds = |s: f32| (s as f64 * 1_000_000.0).round() as Time;
         match e.kind() {
-            "textlist" if e.bool("textHorizontalScrolling") != Some(false) => {
-                let font = e.float("fontSize").unwrap_or(0.045) as f64 * h;
+            // On by default in a textlist, off in a carousel or grid (THEMES.md).
+            "textlist" | "carousel" | "grid" if e.bool("textHorizontalScrolling").unwrap_or(e.kind() == "textlist") => {
+                let font = if e.kind() == "textlist" { e.float("fontSize").unwrap_or(0.045) as f64 } else { super::primary::item_font(e) } * h;
                 Some(TextScroll {
                     delay: seconds(e.float("textHorizontalScrollDelay").unwrap_or(3.0)),
                     speed: m.marquee_speed_per_em * font * e.float("textHorizontalScrollSpeed").unwrap_or(1.0) as f64,

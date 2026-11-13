@@ -52,6 +52,7 @@ Kit.NormalizedCanvas {
         onSectionChosen: (section) => screen.settings.section = section
         onStepped: (row, by) => screen.settings.step(row, by)
         onChosen: (row) => screen.settings.choose(row)
+        onSlid: (row, amount) => screen.settings.slide(row, amount)
         preview: Item {
             objectName: "settingsPreview"
             width: parent ? parent.width : 0

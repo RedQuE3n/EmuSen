@@ -85,15 +85,20 @@ impl MotionToken {
 
     /// How long a movement of the token lasts: its nominal duration, or nothing while motion is reduced.
     pub const fn duration(self, reduced: bool) -> Duration {
-        if reduced { Duration::ZERO } else { self.nominal() }
+        movement(self.nominal(), reduced)
     }
 
     /// How long a fade of the token lasts: its nominal duration, or 120 ms while motion is reduced; nothing for Instant.
     pub const fn fade_duration(self, reduced: bool) -> Duration {
+        self.fade_of(self.nominal(), reduced)
+    }
+
+    /// A fade of the token from a nominal length: it, or 120 ms while motion is reduced; nothing for Instant.
+    pub const fn fade_of(self, nominal: Duration, reduced: bool) -> Duration {
         match self {
             MotionToken::Instant => Duration::ZERO,
             _ if reduced => REDUCED_FADE,
-            _ => self.nominal(),
+            _ => nominal,
         }
     }
 
@@ -156,9 +161,19 @@ pub fn spring(v: f64) -> f64 {
     1.0 - (v * std::f64::consts::PI * 2.4).cos() * (-5.0 * v).exp()
 }
 
+/// A movement of a nominal length: it, or nothing while motion is reduced.
+pub const fn movement(nominal: Duration, reduced: bool) -> Duration {
+    if reduced { Duration::ZERO } else { nominal }
+}
+
 /// Whether the idle focus ring breathes: not while motion is reduced (WCAG 2.3.3).
 pub const fn breathes(reduced: bool) -> bool {
-    !reduced
+    breathes_if(true, reduced)
+}
+
+/// Whether a ring that would breathe (`wanted`) does: never while motion is reduced.
+pub const fn breathes_if(wanted: bool, reduced: bool) -> bool {
+    wanted && !reduced
 }
 
 /// The idle ring's opacity at a time since the focus last moved: 1 until the delay, then a breath down to BREATH_LOW and back each period.

@@ -1,11 +1,14 @@
 //! The tool screen as plain data (EmuSen_Interface.md §15.2–15.6, §16; EmuSen_Qt.md §1.2.2): what `ToolModel` puts on
 //! the kit's `ToolScreen` for any tool, the `Source` each tool implements, and `Tool`, which holds what every tool's
 //! screen holds the same way (the section, the filter, the sort, the search, the focus, the marks, the open card and
-//! the question). Cores is one source; `jobs` is the other, the tools that are lists of the platform library's jobs.
+//! the question). Cores is one source; `jobs` another, the tools that are lists of the platform library's jobs; `scraper`
+//! the third, the Scraper's runs; `cheats` the cheat database and the library's games it has files for.
 //! No Qt here.
 
+pub mod cheats;
 pub mod cores;
 pub mod jobs;
+pub mod scraper;
 
 use crate::card::Row as CardRow;
 use crate::question::{confirm, Question};
@@ -135,12 +138,21 @@ pub trait Source {
     fn columns(&self) -> Vec<Column>;
     /// Every row in the source's own order.
     fn items(&self) -> Vec<Item>;
-    /// The strip's sections, All first, by key and label.
-    fn sections(&self) -> Vec<(String, String)>;
-    /// The List card's filters and sorts, by key and label, All and the source's own order first.
-    fn filters(&self) -> Vec<(String, String)>;
-    fn sorts(&self) -> Vec<(String, String)>;
-    fn facts(&self) -> Vec<Words>;
+    /// The strip's sections, All first, by key and label; All alone for a tool with none of its own.
+    fn sections(&self) -> Vec<(String, String)> {
+        vec![("all".to_owned(), "All".to_owned())]
+    }
+    /// The List card's filters and sorts, by key and label, All and the source's own order first; those alone by default.
+    fn filters(&self) -> Vec<(String, String)> {
+        vec![("all".to_owned(), "All".to_owned())]
+    }
+    fn sorts(&self) -> Vec<(String, String)> {
+        vec![("own".to_owned(), "Tool's order".to_owned())]
+    }
+    /// The header's facts; none by default.
+    fn facts(&self) -> Vec<Words> {
+        Vec::new()
+    }
     /// The pane for the focused row, or the overview with none; `section` is the strip's key.
     fn pane(&self, key: Option<&str>) -> Pane;
     /// The bar with nothing marked: a job's progress, the last outcome, or none.
@@ -149,14 +161,23 @@ pub trait Source {
     fn action(&self, key: &str) -> Option<Action>;
     /// The rows of a row's page under X, each where it applies.
     fn page(&self, key: &str, marked: Option<&Mark>) -> Vec<CardRow>;
-    /// The List card's own rows after Search, Filter and Sort.
-    fn list_rows(&self) -> Vec<CardRow>;
-    fn marks_for(&self, key: &str) -> Vec<Mark>;
-    /// The bar's line and the plan's question for the marked rows, by key.
-    fn summary(&self, marked: &[(String, Mark)]) -> String;
-    fn plan(&self, marked: &[(String, Mark)]) -> Question;
-    /// The marked rows' jobs started, once the plan is answered Yes.
-    fn apply(&mut self, marked: &[(String, Mark)]);
+    /// The List card's own rows after Search, Filter and Sort; none by default.
+    fn list_rows(&self) -> Vec<CardRow> {
+        Vec::new()
+    }
+    /// A row's marks; none by default, for a tool whose rows are not marked and planned.
+    fn marks_for(&self, _key: &str) -> Vec<Mark> {
+        Vec::new()
+    }
+    /// The bar's line and the plan's question for the marked rows, by key; a tool with no marks has neither to say.
+    fn summary(&self, _marked: &[(String, Mark)]) -> String {
+        String::new()
+    }
+    fn plan(&self, _marked: &[(String, Mark)]) -> Question {
+        plan_question(self.title(), &[])
+    }
+    /// The marked rows' jobs started, once the plan is answered Yes; nothing by default.
+    fn apply(&mut self, _marked: &[(String, Mark)]) {}
     /// An action by its key, on a row (A, a page's row) or on none (the List card's rows); `section` is the strip's key.
     fn act(&mut self, action: &str, key: Option<&str>, section: &str) -> Effect;
     /// A question the source asked, answered: `yes` for the answer that does the thing.
@@ -180,6 +201,10 @@ pub trait Source {
     /// Whether rows are marked and applied as a plan; a tool whose rows each start at once has no Apply.
     fn plans(&self) -> bool {
         true
+    }
+    /// Whether a run's end leaves the library changed, so the library is read again.
+    fn changes_library(&self) -> bool {
+        false
     }
 }
 
@@ -729,5 +754,8 @@ impl Source for Box<dyn Source> {
     }
     fn plans(&self) -> bool {
         (**self).plans()
+    }
+    fn changes_library(&self) -> bool {
+        (**self).changes_library()
     }
 }

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use crate::loader::Element;
 
 use super::frame::*;
-use super::motion::Time;
+use super::motion::{TextScroll, Time};
 use super::paint::{self, Ctx, Sizing};
 use super::primary;
 use super::view::SceneView;
@@ -40,6 +40,20 @@ pub struct Drawn {
 
 fn is_primary(kind: &str) -> bool {
     matches!(kind, "carousel" | "textlist" | "grid")
+}
+
+/// A carousel's or grid's selected name scrolls once the painter has measured it wider than its item; the content key
+/// a measurement must match, and how long until the scroll next moves.
+fn item_marquee(row: Option<Row>, text: &mut ItemText, rule: Option<TextScroll>, room: Option<f64>, measured: Option<&(u64, f64, f64)>, since: Time) -> (u64, Option<Time>) {
+    let (Some(rule), Some(row)) = (rule, row) else { return (0, None) };
+    let content = key(&[&row.text, &text.px.to_string()]);
+    match (room, measured) {
+        (Some(room), Some(&(k, mw, _))) if k == content && mw > room + 0.01 => {
+            text.marquee = Some(Scroll { x: rule.loop_offset(since, mw), repeat_at: Some(mw + rule.gap.max(0.0)), y: 0.0, opacity: 1.0 });
+            (content, rule.loop_wait(since, mw))
+        }
+        _ => (content, None),
+    }
 }
 
 impl SceneView {
@@ -81,9 +95,20 @@ impl SceneView {
                 let (rect_w, rect_h) = (s.rect.width, s.rect.height);
                 let (selected, count) = (self.index(), self.count());
                 let (layout, content, wait) = match s.kind.as_str() {
-                    "carousel" => (Layout::Carousel(primary::carousel(e, data, count, s.offset, rect_w, rect_h)), 0, None),
+                    "carousel" => {
+                        let mut c = primary::carousel(e, data, count, selected, s.offset, rect_w, rect_h);
+                        let room = c.slots.iter().find(|x| x.chosen).map(|x| x.w);
+                        let row = primary::row(e, &self.view, data, selected);
+                        let (content, wait) = item_marquee(row, &mut c.text, s.scroll, room, measures.get(&id), since);
+                        (Layout::Carousel(c), content, wait)
+                    }
                     "grid" => match (self.grid(), s.grid) {
-                        (Some(g), Some(focus)) => (Layout::Grid(primary::grid(e, &g, focus, data)), 0, None),
+                        (Some(g), Some(focus)) => {
+                            let mut grid = primary::grid(e, &g, focus, data);
+                            let row = primary::row(e, &self.view, data, selected);
+                            let (content, wait) = item_marquee(row, &mut grid.text, s.scroll, Some(grid.item.0), measures.get(&id), since);
+                            (Layout::Grid(grid), content, wait)
+                        }
                         _ => continue,
                     },
                     _ => {

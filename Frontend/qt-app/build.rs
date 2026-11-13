@@ -17,7 +17,7 @@ fn main() {
             .depend("EmuSen.ThemeHost")
             .depend("EmuSen.Esde"),
     )
-    .files(["src/theme.rs", "src/cues.rs"])
+    .files(["src/theme.rs", "src/style.rs", "src/cues.rs"])
     .qrc("themes.qrc")
     .qt_module("Quick")
     .qt_module("QuickControls2")

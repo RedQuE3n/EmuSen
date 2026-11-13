@@ -3,7 +3,8 @@ import QtQuick
 import EmuSen.Models
 
 // A tool on the tool screen with its own ToolModel: Cores from Home's place, or a tool of jobs (Library Manager, Compressed
-// Discs or Packages) as Screens names it (EmuSen_Interface.md §15; EmuSen_Qt.md §7.7; tools/jobs.rs).
+// Discs or Packages), the Scraper or Cheats as Screens names it (EmuSen_Interface.md §15; EmuSen_Qt.md §7.7; tools/jobs.rs,
+// tools/scraper.rs, tools/cheats.rs).
 Cores {
     id: toolScreen
     required property Screens screens
@@ -15,9 +16,12 @@ Cores {
     property alias platformLibrary: toolModel.platformLibrary
     property alias cores: toolModel.cores
     property alias world: toolModel.world
+    property alias scraperTest: toolModel.scraperTest
     // Open Folder on a firmware page, and what failed, which the window answers.
     signal openFolder(string path)
     signal said(string words)
+    // A run ended that changed the library (the Scraper's).
+    signal libraryChanged()
     visible: toolScreen.screens.shown === toolScreen.shownAs
     tool: toolModel
     inputs: visible && !toolScreen.splashShown
@@ -27,6 +31,7 @@ Cores {
         objectName: `${toolScreen.objectName}Model`
         open: toolScreen.screens.shown === toolScreen.shownAs
         onOpenFolder: (path) => toolScreen.openFolder(path)
+        onLibraryChanged: toolScreen.libraryChanged()
     }
     Connections {
         target: toolModel

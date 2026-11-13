@@ -28,7 +28,7 @@ impl SettingsSource for Platform {
     fn catalogue(&self) -> Result<Value, String> {
         Ok(json!({
             "filters": [
-                {"key": "CRT", "name": "CRT", "consoles": ["SNES", "PlayStation"], "settings": [{"id": "quality", "initial": 1.0f64.to_bits(), "choices": ["Performance", "Balanced", "Accurate"]}]},
+                {"key": "CRT", "name": "CRT", "consoles": ["SNES", "PlayStation"], "settings": [{"id": "quality", "initial": 1.0f32.to_bits(), "choices": ["Performance", "Balanced", "Accurate"]}]},
                 {"key": "effect.None.nearest", "name": "None", "consoles": null},
                 {"key": "effect.Scanlines.nearest", "name": "Scanlines", "consoles": null}
             ],

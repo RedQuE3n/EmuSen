@@ -340,7 +340,7 @@ rule says one joins kit-core first (§7.7).
 **A theme's colours (2026-11-08).** `Tokens` holds a table of colour overrides, each for one variant, set from Rust
 (`set_overrides`, not a QML property) and consulted before the kit's column whenever the column is computed, so a switch of
 variant takes the theme's colour for that variant. The table belongs to one engine's singleton: the program sets it on a
-theme's engine only, so the program's own engine, which draws every card, keeps the kit's colours (`EmuSen_Qt.md` §3.5.1).
+theme's engine and the chosen theme's on its own, whose cards take it (decided by the tester, 2026-11-13; `EmuSen_Qt.md` §3.5.1).
 A token's `Tokens` name is kit-core's `ColourToken::property`, which theme-check reads too; a theme's colour is parsed by
 `Colour::parse`.
 
@@ -1345,6 +1345,15 @@ thread): each tick reads the pads for the interface, as before, and for a runnin
   only once let go and pressed again, so neither the walk nor a repeat sees game input and nothing held over the game
   presses when the interface has the pad back. The kit knows no game: a host binds it (`Play.qml`: the game running and
   not paused), and answers the chord (`SessionModel.togglePause` until the Pause Card exists).
+- **One chord until it is let go** (kit-core's `Grammar::forget`; corrected 2026-11-13). The chord's buttons go down
+  over the game, so the grammar is told to forget them as held; that also lowered its record of the chord, and the
+  chord was reported again at every pump while the buttons stayed down, each one pausing or resuming the game, so how
+  the hold ended decided whether the game was left paused. `forget` now keeps a chord seen down until it is let go:
+  at a pump whose buttons are up (`menu_chord`), or within the router's queue, where a release and a press between two
+  pumps leave the buttons down at both (`Grammar::chord_let_go`, called as the queue is applied), so a quick second
+  press is a new chord. Held to kit-qt's `router` test
+  `kit_7_17_the_chord_held_over_a_game_is_reported_once_until_let_go` (Guide, and Options with Menu; with the interface
+  taking the pad and without; let go and pressed again between two pumps), which failed before the correction.
 
 **Held to** (measured on 2026-11-08, the platform library from the same commit): kit-qt's `router` test
 `kit_7_17_…` (Down held over the game gives no press or repeat; the chord reaches the program; Down still held when the
@@ -2963,10 +2972,10 @@ theme's `shadowColor` in `theme.json` passes theme-check, which reads the regist
 a theme's `shadowColor` on its engine's `Tokens` beside its palette overrides, the name read from
 `Shadow::COLOUR_PROPERTY`; kit-qt's `Column::overridden` takes it in place of the registry's colour for the variant it
 names, and the registry's stays where the theme sets none. The shadow's opacity, offset and blur stay the kit's. Until
-2026-11-11 the host set palette tokens alone and left the override out. The program's own engine keeps the registry's
-shadow, as it keeps the kit's palette. Tests: kit-qt's `column` (a theme's colour replaces the registry's, none keeps
-it) and qt-app's `theme` (the accent fixture's `shadowColor` reaches its screen, the program's tokens keep the
-registry's). Seeded faults, each caught: the column ignoring the theme's colour (`column`); the host dropping it
+2026-11-11 the host set palette tokens alone and left the override out. The program's own engine takes the chosen theme's
+shadow colour with its palette (from 2026-11-13, `EmuSen_Qt.md` §3.5.1). Tests: kit-qt's `column` (a theme's colour replaces
+the registry's, none keeps it) and qt-app's `theme` (the accent fixture's `shadowColor` reaches its screen and the program's
+tokens). Seeded faults, each caught: the column ignoring the theme's colour (`column`); the host dropping it
 (`theme`). `EmuSen.Theme` is unchanged: `Tokens.shadowColor` was already its property.
 
 ### 7.58 The walk presses on through a stepped action; the page frame's focus; Qt Multimedia's two messages (stage 5, piece G2; 2026-11-09)

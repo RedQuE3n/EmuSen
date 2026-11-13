@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use common::{approve, device_and_feed, play_window, until, vulkan_qt};
 use emusen_client_fixture::{library, World};
-use emusen_kit_core::input::PadControl;
+use emusen_kit_core::input::{PadControl, UiButton};
 use emusen_qt_endymion::reading::sdl_button;
 use emusen_qt_play::window::ffi::QGuiApplication as App;
 use emusen_qt_test::compositor::Compositor;
@@ -72,6 +72,9 @@ fn a_virtual_pad_plays_the_game_in_the_window_and_its_chord_pauses_and_resumes_i
     until(&mut scene, "the chord pausing the game", |s| s.property("session", "paused") == "true");
     sdl.press(&pad, guide, false);
     until(&mut scene, "the interface owning the pad while paused", |s| !s.pad_chord_only());
+    // The reader samples the pad every 16 ms, so a button let go and pressed again inside one sample was never let go:
+    // the second press is a second chord only once the router has seen the first one end.
+    until(&mut scene, "the router seeing Guide let go", |s| !s.pad_held(UiButton::Guide));
     sdl.press(&pad, guide, true);
     until(&mut scene, "the chord resuming the game", |s| s.property("session", "paused") == "false");
     sdl.press(&pad, guide, false);

@@ -167,6 +167,12 @@ pub mod qobject {
         #[cxx_name = "readPicture"]
         fn read_picture(self: Pin<&mut SessionModel>);
 
+        /// A lever of `console`'s shader moved to `value`: set on the picture's chain at once when the game drawn is of
+        /// that console and its chain declares `id`, else the picture read again from the settings saved.
+        #[qinvokable]
+        #[cxx_name = "setLever"]
+        fn set_lever(self: Pin<&mut SessionModel>, console: &QString, id: &QString, value: f64);
+
         /// The picture's settings read anew: the picture is drawn again, a still one too.
         #[qsignal]
         #[cxx_name = "pictureRead"]
@@ -229,6 +235,12 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "setConsoleSetting"]
         fn set_console_setting(self: Pin<&mut SessionModel>, key: &QString, value: &QString);
+
+        /// The game's cheat at `index` of its list switched in the running game at once and saved to the list; the
+        /// card's facts read again.
+        #[qinvokable]
+        #[cxx_name = "switchCheat"]
+        fn switch_cheat(self: Pin<&mut SessionModel>, index: i32, on: bool);
 
         /// Guide held with `button` over the running game (`PadRouter.guideChord`): pause.rs's `guide_chord` says what it asks.
         #[qinvokable]
@@ -307,6 +319,8 @@ pub struct SessionModelRust {
     shapes: (f64, f64),
     /// The open session's console, and what its display settings ask for.
     display_console: Option<String>,
+    /// The open game's own crop, read as it opened, in place of its console's overscan.
+    game_crop: Option<display::Crop>,
     display: Display,
     /// Serenity's catalogue, read once.
     catalogue: Option<serde_json::Value>,
@@ -337,6 +351,8 @@ pub struct SessionModelRust {
     runtime: Option<Runtime>,
     platform: Option<Arc<Platform>>,
     session: Option<Session>,
+    /// The game's own cheat list as given to the open session.
+    cheats: Option<crate::cheats::Given>,
     /// The runtime holding the game after a Frame Advance, until a resume lets it run (Mistress's `AdvanceOneFrame`).
     stepped: bool,
 }
@@ -375,6 +391,7 @@ impl Default for SessionModelRust {
             picture_crop: QRectF::new(0.0, 0.0, 1.0, 1.0),
             shapes: (0.0, 0.0),
             display_console: None,
+            game_crop: None,
             display: Display::default(),
             catalogue: None,
             handoff: None,
@@ -396,6 +413,7 @@ impl Default for SessionModelRust {
             runtime: None,
             platform: None,
             session: None,
+            cheats: None,
             stepped: false,
         }
     }
@@ -566,7 +584,8 @@ impl qobject::SessionModel {
         };
         self.as_mut().set_resume_subject(QString::from(&subject));
         let sync = self.sync_to_display;
-        let session = Session::start(runtime, opening, engine, device, handoff, GameIo { pads, sound, sync }, clock, held, report);
+        let cheats = self.as_mut().platform().ok();
+        let session = Session::start(runtime, opening, engine, device, handoff, GameIo { pads, sound, sync, cheats }, clock, held, report);
         self.as_mut().set_sounding(sounding);
         self.as_mut().rust_mut().session = Some(session);
         let title = self.as_mut().title();
@@ -890,6 +909,7 @@ impl qobject::SessionModel {
             })
             .collect();
         facts.cards = card_facts(&runtime, session, &info.console);
+        facts.cheats = self.cheats.as_ref().map(|g| g.list.switches()).unwrap_or_default();
         let text = QString::from(facts.to_json().as_str());
         if self.card_facts != text {
             self.as_mut().rust_mut().card_facts = text;
@@ -909,6 +929,16 @@ impl qobject::SessionModel {
             self.as_mut().read_picture();
         }
         self.unstep();
+    }
+
+    fn set_lever(self: Pin<&mut Self>, console: &QString, id: &QString, value: f64) {
+        let (Some(shown), Some(handoff)) = (self.display_console.clone(), self.handoff.clone()) else { return };
+        if shown != console.to_string() {
+            return;
+        }
+        if !handoff.set_value(&id.to_string(), value as f32) {
+            self.read_picture();
+        }
     }
 
     fn read_picture(mut self: Pin<&mut Self>) {
@@ -932,10 +962,19 @@ impl qobject::SessionModel {
             self.as_mut().rust_mut().catalogue = Some(settings.catalogue()?);
         }
         let catalogue = self.catalogue.as_ref().ok_or("no catalogue")?;
-        let display = display::read(catalogue, &settings.load(Model::Graphics)?, console);
-        let root = handoff.presets().to_string_lossy();
-        let chosen = display.chosen_json();
-        let preset = emusen_platform_client::serenity::filter_preset(&platform, &display.filter, Some(console), chosen.as_ref(), &root);
+        let display = display::read_for_game(catalogue, &settings.load(Model::Graphics)?, console, self.game_crop);
+        let preset = match &display.preset {
+            Some(path) => {
+                let pack = platform.directory(emusen_platform_client::galaxia::consts::DIR_SHADERS).map_err(|e| e.to_string())?;
+                let pack = pack.ok_or("the shader pack's folder is not known")?;
+                emusen_platform_client::serenity::preset_document(&platform, &pack.join(path).to_string_lossy())
+            }
+            None => {
+                let root = handoff.presets().to_string_lossy();
+                let chosen = display.chosen_json();
+                emusen_platform_client::serenity::filter_preset(&platform, &display.filter, Some(console), chosen.as_ref(), &root)
+            }
+        };
         Ok((display, preset.map_err(|e| e.to_string())?))
     }
 
@@ -1104,6 +1143,7 @@ impl qobject::SessionModel {
         *self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         drop(self.as_mut().rust_mut().session.take());
         self.as_mut().rust_mut().opened = None;
+        self.as_mut().rust_mut().cheats = None;
         self.as_mut().rust_mut().holding = None;
         self.as_mut().rust_mut().from_state = None;
         self.as_mut().set_resume_asked(false);
@@ -1137,6 +1177,18 @@ impl qobject::SessionModel {
                 self.as_mut().apply_speed();
                 let console = self.runtime.as_ref().and_then(|r| r.session_info(session).ok()).map(|info| info.console);
                 self.as_mut().rust_mut().display_console = console;
+                let game = self.game.to_string();
+                let crop = match self.as_mut().platform() {
+                    Ok(platform) if !game.is_empty() => crate::clients::game_crop(&platform, &game),
+                    _ => Ok(None),
+                };
+                if let Err(e) = &crop {
+                    self.as_mut().rust_mut().notice_attention = true;
+                    self.as_mut().notice_attention_changed();
+                    self.as_mut().rust_mut().notice = QString::from(format!("The game's own crop could not be read: {e}").as_str());
+                    self.as_mut().notice_changed();
+                }
+                self.as_mut().rust_mut().game_crop = crop.unwrap_or(None);
                 self.as_mut().read_picture();
                 self.as_mut().set_running(true);
                 self.as_mut().left_off(session);
@@ -1155,7 +1207,20 @@ impl qobject::SessionModel {
             Report::Volume(volume) => self.as_mut().heard_volume(volume),
             Report::Device(device) => self.as_mut().heard_device(device),
             Report::Rate { fps } => self.as_mut().set_fps(fps),
+            Report::Cheats(given) => self.as_mut().rust_mut().cheats = given,
         }
+    }
+
+    fn switch_cheat(mut self: Pin<&mut Self>, index: i32, on: bool) {
+        let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
+        let Ok(platform) = self.as_mut().platform() else { return };
+        let Some(mut given) = self.as_mut().rust_mut().cheats.take() else { return };
+        let switched = given.switch(&platform, &runtime, session, index.max(0) as usize, on);
+        self.as_mut().rust_mut().cheats = Some(given);
+        if let Err(words) = switched {
+            self.as_mut().say(format!("The cheat was not switched: {words}"), true);
+        }
+        self.read_card_facts();
     }
 
     fn choose_slot(mut self: Pin<&mut Self>, slot: u32) {

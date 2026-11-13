@@ -16,6 +16,8 @@ ElementBox {
     required property real selectorW
     required property real selectorH
     required property color selectorColor
+    required property color selectorColorEnd
+    required property bool selectorVertical
     required property bool hasSelectedBackground
     required property color selectedBackground
     required property real selectedBackgroundRadius
@@ -48,7 +50,11 @@ ElementBox {
         y: root.selectorY
         width: root.selectorW
         height: root.selectorH
-        color: root.selectorColor
+        gradient: Gradient {
+            orientation: root.selectorVertical ? Gradient.Vertical : Gradient.Horizontal
+            GradientStop { position: 0; color: root.selectorColor }
+            GradientStop { position: 1; color: root.selectorColorEnd }
+        }
     }
     ListView {
         objectName: "esdeTextList"

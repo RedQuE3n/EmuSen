@@ -90,6 +90,42 @@ fn kit_7_17_while_a_game_owns_the_pad_only_the_chord_leaves_and_nothing_held_the
     assert_eq!(buttons(&mut router, 1064), vec![(UiButton::Down, false, 1)]);
 }
 
+// EmuSen_Kit.md §7.17: the chord that takes the pad from a game is one chord for as long as it is held, whoever owns the pad
+// at the next pump; reported at every pump it paused a game and resumed it again while the button was still down.
+#[test]
+fn kit_7_17_the_chord_held_over_a_game_is_reported_once_until_let_go() {
+    for takes_the_pad in [true, false] {
+        let mut router = Router::new(RepeatTiers::OWN);
+        router.set_chord_only(true);
+        router.push(PadEvent { button: UiButton::Guide, down: true });
+        assert!(router.pump(ms(0)).menu_chord, "the chord reaches the program");
+        router.set_chord_only(!takes_the_pad);
+        assert!(!router.pump(ms(16)).menu_chord, "still held at the next pump, the interface owning the pad: {takes_the_pad}");
+        assert!(!router.pump(ms(32)).menu_chord, "and at the one after");
+        router.push(PadEvent { button: UiButton::Guide, down: false });
+        assert!(!router.pump(ms(48)).menu_chord, "let go");
+        router.push(PadEvent { button: UiButton::Guide, down: true });
+        assert!(router.pump(ms(64)).menu_chord, "pressed again, a chord again");
+        // Let go and pressed again between two pumps is a new chord too: the queue shows what the state at the pump cannot.
+        router.push(PadEvent { button: UiButton::Guide, down: false });
+        router.push(PadEvent { button: UiButton::Guide, down: true });
+        assert!(router.pump(ms(80)).menu_chord, "let go and pressed again before the next pump");
+        assert!(!router.pump(ms(96)).menu_chord, "and one chord while that press is held");
+    }
+    // The two middle buttons together are the chord of a pad with no guide button, whether or not Guide is read for its chords.
+    for guide_chords in [false, true] {
+        let mut router = Router::new(RepeatTiers::OWN);
+        router.set_guide_chords(guide_chords);
+        router.set_chord_only(true);
+        router.push(PadEvent { button: UiButton::Options, down: true });
+        router.push(PadEvent { button: UiButton::Menu, down: true });
+        assert!(router.pump(ms(0)).menu_chord, "Guide's chords read: {guide_chords}");
+        assert!(!router.pump(ms(16)).menu_chord, "the two middle buttons still held, the game still owning the pad: {guide_chords}");
+        router.set_chord_only(false);
+        assert!(!router.pump(ms(32)).menu_chord, "and with the interface owning it: {guide_chords}");
+    }
+}
+
 // EmuSen_Kit.md §7.4: the router has work only while an event waits or a button is held, so a frame's clock sleeps otherwise.
 #[test]
 fn kit_7_4_the_router_is_pending_only_while_an_event_waits_or_a_button_is_held() {

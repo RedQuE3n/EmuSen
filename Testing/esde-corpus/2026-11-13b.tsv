@@ -1,0 +1,120 @@
+# fall: against 2026-11-13.tsv: alekfull-nx-es-de: unsupported 4 → 3
+# fall: against 2026-11-13.tsv: analogue-3d-menu-es-de: unsupported 10 → 7
+# fall: against 2026-11-13.tsv: artflix-revisited-es-de: unsupported 5 → 4
+# fall: against 2026-11-13.tsv: atelier-es-de: unsupported 16 → 12
+# fall: against 2026-11-13.tsv: aura-es-de: unsupported 16 → 13
+# fall: against 2026-11-13.tsv: basic-es-de: unsupported 4 → 2
+# fall: against 2026-11-13.tsv: canvas-es-de: unsupported 16 → 13
+# fall: against 2026-11-13.tsv: caralt-es-de: unsupported 9 → 8
+# fall: against 2026-11-13.tsv: carbon-es-de: unsupported 3 → 2
+# fall: against 2026-11-13.tsv: cathode-es-de: unsupported 15 → 10
+# fall: against 2026-11-13.tsv: codywheel-es-de: unsupported 5 → 3
+# fall: against 2026-11-13.tsv: coinops-es-de: unsupported 7 → 5
+# fall: against 2026-11-13.tsv: colorful-pop-es-de: unsupported 10 → 9
+# fall: against 2026-11-13.tsv: compendium-es-de: unsupported 9 → 8
+# fall: against 2026-11-13.tsv: decaffe-es-de: unsupported 5 → 1
+# fall: against 2026-11-13.tsv: diamond-es-de: unsupported 6 → 3
+# fall: against 2026-11-13.tsv: ds-es-de: unsupported 5 → 4
+# fall: against 2026-11-13.tsv: elegance-es-de: unsupported 2 → 0
+# fall: against 2026-11-13.tsv: es-dwee-es-de: unsupported 7 → 4
+# fall: against 2026-11-13.tsv: esboy-es-de: unsupported 7 → 6
+# fall: against 2026-11-13.tsv: forall-es-de: unsupported 9 → 7
+# fall: against 2026-11-13.tsv: homage-es-de: unsupported 8 → 7
+# fall: against 2026-11-13.tsv: horizon-es-de: unsupported 11 → 10
+# fall: against 2026-11-13.tsv: hyperflix-es-de: unsupported 6 → 4
+# fall: against 2026-11-13.tsv: iconic-es-de: unsupported 13 → 11
+# fall: against 2026-11-13.tsv: iisu-interpreted-es-de: unsupported 16 → 11
+# fall: against 2026-11-13.tsv: immersive-revisited-es-de: unsupported 2 → 1
+# fall: against 2026-11-13.tsv: meringue-es-de: unsupported 8 → 7
+# fall: against 2026-11-13.tsv: mini-es-de: unsupported 6 → 5
+# fall: against 2026-11-13.tsv: nxe-menu-es-de: unsupported 9 → 8
+# fall: against 2026-11-13.tsv: playstation-x-es-de: unsupported 15 → 12
+# fall: against 2026-11-13.tsv: ps5-menu-es-de: unsupported 8 → 6
+# fall: against 2026-11-13.tsv: psone-ish-es-de: unsupported 6 → 5
+# fall: against 2026-11-13.tsv: retrofix-revisited-es-de: unsupported 11 → 10
+# fall: against 2026-11-13.tsv: retromega-revisited-es-de: unsupported 4 → 2
+# fall: against 2026-11-13.tsv: showcase-es-de: unsupported 8 → 7
+# fall: against 2026-11-13.tsv: simcar-es-de: unsupported 10 → 9
+# fall: against 2026-11-13.tsv: simplemenu-es-de: unsupported 3 → 2
+# fall: against 2026-11-13.tsv: smooth-es-de: unsupported 9 → 7
+# fall: against 2026-11-13.tsv: superstation-one-menu-es-de: unsupported 5 → 3
+# fall: against 2026-11-13.tsv: tategriddy-es-de: unsupported 4 → 2
+# fall: against 2026-11-13.tsv: techdweeb-es-de: unsupported 5 → 4
+# fall: against 2026-11-13.tsv: texgriddy-es-de: unsupported 6 → 4
+# fall: against 2026-11-13.tsv: unreleased-es-de: unsupported 7 → 5
+# fall: against 2026-11-13.tsv: x-grid-es-de: unsupported 8 → 7
+# fall: against 2026-11-13.tsv: x20s-es-de: unsupported 6 → 4
+# fall: against 2026-11-13.tsv: xmb-menu-es-de: unsupported 6 → 5
+theme	loads	systems	variants	runs	errors	warnings	set	unknown	unsupported	whole	kinds	undrawn	mae_system_1280	mae_gamelist_1280	mae_system_1920	mae_gamelist_1920	rects_off	mae_viewer_1280	mae_viewer_1920	viewer_off
+adroit-es-de	yes	5/5	5	25	0	295	115	0	5	no	animation,badges,clock,grid,helpsystem,image,rating,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+alekfull-nx-es-de	yes	5/5	4	20	0	450	128	0	3	no	carousel,clock,datetime,helpsystem,image,rating,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+analogue-3d-menu-es-de	yes	5/5	8	40	0	2540	204	0	7	no	badges,carousel,clock,datetime,gamelistinfo,gameselector,grid,helpsystem,image,rating,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+analogue-os-menu-es-de	yes	5/5	3	15	0	880	74	0	2	no	clock,helpsystem,image,sound,systemstatus,text,textlist	-	-	-	-	-	-	-	-	-
+art-book-next-es-de	yes	5/5	20	100	0	2210	168	0	3	no	badges,carousel,clock,datetime,grid,helpsystem,image,rating,sound,systemstatus,text,textlist,video	-	0.94	1.97	0.31	1.85	0	-	-	-
+artflix-revisited-es-de	yes	5/5	5	25	0	165	122	0	4	no	badges,carousel,clock,gamelistinfo,gameselector,helpsystem,image,rating,sound,systemstatus,text,textlist,video	carousel:verticalWheel	4.25	8.06	4.04	7.55	0	2.14	2.66	0
+atari-50-menu-es-de	yes	5/5	1	5	0	80	97	0	9	no	badges,carousel,clock,gameselector,helpsystem,image,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+atelier-es-de	yes	5/5	21	105	0	6585	224	0	12	no	badges,carousel,clock,datetime,gamelistinfo,grid,helpsystem,image,rating,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+aura-es-de	yes	5/5	24	120	0	4450	197	0	13	no	badges,carousel,clock,datetime,grid,helpsystem,image,rating,sound,systemstatus,text,textlist,video	carousel:horizontalWheel	-	-	-	-	-	-	-	-
+basic-es-de	yes	5/5	3	15	0	735	88	0	2	no	carousel,clock,helpsystem,image,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+canvas-es-de	yes	5/5	16	80	0	3130	207	0	13	no	animation,badges,carousel,clock,datetime,grid,helpsystem,image,rating,sound,systemstatus,text,textlist,video	carousel:verticalWheel	-	-	-	-	-	-	-	-
+caralt-es-de	yes	5/5	2	10	0	430	120	0	8	no	badges,carousel,clock,gameselector,helpsystem,image,rating,sound,systemstatus,text,video	carousel:verticalWheel	7.07	5.39	6.78	4.98	0	2.14	2.66	0
+carbon-es-de	yes	5/5	1	5	0	65	74	0	2	no	badges,carousel,clock,datetime,helpsystem,image,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+cathode-es-de	yes	5/5	13	65	0	2903	217	0	10	no	animation,badges,carousel,clock,datetime,gamelistinfo,grid,helpsystem,image,rating,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+catppuccin-es-de	yes	5/5	6	30	0	365	120	0	14	no	clock,datetime,grid,helpsystem,image,rating,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+chicuelo-revisited-es-de	yes	5/5	3	15	0	165	109	0	8	no	carousel,clock,gameselector,helpsystem,image,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+codywheel-es-de	yes	5/5	3	15	0	790	157	0	3	no	badges,carousel,clock,datetime,gameselector,grid,helpsystem,image,rating,sound,systemstatus,text,textlist,video	carousel:verticalWheel	-	-	-	-	-	-	-	-
+coinops-es-de	yes	5/5	5	25	0	200	145	0	5	no	badges,carousel,clock,datetime,gamelistinfo,grid,helpsystem,image,rating,sound,systemstatus,text,video	carousel:verticalWheel	-	-	-	-	-	-	-	-
+colorful-pop-es-de	yes	5/5	4	20	0	485	138	0	9	no	animation,badges,carousel,clock,datetime,helpsystem,image,rating,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+colorful-revisited-es-de	yes	5/5	1	5	0	145	105	0	2	no	badges,carousel,clock,datetime,helpsystem,image,rating,sound,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+colorful-simplified-es-de	yes	5/5	9	45	0	765	133	0	2	no	carousel,clock,datetime,helpsystem,image,rating,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+compendium-es-de	yes	5/5	3	15	0	90	111	0	8	no	carousel,clock,datetime,grid,helpsystem,image,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+decaffe-es-de	yes	5/5	4	20	0	620	132	0	1	no	badges,carousel,clock,datetime,gameselector,helpsystem,image,rating,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+diamond-es-de	yes	5/5	6	30	0	930	148	0	3	no	badges,carousel,clock,datetime,grid,helpsystem,image,rating,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+ds-es-de	yes	5/5	3	15	0	1055	121	0	4	no	badges,carousel,clock,datetime,grid,helpsystem,image,rating,sound,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+elegance-es-de	yes	5/5	4	20	0	300	108	0	0	yes	badges,carousel,clock,datetime,helpsystem,image,rating,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+elementerial-es-de	yes	5/5	18	90	0	480	107	0	6	no	carousel,clock,gameselector,grid,helpsystem,image,rating,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+epic-noir-next-es-de	yes	5/5	6	30	0	900	134	0	3	no	badges,carousel,clock,datetime,gameselector,grid,helpsystem,image,rating,sound,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+epic-noir-revisited-es-de	yes	5/5	1	5	0	155	97	0	9	no	badges,clock,helpsystem,image,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+es-dwee-es-de	yes	5/5	3	15	0	795	154	0	4	no	badges,carousel,clock,datetime,grid,helpsystem,image,rating,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+esboy-es-de	yes	5/5	2	10	0	120	120	0	6	no	badges,carousel,clock,datetime,helpsystem,image,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+escape-es-de	yes	5/5	10	50	0	600	121	0	12	no	badges,carousel,clock,datetime,helpsystem,image,rating,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+forall-es-de	yes	5/5	4	20	0	320	118	0	7	no	badges,carousel,clock,helpsystem,image,rating,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+gameos-es-de	yes	5/5	7	35	0	555	68	0	4	no	badges,clock,grid,helpsystem,image,sound,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+grimmlex-es-de	yes	5/5	15	75	0	1500	113	0	5	no	badges,clock,gamelistinfo,gameselector,grid,helpsystem,image,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+homage-es-de	yes	5/5	8	40	0	1600	142	0	7	no	badges,carousel,clock,datetime,grid,helpsystem,image,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+horizon-es-de	yes	5/5	9	45	0	495	132	0	10	no	badges,carousel,clock,grid,helpsystem,image,rating,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+hyperflix-es-de	yes	5/5	6	30	0	285	91	0	4	no	badges,carousel,clock,gamelistinfo,gameselector,helpsystem,image,sound,systemstatus,text,video	carousel:verticalWheel	-	-	-	-	-	-	-	-
+iconic-es-de	yes	5/5	11	55	0	2280	184	0	11	no	badges,carousel,clock,datetime,grid,helpsystem,image,rating,sound,systemstatus,text,textlist,video	carousel:verticalWheel	-	-	-	-	-	-	-	-
+iisu-interpreted-es-de	yes	5/5	6	30	0	820	151	0	11	no	badges,carousel,clock,datetime,grid,helpsystem,image,sound,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+immersive-revisited-es-de	yes	5/5	2	10	0	270	103	0	1	no	badges,carousel,clock,gameselector,helpsystem,image,sound,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+mania-menu-es-de	yes	5/5	4	20	0	380	98	0	9	no	badges,carousel,clock,gameselector,helpsystem,image,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+meringue-es-de	yes	5/5	4	20	0	320	115	0	7	no	badges,carousel,clock,datetime,grid,helpsystem,image,rating,systemstatus,text	-	-	-	-	-	-	-	-	-
+mini-es-de	yes	5/5	12	60	0	2580	157	0	5	no	badges,carousel,clock,datetime,gamelistinfo,gameselector,grid,helpsystem,image,rating,sound,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+minui-menu-es-de	yes	5/5	7	35	0	595	75	0	3	no	clock,helpsystem,image,sound,systemstatus,textlist,video	-	-	-	-	-	-	-	-	-
+mister-menu-es-de	yes	5/5	1	5	0	90	75	0	3	no	clock,helpsystem,image,sound,systemstatus,text,textlist	-	-	-	-	-	-	-	-	-
+notepad-pocket-es-de	yes	5/5	3	15	0	615	106	0	4	no	badges,carousel,clock,gameselector,helpsystem,image,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+nso-menu-interpreted-es-de	yes	5/5	2	10	0	185	97	0	5	no	carousel,clock,gameselector,grid,helpsystem,image,sound,systemstatus,text	-	-	-	-	-	-	-	-	-
+nxe-menu-es-de	yes	5/5	1	5	0	140	113	0	8	no	carousel,clock,datetime,helpsystem,image,sound,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+p-10-menu-es-de	yes	5/5	2	10	0	660	87	0	4	no	clock,helpsystem,image,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+playstation-x-es-de	yes	5/5	5	25	0	755	163	0	12	no	badges,carousel,clock,datetime,grid,helpsystem,image,rating,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+ps5-menu-es-de	yes	5/5	12	60	0	1930	128	0	6	no	badges,carousel,clock,gameselector,helpsystem,image,sound,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+psone-ish-es-de	yes	5/5	1	5	0	115	108	0	5	no	badges,carousel,clock,gamelistinfo,grid,helpsystem,image,sound,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+razor-es-de	yes	5/5	12	60	0	1830	120	0	3	no	badges,clock,datetime,grid,helpsystem,image,rating,sound,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+retrofix-revisited-es-de	yes	5/5	4	20	0	765	148	0	10	no	badges,carousel,clock,datetime,grid,helpsystem,image,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+retromega-revisited-es-de	yes	5/5	8	40	0	680	102	0	2	no	carousel,clock,helpsystem,image,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+sagadiamond-es-de	yes	5/5	8	40	0	45	97	0	3	no	carousel,clock,datetime,gameselector,helpsystem,image,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+shinretro-revisited-es-de	yes	5/5	2	10	0	205	129	0	8	no	badges,carousel,clock,datetime,grid,helpsystem,image,rating,sound,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+showcase-es-de	yes	5/5	2	10	0	580	129	0	7	no	badges,carousel,clock,datetime,gameselector,helpsystem,image,rating,sound,systemstatus,text,video	carousel:verticalWheel	-	-	-	-	-	-	-	-
+simcar-es-de	yes	5/5	2	10	0	330	114	0	9	no	badges,carousel,clock,gameselector,helpsystem,image,rating,sound,systemstatus,text,video	carousel:verticalWheel	-	-	-	-	-	-	-	-
+simplemenu-es-de	yes	5/5	7	35	0	70	53	0	2	no	clock,helpsystem,image,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+slick-es-de	yes	5/5	3	15	0	305	146	0	3	no	badges,carousel,clock,datetime,grid,helpsystem,image,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+smooth-es-de	yes	5/5	3	15	0	210	171	0	7	no	badges,carousel,clock,datetime,gameselector,grid,helpsystem,image,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+superstation-one-menu-es-de	yes	5/5	7	35	0	610	112	0	3	no	carousel,clock,helpsystem,image,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+tategriddy-es-de	yes	5/5	4	20	0	550	131	0	2	no	badges,carousel,clock,grid,helpsystem,image,rating,sound,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+techdweeb-es-de	yes	5/5	6	30	0	570	131	0	4	no	carousel,clock,datetime,helpsystem,image,rating,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+texgriddy-es-de	yes	5/5	4	20	0	820	150	0	4	no	badges,carousel,clock,datetime,grid,helpsystem,image,rating,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+unreleased-es-de	yes	5/5	4	20	0	200	141	0	5	no	carousel,clock,datetime,grid,helpsystem,image,rating,sound,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+x-grid-es-de	yes	5/5	24	120	0	1320	102	0	7	no	clock,datetime,grid,helpsystem,image,systemstatus,text	-	-	-	-	-	-	-	-	-
+x20s-es-de	yes	5/5	3	15	0	50	106	0	4	no	badges,carousel,clock,helpsystem,image,rating,sound,systemstatus,text,textlist,video	-	-	-	-	-	-	-	-	-
+xmb-menu-es-de	yes	5/5	7	35	0	1365	118	0	5	no	badges,carousel,clock,gameselector,helpsystem,image,sound,systemstatus,text,video	-	-	-	-	-	-	-	-	-
+# 71 themes, 71 load, 1 drawn whole, 61 use no undrawn kind

@@ -122,7 +122,24 @@ impl SessionService {
     /// A cheat op, EMUSEN_SESSION_CHEAT_*, its arguments and answer as JSON; a change that answers a number gives it.
     pub fn cheat_op(&self, session: SessionId, op: u32, args: &Value) -> Result<Value> {
         let f = entry!(self, cheat_op);
+        // A change answers its id, count or 0 as the return and copies nothing, so it is called once, never asked a length.
+        let number = matches!(
+            op,
+            raw::EMUSEN_SESSION_CHEAT_ADD
+                | raw::EMUSEN_SESSION_CHEAT_POKE
+                | raw::EMUSEN_SESSION_CHEAT_ROM_PATCH
+                | raw::EMUSEN_SESSION_CHEAT_ENABLE
+                | raw::EMUSEN_SESSION_CHEAT_DISABLE
+                | raw::EMUSEN_SESSION_CHEAT_REMOVE
+                | raw::EMUSEN_SESSION_CHEAT_CLEAR
+                | raw::EMUSEN_SESSION_CHEAT_IMPORT
+                | raw::EMUSEN_SESSION_CHEAT_FILE_WRITE
+        ) || (op == raw::EMUSEN_SESSION_CHEAT_MASTER && args.get("enabled").is_some());
         let args = to_json(args);
+        if number {
+            let n = self.status(unsafe { f(self.ctx, session, op, args.as_ptr(), args.len(), std::ptr::null_mut(), 0) })?;
+            return Ok(Value::from(n));
+        }
         let bytes = self.read(|o, l| unsafe { f(self.ctx, session, op, args.as_ptr(), args.len(), o, l) })?;
         if bytes.is_empty() { Ok(Value::Null) } else { json("cheat_op", &bytes) }
     }

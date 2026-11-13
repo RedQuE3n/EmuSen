@@ -6,7 +6,7 @@
 use super::cores::backend::Job;
 use super::{Action, Bar, Column, Effect, Item, Mark, Pane, Source, Tone, Words};
 use crate::card::{Pane as CardPane, Row as CardRow};
-use crate::question::{confirm, Question};
+use crate::question::confirm;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -153,6 +153,18 @@ fn outcome(event: &Value) -> Words {
     Words::new(format!("{said}; {seconds} s."), tone)
 }
 
+/// A job's state as its row says it: how far it has gone while running, then how it ended.
+pub fn state_words(running: bool, run: Option<&Run>) -> Words {
+    match (running, run) {
+        (true, Some(run)) => match (run.total, run.done) {
+            (Some(total), done) => Words::new(format!("{done} of {total}"), Tone::Accent),
+            (None, _) => Words::new("Starting", Tone::Accent),
+        },
+        (false, Some(Run { outcome: Some(o), .. })) => Words::new(if o.tone == Tone::Error { "Failed" } else if o.tone == Tone::Attention { "Done, with failures" } else { "Done" }, o.tone),
+        _ => Words::new("", Tone::Muted),
+    }
+}
+
 /// Starts a job from its request.
 pub type Starter = Box<dyn Fn(&Value) -> Result<Box<dyn Job>, String>>;
 
@@ -213,14 +225,7 @@ impl Jobs {
 
     fn state(&self, key: &str) -> Words {
         let running = self.running.as_ref().is_some_and(|(k, _)| k == key);
-        match (running, self.runs.get(key)) {
-            (true, Some(run)) => match (run.total, run.done) {
-                (Some(total), done) => Words::new(format!("{done} of {total}"), Tone::Accent),
-                (None, _) => Words::new("Starting", Tone::Accent),
-            },
-            (false, Some(Run { outcome: Some(o), .. })) => Words::new(if o.tone == Tone::Error { "Failed" } else if o.tone == Tone::Attention { "Done, with failures" } else { "Done" }, o.tone),
-            _ => Words::new("", Tone::Muted),
-        }
+        state_words(running, self.runs.get(key))
     }
 }
 
@@ -305,24 +310,6 @@ impl Source for Jobs {
             .map(|(at, l)| CardRow::new(&format!("line{at}"), &l.words).pane(CardPane::said(&l.words, "")))
             .collect()
     }
-
-    fn list_rows(&self) -> Vec<CardRow> {
-        Vec::new()
-    }
-
-    fn marks_for(&self, _key: &str) -> Vec<Mark> {
-        Vec::new()
-    }
-
-    fn summary(&self, _marked: &[(String, Mark)]) -> String {
-        String::new()
-    }
-
-    fn plan(&self, _marked: &[(String, Mark)]) -> Question {
-        confirm(&self.title, &[])
-    }
-
-    fn apply(&mut self, _marked: &[(String, Mark)]) {}
 
     fn act(&mut self, action: &str, key: Option<&str>, _section: &str) -> Effect {
         let Some(spec) = key.and_then(|k| self.spec(k)).cloned() else { return Effect::Done };

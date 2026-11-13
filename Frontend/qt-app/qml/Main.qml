@@ -327,6 +327,17 @@ Window {
                 }
             }
         }
+        // The chosen theme's token overrides on the program's engine too, which Settings, the cards, the page, the Pause Card, the
+        // tools and the notices read; the kit's with none, the reference's or an ES-DE theme (EmuSen_Qt.md §3.5.1).
+        ThemeStyle {
+            id: themeStyle
+            objectName: "themeStyle"
+            host: program.themeHost?.host ?? null
+        }
+        Connections {
+            target: program.themeHost?.host ?? null
+            function onGenerationChanged() { themeStyle.restyle() }
+        }
         // The ES-DE theme's view in place of Home, Choose a console and the grid while it is the library's look, in window pixels;
         // kept under the cards and while a game plays, so the library comes back where it was left (EmuSen_Qt.md §4.15).
         Loader {

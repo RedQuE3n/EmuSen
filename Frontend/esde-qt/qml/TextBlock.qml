@@ -23,6 +23,8 @@ Item {
     property real lineSpacing: 1.5
     property bool wrap: false
     property bool ellipsis: false
+    // One line laid out whole and cut at the box's edges, aligned only while it fits (ES-DE 3.4.1 TextComponent's horizontal scrolling; EmuSen_Qt.md §4.5.5).
+    property bool oneLine: false
     // A vertical container keeps every line, so what overflows its box is measured before it first scrolls.
     property bool everyLine: false
     // A vertical container shows whole rows at its start and end: its window is cut to them (EmuSen_Qt.md §4.12.3).
@@ -47,6 +49,8 @@ Item {
     readonly property real laidHeight: laid.contentHeight
     readonly property real alignedY: root.scrollVertical || root.vAlign === TextBlock.Align.Start ? 0 : Math.max(0, root.vAlign === TextBlock.Align.End ? root.height - root.laidHeight : (root.height - root.laidHeight) / 2)
     readonly property real contentWidth: laid.contentWidth
+    readonly property bool whole: (root.scrolling || root.oneLine) && !root.scrollVertical
+    readonly property real lineShift: root.oneLine ? Math.max(0, (root.width - laid.contentWidth) * (root.hAlign === TextBlock.Align.Center ? 0.5 : root.hAlign === TextBlock.Align.End ? 1 : 0)) : 0
     readonly property real contentHeight: laid.contentHeight
     readonly property int wholeRows: root.snapRows && laid.pitch > 0 ? Math.floor((root.height + 1e-6) / laid.pitch) : 0
     readonly property real windowHeight: root.wholeRows > 0 ? Math.round(root.wholeRows * laid.pitch) : root.height
@@ -67,12 +71,12 @@ Item {
         px: root.px
         ownFace: root.ownFace
         // A scrolling line is laid out whole; a vertical scroll keeps every line.
-        boxWidth: root.scrolling && !root.scrollVertical ? 0 : root.width
-        boxHeight: root.scrolling || root.everyLine ? 0 : root.height
+        boxWidth: root.whole ? 0 : root.width
+        boxHeight: root.scrolling || root.everyLine || root.oneLine ? 0 : root.height
         lineSpacing: root.lineSpacing
-        wrap: root.wrap
-        ellipsis: root.ellipsis && !root.scrolling
-        align: root.scrolling && !root.scrollVertical ? TextBlock.Align.Start : root.hAlign
+        wrap: root.wrap && !root.oneLine
+        ellipsis: root.ellipsis && !root.scrolling && !root.oneLine
+        align: root.whole ? TextBlock.Align.Start : root.hAlign
         onContentWidthChanged: root.measured(laid.contentWidth, root.measuredHeight)
     }
     FontLoader {
@@ -99,11 +103,11 @@ Item {
     Item {
         width: root.width
         height: root.windowHeight
-        clip: root.scrolling || root.everyLine
+        clip: root.scrolling || root.everyLine || root.oneLine
         opacity: root.scrollOpacity
         GlyphText {
             id: words
-            x: -root.scrollX
+            x: root.lineShift - root.scrollX
             y: root.alignedY - root.scrollY
             laid: laid
             family: root.family

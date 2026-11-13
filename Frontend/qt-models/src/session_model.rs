@@ -324,6 +324,8 @@ pub struct SessionModelRust {
     shapes: (f64, f64),
     /// The open session's console, and what its display settings ask for.
     display_console: Option<String>,
+    /// The open game's own crop, read as it opened, in place of its console's overscan.
+    game_crop: Option<display::Crop>,
     display: Display,
     /// Serenity's catalogue, read once.
     catalogue: Option<serde_json::Value>,
@@ -396,6 +398,7 @@ impl Default for SessionModelRust {
             picture_crop: QRectF::new(0.0, 0.0, 1.0, 1.0),
             shapes: (0.0, 0.0),
             display_console: None,
+            game_crop: None,
             display: Display::default(),
             catalogue: None,
             handoff: None,
@@ -978,7 +981,7 @@ impl qobject::SessionModel {
             self.as_mut().rust_mut().catalogue = Some(settings.catalogue()?);
         }
         let catalogue = self.catalogue.as_ref().ok_or("no catalogue")?;
-        let display = display::read(catalogue, &settings.load(Model::Graphics)?, console);
+        let display = display::read_for_game(catalogue, &settings.load(Model::Graphics)?, console, self.game_crop);
         let preset = match &display.preset {
             Some(path) => {
                 let pack = platform.directory(emusen_platform_client::galaxia::consts::DIR_SHADERS).map_err(|e| e.to_string())?;
@@ -1193,6 +1196,18 @@ impl qobject::SessionModel {
                 self.as_mut().apply_speed();
                 let console = self.runtime.as_ref().and_then(|r| r.session_info(session).ok()).map(|info| info.console);
                 self.as_mut().rust_mut().display_console = console;
+                let game = self.game.to_string();
+                let crop = match self.as_mut().platform() {
+                    Ok(platform) if !game.is_empty() => crate::clients::game_crop(&platform, &game),
+                    _ => Ok(None),
+                };
+                if let Err(e) = &crop {
+                    self.as_mut().rust_mut().notice_attention = true;
+                    self.as_mut().notice_attention_changed();
+                    self.as_mut().rust_mut().notice = QString::from(format!("The game's own crop could not be read: {e}").as_str());
+                    self.as_mut().notice_changed();
+                }
+                self.as_mut().rust_mut().game_crop = crop.unwrap_or(None);
                 self.as_mut().read_picture();
                 self.as_mut().set_running(true);
                 self.as_mut().left_off(session);

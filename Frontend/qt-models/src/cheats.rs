@@ -20,6 +20,11 @@ pub fn on_words(on: bool) -> &'static str {
     if on { "On" } else { "Off" }
 }
 
+/// How many of a list's cheats are on, as the game page's Cheats row and the Cheats tool say it.
+pub fn count_words(list: &[Switch]) -> String {
+    format!("{} of {} on", list.iter().filter(|c| c.on).count(), list.len())
+}
+
 /// A game's list: where Galaxia keeps it, and its file as the model reads it (none saved yet reads as no cheats).
 #[derive(Clone, Debug, PartialEq)]
 pub struct List {

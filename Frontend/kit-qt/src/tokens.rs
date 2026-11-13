@@ -214,7 +214,7 @@ pub struct TokensRust {
     breath_low: f64,
     breathes: bool,
     // A theme's overrides per variant, a `Tokens` property and its value as theme.json writes it; set by the host on the theme's
-    // engine only, never on the program's, whose cards a theme never styles.
+    // engine and, for the chosen theme, on the program's (decided by the tester, 2026-11-13).
     overrides: Vec<(core_tokens::Variant, String, String)>,
 }
 
@@ -418,8 +418,8 @@ impl qobject::Tokens {
 
     /// A theme's overrides, each for one variant: a `Tokens` property and its value as `theme.json` writes it, made into the
     /// column by `Column::themed`, where a number or switch is the base the text scale and reduced motion act on as on the
-    /// kit's. The host sets them on the theme's engine, already held to the registry and the contrast floors by theme-check
-    /// (EmuSen_Kit.md §7.2, §7.55; EmuSen_Qt.md §3.5.1).
+    /// kit's. The host sets them on the theme's engine and the chosen theme's on the program's, already held to the registry
+    /// and the contrast floors by theme-check (EmuSen_Kit.md §7.2, §7.55; EmuSen_Qt.md §3.5.1).
     pub fn set_overrides(mut self: Pin<&mut Self>, overrides: Vec<(core_tokens::Variant, String, String)>) {
         self.as_mut().rust_mut().overrides = overrides;
         self.refresh();

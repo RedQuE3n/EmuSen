@@ -25,6 +25,13 @@ ElementBox {
     required property real lineSpacing
     required property color color
     required property color itemBackground
+    required property color selectedColor
+    required property color selectedItemBackground
+    required property real textRadius
+    required property bool oneLine
+    required property bool scrolling
+    required property real scrollX
+    required property real repeatAt
     clip: true
     Rectangle {
         anchors.fill: parent
@@ -67,7 +74,12 @@ ElementBox {
             required property real reflectionFalloff
             required property string text
             required property url image
+            required property bool chosen
             readonly property bool pictured: slot.image.toString().length > 0
+            readonly property color ink: slot.chosen ? root.selectedColor : root.color
+            readonly property color behind: slot.chosen ? root.selectedItemBackground : root.itemBackground
+            // A name newly selected is measured again, since the scene scrolls the selected one only.
+            onChosenChanged: if (slot.chosen) root.esde.measured(root.elementId, label.contentWidth, label.measuredHeight)
             anchors.fill: parent
             opacity: slot.alpha
             transform: [
@@ -139,6 +151,7 @@ ElementBox {
                 fadeFalloff: slot.reflectionFalloff
             }
             TextBlock {
+                id: label
                 objectName: "slot-" + slot.row
                 x: slot.boxX
                 y: slot.boxY
@@ -151,10 +164,16 @@ ElementBox {
                 px: root.px
                 lineSpacing: root.lineSpacing
                 wrap: true
-                color: Qt.rgba(root.color.r * slot.dim, root.color.g * slot.dim, root.color.b * slot.dim, root.color.a)
+                oneLine: root.oneLine
+                color: Qt.rgba(slot.ink.r * slot.dim, slot.ink.g * slot.dim, slot.ink.b * slot.dim, slot.ink.a)
                 hAlign: TextBlock.Align.Center
-                hasBackground: root.itemBackground.a > 0
-                background: root.itemBackground
+                hasBackground: slot.behind.a > 0
+                background: slot.behind
+                backgroundRadius: root.textRadius
+                scrolling: slot.chosen && root.scrolling
+                scrollX: root.scrollX
+                repeatAt: root.repeatAt
+                onMeasured: (width, height) => root.esde.measured(slot.chosen ? root.elementId : "", width, height)
                 HoverHandler {
                     onHoveredChanged: root.esde.hoverAt(parent, hovered ? slot.row : -1)
                 }

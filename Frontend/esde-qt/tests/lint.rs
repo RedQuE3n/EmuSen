@@ -71,6 +71,6 @@ fn qt_5_3_the_removed_hover_is_called_by_no_qml_and_offered_by_no_registry() {
     assert!(found.len() > 200, "the walk found the front end's QML ({} files)", found.len());
     let callers: Vec<_> = found.iter().filter(|p| std::fs::read_to_string(p).unwrap().contains(".hover(")).collect();
     assert!(callers.is_empty(), "EsdeModel.hover(row) is gone in EmuSen.Esde 1.2 (R-20261111-108, CHANGELOG-esde.md); these call it: {callers:?}");
-    let registry = include_str!("../../../Testing/qmltypes/EmuSen.Esde-1.4.qmltypes");
+    let registry = include_str!("../../../Testing/qmltypes/EmuSen.Esde-1.5.qmltypes");
     assert!(registry.contains("name: \"hoverAt\"") && !registry.contains("name: \"hover\""), "the registry offers hoverAt and no hover");
 }

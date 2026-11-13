@@ -243,6 +243,8 @@ pub struct SettingsView {
     pub(crate) listening: Option<String>,
     /// Opened from the Pause Card on its drawing page: B leaves Settings for the card.
     pub(crate) from_card: bool,
+    /// The Pause Card's Display or Sound, Settings' rows read under a section and pages of its own (settings_card.rs).
+    pub(crate) card: crate::settings_card::CardPlace,
 }
 
 impl Default for SettingsView {
@@ -355,6 +357,7 @@ impl SettingsView {
             binding: None,
             listening: None,
             from_card: false,
+            card: Default::default(),
         }
     }
 

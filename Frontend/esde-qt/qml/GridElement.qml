@@ -65,6 +65,11 @@ ElementBox {
     required property color selectedColor
     required property color selectedItemBackground
     required property real textRadius
+    required property bool oneLine
+    required property bool scrolling
+    required property real scrollX
+    required property real repeatAt
+    required property real clipHeight
     clip: true
     RowsModel {
         id: rows
@@ -72,120 +77,134 @@ ElementBox {
         revision: root.esde ? root.esde.revision : 0
         leaving: root.leaving
     }
-    GridView {
-        objectName: "esdeGrid"
-        x: root.marginX
-        width: root.width - root.marginX
-        height: root.height
-        interactive: false
-        cacheBuffer: 0
-        cellWidth: root.pitchX
-        cellHeight: root.pitchY
-        model: rows
-        contentY: root.contentY - root.marginY
-        delegate: Item {
-            id: cell
-            objectName: "cell-" + cell.index
-            required property int index
-            required property string text
-            required property url image
-            readonly property real level: cell.index === root.selected ? (root.focusFrom === cell.index ? 1 : root.toLevel + (1 - root.toLevel) * root.progress) : cell.index === root.focusFrom ? root.fromLevel * (1 - root.progress) : 0
-            readonly property bool chosen: cell.index === root.selected
-            readonly property real dim: root.unfocusedDim + (1 - root.unfocusedDim) * cell.level
-            width: root.itemWidth
-            height: root.itemHeight
-            z: cell.level
-            opacity: root.unfocusedOpacity + (1 - root.unfocusedOpacity) * cell.level
-            scale: 1 + (root.itemScale - 1) * cell.level
-            HoverHandler {
-                onHoveredChanged: root.esde.hoverAt(parent, hovered ? cell.index : -1)
-            }
-            TapHandler {
-                onTapped: root.esde.tap(cell.index)
-            }
-            // A background or selector picture stands in for its fill, and the fill's colours tint it (ES-DE 3.4.1 GridComponent; EmuSen_Qt.md §4.5.7).
-            Rectangle {
-                anchors.centerIn: parent
-                visible: root.hasBackground && root.backgroundSource.toString().length === 0
-                width: cell.width * root.backgroundScale
-                height: cell.height * root.backgroundScale
-                radius: root.backgroundRadius
-                gradient: Gradient {
-                    orientation: root.backgroundVertical ? Gradient.Vertical : Gradient.Horizontal
-                    GradientStop { position: 0; color: root.background }
-                    GradientStop { position: 1; color: root.backgroundEnd }
+    // Whole rows only unless fractionalRows: the cells are cut at clipHeight, as ES-DE 3.4.1's GridComponent::render clips.
+    Item {
+        width: root.width
+        height: root.clipHeight
+        clip: true
+        GridView {
+            objectName: "esdeGrid"
+            x: root.marginX
+            width: root.width - root.marginX
+            height: root.height
+            interactive: false
+            cacheBuffer: 0
+            cellWidth: root.pitchX
+            cellHeight: root.pitchY
+            model: rows
+            contentY: root.contentY - root.marginY
+            delegate: Item {
+                id: cell
+                objectName: "cell-" + cell.index
+                required property int index
+                required property string text
+                required property url image
+                readonly property real level: cell.index === root.selected ? (root.focusFrom === cell.index ? 1 : root.toLevel + (1 - root.toLevel) * root.progress) : cell.index === root.focusFrom ? root.fromLevel * (1 - root.progress) : 0
+                readonly property bool chosen: cell.index === root.selected
+                readonly property real dim: root.unfocusedDim + (1 - root.unfocusedDim) * cell.level
+                // A name newly selected is measured again, since the scene scrolls the selected one only.
+                onChosenChanged: if (cell.chosen) root.esde.measured(root.elementId, label.contentWidth, label.measuredHeight)
+                width: root.itemWidth
+                height: root.itemHeight
+                z: cell.level
+                opacity: root.unfocusedOpacity + (1 - root.unfocusedOpacity) * cell.level
+                scale: 1 + (root.itemScale - 1) * cell.level
+                HoverHandler {
+                    onHoveredChanged: root.esde.hoverAt(parent, hovered ? cell.index : -1)
                 }
-            }
-            Picture {
-                anchors.centerIn: parent
-                width: cell.width * root.backgroundScale
-                height: cell.height * root.backgroundScale
-                source: root.backgroundSource
-                radius: root.backgroundRadius
-                tint: root.hasBackground ? root.background : Qt.rgba(1, 1, 1, 1)
-                tintEnd: root.hasBackground ? root.backgroundEnd : Qt.rgba(1, 1, 1, 1)
-                gradientVertical: root.backgroundVertical
-            }
-            Rectangle {
-                anchors.centerIn: parent
-                visible: root.hasSelector && cell.chosen && root.selectorSource.toString().length === 0
-                z: root.selectorOnTop ? 2 : 0
-                width: cell.width * root.selectorScale
-                height: cell.height * root.selectorScale
-                radius: root.selectorRadius
-                gradient: Gradient {
-                    orientation: root.selectorVertical ? Gradient.Vertical : Gradient.Horizontal
-                    GradientStop { position: 0; color: root.selectorColor }
-                    GradientStop { position: 1; color: root.selectorColorEnd }
+                TapHandler {
+                    onTapped: root.esde.tap(cell.index)
                 }
-            }
-            Picture {
-                anchors.centerIn: parent
-                visible: cell.chosen
-                z: root.selectorOnTop ? 2 : 0
-                width: cell.width * root.selectorScale
-                height: cell.height * root.selectorScale
-                source: root.selectorSource
-                radius: root.selectorRadius
-                tint: root.selectorImageTint
-                tintEnd: root.selectorImageTintEnd
-                gradientVertical: root.selectorImageVertical
-            }
-            Picture {
-                anchors.centerIn: parent
-                z: 1
-                visible: cell.image.toString().length > 0
-                width: cell.width * root.imageScale
-                height: cell.height * root.imageScale
-                source: cell.image
-                fit: root.fit
-                cropX: root.cropX
-                cropY: root.cropY
-                nearest: root.nearest
-                radius: root.radius
-                tint: cell.chosen && root.hasSelectedTint ? root.selectedTint : root.tint
-                tintEnd: cell.chosen && root.hasSelectedTint ? root.selectedTintEnd : root.tintEnd
-                gradientVertical: cell.chosen && root.hasSelectedTint ? root.selectedGradientVertical : root.gradientVertical
-                brightness: root.brightness
-                saturation: root.saturation * (root.unfocusedSaturation + (1 - root.unfocusedSaturation) * cell.level)
-                dim: cell.dim
-                sourceScale: root.itemScale
-            }
-            TextBlock {
-                anchors.fill: parent
-                z: 1
-                visible: cell.image.toString().length === 0
-                text: cell.text
-                fontSource: root.fontSource
-                ownFace: root.ownFace
-                px: root.px
-                lineSpacing: root.lineSpacing
-                hAlign: TextBlock.Align.Center
-                wrap: true
-                color: cell.chosen ? root.selectedColor : root.color
-                hasBackground: true
-                background: cell.chosen ? root.selectedItemBackground : root.itemBackground
-                backgroundRadius: root.textRadius
+                // A background or selector picture stands in for its fill, and the fill's colours tint it (ES-DE 3.4.1 GridComponent; EmuSen_Qt.md §4.5.7).
+                Rectangle {
+                    anchors.centerIn: parent
+                    visible: root.hasBackground && root.backgroundSource.toString().length === 0
+                    width: cell.width * root.backgroundScale
+                    height: cell.height * root.backgroundScale
+                    radius: root.backgroundRadius
+                    gradient: Gradient {
+                        orientation: root.backgroundVertical ? Gradient.Vertical : Gradient.Horizontal
+                        GradientStop { position: 0; color: root.background }
+                        GradientStop { position: 1; color: root.backgroundEnd }
+                    }
+                }
+                Picture {
+                    anchors.centerIn: parent
+                    width: cell.width * root.backgroundScale
+                    height: cell.height * root.backgroundScale
+                    source: root.backgroundSource
+                    radius: root.backgroundRadius
+                    tint: root.hasBackground ? root.background : Qt.rgba(1, 1, 1, 1)
+                    tintEnd: root.hasBackground ? root.backgroundEnd : Qt.rgba(1, 1, 1, 1)
+                    gradientVertical: root.backgroundVertical
+                }
+                Rectangle {
+                    anchors.centerIn: parent
+                    visible: root.hasSelector && cell.chosen && root.selectorSource.toString().length === 0
+                    z: root.selectorOnTop ? 2 : 0
+                    width: cell.width * root.selectorScale
+                    height: cell.height * root.selectorScale
+                    radius: root.selectorRadius
+                    gradient: Gradient {
+                        orientation: root.selectorVertical ? Gradient.Vertical : Gradient.Horizontal
+                        GradientStop { position: 0; color: root.selectorColor }
+                        GradientStop { position: 1; color: root.selectorColorEnd }
+                    }
+                }
+                Picture {
+                    anchors.centerIn: parent
+                    visible: cell.chosen
+                    z: root.selectorOnTop ? 2 : 0
+                    width: cell.width * root.selectorScale
+                    height: cell.height * root.selectorScale
+                    source: root.selectorSource
+                    radius: root.selectorRadius
+                    tint: root.selectorImageTint
+                    tintEnd: root.selectorImageTintEnd
+                    gradientVertical: root.selectorImageVertical
+                }
+                Picture {
+                    anchors.centerIn: parent
+                    z: 1
+                    visible: cell.image.toString().length > 0
+                    width: cell.width * root.imageScale
+                    height: cell.height * root.imageScale
+                    source: cell.image
+                    fit: root.fit
+                    cropX: root.cropX
+                    cropY: root.cropY
+                    nearest: root.nearest
+                    radius: root.radius
+                    tint: cell.chosen && root.hasSelectedTint ? root.selectedTint : root.tint
+                    tintEnd: cell.chosen && root.hasSelectedTint ? root.selectedTintEnd : root.tintEnd
+                    gradientVertical: cell.chosen && root.hasSelectedTint ? root.selectedGradientVertical : root.gradientVertical
+                    brightness: root.brightness
+                    saturation: root.saturation * (root.unfocusedSaturation + (1 - root.unfocusedSaturation) * cell.level)
+                    dim: cell.dim
+                    sourceScale: root.itemScale
+                }
+                TextBlock {
+                    id: label
+                    anchors.fill: parent
+                    z: 1
+                    visible: cell.image.toString().length === 0
+                    text: cell.text
+                    fontSource: root.fontSource
+                    ownFace: root.ownFace
+                    px: root.px
+                    lineSpacing: root.lineSpacing
+                    hAlign: TextBlock.Align.Center
+                    wrap: true
+                    color: cell.chosen ? root.selectedColor : root.color
+                    hasBackground: true
+                    background: cell.chosen ? root.selectedItemBackground : root.itemBackground
+                    backgroundRadius: root.textRadius
+                    oneLine: root.oneLine
+                    scrolling: cell.chosen && root.scrolling
+                    scrollX: root.scrollX
+                    repeatAt: root.repeatAt
+                    onMeasured: (width, height) => root.esde.measured(cell.chosen ? root.elementId : "", width, height)
+                }
             }
         }
     }

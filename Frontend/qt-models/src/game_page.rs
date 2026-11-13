@@ -2,14 +2,18 @@
 //! five sections and what each press does, over one read of the game a source answers. No Qt; the bridge,
 //! `game_page_model.rs`, only puts it on Qt. The media viewer is ES-DE's (`emusen_esde::scene::Viewer`) over the page's
 //! media; Scrape This Game runs the scraper over the game; Edit Details is a deeper page of the game's edits; Cheats is a
-//! deeper page of Options, the game's own cheat list, each a switch saved to its file (cheats.rs). Package, Display crop
-//! and Cover art open nothing yet, so their rows are not shown; Open Folder is the program's folder action.
+//! deeper page of Options, the game's own cheat list, each a switch saved to its file (cheats.rs). Display crop is a
+//! deeper page of Options stepping the game's own crop through Settings' overscan choices, stored in games.db; Package
+//! is one showing the game's package and running the library tool's job that makes or checks it. Cover art opens
+//! nothing yet, so its row is not shown; Open Folder is the program's folder action.
 
 use crate::help::Screen;
 use crate::question::Question;
 use emusen_kit_core::input::UiButton;
 use emusen_platform_client::library::GameFile;
 use crate::words::BETWEEN;
+use crate::display::Crop;
+use crate::tools::jobs::Run;
 
 /// What the page reads of one game and asks of the back end; the client crates or a test's fake answer.
 pub trait GamePageSource: Send + Sync {
@@ -22,10 +26,14 @@ pub trait GamePageSource: Send + Sync {
     fn other_copy(&self, _game: &GameFile, _state: &str) -> Result<Option<String>, String> {
         Ok(None)
     }
+    /// A job of the platform library's tools started from its request, its events drained as it runs.
+    fn start_job(&self, _request: &serde_json::Value) -> Result<Box<dyn crate::tools::cores::backend::Job + Send>, String> {
+        Err("no tool jobs here".into())
+    }
 }
 
 /// A change the page makes to the game's records.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Change {
     /// The heart turned on or off.
     Favourite,
@@ -43,6 +51,8 @@ pub enum Change {
     Edit(&'static str, Option<String>),
     /// The game's cheat at that place of its list switched on or off.
     Cheat(usize, bool),
+    /// The game's own crop; none follows the console's overscan.
+    Crop(Option<Crop>),
 }
 
 /// What the player is told when a change could not be made, and why (EmuSen_Qt.md §7.9).
@@ -56,6 +66,7 @@ pub fn change_failed(change: &Change, why: &str) -> String {
         Change::Hide => "The game could not be hidden",
         Change::Edit(..) => "The game's details could not be stored",
         Change::Cheat(..) => "The cheat was not switched",
+        Change::Crop(_) => "The game's crop could not be stored",
     };
     format!("{what}: {why}")
 }
@@ -139,14 +150,17 @@ pub struct Read {
     pub profile: Option<String>,
     /// The game's own cheats, in its list's order; none where it has no list or an empty one.
     pub cheats: Vec<crate::cheats::Switch>,
-    /// Whether the game has a crop of its own; none where its console has no overscan to crop.
-    pub crop: Option<bool>,
+    /// The game's crop and what it may be; none where its console has no overscan to crop.
+    pub crop: Option<CropOffer>,
     /// The television standards, the game's own first (its value none); none where its console drove no television.
     pub standards: Option<Vec<Choice>>,
     pub standard: Option<String>,
     /// The game's package, and the patches layered on it.
     pub package: Package,
     pub layers: usize,
+    /// The library tool's job for this game's package: making one where it has none, else checking it; none where
+    /// neither can run (a game outside the library folder).
+    pub package_job: Option<PackageJob>,
     /// Whether a scrape run is going, which Scrape This Game waits for.
     pub scraping: bool,
     /// The details Edit Details offers, in its order.
@@ -160,6 +174,58 @@ pub struct Detail {
     pub value: String,
     pub edited: bool,
 }
+
+/// Settings' overscan choices for a console as a game's own crop may take them, and the game's crop.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct CropOffer {
+    /// Settings' row's words for it.
+    pub label: String,
+    /// Each choice that hides a fixed part: its words and what it hides.
+    pub choices: Vec<(String, Crop)>,
+    /// The words for a crop of the player's own, which no choice names.
+    pub custom: String,
+    /// The game's own crop; none for the console's.
+    pub own: Option<Crop>,
+}
+
+/// The words for the console's overscan, where the game has no crop of its own.
+pub const CONSOLES: &str = "Console's";
+
+impl CropOffer {
+    /// The crop's words: the console's, a choice's, or the player's own.
+    pub fn words(&self) -> String {
+        match &self.own {
+            None => CONSOLES.into(),
+            Some(own) => self.choices.iter().find(|(_, c)| c.near(own)).map_or_else(|| self.custom.clone(), |(w, _)| w.clone()),
+        }
+    }
+
+    /// One step on from the crop, round: the console's, then each choice; a crop of the player's own steps to the ends.
+    pub fn stepped(&self, by: i32) -> Option<Crop> {
+        let all: Vec<Option<Crop>> = std::iter::once(None).chain(self.choices.iter().map(|(_, c)| Some(*c))).collect();
+        let at = match &self.own {
+            None => Some(0),
+            Some(own) => all.iter().position(|c| c.is_some_and(|c| c.near(own))),
+        };
+        let n = all.len() as i32;
+        let next = match at {
+            Some(at) => (at as i32 + by.signum()).rem_euclid(n),
+            None if by > 0 => 0,
+            None => n - 1,
+        };
+        all[next as usize]
+    }
+}
+
+/// The library tool's job for a game's package: its key (`make` or `check`) and its request.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PackageJob {
+    pub key: &'static str,
+    pub request: serde_json::Value,
+}
+
+pub const MAKE: &str = "make";
+pub const CHECK: &str = "check";
 
 /// What the game's package is (Mistress's `IGamePageHost.Package`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -235,12 +301,17 @@ pub const PLAY: &str = "play";
 pub const RESUME: &str = "resume";
 pub const FAVOURITE: &str = "favourite";
 
-/// The rows' keys; Package, Display crop and Cover art are a later piece's pages (EmuSen_Interface.md §18.2).
+/// The rows' keys; Cover art is a later piece's page (EmuSen_Interface.md §18.2).
 pub const CHEATS: &str = "cheats";
 /// A cheat on Cheats' page.
 pub const CHEAT: &str = "cheat";
 pub const PACKAGE: &str = "package";
 pub const CROP: &str = "crop";
+/// Display crop's row: the game's crop stepped.
+pub const OVERSCAN: &str = "overscan";
+/// Package's rows: what the package is, and its job.
+pub const PACKAGED: &str = "packaged";
+pub const JOB: &str = "job";
 pub const SCRAPE: &str = "scrape";
 pub const EDIT: &str = "edit";
 pub const COVER: &str = "cover";
@@ -312,7 +383,7 @@ pub enum Content {
 }
 
 /// What a press asks of the program, past the page's own redraw.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Outcome {
     Nothing,
     /// Saved through the source; the page is read again.
@@ -323,6 +394,14 @@ pub enum Outcome {
     Edit,
     /// Cheats opened, Options' deeper page.
     Cheats,
+    /// Display crop opened, Options' deeper page.
+    Crop,
+    /// Package opened, Options' deeper page.
+    Package,
+    /// The package's job started from its request.
+    Job(PackageJob),
+    /// The package's job running asked to stop.
+    StopJob,
     /// The media viewer opened on the Media section's tile at this index.
     View(usize),
     /// A scrape of the game started.
@@ -349,6 +428,11 @@ pub struct GamePage {
     pub editing: bool,
     /// Whether Options shows Cheats, its deeper page.
     pub cheating: bool,
+    /// Whether Options shows Display crop or Package, its deeper pages.
+    pub cropping: bool,
+    pub packaging: bool,
+    /// The package's job: its key, whether it is running, and what it has said; none before one started.
+    pub job: Option<(&'static str, bool, Run)>,
     /// This page's scrape: whether it is going, and what it last said; none before one started.
     pub run: Option<(bool, String)>,
 }
@@ -417,7 +501,7 @@ fn slot_name(slot: Slot) -> String {
 
 impl GamePage {
     pub fn new(read: Read, now: i64) -> GamePage {
-        GamePage { read, section: 0, resume_at: 0, now, editing: false, cheating: false, run: None }
+        GamePage { read, now, ..GamePage::default() }
     }
 
     /// A new read of the same game, the section and Resume's state kept where they still stand; Cheats gives way to
@@ -467,11 +551,15 @@ impl GamePage {
         self.section = index.min(SECTIONS.len() - 1);
         self.editing = false;
         self.cheating = false;
+        self.cropping = false;
+        self.packaging = false;
     }
 
-    /// B on the page: Edit Details goes back to Details and Cheats to Options, and says so; else the page is left.
+    /// B on the page: Edit Details goes back to Details, and Cheats, Display crop and Package to Options, and says so;
+    /// else the page is left.
     pub fn back(&mut self) -> bool {
-        std::mem::replace(&mut self.editing, false) | std::mem::replace(&mut self.cheating, false)
+        let deeper = [&mut self.editing, &mut self.cheating, &mut self.cropping, &mut self.packaging];
+        deeper.into_iter().fold(false, |went, d| std::mem::replace(d, false) | went)
     }
 
     fn state_words(&self, s: &State) -> String {
@@ -530,6 +618,8 @@ impl GamePage {
             }
             Section::States => Content::Tiles(self.state_tiles()),
             Section::Options if self.cheating => Content::Rows(self.cheat_rows()),
+            Section::Options if self.cropping => Content::Rows(self.crop_rows()),
+            Section::Options if self.packaging => Content::Rows(self.package_rows()),
             Section::Options => Content::Rows(self.option_rows()),
             Section::Media => Content::Tiles(self.media_tiles()),
             Section::Details if self.editing => Content::Rows(self.edit_rows()),
@@ -622,6 +712,16 @@ impl GamePage {
                 sentence: "The bindings this game starts with; the console's profile unless one is chosen here. Settings ▸ Controllers ▸ Profiles makes them.",
             });
         }
+        if let Some(crop) = &r.crop {
+            rows.push(Row {
+                key: CROP,
+                label: "Display crop".into(),
+                value: if crop.own.is_some() { "This game's" } else { CONSOLES }.into(),
+                steps: false,
+                opens: true,
+                sentence: "How much of the picture's edge is cut away for this game.",
+            });
+        }
         if let Some(standards) = &r.standards {
             rows.push(Row {
                 key: STANDARD,
@@ -633,17 +733,46 @@ impl GamePage {
             });
         }
         if !r.cheats.is_empty() {
-            let on = r.cheats.iter().filter(|c| c.on).count();
             rows.push(Row {
                 key: CHEATS,
                 label: "Cheats".into(),
-                value: format!("{on} of {} on", r.cheats.len()),
+                value: crate::cheats::count_words(&r.cheats),
                 steps: false,
                 opens: true,
                 sentence: "The game's cheats, on or off; the same switches the Pause Card shows.",
             });
         }
+        if r.package_job.is_some() {
+            let package = package_words(r.package, r.layers);
+            rows.push(Row { key: PACKAGE, label: "Package".into(), value: package, steps: false, opens: true, sentence: "The game's package and its layers, from Packages." });
+        }
         rows
+    }
+
+    /// Display crop's row: the game's crop, stepped through Settings' overscan choices.
+    fn crop_rows(&self) -> Vec<Row> {
+        let Some(crop) = &self.read.crop else { return Vec::new() };
+        vec![Row { key: OVERSCAN, label: crop.label.clone(), value: crop.words(), steps: true, opens: false, sentence: "" }]
+    }
+
+    /// Package's rows: what the package is, and the job that makes or checks it with how far it has gone.
+    fn package_rows(&self) -> Vec<Row> {
+        let r = &self.read;
+        let mut rows = vec![Row { key: PACKAGED, label: "Package".into(), value: package_words(r.package, r.layers), steps: false, opens: false, sentence: "" }];
+        if let Some(job) = &r.package_job {
+            let label = if job.key == MAKE { "Make Package" } else { "Check Package" };
+            let value = match &self.job {
+                Some((key, running, run)) if *key == job.key => crate::tools::jobs::state_words(*running, Some(run)).words,
+                _ => "…".into(),
+            };
+            rows.push(Row { key: JOB, label: label.into(), value, steps: false, opens: false, sentence: "" });
+        }
+        rows
+    }
+
+    /// Whether the package's job is running.
+    pub fn job_running(&self) -> bool {
+        self.job.as_ref().is_some_and(|(_, running, _)| *running)
     }
 
     /// Cheats' rows: each of the game's cheats, a switch.
@@ -710,6 +839,10 @@ impl GamePage {
             Some(row) if row.key == EDIT => Outcome::Edit,
             Some(row) if row.key == CHEATS => Outcome::Cheats,
             Some(row) if row.key == CHEAT => self.switch(index),
+            Some(row) if row.key == CROP => Outcome::Crop,
+            Some(row) if row.key == PACKAGE => Outcome::Package,
+            Some(row) if row.key == JOB && self.job_running() => Outcome::StopJob,
+            Some(row) if row.key == JOB => self.read.package_job.clone().map_or(Outcome::Nothing, Outcome::Job),
             _ => Outcome::Nothing,
         }
     }
@@ -749,6 +882,11 @@ impl GamePage {
                     c.on = *on;
                 }
             }
+            Change::Crop(v) => {
+                if let Some(crop) = r.crop.as_mut() {
+                    crop.own = *v;
+                }
+            }
             Change::DeleteState(_) | Change::Hide => {}
         }
     }
@@ -768,6 +906,10 @@ impl GamePage {
                 None => Outcome::Nothing,
             },
             Some(CHEAT) => self.switch(index),
+            Some(OVERSCAN) => match &self.read.crop {
+                Some(c) => Outcome::Changed(Change::Crop(c.stepped(by))),
+                None => Outcome::Nothing,
+            },
             Some(STANDARD) => match &self.read.standards {
                 Some(s) => Outcome::Changed(Change::Standard(step(s, &self.read.standard))),
                 None => Outcome::Nothing,

@@ -50,8 +50,8 @@ fn the_home_card_has_mistress_rows_and_pages() {
     // Tools: each tool's line as its value, what it does in the pane until it has said its state.
     let tools = json!({ "cores": { "brief": "1 to approve", "attention": true, "sentence": "A core waits." } });
     let t = home.page(home_card::TOOLS, &facts(Facts { tools: tools.clone(), ..Facts::default() }));
-    // A tool with no screen yet (Cheats, Collections, Shell) is not listed.
-    assert_eq!(t.rows.iter().map(|r| r.label.as_str()).collect::<Vec<_>>(), ["Scraper", "Packages", "Library Manager", "Cores", "Themes", "Compressed Discs"]);
+    // A tool with no screen yet (Collections, Shell) is not listed.
+    assert_eq!(t.rows.iter().map(|r| r.label.as_str()).collect::<Vec<_>>(), ["Scraper", "Packages", "Library Manager", "Cores", "Cheats", "Themes", "Compressed Discs"]);
     assert_eq!(t.rows[3].value, "1 to approve");
     assert_eq!(t.rows[3].pane.lines[0], ("Cores".to_owned(), "A core waits.".to_owned()));
     assert_eq!(t.rows[1].pane.lines[0].1, "Makes, checks and zips game packages, and converts discs to CHD.");

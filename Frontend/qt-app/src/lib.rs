@@ -14,6 +14,7 @@ extern crate emusen_theme_qt;
 pub mod gate_pad;
 pub mod cues;
 pub mod start;
+pub mod style;
 pub mod theme;
 
 /// Where the program's window lives in the resource system.

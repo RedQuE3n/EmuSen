@@ -685,15 +685,8 @@ Window {
             target: pads
             function onProblemChanged() { program.said(pads.problem, true, false) }
         }
-        Kit.NormalizedCanvas {
-            id: noticeCanvas
-            objectName: "noticeCanvas"
-            Kit.NoticeLayer {
-                model: notices
-                width: noticeCanvas.width
-                height: noticeCanvas.height
-                labelFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontBody })
-            }
+        NoticeScreen {
+            notices: notices
         }
         Kit.Moonrise {
             id: moonrise

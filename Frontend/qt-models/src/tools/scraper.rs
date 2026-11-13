@@ -158,22 +158,6 @@ impl Source for Scraper {
             .collect()
     }
 
-    fn sections(&self) -> Vec<(String, String)> {
-        vec![("all".to_owned(), "All".to_owned())]
-    }
-
-    fn filters(&self) -> Vec<(String, String)> {
-        vec![("all".to_owned(), "All".to_owned())]
-    }
-
-    fn sorts(&self) -> Vec<(String, String)> {
-        vec![("own".to_owned(), "Tool's order".to_owned())]
-    }
-
-    fn facts(&self) -> Vec<Words> {
-        Vec::new()
-    }
-
     /// The row's name and what the tool does; for the run's row the game in hand and its step, the latest result, what
     /// last failed, and how the run ended.
     fn pane(&self, key: Option<&str>) -> Pane {

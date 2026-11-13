@@ -247,22 +247,6 @@ impl Source for Jobs {
             .collect()
     }
 
-    fn sections(&self) -> Vec<(String, String)> {
-        vec![("all".to_owned(), "All".to_owned())]
-    }
-
-    fn filters(&self) -> Vec<(String, String)> {
-        vec![("all".to_owned(), "All".to_owned())]
-    }
-
-    fn sorts(&self) -> Vec<(String, String)> {
-        vec![("own".to_owned(), "Tool's order".to_owned())]
-    }
-
-    fn facts(&self) -> Vec<Words> {
-        Vec::new()
-    }
-
     /// The job's name, what it does, then while it runs the item it is on, and the latest result line and the outcome.
     fn pane(&self, key: Option<&str>) -> Pane {
         let Some(spec) = key.and_then(|k| self.spec(k)) else { return Pane { title: self.title.clone(), caption: String::new(), sentences: vec![Words::text(&self.about)] } };

@@ -137,12 +137,21 @@ pub trait Source {
     fn columns(&self) -> Vec<Column>;
     /// Every row in the source's own order.
     fn items(&self) -> Vec<Item>;
-    /// The strip's sections, All first, by key and label.
-    fn sections(&self) -> Vec<(String, String)>;
-    /// The List card's filters and sorts, by key and label, All and the source's own order first.
-    fn filters(&self) -> Vec<(String, String)>;
-    fn sorts(&self) -> Vec<(String, String)>;
-    fn facts(&self) -> Vec<Words>;
+    /// The strip's sections, All first, by key and label; All alone for a tool with none of its own.
+    fn sections(&self) -> Vec<(String, String)> {
+        vec![("all".to_owned(), "All".to_owned())]
+    }
+    /// The List card's filters and sorts, by key and label, All and the source's own order first; those alone by default.
+    fn filters(&self) -> Vec<(String, String)> {
+        vec![("all".to_owned(), "All".to_owned())]
+    }
+    fn sorts(&self) -> Vec<(String, String)> {
+        vec![("own".to_owned(), "Tool's order".to_owned())]
+    }
+    /// The header's facts; none by default.
+    fn facts(&self) -> Vec<Words> {
+        Vec::new()
+    }
     /// The pane for the focused row, or the overview with none; `section` is the strip's key.
     fn pane(&self, key: Option<&str>) -> Pane;
     /// The bar with nothing marked: a job's progress, the last outcome, or none.

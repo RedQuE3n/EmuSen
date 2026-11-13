@@ -865,7 +865,8 @@ declares it (a structural setting is not declared, and the picture is read again
 drawn behind Settings yet (its preview is the caption alone), so the change is seen when the game is shown again.
 Tests: `qt-models/tests/settings_shaders.rs` (7, one of them over the platform library) and the program's
 `shaders_gpu.rs` (on Vulkan: a preset of the test's own chosen with the pad, the picture read back tinted, its lever
-moved to nothing and the picture read back plain, both read again when Settings opens again).
+moved to nothing and the picture read back plain, both read again when Settings opens again), and `qt-play/tests/picture.rs`
+(the CRT's contrast set on the running chain and the picture read back darker; an undeclared parameter refused).
 
 ### 1.9 Homes for the front-end logic still in C#
 

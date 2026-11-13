@@ -5,7 +5,7 @@
 //! folder, the package from the library tool's `pkg-ls` and Galaxia's claim index. Nothing here needs a session.
 
 use crate::clients::{app_settings, engine_shown, ClientSource};
-use crate::game_page::{Change, Choice, GamePageSource, Media, MediaKind, Package, Read, Slot, State};
+use crate::game_page::{Change, Choice, Detail, GamePageSource, Media, MediaKind, Package, Read, Slot, State, DETAILS};
 use crate::library::{console_name, title_of, HERO};
 use emusen_crystal_client::Scope;
 use emusen_platform_client::bindings::consts::PROFILES;
@@ -23,13 +23,14 @@ fn words(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
-/// The media store's types the Media section shows, in Mistress's order.
-const MEDIA: [(&str, MediaKind); 5] = [
+/// The media store's types the Media section shows, in Mistress's order, the PDF manual last.
+const MEDIA: [(&str, MediaKind); 6] = [
     ("screenshot", MediaKind::Screenshot),
     ("titlescreen", MediaKind::TitleScreen),
     ("video", MediaKind::Clip),
     ("marquee", MediaKind::Marquee),
     ("fanart", MediaKind::Fanart),
+    ("manual", MediaKind::Manual),
 ];
 
 /// A file's modified time in seconds since 1970; none for no file.
@@ -168,6 +169,8 @@ impl GamePageSource for ClientSource {
             states: self.states(game, &settings)?,
             ..Read::default()
         };
+        let edited = |key: &str| metadata.get(key).and_then(|v| v.get("source")).and_then(Value::as_str) == Some("edited");
+        read.details = DETAILS.iter().map(|(field, _)| Detail { field, value: value(field), edited: edited(field) }).collect();
         read.media = self.screenshots(game)?;
         read.media.extend(MEDIA.iter().filter_map(|(kind, what)| Some(media(kind)).filter(|f| !f.is_empty()).map(|path| Media { path, kind: *what })));
         read.engine = Some(value(crate::edits::ALT_EMULATOR)).filter(|e| !e.is_empty());
@@ -240,6 +243,10 @@ impl GamePageSource for ClientSource {
                     std::fs::remove_file(&picture).map_err(words)?;
                 }
                 self.runtime.state_forget(state).map_err(words)
+            }
+            Change::Edit(field, value) => {
+                let at = crate::words::utc(crate::words::now());
+                self.library.change(&json!({ "op": "save_edits", "path": path, "changes": { *field: value }, "at": at })).map(drop).map_err(words)
             }
             Change::Hide => {
                 let at = crate::words::utc(crate::words::now());

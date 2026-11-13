@@ -458,3 +458,8 @@ ControllerDrawing
     objectName "controllerArt"
     objectName "controllerLabel"
     objectName "controllerLabelWords"
+PdfPage
+    property url source
+    property int page
+    readonly property int pages
+    readonly property size pageSize

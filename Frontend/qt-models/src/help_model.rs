@@ -69,6 +69,11 @@ pub mod qobject {
         SettingsHotkeys,
         /// A choice of the ES-DE theme in use on the Themes tab, after every screen before it.
         ThemesChoice,
+        /// Edit Details and the game page's media viewer, after every screen before them.
+        GamePageEdit,
+        GamePageViewer,
+        GamePageViewerManual,
+        GamePageManual,
     }
 
     extern "RustQt" {
@@ -185,6 +190,10 @@ impl qobject::HelpModel {
             HelpScreen::GamePageChange => Screen::GamePageChange,
             HelpScreen::GamePageChoose => Screen::GamePageChoose,
             HelpScreen::GamePageNone => Screen::GamePageNone,
+            HelpScreen::GamePageEdit => Screen::GamePageEdit,
+            HelpScreen::GamePageViewer => Screen::GamePageViewer,
+            HelpScreen::GamePageViewerManual => Screen::GamePageViewerManual,
+            HelpScreen::GamePageManual => Screen::GamePageManual,
             _ => Screen::Home,
         }
     }
@@ -257,6 +266,10 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::GamePageChange => HelpScreen::GamePageChange,
         Screen::GamePageChoose => HelpScreen::GamePageChoose,
         Screen::GamePageNone => HelpScreen::GamePageNone,
+        Screen::GamePageEdit => HelpScreen::GamePageEdit,
+        Screen::GamePageViewer => HelpScreen::GamePageViewer,
+        Screen::GamePageViewerManual => HelpScreen::GamePageViewerManual,
+        Screen::GamePageManual => HelpScreen::GamePageManual,
     };
     shown.repr
 }

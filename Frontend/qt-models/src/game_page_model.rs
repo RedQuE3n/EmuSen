@@ -70,6 +70,28 @@ pub mod qobject {
         #[qproperty(QStringList, question_sentences, cxx_name = "questionSentences", READ, NOTIFY)]
         #[qproperty(QStringList, question_choices, cxx_name = "questionChoices", READ, NOTIFY)]
         #[qproperty(i32, question_back, cxx_name = "questionBack", READ, NOTIFY)]
+        /// The scraper's test seam, the `test` member of its settings as JSON (a loopback server and its root); empty for
+        /// ScreenScraper itself.
+        #[qproperty(QString, scraper_test, cxx_name = "scraperTest")]
+        /// This page's scrape as the service's progress words it: idle, running, done, stopped or cancelled.
+        #[qproperty(QString, scrape_state, cxx_name = "scrapeState", READ, NOTIFY)]
+        /// The media viewer: whether it is open, what it shows (0 a picture, 1 a clip, 2 the manual's page), its file as
+        /// a URL, its caption, the manual's page, zoom steps and pan steps, and its help bar's screen.
+        #[qproperty(bool, viewing, READ, NOTIFY)]
+        #[qproperty(i32, view_kind, cxx_name = "viewKind", READ, NOTIFY)]
+        #[qproperty(QString, view_source, cxx_name = "viewSource", READ, NOTIFY)]
+        /// The game's PDF manual as a URL, the last viewer's once it closes; empty for none.
+        #[qproperty(QString, view_manual, cxx_name = "viewManual", READ, NOTIFY)]
+        #[qproperty(QString, view_caption, cxx_name = "viewCaption", READ, NOTIFY)]
+        #[qproperty(i32, view_page, cxx_name = "viewPage", READ, NOTIFY)]
+        #[qproperty(i32, view_zoom, cxx_name = "viewZoom", READ, NOTIFY)]
+        #[qproperty(i32, view_pan_x, cxx_name = "viewPanX", READ, NOTIFY)]
+        #[qproperty(i32, view_pan_y, cxx_name = "viewPanY", READ, NOTIFY)]
+        #[qproperty(i32, view_help, cxx_name = "viewHelp", READ, NOTIFY)]
+        /// Words typed for a detail of Edit Details: whether they are asked, the question's title, and the words it starts from.
+        #[qproperty(bool, typing, READ, NOTIFY)]
+        #[qproperty(QString, typing_title, cxx_name = "typingTitle", READ, NOTIFY)]
+        #[qproperty(QString, typing_start, cxx_name = "typingStart", READ, NOTIFY)]
         type GamePageModel = super::GamePageModelRust;
     }
 
@@ -121,9 +143,17 @@ pub mod qobject {
         #[qinvokable]
         fn answer(self: Pin<&mut GamePageModel>, index: i32);
 
+        /// A detail of the game was edited: the library reads its names again.
+        #[qsignal]
+        fn edited(self: Pin<&mut GamePageModel>);
+
         /// The game was hidden from the library: the page closes.
         #[qsignal]
         fn hidden(self: Pin<&mut GamePageModel>);
+
+        /// The media viewer or the keyboard closed: the page takes the focus back from it.
+        #[qsignal]
+        fn returned(self: Pin<&mut GamePageModel>);
 
         /// The question was answered: the page takes the focus back from it.
         #[qsignal]
@@ -133,13 +163,32 @@ pub mod qobject {
         #[qinvokable]
         fn focus(self: Pin<&mut GamePageModel>, action: i32, content: i32);
 
+        /// B on the page: Edit Details goes back to Details (true); else the page is the screens' to leave.
+        #[qinvokable]
+        fn back(self: Pin<&mut GamePageModel>) -> bool;
+
+        /// A key on the media viewer: whether it was the viewer's.
+        #[qinvokable]
+        #[cxx_name = "viewKey"]
+        fn view_key(self: Pin<&mut GamePageModel>, key: i32, modifiers: i32) -> bool;
+
+        /// The manual's page count, as Qt PDF read it.
+        #[qinvokable]
+        #[cxx_name = "viewPages"]
+        fn view_pages(self: Pin<&mut GamePageModel>, pages: i32);
+
+        /// The media viewer closed.
+        #[qinvokable]
+        #[cxx_name = "viewClose"]
+        fn view_close(self: Pin<&mut GamePageModel>);
+
+        /// The words typed for the detail asked, or none for a question let go; the detail is saved at once.
+        #[qinvokable]
+        fn typed(self: Pin<&mut GamePageModel>, kept: bool, words: &QString);
+
         /// The game is to start, from a state's file where one is named.
         #[qsignal]
         fn played(self: Pin<&mut GamePageModel>, path: QString, state: QString);
-
-        /// A door to a later piece's page, by its row's key.
-        #[qsignal]
-        fn door(self: Pin<&mut GamePageModel>, key: QString);
 
         /// The folder holding the game's file, for the program's one folder action (`Folders.open`).
         #[qsignal]
@@ -322,6 +371,8 @@ mod tests {
 enum Pending {
     Change(crate::game_page::Change),
     Play(String),
+    /// The page's scrape stopped.
+    Stop,
 }
 
 pub struct GamePageModelRust {
@@ -362,6 +413,25 @@ pub struct GamePageModelRust {
     /// The clients, opened on the first read and kept.
     source: Option<Arc<ClientSource>>,
     asked: u64,
+    scraper_test: QString,
+    scrape_state: QString,
+    viewing: bool,
+    view_kind: i32,
+    view_source: QString,
+    view_manual: QString,
+    view_caption: QString,
+    view_page: i32,
+    view_zoom: i32,
+    view_pan_x: i32,
+    view_pan_y: i32,
+    view_help: i32,
+    /// The viewer while it is open.
+    viewer: Option<emusen_esde::scene::Viewer>,
+    typing: bool,
+    typing_title: QString,
+    typing_start: QString,
+    /// The detail the typed words are for.
+    typing_for: Option<&'static str>,
 }
 
 impl Default for GamePageModelRust {
@@ -401,6 +471,23 @@ impl Default for GamePageModelRust {
             telling: 0,
             source: None,
             asked: 0,
+            scraper_test: QString::default(),
+            scrape_state: QString::from("idle"),
+            viewing: false,
+            view_kind: 0,
+            view_source: QString::default(),
+            view_manual: QString::default(),
+            view_caption: QString::default(),
+            view_page: 0,
+            view_zoom: 0,
+            view_pan_x: 0,
+            view_pan_y: 0,
+            view_help: shown_screen(crate::help::Screen::GamePageViewer),
+            viewer: None,
+            typing: false,
+            typing_title: QString::default(),
+            typing_start: QString::default(),
+            typing_for: None,
         }
     }
 }
@@ -411,7 +498,10 @@ impl cxx_qt::Initialize for qobject::GamePageModel {
             .on_game_changed(|mut model| {
                 // A new game opens on its Overview, the focus on Play (EmuSen_Interface.md §4 screen 3).
                 model.as_mut().rust_mut().page.section = 0;
+                model.as_mut().rust_mut().page.editing = false;
+                model.as_mut().rust_mut().page.run = None;
                 model.as_mut().rust_mut().focus = (Some(0), 0);
+                model.as_mut().view_close();
                 if model.section != 0 {
                     model.as_mut().telling(|mut model| {
                         model.as_mut().rust_mut().section = 0;
@@ -644,6 +734,9 @@ impl qobject::GamePageModel {
                         model.hidden();
                         return;
                     }
+                    if ok && matches!(change, crate::game_page::Change::Edit(..)) {
+                        model.as_mut().edited();
+                    }
                     if ok {
                         model.as_mut().rust_mut().page.changed(&change);
                         model.as_mut().shown(false);
@@ -656,7 +749,27 @@ impl qobject::GamePageModel {
                     let path = QString::from(model.file.path.as_str());
                     model.played(path, QString::default());
                 }
-                Outcome::Door(key) => model.door(QString::from(key)),
+                Outcome::Edit => {
+                    model.as_mut().rust_mut().page.editing = true;
+                    model.as_mut().rust_mut().focus = (None, 0);
+                    model.as_mut().shown(true);
+                }
+                Outcome::View(index) => {
+                    let viewer = model.page.viewer(index);
+                    model.as_mut().rust_mut().viewer = viewer;
+                    model.as_mut().viewed();
+                }
+                Outcome::Scrape => model.scrape(),
+                Outcome::Stop(question) => model.ask(question, Pending::Stop),
+                Outcome::Type { field, title, start } => {
+                    model.as_mut().rust_mut().typing_for = Some(field);
+                    model.as_mut().rust_mut().typing_title = QString::from(title.as_str());
+                    model.as_mut().rust_mut().typing_start = QString::from(start.as_str());
+                    model.as_mut().typing_title_changed();
+                    model.as_mut().typing_start_changed();
+                    model.as_mut().rust_mut().typing = true;
+                    model.as_mut().typing_changed();
+                }
                 Outcome::OpenFolder => {
                     let folder = std::path::Path::new(&model.file.path).parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
                     model.open_folder(QString::from(folder.as_str()));
@@ -701,6 +814,184 @@ impl qobject::GamePageModel {
         });
     }
 
+    /// What the viewer shows, read again from it: closed where it is none.
+    fn viewed(mut self: Pin<&mut Self>) {
+        // A property told can load the manual at once, and its page count comes back into the viewer while it is told:
+        // told again until the viewer stands still.
+        for _ in 0..4 {
+            let before = self.viewer.clone();
+            self.as_mut().tell_viewer();
+            if self.viewer == before {
+                break;
+            }
+        }
+    }
+
+    fn tell_viewer(mut self: Pin<&mut Self>) {
+        let shown = self.viewer.as_ref().map(|v| {
+            let (kind, source, view) = match v.reading {
+                Some(view) => (2, v.manual.clone().unwrap_or_default(), view),
+                None => {
+                    let entry = v.shown();
+                    let clip = entry.is_some_and(|e| e.kind == "video");
+                    (i32::from(clip), entry.map(|e| e.source.clone()).unwrap_or_default(), Default::default())
+                }
+            };
+            let help = match (v.reading, &v.manual) {
+                (Some(_), _) => crate::help::Screen::GamePageManual,
+                (None, Some(_)) => crate::help::Screen::GamePageViewerManual,
+                (None, None) => crate::help::Screen::GamePageViewer,
+            };
+            (kind, cover_url(&source), cover_url(v.manual.as_deref().unwrap_or("")), self.page.caption(v), view, shown_screen(help))
+        });
+        let viewing = shown.is_some();
+        let (kind, source, manual, caption, view, help) = shown.unwrap_or((0, String::new(), String::new(), String::new(), Default::default(), self.view_help));
+        macro_rules! put {
+            ($field:ident, $changed:ident, $value:expr) => {{
+                let value = $value;
+                if self.$field != value {
+                    self.as_mut().rust_mut().$field = value;
+                    self.as_mut().$changed();
+                }
+            }};
+        }
+        // Kept as it was when the viewer closes, so the manual's page going away is not handed an empty file.
+        if viewing {
+            put!(view_manual, view_manual_changed, QString::from(manual.as_str()));
+        }
+        put!(view_kind, view_kind_changed, kind);
+        put!(view_source, view_source_changed, QString::from(source.as_str()));
+        put!(view_caption, view_caption_changed, QString::from(caption.as_str()));
+        put!(view_page, view_page_changed, view.page as i32);
+        put!(view_zoom, view_zoom_changed, view.zoom as i32);
+        put!(view_pan_x, view_pan_x_changed, view.pan.0);
+        put!(view_pan_y, view_pan_y_changed, view.pan.1);
+        put!(view_help, view_help_changed, help);
+        put!(viewing, viewing_changed, viewing);
+    }
+
+    pub fn view_key(mut self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool {
+        use emusen_esde::scene::Key;
+        use emusen_kit_core::input::UiButton;
+        if self.viewer.is_none() {
+            return false;
+        }
+        // ES-DE's media viewer's buttons (USERGUIDE.md, "Game media viewer"): the triggers to the ends, the shoulders zoom.
+        let key = match emusen_kit_qt::qt_keys::press_of(key, modifiers) {
+            Some(UiButton::Left) => Key::Left,
+            Some(UiButton::Right) => Key::Right,
+            Some(UiButton::Up) => Key::Up,
+            Some(UiButton::Down) => Key::Down,
+            Some(UiButton::First) => Key::First,
+            Some(UiButton::Last) => Key::Last,
+            Some(UiButton::PageUp) => Key::ZoomOut,
+            Some(UiButton::PageDown) => Key::ZoomIn,
+            _ => return false,
+        };
+        let moved = self.as_mut().rust_mut().viewer.as_mut().and_then(|v| v.press(key)) == Some(true);
+        if moved {
+            self.viewed();
+        }
+        true
+    }
+
+    pub fn view_pages(mut self: Pin<&mut Self>, pages: i32) {
+        let changed = self.as_mut().rust_mut().viewer.as_mut().is_some_and(|v| v.set_pages(pages.max(0) as usize));
+        if changed {
+            self.viewed();
+        }
+    }
+
+    /// Closed once the press that closed it has been delivered, so the page, given the focus back, does not take it too.
+    pub fn view_close(self: Pin<&mut Self>) {
+        if self.viewer.is_some() || self.viewing {
+            let _ = self.qt_thread().queue(|mut model| {
+                model.as_mut().rust_mut().viewer = None;
+                model.as_mut().viewed();
+                model.returned();
+            });
+        }
+    }
+
+    pub fn back(mut self: Pin<&mut Self>) -> bool {
+        let went = self.as_mut().rust_mut().page.back();
+        if went {
+            self.as_mut().rust_mut().focus = (None, 0);
+            self.shown(true);
+        }
+        went
+    }
+
+    pub fn typed(mut self: Pin<&mut Self>, kept: bool, words: &QString) {
+        let field = self.as_mut().rust_mut().typing_for.take();
+        // The keyboard closed once its press has been delivered, as the viewer is.
+        if self.typing {
+            let _ = self.qt_thread().queue(|mut model| {
+                model.as_mut().rust_mut().typing = false;
+                model.as_mut().typing_changed();
+                model.returned();
+            });
+        }
+        if let (true, Some(field)) = (kept, field) {
+            let words = words.to_string();
+            // Words left empty put back what was scraped, as the editor's Clear on one field does.
+            let value = Some(words.trim().to_owned()).filter(|w| !w.is_empty());
+            self.outcome(Outcome::Changed(crate::game_page::Change::Edit(field, value)));
+        }
+    }
+
+    /// The page's scrape: the scraper opened with its store, the game queued, its progress followed off the GUI thread and
+    /// told to the Scrape row, and the page read again once it ends, the scraper back to finding pictures alone.
+    fn scrape(mut self: Pin<&mut Self>) {
+        let Some(source) = self.source.clone() else { return };
+        let (file, test) = (self.file.clone(), self.scraper_test.to_string());
+        let test: Option<serde_json::Value> = serde_json::from_str(&test).ok();
+        self.as_mut().ran(Some((true, "Starting".into())), "running");
+        let thread = self.qt_thread();
+        std::thread::spawn(move || {
+            if let Err(why) = source.scrape_start(&file, test.as_ref()) {
+                let _ = thread.queue(move |mut model| {
+                    model.as_mut().ran(Some((false, "It could not start".into())), "idle");
+                    model.said(format!("The scrape could not start: {why}"));
+                });
+                return;
+            }
+            let mut serial = 0;
+            let ended = loop {
+                serial = source.scrape_wait(serial, 250).unwrap_or(serial);
+                let progress = match source.scrape_progress() {
+                    Ok(p) => p,
+                    Err(why) => break Err(why),
+                };
+                let (going, words) = crate::game_page::run_words(&progress, &file.path);
+                let state = progress["state"].as_str().unwrap_or("idle").to_owned();
+                let told = (going, words.clone(), state.clone());
+                let _ = thread.queue(move |model| model.ran(Some((told.0, told.1)), &told.2));
+                if !going {
+                    break Ok(());
+                }
+            };
+            let closed = source.scrape_end();
+            let _ = thread.queue(move |mut model| {
+                if let Some(why) = ended.err().or(closed.err()) {
+                    model.as_mut().said(format!("The scrape could not be followed: {why}"));
+                }
+                model.refresh();
+            });
+        });
+    }
+
+    /// The page's scrape told: the Scrape row's words and the service's state.
+    fn ran(mut self: Pin<&mut Self>, run: Option<(bool, String)>, state: &str) {
+        self.as_mut().rust_mut().page.run = run;
+        let state = QString::from(state);
+        if self.scrape_state != state {
+            self.as_mut().rust_mut().scrape_state = state;
+            self.as_mut().scrape_state_changed();
+        }
+        self.shown(false);
+    }
+
     pub fn act(self: Pin<&mut Self>, index: i32) {
         let outcome = self.page.act(index.max(0) as usize);
         self.outcome(outcome);
@@ -731,6 +1022,10 @@ impl qobject::GamePageModel {
     pub fn declared(self: Pin<&mut Self>, key: &QString) {
         match key.to_string().as_str() {
             crate::help::FAVOURITE => self.outcome(Outcome::Changed(crate::game_page::Change::Favourite)),
+            crate::help::RESET => {
+                let outcome = self.page.reset(self.focus.1);
+                self.outcome(outcome);
+            }
             crate::help::DELETE => {
                 let outcome = self.page.delete(self.focus.1);
                 self.outcome(outcome);
@@ -752,6 +1047,13 @@ impl qobject::GamePageModel {
                 (1, Some(Pending::Play(state))) => {
                     let path = QString::from(model.file.path.as_str());
                     model.played(path, QString::from(state.as_str()));
+                }
+                (1, Some(Pending::Stop)) => {
+                    if let Some(source) = model.source.clone() {
+                        if let Err(why) = source.scrape_cancel() {
+                            model.as_mut().said(format!("The scrape could not be stopped: {why}"));
+                        }
+                    }
                 }
                 _ => {}
             }

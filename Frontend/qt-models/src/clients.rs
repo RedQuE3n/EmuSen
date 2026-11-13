@@ -22,16 +22,24 @@ pub struct ClientSource {
     pub library: Library,
     /// The SQLite lent to the library and the scraper, kept while they are open.
     _sqlite: Lent,
-    /// The sources-alone scraper's serial and its table, for the covers; none where it could not open.
-    scraper: Option<(u64, ScrapeService)>,
+    /// The scraper for the covers, opened for its sources alone except while a scrape runs; none where it could not open.
+    scraper: Option<Scraper>,
     /// The last media index and the scraper's stamps it was walked at, so an unchanged tree is not walked again.
     walked: Mutex<Option<(String, MediaIndex)>>,
 }
 
+/// The process's one scraper as a source holds it: its table, what it was opened with for its sources alone, and the
+/// serial of the open it made last, which a scrape changes (emusen_scrape_service.h).
+struct Scraper {
+    service: ScrapeService,
+    config: ScraperConfig,
+    serial: Mutex<u64>,
+}
+
 impl Drop for ClientSource {
     fn drop(&mut self) {
-        if let Some((serial, _)) = &self.scraper {
-            let _ = self.platform.scraper_close(*serial);
+        if let Some(scraper) = &self.scraper {
+            let _ = self.platform.scraper_close(*scraper.serial.lock().unwrap_or_else(|p| p.into_inner()));
         }
     }
 }
@@ -43,7 +51,55 @@ fn words(e: impl std::fmt::Display) -> String {
 impl ClientSource {
     /// The sources-alone scraper, for a game's metadata and media; none where it could not open.
     pub fn scraper(&self) -> Option<&ScrapeService> {
-        self.scraper.as_ref().map(|(_, s)| s)
+        self.scraper.as_ref().map(|s| &s.service)
+    }
+
+    /// A scrape of one game started: the scraper opened again with its store, the player's ScreenScraper developer file
+    /// read, and `test` as its test seam where one is given; the game queued as one chosen alone (EmuSen_Backend.md §30.3).
+    pub fn scrape_start(&self, game: &GameFile, test: Option<&Value>) -> Result<(), String> {
+        let scraper = self.scraper.as_ref().ok_or("the scraper could not be opened")?;
+        let system = game.system.as_deref().ok_or("the game has no console")?;
+        let mut config = scraper.config.clone();
+        config.settings["sources_alone"] = json!(false);
+        config.settings["developer_files"] = json!(true);
+        if let Some(test) = test {
+            config.settings["test"] = test.clone();
+        }
+        self.reopen(scraper, &config)?;
+        let started = scraper.service.start(&json!({ "games": [{ "path": game.path, "system": system }], "one": true }));
+        match started {
+            Ok(0) => Err("the scraper queued nothing".into()),
+            Ok(_) => Ok(()),
+            Err(why) => Err(why.to_string()),
+        }
+    }
+
+    /// The scraper opened again on `config`, closing the one this source opened.
+    fn reopen(&self, scraper: &Scraper, config: &ScraperConfig) -> Result<(), String> {
+        let mut serial = scraper.serial.lock().unwrap_or_else(|p| p.into_inner());
+        *serial = self.platform.scraper_open(config, Some(&self._sqlite)).map_err(words)?;
+        Ok(())
+    }
+
+    /// Waits at most `ms` for the run's serial to pass `serial`; the serial then.
+    pub fn scrape_wait(&self, serial: u64, ms: u32) -> Result<u64, String> {
+        self.scraper().ok_or("the scraper could not be opened")?.wait(serial, ms).map_err(words)
+    }
+
+    /// The run as it stands, every result of it.
+    pub fn scrape_progress(&self) -> Result<Value, String> {
+        self.scraper().ok_or("the scraper could not be opened")?.progress(0).map_err(words)
+    }
+
+    /// The run stopped; what was fetched is kept.
+    pub fn scrape_cancel(&self) -> Result<bool, String> {
+        self.scraper().ok_or("the scraper could not be opened")?.cancel().map_err(words)
+    }
+
+    /// The run over: the scraper opened again for its sources alone, its store let go for the Scraper tool and DianaSh.
+    pub fn scrape_end(&self) -> Result<(), String> {
+        let scraper = self.scraper.as_ref().ok_or("the scraper could not be opened")?;
+        self.reopen(scraper, &scraper.config)
     }
 
     /// The scan's request: the player's ROM folder, the shelves' systems, and the packages and compressed folders.
@@ -111,13 +167,19 @@ impl LibrarySource for ClientSource {
         Ok(games.iter().filter(hidden).map(|g| g.path.clone()).collect())
     }
 
+    fn names(&self, games: &[GameFile]) -> Result<Vec<(String, String)>, String> {
+        let edits = self.library.get(&json!({ "what": "all_edits" })).map_err(words)?;
+        let named = |g: &GameFile| edits.get(&g.path)?.get(crate::edits::NAME)?.as_str().filter(|n| !n.trim().is_empty()).map(|n| (g.path.clone(), n.to_owned()));
+        Ok(games.iter().filter_map(named).collect())
+    }
+
     fn recent(&self, games: &[GameFile]) -> Result<Vec<String>, String> {
         let paths: Vec<String> = games.iter().map(|g| g.path.clone()).collect();
         self.library.recent(u32::MAX, &paths).map_err(words)
     }
 
     fn media(&self, systems: &[SystemRow], games: &[GameFile], types: &[&str]) -> Result<Vec<(String, String)>, String> {
-        let Some((_, scraper)) = &self.scraper else { return Ok(Vec::new()) };
+        let Some(scraper) = self.scraper() else { return Ok(Vec::new()) };
         let mut out = Vec::new();
         for g in games {
             let Some(system) = systems.iter().find(|s| Some(&s.id) == g.system.as_ref()) else { continue };
@@ -156,7 +218,7 @@ impl LibrarySource for ClientSource {
     }
 
     fn metadata(&self, games: &[GameFile]) -> Result<Vec<(String, crate::esde_shelves::Metadata)>, String> {
-        let Some((_, scraper)) = &self.scraper else { return Ok(Vec::new()) };
+        let Some(scraper) = self.scraper() else { return Ok(Vec::new()) };
         let names = app_settings(&self.platform)?.get("ScrapeGameNames").and_then(Value::as_bool).unwrap_or(false);
         let one = |g: &GameFile| {
             let answer = scraper.get(&json!({ "what": "metadata", "path": g.path, "scraped_names": names }));
@@ -198,7 +260,7 @@ impl LibrarySource for ClientSource {
     }
 
     fn media_index(&self, systems: &[String]) -> Result<MediaIndex, String> {
-        let Some((_, scraper)) = &self.scraper else { return Ok(MediaIndex::default()) };
+        let Some(scraper) = self.scraper() else { return Ok(MediaIndex::default()) };
         let settings = app_settings(&self.platform)?;
         let store = self.platform.directory(DIR_MEDIA).map_err(words)?;
         let esde = settings.get("EsdeMediaDirectory").and_then(Value::as_str).filter(|d| !d.trim().is_empty()).map(std::path::PathBuf::from);
@@ -272,7 +334,7 @@ impl ClientSource {
 
 /// The scraper as a handle for finding pictures alone, with the player's folders as Mistress gives them; none where the
 /// platform library could not open one, so the screens show generated cards.
-fn open_scraper(platform: &Arc<Platform>, runtime: &Runtime, games_db: &str, sqlite: &Lent) -> Option<(u64, ScrapeService)> {
+fn open_scraper(platform: &Arc<Platform>, runtime: &Runtime, games_db: &str, sqlite: &Lent) -> Option<Scraper> {
     let settings = app_settings(platform).ok()?;
     let text = |key: &str| settings.get(key).and_then(Value::as_str).filter(|v| !v.is_empty());
     let cores: Vec<Vec<String>> = runtime.cores().ok()?.into_iter().map(|c| c.systems).filter(|s| !s.is_empty()).collect();
@@ -287,7 +349,7 @@ fn open_scraper(platform: &Arc<Platform>, runtime: &Runtime, games_db: &str, sql
         ..ScraperConfig::default()
     };
     let serial = platform.scraper_open(&config, Some(sqlite)).ok()?;
-    Some((serial, platform.scrape_service().ok()?))
+    Some(Scraper { service: platform.scrape_service().ok()?, config, serial: Mutex::new(serial) })
 }
 
 /// A path with its `.` and `..` resolved by name alone, as .NET's GetFullPath resolves a folder link.

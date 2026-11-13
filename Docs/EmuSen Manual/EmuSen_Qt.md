@@ -6491,6 +6491,33 @@ Seeded faults, each reverted:
 - the page not opening on Play: the program's page test, the focus still on Favourite;
 - the page's state not handed to the session: the program's page test, `startState` empty with the game shown.
 
+#### 7.8.2 Piece P5: the page's media viewer, Scrape This Game and Edit Details (2026-11-12)
+
+- **The media viewer** is ES-DE's (`emusen_esde::scene::Viewer`, §4.10, §4.13) over the page's media: A on a picture of
+  Media opens it on that picture, Left and Right step the pictures and the clip in the page's order and stop at the ends,
+  the triggers go to the first and last, Up opens the game's PDF manual (the media store's `manual`, now a tile of Media
+  too) and Down leaves it, Left and Right turn its pages and the shoulders zoom it, B closes the viewer. A picture is a
+  Qt Quick `Image`, a clip the kit's `VideoTile` heard at the player's Volume, the manual's page the kit's `PdfPage`
+  (EmuSen_Kit.md §7.110), which esde-qt's `ManualElement` now draws through too. It is drawn on Void with a caption bar
+  80 tall on CaptionSurface over the help bar (EmuSen_Interface.md §18.2): the item's words and where it stands, or the
+  manual's page.
+- **Scrape This Game** opens the process's one scraper again with its store (no longer for its sources alone), with the
+  player's ScreenScraper developer file, queues the game alone (`start`, `one`) and follows `wait` and `progress` off the
+  GUI thread; the row says the run's step and then how it came out, A on it while it runs asks to stop it (`cancel`),
+  and when it ends the scraper is opened for its sources alone again and the page is read again, so a picture fetched
+  is shown. The program's `scraperTest` is the scraper's test seam, which a test sets to the recorded ScreenScraper the
+  platform's scraping test answers from (`Platform/platform/examples/recorded_scraper`).
+- **Edit Details** is Details' deeper page: Name, Description, Release date, Developer, Publisher, Genre and Players,
+  each with the value the scraper's `metadata` resolves; A types it on the docked keyboard, Done saves it at once as a
+  games.db edit (empty words put back what was scraped), Y puts back what was scraped, B goes back to Details. A name
+  edited names the game in the grid too: the library reads games.db's `name` edits.
+- **Not opened yet**, so not shown: Options' Cheats, Display crop and Package, and Details' Cover art. The viewer's
+  `X Set as cover` and `Y Delete…` of §18.2 are not built. The run fetches the scraper's default kinds, not the
+  player's Scrape kinds settings, which nothing maps to the scraper's kinds yet.
+- Tests: qt-models' `game_page` (the viewer over the media, the run's words, Edit Details' rows), qt-app's `page_doors`
+  (the viewer paged by the pad, a scrape against the recorded server to done with the cover shown, a name typed, stored
+  and named in the grid).
+
 ### 7.9 Repair piece DC-B: the program does what it offers and says when it fails (2026-11-11)
 
 A review of the landed program on 2026-11-11 proved rows that were drawn and did nothing, and failures the player never

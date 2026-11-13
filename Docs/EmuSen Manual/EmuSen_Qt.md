@@ -1748,8 +1748,8 @@ of the wrong kind, with its line and words (`theme-check/src/tokens.rs`, `tests/
 floors. Proof: `qt-app/tests/theme.rs`, a fixture package overriding the dark accent, shadow colour, `tileRadius` (21) and
 `breathes` (false), whose screen and the program's tokens read all four, and a theme with none giving the kit's back;
 `qt-app/tests/theme_reach.rs`, Settings' and the Home card's focused rows drawn in the chosen theme's accent in each variant and
-in the kit's for none, and Settings, a tool, the Home card, the List card, the game page and the Pause Card holding the gate's
-fit and contrast findings to the kit's own under each in-repo theme that overrides a token, dark and light (the Pause Card in
+in the kit's for none, and Settings, a tool, the Home card, the List card, the game page, a notice over Settings and the
+Pause Card, with each theme's own screens loaded behind, holding the gate's fit and contrast findings to the kit's own under each in-repo theme that overrides a token, dark and light (the Pause Card in
 `theme_reach_pause.rs`, its scene given each theme's overrides); `kit-qt/tests/overrides.rs`, every
 number and switch token of the registry taking a dark override, and a light one, an unknown name and a wrong kind left alone;
 `kit-qt/tests/column.rs`, a theme's `fontBody` at three text sizes, its durations and breathing under reduced motion, and the
@@ -1791,6 +1791,18 @@ role the chosen theme omits, and every role once it fails, is the reference's, a
 slot under a card (Home under the Home card, the grid under the List card) is disabled and declares `backdrop`, as the
 rules read a backdrop; the grid's slot gives up the keys while the search's keyboard or the List card holds them. Object
 names carry the host's: `host.theme`, `home.reference`.
+
+**A screen not shown takes no focus (2026-11-13).** A slot's screen is made in a `FocusScope` (`Placing.screen`) that is
+out of the window's items while the slot is not shown (`parent: null`) and back under the slot once it is. Qt's
+`Item.forceActiveFocus()` "sets focus on the item and ensures that all ancestor FocusScope objects in the object hierarchy
+are also given" focus (doc.qt.io, Qt 6 QML `Item`, read 2026-11-13), so a scope cannot hold it back, and `enabled: false`
+does not either: it clears the item's own active focus, but the climb still gives focus to every enabled scope above it.
+Both were tried: with the slot disabled the focus went to the window's `chosenTheme` Loader, and the climb set the slot's
+own `focus`, which broke its binding. Out of the window's items, the climb ends at the screen's own scope, so nothing of
+the window's changes. `focusPolicy` governs tabbing and clicks only. The defect it closes, seen 2026-11-13: the
+in-repo themes call `forceActiveFocus` in their screens (Horizon's Consoles shelf, Meridian's entries, Orrery's wheel), so
+using Horizon from the Themes tab moved the pad's focus to its hidden Consoles and left the tab deaf, and choosing any of
+the four over Settings took Settings' focus (`qt-app/tests/themes_focus.rs`, which fails without the change).
 
 **Where covers come from.** A theme reads pictures only inside its folder and the cover stores (§3.5.1); the reference
 is held to that too, so the window's `coverStores` (the start's media store, `ArtworkDirectory` and

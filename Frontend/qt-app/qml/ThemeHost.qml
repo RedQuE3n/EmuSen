@@ -46,11 +46,25 @@ Item {
     // Whether one of its screens is to take the keys, for a host made inside a focus scope (the window's Loader).
     readonly property bool takesFocus: homeSlot.focus || consolesSlot.focus || gamesSlot.focus || splashSlot.focus
     // The Home screen placed, read as a theme's ThemeScreen (its engine's type, so not named here).
-    readonly property var homeScreen: homeSlot.placed ? (homeSlot.item as Item)?.children[0] ?? null : null
+    readonly property var homeScreen: homeSlot.placed ? (homeSlot.item as Placing)?.screen.children[0] ?? null : null
     signal played(string path)
     signal resumed()
     signal backed()
     signal focused(string game)
+    // What a slot holds: the scope the theme's screen is made in, out of the window's items while not shown, so a forceActiveFocus
+    // in it climbs no scope of the window's, the slot's included, and takes no focus from the screen shown (EmuSen_Qt.md §3.5.2).
+    component Placing: Item {
+        id: placing
+        property bool shown: false
+        readonly property FocusScope screen: scope
+        FocusScope {
+            id: scope
+            parent: placing.shown ? placing : null
+            width: placing.width
+            height: placing.height
+            focus: true
+        }
+    }
     // One screen of the theme: a slot made while the theme provides its role, the screen created into it in the theme's own engine.
     component Slot: Loader {
         id: slot
@@ -66,13 +80,15 @@ Item {
         // The theme's screen is in place and the theme has not failed; else the reference draws this role.
         readonly property bool themed: slot.active && slot.status === Loader.Ready && slot.placed && !slot.host.failed
         anchors.fill: parent
+        // Under a card nothing on the screen is reached.
+        enabled: !slot.backdrop
         active: slot.wanted && slot.host.ready && slot.host.provides(slot.role)
         visible: slot.shown && slot.themed
         focus: slot.visible && slot.inputs
-        sourceComponent: FocusScope {
-            focus: true
+        sourceComponent: Placing {
+            shown: slot.shown
         }
-        onLoaded: slot.placed = slot.host.place(slot.role, slot.item)
+        onLoaded: slot.placed = slot.host.place(slot.role, (slot.item as Placing).screen)
     }
     Host.ThemeHost {
         id: host
@@ -145,7 +161,6 @@ Item {
         wanted: themed.homeWanted
         inputs: themed.inputs && themed.screens.shown === Screens.Home
         backdrop: themed.screens.shown === Screens.HomeCard
-        enabled: !homeSlot.backdrop
         shown: themed.screens.shown === Screens.Home || themed.screens.shown === Screens.HomeCard
     }
     Slot {
@@ -166,7 +181,6 @@ Item {
         // The search's keyboard and the List card hold the keys over it while they are open; under the card nothing on it is reached.
         inputs: themed.inputs && !themed.typing && !themed.listOpen
         backdrop: themed.listOpen
-        enabled: !gamesSlot.backdrop
         shown: themed.screens.shown === Screens.Grid || themed.listOpen || themed.searching
     }
     Slot {

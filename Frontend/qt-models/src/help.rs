@@ -42,6 +42,8 @@ pub enum Screen {
     Themes,
     /// The Themes tab on a theme in use, not checked clean, or of a kind not chosen here: Check alone.
     ThemesChecked,
+    /// The Themes tab on a choice of the ES-DE theme in use: A and Left and Right step it.
+    ThemesChoice,
     /// Settings on a section (EmuSen_BigPicture.md §52): the shoulders step the sections.
     Settings,
     /// Settings on a page under a section: the shoulders are the page's.
@@ -180,6 +182,13 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
         ],
         Screen::ThemesChecked => &[
             (UiButton::Screensaver, "Check", Some(CHECK)),
+            (UiButton::PageUp, "Kind", None),
+            (UiButton::Back, "Back", None),
+            (UiButton::Menu, "Home", Some(HOME)),
+        ],
+        Screen::ThemesChoice => &[
+            (UiButton::Accept, "Change", None),
+            (UiButton::Left, "Value", None),
             (UiButton::PageUp, "Kind", None),
             (UiButton::Back, "Back", None),
             (UiButton::Menu, "Home", Some(HOME)),

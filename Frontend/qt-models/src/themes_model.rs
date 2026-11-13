@@ -1,11 +1,11 @@
 //! `ThemesModel`, the Themes tab as a QAbstractListModel (EmuSen_Qt.md §3.8): themes.rs's rows of the kind shown, the
-//! focused row's detail as properties, Use and Check as calls. A read and a check run off the GUI thread and come back
+//! ES-DE theme in use followed by its choices, the focused row's detail as properties, Use, Check and a choice's step as calls. A read and a check run off the GUI thread and come back
 //! through qt_thread().queue; QML writes no words and no logic.
 
-use crate::clients::{app_settings, store_app_setting};
+use crate::clients::{app_settings, change_app_settings};
 use crate::help::Screen;
 use crate::help_model::shown_screen;
-use crate::themes::{self, Checked, Kind, Listing, Row, REFERENCE, SETTING};
+use crate::themes::{self, Checked, InUse, Kind, Listing, Row, REFERENCE};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QStringList, QVariant, QVector};
@@ -85,10 +85,15 @@ pub mod qobject {
         #[qinvokable]
         fn refresh(self: Pin<&mut ThemesModel>);
 
-        /// The theme of this id chosen: its id stored, and `used` raised with the folder the host loads. Only a row Use is offered for.
+        /// The theme of this id chosen: an EmuSen theme's id stored and `used` raised with the folder the host loads, or an
+        /// ES-DE theme's folder stored as the library's look; `restyled` either way. Only a row Use is offered for.
         #[qinvokable]
         #[cxx_name = "use"]
         fn use_theme(self: Pin<&mut ThemesModel>, id: &QString);
+
+        /// The choice on this row of the kind listed stepped `by` options round, stored, and `restyled` raised.
+        #[qinvokable]
+        fn step(self: Pin<&mut ThemesModel>, row: i32, by: i32);
 
         /// The theme of this id checked, off the GUI thread.
         #[qinvokable]
@@ -98,13 +103,17 @@ pub mod qobject {
         #[qinvokable]
         fn act(self: Pin<&mut ThemesModel>, key: &QString);
 
-        /// A on the focused row: Use, where it is offered.
+        /// A on the focused row: Use, where it is offered; a choice steps on.
         #[qinvokable]
         fn accept(self: Pin<&mut ThemesModel>);
 
         /// A theme was chosen: the folder the chosen theme's host loads, empty for the reference.
         #[qsignal]
         fn used(self: Pin<&mut ThemesModel>, folder: QString);
+
+        /// The library's look was stored: whether an ES-DE theme draws it, so the library reads its settings again.
+        #[qsignal]
+        fn restyled(self: Pin<&mut ThemesModel>, esde: bool);
     }
 
     unsafe extern "RustQt" {
@@ -147,6 +156,8 @@ pub struct ThemesModelRust {
     help: i32,
     rows: Vec<Row>,
     store: Option<PathBuf>,
+    /// The ES-DE theme the library is drawn with, and its choices.
+    esde: Option<InUse>,
     /// The reads asked for, so an older read that finishes late is dropped.
     asked: u64,
 }
@@ -172,6 +183,7 @@ impl Default for ThemesModelRust {
             help: shown_screen(Screen::ThemesChecked),
             rows: Vec::new(),
             store: None,
+            esde: None,
             asked: 0,
         }
     }
@@ -206,6 +218,14 @@ const CHECKED: i32 = 8;
 const USABLE: i32 = 9;
 const LABEL: i32 = 10;
 const VALUE: i32 = 11;
+const STEPS: i32 = 12;
+
+/// A row of the kind listed: a theme, by its place in `rows`, or a choice of the ES-DE theme in use, by its place in its choices.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Item {
+    Theme(usize),
+    Choice(usize),
+}
 
 /// A row's check as the `checked` role says it: empty before one, `checking`, `ok`, or the findings a line each.
 fn checked_words(checked: &Checked) -> String {
@@ -226,15 +246,43 @@ fn read(platform_library: &str, reference: &str, reference_folder: &str) -> List
 }
 
 impl qobject::ThemesModel {
-    /// The rows of the kind listed.
-    fn shown(&self) -> Vec<&Row> {
+    /// The rows of the kind listed, the ES-DE theme in use followed by its choices.
+    fn shown(&self) -> Vec<Item> {
         let kind = self.kind.to_string();
-        self.rows.iter().filter(|r| themes::KINDS[r.kind.index()] == kind).collect()
+        let mut items = Vec::new();
+        for (at, row) in self.rows.iter().enumerate().filter(|(_, r)| themes::KINDS[r.kind.index()] == kind) {
+            items.push(Item::Theme(at));
+            if let Some(esde) = self.esde.as_ref().filter(|e| row.kind == Kind::Esde && e.id == row.id) {
+                items.extend((0..esde.choices.len()).map(Item::Choice));
+            }
+        }
+        items
+    }
+
+    /// The theme a row of the kind listed is or belongs to.
+    fn theme_at(&self, item: Item) -> Option<&Row> {
+        match item {
+            Item::Theme(at) => self.rows.get(at),
+            Item::Choice(_) => self.esde.as_ref().and_then(|e| self.find(&e.id)).map(|at| &self.rows[at]),
+        }
     }
 
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
-        let Some(row) = self.shown().get(index.row() as usize).copied() else { return QVariant::default() };
+        let Some(item) = self.shown().get(index.row() as usize).copied() else { return QVariant::default() };
         let text = |s: &str| QVariant::from(&QString::from(s));
+        if let Item::Choice(c) = item {
+            let Some(choice) = self.esde.as_ref().and_then(|e| e.choices.get(c)) else { return QVariant::default() };
+            return match role {
+                ID => text(self.esde.as_ref().map_or("", |e| e.id.as_str())),
+                NAME | LABEL => text(choice.label),
+                KIND => text(themes::KINDS[Kind::Esde.index()]),
+                VALUE => text(choice.value()),
+                CURRENT | USABLE => QVariant::from(&false),
+                STEPS => QVariant::from(&true),
+                _ => text(""),
+            };
+        }
+        let Some(row) = self.theme_at(item) else { return QVariant::default() };
         match role {
             ID => text(&row.id),
             NAME | LABEL => text(&row.name),
@@ -247,6 +295,7 @@ impl qobject::ThemesModel {
             CHECKED => text(&checked_words(&row.checked)),
             USABLE => QVariant::from(&row.usable()),
             VALUE => text(&row.value()),
+            STEPS => QVariant::from(&false),
             _ => QVariant::default(),
         }
     }
@@ -266,6 +315,7 @@ impl qobject::ThemesModel {
             (USABLE, "usable"),
             (LABEL, "label"),
             (VALUE, "value"),
+            (STEPS, "steps"),
         ];
         for (role, name) in names {
             roles.insert(role, QByteArray::from(name));
@@ -307,6 +357,7 @@ impl qobject::ThemesModel {
         self.as_mut().begin_reset_model();
         self.as_mut().rust_mut().rows = listing.rows;
         self.as_mut().rust_mut().store = listing.store;
+        self.as_mut().rust_mut().esde = listing.esde;
         self.as_mut().end_reset_model();
         self.as_mut().refocus();
         let (chosen, words) = (QString::from(listing.chosen.as_str()), QString::from(listing.words.as_str()));
@@ -350,24 +401,67 @@ impl qobject::ThemesModel {
     pub fn use_theme(mut self: Pin<&mut Self>, id: &QString) {
         let id = id.to_string();
         let Some(at) = self.find(&id).filter(|&at| self.rows[at].usable()) else { return };
-        let stored = Platform::load(self.platform_library.to_string()).map_err(|e| e.to_string()).and_then(|p| store_app_setting(&p, SETTING, Value::String(id.clone())));
-        if let Err(words) = stored {
-            self.as_mut().rust_mut().words = QString::from(format!("The theme could not be stored: {words}").as_str());
-            self.as_mut().words_changed();
-            return;
+        let kind = self.rows[at].kind;
+        let folder = if id == REFERENCE { None } else { self.folder_of(&self.rows[at]) };
+        let root = folder.as_deref().map(emusen_esde::check::theme_root);
+        let saved = Platform::load(self.platform_library.to_string()).map_err(|e| e.to_string()).and_then(|p| {
+            change_app_settings(&p, |settings| match (kind, &root) {
+                (Kind::Esde, Some(root)) => themes::choose_esde(settings, root),
+                _ => themes::choose_own(settings, &id),
+            })
+        });
+        let settings = match saved {
+            Ok(settings) => settings,
+            Err(words) => return self.say(format!("The theme could not be stored: {words}")),
+        };
+        self.as_mut().begin_reset_model();
+        let store = self.store.clone();
+        let esde = themes::mark(&mut self.as_mut().rust_mut().rows, &settings, store.as_deref());
+        self.as_mut().rust_mut().esde = esde;
+        self.as_mut().end_reset_model();
+        let focused = self.shown().iter().position(|&i| i == Item::Theme(at)).unwrap_or(0) as i32;
+        self.as_mut().set_focused(focused);
+        let chosen = QString::from(themes::chosen_of(&settings).as_str());
+        if self.chosen != chosen {
+            self.as_mut().rust_mut().chosen = chosen;
+            self.as_mut().chosen_changed();
         }
-        let folder = if id == REFERENCE { String::new() } else { self.folder_of(&self.rows[at]).map(|f| f.to_string_lossy().into_owned()).unwrap_or_default() };
-        for (i, row) in self.as_mut().rust_mut().rows.iter_mut().enumerate() {
-            row.current = i == at;
+        self.as_mut().say(String::new());
+        self.as_mut().detail();
+        if kind == Kind::EmuSen {
+            let folder = folder.map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+            self.as_mut().used(QString::from(folder.as_str()));
         }
-        self.as_mut().rust_mut().chosen = QString::from(id.as_str());
-        self.as_mut().chosen_changed();
-        if !self.words.is_empty() {
-            self.as_mut().rust_mut().words = QString::default();
-            self.as_mut().words_changed();
+        self.restyled(kind == Kind::Esde);
+    }
+
+    pub fn step(mut self: Pin<&mut Self>, row: i32, by: i32) {
+        let Some(Item::Choice(c)) = self.shown().get(row.max(0) as usize).copied() else { return };
+        let Some(esde) = self.esde.as_ref() else { return };
+        let (root, mut choice) = (esde.root.clone(), esde.choices[c].clone());
+        let value = choice.step(by).to_owned();
+        let saved = Platform::load(self.platform_library.to_string())
+            .map_err(|e| e.to_string())
+            .and_then(|p| change_app_settings(&p, |settings| themes::store_choice(settings, &root, choice.key, &value)));
+        if let Err(words) = saved {
+            return self.say(format!("The choice could not be stored: {words}"));
         }
-        self.as_mut().rows_changed();
-        self.used(QString::from(folder.as_str()));
+        if let Some(esde) = self.as_mut().rust_mut().esde.as_mut() {
+            esde.choices[c] = choice;
+        }
+        let index = self.index(row, 0, &QModelIndex::default());
+        self.as_mut().data_changed(&index, &index, &QVector::<i32>::default());
+        self.as_mut().detail();
+        self.restyled(true);
+    }
+
+    /// The tab's words: why something could not be done, or none.
+    fn say(mut self: Pin<&mut Self>, words: String) {
+        let words = QString::from(words.as_str());
+        if self.words != words {
+            self.as_mut().rust_mut().words = words;
+            self.words_changed();
+        }
     }
 
     pub fn check(mut self: Pin<&mut Self>, id: &QString) {
@@ -392,9 +486,10 @@ impl qobject::ThemesModel {
         self.rows_changed();
     }
 
-    /// The focused row's id.
+    /// The focused row's theme's id.
     fn focused_id(&self) -> Option<QString> {
-        self.shown().get(self.focused.max(0) as usize).map(|r| QString::from(r.id.as_str()))
+        let item = self.shown().get(self.focused.max(0) as usize).copied()?;
+        self.theme_at(item).map(|r| QString::from(r.id.as_str()))
     }
 
     pub fn act(self: Pin<&mut Self>, key: &QString) {
@@ -404,6 +499,10 @@ impl qobject::ThemesModel {
     }
 
     pub fn accept(self: Pin<&mut Self>) {
+        let focused = self.focused;
+        if let Some(Item::Choice(_)) = self.shown().get(focused.max(0) as usize) {
+            return self.step(focused, 1);
+        }
         if let Some(id) = self.focused_id() {
             self.use_theme(&id);
         }
@@ -411,12 +510,17 @@ impl qobject::ThemesModel {
 
     /// The focused row's detail and help bar.
     fn detail(mut self: Pin<&mut Self>) {
-        let row = self.shown().get(self.focused.max(0) as usize).map(|r| (*r).clone());
+        let item = self.shown().get(self.focused.max(0) as usize).copied();
+        let row = item.and_then(|i| self.theme_at(i)).cloned();
         let (name, line, preview, findings, usable) = match &row {
             Some(r) => (r.name.clone(), r.line(), r.preview.clone(), r.findings(), r.usable()),
             None => Default::default(),
         };
-        let help = shown_screen(if usable { Screen::Themes } else { Screen::ThemesChecked });
+        let help = shown_screen(match item {
+            Some(Item::Choice(_)) => Screen::ThemesChoice,
+            _ if usable => Screen::Themes,
+            _ => Screen::ThemesChecked,
+        });
         let (name, line, preview, findings) = (QString::from(name.as_str()), QString::from(line.as_str()), QString::from(preview.as_str()), QString::from(findings.as_str()));
         if self.name != name {
             self.as_mut().rust_mut().name = name;

@@ -1893,7 +1893,7 @@ motion, since the host gives a splash no `still` of its own yet.
 two kinds, "EmuSen" and "ES-DE", which the shoulders step as the frame's sections; the content is the themes of the kind
 listed in a `MenuPanel`, each row its name and its state ("In use", "Checking…", "Checked", "N findings"); the detail,
 beside, is the focused theme's first preview, its name, a line (author, `EmuSen.Theme` version, variants; for ES-DE, its
-variants) and its check's words; the actions are the help bar's: **A Use**, offered only on an EmuSen package whose last
+variants) and its check's words; the actions are the help bar's: **A Use**, offered only on a theme whose last
 check was clean and that is not in use (the bar then reads `ThemesChecked`, without Use), **X Check**, LB RB the kind,
 B back to Home, Start Home. Until Settings was built it was reached from Home's Settings place and from the Home
 card's Settings row (decided 2026-11-08). Since stage 5 piece D (§7.7) it is a page of Settings: Library ▸ Themes opens
@@ -1901,9 +1901,9 @@ it, B goes back to Settings and Start goes Home.
 
 **The model.** `emusen-qt-models` holds it in two files, one job each: `themes.rs`, plain data with no Qt (the rows, the
 id's resolution, the check), and `themes_model.rs`, `ThemesModel`, its bridge (the rows of the kind listed as roles `id`,
-`name`, `kind`, `author`, `api`, `variants`, `preview`, `current`, `checked`, `usable`, and `label`/`value` for the
-panel's rows; the focused row's detail as properties; `use(id)`, `check(id)`, `accept()`, `act(key)`; the signal
-`used(folder)`). It reads the settings and the store only while the tab is `open`, each time it opens, off the GUI
+`name`, `kind`, `author`, `api`, `variants`, `preview`, `current`, `checked`, `usable`, `steps`, and `label`/`value` for
+the panel's rows; the focused row's detail as properties; `use(id)`, `check(id)`, `step(row, by)`, `accept()`,
+`act(key)`; the signals `used(folder)` and `restyled(esde)`). It reads the settings and the store only while the tab is `open`, each time it opens, off the GUI
 thread; a check also runs off it and comes back through `qt_thread().queue`. A check is kept on its row while the
 program runs; it is not written anywhere.
 
@@ -1929,8 +1929,20 @@ notice raised once the splash has faded. `--theme` and `EMUSEN_THEME` still name
 findings read `dawn/screens/Home.qml:3 literal …`; the loaded step's program is found as `theme-check` finds it
 (`EMUSEN_THEME_AUDIT`, `PATH`), else beside the running program; without it the check cannot be clean, and its words are
 the finding. An ES-DE theme runs `esde-check`'s measure over EmuSen's five systems: clean when it is themed for every one
-and says no error. **An ES-DE theme is listed and checked, but Use is not offered** for it: the program does not draw
-ES-DE themes through the tab yet (stage 4's hosting piece); a stored id naming one falls back to the reference with words.
+and says no error. A stored `EmuSenTheme` id naming an ES-DE folder falls back to the reference with words.
+
+**An ES-DE theme chosen** (built 2026-11-12). Use on an ES-DE row stores `LibraryStyle` "Theme" and `BigPictureTheme`,
+the theme's root folder (`themes::choose_esde`); Use on an EmuSen row stores its id and `LibraryStyle` "Mistress"
+(`themes::choose_own`), keeping the ES-DE folder and its choices for a return. While an ES-DE theme of the store draws the
+library it is the row in use and no EmuSen row is. Under it the tab lists every choice its `capabilities.xml` declares
+(`themes::choices_of`): Variant (the selectable ones), Colour scheme, Font size, Language, Aspect ratio (with
+"automatic") and Transitions ("automatic", the theme's selectable profiles, the built-ins it does not suppress), each a
+kit `MenuRow` that steps; A, Left and Right step it round (help bar `ThemesChoice`), and it is stored at once under
+`BigPicture[<theme folder>]` by the key `esde-qt`'s `shelves::settings` reads. A row shows the theme's English label,
+else the value's own name. Each store raises `restyled(esde)`; `Main.qml` lets go of the start's ES-DE choice when another
+look is stored and calls `LibraryModel.restyle()`, which re-reads the settings off the GUI thread: while a theme stays the
+look only the view's settings text changes, and `EsdeModel` reloads on it; a change of look is a refresh. Nothing waits
+for a restart. `qt-app/tests/themes_esde.rs` holds it with the pad.
 
 **Switching.** `used(folder)` sets the window's `theme`: an EmuSen package's folder, or empty for the reference. The
 chosen theme's host is a `Loader` whose item is made only while the theme is neither empty nor the reference's folder,

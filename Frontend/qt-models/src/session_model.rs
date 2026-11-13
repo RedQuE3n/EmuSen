@@ -91,6 +91,8 @@ pub mod qobject {
         #[qproperty(QString, notice, READ, NOTIFY)]
         // The session's frame as its service reads it, asked when read: for a test to count frames run and gone back.
         #[qproperty(u64, frame, READ = frame_now)]
+        // Stereo frames of the game's sound its player has taken in, asked when read: for a test to see sound reach the player.
+        #[qproperty(u64, sounded, READ = sounded_now)]
         /// Whether that notice says something was not done.
         #[qproperty(bool, notice_attention, cxx_name = "noticeAttention", READ, NOTIFY)]
         /// Whether the Resume question is waiting for an answer, the game held unplayed (EmuSen_Interface.md §18.3).
@@ -266,6 +268,9 @@ pub mod qobject {
 
         #[rust_name = "frame_now"]
         fn frameNow(self: &SessionModel) -> u64;
+
+        #[rust_name = "sounded_now"]
+        fn soundedNow(self: &SessionModel) -> u64;
 
         /// The Exit to Library hotkey over the library with a game suspended: back to the game, as Mistress's
         /// `ToggleLibrary` returns to it.
@@ -1071,6 +1076,10 @@ impl qobject::SessionModel {
             }
             KeyUse::Nothing => false,
         }
+    }
+
+    fn sounded_now(&self) -> u64 {
+        self.session.as_ref().map_or(0, Session::sounded)
     }
 
     fn frame_now(&self) -> u64 {

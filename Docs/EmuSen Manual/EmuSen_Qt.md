@@ -7222,6 +7222,44 @@ each crate's dependency tree against §2's table; the fit audit, pad reach, poin
 sizes on every recorded state; `theme-check`
 on the themes in the repository; the esde corpus TSV diff (§4.4).
 
+### 8.5 Every Rust core plays a game in the program (2026-11-13)
+
+`cargo test --release -p emusen-qt --test cores_play`, a GPU job, takes its rows from the base: each core of
+`xtask/libraries.tsv` with role `core` and ABI 1, built from the commit with its sidecar, and each system the sidecar
+offers; and one more row for the libretro test core, hosted as the PlayStation's. For each row it starts a test image
+from All Games with the pad and holds the program to: the first picture; frames running and the picture drawn; sound
+taken in by the player (the session's `sounded`, the player's own count of frames taken); South held reaching the
+core; the chord's Pause Card holding the game still and Resume playing on; a state saved and loaded from the card; and
+Quit Game back to the library. It prints one line per row and fails on any row that failed.
+
+The images are the client fixture's (`play.rs`), each made by the test with no commercial or firmware image: a small
+program for the console's processor that reads the pad as the console's own games read it and fills the screen blue,
+or white while a button is held, so the picture shows the pad reaching the core. The Sega CD's is a disc whose initial
+program is that of the Genesis cartridge, booted by Nephrite's open BIOS; the PlayStation's a PS-EXE that reads the pad
+over SIO0 without calling the kernel; the Nintendo 64's is boot code that also keeps its audio interface fed with
+silence, since the console makes no samples unless a game plays some. The pad is pressed ten seconds into a game,
+after the Sega CD's disc has booted. The hosted row's game is a disc image the test core takes; the PlayStation's Engine
+setting names the test core, stored under the console's name as its settings page stores it, just before that row.
+
+Measured on 2026-11-13 on the RX 6800:
+
+| Console | Core | Firmware the core declares | Test image | Result |
+|---|---|---|---|---|
+| PlayStation | Diamond | BIOS optional; its open kernel in its place | PS-EXE | passed |
+| Master System | Endou | BIOS optional; open boot in its place | 32 KiB cartridge | passed |
+| SG-1000 | Endou | none | 16 KiB cartridge | passed |
+| Game Gear | Endou | boot ROM optional | none | not offered: the sidecar marks the system in development, and the systems table has no Game Gear |
+| Nintendo 64 | MarsRT | none | 1 MiB cartridge | passed |
+| Game Boy | MercuryRT | none | 32 KiB cartridge | passed |
+| Game Boy Color | MercuryRT | none | 32 KiB cartridge, Color flag | passed |
+| NES | MoonRT | none | NROM cartridge | passed |
+| Genesis | Nephrite | TMSS optional; none in its place, not needed | 128 KiB cartridge | passed |
+| Sega CD | Nephrite | BIOS optional; Nephrite's open BIOS in its place | disc of 40 sectors | passed |
+| 32X | Nephrite | boot ROMs, no replacement | none | not offered: the sidecar marks the system in development, and no 32X game runs yet |
+| PlayStation 2 | Sapphire | BIOS; nothing runs in its place | none | not shown: Sapphire runs nothing without a PlayStation 2 BIOS, and the tree holds none |
+| SNES | VenusRT | the sound chip's start-up and seven cartridge chips, all optional | 128 KiB LoROM | passed |
+| PlayStation | the libretro test core, hosted | none | its own `TCG1` image as `.iso` | passed |
+
 ---
 
 ## 9. Packaging and the handheld

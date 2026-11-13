@@ -23,12 +23,12 @@ pub fn painted_pixel(serial: u64, x: u32, y: u32) -> [u8; 4] {
     [(u64::from(x) + serial) as u8, (y * 2 + lives * 40) as u8, (x >> 3) as u8, 0xFF]
 }
 
-fn cores_dir() -> PathBuf {
+pub(crate) fn cores_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../EmuSen/Cores")
 }
 
 /// `cargo build --release <args>` in a crate under `EmuSen/Cores`, into `EmuSen/obj/<target>`; that directory's `release`.
-fn build(krate: &str, target: &str, args: &[&str]) -> PathBuf {
+pub(crate) fn build(krate: &str, target: &str, args: &[&str]) -> PathBuf {
     let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../EmuSen/obj").join(target);
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
     let status = Command::new(cargo)
@@ -88,6 +88,12 @@ pub fn installation(dir: &Path) -> PathBuf {
 /// The libretro test core's entry under the player's `cores`, laid out as the Cores window lays one (`libretro/<stem>`:
 /// the proxy, the libretro host, the core and its information file); the core's library, whose hash the runtime approves.
 pub fn libretro_entry(cores: &Path) -> PathBuf {
+    libretro_entry_as(cores, "")
+}
+
+/// As `libretro_entry`, its information file naming `systemid`, so the runtime places the test core under the console
+/// whose systems table entry lists that libretro system id (`emusen_systems::for_libretro`).
+pub fn libretro_entry_as(cores: &Path, systemid: &str) -> PathBuf {
     let parts = hosted();
     let folder = cores.join("libretro").join("testcore");
     std::fs::create_dir_all(&folder).unwrap();
@@ -95,7 +101,7 @@ pub fn libretro_entry(cores: &Path) -> PathBuf {
     std::fs::copy(&parts.host, folder.join("emusen-libretro-host.so")).unwrap();
     let core = folder.join("testcore_libretro.so");
     std::fs::copy(&parts.core, &core).unwrap();
-    let info = "display_name = \"EmuSen - Test Core\"\ncorename = \"TestCore\"\nlicense = \"GPLv3\"\nsystemid = \"\"\n";
+    let info = format!("display_name = \"EmuSen - Test Core\"\ncorename = \"TestCore\"\nlicense = \"GPLv3\"\nsystemid = \"{systemid}\"\n");
     std::fs::write(folder.join("testcore_libretro.info"), info).unwrap();
     core
 }

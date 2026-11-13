@@ -76,6 +76,10 @@ struct Shared {
     through: Mutex<Option<Through>>,
     /// The folder built-in filters' presets are written under.
     presets: PathBuf,
+    /// Parameter values asked for over the chain's own, set by the next draw without building it again.
+    live: Mutex<Vec<(String, f32)>>,
+    /// The parameters the chain drawn last declares, by id, for a lever to know whether it is set live.
+    declared: Mutex<Vec<String>>,
 }
 
 /// A preset document and the uniforms the chain is given over the preset's values.
@@ -90,6 +94,8 @@ struct Render {
     device: Arc<Device>,
     through: Through,
     chain: Option<Chain>,
+    /// The chain's parameters and the values it was last given, in its order.
+    values: Vec<(String, f32)>,
     current: Frame,
     advanced: bool,
     /// Whether `current` came since it was last advanced into a chain, so a chain built again over it counts no new frame.
@@ -129,11 +135,14 @@ impl PictureFeed {
             drawing: Mutex::new(()),
             through: Mutex::new(None),
             presets,
+            live: Mutex::default(),
+            declared: Mutex::default(),
         });
         let render = Render {
             device,
             through: Through { preset, uniforms: Vec::new() },
             chain: None,
+            values: Vec::new(),
             current: Frame::default(),
             advanced: false,
             fresh: false,
@@ -254,6 +263,23 @@ impl Handoff {
         *locked(&self.shared.through) = Some(Through { preset, uniforms });
     }
 
+    /// A parameter of the chain drawn set to `value` from the next draw, with no chain built again: false, and nothing
+    /// asked, when the chain declares no parameter `id` (EmuSen_Qt.md §1.8.10).
+    pub fn set_value(&self, id: &str, value: f32) -> bool {
+        if !locked(&self.shared.declared).iter().any(|d| d == id) {
+            return false;
+        }
+        let mut live = locked(&self.shared.live);
+        live.retain(|(d, _)| d != id);
+        live.push((id.to_owned(), value));
+        true
+    }
+
+    /// The parameters the chain drawn last declares, by id.
+    pub fn declared(&self) -> Vec<String> {
+        locked(&self.shared.declared).clone()
+    }
+
     /// The folder the filters' presets are written under.
     pub fn presets(&self) -> &Path {
         &self.shared.presets
@@ -296,7 +322,12 @@ extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Pict
     }
     if render.chain.is_none() {
         match build(&render.device, &render.through) {
-            Ok(chain) => render.chain = Some(chain),
+            Ok((chain, values)) => {
+                *locked(&context.shared.declared) = values.iter().map(|(id, _)| id.clone()).collect();
+                locked(&context.shared.live).clear();
+                render.chain = Some(chain);
+                render.values = values;
+            }
             Err(e) => {
                 render.problem = Some(e.to_string());
                 return -1;
@@ -304,6 +335,18 @@ extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Pict
         }
     }
     let Some(chain) = render.chain.as_mut() else { return -1 };
+    let live = std::mem::take(&mut *locked(&context.shared.live));
+    if !live.is_empty() {
+        for (id, value) in live {
+            if let Some(held) = render.values.iter_mut().find(|(d, _)| *d == id) {
+                held.1 = value;
+            }
+        }
+        let values: Vec<f32> = render.values.iter().map(|(_, v)| *v).collect();
+        if let Err(e) = chain.set_parameters(&values) {
+            render.problem = Some(e.to_string());
+        }
+    }
     if !render.advanced {
         if let Err(e) = advance(chain, &render.current) {
             // A picture that would not advance is not tried again, so no later draw reads a lend or ring it named.
@@ -328,22 +371,21 @@ extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Pict
     show(chain, width, height, out, &mut render.problem)
 }
 
-/// The chain for a preset, its uniforms set over the preset's values where its passes declare them.
-fn build(device: &Arc<Device>, through: &Through) -> emusen_platform_client::Result<Chain> {
+/// The chain for a preset, its uniforms set over the preset's values where its passes declare them, and the values
+/// it was given.
+fn build(device: &Arc<Device>, through: &Through) -> emusen_platform_client::Result<(Chain, Vec<(String, f32)>)> {
     let mut chain = Chain::new(device, &through.preset)?;
-    if !through.uniforms.is_empty() {
-        let mut parameters = chain.parameters()?;
-        if parameters.iter().any(|(id, _)| through.uniforms.iter().any(|(u, _)| u == id)) {
-            for (id, value) in &mut parameters {
-                if let Some((_, given)) = through.uniforms.iter().find(|(u, _)| u == id) {
-                    *value = *given;
-                }
+    let mut parameters = chain.parameters()?;
+    if parameters.iter().any(|(id, _)| through.uniforms.iter().any(|(u, _)| u == id)) {
+        for (id, value) in &mut parameters {
+            if let Some((_, given)) = through.uniforms.iter().find(|(u, _)| u == id) {
+                *value = *given;
             }
-            let values: Vec<f32> = parameters.into_iter().map(|(_, v)| v).collect();
-            chain.set_parameters(&values)?;
         }
+        let values: Vec<f32> = parameters.iter().map(|(_, v)| *v).collect();
+        chain.set_parameters(&values)?;
     }
-    Ok(chain)
+    Ok((chain, parameters))
 }
 
 /// Every pass drawn for a view of `width` by `height`, the picture handed to GamePicture.

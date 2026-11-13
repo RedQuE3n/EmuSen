@@ -145,7 +145,7 @@ impl SettingsView {
         self.running_console().filter(|r| consoles.contains(r)).or_else(|| consoles.first().cloned())
     }
 
-    fn console_name(&self, console: &str) -> String {
+    pub(crate) fn console_name(&self, console: &str) -> String {
         self.read.consoles.console(console).map_or_else(|| console.to_owned(), |c| c.name.clone())
     }
 

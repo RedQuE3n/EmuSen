@@ -35,6 +35,15 @@ pub trait SettingsSource {
     fn outputs(&self) -> Vec<String>;
     /// EmuSen's own folders a row may open, by Galaxia's names for them (`firmware`).
     fn folders(&self) -> std::collections::BTreeMap<String, String>;
+    /// The shader pack's presets, by their paths in its folder (Galaxia's `DIR_SHADERS`).
+    fn pack(&self) -> Vec<String> {
+        Vec::new()
+    }
+    /// The parameters a pack preset's passes declare, merged, the preset's own values as their initial ones, each as
+    /// Serenity's readers give a parameter.
+    fn preset_parameters(&self, _path: &str) -> Result<Vec<Value>, String> {
+        Ok(Vec::new())
+    }
 }
 
 /// One read of everything the screen shows.
@@ -50,19 +59,31 @@ pub struct Read {
     pub consoles: ConsoleRead,
     /// Endymion's four binding models (EmuSen_Qt.md §7.7.H).
     pub bindings: crate::bindings::Bindings,
+    /// The shader pack's presets, by their paths in its folder.
+    pub pack: Vec<String>,
+    /// The parameters of each pack preset a console draws with, by the value its `ScreenFilter` holds, or why they
+    /// could not be read.
+    pub levers: std::collections::BTreeMap<String, Result<Vec<Value>, String>>,
 }
 
 /// Reads the source once; a model with no file yet reads as null, and its keys show their defaults.
 pub fn read(source: &dyn SettingsSource) -> Result<Read, String> {
+    let graphics = source.load(Model::Graphics)?;
+    let levers = crate::settings_shaders::chosen_presets(&graphics).into_iter().map(|stored| {
+        let read = source.preset_parameters(crate::display::pack_preset(&stored).unwrap_or_default());
+        (stored, read)
+    });
     Ok(Read {
         rows: source.rows()?,
         app: source.load(Model::App)?,
-        graphics: source.load(Model::Graphics)?,
+        levers: levers.collect(),
+        graphics,
         catalogue: source.catalogue()?,
         outputs: source.outputs(),
         folders: source.folders(),
         consoles: ConsoleRead::default(),
         bindings: crate::bindings::Bindings::default(),
+        pack: source.pack(),
     })
 }
 
@@ -145,6 +166,8 @@ pub enum Outcome {
     Type { title: String, prompt: String, start: String, typed: crate::settings_controllers::Typed },
     /// Nothing done, and the words of what failed, said as the program's other failures are (EmuSen_Qt.md §7.9).
     Failed(String),
+    /// A lever of a console's shader moved, already saved: the picture of a game of that console follows it at once.
+    Lever { console: String, id: String, value: f32 },
 }
 
 /// A page open under a section.
@@ -172,12 +195,19 @@ pub enum Page {
     Profile(String, String),
     Hotkeys,
     Bindings,
+    /// The consoles, each opening its Shaders page or, with `levers`, its Shader levers page.
+    ShaderConsoles { levers: bool },
+    /// A console's shaders as a page of choices: the recent ones, the built-in filters and the pack's presets.
+    Shaders(String),
+    /// A console's shader's levers, each a slider or a row of its named values.
+    Levers(String),
 }
 
 impl Page {
     fn console(&self) -> Option<&str> {
         match self {
-            Page::Group(_) | Page::Players | Page::Profiles | Page::Profile(..) | Page::Hotkeys | Page::Bindings => None,
+            Page::Group(_) | Page::Players | Page::Profiles | Page::Profile(..) | Page::Hotkeys | Page::Bindings | Page::ShaderConsoles { .. } => None,
+            Page::Shaders(c) | Page::Levers(c) => Some(c),
             Page::Console(c) | Page::Engine(c) | Page::Firmware(c) | Page::Cards(c) | Page::Drawer(c, _) => Some(c),
             Page::Saves(c, _) | Page::Save(c, _, _) | Page::Delete(c, _, _) => Some(c),
         }
@@ -222,7 +252,7 @@ impl Default for SettingsView {
 }
 
 /// A stored value as text: a string as it is, a number by its value, a switch as `true` or `false`.
-fn text_of(value: &Value) -> String {
+pub(crate) fn text_of(value: &Value) -> String {
     match value {
         Value::String(s) => s.clone(),
         Value::Bool(b) => b.to_string(),
@@ -258,11 +288,11 @@ fn document_of<'a>(model: &str, app: &'a Value, graphics: &'a Value) -> &'a Valu
     if model.starts_with("GraphicsConfig") { graphics } else { app }
 }
 
-fn at<'a>(document: &'a Value, key: &str) -> Option<&'a Value> {
+pub(crate) fn at<'a>(document: &'a Value, key: &str) -> Option<&'a Value> {
     key.split('.').try_fold(document, |v, part| v.get(part))
 }
 
-fn set_at(document: &mut Value, key: &str, value: Value) {
+pub(crate) fn set_at(document: &mut Value, key: &str, value: Value) {
     let mut here = document;
     let parts: Vec<&str> = key.split('.').collect();
     for part in &parts[..parts.len() - 1] {
@@ -293,7 +323,7 @@ fn strings(value: &Value) -> Vec<String> {
 }
 
 /// A step through `n` values from `at` by `by`, round from either end.
-fn wrapped(at: usize, by: i32, n: usize) -> usize {
+pub(crate) fn wrapped(at: usize, by: i32, n: usize) -> usize {
     (at as i64 + i64::from(by)).rem_euclid(n as i64) as usize
 }
 
@@ -333,7 +363,7 @@ impl SettingsView {
         path.iter().fold(&self.description, |v, k| &v[*k])
     }
 
-    fn word(&self, name: &str) -> String {
+    pub(crate) fn word(&self, name: &str) -> String {
         self.description["words"][name].as_str().unwrap_or_default().to_owned()
     }
 
@@ -360,7 +390,7 @@ impl SettingsView {
         match self.page() {
             None => Screen::Settings,
             Some(Page::Console(_)) if self.pages.len() == 1 => Screen::SettingsConsole,
-            Some(Page::Engine(_)) => Screen::SettingsChoices,
+            Some(Page::Engine(_) | Page::Shaders(_)) => Screen::SettingsChoices,
             Some(_) => Screen::SettingsPage,
         }
     }
@@ -412,8 +442,11 @@ impl SettingsView {
     }
 
     /// The rows shown: the section's from the description, or a page's: a group's every row of Galaxia's, or a console's.
-    fn entries(&self) -> Vec<Value> {
+    pub(crate) fn entries(&self) -> Vec<Value> {
         if let Some(rows) = self.page().and_then(|p| self.controller_entries(p)) {
+            return rows;
+        }
+        if let Some(rows) = self.page().and_then(|p| self.shaders_entries(p)) {
             return rows;
         }
         match self.page() {
@@ -441,7 +474,7 @@ impl SettingsView {
         self.page().and_then(Page::console).and_then(|c| self.read.consoles.console(c))
     }
 
-    fn console_word(&self, name: &str) -> String {
+    pub(crate) fn console_word(&self, name: &str) -> String {
         self.description["consoles"]["words"][name].as_str().unwrap_or_default().to_owned()
     }
 
@@ -531,7 +564,7 @@ impl SettingsView {
 
     /// The consoles a row is set for: every console Serenity has a screen for, those whose screen is a television, or
     /// the console whose page is open.
-    fn consoles(&self, which: &str) -> Vec<String> {
+    pub(crate) fn consoles(&self, which: &str) -> Vec<String> {
         if which == "this" {
             return self.page().and_then(Page::console).map(|c| vec![c.to_owned()]).unwrap_or_default();
         }
@@ -606,12 +639,12 @@ impl SettingsView {
         self.filter_keyed(&entry["filter"])
     }
 
-    fn filter_keyed(&self, key: &Value) -> Option<&Value> {
+    pub(crate) fn filter_keyed(&self, key: &Value) -> Option<&Value> {
         self.read.catalogue["filters"].as_array()?.iter().find(|f| f["key"] == *key)
     }
 
     /// The word a console's `ScreenFilter` holds for a filter of the catalogue: the filter's name there.
-    fn filter_name(&self, key: &Value) -> String {
+    pub(crate) fn filter_name(&self, key: &Value) -> String {
         self.filter_keyed(key).map_or_else(|| text_of(key), |f| text_of(&f["name"]))
     }
 
@@ -628,7 +661,7 @@ impl SettingsView {
             .filter(entry)
             .and_then(|f| f["settings"].as_array()?.iter().find(|s| s["id"] == entry["setting"]))
             .and_then(|s| s["initial"].as_u64())
-            .map_or(0.0, f64::from_bits);
+            .map_or(0.0, |b| f64::from(f32::from_bits(b as u32)));
         let chosen = at(&self.read.graphics, &format!("Consoles.{c}.ScreenFilter")).map(text_of).unwrap_or_default();
         if chosen != name {
             return 0;
@@ -699,6 +732,9 @@ impl SettingsView {
 
     fn row(&self, entry: &Value) -> Row {
         if let Some(row) = self.controller_row(entry) {
+            return row;
+        }
+        if let Some(row) = self.shaders_row(entry) {
             return row;
         }
         if let Some(row) = self.console_row(entry) {
@@ -799,7 +835,7 @@ impl SettingsView {
 
     /// The filters a console's screen may be drawn with (those of every console, and those naming it) and the one
     /// chosen, by name: the console's `ScreenFilter`, else the plain picture's.
-    fn screen_filters(&self, console: &str) -> Vec<String> {
+    pub(crate) fn screen_filters(&self, console: &str) -> Vec<String> {
         let filters = self.read.catalogue["filters"].as_array().cloned().unwrap_or_default();
         filters
             .iter()
@@ -820,6 +856,9 @@ impl SettingsView {
     pub fn pane(&self, index: usize) -> Pane {
         let entry = self.entries().get(index).cloned();
         if let Some(pane) = self.controller_pane(entry.as_ref()) {
+            return pane;
+        }
+        if let Some(pane) = entry.as_ref().and_then(|e| self.shaders_pane(e)) {
             return pane;
         }
         let Some(entry) = entry else { return Pane::default() };
@@ -864,7 +903,7 @@ impl SettingsView {
     }
 
     /// A line's names filled: `{value}` the row's words, a fact by its name, and `{Model Key}` a key's words.
-    fn fill(&self, line: &str, value: &str) -> String {
+    pub(crate) fn fill(&self, line: &str, value: &str) -> String {
         let mut out = String::new();
         let mut rest = line;
         while let Some(open) = rest.find('{') {
@@ -888,6 +927,9 @@ impl SettingsView {
     pub fn step(&mut self, index: usize, by: i32) -> Outcome {
         let Some(entry) = self.entries().get(index).cloned() else { return Outcome::Nothing };
         if let Some(outcome) = self.controller_step(&entry, by) {
+            return outcome;
+        }
+        if let Some(outcome) = self.shaders_step(&entry, by) {
             return outcome;
         }
         if let Some(outcome) = self.console_step(&entry, by) {
@@ -953,6 +995,9 @@ impl SettingsView {
     pub fn choose(&mut self, index: usize) -> Outcome {
         let Some(entry) = self.entries().get(index).cloned() else { return Outcome::Nothing };
         if let Some(outcome) = self.controller_choose(&entry, index) {
+            return outcome;
+        }
+        if let Some(outcome) = self.shaders_choose(&entry, index) {
             return outcome;
         }
         if let Some(outcome) = self.console_choose(&entry, index) {

@@ -64,6 +64,14 @@ fn flat_blocks(scene: &mut Scene<'_>) -> Vec<bool> {
     colours.chunks(3).map(|c| c.iter().all(|p| p.is_some() && *p == c[0])).collect()
 }
 
+/// The mean of red, green and blue over the shown rectangle's middle, as a grab reads it.
+fn brightness(scene: &mut Scene<'_>) -> f64 {
+    let (x, y, w, h) = place(scene, "shown");
+    let points: Vec<(f64, f64)> = (1..8).flat_map(|i| (1..4).map(move |j| (x + w * f64::from(i) / 8.0, y + h * f64::from(j) / 4.0))).collect();
+    let seen: Vec<_> = scene.colours_at(&points).into_iter().flatten().collect();
+    seen.iter().map(|c| f64::from(c.r) + f64::from(c.g) + f64::from(c.b)).sum::<f64>() / (3.0 * seen.len().max(1) as f64)
+}
+
 fn near(a: f64, b: f64) -> bool {
     (a - b).abs() <= 1.0
 }
@@ -119,6 +127,21 @@ fn the_picture_is_drawn_through_the_console_s_filter_crop_and_shape_as_the_setti
     assert_eq!(place(&mut scene, "picture"), (cx, cy, cw, ch), "the CRT crops itself; the window clips nothing");
     let crt = flat_blocks(&mut scene);
     assert!(crt.iter().all(|f| !*f), "through the CRT no pixel is a flat block: {crt:?}");
+
+    // A lever set on the running chain with no chain built again: the CRT's contrast down to its least, and the picture
+    // drawn darker from the next frames; a parameter the chain does not declare is refused.
+    let handoff = feed.handoff();
+    assert!(!handoff.set_value("no_such_parameter", 1.0), "an undeclared parameter is refused");
+    assert!(handoff.declared().iter().any(|d| d == "contrast"), "the CRT declares its contrast: {:?}", handoff.declared());
+    let before = brightness(&mut scene);
+    assert!(handoff.set_value("contrast", 0.5));
+    let shown = feed.counts().shown.load(Ordering::Relaxed);
+    chord(&mut scene, &sdl, &pad, false);
+    until(&mut scene, "pictures at the lower contrast", |_| feed.counts().shown.load(Ordering::Relaxed) > shown + 30);
+    chord(&mut scene, &sdl, &pad, true);
+    let after = brightness(&mut scene);
+    assert!(after < before * 0.9, "the lever darkened the picture at once: {before} then {after}");
+    assert_eq!(feed.problem(), None, "the values set on the chain drawn");
 
     // Plain again, a custom crop of 10% at the left and 20% at the right, and square pixels: 8 by 4 is 2:1, 70% of it 1.4:1.
     save_graphics(

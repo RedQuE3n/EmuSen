@@ -9,6 +9,15 @@ use std::collections::BTreeMap;
 /// The filter a console with none chosen, or one no longer offered for it, is drawn through: its pixels as they are.
 pub const PLAIN: &str = "effect.None.nearest";
 
+/// What a console's `ScreenFilter` holds before a preset of the shader pack, by its path in the pack's folder
+/// (Galaxia's `DIR_SHADERS`), in place of a built-in filter's name.
+pub const PACK_PREFIX: &str = "slang:";
+
+/// The preset of the shader pack a stored `ScreenFilter` names, by its path in the pack's folder; none for a built-in.
+pub fn pack_preset(stored: &str) -> Option<&str> {
+    stored.strip_prefix(PACK_PREFIX).filter(|p| !p.is_empty())
+}
+
 /// The filter uniforms a filter that crops itself reads its crop from (Serenity's `filters::write`).
 pub const CROP_UNIFORMS: [&str; 4] = ["emusen_crop_left", "emusen_crop_top", "emusen_crop_width", "emusen_crop_height"];
 
@@ -35,8 +44,10 @@ impl Crop {
 /// A console's picture as its settings ask for it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Display {
-    /// The catalogue key of the filter drawn through.
+    /// The catalogue key of the filter drawn through, or the stored value of a preset of the shader pack.
     pub filter: String,
+    /// The preset of the shader pack drawn through, by its path in the pack's folder; none for a built-in filter.
+    pub preset: Option<String>,
     /// The player's values for the filter's settings, by id.
     pub chosen: BTreeMap<String, f32>,
     /// What the overscan setting hides.
@@ -49,7 +60,7 @@ pub struct Display {
 
 impl Default for Display {
     fn default() -> Display {
-        Display { filter: PLAIN.to_owned(), chosen: BTreeMap::new(), crop: Crop::default(), filter_crops: false, square: false }
+        Display { filter: PLAIN.to_owned(), preset: None, chosen: BTreeMap::new(), crop: Crop::default(), filter_crops: false, square: false }
     }
 }
 
@@ -83,20 +94,35 @@ pub fn read(catalogue: &Value, graphics: &Value, console: &str) -> Display {
     let filters = catalogue["filters"].as_array().map(Vec::as_slice).unwrap_or_default();
     let suits = |f: &&Value| f["consoles"].as_array().is_none_or(|list| list.iter().any(|c| c == console));
     let stored = setting("ScreenFilter");
+    let held_for = |name: &str| graphics.get("ShaderParameters").and_then(|p| p.get(console)).and_then(|p| p.get(name)).cloned();
+    if let Some(preset) = pack_preset(&stored) {
+        let mut display = Display { filter: stored.clone(), preset: Some(preset.to_owned()), ..Display::default() };
+        for (id, value) in held_for(&stored).as_ref().and_then(Value::as_object).into_iter().flatten() {
+            if let Some(value) = number(&text(Some(value))) {
+                display.chosen.insert(id.clone(), value as f32);
+            }
+        }
+        return with_place(display, catalogue, &setting, console);
+    }
     let filter = filters.iter().filter(suits).find(|f| f["name"] == stored.as_str() || f["key"] == stored.as_str());
     let filter = filter.or_else(|| filters.iter().find(|f| f["key"] == PLAIN));
     let mut display = Display::default();
     if let Some(filter) = filter {
         display.filter = text(filter.get("key"));
         display.filter_crops = filter["crops_itself"] == true;
-        let held = graphics.get("ShaderParameters").and_then(|p| p.get(console)).and_then(|p| p.get(text(filter.get("name"))));
+        let held = held_for(&text(filter.get("name")));
         for s in filter["settings"].as_array().map(Vec::as_slice).unwrap_or_default() {
             let id = text(s.get("id"));
-            if let Some(value) = number(&text(held.and_then(|h| h.get(&id)))) {
+            if let Some(value) = number(&text(held.as_ref().and_then(|h| h.get(&id)))) {
                 display.chosen.insert(id, value as f32);
             }
         }
     }
+    with_place(display, catalogue, &setting, console)
+}
+
+/// The crop and the shape the console's settings ask for, on a display whose filter is read.
+fn with_place(mut display: Display, catalogue: &Value, setting: &dyn Fn(&str) -> String, console: &str) -> Display {
     let television = catalogue["screens"].as_array().is_some_and(|all| all.iter().any(|s| s["console"] == console && s["kind"] == "Television"));
     if television {
         let most = bits(&catalogue["crop"]["most_at_an_edge"]).unwrap_or(0.0);
@@ -123,8 +149,12 @@ impl Display {
         (!self.chosen.is_empty()).then(|| Value::Object(self.chosen.iter().map(|(id, v)| (id.clone(), json!(v.to_bits()))).collect()))
     }
 
-    /// The uniforms the chain is given over its preset's: the crop, for a filter that crops itself.
+    /// The uniforms the chain is given over its preset's: a pack preset's values chosen, or the crop, for a filter
+    /// that crops itself.
     pub fn uniforms(&self) -> Vec<(String, f32)> {
+        if self.preset.is_some() {
+            return self.chosen.iter().map(|(id, v)| (id.clone(), *v)).collect();
+        }
         if !self.filter_crops {
             return Vec::new();
         }
@@ -196,6 +226,21 @@ mod tests {
         let shown = d.shown(4.0 / 3.0, 2.0);
         assert_eq!(shown.clip, d.crop);
         assert!((shown.aspect - 2.0 * 0.65 / 0.975).abs() < 1e-12, "square pixels, narrowed by the crop: {}", shown.aspect);
+    }
+
+    #[test]
+    fn a_pack_preset_is_drawn_from_its_path_with_the_player_s_values_as_its_uniforms() {
+        let graphics = json!({
+            "Consoles": {"PlayStation": {"ScreenFilter": "slang:crt/glow.slangp", "Overscan": "tv"}},
+            "ShaderParameters": {"PlayStation": {"slang:crt/glow.slangp": {"glow": "0.25", "width": "3"}, "CRT": {"quality": "2"}}}
+        });
+        let d = read(&catalogue(), &graphics, "PlayStation");
+        assert_eq!((d.filter.as_str(), d.preset.as_deref()), ("slang:crt/glow.slangp", Some("crt/glow.slangp")));
+        assert_eq!(d.chosen_json(), Some(json!({"glow": 0.25f32.to_bits(), "width": 3.0f32.to_bits()})), "the preset's own values, not the CRT's");
+        assert_eq!(d.uniforms(), [("glow".to_owned(), 0.25), ("width".to_owned(), 3.0)]);
+        assert!(!d.filter_crops && d.crop.left > 0.0, "the window clips the overscan of a preset's picture");
+        assert_eq!(pack_preset("slang:"), None);
+        assert_eq!(pack_preset("CRT"), None);
     }
 
     #[test]

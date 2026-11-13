@@ -164,6 +164,15 @@ pub mod qobject {
         #[qinvokable]
         fn choose(self: Pin<&mut SettingsModel>, row: i32);
 
+        /// A slider row moved to `amount`, by the pad's walk or the pointer.
+        #[qinvokable]
+        fn slide(self: Pin<&mut SettingsModel>, row: i32, amount: f64);
+
+        /// A lever of the shader of `system` (a console by its stored name) moved to `value` and saved: a game of that
+        /// console draws with it at once.
+        #[qsignal]
+        fn lever(self: Pin<&mut SettingsModel>, system: QString, id: QString, value: f64);
+
         /// B: the page closed, or `left` raised on a section.
         #[qinvokable]
         fn back(self: Pin<&mut SettingsModel>);
@@ -516,6 +525,10 @@ const KIND: i32 = 3;
 const HELD: i32 = 4;
 const MARKED: i32 = 5;
 const KEY: i32 = 6;
+const MINIMUM: i32 = 7;
+const MAXIMUM: i32 = 8;
+const STEP: i32 = 9;
+const AMOUNT: i32 = 10;
 
 impl qobject::SettingsModel {
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
@@ -529,13 +542,17 @@ impl qobject::SettingsModel {
             HELD => QVariant::from(&row.held),
             MARKED => QVariant::from(&row.marked),
             KEY => text(&row.id),
+            MINIMUM..=AMOUNT => self.view.slider(index.row() as usize).map_or_else(QVariant::default, |s| QVariant::from(&s[(role - MINIMUM) as usize])),
             _ => QVariant::default(),
         }
     }
 
     pub fn role_names(&self) -> QHash<QHashPair_i32_QByteArray> {
         let mut roles = QHash::<QHashPair_i32_QByteArray>::default();
-        for (role, name) in [(LABEL, "label"), (VALUE, "value"), (SENTENCE, "sentence"), (KIND, "kind"), (HELD, "held"), (MARKED, "marked"), (KEY, "key")] {
+        for (role, name) in [(LABEL, "label"), (VALUE, "value"), (SENTENCE, "sentence"), (KIND, "kind"), (HELD, "held"), (MARKED, "marked"), (KEY, "key")]
+            .into_iter()
+            .chain([(MINIMUM, "minimum"), (MAXIMUM, "maximum"), (STEP, "step"), (AMOUNT, "amount")])
+        {
             roles.insert(role, QByteArray::from(name));
         }
         roles
@@ -603,6 +620,11 @@ impl qobject::SettingsModel {
 
     pub fn choose(mut self: Pin<&mut Self>, row: i32) {
         let outcome = self.as_mut().rust_mut().view.choose(row.max(0) as usize);
+        self.outcome(outcome);
+    }
+
+    pub fn slide(mut self: Pin<&mut Self>, row: i32, amount: f64) {
+        let outcome = self.as_mut().rust_mut().view.slide(row.max(0) as usize, amount);
         self.outcome(outcome);
     }
 
@@ -700,6 +722,7 @@ impl qobject::SettingsModel {
                 self.refresh();
             }
             Outcome::Reread => self.refresh(),
+            Outcome::Lever { console, id, value } => self.lever(QString::from(console.as_str()), QString::from(id.as_str()), f64::from(value)),
             Outcome::Failed(words) => {
                 self.as_mut().said(words);
                 self.shown(false);

@@ -2277,11 +2277,11 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_n
 | `drawn` | 347 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, measured 2026-11-08) |
 | `later:help-dimmed` | 8 | the help's eight `*Dimmed` properties (`posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`): not drawn until each is checked (R-20261111-75, decided 2026-11-11; the `accepted` state of 2026-11-08 is withdrawn) |
 | `later:sound` | 1 | `sound.path`, which the host plays: not drawn until checked (R-20261111-75) |
-| `later:video` | 16 | the video family |
+| `later:video` | 2 | the video's `scanlines` and `audio`; the other fourteen of the family drawn or moved to `stationary` (§4.5.6, 2026-11-12) |
 | `later:gradients` | 22 | the `*ColorEnd` and `*GradientType` pairs the C# did not draw |
 | `later:item-text` | 19 | carousel and grid item text styles and scrolling, the collections' letter cases, name suffixes |
 | `later:picture` | 16 | interpolation, corner radius and brightness where not drawn, flips, mipmap, `scaleFactor`, `gameOverridePath`, `defaultFolderImage` |
-| `later:stationary` | 11 | `stationary`, `renderDuringTransitions`, `fadeAbovePrimary` |
+| `later:stationary` | 12 | `stationary` (the video's since 2026-11-12), `renderDuringTransitions`, `fadeAbovePrimary` |
 | `later:carousel-layout` | 6 | `itemStacking`, `selectedItemOffset`, `itemLinearScale`, `itemLinearSpacing`, `itemAxisRotation`, `itemDiagonalOffset` |
 | `later:textlist-selector` | 5 | the selector image, width and offset, the secondary selected background |
 | `later:help-layout` | 1 | `entryLayout` |
@@ -2359,6 +2359,41 @@ tests pass. Seeded faults, each applied alone and reverted:
 frame delays); the system view's gameselector picks (the host's); the grid's and carousel's per-row text styles beyond
 the C#'s (`later:item-text`). A frame allocates its records each tick; the bridge's models change rows in place
 (design §4), and whether the scene's own allocation shows in a frame's cost is measured with the painter, not assumed.
+
+#### 4.5.6 A theme's video element **[M 2026-11-12]**
+
+`paint.rs` gives a video element `Paint::Video` once it has a file to play: `path` (which, as THEMES.md says, ignores the
+game's media and the default even when the file is missing), else the game's `video`, else `default`; with none it stays
+a `Paint::Picture` of its still. The record carries the still, the delay, the sizing (`VideoFit`: both axes of `size`
+stretch, one takes the other from the video's aspect, `maxSize` fits, `cropSize` covers, none is the video's own size),
+the pillarbox area and threshold, the fade, the iterations and the look, and `draw.rs` sets `playing` once the delay has
+passed since the game was selected, waking the painter then through `next_change_ms`. The delay follows ES-DE 3.4.1's
+`VideoComponent::applyTheme` and `update` (es-core/src/components/VideoComponent.cpp): it counts only when `imageType`
+is set, and the video starts at once when no still was found unless the type is `none`. Interpolation defaults to nearest
+unless the rotation is off the right angles, as `applyTheme` sets it, and is applied to the video only. ES-DE sets it on
+the still too, but the painter's nearest still measured further from ES-DE's capture than its linear one: Art Book
+Next's gamelist at 1280 × 800, its cover's region (x 740 to 1213, y 58 to 520), mean absolute error 1.66 nearest against
+1.26 linear (measured 2026-11-13; the whole picture 2.06 with the nearest still, 1.97 with the linear one). ES-DE's nearest still is drawn smoothly in its
+capture, and why is not known: its texture loading (es-core/src/resources/TextureData.cpp) is where to look.
+
+`VideoElement.qml` is the painter's: the still (a `Picture`, which now takes `brightness`, 0.3 a step on each channel
+before saturation and tint, as THEMES.md describes it) until `playing`, then a QtMultimedia `MediaPlayer` made through a
+`Loader`, drawn by `VideoOutput` on the GPU and by the kit's `VideoFrames` on the software backend, at the video's own
+resolution (`MediaMetaData.Resolution`) into a `ShaderEffectSource` that the picture's one shader pass samples, nearest
+or linear, cropped by `cropPos`, tinted, desaturated, brightened and rounded. Behind it stands the black frame of
+`fadeInType` black, sized by ES-DE's rule in `VideoFFmpegComponent::calculateBlackFrame` (es-core/src/components/
+VideoFFmpegComponent.cpp, 3.4.1): the whole area on an axis where the video falls short of `pillarboxThreshold`, the video
+moved with the frame when the origin is off centre, and the video's corners left square where the bars stand clear of
+them. Each play fades in from nothing over `fadeInTime` from its first frame and counts towards `iterationCount`; when
+they are done the element shows nothing or, with `onIterationsDone` image, its still. The theme's `audio` mutes it and
+the player's Volume sets its level. Proof: `esde/tests/frame.rs` (the delay, the wake, the source and sizing rules) and
+`esde-qt/tests/theme_video.rs` on the GPU tier (the still alone and no player before the delay, then the clip's frames
+advancing in the box, heard at the Volume or muted, the still back after one iteration); the thirteen pairs drawn are
+each a case of `tests/themes/mapping-cases.tsv`.
+
+Not drawn: `scanlines`, whose ES-DE shader is a GPL phosphor shader not ours to copy, so how a theme's video scanlines
+look is the tester's to rule; `audio`, heard and not seen, which the table has no state for (R-20261111-75); ES-DE's
+"Play audio for gamelist and system view videos" (`ViewsVideoAudio`), which no EmuSen setting offers yet.
 
 ### 4.6 The library as an ES-DE theme sees it, and its screen **[M 2026-11-08]**
 
@@ -2518,7 +2553,7 @@ The second half of the engine, as the painter's design laid it out: a crate of i
 `Frontend/esde-qt`, beside the plain-data `emusen-esde` the way `kit-qt` stands beside `kit-core`. It depends on cxx-qt,
 `emusen-esde` (the scene and its marks) and `emusen-kit-qt` (the body face, and from E2 the help bar and the pad
 router); `tests/lint.rs` holds its manifest to exactly those and the two EmuSen crates' manifests to no client, runtime
-or model crate. The registry is `Testing/qmltypes/EmuSen.Esde-1.2.*`, compared on every build as the kit's is (§5.3),
+or model crate. The registry is `Testing/qmltypes/EmuSen.Esde-1.3.*`, compared on every build as the kit's is (§5.3),
 its line numbers left out in both of qmltyperegistrar's forms (a line of its own, and `; lineNumber: N` inside a signal's
 one-line entry; until 2026-11-11 the second form was compared, so an edit that only moved a bridge's lines failed the
 test). 1.1 added `hoverAt` and deprecated `hover(row)` (repair DC-B). The minor moved to 1.2 for what the help bar and
@@ -2526,7 +2561,7 @@ the media viewer added (`EsdeModel.defaultFont`, `selectionSeed` and `reference`
 invokable `manualPages`; `MarkShapes.aspect` and `baseline`; the type `TextLayout`), for the QML files' properties this
 stage changed or removed, and for the removal of the deprecated `hover(row)` (R-20261111-107, R-20261111-108). The
 QML files' properties are not in the registry; rule Q covers them (R-20261111-99, §5.3): they are held as
-`EmuSen.Esde-1.2.qmlfiles`. Its changes are listed in `Frontend/esde-qt/CHANGELOG-esde.md`.
+`EmuSen.Esde-1.3.qmlfiles`. Its changes are listed in `Frontend/esde-qt/CHANGELOG-esde.md`.
 
 #### 4.8.1 The primitives
 

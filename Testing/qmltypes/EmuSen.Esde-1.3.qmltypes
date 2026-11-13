@@ -32,7 +32,8 @@ Module {
                 "TextList",
                 "Grid",
                 "Clip",
-                "Page"
+                "Page",
+                "Video"
             ]
         }
         Property {
@@ -54,16 +55,16 @@ Module {
             index: 1
             lineNumber: 107
         }
-        Signal { name: "sceneChanged"; lineNumber: 132 }
-        Signal { name: "revisionChanged"; lineNumber: 133 }
+        Signal { name: "sceneChanged"; lineNumber: 133 }
+        Signal { name: "revisionChanged"; lineNumber: 134 }
         Method {
             name: "setScene"
-            lineNumber: 129
+            lineNumber: 130
             Parameter { name: "value"; type: "EsdeModel"; isPointer: true }
         }
         Method {
             name: "setRevision"
-            lineNumber: 131
+            lineNumber: 132
             Parameter { name: "value"; type: "int" }
         }
     }
@@ -450,7 +451,7 @@ Module {
     }
     Component {
         file: "lists.cxxqt.h"
-        lineNumber: 284
+        lineNumber: 285
         name: "EsdeRowsModel"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -464,7 +465,7 @@ Module {
             write: "setScene"
             notify: "sceneChanged"
             index: 0
-            lineNumber: 289
+            lineNumber: 290
         }
         Property {
             name: "revision"
@@ -473,7 +474,7 @@ Module {
             write: "setRevision"
             notify: "revisionChanged"
             index: 1
-            lineNumber: 290
+            lineNumber: 291
         }
         Property {
             name: "leaving"
@@ -482,24 +483,24 @@ Module {
             write: "setLeaving"
             notify: "leavingChanged"
             index: 2
-            lineNumber: 291
+            lineNumber: 292
         }
-        Signal { name: "sceneChanged"; lineNumber: 302 }
-        Signal { name: "revisionChanged"; lineNumber: 303 }
-        Signal { name: "leavingChanged"; lineNumber: 304 }
+        Signal { name: "sceneChanged"; lineNumber: 303 }
+        Signal { name: "revisionChanged"; lineNumber: 304 }
+        Signal { name: "leavingChanged"; lineNumber: 305 }
         Method {
             name: "setScene"
-            lineNumber: 297
+            lineNumber: 298
             Parameter { name: "value"; type: "EsdeModel"; isPointer: true }
         }
         Method {
             name: "setRevision"
-            lineNumber: 299
+            lineNumber: 300
             Parameter { name: "value"; type: "int" }
         }
         Method {
             name: "setLeaving"
-            lineNumber: 301
+            lineNumber: 302
             Parameter { name: "value"; type: "bool" }
         }
     }
@@ -622,7 +623,7 @@ Module {
     }
     Component {
         file: "lists.cxxqt.h"
-        lineNumber: 357
+        lineNumber: 358
         name: "PartsModel"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -636,7 +637,7 @@ Module {
             write: "setScene"
             notify: "sceneChanged"
             index: 0
-            lineNumber: 362
+            lineNumber: 363
         }
         Property {
             name: "revision"
@@ -645,7 +646,7 @@ Module {
             write: "setRevision"
             notify: "revisionChanged"
             index: 1
-            lineNumber: 363
+            lineNumber: 364
         }
         Property {
             name: "element"
@@ -654,30 +655,30 @@ Module {
             write: "setElement"
             notify: "elementChanged"
             index: 2
-            lineNumber: 364
+            lineNumber: 365
         }
-        Signal { name: "sceneChanged"; lineNumber: 375 }
-        Signal { name: "revisionChanged"; lineNumber: 376 }
-        Signal { name: "elementChanged"; lineNumber: 377 }
+        Signal { name: "sceneChanged"; lineNumber: 376 }
+        Signal { name: "revisionChanged"; lineNumber: 377 }
+        Signal { name: "elementChanged"; lineNumber: 378 }
         Method {
             name: "setScene"
-            lineNumber: 370
+            lineNumber: 371
             Parameter { name: "value"; type: "EsdeModel"; isPointer: true }
         }
         Method {
             name: "setRevision"
-            lineNumber: 372
+            lineNumber: 373
             Parameter { name: "value"; type: "int" }
         }
         Method {
             name: "setElement"
-            lineNumber: 374
+            lineNumber: 375
             Parameter { name: "value"; type: "QString" }
         }
     }
     Component {
         file: "lists.cxxqt.h"
-        lineNumber: 211
+        lineNumber: 212
         name: "SlotsModel"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -691,7 +692,7 @@ Module {
             write: "setScene"
             notify: "sceneChanged"
             index: 0
-            lineNumber: 216
+            lineNumber: 217
         }
         Property {
             name: "revision"
@@ -700,7 +701,7 @@ Module {
             write: "setRevision"
             notify: "revisionChanged"
             index: 1
-            lineNumber: 217
+            lineNumber: 218
         }
         Property {
             name: "leaving"
@@ -709,24 +710,24 @@ Module {
             write: "setLeaving"
             notify: "leavingChanged"
             index: 2
-            lineNumber: 218
+            lineNumber: 219
         }
-        Signal { name: "sceneChanged"; lineNumber: 229 }
-        Signal { name: "revisionChanged"; lineNumber: 230 }
-        Signal { name: "leavingChanged"; lineNumber: 231 }
+        Signal { name: "sceneChanged"; lineNumber: 230 }
+        Signal { name: "revisionChanged"; lineNumber: 231 }
+        Signal { name: "leavingChanged"; lineNumber: 232 }
         Method {
             name: "setScene"
-            lineNumber: 224
+            lineNumber: 225
             Parameter { name: "value"; type: "EsdeModel"; isPointer: true }
         }
         Method {
             name: "setRevision"
-            lineNumber: 226
+            lineNumber: 227
             Parameter { name: "value"; type: "int" }
         }
         Method {
             name: "setLeaving"
-            lineNumber: 228
+            lineNumber: 229
             Parameter { name: "value"; type: "bool" }
         }
     }

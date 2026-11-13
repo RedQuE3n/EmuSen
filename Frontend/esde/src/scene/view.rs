@@ -367,7 +367,9 @@ impl SceneView {
                     "text" => e
                         .string("metadata")
                         .is_some_and(|m| !matches!(m, "systemName" | "systemFullname" | "sourceSystemName" | "sourceSystemFullname")),
-                    "datetime" | "rating" | "badges" | "video" => true,
+                    "datetime" | "rating" | "badges" => true,
+                    // A video with `path` is static, metadata only by metadataElement (THEMES.md, video).
+                    "video" => !e.explicit.contains_key("path"),
                     "image" => !e.list("imageType").is_empty(),
                     _ => false,
                 })

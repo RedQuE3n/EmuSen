@@ -61,6 +61,8 @@ pub mod qobject {
         GamePageNone,
         /// Start Console's page of a card (EmuSen_Qt.md §7.9), after every screen before it so their numbers stay.
         CardStart,
+        /// A choice of the ES-DE theme in use on the Themes tab, after every screen before it.
+        ThemesChoice,
     }
 
     extern "RustQt" {
@@ -155,6 +157,7 @@ impl qobject::HelpModel {
             HelpScreen::PauseDisc => Screen::PauseDisc,
             HelpScreen::Themes => Screen::Themes,
             HelpScreen::ThemesChecked => Screen::ThemesChecked,
+            HelpScreen::ThemesChoice => Screen::ThemesChoice,
             HelpScreen::Settings => Screen::Settings,
             HelpScreen::SettingsPage => Screen::SettingsPage,
             HelpScreen::ToolSearch => Screen::ToolSearch,
@@ -220,6 +223,7 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::PauseDisc => HelpScreen::PauseDisc,
         Screen::Themes => HelpScreen::Themes,
         Screen::ThemesChecked => HelpScreen::ThemesChecked,
+        Screen::ThemesChoice => HelpScreen::ThemesChoice,
         Screen::Settings => HelpScreen::Settings,
         Screen::SettingsPage => HelpScreen::SettingsPage,
         Screen::ToolSearch => HelpScreen::ToolSearch,

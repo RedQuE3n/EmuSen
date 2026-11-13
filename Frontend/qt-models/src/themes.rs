@@ -1,10 +1,13 @@
 //! The Themes tab's facts as plain data (EmuSen_Qt.md §3.8): every theme in Galaxia's themes store as a row, the reference
-//! first; the stored id resolved to a folder; a package's check, run by `theme-check` or `esde-check`'s measure. No Qt:
-//! `themes_model.rs` puts it on Qt.
+//! first; the stored id resolved to a folder; a package's check, run by `theme-check` or `esde-check`'s measure; the ES-DE
+//! theme the library is drawn with, and its choices as capabilities.xml declares them. No Qt: `themes_model.rs` puts it on Qt.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use crate::esde_shelves::{self, theme_key, CHOICES, STYLE, STYLE_OWN, STYLE_THEME, THEME};
 use emusen_esde::check as esde;
+use emusen_esde::loader::capabilities::{self, Capabilities, BUILT_IN_TRANSITIONS, FONT_SIZE_ORDER};
 use emusen_theme_check::loaded;
 use serde_json::Value;
 
@@ -62,9 +65,9 @@ pub struct Row {
 }
 
 impl Row {
-    /// Offered Use: an EmuSen package whose last check was clean, not already the one in use.
+    /// Offered Use: a theme whose last check was clean, not already the one in use.
     pub fn usable(&self) -> bool {
-        self.kind == Kind::EmuSen && self.checked == Checked::Ok && !self.current
+        self.checked == Checked::Ok && !self.current
     }
 
     /// The row's value on the list: in use, checking, its check's outcome, or nothing yet.
@@ -96,10 +99,10 @@ impl Row {
             Checked::Ok => "Checked: nothing found.".to_owned(),
             Checked::Findings(f) => f.join("\n"),
         };
-        match (self.kind, self.current) {
-            (_, true) => "In use.".to_owned(),
-            (Kind::Esde, _) => format!("{check}\nAn ES-DE theme can be checked here; choosing one is not offered yet."),
-            (Kind::EmuSen, _) => check,
+        if self.current {
+            "In use.".to_owned()
+        } else {
+            check
         }
     }
 }
@@ -158,7 +161,7 @@ impl Resolved {
     pub fn words(&self, id: &str) -> String {
         match self {
             Resolved::Missing => format!("The theme “{id}” is not in the themes folder, so EmuSen's own theme is shown."),
-            Resolved::Theme { kind: Kind::Esde, .. } => format!("“{id}” is an ES-DE theme, which is not drawn here yet, so EmuSen's own theme is shown."),
+            Resolved::Theme { kind: Kind::Esde, .. } => format!("“{id}” is an ES-DE theme, which is chosen under ES-DE, so EmuSen's own theme is shown."),
             _ => String::new(),
         }
     }
@@ -232,19 +235,153 @@ pub struct Listing {
     pub store: Option<PathBuf>,
     pub chosen: String,
     pub words: String,
+    /// The ES-DE theme the library is drawn with, where it is one of the store's.
+    pub esde: Option<InUse>,
 }
 
 /// The listing from the settings, the store and the reference's manifest and folder.
 pub fn listing(settings: &Value, store: Option<&Path>, reference: &str, reference_folder: &str) -> Listing {
     let chosen = chosen_of(settings);
     let resolved = resolve(&chosen, store);
-    let in_use = if resolved.host_folder().is_empty() { REFERENCE } else { chosen.as_str() };
     let mut rows = vec![reference_row(reference, reference_folder)];
     rows.extend(store.map(scan).unwrap_or_default());
-    for row in &mut rows {
-        row.current = row.id == in_use;
+    let esde = mark(&mut rows, settings, store);
+    Listing { rows, store: store.map(Path::to_path_buf), words: resolved.words(&chosen), chosen, esde }
+}
+
+/// Marks the row in use: the ES-DE theme the settings make the library's look, else the EmuSen theme they choose (the
+/// reference where that one cannot be drawn). Returns the ES-DE theme's choices when it is one of the store's.
+pub fn mark(rows: &mut [Row], settings: &Value, store: Option<&Path>) -> Option<InUse> {
+    let themed = esde_shelves::settings_of(settings).themed;
+    let esde = if themed { esde_in_use(settings, store, rows) } else { None };
+    let chosen = chosen_of(settings);
+    let own = if resolve(&chosen, store).host_folder().is_empty() { REFERENCE } else { chosen.as_str() };
+    for row in rows.iter_mut() {
+        row.current = match row.kind {
+            Kind::EmuSen => !themed && row.id == own,
+            Kind::Esde => esde.as_ref().is_some_and(|e| e.id == row.id),
+        };
     }
-    Listing { rows, store: store.map(Path::to_path_buf), words: resolved.words(&chosen), chosen }
+    esde
+}
+
+/// The ES-DE theme the library is drawn with, as the tab lists it: its row's id, the folder ES-DE loads, and its choices.
+#[derive(Clone, Debug, PartialEq)]
+pub struct InUse {
+    pub id: String,
+    pub root: PathBuf,
+    pub choices: Vec<Choice>,
+}
+
+/// The store's ES-DE theme whose folder the settings' `BigPictureTheme` names; none for a folder outside the store.
+fn esde_in_use(settings: &Value, store: Option<&Path>, rows: &[Row]) -> Option<InUse> {
+    let named = theme_key(settings.get(THEME).and_then(Value::as_str).unwrap_or_default());
+    let store = store?;
+    rows.iter().filter(|r| r.kind == Kind::Esde).find_map(|r| {
+        let root = esde::theme_root(&store.join(&r.id));
+        let key = theme_key(&root.to_string_lossy());
+        (key == named).then(|| {
+            let stored = settings.get(CHOICES).and_then(|c| c.get(&key)).cloned().unwrap_or(Value::Null);
+            let caps = capabilities::read(&root.to_string_lossy());
+            InUse { id: r.id.clone(), root, choices: choices_of(&caps, &stored) }
+        })
+    })
+}
+
+/// The stored value of a choice that means "the loader decides": the screen's nearest ratio, the variant's transitions.
+pub const AUTOMATIC: &str = "automatic";
+
+/// One of an ES-DE theme's choices: its key among the stored choices (`esde-qt`'s `shelves::settings` reads it), its
+/// row's words, each option as its stored value and its words, and the one in force.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Choice {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub options: Vec<(String, String)>,
+    pub at: usize,
+}
+
+impl Choice {
+    /// The words of the option in force.
+    pub fn value(&self) -> &str {
+        self.options.get(self.at).map_or("", |o| o.1.as_str())
+    }
+
+    /// Steps `by` options round the list and gives the stored value now in force.
+    pub fn step(&mut self, by: i32) -> &str {
+        let n = self.options.len() as i64;
+        self.at = (self.at as i64 + i64::from(by)).rem_euclid(n.max(1)) as usize;
+        &self.options[self.at].0
+    }
+}
+
+/// A capability's words: its English label where the theme gives one, else its name.
+fn label_of(labels: &BTreeMap<String, String>, name: &str) -> String {
+    labels.get("en_US").filter(|l| !l.is_empty()).cloned().unwrap_or_else(|| name.to_owned())
+}
+
+/// Every choice the capabilities declare, in ES-DE's order, each at its stored value, else at the option the loader
+/// falls back to (`Selection::resolve`, `resolve_transitions`).
+pub fn choices_of(caps: &Capabilities, stored: &Value) -> Vec<Choice> {
+    let given = |key: &str| {
+        let lower = format!("{}{}", key[..1].to_lowercase(), &key[1..]);
+        stored.get(key).or_else(|| stored.get(&lower)).and_then(Value::as_str).map(str::to_owned)
+    };
+    let named = |names: &[String]| names.iter().map(|n| (n.clone(), n.clone())).collect::<Vec<_>>();
+    let automatic = || (AUTOMATIC.to_owned(), "Automatic".to_owned());
+    let mut out = Vec::new();
+    let mut add = |key: &'static str, label: &'static str, options: Vec<(String, String)>, fallback: usize| {
+        if options.is_empty() {
+            return;
+        }
+        let at = given(key).and_then(|v| options.iter().position(|o| o.0 == v)).unwrap_or(fallback);
+        out.push(Choice { key, label, options, at });
+    };
+    let variants = caps.variants.iter().filter(|v| v.selectable).map(|v| (v.name.clone(), label_of(&v.labels, &v.name))).collect();
+    add("Variant", "Variant", variants, 0);
+    add("ColorScheme", "Colour scheme", caps.color_schemes.iter().map(|c| (c.name.clone(), label_of(&c.labels, &c.name))).collect(), 0);
+    let medium = caps.font_sizes.iter().position(|f| f == FONT_SIZE_ORDER[0]).unwrap_or(0);
+    add("FontSize", "Font size", named(&caps.font_sizes), medium);
+    let english = caps.languages.iter().position(|l| l == "en_US").unwrap_or(0);
+    add("Language", "Language", named(&caps.languages), english);
+    if !caps.aspect_ratios.is_empty() {
+        add("AspectRatio", "Aspect ratio", std::iter::once(automatic()).chain(named(&caps.aspect_ratios)).collect(), 0);
+    }
+    let profiles = caps.transitions.iter().filter(|t| t.selectable).map(|t| (t.name.clone(), label_of(&t.labels, &t.name)));
+    let built_in = BUILT_IN_TRANSITIONS.iter().filter(|b| !caps.suppressed_transitions.iter().any(|s| s == *b)).map(|b| (b.to_string(), b.to_string()));
+    add("Transitions", "Transitions", std::iter::once(automatic()).chain(profiles).chain(built_in).collect(), 0);
+    out
+}
+
+/// The settings with an ES-DE theme's folder as the library's look.
+pub fn choose_esde(settings: &mut Value, root: &Path) {
+    object(settings);
+    settings[STYLE] = Value::from(STYLE_THEME);
+    settings[THEME] = Value::from(root.to_string_lossy().into_owned());
+}
+
+/// The settings with an EmuSen theme as the library's look, the ES-DE theme's folder and choices kept for a later return.
+pub fn choose_own(settings: &mut Value, id: &str) {
+    object(settings);
+    settings[SETTING] = Value::from(id);
+    settings[STYLE] = Value::from(STYLE_OWN);
+}
+
+/// The settings with one choice of the ES-DE theme in `root` stored under its folder's key.
+pub fn store_choice(settings: &mut Value, root: &Path, key: &str, value: &str) {
+    object(settings);
+    let choices = &mut settings[CHOICES];
+    object(choices);
+    let theme = &mut choices[theme_key(&root.to_string_lossy())];
+    object(theme);
+    theme[key] = Value::from(value);
+}
+
+/// A value made an object where it is anything else, so a key can be set on it.
+fn object(value: &mut Value) {
+    if !value.is_object() {
+        *value = Value::Object(Default::default());
+    }
 }
 
 /// `theme-audit` as `theme-check` finds it, else beside the running program.

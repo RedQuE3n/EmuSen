@@ -484,37 +484,19 @@ Window {
             padFamily: program.padFamily
             splashShown: program.splashShown
         }
-        // A game's page, from X on Home and the grid, a theme's openPage and the Home card's Selected game (EmuSen_Qt.md §7.8);
-        // its media viewer, scrape and Edit Details are its own (§7.8.2).
-        GamePageModel {
-            id: pageModel
-            objectName: "pageModel"
-            platformLibrary: program.platformLibrary
-            cores: library.cores
-            game: screens.shown === Screens.Page ? library.gameFile(program.inHand) : ""
-            onPlayed: (path, state) => state.length > 0 ? program.playFrom(path, state) : program.play(path)
-            onHidden: screens.back()
-            onOpenFolder: (path) => folders.open(path)
-            // The recorded ScreenScraper a test names for the scraper; empty for ScreenScraper itself.
-            scraperTest: program.scraperTest
-        }
-        Connections {
-            target: pageModel
-            function onHidden() { library.refresh() }
-        }
-        // A name edited on the page is the grid's too (EmuSen_Qt.md §7.8.2).
-        Connections {
-            target: pageModel
-            function onEdited() { library.refresh() }
-        }
-        GamePage {
+        PageScreen {
             objectName: "gamePage"
-            visible: screens.shown === Screens.Page
-            page: pageModel
+            screens: screens
+            library: library
+            platformLibrary: program.platformLibrary
+            inHand: program.inHand
+            scraperTest: program.scraperTest
             padFamily: program.padFamily
-            inputs: visible && !program.splashShown
-            onBacked: screens.back()
-            onActed: (key) => screens.act(key)
+            splashShown: program.splashShown
+            onPlay: (path) => program.play(path)
+            onPlayFrom: (path, state) => program.playFrom(path, state)
+            onOpenFolder: (path) => folders.open(path)
+            onSaid: (words) => program.said(words, true, false)
         }
         // The Home card over Home, opened at Power by its place (EmuSen_Interface.md §2.3; EmuSen_BigPicture.md §51.2).
         Kit.NormalizedCanvas {
@@ -697,10 +679,6 @@ Window {
         Connections {
             target: settingsModel
             function onProblemChanged() { program.said(settingsModel.problem, true, false) }
-        }
-        Connections {
-            target: pageModel
-            function onProblemChanged() { program.said(pageModel.problem, true, false) }
         }
         // The pads unread: opening them or a tick failed, said once until they read again (EmuSen_Qt.md §7.7.H5).
         Connections {

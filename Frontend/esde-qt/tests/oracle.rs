@@ -511,7 +511,8 @@ fn the_watched_states_hold_against_es_de_and_the_c_sharp_baseline() {
                     scene.pad(*b);
                     scene.wait(100);
                 }
-                if name0.contains("media-0") {
+                // The first game's first medium is its video; the second game has none.
+                if entry == 0 && presses.is_empty() {
                     // A viewer still black is at rest too, and was grabbed as the clip: its first frame is waited for.
                     common::until(&mut scene, &format!("{at}: the viewer's clip playing"), clip_playing);
                 }

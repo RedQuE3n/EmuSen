@@ -36,6 +36,27 @@ pub struct Drawn {
     pub placed: Placed,
     pub content: u64,
     pub wait: Option<Time>,
+    /// How the element behaves while the views pan between the system and gamelist views.
+    pub transit: Transit,
+}
+
+/// An element during a slide between the system and gamelist views: `stationary` and `renderDuringTransitions`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Transit {
+    /// stationary is betweenViews or always: drawn where it rests, not panned.
+    pub stays: bool,
+    /// renderDuringTransitions is false: not drawn until the pan ends.
+    pub hidden: bool,
+}
+
+impl Transit {
+    /// ES-DE 3.4.1's `GamelistView::render` and `SystemView::renderElements` (stationaryApplicable, renderChildCondFunc).
+    pub fn of(e: &Element) -> Transit {
+        Transit {
+            stays: matches!(e.string("stationary"), Some("betweenViews" | "always")),
+            hidden: e.bool("renderDuringTransitions") == Some(false),
+        }
+    }
 }
 
 fn is_primary(kind: &str) -> bool {
@@ -133,7 +154,7 @@ impl SceneView {
                     }
                 };
                 primary_out = Some(Primary { id, rows: self.rows_id(), selected, layout });
-                out.push(Drawn { placed, content, wait });
+                out.push(Drawn { placed, content, wait, transit: Transit::default() });
                 continue;
             }
             let Some(draft) = paint::draft(e, s.text.clone(), s.scroll, &ctx) else { continue };
@@ -200,7 +221,7 @@ impl SceneView {
                 }
             }
             placed.paint = paint;
-            out.push(Drawn { placed, content, wait });
+            out.push(Drawn { placed, content, wait, transit: Transit::of(e) });
         }
         (out, primary_out)
     }

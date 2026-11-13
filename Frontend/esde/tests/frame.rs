@@ -73,7 +73,7 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_not_
     // Heard, not seen: no picture shows it, and no state stands between drawn and not drawn (R-20261111-75).
     assert_eq!(mapping::status("video", "audio"), Some(&Mapped::Later("video".into())));
     assert_eq!(mapping::status("video", "scanlines"), Some(&Mapped::Later("video".into())));
-    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 432);
+    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 441);
     assert!(
         mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"),
         "the gameselector picks the system view's games; sound is played"

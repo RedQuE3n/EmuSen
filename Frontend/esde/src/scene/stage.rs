@@ -4,7 +4,7 @@
 use crate::loader::Animation;
 
 use super::data::Data;
-use super::draw::{Drawn, Measures};
+use super::draw::{Drawn, Measures, Transit};
 use super::frame::{Frame, Paint, Row, Rows};
 use super::motion::{Glide, Time};
 use super::view::{ElementState, SceneView};
@@ -97,12 +97,26 @@ impl Stage {
         let h = self.current.data.height;
         let p = self.slide.value_at(now);
         let y = if self.leaving.is_some() { self.direction * (1.0 - p) * h } else { 0.0 };
+        let transit = |v: &SceneView, e: &ElementState| Transit::of(&v.theme_view().elements[e.index]);
         if let Some(leaving) = &self.leaving {
-            let elements = leaving.frame().into_iter().filter(|e| !overlay(&e.kind)).collect();
-            layers.push(Layer { view: leaving.view.clone(), y: -self.direction * p * h, elements });
+            let leave_y = -self.direction * p * h;
+            let elements = leaving
+                .frame()
+                .into_iter()
+                .filter(|e| !overlay(&e.kind) && !transit(leaving, e).hidden)
+                .map(|mut e| {
+                    if transit(leaving, &e).stays {
+                        e.rect.y -= leave_y;
+                    }
+                    e
+                })
+                .collect();
+            layers.push(Layer { view: leaving.view.clone(), y: leave_y, elements });
         }
-        let mut elements = self.current.frame();
-        for e in elements.iter_mut().filter(|e| overlay(&e.kind)) {
+        let panning = self.leaving.is_some();
+        let mut elements: Vec<ElementState> =
+            self.current.frame().into_iter().filter(|e| !(panning && transit(&self.current, e).hidden)).collect();
+        for e in elements.iter_mut().filter(|e| overlay(&e.kind) || (panning && transit(&self.current, e).stays)) {
             e.rect.y -= y;
         }
         layers.push(Layer { view: self.current.view.clone(), y, elements });
@@ -127,21 +141,24 @@ impl Stage {
         if let Some(leaving) = &self.leaving {
             let (drawn, primary) = leaving.draw(measures, true);
             frame.leaving_primary = primary;
-            all.extend(drawn.into_iter().filter(|d| !overlay(&d.placed.kind)).map(|mut d| {
-                d.placed.y += leave_y;
+            all.extend(drawn.into_iter().filter(|d| !overlay(&d.placed.kind) && !d.transit.hidden).map(|mut d| {
+                if !d.transit.stays {
+                    d.placed.y += leave_y;
+                }
                 d
             }));
         }
+        let panning = self.leaving.is_some();
         let (drawn, primary) = self.current.draw(measures, false);
         frame.primary = primary;
-        all.extend(drawn.into_iter().map(|mut d| {
-            if !overlay(&d.placed.kind) {
+        all.extend(drawn.into_iter().filter(|d| !(panning && d.transit.hidden)).map(|mut d| {
+            if !overlay(&d.placed.kind) && !(panning && d.transit.stays) {
                 d.placed.y += y;
             }
             d
         }));
         if let Some(viewer) = &self.viewer {
-            all.extend(viewer.placed(&self.current.data, measures).into_iter().map(|placed| Drawn { content: placed.id, placed, wait: None }));
+            all.extend(viewer.placed(&self.current.data, measures).into_iter().map(|placed| Drawn { content: placed.id, placed, wait: None, transit: Transit::default() }));
         }
         (all, frame)
     }

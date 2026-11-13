@@ -184,8 +184,8 @@ image	cropPos	drawn
 image	origin	drawn
 image	rotation	drawn
 image	rotationOrigin	drawn
-image	stationary	later:stationary
-image	renderDuringTransitions	later:stationary
+image	stationary	drawn
+image	renderDuringTransitions	drawn
 image	flipHorizontal	drawn
 image	flipVertical	drawn
 image	path	drawn
@@ -224,7 +224,7 @@ video	imageCropPos	drawn
 video	origin	drawn
 video	rotation	drawn
 video	rotationOrigin	drawn
-video	stationary	later:stationary
+video	stationary	drawn
 video	path	drawn
 video	default	drawn
 video	defaultImage	drawn
@@ -260,7 +260,7 @@ animation	scaleFactor	later:picture
 animation	origin	drawn
 animation	rotation	drawn
 animation	rotationOrigin	drawn
-animation	stationary	later:stationary
+animation	stationary	drawn
 animation	metadataElement	drawn
 animation	path	drawn
 animation	speed	later:animation-timing
@@ -281,7 +281,7 @@ badges	size	drawn
 badges	origin	drawn
 badges	rotation	drawn
 badges	rotationOrigin	drawn
-badges	stationary	later:stationary
+badges	stationary	drawn
 badges	horizontalAlignment	drawn
 badges	direction	drawn
 badges	lines	drawn
@@ -313,7 +313,7 @@ text	size	drawn
 text	origin	drawn
 text	rotation	drawn
 text	rotationOrigin	drawn
-text	stationary	later:stationary
+text	stationary	drawn
 text	text	drawn
 text	systemdata	drawn
 text	metadata	drawn
@@ -348,7 +348,7 @@ datetime	size	drawn
 datetime	origin	drawn
 datetime	rotation	drawn
 datetime	rotationOrigin	drawn
-datetime	stationary	later:stationary
+datetime	stationary	drawn
 datetime	metadata	drawn
 datetime	defaultValue	drawn
 datetime	gameselector	drawn
@@ -373,7 +373,7 @@ gamelistinfo	size	drawn
 gamelistinfo	origin	drawn
 gamelistinfo	rotation	drawn
 gamelistinfo	rotationOrigin	drawn
-gamelistinfo	stationary	later:stationary
+gamelistinfo	stationary	drawn
 gamelistinfo	fontPath	drawn
 gamelistinfo	fontSize	drawn
 gamelistinfo	horizontalAlignment	drawn
@@ -388,7 +388,7 @@ rating	size	drawn
 rating	origin	drawn
 rating	rotation	drawn
 rating	rotationOrigin	drawn
-rating	stationary	later:stationary
+rating	stationary	drawn
 rating	hideIfZero	drawn
 rating	gameselector	drawn
 rating	gameselectorEntry	drawn

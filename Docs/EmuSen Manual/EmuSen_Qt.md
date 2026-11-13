@@ -2536,6 +2536,26 @@ in all, against `2026-11-13b.tsv`, and no rise in any column.
 proves a pair by two different pictures, and sound makes none; it stays `later:video` (R-20261111-75 keeps no state
 between drawn and not drawn).
 
+#### 4.5.9 What stays put in a slide, the dimmed help, the selector, the carousel's layout, GIF timing, sound **[M 2026-11-13]**
+
+Pairs moved from `later:` to `drawn`, each with a case in `tests/themes/mapping-cases.tsv` that paints two different
+pictures, and each rule read in ES-DE 3.4.1's source (read, never copied).
+
+| Pairs | Rule | ES-DE 3.4.1 source |
+|---|---|---|
+| `stationary` of image, video, animation, badges, text, datetime, gamelistinfo, rating | during a slide between the system and gamelist views, `betweenViews` and `always` keep the element where it rests in either view (`draw::Transit`, `Stage::drawn`); `never` and `withinView` pan with the view | `GamelistView::render`, `SystemView::renderElements` (stationaryApplicable) |
+| image `renderDuringTransitions` | false: not drawn, in either view, while the views pan | the same (renderChildCondFunc) |
+
+The mapping test's `switch` move presses accept in the system view or back in the gamelist with a slide transitions
+profile in the case's `capabilities.xml`, and reads the picture at the case's time on the held clock.
+`esde/tests/scene.rs` `a_stationary_element_rests_and_a_transit_hidden_one_waits_while_the_views_pan` holds the rule.
+
+**Not drawn.** `withinView` belongs to a move within one view, system to system or gamelist to gamelist, and the scene
+draws both of those moves instantly (a new selection in the system view, `Painter::change_system`), so it has nothing to
+hold still; the stage has no slide or fade between two systems. The three `fadeAbovePrimary` pairs act only in a fade
+between two systems (`SystemView::render`, `renderElements`: mFadeOpacity), which the scene does not draw either; they
+stay `later:stationary`.
+
 ### 4.6 The library as an ES-DE theme sees it, and its screen **[M 2026-11-08]**
 
 The painter takes plain data from `LibraryModel` (stage 3's curated view is not built); `emusen-qt-models` writes it,

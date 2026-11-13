@@ -384,7 +384,11 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     hold(&mut scene, "GamePageOptions", &mockup::Mockup::default(), &mut excuses, &mut report);
     // The television standard, offered for a television's console: the game's own, stepped to NTSC and saved in games.db,
     // then back; the package's state in Mistress's words.
-    assert!(comes_to_read(&mut scene, "Not a package"), "the package's state");
+    // Package, Cheats and Display crop open nothing yet, so they are not shown (EmuSen_Qt.md §7.8.2).
+    down_to(&mut scene, "Television standard");
+    for hidden in ["Package", "Cheats", "Display crop"] {
+        assert!(!reads(&mut scene, hidden), "{hidden} is not shown");
+    }
     down_to(&mut scene, "Television standard");
     assert!(comes_to_read(&mut scene, "The game's"), "the game's own standard");
     let standard = |platform: &std::sync::Arc<Platform>| {
@@ -432,7 +436,7 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
         }
     }
     assert_eq!(quiet, 6, "the rows settled: {told:?}");
-    assert_eq!(told.join(","), "2-2,2-2", "each step told in place on the standard's row as it was pressed, and nothing after");
+    assert_eq!(told.join(","), "1-1,1-1", "each step told in place on the standard's row, the second of Options' rows, as it was pressed, and nothing after");
     assert!(comes_to_read(&mut scene, "The game's"), "two steps back to back come back to the game's own");
     assert_eq!(standard(&platform), serde_json::Value::Null, "and the game's own is what is saved");
     section(&mut scene, 3);

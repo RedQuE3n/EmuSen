@@ -36,6 +36,8 @@ Window {
     property string onlyPads
     // A file holding Cores' world in place of the back end's, as the recordings script theirs; empty for the back end.
     property string coresWorld
+    // The scraper's test seam, its settings' `test` member as JSON (a loopback server and its root), as a test names it.
+    property string scraperTest
     // The splash keeps the focus, and every press, until it has faded, so the press that skipped it is never a screen's.
     readonly property bool splashShown: program.splash && (!moonrise.done || moonrise.opacity > 0)
     // The help bar's family: Controller type's, or with Automatic the pad last used; a generic pad's glyphs drawn as the Xbox pad's lettered ones, as Mistress does.
@@ -630,7 +632,7 @@ Window {
             onBacked: screens.back()
         }
         // A game's page, from X on Home and the grid, a theme's openPage and the Home card's Selected game (EmuSen_Qt.md §7.8);
-        // its doors open later pieces' pages.
+        // its media viewer, scrape and Edit Details are its own (§7.8.2).
         GamePageModel {
             id: pageModel
             objectName: "pageModel"
@@ -640,10 +642,17 @@ Window {
             onPlayed: (path, state) => state.length > 0 ? program.playFrom(path, state) : program.play(path)
             onHidden: screens.back()
             onOpenFolder: (path) => folders.open(path)
+            // The recorded ScreenScraper a test names for the scraper; empty for ScreenScraper itself.
+            scraperTest: program.scraperTest
         }
         Connections {
             target: pageModel
             function onHidden() { library.refresh() }
+        }
+        // A name edited on the page is the grid's too (EmuSen_Qt.md §7.8.2).
+        Connections {
+            target: pageModel
+            function onEdited() { library.refresh() }
         }
         GamePage {
             objectName: "gamePage"

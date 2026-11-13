@@ -1,7 +1,9 @@
 //! A game's page as plain Rust (EmuSen_Qt.md §7.8; EmuSen_Interface.md §2.5, §4 screen 3): its facts, its actions, its
 //! five sections and what each press does, over one read of the game a source answers. No Qt; the bridge,
-//! `game_page_model.rs`, only puts it on Qt. The deeper pages (Cheats, Package, Edit Details, Cover Art, Scrape This
-//! Game, the viewer) are doors the page names and a later piece opens; Open Folder is the program's folder action.
+//! `game_page_model.rs`, only puts it on Qt. The media viewer is ES-DE's (`emusen_esde::scene::Viewer`) over the page's
+//! media; Scrape This Game runs the scraper over the game; Edit Details is a deeper page of the game's edits. Cheats,
+//! Package, Display crop and Cover art open nothing yet, so their rows are not shown; Open Folder is the program's
+//! folder action.
 
 use crate::help::Screen;
 use crate::question::Question;
@@ -37,6 +39,8 @@ pub enum Change {
     DeleteState(String),
     /// The game hidden from every library view; its file is not touched.
     Hide,
+    /// One of the game's details edited, by its field; none goes back to what was scraped.
+    Edit(&'static str, Option<String>),
 }
 
 /// What the player is told when a change could not be made, and why (EmuSen_Qt.md §7.9).
@@ -48,6 +52,7 @@ pub fn change_failed(change: &Change, why: &str) -> String {
         Change::Standard(_) => "The game's television standard could not be stored",
         Change::DeleteState(_) => "The state could not be deleted",
         Change::Hide => "The game could not be hidden",
+        Change::Edit(..) => "The game's details could not be stored",
     };
     format!("{what}: {why}")
 }
@@ -86,6 +91,8 @@ pub enum MediaKind {
     Clip,
     Marquee,
     Fanart,
+    /// The game's PDF manual.
+    Manual,
 }
 
 /// One picture or clip of the game, the player's own or the scraper's, by its file.
@@ -139,6 +146,16 @@ pub struct Read {
     pub layers: usize,
     /// Whether a scrape run is going, which Scrape This Game waits for.
     pub scraping: bool,
+    /// The details Edit Details offers, in its order.
+    pub details: Vec<Detail>,
+}
+
+/// One detail of the game as Edit Details shows it: its field, its value, and whether the player's edit holds it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Detail {
+    pub field: &'static str,
+    pub value: String,
+    pub edited: bool,
 }
 
 /// What the game's package is (Mistress's `IGamePageHost.Package`).
@@ -215,7 +232,7 @@ pub const PLAY: &str = "play";
 pub const RESUME: &str = "resume";
 pub const FAVOURITE: &str = "favourite";
 
-/// The doors the rows open, by their keys: each a later piece's page (EmuSen_Interface.md §18.2).
+/// The rows' keys; Cheats, Package, Display crop and Cover art are a later piece's pages (EmuSen_Interface.md §18.2).
 pub const CHEATS: &str = "cheats";
 pub const PACKAGE: &str = "package";
 pub const CROP: &str = "crop";
@@ -225,6 +242,17 @@ pub const COVER: &str = "cover";
 pub const FOLDER: &str = "folder";
 pub const HIDE: &str = "hide";
 pub const STANDARD: &str = "standard";
+
+/// The fields Edit Details offers, the scraper's names for them (its `metadata.rs` FIELDS), and their words.
+pub const DETAILS: [(&str, &str); 7] = [
+    (crate::edits::NAME, "Name"),
+    ("description", "Description"),
+    ("releasedate", "Release date"),
+    ("developer", "Developer"),
+    ("publisher", "Publisher"),
+    ("genre", "Genre"),
+    ("players", "Players"),
+];
 
 pub const NO_DESCRIPTION: &str = "No description yet. Details ▸ Scrape This Game fetches one, and Edit Details writes one.";
 
@@ -286,8 +314,16 @@ pub enum Outcome {
     Changed(Change),
     /// The game started, from a state's file where one is named.
     Play(Option<String>),
-    /// A door to a later piece's page, by its row's key.
-    Door(&'static str),
+    /// Edit Details opened, Details' deeper page.
+    Edit,
+    /// The media viewer opened on the Media section's tile at this index.
+    View(usize),
+    /// A scrape of the game started.
+    Scrape,
+    /// The run going asked first whether to stop it; Yes stops it.
+    Stop(Question),
+    /// Words typed for a detail: its field, the question's title, and the words it starts from.
+    Type { field: &'static str, title: String, start: String },
     /// The folder holding the game's file, shown in the system's file manager.
     OpenFolder,
     /// A question first; the change is made when its second answer, Yes, is chosen.
@@ -302,6 +338,10 @@ pub struct GamePage {
     resume_at: usize,
     /// Now, in seconds since 1970, for how long ago things were.
     pub now: i64,
+    /// Whether Details shows Edit Details, its deeper page.
+    pub editing: bool,
+    /// This page's scrape: whether it is going, and what it last said; none before one started.
+    pub run: Option<(bool, String)>,
 }
 
 /// How long ago, as the page says it: Just now, 12 min ago, 2 h ago, Yesterday, 3 days ago, then the date (Mistress's
@@ -324,6 +364,50 @@ fn ask(title: &str, sentence: &str, yes: &str) -> Question {
     let mut q = crate::question::confirm(title, &[sentence]);
     q.choices[1] = yes.to_owned();
     q
+}
+
+/// The media store's type for a kind of the page's media, as ES-DE's viewer names its items.
+pub fn kind_word(kind: MediaKind) -> &'static str {
+    match kind {
+        MediaKind::Taken | MediaKind::Screenshot => "screenshot",
+        MediaKind::TitleScreen => "titlescreen",
+        MediaKind::Clip => "video",
+        MediaKind::Marquee => "marquee",
+        MediaKind::Fanart => "fanart",
+        MediaKind::Manual => "manual",
+    }
+}
+
+/// What a scrape's progress (emusen.scrape `progress`, EmuSen_Backend.md §30.3) says of the run: whether it is still
+/// going, and its words: the step on the game while it goes, how it came out once it has ended.
+pub fn run_words(progress: &serde_json::Value, game: &str) -> (bool, String) {
+    // The media store's own type names, which the scraper's kinds table holds no words for.
+    let kind = |k: &serde_json::Value| k.as_str().unwrap_or("").to_owned();
+    match progress["state"].as_str().unwrap_or("idle") {
+        "running" => {
+            let current = &progress["current"];
+            let words = match current["step"].as_str() {
+                Some("downloading") => format!("Fetching the {}", kind(&current["kind"])),
+                Some("arrived") => format!("Fetched the {}", kind(&current["kind"])),
+                Some(_) => "Looking it up".into(),
+                None => "Starting".into(),
+            };
+            (true, words)
+        }
+        "cancelled" | "stopped" => (false, "Stopped".into()),
+        _ => {
+            let result = progress["results"].as_array().and_then(|all| all.iter().rev().find(|r| r["path"] == game));
+            let words = match result.map(|r| (r["outcome"].as_str().unwrap_or(""), r["kinds"].as_array())) {
+                Some(("found", Some(kinds))) if !kinds.is_empty() => format!("Found: {}", kinds.iter().map(kind).collect::<Vec<_>>().join(", ")),
+                Some(("found", _)) => "Found, nothing new".into(),
+                Some(("unknown", _)) => "Not found".into(),
+                Some(("stopped", _)) => "Stopped".into(),
+                Some((_, _)) => result.and_then(|r| r["detail"].as_str()).filter(|d| !d.is_empty()).map_or_else(|| "It failed".into(), |d| format!("It failed: {d}")),
+                None => progress["why"].as_str().map_or_else(|| "Done".into(), |why| format!("It could not run: {why}")),
+            };
+            (false, words)
+        }
+    }
 }
 
 /// "1 Nov 2026".
@@ -353,7 +437,7 @@ fn slot_name(slot: Slot) -> String {
 
 impl GamePage {
     pub fn new(read: Read, now: i64) -> GamePage {
-        GamePage { read, section: 0, resume_at: 0, now }
+        GamePage { read, section: 0, resume_at: 0, now, editing: false, run: None }
     }
 
     /// A new read of the same game, the section and Resume's state kept where they still stand.
@@ -391,6 +475,12 @@ impl GamePage {
 
     pub fn choose_section(&mut self, index: usize) {
         self.section = index.min(SECTIONS.len() - 1);
+        self.editing = false;
+    }
+
+    /// B on the page: Edit Details goes back to Details, and says so; else the page is left.
+    pub fn back(&mut self) -> bool {
+        std::mem::replace(&mut self.editing, false)
     }
 
     fn state_words(&self, s: &State) -> String {
@@ -450,6 +540,7 @@ impl GamePage {
             Section::States => Content::Tiles(self.state_tiles()),
             Section::Options => Content::Rows(self.option_rows()),
             Section::Media => Content::Tiles(self.media_tiles()),
+            Section::Details if self.editing => Content::Rows(self.edit_rows()),
             Section::Details => Content::Rows(self.detail_rows()),
         }
     }
@@ -482,8 +573,8 @@ impl GamePage {
         out
     }
 
-    fn media_tiles(&self) -> Vec<Tile> {
-        let r = &self.read;
+    /// Each picture's, clip's and manual's words, in the media's order: the player's screenshots numbered.
+    pub fn media_labels(&self) -> Vec<String> {
         let mut taken = 0;
         let mut label = |k: MediaKind| match k {
             MediaKind::Taken => {
@@ -495,9 +586,21 @@ impl GamePage {
             MediaKind::Clip => "Clip".into(),
             MediaKind::Marquee => "Marquee".into(),
             MediaKind::Fanart => "Fan art".into(),
+            MediaKind::Manual => "Manual".into(),
         };
-        let picture = |m: &Media| if m.kind == MediaKind::Clip { r.hero.clone() } else { m.path.clone() };
-        r.media.iter().map(|m| Tile { key: m.path.clone(), label: label(m.kind), line: String::new(), picture: picture(m), marked: false }).collect()
+        self.read.media.iter().map(|m| label(m.kind)).collect()
+    }
+
+    fn media_tiles(&self) -> Vec<Tile> {
+        let r = &self.read;
+        // A clip's tile shows the hero, a manual's the cover.
+        let picture = |m: &Media| match m.kind {
+            MediaKind::Clip => r.hero.clone(),
+            MediaKind::Manual if !r.cover.is_empty() => r.cover.clone(),
+            MediaKind::Manual => r.hero.clone(),
+            _ => m.path.clone(),
+        };
+        r.media.iter().zip(self.media_labels()).map(|(m, label)| Tile { key: m.path.clone(), label, line: String::new(), picture: picture(m), marked: false }).collect()
     }
 
     fn text_of(choices: &[Choice], value: &Option<String>) -> String {
@@ -527,26 +630,6 @@ impl GamePage {
                 sentence: "The bindings this game starts with; the console's profile unless one is chosen here. Settings ▸ Controllers ▸ Profiles makes them.",
             });
         }
-        if let Some((on, all)) = r.cheats {
-            rows.push(Row {
-                key: CHEATS,
-                label: "Cheats",
-                value: format!("{on} of {all} on"),
-                steps: false,
-                opens: true,
-                sentence: "The game's cheats, on or off; the same switches the Pause Card shows.",
-            });
-        }
-        if let Some(own) = r.crop {
-            rows.push(Row {
-                key: CROP,
-                label: "Display crop",
-                value: if own { "This game's" } else { "Console's" }.into(),
-                steps: false,
-                opens: true,
-                sentence: "How much of the picture's edge is cut away for this game.",
-            });
-        }
         if let Some(standards) = &r.standards {
             rows.push(Row {
                 key: STANDARD,
@@ -557,21 +640,33 @@ impl GamePage {
                 sentence: "The television the picture is drawn for: the game's own, NTSC or PAL.",
             });
         }
-        let package = package_words(r.package, r.layers);
-        rows.push(Row { key: PACKAGE, label: "Package", value: package, steps: false, opens: true, sentence: "The game's package and its layers, from Packages." });
         rows
     }
 
     fn detail_rows(&self) -> Vec<Row> {
-        let cover = if self.read.cover.is_empty() { "Generated" } else { "Its own" };
         let row = |key, label, value: &str, opens| Row { key, label, value: value.to_owned(), steps: false, opens, sentence: "" };
-        vec![
-            row(SCRAPE, "Scrape This Game", if self.read.scraping { "A run is going" } else { "…" }, false),
-            row(EDIT, "Edit Details", "", true),
-            row(COVER, "Cover art", cover, true),
-            row(FOLDER, "Open Folder", "", false),
-            row(HIDE, "Hide from Library", "…", false),
-        ]
+        let scrape = match &self.run {
+            Some((_, words)) => words.as_str(),
+            None if self.read.scraping => "A run is going",
+            None => "…",
+        };
+        vec![row(SCRAPE, "Scrape This Game", scrape, false), row(EDIT, "Edit Details", "", true), row(FOLDER, "Open Folder", "", false), row(HIDE, "Hide from Library", "…", false)]
+    }
+
+    /// Edit Details' rows: each detail with its value; A types it, Y puts back what was scraped.
+    fn edit_rows(&self) -> Vec<Row> {
+        DETAILS
+            .iter()
+            .map(|(field, label)| {
+                let value = self.read.details.iter().find(|d| d.field == *field).map(|d| d.value.clone()).unwrap_or_default();
+                Row { key: field, label, value, steps: false, opens: true, sentence: "" }
+            })
+            .collect()
+    }
+
+    /// Whether this page's scrape is going.
+    pub fn running(&self) -> bool {
+        self.run.as_ref().is_some_and(|(going, _)| *going)
     }
 
     /// A on a row: Hide from Library asks first; any other row is its door.
@@ -585,10 +680,18 @@ impl GamePage {
                 let sentence = "It leaves every library view until Settings lists hidden games again. Its file is not touched.";
                 Outcome::Ask(ask(&format!("Hide {}?", self.read.title), sentence, "Hide"), Change::Hide)
             }
-            // A run going holds Scrape This Game until it ends, as Mistress's row is disabled.
+            Some(row) if self.editing => {
+                let start = self.read.details.iter().find(|d| d.field == row.key).map(|d| d.value.clone()).unwrap_or_default();
+                Outcome::Type { field: row.key, title: format!("{} › {}", self.read.title, row.label), start }
+            }
+            Some(row) if row.key == SCRAPE && self.running() => {
+                Outcome::Stop(ask("Stop the scrape?", "What was fetched before it stops is kept.", "Stop"))
+            }
+            // Another run going (the Scraper tool's) holds Scrape This Game until it ends.
             Some(row) if row.key == SCRAPE && self.read.scraping => Outcome::Nothing,
+            Some(row) if row.key == SCRAPE => Outcome::Scrape,
             Some(row) if row.key == FOLDER => Outcome::OpenFolder,
-            Some(row) if !row.steps => Outcome::Door(row.key),
+            Some(row) if row.key == EDIT => Outcome::Edit,
             _ => Outcome::Nothing,
         }
     }
@@ -615,6 +718,14 @@ impl GamePage {
             Change::Engine(v) => r.engine = v.clone(),
             Change::Profile(v) => r.profile = v.clone(),
             Change::Standard(v) => r.standard = v.clone(),
+            Change::Edit(field, value) => {
+                if let Some(d) = r.details.iter_mut().find(|d| d.field == *field) {
+                    d.edited = value.is_some();
+                    if let Some(v) = value {
+                        d.value = v.clone();
+                    }
+                }
+            }
             Change::DeleteState(_) | Change::Hide => {}
         }
     }
@@ -641,14 +752,53 @@ impl GamePage {
         }
     }
 
-    /// A on a tile: a state loads, a picture opens the viewer (a later piece's).
+    /// Y on Edit Details' row: the detail goes back to what was scraped, where the player's edit holds it.
+    pub fn reset(&self, index: usize) -> Outcome {
+        if !self.editing {
+            return Outcome::Nothing;
+        }
+        match DETAILS.get(index).and_then(|(field, _)| self.read.details.iter().find(|d| d.field == *field)) {
+            Some(d) if d.edited => Outcome::Changed(Change::Edit(d.field, None)),
+            _ => Outcome::Nothing,
+        }
+    }
+
+    /// The media viewer on the Media section's tile at `index`: ES-DE's, its items the pictures and clips in the page's
+    /// order and its manual the game's PDF, opened on the manual where that tile was chosen.
+    pub fn viewer(&self, index: usize) -> Option<emusen_esde::scene::Viewer> {
+        use emusen_esde::scene::{viewer::Entry, ManualView, Viewer};
+        let chosen = self.read.media.get(index)?;
+        let shown: Vec<&Media> = self.read.media.iter().filter(|m| m.kind != MediaKind::Manual).collect();
+        let entries = shown.iter().map(|m| Entry { kind: kind_word(m.kind).to_owned(), source: m.path.clone() }).collect();
+        let manual = self.read.media.iter().find(|m| m.kind == MediaKind::Manual).map(|m| m.path.clone());
+        let at = shown.iter().position(|m| m.path == chosen.path).unwrap_or(0);
+        let reading = (chosen.kind == MediaKind::Manual).then(ManualView::default);
+        Some(Viewer { entries, index: at, manual, reading, pages: 0 })
+    }
+
+    /// The viewer's caption: what is shown and where it stands among the media, or the manual's page.
+    pub fn caption(&self, viewer: &emusen_esde::scene::Viewer) -> String {
+        if let Some(view) = viewer.reading {
+            return match viewer.pages {
+                0 => "Manual".into(),
+                n => format!("Manual {BETWEEN} Page {} of {n}", view.page + 1),
+            };
+        }
+        let labels: Vec<(String, &Media)> = self.media_labels().into_iter().zip(&self.read.media).filter(|(_, m)| m.kind != MediaKind::Manual).collect();
+        match labels.get(viewer.index) {
+            Some((label, _)) => format!("{label} {BETWEEN} {} of {}", viewer.index + 1, labels.len()),
+            None => String::new(),
+        }
+    }
+
+    /// A on a tile: a state loads, a picture opens the viewer.
     pub fn choose_tile(&self, index: usize) -> Outcome {
         match (self.shown(), self.content()) {
             (Section::States, Content::Tiles(tiles)) => match tiles.get(index) {
                 Some(t) if !t.key.starts_with("empty.") => Outcome::Play(Some(t.key.clone())),
                 _ => Outcome::Nothing,
             },
-            (Section::Media, Content::Tiles(tiles)) if index < tiles.len() => Outcome::Door("viewer"),
+            (Section::Media, Content::Tiles(tiles)) if index < tiles.len() => Outcome::View(index),
             _ => Outcome::Nothing,
         }
     }
@@ -670,6 +820,7 @@ impl GamePage {
             },
             Content::Tiles(_) => Screen::GamePageView,
             Content::Rows(rows) => match rows.get(content) {
+                Some(_) if self.editing => Screen::GamePageEdit,
                 Some(r) if r.steps => Screen::GamePageValue,
                 Some(_) if self.shown() == Section::Options => Screen::GamePageChange,
                 Some(_) => Screen::GamePageChoose,

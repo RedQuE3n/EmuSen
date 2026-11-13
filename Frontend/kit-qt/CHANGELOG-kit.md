@@ -5,6 +5,15 @@ writes it, is committed under `Testing/qmltypes/` and compared on every build. U
 addition, a change or a removal, bumps the minor (R-20261111-107, R-20261111-108); each entry names what changed and the
 section of `EmuSen_Kit.md` that records it.
 
+## 1.3, stage 5 piece P5: a page of a PDF (2026-11-12)
+
+Additions only; no type, property, signal or invokable was removed or changed.
+
+- **`PdfPage`** (qmldir): one page of a PDF drawn to its box through Qt PDF, with `source`, `page`, and the file's
+  `pages` and the page's `pageSize` in points; the module depends on `QtQuick.Pdf`. `EmuSen_Kit.md` §7.110.
+- The minor is 1.3, one above WiseMan's 1.2 (rule Q, EmuSen_Qt.md §5.3; R-20261111-107); the registry, qmldir and
+  QML-file surface are `Testing/qmltypes/EmuSen.Kit-1.3.*`, each 1.2 file with these added.
+
 ## 1.2, stage 5 piece H: the controller drawing and the settings frame's page of content (2026-11-09; 1.2 on 2026-11-12)
 
 Additions only; no type, property, signal or invokable was removed or changed.

@@ -79,6 +79,13 @@ pub enum Screen {
     GamePageChange,
     GamePageChoose,
     GamePageNone,
+    /// Edit Details' rows: A types the detail, Y puts back what was scraped.
+    GamePageEdit,
+    /// The media viewer: Left and Right browse, Up opens the manual where the game has one.
+    GamePageViewer,
+    GamePageViewerManual,
+    /// The viewer's manual: Left and Right turn the page, the shoulders zoom, Down goes back to the media.
+    GamePageManual,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -268,6 +275,10 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
         Screen::GamePageChange => &[(UiButton::Accept, "Change", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
         Screen::GamePageChoose => &[(UiButton::Accept, "Choose", None), PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
         Screen::GamePageNone => &[PAGE_HEART, PAGE_SECTION, BACK, PAGE_HOME],
+        Screen::GamePageEdit => &[(UiButton::Accept, "Change", None), (UiButton::Search, "Reset", Some(RESET)), BACK],
+        Screen::GamePageViewer => &[(UiButton::Left, "Browse", None), BACK],
+        Screen::GamePageViewerManual => &[(UiButton::Left, "Browse", None), (UiButton::Up, "Manual", None), BACK],
+        Screen::GamePageManual => &[(UiButton::Left, "Page", None), (UiButton::PageUp, "Zoom", None), (UiButton::Down, "Media", None), BACK],
     }
 }
 

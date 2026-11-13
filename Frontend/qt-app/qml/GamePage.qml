@@ -28,7 +28,8 @@ Kit.NormalizedCanvas {
         objectName: "pageFrame"
         anchors.fill: parent
         form: Kit.Forms.BigScreen
-        focus: screen.inputs
+        // The viewer and the keyboard take the keys while they are open; the page has them back when they close.
+        focus: screen.inputs && !screen.page.viewing && !screen.page.typing
         padFamily: screen.padFamily
         helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
         helpSpacing: 40
@@ -87,9 +88,14 @@ Kit.NormalizedCanvas {
             target: screen.page
             function onAnswered() { frame.forceActiveFocus() }
         }
+        // The viewer and the keyboard likewise, once closed.
+        Connections {
+            target: screen.page
+            function onReturned() { frame.forceActiveFocus() }
+        }
         Connections {
             target: frame.controller
-            function onBackDeclined() { screen.backed() }
+            function onBackDeclined() { screen.page.back() || screen.backed() }
         }
         // Asked before deleting a state or hiding the game: No first and focused, B answers No (EmuSen_Interface.md §15.6).
         Kit.Question {
@@ -114,6 +120,163 @@ Kit.NormalizedCanvas {
         // Opened each time it is asked; a Binding, since B closing the popup would undo a plain one.
         Binding {
             question.visible: screen.page.asking
+        }
+    }
+    // The media viewer, from A on Media's tile: the picture, the clip with its sound, or the manual's page, on Void with
+    // the caption bar over the help bar; ES-DE's viewer's buttons step it (EmuSen_Interface.md §18.2; EmuSen_Qt.md §7.8.2).
+    Kit.Frame {
+        id: viewer
+        objectName: "pageViewer"
+        anchors.fill: parent
+        visible: screen.page.viewing
+        focus: screen.inputs && screen.page.viewing
+        surfaceDrawn: false
+        padFamily: screen.padFamily
+        helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        helpSpacing: 40
+        helpGlyphGap: 10
+        controller.navigationShown: false
+        help: HelpModel {
+            objectName: "viewerHelp"
+            screen: screen.page.viewHelp
+        }
+        Connections {
+            target: viewer.controller
+            function onBackDeclined() { screen.page.viewClose() }
+        }
+        Item {
+            id: shown
+            objectName: "viewerShown"
+            x: -viewer.safeX
+            y: -viewer.safeY
+            width: screen.width
+            height: screen.height
+            focus: true
+            Keys.onPressed: (event) => event.accepted = screen.page.viewKey(event.key, event.modifiers)
+            // The caption bar is 80 tall (EmuSen_Interface.md §18.2).
+            readonly property real captionHeight: 80
+            readonly property real areaHeight: screen.height - Kit.Tokens.helpBar - shown.captionHeight
+            Rectangle {
+                anchors.fill: parent
+                color: Kit.Tokens.voidFill
+            }
+            Image {
+                objectName: "viewerPicture"
+                width: parent.width
+                height: shown.areaHeight
+                visible: screen.page.viewKind === 0
+                source: screen.page.viewing && screen.page.viewKind === 0 ? screen.page.viewSource : ""
+                fillMode: Image.PreserveAspectFit
+                asynchronous: true
+            }
+            Kit.VideoTile {
+                objectName: "viewerClip"
+                width: parent.width
+                height: shown.areaHeight
+                visible: screen.page.viewKind === 1
+                source: screen.page.viewKind === 1 ? screen.page.viewSource : ""
+                playing: viewer.visible && screen.page.viewKind === 1
+                // Heard at the player's Volume, as the page's clip is (EmuSen_Interface.md §5.9; R-20261111-100).
+                muted: false
+                volume: screen.page.clipVolume
+                fillMode: Image.PreserveAspectFit
+                delay: 0
+            }
+            // The manual's page fitted to the area, each zoom step half the area's height more, panned an eighth of its
+            // width a step; made only while the manual is shown, so Qt PDF opens no file else.
+            Loader {
+                id: manualLoader
+                width: parent.width
+                height: shown.areaHeight
+                active: screen.page.viewing && screen.page.viewKind === 2
+                sourceComponent: Kit.PdfPage {
+                    id: manual
+                    objectName: "viewerManual"
+                    readonly property real fit: pageSize.width > 0 && pageSize.height > 0 ? Math.min(manualLoader.width / pageSize.width, manualLoader.height / pageSize.height) : 0
+                    readonly property real zoom: 1 + screen.page.viewZoom * 0.5
+                    source: screen.page.viewManual
+                    page: screen.page.viewPage
+                    width: pageSize.width * fit * zoom
+                    height: pageSize.height * fit * zoom
+                    x: (manualLoader.width - width) / 2 - screen.page.viewPanX * manualLoader.width / 8
+                    y: (manualLoader.height - height) / 2 - screen.page.viewPanY * manualLoader.width / 8
+                    onPagesChanged: screen.page.viewPages(manual.pages)
+                }
+            }
+            Rectangle {
+                objectName: "viewerCaptionBar"
+                y: shown.areaHeight
+                width: parent.width
+                height: shown.captionHeight
+                color: Kit.Tokens.captionSurface
+                Text {
+                    objectName: "viewerCaption"
+                    x: Kit.Tokens.safeAreaX
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: screen.page.viewCaption
+                    color: Kit.Tokens.textStrong
+                    font.family: faces.regular
+                    font.pixelSize: Kit.Tokens.fontBody
+                }
+            }
+        }
+    }
+    // A detail typed on the docked keyboard for Edit Details: Done saves it at once, B on an empty field lets it go.
+    Kit.KeyboardModel {
+        id: typist
+        onClosed: (kept) => screen.page.typed(kept, typist.text)
+    }
+    Connections {
+        target: screen.page
+        function onTypingStartChanged() { typist.setText(screen.page.typingStart, screen.page.typingStart.length) }
+    }
+    Kit.Frame {
+        id: typeFrame
+        objectName: "pageTyping"
+        anchors.fill: parent
+        visible: screen.page.typing
+        focus: screen.inputs && screen.page.typing
+        padFamily: screen.padFamily
+        helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        helpSpacing: 40
+        helpGlyphGap: 10
+        controller.navigationShown: false
+        help: HelpModel {
+            screen: HelpModel.ToolSearch
+        }
+        Connections {
+            target: typeFrame.controller
+            function onActionInvoked(key) { typist.act(key) }
+        }
+        Column {
+            spacing: Kit.Tokens.paneGap
+            Text {
+                text: screen.page.typingTitle
+                color: Kit.Tokens.textStrong
+                font.family: faces.regular
+                font.pixelSize: Kit.Tokens.fontTitle
+            }
+            Text {
+                objectName: "pageTyped"
+                text: typist.text
+                color: Kit.Tokens.text
+                font.family: faces.regular
+                font.pixelSize: Kit.Tokens.fontRow
+            }
+        }
+        Item {
+            x: -typeFrame.safeX
+            y: -typeFrame.safeY
+            width: screen.width
+            height: screen.height
+            Kit.Keyboard {
+                objectName: "pageKeyboard"
+                model: typist
+                y: 398
+                width: screen.width
+                focus: true
+                labelFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontBody })
+            }
         }
     }
     Faces {

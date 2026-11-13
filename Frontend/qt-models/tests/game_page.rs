@@ -2,6 +2,7 @@
 //! design orders them, the Options rows and their stepping, the doors, the help bar by the focus, and the screens' routes
 //! into the page and back to where it was opened.
 
+use emusen_qt_models::cheats::Switch;
 use emusen_qt_models::game_page::*;
 use emusen_qt_models::help::Screen;
 use emusen_qt_models::screens::{page_origin, page_step, step, step_in, Ask, Shown, GAME_PAGE};
@@ -27,7 +28,7 @@ fn read() -> Read {
             Choice { value: Some("venus".into()), text: "Venus (the console's)".into() },
             Choice { value: Some("snes9x".into()), text: "Snes9x".into() },
         ],
-        cheats: Some((1, 3)),
+        cheats: vec![switch("Infinite lives", true), switch("Moon jump", false), switch("All keys", false)],
         crop: Some(false),
         ..Read::default()
     }
@@ -94,14 +95,18 @@ fn qt_7_8_states_stand_slot_by_slot_with_auto_after_the_last_in_use() {
     assert_eq!(page.delete(4), Outcome::Nothing, "an empty slot has nothing to delete");
 }
 
+fn switch(description: &str, on: bool) -> Switch {
+    Switch { description: description.into(), on }
+}
+
 #[test]
 fn qt_7_8_options_rows_step_the_engine_and_hide_the_rows_that_open_nothing() {
     let mut page = GamePage::new(read(), NOW);
     page.choose_section(2);
     let Content::Rows(rows) = page.content() else { panic!("rows") };
     let words: Vec<String> = rows.iter().map(|r| format!("{} | {}", r.label, r.value)).collect();
-    // Cheats, Display crop and Package open nothing yet, so they are not shown though the game has cheats and a crop.
-    assert_eq!(words, ["Engine | Venus (default)"]);
+    // Display crop and Package open nothing yet, so they are not shown though the game has a crop.
+    assert_eq!(words, ["Engine | Venus (default)", "Cheats | 1 of 3 on"]);
     assert!(rows[0].steps);
     assert_eq!(page.step_row(0, 1), Outcome::Changed(Change::Engine(Some("venus".into()))));
     assert_eq!(page.step_row(0, -1), Outcome::Changed(Change::Engine(Some("snes9x".into()))), "stepping wraps");
@@ -111,12 +116,38 @@ fn qt_7_8_options_rows_step_the_engine_and_hide_the_rows_that_open_nothing() {
     let mut one = read();
     one.engines = vec![Choice { value: None, text: "Venus (the only one)".into() }];
     one.crop = None;
-    one.cheats = None;
+    one.cheats = Vec::new();
     let mut page = GamePage::new(one, NOW);
     page.choose_section(2);
     let Content::Rows(rows) = page.content() else { panic!("rows") };
-    assert_eq!(rows.iter().map(|r| r.label).collect::<Vec<_>>(), ["Engine"]);
+    assert_eq!(rows.iter().map(|r| r.label.clone()).collect::<Vec<_>>(), ["Engine"], "no cheats, no Cheats row");
     assert!(!rows[0].steps);
+}
+
+#[test]
+fn qt_cheats_options_opens_the_games_cheats_each_a_switch_saved_as_it_turns() {
+    let mut page = GamePage::new(read(), NOW);
+    page.choose_section(2);
+    assert_eq!(page.choose_row(1), Outcome::Cheats, "A on Cheats opens its page");
+    page.cheating = true;
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    let words: Vec<String> = rows.iter().map(|r| format!("{} | {}", r.label, r.value)).collect();
+    assert_eq!(words, ["Infinite lives | On", "Moon jump | Off", "All keys | Off"]);
+    assert!(rows.iter().all(|r| r.steps && !r.opens));
+    assert_eq!(page.choose_row(1), Outcome::Changed(Change::Cheat(1, true)), "A switches a cheat on");
+    assert_eq!(page.step_row(0, 1), Outcome::Changed(Change::Cheat(0, false)), "Right switches one off");
+    assert_eq!(page.step_row(0, -1), Outcome::Changed(Change::Cheat(0, false)), "Left too");
+    assert_eq!(page.help(None, 0), Screen::GamePageValue);
+    page.changed(&Change::Cheat(1, true));
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    assert_eq!(rows[1].value, "On", "taken into the page at once");
+    assert!(page.back(), "B goes back to Options");
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    assert_eq!(rows[1].value, "2 of 3 on");
+    assert!(!page.back(), "B on Options leaves the page");
+    page.cheating = true;
+    page.choose_section(0);
+    assert!(!page.cheating, "another section leaves Cheats");
 }
 
 #[test]
@@ -137,7 +168,7 @@ fn qt_7_8_the_overview_media_and_details() {
     page.choose_section(4);
     let Content::Rows(rows) = page.content() else { panic!("rows") };
     // Cover art opens nothing yet, so it is not shown.
-    assert_eq!(rows.iter().map(|r| r.label).collect::<Vec<_>>(), ["Scrape This Game", "Edit Details", "Open Folder", "Hide from Library"]);
+    assert_eq!(rows.iter().map(|r| r.label.clone()).collect::<Vec<_>>(), ["Scrape This Game", "Edit Details", "Open Folder", "Hide from Library"]);
     assert_eq!(page.choose_row(0), Outcome::Scrape);
     let Outcome::Ask(q, change) = page.choose_row(3) else { panic!("Hide asks first") };
     assert_eq!((q.title.as_str(), q.choices.as_slice(), change), ("Hide Cobalt Harbor (Synthetic)?", &["No".to_string(), "Hide".to_string()][..], Change::Hide));
@@ -171,7 +202,7 @@ fn qt_7_8_g2_the_standard_the_package_the_players_screenshots_scrape_and_open_fo
     page.choose_section(2);
     let Content::Rows(rows) = page.content() else { panic!("rows") };
     let words: Vec<String> = rows.iter().map(|r| format!("{} | {}", r.label, r.value)).collect();
-    assert_eq!(words, ["Engine | Venus (default)", "Television standard | PAL"]);
+    assert_eq!(words, ["Engine | Venus (default)", "Television standard | PAL", "Cheats | 1 of 3 on"]);
     assert!(rows[1].steps);
     assert_eq!(page.step_row(1, 1), Outcome::Changed(Change::Standard(None)), "PAL wraps to the game's own");
     assert_eq!(page.step_row(1, -1), Outcome::Changed(Change::Standard(Some("ntsc".into()))));
@@ -287,7 +318,7 @@ fn qt_7_8_2_edit_details_types_each_detail_and_puts_back_what_was_scraped() {
     assert_eq!(page.choose_row(1), Outcome::Edit);
     page.editing = true;
     let Content::Rows(rows) = page.content() else { panic!("rows") };
-    assert_eq!(rows.iter().map(|r| r.label).collect::<Vec<_>>(), ["Name", "Description", "Release date", "Developer", "Publisher", "Genre", "Players"]);
+    assert_eq!(rows.iter().map(|r| r.label.clone()).collect::<Vec<_>>(), ["Name", "Description", "Release date", "Developer", "Publisher", "Genre", "Players"]);
     assert_eq!(rows[0].value, "Cobalt Harbor");
     assert_eq!(page.help(None, 0), Screen::GamePageEdit);
     assert_eq!(page.choose_row(0), Outcome::Type { field: "name", title: "Cobalt Harbor (Synthetic) › Name".into(), start: "Cobalt Harbor".into() });

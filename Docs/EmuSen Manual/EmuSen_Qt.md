@@ -6683,12 +6683,31 @@ Seeded faults, each reverted:
   each with the value the scraper's `metadata` resolves; A types it on the docked keyboard, Done saves it at once as a
   games.db edit (empty words put back what was scraped), Y puts back what was scraped, B goes back to Details. A name
   edited names the game in the grid too: the library reads games.db's `name` edits.
-- **Not opened yet**, so not shown: Options' Cheats, Display crop and Package, and Details' Cover art. The viewer's
+- **Not opened yet**, so not shown: Options' Display crop and Package, and Details' Cover art (Cheats is §7.8.3's). The viewer's
   `X Set as cover` and `Y Delete…` of §18.2 are not built. The run fetches the scraper's default kinds, not the
   player's Scrape kinds settings, which nothing maps to the scraper's kinds yet.
 - Tests: qt-models' `game_page` (the viewer over the media, the run's words, Edit Details' rows), qt-app's `page_doors`
   (the viewer paged by the pad, a scrape against the recorded server to done with the cover shown, a name typed, stored
   and named in the grid).
+
+#### 7.8.3 Piece P6: a game's cheats while it runs (2026-11-13)
+
+- **The game's own list** is the file Galaxia names for it (`emusen_galaxia_cheat_game_list`: `<game>.json` in
+  `cheats/<console>`), read and saved as the `CheatFile` model; `qt-models/src/cheats.rs` is its one reader and writer.
+- **Given at the start.** On the frame thread, after the session opens and before `Opened` and its first frame, each
+  cheat of the list is given to the session alone (`cheat_op` `IMPORT` with a one-cheat file), so the session's id of
+  each is known from `LIST`; a cheat switched on is in force from the first frame. A cheat the session refuses has no
+  id and is switched in its file only.
+- **Pause Card ▸ Game Options ▸ Cheats** lists the game's cheats, each a stepped row reading On or Off as a settings
+  switch does; A, Left or Right turns it at once (`ENABLE` or `DISABLE` by its id) and saves the list, the card staying.
+  The Cheats row is dimmed, and opens nothing, for a game with no cheats in its list.
+- **Game page ▸ Options ▸ Cheats** ("1 of 3 on") is shown where the list holds cheats, and opens the same switches as
+  Options' deeper page; a turn changes the file only, taken by the game's next start.
+- **Not built here:** adding, editing or removing a code, the database's download and the Cheats tool. Hosted libretro
+  cores take no cheats (the base's open defect: `cheat_space` null, `retro_cheat_set` unused).
+- Tests: qt-models' `pause` and `game_page` (the pages' rows and turns), qt-app's `game_page_cheats` (the page's switch
+  saved to the list) and `cheats_gpu` (a GPU job: on the test core, a poke switched on from the card holds the counted
+  RAM byte in a saved state, switched off the count runs on, and the game started again has the switch as saved).
 
 ### 7.9 Repair piece DC-B: the program does what it offers and says when it fails (2026-11-11)
 

@@ -5,6 +5,7 @@
 use emusen_crystal_client::shapes::{Moment, Picture, RewindReel, SessionInfo};
 use emusen_kit_core::input::{UiButton, WalkAction};
 use emusen_qt_models::help::{action_lines, entries, Screen};
+use emusen_qt_models::cheats::Switch;
 use emusen_qt_models::pause::{facts_of, Card, DiscFacts, Facts, Outcome, Page, PaneKind, SlotFact, Tile};
 use emusen_qt_models::reel::{interval_for, marks_of, stops_of, Reel};
 
@@ -265,6 +266,31 @@ fn game_options_holds_mistresss_rows_and_memory_cards_where_the_drive_changes() 
     let mut disc = two_discs();
     disc.choose(at(&disc, "Game Options"));
     assert_eq!(rows(&disc).last().unwrap(), "Memory Cards ▸", "a console with a drive has its cards");
+}
+
+#[test]
+fn cheats_lists_the_games_cheats_each_a_switch_that_turns_at_once() {
+    let words = |c: &Card| c.rows().into_iter().map(|r| format!("{} | {}{}", r.label, r.value, if r.steps { " ◂▸" } else { "" })).collect::<Vec<_>>();
+    let mut none = card(Facts::default());
+    none.choose(at(&none, "Game Options"));
+    assert!(none.rows()[0].dimmed, "a game with no cheats: the row is a hint");
+    assert_eq!(none.choose(0), Outcome::Nothing, "and opens nothing");
+    let cheats = vec![Switch { description: "Infinite lives".into(), on: true }, Switch { description: "Moon jump".into(), on: false }];
+    let facts = Facts { cheats, ..Facts::default() };
+    assert_eq!(Facts::from_json(&facts.to_json()), facts, "the cheats cross to the card whole");
+    let mut c = card(facts);
+    c.choose(at(&c, "Game Options"));
+    assert!(!c.rows()[0].dimmed);
+    assert_eq!(c.choose(0), Outcome::Shown);
+    assert_eq!((c.page, c.title("G"), c.breadcrumb("G"), c.help()), (Page::Cheats, "Cheats".into(), "G".into(), Screen::PausePage));
+    assert_eq!(words(&c), ["Infinite lives | On ◂▸", "Moon jump | Off ◂▸"]);
+    assert_eq!(c.choose(1), Outcome::Cheat { index: 1, on: true }, "A switches it on");
+    assert_eq!(words(&c)[1], "Moon jump | On ◂▸", "shown at once");
+    assert_eq!(c.step(0, 1, false), Outcome::Cheat { index: 0, on: false }, "Right switches it off");
+    assert_eq!(c.step(0, -1, false), Outcome::Cheat { index: 0, on: true }, "Left back on");
+    assert_eq!(c.page, Page::Cheats, "the card stays");
+    assert_eq!(c.back(), Outcome::Shown);
+    assert_eq!((c.page, c.current), (Page::Options, 0), "B back to Cheats' row");
 }
 
 #[test]

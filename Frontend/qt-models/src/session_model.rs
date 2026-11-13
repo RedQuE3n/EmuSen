@@ -230,6 +230,12 @@ pub mod qobject {
         #[cxx_name = "setConsoleSetting"]
         fn set_console_setting(self: Pin<&mut SessionModel>, key: &QString, value: &QString);
 
+        /// The game's cheat at `index` of its list switched in the running game at once and saved to the list; the
+        /// card's facts read again.
+        #[qinvokable]
+        #[cxx_name = "switchCheat"]
+        fn switch_cheat(self: Pin<&mut SessionModel>, index: i32, on: bool);
+
         /// Guide held with `button` over the running game (`PadRouter.guideChord`): pause.rs's `guide_chord` says what it asks.
         #[qinvokable]
         #[cxx_name = "guideChord"]
@@ -337,6 +343,8 @@ pub struct SessionModelRust {
     runtime: Option<Runtime>,
     platform: Option<Arc<Platform>>,
     session: Option<Session>,
+    /// The game's own cheat list as given to the open session.
+    cheats: Option<crate::cheats::Given>,
     /// The runtime holding the game after a Frame Advance, until a resume lets it run (Mistress's `AdvanceOneFrame`).
     stepped: bool,
 }
@@ -396,6 +404,7 @@ impl Default for SessionModelRust {
             runtime: None,
             platform: None,
             session: None,
+            cheats: None,
             stepped: false,
         }
     }
@@ -566,7 +575,8 @@ impl qobject::SessionModel {
         };
         self.as_mut().set_resume_subject(QString::from(&subject));
         let sync = self.sync_to_display;
-        let session = Session::start(runtime, opening, engine, device, handoff, GameIo { pads, sound, sync }, clock, held, report);
+        let cheats = self.as_mut().platform().ok();
+        let session = Session::start(runtime, opening, engine, device, handoff, GameIo { pads, sound, sync, cheats }, clock, held, report);
         self.as_mut().set_sounding(sounding);
         self.as_mut().rust_mut().session = Some(session);
         let title = self.as_mut().title();
@@ -890,6 +900,7 @@ impl qobject::SessionModel {
             })
             .collect();
         facts.cards = card_facts(&runtime, session, &info.console);
+        facts.cheats = self.cheats.as_ref().map(|g| g.list.switches()).unwrap_or_default();
         let text = QString::from(facts.to_json().as_str());
         if self.card_facts != text {
             self.as_mut().rust_mut().card_facts = text;
@@ -1104,6 +1115,7 @@ impl qobject::SessionModel {
         *self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         drop(self.as_mut().rust_mut().session.take());
         self.as_mut().rust_mut().opened = None;
+        self.as_mut().rust_mut().cheats = None;
         self.as_mut().rust_mut().holding = None;
         self.as_mut().rust_mut().from_state = None;
         self.as_mut().set_resume_asked(false);
@@ -1155,7 +1167,20 @@ impl qobject::SessionModel {
             Report::Volume(volume) => self.as_mut().heard_volume(volume),
             Report::Device(device) => self.as_mut().heard_device(device),
             Report::Rate { fps } => self.as_mut().set_fps(fps),
+            Report::Cheats(given) => self.as_mut().rust_mut().cheats = given,
         }
+    }
+
+    fn switch_cheat(mut self: Pin<&mut Self>, index: i32, on: bool) {
+        let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
+        let Ok(platform) = self.as_mut().platform() else { return };
+        let Some(mut given) = self.as_mut().rust_mut().cheats.take() else { return };
+        let switched = given.switch(&platform, &runtime, session, index.max(0) as usize, on);
+        self.as_mut().rust_mut().cheats = Some(given);
+        if let Err(words) = switched {
+            self.as_mut().say(format!("The cheat was not switched: {words}"), true);
+        }
+        self.read_card_facts();
     }
 
     fn choose_slot(mut self: Pin<&mut Self>, slot: u32) {

@@ -57,6 +57,7 @@ MenuCard {
         onSettingAsked: (key, value) => root.session.setConsoleSetting(key, value)
         controllers: root.settings ? root.settings.cardControllers : ""
         onControllersAsked: (index, by) => root.settings?.cardAct(index, by)
+        onCheatAsked: (index, on) => root.session.switchCheat(index, on)
     }
     GameModel {
         id: games

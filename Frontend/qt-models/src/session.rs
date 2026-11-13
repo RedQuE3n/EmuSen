@@ -39,6 +39,8 @@ pub enum Report {
     Device(Option<String>),
     /// Frames run per second, over the last second the game ran.
     Rate { fps: f64 },
+    /// The game's own cheat list, given to the session before its first frame; none where it has none.
+    Cheats(Option<crate::cheats::Given>),
 }
 
 /// What the model asks of the frame thread.
@@ -60,16 +62,18 @@ struct Control {
 }
 
 /// What the game hears and plays through, each when the window has it: the game's side of the pads and the sound player;
-/// and whether its frames follow the display's swaps (Sync to display).
+/// and whether its frames follow the display's swaps (Sync to display); and the platform library the game's own cheat
+/// list is read from, none to give it none.
 pub struct GameIo {
     pub pads: Option<GameInput>,
     pub sound: Option<GameSound>,
     pub sync: bool,
+    pub cheats: Option<Arc<emusen_platform_client::Platform>>,
 }
 
 impl Default for GameIo {
     fn default() -> GameIo {
-        GameIo { pads: None, sound: None, sync: true }
+        GameIo { pads: None, sound: None, sync: true, cheats: None }
     }
 }
 
@@ -213,6 +217,13 @@ fn run(
     // An engine that withholds rewind says why in session_info, which the card shows; the game plays on without it,
     // and Rewind held says so.
     let rewind_every = crate::reel::keep(runtime, session).map(crate::reel::held_step);
+    // The game's cheats switched on are in force from its first frame (cheats.rs).
+    if let (Some(platform), Some(path)) = (io.cheats.as_ref(), open.path.as_deref()) {
+        match crate::cheats::give(platform, runtime, session, path) {
+            Ok(given) => report(Report::Cheats(given)),
+            Err(words) => report(Report::Said(format!("The game's cheats could not be switched on: {words}"))),
+        }
+    }
     report(Report::Opened { session });
     let mut info = frame_info();
     let mut frame = Frame::default();

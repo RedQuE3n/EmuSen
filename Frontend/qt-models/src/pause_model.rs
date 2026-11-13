@@ -41,6 +41,7 @@ pub mod qobject {
         Cards,
         Drawer,
         Controllers,
+        Cheats,
     }
 
     extern "RustQt" {
@@ -195,6 +196,11 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "controllersAsked"]
         fn controllers_asked(self: Pin<&mut PauseModel>, index: i32, by: i32);
+
+        /// The game's cheat at `index` of its list switched on or off, for `SessionModel.switchCheat`.
+        #[qsignal]
+        #[cxx_name = "cheatAsked"]
+        fn cheat_asked(self: Pin<&mut PauseModel>, index: i32, on: bool);
     }
 
     unsafe extern "RustQt" {
@@ -301,6 +307,7 @@ fn shown_page(page: Page) -> PausePage {
         Page::Cards => PausePage::Cards,
         Page::Drawer(_) => PausePage::Drawer,
         Page::Controllers => PausePage::Controllers,
+        Page::Cheats => PausePage::Cheats,
     }
 }
 
@@ -421,6 +428,10 @@ impl qobject::PauseModel {
                 self.shown();
             }
             Outcome::Controllers { index, by } => self.as_mut().controllers_asked(index as i32, by),
+            Outcome::Cheat { index, on } => {
+                self.as_mut().cheat_asked(index as i32, on);
+                self.shown();
+            }
         }
     }
 

@@ -119,11 +119,17 @@ impl ConsoleRead {
 
 /// Reads every console: each once, by the first system naming it; those an engine runs first, then by release year and
 /// name (EmuSen_BigPicture.md §52.4). A console no engine runs is listed with no schema read.
+/// The name a system's console settings are stored under, as Settings stores them and the runtime reads them (its
+/// `engine_for`, by the catalog row's console): the system's console, or its id where the table names none.
+pub fn settings_console(s: &SystemRow) -> &str {
+    if s.console.is_empty() { &s.id } else { &s.console }
+}
+
 pub fn read(source: &dyn ConsoleSource) -> Result<ConsoleRead, String> {
     let systems = source.systems()?;
     let mut consoles: Vec<Console> = Vec::new();
     for s in &systems {
-        let console = if s.console.is_empty() { s.id.clone() } else { s.console.clone() };
+        let console = settings_console(s).to_owned();
         if let Some(c) = consoles.iter_mut().find(|c| c.console.eq_ignore_ascii_case(&console)) {
             c.systems.push(s.id.clone());
             c.starts_empty |= s.starts_empty;

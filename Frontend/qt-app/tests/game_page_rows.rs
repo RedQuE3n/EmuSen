@@ -1,5 +1,6 @@
 //! A game's Display crop and Package from its page in the program, the game not running: Options' Display crop opens
-//! the game's own crop, stepped through Settings' overscan choices and stored in games.db for that game alone; Package
+//! the game's own crop, stepped through Settings' overscan choices, a custom one's edges with it, and stored in games.db
+//! for that game alone; Package
 //! opens the game's package, and A on its job makes one through the library tool, its progress said on the row until it
 //! is done and the package's row says what it now is.
 
@@ -99,6 +100,15 @@ fn the_game_page_sets_the_games_own_crop_and_makes_its_package() {
     let tv = crop(&rom).unwrap();
     assert!(tv.near(&Crop { left: tv.left, top: tv.left, right: tv.left, bottom: tv.left }), "an even crop: {tv:?}");
     assert_eq!(crop(&other), None);
+    // Right once more: Custom crop, from the crop shown, its four edges after it; Right on the left edge stores the next
+    // whole percent for this game alone, the other edges kept.
+    scene.pad(UiButton::Right);
+    until(&mut scene, "the edges shown", |s| reads(s, "Custom crop") && reads(s, "Left edge") && reads(s, "Bottom edge"));
+    assert!(reads(&mut scene, "3.3%"), "the television's edge, to a tenth");
+    down_to(&mut scene, "Left edge");
+    scene.pad(UiButton::Right);
+    until(&mut scene, "the left edge stored", |s| reads(s, "4%") && crop(&rom).is_some_and(|c| c.near(&Crop { left: 0.04, ..tv })));
+    assert_eq!(crop(&other), None, "the other game keeps its console's");
     // B goes back to Options, the row now the game's own.
     scene.pad(UiButton::Back);
     until(&mut scene, "Options again", |s| reads(s, "This game's") && !reads(s, "Crop overscan"));

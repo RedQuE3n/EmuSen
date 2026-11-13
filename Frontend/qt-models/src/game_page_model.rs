@@ -1117,8 +1117,8 @@ impl qobject::GamePageModel {
         self.outcome(outcome);
     }
 
-    pub fn step(self: Pin<&mut Self>, index: i32, by: i32) {
-        let outcome = self.page.step_row(index.max(0) as usize, by);
+    pub fn step(mut self: Pin<&mut Self>, index: i32, by: i32) {
+        let outcome = self.as_mut().rust_mut().page.step_row(index.max(0) as usize, by);
         self.outcome(outcome);
     }
 

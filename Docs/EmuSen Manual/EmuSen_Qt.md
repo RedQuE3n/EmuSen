@@ -6838,9 +6838,18 @@ Seeded faults, each reverted:
   one stepped row, Galaxia's Overscan row (its label and choice labels, `emusen_galaxia_settings_rows`): Console's, then
   each choice that hides a fixed part as `display::overscan` sizes it from the catalogue (Whole picture, TV overscan).
   A step is stored at once in games.db for that game alone (`set_crop`, percentages at each edge; Console's is
-  `clear_crop`); a crop no choice names reads as Settings' Custom crop, whose edges no Qt row sets yet. On the next
+  `clear_crop`); after the choices comes Settings' Custom crop, which starts from the crop shown and is followed by its
+  four edge rows (below); a crop no choice names reads as Custom crop too. On the next
   start the session reads the game's crop as it opens (`clients::game_crop`) and `display::read_for_game` draws it in
   place of the console's overscan, held to the catalogue's most at an edge.
+- **A custom crop's edges** (2026-11-13): one description, `display::EDGES` (each edge's `Crop*` key, label and pane
+  sentence), drawn in three places: Settings ▸ Consoles ▸ <console> and the Pause Card's Display, where the
+  description's `cropedges` entry stands for the four rows while the console's `Overscan` is `custom`, and the game
+  page's Display crop while its row is on Custom crop. An edge steps one percentage point (`display::EDGE_STEP`; the base
+  states no step), landing on whole points, held between none and the catalogue's `crop.most_at_an_edge`; on a console
+  it is stored as the `Crop*` key's percentage text, which the Pause Card's picture follows at once (`readPicture`), on a
+  game in games.db with `set_crop`. Tests: qt-models' `pause_settings` and `game_page`, qt-app's `game_page_rows` and
+  `pause_settings_gpu`.
 - **Package** (Options, where the library tool can run the game's job) opens a deeper page: the package's state in the
   row's words, then Make Package (`pkg-make` of the game's path under the library folder, linked) for a game with none,
   else Check Package (`pkg-check` of its folder). A starts the job, A again while it runs stops it; its events are drained

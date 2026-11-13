@@ -6,6 +6,7 @@
 
 use crate::consoles::{self, Console, ConsoleRead};
 use crate::tools::Tone;
+use crate::display::{self, Edge};
 use crate::{cards, firmware, schema, words};
 use emusen_kit_core::glyph::PadFamily;
 use emusen_kit_core::settings::RowKind;
@@ -495,6 +496,23 @@ impl SettingsView {
         self.read.catalogue["screens"].as_array().into_iter().flatten().any(|s| s["console"] == console && s["kind"] == "Television")
     }
 
+    /// A crop's four edge rows (display.rs `EDGES`), each marked as the description's entry is, where the console's
+    /// `Overscan` holds the entry's value.
+    fn edge_entries(&self, console: &str, entry: &Value) -> Vec<Value> {
+        let overscan = at(&self.read.graphics, &format!("Consoles.{console}.Overscan")).map(text_of).unwrap_or_default();
+        if entry["edges"] != true || overscan != display::CUSTOM {
+            return Vec::new();
+        }
+        let id = text_of(&entry["id"]);
+        display::EDGES.iter().map(|e| json!({ "id": format!("{id}:{}", e.key), "edge": e.key, "hint": e.hint, "pause": entry["pause"] })).collect()
+    }
+
+    /// The open console's stored percentage at an edge.
+    fn edge_percent(&self, edge: Edge) -> f64 {
+        let console = self.page().and_then(Page::console).unwrap_or_default();
+        display::edge_percent(&at(&self.read.graphics, &format!("Consoles.{console}.{}", edge.key)).map(text_of).unwrap_or_default())
+    }
+
     /// A console page's rows: its own page from the description with the schema's other rows in place of `*`, each
     /// group under a heading; the engines; the firmware's needs and rows; the media's.
     fn console_entries(&self, page: &Page) -> Vec<Value> {
@@ -524,6 +542,7 @@ impl SettingsView {
                             }
                         }
                         Some(key) if console.row(key).is_none_or(|r| r.choices.as_ref().is_none_or(Vec::is_empty)) => {}
+                        _ if e.get("edges").is_some() => out.extend(self.edge_entries(&console.console, e)),
                         _ => out.push(e.clone()),
                     }
                 }
@@ -786,6 +805,9 @@ impl SettingsView {
         }
         if let Some(group) = entry["heading"].as_str() {
             return row(group.to_owned(), String::new(), RowKind::Action, true);
+        }
+        if let Some(edge) = entry["edge"].as_str().and_then(Edge::by_key) {
+            return row(edge.label.to_owned(), display::edge_words(self.edge_percent(edge)), RowKind::Steps, false);
         }
         let console = self.console()?;
         if let Some(key) = entry["schema"].as_str() {
@@ -1265,6 +1287,12 @@ impl SettingsView {
         if self.on_saves() {
             return self.saves_step(entry, by);
         }
+        if let Some(edge) = entry["edge"].as_str().and_then(Edge::by_key) {
+            let next = display::edge_stepped(display::most(&self.read.catalogue), self.edge_percent(edge), by);
+            let console = self.page().and_then(Page::console)?.to_owned();
+            set_at(&mut self.read.graphics, &format!("Consoles.{console}.{}", edge.key), json!(next.to_string()));
+            return Some(Outcome::Saved(Model::Graphics, self.read.graphics.clone()));
+        }
         let console = self.console()?.clone();
         let value = |k: &str| console.value(k);
         if let Some(key) = entry["schema"].as_str() {
@@ -1309,6 +1337,9 @@ impl SettingsView {
         if let Some(name) = entry["console"].as_str() {
             let c = self.read.consoles.console(name)?;
             return Some(if c.runs() { self.open(Page::Console(c.console.clone()), c.name.clone(), index) } else { Outcome::Nothing });
+        }
+        if entry.get("edge").is_some() {
+            return self.console_step(entry, 1);
         }
         let console = self.console()?.clone();
         if let Some(key) = entry["schema"].as_str() {

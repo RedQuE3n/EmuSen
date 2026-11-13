@@ -35,7 +35,8 @@ impl SettingsSource for Fake {
                 {"key": "LCD", "name": "Game Boy LCD", "consoles": ["GB"], "settings": []},
                 {"key": "effect.None.nearest", "name": "None", "consoles": null, "settings": []}
             ],
-            "screens": [{"console": "NES", "kind": "Television"}, {"console": "GB", "kind": "Lcd"}]
+            "screens": [{"console": "NES", "kind": "Television"}, {"console": "GB", "kind": "Lcd"}],
+            "crop": {"television": 0.07f64.to_bits(), "most_at_an_edge": 0.25f64.to_bits()}
         }))
     }
     fn outputs(&self) -> Vec<String> {
@@ -109,6 +110,49 @@ fn a_display_step_is_stored_as_settings_stores_it_and_leaves_settings_own_page_a
     assert_eq!(v.read.graphics["Consoles"]["NES"]["PictureShape"], "square");
     assert_eq!((v.section, v.page_open()), (display, false), "Settings' own section and pages as they were");
     assert_eq!(v.card_settings_act(9, 1), Outcome::Nothing, "no such row");
+}
+
+#[test]
+fn a_custom_crops_four_edges_follow_its_overscan_row_in_settings_and_on_the_card_and_store_what_is_stepped() {
+    let mut v = view(json!({}), json!({"Consoles": {"NES": {"Overscan": "tv"}}}));
+    let ids = |page: &[(String, String, String)]| page.iter().map(|(id, _, _)| id.clone()).collect::<Vec<_>>();
+    assert!(!ids(&settings_page(&mut v, "NES")).iter().any(|id| id.starts_with("cropedges")), "no edges with TV overscan");
+    v.card_open(CardPage::Display, "NES");
+    assert_eq!(v.card_rows().rows.len(), 4);
+
+    // Right on Crop overscan: Custom crop, and its four edges after it, on the card and on Settings' page alike.
+    assert_eq!(v.card_settings_act(2, 1), Outcome::Saved(Model::Graphics, v.read.graphics.clone()));
+    assert_eq!(v.read.graphics["Consoles"]["NES"]["Overscan"], "custom");
+    let rows = v.card_rows();
+    let edges = [("Crop overscan", "Custom crop"), ("Left edge", "0%"), ("Right edge", "0%"), ("Top edge", "0%"), ("Bottom edge", "0%")];
+    assert_eq!(labels(&rows)[2..7], edges.map(|(l, v)| (l.to_owned(), v.to_owned())));
+    assert!(rows.rows[3..7].iter().all(|r| r.steps && !r.dimmed));
+    assert_eq!(rows.rows[3].sentence, "How much of the picture's width is hidden at its left edge.");
+    let page = settings_page(&mut v, "NES");
+    for r in &rows.rows {
+        assert!(page.contains(&(r.key.clone(), r.label.clone(), r.value.clone())), "{} as Settings ▸ Consoles ▸ NES has it", r.label);
+    }
+
+    // Right twice on the left edge, Left once on the top: each stored where the picture reads it, a percentage.
+    v.card_open(CardPage::Display, "NES");
+    v.card_settings_act(3, 1);
+    assert_eq!(v.card_settings_act(3, 0), Outcome::Saved(Model::Graphics, v.read.graphics.clone()), "A steps on too");
+    v.card_settings_act(5, -1);
+    assert_eq!(v.read.graphics["Consoles"]["NES"]["CropLeft"], "2");
+    assert_eq!(v.read.graphics["Consoles"]["NES"]["CropTop"], "0", "held at none");
+    assert_eq!(labels(&v.card_rows())[3], ("Left edge".to_owned(), "2%".to_owned()));
+    let shown = emusen_qt_models::display::read(&v.read.catalogue, &v.read.graphics, "NES");
+    assert_eq!(shown.crop.left, 0.02, "the picture follows the stored edge");
+    for _ in 0..30 {
+        v.card_settings_act(4, 1);
+    }
+    assert_eq!(v.read.graphics["Consoles"]["NES"]["CropRight"], "25", "held at the catalogue's most");
+
+    // Off the custom crop, the edges go; stored values are kept for the next time it is chosen.
+    v.card_settings_act(2, 1);
+    assert_eq!(v.card_rows().rows.len(), 4);
+    assert_eq!(v.read.graphics["Consoles"]["NES"]["CropLeft"], "2");
+    assert!(!ids(&settings_page(&mut v, "NES")).iter().any(|id| id.starts_with("cropedges")));
 }
 
 #[test]

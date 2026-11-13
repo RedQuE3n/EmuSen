@@ -130,7 +130,8 @@ impl ClientSource {
         let rows = self.platform.settings_rows().map_err(words)?;
         let row = rows["GraphicsConfig.Consoles"].as_array().and_then(|all| all.iter().find(|r| r["key"] == "Overscan")).cloned().unwrap_or(Value::Null);
         let texts = |k: &str| row[k].as_array().into_iter().flatten().map(|v| v.as_str().unwrap_or_default().to_owned()).collect::<Vec<_>>();
-        let mut offer = CropOffer { label: row["label"].as_str().unwrap_or_default().to_owned(), ..CropOffer::default() };
+        let label = row["label"].as_str().unwrap_or_default().to_owned();
+        let mut offer = CropOffer { label, most: crate::display::most(catalogue), ..CropOffer::default() };
         for (value, label) in texts("choices").into_iter().zip(texts("choice_labels")) {
             match value.as_str() {
                 crate::display::CUSTOM => offer.custom = label,

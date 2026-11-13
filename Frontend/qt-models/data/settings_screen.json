@@ -181,6 +181,7 @@
       {"id": "consolelevers", "pause": true, "label": "Shader levers", "hint": "The CRT's own levers for the {console}.", "screen": "Television", "door": "levers", "while": "CRT"},
       {"id": "consolecrop", "pause": true, "row": "GraphicsConfig.Consoles Overscan", "consoles": "this", "screen": "Television",
        "pane": {"sentence": "The whole picture, the part a television showed, or a crop of your own."}},
+      {"id": "cropedges", "pause": true, "edges": true, "screen": "Television"},
       {"id": "screen", "pause": true, "label": "Screen", "hint": "The {console}'s screen as it is drawn.", "screen": "other", "filters": "suiting", "off": "effect.None.nearest", "consoles": "this"},
       {"id": "consoleshape", "pause": true, "row": "GraphicsConfig.Consoles PictureShape", "consoles": "this",
        "pane": {"sentence": "The screen the console was made for, or each pixel square."}},

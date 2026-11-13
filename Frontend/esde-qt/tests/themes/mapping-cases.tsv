@@ -266,7 +266,7 @@ rating	gameselector	a	b	system	-	-	-	-	-	-	-	<gameselector name="a"><selection>l
 rating	gameselectorEntry	0	2	system	-	-	-	-	-	-	-	<gameselector name="a"><selection>lastplayed</selection><gameCount>3</gameCount></gameselector><gameselector name="b"><selection>mostplayed</selection><gameCount>3</gameCount></gameselector>
 animation	path	{G}	{G2}	-	-	-	-	-	-	-	-	-
 animation	maxSize	0.5 0.6	0.2 0.2	-	-	-	size	-	-	-	-	-
-animation	speed	1	3	-	-	-	-	-	150	-	-	-
+animation	speed	1	3	-	-	-	-	-	250	-	-	-
 animation	direction	normal	reverse	-	-	-	-	-	150	-	-	-
 animation	iterationCount	0	1	-	-	-	-	-	900	-	-	-
 animation	interpolation	nearest	linear	-	-	-	-	path={G2}	-	-	-	-

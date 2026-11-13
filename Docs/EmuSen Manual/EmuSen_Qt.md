@@ -2330,19 +2330,20 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_n
 
 | Status | Pairs | Meaning |
 |---|---|---|
-| `drawn` | 432 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, 347 measured 2026-11-08), and the families drawn since (§4.5.6 to §4.5.8) |
-| `later:help-dimmed` | 8 | the help's eight `*Dimmed` properties (`posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`): not drawn until each is checked (R-20261111-75, decided 2026-11-11; the `accepted` state of 2026-11-08 is withdrawn) |
-| `later:sound` | 1 | `sound.path`, which the host plays: not drawn until checked (R-20261111-75) |
-| `later:video` | 2 | the video's `scanlines` and `audio`; the other fourteen of the family drawn or moved to `stationary` (§4.5.6, 2026-11-12) |
+| `drawn` | 459 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, 347 measured 2026-11-08), and the families drawn since (§4.5.6 to §4.5.9) |
+| `heard:<test>` | 2 | proven by what is heard, not by a picture (R-20261112-26): `sound.path` and video `audio`, each naming the test that hears it (§4.5.9) |
+| `later:help-dimmed` | 0 | the help's eight `*Dimmed` properties (`posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`): not drawn until each is checked (R-20261111-75, decided 2026-11-11; the `accepted` state of 2026-11-08 is withdrawn) |
+| `later:sound` | 0 | `sound.path`, heard since 2026-11-13 (§4.5.9) |
+| `later:video` | 1 | the video's `scanlines` (`audio` heard since 2026-11-13, §4.5.9); the other fourteen of the family drawn or moved to `stationary` (§4.5.6, 2026-11-12) |
 | `later:gradients` | 0 | the 22 `*ColorEnd` and `*GradientType` pairs, drawn since 2026-11-13 (§4.5.7) |
 | `later:item-text` | 0 | the 19 carousel, grid and text list item text pairs, drawn since 2026-11-13 (§4.5.8) |
 | `later:picture` | 2 | `scaleFactor` of image and animation, which ES-DE 3.4.1 does not read: its property table (es-core/src/ThemeData.cpp) has no `scaleFactor`, so what a theme means by it has no source to follow. The other 14 drawn since 2026-11-13 (§4.5.7) |
-| `later:stationary` | 12 | `stationary` (the video's since 2026-11-12), `renderDuringTransitions`, `fadeAbovePrimary` |
-| `later:carousel-layout` | 6 | `itemStacking`, `selectedItemOffset`, `itemLinearScale`, `itemLinearSpacing`, `itemAxisRotation`, `itemDiagonalOffset` |
-| `later:textlist-selector` | 5 | the selector image, width and offset, the secondary selected background |
-| `later:help-layout` | 1 | `entryLayout` |
+| `later:stationary` | 3 | the three `fadeAbovePrimary`; `stationary` and `renderDuringTransitions` drawn since 2026-11-13 (§4.5.9) |
+| `later:carousel-layout` | 2 | `itemLinearScale`, `itemLinearSpacing`, which ES-DE 3.4.1 does not read; the other four drawn since 2026-11-13 (§4.5.9) |
+| `later:textlist-selector` | 0 | drawn since 2026-11-13 (§4.5.9) |
+| `later:help-layout` | 0 | `entryLayout`, drawn since 2026-11-13 (§4.5.9) |
 | `later:gameselector` | 13 | the gameselector's picks (`selection`, `gameCount`, `allowDuplicates`) and the elements that read them (`gameselector`, `gameselectorEntry` of image, video, text, datetime and rating): the scene shows no game in the system view (§4.8.5) |
-| `later:animation-timing` | 3 | a GIF's `speed`, `direction` and `iterationCount`: the scene gives the painter no frame, so a GIF stands on its first |
+| `later:animation-timing` | 3 | a GIF's `speed`, `direction` and `iterationCount`: the scene steps the frame, the painter does not show it (§4.5.9) |
 | `later:container` | 0 | `containerVerticalSnap` drawn since 2026-11-09 (§4.12.3), `containerScrollSpeed` since 2026-11-13 (§4.5.8) |
 | `later:grid-rows` | 0 | `fractionalRows`, drawn since 2026-11-13 (§4.5.8) |
 | `later:text-lines` | 0 | datetime's `lineSpacing`, drawn since 2026-11-13 (§4.5.8) |
@@ -2532,9 +2533,8 @@ and letters join). The text list's ASCII mark for a game in the edited collectio
 (named to sort after that day's two earlier measures, which it keeps) has 60 themes falling in `unsupported`, 112 pairs
 in all, against `2026-11-13b.tsv`, and no rise in any column.
 
-**Not drawn: video `audio`.** It is read and heard (`VideoElement.qml` mutes its `AudioOutput`), but the mapping test
-proves a pair by two different pictures, and sound makes none; it stays `later:video` (R-20261111-75 keeps no state
-between drawn and not drawn).
+**Video `audio`.** It is read and heard (`VideoElement.qml` mutes its `AudioOutput`); the mapping test proves a pair by
+two different pictures, and sound makes none, so it was `later:video` until the `heard` state of §4.5.9.
 
 #### 4.5.9 What stays put in a slide, the dimmed help, the selector, the carousel's layout, GIF timing, sound **[M 2026-11-13]**
 
@@ -2566,8 +2566,36 @@ card or another screen over the theme's view (`Main.qml`'s `esdeLoader.backdrop`
 lists the open menu's own prompts. The mapping test's `menu` move sets it before the picture; the rules are
 held by `esde/tests/frame.rs` `a_menu_over_the_view_dims_the_help_and_swaps_the_scoped_ones`.
 
+**A GIF's timing, stepped but not shown.** The scene steps a GIF as ES-DE 3.4.1's `GIFAnimComponent` does
+(`motion::gif_frame`; `setAnimation`, `update`, `render`, `resetComponent`, `GamelistView::onShow`,
+`SystemView::onCursorChanged`): every frame for the first frame's delay (20 to 1000 ms, else it stands on its first)
+over `speed`, cut to whole milliseconds; the file's first frame stands one such step, then the sequence runs one frame a
+step; `normal` and `reverse` start again from their first frame, `alternate` and `alternateReverse` turn at each end
+without showing it twice; after `iterationCount` plays (0 for ever) nothing is drawn, since the frame past the last
+reads as an empty page. A gamelist's GIFs start again when the view is shown, the system view's on each new system. The
+painter reads each file's frame count and first delay with Qt's `QImageReader` (`imageCount`, `nextImageDelay` after the
+first `read`; `esde-qt/cpp/gif_timing.cpp`, `gif.rs`, since cxx-qt-lib does not bind it; QtGui is linked through Qt
+Quick) into `Data::animations` at each install. Held by `esde/tests/scene.rs`
+`a_gif_steps_by_its_first_delay_over_the_speed_in_its_direction_for_its_iterations` and `esde/tests/frame.rs`
+`an_animation_takes_its_frame_from_the_host_s_timing_and_goes_when_its_plays_are_done`.
+
+**Not drawn: `speed`, `direction`, `iterationCount`.** The painter does not show the scene's frame yet, so the three stay
+`later:animation-timing`; only the end of the plays is seen (the GIF goes). Measured 2026-11-13 with the mapping cases:
+`Image.currentFrame` set to the scene's frame leaves a GIF on its first frame (both directions read red, frame 0, at
+150 ms), and a paused `AnimatedImage` given as the picture shader's source, directly or through a
+`ShaderEffectSource`, drew nothing. What would settle it: a frame read by `QImageReader` itself handed to the painter
+(an image provider), or the reason the paused `AnimatedImage` gives no texture.
+
 The carousel's four are added to the scene's own slots (`primary::carousel`), which the painter binds and animates
 nothing of; a `PathView` would lay the items out a second time beside the scene's layout, so none is used.
+
+**Heard: `sound.path` and video `audio`** (R-20261112-26, decided 2026-11-12). `mapping.tsv` gains the state
+`heard:<crate dir/tests/file.rs::fn>`, a pair proven by what is heard; `check` counts it `set`, and the mapping test
+`every_heard_pair_names_a_test_that_hears_it` holds that the named test is there. A theme's `sound` elements are played
+by the program's navigation sound player (`qt-app/src/cues.rs`, no second player): `qt-app/tests/esde.rs`
+`an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist` hears each sound the view asks for as the
+theme's file. A video's `audio` is heard or muted in `esde-qt/tests/theme_video.rs`
+`a_theme_s_video_shows_its_still_until_the_delay_then_plays_its_frames_in_the_box`.
 
 **Not drawn.** `itemLinearScale` and `itemLinearSpacing` are in the catalogue but not in ES-DE 3.4.1's property table
 (es-core/src/ThemeData.cpp) nor in its THEMES.md, so they have no rule to follow and stay `later:carousel-layout`, as

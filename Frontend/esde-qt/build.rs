@@ -88,7 +88,9 @@ fn main() {
         QmlModule::new("EmuSen.Esde").version(1, 6).qml_files(ESDE_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtQml.Models").depend("QtQuick.Pdf").depend("QtMultimedia").depend("EmuSen.Kit"),
     )
     .qrc(shaders)
-    .files(["src/marks.rs", "src/model.rs", "src/lists.rs", "src/text.rs"])
+    .files(["src/marks.rs", "src/model.rs", "src/lists.rs", "src/text.rs", "src/gif.rs"])
+    .include_dir("cpp")
+    .cpp_files(["cpp/gif_timing.h", "cpp/gif_timing.cpp"])
     .qt_module("Quick")
     .build()
     .export();

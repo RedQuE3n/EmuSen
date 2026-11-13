@@ -621,3 +621,23 @@ fn capitalize_lowers_the_rest_and_raises_each_word_as_unicode_bounds_it() {
     assert_eq!(words::system_suffix("snes", Some("lowercase")), " [snes]");
     assert_eq!(words::system_suffix("snes", None), " [SNES]");
 }
+
+// ES-DE 3.4.1's `GIFAnimComponent`: the first frame stands one pacing, then the sequence one frame a pacing; the
+// alternating forms turn without showing an end twice; after the iterations nothing is drawn.
+#[test]
+fn a_gif_steps_by_its_first_delay_over_the_speed_in_its_direction_for_its_iterations() {
+    use emusen_esde::scene::motion::gif_frame;
+    let at = |t: f64, speed: f64, dir: &str, it: u32| gif_frame(ms(t), 4, 100, speed, dir, it).map(|(f, _)| f);
+    let run = |speed: f64, dir: &str, it: u32| (0..16).map(|i| at(i as f64 * 100.0 / speed + 1.0, speed, dir, it)).collect::<Vec<_>>();
+    let s = |v: &[u32]| v.iter().map(|f| Some(*f)).collect::<Vec<_>>();
+    assert_eq!(run(1.0, "normal", 0), s(&[0, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2]));
+    assert_eq!(run(1.0, "reverse", 0), s(&[0, 3, 2, 1, 0, 3, 2, 1, 0, 3, 2, 1, 0, 3, 2, 1]));
+    assert_eq!(run(1.0, "alternate", 0), s(&[0, 0, 1, 2, 3, 2, 1, 0, 1, 2, 3, 2, 1, 0, 1, 2]));
+    assert_eq!(run(1.0, "alternateReverse", 0), s(&[0, 3, 2, 1, 0, 1, 2, 3, 2, 1, 0, 1, 2, 3, 2, 1]));
+    assert_eq!(run(2.0, "normal", 0), run(1.0, "normal", 0), "speed divides the pacing");
+    assert_eq!(&run(1.0, "normal", 2)[..9], &s(&[0, 0, 1, 2, 3, 0, 1, 2, 3])[..]);
+    assert_eq!(run(1.0, "normal", 2)[9], None, "two plays, then nothing");
+    assert_eq!(gif_frame(ms(150.0), 4, 100, 1.0, "normal", 0), Some((0, Some(ms(50.0)))));
+    assert_eq!(gif_frame(ms(150.0), 4, 100, 3.0, "normal", 0).map(|f| f.0), Some(3), "33 ms a frame, whole milliseconds: four pacings, the fourth frame");
+    assert_eq!(gif_frame(ms(5000.0), 1, 100, 1.0, "normal", 1), Some((0, None)), "one frame stands");
+}

@@ -327,3 +327,44 @@ impl Motion {
         }
     }
 }
+
+/// A GIF's frame at a time since its restart, as ES-DE 3.4.1's `GIFAnimComponent` steps it (`setAnimation`, `update`,
+/// `render`): every frame for the first one's delay over the speed, whole milliseconds; `normal` and `reverse` start
+/// again from their first frame, the alternating forms turn at each end without showing it twice; after
+/// `iterations` plays (0 for ever) nothing is drawn. Returns the frame and the time until it changes, or None when done.
+pub fn gif_frame(since: Time, frames: u32, delay_ms: u32, speed: f64, direction: &str, iterations: u32) -> Option<(u32, Option<Time>)> {
+    if frames == 0 {
+        return None;
+    }
+    let pacing = ((f64::from(delay_ms) / speed.clamp(0.2, 3.0)) as i64).max(1) * 1000;
+    let wait = Some(pacing - since.max(0) % pacing);
+    if frames == 1 {
+        return Some((0, None));
+    }
+    // The file's first frame stands for the first pacing; each later one shows the next frame of the sequence, since
+    // `render` reads the frame it is at and then counts on.
+    let paced = since.max(0) / pacing;
+    if paced == 0 {
+        return Some((0, wait));
+    }
+    let step = paced - 1;
+    let n = i64::from(frames);
+    let alternate = direction.starts_with("alternate");
+    let reverse = direction == "reverse" || direction == "alternateReverse";
+    // A play's frames: n from the start; turning, the end frame is not shown again, so n - 1 after the first.
+    let (play, frame) = if !alternate {
+        let (play, at) = (step / n, step % n);
+        (play, if reverse { n - 1 - at } else { at })
+    } else if step < n {
+        (0, if reverse { n - 1 - step } else { step })
+    } else {
+        let rest = step - n;
+        let (k, at) = (rest / (n - 1), rest % (n - 1));
+        let backwards = (k % 2 == 0) != reverse;
+        (k + 1, if backwards { n - 2 - at } else { at + 1 })
+    };
+    if iterations > 0 && play >= i64::from(iterations) {
+        return None;
+    }
+    Some((frame as u32, wait))
+}

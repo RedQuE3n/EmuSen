@@ -199,6 +199,17 @@ impl SceneView {
             }
             let mut wait = None;
             let mut paint = draft.paint;
+            // A GIF steps through its frames from the view's restart, as the host read its frame count and delay.
+            if let (Paint::Picture(p), "animation") = (&mut paint, e.kind()) {
+                if let Some(&(frames, delay)) = data.animations.get(&p.source).filter(|(_, d)| (20..=1000).contains(d)) {
+                    let since = self.now() - self.animations_since();
+                    let speed = e.float("speed").unwrap_or(1.0) as f64;
+                    let iterations = e.uint("iterationCount").unwrap_or(0).min(10) as u32;
+                    let Some((frame, next)) = super::motion::gif_frame(since, frames, delay, speed, e.string("direction").unwrap_or("normal"), iterations) else { continue };
+                    p.frame = Some(frame);
+                    wait = next;
+                }
+            }
             if let (Paint::Text(t), Some((rule, vertical)), Some((mw, mh))) = (&mut paint, draft.scroll, measured) {
                 if vertical {
                     let travel = mh - bh;

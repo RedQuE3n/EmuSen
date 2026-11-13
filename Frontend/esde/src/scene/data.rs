@@ -213,6 +213,9 @@ pub struct Data {
     /// A menu or card of the program's is open over the view: ES-DE's `Window::isBackgroundDimmed`, which the help's
     /// `*Dimmed` properties and the `scope` of the help, clock and status follow.
     pub menu_open: bool,
+    /// Each GIF a theme's animation names, by its absolute path: its frame count and its first frame's delay in ms, as
+    /// the host read them (ES-DE plays every frame for the first one's delay).
+    pub animations: BTreeMap<String, (u32, u32)>,
     pub motion: Motion,
     pub status: DeviceStatus,
     pub status_shown: Indicators,
@@ -245,6 +248,7 @@ impl Data {
             show_clock: true,
             show_help: true,
             menu_open: false,
+            animations: BTreeMap::new(),
             motion: Motion::esde(),
             status: DeviceStatus { wifi: Some(true), battery_percent: Some(80), ..DeviceStatus::default() },
             status_shown: Indicators::default(),

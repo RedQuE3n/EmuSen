@@ -441,6 +441,24 @@ fn every_pair_the_mapping_marks_drawn_has_a_case_and_every_case_is_mapped() {
     assert!(unmapped.is_empty(), "a case for a pair mapping.tsv marks neither drawn nor later: {unmapped:?}");
 }
 
+// A heard pair names the test that hears it, as `crate dir/tests/file.rs::fn`, and that test is there (R-20261112-26).
+#[test]
+fn every_heard_pair_names_a_test_that_hears_it() {
+    let heard: Vec<(String, String, String)> = mapping::pairs()
+        .filter_map(|(k, p, s)| match s {
+            Status::Heard(t) => Some((k.to_owned(), p.to_owned(), t.clone())),
+            _ => None,
+        })
+        .collect();
+    assert!(!heard.is_empty());
+    for (kind, property, test) in heard {
+        let (file, name) = test.split_once("::").unwrap_or_else(|| panic!("{kind}.{property}: {test} is not file::fn"));
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(file);
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{kind}.{property}: {}: {e}", path.display()));
+        assert!(text.contains(&format!("#[test]\nfn {name}(")), "{kind}.{property}: no test {name} in {file}");
+    }
+}
+
 #[test]
 fn every_case_s_two_themes_load_without_errors() {
     let dir = Scratch::new("mapping-load");

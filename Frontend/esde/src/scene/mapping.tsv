@@ -1,5 +1,6 @@
 # The one list of (element, property) pairs and what the scene and its painter do with each (EmuSen_Qt.md §4.5.5).
 # drawn: the scene reads it and the painter draws it.
+# heard:<test>: proven by what is heard, not by a picture (R-20261112-26), the test that hears it named as crate dir/tests/file.rs::fn.
 # later:<family>: not drawn yet; the family names the step of EmuSen_Qt.md §4.5.5 that draws it. Every catalogue pair is listed once.
 carousel	pos	drawn
 carousel	size	drawn
@@ -234,7 +235,7 @@ video	gameselector	drawn
 video	gameselectorEntry	drawn
 video	iterationCount	drawn
 video	onIterationsDone	drawn
-video	audio	later:video
+video	audio	heard:esde-qt/tests/theme_video.rs::a_theme_s_video_shows_its_still_until_the_delay_then_plays_its_frames_in_the_box
 video	interpolation	drawn
 video	imageCornerRadius	drawn
 video	videoCornerRadius	drawn
@@ -472,4 +473,4 @@ clock	backgroundVerticalPadding	drawn
 clock	backgroundCornerRadius	drawn
 clock	format	drawn
 clock	opacity	drawn
-sound	path	later:sound
+sound	path	heard:qt-app/tests/esde.rs::an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist

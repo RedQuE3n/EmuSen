@@ -82,6 +82,8 @@ pub struct SceneView {
     now: Time,
     position: Glide,
     selected_at: Time,
+    /// When the view was shown, which restarts a gamelist's animations (ES-DE's `GamelistView::onShow`).
+    shown_at: Time,
     changed: bool,
     metadata: Glide,
     repeat: Repeat,
@@ -106,6 +108,7 @@ impl SceneView {
             now,
             position: Glide::at(0.0),
             selected_at: now,
+            shown_at: now,
             changed: false,
             metadata: Glide::at(1.0),
             repeat: Repeat::default(),
@@ -352,6 +355,12 @@ impl SceneView {
 
     pub fn selected_at(&self) -> Time {
         self.selected_at
+    }
+
+    /// When the view's animations last restarted: a gamelist's when it was shown, the system view's on each new system
+    /// (ES-DE 3.4.1's `GamelistView::onShow`, `SystemView::onCursorChanged` and `goToSystem`).
+    pub fn animations_since(&self) -> Time {
+        if self.is_system_view() { self.selected_at } else { self.shown_at }
     }
 
     /// ES-DE's quick-scroll overlay is up: a direction is held and its repeats have faded the metadata out.

@@ -131,6 +131,7 @@ impl Painter {
         data.swap = self.swap;
         data.status = self.device;
         data.menu_open = self.menu_open;
+        data.animations = crate::gif::of_systems(&data.systems);
         data.help = HelpContext {
             random_games: self.settings.random != "disabled",
             random_systems: self.settings.random == "gamessystems",

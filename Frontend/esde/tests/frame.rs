@@ -68,10 +68,11 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_drawn_once_che
     let dimmed: Vec<_> = mapping::pairs().filter(|(k, p, _)| *k == "helpsystem" && p.ends_with("Dimmed")).collect();
     assert_eq!(dimmed.len(), 8);
     assert!(dimmed.iter().all(|(_, _, s)| **s == Mapped::Drawn), "each checked by its mapping case (§4.5.9)");
-    assert_eq!(mapping::status("sound", "path"), Some(&Mapped::Later("sound".into())));
     assert_eq!(mapping::status("video", "delay"), Some(&Mapped::Drawn));
-    // Heard, not seen: no picture shows it, and no state stands between drawn and not drawn (R-20261111-75).
-    assert_eq!(mapping::status("video", "audio"), Some(&Mapped::Later("video".into())));
+    // Heard, not seen: proven by the test that hears it (R-20261112-26).
+    assert!(matches!(mapping::status("sound", "path"), Some(Mapped::Heard(t)) if t.starts_with("qt-app/tests/esde.rs::")));
+    assert!(matches!(mapping::status("video", "audio"), Some(Mapped::Heard(t)) if t.starts_with("esde-qt/tests/theme_video.rs::")));
+    assert!(mapping::is_supported("sound", "path") && !mapping::is_supported("video", "scanlines"));
     assert_eq!(mapping::status("video", "scanlines"), Some(&Mapped::Later("video".into())));
     assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 459);
     assert!(
@@ -81,7 +82,7 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_drawn_once_che
 }
 
 #[test]
-fn a_theme_setting_a_pair_not_drawn_or_a_sound_counts_them_unsupported_and_not_whole() {
+fn a_theme_setting_a_pair_not_drawn_counts_it_unsupported_and_not_whole_and_a_heard_sound_set() {
     let t = Synth::new();
     t.capabilities("").theme(
         "<view name=\"system\"><textlist name=\"l\"><fadeAbovePrimary>true</fadeAbovePrimary></textlist><helpsystem name=\"help\"><textColorDimmed>FF0000</textColorDimmed><opacityDimmed>0.5</opacityDimmed></helpsystem></view>
@@ -90,15 +91,15 @@ fn a_theme_setting_a_pair_not_drawn_or_a_sound_counts_them_unsupported_and_not_w
     let m = check::measure(&t.root, &["nes"]);
     assert_eq!(m.properties.get("helpsystem.textColorDimmed"), Some(&"set"));
     assert_eq!(m.properties.get("textlist.fadeAbovePrimary"), Some(&"unsupported"));
-    assert_eq!(m.properties.get("sound.path"), Some(&"unsupported"));
-    assert_eq!(m.count("unsupported"), 2);
+    assert_eq!(m.properties.get("sound.path"), Some(&"set"));
+    assert_eq!(m.count("unsupported"), 1);
     assert!(m.loads() && !m.whole());
     let header: Vec<&str> = check::SUMMARY_HEADER.split('\t').collect();
     assert!(!header.contains(&"accepted"), "no state between drawn and not drawn");
     let row = check::summary_row(&m);
     let cells: Vec<&str> = row.split('\t').collect();
     assert_eq!(cells.len(), header.len());
-    assert_eq!(cells[header.iter().position(|c| *c == "unsupported").unwrap()], "2");
+    assert_eq!(cells[header.iter().position(|c| *c == "unsupported").unwrap()], "1");
     assert_eq!(cells[header.iter().position(|c| *c == "whole").unwrap()], "no");
 }
 
@@ -1092,4 +1093,27 @@ fn a_row_carousel_takes_its_selected_offset_axis_rotation_diagonal_and_stacking(
     let rest = xs(&down[..down.len() - 1]);
     assert!(rest.windows(2).all(|w| w[0] > w[1]), "{rest:?}");
     assert!(chosen(&plain) == *plain.last().unwrap(), "centered keeps the selection on top");
+}
+
+// A GIF the host read is drawn on its frame at the view's time, and with iterations done, not at all.
+#[test]
+fn an_animation_takes_its_frame_from_the_host_s_timing_and_goes_when_its_plays_are_done() {
+    let t = Synth::new();
+    t.asset("spin.gif");
+    let anim = |extra: &str| format!("<animation name=\"a\"><pos>0 0</pos><size>0.5 0.5</size><path>./spin.gif</path>{extra}</animation>");
+    let mut s = stage(&t, "", &anim("<iterationCount>1</iterationCount>"), "gamelist", 0);
+    let path = t.path_of("spin.gif");
+    s.current.data.animations.insert(path.clone(), (4, 100));
+    let frame_of = |s: &Stage| s.frame().elements.iter().find(|p| p.name == "a").map(|p| match &p.paint {
+        Paint::Picture(q) => q.frame,
+        other => panic!("{other:?}"),
+    });
+    assert_eq!(frame_of(&s), Some(Some(0)));
+    assert_eq!(s.frame().next_change_ms, Some(100));
+    s.advance(ms(250.0));
+    assert_eq!(frame_of(&s), Some(Some(1)));
+    s.advance(ms(550.0));
+    assert_eq!(frame_of(&s), None, "one play of four frames, then nothing");
+    s.current.data.animations.clear();
+    assert_eq!(frame_of(&s), Some(None), "a file the host read no timing for stands on its first frame");
 }

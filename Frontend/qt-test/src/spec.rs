@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
-use emusen_kit_core::audit::{Item, Kind, Rect, SMALL_TEXT_EXCEPTIONS};
+use emusen_kit_core::audit::{Item, Kind, Rect, accepted, small_text_exception};
 use emusen_kit_core::input::UiButton;
 use emusen_kit_core::tokens::Colour;
 
@@ -190,9 +190,8 @@ impl<'a> Writer<'a> {
         if !item.hit_testable {
             flag(&mut f, "nohit");
         }
-        let allowed = SMALL_TEXT_EXCEPTIONS.iter().find(|(name, _)| item.name == *name);
-        if let Some((_, why)) = allowed {
-            f.insert("allow", (*why).to_owned());
+        if let Some(class) = small_text_exception(item) {
+            f.insert("allow", accepted(class).map_or("no ruling", |a| a.ruling).to_owned());
         }
         let in_popup = ancestors.iter().skip(1).any(|a| a.kind == Kind::Popup);
         if item.is_drawn() && !in_popup {

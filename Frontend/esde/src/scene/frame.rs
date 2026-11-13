@@ -46,10 +46,35 @@ pub enum Paint {
     Help(Help),
     Info(Info),
     Status(Status),
+    /// A video file played in the box (the media viewer's, EmuSen_Qt.md §4.10).
+    Clip(Clip),
+    /// A page of a PDF file drawn to the box (the media viewer's manual, EmuSen_Qt.md §4.13).
+    Page(Page),
     /// The view's primary element, drawn from `Frame::primary` (or `leaving_primary` when true).
     Primary {
         leaving: bool,
     },
+}
+
+/// The media viewer's video under the player's settings: stretched to the box or fitted inside it, with its sound or
+/// without at a share of full, and its horizontal blur's Gaussian sigma in pixels, 0 for none (EmuSen_Qt.md §4.14).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Clip {
+    pub source: String,
+    pub stretch: bool,
+    pub audio: bool,
+    /// The share of full its sound plays at.
+    pub volume: f64,
+    pub blur: f64,
+    /// How long it fades in once its first frame shows, in ms.
+    pub fade: f64,
+}
+
+/// A PDF file's page, counted from 0.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Page {
+    pub source: String,
+    pub page: usize,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -122,11 +147,19 @@ pub struct Scroll {
     pub opacity: f64,
 }
 
+/// A text's face: the theme's font file, else ES-DE's own face where the player has it (none: the painter's body face),
+/// and whether it is ES-DE's own, which ES-DE draws at its size rounded up to a whole pixel (EmuSen_Qt.md §4.9.1).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Face {
+    pub file: Option<String>,
+    pub own: bool,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Text {
     /// Already in its letter case.
     pub text: String,
-    pub font: Option<String>,
+    pub font: Face,
     pub px: f64,
     pub color: Color,
     pub h_align: HAlign,
@@ -134,6 +167,10 @@ pub struct Text {
     pub line_spacing: f64,
     pub wrap: bool,
     pub ellipsis: bool,
+    /// A vertical container: laid out with every line, past its box, so the scroll can measure what overflows.
+    pub every_line: bool,
+    /// A vertical container's window cut to whole rows at its start and end (THEMES.md's `containerVerticalSnap`).
+    pub snap_rows: bool,
     pub background: Option<Background>,
     /// None before the painter has measured the text, and when it fits.
     pub scroll: Option<Scroll>,
@@ -201,6 +238,8 @@ pub enum PadButton {
     Select,
     Start,
     StickClick,
+    /// The whole d-pad, its four directions as one (the viewer's pan).
+    Dpad,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -217,7 +256,7 @@ pub struct HelpEntry {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Help {
     pub entries: Vec<HelpEntry>,
-    pub font: Option<String>,
+    pub font: Face,
     pub px: f64,
     pub label_color: Color,
     pub icon_color: Color,
@@ -238,7 +277,7 @@ pub struct InfoItem {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Info {
     pub items: Vec<InfoItem>,
-    pub font: Option<String>,
+    pub font: Face,
     pub px: f64,
     pub color: Color,
     pub background: Color,
@@ -257,7 +296,7 @@ pub struct Status {
     pub items: Vec<StatusItem>,
     /// The icons' height; a theme's icon file keeps its own width for that height.
     pub height: f64,
-    pub font: Option<String>,
+    pub font: Face,
     /// The percentage's size over the height.
     pub text_scale: f64,
     pub color: Color,
@@ -303,7 +342,7 @@ pub struct Primary {
 /// Text set in an item: font, size, colour and background.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ItemText {
-    pub font: Option<String>,
+    pub font: Face,
     pub px: f64,
     pub line_spacing: f64,
     pub color: Color,
@@ -373,7 +412,7 @@ pub struct TextList {
     pub secondary_color: Color,
     pub selected_color: Color,
     pub selected_secondary_color: Color,
-    pub font: Option<String>,
+    pub font: Face,
     pub px: f64,
     pub line_spacing: f64,
     pub margin: f64,

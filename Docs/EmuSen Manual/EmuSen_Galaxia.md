@@ -602,6 +602,18 @@ default that is not true or false, choices without their words, a default none o
 Three faults were seeded and caught: a row dropped and a picker's key given a row (the one-row test), and a default
 moved off the model's (the default test).
 
+#### 3.15.1 The media viewer's rows (2026-11-09)
+
+*Decided 2026-11-09 by the tester (R-20261109-m2):* the media viewer's settings, the scanlines left out, are rows of the
+group Media viewer under `AppSettings`, keys of `BigPictureInterface` named and defaulted as ES-DE's own
+`es_settings.xml` has them: `MediaViewerHelpPrompts` (`top`, `bottom` or `disabled`),
+`MediaViewerShowTypes`, `MediaViewerKeepVideoRunning`, `MediaViewerStretchVideos`, `MediaViewerVideoBlur` and
+`MediaViewerVideoAudio`. Five are rows of ES-DE 3.4.1's media viewer settings menu (`GuiMediaViewerOptions`); the sixth,
+"Play audio for media viewer videos", ES-DE offers under its sound settings (`GuiMenu::openSoundOptions`), and ES-DE's user
+guide lists it there, not under "Media viewer settings" (read 2026-11-11). No C# row set them, so the one-row test names them beside the C# keys (`VIEWER_KEYS`), and a row of
+the group that is not one of them is refused. The C# model carries the same six members, so a file written by either
+keeps them. What each does is EmuSen_Qt.md §4.14.
+
 ## 5. `SaveLibrary` — what the files are called
 
 One spelling of the naming rules, previously duplicated across two frontends and computed three different ways by three cores.

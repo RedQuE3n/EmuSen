@@ -106,6 +106,9 @@ pub struct System {
     pub favorites_on_top: bool,
     /// The counts gamelistinfo shows when the host filters or enters a folder; None counts the games.
     pub counts: Option<Counts>,
+    /// The system's games the list's level does not show (inside its folders, or outside the folder open), which ES-DE's
+    /// gameselectors draw from too (EmuSen_Qt.md §4.11).
+    pub unlisted: Vec<Game>,
 }
 
 /// gamelistinfo's numbers: games and favourites over all, games kept by a filter, and whether a folder is open.
@@ -181,7 +184,12 @@ impl Default for HelpContext {
 
 impl System {
     pub fn new(system: ThemeSystem, theme: Theme, games: Vec<Game>) -> Self {
-        System { system, theme, games, heading: None, stars: true, favorites_on_top: false, counts: None }
+        System { system, theme, games, heading: None, stars: true, favorites_on_top: false, counts: None, unlisted: Vec::new() }
+    }
+
+    /// A game by its place among the listed games and then the unlisted ones, the gameselectors' numbering.
+    pub fn any_game(&self, i: usize) -> Option<&Game> {
+        self.games.get(i).or_else(|| self.unlisted.get(i.checked_sub(self.games.len())?))
     }
 
     pub fn is_collection(&self) -> bool {
@@ -213,6 +221,12 @@ pub struct Data {
     pub scroll_overlay: bool,
     /// The gameselectors' random picks start from this, set by the host; each navigation of the view draws again.
     pub selection_seed: u64,
+    /// The face of a text whose theme names none: ES-DE's own where the host found it (`fonts`), else the painter's body face.
+    pub default_font: Option<String>,
+    /// The face of the help where its theme names none: ES-DE's help face beside its default (`fonts::help_font`).
+    pub help_font: Option<String>,
+    /// The player's media viewer settings.
+    pub viewer: super::viewer::ViewerSettings,
 }
 
 impl Data {
@@ -235,6 +249,9 @@ impl Data {
             help: HelpContext::default(),
             scroll_overlay: false,
             selection_seed: 0,
+            default_font: None,
+            help_font: None,
+            viewer: super::viewer::ViewerSettings::default(),
         }
     }
 

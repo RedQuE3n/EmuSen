@@ -1,0 +1,460 @@
+Walkable
+    required property Kit.FrameController controller
+    signal activated()
+    readonly property alias hovered
+Body
+    property alias shape
+    property alias hue
+    property alias focused
+    property alias craters
+    property alias bands
+    property alias cap
+    property alias ring
+    property alias moons
+    property alias inks
+    property alias world
+    readonly property alias tileWidth
+    readonly property alias tileHeight
+Sky
+    property alias seed
+    property alias count
+    property alias moonriseSky
+    property alias starsOpacity
+    property alias glowHue
+    property alias glowX
+    property alias glowY
+    property bool animating
+    readonly property alias starsShown
+    readonly property alias glowSettled
+    property alias time
+Moonrise
+    property alias title
+    property alias caption
+    property alias worlds
+    property list<real> hues
+    property alias model
+    property bool running
+    readonly property alias finished
+    readonly property alias starsShown
+    objectName "moonOutline"
+    objectName "moonriseTitle"
+    objectName "moonriseCaption"
+Frame
+    property alias form
+    readonly property alias controller
+    property alias navigation
+    default property alias content
+    property alias detail
+    property alias actions
+    property alias help
+    property alias padFamily
+    property alias helpFont
+    property alias helpSpacing
+    property alias helpGlyphGap
+    property real navigationWidth
+    property bool surfaceDrawn
+    property bool helpShown
+    readonly property bool desktop
+    readonly property bool card
+    readonly property bool bigScreen
+    readonly property bool detailBeside
+    readonly property real safeX
+    readonly property real safeY
+    objectName "frame"
+    objectName "navigation"
+    objectName "cardSurface"
+    objectName "content"
+    objectName "detail"
+    objectName "actions"
+    objectName "helpBar"
+Card
+    default property alias content
+Sheet
+    required property Kit.FrameController controller
+    signal pressed(int button)
+Question
+    property alias title
+    property alias message
+    property alias choices
+    property alias sentences
+    property alias caption
+    property int backIndex
+    property var help
+    property alias padFamily
+    property alias helpFont
+    property alias helpSpacing
+    property alias helpGlyphGap
+    property font titleFont
+    property font bodyFont
+    property font captionFont
+    property font rowFont
+    property real cardWidth
+    property real cardPadding
+    property real cardMargin
+    signal chosen(int index)
+    objectName "questionCover"
+    objectName "questionCard"
+    objectName "questionTitle"
+    objectName "questionWords"
+    objectName "questionMessage"
+    objectName "questionCaption"
+    objectName "choices"
+    objectName "answer." + answer.index
+    objectName "questionHelp"
+HelpBar
+    property Kit.FrameController controller
+    property alias model
+    property real leftInset
+    property int family
+    property int glyphStyle
+    property font labelFont
+    property real entrySpacing
+    property real glyphGap
+    property color labelColor
+    property color iconColor
+    property real entryScale
+    property real glyphSize
+    property bool pairGlyph
+    property Component label
+    property color color
+    property alias radius
+    property real horizontalPadding
+    property real verticalPadding
+    property bool fitted
+    property bool ruled
+    property bool glass
+    readonly property real glassOpacity
+    signal pressed(int button)
+    objectName "helpGlassRule"
+    objectName "help-" + entry.label
+    objectName "icon-" + entry.label
+    objectName "glyph-" + entry.label
+    objectName "glyph2-" + entry.label
+MenuPanel
+    required property Kit.FrameController controller
+    property alias model
+    property alias delegate
+    property alias currentIndex
+    property alias view
+    signal activated(int index)
+    objectName "rows"
+MenuRow
+    property string label
+    property string value
+    property bool current
+    property bool steps
+    property bool opens
+    property bool ruled
+    property bool sectionEnd
+    property real inset
+    property font labelFont
+    property bool overRaised
+    readonly property size stepMark
+    readonly property size openMark
+    readonly property size afterMark
+    readonly property real markGap
+    objectName "rule"
+    objectName "label"
+    objectName "before"
+    objectName "value"
+    objectName "after"
+WholeRow
+    default property alias content
+    property bool current
+Carousel
+    required property Kit.FrameController controller
+    property real itemWidth
+    readonly property int fits
+NormalizedCanvas
+    property real designHeight
+    property bool active
+    readonly property real unit
+PadGlyph
+    property alias family
+    property alias button
+    property alias swap
+    property alias style
+    property alias pair
+    readonly property alias paired
+    property color ink
+    readonly property alias name
+    readonly property real sideShare
+Scene
+Keyboard
+    required property Kit.KeyboardModel model
+    property font labelFont
+    readonly property bool showsCurrent
+    objectName "keyboardBand"
+    objectName "keyboardRule"
+    objectName "key." + key.index
+NoticeLayer
+    required property Kit.NoticeModel model
+    property font labelFont
+    property real glyphSize
+    property real shadowOpacity
+    property real shadowRadius
+    objectName "noticeShadow"
+    objectName "notice"
+    objectName "noticeGlyph"
+    objectName "noticeWords"
+RoundPicture
+    property alias source
+    property alias horizontalAlignment
+    property alias verticalAlignment
+    property real radius
+    property real pixelScale
+    property bool crop
+    readonly property alias status
+    readonly property bool rounded
+    readonly property real paintedWidth
+    readonly property real paintedHeight
+    readonly property real paintedX
+    readonly property real paintedY
+    readonly property real textureScale
+CoverTile
+    property string source
+    property string title
+    property real hue
+    property bool favourite
+    property bool lit
+    property string mark
+    property real pixelScale
+    property real litScale
+    property real litRise
+    property bool lifts
+    property real drawnScale
+    property bool alignRight
+    readonly property bool drawn
+    readonly property real paintedWidth
+    readonly property real paintedHeight
+    readonly property real paintedX
+    readonly property real paintedY
+    objectName "coverPicture"
+    objectName "coverCardTitle"
+    objectName "coverHeart"
+    objectName "coverRing"
+OrbitSlot
+    required property ListView view
+    required property real turning
+    required property real rx
+    required property real ry
+    required property real cy
+    required property real step
+    required property real coverHeight
+    required property real scaleStep
+    required property real minScale
+    required property real coverShape
+    required property int index
+    property bool lit
+    readonly property real d
+    readonly property real far
+    readonly property real theta
+    readonly property real size
+    readonly property real tilt
+EdgeFade
+    property bool fadeTop
+    property bool fadeBottom
+    property bool fadeLeft
+    property bool fadeRight
+    property real length
+    default property alias content
+    readonly property bool fading
+    readonly property bool software
+SettingsFrame
+    property alias model
+    property list<string> sections
+    property list<string> trail
+    property alias section
+    property int sentenceTone
+    property alias preview
+    property alias lines
+    property bool pageShown
+    property alias pageContent
+    property string pageSentence
+    readonly property alias layout
+    readonly property alias currentRow
+    signal sectionChosen(int section)
+    signal stepped(int row, int by)
+    signal chosen(int row)
+    signal slid(int row, real amount)
+    objectName "settingsLayout"
+    objectName "settingsStrip"
+    objectName "settingsContent"
+    objectName "settingsContentSlot"
+    objectName "settingsRows"
+    objectName "settingsList"
+    objectName "settingsPane"
+    objectName "settingsSlot"
+    objectName "settingsSentence"
+    objectName "settingsLines"
+ChoiceRow
+    property bool marked
+    objectName "mark"
+SliderRow
+    property string label
+    property string value
+    property real minimum
+    property real maximum
+    property real step
+    property real amount
+    property bool held
+    signal slid(real amount)
+    objectName "label"
+    objectName "slider"
+    objectName "value"
+SectionStrip
+    required property Kit.FrameController controller
+    readonly property bool overflows
+ToolScreen
+    property string title
+    property alias facts
+    property alias rows
+    property var columns
+    property string nameRole
+    property alias currentIndex
+    property alias searchText
+    property string searchHint
+    property string paneTitle
+    property string paneCaption
+    property alias sentences
+    property string summary
+    property int summaryTone
+    property real progress
+    property real keysTop
+    readonly property bool keysDocked
+    property string applyLabel
+    property bool applyEnabled
+    property real meter
+    property string meterWords
+    property font cellFont
+    property font titleFont
+    property font captionFont
+    property font bodyFont
+    readonly property alias list
+    signal activated(int index)
+    signal applied()
+    objectName "toolScreen"
+    objectName "toolTitle"
+    objectName "toolFacts"
+    objectName "toolSections"
+    objectName "toolSearch"
+    objectName "toolList"
+    objectName "toolRows"
+    objectName "toolBar"
+    objectName "toolSummary"
+    objectName "toolProgress"
+    objectName "toolApply"
+    objectName "toolMeter"
+    objectName "toolPane"
+    objectName "toolPaneWords"
+PageFrame
+    property url hero
+    property url clipSource
+    property bool clipPlaying
+    property bool clipMuted
+    property real clipVolume
+    property url cover
+    property real coverAspect
+    property string coverName
+    property string title
+    property string facts
+    property alias actionModel
+    property var tileModel
+    property var rowModel
+    property bool showsTiles
+    property bool showsText
+    property string contentWords
+    property url contentPicture
+    readonly property alias actionView
+    readonly property alias tileView
+    readonly property alias rowView
+    readonly property alias videoTile
+    readonly property real ringRoom
+    signal acted(int index)
+    signal tileChosen(int index)
+    signal rowChosen(int index)
+    signal actionStepped(int index, int by)
+    signal rowStepped(int index, int by)
+    signal focusFirstAction()
+    signal contentKindChanged()
+    objectName "page"
+    objectName "pageHero"
+    objectName "pageClip"
+    objectName "pageCover"
+    objectName "pageTitle"
+    objectName "pageFacts"
+    objectName "pageActions"
+    objectName "pageSections"
+    objectName "pageWords"
+    objectName "pagePicture"
+    objectName "pageTiles"
+    objectName "ring"
+    objectName "pageRows"
+ToneText
+    property int tone
+ActionButton
+    property string label
+    property string value
+    property int button
+    property bool filled
+    property bool stepped
+    readonly property size stepMark
+    property int family
+    property font labelFont
+    readonly property color ink
+    readonly property real padding
+    objectName "ring"
+    objectName "before"
+    objectName "after"
+VideoTile
+    property url source
+    property url still
+    property bool playing
+    property bool muted
+    property real volume
+    property int fillMode
+    property int delay
+    property int fade
+    readonly property bool running
+    readonly property bool showing
+    readonly property int frames
+    objectName "videoStill"
+    objectName "videoClip"
+VideoClip
+    objectName "videoPlayback"
+    property url source
+    property bool muted
+    property real volume
+    property int fillMode
+    property int delay
+    property int fade
+    readonly property bool software
+    readonly property bool showing
+    readonly property int frames
+    readonly property real position
+    readonly property bool heard
+    readonly property real level
+    objectName "videoFrames"
+    objectName "videoPlayer"
+RaisedShadow
+    property real radius
+    readonly property bool software
+    readonly property real reach
+    objectName "raisedShadow"
+    objectName "raisedShadowPainted"
+ControllerDrawing
+    property alias drawing
+    property alias controls
+    property alias texts
+    property alias focused
+    property alias held
+    property list<real> pushes
+    readonly property alias layout
+    signal chosen(int index)
+    objectName "controllerLayout"
+    readonly property real inset
+    readonly property real padding
+    objectName "controllerLeaders"
+    objectName "controllerArt"
+    objectName "controllerLabel"
+    objectName "controllerLabelWords"

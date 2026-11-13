@@ -1,0 +1,23 @@
+# Four-entry help copies across fontSize 0.0240-0.0260 in steps of 0.0002 in rost at entryRelativeScale 1 (v) and 0.8 (u): whether the icon's box in the bar's sum slides with the size or steps (EmuSen_Qt.md §4.12.1). The own face's series are helpsweep2.tsv.
+v00	0.0240	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625
+v01	0.0242	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625
+v02	0.0244	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625
+v03	0.0246	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625
+v04	0.0248	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625
+v05	0.0250	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625
+v06	0.0252	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625
+v07	0.0254	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625
+v08	0.0256	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625
+v09	0.0258	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625
+v10	0.0260	entryRelativeScale=1	iconTextSpacing=0.00390625	entrySpacing=0.00625
+u00	0.0240	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625
+u01	0.0242	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625
+u02	0.0244	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625
+u03	0.0246	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625
+u04	0.0248	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625
+u05	0.0250	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625
+u06	0.0252	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625
+u07	0.0254	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625
+u08	0.0256	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625
+u09	0.0258	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625
+u10	0.0260	entryRelativeScale=0.8	iconTextSpacing=0.00390625	entrySpacing=0.00625

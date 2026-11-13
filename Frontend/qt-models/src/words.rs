@@ -85,6 +85,31 @@ pub fn is_fixed(words: &str) -> bool {
         || crate::library::PLACES.iter().any(|(_, name)| *name == words)
 }
 
+/// Whether `words` are the program's own, which a screen must show whole: a fixed word, or a line the program builds from
+/// its own settings, devices and clock (the Settings place's line, the status line, the version line). Only what comes from
+/// the library, a game or a file is data and may elide (R-20261111-44, EmuSen_Qt.md §3.7.2).
+pub fn is_own(words: &str) -> bool {
+    is_fixed(words) || is_settings_line(words) || is_status_line(words) || words == version_line()
+}
+
+/// Whether `words` are one `settings_line` builds.
+fn is_settings_line(words: &str) -> bool {
+    let Some((look, sound)) = words.split_once(&format!(" {BETWEEN} ")) else { return false };
+    let volume = sound.strip_suffix("% sound").and_then(|v| v.parse::<i64>().ok());
+    matches!(look, "Dark" | "Light") && (sound == "sound off" || volume.is_some_and(|v| (0..=100).contains(&v) && format!("{v}% sound") == sound))
+}
+
+/// Whether `words` are one `status_line` builds from a clock's "hh:mm".
+fn is_status_line(words: &str) -> bool {
+    let (count, time) = words.rsplit_once(&format!(" {BETWEEN} ")).map_or((None, words), |(c, t)| (Some(c), t));
+    let clock = time.len() == 5 && time.bytes().enumerate().all(|(i, b)| if i == 2 { b == b':' } else { b.is_ascii_digit() });
+    let controllers = count.is_none_or(|c| {
+        let n = c.split(' ').next().and_then(|n| n.replace(',', "").parse::<usize>().ok());
+        n.is_some_and(|n| n > 0 && counted(n, "controller", "controllers") == c)
+    });
+    clock && controllers
+}
+
 /// A count of games.
 pub fn games(n: usize) -> String {
     counted(n, "game", "games")

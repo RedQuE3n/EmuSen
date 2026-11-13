@@ -279,9 +279,9 @@ impl Walk {
     pub fn press(&mut self, button: UiButton) -> bool {
         let button = button.swapped(self.swap_accept_back);
         match button {
-            // With no sections a shoulder is a screen's to declare (EmuSen_Kit.md §7.27).
-            UiButton::PageUp if self.form != WalkForm::Card && !self.sections.is_empty() => return self.step_section(-1),
-            UiButton::PageDown if self.form != WalkForm::Card && !self.sections.is_empty() => return self.step_section(1),
+            // A shoulder is the screen's where it declares it, else it steps the sections (EmuSen_Kit.md §7.27, §7.103).
+            UiButton::PageUp if self.form != WalkForm::Card && !self.sections.is_empty() && !self.declares(button) => return self.step_section(-1),
+            UiButton::PageDown if self.form != WalkForm::Card && !self.sections.is_empty() && !self.declares(button) => return self.step_section(1),
             UiButton::Accept
                 if self.form == WalkForm::BigScreen
                     && !self.is_detail_open()
@@ -309,6 +309,11 @@ impl Walk {
         let key = action.key.clone();
         self.events.push(WalkEvent::ActionInvoked(key));
         true
+    }
+
+    /// Whether the screen declares an enabled action on `button`.
+    fn declares(&self, button: UiButton) -> bool {
+        self.actions.iter().any(|a| a.button == Some(button) && a.enabled)
     }
 
     /// Everything the walk did since the last call, oldest first.

@@ -6,10 +6,11 @@
 mod bindings;
 mod common;
 
-use bindings::{nothing_named, open_settings, tabs};
+use bindings::{open_settings, tabs};
 use common::{hold, sandbox, wait_for};
 use emusen_kit_core::input::UiButton;
 use emusen_qt::MAIN_URL;
+use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::mockup;
 use emusen_qt_test::virtual_pad::Sdl;
 
@@ -32,7 +33,7 @@ fn qt_7_7_h_every_declared_controllers_drawing_fits_and_a_controller_with_none_i
         assert!(!seen.contains(&id), "{id} twice");
         let generic = scene.property("controllerLayout", "generic");
         assert_eq!(generic, if id == "test.pad" { "true" } else { "false" }, "{id}: only the controller with no drawing is drawn generic");
-        hold(&mut scene, &format!("Bindings-{}", id.replace('.', "-")), &mockup::Mockup::default(), nothing_named, &mut report);
+        hold(&mut scene, &format!("Bindings-{}", id.replace('.', "-")), &mockup::Mockup::default(), &mut Excuses::none(), &mut report);
         // Every label beside the drawing at each size the gate asks, read at that size.
         for (w, h) in emusen_qt_test::harness::SIZES {
             scene.resize(w, h);

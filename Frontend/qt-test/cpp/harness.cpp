@@ -157,6 +157,8 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
     node["ty"] = typeOf(item);
     node["cls"] = QString::fromLatin1(item->metaObject()->className());
     node["name"] = item->objectName();
+    const QQmlContext* written = qmlContext(item);
+    node["source"] = written != nullptr ? written->baseUrl().toString() : QString(); // the file it is written in (EmuSen_Kit.md §7.109)
     node["x"] = rect.x();
     node["y"] = rect.y();
     node["w"] = rect.width();
@@ -212,7 +214,7 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
         node["cap"] = QFontMetricsF(font).capHeight() * sy;
         QColor ink = item->property("color").value<QColor>();
         ink.setAlphaF(ink.alphaF() * opacity);
-        node["ink"] = item->isEnabled() ? ink.name(QColor::HexArgb) : QString(); // words of a disabled control are exempt (WCAG 2.1, 1.4.3)
+        node["ink"] = ink.name(QColor::HexArgb); // a disabled control's too: kit-core's exempted names it under R-20261111-43 (EmuSen_Kit.md §7.109)
         node["size"] = font.pixelSize() > 0 ? font.pixelSize() : font.pointSizeF() * 4.0 / 3.0;
         node["bold"] = font.weight() >= QFont::Bold;
         node["face"] = font.family();
@@ -510,6 +512,8 @@ void harness_wait(int ms) { QTest::qWait(ms); }
 void harness_keep_messages() { kept().shown = qInstallMessageHandler(keep); }
 
 QString harness_messages() { return std::exchange(kept().messages, {}).join(QChar(0x1e)); }
+
+bool harness_software() { return QQuickWindow::sceneGraphBackend() == QLatin1String("software"); }
 
 void harness_watch_dirty(bool on)
 {

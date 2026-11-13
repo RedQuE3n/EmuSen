@@ -462,7 +462,7 @@ pub struct Read {
 pub type Refreshed = Result<Read, String>;
 
 /// A source's first read for an ES-DE theme: the systems, the games and the player's records without the metadata, the
-/// plays or the media (so the grid's Most played, Year and Rating sort by name until then), which the whole read brings after it, so the theme's view is shown first (EmuSen_Qt.md §4.9).
+/// plays or the media (so the grid's Most played, Year and Rating sort by name until then), which the whole read brings after it, so the theme's view is shown first (EmuSen_Qt.md §4.15).
 pub struct FirstLook<'a>(pub &'a dyn LibrarySource);
 
 impl LibrarySource for FirstLook<'_> {
@@ -556,6 +556,15 @@ pub fn firmware_line(read: Result<Vec<emusen_crystal_client::shapes::FirmwareFil
     }
 }
 
+/// A cover's shape where the systems table gives none: the kit's, 3 wide by 4 tall.
+pub use emusen_kit_core::page::COVER_SHAPE;
+
+/// A console's cover shape as a theme draws it, width over height: the systems table's `cover_aspect` (height over width)
+/// turned, or `COVER_SHAPE` where it gives none. The one place the turn is made (EmuSen_Qt.md §3.4.2).
+pub fn cover_shape(system: Option<&SystemRow>) -> f64 {
+    system.map(|s| s.cover_aspect).filter(|a| *a > 0.0).map_or(COVER_SHAPE, |a| 1.0 / a)
+}
+
 /// The view's state: the rows with the selection kept across refreshes, and the last refresh's problem.
 #[derive(Clone, Debug, Default)]
 pub struct LibraryView {
@@ -637,7 +646,7 @@ impl LibraryView {
         drop(self.swap_in(refreshed));
     }
 
-    /// `apply`, handing back what the read replaced, so the GUI thread can drop it elsewhere (EmuSen_Qt.md §4.9).
+    /// `apply`, handing back what the read replaced, so the GUI thread can drop it elsewhere (EmuSen_Qt.md §4.15).
     pub fn swap_in(&mut self, refreshed: Refreshed) -> Option<Read> {
         use std::mem::replace;
         match refreshed {

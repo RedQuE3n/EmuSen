@@ -36,6 +36,23 @@ control that is visible), in drawing order, with `x`, `y`, `w` and `h`:
   and the relative dates show what ES-DE showed), no live clock, and the device status empty, as the sandboxed ES-DE
   shows none.
 
+## ES-DE's own boxes and picks (2026-11-09)
+
+Decided 2026-11-09 by the tester: the Qt painter is held to ES-DE 3.4.1, not to the C# painter (`EmuSen_Qt.md` §4.8.7).
+Two files hold what the specs cannot:
+
+- `esde-boxes.tsv`: ES-DE's box of an element where the C# scene's box is not ES-DE's, measured on the 2026-11-08
+  captures, one row per theme, state, width and spec key, in design units of 1280 × 800, with how it was measured (a
+  background's edges less the theme's paddings, an icon's ink less its box's margin with the edge the theme anchors, a
+  drawn picture's edges, or nothing drawn). The oracle holds every spec element to this row where there is one and to
+  the spec's box otherwise. A help strip's right edge is the end of its last letter, that glyph's pen matched to the
+  capture plus its advance rounded as ES-DE rounds it, where the capture shows it (Art Book Next's and Artflix's rows
+  at 1280 × 800, re-measured 2026-11-11 and 2026-11-12); Artflix's rows at 1920 × 1200 still take the left edge
+  mirrored about the centre, which the capture puts within a third of a unit of that end, and CarAlt's the theme's
+  `pos` with origin 1.
+- `picks.tsv`: the games a capture shows for its gameselector elements, read off the capture. The oracle seeds the
+  painter so that it shows the same games, as it sets the clock to the capture's time.
+
 ## The MAE
 
 `compare.py` writes `mae.tsv`: per state, the mean absolute error of the C# grab against the ES-DE capture over R, G and

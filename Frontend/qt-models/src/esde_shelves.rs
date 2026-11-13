@@ -27,8 +27,16 @@ pub struct Plays {
 pub struct EsdeSettings {
     /// `LibraryStyle` is "Theme" and `BigPictureTheme` names a folder.
     pub themed: bool,
-    /// `{"style", "theme", "choices", "interface", "collections", "show_hidden"}`.
+    /// `{"style", "theme", "choices", "interface", "collections", "show_hidden", "volume"}`.
     pub text: String,
+}
+
+/// `AppSettings`' volume, a share of full: the one EmuSen plays sound at, the media viewer's video's included (EmuSen_Qt.md §4.14).
+pub const VOLUME: &str = "Volume";
+
+/// The volume the settings give, a share of full; full where they give none.
+pub fn volume_of(settings: &Value) -> f64 {
+    settings.get(VOLUME).and_then(Value::as_f64).map_or(1.0, |v| v.clamp(0.0, 1.0))
 }
 
 /// The settings for the ES-DE view: the choices are those stored under the theme folder's full path less a trailing
@@ -46,6 +54,7 @@ pub fn settings_of(settings: &Value) -> EsdeSettings {
         "interface": object(settings.get("BigPictureInterface")),
         "collections": object(settings.get("BigPictureCollections")),
         "show_hidden": settings.get(crate::library::SHOW_HIDDEN).and_then(Value::as_bool).unwrap_or(false),
+        "volume": settings.get(VOLUME).and_then(Value::as_f64),
     });
     EsdeSettings { themed: style == "Theme" && !theme.trim().is_empty(), text: out.to_string() }
 }
@@ -420,7 +429,7 @@ fn present(media: &MediaIndex, games: &[EsdeGame]) -> Vec<String> {
 }
 
 /// A game's metadata as the view reads it: each scraper key's chosen value (EmuSen_Backend.md §30.3), the empty ones left
-/// out. A game's answer is made this as it is read, so the library's answers are never held whole (EmuSen_Qt.md §4.9).
+/// out. A game's answer is made this as it is read, so the library's answers are never held whole (EmuSen_Qt.md §4.15).
 pub type Metadata = BTreeMap<String, String>;
 
 /// The scraper's keys for a game's release date (`yyyy-MM-dd`) and its rating (0 to 1).

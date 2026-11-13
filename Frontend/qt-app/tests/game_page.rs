@@ -14,17 +14,13 @@ use emusen_platform_client::galaxia::consts::{DIR_SCREENSHOTS, FILE_GAMES, MODEL
 use emusen_platform_client::library::Library;
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt::MAIN_URL;
+use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::{mockup, Scene};
 use std::path::Path;
 use std::time::{Duration, SystemTime};
 
 const COBALT: &str = "Cobalt Harbor (Synthetic)";
 const LANTERN: &str = "Lantern Bay (Synthetic)";
-
-/// No finding is named for the tester: the gate holds every state whole.
-fn nothing_named(_: &str, _: &emusen_qt_test::tree::Tree, _: (i32, i32)) -> bool {
-    false
-}
 
 /// The focus moved by `button` until it is on the item heard as `heard`.
 fn move_to(scene: &mut Scene<'_>, button: UiButton, heard: &str) {
@@ -206,6 +202,8 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     set_setting(&platform, "EsdeMediaDirectory", serde_json::json!(media.to_str().unwrap()));
     // The recordings hold a still: the clip is off while the states are held, and on for the clip's own part.
     set_setting(&platform, "PlayVideos", serde_json::json!(false));
+    // The player's Volume, which the page's clip is heard at (R-20261111-100).
+    set_setting(&platform, "Volume", serde_json::json!(0.35));
 
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
@@ -233,6 +231,7 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     assert_eq!(scene.property("pageModel", "clip"), "", "Play videos off: no clip");
     assert_eq!(scene.property("pageClip", "running"), "false", "no clip, no player: Qt Multimedia not started");
     let mut report = Vec::new();
+    let mut excuses = Excuses::none().listing("qt-app-game-page");
     // Right from Play is Resume; Right steps Resume through the four states, then reaches Favourite.
     scene.pad(UiButton::Right);
     wait_for(&mut scene, "pageModel", "help", &help(emusen_qt_models::help::Screen::GamePageResumeSlots), 1000);
@@ -250,12 +249,12 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
         scene.wait(50);
     }
     wait_for(&mut scene, "pageModel", "help", &help(emusen_qt_models::help::Screen::GamePage), 1000);
-    hold(&mut scene, "GamePage", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "GamePage", &mockup::Mockup::default(), &mut excuses, &mut report);
 
     section(&mut scene, 1);
     assert_eq!(scene.property("pageModel", "shows"), "1");
     let held_before = report.len();
-    hold(&mut scene, "GamePageStates", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "GamePageStates", &mockup::Mockup::default(), &mut excuses, &mut report);
     if report.len() > held_before {
         let tiles: Vec<String> = scene.tree().nodes.iter().filter(|n| n.ty.starts_with("Walkable")).map(|n| format!("{} {:?} at {:.0},{:.0} {}x{} visible {}", n.id, n.name, n.x, n.y, n.w, n.h, n.visible)).collect();
         report.push(format!("GamePageStates, at the failure: {}; shows {}; the walkables: {tiles:?}", common::state(&mut scene), scene.property("pageModel", "shows")));
@@ -382,7 +381,7 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     scene.pad(UiButton::Up);
     section(&mut scene, 2);
     assert_eq!(scene.property("pageModel", "shows"), "2");
-    hold(&mut scene, "GamePageOptions", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "GamePageOptions", &mockup::Mockup::default(), &mut excuses, &mut report);
     // The television standard, offered for a television's console: the game's own, stepped to NTSC and saved in games.db,
     // then back; the package's state in Mistress's words.
     assert!(comes_to_read(&mut scene, "Not a package"), "the package's state");
@@ -437,7 +436,7 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     assert!(comes_to_read(&mut scene, "The game's"), "two steps back to back come back to the game's own");
     assert_eq!(standard(&platform), serde_json::Value::Null, "and the game's own is what is saved");
     section(&mut scene, 3);
-    hold(&mut scene, "GamePageMedia", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "GamePageMedia", &mockup::Mockup::default(), &mut excuses, &mut report);
     // Media's tiles and Details' rows at once, three times, the tiles scrolled: a section's items come while the last
     // one's are still being made, and Qt logs nothing.
     for _ in 0..3 {
@@ -453,7 +452,7 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     scene.wait(300);
     scene.pad(UiButton::Up);
     section(&mut scene, 4);
-    hold(&mut scene, "GamePageDetails", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "GamePageDetails", &mockup::Mockup::default(), &mut excuses, &mut report);
     // Open Folder: the program's one folder action, given the folder holding the game's file, caught as its URL.
     assert!(scene.set_property("folders", "catching", "true"));
     down_to(&mut scene, "Open Folder");
@@ -517,6 +516,8 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     wait_for(&mut scene, "videoPlayer", "playbackState", "PlayingState", 4000);
     wait_for(&mut scene, "pageClip", "showing", "true", 4000);
     assert!(scene.property("pageClip", "frames").parse::<i32>().unwrap_or(0) > 0, "the frames drawn by the kit's sink");
+    assert_eq!(scene.property("videoPlayback", "heard"), "true", "the page's clip heard");
+    assert!(scene.property("videoPlayback", "level").parse::<f64>().is_ok_and(|v| (v - 0.35).abs() < 1e-6), "at the player's Volume, 35 %: {}", scene.property("videoPlayback", "level"));
     // The fade over the still done.
     scene.wait(1200);
     let clip = hero_colour(&mut scene);

@@ -6,10 +6,11 @@
 mod bindings;
 mod common;
 
-use bindings::{lines, nothing_named, open_settings, sentence, tabs, until};
+use bindings::{lines, open_settings, sentence, tabs, until};
 use common::{hold, sandbox, wait_for};
 use emusen_kit_core::input::UiButton;
 use emusen_qt::MAIN_URL;
+use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::mockup;
 use emusen_qt_test::virtual_pad::Sdl;
 
@@ -31,7 +32,7 @@ fn qt_7_7_h_controllers_the_bindings_page_keys_and_hotkeys_hold_their_states_and
     }
     assert_eq!(sentence(&mut scene), "Player 1 · Simulated pad · Default profile");
     assert_eq!(lines(&mut scene), "Players 2 and 3 and 4 · none | Left and Right on a controller's row pick its player.");
-    hold(&mut scene, "SettingsControllers", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "SettingsControllers", &mockup::Mockup::default(), &mut Excuses::none(), &mut report);
 
     // The bindings page on the Super Nintendo, Y focused as the recording has it.
     scene.pad(UiButton::Down);
@@ -46,7 +47,7 @@ fn qt_7_7_h_controllers_the_bindings_page_keys_and_hotkeys_hold_their_states_and
     assert_eq!(sentence(&mut scene), "Super Nintendo · Y");
     assert_eq!(lines(&mut scene), "Bound to the pad's West button. | A listens for a press and rebinds it; Y resets this button; the profile saves at once.");
     assert_eq!(scene.property("controllerLayout", "fits"), "true");
-    hold(&mut scene, "SettingsBindings", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "SettingsBindings", &mockup::Mockup::default(), &mut Excuses::none(), &mut report);
 
     // A listens; North pressed on the pad binds Y to it, and the interface hears nothing of the press.
     scene.pad(UiButton::Accept);

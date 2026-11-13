@@ -158,12 +158,13 @@ impl GamePageSource for ClientSource {
             played_seconds: record.play_seconds as i64,
             last_played: record.last_played.as_ref().and_then(Value::as_str).and_then(crate::words::parse_utc),
             favourite: record.favourite,
-            cover_aspect: system.map_or(0.75, |s| if s.cover_aspect > 0.0 { 1.0 / s.cover_aspect } else { 0.75 }),
+            cover_aspect: crate::library::cover_shape(system),
             cover: media(crate::library::COVER),
             hero: HERO.iter().map(|k| media(k)).find(|f| !f.is_empty()).unwrap_or_default(),
             screenshot: media("screenshot"),
             // Settings ▸ Display ▸ Play videos off shows the still alone (EmuSen_Interface.md §5.9).
             clip: if settings.get("PlayVideos").and_then(Value::as_bool).unwrap_or(true) { media("video") } else { String::new() },
+            clip_volume: crate::esde_shelves::volume_of(&settings),
             states: self.states(game, &settings)?,
             ..Read::default()
         };

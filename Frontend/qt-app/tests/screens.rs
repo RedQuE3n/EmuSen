@@ -36,6 +36,13 @@ fn the_screens_switch_by_the_pad_and_the_walk_follows_the_rows() {
     assert_eq!(focused(&mut scene), "place.0", "no game suspended and none played: the places have the focus");
     scene.pad(UiButton::Accept);
     assert_eq!(scene.property("screens", "shown"), CONSOLES, "the Games place opens Choose a console");
+    // The thin ring about each place's disc is the palette's muted token at 18% (R-20261111-96).
+    let muted = scene.kit_tokens().map(|t| (t.muted().red(), t.muted().green(), t.muted().blue())).expect("the kit's tokens");
+    let tree = scene.tree();
+    let disc = tree.nodes.iter().find(|n| n.name == "placeDisc.0").expect("the first place's disc");
+    let edge = disc.colors.last().and_then(|c| emusen_qt_test::tree::colour(c)).expect("the disc's edge");
+    assert_eq!((i32::from(edge.r), i32::from(edge.g), i32::from(edge.b)), muted, "the disc's edge is the muted token: {:?}", disc.colors);
+    assert!((f64::from(edge.a) / 255.0 - 0.18).abs() < 0.01, "the disc's edge at 18%: {:?}", disc.colors);
     let places: usize = scene.property("library", "places").parse().unwrap();
     assert_eq!(focused(&mut scene), format!("tile.{places}"), "the first console has the focus");
     assert_eq!(scene.property("library", "selectedIndex"), places.to_string());

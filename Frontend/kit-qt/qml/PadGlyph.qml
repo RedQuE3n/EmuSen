@@ -10,6 +10,9 @@ Item {
     property alias button: marks.button
     property alias swap: marks.swap
     property alias style: marks.style
+    // A second press drawn with `button` as one glyph where the kit has one for the two (a d-pad axis, the shoulders, the triggers); -1 for none (EmuSen_Kit.md §7.54).
+    property alias pair: marks.pair
+    readonly property alias paired: marks.paired
     property color ink: Kit.Tokens.text
     readonly property alias name: marks.name
     // The glyph's own side over the glyph type's size.

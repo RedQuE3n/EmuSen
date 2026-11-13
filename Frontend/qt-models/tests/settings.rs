@@ -166,6 +166,7 @@ fn qt_7_7_doors_open_pages_and_screens_and_b_closes_a_page_first() {
     assert_eq!(rows[2], ("Themes".into(), "EmuSen (built in)".into()));
     assert_eq!(rows[3], ("Scraping".into(), "ScreenScraper".into()));
     assert_eq!(rows[5], ("Hidden games".into(), "Not listed".into()));
+    assert_eq!(rows[6].0, "Media viewer", "the viewer's settings, a page of their own (EmuSen_Qt.md §4.14)");
     assert_eq!(view.rows()[0].kind, RowKind::Opens);
     assert_eq!(view.pane(0).sentence, "3 games under /games, read in place and never moved.");
     assert_eq!(view.choose(index(&view, "themes")), Outcome::Door("themes".into()));

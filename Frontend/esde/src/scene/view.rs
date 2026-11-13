@@ -444,7 +444,7 @@ impl SceneView {
                 } else {
                     None
                 };
-                let game = game_index.and_then(|i| system.games.get(i));
+                let game = game_index.and_then(|i| system.any_game(i));
                 let mut skipped = self.skip(e, game);
                 if skipped.is_none() && selecting && game.is_none() && uses_game(e) {
                     skipped = Some("the gameselector's entry is empty".into());

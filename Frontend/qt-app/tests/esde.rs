@@ -1,4 +1,4 @@
-//! An ES-DE theme as the library's look (EmuSen_Qt.md §4.9): the program over a sandbox whose settings choose Art Book Next
+//! An ES-DE theme as the library's look (EmuSen_Qt.md §4.15): the program over a sandbox whose settings choose Art Book Next
 //! from the corpus, its library two synthetic NES images and a synthetic Super Nintendo image, played by VenusRT built
 //! from this commit with its sidecar (the client fixture's; no player's game and no published build is read). Moonrise
 //! gives way to the system view; a NES game with no engine fails, said as Mistress said it; Right steps the carousel; A
@@ -25,6 +25,7 @@ use emusen_platform_client::Platform;
 use emusen_qt::{start, MAIN_URL};
 use emusen_qt_play::host::Host;
 use emusen_qt_test::compositor::Compositor;
+use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::virtual_pad::Sdl;
 use emusen_qt_test::{mockup, Harness, Scene};
 use serde_json::json;
@@ -33,11 +34,6 @@ use std::path::PathBuf;
 /// Art Book Next with the options the oracle and the C# baseline gave it (Testing/esde-baseline/states.tsv).
 const THEME: &str = "art-book-next-es-de";
 const CHOICES: [(&str, &str); 3] = [("Variant", "gamelist-list-metadata-cover"), ("ColorScheme", "dark-screenshots"), ("FontSize", "medium")];
-
-/// No finding is named for the tester: the gate holds every state whole.
-fn nothing_named(_: &str, _: &emusen_qt_test::tree::Tree, _: (i32, i32)) -> bool {
-    false
-}
 
 fn home() -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap())
@@ -89,6 +85,7 @@ fn choose_row(scene: &mut Scene<'_>, words: &str) {
 
 #[test]
 fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() {
+    let mut excuses = Excuses::none().listing("qt-app-esde");
     let theme = home().join(".cache/emusen/bigpicture/corpus/whole").join(THEME);
     assert!(theme.exists(), "the theme at {}", theme.display());
     // Set before SDL is first loaded: the interface player and the game play to no speaker.
@@ -270,7 +267,7 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     scene.pad(UiButton::Up);
     until(&mut scene, 5, "Up back on Continue", |s| focused_words(s).starts_with("Continue"));
     let mut report = Vec::new();
-    hold(&mut scene, "EsdeHomeCardContinue", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "EsdeHomeCardContinue", &mockup::Mockup::default(), &mut excuses, &mut report);
     scene.resize(1280, 800);
     scene.wait(150);
     scene.pad(UiButton::Accept);
@@ -301,7 +298,7 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
         }
         until(&mut scene, 5, "the tool's screen", |s| s.property("screens", "shown") == screen);
         scene.wait(300);
-        hold(&mut scene, &format!("Esde{screen}"), &mockup::Mockup::default(), nothing_named, &mut report);
+        hold(&mut scene, &format!("Esde{screen}"), &mockup::Mockup::default(), &mut excuses, &mut report);
         scene.pad(UiButton::Back);
         until(&mut scene, 5, "B back to the theme", |s| s.property("screens", "shown") == "Esde");
     }
@@ -362,7 +359,8 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     until(&mut scene, 5, "the view at rest on the new order", |s| s.property("esdeModel", "moving") == "false");
     assert_eq!(scene.property("esdeModel", "selected"), "0", "the entry the act answered, moved to from the second");
     let tree = scene.tree();
-    let top = |name: &str| tree.nodes.iter().filter(|n| n.visible && n.text.as_deref() == Some(name)).map(|n| n.y).reduce(f64::min);
+    // The theme draws its words glyph by glyph; a reader hears them whole on the item that draws them.
+    let top = |name: &str| tree.nodes.iter().filter(|n| n.visible && n.heard == name).map(|n| n.y).reduce(f64::min);
     let (cobalt, brass) = (top("Cobalt Harbor"), top("Brass Lantern"));
     assert!(matches!((cobalt, brass), (Some(c), Some(b)) if c < b), "the view lists both, Cobalt Harbor first: {cobalt:?} {brass:?}");
     // Y makes Cobalt Harbor a favourite; Down to Brass Lantern; Filter, Favourites leaves Cobalt Harbor alone in the
@@ -426,7 +424,7 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     until(&mut scene, 5, "the slide at rest", |s| s.property("esdeModel", "moving") == "false");
     scene.pad(UiButton::Options);
     until(&mut scene, 5, "the List card in place", |s| s.property("screens", "shown") == "List" && s.property("listCardCanvas", "slide") == "0");
-    hold(&mut scene, "EsdeListCardStartConsole", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "EsdeListCardStartConsole", &mockup::Mockup::default(), &mut excuses, &mut report);
     let (x, y) = row_centre(&mut scene, "Start PlayStation With No Disc");
     let top = row_middles(&mut scene)[0].1;
     assert_eq!(y, top, "the console's row leads the menu");
@@ -442,7 +440,7 @@ fn an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist() 
     until(&mut scene, 5, "the Home card in place", |s| s.property("screens", "shown") == "HomeCard" && s.property("homeCardCanvas", "slide") == "0");
     assert!(focused_words(&mut scene).starts_with("Continue"), "the focus on Continue: {}", focused_words(&mut scene));
     assert!(scene.tree().nodes.iter().any(|n| n.visible && n.text.as_deref() == Some("PlayStation (no disc)")), "Continue names the console's session");
-    hold(&mut scene, "EsdeHomeCardContinueConsole", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "EsdeHomeCardContinueConsole", &mockup::Mockup::default(), &mut excuses, &mut report);
     scene.pad(UiButton::Accept);
     until(&mut scene, 5, "Continue resuming the console", |s| s.property("screens", "shown") == "Game" && s.property("session", "paused") == "false");
     quit_game(&mut scene, &sdl, &pad, "PlayStation (no disc)", "Esde");

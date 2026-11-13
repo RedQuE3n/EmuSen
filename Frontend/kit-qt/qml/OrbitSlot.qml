@@ -22,7 +22,7 @@ Kit.Walkable {
     readonly property real theta: (90 - slot.step * slot.d) * Math.PI / 180
     readonly property real size: Math.max(slot.minScale, 1 - slot.scaleStep * slot.far)
     readonly property real tilt: -Math.atan2(Math.cos(slot.theta) / slot.rx, Math.sin(slot.theta) / slot.ry) * 180 / Math.PI
-    width: Math.round(slot.coverHeight * Math.min(1.6, Math.max(0.5, slot.coverShape > 0 ? slot.coverShape : 0.75)))
+    width: Math.round(slot.coverHeight * Math.min(1.6, Math.max(0.5, slot.coverShape)))
     height: slot.coverHeight
     z: 10 - slot.far
     // The fourth from the apex exists unseen, so it fades in as the orbit turns.

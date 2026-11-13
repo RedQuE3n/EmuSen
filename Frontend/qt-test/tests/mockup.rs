@@ -53,17 +53,20 @@ fn an_item_is_held_to_its_box_its_token_and_its_words() {
         node("tile", [96.0, 150.0, 558.0, 108.0], &["#8C26262B"], ""),
         node("count", [1600.0, 0.0, 224.0, 36.0], &[], "3 consoles"),
     ];
-    assert_eq!(compare(&m, &good, 1.5, Variant::Dark), Vec::<String>::new());
+    assert!(compare(&m, &good, 1.5, Variant::Dark).is_empty());
     let mut off = good.clone();
     off[0].y += 4.5;
     off[1].colors = vec!["#8C1B1B1E".into()];
     off[2].text = None;
-    let faults = compare(&m, &off, 1.5, Variant::Dark);
+    let found = compare(&m, &off, 1.5, Variant::Dark);
+    let kinds: Vec<(&str, &str)> = found.iter().map(|d| (d.element.as_str(), d.kind)).collect();
+    assert_eq!(kinds, [("title", "Y"), ("tile", "paints"), ("count", "shows no words")], "each difference by its element and kind");
+    let faults: Vec<String> = found.iter().map(ToString::to_string).collect();
     assert_eq!(faults.len(), 3, "{faults:?}");
     assert!(faults[0].starts_with("title: Y 44.0"), "three units down is past two: {faults:?}");
     assert!(faults[1].contains("not SurfaceRaised"), "{faults:?}");
     assert!(faults[2].contains("no words"), "{faults:?}");
     off[1].colors = vec!["#FF26262B".into()];
-    assert!(compare(&m, &off[1..2], 1.5, Variant::Dark).iter().any(|f| f.starts_with("tile: alpha 1.000")), "the alpha is held");
-    assert!(compare(&m, &[], 1.5, Variant::Dark).iter().all(|f| f.ends_with("not shown")));
+    assert!(compare(&m, &off[1..2], 1.5, Variant::Dark).iter().any(|f| f.to_string().starts_with("tile: alpha 1.000")), "the alpha is held");
+    assert!(compare(&m, &[], 1.5, Variant::Dark).iter().all(|f| f.to_string().ends_with("not shown") && f.kind == "not shown"));
 }

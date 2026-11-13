@@ -6,8 +6,7 @@ source constellation-alt/consoles-figures.html
 element consolesTitle x=64 y=40 h=38.4 token=TextStrong words=data
 element consolesSubtitle y=52 h=24 token=Muted words=data
 element consolesSummary right=1216 y=52 h=24 token=Muted words=data
-note the chart's viewport reaches 8 past the canvas's 96 ... 564 at each end, for a focused label stepped clear of its ring (EmuSen_Qt.md §3.4.5)
-element chart x=0 y=88 w=1280 h=484
+element chart x=0 y=96 w=1280 h=468
 note the bodies: a 96-unit box about each node of the full tier (row centres 212 and 444, amplitude 20, pitch 110, the pair 130)
 element body.0 x=186 y=144 w=96 h=96
 element body.1 x=296 y=184 w=96 h=96

@@ -98,9 +98,11 @@ fn a_package_is_checked_by_theme_check_and_an_es_de_theme_by_its_measure() {
     let root = store("check");
     // theme-audit stood in for by a script that finds nothing, as theme-check's own tests do; the static step is real.
     let audit = root.join("audit.sh");
-    std::fs::write(&audit, "#!/bin/bash\nexit 0\n").unwrap();
-    std::process::Command::new("chmod").arg("+x").arg(&audit).status().unwrap();
+    let ran = root.join("audit-ran");
+    std::fs::write(&audit, format!("#!/bin/bash\ntouch \"{}\"\nexit 0\n", ran.display())).unwrap();
+    assert!(std::process::Command::new("chmod").arg("+x").arg(&audit).status().unwrap().success(), "the stand-in made runnable");
     assert_eq!(themes::check_package(&root.join("dawn"), Some(&audit)), Checked::Ok);
+    assert!(ran.exists(), "ok only once the loaded step ran");
     match themes::check_package(Path::new(LITERAL), Some(&audit)) {
         Checked::Findings(found) => assert!(!found.is_empty() && found.iter().all(|f| f.starts_with("literal/")), "{found:?}"),
         other => panic!("a literal in a part is a finding: {other:?}"),

@@ -8,6 +8,8 @@ Item {
     id: root
     property alias mark: shapes.mark
     property alias color: shapes.color
+    readonly property alias aspect: shapes.aspect
+    readonly property alias baselineShare: shapes.baseline
     MarkShapes {
         id: shapes
         width: root.width

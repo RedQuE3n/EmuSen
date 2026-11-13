@@ -1,4 +1,4 @@
-// emusen-esde's shelves schema, tested where serde_json is at hand (EmuSen_Qt.md §4.9): what is written as an entry
+// emusen-esde's shelves schema, tested where serde_json is at hand (EmuSen_Qt.md §4.15): what is written as an entry
 // reads back as the same row, a member as a row with no name, and a key or a type either side does not name is an error.
 
 use emusen_esde::shelves::{CountsText, Entry, GameRow, ShelfText};
@@ -38,6 +38,7 @@ fn shelf<G>(games: Vec<G>) -> ShelfText<'static, G> {
         stars: true,
         system: "snes".into(),
         theme: "snes".into(),
+        unlisted: vec![row()],
     }
 }
 

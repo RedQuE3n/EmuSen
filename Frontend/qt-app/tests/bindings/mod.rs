@@ -7,11 +7,6 @@ use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
 use emusen_qt_test::Scene;
 
-/// No finding is named for the tester: every Controllers state is held whole, at every size.
-pub fn nothing_named(_: &str, _: &emusen_qt_test::tree::Tree, _: (i32, i32)) -> bool {
-    false
-}
-
 pub fn sentence(scene: &mut Scene<'_>) -> String {
     scene.property("settingsSentence", "text")
 }

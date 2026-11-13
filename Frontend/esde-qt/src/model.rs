@@ -46,6 +46,12 @@ pub mod qobject {
         #[qproperty(QString, letters_mark, READ, NOTIFY)]
         #[qproperty(f64, letters_px, READ, NOTIFY)]
         #[qproperty(f64, letters_opacity, READ, NOTIFY)]
+        /// ES-DE's default face as a file the host gives; empty, the one `emusen_esde::fonts` finds (EmuSen_Qt.md §4.8.7).
+        #[qproperty(QString, default_font)]
+        /// The seed the gameselectors' random picks start from; 0 takes the install's time (EmuSen_Qt.md §4.8.7).
+        #[qproperty(i64, selection_seed)]
+        /// The character a line of ES-DE's words is centred by (`emusen_esde::fonts::REFERENCE`).
+        #[qproperty(QString, reference, READ, CONSTANT)]
         /// The shown system's shelf, by its name in the shelves' text, and the primary's selected row.
         #[qproperty(QString, shelf, READ, NOTIFY)]
         #[qproperty(i32, selected, READ, NOTIFY)]
@@ -63,9 +69,6 @@ pub mod qobject {
         fn pressed(self: Pin<&mut EsdeModel>, button: i32, repeat: bool, jump: i32);
         #[qinvokable]
         fn released(self: Pin<&mut EsdeModel>, button: i32);
-        /// Deprecated in EmuSen.Esde 1.1 for `hoverAt`, removed at the next major (CHANGELOG-esde.md): the row selected as by `hoverAt`, moving or not.
-        #[qinvokable]
-        fn hover(self: Pin<&mut EsdeModel>, row: i32);
         /// The pointer onto the row `item` draws, or off every row (-1): it selects only as the pointer itself moves (EmuSen_Kit.md §7.108).
         #[qinvokable]
         #[cxx_name = "hoverAt"]
@@ -77,6 +80,10 @@ pub mod qobject {
         /// The painter's measurement of an element, by the `id` role's text.
         #[qinvokable]
         fn measured(self: Pin<&mut EsdeModel>, id: &QString, w: f64, h: f64);
+        /// The page count of the media viewer's manual, as the painter's PDF document read it.
+        #[qinvokable]
+        #[cxx_name = "manualPages"]
+        fn manual_pages(self: Pin<&mut EsdeModel>, pages: i32);
         /// Reads the theme folder again, as an update on disk asks.
         #[qinvokable]
         fn reload(self: Pin<&mut EsdeModel>);
@@ -101,19 +108,8 @@ pub mod qobject {
     impl cxx_qt::Initialize for EsdeModel {}
 }
 
-// A read-only property set from Rust: the field changed and its signal raised, only when the value differs.
-macro_rules! publish {
-    ($m:expr, $field:ident, $signal:ident, $value:expr) => {{
-        let value = $value;
-        if $m.$field != value {
-            $m.as_mut().rust_mut().$field = value;
-            $m.as_mut().$signal();
-        }
-    }};
-}
-
 /// The four texts a load reads, as the GUI thread hands them to the load's thread: each QString shared, not copied, and
-/// turned into Rust text on that thread (EmuSen_Qt.md §4.9).
+/// turned into Rust text on that thread (EmuSen_Qt.md §4.15).
 pub struct LoadTexts(pub [QString; 4]);
 
 // Sound: the copies are made here and moved whole, and Qt's implicit sharing counts atomically (EmuSen_Qt.md §4.7).
@@ -145,6 +141,9 @@ pub struct EsdeModelRust {
     swap: bool,
     device: QString,
     now: i64,
+    default_font: QString,
+    selection_seed: i64,
+    reference: QString,
     themed: bool,
     problem: QString,
     view: QString,
@@ -167,6 +166,11 @@ pub struct EsdeModelRust {
     load_problem: String,
 }
 
+/// A read load's problem: the painter's, or with themed systems and none, FreeType's when it did not start (EmuSen_Qt.md §4.12.4).
+fn load_problem(painter: String, themed: bool, freetype: Result<(), String>) -> String {
+    if painter.is_empty() && themed { freetype.err().unwrap_or_default() } else { painter }
+}
+
 /// The local time at `pinned` seconds since 1970, or the wall clock's at 0, for the clock element and the dates.
 fn local_now(pinned: i64) -> DateTime {
     let now = if pinned == 0 { QDateTime::current_date_time() } else { QDateTime::from_secs_since_epoch(pinned, &QTimeZone::system_time_zone()) };
@@ -177,6 +181,7 @@ fn local_now(pinned: i64) -> DateTime {
 
 impl cxx_qt::Initialize for qobject::EsdeModel {
     fn initialize(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().reference = QString::from(emusen_esde::fonts::REFERENCE);
         emusen_kit_qt::frame::watch_windows();
         self.as_mut().on_settings_changed(|m| m.ask_load()).release();
         self.as_mut().on_shelves_changed(|m| m.ask_load()).release();
@@ -184,6 +189,8 @@ impl cxx_qt::Initialize for qobject::EsdeModel {
         self.as_mut().on_presence_changed(|m| m.ask_load()).release();
         self.as_mut().on_width_changed(|m| m.ask_load()).release();
         self.as_mut().on_height_changed(|m| m.ask_load()).release();
+        self.as_mut().on_default_font_changed(|m| m.ask_load()).release();
+        self.as_mut().on_selection_seed_changed(|m| m.ask_load()).release();
         self.as_mut().on_device_changed(|mut m| {
             let device = shelves::device(&m.device.to_string());
             m.as_mut().rust_mut().shared.borrow_mut().set_device(device.unwrap_or_default());
@@ -226,6 +233,7 @@ impl qobject::EsdeModel {
         }
         let texts = LoadTexts::of([&self.settings, &self.shelves, &self.media, &self.presence]);
         let (qt, cache) = (self.qt_thread(), self.cache.clone());
+        let given = (!self.default_font.is_empty()).then(|| self.default_font.to_string());
         let load = self.load + 1;
         self.as_mut().rust_mut().load = load;
         std::thread::spawn(move || {
@@ -238,18 +246,19 @@ impl qobject::EsdeModel {
                 }
                 Err(words) => (Settings::default(), Err(words)),
             };
-            let _ = qt.queue(move |model| model.install(load, settings, found));
+            let faces = painter::faces(given);
+            let _ = qt.queue(move |model| model.install(load, settings, found, faces));
         });
     }
 
     // A text that did not read installs nothing and is the problem, so the host shows its words.
-    fn install(mut self: Pin<&mut Self>, load: u64, settings: Settings, found: Result<Vec<System>, String>) {
+    fn install(mut self: Pin<&mut Self>, load: u64, settings: Settings, found: Result<Vec<System>, String>, faces: painter::Faces) {
         if load != self.load {
             return;
         }
         let (systems, problem) = match found {
             Ok(systems) => {
-                let problem = painter::problem(&systems);
+                let problem = load_problem(painter::problem(&systems), !systems.is_empty(), crate::hinted::ready());
                 (systems, problem)
             }
             Err(words) => (Vec::new(), words),
@@ -259,6 +268,8 @@ impl qobject::EsdeModel {
         {
             let mut p = self.shared.borrow_mut();
             p.settings = settings;
+            p.faces = faces;
+            p.selection_seed = u64::try_from(self.selection_seed).ok().filter(|s| *s != 0);
             p.install(systems, w, h, local_now(self.now));
         }
         let themed = self.shared.borrow().stage.is_some();
@@ -333,11 +344,6 @@ impl qobject::EsdeModel {
         self.publish();
     }
 
-    pub fn hover(self: Pin<&mut Self>, row: i32) {
-        self.shared.borrow_mut().hover(row);
-        self.publish();
-    }
-
     pub unsafe fn hover_at(self: Pin<&mut Self>, item: *mut qobject::QQuickItem, row: i32) {
         if row >= 0 && !emusen_kit_qt::frame::pointer_moving(item) {
             return;
@@ -365,6 +371,13 @@ impl qobject::EsdeModel {
         }
     }
 
+    pub fn manual_pages(self: Pin<&mut Self>, pages: i32) {
+        let changed = self.shared.try_borrow_mut().is_ok_and(|mut p| p.manual_pages(pages.max(0) as usize));
+        if changed {
+            let _ = self.qt_thread().queue(|m| m.publish());
+        }
+    }
+
     pub fn select(self: Pin<&mut Self>, row: i32) {
         self.shared.borrow_mut().choose(row);
         self.publish();
@@ -373,5 +386,18 @@ impl qobject::EsdeModel {
     pub fn reload(self: Pin<&mut Self>) {
         self.cache.forget();
         self.load();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::load_problem;
+    use crate::hinted::NOT_STARTED;
+
+    #[test]
+    fn a_freetype_that_did_not_start_is_the_load_s_problem() {
+        assert_eq!(load_problem(String::new(), true, Err(NOT_STARTED.to_owned())), NOT_STARTED);
+        assert_eq!(load_problem(String::new(), true, Ok(())), "");
+        assert_eq!(load_problem("a theme's words".to_owned(), true, Err(NOT_STARTED.to_owned())), "a theme's words");
     }
 }

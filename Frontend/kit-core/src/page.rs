@@ -79,6 +79,9 @@ pub struct PageLayout {
     pub rows: usize,
 }
 
+/// A cover's shape, width over height, where nothing gives one: 3 wide by 4 tall (EmuSen_Qt.md §3.4.2).
+pub const COVER_SHAPE: f64 = 0.75;
+
 /// The places on a screen `width` × `height` design units, for a cover `aspect` wide per unit of height (3:4 is 0.75).
 /// The cover keeps its height and takes its width from its shape, never past the column beside it.
 pub fn page_layout(width: f64, height: f64, aspect: f64, g: &PageGeometry) -> PageLayout {

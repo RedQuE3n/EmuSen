@@ -1,4 +1,4 @@
-//! The shelves' text across the two crates that keep it (EmuSen_Qt.md §4.9): written by qt-models' `esde_shelves` as the
+//! The shelves' text across the two crates that keep it (EmuSen_Qt.md §4.15): written by qt-models' `esde_shelves` as the
 //! library reads it, read back by esde-qt's `shelves` as the view does, every field the view shows as it was written. No
 //! window: the program links both crates, so the round trip is tested where they meet.
 

@@ -10,6 +10,7 @@ use emusen_kit_core::input::UiButton;
 use emusen_platform_client::galaxia::consts::{DIR_THEMES, MODEL_APP_SETTINGS};
 use emusen_platform_client::Platform;
 use emusen_qt::MAIN_URL;
+use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::{mockup, Scene};
 use std::path::Path;
 
@@ -27,13 +28,26 @@ fn copy(from: &Path, to: &Path) {
     }
 }
 
+/// Copies the clean fixture to the store as `id`, named `name`.
+/// A fixture under another id and name, its manifest's own name replaced.
+fn named_copy(store: &Path, fixture: &str, was: &str, id: &str, name: &str) {
+    copy(&Path::new(FIXTURES).join(fixture), &store.join(id));
+    let manifest = store.join(id).join("theme.json");
+    let text = std::fs::read_to_string(&manifest).unwrap().replace(&format!("\"{was}\""), &format!("\"{name}\""));
+    std::fs::write(&manifest, text).unwrap();
+}
+
+/// theme-audit as this build made it, beside the test's own program in the target folder.
+fn theme_audit() -> std::path::PathBuf {
+    let exe = std::env::current_exe().unwrap();
+    let audit = exe.parent().and_then(Path::parent).unwrap().join("theme-audit");
+    assert!(audit.exists(), "theme-audit is built beside this test ({}): cargo build --release -p emusen-theme-audit", audit.display());
+    audit
+}
+
 fn focused(scene: &mut Scene<'_>) -> String {
     let tree = scene.tree();
     scene.focus(&tree).map(|i| tree.nodes[i as usize].name.clone()).unwrap_or_default()
-}
-
-fn named(fault: &str, _tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
-    size == (1280, 720) && fault.contains("too small to read")
 }
 
 /// The id the settings file holds.
@@ -48,7 +62,7 @@ fn check_next(scene: &mut Scene<'_>, name: &str) {
     wait_for(scene, "themesModel", "name", name, 2000);
     scene.pad(UiButton::Screensaver);
     let mut waited = 0;
-    while scene.property("themesModel", "findings").starts_with("Checking") && waited < 30000 {
+    while scene.property("themesModel", "findings").starts_with("Checking") && waited < 180_000 {
         scene.wait(50);
         waited += 50;
     }
@@ -62,14 +76,32 @@ fn qt_3_8_the_themes_tab_checks_uses_and_switches_the_chosen_theme_s_host() {
     copy(&Path::new(FIXTURES).join("clean"), &store.join("dawn"));
     copy(&Path::new(FIXTURES).join("loaded"), &store.join("dusk"));
     copy(&Path::new(FIXTURES).join("literal"), &store.join("rough"));
+    // Two themes the real theme-audit judges: titles cut with an ellipsis, a class R-20261111-44 accepts, and Moonrise's
+    // caption's name on a Home of its own, which no ruling accepts (R-20261111-40 covers the caption in Moonrise alone).
+    named_copy(&store, "elided-title", "Fixture elided title", "sage", "Fixture kept");
+    named_copy(&store, "small-caption", "Fixture small caption", "tide", "Fixture held");
     let book = store.join("book");
     std::fs::create_dir_all(&book).unwrap();
     std::fs::write(book.join("capabilities.xml"), "<themeCapabilities><themeName>Picture Book</themeName></themeCapabilities>").unwrap();
     std::fs::write(book.join("theme.xml"), "<theme><view name=\"system\"><text name=\"t\"><text>x</text></text></view></theme>").unwrap();
-    // theme-audit stood in for by a script that finds nothing; the loaded step is theme-check's own tests' to prove.
+    // theme-audit stood in for by a script that finds nothing for the first three, whose loaded step is theme-check's own
+    // tests' to prove; sage and tide go to the real theme-audit, so what kit-core's table accepts is what reaches the tab.
     let audit = world.root.join("audit.sh");
-    std::fs::write(&audit, "#!/bin/bash\nexit 0\n").unwrap();
-    std::process::Command::new("chmod").arg("+x").arg(&audit).status().unwrap();
+    let ran = world.root.join("audit-ran");
+    let script = format!(
+        r#"#!/bin/bash
+touch "{}"
+package="${{@: -1}}"
+case "$package" in
+  *sage|*tide) exec "{}" "$@" ;;
+esac
+exit 0
+"#,
+        ran.display(),
+        theme_audit().display()
+    );
+    std::fs::write(&audit, script).unwrap();
+    assert!(std::process::Command::new("chmod").arg("+x").arg(&audit).status().unwrap().success(), "the stand-in made runnable");
     std::env::set_var("EMUSEN_THEME_AUDIT", &audit);
 
     let mut harness = emusen_qt_test::Harness::new();
@@ -107,11 +139,13 @@ fn qt_3_8_the_themes_tab_checks_uses_and_switches_the_chosen_theme_s_host() {
     assert_eq!(scene.property("themesModel", "usable"), "false");
     scene.wait(300);
     let mut report = Vec::new();
-    hold(&mut scene, "ThemesTab", &mockup::Mockup::default(), named, &mut report);
+    let mut excuses = Excuses::none().listing("qt-app-themes-tab");
+    hold(&mut scene, "ThemesTab", &mockup::Mockup::default(), &mut excuses, &mut report);
 
     // A package is checked before Use is offered; Use stores its id and its host is made at once.
     check_next(&mut scene, "Fixture clean");
     assert_eq!(scene.property("themesModel", "findings"), "Checked: nothing found.");
+    assert!(ran.exists(), "nothing found only once the loaded step ran");
     assert_eq!(scene.property("themesModel", "usable"), "true");
     scene.pad(UiButton::Accept);
     scene.wait(200);
@@ -136,8 +170,24 @@ fn qt_3_8_the_themes_tab_checks_uses_and_switches_the_chosen_theme_s_host() {
     scene.wait(200);
     assert_eq!(stored(&platform), "dusk");
 
+    // An exemption of a class the tester accepted (R-20261111-44) is no finding: Use is offered and takes the theme.
+    check_next(&mut scene, "Fixture kept");
+    assert_eq!(scene.property("themesModel", "findings"), "Checked: nothing found.");
+    assert_eq!(scene.property("themesModel", "usable"), "true");
+    scene.pad(UiButton::Accept);
+    scene.wait(200);
+    assert_eq!(stored(&platform), "sage");
+
+    // Words under the floor no ruling accepts are a finding: no Use, and A stores nothing.
+    check_next(&mut scene, "Fixture held");
+    assert_eq!(scene.property("themesModel", "usable"), "false");
+    assert!(scene.property("themesModel", "findings").contains("moonriseCaption"), "{}", scene.property("themesModel", "findings"));
+    scene.pad(UiButton::Accept);
+    scene.wait(200);
+    assert_eq!(stored(&platform), "sage");
+
     // The reference again: its id is stored and the chosen theme's host is gone with its engine.
-    for _ in 0..3 {
+    for _ in 0..5 {
         scene.pad(UiButton::Up);
     }
     wait_for(&mut scene, "themesModel", "name", "EmuSen", 2000);
@@ -167,3 +217,4 @@ fn qt_3_8_the_themes_tab_checks_uses_and_switches_the_chosen_theme_s_host() {
     wait_for(&mut scene, "screens", "shown", "Home", 2000);
     assert!(report.is_empty(), "{}", report.join("\n"));
 }
+

@@ -5,7 +5,7 @@ use crate::library::GameRow;
 use serde::Serialize;
 use serde_json::Value;
 
-/// The games as the JSON array GameModel reads, written straight from the rows (EmuSen_Qt.md §4.9).
+/// The games as the JSON array GameModel reads, written straight from the rows (EmuSen_Qt.md §4.15).
 pub fn to_json<'a>(games: impl IntoIterator<Item = &'a GameRow>) -> String {
     let rows: Vec<RowText> = games.into_iter().map(RowText::of).collect();
     serde_json::to_string(&rows).unwrap_or_else(|_| "[]".into())

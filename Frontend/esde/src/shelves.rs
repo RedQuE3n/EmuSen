@@ -1,4 +1,4 @@
-//! The shelves' text (EmuSen_Qt.md §4.9): one shelf per list with its facts and its games, the one schema qt-models
+//! The shelves' text (EmuSen_Qt.md §4.15): one shelf per list with its facts and its games, the one schema qt-models
 //! writes and esde-qt's view reads. Borrowed where written and owned where read; a key either side does not name is an
 //! error, never a field read as absent.
 
@@ -29,6 +29,10 @@ pub struct ShelfText<'a, G = GameRow<'a>> {
     pub stars: bool,
     pub system: Text<'a>,
     pub theme: Text<'a>,
+    /// A console's games its level does not list (inside its folders, or outside the folder open), whole rows: ES-DE's
+    /// gameselectors draw from every game of the system (EmuSen_Qt.md §4.11). Left out where there are none.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub unlisted: Vec<GameRow<'a>>,
 }
 
 /// A list's counts, as the help and the game count show them.

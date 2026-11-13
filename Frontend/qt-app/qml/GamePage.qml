@@ -37,6 +37,9 @@ Kit.NormalizedCanvas {
         clipSource: screen.page.clip
         // The clip plays while the page holds the focus, and stops when it loses it.
         clipPlaying: screen.visible && frame.activeFocus
+        // Heard at the player's Volume, as the media viewer's clip is (R-20261111-100).
+        clipMuted: false
+        clipVolume: screen.page.clipVolume
         cover: screen.page.cover
         coverAspect: screen.page.coverAspect
         coverName: screen.page.coverName

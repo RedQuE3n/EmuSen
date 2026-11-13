@@ -8,6 +8,7 @@ use emusen_kit_gallery::GALLERY_URL;
 use emusen_qt_test::harness::{edges, palette, Measures, Step, SIZES};
 use emusen_qt_test::lint::{frontend, qmllint, rules};
 use emusen_qt_test::spec::{self, Header};
+use emusen_qt_test::excuse::{sort, SmallText};
 use emusen_qt_test::{Harness, Scene};
 
 const FORMS: [(WalkForm, &str, &str); 3] =
@@ -193,7 +194,10 @@ fn qt_7_stage_0_gate_on_the_gallery() {
     let mut scene = harness.load(GALLERY_URL, 1280, 800);
     let grabs = grabs();
     let mut report = Vec::new();
+    let mut accepted: Vec<String> = Vec::new();
     let mut states = 0;
+    // The named small texts the gate sees let pass; one that let nothing pass fails the gate (EmuSen_Kit.md §7.100).
+    let mut small = SmallText::new();
     for variant in [Variant::Dark, Variant::Light] {
         scene.set_variant(variant);
         for (form, form_name, form_value) in FORMS {
@@ -240,6 +244,12 @@ fn qt_7_stage_0_gate_on_the_gallery() {
                     faults.extend(
                         scene.audit(&tree, form, variant, focus, &edges, f64::from(w), f64::from(h)).iter().map(ToString::to_string),
                     );
+                    // What the rules' exemptions let pass: listed with its ruling where one accepts its class, else a finding (EmuSen_Kit.md §7.102).
+                    let exempted = scene.exempted(&tree, form, variant, f64::from(h));
+                    small.saw(&exempted, &tree.nodes);
+                    let (listed, refused) = sort(&exempted);
+                    accepted.extend(listed.into_iter().map(|l| format!("{name}: {l}")));
+                    faults.extend(refused.iter().map(ToString::to_string));
                     let notes = grabs.join(format!("{name}.faults.txt"));
                     if faults.is_empty() {
                         let _ = std::fs::remove_file(&notes);
@@ -276,6 +286,11 @@ fn qt_7_stage_0_gate_on_the_gallery() {
     record("question-1280x800", &tree, &sheet, (WalkForm::BigScreen, Variant::Dark), (1280, 800), focus, &walk);
     let faults = scene.audit_item(&sheet, WalkForm::BigScreen, Variant::Dark, focus, &edges, 1280.0, 800.0);
     report.extend(faults.iter().map(|f| format!("question: {f}")));
+    let exempted = scene.exempted_item(&sheet, WalkForm::BigScreen, Variant::Dark, 800.0);
+    small.saw(&exempted, &tree.nodes);
+    let (listed, refused) = sort(&exempted);
+    accepted.extend(listed.into_iter().map(|l| format!("question: {l}")));
+    report.extend(refused.iter().map(|f| format!("question: {f}")));
     scene.pad(UiButton::Back);
     scene.wait(400);
     assert_eq!(scene.property("question", "opened"), "false", "B closed it");
@@ -291,6 +306,8 @@ fn qt_7_stage_0_gate_on_the_gallery() {
     states += 1;
 
     scene.assert_quiet();
+    // Each exemption a ruling accepts, listed beside the grabs and in the test's output (EmuSen_Kit.md §7.102).
+    emusen_qt_test::excuse::write_accepted(&emusen_qt_test::excuse::accepted_dir(), "gate", &accepted);
     assert!(report.is_empty(), "{} states; faults:\n{}", states, report.join("\n"));
     assert_eq!(states, 2 * 3 * 3 * SIZES.len() + 1);
 }

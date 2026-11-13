@@ -203,6 +203,7 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Back, "Delete", None),
             (UiButton::Search, "Space", Some("space")),
             (UiButton::Screensaver, "Done", Some("done")),
+            (UiButton::PageUp, "Move to list", Some(crate::screens::TO_GRID)),
         ],
         Screen::SettingsConsole => &[
             (UiButton::Accept, "Change", None),
@@ -353,6 +354,7 @@ pub fn unnamed(screen: Screen) -> &'static [Entry] {
         Screen::Consoles => &[(UiButton::Menu, "Home", Some(HOME))],
         Screen::Grid | Screen::GridSearched => &[(UiButton::PageDown, "Console", Some(NEXT))],
         Screen::Search => &[(UiButton::PageDown, "Move to grid", Some(crate::screens::TO_GRID))],
+        Screen::ToolSearch => &[(UiButton::PageDown, "Move to list", Some(crate::screens::TO_GRID))],
         _ => &[],
     }
 }

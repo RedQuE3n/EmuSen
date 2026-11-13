@@ -30,7 +30,8 @@ ThemeScreen {
         Accessible.description: place.line
         // The section last opened has the focus, else the first console, else the first shelf.
         focus: Browse.section.length > 0 ? place.key === Browse.section : Library.consoles.count === 0 && place.index === 0
-        width: 52 + placeName.implicitWidth
+        // The canvas's slot, 11.5 units a letter, else the name's own width where that is wider (EmuSen_Qt.md §3.4.2).
+        width: 52 + Math.max(Math.round(place.name.length * 11.5), placeName.implicitWidth)
         height: 40
         onCentreXChanged: layout.lead(place.index, place.centreX)
         onActiveFocusChanged: {
@@ -51,7 +52,7 @@ ThemeScreen {
             radius: 20
             color: Qt.rgba(38 / 255, 38 / 255, 43 / 255, 0.5)
             border.width: 1
-            border.color: Qt.rgba(140 / 255, 150 / 255, 220 / 255, 0.18)
+            border.color: Qt.rgba(Tokens.muted.r, Tokens.muted.g, Tokens.muted.b, 0.18) // the muted token at 18% (R-20261111-96)
             Glyph {
                 anchors.centerIn: parent
                 width: 22
@@ -531,8 +532,8 @@ ThemeScreen {
                     Text {
                         objectName: "consoleDetailName"
                         x: 64
-                        // The face's own line box, 53, a unit above the canvas's 44 so it ends where the facts begin (EmuSen_Qt.md §3.4.2).
-                        y: 611
+                        // The face's own line box, 53, its baseline where the canvas's is (R-20261111-94, EmuSen_Qt.md §3.4.2).
+                        y: 607.6
                         width: coverRow.x - 96
                         text: root.focusedTile ? root.focusedTile.fullName : ""
                         elide: Text.ElideRight

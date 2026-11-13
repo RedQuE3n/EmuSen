@@ -189,6 +189,7 @@ impl Synthetic {
             Shape::NoCovers => source.covers = false,
             Shape::Unplayed => source.played = false,
             Shape::Long => source.keep.push(self.long.clone()),
+            Shape::Loud => {}
             Shape::OneConsole => {
                 let suspended = self.key_of(SUSPENDED).unwrap_or_default();
                 let ext = suspended.rsplit('.').next().unwrap_or_default().to_owned();
@@ -197,6 +198,10 @@ impl Synthetic {
         }
         let mut view = LibraryView::empty();
         view.apply(refresh(&source));
+        if shape == Shape::Loud {
+            view.catalog.settings["BigPictureInterface"]["NavigationVolume"] = json!(100);
+            view.catalog.settings["NavigationSounds"] = json!(true);
+        }
         if view.problem.is_empty() { Ok(view) } else { Err(format!("the library: {}", view.problem)) }
     }
 
@@ -205,9 +210,9 @@ impl Synthetic {
         self.eight.iter().chain([&self.long]).find(|k| k.contains(&format!("/{title} (Synthetic)."))).cloned()
     }
 
-    /// Home's lines over a view, as the program's host makes them.
-    pub fn home_lines(&self, view: &LibraryView) -> String {
-        let settings_line = words::settings_line(true, &view.catalog.settings);
+    /// Home's lines over a view in the dark or the light variant, as the program's host makes them.
+    pub fn home_lines(&self, view: &LibraryView, dark: bool) -> String {
+        let settings_line = words::settings_line(dark, &view.catalog.settings);
         let lines: Vec<serde_json::Value> = words::home_lines(view.catalog.games.len(), &serde_json::Value::Null, &settings_line)
             .into_iter()
             .map(|(status, attention)| json!({ "status": status, "attention": attention }))

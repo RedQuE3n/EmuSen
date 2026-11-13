@@ -7,10 +7,10 @@ extern crate emusen_qt;
 mod bindings;
 mod common;
 
-use bindings::nothing_named;
 use common::{hold, sandbox, wait_for};
 use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
+use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::mockup;
 use emusen_qt_test::virtual_pad::Sdl;
 
@@ -89,7 +89,7 @@ fn qt_7_7_h_the_pause_cards_controllers_page_seats_the_pad_and_names_the_profile
     assert_eq!(scene.property("PaneSentence", "text"), "Player 1 plays on the Simulated pad, with the Default profile.");
     assert_eq!(scene.property("PaneMuted", "text"), "Left and Right pick another connected controller; Bindings opens the drawing for this console.");
     let mut report = Vec::new();
-    hold(&mut scene, "PauseCardControllers", &mockup::Mockup::default(), nothing_named, &mut report);
+    hold(&mut scene, "PauseCardControllers", &mockup::Mockup::default(), &mut Excuses::none(), &mut report);
     // Right on Player 2 seats the pad there, trading with player 1.
     scene.pad(UiButton::Down);
     scene.pad(UiButton::Right);

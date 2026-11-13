@@ -595,7 +595,7 @@ impl qobject::LibraryModel {
                             let worlds = splash_worlds(&systems);
                             let _ = qt.queue(move |model| model.show_splash(worlds));
                         }
-                        // An ES-DE theme's view is shown from a first read, the metadata and media following (§4.9).
+                        // An ES-DE theme's view is shown from a first read, the metadata and media following (§4.15).
                         let themed = source.settings().is_ok_and(|s| crate::esde_shelves::settings_of(&s).themed);
                         if themed {
                             let (first, shown) = (refresh(&crate::library::FirstLook(source.as_ref())), source.clone());

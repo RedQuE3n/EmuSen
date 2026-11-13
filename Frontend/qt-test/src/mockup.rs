@@ -141,13 +141,53 @@ pub fn token(name: &str) -> Option<ColourToken> {
     ColourToken::ALL.into_iter().find(|t| format!("{t:?}").eq_ignore_ascii_case(name))
 }
 
+/// One way a shown state differs from its mockup: the element, the kind of difference (an edge's name, `not shown`,
+/// `paints`, `alpha`, `says`, `shows no words`) and the words of its line.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Difference {
+    pub element: String,
+    pub kind: &'static str,
+    pub words: String,
+}
+
+impl Difference {
+    fn new(e: &Element, kind: &'static str, words: String) -> Difference {
+        Difference { element: e.name.clone(), kind, words }
+    }
+}
+
+impl std::fmt::Display for Difference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.element, self.words)
+    }
+}
+
+impl Edge {
+    /// The edge's name as a mockup's difference names it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Edge::X => "X",
+            Edge::Y => "Y",
+            Edge::W => "W",
+            Edge::H => "H",
+            Edge::Right => "Right",
+            Edge::Bottom => "Bottom",
+        }
+    }
+}
+
 /// The state's items (a tree's nodes) held to the mockup: each element found by its objectName, its box in design units (the scene's
 /// pixels over `unit`) within `UNITS` of every stated edge, its paints holding its token's colour or its ink, and its words.
-pub fn compare(m: &Mockup, nodes: &[Node], unit: f64, variant: Variant) -> Vec<String> {
+pub fn compare(m: &Mockup, nodes: &[Node], unit: f64, variant: Variant) -> Vec<Difference> {
+    compare_in(m, nodes, unit, &|t| tokens::colour(variant, t))
+}
+
+/// As `compare`, each token's colour as `palette` gives it: a theme's, its overrides over the kit's.
+pub fn compare_in(m: &Mockup, nodes: &[Node], unit: f64, palette: &dyn Fn(ColourToken) -> Colour) -> Vec<Difference> {
     let mut faults = Vec::new();
     for e in &m.elements {
         let Some(i) = nodes.iter().position(|n| n.name == e.name && n.visible) else {
-            faults.push(format!("{}: not shown", e.name));
+            faults.push(Difference::new(e, "not shown", "not shown".to_owned()));
             continue;
         };
         let n = &nodes[i];
@@ -162,7 +202,7 @@ pub fn compare(m: &Mockup, nodes: &[Node], unit: f64, variant: Variant) -> Vec<S
                 Edge::Bottom => y + h,
             };
             if (got - want).abs() > UNITS {
-                faults.push(format!("{}: {edge:?} {got:.1}, the mockup's {want}", e.name));
+                faults.push(Difference::new(e, edge.name(), format!("{edge:?} {got:.1}, the mockup's {want}")));
             }
         }
         let mut paints: Vec<Colour> = n.colors.iter().filter_map(|c| colour(c)).collect();
@@ -171,20 +211,19 @@ pub fn compare(m: &Mockup, nodes: &[Node], unit: f64, variant: Variant) -> Vec<S
         }
         let same =
             |a: Colour, b: Colour, levels: u8| a.r.abs_diff(b.r) <= levels && a.g.abs_diff(b.g) <= levels && a.b.abs_diff(b.b) <= levels;
-        let wanted = e.token.as_deref().and_then(token).map(|t| (tokens::colour(variant, t), 0u8)).or(e.ink.map(|c| (c, 1u8)));
+        let wanted = e.token.as_deref().and_then(token).map(|t| (palette(t), 0u8)).or(e.ink.map(|c| (c, 1u8)));
         if let Some((want, levels)) = wanted {
             match paints.iter().find(|p| same(**p, want, levels)) {
-                None => faults.push(format!(
-                    "{}: paints {:?}, not {}",
-                    e.name,
-                    n.colors,
-                    e.token.clone().unwrap_or_else(|| format!("{want:?}"))
+                None => faults.push(Difference::new(
+                    e,
+                    "paints",
+                    format!("paints {:?}, not {}", n.colors, e.token.clone().unwrap_or_else(|| format!("{want:?}"))),
                 )),
                 Some(p) => {
                     if let Some(alpha) = e.alpha {
                         let got = f64::from(p.a) * n.opacity;
                         if (got - alpha * 255.0).abs() > ALPHA_LEVELS {
-                            faults.push(format!("{}: alpha {:.3}, the mockup's {alpha}", e.name, got / 255.0));
+                            faults.push(Difference::new(e, "alpha", format!("alpha {:.3}, the mockup's {alpha}", got / 255.0)));
                         }
                     }
                 }
@@ -193,10 +232,10 @@ pub fn compare(m: &Mockup, nodes: &[Node], unit: f64, variant: Variant) -> Vec<S
         let words = n.text.clone().unwrap_or_default();
         if let Some(text) = &e.text {
             if &words != text {
-                faults.push(format!("{}: says {words:?}, the mockup {text:?}", e.name));
+                faults.push(Difference::new(e, "says", format!("says {words:?}, the mockup {text:?}")));
             }
         } else if e.data && words.trim().is_empty() {
-            faults.push(format!("{}: shows no words", e.name));
+            faults.push(Difference::new(e, "shows no words", "shows no words".to_owned()));
         }
     }
     faults

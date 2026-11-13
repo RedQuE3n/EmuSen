@@ -2737,7 +2737,7 @@ Module {
     }
     Component {
         file: "glyph.cxxqt.h"
-        lineNumber: 106
+        lineNumber: 124
         name: "PadGlyphMarks"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -2747,7 +2747,7 @@ Module {
             name: "MarkRole"
             isScoped: true
             type: "int"
-            lineNumber: 121
+            lineNumber: 142
             values: ["Outline", "Filled", "Stroke", "CutLetter", "Holes"]
         }
         Property {
@@ -2757,7 +2757,7 @@ Module {
             write: "setFamily"
             notify: "familyChanged"
             index: 0
-            lineNumber: 111
+            lineNumber: 129
         }
         Property {
             name: "button"
@@ -2766,7 +2766,7 @@ Module {
             write: "setButton"
             notify: "buttonChanged"
             index: 1
-            lineNumber: 112
+            lineNumber: 130
         }
         Property {
             name: "swap"
@@ -2775,7 +2775,7 @@ Module {
             write: "setSwap"
             notify: "swapChanged"
             index: 2
-            lineNumber: 113
+            lineNumber: 131
         }
         Property {
             name: "size"
@@ -2784,7 +2784,7 @@ Module {
             write: "setSize"
             notify: "sizeChanged"
             index: 3
-            lineNumber: 114
+            lineNumber: 132
         }
         Property {
             name: "letter"
@@ -2792,7 +2792,7 @@ Module {
             read: "getLetter"
             notify: "letterChanged"
             index: 4
-            lineNumber: 115
+            lineNumber: 133
             isReadonly: true
         }
         Property {
@@ -2801,7 +2801,7 @@ Module {
             read: "getLetterScale"
             notify: "letterScaleChanged"
             index: 5
-            lineNumber: 116
+            lineNumber: 134
             isReadonly: true
         }
         Property {
@@ -2810,7 +2810,7 @@ Module {
             read: "getCut"
             notify: "cutChanged"
             index: 6
-            lineNumber: 117
+            lineNumber: 135
             isReadonly: true
         }
         Property {
@@ -2819,7 +2819,7 @@ Module {
             read: "getName"
             notify: "nameChanged"
             index: 7
-            lineNumber: 118
+            lineNumber: 136
             isReadonly: true
         }
         Property {
@@ -2829,7 +2829,7 @@ Module {
             write: "setStyle"
             notify: "styleChanged"
             index: 8
-            lineNumber: 119
+            lineNumber: 137
         }
         Property {
             name: "letterBold"
@@ -2837,49 +2837,83 @@ Module {
             read: "getLetterBold"
             notify: "letterBoldChanged"
             index: 9
-            lineNumber: 120
+            lineNumber: 138
             isReadonly: true
         }
-        Signal { name: "familyChanged"; lineNumber: 148 }
-        Signal { name: "buttonChanged"; lineNumber: 149 }
-        Signal { name: "swapChanged"; lineNumber: 150 }
-        Signal { name: "sizeChanged"; lineNumber: 151 }
-        Signal { name: "letterChanged"; lineNumber: 152 }
-        Signal { name: "letterScaleChanged"; lineNumber: 153 }
-        Signal { name: "cutChanged"; lineNumber: 154 }
-        Signal { name: "nameChanged"; lineNumber: 155 }
-        Signal { name: "styleChanged"; lineNumber: 156 }
-        Signal { name: "letterBoldChanged"; lineNumber: 157 }
+        Property {
+            name: "pair"
+            type: "int"
+            read: "getPair"
+            write: "setPair"
+            notify: "pairChanged"
+            index: 10
+            lineNumber: 139
+        }
+        Property {
+            name: "paired"
+            type: "bool"
+            read: "getPaired"
+            notify: "pairedChanged"
+            index: 11
+            lineNumber: 140
+            isReadonly: true
+        }
+        Property {
+            name: "discShare"
+            type: "double"
+            read: "getDiscShare"
+            index: 12
+            lineNumber: 141
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Signal { name: "familyChanged"; lineNumber: 173 }
+        Signal { name: "buttonChanged"; lineNumber: 174 }
+        Signal { name: "swapChanged"; lineNumber: 175 }
+        Signal { name: "sizeChanged"; lineNumber: 176 }
+        Signal { name: "letterChanged"; lineNumber: 177 }
+        Signal { name: "letterScaleChanged"; lineNumber: 178 }
+        Signal { name: "cutChanged"; lineNumber: 179 }
+        Signal { name: "nameChanged"; lineNumber: 180 }
+        Signal { name: "styleChanged"; lineNumber: 181 }
+        Signal { name: "letterBoldChanged"; lineNumber: 182 }
+        Signal { name: "pairChanged"; lineNumber: 183 }
+        Signal { name: "pairedChanged"; lineNumber: 184 }
         Method {
             name: "setFamily"
-            lineNumber: 134
+            lineNumber: 155
             Parameter { name: "value"; type: "Families::Family" }
         }
         Method {
             name: "setButton"
-            lineNumber: 136
+            lineNumber: 157
             Parameter { name: "value"; type: "Pad::PadButton" }
         }
         Method {
             name: "setSwap"
-            lineNumber: 138
+            lineNumber: 159
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "setSize"
-            lineNumber: 140
+            lineNumber: 161
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setStyle"
-            lineNumber: 146
+            lineNumber: 167
             Parameter { name: "value"; type: "GlyphStyles::GlyphStyle" }
+        }
+        Method {
+            name: "setPair"
+            lineNumber: 170
+            Parameter { name: "value"; type: "int" }
         }
         Method {
             name: "data"
             type: "QVariant"
             isMethodConstant: true
-            lineNumber: 158
+            lineNumber: 185
             Parameter { name: "index"; type: "QModelIndex" }
             Parameter { name: "role"; type: "int" }
         }
@@ -2887,13 +2921,13 @@ Module {
             name: "roleNames"
             type: "QHash_i32_QByteArray"
             isMethodConstant: true
-            lineNumber: 159
+            lineNumber: 186
         }
         Method {
             name: "rowCount"
             type: "int"
             isMethodConstant: true
-            lineNumber: 160
+            lineNumber: 187
             Parameter { name: "parent"; type: "QModelIndex" }
         }
     }
@@ -5321,8 +5355,28 @@ Module {
             lineNumber: 15
             isReadonly: true
         }
-        Signal { name: "framesChanged"; lineNumber: 25 }
-        Method { name: "clear"; lineNumber: 22 }
+        Property {
+            name: "fitted"
+            type: "bool"
+            read: "fitted"
+            write: "setFitted"
+            notify: "fittedChanged"
+            index: 2
+            lineNumber: 17
+        }
+        Property {
+            name: "stretched"
+            type: "bool"
+            read: "stretched"
+            write: "setStretched"
+            notify: "stretchedChanged"
+            index: 3
+            lineNumber: 19
+        }
+        Signal { name: "framesChanged"; lineNumber: 33 }
+        Signal { name: "fittedChanged"; lineNumber: 34 }
+        Signal { name: "stretchedChanged"; lineNumber: 35 }
+        Method { name: "clear"; lineNumber: 30 }
     }
     Component {
         file: "current.cxxqt.h"

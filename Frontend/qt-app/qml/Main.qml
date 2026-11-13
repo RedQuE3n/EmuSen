@@ -608,43 +608,9 @@ Window {
                 id: resumeFaces
             }
         }
-        // The questions before a game opens: its core's approval, then the firmware it needs (EmuSen_Qt.md §7.7).
-        Kit.NormalizedCanvas {
-            id: launchCanvas
-            objectName: "launchCanvas"
-            visible: launch.asking
-            Kit.Frame {
-                id: launchFrame
-                anchors.fill: parent
-                form: Kit.Forms.BigScreen
-                surfaceDrawn: false
-                helpShown: false
-                focus: launch.asking
-                controller.navigationShown: false
-                Kit.Question {
-                    id: launchQuestion
-                    objectName: "launchQuestion"
-                    controller: launchFrame.controller
-                    title: launch.title
-                    sentences: launch.sentences
-                    caption: launch.caption
-                    choices: launch.choices
-                    backIndex: launch.backIndex
-                    padFamily: program.padFamily
-                    titleFont: Qt.font({ family: resumeFaces.condensedRegular, pixelSize: Kit.Tokens.fontTitle })
-                    bodyFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontBody })
-                    captionFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontCaption })
-                    rowFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontRow })
-                    helpFont: Qt.font({ family: resumeFaces.regular, pixelSize: 20 })
-                    help: HelpModel {
-                        screen: launch.help
-                    }
-                    onChosen: (index) => launch.answer(index)
-                }
-                Binding {
-                    launchQuestion.visible: launch.asking
-                }
-            }
+        LaunchQuestion {
+            launch: launch
+            padFamily: program.padFamily
         }
         // The session's notices (saved, loaded, the screenshot, what failed), at the top right over everything; over running
         // gameplay they are the game's own, so they show (EmuSen_Interface.md §18.6).

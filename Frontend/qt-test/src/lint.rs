@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
 
 use emusen_qml_rules::{check_tree, qml_files, Options};
 
@@ -24,6 +25,24 @@ pub fn rules(dirs: &[(&Path, bool)]) -> Vec<String> {
     lines
 }
 
+/// The folder holding a copy of the style as the module `EmuSen`, for qmllint's import path. Copied once a process: a
+/// test file's tests run on threads of one process, and two that each wrote the copy afresh removed it under each other.
+fn style_root() -> &'static Path {
+    static ROOT: OnceLock<PathBuf> = OnceLock::new();
+    ROOT.get_or_init(|| {
+        let lint_root = target().join("lint");
+        let style_copy = lint_root.join("EmuSen");
+        let _ = std::fs::remove_dir_all(&style_copy);
+        std::fs::create_dir_all(&style_copy).expect("the lint tree");
+        let style = frontend().join("kit-qt").join("style");
+        for file in qml_files(&style) {
+            std::fs::copy(&file, style_copy.join(file.file_name().unwrap())).expect("copy");
+        }
+        std::fs::copy(style.join("qmldir"), style_copy.join("qmldir")).expect("qmldir");
+        lint_root
+    })
+}
+
 /// `qmllint` over every `.qml` under the directories, with the built modules and a copy of the style on the import path; complaints as text.
 pub fn qmllint(dirs: &[&Path]) -> Vec<String> {
     let qmllint = ["/usr/lib64/qt6/bin/qmllint", "/usr/lib/qt6/bin/qmllint", "qmllint"]
@@ -31,15 +50,7 @@ pub fn qmllint(dirs: &[&Path]) -> Vec<String> {
         .find(|p| Command::new(p).arg("--version").output().is_ok())
         .expect("qmllint");
     let target = target();
-    let lint_root = target.join("lint");
-    let style_copy = lint_root.join("EmuSen");
-    let _ = std::fs::remove_dir_all(&style_copy);
-    std::fs::create_dir_all(&style_copy).expect("the lint tree");
-    let style = frontend().join("kit-qt").join("style");
-    for file in qml_files(&style) {
-        std::fs::copy(&file, style_copy.join(file.file_name().unwrap())).expect("copy");
-    }
-    std::fs::copy(style.join("qmldir"), style_copy.join("qmldir")).expect("qmldir");
+    let lint_root = style_root();
     let mut complaints = Vec::new();
     for dir in dirs {
         for file in qml_files(dir) {

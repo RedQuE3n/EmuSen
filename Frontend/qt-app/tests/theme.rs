@@ -45,29 +45,30 @@ fn qt_3_5_the_theme_s_screens_replace_the_reference_s_and_a_failed_theme_shows_t
     assert_eq!(scene.property("theme", "home"), "false");
     assert_eq!(scene.property("home", "visible"), "true", "the reference's Home is shown for a failed theme");
 
-    // A theme's token override is set on its own engine: its screen draws the theme's accent, while the program's tokens,
-    // which every card reads, keep the kit's (a theme never styles a card).
+    // A theme's token override is set on its own engine, where its screen draws the theme's accent, and on the program's, which
+    // Settings, the cards and the page read (decided by the tester, 2026-11-13; EmuSen_Qt.md §3.5.1).
     choose(&mut scene, "accent");
     assert_eq!(scene.property("accentProbe", "color"), "#b4442a", "{}", scene.property("theme", "warnings"));
-    let kit = scene.kit_tokens().map(|t| (t.accent().red(), t.accent().green(), t.accent().blue()));
-    assert_eq!(kit, Some((0x4C, 0x9A, 0xE8)), "the program's accent is the kit's");
-    // Its own shadow colour too (R-20261111-68), where the program's stays the registry's.
+    let program = scene.kit_tokens().map(|t| (t.accent().red(), t.accent().green(), t.accent().blue()));
+    assert_eq!(program, Some((0xB4, 0x44, 0x2A)), "the program's accent is the theme's");
+    // Its own shadow colour too (R-20261111-68), on both engines.
     assert_eq!(scene.property("shadowProbe", "color"), "#2a1b4c", "{}", scene.property("theme", "warnings"));
-    let registry = emusen_kit_core::tokens::raised_shadow(emusen_kit_core::tokens::Form::Desktop).colour;
-    let kit = scene.kit_tokens().map(|t| (t.shadow_color().red(), t.shadow_color().green(), t.shadow_color().blue()));
-    assert_eq!(kit, Some((i32::from(registry.r), i32::from(registry.g), i32::from(registry.b))), "the program's shadow is the registry's");
-    // A number and a switch too (EmuSen_Qt.md §3.5.1): the theme's screen reads its own, the program's tokens the kit's.
+    let program = scene.kit_tokens().map(|t| (t.shadow_color().red(), t.shadow_color().green(), t.shadow_color().blue()));
+    assert_eq!(program, Some((0x2A, 0x1B, 0x4C)), "the program's shadow is the theme's");
+    // A number and a switch too (EmuSen_Qt.md §3.5.1): the theme's screen and the program's tokens read the theme's.
     assert_eq!(scene.property("tokenProbe", "tileRadius"), "21", "{}", scene.property("theme", "warnings"));
     assert_eq!(scene.property("tokenProbe", "breathes"), "false");
-    let kit = scene.kit_tokens().map(|t| (*t.tile_radius(), *t.breathes(), *t.reduced_motion(), *t.form()));
-    let (radius, breathes, reduced, form) = kit.expect("the program's tokens");
-    let form = emusen_kit_qt::kinds::token_form(form);
-    assert_eq!((radius, breathes), (emusen_kit_core::tokens::spacing(form).tile_radius, emusen_kit_core::motion::breathes(reduced)), "the program's are the kit's");
-    assert_ne!(radius, 21.0, "the fixture's radius is not the kit's");
+    let program = scene.kit_tokens().map(|t| (*t.tile_radius(), *t.breathes()));
+    assert_eq!(program, Some((21.0, false)), "the program's radius and breathing are the theme's");
 
     // Switching at run time makes a new engine and lets the last one go; no theme, no engine.
     choose(&mut scene, "stub");
     assert_eq!(scene.property("stubHome", "visible"), "true");
+    // A theme with no overrides gives the program the kit's tokens back.
+    let kit = scene.kit_tokens().map(|t| (t.accent().red(), t.accent().green(), t.accent().blue(), *t.tile_radius(), *t.form()));
+    let (r, g, b, radius, form) = kit.expect("the program's tokens");
+    let form = emusen_kit_qt::kinds::token_form(form);
+    assert_eq!((r, g, b, radius), (0x4C, 0x9A, 0xE8, emusen_kit_core::tokens::spacing(form).tile_radius), "the program's are the kit's");
     choose(&mut scene, "splash");
     choose(&mut scene, "stub");
     assert_eq!(scene.property("host.theme", "liveEngines"), "1", "switching twice leaks no engine");

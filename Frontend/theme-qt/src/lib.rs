@@ -89,7 +89,8 @@ pub mod host {
     }
 
     /// A theme's token overrides as its `theme.json` writes them (light or not, a `Tokens` property, its value), set on the kit's
-    /// tokens of the theme's engine and nowhere else; the kit's `Tokens` reads each as its token's kind (EmuSen_Qt.md §3.5.1).
+    /// tokens of `within`'s engine: the theme's, and the program's for the chosen theme; the kit's `Tokens` reads each as its
+    /// token's kind (EmuSen_Qt.md §3.5.1).
     pub fn set_token_overrides(within: Pin<&mut QObject>, overrides: &[(bool, String, String)]) {
         use emusen_kit_core::tokens::Variant;
         let variant = |light: bool| if light { Variant::Light } else { Variant::Dark };

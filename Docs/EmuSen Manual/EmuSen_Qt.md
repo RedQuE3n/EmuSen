@@ -1351,7 +1351,7 @@ Horizon is the package `Frontend/themes/horizon/`, the design of `horizon.md` (2
 horizon line high at y 440, the focused game or console risen over it at the right as a world in a 300 disc, its words in
 the sky at the left, and the things browsed standing on the land on one foot line (700) under a clamped camera. Its
 `theme.json` lists `home`, `consoles`, `games` and `splash`, the variants dark and light, and one token override,
-`light.accent` #B4442A (Dawn), set on the theme's engine only (§3.5.1). Its mockups are
+`light.accent` #B4442A (Dawn), set on the theme's engine and, chosen, on the program's (§3.5.1). Its mockups are
 `Testing/themes/horizon-{home,consoles,games}.mockup.spec`, held within two units of theme-audit's recordings.
 
 **Parts.** `Backdrop` (the kit's night `Sky` drawn twice, once as the gradient alone and once with the stars clipped at
@@ -1735,11 +1735,22 @@ text size and reduced motion act on it as on the kit's own. A type size (`fontDi
 scaled by the text size and rounded to a half unit (`scaled_text`); `headerSize` is scaled on the desktop and fixed on the big
 screen (`header_of`); a movement's duration is nothing under reduced motion (`movement`), a fade's 120 ms (`fade_of`), and
 `breathes` is false under it (`breathes_if`); spacing, focus marks, shadow metrics, curves and the breath's delay, period and
-low are the theme's under both. A value not of its token's kind is left alone. No override ever reaches the program's engine, which draws the cards: a theme never styles a card
-(§3.1). Before a theme is offered, theme-check refuses an override that names no token of the kit's registry, or gives a value
+low are the theme's under both. A value not of its token's kind is left alone. **The chosen theme's overrides reach the
+program's engine too** (decided by the tester, 2026-11-13, R-20261113-5 and R-20261113-6): Settings, the List card, the Home
+card, the game page, the Pause Card, the tools and the notices, which the program draws itself, take the chosen theme's colours
+and sizes; a theme still draws only its four screens, and `EmuSen.Theme` is unchanged. qt-app's `ThemeStyle` (`src/style.rs`),
+which `Main.qml` hands the chosen theme's host, sets the host's `overrides()` on its own engine's `Tokens` by the same
+`set_token_overrides`, again on each new engine the host makes (a theme chosen in the Themes tab), and none, so the kit's,
+while no theme, the reference or an ES-DE theme is the look; the `Tokens` variant takes each variant's values as on the
+theme's engine. The game's own layers (its picture, its black bars, its status lines) read no token and stay as they are.
+Until 2026-11-13 no override reached the program's engine. Before a theme is offered, theme-check refuses an override that names no token of the kit's registry, or gives a value
 of the wrong kind, with its line and words (`theme-check/src/tokens.rs`, `tests/check.rs`), and holds colours to the contrast
 floors. Proof: `qt-app/tests/theme.rs`, a fixture package overriding the dark accent, shadow colour, `tileRadius` (21) and
-`breathes` (false), whose screen reads all four while the program's tokens keep the kit's; `kit-qt/tests/overrides.rs`, every
+`breathes` (false), whose screen and the program's tokens read all four, and a theme with none giving the kit's back;
+`qt-app/tests/theme_reach.rs`, Settings' and the Home card's focused rows drawn in the chosen theme's accent in each variant and
+in the kit's for none, and Settings, a tool, the Home card, the List card, the game page, a notice over Settings and the
+Pause Card, with each theme's own screens loaded behind, holding the gate's fit and contrast findings to the kit's own under each in-repo theme that overrides a token, dark and light (the Pause Card in
+`theme_reach_pause.rs`, its scene given each theme's overrides); `kit-qt/tests/overrides.rs`, every
 number and switch token of the registry taking a dark override, and a light one, an unknown name and a wrong kind left alone;
 `kit-qt/tests/column.rs`, a theme's `fontBody` at three text sizes, its durations and breathing under reduced motion, and the
 tokens neither touches.
@@ -1780,6 +1791,22 @@ role the chosen theme omits, and every role once it fails, is the reference's, a
 slot under a card (Home under the Home card, the grid under the List card) is disabled and declares `backdrop`, as the
 rules read a backdrop; the grid's slot gives up the keys while the search's keyboard or the List card holds them. Object
 names carry the host's: `host.theme`, `home.reference`.
+
+**A screen not shown takes no focus (2026-11-13).** A slot's screen is made in a `FocusScope` (`Placing.screen`) that is
+out of the window's items while the slot is not shown (`parent: null`) and back under the slot once it is. Qt's
+`Item.forceActiveFocus()` "sets focus on the item and ensures that all ancestor FocusScope objects in the object hierarchy
+are also given" focus (doc.qt.io, Qt 6 QML `Item`, read 2026-11-13), so a scope cannot hold it back, and `enabled: false`
+does not either: it clears the item's own active focus, but the climb still gives focus to every enabled scope above it.
+Both were tried: with the slot disabled the focus went to the window's `chosenTheme` Loader, and the climb set the slot's
+own `focus`, which broke its binding. Out of the window's items, the climb ends at the screen's own scope, so nothing of
+the window's changes. `focusPolicy` governs tabbing and clicks only. The defect it closes, seen 2026-11-13: the
+in-repo themes call `forceActiveFocus` in their screens (Horizon's Consoles shelf, Meridian's entries, Orrery's wheel), so
+using Horizon from the Themes tab moved the pad's focus to its hidden Consoles and left the tab deaf, and choosing any of
+the four over Settings took Settings' focus (`qt-app/tests/themes_focus.rs`, which fails without the change). The scope
+is also invisible while out, since an item with no parent is visible by its own flag alone. Its animations still run and
+drive the window's frames, so the harness's `running` (which `rest` and `assert_still` read) now also walks the items an
+item holds out of the window's: without that, `acceptance.rs` failed `assert_still` under the List card in two runs of two,
+11 frames in 2 s with nothing dirty, and passed with it (measured 2026-11-13).
 
 **Where covers come from.** A theme reads pictures only inside its folder and the cover stores (§3.5.1); the reference
 is held to that too, so the window's `coverStores` (the start's media store, `ArtworkDirectory` and

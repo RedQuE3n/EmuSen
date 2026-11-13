@@ -64,6 +64,8 @@ Item {
         cores: root.cores
         engine: root.engine
         pads: root.pads
+        // A still picture is drawn again through what the settings now ask for.
+        onPictureRead: picture.update()
     }
 
     // The bars are the game's and always black, whatever the theme: nothing white or themed ever shows beside the picture.
@@ -73,16 +75,28 @@ Item {
         color: "#000000"
     }
 
-    // The picture at its display shape, the session's, centred with bars where the window's shape differs, as Mistress letterboxes it.
-    Kit.GamePicture {
-        id: picture
-        objectName: "picture"
+    // The picture at its display shape, the session's, centred with bars where the window's shape differs, as Mistress
+    // letterboxes it; a crop the filter does not make itself is the part of the picture this item clips to (EmuSen_Qt.md §1.8.10).
+    Item {
+        id: shown
+        objectName: "shown"
         readonly property real shape: session.pictureAspect > 0 ? session.pictureAspect : root.width / Math.max(1, root.height)
+        readonly property rect crop: session.pictureCrop
         anchors.centerIn: parent
-        width: Math.min(root.width, root.height * picture.shape)
-        height: Math.min(root.height, root.width / picture.shape)
-        feed: root.feed
-        // Redrawn at each swap only while the game runs; paused or with no game its last picture stands still (EmuSen_Qt.md §9.3.2).
-        live: root.feed !== 0 && session.running && !session.paused
+        width: Math.min(root.width, root.height * shown.shape)
+        height: Math.min(root.height, root.width / shown.shape)
+        clip: shown.crop.width < 1 || shown.crop.height < 1
+
+        Kit.GamePicture {
+            id: picture
+            objectName: "picture"
+            width: shown.width / Math.max(0.01, shown.crop.width)
+            height: shown.height / Math.max(0.01, shown.crop.height)
+            x: -shown.crop.x * picture.width
+            y: -shown.crop.y * picture.height
+            feed: root.feed
+            // Redrawn at each swap only while the game runs; paused or with no game its last picture stands still (EmuSen_Qt.md §9.3.2).
+            live: root.feed !== 0 && session.running && !session.paused
+        }
     }
 }

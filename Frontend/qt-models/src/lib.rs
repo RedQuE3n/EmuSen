@@ -7,6 +7,7 @@ pub mod cards;
 pub mod card_model;
 pub mod clients;
 pub mod clock;
+pub mod display;
 pub mod edits;
 pub mod consoles;
 pub mod consoles_source;

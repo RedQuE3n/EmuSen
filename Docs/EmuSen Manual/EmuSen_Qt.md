@@ -819,6 +819,23 @@ handheld: whether SteamOS's image carries Qt Multimedia and which FFmpeg it link
 handheld's next measurement, §9.3); the AppImage bundles Qt's Multimedia plugin either way. The cost of decoding there is
 `EmuSen_BigPicture.md`'s P5 (under 5% of one core for a `video-normalized` clip), still to be measured on the Legion Go S.
 
+#### 1.8.10 The picture follows the display settings **[M 2026-11-12]**
+
+When a game opens, the session reads its console from `session_info` and `qt-models/src/display.rs` reads that console's
+display settings from the graphics model against Serenity's catalogue: the filter its `ScreenFilter` names, if the
+catalogue offers it for the console (else `effect.None.nearest`), with the values `ShaderParameters` holds for that
+filter's own settings; the crop its `Overscan` asks for, on a console whose screen the catalogue lists as a television
+(`tv` hides the catalogue's `crop.television` share at each edge, `custom` the `CropLeft`/`CropRight`/`CropTop`/
+`CropBottom` percentages, each held to `crop.most_at_an_edge`); and `PictureShape` (`tv`, the console's screen, or
+`square`, the frame's pixels square). The preset is written by `emusen_serenity_filter_write` under the feed's folder
+and handed to the feed, which builds the chain on the render thread at its next draw; a picture from a ring, whose
+slot is given back once drawn, is drawn through the new chain from its next frame. A filter that crops itself (the
+CRT, `crops_itself`) is given the crop as its `emusen_crop_*` uniforms; for any other the window clips: `Game.qml`'s
+`shown` item has the cropped shape and clips a `GamePicture` drawn whole past its edges, the bars around both black.
+The settings are read again when the game resumes and when Settings closes after a save (`readPicture`), and a still
+picture is drawn again then. Not yet followed: a RetroArch preset the Shaders screen stored, and
+a hosted core's `console_picture` setting, which the C# kept on while the CRT was chosen.
+
 ### 1.9 Homes for the front-end logic still in C#
 
 The survey of the remaining C# (2026-11-07) lists front-end logic that needs a Rust owner. Each is given one layer here,

@@ -23,8 +23,9 @@ const SWAP_BOUND: Duration = Duration::from_millis(100);
 pub enum Report {
     Opened { session: u32 },
     FirstPicture { after: Duration },
-    /// The picture's display shape changed: its width over its height as shown (`shown_aspect`).
-    Shape { aspect: f64 },
+    /// The picture's shape changed: its width over its height on the console's screen (`shown_aspect`), and with each
+    /// of the frame's pixels square (`square_aspect`).
+    Shape { screen: f64, square: f64 },
     Failed(String),
     Closed,
     /// Words over the game for something that did not happen, the game playing on.
@@ -177,7 +178,7 @@ fn run(
     let mut seen = handoff.swaps();
     let mut taken = handoff.taken();
     let mut first = true;
-    let mut shape = 0.0;
+    let mut shape = (0.0, 0.0);
     let mut next = Instant::now();
     handoff.set_running(true);
     let failed = Mutex::new(None);
@@ -249,10 +250,10 @@ fn run(
             if std::mem::take(&mut first) {
                 report(Report::FirstPicture { after: started.elapsed() });
             }
-            let aspect = shown_aspect(&info);
+            let aspect = (shown_aspect(&info), square_aspect(&info));
             if aspect != shape {
                 shape = aspect;
-                report(Report::Shape { aspect });
+                report(Report::Shape { screen: aspect.0, square: aspect.1 });
             }
             // A picture on the device is drawn before the machine runs again, so a frame never waits on a ring slot
             // nobody takes and no lend or ring is remade under a picture still to be drawn (§1.8.7).
@@ -312,13 +313,12 @@ fn run(
 /// The picture's shape as shown, width over height: the runtime's display aspect, which the systems table's shape and
 /// the core's own declaration give (EmuSen_Serenity.md §2.9), else the frame's own shape, as Mistress letterboxes it.
 pub fn shown_aspect(info: &FrameInfo) -> f64 {
-    if info.display_aspect > 0.0 {
-        info.display_aspect
-    } else if info.width > 0 && info.height > 0 {
-        info.width as f64 / (info.height as f64 * info.row_repeat.max(1) as f64)
-    } else {
-        0.0
-    }
+    if info.display_aspect > 0.0 { info.display_aspect } else { square_aspect(info) }
+}
+
+/// The frame's own shape, each of its pixels square and each row as often as it is shown.
+pub fn square_aspect(info: &FrameInfo) -> f64 {
+    if info.width > 0 && info.height > 0 { info.width as f64 / (info.height as f64 * info.row_repeat.max(1) as f64) } else { 0.0 }
 }
 
 /// The frame's picture into `frame`: where the machine left it on the device (its ring's slot, or its lend), else its

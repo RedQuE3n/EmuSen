@@ -1,6 +1,7 @@
 //! A window's game picture host (EmuSen_Qt.md §1.8, §7.1): Serenity's device made for Qt's platform plugin, the feed
-//! drawing through the plain preset, and the window adopting the device before it is first shown. emusen-qt-play and
-//! emusen-qt start through it, and so do their tests in a compositor of their own.
+//! drawing through the plain preset until a game's display settings ask for another, and the window adopting the
+//! device before it is first shown. emusen-qt-play and emusen-qt start through it, and so do their tests in a
+//! compositor of their own.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -8,6 +9,7 @@ use std::sync::Arc;
 use emusen_kit_qt::picture::{adopt, Adopted};
 use emusen_platform_client::serenity::{builtin_preset, Device};
 use emusen_platform_client::Platform;
+use emusen_qt_models::display::PLAIN;
 use emusen_qt_models::picture::PictureFeed;
 
 use crate::surface_extensions;
@@ -26,8 +28,8 @@ impl Host {
     pub fn new(platform: &Arc<Platform>, platform_name: &str, gpu: Option<&str>, validate: bool, presets: &Path) -> Result<Host, String> {
         let mut extensions = surface_extensions(platform_name);
         let device = Arc::new(Device::new_for(platform, gpu, validate, &extensions, &["VK_KHR_swapchain"]).map_err(|e| e.to_string())?);
-        let preset = builtin_preset(platform, "effect.None.nearest", None, &presets.to_string_lossy()).map_err(|e| e.to_string())?;
-        let feed = PictureFeed::new(device.clone(), preset);
+        let preset = builtin_preset(platform, PLAIN, None, &presets.to_string_lossy()).map_err(|e| e.to_string())?;
+        let feed = PictureFeed::new(device.clone(), preset, presets.to_path_buf());
         if validate {
             extensions.push("VK_EXT_debug_utils");
         }

@@ -1117,3 +1117,19 @@ fn an_animation_takes_its_frame_from_the_host_s_timing_and_goes_when_its_plays_a
     s.current.data.animations.clear();
     assert_eq!(frame_of(&s), Some(None), "a file the host read no timing for stands on its first frame");
 }
+
+// ES-DE 3.4.1's ViewsVideoAudio (`VideoFFmpegComponent`, outputSound): off, a theme's videos in the views play silent.
+#[test]
+fn the_player_s_switch_silences_a_theme_s_videos_in_the_views() {
+    let t = Synth::new();
+    t.asset("clip.mp4");
+    let gamelist = "<video name=\"v\"><pos>0 0</pos><size>0.5 0.5</size><path>./clip.mp4</path></video>";
+    let mut s = stage(&t, "", gamelist, "gamelist", 0);
+    let audio = |s: &Stage| match &s.frame().elements.iter().find(|p| p.name == "v").unwrap().paint {
+        Paint::Video(v) => v.audio,
+        other => panic!("{other:?}"),
+    };
+    assert!(audio(&s));
+    s.current.data.views_video_audio = false;
+    assert!(!audio(&s));
+}

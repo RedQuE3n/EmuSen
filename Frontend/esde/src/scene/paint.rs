@@ -238,7 +238,7 @@ fn video(e: &Element, ctx: &Ctx) -> Option<Draft> {
         source,
         playing: delay == 0.0,
         delay,
-        audio: e.bool("audio").unwrap_or(true),
+        audio: e.bool("audio").unwrap_or(true) && ctx.data.views_video_audio,
         volume: ctx.data.viewer.volume,
         fade: e.float("fadeInTime").unwrap_or(1.0).clamp(0.0, 8.0) as f64 * 1000.0,
         black: e.string("fadeInType") != Some("transparent"),

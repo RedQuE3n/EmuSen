@@ -127,6 +127,7 @@ impl Painter {
         data.show_clock = self.settings.show_clock;
         data.show_help = self.settings.show_help;
         data.scroll_overlay = self.settings.scroll_overlay;
+        data.views_video_audio = self.settings.views_video_audio;
         data.viewer = self.settings.viewer;
         data.swap = self.swap;
         data.status = self.device;

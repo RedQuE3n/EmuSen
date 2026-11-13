@@ -2597,6 +2597,15 @@ by the program's navigation sound player (`qt-app/src/cues.rs`, no second player
 theme's file. A video's `audio` is heard or muted in `esde-qt/tests/theme_video.rs`
 `a_theme_s_video_shows_its_still_until_the_delay_then_plays_its_frames_in_the_box`.
 
+**The sound of a theme's videos in the views** (R-20261112-27, decided 2026-11-12). The scene and painter honour ES-DE's
+`ViewsVideoAudio`: `BigPictureInterface.ViewsVideoAudio` in the settings, read as the interface's `ViewsVideoAudio`
+(`shelves.rs`, default on), turns off the sound of every theme video in the system and gamelist views
+(`Data::views_video_audio`; `VideoFFmpegComponent`'s outputSound), held by `esde/tests/frame.rs`
+`the_player_s_switch_silences_a_theme_s_videos_in_the_views`. Not built: the Settings row. A row of
+`frontend_settings.json` needs its key to be a field of Galaxia's `BigPictureInterface` model
+(`each_key_is_its_models_and_each_default_the_models_initial_value`), and a new field re-records every recorded model of
+`galaxia/tests/disk` (`every_config_file_reads_to_its_recorded_model`), which is a change to what a test compares against.
+
 **Not drawn.** `itemLinearScale` and `itemLinearSpacing` are in the catalogue but not in ES-DE 3.4.1's property table
 (es-core/src/ThemeData.cpp) nor in its THEMES.md, so they have no rule to follow and stay `later:carousel-layout`, as
 `scaleFactor` stays `later:picture`. `withinView` belongs to a move within one view, system to system or gamelist to gamelist, and the scene

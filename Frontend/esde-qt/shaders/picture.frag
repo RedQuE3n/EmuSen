@@ -1,5 +1,5 @@
 #version 440
-// Esde.Picture's one pass over a premultiplied texture: crop or tile, Rec. 601 saturation, tint, dim, rounded mask, ramp (EmuSen_Qt.md §4.8).
+// Esde.Picture's one pass over a premultiplied texture: crop or tile, brightness, Rec. 601 saturation, tint, dim, rounded mask, ramp (EmuSen_Qt.md §4.8).
 
 layout(location = 0) in vec2 qt_TexCoord0;
 layout(location = 0) out vec4 fragColor;
@@ -20,6 +20,7 @@ layout(std140, binding = 0) uniform buf {
     float tiled;
     float fadeFrom;
     float fadeFalloff;
+    float brightness;
 };
 
 layout(binding = 1) uniform sampler2D source;
@@ -28,6 +29,8 @@ void main() {
     vec2 cell = qt_TexCoord0 * tiles - tileOrigin;
     vec2 uv = uvRect.xy + (tiled > 0.5 ? fract(cell) : cell) * uvRect.zw;
     vec4 c = texture(source, uv);
+    // THEMES.md brightness: 0.3 of a step added to each channel, before saturation and tint, on premultiplied colour.
+    c.rgb += 0.3 * brightness * c.a;
     float luma = dot(c.rgb, vec3(0.299, 0.587, 0.114));
     c.rgb = mix(vec3(luma), c.rgb, saturation);
     vec4 t = mix(tint, tintEnd, vertical > 0.5 ? uv.y : uv.x);

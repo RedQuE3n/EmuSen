@@ -69,8 +69,11 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_not_
     assert_eq!(dimmed.len(), 8);
     assert!(dimmed.iter().all(|(_, _, s)| **s == Mapped::Later("help-dimmed".into())), "R-20261111-75: not drawn until checked");
     assert_eq!(mapping::status("sound", "path"), Some(&Mapped::Later("sound".into())));
-    assert_eq!(mapping::status("video", "delay"), Some(&Mapped::Later("video".into())));
-    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 361);
+    assert_eq!(mapping::status("video", "delay"), Some(&Mapped::Drawn));
+    // Heard, not seen: no picture shows it, and no state stands between drawn and not drawn (R-20261111-75).
+    assert_eq!(mapping::status("video", "audio"), Some(&Mapped::Later("video".into())));
+    assert_eq!(mapping::status("video", "scanlines"), Some(&Mapped::Later("video".into())));
+    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 374);
     assert!(
         mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"),
         "the gameselector picks the system view's games; sound is played"
@@ -775,4 +778,75 @@ fn a_text_s_words_size_only_the_axes_its_theme_leaves_at_zero() {
     assert_eq!(of("text", "tall"), (false, true));
     assert_eq!(of("text", "both"), (false, false));
     assert_eq!(of("datetime", "date"), (false, false));
+}
+
+fn video_of(f: &Frame) -> Video {
+    match &placed(f, "v").paint {
+        Paint::Video(x) => x.clone(),
+        p => panic!("a video: {p:?}"),
+    }
+}
+
+// A video element's stage over games that have a screenshot and no video, so `default` plays (THEMES.md, video).
+fn video_stage(t: &Synth, video: &str) -> Stage {
+    t.asset("shot.png").asset("clip.mkv").asset("other.mkv");
+    let mut s = stage(t, "", video, "gamelist", 0);
+    let shot = t.path_of("shot.png");
+    for g in s.current.data.systems.iter_mut().flat_map(|sys| sys.games.iter_mut()) {
+        g.media.insert("screenshot".into(), shot.clone());
+    }
+    s
+}
+
+#[test]
+fn a_video_shows_its_still_until_its_delay_has_passed_and_wakes_the_painter_then() {
+    let t = Synth::new();
+    let v = "<video name=\"v\"><pos>0.5 0.5</pos><origin>0.5 0.5</origin><size>0.5 0.5</size><imageType>screenshot</imageType>\
+             <default>./clip.mkv</default><delay>2</delay><fadeInTime>0.5</fadeInTime><fadeInType>transparent</fadeInType><audio>false</audio></video>";
+    let mut s = video_stage(&t, v);
+    let f = s.frame();
+    let Paint::Video(x) = &placed(&f, "v").paint else { panic!("a video: {:?}", placed(&f, "v").paint) };
+    assert!(x.source.ends_with("clip.mkv") && x.still.as_ref().is_some_and(|p| p.source.ends_with("shot.png")));
+    assert!(!x.playing && x.delay == 2000.0, "the still first, for the theme's 2 s");
+    assert_eq!(f.next_change_ms, Some(2000), "the painter woken when the video is due");
+    assert!(!x.audio && x.fade == 500.0 && !x.black);
+    assert_eq!((x.fit, x.target, x.area, x.anchor), (VideoFit::Stretch, (160.0, 100.0), (160.0, 100.0), (80.0, 50.0)));
+    s.advance(ms(1999.0));
+    let x = video_of(&s.frame());
+    assert!(!x.playing, "not before the delay");
+    s.advance(ms(2000.0));
+    let f = s.frame();
+    let Paint::Video(x) = &placed(&f, "v").paint else { panic!() };
+    assert!(x.playing && f.next_change_ms.is_none(), "the video from the delay on");
+    // A new game starts the delay again.
+    s.current.step(1, ms(2500.0));
+    s.advance(ms(2600.0));
+    let x = video_of(&s.frame());
+    assert!(!x.playing, "the still again for the next game");
+}
+
+#[test]
+fn a_video_s_delay_is_ignored_without_an_image_type_or_a_still_and_path_ignores_the_game() {
+    let t = Synth::new();
+    // No imageType: ES-DE ignores the delay, so the video plays at once with no still.
+    let s = video_stage(&t, "<video name=\"v\"><pos>0.1 0.1</pos><maxSize>0.5 0.5</maxSize><default>./clip.mkv</default><delay>3</delay></video>");
+    let x = video_of(&s.frame());
+    assert!(x.playing && x.delay == 0.0 && x.still.is_none() && x.fit == VideoFit::Contain && x.black && x.audio);
+    assert!(close(x.pillarbox_threshold.0, 0.85) && close(x.pillarbox_threshold.1, 0.9) && x.iterations == 0 && !x.then_still);
+    // A type the game lacks and no defaultImage: no still, so it starts at once too.
+    let s = video_stage(&t, "<video name=\"v\"><pos>0.1 0.1</pos><size>0.5 0</size><imageType>marquee</imageType><default>./clip.mkv</default></video>");
+    let x = video_of(&s.frame());
+    assert!(x.playing && x.still.is_none() && x.fit == VideoFit::Width && x.target == (160.0, 0.0));
+    // path: a static video, the game's media and the default ignored, the still only the defaultImage.
+    let v = "<video name=\"v\"><pos>0.1 0.1</pos><cropSize>0.5 0.5</cropSize><cropPos>0 1</cropPos><path>./other.mkv</path><imageType>screenshot</imageType>\
+             <default>./clip.mkv</default><iterationCount>2</iterationCount><onIterationsDone>image</onIterationsDone><videoCornerRadius>0.01</videoCornerRadius>\
+             <brightness>0.5</brightness><interpolation>linear</interpolation><pillarboxes>false</pillarboxes></video>";
+    let s = video_stage(&t, v);
+    let x = video_of(&s.frame());
+    assert!(x.source.ends_with("other.mkv") && x.still.is_none() && x.playing, "path plays its own file at once");
+    assert_eq!((x.fit, x.crop_pos, x.iterations, x.then_still), (VideoFit::Cover, (0.0, 1.0), 2, false), "no still to return to under path");
+    assert!(close(x.corner_radius, 3.2) && x.brightness == 0.5 && !x.nearest && !x.pillarboxes);
+    // No video at all: the still alone, as a picture.
+    let s = video_stage(&t, "<video name=\"v\"><pos>0.1 0.1</pos><size>0.5 0.5</size><imageType>screenshot</imageType></video>");
+    assert!(matches!(placed(&s.frame(), "v").paint, Paint::Picture(_)));
 }

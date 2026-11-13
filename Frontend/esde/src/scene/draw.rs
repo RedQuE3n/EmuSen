@@ -115,6 +115,7 @@ impl SceneView {
             // A picture's own size is its file's, so it holds across a resize; text and rows are measured at their size.
             let content = match (&draft.paint, draft.sizing) {
                 (Paint::Picture(p), Sizing::Natural { .. } | Sizing::Aspect { .. }) => key(&["picture", &p.source]),
+                (Paint::Video(Video { still: Some(p), .. }), Sizing::Natural { .. } | Sizing::Aspect { .. }) => key(&["picture", &p.source]),
                 _ => key(&[&format!("{:?}{:?}", draft.paint, draft.size)]),
             };
             let measured = measures.get(&id).filter(|m| m.0 == content).map(|m| (m.1, m.2));
@@ -162,6 +163,15 @@ impl SceneView {
                     t.scroll =
                         Some(Scroll { x: rule.loop_offset(since, mw), repeat_at: Some(mw + rule.gap.max(0.0)), y: 0.0, opacity: 1.0 });
                     wait = rule.loop_wait(since, mw);
+                }
+            }
+            // A video starts once its delay has passed since the game was selected; until then the scene waits on it.
+            if let Paint::Video(v) = &mut paint {
+                v.anchor = (v.anchor.0 - placed.x, v.anchor.1 - placed.y);
+                let delay = super::motion::ms(v.delay);
+                v.playing = since >= delay;
+                if !v.playing {
+                    wait = Some(delay - since);
                 }
             }
             placed.paint = paint;

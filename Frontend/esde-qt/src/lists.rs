@@ -53,6 +53,7 @@ pub mod qobject {
         Grid,
         Clip,
         Page,
+        Video,
     }
 
     #[auto_cxx_name]
@@ -210,6 +211,7 @@ fn paint_number(kind: &str) -> i32 {
         "grid" => PaintKind::Grid,
         "clip" => PaintKind::Clip,
         "page" => PaintKind::Page,
+        "video" => PaintKind::Video,
         _ => PaintKind::None,
     }
     .repr

@@ -4,6 +4,12 @@ The ES-DE painter is the QML module `EmuSen.Esde` (EmuSen_Qt.md §4.8), held by 
 qmltyperegistrar writes it, and its QML files' surface (R-20261111-99) are committed under `Testing/qmltypes/` and
 compared on every build. Each entry names what changed and the section that records it.
 
+## 1.3, piece P4: a theme's video element plays (2026-11-12)
+
+- Registry, added: the `ElementModel.Video` paint kind. §4.5.6.
+- QML files, added: the type `VideoElement`, a theme's video element over its still; `Picture.brightness`. §4.5.6.
+- The module depends on `QtMultimedia`, which `VideoElement` imports itself; `ClipElement` reached it through the kit.
+
 ## 1.2, stage 4 piece X: the help bar, the text rules and the media viewer (2026-11-11)
 
 - Registry, added: `EsdeModel.defaultFont`, `selectionSeed`, `reference` and `manualPages`; `MarkShapes.aspect` and

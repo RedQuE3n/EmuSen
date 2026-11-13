@@ -48,6 +48,8 @@ pub enum Paint {
     Status(Status),
     /// A video file played in the box (the media viewer's, EmuSen_Qt.md §4.10).
     Clip(Clip),
+    /// A theme's video element: its still until the delay has passed, then the video (EmuSen_Qt.md §4.5.6).
+    Video(Video),
     /// A page of a PDF file drawn to the box (the media viewer's manual, EmuSen_Qt.md §4.13).
     Page(Page),
     /// The view's primary element, drawn from `Frame::primary` (or `leaving_primary` when true).
@@ -68,6 +70,59 @@ pub struct Clip {
     pub blur: f64,
     /// How long it fades in once its first frame shows, in ms.
     pub fade: f64,
+}
+
+/// How a theme's video is sized to its target: both axes given stretch it, one given takes the other from the
+/// video's aspect, maxSize fits it inside, cropSize covers, and none leaves it at its own size (THEMES.md, video).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VideoFit {
+    Stretch,
+    Width,
+    Height,
+    Contain,
+    Cover,
+    Own,
+}
+
+/// A theme's video element at a time (THEMES.md, video; ES-DE 3.4.1 es-core/src/components/VideoComponent.cpp and
+/// VideoFFmpegComponent.cpp; EmuSen_Qt.md §4.5.6). The box is the still's; the video is placed from `anchor`, the
+/// element's pos relative to the box, by its own size and `origin`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Video {
+    pub source: String,
+    /// The still shown before the video starts, and after its iterations when `then_still`; None for none.
+    pub still: Option<Picture>,
+    /// The delay has passed: the video runs, the still is gone.
+    pub playing: bool,
+    /// How long after the game is selected the video starts, in ms; 0 when it starts at once.
+    pub delay: f64,
+    pub audio: bool,
+    /// The share of full its sound plays at: the player's Volume.
+    pub volume: f64,
+    /// How long it fades in once its first frame shows, in ms.
+    pub fade: f64,
+    /// fadeInType black: a black frame behind it, which it fades in over.
+    pub black: bool,
+    pub pillarboxes: bool,
+    pub pillarbox_threshold: (f64, f64),
+    /// Plays this many times then stops; 0 for ever.
+    pub iterations: u32,
+    /// onIterationsDone image: the still once the iterations are done, else nothing.
+    pub then_still: bool,
+    pub fit: VideoFit,
+    /// The target size in pixels; an axis the fit takes from the video's aspect is 0.
+    pub target: (f64, f64),
+    /// The area the pillarboxes may fill: the target, or none when the theme set no pos or size, as ES-DE measures it.
+    pub area: (f64, f64),
+    pub anchor: (f64, f64),
+    pub origin: (f64, f64),
+    /// Where a cover crop is taken from, fractions of the video.
+    pub crop_pos: (f64, f64),
+    pub tint: Tint,
+    pub saturation: f64,
+    pub brightness: f64,
+    pub corner_radius: f64,
+    pub nearest: bool,
 }
 
 /// A PDF file's page, counted from 0.
@@ -126,6 +181,8 @@ pub struct Picture {
     pub saturation: f64,
     pub corner_radius: f64,
     pub nearest: bool,
+    /// Added to each colour channel at 0.3 a step (THEMES.md, brightness); 0 for none.
+    pub brightness: f64,
     /// A GIF's frame at the time; None until the painter reports the file's frame delays.
     pub frame: Option<u32>,
 }

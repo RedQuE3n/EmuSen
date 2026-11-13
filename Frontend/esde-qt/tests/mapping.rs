@@ -12,7 +12,7 @@ use emusen_esde::loader::catalog::Scope;
 use emusen_esde::loader::{self, catalog, Severity, ThemeSystem};
 use emusen_esde::scene::mapping::{self, Status};
 use emusen_kit_core::input::UiButton;
-use emusen_qt_test::{Harness, Scene};
+use emusen_qt_test::{clips, Harness, Scene};
 
 const W: i32 = 640;
 const H: i32 = 400;
@@ -153,6 +153,13 @@ impl Assets {
             let text = format!("<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'>{body}</svg>");
             std::fs::write(p(name), text).unwrap();
         };
+        // Clips: red, blue, one second of red, red and blue stripes two pixels wide, and a red left half by a blue right.
+        let clip = |name: &str, w: usize, frames: u32, colour: fn(u32, usize, usize) -> [u8; 3]| clips::write_frames(&p(name), w, 48, frames, colour);
+        clip("red.y4m", 64, 300, |_, _, _| clips::RED);
+        clip("blue.y4m", 64, 300, |_, _, _| clips::BLUE);
+        clip("short.y4m", 64, clips::RATE, |_, _, _| clips::RED);
+        clip("stripes.y4m", 16, 300, |_, x, _| if x % 4 < 2 { clips::RED } else { clips::BLUE });
+        clip("halves.y4m", 64, 300, |_, x, _| if x < 32 { clips::RED } else { clips::BLUE });
         svg("icon-1.svg", "<circle cx='10' cy='10' r='9' fill='#fff' fill-opacity='0.5'/>");
         svg("icon-2.svg", "<rect x='2' y='2' width='16' height='16' fill='#888'/>");
         svg("icon-3.svg", "<path d='M10 1L19 19H1Z' fill='#fff'/>");
@@ -170,6 +177,11 @@ impl Assets {
             .replace("{S1}", &p("icon-1.svg"))
             .replace("{S2}", &p("icon-2.svg"))
             .replace("{S3}", &p("icon-3.svg"))
+            .replace("{V2}", &p("blue.y4m"))
+            .replace("{VS}", &p("short.y4m"))
+            .replace("{VC}", &p("stripes.y4m"))
+            .replace("{VH}", &p("halves.y4m"))
+            .replace("{V}", &p("red.y4m"))
             .replace("{FT}", &format!("{fonts}BarlowCondensed-Light.ttf"))
             .replace("{FB}", &format!("{fonts}Barlow-Medium.ttf"))
     }

@@ -7,7 +7,6 @@ use super::{Action, Bar, Column, Effect, Item, Mark, Pane, Source, Tone, Words};
 use crate::card::{Pane as CardPane, Row as CardRow};
 use crate::clients::ClientSource;
 use crate::library::LibrarySource;
-use crate::question::{confirm, Question};
 use crate::scrape_run::{self, Run};
 use serde_json::Value;
 use std::sync::mpsc::{channel, Receiver};
@@ -225,20 +224,6 @@ impl Source for Scraper {
     fn list_rows(&self) -> Vec<CardRow> {
         if self.running() { vec![CardRow::new(STOP, "Stop the scrape")] } else { Vec::new() }
     }
-
-    fn marks_for(&self, _key: &str) -> Vec<Mark> {
-        Vec::new()
-    }
-
-    fn summary(&self, _marked: &[(String, Mark)]) -> String {
-        String::new()
-    }
-
-    fn plan(&self, _marked: &[(String, Mark)]) -> Question {
-        confirm(self.title(), &[])
-    }
-
-    fn apply(&mut self, _marked: &[(String, Mark)]) {}
 
     fn act(&mut self, action: &str, key: Option<&str>, _section: &str) -> Effect {
         match (action, key) {

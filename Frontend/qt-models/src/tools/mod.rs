@@ -161,14 +161,23 @@ pub trait Source {
     fn action(&self, key: &str) -> Option<Action>;
     /// The rows of a row's page under X, each where it applies.
     fn page(&self, key: &str, marked: Option<&Mark>) -> Vec<CardRow>;
-    /// The List card's own rows after Search, Filter and Sort.
-    fn list_rows(&self) -> Vec<CardRow>;
-    fn marks_for(&self, key: &str) -> Vec<Mark>;
-    /// The bar's line and the plan's question for the marked rows, by key.
-    fn summary(&self, marked: &[(String, Mark)]) -> String;
-    fn plan(&self, marked: &[(String, Mark)]) -> Question;
-    /// The marked rows' jobs started, once the plan is answered Yes.
-    fn apply(&mut self, marked: &[(String, Mark)]);
+    /// The List card's own rows after Search, Filter and Sort; none by default.
+    fn list_rows(&self) -> Vec<CardRow> {
+        Vec::new()
+    }
+    /// A row's marks; none by default, for a tool whose rows are not marked and planned.
+    fn marks_for(&self, _key: &str) -> Vec<Mark> {
+        Vec::new()
+    }
+    /// The bar's line and the plan's question for the marked rows, by key; a tool with no marks has neither to say.
+    fn summary(&self, _marked: &[(String, Mark)]) -> String {
+        String::new()
+    }
+    fn plan(&self, _marked: &[(String, Mark)]) -> Question {
+        plan_question(self.title(), &[])
+    }
+    /// The marked rows' jobs started, once the plan is answered Yes; nothing by default.
+    fn apply(&mut self, _marked: &[(String, Mark)]) {}
     /// An action by its key, on a row (A, a page's row) or on none (the List card's rows); `section` is the strip's key.
     fn act(&mut self, action: &str, key: Option<&str>, section: &str) -> Effect;
     /// A question the source asked, answered: `yes` for the answer that does the thing.

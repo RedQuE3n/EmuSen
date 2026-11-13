@@ -10,7 +10,6 @@ use crate::card::{Pane as CardPane, Row as CardRow};
 use crate::cheats::{count_words, on_words, List, Switch};
 use crate::clients::ClientSource;
 use crate::library::LibrarySource;
-use crate::question::{confirm, Question};
 use emusen_crystal_client::consts::CHEAT_DB_STATUS;
 use emusen_crystal_client::service_flags::NO_GAME;
 use emusen_platform_client::cheats::CheatsDatabase;
@@ -194,24 +193,6 @@ impl Source for Cheats {
             .map(|(at, c)| CardRow::new(&format!("cheat{at}"), &c.description).value(on_words(c.on)).pane(CardPane::said(&c.description, "")))
             .collect()
     }
-
-    fn list_rows(&self) -> Vec<CardRow> {
-        Vec::new()
-    }
-
-    fn marks_for(&self, _key: &str) -> Vec<Mark> {
-        Vec::new()
-    }
-
-    fn summary(&self, _marked: &[(String, Mark)]) -> String {
-        String::new()
-    }
-
-    fn plan(&self, _marked: &[(String, Mark)]) -> Question {
-        confirm(self.title(), &[])
-    }
-
-    fn apply(&mut self, _marked: &[(String, Mark)]) {}
 
     fn act(&mut self, _action: &str, _key: Option<&str>, _section: &str) -> super::Effect {
         super::Effect::Done

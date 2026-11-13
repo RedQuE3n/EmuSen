@@ -80,7 +80,7 @@ fn a_game_s_pictures_are_drawn_in_place_paced_and_paused() {
         None,
         std::ptr::NonNull::new(device.as_ptr().cast_mut()),
         handoff.clone(),
-        GameIo { pads: None, sound: Some(sound), sync: true },
+        GameIo { pads: None, sound: Some(sound), sync: true, cheats: None },
         DisplayClock::new(&platform),
         false,
         move |r| {

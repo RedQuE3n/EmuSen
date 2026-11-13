@@ -1,9 +1,9 @@
 //! A game's page as plain Rust (EmuSen_Qt.md §7.8; EmuSen_Interface.md §2.5, §4 screen 3): its facts, its actions, its
 //! five sections and what each press does, over one read of the game a source answers. No Qt; the bridge,
 //! `game_page_model.rs`, only puts it on Qt. The media viewer is ES-DE's (`emusen_esde::scene::Viewer`) over the page's
-//! media; Scrape This Game runs the scraper over the game; Edit Details is a deeper page of the game's edits. Cheats,
-//! Package, Display crop and Cover art open nothing yet, so their rows are not shown; Open Folder is the program's
-//! folder action.
+//! media; Scrape This Game runs the scraper over the game; Edit Details is a deeper page of the game's edits; Cheats is a
+//! deeper page of Options, the game's own cheat list, each a switch saved to its file (cheats.rs). Package, Display crop
+//! and Cover art open nothing yet, so their rows are not shown; Open Folder is the program's folder action.
 
 use crate::help::Screen;
 use crate::question::Question;
@@ -41,6 +41,8 @@ pub enum Change {
     Hide,
     /// One of the game's details edited, by its field; none goes back to what was scraped.
     Edit(&'static str, Option<String>),
+    /// The game's cheat at that place of its list switched on or off.
+    Cheat(usize, bool),
 }
 
 /// What the player is told when a change could not be made, and why (EmuSen_Qt.md §7.9).
@@ -53,6 +55,7 @@ pub fn change_failed(change: &Change, why: &str) -> String {
         Change::DeleteState(_) => "The state could not be deleted",
         Change::Hide => "The game could not be hidden",
         Change::Edit(..) => "The game's details could not be stored",
+        Change::Cheat(..) => "The cheat was not switched",
     };
     format!("{what}: {why}")
 }
@@ -134,8 +137,8 @@ pub struct Read {
     /// The console's controller profiles, the console's first; none where it has only one, so the row is left out.
     pub profiles: Option<Vec<Choice>>,
     pub profile: Option<String>,
-    /// The game's saved cheats, on and in all; none where it has none.
-    pub cheats: Option<(usize, usize)>,
+    /// The game's own cheats, in its list's order; none where it has no list or an empty one.
+    pub cheats: Vec<crate::cheats::Switch>,
     /// Whether the game has a crop of its own; none where its console has no overscan to crop.
     pub crop: Option<bool>,
     /// The television standards, the game's own first (its value none); none where its console drove no television.
@@ -232,8 +235,10 @@ pub const PLAY: &str = "play";
 pub const RESUME: &str = "resume";
 pub const FAVOURITE: &str = "favourite";
 
-/// The rows' keys; Cheats, Package, Display crop and Cover art are a later piece's pages (EmuSen_Interface.md §18.2).
+/// The rows' keys; Package, Display crop and Cover art are a later piece's pages (EmuSen_Interface.md §18.2).
 pub const CHEATS: &str = "cheats";
+/// A cheat on Cheats' page.
+pub const CHEAT: &str = "cheat";
 pub const PACKAGE: &str = "package";
 pub const CROP: &str = "crop";
 pub const SCRAPE: &str = "scrape";
@@ -290,7 +295,7 @@ pub struct Tile {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Row {
     pub key: &'static str,
-    pub label: &'static str,
+    pub label: String,
     pub value: String,
     pub steps: bool,
     pub opens: bool,
@@ -316,6 +321,8 @@ pub enum Outcome {
     Play(Option<String>),
     /// Edit Details opened, Details' deeper page.
     Edit,
+    /// Cheats opened, Options' deeper page.
+    Cheats,
     /// The media viewer opened on the Media section's tile at this index.
     View(usize),
     /// A scrape of the game started.
@@ -340,6 +347,8 @@ pub struct GamePage {
     pub now: i64,
     /// Whether Details shows Edit Details, its deeper page.
     pub editing: bool,
+    /// Whether Options shows Cheats, its deeper page.
+    pub cheating: bool,
     /// This page's scrape: whether it is going, and what it last said; none before one started.
     pub run: Option<(bool, String)>,
 }
@@ -437,7 +446,7 @@ fn slot_name(slot: Slot) -> String {
 
 impl GamePage {
     pub fn new(read: Read, now: i64) -> GamePage {
-        GamePage { read, section: 0, resume_at: 0, now, editing: false, run: None }
+        GamePage { read, section: 0, resume_at: 0, now, editing: false, cheating: false, run: None }
     }
 
     /// A new read of the same game, the section and Resume's state kept where they still stand.
@@ -476,11 +485,12 @@ impl GamePage {
     pub fn choose_section(&mut self, index: usize) {
         self.section = index.min(SECTIONS.len() - 1);
         self.editing = false;
+        self.cheating = false;
     }
 
-    /// B on the page: Edit Details goes back to Details, and says so; else the page is left.
+    /// B on the page: Edit Details goes back to Details and Cheats to Options, and says so; else the page is left.
     pub fn back(&mut self) -> bool {
-        std::mem::replace(&mut self.editing, false)
+        std::mem::replace(&mut self.editing, false) | std::mem::replace(&mut self.cheating, false)
     }
 
     fn state_words(&self, s: &State) -> String {
@@ -538,6 +548,7 @@ impl GamePage {
                 Content::Text { words, picture }
             }
             Section::States => Content::Tiles(self.state_tiles()),
+            Section::Options if self.cheating => Content::Rows(self.cheat_rows()),
             Section::Options => Content::Rows(self.option_rows()),
             Section::Media => Content::Tiles(self.media_tiles()),
             Section::Details if self.editing => Content::Rows(self.edit_rows()),
@@ -613,7 +624,7 @@ impl GamePage {
         if !r.engines.is_empty() {
             rows.push(Row {
                 key: "engine",
-                label: "Engine",
+                label: "Engine".into(),
                 value: Self::text_of(&r.engines, &r.engine),
                 steps: r.engines.len() > 1,
                 opens: false,
@@ -623,7 +634,7 @@ impl GamePage {
         if let Some(profiles) = &r.profiles {
             rows.push(Row {
                 key: "profile",
-                label: "Controller profile",
+                label: "Controller profile".into(),
                 value: Self::text_of(profiles, &r.profile),
                 steps: true,
                 opens: false,
@@ -633,18 +644,42 @@ impl GamePage {
         if let Some(standards) = &r.standards {
             rows.push(Row {
                 key: STANDARD,
-                label: "Television standard",
+                label: "Television standard".into(),
                 value: Self::text_of(standards, &r.standard),
                 steps: true,
                 opens: false,
                 sentence: "The television the picture is drawn for: the game's own, NTSC or PAL.",
             });
         }
+        if !r.cheats.is_empty() {
+            let on = r.cheats.iter().filter(|c| c.on).count();
+            rows.push(Row {
+                key: CHEATS,
+                label: "Cheats".into(),
+                value: format!("{on} of {} on", r.cheats.len()),
+                steps: false,
+                opens: true,
+                sentence: "The game's cheats, on or off; the same switches the Pause Card shows.",
+            });
+        }
         rows
     }
 
+    /// Cheats' rows: each of the game's cheats, a switch.
+    fn cheat_rows(&self) -> Vec<Row> {
+        let row = |c: &crate::cheats::Switch| Row {
+            key: CHEAT,
+            label: c.description.clone(),
+            value: crate::cheats::on_words(c.on).into(),
+            steps: true,
+            opens: false,
+            sentence: "",
+        };
+        self.read.cheats.iter().map(row).collect()
+    }
+
     fn detail_rows(&self) -> Vec<Row> {
-        let row = |key, label, value: &str, opens| Row { key, label, value: value.to_owned(), steps: false, opens, sentence: "" };
+        let row = |key, label: &str, value: &str, opens| Row { key, label: label.into(), value: value.to_owned(), steps: false, opens, sentence: "" };
         let scrape = match &self.run {
             Some((_, words)) => words.as_str(),
             None if self.read.scraping => "A run is going",
@@ -659,7 +694,7 @@ impl GamePage {
             .iter()
             .map(|(field, label)| {
                 let value = self.read.details.iter().find(|d| d.field == *field).map(|d| d.value.clone()).unwrap_or_default();
-                Row { key: field, label, value, steps: false, opens: true, sentence: "" }
+                Row { key: field, label: label.to_string(), value, steps: false, opens: true, sentence: "" }
             })
             .collect()
     }
@@ -692,6 +727,8 @@ impl GamePage {
             Some(row) if row.key == SCRAPE => Outcome::Scrape,
             Some(row) if row.key == FOLDER => Outcome::OpenFolder,
             Some(row) if row.key == EDIT => Outcome::Edit,
+            Some(row) if row.key == CHEATS => Outcome::Cheats,
+            Some(row) if row.key == CHEAT => self.switch(index),
             _ => Outcome::Nothing,
         }
     }
@@ -726,6 +763,11 @@ impl GamePage {
                     }
                 }
             }
+            Change::Cheat(index, on) => {
+                if let Some(c) = r.cheats.get_mut(*index) {
+                    c.on = *on;
+                }
+            }
             Change::DeleteState(_) | Change::Hide => {}
         }
     }
@@ -744,10 +786,19 @@ impl GamePage {
                 Some(p) => Outcome::Changed(Change::Profile(step(p, &self.read.profile))),
                 None => Outcome::Nothing,
             },
+            Some(CHEAT) => self.switch(index),
             Some(STANDARD) => match &self.read.standards {
                 Some(s) => Outcome::Changed(Change::Standard(step(s, &self.read.standard))),
                 None => Outcome::Nothing,
             },
+            _ => Outcome::Nothing,
+        }
+    }
+
+    /// A cheat turned the other way and saved to its list.
+    fn switch(&self, index: usize) -> Outcome {
+        match self.read.cheats.get(index) {
+            Some(c) if self.cheating => Outcome::Changed(Change::Cheat(index, !c.on)),
             _ => Outcome::Nothing,
         }
     }

@@ -384,7 +384,7 @@ fn qt_7_8_a_games_page_opens_from_the_grid_holds_its_states_and_plays_its_clip()
     hold(&mut scene, "GamePageOptions", &mockup::Mockup::default(), &mut excuses, &mut report);
     // The television standard, offered for a television's console: the game's own, stepped to NTSC and saved in games.db,
     // then back; the package's state in Mistress's words.
-    // Package, Cheats and Display crop open nothing yet, so they are not shown (EmuSen_Qt.md §7.8.2).
+    // Package and Display crop open nothing yet, and the game has no cheat list, so none is shown (EmuSen_Qt.md §7.8.2).
     down_to(&mut scene, "Television standard");
     for hidden in ["Package", "Cheats", "Display crop"] {
         assert!(!reads(&mut scene, hidden), "{hidden} is not shown");

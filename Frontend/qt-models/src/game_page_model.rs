@@ -301,7 +301,7 @@ fn items(content: &Content) -> Vec<Item> {
             .collect(),
         Content::Rows(rows) => rows
             .iter()
-            .map(|r| Item { key: r.key.into(), label: r.label.into(), value: r.value.clone(), steps: r.steps, opens: r.opens, ..Item::default() })
+            .map(|r| Item { key: r.key.into(), label: r.label.clone(), value: r.value.clone(), steps: r.steps, opens: r.opens, ..Item::default() })
             .collect(),
     }
 }
@@ -503,6 +503,7 @@ impl cxx_qt::Initialize for qobject::GamePageModel {
                 // A new game opens on its Overview, the focus on Play (EmuSen_Interface.md §4 screen 3).
                 model.as_mut().rust_mut().page.section = 0;
                 model.as_mut().rust_mut().page.editing = false;
+                model.as_mut().rust_mut().page.cheating = false;
                 model.as_mut().rust_mut().page.run = None;
                 model.as_mut().rust_mut().focus = (Some(0), 0);
                 model.as_mut().view_close();
@@ -755,6 +756,11 @@ impl qobject::GamePageModel {
                 }
                 Outcome::Edit => {
                     model.as_mut().rust_mut().page.editing = true;
+                    model.as_mut().rust_mut().focus = (None, 0);
+                    model.as_mut().shown(true);
+                }
+                Outcome::Cheats => {
+                    model.as_mut().rust_mut().page.cheating = true;
                     model.as_mut().rust_mut().focus = (None, 0);
                     model.as_mut().shown(true);
                 }

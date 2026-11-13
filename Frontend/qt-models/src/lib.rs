@@ -4,6 +4,7 @@
 pub mod bindings;
 pub mod card;
 pub mod cards;
+pub mod cheats;
 pub mod card_model;
 pub mod clients;
 pub mod clock;

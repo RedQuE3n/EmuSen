@@ -10,7 +10,7 @@ use crate::library::{console_name, title_of, HERO};
 use emusen_crystal_client::Scope;
 use emusen_platform_client::bindings::consts::PROFILES;
 use emusen_platform_client::galaxia::consts::{
-    DIR_SCREENSHOTS, MODEL_CHEAT_FILE, SAVE_PACKAGE_RESUME_STATE, SAVE_PACKAGE_STATE, SAVE_PICTURE, SAVE_RESUME_STATE, SAVE_STATE,
+    DIR_SCREENSHOTS, SAVE_PACKAGE_RESUME_STATE, SAVE_PACKAGE_STATE, SAVE_PICTURE, SAVE_RESUME_STATE, SAVE_STATE,
 };
 use emusen_platform_client::library::GameFile;
 use emusen_platform_client::packages::Roots;
@@ -193,13 +193,7 @@ impl GamePageSource for ClientSource {
                 .collect(),
         };
         (read.profiles, read.profile) = self.profiles(&s.console, &game.path);
-        if let Some((list, category)) = self.platform.cheat_game_list(Some(&s.console), &game.path).map_err(words)? {
-            let file = self.platform.model_load(MODEL_CHEAT_FILE, Some(&category), &format!("{list}.json")).map_err(words)?;
-            let cheats = file.as_ref().and_then(|f| f["Cheats"].as_array()).cloned().unwrap_or_default();
-            if !cheats.is_empty() {
-                read.cheats = Some((cheats.iter().filter(|c| c["Enabled"].as_bool() == Some(true)).count(), cheats.len()));
-            }
-        }
+        read.cheats = crate::cheats::List::of(&self.platform, &s.console, &game.path)?.map(|l| l.switches()).unwrap_or_default();
         let catalogue = serenity::catalogue(&self.platform).map_err(words)?;
         let television = catalogue["screens"].as_array().is_some_and(|all| all.iter().any(|c| c["console"] == s.console.as_str() && c["kind"] == "Television"));
         if television {
@@ -247,6 +241,15 @@ impl GamePageSource for ClientSource {
             Change::Edit(field, value) => {
                 let at = crate::words::utc(crate::words::now());
                 self.library.change(&json!({ "op": "save_edits", "path": path, "changes": { *field: value }, "at": at })).map(drop).map_err(words)
+            }
+            Change::Cheat(index, on) => {
+                let systems = self.runtime.systems().map_err(words)?;
+                let console = systems.iter().find(|s| Some(&s.id) == game.system.as_ref()).map(|s| s.console.clone()).unwrap_or_default();
+                let mut list = crate::cheats::List::of(&self.platform, &console, path)?.ok_or_else(|| "the game has no cheat list".to_string())?;
+                if !list.set(*index, *on) {
+                    return Err(format!("no cheat {index}"));
+                }
+                list.save(&self.platform)
             }
             Change::Hide => {
                 let at = crate::words::utc(crate::words::now());

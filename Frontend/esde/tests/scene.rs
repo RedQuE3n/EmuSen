@@ -84,7 +84,7 @@ fn round() -> Motion {
 #[allow(clippy::too_many_arguments)]
 fn data_sized(system: &str, gamelist: &str, motion: Motion, capabilities: &str, system_index: usize, game: usize, w: f64, h: f64) -> Data {
     let t = Synth::new();
-    t.capabilities(capabilities).theme(&format!("<view name=\"system\">{system}</view><view name=\"gamelist\">{gamelist}</view>"));
+    t.asset("art.png").capabilities(capabilities).theme(&format!("<view name=\"system\">{system}</view><view name=\"gamelist\">{gamelist}</view>"));
     let choices = Choices { screen_width: w as i32, screen_height: h as i32, ..Choices::default() };
     let mut systems: Vec<System> = library_systems()
         .into_iter()
@@ -345,6 +345,44 @@ fn a_slide_moves_both_views_across_and_settles_on_the_gamelist_alone() {
     assert_eq!(instant.current.view, "gamelist");
 }
 
+// ES-DE 3.4.1's `SystemView::renderElements` and `GamelistView::render`: during a slide between the two views an element
+// that is stationary betweenViews or always rests where it is, and one with renderDuringTransitions false is not drawn.
+#[test]
+fn a_stationary_element_rests_and_a_transit_hidden_one_waits_while_the_views_pan() {
+    let capabilities =
+        "<transitions name=\"slide\"><systemToGamelist>slide</systemToGamelist><gamelistToSystem>slide</gamelistToSystem></transitions>";
+    let image = |name: &str, extra: &str| format!("<image name=\"{name}\"><pos>0.5 0.5</pos><size>0.2 0.2</size><path>./art.png</path>{extra}</image>");
+    let system = carousel("")
+        + &image("moves", "")
+        + &image("between", "<stationary>betweenViews</stationary>")
+        + &image("always", "<stationary>always</stationary>")
+        + &image("within", "<stationary>withinView</stationary>")
+        + &image("waits", "<renderDuringTransitions>false</renderDuringTransitions>");
+    let gamelist = list("") + &image("comes", "<stationary>always</stationary>") + &image("later", "<renderDuringTransitions>false</renderDuringTransitions>");
+    let mut stage = Stage::new(data(&system, &gamelist, round(), capabilities, 1, 2), "system", 0);
+    let y = |stage: &Stage, name: &str| stage.frame().elements.iter().find(|e| e.name == name).map(|e| e.y);
+    let rest = y(&stage, "moves").unwrap();
+    assert_eq!(y(&stage, "waits"), Some(rest));
+    stage.switch(ms(1000.0));
+    stage.advance(ms(1200.0));
+    let moved = y(&stage, "moves").unwrap();
+    assert!(moved < rest - 1.0, "a plain element pans with its view: {moved} against {rest}");
+    assert!(close(y(&stage, "between").unwrap(), rest));
+    assert!(close(y(&stage, "always").unwrap(), rest));
+    assert!(close(y(&stage, "within").unwrap(), moved), "withinView is for a move within one view");
+    assert!(close(y(&stage, "comes").unwrap(), rest));
+    assert_eq!(y(&stage, "waits"), None);
+    assert_eq!(y(&stage, "later"), None);
+    // The layers say the same.
+    let layers = stage.layers();
+    let at = |name: &str| layers.iter().find_map(|l| l.elements.iter().find(|e| e.name == name).map(|e| e.rect.y + l.y));
+    assert!(close(at("between").unwrap(), rest));
+    assert!(close(at("comes").unwrap(), rest));
+    assert!(at("waits").is_none() && at("later").is_none());
+    stage.advance(ms(1500.0));
+    assert!(close(y(&stage, "later").unwrap(), rest));
+}
+
 // GridSceneTests: four columns of 0.2 x 0.3, spacing 0.02 x 0.03, scale 1.2, two whole rows, and a metadata text above.
 fn grid(extra: &str) -> String {
     format!(
@@ -582,4 +620,24 @@ fn capitalize_lowers_the_rest_and_raises_each_word_as_unicode_bounds_it() {
     assert_eq!(words::cased("3d world (usa)", Some("capitalize")), "3d World (Usa)");
     assert_eq!(words::system_suffix("snes", Some("lowercase")), " [snes]");
     assert_eq!(words::system_suffix("snes", None), " [SNES]");
+}
+
+// ES-DE 3.4.1's `GIFAnimComponent`: the first frame stands one pacing, then the sequence one frame a pacing; the
+// alternating forms turn without showing an end twice; after the iterations nothing is drawn.
+#[test]
+fn a_gif_steps_by_its_first_delay_over_the_speed_in_its_direction_for_its_iterations() {
+    use emusen_esde::scene::motion::gif_frame;
+    let at = |t: f64, speed: f64, dir: &str, it: u32| gif_frame(ms(t), 4, 100, speed, dir, it).map(|(f, _)| f);
+    let run = |speed: f64, dir: &str, it: u32| (0..16).map(|i| at(i as f64 * 100.0 / speed + 1.0, speed, dir, it)).collect::<Vec<_>>();
+    let s = |v: &[u32]| v.iter().map(|f| Some(*f)).collect::<Vec<_>>();
+    assert_eq!(run(1.0, "normal", 0), s(&[0, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2]));
+    assert_eq!(run(1.0, "reverse", 0), s(&[0, 3, 2, 1, 0, 3, 2, 1, 0, 3, 2, 1, 0, 3, 2, 1]));
+    assert_eq!(run(1.0, "alternate", 0), s(&[0, 0, 1, 2, 3, 2, 1, 0, 1, 2, 3, 2, 1, 0, 1, 2]));
+    assert_eq!(run(1.0, "alternateReverse", 0), s(&[0, 3, 2, 1, 0, 1, 2, 3, 2, 1, 0, 1, 2, 3, 2, 1]));
+    assert_eq!(run(2.0, "normal", 0), run(1.0, "normal", 0), "speed divides the pacing");
+    assert_eq!(&run(1.0, "normal", 2)[..9], &s(&[0, 0, 1, 2, 3, 0, 1, 2, 3])[..]);
+    assert_eq!(run(1.0, "normal", 2)[9], None, "two plays, then nothing");
+    assert_eq!(gif_frame(ms(150.0), 4, 100, 1.0, "normal", 0), Some((0, Some(ms(50.0)))));
+    assert_eq!(gif_frame(ms(150.0), 4, 100, 3.0, "normal", 0).map(|f| f.0), Some(3), "33 ms a frame, whole milliseconds: four pacings, the fourth frame");
+    assert_eq!(gif_frame(ms(5000.0), 1, 100, 1.0, "normal", 1), Some((0, None)), "one frame stands");
 }

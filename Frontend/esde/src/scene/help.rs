@@ -125,12 +125,24 @@ pub fn entries(view: &str, e: &Element, data: &Data) -> Vec<HelpEntry> {
 // The strip's numbers as ES-DE 3.4.1 takes them from a theme, in f32 as it computes them (EmuSen_Qt.md §4.12.4): es-core
 // HelpComponent.cpp (the constructor, applyTheme, updateGrid), Font.h getSmallFont, Font.cpp getFromTheme and Font::Font.
 
+/// The property a help element reads now: its `*Dimmed` twin while a menu is open over the view and the theme sets
+/// it, else the property itself, as ES-DE 3.4.1's `HelpComponent::applyTheme` falls back and `updateGrid` chooses.
+pub fn now_of(e: &Element, property: &str, dimmed: bool) -> String {
+    let twin = format!("{property}Dimmed");
+    if dimmed && e.explicit.contains_key(&twin) { twin } else { property.to_owned() }
+}
+
 /// The font's size in pixels: a theme's fontSize (the loader holds it to 0.001–1.5) × the screen's height; without one,
 /// the default share (the loader's, 0.035) × the shorter side; then clamped to 3 px – 1.5 heights, as the font is made.
 pub fn font_px(e: &Element, w: f64, h: f64) -> f64 {
+    font_px_of(e, "fontSize", w, h)
+}
+
+/// The same for `fontSize` or `fontSizeDimmed`.
+pub fn font_px_of(e: &Element, property: &str, w: f64, h: f64) -> f64 {
     let (w, h) = (w as f32, h as f32);
-    let share = e.float("fontSize").unwrap_or(0.035);
-    let size = if e.explicit.contains_key("fontSize") { h * share } else { share * w.min(h) };
+    let share = e.float(property).unwrap_or(0.035);
+    let size = if e.explicit.contains_key(property) { h * share } else { share * w.min(h) };
     f64::from(size.clamp(3.0, h * 1.5))
 }
 

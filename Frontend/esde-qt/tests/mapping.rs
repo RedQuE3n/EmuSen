@@ -340,6 +340,15 @@ fn element(c: &Case, value: &str, assets: &Assets) -> String {
     assets.fill(&format!("<view name=\"{}\">{cover}<{} name=\"x\">{body}</{}>{}</view>", view_of(c), c.kind, c.kind, c.beside))
 }
 
+// A case that switches views slides between them, as a theme's transitions profile asks.
+fn capabilities(c: &Case) -> &'static str {
+    if c.moves.as_deref() == Some("switch") {
+        "<transitions name=\"slide\"><systemToGamelist>slide</systemToGamelist><gamelistToSystem>slide</gamelistToSystem></transitions>"
+    } else {
+        ""
+    }
+}
+
 /// The theme's errors as the loader reports them for the case's system, before anything is drawn.
 fn errors(theme: &Path) -> Vec<String> {
     let loaded = loader::load(&theme.to_string_lossy(), &ThemeSystem::new("snes", "Super Nintendo", "snes"), &loader::Choices::default(), None);
@@ -369,7 +378,7 @@ fn since_press(scene: &mut Scene<'_>) -> f64 {
 /// One rendering of a case: the view emptied so the next install starts afresh, the theme and the rotated library
 /// installed, the case's move made, and the picture left on the window at the case's time, a timed case's clock still held.
 fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &Assets) {
-    common::write_theme(theme, "", &element(c, value, assets));
+    common::write_theme(theme, capabilities(c), &element(c, value, assets));
     if scene.property("esdeModel", "themed") == "true" {
         assert!(scene.set_property("view", "shelves", "[]"));
         until(scene, "the view emptied", |s| s.property("esdeModel", "themed") == "false");
@@ -380,6 +389,8 @@ fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &A
     assert!(scene.set_property("view", "media", &assets.media(&files)));
     let interface = format!("\"DisplayClock\":true,\"StartupView\":\"{}\"", view_of(c));
     assert!(scene.set_property("view", "now", common::HELD_NOW));
+    // A case that opens a menu draws the view as a card over it leaves it (the help's dimmed look, EmuSen_Qt.md §4.5.9).
+    assert!(scene.set_property("view", "menuOpen", if c.moves.as_deref() == Some("menu") { "true" } else { "false" }));
     assert!(scene.set_property("view", "settings", &settings(theme, &interface)));
     assert!(scene.set_property("view", "shelves", &shelves));
     until(scene, "the case's theme installed", |s| s.property("esdeModel", "themed") == "true");
@@ -393,6 +404,7 @@ fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &A
         Some("step") => scene.pad(along(c, value)),
         Some("down") => scene.pad(UiButton::Down),
         Some("hold") => scene.pad_down(along(c, value)),
+        Some("switch") => scene.pad(if view_of(c) == "system" { UiButton::Accept } else { UiButton::Back }),
         _ => {}
     }
     match c.at {
@@ -429,6 +441,24 @@ fn every_pair_the_mapping_marks_drawn_has_a_case_and_every_case_is_mapped() {
     assert!(unmapped.is_empty(), "a case for a pair mapping.tsv marks neither drawn nor later: {unmapped:?}");
 }
 
+// A heard pair names the test that hears it, as `crate dir/tests/file.rs::fn`, and that test is there (R-20261112-26).
+#[test]
+fn every_heard_pair_names_a_test_that_hears_it() {
+    let heard: Vec<(String, String, String)> = mapping::pairs()
+        .filter_map(|(k, p, s)| match s {
+            Status::Heard(t) => Some((k.to_owned(), p.to_owned(), t.clone())),
+            _ => None,
+        })
+        .collect();
+    assert!(!heard.is_empty());
+    for (kind, property, test) in heard {
+        let (file, name) = test.split_once("::").unwrap_or_else(|| panic!("{kind}.{property}: {test} is not file::fn"));
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(file);
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{kind}.{property}: {}: {e}", path.display()));
+        assert!(text.contains(&format!("#[test]\nfn {name}(")), "{kind}.{property}: no test {name} in {file}");
+    }
+}
+
 #[test]
 fn every_case_s_two_themes_load_without_errors() {
     let dir = Scratch::new("mapping-load");
@@ -437,7 +467,7 @@ fn every_case_s_two_themes_load_without_errors() {
     for (n, c) in all_cases().iter().enumerate() {
         for (side, value) in [("a", &c.a), ("b", &c.b)] {
             let theme = dir.path(&format!("theme-{n}-{side}"));
-            common::write_theme(&theme, "", &element(c, value, &assets));
+            common::write_theme(&theme, capabilities(c), &element(c, value, &assets));
             failures.extend(errors(&theme).into_iter().map(|e| format!("{c} = {value}: {e}")));
         }
     }

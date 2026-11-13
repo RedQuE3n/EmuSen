@@ -238,7 +238,7 @@ fn video(e: &Element, ctx: &Ctx) -> Option<Draft> {
         source,
         playing: delay == 0.0,
         delay,
-        audio: e.bool("audio").unwrap_or(true),
+        audio: e.bool("audio").unwrap_or(true) && ctx.data.views_video_audio,
         volume: ctx.data.viewer.volume,
         fade: e.float("fadeInTime").unwrap_or(1.0).clamp(0.0, 8.0) as f64 * 1000.0,
         black: e.string("fadeInType") != Some("transparent"),
@@ -533,17 +533,19 @@ fn help_element(e: &Element, ctx: &Ctx) -> Option<Draft> {
     if entries.is_empty() {
         return None;
     }
+    let now = |p: &str| help::now_of(e, p, ctx.data.menu_open);
     let paint = Paint::Help(Help {
         entries,
         font: help_face(e, ctx.data),
-        px: help::font_px(e, ctx.w, ctx.h),
-        label_color: color(e, "textColor", 0x7777_77FF),
-        icon_color: color(e, "iconColor", 0x7777_77FF),
+        px: help::font_px_of(e, &now("fontSize"), ctx.w, ctx.h),
+        label_color: color(e, &now("textColor"), 0x7777_77FF),
+        icon_color: color(e, &now("iconColor"), 0x7777_77FF),
         background: padded(e, ctx, background_tint(e)),
-        entry_spacing: help::spacing_px(e, "entrySpacing", ctx.w),
-        icon_gap: help::spacing_px(e, "iconTextSpacing", ctx.w),
+        entry_spacing: help::spacing_px(e, &now("entrySpacing"), ctx.w),
+        icon_gap: help::spacing_px(e, &now("iconTextSpacing"), ctx.w),
         scale: help::scale(e),
         filled_glyphs: true,
+        text_first: e.string("entryLayout") == Some("textFirst"),
     });
     Some(Draft { paint, size: (0.0, 0.0), sizing: Sizing::Content { auto_w: true, auto_h: true }, scroll: None })
 }

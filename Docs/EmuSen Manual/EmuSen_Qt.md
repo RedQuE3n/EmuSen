@@ -2330,19 +2330,20 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_n
 
 | Status | Pairs | Meaning |
 |---|---|---|
-| `drawn` | 432 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, 347 measured 2026-11-08), and the families drawn since (§4.5.6 to §4.5.8) |
-| `later:help-dimmed` | 8 | the help's eight `*Dimmed` properties (`posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`): not drawn until each is checked (R-20261111-75, decided 2026-11-11; the `accepted` state of 2026-11-08 is withdrawn) |
-| `later:sound` | 1 | `sound.path`, which the host plays: not drawn until checked (R-20261111-75) |
-| `later:video` | 2 | the video's `scanlines` and `audio`; the other fourteen of the family drawn or moved to `stationary` (§4.5.6, 2026-11-12) |
+| `drawn` | 459 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, 347 measured 2026-11-08), and the families drawn since (§4.5.6 to §4.5.9) |
+| `heard:<test>` | 2 | proven by what is heard, not by a picture (R-20261112-26): `sound.path` and video `audio`, each naming the test that hears it (§4.5.9) |
+| `later:help-dimmed` | 0 | the help's eight `*Dimmed` properties, drawn since 2026-11-13 (§4.5.9) |
+| `later:sound` | 0 | `sound.path`, heard since 2026-11-13 (§4.5.9) |
+| `later:video` | 1 | the video's `scanlines` (`audio` heard since 2026-11-13, §4.5.9); the other fourteen of the family drawn or moved to `stationary` (§4.5.6, 2026-11-12) |
 | `later:gradients` | 0 | the 22 `*ColorEnd` and `*GradientType` pairs, drawn since 2026-11-13 (§4.5.7) |
 | `later:item-text` | 0 | the 19 carousel, grid and text list item text pairs, drawn since 2026-11-13 (§4.5.8) |
 | `later:picture` | 2 | `scaleFactor` of image and animation, which ES-DE 3.4.1 does not read: its property table (es-core/src/ThemeData.cpp) has no `scaleFactor`, so what a theme means by it has no source to follow. The other 14 drawn since 2026-11-13 (§4.5.7) |
-| `later:stationary` | 12 | `stationary` (the video's since 2026-11-12), `renderDuringTransitions`, `fadeAbovePrimary` |
-| `later:carousel-layout` | 6 | `itemStacking`, `selectedItemOffset`, `itemLinearScale`, `itemLinearSpacing`, `itemAxisRotation`, `itemDiagonalOffset` |
-| `later:textlist-selector` | 5 | the selector image, width and offset, the secondary selected background |
-| `later:help-layout` | 1 | `entryLayout` |
+| `later:stationary` | 3 | the three `fadeAbovePrimary`; `stationary` and `renderDuringTransitions` drawn since 2026-11-13 (§4.5.9) |
+| `later:carousel-layout` | 2 | `itemLinearScale`, `itemLinearSpacing`, which ES-DE 3.4.1 does not read; the other four drawn since 2026-11-13 (§4.5.9) |
+| `later:textlist-selector` | 0 | drawn since 2026-11-13 (§4.5.9) |
+| `later:help-layout` | 0 | `entryLayout`, drawn since 2026-11-13 (§4.5.9) |
 | `later:gameselector` | 13 | the gameselector's picks (`selection`, `gameCount`, `allowDuplicates`) and the elements that read them (`gameselector`, `gameselectorEntry` of image, video, text, datetime and rating): the scene shows no game in the system view (§4.8.5) |
-| `later:animation-timing` | 3 | a GIF's `speed`, `direction` and `iterationCount`: the scene gives the painter no frame, so a GIF stands on its first |
+| `later:animation-timing` | 3 | a GIF's `speed`, `direction` and `iterationCount`: the scene steps the frame, the painter does not show it (§4.5.9) |
 | `later:container` | 0 | `containerVerticalSnap` drawn since 2026-11-09 (§4.12.3), `containerScrollSpeed` since 2026-11-13 (§4.5.8) |
 | `later:grid-rows` | 0 | `fractionalRows`, drawn since 2026-11-13 (§4.5.8) |
 | `later:text-lines` | 0 | datetime's `lineSpacing`, drawn since 2026-11-13 (§4.5.8) |
@@ -2532,9 +2533,86 @@ and letters join). The text list's ASCII mark for a game in the edited collectio
 (named to sort after that day's two earlier measures, which it keeps) has 60 themes falling in `unsupported`, 112 pairs
 in all, against `2026-11-13b.tsv`, and no rise in any column.
 
-**Not drawn: video `audio`.** It is read and heard (`VideoElement.qml` mutes its `AudioOutput`), but the mapping test
-proves a pair by two different pictures, and sound makes none; it stays `later:video` (R-20261111-75 keeps no state
-between drawn and not drawn).
+**Video `audio`.** It is read and heard (`VideoElement.qml` mutes its `AudioOutput`); the mapping test proves a pair by
+two different pictures, and sound makes none, so it was `later:video` until the `heard` state of §4.5.9.
+
+#### 4.5.9 What stays put in a slide, the dimmed help, the selector, the carousel's layout, GIF timing, sound **[M 2026-11-13]**
+
+Pairs moved from `later:` to `drawn`, each with a case in `tests/themes/mapping-cases.tsv` that paints two different
+pictures, and each rule read in ES-DE 3.4.1's source (read, never copied).
+
+| Pairs | Rule | ES-DE 3.4.1 source |
+|---|---|---|
+| `stationary` of image, video, animation, badges, text, datetime, gamelistinfo, rating | during a slide between the system and gamelist views, `betweenViews` and `always` keep the element where it rests in either view (`draw::Transit`, `Stage::drawn`); `never` and `withinView` pan with the view | `GamelistView::render`, `SystemView::renderElements` (stationaryApplicable) |
+| image `renderDuringTransitions` | false: not drawn, in either view, while the views pan | the same (renderChildCondFunc) |
+| helpsystem `posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed` | while a menu is open over the view, each in place of its own property, which it falls back to when unset (`help::now_of`) | `HelpComponent::applyTheme`, `updateGrid`, `setOpacity`; `Window::isBackgroundDimmed` |
+| helpsystem `entryLayout` | `textFirst`: each entry's label, its gap, then its icon, the grid's width unchanged (`help::places_with`, `HelpElement.qml`) | `HelpComponent::updateGrid` |
+| textlist `selectorWidth`, `selectorHorizontalOffset` | shares of the screen's width; unset, the bar is the list's width and unshifted. The shift moves the selected background with the bar. The bar is drawn outside the rows' clip, as ES-DE draws it before pushing its clip | `TextListComponent::applyTheme`, `render` |
+| textlist `selectorImagePath`, `selectorImageTile` | a picture in the bar's place, stretched to it or repeated at its own size, tinted by `selectorColor` to `selectorColorEnd` across (an image's colour shift ignores `selectorGradientType`); a width of 0 follows the picture's aspect | the same (mSelectorImage) |
+| textlist `selectedSecondaryBackgroundColor` | the selected folder's background, falling back to `selectedBackgroundColor` | the same |
+| carousel `selectedItemOffset` | the selected item moves by the pair in proportion as it nears the centre, both axes a share of the screen's width for a horizontal carousel and of its height for a vertical one; row types only | `CarouselComponent::applyTheme`, `render` |
+| carousel `itemAxisRotation` | each item of a row type turned by the angle about its own unscaled centre, after its growth | `render` |
+| carousel `itemDiagonalOffset` | each item shifted by the share × its distance from the centre, up for a horizontal carousel (the screen's height) and left for a vertical one (its width); the shift turns with the item | `render` (comp->setPosition) |
+| carousel `itemStacking` | `ascending` draws the row in order, `descending` reversed, the `Raised` forms the centre item last; the centre is the item at the position's floor while it moves toward lower positions, and at its ceiling while it moves toward higher ones or rests | `render` (belowCenter, mPositiveDirection) |
+| `scope` of helpsystem, clock and systemstatus | `menu` shows only while a menu is open, `view` only while none is, `none` never | `Window::render`, `renderHelpPromptsEarly` |
+
+The mapping test's `switch` move presses accept in the system view or back in the gamelist with a slide transitions
+profile in the case's `capabilities.xml`, and reads the picture at the case's time on the held clock.
+`esde/tests/scene.rs` `a_stationary_element_rests_and_a_transit_hidden_one_waits_while_the_views_pan` holds the rule.
+
+**A menu over the view.** ES-DE dims the view behind any menu on its window's stack. The program's equivalent is a
+card or another screen over the theme's view (`Main.qml`'s `esdeLoader.backdrop`), which sets `View.menuOpen`
+(EmuSen.Esde 1.6), `Data::menu_open` in the scene. Not built: the help keeps the view's entries under a card, where ES-DE
+lists the open menu's own prompts. The mapping test's `menu` move sets it before the picture; the rules are
+held by `esde/tests/frame.rs` `a_menu_over_the_view_dims_the_help_and_swaps_the_scoped_ones`.
+
+**A GIF's timing, stepped but not shown.** The scene steps a GIF as ES-DE 3.4.1's `GIFAnimComponent` does
+(`motion::gif_frame`; `setAnimation`, `update`, `render`, `resetComponent`, `GamelistView::onShow`,
+`SystemView::onCursorChanged`): every frame for the first frame's delay (20 to 1000 ms, else it stands on its first)
+over `speed`, cut to whole milliseconds; the file's first frame stands one such step, then the sequence runs one frame a
+step; `normal` and `reverse` start again from their first frame, `alternate` and `alternateReverse` turn at each end
+without showing it twice; after `iterationCount` plays (0 for ever) nothing is drawn, since the frame past the last
+reads as an empty page. A gamelist's GIFs start again when the view is shown, the system view's on each new system. The
+painter reads each file's frame count and first delay with Qt's `QImageReader` (`imageCount`, `nextImageDelay` after the
+first `read`; `esde-qt/cpp/gif_timing.cpp`, `gif.rs`, since cxx-qt-lib does not bind it; QtGui is linked through Qt
+Quick) into `Data::animations` at each install. Held by `esde/tests/scene.rs`
+`a_gif_steps_by_its_first_delay_over_the_speed_in_its_direction_for_its_iterations` and `esde/tests/frame.rs`
+`an_animation_takes_its_frame_from_the_host_s_timing_and_goes_when_its_plays_are_done`.
+
+**Not drawn: `speed`, `direction`, `iterationCount`.** The painter does not show the scene's frame yet, so the three stay
+`later:animation-timing`; only the end of the plays is seen (the GIF goes). Measured 2026-11-13 with the mapping cases:
+`Image.currentFrame` set to the scene's frame leaves a GIF on its first frame (both directions read red, frame 0, at
+150 ms), and a paused `AnimatedImage` given as the picture shader's source, directly or through a
+`ShaderEffectSource`, drew nothing. What would settle it: a frame read by `QImageReader` itself handed to the painter
+(an image provider), or the reason the paused `AnimatedImage` gives no texture.
+
+The carousel's four are added to the scene's own slots (`primary::carousel`), which the painter binds and animates
+nothing of; a `PathView` would lay the items out a second time beside the scene's layout, so none is used.
+
+**Heard: `sound.path` and video `audio`** (R-20261112-26, decided 2026-11-12). `mapping.tsv` gains the state
+`heard:<crate dir/tests/file.rs::fn>`, a pair proven by what is heard; `check` counts it `set`, and the mapping test
+`every_heard_pair_names_a_test_that_hears_it` holds that the named test is there. A theme's `sound` elements are played
+by the program's navigation sound player (`qt-app/src/cues.rs`, no second player): `qt-app/tests/esde.rs`
+`an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist` hears each sound the view asks for as the
+theme's file. A video's `audio` is heard or muted in `esde-qt/tests/theme_video.rs`
+`a_theme_s_video_shows_its_still_until_the_delay_then_plays_its_frames_in_the_box`.
+
+**The sound of a theme's videos in the views** (R-20261112-27, decided 2026-11-12). The scene and painter honour ES-DE's
+`ViewsVideoAudio`: `BigPictureInterface.ViewsVideoAudio` in the settings, read as the interface's `ViewsVideoAudio`
+(`shelves.rs`, default on), turns off the sound of every theme video in the system and gamelist views
+(`Data::views_video_audio`; `VideoFFmpegComponent`'s outputSound), held by `esde/tests/frame.rs`
+`the_player_s_switch_silences_a_theme_s_videos_in_the_views`. Not built: the Settings row. A row of
+`frontend_settings.json` needs its key to be a field of Galaxia's `BigPictureInterface` model
+(`each_key_is_its_models_and_each_default_the_models_initial_value`), and a new field re-records every recorded model of
+`galaxia/tests/disk` (`every_config_file_reads_to_its_recorded_model`), which is a change to what a test compares against.
+
+**Not drawn.** `itemLinearScale` and `itemLinearSpacing` are in the catalogue but not in ES-DE 3.4.1's property table
+(es-core/src/ThemeData.cpp) nor in its THEMES.md, so they have no rule to follow and stay `later:carousel-layout`, as
+`scaleFactor` stays `later:picture`. `withinView` belongs to a move within one view, system to system or gamelist to gamelist, and the scene
+draws both of those moves instantly (a new selection in the system view, `Painter::change_system`), so it has nothing to
+hold still; the stage has no slide or fade between two systems. The three `fadeAbovePrimary` pairs act only in a fade
+between two systems (`SystemView::render`, `renderElements`: mFadeOpacity), which the scene does not draw either; they
+stay `later:stationary`.
 
 ### 4.6 The library as an ES-DE theme sees it, and its screen **[M 2026-11-08]**
 

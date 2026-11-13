@@ -8,6 +8,8 @@ use std::sync::OnceLock;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Status {
     Drawn,
+    /// Proven by what is heard, not by a picture (R-20261112-26): the test that hears it, as `crate dir/tests/file.rs::fn`.
+    Heard(String),
     /// Not drawn yet; the family that will draw it.
     Later(String),
 }
@@ -26,6 +28,7 @@ fn table() -> &'static Vec<(String, String, Status)> {
                 };
                 let status = match status {
                     "drawn" => Status::Drawn,
+                    heard if heard.starts_with("heard:") => Status::Heard(heard["heard:".len()..].to_owned()),
                     later => Status::Later(later.strip_prefix("later:").unwrap_or_else(|| panic!("mapping.tsv: {later}")).to_owned()),
                 };
                 (kind.to_owned(), property.to_owned(), status)
@@ -51,4 +54,9 @@ pub fn status(kind: &str, property: &str) -> Option<&'static Status> {
 /// Whether the element kind is drawn at all: any of its pairs is; sound is played, not drawn, and gameselector draws nothing itself.
 pub fn is_drawn(kind: &str) -> bool {
     table().iter().any(|(k, _, s)| k == kind && *s == Status::Drawn)
+}
+
+/// Whether the scene or the host does what the pair asks: drawn, or heard.
+pub fn is_supported(kind: &str, property: &str) -> bool {
+    matches!(status(kind, property), Some(Status::Drawn | Status::Heard(_)))
 }

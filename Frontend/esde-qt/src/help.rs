@@ -18,6 +18,10 @@ const LABEL_FLOOR: f32 = 3.0;
 pub struct Places {
     pub starts: Vec<f64>,
     pub labels: Vec<f64>,
+    /// Each entry's icon box start: the entry's start, or after its label and gap with entryLayout textFirst.
+    pub icons: Vec<f64>,
+    /// The icon box's width.
+    pub icon: f64,
     pub width: f64,
 }
 
@@ -52,17 +56,24 @@ pub fn places_with(h: &Help, icon: f64) -> Places {
     let px = label_px(h);
     // Summed in f32, as HelpComponent.cpp's updateGrid sums (EmuSen_Qt.md §4.12.4).
     let (icon, gap, spacing) = (icon as f32, h.icon_gap as f32, h.entry_spacing as f32);
-    let (mut starts, mut labels, mut x) = (vec![], vec![], 0.0_f32);
+    let (mut starts, mut labels, mut icons, mut x) = (vec![], vec![], vec![], 0.0_f32);
     for e in &h.entries {
         let words = face.as_ref().map_or(0, |f| {
             let spec = Spec { text: &e.label, px, own_face: h.font.own, width: 0.0, height: 0.0, line_spacing: 0.0, wrap: false, ellipsis: false, align: Align::Start };
             layout(f, &spec).width
         });
         starts.push(f64::from(x));
-        labels.push(f64::from(x + icon + gap));
+        // HelpComponent::updateGrid's columns: icon, gap, label, spacing; or label, gap, icon, spacing.
+        if h.text_first {
+            labels.push(f64::from(x));
+            icons.push(f64::from(x + words as f32 + gap));
+        } else {
+            labels.push(f64::from(x + icon + gap));
+            icons.push(f64::from(x));
+        }
         x += icon + words as f32 + gap + spacing;
     }
-    Places { starts, labels, width: f64::from(x) }
+    Places { starts, labels, icons, icon: f64::from(icon), width: f64::from(x) }
 }
 
 #[cfg(test)]
@@ -89,6 +100,7 @@ mod tests {
             icon_gap: 5.0,
             scale,
             filled_glyphs: true,
+            text_first: false,
         }
     }
 

@@ -6,7 +6,7 @@ use cxx_qt_build::{CxxQtBuilder, QmlModule};
 #[path = "build/freetype.rs"]
 mod freetype;
 
-// EmuSen.Esde 1.5, the painter's module (EmuSen_Qt.md §4.8); its .qmltypes is the module's surface.
+// EmuSen.Esde 1.6, the painter's module (EmuSen_Qt.md §4.8); its .qmltypes is the module's surface.
 const ESDE_FILES: [&str; 21] = [
     "qml/Picture.qml",
     "qml/Mark.qml",
@@ -85,10 +85,12 @@ fn main() {
     link_freetype();
     let shaders = baked_shader();
     CxxQtBuilder::new_qml_module(
-        QmlModule::new("EmuSen.Esde").version(1, 5).qml_files(ESDE_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtQml.Models").depend("QtQuick.Pdf").depend("QtMultimedia").depend("EmuSen.Kit"),
+        QmlModule::new("EmuSen.Esde").version(1, 6).qml_files(ESDE_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtQml.Models").depend("QtQuick.Pdf").depend("QtMultimedia").depend("EmuSen.Kit"),
     )
     .qrc(shaders)
-    .files(["src/marks.rs", "src/model.rs", "src/lists.rs", "src/text.rs"])
+    .files(["src/marks.rs", "src/model.rs", "src/lists.rs", "src/text.rs", "src/gif.rs"])
+    .include_dir("cpp")
+    .cpp_files(["cpp/gif_timing.h", "cpp/gif_timing.cpp"])
     .qt_module("Quick")
     .build()
     .export();

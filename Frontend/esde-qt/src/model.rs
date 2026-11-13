@@ -34,6 +34,8 @@ pub mod qobject {
         #[qproperty(f64, height)]
         #[qproperty(bool, swap)]
         #[qproperty(QString, device)]
+        /// A menu or card of the program's is open over the view: the help takes its `*Dimmed` look (EmuSen_Qt.md §4.5.9).
+        #[qproperty(bool, menu_open)]
         /// The time the clock and the relative dates read, in seconds since 1970; 0 reads the wall clock.
         #[qproperty(i64, now)]
         #[qproperty(bool, themed, READ, NOTIFY)]
@@ -140,6 +142,7 @@ pub struct EsdeModelRust {
     height: f64,
     swap: bool,
     device: QString,
+    menu_open: bool,
     now: i64,
     default_font: QString,
     selection_seed: i64,
@@ -201,6 +204,12 @@ impl cxx_qt::Initialize for qobject::EsdeModel {
         self.as_mut().on_now_changed(|mut m| {
             let now = local_now(m.now);
             m.as_mut().rust_mut().shared.borrow_mut().set_now(now);
+            m.publish();
+        })
+        .release();
+        self.as_mut().on_menu_open_changed(|mut m| {
+            let open = *m.menu_open();
+            m.as_mut().rust_mut().shared.borrow_mut().set_menu_open(open);
             m.publish();
         })
         .release();

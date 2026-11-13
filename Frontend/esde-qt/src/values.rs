@@ -357,7 +357,11 @@ fn layout(pr: &Primary, role: &str) -> Option<V> {
             "lineSpacing" => V::N(c.text.line_spacing),
             "color" => V::C(c.text.color),
             "itemBackground" => V::C(c.text.background),
-            _ => return None,
+            "selectedColor" => V::C(c.text.selected_color),
+            "selectedItemBackground" => V::C(c.text.selected_background),
+            "textRadius" => V::N(c.text.radius),
+            "oneLine" => V::B(c.text.one_line),
+            _ => return scroll(&c.text.marquee, role),
         }),
         Layout::TextList(t) => {
             let bar = t.selector.unwrap_or(emusen_esde::scene::Bar { x: 0.0, y: 0.0, w: 0.0, h: 0.0, tint: Tint { color: CLEAR, end: CLEAR, vertical: false } });
@@ -448,10 +452,12 @@ fn layout(pr: &Primary, role: &str) -> Option<V> {
             "lineSpacing" => V::N(g.text.line_spacing),
             "color" => V::C(g.text.color),
             "itemBackground" => V::C(g.text.background),
-            "selectedColor" => V::C(g.text_selected_color.unwrap_or(g.text.color)),
-            "selectedItemBackground" => V::C(g.text_selected_background.unwrap_or(g.text.background)),
-            "textRadius" => V::N(g.text_radius),
-            _ => return tint(&g.tint, role),
+            "selectedColor" => V::C(g.text.selected_color),
+            "selectedItemBackground" => V::C(g.text.selected_background),
+            "textRadius" => V::N(g.text.radius),
+            "oneLine" => V::B(g.text.one_line),
+            "clipHeight" => V::N(g.clip_height),
+            _ => return tint(&g.tint, role).or_else(|| scroll(&g.text.marquee, role)),
         }),
     }
 }
@@ -477,6 +483,7 @@ pub fn row(r: &Row, role: &str) -> V {
 pub fn slot(s: &Slot, r: Option<&Row>, role: &str) -> V {
     match role {
         "row" => V::I(s.row as i32),
+        "chosen" => V::B(s.chosen),
         "boxX" => V::N(s.x),
         "boxY" => V::N(s.y),
         "boxWidth" => V::N(s.w),
@@ -602,17 +609,17 @@ pub const ELEMENT_ROLES: [&str; 150] = [
 ];
 
 /// The grid's roles, numbered on past the element list's.
-pub const GRID_ROLES: [&str; 14] = [
+pub const GRID_ROLES: [&str; 16] = [
     "backgroundSource", "backgroundScale", "selectorSource", "selectorScale", "selectorRadius", "selectorOnTop", "selectorInMiddle",
     "selectedItemBackground", "textRadius", "selectedTintEnd", "selectedGradientVertical", "selectorImageTint", "selectorImageTintEnd",
-    "selectorImageVertical",
+    "selectorImageVertical", "oneLine", "clipHeight",
 ];
 
 pub const ROW_ROLES: [&str; 4] = ["text", "image", "marker", "folder"];
 
-pub const SLOT_ROLES: [&str; 24] = [
+pub const SLOT_ROLES: [&str; 25] = [
     "row", "boxX", "boxY", "boxWidth", "boxHeight", "grow", "growX", "growY", "turn", "turnX", "turnY", "alpha", "dim",
-    "saturation", "tint", "tintEnd", "gradientVertical", "reflected", "reflectionOpacity", "reflectionFalloff", "text", "image", "marker", "folder",
+    "saturation", "tint", "tintEnd", "gradientVertical", "reflected", "reflectionOpacity", "reflectionFalloff", "text", "image", "marker", "folder", "chosen",
 ];
 
 pub const PART_ROLES: [&str; 42] = [

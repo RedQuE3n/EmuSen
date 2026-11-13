@@ -73,7 +73,7 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_not_
     // Heard, not seen: no picture shows it, and no state stands between drawn and not drawn (R-20261111-75).
     assert_eq!(mapping::status("video", "audio"), Some(&Mapped::Later("video".into())));
     assert_eq!(mapping::status("video", "scanlines"), Some(&Mapped::Later("video".into())));
-    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 410);
+    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 432);
     assert!(
         mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"),
         "the gameselector picks the system view's games; sound is played"
@@ -917,4 +917,82 @@ fn a_clear_selector_with_no_end_set_draws_no_bar() {
     let f = stage(&t, "", "<textlist name=\"l\"><selectorColor>00000000</selectorColor></textlist>", "gamelist", 0).frame();
     let Layout::TextList(l) = &f.primary.unwrap().layout else { panic!() };
     assert_eq!(l.selector, None, "the end is the colour itself, as ES-DE's TextListComponent::applyTheme sets it");
+}
+
+// A carousel's or grid's text items: the selected item's colours, the corner radius, one line each, and the selected
+// name scrolling once the painter measures it wider than its item (ES-DE 3.4.1 CarouselComponent, GridComponent).
+#[test]
+fn a_carousel_s_and_a_grid_s_selected_name_takes_its_colours_and_scrolls_once_measured() {
+    let text = "<textColor>FFFFFF</textColor><textSelectedColor>FF0000</textSelectedColor><textBackgroundColor>000000</textBackgroundColor>\
+                <textSelectedBackgroundColor>00FF00</textSelectedBackgroundColor><textBackgroundCornerRadius>0.9</textBackgroundCornerRadius>\
+                <textHorizontalScrolling>true</textHorizontalScrolling><textHorizontalScrollDelay>1</textHorizontalScrollDelay><fontSize>0.1</fontSize>";
+    let carousel = format!("{CAROUSEL}<imageType>none</imageType><itemSize>0.25 0.25</itemSize>{text}</carousel>");
+    let grid = format!("<grid name=\"c\"><pos>0 0</pos><size>1 1</size><imageType>none</imageType><itemSize>0.25 0.25</itemSize>{text}</grid>");
+    for theme in [carousel, grid] {
+        let t = Synth::new();
+        let mut s = stage(&t, "", &theme, "gamelist", 2);
+        let f = s.frame();
+        let p = f.primary.clone().unwrap();
+        let (text, room) = match &p.layout {
+            Layout::Carousel(c) => {
+                let chosen: Vec<_> = c.slots.iter().filter(|x| x.chosen).collect();
+                assert_eq!(chosen.len(), 1, "one slot is the selected item's");
+                assert_eq!(chosen[0].row, 2);
+                (c.text.clone(), chosen[0].w)
+            }
+            Layout::Grid(g) => (g.text.clone(), g.item.0),
+            _ => panic!(),
+        };
+        assert_eq!((text.color, text.selected_color), (Color(0xFFFF_FFFF), Color(0xFF00_00FF)));
+        assert_eq!((text.background, text.selected_background), (Color(0x0000_00FF), Color(0x00FF_00FF)));
+        assert!(close(text.radius, 0.5 * W), "the radius is clamped to half the screen: {}", text.radius);
+        assert!(text.one_line && text.marquee.is_none() && !f.moving, "no scroll before the painter measures");
+        s.measured(p.id, room - 1.0, 20.0);
+        assert!(text_of(&s.frame().primary.unwrap().layout).marquee.is_none(), "a name that fits does not scroll");
+        assert!(s.measured(p.id, room * 3.0, 20.0));
+        let f = s.frame();
+        assert_eq!(text_of(&f.primary.clone().unwrap().layout).marquee.map(|m| m.x), Some(0.0));
+        assert_eq!(f.next_change_ms, Some(1000), "the scroll waits its delay");
+        s.advance(ms(1500.0));
+        let f = s.frame();
+        let m = text_of(&f.primary.unwrap().layout).marquee.unwrap();
+        assert!(m.x > 0.0 && f.moving && m.repeat_at.is_some_and(|r| r > room * 3.0));
+    }
+}
+
+fn text_of(l: &Layout) -> ItemText {
+    match l {
+        Layout::Carousel(c) => c.text.clone(),
+        Layout::Grid(g) => g.text.clone(),
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn a_carousel_s_names_stay_wrapped_and_still_without_horizontal_scrolling() {
+    let t = Synth::new();
+    let theme = format!("{CAROUSEL}<imageType>none</imageType><fontSize>0.1</fontSize></carousel>");
+    let mut s = stage(&t, "", &theme, "gamelist", 2);
+    let p = s.frame().primary.unwrap();
+    assert!(!text_of(&p.layout).one_line);
+    s.measured(p.id, 5000.0, 20.0);
+    s.advance(ms(5000.0));
+    assert!(text_of(&s.frame().primary.unwrap().layout).marquee.is_none(), "off by default in a carousel");
+}
+
+// ES-DE 3.4.1 GridComponent::render clips to whole rows unless fractionalRows is set.
+#[test]
+fn a_grid_draws_whole_rows_only_unless_fractional_rows_is_set() {
+    let grid = |fractional: bool| {
+        let t = Synth::new();
+        let theme = format!(
+            "<grid name=\"c\"><pos>0 0</pos><size>1 1</size><itemSize>0.25 0.3</itemSize><itemSpacing>0 0</itemSpacing><itemScale>1</itemScale><fractionalRows>{fractional}</fractionalRows></grid>"
+        );
+        let s = stage(&t, "", &theme, "gamelist", 0);
+        let Layout::Grid(g) = s.frame().primary.unwrap().layout else { panic!() };
+        g.clip_height
+    };
+    // Rows 60 px high in a box of 200: three whole rows, 180 px, or the whole box.
+    assert!(close(grid(false), 180.0), "{}", grid(false));
+    assert!(close(grid(true), 200.0), "{}", grid(true));
 }

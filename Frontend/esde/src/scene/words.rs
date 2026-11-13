@@ -15,26 +15,49 @@ pub fn count(n: usize, one: &str, many: &str) -> String {
     format!("{n} {}", if n == 1 { one } else { many })
 }
 
-/// THEMES.md's letterCase: uppercase, lowercase, capitalize (each word's first letter), or none.
+/// THEMES.md's letterCase: uppercase, lowercase, capitalize, or none. Capitalize lowers the text and raises the first
+/// letter of each word, a word being bounded as Unicode's word segmentation bounds it (ES-DE 3.4.1
+/// `Utils::String::toCapitalized`, which walks ICU's word break iterator).
 pub fn cased(text: &str, letter_case: Option<&str>) -> String {
     match letter_case {
         Some("uppercase") => text.to_uppercase(),
         Some("lowercase") => text.to_lowercase(),
-        Some("capitalize") => {
-            let mut out = String::with_capacity(text.len());
-            let mut start = true;
-            for c in text.chars() {
-                if start {
-                    out.extend(c.to_uppercase());
-                } else {
-                    out.push(c);
-                }
-                start = c.is_whitespace();
-            }
-            out
-        }
+        Some("capitalize") => capitalized(text),
         _ => text.to_owned(),
     }
+}
+
+fn capitalized(text: &str) -> String {
+    let lower: Vec<char> = text.to_lowercase().chars().collect();
+    let word = |c: char| c.is_alphanumeric();
+    // UAX #29's WB6/WB7 and WB11/WB12: an apostrophe, full stop or colon between letters, or a comma or full stop
+    // between digits, stays inside the word.
+    let joins = |i: usize| {
+        let (Some(&a), Some(&m), Some(&b)) = (lower.get(i.wrapping_sub(2)), lower.get(i - 1), lower.get(i)) else { return false };
+        (a.is_alphabetic() && b.is_alphabetic() && matches!(m, '\'' | '\u{2019}' | '.' | ':' | '\u{b7}'))
+            || (a.is_numeric() && b.is_numeric() && matches!(m, ',' | '.' | ';' | '\''))
+    };
+    let mut out = String::with_capacity(text.len());
+    for (i, &c) in lower.iter().enumerate() {
+        let starts = i == 0 || !(word(lower[i - 1]) && word(c) || joins(i));
+        if starts {
+            out.extend(c.to_uppercase());
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// The collection suffix of a game's name: its own system's short name in brackets, upper case or capitalized as
+/// letterCaseSystemNameSuffix says and as written for lowercase (ES-DE 3.4.1 `GamelistBase::populateList`'s nameSuffixFunc).
+pub fn system_suffix(system: &str, letter_case: Option<&str>) -> String {
+    let name = match letter_case.unwrap_or("uppercase") {
+        "uppercase" => system.to_uppercase(),
+        "capitalize" => capitalized(system),
+        _ => system.to_owned(),
+    };
+    format!(" [{name}]")
 }
 
 const MONTHS: [&str; 12] =
@@ -112,7 +135,7 @@ pub fn play_time(seconds: u64) -> String {
 pub fn name_with_suffix(e: &Element, game: &Game, system: &System) -> String {
     if !game.folder && e.bool("systemNameSuffix") == Some(true) && system.is_collection() {
         let source = game.source.as_ref().unwrap_or(&system.system);
-        return format!("{} [{}]", game.name, cased(&source.name, Some(e.string("letterCaseSystemNameSuffix").unwrap_or("uppercase"))));
+        return format!("{}{}", game.name, system_suffix(&source.name, e.string("letterCaseSystemNameSuffix")));
     }
     game.name.clone()
 }

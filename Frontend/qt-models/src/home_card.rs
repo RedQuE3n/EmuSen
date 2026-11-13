@@ -26,6 +26,8 @@ pub const QUIT_EMUSEN: &str = "quitEmuSen";
 pub const CORES: &str = "cores";
 pub const THEMES: &str = "themes";
 pub const SCRAPER: &str = "scraper";
+/// The Cheats tool's row.
+pub const CHEATS: &str = "cheats";
 
 /// A console started empty, as the action the host carries out: `startConsole:<console>`.
 pub fn start_console_action(console: &str) -> String {
@@ -131,7 +133,7 @@ const TOOL_ROWS: [(&str, &str, &str, &str); 5] = [
     ("packages", "Packages", "Game packages", "Makes, checks and zips game packages, and converts discs to CHD."),
     ("library", "Library Manager", "Checks dumps", "Finds duplicate and damaged dumps; it reads every file when it checks."),
     (CORES, "Cores", "The engines", "The engines each console runs on: EmuSen's own and libretro's."),
-    ("cheats", "Cheats", "Codes for games", "Codes for games, switched on game by game."),
+    (CHEATS, "Cheats", "Codes for games", "Codes for games, switched on game by game."),
 ];
 
 /// The tools after the five with summaries: each opens its own window, said by what A and B do.
@@ -152,7 +154,7 @@ fn screened(key: &str) -> bool {
 }
 
 /// The order the Tools row's value is taken in: the first tool whose line needs the player (`AttentionValue`).
-const ATTENTION_ORDER: [&str; 5] = ["cores", "library", "scraper", "packages", "cheats"];
+const ATTENTION_ORDER: [&str; 5] = ["cores", "library", "scraper", "packages", CHEATS];
 
 fn summary<'a>(tools: &'a Value, key: &str, field: &str) -> Option<&'a str> {
     tools.get(key).and_then(|s| s.get(field)).and_then(Value::as_str).filter(|w| !w.is_empty())

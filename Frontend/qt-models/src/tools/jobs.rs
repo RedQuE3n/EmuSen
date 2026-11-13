@@ -6,7 +6,7 @@
 use super::cores::backend::Job;
 use super::{Action, Bar, Column, Effect, Item, Mark, Pane, Source, Tone, Words};
 use crate::card::{Pane as CardPane, Row as CardRow};
-use crate::question::{confirm, Question};
+use crate::question::confirm;
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -310,24 +310,6 @@ impl Source for Jobs {
             .map(|(at, l)| CardRow::new(&format!("line{at}"), &l.words).pane(CardPane::said(&l.words, "")))
             .collect()
     }
-
-    fn list_rows(&self) -> Vec<CardRow> {
-        Vec::new()
-    }
-
-    fn marks_for(&self, _key: &str) -> Vec<Mark> {
-        Vec::new()
-    }
-
-    fn summary(&self, _marked: &[(String, Mark)]) -> String {
-        String::new()
-    }
-
-    fn plan(&self, _marked: &[(String, Mark)]) -> Question {
-        confirm(&self.title, &[])
-    }
-
-    fn apply(&mut self, _marked: &[(String, Mark)]) {}
 
     fn act(&mut self, action: &str, key: Option<&str>, _section: &str) -> Effect {
         let Some(spec) = key.and_then(|k| self.spec(k)).cloned() else { return Effect::Done };

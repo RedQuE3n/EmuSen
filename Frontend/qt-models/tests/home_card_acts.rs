@@ -116,7 +116,8 @@ fn tools_cores_and_themes_open_their_screens_and_b_comes_back_to_where_the_card_
         assert_eq!(tool_back(themed, Some(Shown::HomeCard), Shown::Cores, &Ask::Back), Some(library));
         assert_eq!(tool_back(themed, Some(Shown::HomeCard), Shown::Themes, &Ask::Back), Some(library));
         // A tool the card does not have a screen for closes the card to the library's screen, as before.
-        assert_eq!(step_in(themed, Shown::HomeCard, &act("cheats")), Some((library, None)));
+        assert_eq!(step_in(themed, Shown::HomeCard, &act("collections")), Some((library, None)));
+        assert_eq!(step_in(themed, Shown::HomeCard, &act(home_card::CHEATS)), Some((Shown::Tool, Some(home_card::CHEATS.into()))), "the Cheats row opens its screen");
         assert_eq!(step_in(themed, Shown::HomeCard, &act(home_card::SCRAPER)), Some((Shown::Tool, Some(home_card::SCRAPER.into()))), "the Scraper's row opens its screen");
     }
     // Opened otherwise, each screen's own way back stands: the Themes tab to Settings, Cores from Home's place to Home.

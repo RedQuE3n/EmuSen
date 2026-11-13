@@ -1,7 +1,7 @@
 //! A game's cheats in the program on Vulkan: a game of the test core whose own list holds one cheat, a poke holding the
 //! RAM byte the core counts each frame. Switched on with the pad from the Pause Card's Game Options ▸ Cheats, the game's
 //! memory holds the poke's value; switched off, the count runs on; the game started again has the switch as it was
-//! saved, the poke in force. The game's memory is read from states the card saves, loaded into a runtime of the test's
+//! saved, the poke in force from its start. The game's memory is read from states the card saves, loaded into a runtime of the test's
 //! own; on the RX 6800 unless EMUSEN_GPU_DEVICE names another.
 
 mod common;
@@ -11,7 +11,7 @@ use common::{sandbox, wait_for};
 use emusen_client_fixture::{image, library, TEST_SYSTEM};
 use emusen_crystal_client::{Api, Config, Open, Runtime};
 use emusen_kit_core::input::UiButton;
-use emusen_platform_client::galaxia::consts::MODEL_CHEAT_FILE;
+use emusen_platform_client::galaxia::consts::{MODEL_APP_SETTINGS, MODEL_CHEAT_FILE};
 use emusen_platform_client::Platform;
 use emusen_qt::MAIN_URL;
 use emusen_qt_play::host::Host;
@@ -48,6 +48,9 @@ fn pause(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad) {
 fn switch_from_the_card(scene: &mut Scene<'_>) -> String {
     choose_row(scene, "Game Options");
     until(scene, "Game Options' page", |s| s.property("pause", "title") == "Game Options");
+    let said = (scene.property("session", "notice"), scene.property("session", "problem"), scene.property("session", "cardFacts"));
+    let facts: serde_json::Value = serde_json::from_str(&said.2).unwrap_or_default();
+    assert!(facts["cheats"].as_array().is_some_and(|c| c.len() == 1), "the card's facts hold the game's cheat; the session said {:?} {:?}", said.0, said.1);
     choose_row(scene, "Cheats");
     until(scene, "Cheats' page", |s| s.property("pause", "title") == "Cheats");
     scene.pad(UiButton::Accept);
@@ -112,6 +115,10 @@ fn a_cheat_switched_on_the_pause_card_holds_the_games_memory_and_is_saved_for_th
     let host = Host::new(&platform, "wayland", gpu.as_deref(), false, &presets).expect("a Vulkan device");
     let adoption = host.adoption();
     let world = sandbox("qt-app-cheats-gpu", &[]);
+    // Each start from the beginning, never from where the game was left off, so the restart's memory is the cheat's alone.
+    let mut settings = platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
+    settings[emusen_qt_models::resume::KEY] = json!("Restart");
+    platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
     let game = world.dir("Roms").join("Cheat (Synthetic).tst");
     std::fs::write(&game, image(&[1, 2, 3, 4])).unwrap();
     let player = world.dir("Home/Cores");
@@ -119,8 +126,13 @@ fn a_cheat_switched_on_the_pause_card_holds_the_games_memory_and_is_saved_for_th
     let config = Config { player_cores: Some(vec![player.to_str().unwrap().into()]), ..Config::default() };
     let rt = Runtime::new(&Api::load(library()).unwrap(), &config).unwrap();
     rt.core_approve(&emusen_client_fixture::cores::sha256(&core)).unwrap();
-    // The game's own list where the program looks for it, by the test system's console: one poke, saved off.
-    let console = rt.systems().unwrap().into_iter().find(|s| s.id == TEST_SYSTEM).expect("the test system").console;
+    // The game's own list where the running game's list is looked for, by the console its session names (the systems
+    // table names none for the test system, which no catalogue row describes): one poke, saved off.
+    let opened = rt.open(&Open { path: Some(game.to_str().unwrap().into()), ..Open::default() }).unwrap();
+    let info = rt.session_info(opened).unwrap();
+    assert_eq!(info.system, TEST_SYSTEM);
+    let console = info.console;
+    rt.close(opened).unwrap();
     drop(rt);
     let list = platform.cheat_game_list(Some(&console), game.to_str().unwrap()).unwrap().expect("a list for the game");
     let poke = json!({ "Kind": "RamPoke", "Description": "Counter held", "Enabled": false,

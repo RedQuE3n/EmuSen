@@ -150,3 +150,32 @@ fn a_failure_carries_its_own_words() {
     assert!(words.to_string().contains("No ROM loaded"), "the table's own last_error: {words}");
     assert!(no_game.sessions().unwrap().is_empty());
 }
+
+#[test]
+fn a_cheat_change_is_made_once_and_answers_its_number() {
+    let world = World::new("cheats");
+    let rt = with_test_core(&world);
+    let game = world.game("game.tst", &[1, 2, 3, 4]);
+    let id = rt.open(&Open { path: Some(game.to_str().unwrap().into()), flags: consts::OPEN_NO_BATTERY, ..Open::default() }).unwrap();
+    let table = rt.session_service(id, 0).unwrap();
+    let file = serde_json::json!({ "Cheats": [{ "Kind": "RamPoke", "Description": "held", "Enabled": false,
+        "Writes": [{ "Space": "RAM", "Address": "2", "Value": "5A" }] }] });
+    assert_eq!(table.cheat_op(id, consts::CHEAT_IMPORT, &file).unwrap(), 1, "IMPORT answers the number loaded");
+    let listed = table.cheat_op(id, consts::CHEAT_LIST, &serde_json::json!({})).unwrap();
+    let cheats = listed["cheats"].as_array().unwrap();
+    assert_eq!(cheats.len(), 1, "loaded once, not again by a length asked: {listed}");
+    let cheat = cheats[0]["id"].as_i64().unwrap();
+    assert_eq!(table.cheat_op(id, consts::CHEAT_ENABLE, &serde_json::json!({ "id": cheat })).unwrap(), 0);
+    let mut frame = frame_info();
+    let mut held = [0u8; 1];
+    for _ in 0..3 {
+        rt.frame(id, &mut frame).unwrap();
+        table.space_read(id, "RAM", 2, &mut held).unwrap();
+        assert_eq!(held[0], 0x5A, "switched on, the poke holds the byte the core counts");
+    }
+    assert_eq!(table.cheat_op(id, consts::CHEAT_DISABLE, &serde_json::json!({ "id": cheat })).unwrap(), 0);
+    rt.frame(id, &mut frame).unwrap();
+    table.space_read(id, "RAM", 2, &mut held).unwrap();
+    assert_eq!(held[0], 0x5B, "switched off, the count runs on");
+    rt.close(id).unwrap();
+}

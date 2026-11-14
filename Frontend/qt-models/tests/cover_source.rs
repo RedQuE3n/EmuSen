@@ -1,7 +1,7 @@
 //! Cover art's cards as the game page's source reads them over the platform library built from this commit, in a scratch
 //! tree (EmuSen_Qt.md §7.8.5): no card for a cover that was not found, a cover borrowed from another game read from the
 //! base's `from` as its own card in use (VenusRT installed, since the base follows a borrowed cover only to a game it
-//! routes to a console), and a kind the Media section does not show named by the Scraping settings' row.
+//! routes to a console), and a kind outside the Media section named by the Scraping settings' row.
 
 use emusen_client_fixture::cores::installation_with_snes;
 use emusen_client_fixture::{library, World};
@@ -79,7 +79,7 @@ fn qt_7_8_5_a_cover_borrowed_from_another_game_is_read_as_its_own_card_in_use() 
 }
 
 #[test]
-fn qt_7_8_5_a_kind_the_media_section_does_not_show_is_named_by_its_scraping_row() {
+fn qt_7_8_5_a_kind_outside_the_media_section_is_named_by_its_scraping_row() {
     let (_world, source, mine, _, _) = world("models-cover-words", &[("covers", "Mine"), ("miximages", "Mine"), ("screenshots", "Mine")], false);
     let platform = Platform::load(library()).unwrap();
     let rows = platform.settings_rows().unwrap();

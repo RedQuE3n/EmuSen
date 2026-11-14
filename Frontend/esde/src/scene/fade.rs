@@ -7,6 +7,20 @@ use super::draw::key;
 use super::frame::{Paint, Placed};
 use super::motion::{Motion, Time};
 
+// The curve of a fade between systems, as shares of its run (ES-DE 3.4.1 es-app/src/views/SystemView.cpp 451-462).
+/// The black rises over this share of the run, t / 0.2 (line 453).
+pub const RISE: f64 = 0.2;
+/// The rise's branch ends here, t < 0.3 (line 451).
+pub const RISING_UNTIL: f64 = 0.3;
+/// The black is whole until here, t < 0.7 (line 454); a held direction sets mMaxFade from here too (line 462).
+pub const WHOLE_UNTIL: f64 = 0.7;
+/// The fall is measured from here, (t - 0.6) (line 457).
+pub const FALL_FROM: f64 = 0.6;
+/// The black falls over this share of the run, / 0.3 (line 457).
+pub const FALL: f64 = 0.3;
+/// The camera moves to the new system past this share, t > 0.5 (line 459).
+pub const CAMERA_AT: f64 = 0.5;
+
 /// A fade between two views, from a time: the black rises, holds, and falls (ES-DE's `ViewController::playViewTransition`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ViewFade {
@@ -88,21 +102,21 @@ impl SystemFade {
         ((now - self.at) as f64 / self.run.max(1) as f64).clamp(0.0, 1.0)
     }
 
-    /// The black over the system's elements below the primary (ES-DE 3.4.1 SystemView.cpp 449-458, mFadeOpacity).
+    /// The black over the system's elements below the primary (ES-DE 3.4.1 SystemView.cpp 451-457, mFadeOpacity).
     pub fn black(&self, now: Time) -> f64 {
         let t = self.t(now);
-        if t < 0.3 {
-            (t / 0.2 + self.start).clamp(0.0, 1.0)
-        } else if t < 0.7 {
+        if t < RISING_UNTIL {
+            (t / RISE + self.start).clamp(0.0, 1.0)
+        } else if t < WHOLE_UNTIL {
             1.0
         } else {
-            1.0 - ((t - 0.6) / 0.3).clamp(0.0, 1.0)
+            1.0 - ((t - FALL_FROM) / FALL).clamp(0.0, 1.0)
         }
     }
 
-    /// Whether the system left still shows: the camera moves to the new one past half way (SystemView.cpp 460).
+    /// Whether the system left still shows: the camera moves to the new one past half way (SystemView.cpp 459).
     pub fn shows_from(&self, now: Time) -> bool {
-        self.t(now) <= 0.5
+        self.t(now) <= CAMERA_AT
     }
 
     pub fn is_running(&self, now: Time) -> bool {
@@ -112,11 +126,11 @@ impl SystemFade {
     /// ES-DE's `mMaxFade` at a time: set from 0.7 of the run while a direction is held (SystemView.cpp 462-463), cleared
     /// once the black is whole again (471-472).
     pub fn max_fade(&self, now: Time, navigating: &Navigating) -> bool {
-        let set = self.at + (self.run as f64 * 0.7).ceil() as Time;
+        let set = self.at + (self.run as f64 * WHOLE_UNTIL).ceil() as Time;
         if now >= set && navigating.at(set) {
             return true;
         }
-        let whole = self.at + (self.run as f64 * 0.2 * (1.0 - self.start)).max(0.0).ceil() as Time;
+        let whole = self.at + (self.run as f64 * RISE * (1.0 - self.start)).max(0.0).ceil() as Time;
         self.held_over && now < whole
     }
 

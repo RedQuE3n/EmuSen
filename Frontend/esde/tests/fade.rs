@@ -79,7 +79,9 @@ fn a_fade_between_systems_darkens_below_the_primary_and_changes_system_half_way(
     let t = Synth::new();
     let mut s = systems_stage(&t, "fade", "");
     tap(&mut s);
-    // 520 ms: SystemView.cpp's 400 ms x 1.3; black rises over 0.2 of the run, holds to 0.7, falls from 2/3 to none at 0.9.
+    // ES-DE 3.4.1 SystemView.cpp: a run of 400 ms (line 427) x 1.3 (line 476) = 520 ms; the black is t / 0.2 while t < 0.3
+    // (451-453), whole while t < 0.7 (454), then 1 - (t - 0.6) / 0.3 (457), so 2/3 at 0.7 and none from 0.9; the
+    // camera moves past t = 0.5 (459). 26 ms is t = 0.05, a black of 0.25.
     let f = at(&mut s, 26.0);
     assert!(close(veil(&f).unwrap(), 0.25), "{:?}", veil(&f));
     assert_eq!(words(&f, "below"), "snes", "the system left shows until half way");
@@ -125,7 +127,7 @@ fn a_held_direction_keeps_the_faded_elements_off_from_the_darkest() {
         s.current.press(1, 0, false);
         let f = at(&mut s, 300.0);
         assert!(find(&f, "below").is_some(), "before 0.7 of the run the elements are drawn");
-        // 0.7 x 520 = 364 ms: ES-DE's mMaxFade, with the direction held.
+        // 0.7 x 520 = 364 ms: ES-DE's mMaxFade, with the direction held (SystemView.cpp 462).
         let f = at(&mut s, 400.0);
         assert!(find(&f, "below").is_none() && veil(&f).is_none(), "{:?}", order(&f));
         assert_eq!(find(&f, "above").is_none(), above, "fadeAbovePrimary {above}: {:?}", order(&f));
@@ -144,7 +146,8 @@ fn a_press_after_a_long_hold_starts_with_the_elements_off_until_the_black_is_who
     s.current.release(ms(400.0));
     let f = at(&mut s, 1000.0);
     assert!(find(&f, "below").is_some());
-    // mMaxFade stayed set; the next press navigates, so the elements are off until the new fade's black is whole (0.2 x 520).
+    // mMaxFade stayed set; the next press navigates, so the elements are off until the new fade's black is whole, 0.2 x 520
+    // = 104 ms (SystemView.cpp 453 and 471-472).
     s.current.press(1, ms(1000.0), false);
     let f = at(&mut s, 1050.0);
     assert!(find(&f, "below").is_none(), "{:?}", order(&f));
@@ -159,7 +162,7 @@ fn a_grid_fades_between_systems_over_its_shorter_run() {
     let grid = "<grid name=\"c\"><pos>0 0.4</pos><size>1 0.4</size><itemSize>0.2 0.2</itemSize></grid>";
     let mut s = Stage::new(data(&t, &caps, &format!("{grid}{BELOW}"), ""), "system", 0);
     tap(&mut s);
-    // 390 ms: 300 ms x 1.3; 0.05 of it is 19.5 ms.
+    // 390 ms: a grid's 300 ms (SystemView.cpp 432) x 1.3 (476); 0.05 of it is 19.5 ms, a black of 0.25 (453).
     let f = at(&mut s, 19.5);
     assert!(close(veil(&f).unwrap(), 0.25), "{:?}", veil(&f));
     let f = at(&mut s, 390.0);
@@ -187,6 +190,22 @@ fn the_system_view_draws_an_element_at_the_primary_s_z_index_beneath_it() {
     assert_eq!(order(&s.frame()), ["tie", "c", "above"], "SystemView::render draws zIndex <= the primary's before it");
 }
 
+// ES-DE keeps the help, clock and status out of the view's children (SystemView.cpp 758-772) and draws the clock and status
+// from the window after the views (Window.cpp 715-735), so no fade between systems dims them; their types have no zIndex,
+// and one a theme writes is dropped, so the scene ranks them over the black whatever the theme says.
+#[test]
+fn the_status_stays_over_a_fade_between_systems_even_with_a_low_z_index_written() {
+    let t = Synth::new();
+    let status = "<systemstatus name=\"status\"><zIndex>10</zIndex></systemstatus>";
+    let caps = profile("<systemToSystem>fade</systemToSystem>");
+    let mut s = Stage::new(data(&t, &caps, &format!("{CAROUSEL}</carousel>{BELOW}{status}"), ""), "system", 0);
+    tap(&mut s);
+    let f = at(&mut s, 26.0);
+    let order = order(&f);
+    let place = |n: &str| order.iter().position(|o| o == n).unwrap_or_else(|| panic!("{n} not drawn: {order:?}"));
+    assert!(place("veil") < place("c") && place("c") < place("status"), "the status over the primary and the black: {order:?}");
+}
+
 const LIST: &str = "<textlist name=\"l\"><pos>0 0</pos><size>0.5 0.5</size><fontSize>0.1</fontSize></textlist>";
 
 fn views_stage(t: &Synth, kinds: &str, view: &str) -> Stage {
@@ -200,7 +219,8 @@ fn a_fade_between_views_goes_to_black_holds_and_comes_back_with_the_new_view() {
     let t = Synth::new();
     let mut s = views_stage(&t, "<systemToGamelist>fade</systemToGamelist><gamelistToSystem>fade</gamelistToSystem>", "system");
     s.switch(0);
-    // ViewController.cpp: 120 ms to black, 200 ms held, 120 ms back.
+    // ViewController.cpp 971-972: FADE_DURATION 120 ms to black, FADE_WAIT 200 ms held, 120 ms back (the second
+    // animation reversed, 979); 60 ms is half way up, 380 ms half way down.
     let f = at(&mut s, 60.0);
     assert!(close(veil(&f).unwrap(), 0.5));
     assert!(find(&f, "below").is_some() && find(&f, "title").is_none(), "the view left shows until the black covers it");

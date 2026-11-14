@@ -416,24 +416,11 @@ pub fn rows(systems: &[SystemRow], catalog: &Catalog, engines: &[(String, Engine
     out
 }
 
-/// The cores named after the Moon and the planets, whose engine line carries their astronomical symbol (§24.6).
-pub const SKY_NAMED: [&str; 4] = ["moon", "mercury", "venus", "mars"];
+pub use emusen_kit_core::planet_mark::SKY_NAMED;
 
-/// The mark before an engine's name, a property of the engine (§24.6): "libretro" for a hosted core, a sky-named core's
-/// own symbol, else its maker's body glyph ("shard", "gem") or "planet".
+/// The mark before an engine's name, a property of the engine (§24.6), from its one owner, kit-core's `planet_mark`.
 pub fn engine_mark(name: &str, libretro: bool, body: &str) -> String {
-    let lower = name.to_lowercase();
-    if libretro {
-        "libretro".into()
-    } else if SKY_NAMED.contains(&lower.as_str()) {
-        lower
-    } else if body.contains("shard") {
-        "shard".into()
-    } else if body.contains("gem") {
-        "gem".into()
-    } else {
-        "planet".into()
-    }
+    emusen_kit_core::planet_mark::of(name, libretro, body)
 }
 
 /// A console's body from the systems table's look, the one owner of which console is which body (EmuSen_Interface.md

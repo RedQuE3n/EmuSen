@@ -5,6 +5,23 @@ writes it, is committed under `Testing/qmltypes/` and compared on every build. U
 addition, a change or a removal, bumps the minor (R-20261111-107, R-20261111-108); each entry names what changed and the
 section of `EmuSen_Kit.md` that records it.
 
+## 1.6: Eclipse's corona disc and the planet mark as kit parts (2026-11-14)
+
+Additions only; no type, property, signal or invokable was removed or changed. Decided 2026-11-14 by the tester
+(R-20261114-16): Eclipse's shared parts are kit parts, exported to themes as an addition.
+
+- **`PlanetMark`** (qmldir): the mark beside a core's name, `mark`, `libretro`, `ink` and `cut`, drawn from
+  **`PlanetMarks`** (registry, singleton: `boxSize`, `stroke`, `badgeBox`, `badge`, `alien`, `libretro` and `path(mark)`),
+  which reads kit-core's `planet_mark`, now the one owner of which mark a core has and how it is drawn. `EmuSen_Kit.md`
+  §7.115.
+- **`CoronaDisc`** and **`CoronaGlow`** (qmldir): the dark disc in its box, its rim and its glows, with `fill`, `corona`,
+  `rim` and `glows`. `EmuSen_Kit.md` §7.116.
+- **`Tokens`**: `coronaColor`, `coronaRim`, `coronaGlowColor`, `coronaGlowBlur`, `coronaGlowSpread`, `coronaHaloColor`,
+  `coronaHaloBlur`, `coronaHaloSpread`, declared after `shadowBlur` so no existing property's index moves. The kit's own
+  corona is none (no rim, no glow); its colours are the variant's accent where a theme gives none.
+- The minor is 1.6, reserved for this addition above the 1.5 of the focus ring's; the registry, qmldir and QML-file
+  surface are `Testing/qmltypes/EmuSen.Kit-1.6.*`.
+
 ## 1.4: pictures decoded at the pixels they cover, and the design height's one owner (2026-11-14)
 
 Additions only; no type, property, signal or invokable was removed or changed.

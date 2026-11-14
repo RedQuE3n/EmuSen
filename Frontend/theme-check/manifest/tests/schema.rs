@@ -28,7 +28,7 @@ fn kinds(text: &str) -> Vec<(usize, Kind)> {
 #[test]
 fn qt_3_4_a_whole_manifest_reads_with_its_lines_and_an_unknown_key_is_a_note() {
     let (m, findings) = parse(GOOD).unwrap();
-    assert_eq!((m.schema, m.api, m.name.as_str()), (1, API, "Dawnline"));
+    assert_eq!((m.schema, m.api, m.name.as_str()), (1, (1, 0), "Dawnline"));
     assert_eq!(m.variants, vec![Variant::Dark, Variant::Light]);
     assert_eq!(m.screens, vec![Screen::Home, Screen::Games, Screen::Splash]);
     assert_eq!(m.font_sizes, vec![1.0, 1.15, 1.3]);
@@ -52,7 +52,7 @@ fn qt_3_3_a_newer_api_or_schema_is_refused_and_an_older_minor_is_not_possible_be
     assert_eq!(kinds(&GOOD.replace("\"1.0\"", "\"one\"")), vec![(3, Kind::Schema), (16, Kind::Note)]);
     assert_eq!(kinds(&GOOD.replace("\"schema\": 1", "\"schema\": 2")), vec![(2, Kind::Api), (16, Kind::Note)]);
     let words = parse(&GOOD.replace("\"1.0\"", "\"2.0\"")).unwrap().1[0].words.clone();
-    assert!(words.contains("2.0") && words.contains("1.0"), "the words name both: {words}");
+    assert!(words.contains("2.0") && words.contains(&format!("{}.{}", API.0, API.1)), "the words name both: {words}");
 }
 
 #[test]

@@ -3850,3 +3850,70 @@ QML as `designHeight`, a constant; `NormalizedCanvas.designHeight` keeps its pla
 (decided 2026-11-14, R-20261114-7). It is a part of its own rather than a property of `Tokens` because every read-only number of
 `Tokens` takes a theme's override (§7.2, `tests/overrides.rs`), and the design height is the program's, not a theme's.
 Kit 1.4.
+
+### 7.115 PlanetMark: a core's mark, from its one owner (2026-11-14)
+
+Decided 2026-11-14 by the tester (R-20261114-16): Eclipse's shared parts are kit parts, exported to themes as an
+addition; decided 2026-11-11 (R-20261111-15): a planet mark stands beside every core's name. Which mark a core has and
+how each mark is drawn were in `qt-models` (`library::engine_mark`, `marks::path`, `BADGE`, `alien`), which the kit cannot
+reach (qt-models depends on the kit). They are now kit-core's `planet_mark`: `of(name, libretro, body)` gives
+`libretro` for a hosted core, a sky-named core's own name (`SKY_NAMED`: moon, mercury, venus, mars), else `shard` or `gem`
+by its console's body in the systems table, else `planet`; `path(mark)` the mark's SVG path in a 24-unit box, stroked at
+2; `BADGE` and `alien()` libretro's badge and the alien in an 11-unit box. The box sides and the stroke are constants of
+the courts canvas's drawing. `qt-models` keeps its names (`engine_mark`, `SKY_NAMED`, `marks::path`, `BADGE`, `alien`)
+as calls into it, so the program's `Marks` and the theme API's `Marks` give the same paths as before.
+
+`PlanetMarks` (`src/planet_mark.rs`, a singleton) gives them to QML: `boxSize`, `stroke`, `badgeBox`, `badge`, `alien`,
+`libretro` (the hosted mark's name) and `path(mark)`. `PlanetMark` draws one mark in its box: `mark` (a console row's
+`engineMark`), `libretro` (true when the mark is libretro's unless set), `ink` (textStrong unless set) and `cut` (the
+alien's colour, surfaceRaised unless set). It draws what the themes' `EngineMark` copies drew, from the same data: the
+glyph stroked in the ink, or the badge filled in the ink with the alien in `cut`. The reference theme's
+`parts/EngineMark.qml` is now a `PlanetMark` with its own white ink and 15-unit box; Horizon's, Meridian's, Constellation's
+and Orrery's copies are left as they were (their badge is drawn in #C9C9D0 with the alien in #26262B, where the
+reference's takes the ink and surfaceRaised). Test: `tests/planet_mark.rs`, three cores (Venus on the Super Nintendo's
+body, Diamond on the PlayStation's, Nephrite on the Mega Drive's, each body read from `Platform/systems/data`) and a
+hosted core. Kit 1.6.
+
+### 7.116 CoronaDisc: the eclipse's disc, its rim and its glows (2026-11-14)
+
+Decided 2026-11-14 by the tester (R-20261114-16); the corona's colour for a game is computed when the game is scraped
+and stored with it (R-20261111-19), a later piece with its own interface number: here the disc takes it as a property.
+
+**The boards' discs.** Read on 2026-11-14 from the design project (`~/.cache/emusen/design-console-themes-2026-11-11/project/`)
+by every element with `border-radius: 50%` and a `box-shadow` that begins with a rim (`0 0 0 Npx`): 59 elements on 56
+boards. Every one is a disc, a rim, and zero to three glows, each glow a CSS shadow with no offset (a blur and a spread).
+The large discs are empty, drawn over the board's blurred colour fields (`Main:22`) and under the screen's contents; the
+small discs of Shaders (60 px) and Tools (84 px) hold a stroked 24-unit icon at their centre; the splash's playing and
+orbit boards draw the rim and glows with no fill, over the moon's own disc, turning (`EclipseSplashPlay:54`). The recipes by count:
+the Settings boards' 2000 px disc of #0B0D16, a rim of rgba(246, 231, 216, 0.75) and one glow (25 boards); the 3120 px
+disc of #07080F behind a card or the Pause Card, also Home's 2100 px, the Power board's 900 px and the question's 780 px,
+with a 2 px #F6E7D8 rim and two glows, 44 px 8 px rgba(246, 214, 200, 0.6) and 170 px 46 px rgba(236, 160, 186, 0.28)
+(20 boards); the splash's 420 px disc with three glows (the splash and its playing and orbit boards); the game page's 2900 px and the library's 1700 px
+with the two glows at 0.55 and 0.25 (two boards); and single boards: Choose a console's 300 px (a violet far glow),
+the first-run 600 px and a splash frame's 150 px (three glows), another splash frame's 1000 px and Settings ›
+EmuSen's 200 px (two glows), and small discs of 26 to
+84 px on Rewind, Shaders and Tools (a rim, and one glow or none). `CoronaDisc` covers each: its fill (transparent for
+the splash's), its rim's width and colour, and a list of glows are properties, and what a disc holds is placed as its
+child, over it, so no board needs a second disc. The turning is the splash's own, not the disc's.
+
+**The part.** `CoronaDisc` draws a disc as wide as its box's shorter side at the box's centre, in `fill` (surface unless
+set); a ring `rim` wide outside it in `corona` (the look's `coronaColor` unless a game's is given); and under both, each
+of `glows`, a list of `CoronaGlow` (`blur`, `spread`, `color`), the first on top as a box-shadow lists them, by default
+two from the tokens, the glow and the halo. Everything past the disc is drawn past the box, as a box-shadow is, and
+takes no room in a layout. A glow is the disc's circle grown by its spread and blurred by its blur. On the graphics card
+it is a `MultiEffect` of the circle with `shadowScale` (scaled from the item's centre, Qt 6 documentation, read
+2026-11-14) growing it by the spread and `blurMax` the blur, as `RaisedShadow` maps a CSS blur (§7.55). The software
+backend draws no `MultiEffect` (seen on 2026-11-14: a `MultiEffect` under `QT_QUICK_BACKEND=software` drew no pixel, its
+source included); there a `Canvas` paints each glow as the shadow of its grown circle, the circle itself drawn off the
+canvas and its shadow offset back onto it, so only the glow lands (seen the same day: Qt's Context2D paints the shadow
+of a shape drawn outside the canvas). The canvas reaches past the grown circle by twice the blur. How Qt's `shadowBlur`
+and `MultiEffect`'s blur relate to a CSS blur radius was not measured; both backends take the token as the blur.
+
+**Tokens.** `coronaColor`, `coronaGlowColor` and `coronaHaloColor` (colours, the variant's accent, or the theme's
+accent, where a theme gives none) and `coronaRim`, `coronaGlowBlur`, `coronaGlowSpread`, `coronaHaloBlur`,
+`coronaHaloSpread` (numbers, kit-core's `tokens::corona`). The kit's own corona is none, all five numbers 0, since the
+reference look draws no disc: under the reference's tokens a `CoronaDisc` is a plain disc, and nothing in the program
+places one yet. Eclipse's values are Home's disc (`Main:25`), converted as `EmuSen_Qt.md` §3.4.7 converts every board
+value. Test: `tests/corona_disc.rs`, under Eclipse's tokens read from its `theme.json`: the box, the rim's colour as
+given and as the look's, drawn, and the two glows at the tokens' sizes, drawn. The pixel ratio is one under the
+headless harness. Kit 1.6.

@@ -517,6 +517,7 @@ ThemeScreen {
                         World {}
                     }
                     Text {
+                        id: noConsolesWords
                         objectName: "noConsoles"
                         visible: Library.consoles.count === 0
                         y: 358
@@ -533,7 +534,8 @@ ThemeScreen {
                     Text {
                         objectName: "noConsolesAddFolder"
                         visible: Library.consoles.count === 0
-                        y: 358 + 26.4 + 8
+                        anchors.top: noConsolesWords.bottom
+                        anchors.topMargin: 8
                         width: root.width
                         horizontalAlignment: Text.AlignHCenter
                         text: Words.addFolder

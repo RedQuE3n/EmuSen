@@ -1102,6 +1102,12 @@ finding "a declined place drawn as if offered" is gone at every size, its words 
 §7.38); at 80% it came back at all five sizes (a seeded fault, reverted). The light variant kept it until its words
 turned light (below).
 
+**An empty library** (decided 2026-11-13 by the tester). With no console holding a game, the theme shows the program's
+own sentence on how a folder is added (`Words.addFolder`), as the other built-in themes show it: on Home where the
+shelf's covers would stand, and on Choose a console one line under "No consoles have games yet". With games it is not
+shown. Proof: `qt-app/tests/theme_empty_library.rs` and `theme_library_words.rs`, each a process of its own, as the
+test harness makes one application a process.
+
 **The light variant: the world stays dark** (decided 2026-11-09 by the tester). In light, the world, Home's and the grid's
 night sky, stays dark and the words drawn on it turn light; only the cards and panels go light. The words on the world
 (Home's status line, the wordmark, RECENT and the focused cover's name; the grid's path, heading, count, neighbours and the
@@ -5748,8 +5754,8 @@ and the text sizes' lines at hers. **Differences that remain, each for the teste
 - Library ▸ Collections has no value (Mistress's `1`, her fixture's one collection): the library's collections are not
   read here yet (piece M).
 - EmuSen ▸ Logging and Shell are not listed until their screens are built (decided by the tester, 2026-11-13): each is
-  one line of `qt-models/data/settings_screen.json`, taken out, so EmuSen holds Saves and states, Big picture, Pause in
-  the background and About.
+  one line of `qt-models/data/settings_screen.json`, taken out, so EmuSen holds Saves and states, Pause in the background
+  and About.
 - Display ▸ CRT shader's caption reads "The last game · Off CRT", since the sandbox has played nothing, where Mistress's
   fixture names its game; the box follows the words.
 - Not built in this piece, each a door that goes nowhere yet: Shader levers and Shaders (piece J), Cheats, Compressed discs (pieces I and L; built since, below), and the Scraping page's doors (Member account,

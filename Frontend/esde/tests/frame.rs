@@ -74,7 +74,7 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_drawn_once_che
     assert!(matches!(mapping::status("video", "audio"), Some(Mapped::Heard(t)) if t.starts_with("esde-qt/tests/theme_video.rs::")));
     assert!(mapping::is_supported("sound", "path") && !mapping::is_supported("video", "scanlines"));
     assert_eq!(mapping::status("video", "scanlines"), Some(&Mapped::Later("video".into())));
-    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 462);
+    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 465);
     assert!(
         mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"),
         "the gameselector picks the system view's games; sound is played"

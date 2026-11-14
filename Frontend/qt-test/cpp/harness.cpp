@@ -479,12 +479,27 @@ void harness_key_hold(QObject& window, int key, bool down)
     }
 }
 
-HeldClock::~HeldClock() { uninstall(); }
+// An animation of no length that never ends and changes nothing, kept running while a clock is held (EmuSen_Kit.md §7.36).
+class Keeper : public QAbstractAnimation {
+public:
+    int duration() const override { return -1; }
+
+protected:
+    void updateCurrentTime(int) override {}
+};
+
+HeldClock::~HeldClock()
+{
+    keeper.reset();
+    uninstall();
+}
 
 std::unique_ptr<HeldClock> harness_clock_hold()
 {
     auto clock = std::make_unique<HeldClock>();
     clock->install();
+    clock->keeper = std::make_unique<Keeper>();
+    clock->keeper->start();
     return clock;
 }
 

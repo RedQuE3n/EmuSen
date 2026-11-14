@@ -44,6 +44,9 @@ Item {
     property bool mirrorVertically: false
     // THEMES.md mipmap: a picture drawn below its own size samples Qt's mipmaps.
     property bool mipmap: false
+    // A GIF's frame as the scene steps it; -1 for a still, which Image draws (EmuSen_Qt.md §4.5.9).
+    property int frame: -1
+    readonly property bool animated: root.frame >= 0
     readonly property alias status: image.status
     readonly property alias ownWidth: image.implicitWidth
     readonly property alias ownHeight: image.implicitHeight
@@ -70,7 +73,7 @@ Item {
         readonly property real drawnHeight: (root.tiled ? root.tileH : root.fit === Picture.Fit.Contain ? root.paintedHeight : root.height) * root.sourceScale
         readonly property bool minified: !root.vector && (image.implicitWidth * root.cropW > image.drawnWidth + 0.5 || image.implicitHeight * root.cropH > image.drawnHeight + 0.5)
         // Shown only for the mipmapped copy below to draw it, which hides it from the scene again.
-        visible: root.mipmap
+        visible: root.mipmap && !root.animated
         width: root.width
         height: root.height
         source: root.source
@@ -83,18 +86,29 @@ Item {
         sourceSize.width: root.ownSize ? 0 : root.tiled ? root.tileWidth : Math.round((root.fit === Picture.Fit.Cover ? Math.max(root.width, 2 * root.height) : root.width) * root.sourceScale)
         sourceSize.height: root.ownSize || root.fit === Picture.Fit.Cover || (root.vector && root.fit === Picture.Fit.Contain) ? 0 : root.tiled ? root.tileHeight : Math.ceil(root.height * root.sourceScale)
     }
+    // An animation's frame, chosen and never played: Image's currentFrame cannot reach a GIF's later frames (EmuSen_Qt.md §4.5.9).
+    AnimatedImage {
+        id: movie
+        visible: root.mipmap && root.animated
+        width: root.width
+        height: root.height
+        source: root.animated ? root.source : ""
+        playing: false
+        currentFrame: Math.max(0, root.frame)
+        smooth: image.smooth
+    }
     // THEMES.md mipmap: the picture rendered at its own size into a texture Qt mipmaps, since an Image's mipmap set after its texture exists is refused by Qt (EmuSen_Qt.md §4.5.7).
     ShaderEffectSource {
         id: mipmapped
-        sourceItem: root.mipmap ? image : null
+        sourceItem: !root.mipmap ? null : root.animated ? movie : image
         hideSource: true
         visible: false
         mipmap: true
         smooth: true
-        textureSize: Qt.size(image.implicitWidth, image.implicitHeight)
+        textureSize: root.animated ? Qt.size(movie.implicitWidth, movie.implicitHeight) : Qt.size(image.implicitWidth, image.implicitHeight)
     }
     ShaderEffect {
-        readonly property var source: root.mipmap ? mipmapped : image
+        readonly property var source: root.mipmap ? mipmapped : root.animated ? movie : image
         // A reflection's vertical gradient is turned with it, as ES-DE swaps the two colours for its reflections.
         readonly property color tint: root.flipped && root.gradientVertical ? root.tintEnd : root.tint
         readonly property color tintEnd: root.flipped && root.gradientVertical ? root.tint : root.tintEnd
@@ -111,7 +125,7 @@ Item {
         readonly property real fadeFrom: root.fadeFrom
         readonly property real fadeFalloff: root.fadeFalloff
         readonly property real brightness: root.brightness
-        visible: image.status === Image.Ready
+        visible: image.status === Image.Ready && (!root.animated || movie.status === Image.Ready)
         width: root.fit === Picture.Fit.Contain ? root.paintedWidth : root.width
         height: root.fit === Picture.Fit.Contain ? root.paintedHeight : root.height
         x: (root.width - width) * root.alignX

@@ -3362,7 +3362,8 @@ at 1280 × 800 and 1920 × 1200 by night. The acceptance test's comment points t
 
 **What that comparison covers, and what not (2026-11-11).** The program and theme-audit show one screen
 file: qt-app's `qt_3_4_2_the_program_s_reference_theme_is_the_package_theme_audit_holds_to_its_canvas` (`tests/theme.rs`)
-holds the resources' reference theme, `REFERENCE_THEME`, to `Frontend/themes/emusen` file for file, the folder
+holds the resources' reference theme, `reference_theme()`, to `Frontend/themes/emusen` file for file (and since §3.4.7 of
+`EmuSen_Qt.md` each built-in to its folder), the folder
 theme-audit's eleven-console test holds. They are not the same catalogue (the acceptance library shelves three
 consoles of one maker, theme-audit's `eleven` the canvas's eleven on three makers) or the same host (theme-audit feeds
 the screen through its own synthetic world and `emusen-theme-host`; the program through its library). So the

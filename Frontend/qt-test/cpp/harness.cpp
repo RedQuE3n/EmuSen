@@ -600,6 +600,24 @@ QObject* harness_focused_singleton(QObject& window, const QString& module, const
 
 int harness_roots(QQmlApplicationEngine& engine) { return static_cast<int>(engine.rootObjects().size()); }
 
+QObject* harness_object(QObject& root, const QString& object_name)
+{
+    return root.objectName() == object_name ? &root : root.findChild<QObject*>(object_name);
+}
+
+QString harness_constants(QObject& object)
+{
+    QStringList lines;
+    const QMetaObject* meta = object.metaObject();
+    for (int i = QObject::staticMetaObject.propertyCount(); i < meta->propertyCount(); ++i) {
+        const QMetaProperty p = meta->property(i);
+        if (!p.isWritable()) {
+            lines << QStringLiteral("%1=%2").arg(QString::fromLatin1(p.name()), p.read(&object).toString());
+        }
+    }
+    return lines.join(QLatin1Char('\n'));
+}
+
 bool harness_set_property(QObject& root, const QString& object_name, const QString& property, const QString& value)
 {
     QObject* object = root.objectName() == object_name ? &root : root.findChild<QObject*>(object_name);

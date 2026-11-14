@@ -5252,8 +5252,9 @@ built on it too:
 **The Home card** (`home_card.rs`): Mistress's `HomeRows`, `ToolRows` and `PowerRows` in her words. The first page is
 Continue (while a game is suspended), Selected game ▸, Search, Start Console ▸, Tools ▸, Settings ▸ and Power ▸, with
 Tools and Power each starting a section. Tools lists the five tools with their summaries as values, then Themes,
-Collections, Compressed Discs and Shell. Power has Exit Big Picture, then Quit EmuSen..., whose question says "EmuSen
-closes." or "The game closes, then EmuSen."; Yes quits the program. In Steam's Game Mode Power holds Quit alone. Under
+Collections, Compressed Discs and Shell. Power has Quit EmuSen..., whose question says "EmuSen
+closes." or "The game closes, then EmuSen."; Yes quits the program. Power held Exit Big Picture above it outside Steam's
+Game Mode until 2026-11-13, when it was taken off: Big Picture is the program's only interface for now (§7.7.H7). Under
 Power's rows stands "EmuSen 0.9.1" in Muted at 26 (Mistress's `BigMenuFooter`; within a pixel of her render at 1280 ×
 800). The version's owner is still MSBuild's `Directory.Build.props`. `qt-models/build.rs` reads it from there rather
 than copying it, and the reading moves with the build host (§1.9). Start Console is offered on both cards wherever a
@@ -5294,7 +5295,7 @@ none`; and the screens beneath under their stage 1 names. The side-by-sides (Mis
 over either) are `~/.cache/emusen/tmp/qt-s2/compare/<State>-<size>-side.png`.
 
 **Differences that remain, each for the tester:**
-- Exit Big Picture closes the card and does nothing more: emusen-qt has only the big-screen form until stage 6.
+- Exit Big Picture closed the card and did nothing more; since 2026-11-13 Power no longer offers it (§7.7.H7).
 - The Tools page's rows, Settings ▸, Start Console ▸ (§18.3's page), Collections ▸ and the paused frame in Continue's
   pane are declared and do nothing yet. Each opens a screen of a later stage. (Since §7.9: Continue resumes the game,
   Start Console starts the console chosen, and Tools ▸ Cores and ▸ Themes open their screens; Most played, Year and
@@ -6406,6 +6407,24 @@ the window (`fullScreenAsked`), and what the window reports (`visibility` FullSc
 shows both: the test's own `kwin_wayland --virtual` grants the request and Qt reports the window's visibility from the
 compositor's answer, which the passing runs of 2026-11-12 saw; the request alone would not prove the window changed, so
 the assertion on the window's state stays.
+
+**Big Picture is the program, for now** (the tester decided, 2026-11-13, R-20261113-7, narrowed by R-20261113-9). The
+program starts full screen on every machine, not only under Steam's Game Mode, and Big Picture is its only interface for
+now; there is no desktop view. The choice is made in one place, `start::FULL_SCREEN`: the start carries it as
+`Start.full_screen`, hands it to the window as `fullScreenAsked`, and `window::show` shows the window by it, with
+`QWindow::showFullScreen` (which sets the full-screen state, then shows the window, so a Wayland compositor is asked
+through `xdg_toplevel.set_fullscreen` before the first frame; Qt 6 documentation of `QWindow`, read 2026-11-13). What the
+compositor gives is read back as the window's `visibility`; under gamescope, which shows every window full screen, the
+request changes nothing. The Fullscreen hotkey still gives a window and full screen again, and every screen still lays
+out at any window size. `full_screen_gpu.rs` holds it in the test's own compositor: the window that `start::initial` and
+`window::show` make reports FullScreen, the first F11 asks for and gets a window, the second full screen again.
+Two rows that did nothing were taken off: Power's Exit Big Picture (its key `bigPicture` and its route, which only closed
+the card, went with it, since nothing else names them) and Settings ▸ EmuSen's Big picture row (`AppSettings
+BigScreen`, which nothing in the Qt program reads). A desktop mode would need back: the row in `home_card::power_page`
+outside Game Mode (`Facts.game_mode` is still handed in, from `start::game_mode_from`, which also gives the Guide chords'
+default), with its key and an action that leaves for the desktop; the `bigpicture` entry in `settings_screen.json`'s
+EmuSen section and a reader of `BigScreen` at the start; and the start's choice in `start::FULL_SCREEN`. The Kit's
+Desktop form, the base's `BigScreen` setting and the theme API's `Device.bigScreen` stay as they are.
 
 **The hotkeys' words.** Endymion gives the ten action words through `bindings_defaults` (HOTKEYS), whose keys they are;
 the Hotkeys page reads its rows from there (`Bindings::actions`). `qt-endymion` `hotkeys.rs` needs a map from each word to

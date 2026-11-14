@@ -11,6 +11,10 @@ use std::path::{Path, PathBuf};
 /// The platform library's file name, found beside the program when nothing names another.
 pub const LIBRARY_FILE: &str = "libemusen_platform.so";
 
+/// The window comes up full screen: Big Picture is the program's only interface for now (the tester decided, 2026-11-13;
+/// EmuSen_Qt.md §7.7.H7). A start in a window, a setting or a mode, is chosen here.
+pub const FULL_SCREEN: bool = true;
+
 /// The start's facts, each an initial property of the window.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Start {
@@ -19,7 +23,7 @@ pub struct Start {
     pub splash: bool,
     /// AppSettings.ReducedMotion: "on" reduces it; "off" and the desktop's own preference ("system") do not yet (EmuSen_Qt.md §7.1).
     pub reduced_motion: bool,
-    /// Steam's Game Mode holds the session, so Power holds Quit alone (Mistress's `InGameModeSession`).
+    /// Steam's Game Mode holds the session: the Guide chords' default, off there, and the Home card's fact (Mistress's `InGameModeSession`).
     pub game_mode: bool,
     /// Guide held with Up, Down or the right shoulder over a game (AppSettings.GuideChords, EmuSen_BigPicture.md §48.7).
     pub guide_chords: bool,
@@ -35,6 +39,8 @@ pub struct Start {
     pub esde: bool,
     /// AppSettings.NavigationSounds: the ES-DE theme's navigation sounds, on unless the player turned them off.
     pub navigation_sounds: bool,
+    /// The window shown full screen, else in a window (`FULL_SCREEN`).
+    pub full_screen: bool,
 }
 
 /// The platform library: `--platform-library PATH`, else `EMUSEN_PLATFORM_LIBRARY`, else the file beside the program.
@@ -105,7 +111,7 @@ pub fn read(library: &Path) -> Start {
     Start { platform_library: library.to_string_lossy().into_owned(), splash: splash_from(&settings), reduced_motion: reduced_motion_from(&settings),
         game_mode, guide_chords: guide_chords_from(&settings, game_mode),
         theme, theme_words, cover_stores: cover_stores_from(media.as_deref(), &settings),
-        esde: esde_shelves::settings_of(&settings).themed, navigation_sounds: navigation_sounds_from(&settings),
+        esde: esde_shelves::settings_of(&settings).themed, navigation_sounds: navigation_sounds_from(&settings), full_screen: FULL_SCREEN,
     }
 }
 
@@ -122,6 +128,7 @@ pub fn initial(start: &Start) -> QMap<QMapPair_QString_QVariant> {
     initial.insert(QString::from("themeWords"), QVariant::from(&QString::from(&start.theme_words)));
     initial.insert(QString::from("esdeChosen"), QVariant::from(&start.esde));
     initial.insert(QString::from("navigationSounds"), QVariant::from(&start.navigation_sounds));
+    initial.insert(QString::from("fullScreenAsked"), QVariant::from(&start.full_screen));
     let mut stores = QStringList::default();
     start.cover_stores.iter().for_each(|s| stores.append(QString::from(s)));
     initial.insert(QString::from("coverStores"), QVariant::from(&stores));

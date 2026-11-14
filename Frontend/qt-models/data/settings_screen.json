@@ -145,7 +145,6 @@
       "rows": [
         {"id": "saves", "label": "Saves and states", "hint": "Where states go, what happens when a game starts again, and how play time is counted.", "page": "Saves and states",
          "pane": {"sentence": "States and saves live beside the games, with one resume point kept per game.", "muted": ["Resume · {AppSettings ResumeOnLaunch}"]}},
-        {"id": "bigpicture", "row": "AppSettings BigScreen"},
         {"id": "background", "row": "AppSettings PauseInBackground"},
         {"id": "logging", "label": "Logging", "hint": "Whether the runtime writes its log, and where each session's log goes.", "door": "logging"},
         {"id": "shell", "label": "Shell", "hint": "DianaSh, EmuSen's own shell, for scripts and the runtime's commands.", "door": "shell"},

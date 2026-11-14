@@ -47,6 +47,7 @@ fn main() {
         }
         engine.as_mut().set_initial_properties(&initial);
         let adopting = host.as_ref().map(Host::adoption);
+        let full_screen = start.full_screen;
         engine
             .as_mut()
             .on_object_created(move |_, object, _| {
@@ -59,7 +60,7 @@ fn main() {
                         eprintln!("No game can be played: {words}");
                     }
                 }
-                unsafe { std::pin::Pin::new_unchecked(&mut *window) }.show();
+                emusen_qt::window::show(unsafe { std::pin::Pin::new_unchecked(&mut *window) }, full_screen);
             })
             .release();
         engine.load(&QUrl::from(MAIN_URL));

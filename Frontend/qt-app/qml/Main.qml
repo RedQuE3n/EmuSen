@@ -23,11 +23,11 @@ Window {
     property double feed: 0
     property bool splash: true
     property bool reducedMotion: false
-    // Steam's Game Mode holds the session: Power holds Quit alone.
+    // Steam's Game Mode holds the session, as the start read it: the Guide chords' default, and the Home card's fact.
     property bool gameMode: false
     // AppSettings.GuideChords as the start read it: On, or Auto away from Steam's Game Mode.
     property bool guideChords: false
-    // What the Fullscreen hotkey last asked of the window, apart from the visibility the compositor gives it.
+    // What was last asked of the window, apart from the visibility the compositor gives it: the start's (`full_screen`), then the Fullscreen hotkey's.
     property bool fullScreenAsked: false
     // The EmuSen theme's folder, empty for the reference, and the folders its pictures may come from (EmuSen_Qt.md §3.5).
     property string theme

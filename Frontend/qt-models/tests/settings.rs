@@ -196,10 +196,12 @@ fn qt_7_7_emusens_panes_and_values_name_other_keys_and_the_version() {
     let pane = view.pane(0);
     assert_eq!(pane.sentence, "States and saves live beside the games, with one resume point kept per game.");
     assert_eq!(pane.muted, ["Resume · Always start again"]);
-    assert_eq!(shown(&view)[1], ("Big picture".into(), "On startup".into()));
-    assert_eq!(view.rows()[5].value, emusen_qt_models::words::version_line());
-    assert_eq!(view.rows()[5].kind, RowKind::Action);
-    assert_eq!(view.choose(5), Outcome::Nothing);
+    // Big Picture is the program on every machine (the tester decided, 2026-11-13): no Big picture row, whatever the base holds.
+    let labels: Vec<String> = shown(&view).into_iter().map(|(label, _)| label).collect();
+    assert_eq!(labels, ["Saves and states", "Pause in the background", "Logging", "Shell", "About"]);
+    assert_eq!(view.rows()[4].value, emusen_qt_models::words::version_line());
+    assert_eq!(view.rows()[4].kind, RowKind::Action);
+    assert_eq!(view.choose(4), Outcome::Nothing);
 }
 
 #[test]

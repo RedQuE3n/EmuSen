@@ -9,6 +9,8 @@ pub mod ffi {
         type QQuickWindow;
 
         fn show(self: Pin<&mut QQuickWindow>);
+        #[cxx_name = "showFullScreen"]
+        fn show_full_screen(self: Pin<&mut QQuickWindow>);
 
         #[qsignal]
         #[cxx_name = "frameSwapped"]

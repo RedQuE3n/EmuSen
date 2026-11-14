@@ -38,14 +38,9 @@ Window {
     // Out of full screen, the setting's size, given when the window is asked out of it and again at the compositor's answer,
     // which Qt's Wayland plugin applies as a size of its own (EmuSen_Qt.md §7.7.H7, The window's size).
     property bool windowedAnswerAwaited: false
-    function giveWindowedSize() {
-        if (program.windowedWidth > 0 && program.windowedHeight > 0) {
-            program.width = program.windowedWidth
-            program.height = program.windowedHeight
-        }
-    }
-    onWidthChanged: if (program.windowedAnswerAwaited) { program.windowedAnswerAwaited = false; program.giveWindowedSize() }
-    onHeightChanged: if (program.windowedAnswerAwaited) { program.windowedAnswerAwaited = false; program.giveWindowedSize() }
+    readonly property bool windowedSizeRead: program.windowedWidth > 0 && program.windowedHeight > 0
+    onWidthChanged: if (program.windowedAnswerAwaited) { program.windowedAnswerAwaited = false; program.width = program.windowedWidth; program.height = program.windowedHeight }
+    onHeightChanged: if (program.windowedAnswerAwaited) { program.windowedAnswerAwaited = false; program.width = program.windowedWidth; program.height = program.windowedHeight }
     // WindowResizable off holds the window at the setting's size, Qt's way: its least and greatest sizes made equal.
     Binding { target: program; property: "minimumWidth"; value: program.windowedWidth; when: !program.fullScreenAsked && !program.windowResizable }
     Binding { target: program; property: "maximumWidth"; value: program.windowedWidth; when: !program.fullScreenAsked && !program.windowResizable }
@@ -262,9 +257,11 @@ Window {
             onFullScreenAsked: {
                 program.fullScreenAsked = program.visibility !== Window.FullScreen
                 program.visibility = program.fullScreenAsked ? Window.FullScreen : Window.Windowed
-                if (!program.fullScreenAsked)
-                    program.giveWindowedSize()
-                program.windowedAnswerAwaited = !program.fullScreenAsked
+                if (!program.fullScreenAsked && program.windowedSizeRead) {
+                    program.width = program.windowedWidth
+                    program.height = program.windowedHeight
+                }
+                program.windowedAnswerAwaited = !program.fullScreenAsked && program.windowedSizeRead
             }
         }
         // The grid's games: the section shown, sorted, narrowed and searched as the List card and the search ask; a theme's

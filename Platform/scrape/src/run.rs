@@ -1015,14 +1015,15 @@ impl Scraper {
 
     // --- the failover ---
 
-    /// The cover a game shows from any source, `CoverPathFor`.
-    fn cover_shown(&self, rom: &str, cores: &[Core]) -> Option<String> {
+    /// The cover found for a game from any source, the player's choices aside: a game that borrows a cover or shows a
+    /// picture of its own as one still lacks its cover (EmuSen_Backend.md §30.6).
+    fn cover_found(&self, rom: &str, cores: &[Core]) -> Option<String> {
         let system = self.route(rom, cores)?;
         let game = crate::media::Game { file: rom, folder_path: self.settings().folder_of(rom), folder: false };
-        self.locate(&system.esde_system, &game, kinds::COVER.esde_type).map(|(_, p)| p)
+        self.found_in(&system.esde_system, &game, kinds::COVER.esde_type, cores).map(|f| f.path)
     }
 
-    /// `FailoverFor`: the games of this run with no cover shown handed to OpenEmu's sources, each once.
+    /// `FailoverFor`: the games of this run with no cover found handed to OpenEmu's sources, each once.
     fn failover_for(&self, roms: Vec<String>) {
         let settings = self.settings();
         if !settings.openemu || self.progress().phase != Phase::Running {
@@ -1030,7 +1031,7 @@ impl Scraper {
         }
         let cores = consoles::cores(&settings.cores);
         for rom in roms {
-            if self.cover_shown(&rom, &cores).is_some() || self.progress().failover_pending.contains(&rom) {
+            if self.cover_found(&rom, &cores).is_some() || self.progress().failover_pending.contains(&rom) {
                 continue;
             }
             let Some(core) = self.route(&rom, &cores).and_then(|s| consoles::core_of(&cores, &s.id)).cloned() else { continue };
@@ -1297,5 +1298,45 @@ mod identity_tests {
         let patched = emusen_galaxia::package::parse(&manifest("patched")).unwrap();
         let h = scraped_first(&patched).unwrap();
         assert_eq!((h.crc32.as_str(), h.size), ("0000000a", 4));
+    }
+}
+
+#[cfg(test)]
+mod cover_found_tests {
+    use crate::Scraper;
+    use serde_json::json;
+    use std::sync::Arc;
+
+    const GAME: &str = "/roms/snes/Game.sfc";
+
+    /// What decides a run's failover is the cover found: a game showing its own title screen or another game's cover as its
+    /// cover, with none found for it, still lacks one, while `media` gives the picture shown (EmuSen_Backend.md §30.6).
+    #[test]
+    fn a_game_showing_a_chosen_cover_still_lacks_the_cover_found() {
+        let Some(sqlite) = emusen_sqlite::for_tests() else {
+            eprintln!("a_game_showing_a_chosen_cover_still_lacks_the_cover_found stood down: no SQLite for the scraper");
+            return;
+        };
+        let dir = std::env::var("TMPDIR").map(std::path::PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-scrape-cover-found-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let snes = dir.join("esde").join("snes");
+        for (folder, name) in [("titlescreens", "Game.png"), ("covers", "Other.png")] {
+            std::fs::create_dir_all(snes.join(folder)).unwrap();
+            std::fs::write(snes.join(folder).join(name), folder).unwrap();
+        }
+        let library = Arc::new(emusen_library::Library::open(sqlite.clone(), &dir.join("games.db").to_string_lossy()).unwrap());
+        let settings = json!({ "developer_files": false, "openemu": false, "sources_alone": true, "esde_media": dir.join("esde").to_string_lossy(), "cores": [["snes"]], "test": { "offline": true } });
+        let scraper = Scraper::open(sqlite, &dir.join("Media").to_string_lossy(), Some(library.clone()), &[], &settings.to_string()).unwrap();
+        let cores = crate::consoles::cores(&scraper.settings().cores);
+        let game = crate::media::Game { file: GAME, folder_path: String::new(), folder: false };
+        for (field, value, shown) in [("covertype", "titlescreen", snes.join("titlescreens").join("Game.png")), ("coverfrom", "/roms/snes/Other.sfc", snes.join("covers").join("Other.png"))] {
+            library.change_request(&json!({ "op": "save_edits", "path": GAME, "changes": { "covertype": null, "coverfrom": null } }).to_string()).unwrap();
+            library.change_request(&json!({ "op": "save_edits", "path": GAME, "changes": { field: value } }).to_string()).unwrap();
+            let shown = shown.to_string_lossy().into_owned();
+            assert_eq!(scraper.locate("snes", &game, "cover").unwrap().map(|(_, p)| p), Some(shown), "{field}: the picture shown");
+            assert_eq!(scraper.cover_found(GAME, &cores), None, "{field}: no cover found, so the failover still asks for one");
+        }
+        drop(scraper);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

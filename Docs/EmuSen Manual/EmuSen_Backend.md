@@ -8769,9 +8769,17 @@ from another game (`coverfrom`; decided 2026-11-14, R-20261114-10). No file is c
 choice among the files. `media` for a cover then gives, after a borrowed cover, the chosen type's file while the game has
 one, and the cover found otherwise, so a picture taken away leaves the choice and shows the cover found. Its answer
 carries `type`, the media type of the file given, and for a borrowed cover `from`, the other game's file; `choices:
-false` asks for the cover found as though the player had chosen none, which Cover art's card for it shows. Every view reads a cover through `media` (the Qt library's grid, its ES-DE shelves,
-whose cover replaces the folder index's, the game page, and DianaSh's `scrape ls`), so each shows the choice. The
-editor's Clear keeps `covertype` beside `coverfrom`. Held to the scraper's `tests/cover_choice.rs` and the library's
+false` asks for the cover found as though the player had chosen none, reads no edits, and is what Cover art's card for
+it shows. An edits read that fails is an error of `media` and `present`, not an answer of no choice; a handle with no
+library lent has no choice. Where a cover is shown the choice counts: `media` and `present` (a shelf's types, a cover
+counted from any source). Where a cover is to be fetched it does not: a run's failover to OpenEmu's sources asks for
+every game with no cover found, one that borrows a cover or shows its own picture included (`run.rs` `cover_found`).
+The Qt front end reads every cover through `media` (the library's grid, its ES-DE shelves, whose cover replaces the
+folder index's, and the game page), so each shows the choice. The C# front end reads its library's and themed view's
+covers through `media` too, but its game page's Cover Art and the stamp that keys its themed pictures read `coverfrom`
+from the edits themselves (`MainWindow.CoverChoice.cs`, `GameRecords.Edits.cs`), so they know nothing of `covertype`.
+The editor's Clear keeps `covertype` beside `coverfrom`. Held to the scraper's `tests/cover_choice.rs` and its
+`run.rs` test `a_game_showing_a_chosen_cover_still_lacks_the_cover_found`, and the library's
 `the_editors_clear_keeps_the_cover_choices_and_drops_the_details`.
 
 ### 30.7 The recorded-answer harness

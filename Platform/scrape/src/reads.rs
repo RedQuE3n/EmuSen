@@ -181,7 +181,7 @@ pub(crate) fn get(s: &Scraper, r: &Value) -> Result<String, Error> {
                 None => s.settings().folder_of(&file),
             };
             let game = crate::media::Game { file: &file, folder_path, folder };
-            match s.found(&json::text(r, "system")?, &game, &json::text(r, "type")?, json::flag(r, "choices", true)?) {
+            match s.found(&json::text(r, "system")?, &game, &json::text(r, "type")?, json::flag(r, "choices", true)?)? {
                 Some(f) => {
                     let from = f.from.as_deref().map(|g| format!(",\"from\":{}", quoted(g))).unwrap_or_default();
                     out.push_str(&format!("{{\"source\":\"{}\",\"path\":{},\"type\":{}{from}}}", f.source.word(), quoted(&f.path), quoted(&f.media_type)))
@@ -228,7 +228,7 @@ pub(crate) fn get(s: &Scraper, r: &Value) -> Result<String, Error> {
                     .collect::<Result<_, Error>>()?,
                 _ => Vec::new(),
             };
-            json::strings_into(&mut out, s.present(&system, &games));
+            json::strings_into(&mut out, s.present(&system, &games)?);
         }
         "stamp" => out.push_str(&quoted(&s.stamp(&json::text(r, "system")?, &json::text_or_none(r, "choice")?.unwrap_or_default()))),
         "openvgdb" => {

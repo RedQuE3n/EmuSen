@@ -14,8 +14,12 @@ struct World {
 
 const GAME: &str = "/roms/snes/Game.sfc";
 
+/// The scratch world, or none with a printed line where no SQLite is there for the scraper and the library.
 fn world(label: &str) -> Option<World> {
-    let sqlite = emusen_sqlite::for_tests()?;
+    let Some(sqlite) = emusen_sqlite::for_tests() else {
+        eprintln!("{label} stood down: no SQLite for the scraper and the library");
+        return None;
+    };
     let dir = std::env::var("TMPDIR").map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-scrape-{label}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     for (folder, bytes) in [("covers", "cover"), ("titlescreens", "title"), ("videos", "clip")] {

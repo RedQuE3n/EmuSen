@@ -2598,8 +2598,12 @@ still frame 0), so an Image of a GIF stays on its first frame, which is what the
 frame by its own delay and run off the scene's clock, so the scene chooses the frame and the clock stays one.
 Held by `esde/tests/scene.rs` `a_gif_steps_by_its_first_delay_over_the_speed_in_its_direction_for_its_iterations`,
 `esde/tests/frame.rs` `an_animation_takes_its_frame_from_the_host_s_timing_and_keeps_its_last_when_its_plays_are_done`,
-and on the card by `esde-qt/tests/animation_gpu.rs`, which reads a four-colour fixture through the real view on the
-held clock at the middle of each pacing in every direction, at a second speed, and after its plays.
+and on the card by `esde-qt/tests/animation_gpu.rs`, which reads a four-colour fixture through the real view against
+the scene's own ticks in every direction, at a second speed, and after its plays. A resting scene's clock is
+`View.qml`'s Timer, which runs on wall time: the harness's held clock does not step it (measured 2026-11-14, two ticks
+in 1150 held ms), so the test counts the ticks (a revision each, `nextChangeMs` apart) rather than holding the clock.
+The mapping case for `iterationCount` reads at 650 ms, where a GIF playing for ever shows frame 0 to 2 and one played
+once holds its last.
 
 The carousel's four are added to the scene's own slots (`primary::carousel`), which the painter binds and animates
 nothing of; a `PathView` would lay the items out a second time beside the scene's layout, so none is used.

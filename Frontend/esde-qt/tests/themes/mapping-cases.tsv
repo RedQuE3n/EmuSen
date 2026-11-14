@@ -364,3 +364,6 @@ carousel	itemStacking	ascending	descending	-	-	-	-	itemSize=0.5 0.6;unfocusedIte
 carousel	selectedItemOffset	0 0	0.1 0.1	-	-	-	-	-	-	-	-	-
 carousel	itemAxisRotation	0	30	-	-	-	-	-	-	-	-	-
 carousel	itemDiagonalOffset	0	0.1	-	-	-	-	-	-	-	-	-
+carousel	fadeAbovePrimary	false	true	-	-	-	-	-	52	fade	-	<image name="above"><pos>0 0</pos><size>1 1</size><path>{A}</path><zIndex>60</zIndex></image>
+textlist	fadeAbovePrimary	false	true	-	-	-	-	-	52	fade	-	<image name="above"><pos>0 0</pos><size>1 1</size><path>{A}</path><zIndex>60</zIndex></image>
+grid	fadeAbovePrimary	false	true	-	-	-	-	-	39	fade	-	<image name="above"><pos>0 0</pos><size>1 1</size><path>{A}</path><zIndex>60</zIndex></image>

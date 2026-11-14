@@ -3538,6 +3538,36 @@ the last table and on nothing else; kit-core's `glyph` (7 tests, the pair's amon
 reverted: six caught as written above (the pair glyph off, the fractional advances, the glyph's side, the info gap, no
 default face, the filled axis cut at one tip), and one, the info marks square, not caught and replaced.
 
+#### 4.8.8 A theme's fade transitions and `fadeAbovePrimary` **[M 2026-11-14]**
+
+The rules, read in ES-DE 3.4.1's source (`es-app/src/views/ViewController.cpp`, `SystemView.cpp`,
+`es-core/src/Window.cpp`, `resources/shaders/glsl/core.glsl`); the durations live in `scene/motion.rs` beside the slide's,
+the curves in `scene/fade.rs`.
+
+- **Between views** (system to gamelist, gamelist to system, gamelist to gamelist, startup to either):
+  `ViewController::playViewTransition` draws a black rectangle over the screen whose alpha rises linearly over 120 ms
+  (`FADE_DURATION`, line 971), moves the camera to the new view, holds the black for 200 ms (`FADE_WAIT`, 972) and lowers
+  it linearly over 120 ms: 440 ms in all. The view left is the one on the screen for the first 120 ms. A fade begun while
+  another is part way starts from that one's black (lines 983-991). The help is drawn under the black
+  (`renderHelpPromptsEarly`, 1378), the clock and the status over it (`Window::render`, 715-735). At startup the camera
+  starts away from the view (lines 680-693, 878-885), so the screen is black until the view fades in.
+- **Between systems** in the system view (`SystemView::onCursorChanged`, 427-476): a run of 400 ms x 1.3 for a carousel or
+  a list and 300 ms x 1.3 for a grid. Its black f rises as t/0.2 plus the black it started from, is 1 from 0.3 to 0.7 of
+  the run, and falls as 1 - (t - 0.6)/0.3, from 2/3 at 0.7 to 0 at 0.9. The system left shows until half way (line 460).
+  `renderElements` dims the elements at or below the primary's zIndex by 1 - f (1720-1722); since the shader multiplies
+  colour only (`core.glsl` 171), that is a black box of opacity f between them and the primary, which is how the scene
+  draws it, as a `Paint::fill`. The elements above the primary keep their opacity, or with **`fadeAbovePrimary`** take
+  1 - f (1695-1699). The help, clock and status are the window's, not the view's children, and do not fade.
+- **A held direction** (`mMaxFade`, 189-207, 462-472): from 0.7 of a run with the direction held, the faded elements are not
+  drawn at all until the black is whole again in a later run, so a held scroll stays dark; it is set until then, so a
+  press after a long hold starts with them off.
+- **The drawing order**: the system view draws the elements at or below the primary's zIndex, then the primary, then the
+  rest (`SystemView::render`), whatever order equal zIndexes were written in.
+
+Not built: a slide between systems or between two gamelists (both still change at once, as before), and the system
+left's video paused at its frame during the first half (its still is drawn). Proof: `emusen-esde`'s `fade` tests, the
+painter's startup and quick-system-select fade, and the three `fadeAbovePrimary` cases in `mapping-cases.tsv`.
+
 ### 4.9 ES-DE's text rules: `emusen-esde-text` **[M 2026-11-09]**
 
 **Decided 2026-11-09 by the tester:** ES-DE's text layout is built as a component of its own, after the evaluation below,

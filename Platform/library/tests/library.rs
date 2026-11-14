@@ -198,3 +198,18 @@ fn a_games_television_standard_is_read_set_refused_outside_the_two_and_kept_by_c
     set(&lib, serde_json::Value::Null).unwrap();
     assert_eq!(read(&lib)["value"], serde_json::Value::Null, "null follows the game again");
 }
+
+#[test]
+fn the_editors_clear_keeps_the_cover_choices_and_drops_the_details() {
+    let Some(sqlite) = sqlite() else {
+        return;
+    };
+    let t = Temp::new("cover-choice");
+    let lib = Library::open(sqlite, &t.at("lib/games.db")).unwrap();
+    let game = t.at("roms/snes/Game.sfc");
+    let changes = serde_json::json!({ emusen_library::records::COVER_TYPE: "titlescreen", emusen_library::records::COVER_FROM: "/roms/snes/Other.sfc", "name": "Mine" });
+    lib.change_request(&serde_json::json!({ "op": "save_edits", "path": game, "changes": changes }).to_string()).unwrap();
+    lib.change_request(&serde_json::json!({ "op": "clear_edits", "path": game }).to_string()).unwrap();
+    let edits: serde_json::Value = serde_json::from_str(&lib.get_request(&serde_json::json!({ "what": "edits", "path": game }).to_string()).unwrap()).unwrap();
+    assert_eq!(edits, serde_json::json!({ "covertype": "titlescreen", "coverfrom": "/roms/snes/Other.sfc" }), "the name goes, both cover choices stay");
+}

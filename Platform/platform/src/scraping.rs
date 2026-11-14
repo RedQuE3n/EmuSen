@@ -11,7 +11,7 @@ use std::sync::{Arc, RwLock, RwLockReadGuard};
 
 pub const SERVICE: &str = "emusen.scrape";
 pub const MAJOR: u32 = 2;
-pub const MINOR: u32 = 0;
+pub const MINOR: u32 = 1;
 
 /// The front end's theme loader: the media types its active theme draws for a system, by the length-query idiom.
 pub type ThemeKinds = unsafe extern "C" fn(*mut c_void, *const u8, usize, *mut u8, usize) -> i64;

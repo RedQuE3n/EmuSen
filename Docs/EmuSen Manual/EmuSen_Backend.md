@@ -8759,6 +8759,20 @@ console and libretro name from the systems table), ScreenScraper's store, an ES-
 metadata a view shows is the scraper's `metadata`: the player's edit (the library's), else the scraped text, else the
 file's. Both need the library; §30.9's Q3 asks for the handle to be lent.
 
+**A game's own picture as its cover** (the tester decided, 2026-11-13, R-20261113-10; service 2.1, platform interface
+49). The service's change `cover {path, system, type, folder_path, at}` makes one of the game's own pictures its cover by
+its media type (`screenshot`, `titlescreen`, `marquee`, `miximage`, `backcover`, `3dbox`, `physicalmedia`, `fanart`: a
+kind whose payload is a picture, `kinds::may_be_cover`), stored as the game's `covertype` edit in `games.db` through the
+lent library's `save_edits`; a null type, or `cover`, removes it. A type that is not a picture, or one the game has no
+file of where `media` would look, is refused with words and nothing is written; choosing a picture of its own ends a
+cover borrowed from another game (`coverfrom`). No file is copied, written or removed: the cover is a choice among the
+files. `media` for a cover then gives, after a borrowed cover, the chosen type's file while the game has one, and the
+cover found otherwise, so a picture taken away leaves the choice and shows the cover found. Its answer carries `type`,
+the media type of the file given. Every view reads a cover through `media` (the Qt library's grid, its ES-DE shelves,
+whose cover replaces the folder index's, the game page, and DianaSh's `scrape ls`), so each shows the choice. The
+editor's Clear keeps `covertype` beside `coverfrom`. Held to the scraper's `tests/cover_choice.rs` and the library's
+`the_editors_clear_keeps_the_cover_choices_and_drops_the_details`.
+
 ### 30.7 The recorded-answer harness
 
 The gate of §6's row, "recorded ScreenScraper answers replayed to both, the requests compared byte for byte with the

@@ -7,8 +7,9 @@ use crate::db::{scalar_i64, scalar_text, transaction};
 use emusen_sqlite::{Bound, Connection, Row};
 
 /// The edit fields that are the player's choices rather than metadata, kept by the editor's Clear: `GameMetadata`'s
-/// `CoverFrom` and `TelevisionStandard`.
+/// `CoverFrom` and `TelevisionStandard`, and the media type of the game's own picture chosen as its cover.
 pub const COVER_FROM: &str = "coverfrom";
+pub const COVER_TYPE: &str = "covertype";
 pub const TELEVISION_STANDARD: &str = "tvstandard";
 
 /// The television standards a game's picture may be drawn for, as `TELEVISION_STANDARD` stores them (EmuSen_CRT.md §26).
@@ -313,9 +314,10 @@ pub fn save_edits(db: &Connection, path: &str, changes: &[(String, Option<String
     })
 }
 
-/// The editor's Clear: the cover borrowed from another game and the television standard chosen stay.
+/// The editor's Clear: the cover borrowed from another game, the picture chosen as the cover and the television standard
+/// chosen stay.
 pub fn clear_edits(db: &Connection, path: &str) -> Result<(), Error> {
-    write(db, path, &format!("DELETE FROM game_edit WHERE path = $path AND field NOT IN ('{COVER_FROM}', '{TELEVISION_STANDARD}')"), None)
+    write(db, path, &format!("DELETE FROM game_edit WHERE path = $path AND field NOT IN ('{COVER_FROM}', '{COVER_TYPE}', '{TELEVISION_STANDARD}')"), None)
 }
 
 /// The standard the player chose for the game's picture; none where it follows the game.

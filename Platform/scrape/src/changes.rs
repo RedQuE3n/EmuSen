@@ -71,6 +71,16 @@ pub(crate) fn change(s: &Scraper, r: &Value) -> Result<String, Error> {
             s.add_art(json::text_or_none(r, "console")?, &json::text(r, "stem")?, &json::text(r, "path")?);
             out.push_str("true");
         }
+        "cover" => {
+            let file = json::text(r, "path")?;
+            let folder_path = match json::text_or_none(r, "folder_path")? {
+                Some(f) => f,
+                None => s.settings().folder_of(&file),
+            };
+            let game = crate::media::Game { file: &file, folder_path, folder: false };
+            s.choose_cover(&json::text(r, "system")?, &game, json::text_or_none(r, "type")?.as_deref(), json::text_or_none(r, "at")?.as_deref())?;
+            out.push_str("true");
+        }
         "playing" => {
             s.set_playing(json::flag(r, "running", false)?);
             out.push_str("true");

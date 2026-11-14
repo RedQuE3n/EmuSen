@@ -4716,3 +4716,15 @@ reset, lit by the tester and named in a clash, as Mistress's page did with `PadC
 `bindings` unit test, the client's `platform.rs` and `qt-models`' `controllers.rs` (Left stick up shown bound to I and
 bound to K under `LeftStickUp`, never under `LeftY-`). No seeded fault had been run against it by 2026-11-12. A control
 Endymion names no word for is now said and nothing written for it (`EmuSen_Qt.md` §7.7.H5).
+
+## 57. Interface 49, 2026-11-13: a game's own picture as its cover
+
+*Decided by the tester on 2026-11-13 (R-20261113-10).* A game's cover could be another game's (`coverfrom`) or a file the
+player placed in the art folder, but none of the game's own pictures. The emusen.scrape service, whose header
+`emusen_platform.h` includes, moves to 2.1: its change gains `cover {path, system, type, folder_path, at}`, and `media`'s
+answer gains `type`. No call's signature, meaning or table layout changes; the op is one more of the existing `change`,
+since a game's pictures and the order they are found in are the scraper's, and the check that the game has the picture
+needs them. The choice is kept where the library keeps what it knows of a game, its `covertype` edit, written through the
+lent library's existing `save_edits`, so it follows a renamed game as every edit does. `EmuSen_Backend.md` §30.6 has
+the rule. `lib.rs`, `emusen_platform.h`, the service's minor in `scraping.rs`, the platform client's binding and
+`PlatformLibrary.InterfaceVersion` move to 49 together.

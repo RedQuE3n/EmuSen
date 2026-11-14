@@ -3,7 +3,7 @@
 //! so a game shows the same cover in each. See EmuSen_Settings_Reference.md §4.60, §4.65 and EmuSen_Backend.md §30.6.
 
 use std::path::Path;
-use crate::Scraper;
+use crate::{Error, Scraper};
 use crate::consoles::{self, Core};
 use crate::kinds;
 use emusen_galaxia::files::file_exists;
@@ -29,6 +29,20 @@ impl Source {
             Source::OpenEmu => "openemu",
             Source::Package => "package",
         }
+    }
+}
+
+/// A picture found for a game: where it came from, its file, and the media type it is a file of.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Found {
+    pub source: Source,
+    pub path: String,
+    pub media_type: String,
+}
+
+impl Found {
+    fn of(source: Source, path: String, media_type: &str) -> Found {
+        Found { source, path, media_type: media_type.to_string() }
     }
 }
 
@@ -110,15 +124,23 @@ impl Scraper {
         consoles::core_of(cores, &system.id).map(|c| c.console.clone())
     }
 
-    /// The game whose cover a ROM shows, the player's choice in the library's edits; none with no library lent.
-    fn cover_from(&self, rom: &str) -> Option<String> {
-        let library = self.library().ok()?;
-        let edits = library.get_request(&serde_json::json!({ "what": "edits", "path": rom }).to_string()).ok()?;
-        serde_json::from_str::<serde_json::Value>(&edits).ok()?.get("coverfrom").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(str::to_string)
+    /// The player's cover choices for a ROM in the library's edits: the game whose cover it shows, and the type of its own
+    /// picture shown as its cover; neither with no library lent.
+    fn cover_choices(&self, rom: &str) -> (Option<String>, Option<String>) {
+        let Ok(library) = self.library() else { return (None, None) };
+        let edits = library.get_request(&serde_json::json!({ "what": "edits", "path": rom }).to_string()).ok();
+        let edits = edits.and_then(|e| serde_json::from_str::<serde_json::Value>(&e).ok()).unwrap_or_default();
+        let field = |name: &str| edits.get(name).and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(str::to_string);
+        (field(emusen_library::records::COVER_FROM), field(emusen_library::records::COVER_TYPE))
     }
 
     /// The picture of a type for a game on the shelf ES-DE calls `esde_system`, and where it came from.
     pub fn locate(&self, esde_system: &str, game: &Game, media_type: &str) -> Option<(Source, String)> {
+        self.found(esde_system, game, media_type).map(|f| (f.source, f.path))
+    }
+
+    /// `locate`, with the type of the file found: for a cover, the type of the game's own picture chosen as its cover.
+    pub fn found(&self, esde_system: &str, game: &Game, media_type: &str) -> Option<Found> {
         let settings = self.settings();
         let cores = consoles::cores(&settings.cores);
         let mut seen = HashSet::new();
@@ -126,20 +148,52 @@ impl Scraper {
         self.locate_in(esde_system, game, media_type, &cores, &mut seen)
     }
 
-    fn locate_in(&self, esde_system: &str, game: &Game, media_type: &str, cores: &[Core], seen: &mut HashSet<String>) -> Option<(Source, String)> {
+    /// Makes one of a game's own pictures, by its type, its cover, or with none puts the cover back to the one found for
+    /// it; a type that is not a picture, or one the game has no file of, is refused and nothing is written. Choosing a
+    /// picture of its own ends a cover borrowed from another game. The files are never touched (EmuSen_Backend.md §30.6).
+    pub(crate) fn choose_cover(&self, esde_system: &str, game: &Game, media_type: Option<&str>, at: Option<&str>) -> Result<(), Error> {
+        let library = self.library()?;
+        let chosen = media_type.filter(|t| *t != kinds::COVER.esde_type);
+        if let Some(t) = chosen {
+            if !kinds::may_be_cover(t) {
+                return Err(Error::BadRequest(format!("{t} is not a kind of picture, so it cannot be a game's cover.")));
+            }
+            if game.folder || self.locate(esde_system, game, t).is_none() {
+                let title = Path::new(game.file).file_stem().unwrap_or_default().to_string_lossy().to_string();
+                return Err(Error::BadRequest(format!("{title} has no picture of the type {t} to be its cover.")));
+            }
+        }
+        let mut changes = serde_json::Map::new();
+        changes.insert(emusen_library::records::COVER_TYPE.into(), chosen.map_or(serde_json::Value::Null, |t| t.into()));
+        if chosen.is_some() {
+            changes.insert(emusen_library::records::COVER_FROM.into(), serde_json::Value::Null);
+        }
+        let mut request = serde_json::json!({ "op": "save_edits", "path": game.file, "changes": changes });
+        if let Some(at) = at {
+            request["at"] = at.into();
+        }
+        library.change_request(&request.to_string()).map(drop).map_err(|e| Error::Io(e.words()))
+    }
+
+    fn locate_in(&self, esde_system: &str, game: &Game, media_type: &str, cores: &[Core], seen: &mut HashSet<String>) -> Option<Found> {
         let settings = self.settings();
         let cover = media_type == kinds::COVER.esde_type;
         let file = !game.folder;
         if cover && file {
-            if let Some(from) = self.cover_from(game.file) {
+            let (from, chosen) = self.cover_choices(game.file);
+            if let Some(from) = from {
                 if seen.insert(from.clone()) {
                     if let Some(system) = self.route(&from, cores) {
                         let next = Game { file: &from, folder_path: settings.folder_of(&from), folder: false };
-                        if let Some((_, borrowed)) = self.locate_in(&system.esde_system, &next, media_type, cores, seen) {
-                            return Some((Source::OtherGame, borrowed));
+                        if let Some(borrowed) = self.locate_in(&system.esde_system, &next, media_type, cores, seen) {
+                            return Some(Found { source: Source::OtherGame, ..borrowed });
                         }
                     }
                 }
+            }
+            // The game's own picture chosen as its cover, while the game has a file of it; else the cover found for it.
+            if let Some(own) = chosen.filter(|t| *t != media_type && kinds::may_be_cover(t)).and_then(|t| self.locate_in(esde_system, game, &t, cores, seen)) {
+                return Some(own);
             }
         }
         let title = Path::new(game.file).file_stem().unwrap_or_default().to_string_lossy().to_string();
@@ -147,7 +201,7 @@ impl Scraper {
         if cover {
             if let Some(console) = &console {
                 if let Some(hand) = self.art().find(Some(console), &title) {
-                    return Some((Source::Hand, hand));
+                    return Some(Found::of(Source::Hand, hand, media_type));
                 }
             }
         }
@@ -155,20 +209,20 @@ impl Scraper {
             && let Some(package) = settings.package_of(game.file)
             && let Some(packaged) = find_in_package(package, media_type)
         {
-            return Some((Source::Package, packaged));
+            return Some(Found::of(Source::Package, packaged, media_type));
         }
         let stored = Game { file: game.file, folder_path: settings.store_folder(game.file, &game.folder_path, game.folder), folder: game.folder };
         let game = &stored;
         if let Some(scraped) = find_in(&self.root(), esde_system, game, media_type) {
-            return Some((Source::ScreenScraper, scraped));
+            return Some(Found::of(Source::ScreenScraper, scraped, media_type));
         }
         if let Some(esde) = settings.esde_media.as_deref().filter(|e| !e.trim().is_empty()).and_then(|root| find_in(root, esde_system, game, media_type)) {
-            return Some((Source::EsdeFolder, esde));
+            return Some(Found::of(Source::EsdeFolder, esde, media_type));
         }
         if cover && settings.openemu {
             if let Some(console) = &console {
                 if let Some(found) = openemu_cover(&self.openemu_root(), console, &title) {
-                    return Some((Source::OpenEmu, found));
+                    return Some(Found::of(Source::OpenEmu, found, media_type));
                 }
             }
         }

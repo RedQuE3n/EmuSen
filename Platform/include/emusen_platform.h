@@ -7,7 +7,8 @@
  * codecs, a firmware install, the card manager and a cheat database's install are the frontend API's alone
  * (EmuSen_RustPlatform.md, section 47.24); since 39 scraping is the emusen.scrape service's table alone (47.25); since
  * 40 Endymion reads and writes the four binding files and Galaxia names its files (EmuSen_Input.md, section 5.2); since
- * 45 Galaxia serves the front end's own settings rows (EmuSen_Galaxia.md, section 3.15). The
+ * 45 Galaxia serves the front end's own settings rows (EmuSen_Galaxia.md, section 3.15); since 49 the emusen.scrape
+ * service 2.1 makes one of a game's own pictures its cover (EmuSen_Backend.md, section 30.6). The
  * rules are argued in EmuSen_RustPlatform.md, section 3, and are the core ABI's (emusen_core.h) one layer up:
  *
  *  - The host calls and the library returns. The library never calls the host: what the C# reports through a
@@ -43,7 +44,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 47u
+#define EMUSEN_PLATFORM_ABI_VERSION 49u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */

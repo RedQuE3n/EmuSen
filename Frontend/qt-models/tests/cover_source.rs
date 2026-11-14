@@ -79,7 +79,7 @@ fn qt_7_8_5_a_cover_borrowed_from_another_game_is_read_as_its_own_card_in_use() 
 }
 
 #[test]
-fn qt_7_8_5_a_kind_outside_the_media_section_is_named_by_its_scraping_row() {
+fn qt_7_8_5_a_kind_outside_the_media_section_takes_its_scraping_rows_words() {
     let (_world, source, mine, _, _) = world("models-cover-words", &[("covers", "Mine"), ("miximages", "Mine"), ("screenshots", "Mine")], false);
     let platform = Platform::load(library()).unwrap();
     let rows = platform.settings_rows().unwrap();

@@ -4,8 +4,9 @@
 //! media; Scrape This Game runs the scraper over the game; Edit Details is a deeper page of the game's edits; Cheats is a
 //! deeper page of Options, the game's own cheat list, each a switch saved to its file (cheats.rs). Display crop is a
 //! deeper page of Options stepping the game's own crop through Settings' overscan choices, stored in games.db; Package
-//! is one showing the game's package and running the library tool's job that makes or checks it. Cover art opens
-//! nothing yet, so its row is not shown; Open Folder is the program's folder action.
+//! is one showing the game's package and running the library tool's job that makes or checks it. Cover art is a deeper
+//! page of Details choosing which of the game's own pictures is its cover, as the media viewer's Set as cover does; the
+//! choice is the scraper's `cover` (EmuSen_Backend.md §30.6). Open Folder is the program's folder action.
 
 use crate::help::Screen;
 use crate::question::Question;
@@ -53,6 +54,8 @@ pub enum Change {
     Cheat(usize, bool),
     /// The game's own crop; none follows the console's overscan.
     Crop(Option<Crop>),
+    /// One of the game's own pictures, by its media type, made its cover; none puts back the cover found.
+    Cover(Option<String>),
 }
 
 /// What the player is told when a change could not be made, and why (EmuSen_Qt.md §7.9).
@@ -67,6 +70,7 @@ pub fn change_failed(change: &Change, why: &str) -> String {
         Change::Edit(..) => "The game's details could not be stored",
         Change::Cheat(..) => "The cheat was not switched",
         Change::Crop(_) => "The game's crop could not be stored",
+        Change::Cover(_) => "The game's cover could not be chosen",
     };
     format!("{what}: {why}")
 }
@@ -165,6 +169,11 @@ pub struct Read {
     pub scraping: bool,
     /// The details Edit Details offers, in its order.
     pub details: Vec<Detail>,
+    /// What Cover art offers: the cover found (its value none), then each of the game's own pictures that can be its
+    /// cover, by its media type; empty where no pictures are looked for.
+    pub covers: Vec<Choice>,
+    /// The media type of the game's own picture shown as its cover; none for the cover found.
+    pub cover_choice: Option<String>,
 }
 
 /// One detail of the game as Edit Details shows it: its field, its value, and whether the player's edit holds it.
@@ -317,7 +326,7 @@ pub const PLAY: &str = "play";
 pub const RESUME: &str = "resume";
 pub const FAVOURITE: &str = "favourite";
 
-/// The rows' keys; Cover art is a later piece's page (EmuSen_Interface.md §18.2).
+/// The rows' keys.
 pub const CHEATS: &str = "cheats";
 /// A cheat on Cheats' page.
 pub const CHEAT: &str = "cheat";
@@ -331,6 +340,8 @@ pub const JOB: &str = "job";
 pub const SCRAPE: &str = "scrape";
 pub const EDIT: &str = "edit";
 pub const COVER: &str = "cover";
+/// A picture on Cover art's page.
+pub const COVER_PICTURE: &str = "coverPicture";
 pub const FOLDER: &str = "folder";
 pub const HIDE: &str = "hide";
 pub const STANDARD: &str = "standard";
@@ -345,6 +356,9 @@ pub const DETAILS: [(&str, &str); 7] = [
     ("genre", "Genre"),
     ("players", "Players"),
 ];
+
+/// Cover art's mark on the picture shown as the cover, as EmuSen_Interface.md §18.2 words it.
+pub const SHOWN: &str = "In use";
 
 pub const NO_DESCRIPTION: &str = "No description yet. Details ▸ Scrape This Game fetches one, and Edit Details writes one.";
 
@@ -414,6 +428,8 @@ pub enum Outcome {
     Crop,
     /// Package opened, Options' deeper page.
     Package,
+    /// Cover art opened, Details' deeper page.
+    CoverArt,
     /// The package's job started from its request.
     Job(PackageJob),
     /// The package's job running asked to stop.
@@ -449,6 +465,8 @@ pub struct GamePage {
     /// Whether Display crop's row was stepped to a crop of the player's own, whose edges follow it.
     pub custom: bool,
     pub packaging: bool,
+    /// Whether Details shows Cover art, its deeper page.
+    pub covering: bool,
     /// The package's job: its key, whether it is running, and what it has said; none before one started.
     pub job: Option<(&'static str, bool, Run)>,
     /// This page's scrape: whether it is going, and what it last said; none before one started.
@@ -475,6 +493,39 @@ fn ask(title: &str, sentence: &str, yes: &str) -> Question {
     let mut q = crate::question::confirm(title, &[sentence]);
     q.choices[1] = yes.to_owned();
     q
+}
+
+/// The words for a picture Cover art offers, by its media type: the cover found, then the Media section's words for a
+/// kind it shows (`media_word`), else the Settings' scraping row's for the kind (its "Mix images" one of them); a type
+/// none names is its own word.
+pub fn cover_words(media_type: Option<&str>) -> String {
+    const SCRAPED: [MediaKind; 4] = [MediaKind::Screenshot, MediaKind::TitleScreen, MediaKind::Marquee, MediaKind::Fanart];
+    match media_type {
+        None => "Cover".into(),
+        Some(t) => match SCRAPED.into_iter().find(|k| kind_word(*k) == t) {
+            Some(kind) => media_word(kind).into(),
+            None => match t {
+                "miximage" => "Mix image".into(),
+                "backcover" => "Back cover".into(),
+                "3dbox" => "3D box".into(),
+                "physicalmedia" => "Physical media".into(),
+                other => other.into(),
+            },
+        },
+    }
+}
+
+/// The Media section's word for a kind of the page's media; the player's own screenshots are numbered by `media_labels`.
+pub fn media_word(kind: MediaKind) -> &'static str {
+    match kind {
+        MediaKind::Taken => "Screenshot",
+        MediaKind::Screenshot => "Scraped screenshot",
+        MediaKind::TitleScreen => "Title screen",
+        MediaKind::Clip => "Clip",
+        MediaKind::Marquee => "Marquee",
+        MediaKind::Fanart => "Fan art",
+        MediaKind::Manual => "Manual",
+    }
 }
 
 /// The media store's type for a kind of the page's media, as ES-DE's viewer names its items.
@@ -527,6 +578,7 @@ impl GamePage {
     pub fn reread(&mut self, read: Read) {
         self.resume_at = self.resume_at.min(read.states.len().saturating_sub(1));
         self.cheating &= !read.cheats.is_empty();
+        self.covering &= !read.covers.is_empty();
         self.read = read;
     }
 
@@ -572,13 +624,14 @@ impl GamePage {
         self.cropping = false;
         self.custom = false;
         self.packaging = false;
+        self.covering = false;
     }
 
-    /// B on the page: Edit Details goes back to Details, and Cheats, Display crop and Package to Options, and says so;
-    /// else the page is left.
+    /// B on the page: Edit Details and Cover art go back to Details, and Cheats, Display crop and Package to Options, and
+    /// says so; else the page is left.
     pub fn back(&mut self) -> bool {
         self.custom = false;
-        let deeper = [&mut self.editing, &mut self.cheating, &mut self.cropping, &mut self.packaging];
+        let deeper = [&mut self.editing, &mut self.cheating, &mut self.cropping, &mut self.packaging, &mut self.covering];
         deeper.into_iter().fold(false, |went, d| std::mem::replace(d, false) | went)
     }
 
@@ -643,6 +696,7 @@ impl GamePage {
             Section::Options => Content::Rows(self.option_rows()),
             Section::Media => Content::Tiles(self.media_tiles()),
             Section::Details if self.editing => Content::Rows(self.edit_rows()),
+            Section::Details if self.covering => Content::Rows(self.cover_rows()),
             Section::Details => Content::Rows(self.detail_rows()),
         }
     }
@@ -681,14 +735,9 @@ impl GamePage {
         let mut label = |k: MediaKind| match k {
             MediaKind::Taken => {
                 taken += 1;
-                format!("Screenshot {taken}")
+                format!("{} {taken}", media_word(k))
             }
-            MediaKind::Screenshot => "Scraped screenshot".into(),
-            MediaKind::TitleScreen => "Title screen".into(),
-            MediaKind::Clip => "Clip".into(),
-            MediaKind::Marquee => "Marquee".into(),
-            MediaKind::Fanart => "Fan art".into(),
-            MediaKind::Manual => "Manual".into(),
+            other => media_word(other).into(),
         };
         self.read.media.iter().map(|m| label(m.kind)).collect()
     }
@@ -824,7 +873,37 @@ impl GamePage {
             None if self.read.scraping => "A run is going",
             None => "…",
         };
-        vec![row(SCRAPE, "Scrape This Game", scrape, false), row(EDIT, "Edit Details", "", true), row(FOLDER, "Open Folder", "", false), row(HIDE, "Hide from Library", "…", false)]
+        let mut rows = vec![row(SCRAPE, "Scrape This Game", scrape, false), row(EDIT, "Edit Details", "", true)];
+        if !self.read.covers.is_empty() {
+            rows.push(row(COVER, "Cover art", &Self::text_of(&self.read.covers, &self.read.cover_choice), true));
+        }
+        rows.extend([row(FOLDER, "Open Folder", "", false), row(HIDE, "Hide from Library", "…", false)]);
+        rows
+    }
+
+    /// Cover art's rows: the cover found, then each of the game's own pictures that can be its cover, the one shown marked.
+    fn cover_rows(&self) -> Vec<Row> {
+        let row = |c: &Choice| Row {
+            key: COVER_PICTURE,
+            label: c.text.clone(),
+            value: if c.value == self.read.cover_choice { SHOWN.into() } else { String::new() },
+            steps: false,
+            opens: false,
+            sentence: "",
+        };
+        self.read.covers.iter().map(row).collect()
+    }
+
+    /// The media type of the picture the viewer shows where it can be the game's cover and is not already.
+    pub fn viewer_cover(&self, viewer: &emusen_esde::scene::Viewer) -> Option<String> {
+        if viewer.reading.is_some() {
+            return None;
+        }
+        let shown: Vec<&Media> = self.read.media.iter().filter(|m| m.kind != MediaKind::Manual).collect();
+        let media = shown.get(viewer.index).filter(|m| m.kind != MediaKind::Taken)?;
+        let kind = kind_word(media.kind);
+        let offered = self.read.covers.iter().any(|c| c.value.as_deref() == Some(kind));
+        (offered && self.read.cover_choice.as_deref() != Some(kind)).then(|| kind.to_owned())
     }
 
     /// Edit Details' rows: each detail with its value; A types it, Y puts back what was scraped.
@@ -866,6 +945,8 @@ impl GamePage {
             Some(row) if row.key == SCRAPE => Outcome::Scrape,
             Some(row) if row.key == FOLDER => Outcome::OpenFolder,
             Some(row) if row.key == EDIT => Outcome::Edit,
+            Some(row) if row.key == COVER => Outcome::CoverArt,
+            Some(row) if row.key == COVER_PICTURE => self.read.covers.get(index).map_or(Outcome::Nothing, |c| Outcome::Changed(Change::Cover(c.value.clone()))),
             Some(row) if row.key == CHEATS => Outcome::Cheats,
             Some(row) if row.key == CHEAT => self.switch(index),
             Some(row) if row.key == CROP => Outcome::Crop,
@@ -916,6 +997,7 @@ impl GamePage {
                     crop.own = *v;
                 }
             }
+            Change::Cover(v) => r.cover_choice = v.clone(),
             Change::DeleteState(_) | Change::Hide => {}
         }
     }

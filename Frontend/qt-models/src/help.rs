@@ -86,6 +86,9 @@ pub enum Screen {
     GamePageViewerManual,
     /// The viewer's manual: Left and Right turn the page, the shoulders zoom, Down goes back to the media.
     GamePageManual,
+    /// The media viewer on a picture that can be the game's cover: X sets it (EmuSen_Interface.md §18.2).
+    GamePageViewerCover,
+    GamePageViewerManualCover,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -279,6 +282,8 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
         Screen::GamePageViewer => &[(UiButton::Left, "Browse", None), BACK],
         Screen::GamePageViewerManual => &[(UiButton::Left, "Browse", None), (UiButton::Up, "Manual", None), BACK],
         Screen::GamePageManual => &[(UiButton::Left, "Page", None), (UiButton::PageUp, "Zoom", None), (UiButton::Down, "Media", None), BACK],
+        Screen::GamePageViewerCover => &[(UiButton::Left, "Browse", None), (UiButton::Screensaver, "Set as cover", Some(SET_COVER)), BACK],
+        Screen::GamePageViewerManualCover => &[(UiButton::Left, "Browse", None), (UiButton::Up, "Manual", None), (UiButton::Screensaver, "Set as cover", Some(SET_COVER)), BACK],
     }
 }
 
@@ -342,6 +347,8 @@ pub const GAME_PAGE: &str = "gamePage";
 pub const FAVOURITE: &str = "favourite";
 /// X on a game's page's state: its deletion, asked first.
 pub const DELETE: &str = "delete";
+/// X in a game's page's media viewer (EmuSen_Interface.md §18.2): the picture shown made the game's cover.
+pub const SET_COVER: &str = "setCover";
 pub const RANDOM: &str = "random";
 
 /// The shoulders on the grid: the console before and the console after (Mistress's `StepSection`).

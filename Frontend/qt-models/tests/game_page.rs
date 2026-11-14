@@ -184,7 +184,7 @@ fn qt_7_8_the_overview_media_and_details() {
     assert_eq!(page.help(None, 0), Screen::GamePageView);
     page.choose_section(4);
     let Content::Rows(rows) = page.content() else { panic!("rows") };
-    // Cover art opens nothing yet, so it is not shown.
+    // A game whose pictures are not looked for has no Cover art.
     assert_eq!(rows.iter().map(|r| r.label.clone()).collect::<Vec<_>>(), ["Scrape This Game", "Edit Details", "Open Folder", "Hide from Library"]);
     assert_eq!(page.choose_row(0), Outcome::Scrape);
     let Outcome::Ask(q, change) = page.choose_row(3) else { panic!("Hide asks first") };
@@ -470,4 +470,59 @@ fn package_shows_the_games_package_and_runs_its_job_with_its_progress() {
     let mut page = GamePage::new(r, NOW);
     page.choose_section(2);
     assert!(words(&page).iter().all(|w| !w.starts_with("Package")));
+}
+
+fn covered() -> Read {
+    let mut r = read();
+    r.covers = vec![
+        Choice { value: None, text: cover_words(None) },
+        Choice { value: Some("screenshot".into()), text: cover_words(Some("screenshot")) },
+        Choice { value: Some("titlescreen".into()), text: cover_words(Some("titlescreen")) },
+    ];
+    r.media = vec![
+        Media { path: "/m/taken.png".into(), kind: MediaKind::Taken },
+        Media { path: "/m/shot.png".into(), kind: MediaKind::Screenshot },
+        Media { path: "/m/title.png".into(), kind: MediaKind::TitleScreen },
+        Media { path: "/m/clip.mkv".into(), kind: MediaKind::Clip },
+    ];
+    r
+}
+
+#[test]
+fn qt_7_8_cover_art_lists_the_games_own_pictures_marks_the_shown_one_and_a_chooses() {
+    let mut page = GamePage::new(covered(), NOW);
+    page.choose_section(4);
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    assert_eq!(rows.iter().map(|r| r.label.clone()).collect::<Vec<_>>(), ["Scrape This Game", "Edit Details", "Cover art", "Open Folder", "Hide from Library"]);
+    assert_eq!((rows[2].value.as_str(), rows[2].opens), ("Cover", true));
+    assert_eq!(page.choose_row(2), Outcome::CoverArt);
+    page.covering = true;
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    let shown = |rows: &[Row]| rows.iter().map(|r| (r.label.clone(), r.value.clone())).collect::<Vec<_>>();
+    let labels = ["Cover", "Scraped screenshot", "Title screen"].map(String::from);
+    let marked = |at: usize| (0..labels.len()).map(move |i| if i == at { SHOWN.to_string() } else { String::new() });
+    assert_eq!(shown(&rows), labels.iter().cloned().zip(marked(0)).collect::<Vec<_>>(), "the cover found is shown before any choice");
+    assert_eq!(page.help(None, 1), Screen::GamePageChoose);
+    assert_eq!(page.choose_row(2), Outcome::Changed(Change::Cover(Some("titlescreen".into()))));
+    page.changed(&Change::Cover(Some("titlescreen".into())));
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    assert_eq!(shown(&rows), labels.iter().cloned().zip(marked(2)).collect::<Vec<_>>());
+    assert_eq!(page.choose_row(0), Outcome::Changed(Change::Cover(None)), "the first row puts the cover found back");
+    assert!(page.back(), "B goes back to Details");
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    assert_eq!(rows[2].value, "Title screen");
+    assert!(!page.back(), "and B again leaves the page");
+}
+
+#[test]
+fn qt_7_8_the_viewer_sets_a_scraped_picture_as_the_cover_but_not_a_taken_one_a_clip_or_the_cover_shown() {
+    let mut page = GamePage::new(covered(), NOW);
+    let at = |page: &GamePage, index: usize| page.viewer(index).and_then(|v| page.viewer_cover(&v));
+    assert_eq!(at(&page, 0), None, "the player's own screenshot is no medium of the store");
+    assert_eq!(at(&page, 1).as_deref(), Some("screenshot"));
+    assert_eq!(at(&page, 2).as_deref(), Some("titlescreen"));
+    assert_eq!(at(&page, 3), None, "a clip is not a picture");
+    page.changed(&Change::Cover(Some("titlescreen".into())));
+    assert_eq!(at(&page, 2), None, "the picture already the cover");
+    assert_eq!(change_failed(&Change::Cover(None), "no"), "The game's cover could not be chosen: no");
 }

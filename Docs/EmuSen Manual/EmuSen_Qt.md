@@ -6896,8 +6896,8 @@ Seeded faults, each reverted:
   each with the value the scraper's `metadata` resolves; A types it on the docked keyboard, Done saves it at once as a
   games.db edit (empty words put back what was scraped), Y puts back what was scraped, B goes back to Details. A name
   edited names the game in the grid too: the library reads games.db's `name` edits.
-- **Not opened yet**, so not shown: Details' Cover art (Cheats is §7.8.3's; Display crop and Package §7.8.4's). The viewer's
-  `X Set as cover` and `Y Delete…` of §18.2 are not built. The run fetches the scraper's default kinds, not the
+- **Not opened yet**, so not shown at the time: Details' Cover art and the viewer's `X Set as cover`, since built
+  (§7.8.5); Cheats is §7.8.3's, Display crop and Package §7.8.4's. The viewer's `Y Delete…` of §18.2 is not built. The run fetches the scraper's default kinds, not the
   player's Scrape kinds settings, which nothing maps to the scraper's kinds yet.
 - Tests: qt-models' `game_page` (the viewer over the media, the run's words, Edit Details' rows), qt-app's `page_doors`
   (the viewer paged by the pad, a scrape against the recorded server to done with the cover shown, a name typed, stored
@@ -6946,14 +6946,30 @@ Seeded faults, each reverted:
   off the GUI thread into the jobs tools' `Run`, and the row says its state as their rows do (`jobs::state_words`). When
   it ends the page is read again, and a package made asks the library to scan again. A package made since the scan
   claims the game while `pkg-ls` finds the game as recorded, so it reads as Linked, not Changed.
-- **Cover art** is not built: the base keeps a game's cover choice only as another game's (`coverfrom`, read by the
-  scraper's `locate`) or as a file in the player's art folder (`art_added` names one to the index); no call makes one
-  of the game's own fetched pictures its cover.
+- **Cover art** was not built here: the base kept a game's cover choice only as another game's (`coverfrom`) or as a
+  file in the player's art folder; §7.8.5 adds the call and the page.
 - Tests: qt-models' `game_page` (both pages' rows, steps and the job's words) and `display` (the game's crop on a
   television alone), qt-app's `game_page_rows` (in the program: a crop stored for one game and not the other, a package
   made and then checked to done) and `game_crop_gpu` (a GPU job: on VenusRT, a Super Nintendo image the test makes
   draws red with its left quarter forced black; the console's custom 25% crop cuts the quarter, the game's own Whole
   picture brings it back on its next start, and a second game keeps the console's crop).
+
+#### 7.8.5 Cover art and the viewer's Set as cover (2026-11-13)
+
+The tester decided, 2026-11-13 (R-20261113-10): one of a game's own pictures may be its cover. The base's call is the
+emusen.scrape service's change `cover` (2.1, platform interface 49; `EmuSen_Backend.md` §30.6). **Details ▸ Cover art**
+(after Edit Details, its value the picture in use) opens a deeper page of rows in the page's own parts: `Cover` (the
+cover found) first, then each kind of picture the scraper's `kinds` names that the game has a file of, by the Media
+section's words or Settings' scraping words (`game_page::cover_words`), the one in use marked `In use`; A makes it the
+cover at once, B goes back to Details. The page's cover, the grid's tile and an ES-DE theme's cover then draw it, since
+each reads the cover through the scraper's `media`; the library reads again as after an edited name. **The media
+viewer** offers `X Set as cover` in its help bar for a scraped picture that is not the cover already (not the player's
+own screenshots, a clip or the manual); the viewer stays open. §18.2 draws Cover Art as 150 × 200 cards with ScreenScraper's
+other covers, a borrowed cover and the generated one; these rows are the page's existing parts, and the cards, the other
+covers and borrowing are not built. Tests: the scraper's `cover_choice`, the library's
+`the_editors_clear_keeps_the_cover_choices_and_drops_the_details`, qt-models' `game_page` (the rows, the mark, the
+viewer's offer) and qt-app's `page_cover` (in the program: the pad chooses the title screen, the page's cover and the
+grid's tile draw it, Cover brings the cover found back, and X in the viewer makes the screenshot the cover).
 
 ### 7.9 Repair piece DC-B: the program does what it offers and says when it fails (2026-11-11)
 

@@ -439,6 +439,9 @@ pub struct GamePageModelRust {
     typing_start: QString,
     /// The detail the typed words are for.
     typing_for: Option<&'static str>,
+    /// The next read follows the page's own choice of its cover, so the new cover is no other game's and the content
+    /// keeps its focus.
+    cover_chosen: bool,
     /// Set to ask the package's job running to stop.
     job_stop: Option<Arc<std::sync::atomic::AtomicBool>>,
 }
@@ -498,6 +501,7 @@ impl Default for GamePageModelRust {
             typing_title: QString::default(),
             typing_start: QString::default(),
             typing_for: None,
+            cover_chosen: false,
             job_stop: None,
         }
     }
@@ -513,6 +517,7 @@ impl cxx_qt::Initialize for qobject::GamePageModel {
                 model.as_mut().rust_mut().page.cheating = false;
                 model.as_mut().rust_mut().page.cropping = false;
                 model.as_mut().rust_mut().page.packaging = false;
+                model.as_mut().rust_mut().page.covering = false;
                 model.as_mut().rust_mut().page.run = None;
                 model.as_mut().rust_mut().page.job = None;
                 model.as_mut().rust_mut().focus = (Some(0), 0);
@@ -623,7 +628,8 @@ impl qobject::GamePageModel {
 
     fn apply(self: Pin<&mut Self>, read: Read) {
         self.telling(|mut model| {
-            let fresh = model.page.read.title.is_empty() || model.page.read.cover != read.cover || !model.ready;
+            let chosen = std::mem::take(&mut model.as_mut().rust_mut().cover_chosen);
+            let fresh = model.page.read.title.is_empty() || (model.page.read.cover != read.cover && !chosen) || !model.ready;
             let now = crate::words::now();
             model.as_mut().rust_mut().page.now = now;
             model.as_mut().rust_mut().page.reread(read);
@@ -755,12 +761,18 @@ impl qobject::GamePageModel {
                         model.hidden();
                         return;
                     }
-                    if ok && matches!(change, crate::game_page::Change::Edit(..)) {
+                    // An edited name, or a cover chosen, is read again by the library's views.
+                    if ok && matches!(change, crate::game_page::Change::Edit(..) | crate::game_page::Change::Cover(_)) {
                         model.as_mut().edited();
                     }
                     if ok {
                         model.as_mut().rust_mut().page.changed(&change);
                         model.as_mut().shown(false);
+                    }
+                    // The viewer's Set as cover leaves the picture now the cover.
+                    if ok && matches!(change, crate::game_page::Change::Cover(_)) {
+                        model.as_mut().rust_mut().cover_chosen = true;
+                        model.as_mut().viewed();
                     }
                     model.refresh();
                 }
@@ -787,6 +799,11 @@ impl qobject::GamePageModel {
                 }
                 Outcome::Package => {
                     model.as_mut().rust_mut().page.packaging = true;
+                    model.as_mut().rust_mut().focus = (None, 0);
+                    model.as_mut().shown(true);
+                }
+                Outcome::CoverArt => {
+                    model.as_mut().rust_mut().page.covering = true;
                     model.as_mut().rust_mut().focus = (None, 0);
                     model.as_mut().shown(true);
                 }
@@ -879,10 +896,13 @@ impl qobject::GamePageModel {
                     (i32::from(clip), entry.map(|e| e.source.clone()).unwrap_or_default(), Default::default())
                 }
             };
-            let help = match (v.reading, &v.manual) {
-                (Some(_), _) => crate::help::Screen::GamePageManual,
-                (None, Some(_)) => crate::help::Screen::GamePageViewerManual,
-                (None, None) => crate::help::Screen::GamePageViewer,
+            let cover = self.page.viewer_cover(v).is_some();
+            let help = match (v.reading, &v.manual, cover) {
+                (Some(_), _, _) => crate::help::Screen::GamePageManual,
+                (None, Some(_), false) => crate::help::Screen::GamePageViewerManual,
+                (None, Some(_), true) => crate::help::Screen::GamePageViewerManualCover,
+                (None, None, false) => crate::help::Screen::GamePageViewer,
+                (None, None, true) => crate::help::Screen::GamePageViewerCover,
             };
             (kind, cover_url(&source), cover_url(v.manual.as_deref().unwrap_or("")), self.page.caption(v), view, shown_screen(help))
         });
@@ -1132,6 +1152,11 @@ impl qobject::GamePageModel {
             crate::help::DELETE => {
                 let outcome = self.page.delete(self.focus.1);
                 self.outcome(outcome);
+            }
+            crate::help::SET_COVER => {
+                if let Some(kind) = self.viewer.as_ref().and_then(|v| self.page.viewer_cover(v)) {
+                    self.outcome(Outcome::Changed(crate::game_page::Change::Cover(Some(kind))));
+                }
             }
             _ => self.passed(key.clone()),
         }

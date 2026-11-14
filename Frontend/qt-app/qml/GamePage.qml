@@ -145,6 +145,8 @@ Kit.NormalizedCanvas {
         Connections {
             target: viewer.controller
             function onBackDeclined() { screen.page.viewClose() }
+            // X, Set as cover, where the help bar offers it for the picture shown.
+            function onActionInvoked(key) { screen.page.declared(key) }
         }
         Item {
             id: shown

@@ -3907,7 +3907,10 @@ backend draws no `MultiEffect` (seen on 2026-11-14: a `MultiEffect` under `QT_QU
 source included); there a `Canvas` paints each glow as the shadow of its grown circle, the circle itself drawn off the
 canvas and its shadow offset back onto it, so only the glow lands (seen the same day: Qt's Context2D paints the shadow
 of a shape drawn outside the canvas). The canvas reaches past the grown circle by twice the blur. How Qt's `shadowBlur`
-and `MultiEffect`'s blur relate to a CSS blur radius was not measured; both backends take the token as the blur.
+and `MultiEffect`'s blur relate to a CSS blur radius was not measured; both backends take the token as the blur. Not measured
+either: the time and memory of a glow's canvas on the software backend for a disc wider than the window (Home's is
+1400 units), whose canvas is the disc and twice its reach on each side; and the glows on the graphics card, which no test
+has drawn yet.
 
 **Tokens.** `coronaColor`, `coronaGlowColor` and `coronaHaloColor` (colours, the variant's accent, or the theme's
 accent, where a theme gives none) and `coronaRim`, `coronaGlowBlur`, `coronaGlowSpread`, `coronaHaloBlur`,

@@ -9,6 +9,7 @@
 pub mod base;
 pub mod bellcache;
 pub mod bells;
+pub mod canvas;
 pub mod body;
 pub mod column;
 pub mod controller;

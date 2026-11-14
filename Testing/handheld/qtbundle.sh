@@ -5,7 +5,8 @@
 # <dest>/plugins the Wayland and offscreen platforms with Wayland's integrations and the common image formats;
 # <dest>/qml the modules the front end imports. A program reads them through a qt.conf beside it naming <dest> and
 # LD_LIBRARY_PATH naming <dest>/lib. See README.md.
-# Usage: qtbundle.sh <dest> <sonames-file> <binary>...    <sonames-file>: the other machine's `ldconfig -p` sonames, one a line
+# Usage: qtbundle.sh <dest> <sonames-file> <binary>...    <sonames-file>: the other machine's library file names, one a line
+#   (`ldconfig -p`'s and every lib*.so* under /usr/lib: a library it holds off ldconfig's list is still never carried; README.md)
 set -eu
 dest=$1; sonames=$2; shift 2
 qt=/usr/lib64/qt6

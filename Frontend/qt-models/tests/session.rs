@@ -71,7 +71,8 @@ fn a_game_s_pictures_are_drawn_in_place_paced_and_paused() {
     assert_eq!((feed.draw)(feed.context, 64, 48, &mut out), 0, "nothing to show before a frame");
 
     platform.lend_sdl(&Lent::open("libSDL3.so.0").unwrap()).unwrap();
-    let sound = GameSound::new(&platform, SoundSettings::default()).unwrap();
+    let config = platform.model_new(emusen_platform_client::galaxia::consts::MODEL_AUDIO_CONFIG).unwrap();
+    let sound = GameSound::new(&platform, SoundSettings::of_audio_config(&config).unwrap()).unwrap();
     let (tell, told) = mpsc::channel();
     let game = world.game("game.tst", &[1, 2, 3, 4]);
     let session = Session::start(

@@ -73,11 +73,15 @@ Item {
         y: layout.place.y
         width: Math.max(1, layout.place.width)
         height: Math.max(1, layout.place.height)
-        sourceSize.width: Math.ceil(width * Screen.devicePixelRatio)
-        sourceSize.height: Math.ceil(height * Screen.devicePixelRatio)
+        sourceSize: artPixels.pixels
         source: layout.picture
         cache: false
         smooth: true
+        // Decoded at the pixels the drawing covers, through the settings canvas's scale (EmuSen_Kit.md §7.111).
+        Kit.DrawnPixels {
+            id: artPixels
+            anchors.fill: parent
+        }
     }
 
     Repeater {

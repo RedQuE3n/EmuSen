@@ -2,6 +2,7 @@
 
 pub mod console;
 pub mod cores_fit;
+pub mod full_screen;
 
 use emusen_client_fixture::{library, World};
 use emusen_crystal_client::Config;

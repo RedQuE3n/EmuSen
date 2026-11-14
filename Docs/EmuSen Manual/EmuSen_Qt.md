@@ -6438,6 +6438,46 @@ compositor gives is read back as the window's `visibility`; under gamescope, whi
 request changes nothing. The Fullscreen hotkey still gives a window and full screen again, and every screen still lays
 out at any window size. `full_screen_gpu.rs` holds it in the test's own compositor: the window that `start::initial` and
 `window::show` make reports FullScreen, the first F11 asks for and gets a window, the second full screen again.
+
+**The window's size** (the tester decided, 2026-11-14, R-20261114-1: no resolution is written into the program; the
+program runs at the resolution the device sets, on the handheld's panel and on a television when it is docked). Each
+size has one owner. While full screen is asked (`fullScreenAsked`), the window's screen: `Main.qml` binds the window's
+width and height to `screen.width` and `screen.height` (QML's `Window.screen`, a `QQuickScreenInfo` whose size signals
+are wired to `QScreen::geometryChanged`, and which is made again on `QWindow::screenChanged`; qtdeclarative 6.11.2,
+`qquickscreen.cpp` and `qquickwindowmodule.cpp`, read 2026-11-14), so the window follows its screen. The size is the
+window's before it is shown, and that matters under gamescope: gamescope 3.16.30.1 never sends the full-screen state
+(its `wlserver.cpp` sets only `activated` on a toplevel, read 2026-11-14), and Qt 6.11.2's xdg-shell plugin, given a
+`configure` with no size and neither the maximized nor the full-screen state, gives the window the size it had
+(`QWaylandXdgSurface::Toplevel::applyConfigure`, `m_normalSize`), so the window's own size is the size the player sees.
+A compositor that names a size (KWin) is obeyed: Qt applies its `configure`. Out of full screen, the window takes
+graphics.json's `WindowWidth` and `WindowHeight`, and `WindowResizable` off holds it there by its least and greatest sizes
+(`play::Windowed`, read through the description's `applies` as every setting is; an absent file is the model's
+`model_new`). The three are read whole or not at all: where one is missing or a size is not a positive whole number,
+`Windowed::of` gives none, nothing is given to the window and nothing holds it, and the window is Qt's to size and free,
+as any window given nothing is. A failed read is not said by the program's start, which says none of its failed reads;
+`emusen-qt-play`'s start says it in the error's own words on standard error, as it says its others. The setting's size
+is given when the window is asked out of full screen and once more at the compositor's answer, never after, so a size
+the player then gives the window stays. The answer is marked by `CompositorAnswer` (qt-app's own element,
+`cpp/compositor_answer.h`): Qt 6.11.2's Wayland plugin, applying a `configure`, reports the state through
+`QWindowSystemInterface::handleWindowStateChanged` before it applies the size with
+`QWaylandWindow::resizeFromApplyConfigure` (`qwaylandxdgshell.cpp`, `Toplevel::applyConfigure`, lines 89 and 126); the
+state is a queued window-system event, the size a synchronous one (`qwaylandwindow.cpp` line 516, `QWaylandWindow::setGeometry`), and
+`QGuiApplicationPrivate::processWindowStateChangedEvent` then sends the window a spontaneous `QWindowStateChangeEvent`
+whatever the state, while `QWindow::windowStateChanged` and `visibility` change at the request and not at an answer that
+repeats them (`qwindow.cpp`, `setWindowStates`; `qguiapplication.cpp` lines 2776 to 2791; all read 2026-11-14). The
+element filters the window's events for that event and holds `fullScreen`, the state applied last; `Main.qml` gives the
+setting's size when it turns false. The answer KWin gives is the size the window had before full screen, which may be
+the setting's size already: `full_screen_gpu.rs` holds both cases, a size the test gives the window after each answer
+staying. Under gamescope, which never sends the full-screen state, `fullScreen` never turns, and the size given at the
+request stands (`m_normalSize`, above). With no platform library the size is left to Qt: `QWindow::resize` changes
+nothing on a window not yet made whose size is already the one asked (0 by 0, `qwindow.cpp` line 2108), and Qt's
+Wayland plugin then gives a toplevel with no size 500 by 500 (`QWaylandWindow::initWindow`, `defaultGeometry`). Under
+gamescope, `visibility` never reads FullScreen, so the Fullscreen hotkey asks for full screen each time and the window
+keeps its screen's size. `emusen-qt-play`'s window, shown in a window and never full screen, takes graphics.json's size
+the same way, its size untouched where nothing was read whole; `qt-play/tests/window_size.rs` holds it.
+`full_screen_gpu.rs` and `full_screen_small_gpu.rs` hold the program's at two sizes of the test's choosing: the window has
+the compositor's output size before it is shown, full screen at that size, graphics.json's size after F11, the screen's
+again after the second.
 Two rows that did nothing were taken off: Power's Exit Big Picture (its key `bigPicture` and its route, which only closed
 the card, went with it, since nothing else names them) and Settings ▸ EmuSen's Big picture row (`AppSettings
 BigScreen`, which nothing in the Qt program reads). A desktop mode would need back: the row in `home_card::power_page`

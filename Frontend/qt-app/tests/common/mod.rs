@@ -1,5 +1,6 @@
 //! What the program's tests share: a sandbox home with synthetic games, and waiting on a property.
 
+pub mod cheats;
 pub mod console;
 pub mod cores_fit;
 

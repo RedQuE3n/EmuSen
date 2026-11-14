@@ -3,8 +3,12 @@
 //! list the Pause Card and the game page switch, cheats.rs). The database is read through the base's own calls: its
 //! folder and attribution from the session table's DB_STATUS, its files from `emusen_cheats_database_*`, and a game's
 //! file by the database's own `find`, kept to the console's cheat systems. The library is matched on a thread of its own.
-//! Getting the database and making a game's list from it have no call in the base yet, so neither is offered. No Qt here.
+//! The List card gets or updates the database: downloaded by the base's HTTP client (`emusen_net_download_*`), its
+//! progress on the bar and a stop on the List card, then installed by `emusen_cheats_install`, which leaves the database
+//! as it was when the download is stopped or fails. A on a game with no list of its own makes it from the game's file,
+//! read with its console's codecs by `emusen_cheats_parse` (EmuSen_Qt.md §7.7.V). No Qt here.
 
+use super::cores::words::size;
 use super::{Action, Bar, Column, Item, Mark, Pane, Source, Tone, Words};
 use crate::card::{Pane as CardPane, Row as CardRow};
 use crate::cheats::{count_words, on_words, List, Switch};
@@ -13,18 +17,26 @@ use crate::library::LibrarySource;
 use emusen_crystal_client::consts::CHEAT_DB_STATUS;
 use emusen_crystal_client::service_flags::NO_GAME;
 use emusen_platform_client::cheats::CheatsDatabase;
+use emusen_platform_client::net::{Download, State};
 use serde_json::{json, Value};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use std::sync::Arc;
 
-/// A library game the database has a file for: its path, name, console, the file's system folder and game, and the
-/// game's own list, none where it has none yet.
+/// The List card's rows: the database got or updated, and the download stopped; A's action on a game with no list.
+pub const GET: &str = "get";
+pub const STOP: &str = "stop";
+pub const MAKE: &str = "make";
+
+/// A library game the database has a file for: its path, name, system, the file's system folder, game and path, the
+/// console its own list is kept under, and that list, none where it has none yet.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Game {
     pub path: String,
     pub name: String,
     pub console: String,
     pub file: (String, String),
+    pub cht: String,
+    pub list_console: String,
     pub list: Vec<Switch>,
 }
 
@@ -69,22 +81,123 @@ pub fn read(source: &ClientSource) -> Result<Found, String> {
         if !found.consoles.iter().any(|c| c.0 == system.id) {
             found.consoles.push((system.id.clone(), crate::library::console_name(system)));
         }
-        found.games.push(Game { path: game.path.clone(), name, console: system.id.clone(), file: (entry.0.clone(), entry.1.clone()), list });
+        found.games.push(Game {
+            path: game.path.clone(),
+            name,
+            console: system.id.clone(),
+            file: (entry.0.clone(), entry.1.clone()),
+            cht: entry.2.clone(),
+            list_console: system.console.clone(),
+            list,
+        });
     }
     Ok(found)
 }
 
-/// The tool: the clients it reads through, what the last read found, the read going, and what failed.
+/// A download waited on and, once done, installed into `directory`, on the thread this is called from: the words of
+/// what was installed, or of why nothing was, each said where it happened. A download stopped installs nothing.
+fn fetch_and_install(source: &ClientSource, download: &Download, directory: &str) -> Words {
+    let error = |words: String| Words::new(words, Tone::Error);
+    let state = loop {
+        // The thread's own check period, a constant of the design: a stop ends the wait within it.
+        match download.wait(100) {
+            State::Running => continue,
+            ended => break ended,
+        }
+    };
+    match (state, download.failure()) {
+        (State::Done, _) => {}
+        (State::Cancelled, _) => return Words::new("Stopped", Tone::Muted),
+        (_, Ok(Some(why))) => match why["message"].as_str() {
+            Some(message) => return error(format!("It could not be downloaded: {message}")),
+            None => return error(format!("It could not be downloaded, and why could not be read: {why}")),
+        },
+        (_, Ok(None)) => return error("It could not be downloaded, and the base gave no reason".to_owned()),
+        (_, Err(e)) => return error(format!("It could not be downloaded, and why could not be read: {e}")),
+    }
+    let zip = match download.body() {
+        Ok(Some(zip)) => zip,
+        Ok(None) => return error("It was downloaded, but the base gave no archive to install".to_owned()),
+        Err(e) => return error(format!("The downloaded archive could not be read: {e}")),
+    };
+    match source.platform.cheats_install(&zip, directory) {
+        Ok(answer) => match answer["installed"].as_u64() {
+            Some(n) => Words::new(format!("Installed {n} cheat file(s)"), Tone::Success),
+            None => error(format!("It was installed, but the answer could not be read: {answer}")),
+        },
+        Err(e) => error(format!("It could not be installed: {e}")),
+    }
+}
+
+/// What the bar says once a list is made: nothing where every cheat of the file is in it, else how many were left out.
+pub fn made_words(left_out: u64) -> Option<Words> {
+    (left_out > 0).then(|| Words::new(format!("Its list was made; {left_out} cheat(s) of the file could not be held in it"), Tone::Attention))
+}
+
+/// The tool: the clients it reads through, the address it downloads from, what the last read found, the read going,
+/// the download going with what its thread tells, how the last download ended, and what failed.
 pub struct Cheats {
     source: Arc<ClientSource>,
+    url: String,
     found: Option<Found>,
     reading: Option<Receiver<Result<Found, String>>>,
+    download: Option<(Arc<Download>, Receiver<Words>)>,
+    outcome: Option<Words>,
     problem: Option<String>,
+    acted: Option<String>,
 }
 
 impl Cheats {
-    pub fn new(source: Arc<ClientSource>) -> Cheats {
-        Cheats { source, found: None, reading: None, problem: None }
+    /// The tool over `source`, its database downloaded from `url` where one is named, else the header's address.
+    pub fn new(source: Arc<ClientSource>, url: Option<String>) -> Cheats {
+        let url = url.unwrap_or_else(|| emusen_platform_client::cheats::database_url().to_owned());
+        Cheats { source, url, found: None, reading: None, download: None, outcome: None, problem: None, acted: None }
+    }
+
+    /// The download started off the GUI thread, into the folder the last read found; installed when it ends.
+    pub fn get(&mut self) {
+        let Some(directory) = self.found.as_ref().map(|f| f.directory.clone()).filter(|_| !self.running()) else { return };
+        let download = match Download::start(&self.source.platform, &json!({ "url": self.url, "timeout_ms": null })) {
+            Ok(d) => Arc::new(d),
+            Err(e) => {
+                self.outcome = Some(Words::new(format!("It could not be downloaded: {e}"), Tone::Error));
+                return;
+            }
+        };
+        let (tx, rx) = channel();
+        let (source, held) = (self.source.clone(), download.clone());
+        std::thread::spawn(move || drop(tx.send(fetch_and_install(&source, &held, &directory))));
+        self.download = Some((download, rx));
+        self.outcome = None;
+    }
+
+    /// The download stopped; the database stays as it was.
+    pub fn stop(&mut self) {
+        if let Some((download, _)) = &self.download {
+            download.cancel();
+        }
+    }
+
+    /// The game's own list made from its file in the database, read with its console's codecs, and saved.
+    pub fn make(&mut self, key: &str) {
+        let platform = self.source.platform.clone();
+        let Some(game) = self.found.as_mut().and_then(|f| f.games.iter_mut().find(|g| g.path == key)) else { return };
+        let made = (|| -> Result<(Vec<Switch>, u64), String> {
+            let parsed = platform.cheats_parse(&json!({ "path": game.cht, "system": game.console })).map_err(|e| e.to_string())?;
+            let left_out = parsed["left_out"].as_u64().ok_or_else(|| format!("the answer could not be read: {parsed}"))?;
+            let mut list = List::of(&platform, &game.list_console, &game.path)?.ok_or_else(|| format!("{} can have no list", game.name))?;
+            list.file = parsed["file"].clone();
+            list.save(&platform)?;
+            Ok((list.switches(), left_out))
+        })();
+        match made {
+            Ok((list, left_out)) => {
+                game.list = list;
+                self.outcome = made_words(left_out);
+            }
+            Err(why) => self.outcome = Some(Words::new(format!("Its list could not be made: {why}"), Tone::Error)),
+        }
+        self.acted = Some(key.to_owned());
     }
 
     fn words() -> (&'static str, &'static str) {
@@ -172,12 +285,32 @@ impl Source for Cheats {
         Pane { title: game.name.clone(), caption: String::new(), sentences }
     }
 
+    /// The download's progress while it goes, then how it ended, else the database's state.
     fn bar(&self) -> Bar {
-        Bar { line: self.status(), ..Bar::default() }
+        if let Some((download, _)) = &self.download {
+            let (_, received, total) = download.progress();
+            let line = match total {
+                Some(total) => format!("Downloading: {} of {}", size(received), size(total)),
+                None => format!("Downloading: {}", size(received)),
+            };
+            let share = total.filter(|t| *t > 0).map_or(0.0, |t| received as f64 / t as f64);
+            return Bar { line: Words::text(line), progress: Some(share), ..Bar::default() };
+        }
+        Bar { line: self.outcome.clone().unwrap_or_else(|| self.status()), ..Bar::default() }
     }
 
-    fn action(&self, _key: &str) -> Option<Action> {
-        None
+    /// A on a game with no list of its own makes it from the database's file.
+    fn action(&self, key: &str) -> Option<Action> {
+        self.game(key).filter(|g| g.list.is_empty()).map(|_| Action::new(MAKE, "Make its list"))
+    }
+
+    /// Get the database with none, Update it with one; Stop the download while it goes.
+    fn list_rows(&self) -> Vec<CardRow> {
+        match (&self.download, &self.found) {
+            (Some(_), _) => vec![CardRow::new(STOP, "Stop the download")],
+            (None, Some(f)) if self.reading.is_none() => vec![CardRow::new(GET, if f.exists { "Update the database" } else { "Get the database" })],
+            _ => Vec::new(),
+        }
     }
 
     fn plans(&self) -> bool {
@@ -194,7 +327,13 @@ impl Source for Cheats {
             .collect()
     }
 
-    fn act(&mut self, _action: &str, _key: Option<&str>, _section: &str) -> super::Effect {
+    fn act(&mut self, action: &str, key: Option<&str>, _section: &str) -> super::Effect {
+        match (action, key) {
+            (GET, _) => self.get(),
+            (STOP, _) => self.stop(),
+            (MAKE, Some(key)) if !self.running() => self.make(key),
+            _ => {}
+        }
         super::Effect::Done
     }
 
@@ -209,6 +348,16 @@ impl Source for Cheats {
     }
 
     fn poll(&mut self) -> bool {
+        let told = self.download.as_ref().map(|(_, told)| told.try_recv());
+        if let Some(ended @ (Ok(_) | Err(TryRecvError::Disconnected))) = told {
+            self.download = None;
+            self.outcome = Some(ended.unwrap_or_else(|_| Words::new("The download's thread ended without a word", Tone::Error)));
+            self.refresh();
+            return true;
+        }
+        if self.download.is_some() {
+            return true;
+        }
         let Some(read) = self.reading.as_ref().and_then(|r| r.try_recv().ok()) else { return false };
         self.reading = None;
         match read {
@@ -221,12 +370,12 @@ impl Source for Cheats {
         true
     }
 
-    /// While the read goes, so the screen's timer polls for it.
+    /// While the read or the download goes, so the screen's timer polls for it.
     fn running(&self) -> bool {
-        self.reading.is_some()
+        self.reading.is_some() || self.download.is_some()
     }
 
     fn acted_on(&mut self) -> Option<String> {
-        None
+        self.acted.take()
     }
 }

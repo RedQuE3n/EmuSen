@@ -38,6 +38,8 @@ Window {
     property string coresWorld
     // The scraper's test seam, its settings' `test` member as JSON (a loopback server and its root), as a test names it.
     property string scraperTest
+    // The address Cheats downloads the cheat database from in place of the header's, as a test names its loopback server.
+    property string cheatsUrl
     // The splash keeps the focus, and every press, until it has faded, so the press that skipped it is never a screen's.
     readonly property bool splashShown: program.splash && (!moonrise.done || moonrise.opacity > 0)
     // The help bar's family: Controller type's, or with Automatic the pad last used; a generic pad's glyphs drawn as the Xbox pad's lettered ones, as Mistress does.
@@ -507,6 +509,7 @@ Window {
             platformLibrary: program.platformLibrary
             cores: library.cores
             scraperTest: program.scraperTest
+            cheatsUrl: program.cheatsUrl
             padFamily: program.padFamily
             splashShown: program.splashShown
             // The Scraper's run ended: the library shows what it fetched.

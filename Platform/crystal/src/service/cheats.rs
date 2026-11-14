@@ -578,9 +578,12 @@ mod tests {
         let half = zip[..zip.len() / 2].to_vec();
         assert!(fetch_installed(&|_| Ok(half.clone()), &directory).is_err());
         assert!(!at.join("db/Sega/New.cht").exists() && at.join("db/Sega/Old.cht").exists() && !at.join("db.part").exists());
+        std::fs::create_dir_all(at.join("db.part/Stale")).unwrap();
+        std::fs::write(at.join("db.part/Stale/Half.cht"), "half").unwrap();
         let installed = fetch_installed(&|url| if url == emusen_cheats::install::DATABASE_URL { Ok(zip.clone()) } else { Err(url.into()) }, &directory).ok().unwrap();
         assert_eq!(installed.installed, 1);
         assert!(at.join("db/Sega/New.cht").exists() && at.join("db/Sega/Old.cht").exists() && !at.join("db.part").exists());
+        assert!(!at.join("db/Stale").exists(), "what a stopped install left is cleared, never moved in");
         std::fs::remove_dir_all(&at).unwrap();
     }
 }

@@ -3,6 +3,7 @@
 //! description's `applies`, as the program's other settings are, so it is named in one place; plain data, no Qt.
 
 use crate::settings::{applied_in, applies_as_in, Model, SettingsSource, DESCRIPTION};
+use cxx_qt_lib::{QMap, QMapPair_QString_QVariant, QString, QVariant};
 use serde_json::Value;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -40,6 +41,40 @@ impl PlaySettings {
     }
 }
 
+/// The window's size and whether the player may resize it while it is not full screen: graphics.json's WindowWidth,
+/// WindowHeight and WindowResizable (Galaxia's `GraphicsConfig`, EmuSen_Qt.md §7.7.H7). A full-screen window never takes
+/// them: its screen sizes it. Zero, from a model that could not be read, leaves the size to Qt.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Windowed {
+    pub width: i32,
+    pub height: i32,
+    pub resizable: bool,
+}
+
+impl Windowed {
+    /// Nothing read, the platform library not loaded: the size left to Qt, and the window resizable as Qt's windows are.
+    pub const UNREAD: Windowed = Windowed { width: 0, height: 0, resizable: true };
+
+    /// From the description and the two stored models.
+    pub fn of(description: &Value, app: &Value, graphics: &Value) -> Windowed {
+        let number = |name: &str| applied_in(description, app, graphics, name).and_then(|v| v.parse().ok()).unwrap_or(0);
+        Windowed { width: number("window_width"), height: number("window_height"), resizable: applies_as_in(description, app, graphics, "window_resizable") }
+    }
+
+    /// Read from a source; a model with no file yet is at its initial values (the base's `model_new`).
+    pub fn read(source: &dyn SettingsSource) -> Result<Windowed, String> {
+        let description: Value = serde_json::from_str(DESCRIPTION).map_err(|e| e.to_string())?;
+        Ok(Windowed::of(&description, &source.load(Model::App)?, &source.load(Model::Graphics)?))
+    }
+
+    /// As a window's initial properties, by the names both programs' windows declare.
+    pub fn insert_into(&self, initial: &mut QMap<QMapPair_QString_QVariant>) {
+        initial.insert(QString::from("windowedWidth"), QVariant::from(&self.width));
+        initial.insert(QString::from("windowedHeight"), QVariant::from(&self.height));
+        initial.insert(QString::from("windowResizable"), QVariant::from(&self.resizable));
+    }
+}
+
 /// The device a stored Output names for the game's player: none for the setting's initial value, the system default.
 pub fn device(output: &str, initial: &str) -> Option<String> {
     (!output.is_empty() && output != initial).then(|| output.to_owned())
@@ -74,6 +109,15 @@ mod tests {
         );
         let turned = PlaySettings::of(&description(), &json!({"PauseInBackground": true, "ShowFpsBar": false, "ShowStatusText": true}), &json!({"SyncToDisplay": true}));
         assert!(turned.pause_in_background && !turned.show_fps && turned.show_status_text && turned.sync_to_display);
+    }
+
+    #[test]
+    fn the_window_size_is_read_from_graphics_json() {
+        let graphics = json!({"WindowWidth": 1500, "WindowHeight": 900, "WindowResizable": false});
+        assert_eq!(Windowed::of(&description(), &json!({}), &graphics), Windowed { width: 1500, height: 900, resizable: false });
+        let turned = Windowed::of(&description(), &json!({}), &json!({"WindowWidth": 700, "WindowHeight": 500, "WindowResizable": true}));
+        assert_eq!(turned, Windowed { width: 700, height: 500, resizable: true });
+        assert_eq!(Windowed::of(&description(), &json!({}), &serde_json::Value::Null), Windowed { width: 0, height: 0, resizable: false });
     }
 
     #[test]

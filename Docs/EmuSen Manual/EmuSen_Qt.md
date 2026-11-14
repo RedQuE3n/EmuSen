@@ -6418,6 +6418,27 @@ compositor gives is read back as the window's `visibility`; under gamescope, whi
 request changes nothing. The Fullscreen hotkey still gives a window and full screen again, and every screen still lays
 out at any window size. `full_screen_gpu.rs` holds it in the test's own compositor: the window that `start::initial` and
 `window::show` make reports FullScreen, the first F11 asks for and gets a window, the second full screen again.
+
+**The window's size** (the tester decided, 2026-11-14, R-20261114-1: no resolution is written into the program; the
+program runs at the resolution the device sets, on the handheld's panel and on a television when it is docked). Each
+size has one owner. While full screen is asked (`fullScreenAsked`), the window's screen: `Main.qml` binds the window's
+width and height to `screen.width` and `screen.height` (QML's `Window.screen`, a `QQuickScreenInfo` whose size signals
+are wired to `QScreen::geometryChanged`, and which is made again on `QWindow::screenChanged`; qtdeclarative 6.11.2,
+`qquickscreen.cpp` and `qquickwindowmodule.cpp`, read 2026-11-14), so the window follows its screen. The size is the
+window's before it is shown, and that matters under gamescope: gamescope 3.16.30.1 never sends the full-screen state
+(its `wlserver.cpp` sets only `activated` on a toplevel, read 2026-11-14), and Qt 6.11.2's xdg-shell plugin, given a
+`configure` with no size and neither the maximized nor the full-screen state, gives the window the size it had
+(`QWaylandXdgSurface::Toplevel::applyConfigure`, `m_normalSize`), so the window's own size is the size the player sees.
+A compositor that names a size (KWin) is obeyed: Qt applies its `configure`. Out of full screen, the window takes
+graphics.json's `WindowWidth` and `WindowHeight`, and `WindowResizable` off holds it there by its least and greatest sizes
+(`play::Windowed`, read through the description's `applies` as every setting is; an absent file is the model's
+`model_new`). Nothing in the program writes that size back. With no platform library the size is left to Qt, whose
+Wayland plugin then gives a toplevel 500 by 500 (`QWaylandWindow::defaultGeometry`). Under gamescope, `visibility` never
+reads FullScreen, so the Fullscreen hotkey asks for full screen each time and the window keeps its screen's size.
+`emusen-qt-play`'s window, shown in a window and never full screen, takes graphics.json's size the same way.
+`full_screen_gpu.rs` and `full_screen_small_gpu.rs` hold it at two sizes of the test's choosing: the window has the
+compositor's output size before it is shown, full screen at that size, graphics.json's size after F11, the screen's
+again after the second.
 Two rows that did nothing were taken off: Power's Exit Big Picture (its key `bigPicture` and its route, which only closed
 the card, went with it, since nothing else names them) and Settings ▸ EmuSen's Big picture row (`AppSettings
 BigScreen`, which nothing in the Qt program reads). A desktop mode would need back: the row in `home_card::power_page`

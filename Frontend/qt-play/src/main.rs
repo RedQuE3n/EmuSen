@@ -14,6 +14,8 @@ use cxx_qt::QObject;
 use cxx_qt_lib::{QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QString, QUrl, QVariant};
 use emusen_platform_client::Platform;
 use emusen_qt_models::picture::{Frame, Handoff};
+use emusen_qt_models::play::Windowed;
+use emusen_qt_models::settings_source::ClientSettings;
 use emusen_qt_play::host::Host;
 use emusen_qt_play::window::ffi::{QCoreApplication, QGuiApplication as App, QQuickWindow};
 use emusen_qt_play::PLAY_URL;
@@ -48,6 +50,8 @@ fn main() {
         let mut initial = QMap::<QMapPair_QString_QVariant>::default();
         initial.insert(QString::from("feed"), QVariant::from(&feed.address()));
         initial.insert(QString::from("platformLibrary"), QVariant::from(&QString::from(&library)));
+        let windowed = Windowed::read(&ClientSettings::on(platform.clone())).unwrap_or(Windowed::UNREAD);
+        windowed.insert_into(&mut initial);
         if let Ok(cores) = std::env::var("EMUSEN_CORES") {
             initial.insert(QString::from("cores"), QVariant::from(&QString::from(&cores)));
         }

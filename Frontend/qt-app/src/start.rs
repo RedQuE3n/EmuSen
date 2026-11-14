@@ -3,6 +3,8 @@
 
 use cxx_qt_lib::{QMap, QMapPair_QString_QVariant, QString, QStringList, QVariant};
 use emusen_platform_client::galaxia::consts::{DIR_MEDIA, DIR_THEMES};
+use emusen_qt_models::play::Windowed;
+use emusen_qt_models::settings_source::ClientSettings;
 use emusen_qt_models::{esde_shelves, themes};
 use emusen_platform_client::Platform;
 use serde_json::Value;
@@ -41,6 +43,8 @@ pub struct Start {
     pub navigation_sounds: bool,
     /// The window shown full screen, else in a window (`FULL_SCREEN`).
     pub full_screen: bool,
+    /// The window's size out of full screen, and whether the player may resize it: graphics.json's (`play::Windowed`).
+    pub windowed: Windowed,
 }
 
 /// The platform library: `--platform-library PATH`, else `EMUSEN_PLATFORM_LIBRARY`, else the file beside the program.
@@ -107,11 +111,13 @@ pub fn read(library: &Path) -> Start {
     let store = platform.as_ref().and_then(|p| p.directory(DIR_THEMES).ok().flatten());
     let named = theme(&args, std::env::var("EMUSEN_THEME").ok());
     let (theme, theme_words) = if named.is_empty() { chosen_theme(&settings, store.as_deref()) } else { (named, String::new()) };
+    let windowed = platform.clone().and_then(|p| Windowed::read(&ClientSettings::on(p)).ok()).unwrap_or(Windowed::UNREAD);
     let game_mode = game_mode_from(std::env::var("XDG_CURRENT_DESKTOP").ok().as_deref(), std::env::var("SteamDeck").ok().as_deref());
     Start { platform_library: library.to_string_lossy().into_owned(), splash: splash_from(&settings), reduced_motion: reduced_motion_from(&settings),
         game_mode, guide_chords: guide_chords_from(&settings, game_mode),
         theme, theme_words, cover_stores: cover_stores_from(media.as_deref(), &settings),
         esde: esde_shelves::settings_of(&settings).themed, navigation_sounds: navigation_sounds_from(&settings), full_screen: FULL_SCREEN,
+        windowed,
     }
 }
 
@@ -129,6 +135,7 @@ pub fn initial(start: &Start) -> QMap<QMapPair_QString_QVariant> {
     initial.insert(QString::from("esdeChosen"), QVariant::from(&start.esde));
     initial.insert(QString::from("navigationSounds"), QVariant::from(&start.navigation_sounds));
     initial.insert(QString::from("fullScreenAsked"), QVariant::from(&start.full_screen));
+    start.windowed.insert_into(&mut initial);
     let mut stores = QStringList::default();
     start.cover_stores.iter().for_each(|s| stores.append(QString::from(s)));
     initial.insert(QString::from("coverStores"), QVariant::from(&stores));

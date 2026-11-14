@@ -15,8 +15,10 @@ Window {
     objectName: "program"
     // Shown by the program once its scene graph has adopted the device, as a test harness shows it.
     visible: false
-    width: 1280
-    height: 800
+    // Out of full screen, graphics.json's WindowWidth, WindowHeight and WindowResizable, as the start read them; 0 leaves the size to Qt.
+    property int windowedWidth: 0
+    property int windowedHeight: 0
+    property bool windowResizable: true
     color: Kit.Tokens.voidFill
     property string platformLibrary
     // The game picture's feed, which the program's start names after adopting Serenity's device; 0 draws no game.
@@ -29,6 +31,17 @@ Window {
     property bool guideChords: false
     // What was last asked of the window, apart from the visibility the compositor gives it: the start's (`full_screen`), then the Fullscreen hotkey's.
     property bool fullScreenAsked: false
+    // The window's size has one owner at a time (EmuSen_Qt.md §7.7.H7, The window's size): full screen, its screen, followed as
+    // the screen's geometry or the window's screen changes, and overridden by a compositor that names a size; out of it, the setting.
+    Binding { target: program; property: "width"; value: program.screen.width; when: program.fullScreenAsked; restoreMode: Binding.RestoreNone }
+    Binding { target: program; property: "height"; value: program.screen.height; when: program.fullScreenAsked; restoreMode: Binding.RestoreNone }
+    Binding { target: program; property: "width"; value: program.windowedWidth; when: !program.fullScreenAsked && program.windowedWidth > 0; restoreMode: Binding.RestoreNone }
+    Binding { target: program; property: "height"; value: program.windowedHeight; when: !program.fullScreenAsked && program.windowedHeight > 0; restoreMode: Binding.RestoreNone }
+    // WindowResizable off holds the window at the setting's size, Qt's way: its least and greatest sizes made equal.
+    Binding { target: program; property: "minimumWidth"; value: program.windowedWidth; when: !program.fullScreenAsked && !program.windowResizable }
+    Binding { target: program; property: "maximumWidth"; value: program.windowedWidth; when: !program.fullScreenAsked && !program.windowResizable }
+    Binding { target: program; property: "minimumHeight"; value: program.windowedHeight; when: !program.fullScreenAsked && !program.windowResizable }
+    Binding { target: program; property: "maximumHeight"; value: program.windowedHeight; when: !program.fullScreenAsked && !program.windowResizable }
     // The EmuSen theme's folder, empty for the reference, and the folders its pictures may come from (EmuSen_Qt.md §3.5).
     property string theme
     property list<string> coverStores

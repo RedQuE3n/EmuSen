@@ -33,7 +33,10 @@
     "show_status_text": ["AppSettings ShowStatusText", true],
     "show_status_bar": ["AppSettings ShowStatusBar", true],
     "navigation_volume": "AppSettings BigPictureInterface.NavigationVolume",
-    "play_hours": "AppSettings MaxPlayTimeTracking"
+    "play_hours": "AppSettings MaxPlayTimeTracking",
+    "window_width": "GraphicsConfig WindowWidth",
+    "window_height": "GraphicsConfig WindowHeight",
+    "window_resizable": ["GraphicsConfig WindowResizable", true]
   },
   "sections": [
     {

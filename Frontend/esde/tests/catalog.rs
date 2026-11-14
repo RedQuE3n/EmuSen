@@ -9,14 +9,14 @@ use emusen_esde::loader::values::number;
 use emusen_esde::loader::{Binding, Color, Pair, Severity, ThemePath, Value};
 
 #[test]
-fn the_catalogue_holds_themes_md_s_fifteen_reference_elements_and_sound_with_472_properties() {
+fn the_catalogue_holds_themes_md_s_fifteen_reference_elements_and_sound_with_468_properties() {
     let expected: BTreeMap<&str, usize> = [
-        ("carousel", 73),
+        ("carousel", 71),
         ("grid", 64),
         ("textlist", 38),
-        ("image", 36),
+        ("image", 35),
         ("video", 41),
-        ("animation", 23),
+        ("animation", 22),
         ("badges", 32),
         ("text", 35),
         ("datetime", 25),
@@ -32,7 +32,7 @@ fn the_catalogue_holds_themes_md_s_fifteen_reference_elements_and_sound_with_472
     .collect();
     let actual: BTreeMap<&str, usize> = catalog().elements.iter().map(|e| (e.kind.as_str(), e.properties.len())).collect();
     assert_eq!(actual, expected);
-    assert_eq!(catalog().property_count(), 472);
+    assert_eq!(catalog().property_count(), 468);
 }
 
 // Spot checks read from THEMES.md by hand, independent of how the catalogue was drafted.
@@ -250,7 +250,7 @@ fn every_documented_property_of_every_element_is_read_into_its_type() {
             seen.insert((element.clone(), property.clone()));
         }
     }
-    assert_eq!(seen.len(), 472);
+    assert_eq!(seen.len(), 468);
 }
 
 fn normalise(text: &str, kind: PropertyType) -> String {
@@ -320,7 +320,8 @@ fn every_literal_default_is_in_the_effective_values_of_an_element_that_sets_noth
         .collect();
     assert!(literal.difference(&covered).next().is_none(), "{:?}", literal.difference(&covered).collect::<Vec<_>>());
     // 339 since 2026-11-13: textlist selectorColorEnd follows selectorColor, as ES-DE 3.4.1's TextListComponent::applyTheme sets it.
-    assert_eq!(covered.len(), 339);
+    // 335 since 2026-11-14: the four properties ES-DE 3.4.1 does not read, each with a literal default, left the catalogue.
+    assert_eq!(covered.len(), 335);
 }
 
 #[test]

@@ -2175,7 +2175,7 @@ here.
   readings (`EmuSen_BigPicture.md` §31, §35) are kept to the character: ES-DE's leading-number FLOAT, C-style
   UNSIGNED_INTEGER and COLOR, the pair split at its first space, `selectable` false only on `0`, `f` or `n`, untrimmed
   paths and includes, an unknown `imageType` hiding the element.
-- **The catalogue is data.** The 16 element types and 472 properties (468 until the re-check of §4.5.5) are `catalog.tsv`, one row a property (type,
+- **The catalogue is data.** The 16 element types and 468 properties (472 from the re-check of §4.5.5 until 2026-11-14, when the four ES-DE 3.4.1 does not read left, §4.5.9) are `catalog.tsv`, one row a property (type,
   literal default, same-as default, computed default, range, pair rule, shape, values, view limit, deferral), read once.
   It was generated from the C# `ThemeCatalog` by a script outside the repository on 2026-11-08 and is checked by the
   C# catalogue tests re-expressed (§4.5.3), the 39 hand-read entries among them.
@@ -2325,25 +2325,25 @@ two views of a pan):
   triggers, back, start, stick click); the bridge maps place to the kit's button. One owner each: the places are
   ES-DE's, the kit's functions the kit's.
 
-**`scene/mapping.tsv`** is now one row per (element, property): all 472 catalogue pairs, each once, with a status. The
+**`scene/mapping.tsv`** is now one row per (element, property): all 468 catalogue pairs, each once, with a status. The
 test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_not_drawn` holds it equal to the catalogue.
 
 | Status | Pairs | Meaning |
 |---|---|---|
-| `drawn` | 459 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, 347 measured 2026-11-08), and the families drawn since (§4.5.6 to §4.5.9) |
+| `drawn` | 462 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, 347 measured 2026-11-08), and the families drawn since (§4.5.6 to §4.5.9) |
 | `heard:<test>` | 2 | proven by what is heard, not by a picture (R-20261112-26): `sound.path` and video `audio`, each naming the test that hears it (§4.5.9) |
 | `later:help-dimmed` | 0 | the help's eight `*Dimmed` properties, drawn since 2026-11-13 (§4.5.9) |
 | `later:sound` | 0 | `sound.path`, heard since 2026-11-13 (§4.5.9) |
 | `later:video` | 1 | the video's `scanlines` (`audio` heard since 2026-11-13, §4.5.9); the other fourteen of the family drawn or moved to `stationary` (§4.5.6, 2026-11-12) |
 | `later:gradients` | 0 | the 22 `*ColorEnd` and `*GradientType` pairs, drawn since 2026-11-13 (§4.5.7) |
 | `later:item-text` | 0 | the 19 carousel, grid and text list item text pairs, drawn since 2026-11-13 (§4.5.8) |
-| `later:picture` | 2 | `scaleFactor` of image and animation, which ES-DE 3.4.1 does not read: its property table (es-core/src/ThemeData.cpp) has no `scaleFactor`, so what a theme means by it has no source to follow. The other 14 drawn since 2026-11-13 (§4.5.7) |
+| `later:picture` | 0 | drawn since 2026-11-13 (§4.5.7); `scaleFactor` of image and animation left the catalogue (decided 2026-11-13): ES-DE 3.4.1's property table (es-core/src/ThemeData.cpp) has no `scaleFactor` |
 | `later:stationary` | 3 | the three `fadeAbovePrimary`; `stationary` and `renderDuringTransitions` drawn since 2026-11-13 (§4.5.9) |
-| `later:carousel-layout` | 2 | `itemLinearScale`, `itemLinearSpacing`, which ES-DE 3.4.1 does not read; the other four drawn since 2026-11-13 (§4.5.9) |
+| `later:carousel-layout` | 0 | drawn since 2026-11-13 (§4.5.9); `itemLinearScale` and `itemLinearSpacing` left the catalogue (decided 2026-11-13): ES-DE 3.4.1 does not read them |
 | `later:textlist-selector` | 0 | drawn since 2026-11-13 (§4.5.9) |
 | `later:help-layout` | 0 | `entryLayout`, drawn since 2026-11-13 (§4.5.9) |
 | `later:gameselector` | 13 | the gameselector's picks (`selection`, `gameCount`, `allowDuplicates`) and the elements that read them (`gameselector`, `gameselectorEntry` of image, video, text, datetime and rating): the scene shows no game in the system view (§4.8.5) |
-| `later:animation-timing` | 3 | a GIF's `speed`, `direction` and `iterationCount`: the scene steps the frame, the painter does not show it (§4.5.9) |
+| `later:animation-timing` | 0 | a GIF's `speed`, `direction` and `iterationCount`, drawn since 2026-11-14 (§4.5.9) |
 | `later:container` | 0 | `containerVerticalSnap` drawn since 2026-11-09 (§4.12.3), `containerScrollSpeed` since 2026-11-13 (§4.5.8) |
 | `later:grid-rows` | 0 | `fractionalRows`, drawn since 2026-11-13 (§4.5.8) |
 | `later:text-lines` | 0 | datetime's `lineSpacing`, drawn since 2026-11-13 (§4.5.8) |
@@ -2412,8 +2412,7 @@ tests pass. Seeded faults, each applied alone and reverted:
 | the next change ignoring the scrolls | `a_text_list_keeps_the_selection_mid_window…` |
 | `maxSize` contained by the larger ratio | `a_picture_with_max_size_is_contained_once_its_own_size_is_known` |
 
-**Left for later, named:** a GIF's frame at the time (`Picture::frame` is none until the painter reports the file's
-frame delays); the system view's gameselector picks (the host's). A frame allocates its records each tick; the bridge's models change rows in place
+**Left for later, named:** the system view's gameselector picks (the host's); a GIF's frame is drawn since 2026-11-14 (§4.5.9). A frame allocates its records each tick; the bridge's models change rows in place
 (design §4), and whether the scene's own allocation shows in a frame's cost is measured with the painter, not assumed.
 
 #### 4.5.6 A theme's video element **[M 2026-11-12]**
@@ -2566,25 +2565,41 @@ card or another screen over the theme's view (`Main.qml`'s `esdeLoader.backdrop`
 lists the open menu's own prompts. The mapping test's `menu` move sets it before the picture; the rules are
 held by `esde/tests/frame.rs` `a_menu_over_the_view_dims_the_help_and_swaps_the_scoped_ones`.
 
-**A GIF's timing, stepped but not shown.** The scene steps a GIF as ES-DE 3.4.1's `GIFAnimComponent` does
-(`motion::gif_frame`; `setAnimation`, `update`, `render`, `resetComponent`, `GamelistView::onShow`,
-`SystemView::onCursorChanged`): every frame for the first frame's delay (20 to 1000 ms, else it stands on its first)
-over `speed`, cut to whole milliseconds; the file's first frame stands one such step, then the sequence runs one frame a
-step; `normal` and `reverse` start again from their first frame, `alternate` and `alternateReverse` turn at each end
-without showing it twice; after `iterationCount` plays (0 for ever) nothing is drawn, since the frame past the last
-reads as an empty page. A gamelist's GIFs start again when the view is shown, the system view's on each new system. The
-painter reads each file's frame count and first delay with Qt's `QImageReader` (`imageCount`, `nextImageDelay` after the
-first `read`; `esde-qt/cpp/gif_timing.cpp`, `gif.rs`, since cxx-qt-lib does not bind it; QtGui is linked through Qt
-Quick) into `Data::animations` at each install. Held by `esde/tests/scene.rs`
-`a_gif_steps_by_its_first_delay_over_the_speed_in_its_direction_for_its_iterations` and `esde/tests/frame.rs`
-`an_animation_takes_its_frame_from_the_host_s_timing_and_goes_when_its_plays_are_done`.
+**A GIF's timing** (drawn since 2026-11-14). The scene steps a GIF as ES-DE 3.4.1's `GIFAnimComponent` does
+(`motion::gif_frame`; es-core/src/components/GIFAnimComponent.cpp, `setAnimation`, `applyTheme`, `update`, `render`,
+`resetComponent`; `GamelistView::onShow`, `SystemView::onCursorChanged`), read in that source on 2026-11-14:
 
-**Not drawn: `speed`, `direction`, `iterationCount`.** The painter does not show the scene's frame yet, so the three stay
-`later:animation-timing`; only the end of the plays is seen (the GIF goes). Measured 2026-11-13 with the mapping cases:
-`Image.currentFrame` set to the scene's frame leaves a GIF on its first frame (both directions read red, frame 0, at
-150 ms), and a paused `AnimatedImage` given as the picture shader's source, directly or through a
-`ShaderEffectSource`, drew nothing. What would settle it: a frame read by `QImageReader` itself handed to the painter
-(an image provider), or the reason the paused `AnimatedImage` gives no texture.
+- **Pacing.** Every frame is shown for the *first* frame's delay, never its own: `setAnimation` reads the `FrameTime`
+  of page 0 only, takes it only within 20 to 1000 ms, and sets `mTargetPacing` to `(1000 / (1000 / delay)) / speed`
+  cut to whole milliseconds, which `gif_frame` computes in the same arithmetic. `speed` is clamped to 0.2 to 3 and
+  `iterationCount` to 0 to 10 by `applyTheme`; here the catalogue's ranges clamp them (`catalog.tsv`), so the scene
+  holds no second copy of either bound.
+- **Sequence.** The file's first frame stands one pacing (it is the texture `setAnimation` makes), then `render`
+  shows the frame it is at and counts on, one frame a pacing. `normal` and `reverse` start again from their first
+  frame; `alternate` and `alternateReverse` turn at each end without showing it twice; any other value is `normal`.
+- **Plays.** For the alternating forms `applyTheme` doubles `iterationCount`, so one count is a play each way. When
+  the count is reached `render` sets `mExternalPause` on the display frame after the last frame shown, with no new
+  frame locked unless `update` released one in that same frame; so the last frame shown stays, which the scene keeps
+  (`next_change_ms` none). Where the pacing is within about two display frames, `update` can release a frame in
+  that display frame and `render` then asks FreeImage for the page one past the last: what ES-DE shows then is not
+  known (FreeImage's behaviour for that page was not read).
+- **A delay outside 20 to 1000 ms.** ES-DE keeps `mFrameTime` at 0, so `mTargetPacing` is 0, and on its second
+  `update` the frame-skipping loop (`while (mTimeAccumulator - deltaTime > mTargetPacing)`) subtracts 0 and does not
+  end, as the source reads. What the player sees in ES-DE is not known (a capture would settle it); here the GIF
+  stands on its first frame (`gif_frame` gives no pacing).
+
+The painter reads each file's frame count and first delay with Qt's `QImageReader` (`imageCount`, `nextImageDelay`
+after the first `read`; `esde-qt/cpp/gif_timing.cpp`, `gif.rs`) into `Data::animations` at each install, and draws the
+frame with an `AnimatedImage` that is never played, its `currentFrame` bound to the scene's frame (`Picture.qml`), as
+the picture shader's source. Qt's way chosen, and why: `Image.currentFrame` is documented to show another frame, but
+QImageReader's GIF handler refuses `jumpToImage` (measured 2026-11-14 with Qt 6.11.2: `jumpToImage(2)` false, the read
+still frame 0), so an Image of a GIF stays on its first frame, which is what the mapping cases saw on 2026-11-13;
+`AnimatedImage` (QMovie, `jumpToFrame`) does reach every frame. Playing it on QMovie's own timer would pace each
+frame by its own delay and run off the scene's clock, so the scene chooses the frame and the clock stays one.
+Held by `esde/tests/scene.rs` `a_gif_steps_by_its_first_delay_over_the_speed_in_its_direction_for_its_iterations`,
+`esde/tests/frame.rs` `an_animation_takes_its_frame_from_the_host_s_timing_and_keeps_its_last_when_its_plays_are_done`,
+and on the card by `esde-qt/tests/animation_gpu.rs`, which reads a four-colour fixture through the real view on the
+held clock at the middle of each pacing in every direction, at a second speed, and after its plays.
 
 The carousel's four are added to the scene's own slots (`primary::carousel`), which the painter binds and animates
 nothing of; a `PathView` would lay the items out a second time beside the scene's layout, so none is used.

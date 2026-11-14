@@ -15,7 +15,15 @@ Kit.NormalizedCanvas {
     signal acted(string key)
     // The focus as the help bar reads it: an action's index, else -1 and the content's index.
     readonly property int actionFocused: frame.actionView.activeFocus ? frame.actionView.currentIndex : -1
-    readonly property int contentFocused: frame.showsTiles ? frame.tileView.currentIndex : frame.rowView.currentIndex
+    // A card of Cover art: its words, its picture and whether it is in use, the model's roles.
+    component CoverCardItem: Kit.Walkable {
+        required property string label
+        required property string line
+        required property url picture
+        required property bool marked
+        required property int index
+    }
+    readonly property int contentFocused: screen.page.coverArt ? coverCards.currentIndex : frame.showsTiles ? frame.tileView.currentIndex : frame.rowView.currentIndex
     // Told as it moves, inside the model's own reset too, where the model keeps it until the reset ends (EmuSen_Qt.md §7.8.1).
     onActionFocusedChanged: screen.page.focus(screen.actionFocused, screen.contentFocused)
     onContentFocusedChanged: screen.page.focus(screen.actionFocused, screen.contentFocused)
@@ -27,9 +35,11 @@ Kit.NormalizedCanvas {
         id: frame
         objectName: "pageFrame"
         anchors.fill: parent
+        // Cover art stands in its place while it is open.
+        visible: !screen.page.coverArt
         form: Kit.Forms.BigScreen
         // The viewer and the keyboard take the keys while they are open; the page has them back when they close.
-        focus: screen.inputs && !screen.page.viewing && !screen.page.typing
+        focus: screen.inputs && !screen.page.viewing && !screen.page.typing && !screen.page.coverArt
         padFamily: screen.padFamily
         helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
         helpSpacing: 40
@@ -122,6 +132,182 @@ Kit.NormalizedCanvas {
         // Opened each time it is asked; a Binding, since B closing the popup would undo a plain one.
         Binding {
             question.visible: screen.page.asking
+        }
+    }
+    // Details ▸ Cover art: the game's covers as cards four across, the one in use marked, the focused one large in the
+    // pane beside, as the Eclipse board draws it (EmuSen_Interface.md §18.2; EmuSen_Qt.md §7.8.5).
+    Kit.Frame {
+        id: coverArt
+        objectName: "pageCoverArt"
+        anchors.fill: parent
+        visible: screen.page.coverArt
+        focus: screen.inputs && screen.page.coverArt
+        padFamily: screen.padFamily
+        helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        helpSpacing: 40
+        helpGlyphGap: 10
+        controller.navigationShown: true
+        controller.hasDetail: true
+        controller.detailBeside: true
+        // The board's four cards across, and its card's height per unit of its width (EclipseGameCover), constants of the design.
+        readonly property int columns: 4
+        readonly property real cardShape: 270 / 230
+        readonly property real gap: Kit.Tokens.tileGap
+        readonly property real cardWidth: (coverCards.width - 2 * coverArt.ringRoom - (coverArt.columns - 1) * coverArt.gap) / coverArt.columns
+        readonly property real cardHeight: coverArt.cardWidth * coverArt.cardShape
+        // Two lines of a card's words under it, clear of the focus ring's room.
+        readonly property real ringRoom: Kit.Tokens.ringOffset + Kit.Tokens.ringThickness
+        readonly property real wordsHeight: coverArt.ringRoom + 2 * Math.round(Kit.Tokens.fontCaption * 1.2)
+        help: HelpModel {
+            objectName: "coverArtHelp"
+            screen: screen.page.help
+        }
+        Connections {
+            target: coverArt.controller
+            function onBackDeclined() { screen.page.back() }
+            function onActionInvoked(key) { screen.page.declared(key) }
+        }
+        navigation: Column {
+            width: parent.width
+            Text {
+                objectName: "coverArtTrail"
+                width: parent.width
+                text: screen.page.coverTrail
+                color: Kit.Tokens.muted
+                font.family: faces.regular
+                font.pixelSize: Kit.Tokens.fontCaption
+                elide: Text.ElideRight
+            }
+            Text {
+                objectName: "coverArtTitle"
+                width: parent.width
+                text: screen.page.coverTitle
+                color: Kit.Tokens.textStrong
+                font.family: faces.condensedRegular
+                font.pixelSize: Kit.Tokens.fontTitle
+                elide: Text.ElideRight
+            }
+        }
+        GridView {
+            id: coverCards
+            objectName: "coverCards"
+            // The focus ring's room around the cards, inside the view's clip, as the page's tiles keep it.
+            anchors.fill: parent
+            anchors.margins: -coverArt.ringRoom
+            leftMargin: coverArt.ringRoom
+            topMargin: coverArt.ringRoom
+            rightMargin: coverArt.ringRoom
+            bottomMargin: coverArt.ringRoom
+            model: screen.page.coverArt ? screen.page : null
+            // A model that fills after the view was made leaves it with no current item, so no delegate would take the focus.
+            onCountChanged: if (currentIndex < 0 && count > 0) currentIndex = 0
+            focus: true
+            clip: true
+            keyNavigationEnabled: true
+            keyNavigationWraps: false
+            boundsBehavior: Flickable.StopAtBounds
+            highlightMoveDuration: Kit.Tokens.instant
+            cellWidth: coverArt.cardWidth + coverArt.gap
+            cellHeight: coverArt.cardHeight + coverArt.wordsHeight + coverArt.gap
+            delegate: CoverCardItem {
+                id: card
+                width: coverArt.cardWidth
+                height: coverArt.cardHeight + coverArt.wordsHeight
+                controller: coverArt.controller
+                focus: GridView.isCurrentItem
+                Accessible.role: Accessible.ListItem
+                Accessible.name: card.label
+                onActivated: screen.page.choose(card.index)
+                onActiveFocusChanged: coverCards.currentIndex = card.activeFocus ? card.index : coverCards.currentIndex
+                Kit.CoverTile {
+                    id: cardCover
+                    objectName: "coverCard"
+                    width: coverArt.cardWidth
+                    height: coverArt.cardHeight
+                    source: card.picture
+                    title: card.label
+                    lit: card.activeFocus
+                    lifts: false
+                }
+                Rectangle {
+                    objectName: "coverInUse"
+                    visible: card.marked
+                    // On the picture's top left, where the cover stands at the box's foot.
+                    x: cardCover.paintedX + Kit.Tokens.base * 2
+                    y: cardCover.paintedY + Kit.Tokens.base * 2
+                    width: inUse.implicitWidth + 2 * Kit.Tokens.base * 3
+                    height: inUse.implicitHeight + 2 * Kit.Tokens.base
+                    radius: height / 2
+                    color: Kit.Tokens.accent
+                    Text {
+                        id: inUse
+                        anchors.centerIn: parent
+                        text: card.line
+                        color: Kit.Tokens.overAccent
+                        font.family: faces.regular
+                        font.weight: Font.DemiBold
+                        font.pixelSize: Kit.Tokens.fontCaption
+                    }
+                }
+                Text {
+                    objectName: "coverCardWords"
+                    y: coverArt.cardHeight + coverArt.ringRoom
+                    width: coverArt.cardWidth
+                    height: coverArt.wordsHeight - coverArt.ringRoom
+                    text: card.label
+                    lineHeightMode: Text.FixedHeight
+                    lineHeight: Math.round(Kit.Tokens.fontCaption * 1.2)
+                    color: card.activeFocus ? Kit.Tokens.textStrong : Kit.Tokens.text
+                    font.family: faces.regular
+                    font.pixelSize: Kit.Tokens.fontCaption
+                    wrapMode: Text.Wrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                }
+            }
+        }
+        // The cover in focus, large, with its words.
+        readonly property CoverCardItem focused: coverCards.currentItem as CoverCardItem
+        detail: Kit.Card {
+            objectName: "coverInFocus"
+            width: parent.width
+            Column {
+                width: parent.width
+                spacing: Kit.Tokens.paneGutter
+                Kit.CoverTile {
+                    objectName: "coverInFocusPicture"
+                    width: parent.width
+                    // The board's large cover, its height per unit of its width (EclipseGameCover), a constant of the design.
+                    height: parent.width * 440 / 512
+                    source: coverArt.focused?.picture ?? ""
+                    title: coverArt.focused?.label ?? ""
+                    lifts: false
+                }
+                Text {
+                    objectName: "coverInFocusWords"
+                    width: parent.width
+                    text: coverArt.focused?.label ?? ""
+                    color: Kit.Tokens.textStrong
+                    font.family: faces.regular
+                    font.weight: Font.DemiBold
+                    font.pixelSize: Kit.Tokens.fontStrong
+                    wrapMode: Text.Wrap
+                }
+            }
+        }
+        // Where the focused card stands among them, at the help bar's end.
+        Text {
+            objectName: "coverArtPlace"
+            parent: coverArt
+            anchors.right: parent.right
+            anchors.rightMargin: coverArt.safeX
+            anchors.bottom: parent.bottom
+            height: Kit.Tokens.helpBar
+            verticalAlignment: Text.AlignVCenter
+            text: coverCards.count > 0 ? screen.page.place(coverCards.currentIndex, coverCards.count) : ""
+            color: Kit.Tokens.muted
+            font.family: faces.regular
+            font.pixelSize: Kit.Tokens.fontCaption
         }
     }
     // The media viewer, from A on Media's tile: the picture, the clip with its sound, or the manual's page, on Void with

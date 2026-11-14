@@ -7,7 +7,7 @@
 
 use crate::clients::{app_settings, engine_shown, ClientSource};
 use crate::display::Crop;
-use crate::game_page::{cover_words, Change, Choice, CropOffer, Detail, GamePageSource, Media, MediaKind, Package, PackageJob, Read, Slot, State, CHECK, DETAILS, MAKE};
+use crate::game_page::{cover_words, Change, Choice, CoverCard, CoverChoice, CropOffer, Detail, GamePageSource, Media, MediaKind, Package, PackageJob, Read, Slot, State, CHECK, DETAILS, MAKE};
 use crate::library::{console_name, title_of, HERO};
 use emusen_crystal_client::Scope;
 use emusen_platform_client::bindings::consts::PROFILES;
@@ -48,22 +48,34 @@ impl ClientSource {
         found.ok().and_then(|f| f.get("path").and_then(Value::as_str).map(str::to_owned)).unwrap_or_default()
     }
 
-    /// What Cover art offers and the type chosen: the cover found, then each kind of picture the scraper's `kinds` names
-    /// (besides the cover's own) that the game has a file of; the choice as `media` answers the cover, where it is the game's
-    /// own picture rather than another game's.
-    fn covers(&self, game: &GameFile, esde_system: &str) -> Result<(Vec<Choice>, Option<String>), String> {
-        let Some(scraper) = self.scraper().filter(|_| !esde_system.is_empty()) else { return Ok((Vec::new(), None)) };
-        let cover = scraper.get(&json!({ "what": "media", "path": game.path, "system": esde_system, "type": crate::library::COVER })).map_err(words)?;
-        let chosen = cover["type"].as_str().filter(|t| *t != crate::library::COVER && cover["source"] != "other_game").map(str::to_owned);
+    /// Cover art's cards and the one in use: a cover borrowed from another game while it is shown, the cover found, then
+    /// each kind of picture the scraper's `kinds` names (besides the cover's own) that the game has a file of; what is in
+    /// use as `media` answers the cover.
+    fn covers(&self, game: &GameFile, esde_system: &str) -> Result<(Vec<CoverCard>, CoverChoice), String> {
+        let Some(scraper) = self.scraper().filter(|_| !esde_system.is_empty()) else { return Ok((Vec::new(), CoverChoice::Found)) };
+        let read = |choices: bool| scraper.get(&json!({ "what": "media", "path": game.path, "system": esde_system, "type": crate::library::COVER, "choices": choices }));
+        let (shown, found) = (read(true).map_err(words)?, read(false).map_err(words)?);
+        let text = |v: &Value, key: &str| v[key].as_str().unwrap_or_default().to_owned();
+        let in_use = match (shown["from"].as_str(), shown["type"].as_str()) {
+            (Some(from), _) => CoverChoice::Borrowed(from.to_owned()),
+            (None, Some(t)) if t != crate::library::COVER => CoverChoice::Own(t.to_owned()),
+            _ => CoverChoice::Found,
+        };
+        let card = |choice: CoverChoice, picture: String| CoverCard { text: cover_words(&choice), choice, picture };
+        let mut cards = Vec::new();
+        if matches!(in_use, CoverChoice::Borrowed(_)) {
+            cards.push(card(in_use.clone(), text(&shown, "path")));
+        }
+        cards.push(card(CoverChoice::Found, text(&found, "path")));
         let kinds = scraper.get(&json!({ "what": "kinds" })).map_err(words)?;
         let pictures = kinds.as_array().into_iter().flatten().filter(|k| k["payload"] == "image").filter_map(|k| k["type"].as_str()).filter(|t| *t != crate::library::COVER);
-        let mut offered = vec![Choice { value: None, text: cover_words(None) }];
         for kind in pictures {
-            if !self.media_file(game, esde_system, kind).is_empty() {
-                offered.push(Choice { value: Some(kind.to_owned()), text: cover_words(Some(kind)) });
+            let file = self.media_file(game, esde_system, kind);
+            if !file.is_empty() {
+                cards.push(card(CoverChoice::Own(kind.to_owned()), file));
             }
         }
-        Ok((offered, chosen))
+        Ok((cards, in_use))
     }
 
     /// The states, slot by slot and then the automatic one, each where its file is, the most recent first.
@@ -222,7 +234,7 @@ impl GamePageSource for ClientSource {
         read.engine = Some(value(crate::edits::ALT_EMULATOR)).filter(|e| !e.is_empty());
         (read.package, read.layers, read.package_job) = self.package(game)?;
         read.scraping = self.scraping();
-        (read.covers, read.cover_choice) = self.covers(game, &esde)?;
+        (read.covers, read.cover_in_use) = self.covers(game, &esde)?;
         let Some(s) = system else { return Ok(read) };
         // The engines: the console's own first, then each it may run on (Mistress's IGamePageHost.Engines).
         let cores = self.runtime.cores().map_err(words)?;

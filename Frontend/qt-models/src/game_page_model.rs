@@ -94,6 +94,11 @@ pub mod qobject {
         #[qproperty(bool, typing, READ, NOTIFY)]
         #[qproperty(QString, typing_title, cxx_name = "typingTitle", READ, NOTIFY)]
         #[qproperty(QString, typing_start, cxx_name = "typingStart", READ, NOTIFY)]
+        /// Whether Details' Cover art is shown, its cards the model's tiles.
+        #[qproperty(bool, cover_art, cxx_name = "coverArt", READ, NOTIFY)]
+        /// Cover art's title and the way back above it.
+        #[qproperty(QString, cover_title, cxx_name = "coverTitle", READ, CONSTANT)]
+        #[qproperty(QString, cover_trail, cxx_name = "coverTrail", READ, NOTIFY)]
         type GamePageModel = super::GamePageModelRust;
     }
 
@@ -136,6 +141,10 @@ pub mod qobject {
         /// A help bar's declared action: the page answers Y, the heart, itself, and passes every other on.
         #[qinvokable]
         fn declared(self: Pin<&mut GamePageModel>, key: &QString);
+
+        /// Where an item stands among its list: "2 of 8".
+        #[qinvokable]
+        fn place(self: &GamePageModel, index: i32, count: i32) -> QString;
 
         /// A declared action the screens answer (Start).
         #[qsignal]
@@ -423,6 +432,9 @@ pub struct GamePageModelRust {
     scraper_test: QString,
     scrape_state: QString,
     viewing: bool,
+    cover_art: bool,
+    cover_title: QString,
+    cover_trail: QString,
     view_kind: i32,
     view_source: QString,
     view_manual: QString,
@@ -487,6 +499,9 @@ impl Default for GamePageModelRust {
             scraper_test: QString::default(),
             scrape_state: QString::from("idle"),
             viewing: false,
+            cover_art: false,
+            cover_title: QString::from(crate::game_page::COVER_ART),
+            cover_trail: QString::default(),
             view_kind: 0,
             view_source: QString::default(),
             view_manual: QString::default(),
@@ -725,6 +740,16 @@ impl qobject::GamePageModel {
             if model.picture != picture {
                 model.as_mut().rust_mut().picture = picture;
                 model.as_mut().picture_changed();
+            }
+            let trail = QString::from(model.page.cover_trail().as_str());
+            if model.cover_trail != trail {
+                model.as_mut().rust_mut().cover_trail = trail;
+                model.as_mut().cover_trail_changed();
+            }
+            if model.cover_art != model.page.covering {
+                let covering = model.page.covering;
+                model.as_mut().rust_mut().cover_art = covering;
+                model.as_mut().cover_art_changed();
             }
         });
     }
@@ -976,6 +1001,16 @@ impl qobject::GamePageModel {
     }
 
     pub fn back(mut self: Pin<&mut Self>) -> bool {
+        // Cover art closes once its press has been delivered, as the viewer does, so the page under it never hears that B.
+        if self.page.covering {
+            let _ = self.qt_thread().queue(|mut model| {
+                model.as_mut().rust_mut().page.back();
+                model.as_mut().rust_mut().focus = (None, 0);
+                model.as_mut().shown(true);
+                model.returned();
+            });
+            return true;
+        }
         let went = self.as_mut().rust_mut().page.back();
         if went {
             self.as_mut().rust_mut().focus = (None, 0);
@@ -1140,6 +1175,10 @@ impl qobject::GamePageModel {
     pub fn step(mut self: Pin<&mut Self>, index: i32, by: i32) {
         let outcome = self.as_mut().rust_mut().page.step_row(index.max(0) as usize, by);
         self.outcome(outcome);
+    }
+
+    pub fn place(&self, index: i32, count: i32) -> QString {
+        QString::from(crate::game_page::place(index.max(0) as usize, count.max(0) as usize).as_str())
     }
 
     pub fn declared(self: Pin<&mut Self>, key: &QString) {

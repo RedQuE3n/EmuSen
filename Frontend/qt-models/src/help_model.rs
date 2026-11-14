@@ -77,6 +77,7 @@ pub mod qobject {
         /// The viewer on a picture that can be the game's cover, after every screen before it.
         GamePageViewerCover,
         GamePageViewerManualCover,
+        GamePageCoverArt,
     }
 
     extern "RustQt" {
@@ -199,6 +200,7 @@ impl qobject::HelpModel {
             HelpScreen::GamePageManual => Screen::GamePageManual,
             HelpScreen::GamePageViewerCover => Screen::GamePageViewerCover,
             HelpScreen::GamePageViewerManualCover => Screen::GamePageViewerManualCover,
+            HelpScreen::GamePageCoverArt => Screen::GamePageCoverArt,
             _ => Screen::Home,
         }
     }
@@ -277,6 +279,7 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::GamePageManual => HelpScreen::GamePageManual,
         Screen::GamePageViewerCover => HelpScreen::GamePageViewerCover,
         Screen::GamePageViewerManualCover => HelpScreen::GamePageViewerManualCover,
+        Screen::GamePageCoverArt => HelpScreen::GamePageCoverArt,
     };
     shown.repr
 }

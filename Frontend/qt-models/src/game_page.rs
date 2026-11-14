@@ -169,11 +169,31 @@ pub struct Read {
     pub scraping: bool,
     /// The details Edit Details offers, in its order.
     pub details: Vec<Detail>,
-    /// What Cover art offers: the cover found (its value none), then each of the game's own pictures that can be its
-    /// cover, by its media type; empty where no pictures are looked for.
-    pub covers: Vec<Choice>,
-    /// The media type of the game's own picture shown as its cover; none for the cover found.
-    pub cover_choice: Option<String>,
+    /// Cover art's cards: a cover borrowed from another game while it is shown, the cover found, then each of the game's
+    /// own pictures that can be its cover; empty where no pictures are looked for.
+    pub covers: Vec<CoverCard>,
+    /// What the game shows as its cover.
+    pub cover_in_use: CoverChoice,
+}
+
+/// What a card of Cover art stands for (decided 2026-11-14, R-20261114-10).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum CoverChoice {
+    /// Another game's cover, by that game's file: shown while it is borrowed, and never chosen again from here.
+    Borrowed(String),
+    /// The cover found for the game.
+    #[default]
+    Found,
+    /// One of the game's own pictures, by its media type.
+    Own(String),
+}
+
+/// One card of Cover art: what it stands for, its words and its picture's file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CoverCard {
+    pub choice: CoverChoice,
+    pub text: String,
+    pub picture: String,
 }
 
 /// One detail of the game as Edit Details shows it: its field, its value, and whether the player's edit holds it.
@@ -340,8 +360,10 @@ pub const JOB: &str = "job";
 pub const SCRAPE: &str = "scrape";
 pub const EDIT: &str = "edit";
 pub const COVER: &str = "cover";
-/// A picture on Cover art's page.
-pub const COVER_PICTURE: &str = "coverPicture";
+/// Cover art's row, and its page's title.
+pub const COVER_ART: &str = "Cover art";
+/// A card on Cover art's page, by its place.
+pub const COVER_CARD: &str = "coverCard";
 pub const FOLDER: &str = "folder";
 pub const HIDE: &str = "hide";
 pub const STANDARD: &str = "standard";
@@ -357,7 +379,12 @@ pub const DETAILS: [(&str, &str); 7] = [
     ("players", "Players"),
 ];
 
-/// Cover art's mark on the picture shown as the cover, as EmuSen_Interface.md §18.2 words it.
+/// Where an item stands among its list: "2 of 8".
+pub fn place(index: usize, count: usize) -> String {
+    format!("{} of {count}", index + 1)
+}
+
+/// Cover art's mark on the card in use, as EmuSen_Interface.md §18.2 words it.
 pub const SHOWN: &str = "In use";
 
 pub const NO_DESCRIPTION: &str = "No description yet. Details ▸ Scrape This Game fetches one, and Edit Details writes one.";
@@ -495,16 +522,17 @@ fn ask(title: &str, sentence: &str, yes: &str) -> Question {
     q
 }
 
-/// The words for a picture Cover art offers, by its media type: the cover found, then the Media section's words for a
-/// kind it shows (`media_word`), else the Settings' scraping row's for the kind (its "Mix images" one of them); a type
-/// none names is its own word.
-pub fn cover_words(media_type: Option<&str>) -> String {
+/// The words for a card Cover art offers: the other game a borrowed cover is from, the cover found, then for one of the
+/// game's own pictures the Media section's words for a kind it shows (`media_word`), else the Settings' scraping row's
+/// for the kind (its "Mix images" one of them); a type none names is its own word.
+pub fn cover_words(choice: &CoverChoice) -> String {
     const SCRAPED: [MediaKind; 4] = [MediaKind::Screenshot, MediaKind::TitleScreen, MediaKind::Marquee, MediaKind::Fanart];
-    match media_type {
-        None => "Cover".into(),
-        Some(t) => match SCRAPED.into_iter().find(|k| kind_word(*k) == t) {
+    match choice {
+        CoverChoice::Borrowed(from) => format!("Borrowed from {}", crate::library::title_of(from)),
+        CoverChoice::Found => "Cover".into(),
+        CoverChoice::Own(t) => match SCRAPED.into_iter().find(|k| kind_word(*k) == t.as_str()) {
             Some(kind) => media_word(kind).into(),
-            None => match t {
+            None => match t.as_str() {
                 "miximage" => "Mix image".into(),
                 "backcover" => "Back cover".into(),
                 "3dbox" => "3D box".into(),
@@ -696,7 +724,7 @@ impl GamePage {
             Section::Options => Content::Rows(self.option_rows()),
             Section::Media => Content::Tiles(self.media_tiles()),
             Section::Details if self.editing => Content::Rows(self.edit_rows()),
-            Section::Details if self.covering => Content::Rows(self.cover_rows()),
+            Section::Details if self.covering => Content::Tiles(self.cover_tiles()),
             Section::Details => Content::Rows(self.detail_rows()),
         }
     }
@@ -875,23 +903,38 @@ impl GamePage {
         };
         let mut rows = vec![row(SCRAPE, "Scrape This Game", scrape, false), row(EDIT, "Edit Details", "", true)];
         if !self.read.covers.is_empty() {
-            rows.push(row(COVER, "Cover art", &Self::text_of(&self.read.covers, &self.read.cover_choice), true));
+            let in_use = self.read.covers.iter().find(|c| c.choice == self.read.cover_in_use).map(|c| c.text.as_str()).unwrap_or_default();
+            rows.push(row(COVER, COVER_ART, in_use, true));
         }
         rows.extend([row(FOLDER, "Open Folder", "", false), row(HIDE, "Hide from Library", "…", false)]);
         rows
     }
 
-    /// Cover art's rows: the cover found, then each of the game's own pictures that can be its cover, the one shown marked.
-    fn cover_rows(&self) -> Vec<Row> {
-        let row = |c: &Choice| Row {
-            key: COVER_PICTURE,
+    /// The way back above Cover art's title: the game, then Details.
+    pub fn cover_trail(&self) -> String {
+        format!("{} / {}", self.read.title, Section::Details.name())
+    }
+
+    /// Cover art's cards, the one in use marked and its mark's words its line.
+    fn cover_tiles(&self) -> Vec<Tile> {
+        let tile = |(i, c): (usize, &CoverCard)| Tile {
+            key: format!("{COVER_CARD}.{i}"),
             label: c.text.clone(),
-            value: if c.value == self.read.cover_choice { SHOWN.into() } else { String::new() },
-            steps: false,
-            opens: false,
-            sentence: "",
+            line: if c.choice == self.read.cover_in_use { SHOWN.into() } else { String::new() },
+            picture: c.picture.clone(),
+            marked: c.choice == self.read.cover_in_use,
         };
-        self.read.covers.iter().map(row).collect()
+        self.read.covers.iter().enumerate().map(tile).collect()
+    }
+
+    /// A on Cover art's card: the cover found or one of the game's own pictures made the cover; nothing for the card in use.
+    fn choose_cover(&self, index: usize) -> Outcome {
+        match self.read.covers.get(index).map(|c| &c.choice) {
+            Some(c) if *c == self.read.cover_in_use => Outcome::Nothing,
+            Some(CoverChoice::Found) => Outcome::Changed(Change::Cover(None)),
+            Some(CoverChoice::Own(kind)) => Outcome::Changed(Change::Cover(Some(kind.clone()))),
+            Some(CoverChoice::Borrowed(_)) | None => Outcome::Nothing,
+        }
     }
 
     /// The media type of the picture the viewer shows where it can be the game's cover and is not already.
@@ -902,8 +945,9 @@ impl GamePage {
         let shown: Vec<&Media> = self.read.media.iter().filter(|m| m.kind != MediaKind::Manual).collect();
         let media = shown.get(viewer.index).filter(|m| m.kind != MediaKind::Taken)?;
         let kind = kind_word(media.kind);
-        let offered = self.read.covers.iter().any(|c| c.value.as_deref() == Some(kind));
-        (offered && self.read.cover_choice.as_deref() != Some(kind)).then(|| kind.to_owned())
+        let own = CoverChoice::Own(kind.to_owned());
+        let offered = self.read.covers.iter().any(|c| c.choice == own);
+        (offered && self.read.cover_in_use != own).then(|| kind.to_owned())
     }
 
     /// Edit Details' rows: each detail with its value; A types it, Y puts back what was scraped.
@@ -946,7 +990,6 @@ impl GamePage {
             Some(row) if row.key == FOLDER => Outcome::OpenFolder,
             Some(row) if row.key == EDIT => Outcome::Edit,
             Some(row) if row.key == COVER => Outcome::CoverArt,
-            Some(row) if row.key == COVER_PICTURE => self.read.covers.get(index).map_or(Outcome::Nothing, |c| Outcome::Changed(Change::Cover(c.value.clone()))),
             Some(row) if row.key == CHEATS => Outcome::Cheats,
             Some(row) if row.key == CHEAT => self.switch(index),
             Some(row) if row.key == CROP => Outcome::Crop,
@@ -997,7 +1040,11 @@ impl GamePage {
                     crop.own = *v;
                 }
             }
-            Change::Cover(v) => r.cover_choice = v.clone(),
+            // Any choice ends a borrowed cover, so its card goes.
+            Change::Cover(v) => {
+                r.cover_in_use = v.clone().map_or(CoverChoice::Found, CoverChoice::Own);
+                r.covers.retain(|c| !matches!(c.choice, CoverChoice::Borrowed(_)));
+            }
             Change::DeleteState(_) | Change::Hide => {}
         }
     }
@@ -1079,13 +1126,16 @@ impl GamePage {
         }
         let labels: Vec<(String, &Media)> = self.media_labels().into_iter().zip(&self.read.media).filter(|(_, m)| m.kind != MediaKind::Manual).collect();
         match labels.get(viewer.index) {
-            Some((label, _)) => format!("{label} {BETWEEN} {} of {}", viewer.index + 1, labels.len()),
+            Some((label, _)) => format!("{label} {BETWEEN} {}", place(viewer.index, labels.len())),
             None => String::new(),
         }
     }
 
     /// A on a tile: a state loads, a picture opens the viewer.
     pub fn choose_tile(&self, index: usize) -> Outcome {
+        if self.covering {
+            return self.choose_cover(index);
+        }
         match (self.shown(), self.content()) {
             (Section::States, Content::Tiles(tiles)) => match tiles.get(index) {
                 Some(t) if !t.key.starts_with("empty.") => Outcome::Play(Some(t.key.clone())),
@@ -1107,6 +1157,7 @@ impl GamePage {
             };
         }
         match self.content() {
+            Content::Tiles(_) if self.covering => Screen::GamePageCoverArt,
             Content::Tiles(tiles) if self.shown() == Section::States => match tiles.get(content) {
                 Some(t) if !t.key.starts_with("empty.") => Screen::GamePageLoad,
                 _ => Screen::GamePageNone,

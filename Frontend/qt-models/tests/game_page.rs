@@ -472,12 +472,16 @@ fn package_shows_the_games_package_and_runs_its_job_with_its_progress() {
     assert!(words(&page).iter().all(|w| !w.starts_with("Package")));
 }
 
+fn card(choice: CoverChoice, picture: &str) -> CoverCard {
+    CoverCard { text: cover_words(&choice), choice, picture: picture.into() }
+}
+
 fn covered() -> Read {
     let mut r = read();
     r.covers = vec![
-        Choice { value: None, text: cover_words(None) },
-        Choice { value: Some("screenshot".into()), text: cover_words(Some("screenshot")) },
-        Choice { value: Some("titlescreen".into()), text: cover_words(Some("titlescreen")) },
+        card(CoverChoice::Found, "/m/cover.png"),
+        card(CoverChoice::Own("screenshot".into()), "/m/shot.png"),
+        card(CoverChoice::Own("titlescreen".into()), "/m/title.png"),
     ];
     r.media = vec![
         Media { path: "/m/taken.png".into(), kind: MediaKind::Taken },
@@ -488,30 +492,58 @@ fn covered() -> Read {
     r
 }
 
+/// Cover art's cards as (words, picture, in use).
+fn cards(page: &GamePage) -> Vec<(String, String, bool)> {
+    let Content::Tiles(tiles) = page.content() else { panic!("cards") };
+    tiles.iter().map(|t| (t.label.clone(), t.picture.clone(), t.marked)).collect()
+}
+
 #[test]
-fn qt_7_8_cover_art_lists_the_games_own_pictures_marks_the_shown_one_and_a_chooses() {
+fn qt_7_8_cover_art_shows_the_games_covers_as_cards_marks_the_one_in_use_and_a_chooses() {
     let mut page = GamePage::new(covered(), NOW);
     page.choose_section(4);
     let Content::Rows(rows) = page.content() else { panic!("rows") };
-    assert_eq!(rows.iter().map(|r| r.label.clone()).collect::<Vec<_>>(), ["Scrape This Game", "Edit Details", "Cover art", "Open Folder", "Hide from Library"]);
+    assert_eq!(rows.iter().map(|r| r.label.clone()).collect::<Vec<_>>(), ["Scrape This Game", "Edit Details", COVER_ART, "Open Folder", "Hide from Library"]);
     assert_eq!((rows[2].value.as_str(), rows[2].opens), ("Cover", true));
     assert_eq!(page.choose_row(2), Outcome::CoverArt);
     page.covering = true;
-    let Content::Rows(rows) = page.content() else { panic!("rows") };
-    let shown = |rows: &[Row]| rows.iter().map(|r| (r.label.clone(), r.value.clone())).collect::<Vec<_>>();
-    let labels = ["Cover", "Scraped screenshot", "Title screen"].map(String::from);
-    let marked = |at: usize| (0..labels.len()).map(move |i| if i == at { SHOWN.to_string() } else { String::new() });
-    assert_eq!(shown(&rows), labels.iter().cloned().zip(marked(0)).collect::<Vec<_>>(), "the cover found is shown before any choice");
-    assert_eq!(page.help(None, 1), Screen::GamePageChoose);
-    assert_eq!(page.choose_row(2), Outcome::Changed(Change::Cover(Some("titlescreen".into()))));
+    let pictures = ["/m/cover.png", "/m/shot.png", "/m/title.png"];
+    let labels = ["Cover", "Scraped screenshot", "Title screen"];
+    let marked = |at: usize| (0..labels.len()).map(|i| (labels[i].to_string(), pictures[i].to_string(), i == at)).collect::<Vec<_>>();
+    assert_eq!(cards(&page), marked(0), "the cover found in use before any choice");
+    let Content::Tiles(tiles) = page.content() else { panic!("cards") };
+    assert_eq!(tiles[0].line, SHOWN, "the mark's words on the card in use");
+    assert!(tiles[1].line.is_empty());
+    assert_eq!(page.help(None, 1), Screen::GamePageCoverArt);
+    assert_eq!(page.choose_tile(0), Outcome::Nothing, "the card in use is in use already");
+    assert_eq!(page.choose_tile(2), Outcome::Changed(Change::Cover(Some("titlescreen".into()))));
     page.changed(&Change::Cover(Some("titlescreen".into())));
-    let Content::Rows(rows) = page.content() else { panic!("rows") };
-    assert_eq!(shown(&rows), labels.iter().cloned().zip(marked(2)).collect::<Vec<_>>());
-    assert_eq!(page.choose_row(0), Outcome::Changed(Change::Cover(None)), "the first row puts the cover found back");
+    assert_eq!(cards(&page), marked(2));
+    assert_eq!(page.choose_tile(0), Outcome::Changed(Change::Cover(None)), "the first card puts the cover found back");
     assert!(page.back(), "B goes back to Details");
     let Content::Rows(rows) = page.content() else { panic!("rows") };
     assert_eq!(rows[2].value, "Title screen");
     assert!(!page.back(), "and B again leaves the page");
+    assert_eq!(page.cover_trail(), format!("{} / Details", page.read.title));
+    assert_eq!(place(1, 8), "2 of 8");
+}
+
+#[test]
+fn qt_7_8_a_borrowed_cover_is_a_card_in_use_and_any_choice_ends_it() {
+    let mut r = covered();
+    let borrowed = CoverChoice::Borrowed("/roms/snes/Other Game.sfc".into());
+    r.covers.insert(0, card(borrowed.clone(), "/m/other.png"));
+    r.cover_in_use = borrowed;
+    let mut page = GamePage::new(r, NOW);
+    page.choose_section(4);
+    page.covering = true;
+    assert_eq!(cards(&page)[0], ("Borrowed from Other Game".to_string(), "/m/other.png".to_string(), true), "the borrowed cover, in use");
+    assert_eq!(cards(&page).iter().filter(|c| c.2).count(), 1, "one card in use");
+    assert_eq!(page.choose_tile(0), Outcome::Nothing);
+    assert_eq!(page.choose_tile(1), Outcome::Changed(Change::Cover(None)), "the cover found is a choice while another game's is shown");
+    page.changed(&Change::Cover(None));
+    assert_eq!(cards(&page).iter().map(|c| c.0.as_str()).collect::<Vec<_>>(), ["Cover", "Scraped screenshot", "Title screen"], "the borrowed card gone");
+    assert!(cards(&page)[0].2, "the cover found in use");
 }
 
 #[test]

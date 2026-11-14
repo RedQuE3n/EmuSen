@@ -6954,22 +6954,28 @@ Seeded faults, each reverted:
   draws red with its left quarter forced black; the console's custom 25% crop cuts the quarter, the game's own Whole
   picture brings it back on its next start, and a second game keeps the console's crop).
 
-#### 7.8.5 Cover art and the viewer's Set as cover (2026-11-13)
+#### 7.8.5 Cover art and the viewer's Set as cover (2026-11-13, cards 2026-11-14)
 
 The tester decided, 2026-11-13 (R-20261113-10): one of a game's own pictures may be its cover. The base's call is the
 emusen.scrape service's change `cover` (2.1, platform interface 49; `EmuSen_Backend.md` §30.6). **Details ▸ Cover art**
-(after Edit Details, its value the picture in use) opens a deeper page of rows in the page's own parts: `Cover` (the
-cover found) first, then each kind of picture the scraper's `kinds` names that the game has a file of, by the Media
-section's words or Settings' scraping words (`game_page::cover_words`), the one in use marked `In use`; A makes it the
-cover at once, B goes back to Details. The page's cover, the grid's tile and an ES-DE theme's cover then draw it, since
-each reads the cover through the scraper's `media`; the library reads again as after an edited name. **The media
-viewer** offers `X Set as cover` in its help bar for a scraped picture that is not the cover already (not the player's
-own screenshots, a clip or the manual); the viewer stays open. §18.2 draws Cover Art as 150 × 200 cards with ScreenScraper's
-other covers, a borrowed cover and the generated one; these rows are the page's existing parts, and the cards, the other
-covers and borrowing are not built. Tests: the scraper's `cover_choice`, the library's
-`the_editors_clear_keeps_the_cover_choices_and_drops_the_details`, qt-models' `game_page` (the rows, the mark, the
-viewer's offer) and qt-app's `page_cover` (in the program: the pad chooses the title screen, the page's cover and the
-grid's tile draw it, Cover brings the cover found back, and X in the viewer makes the screenshot the cover).
+(after Edit Details, its value the words of the card in use) opens Cover art as the Eclipse board `EclipseGameCover`
+draws it (decided 2026-11-14, R-20261114-9), in its own `Kit.Frame` over the page: the game and Details above the
+title, the cards four across in the frame's content (`Kit.CoverTile` each, its words under it, the one in use marked
+`In use`), the focused card large in the frame's pane beside (`Kit.Card`), and the help bar `A Use this one`, `Y
+Favourite`, `B Details`, `Start Home` with the focused card's place ("2 of 8") at its end. The cards (R-20261114-10): a
+cover borrowed from another game while it is shown (`Borrowed from <game>`, in use), the cover found (`Cover`, read
+with `media`'s `choices: false`), then each kind of picture the scraper's `kinds` names that the game has a file of, by
+the Media section's words or Settings' scraping words (`game_page::cover_words`). A on another card makes it the cover
+at once and ends a borrowed cover, whose card then goes; A on the card in use does nothing; B goes back to Details. The
+page's cover, the grid's tile and an ES-DE theme's cover then draw it, since each reads the cover through the scraper's
+`media`; the library reads again as after an edited name. The cards' size comes from the frame's content width, the
+board's four across and its card's shape; the pane beside is the kit's card width. **The media viewer** offers `X Set
+as cover` in its help bar for a scraped picture that is not the cover already (not the player's own screenshots, a clip
+or the manual); the viewer stays open (R-20261114-11). Tests: the scraper's `cover_choice`, the library's
+`the_editors_clear_keeps_the_cover_choices_and_drops_the_details`, qt-models' `game_page` (the cards, the mark, a
+borrowed cover, the viewer's offer) and qt-app's `page_cover` (in the program: the pad chooses the title screen's card,
+the page's cover, the card's mark and the grid's tile show it, Cover brings the cover found back, kit-core's rules and
+the pad's reach over Cover art at each of the gate's window sizes, and X in the viewer makes the screenshot the cover).
 
 ### 7.9 Repair piece DC-B: the program does what it offers and says when it fails (2026-11-11)
 

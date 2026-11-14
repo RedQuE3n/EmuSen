@@ -24,8 +24,9 @@ fn world(label: &str) -> Option<World> {
         let ext = if folder == "videos" { "mp4" } else { "png" };
         std::fs::write(at.join(format!("Game.{ext}")), bytes).unwrap();
     }
+    std::fs::write(dir.join("esde").join("snes").join("covers").join("Other.png"), "other").unwrap();
     let library = Arc::new(emusen_library::Library::open(sqlite.clone(), &dir.join("games.db").to_string_lossy()).unwrap());
-    let settings = json!({ "developer_files": false, "openemu": false, "sources_alone": true, "esde_media": dir.join("esde").to_string_lossy(), "test": { "offline": true } });
+    let settings = json!({ "developer_files": false, "openemu": false, "sources_alone": true, "esde_media": dir.join("esde").to_string_lossy(), "cores": [["snes"]], "test": { "offline": true } });
     let scraper = Scraper::open(sqlite, &dir.join("Media").to_string_lossy(), Some(library.clone()), &[], &settings.to_string()).unwrap();
     Some(World { dir, scraper, library })
 }
@@ -97,4 +98,38 @@ fn choosing_a_picture_of_its_own_ends_a_cover_borrowed_from_another_game() {
     w.choose("titlescreen".into()).unwrap();
     assert_eq!(w.edits(), json!({ "covertype": "titlescreen" }));
     assert!(Path::new(&w.file("titlescreens", "png")).exists());
+}
+
+#[test]
+fn choosing_the_cover_found_ends_a_cover_borrowed_from_another_game() {
+    let Some(w) = world("cover-found-borrowed") else { return };
+    let changes = json!({ emusen_library::records::COVER_FROM: "/roms/snes/Other.sfc" });
+    w.library.change_request(&json!({ "op": "save_edits", "path": GAME, "changes": changes }).to_string()).unwrap();
+    w.choose(Value::Null).unwrap();
+    assert_eq!(w.edits(), json!({}), "the borrowing ends with the choice of the cover found");
+    assert_eq!(w.cover()["path"], w.file("covers", "png"));
+}
+
+#[test]
+fn a_cover_borrowed_from_another_game_is_read_with_that_game_and_ended_by_a_choice() {
+    let Some(w) = world("cover-borrowed-read") else { return };
+    let other = "/roms/snes/Other.sfc";
+    let changes = json!({ emusen_library::records::COVER_FROM: other });
+    w.library.change_request(&json!({ "op": "save_edits", "path": GAME, "changes": changes }).to_string()).unwrap();
+    let other_cover = w.dir.join("esde").join("snes").join("covers").join("Other.png").to_string_lossy().into_owned();
+    assert_eq!(w.cover(), json!({ "source": "other_game", "path": other_cover, "type": "cover", "from": other }), "the other game's cover, and which game");
+    w.choose(Value::Null).unwrap();
+    assert_eq!(w.cover(), json!({ "source": "esde", "path": w.file("covers", "png"), "type": "cover" }), "the cover found once the borrowing ends");
+}
+
+#[test]
+fn the_cover_found_is_read_without_the_choices_while_a_picture_is_chosen() {
+    let Some(w) = world("cover-found-read") else { return };
+    w.choose("titlescreen".into()).unwrap();
+    let found = |choices: bool| -> Value {
+        let request = json!({ "what": "media", "path": GAME, "system": "snes", "type": "cover", "choices": choices });
+        serde_json::from_str(&w.scraper.get_request(&request.to_string()).unwrap()).unwrap()
+    };
+    assert_eq!(found(false), json!({ "source": "esde", "path": w.file("covers", "png"), "type": "cover" }), "the cover found");
+    assert_eq!(found(true)["path"], w.file("titlescreens", "png"), "the choice, as media gives by default");
 }

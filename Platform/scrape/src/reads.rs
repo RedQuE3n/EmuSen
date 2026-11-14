@@ -181,8 +181,11 @@ pub(crate) fn get(s: &Scraper, r: &Value) -> Result<String, Error> {
                 None => s.settings().folder_of(&file),
             };
             let game = crate::media::Game { file: &file, folder_path, folder };
-            match s.found(&json::text(r, "system")?, &game, &json::text(r, "type")?) {
-                Some(f) => out.push_str(&format!("{{\"source\":\"{}\",\"path\":{},\"type\":{}}}", f.source.word(), quoted(&f.path), quoted(&f.media_type))),
+            match s.found(&json::text(r, "system")?, &game, &json::text(r, "type")?, json::flag(r, "choices", true)?) {
+                Some(f) => {
+                    let from = f.from.as_deref().map(|g| format!(",\"from\":{}", quoted(g))).unwrap_or_default();
+                    out.push_str(&format!("{{\"source\":\"{}\",\"path\":{},\"type\":{}{from}}}", f.source.word(), quoted(&f.path), quoted(&f.media_type)))
+                }
                 None => out.push_str("null"),
             }
         }

@@ -32,17 +32,19 @@ impl Source {
     }
 }
 
-/// A picture found for a game: where it came from, its file, and the media type it is a file of.
+/// A picture found for a game: where it came from, its file, the media type it is a file of, and for a cover borrowed
+/// from another game, that game's file.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Found {
     pub source: Source,
     pub path: String,
     pub media_type: String,
+    pub from: Option<String>,
 }
 
 impl Found {
     fn of(source: Source, path: String, media_type: &str) -> Found {
-        Found { source, path, media_type: media_type.to_string() }
+        Found { source, path, media_type: media_type.to_string(), from: None }
     }
 }
 
@@ -136,21 +138,22 @@ impl Scraper {
 
     /// The picture of a type for a game on the shelf ES-DE calls `esde_system`, and where it came from.
     pub fn locate(&self, esde_system: &str, game: &Game, media_type: &str) -> Option<(Source, String)> {
-        self.found(esde_system, game, media_type).map(|f| (f.source, f.path))
+        self.found(esde_system, game, media_type, true).map(|f| (f.source, f.path))
     }
 
     /// `locate`, with the type of the file found: for a cover, the type of the game's own picture chosen as its cover.
-    pub fn found(&self, esde_system: &str, game: &Game, media_type: &str) -> Option<Found> {
+    /// Without `choices`, a cover is the one found for the game, as though the player had chosen none.
+    pub fn found(&self, esde_system: &str, game: &Game, media_type: &str, choices: bool) -> Option<Found> {
         let settings = self.settings();
         let cores = consoles::cores(&settings.cores);
         let mut seen = HashSet::new();
         seen.insert(game.file.to_string());
-        self.locate_in(esde_system, game, media_type, &cores, &mut seen)
+        self.locate_in(esde_system, game, media_type, choices, &cores, &mut seen)
     }
 
     /// Makes one of a game's own pictures, by its type, its cover, or with none puts the cover back to the one found for
-    /// it; a type that is not a picture, or one the game has no file of, is refused and nothing is written. Choosing a
-    /// picture of its own ends a cover borrowed from another game. The files are never touched (EmuSen_Backend.md §30.6).
+    /// it; a type that is not a picture, or one the game has no file of, is refused and nothing is written. Either
+    /// choice ends a cover borrowed from another game. The files are never touched (EmuSen_Backend.md §30.6).
     pub(crate) fn choose_cover(&self, esde_system: &str, game: &Game, media_type: Option<&str>, at: Option<&str>) -> Result<(), Error> {
         let library = self.library()?;
         let chosen = media_type.filter(|t| *t != kinds::COVER.esde_type);
@@ -165,9 +168,7 @@ impl Scraper {
         }
         let mut changes = serde_json::Map::new();
         changes.insert(emusen_library::records::COVER_TYPE.into(), chosen.map_or(serde_json::Value::Null, |t| t.into()));
-        if chosen.is_some() {
-            changes.insert(emusen_library::records::COVER_FROM.into(), serde_json::Value::Null);
-        }
+        changes.insert(emusen_library::records::COVER_FROM.into(), serde_json::Value::Null);
         let mut request = serde_json::json!({ "op": "save_edits", "path": game.file, "changes": changes });
         if let Some(at) = at {
             request["at"] = at.into();
@@ -175,24 +176,24 @@ impl Scraper {
         library.change_request(&request.to_string()).map(drop).map_err(|e| Error::Io(e.words()))
     }
 
-    fn locate_in(&self, esde_system: &str, game: &Game, media_type: &str, cores: &[Core], seen: &mut HashSet<String>) -> Option<Found> {
+    fn locate_in(&self, esde_system: &str, game: &Game, media_type: &str, choices: bool, cores: &[Core], seen: &mut HashSet<String>) -> Option<Found> {
         let settings = self.settings();
         let cover = media_type == kinds::COVER.esde_type;
         let file = !game.folder;
-        if cover && file {
+        if cover && file && choices {
             let (from, chosen) = self.cover_choices(game.file);
             if let Some(from) = from {
                 if seen.insert(from.clone()) {
                     if let Some(system) = self.route(&from, cores) {
                         let next = Game { file: &from, folder_path: settings.folder_of(&from), folder: false };
-                        if let Some(borrowed) = self.locate_in(&system.esde_system, &next, media_type, cores, seen) {
-                            return Some(Found { source: Source::OtherGame, ..borrowed });
+                        if let Some(borrowed) = self.locate_in(&system.esde_system, &next, media_type, true, cores, seen) {
+                            return Some(Found { source: Source::OtherGame, from: Some(from.clone()), ..borrowed });
                         }
                     }
                 }
             }
             // The game's own picture chosen as its cover, while the game has a file of it; else the cover found for it.
-            if let Some(own) = chosen.filter(|t| *t != media_type && kinds::may_be_cover(t)).and_then(|t| self.locate_in(esde_system, game, &t, cores, seen)) {
+            if let Some(own) = chosen.filter(|t| *t != media_type && kinds::may_be_cover(t)).and_then(|t| self.locate_in(esde_system, game, &t, true, cores, seen)) {
                 return Some(own);
             }
         }

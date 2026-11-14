@@ -15,7 +15,7 @@ Window {
     objectName: "program"
     // Shown by the program once its scene graph has adopted the device, as a test harness shows it.
     visible: false
-    // Out of full screen, graphics.json's WindowWidth, WindowHeight and WindowResizable, as the start read them; 0 leaves the size to Qt.
+    // Out of full screen, graphics.json's WindowWidth, WindowHeight and WindowResizable, as the start read them; left at 0 where not read whole.
     property int windowedWidth: 0
     property int windowedHeight: 0
     property bool windowResizable: true
@@ -36,16 +36,20 @@ Window {
     Binding { target: program; property: "width"; value: program.screen.width; when: program.fullScreenAsked; restoreMode: Binding.RestoreNone }
     Binding { target: program; property: "height"; value: program.screen.height; when: program.fullScreenAsked; restoreMode: Binding.RestoreNone }
     // Out of full screen, the setting's size, given when the window is asked out of it and again at the compositor's answer,
-    // which Qt's Wayland plugin applies as a size of its own (EmuSen_Qt.md §7.7.H7, The window's size).
-    property bool windowedAnswerAwaited: false
+    // which Qt's Wayland plugin applies as a size of its own; never later, so a size the player gives the window stays
+    // (EmuSen_Qt.md §7.7.H7, The window's size). Nothing is given or held where the setting was not read whole.
     readonly property bool windowedSizeRead: program.windowedWidth > 0 && program.windowedHeight > 0
-    onWidthChanged: if (program.windowedAnswerAwaited) { program.windowedAnswerAwaited = false; program.width = program.windowedWidth; program.height = program.windowedHeight }
-    onHeightChanged: if (program.windowedAnswerAwaited) { program.windowedAnswerAwaited = false; program.width = program.windowedWidth; program.height = program.windowedHeight }
+    CompositorAnswer {
+        id: compositorAnswer
+        objectName: "compositorAnswer"
+        window: program
+        onFullScreenChanged: if (!compositorAnswer.fullScreen && !program.fullScreenAsked && program.windowedSizeRead) { program.width = program.windowedWidth; program.height = program.windowedHeight }
+    }
     // WindowResizable off holds the window at the setting's size, Qt's way: its least and greatest sizes made equal.
-    Binding { target: program; property: "minimumWidth"; value: program.windowedWidth; when: !program.fullScreenAsked && !program.windowResizable }
-    Binding { target: program; property: "maximumWidth"; value: program.windowedWidth; when: !program.fullScreenAsked && !program.windowResizable }
-    Binding { target: program; property: "minimumHeight"; value: program.windowedHeight; when: !program.fullScreenAsked && !program.windowResizable }
-    Binding { target: program; property: "maximumHeight"; value: program.windowedHeight; when: !program.fullScreenAsked && !program.windowResizable }
+    Binding { target: program; property: "minimumWidth"; value: program.windowedWidth; when: !program.fullScreenAsked && !program.windowResizable && program.windowedSizeRead }
+    Binding { target: program; property: "maximumWidth"; value: program.windowedWidth; when: !program.fullScreenAsked && !program.windowResizable && program.windowedSizeRead }
+    Binding { target: program; property: "minimumHeight"; value: program.windowedHeight; when: !program.fullScreenAsked && !program.windowResizable && program.windowedSizeRead }
+    Binding { target: program; property: "maximumHeight"; value: program.windowedHeight; when: !program.fullScreenAsked && !program.windowResizable && program.windowedSizeRead }
     // The EmuSen theme's folder, empty for the reference, and the folders its pictures may come from (EmuSen_Qt.md §3.5).
     property string theme
     property list<string> coverStores
@@ -261,7 +265,6 @@ Window {
                     program.width = program.windowedWidth
                     program.height = program.windowedHeight
                 }
-                program.windowedAnswerAwaited = !program.fullScreenAsked && program.windowedSizeRead
             }
         }
         // The grid's games: the section shown, sorted, narrowed and searched as the List card and the search ask; a theme's

@@ -2279,7 +2279,7 @@ here.
   readings (`EmuSen_BigPicture.md` §31, §35) are kept to the character: ES-DE's leading-number FLOAT, C-style
   UNSIGNED_INTEGER and COLOR, the pair split at its first space, `selectable` false only on `0`, `f` or `n`, untrimmed
   paths and includes, an unknown `imageType` hiding the element.
-- **The catalogue is data.** The 16 element types and 468 properties (472 from the re-check of §4.5.5 until 2026-11-14, when the four ES-DE 3.4.1 does not read left, §4.5.9) are `catalog.tsv`, one row a property (type,
+- **The catalogue is data.** The 16 element types and 472 properties (468 until the re-check of §4.5.5) are `catalog.tsv`, one row a property (type,
   literal default, same-as default, computed default, range, pair rule, shape, values, view limit, deferral), read once.
   It was generated from the C# `ThemeCatalog` by a script outside the repository on 2026-11-08 and is checked by the
   C# catalogue tests re-expressed (§4.5.3), the 39 hand-read entries among them.
@@ -2429,7 +2429,7 @@ two views of a pan):
   triggers, back, start, stick click); the bridge maps place to the kit's button. One owner each: the places are
   ES-DE's, the kit's functions the kit's.
 
-**`scene/mapping.tsv`** is now one row per (element, property): all 468 catalogue pairs, each once, with a status. The
+**`scene/mapping.tsv`** is now one row per (element, property): all 472 catalogue pairs, each once, with a status. The
 test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_not_drawn` holds it equal to the catalogue.
 
 | Status | Pairs | Meaning |
@@ -2441,9 +2441,9 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_n
 | `later:video` | 1 | the video's `scanlines` (`audio` heard since 2026-11-13, §4.5.9); the other fourteen of the family drawn or moved to `stationary` (§4.5.6, 2026-11-12) |
 | `later:gradients` | 0 | the 22 `*ColorEnd` and `*GradientType` pairs, drawn since 2026-11-13 (§4.5.7) |
 | `later:item-text` | 0 | the 19 carousel, grid and text list item text pairs, drawn since 2026-11-13 (§4.5.8) |
-| `later:picture` | 0 | drawn since 2026-11-13 (§4.5.7); `scaleFactor` of image and animation left the catalogue (decided 2026-11-13): ES-DE 3.4.1's property table (es-core/src/ThemeData.cpp) has no `scaleFactor` |
+| `later:picture` | 2 | `scaleFactor` of image and animation, which ES-DE 3.4.1 does not read: its property table (es-core/src/ThemeData.cpp) has no `scaleFactor`. ES-DE's current `THEMES.md` documents it (master, read 2026-11-14: the scale at which an SVG image or a Lottie animation is rasterised), so a theme may set it and the catalogue keeps the row. The other 14 drawn since 2026-11-13 (§4.5.7) |
 | `later:stationary` | 3 | the three `fadeAbovePrimary`; `stationary` and `renderDuringTransitions` drawn since 2026-11-13 (§4.5.9) |
-| `later:carousel-layout` | 0 | drawn since 2026-11-13 (§4.5.9); `itemLinearScale` and `itemLinearSpacing` left the catalogue (decided 2026-11-13): ES-DE 3.4.1 does not read them |
+| `later:carousel-layout` | 2 | `itemLinearScale`, `itemLinearSpacing`, which ES-DE 3.4.1 does not read; ES-DE's current `THEMES.md` documents both and NXE Menu sets them (§4.4), so the catalogue keeps the rows: without them that theme does not load. The other four drawn since 2026-11-13 (§4.5.9) |
 | `later:textlist-selector` | 0 | drawn since 2026-11-13 (§4.5.9) |
 | `later:help-layout` | 0 | `entryLayout`, drawn since 2026-11-13 (§4.5.9) |
 | `later:gameselector` | 13 | the gameselector's picks (`selection`, `gameCount`, `allowDuplicates`) and the elements that read them (`gameselector`, `gameselectorEntry` of image, video, text, datetime and rating): the scene shows no game in the system view (§4.8.5) |

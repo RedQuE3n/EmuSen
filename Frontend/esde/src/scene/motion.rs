@@ -298,6 +298,12 @@ pub struct Motion {
     /// The camera pan between the system and gamelist views, a screen height, the gamelist below.
     pub view_slide: Time,
     pub view_slide_easing: Easing,
+    /// A fade between views: to black over view_fade, held black for view_fade_hold, back over view_fade.
+    pub view_fade: Time,
+    pub view_fade_hold: Time,
+    /// A fade between systems in the system view: a carousel's or list's run, and a grid's.
+    pub system_fade: Time,
+    pub grid_system_fade: Time,
 }
 
 impl Motion {
@@ -324,6 +330,11 @@ impl Motion {
             grid_repeat: RepeatRule::new(ms(500.0), ms(200.0)),
             view_slide: ms(402.0),
             view_slide_easing: Easing::CubicOut,
+            // ES-DE 3.4.1 ViewController.cpp 971-972 (FADE_DURATION, FADE_WAIT); SystemView.cpp 427-433 and 476 (animTime x 1.3).
+            view_fade: ms(120.0),
+            view_fade_hold: ms(200.0),
+            system_fade: ms(400.0 * 1.3),
+            grid_system_fade: ms(300.0 * 1.3),
         }
     }
 }

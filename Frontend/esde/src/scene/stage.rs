@@ -1,10 +1,12 @@
-//! The system and gamelist views and the move between them, instant or a vertical pan as the theme's transition profile
-//! says; the help bar, clock and status stay still while the views pan beneath them (EmuSen_BigPicture.md §14.7).
+//! The system and gamelist views and the move between them, instant, a vertical pan or a fade through black as the
+//! theme's transition profile says; the help bar, clock and status stay still while the views pan beneath them
+//! (EmuSen_BigPicture.md §14.7; EmuSen_Qt.md §4.8.8).
 
 use crate::loader::Animation;
 
 use super::data::Data;
 use super::draw::{Drawn, Measures, Transit};
+use super::fade::{self, ViewFade};
 use super::frame::{Frame, Paint, Row, Rows};
 use super::motion::{Glide, Time};
 use super::view::{ElementState, SceneView};
@@ -25,10 +27,12 @@ pub struct Stage {
     measures: Measures,
     /// ES-DE's media viewer over the gamelist, while it is open.
     pub viewer: Option<Viewer>,
+    /// A fade through black between views, while it runs; `leaving` is the view shown until the black covers it.
+    fade: Option<ViewFade>,
 }
 
-// The elements that stay on the screen while the views pan.
-fn overlay(kind: &str) -> bool {
+/// The elements ES-DE draws over its views, apart from them: the help, the clock and the status.
+pub(super) fn overlay(kind: &str) -> bool {
     matches!(kind, "helpsystem" | "clock" | "systemstatus")
 }
 
@@ -41,7 +45,48 @@ impl Stage {
             direction: 0.0,
             measures: Measures::new(),
             viewer: None,
+            fade: None,
         }
+    }
+
+    /// The program's first view, faded in from black when the theme's profile fades at startup (ES-DE's
+    /// `goToSystemView` and `goToGamelist` from `ViewMode::NOTHING`).
+    pub fn opening(data: Data, view: &str, now: Time) -> Self {
+        let mut stage = Stage::new(data, view, now);
+        let profile = &stage.current.data.system().theme.transitions;
+        let animation = if view == "gamelist" { profile.startup_to_gamelist } else { profile.startup_to_system };
+        if animation == Animation::Fade {
+            stage.fade = Some(ViewFade::new(now, 0.0, &stage.current.motion));
+        }
+        stage.advance(now);
+        stage
+    }
+
+    /// Another system's gamelist from a gamelist, as ES-DE's quick system select opens it: a fade when the profile's
+    /// gamelistToGamelist fades, else at once, keeping the painter's measurements.
+    pub fn open_gamelist(&mut self, data: Data, now: Time) {
+        let animation = self.current.data.system().theme.transitions.gamelist_to_gamelist;
+        let next = SceneView::new(data, "gamelist", now);
+        self.viewer = None;
+        let previous = std::mem::replace(&mut self.current, next);
+        self.slide = Glide::at(0.0);
+        self.fade_from(previous, animation, now);
+        self.advance(now);
+    }
+
+    // A fade from the view on the screen when the profile fades, else none; a fade begun over another starts from its black.
+    fn fade_from(&mut self, previous: SceneView, animation: Animation, now: Time) {
+        let running = self.fade.take();
+        if animation != Animation::Fade {
+            self.leaving = None;
+            return;
+        }
+        let black = running.and_then(|f| f.black(now)).unwrap_or(0.0);
+        let still_leaving = running.is_some_and(|f| f.shows_leaving(now));
+        if !still_leaving {
+            self.leaving = Some(previous);
+        }
+        self.fade = Some(ViewFade::new(now, black, &self.current.motion));
     }
 
     /// A new view over new data that keeps the painter's measurements, as a reload, a resize or another system asks (EmuSen_Qt.md §4.8.5).
@@ -51,7 +96,12 @@ impl Stage {
     }
 
     pub fn is_moving(&self) -> bool {
-        self.leaving.is_some() || self.current.is_moving()
+        self.leaving.is_some() || self.fade.is_some() || self.current.is_moving()
+    }
+
+    // The view leaving in a pan, not in a fade.
+    fn panning(&self) -> Option<&SceneView> {
+        self.leaving.as_ref().filter(|_| self.fade.is_none())
     }
 
     /// The page count of the open viewer's manual, as the painter read it; whether it changed.
@@ -74,19 +124,29 @@ impl Stage {
         let data = self.current.data.clone();
         let next = SceneView::new(data, if to_gamelist { "gamelist" } else { "system" }, now);
         let previous = std::mem::replace(&mut self.current, next);
-        self.leaving = None;
         if animation == Animation::Slide && previous.motion.view_slide > 0 {
+            self.fade = None;
             self.direction = if to_gamelist { 1.0 } else { -1.0 };
             self.slide = Glide::new(0.0, 1.0, now, previous.motion.view_slide, previous.motion.view_slide_easing);
             self.leaving = Some(previous);
+        } else {
+            self.slide = Glide::at(0.0);
+            self.fade_from(previous, animation, now);
         }
         self.advance(now);
     }
 
     pub fn advance(&mut self, now: Time) {
         self.current.advance(now);
-        if self.slide.is_settled_at(now) {
-            self.leaving = None;
+        match self.fade {
+            Some(f) if f.black(now).is_none() => {
+                self.fade = None;
+                self.leaving = None;
+            }
+            Some(f) if !f.shows_leaving(now) => self.leaving = None,
+            Some(_) => {}
+            None if self.slide.is_settled_at(now) => self.leaving = None,
+            None => {}
         }
     }
 
@@ -96,9 +156,9 @@ impl Stage {
         let mut layers = vec![];
         let h = self.current.data.height;
         let p = self.slide.value_at(now);
-        let y = if self.leaving.is_some() { self.direction * (1.0 - p) * h } else { 0.0 };
+        let y = if self.panning().is_some() { self.direction * (1.0 - p) * h } else { 0.0 };
         let transit = |v: &SceneView, e: &ElementState| Transit::of(&v.theme_view().elements[e.index]);
-        if let Some(leaving) = &self.leaving {
+        if let Some(leaving) = self.panning() {
             let leave_y = -self.direction * p * h;
             let elements = leaving
                 .frame()
@@ -113,7 +173,7 @@ impl Stage {
                 .collect();
             layers.push(Layer { view: leaving.view.clone(), y: leave_y, elements });
         }
-        let panning = self.leaving.is_some();
+        let panning = self.panning().is_some();
         let mut elements: Vec<ElementState> =
             self.current.frame().into_iter().filter(|e| !(panning && transit(&self.current, e).hidden)).collect();
         for e in elements.iter_mut().filter(|e| overlay(&e.kind) || (panning && transit(&self.current, e).stays)) {
@@ -127,7 +187,7 @@ impl Stage {
     fn shifts(&self) -> (f64, f64) {
         let h = self.current.data.height;
         let p = self.slide.value_at(self.current.now());
-        if self.leaving.is_some() {
+        if self.panning().is_some() {
             (-self.direction * p * h, self.direction * (1.0 - p) * h)
         } else {
             (0.0, 0.0)
@@ -135,6 +195,9 @@ impl Stage {
     }
 
     fn drawn(&self, measures: &Measures) -> (Vec<Drawn>, Frame) {
+        if let Some(f) = self.fade {
+            return self.faded(f, measures);
+        }
         let (leave_y, y) = self.shifts();
         let mut frame = Frame::default();
         let mut all = vec![];
@@ -163,11 +226,37 @@ impl Stage {
         (all, frame)
     }
 
+    // A fade between views: the view left until the black covers it, then the new one, under the black; the clock and
+    // status over it, as ES-DE's Window draws them after the views (ViewController.cpp 1336-1386, Window.cpp 715-735).
+    fn faded(&self, f: ViewFade, measures: &Measures) -> (Vec<Drawn>, Frame) {
+        let now = self.current.now();
+        let mut frame = Frame::default();
+        let drawn = if f.shows_leaving(now) {
+            // At startup nothing is in front of the camera yet.
+            self.leaving.as_ref().map_or(vec![], |leaving| {
+                let (drawn, primary) = leaving.draw(measures, true);
+                frame.leaving_primary = primary;
+                drawn
+            })
+        } else {
+            let (drawn, primary) = self.current.draw(measures, false);
+            frame.primary = primary;
+            drawn
+        };
+        let over = |d: &Drawn| matches!(d.placed.kind.as_str(), "clock" | "systemstatus");
+        let (mut all, above): (Vec<Drawn>, Vec<Drawn>) = drawn.into_iter().partition(|d| !over(d));
+        let black = f.black(now).unwrap_or(0.0);
+        let data = &self.current.data;
+        all.push(Drawn { content: 0, placed: fade::veil("stage", data.width, data.height, black), wait: None, transit: Transit::default() });
+        all.extend(above);
+        (all, frame)
+    }
+
     /// Everything on the screen at the stage's time, in window pixels (EmuSen_Qt.md §4.5.5).
     pub fn frame(&self) -> Frame {
         let (drawn, mut frame) = self.drawn(&self.measures);
         let waits: Vec<Time> = drawn.iter().filter_map(|d| d.wait).collect();
-        frame.moving = self.leaving.is_some() || self.current.is_animating() || waits.contains(&0);
+        frame.moving = self.leaving.is_some() || self.fade.is_some() || self.current.is_animating() || waits.contains(&0);
         let now = self.current.data.now;
         let clock = drawn.iter().any(|d| d.placed.kind == "clock").then(|| {
             let seconds = self.current.theme_view().of_kind("clock").any(|e| e.string("format").is_some_and(|f| f.contains("%S")));

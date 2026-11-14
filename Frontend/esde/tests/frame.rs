@@ -85,12 +85,13 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_drawn_once_che
 fn a_theme_setting_a_pair_not_drawn_counts_it_unsupported_and_not_whole_and_a_heard_sound_set() {
     let t = Synth::new();
     t.capabilities("").theme(
-        "<view name=\"system\"><textlist name=\"l\"><fadeAbovePrimary>true</fadeAbovePrimary></textlist><helpsystem name=\"help\"><textColorDimmed>FF0000</textColorDimmed><opacityDimmed>0.5</opacityDimmed></helpsystem></view>
+        "<view name=\"system\"><textlist name=\"l\"><fadeAbovePrimary>true</fadeAbovePrimary></textlist><image name=\"i\"><scaleFactor>0.5</scaleFactor></image><helpsystem name=\"help\"><textColorDimmed>FF0000</textColorDimmed><opacityDimmed>0.5</opacityDimmed></helpsystem></view>
          <view name=\"all\"><sound name=\"systembrowse\"><path>./s.wav</path></sound></view>",
     );
     let m = check::measure(&t.root, &["nes"]);
     assert_eq!(m.properties.get("helpsystem.textColorDimmed"), Some(&"set"));
-    assert_eq!(m.properties.get("textlist.fadeAbovePrimary"), Some(&"unsupported"));
+    assert_eq!(m.properties.get("textlist.fadeAbovePrimary"), Some(&"set"));
+    assert_eq!(m.properties.get("image.scaleFactor"), Some(&"unsupported"));
     assert_eq!(m.properties.get("sound.path"), Some(&"set"));
     assert_eq!(m.count("unsupported"), 1);
     assert!(m.loads() && !m.whole());

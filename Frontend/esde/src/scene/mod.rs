@@ -4,6 +4,7 @@
 
 pub mod data;
 pub mod draw;
+pub mod fade;
 pub mod frame;
 pub mod grid;
 pub mod help;

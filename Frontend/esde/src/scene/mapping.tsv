@@ -71,7 +71,7 @@ carousel	letterCaseCustomCollections	drawn
 carousel	lineSpacing	drawn
 carousel	systemNameSuffix	drawn
 carousel	letterCaseSystemNameSuffix	drawn
-carousel	fadeAbovePrimary	later:stationary
+carousel	fadeAbovePrimary	drawn
 carousel	zIndex	drawn
 grid	pos	drawn
 grid	size	drawn
@@ -135,7 +135,7 @@ grid	letterCaseCustomCollections	drawn
 grid	lineSpacing	drawn
 grid	systemNameSuffix	drawn
 grid	letterCaseSystemNameSuffix	drawn
-grid	fadeAbovePrimary	later:stationary
+grid	fadeAbovePrimary	drawn
 grid	zIndex	drawn
 textlist	pos	drawn
 textlist	size	drawn
@@ -173,7 +173,7 @@ textlist	indicators	drawn
 textlist	collectionIndicators	drawn
 textlist	systemNameSuffix	drawn
 textlist	letterCaseSystemNameSuffix	drawn
-textlist	fadeAbovePrimary	later:stationary
+textlist	fadeAbovePrimary	drawn
 textlist	zIndex	drawn
 image	pos	drawn
 image	size	drawn

@@ -176,7 +176,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
         ],
         "the kit's types by name, the screen and the tokens; never the whole kit"
     );
-    assert!(COMMITTED_QMLDIR.contains("singleton Tokens 1.2"), "Tokens is a singleton");
+    assert!(COMMITTED_QMLDIR.contains("singleton Tokens 1.0"), "Tokens is a singleton");
     assert!(!COMMITTED_QMLDIR.lines().any(|l| l.starts_with("import ")), "the qmldir does not hand a theme the kit");
 }
 

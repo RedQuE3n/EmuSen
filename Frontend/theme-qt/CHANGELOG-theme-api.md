@@ -14,6 +14,9 @@ Decided 2026-11-14 by the tester (R-20261114-16): Eclipse's shared parts are kit
   `coronaHaloBlur`, `coronaHaloSpread`** (added, read-only), as the kit's `Tokens` gained them; a theme may override each
   in `theme.json`.
 - The module is 1.2 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.2.*`.
+  Every type of 1.0 keeps 1.0 in the qmldir and the three added are 1.2, so a theme that imports `EmuSen.Theme 1.0` finds
+  what it found before; the module's minor alone, given to every file, had made `import EmuSen.Theme 1.0` find no type
+  (seen 2026-11-14 in theme-audit's fixture themes: "ThemeScreen is not a type").
 
 ## 1.0, an addition: the raised shadow (2026-11-09)
 

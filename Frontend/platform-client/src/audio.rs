@@ -95,9 +95,7 @@ impl GameSound {
 
     /// The rate control's frames it keeps queued and its largest deviation from the nominal ratio, as it holds them.
     pub fn rate_target(&self) -> Result<(i32, f64)> {
-        let mut state = raw::emusen_endymion_rate_state { size: std::mem::size_of::<raw::emusen_endymion_rate_state>() as u32, ..Default::default() };
-        let n = unsafe { self.platform.lib.emusen_endymion_rate_read(self.rate.as_ptr(), &mut state) };
-        self.platform.status(n.into()).map(|_| (state.target_queued_frames, state.max_deviation))
+        self.rate_state().map(|state| (state.target_queued_frames, state.max_deviation))
     }
 
     /// Whether a device is open.
@@ -112,9 +110,14 @@ impl GameSound {
 
     /// The stereo frames the player has taken in, by its rate control's count.
     pub fn taken_frames(&self) -> Result<i64> {
+        self.rate_state().map(|state| state.total_input_frames)
+    }
+
+    /// The rate control's state as it holds it.
+    fn rate_state(&self) -> Result<raw::emusen_endymion_rate_state> {
         let mut state = raw::emusen_endymion_rate_state { size: std::mem::size_of::<raw::emusen_endymion_rate_state>() as u32, ..Default::default() };
         let n = unsafe { self.platform.lib.emusen_endymion_rate_read(self.rate.as_ptr(), &mut state) };
-        self.platform.status(n.into()).map(|_| state.total_input_frames)
+        self.platform.status(n.into()).map(|_| state)
     }
 
     /// The device the game plays on, by a name `Platform::audio_devices` gave; none for the system default. An open

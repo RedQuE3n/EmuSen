@@ -17,7 +17,7 @@ pub const EMUSEN_SCRAPE_BUSY: i32 = -1164;
 pub const EMUSEN_SCRAPE_IO: i32 = -1165;
 pub const EMUSEN_SCRAPE_NO_LIBRARY: i32 = -1166;
 pub const EMUSEN_SCRAPE_STORE_IN_USE: i32 = -1167;
-pub const EMUSEN_PLATFORM_ABI_VERSION: u32 = 47;
+pub const EMUSEN_PLATFORM_ABI_VERSION: u32 = 48;
 pub const EMUSEN_PLATFORM_NULL: i32 = -1;
 pub const EMUSEN_PLATFORM_BAD_STRING: i32 = -5;
 pub const EMUSEN_PLATFORM_NOT_SUPPORTED: i32 = -256;
@@ -85,6 +85,7 @@ pub const EMUSEN_GALAXIA_MODEL_CHEAT_FILE: u32 = 3;
 pub const EMUSEN_GALAXIA_MODEL_UPGRADE: u32 = 1;
 pub const EMUSEN_GALAXIA_SUGGEST_HINT: u32 = 0;
 pub const EMUSEN_GALAXIA_SUGGEST_NEAREST: u32 = 1;
+pub const EMUSEN_CHEATS_DATABASE_URL: &[u8; 57] = b"https://buildbot.libretro.com/assets/frontend/cheats.zip\0";
 pub const EMUSEN_NET_RUNNING: u32 = 0;
 pub const EMUSEN_NET_DONE: u32 = 1;
 pub const EMUSEN_NET_FAILED: u32 = 2;
@@ -998,6 +999,8 @@ pub struct PlatformLibrary {
     pub emusen_firmware_find: unsafe extern "C" fn(request: *const u8, request_len: usize, out: *mut u8, len: usize) -> i64,
     pub emusen_firmware_locate: unsafe extern "C" fn(request: *const u8, request_len: usize, out: *mut u8, len: usize) -> i64,
     pub emusen_cheats_parse: unsafe extern "C" fn(request: *const u8, request_len: usize, out: *mut u8, len: usize) -> i64,
+    pub emusen_cheats_install:
+        unsafe extern "C" fn(zip: *const u8, zip_len: usize, directory: *const u8, directory_len: usize, out: *mut u8, len: usize) -> i64,
     pub emusen_cheats_write: unsafe extern "C" fn(request: *const u8, request_len: usize, out: *mut u8, len: usize) -> i64,
     pub emusen_cheats_database_open: unsafe extern "C" fn(directory: *const u8, directory_len: usize) -> *mut emusen_cheats_database,
     pub emusen_cheats_database_free: unsafe extern "C" fn(db: *mut emusen_cheats_database),
@@ -1538,6 +1541,7 @@ impl PlatformLibrary {
         let emusen_firmware_find = unsafe { __library.get(b"emusen_firmware_find\0") }.map(|sym| *sym)?;
         let emusen_firmware_locate = unsafe { __library.get(b"emusen_firmware_locate\0") }.map(|sym| *sym)?;
         let emusen_cheats_parse = unsafe { __library.get(b"emusen_cheats_parse\0") }.map(|sym| *sym)?;
+        let emusen_cheats_install = unsafe { __library.get(b"emusen_cheats_install\0") }.map(|sym| *sym)?;
         let emusen_cheats_write = unsafe { __library.get(b"emusen_cheats_write\0") }.map(|sym| *sym)?;
         let emusen_cheats_database_open = unsafe { __library.get(b"emusen_cheats_database_open\0") }.map(|sym| *sym)?;
         let emusen_cheats_database_free = unsafe { __library.get(b"emusen_cheats_database_free\0") }.map(|sym| *sym)?;
@@ -1817,6 +1821,7 @@ impl PlatformLibrary {
             emusen_firmware_find,
             emusen_firmware_locate,
             emusen_cheats_parse,
+            emusen_cheats_install,
             emusen_cheats_write,
             emusen_cheats_database_open,
             emusen_cheats_database_free,
@@ -2574,6 +2579,17 @@ impl PlatformLibrary {
     }
     pub unsafe fn emusen_cheats_parse(&self, request: *const u8, request_len: usize, out: *mut u8, len: usize) -> i64 {
         unsafe { (self.emusen_cheats_parse)(request, request_len, out, len) }
+    }
+    pub unsafe fn emusen_cheats_install(
+        &self,
+        zip: *const u8,
+        zip_len: usize,
+        directory: *const u8,
+        directory_len: usize,
+        out: *mut u8,
+        len: usize,
+    ) -> i64 {
+        unsafe { (self.emusen_cheats_install)(zip, zip_len, directory, directory_len, out, len) }
     }
     pub unsafe fn emusen_cheats_write(&self, request: *const u8, request_len: usize, out: *mut u8, len: usize) -> i64 {
         unsafe { (self.emusen_cheats_write)(request, request_len, out, len) }

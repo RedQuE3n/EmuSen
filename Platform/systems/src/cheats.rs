@@ -56,6 +56,12 @@ pub fn codec(id: &str) -> Option<&'static Codec> {
     CODECS.iter().find(|c| c.id == id)
 }
 
+/// A system's codecs by its pair, detected then explicit; neither for a system with none.
+pub fn pair(system: &str) -> (Option<&'static Codec>, Option<&'static Codec>) {
+    let Some((_, auto, explicit)) = PAIRS.iter().find(|(id, _, _)| *id == system) else { return (None, None) };
+    (auto.and_then(codec), explicit.and_then(codec))
+}
+
 /// The space a codec's writes go into: its systems' `cheat_space`; none for a patch.
 pub fn space(codec: &Codec) -> Option<&'static str> {
     if codec.kind == Kind::RomPatch {

@@ -2,7 +2,6 @@
 //! as its `recorded_scraper` example and run beside the test: the scraper's test seam to give it, the paths it was
 //! asked, and the made-up developer file a run needs (EmuSen_Qt.md §1.1.3).
 
-use crate::{platform_dir, PROFILE};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -21,18 +20,7 @@ pub struct RecordedScraper {
 
 fn built() -> &'static Path {
     static BUILT: OnceLock<PathBuf> = OnceLock::new();
-    BUILT.get_or_init(|| {
-        let dir = platform_dir();
-        let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
-        let status = Command::new(cargo)
-            .current_dir(&dir)
-            .args(["build", "--quiet", "--profile", PROFILE, "-p", "emusen-platform", "--example", "recorded_scraper"])
-            .env_remove("CARGO_TARGET_DIR")
-            .status()
-            .expect("cargo runs");
-        assert!(status.success(), "the recorded scraper did not build: {status}");
-        dir.join("target").join(PROFILE).join("examples").join("recorded_scraper")
-    })
+    BUILT.get_or_init(|| crate::example("recorded_scraper"))
 }
 
 impl RecordedScraper {

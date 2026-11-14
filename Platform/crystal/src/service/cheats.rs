@@ -16,14 +16,8 @@ use super::{Answer, Call, Provider, READ_ONLY_WORDS, int32, no_such_id, not_supp
 use crate::json::Json;
 use crate::runtime::Runtime;
 
-/// `CheatDatabaseInstaller.LibretroCheatsUrl`, what RetroArch's own "Update Cheats" pulls.
-const LIBRETRO_CHEATS_URL: &str = "https://buildbot.libretro.com/assets/frontend/cheats.zip";
-
 /// `CheatDatabaseInstaller.Attribution`, shown beside the database as its licence asks.
 const ATTRIBUTION: &str = "Cheat data comes from the libretro cheat database (github.com/libretro/libretro-database),\nlicensed CC BY-SA 4.0. The codes themselves were collected from community sources,\nsubstantially GameHacking.org - credit belongs to their original authors.\nEmuSen ships none of this data; it is downloaded to your machine at your request.";
-
-/// `CheatImport.DefaultSpaceName`.
-const DEFAULT_SPACE: &str = "CpuBus";
 
 /// The words of the `ArgumentOutOfRangeException` a codec threw indexing an empty list.
 const RANGE_WORDS: &str = "Index was out of range. Must be non-negative and less than the size of the collection. (Parameter 'index')";
@@ -47,8 +41,7 @@ struct Cheats<'a> {
 
 /// A system's codecs, by its pack's pair, `SystemCodecs`.
 fn codecs_of(system: Option<&str>) -> (Option<&'static Codec>, Option<&'static Codec>) {
-    let Some(pair) = system.and_then(|s| codecs::PAIRS.iter().find(|(id, _, _)| *id == s)) else { return (None, None) };
-    (pair.1.and_then(codecs::codec), pair.2.and_then(codecs::codec))
+    system.map_or((None, None), codecs::pair)
 }
 
 /// The system a session's codecs are its pack's: the machine's, else its engine's first.
@@ -166,8 +159,7 @@ fn parsed_json(parsed: &cht::Parsed, game: Option<&str>) -> Vec<u8> {
 
 /// A `.cht` text read with the session's codecs, the C# `ChtFile.Parse`; a codec's range fault escapes as a fault.
 fn read_cht(cc: &Cheats, text: &str) -> Answer<cht::Parsed> {
-    let space = cc.auto.and_then(codecs::space).unwrap_or(DEFAULT_SPACE);
-    cht::parse(text, cc.auto.map(|c| c.id), space, cc.explicit.map(|c| c.id)).map_err(|_| refused(status::FAULT, RANGE_WORDS))
+    cht::parse_with(text, cc.auto, cc.explicit).map_err(|_| refused(status::FAULT, RANGE_WORDS))
 }
 
 fn codec_error(e: &codecs::Error) -> String {
@@ -253,14 +245,19 @@ fn prune_json(cc: &Cheats, apply: bool) -> Vec<u8> {
 fn update_json(cc: &Cheats) -> Answer<Vec<u8>> {
     let directory = database_folder(&galaxia_tree::tree());
     let fetch = cc.rt.fetch.as_ref().ok_or_else(|| refused(status::FAULT, "this runtime downloads nothing"))?;
-    let zip = fetch(LIBRETRO_CHEATS_URL).map_err(|w| refused(status::FAULT, w))?;
-    let installed = emusen_cheats::install::install(&zip, &directory).map_err(|r| match r {
-        emusen_cheats::install::Refusal::Unreadable(words) => refused(status::FAULT, words),
-        emusen_cheats::install::Refusal::Io(e) => refused(status::FAULT, e.to_string()),
-    })?;
+    let installed = fetch_installed(fetch.as_ref(), &directory)?;
     let mut j = Json::new();
     j.begin_object().int("installed", installed.installed as i64).str("directory", &directory).str("attribution", ATTRIBUTION).end_object();
     Ok(j.finish().into_bytes())
+}
+
+/// The database fetched and installed into `directory` by the staged install, so a refused one leaves it as it was.
+fn fetch_installed(fetch: &dyn Fn(&str) -> Result<Vec<u8>, String>, directory: &str) -> Answer<emusen_cheats::install::Installed> {
+    let zip = fetch(emusen_cheats::install::DATABASE_URL).map_err(|w| refused(status::FAULT, w))?;
+    emusen_cheats::install::install_staged(&zip, directory).map_err(|r| match r {
+        emusen_cheats::install::Refusal::Unreadable(words) => refused(status::FAULT, words),
+        emusen_cheats::install::Refusal::Io(e) => refused(status::FAULT, e.to_string()),
+    })
 }
 
 /// `Pending(op, apply)`: a change whose record a short buffer cannot take is kept until one can.
@@ -558,4 +555,32 @@ pub fn cheat_codecs(c: &Call) -> Answer<Vec<u8>> {
         j.strs("systems", c.rt.supported_cheat_systems()).end_object();
         Ok(j.finish().into_bytes())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use emusen_galaxia::archive::ZipWriter;
+
+    // DB_UPDATE's install is the staged one: an archive refused leaves the database as it was, one taken leaves no `.part`.
+    #[test]
+    fn the_session_tables_update_installs_through_the_staged_install() {
+        let at = std::env::temp_dir().join(format!("crystal-db-update-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&at);
+        std::fs::create_dir_all(at.join("db/Sega")).unwrap();
+        std::fs::write(at.join("db/Sega/Old.cht"), "old").unwrap();
+        std::fs::write(at.join("source"), "new").unwrap();
+        let mut w = ZipWriter::create(at.join("made.zip").to_str().unwrap()).unwrap();
+        w.add("Sega/New.cht", at.join("source").to_str().unwrap(), std::time::SystemTime::now(), false, &|| false).unwrap();
+        w.finish().unwrap();
+        let zip = std::fs::read(at.join("made.zip")).unwrap();
+        let directory = at.join("db").to_string_lossy().into_owned();
+        let half = zip[..zip.len() / 2].to_vec();
+        assert!(fetch_installed(&|_| Ok(half.clone()), &directory).is_err());
+        assert!(!at.join("db/Sega/New.cht").exists() && at.join("db/Sega/Old.cht").exists() && !at.join("db.part").exists());
+        let installed = fetch_installed(&|url| if url == emusen_cheats::install::DATABASE_URL { Ok(zip.clone()) } else { Err(url.into()) }, &directory).ok().unwrap();
+        assert_eq!(installed.installed, 1);
+        assert!(at.join("db/Sega/New.cht").exists() && at.join("db/Sega/Old.cht").exists() && !at.join("db.part").exists());
+        std::fs::remove_dir_all(&at).unwrap();
+    }
 }

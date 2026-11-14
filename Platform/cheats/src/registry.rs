@@ -364,6 +364,14 @@ fn type_name(kind: WriteType) -> &'static str {
     }
 }
 
+/// A `.cht` file's cheats as a game's own list, as `CheatImport` adds them: each the registry takes, in order, and how
+/// many it refused and left out; the list as `cheats/<game>.json` holds it.
+pub fn list_of(cheats: &[crate::cht::Cheat]) -> (CheatFile, usize) {
+    let mut registry = CheatRegistry::new();
+    let left_out = cheats.iter().filter(|c| registry.add(c.kind, c.writes.clone(), None, &c.description, c.enabled).is_err()).count();
+    (registry.to_file(), left_out)
+}
+
 /// `TryParseWriteType`: absent or blank is `Set`; otherwise a member's name or number, ignoring case, as
 /// `Enum.TryParse` takes it.
 pub fn parse_write_type(text: Option<&str>) -> Option<WriteType> {
@@ -526,6 +534,20 @@ impl Applied {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_files_cheats_become_a_list_and_one_the_registry_refuses_is_counted_left_out() {
+        let cheat = |description: &str, kind: Kind, write: Write| crate::cht::Cheat { description: description.into(), enabled: true, writes: vec![write], kind };
+        let cheats = [
+            cheat("poke", Kind::RamPoke, Write::poke("WRAM", 0x10, 9, 1)),
+            cheat("growing patch", Kind::RomPatch, Write { kind: WriteType::Increase, ..Write::patch(0x20, 1, 1) }),
+            cheat("patch", Kind::RomPatch, Write::patch(0x30, 0xEA, 1)),
+        ];
+        let (file, left_out) = list_of(&cheats);
+        assert_eq!(left_out, 1, "a ROM patch that increases is refused");
+        let names: Vec<_> = file.cheats.unwrap().into_iter().map(|c| c.description.unwrap()).collect();
+        assert_eq!(names, ["poke", "patch"]);
+    }
 
     #[test]
     fn a_simple_poke_goes_to_the_core_and_the_rest_stay_the_hosts() {

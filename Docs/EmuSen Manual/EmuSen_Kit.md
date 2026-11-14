@@ -3821,3 +3821,31 @@ the file's `pages` and the page's `pageSize` in points, so its host fits the box
 game page's viewer (EmuSen_Qt.md §7.8.2) and esde-qt's `ManualElement`, which drew the same two Qt PDF types itself
 until 2026-11-12. The kit's module now depends on `QtQuick.Pdf`, which esde-qt already did; nothing links Qt PDF that
 did not before. Kit 1.3.
+
+### 7.111 DrawnPixels: a picture decoded at the pixels it covers (2026-11-14)
+
+A picture laid out on the big screen's canvas (§7.112) is sized in design units and drawn through the canvas's
+`Scale`, so a `sourceSize` written in its own units decodes it at the design size and the scene enlarges it: at a
+window 1.5 times the design height a help bar's picture, a PDF's page or a controller's drawing was decoded at two
+thirds of the pixels drawn (read from `HelpBar.qml`, `PdfPage.qml` and `ControllerDrawing.qml` on 2026-11-14).
+`DrawnPixels` (C++, `cpp/drawn_pixels.h`) is an item that fills its picture and gives one property, `pixels`, a
+`size`: its box mapped to the scene through every ancestor's position, scale and transform (`mapRectToScene`), times
+its window's `effectiveDevicePixelRatio`, rounded up; zero outside a window, which an `Image` reads as its natural size.
+It measures again on each change Qt tells it of: `ItemTransformHasChanged` (an ancestor's too, as `ItemObservesViewport`
+asks, the flag `InsideClips` of §7.34 uses), `ItemSceneChange`, `ItemParentHasChanged`, `ItemDevicePixelRatioHasChanged`
+and its own geometry. `HelpBar`'s theme picture, `PdfPage`'s page and `ControllerDrawing`'s drawing set `sourceSize`
+to it. A rotated ancestor gives the bounding box's size. `RoundPicture` and `CoverTile` keep the `pixelScale` their
+callers give (decided 2026-11-14, R-20261114-5). Qt's documentation offers no bindable effective scale: `Item.mapToItem` and
+`mapToGlobal` are calls, which a binding does not re-run when an ancestor's transform changes, and QML is layout only
+(EmuSen_Qt.md §1.3). Test: `kit-qt/tests/drawn_pixels.rs`, at two window heights in one run. The pixel ratio is one
+under the headless harness, so a ratio other than one is not tested. Kit 1.4.
+
+### 7.112 CanvasUnits: the design height's one owner (2026-11-14)
+
+The canvas's design height, the units every big-screen screen is laid out in, was written twice: `designHeight: 800`
+in `NormalizedCanvas.qml` and `DESIGN_HEIGHT` in kit-core's night sky, which sizes the stars and the glow. It is now
+`kit-core/src/canvas.rs`'s `DESIGN_HEIGHT`, which the sky re-exports, and the kit's singleton `CanvasUnits` gives it to
+QML as `designHeight`, a constant; `NormalizedCanvas.designHeight` keeps its place in the registry and binds to it
+(decided 2026-11-14, R-20261114-7). It is a part of its own rather than a property of `Tokens` because every read-only number of
+`Tokens` takes a theme's override (§7.2, `tests/overrides.rs`), and the design height is the program's, not a theme's.
+Kit 1.4.

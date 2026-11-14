@@ -1,5 +1,7 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Pdf
+import EmuSen.Kit as Kit
 
 // A page of a PDF file drawn to its box through Qt PDF, with the file's pages and the page's size in points: the media viewers' manual (EmuSen_Kit.md §7.110).
 Item {
@@ -12,12 +14,21 @@ Item {
         id: document
         source: root.source
     }
-    PdfPageImage {
+    // The page is made only for a loaded document, so its decode size never asks a file of an empty source.
+    Loader {
         anchors.fill: parent
-        document: document
-        currentFrame: root.page
-        sourceSize: Qt.size(root.width, root.height)
-        fillMode: Image.Stretch
-        asynchronous: false
+        active: document.status === PdfDocument.Ready
+        sourceComponent: PdfPageImage {
+            document: document
+            currentFrame: root.page
+            sourceSize: pagePixels.pixels
+            fillMode: Image.Stretch
+            asynchronous: false
+            // Rendered at the pixels the page covers, through any canvas's scale (EmuSen_Kit.md §7.111).
+            Kit.DrawnPixels {
+                id: pagePixels
+                anchors.fill: parent
+            }
+        }
     }
 }

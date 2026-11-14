@@ -20,12 +20,13 @@ fn facts(f: Facts) -> Value {
 #[test]
 fn the_home_card_has_mistress_rows_and_pages() {
     let home = pages_of(home_card::CARD).unwrap();
-    // The big screen's Power page (HomeCardPower), and Steam's Game Mode's (HomeCardHandheldPower).
+    // The Power page (HomeCardPower): Quit alone, Big Picture being the program on every machine (the tester decided, 2026-11-13).
     let power = home.page(home_card::POWER, &facts(Facts::default()));
     assert_eq!((power.title.as_str(), power.breadcrumb.as_str()), ("Power", "Home"));
     assert!(power.footer.starts_with("EmuSen ") && power.footer.len() > 7, "the program's version under Power: {}", power.footer);
-    assert_eq!(labels(home_card::CARD, home_card::POWER, &facts(Facts::default())), ["Exit Big Picture", "Quit EmuSen..."]);
+    assert_eq!(labels(home_card::CARD, home_card::POWER, &facts(Facts::default())), ["Quit EmuSen..."]);
     assert_eq!(labels(home_card::CARD, home_card::POWER, &facts(Facts { game_mode: true, ..Facts::default() })), ["Quit EmuSen..."]);
+    assert_eq!(home.choose(home_card::POWER, "bigPicture"), Choice::Owed, "no row of Power's leaves Big Picture");
     // Quit asks first (HomeCardQuit): No, then Yes; its sentence says whether a game closes too.
     let quit = home.page(home_card::QUIT, &facts(Facts::default()));
     assert_eq!(quit, question("Quit EmuSen?", "EmuSen closes."));

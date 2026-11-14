@@ -5252,8 +5252,9 @@ built on it too:
 **The Home card** (`home_card.rs`): Mistress's `HomeRows`, `ToolRows` and `PowerRows` in her words. The first page is
 Continue (while a game is suspended), Selected game ▸, Search, Start Console ▸, Tools ▸, Settings ▸ and Power ▸, with
 Tools and Power each starting a section. Tools lists the five tools with their summaries as values, then Themes,
-Collections, Compressed Discs and Shell. Power has Exit Big Picture, then Quit EmuSen..., whose question says "EmuSen
-closes." or "The game closes, then EmuSen."; Yes quits the program. In Steam's Game Mode Power holds Quit alone. Under
+Collections, Compressed Discs and Shell. Power has Quit EmuSen..., whose question says "EmuSen
+closes." or "The game closes, then EmuSen."; Yes quits the program. Power held Exit Big Picture above it outside Steam's
+Game Mode until 2026-11-13, when it was taken off: Big Picture is the program's only interface for now (§7.7.H7). Under
 Power's rows stands "EmuSen 0.9.1" in Muted at 26 (Mistress's `BigMenuFooter`; within a pixel of her render at 1280 ×
 800). The version's owner is still MSBuild's `Directory.Build.props`. `qt-models/build.rs` reads it from there rather
 than copying it, and the reading moves with the build host (§1.9). Start Console is offered on both cards wherever a
@@ -5294,7 +5295,7 @@ none`; and the screens beneath under their stage 1 names. The side-by-sides (Mis
 over either) are `~/.cache/emusen/tmp/qt-s2/compare/<State>-<size>-side.png`.
 
 **Differences that remain, each for the tester:**
-- Exit Big Picture closes the card and does nothing more: emusen-qt has only the big-screen form until stage 6.
+- Exit Big Picture closed the card and did nothing more; since 2026-11-13 Power no longer offers it (§7.7.H7).
 - The Tools page's rows, Settings ▸, Start Console ▸ (§18.3's page), Collections ▸ and the paused frame in Continue's
   pane are declared and do nothing yet. Each opens a screen of a later stage. (Since §7.9: Continue resumes the game,
   Start Console starts the console chosen, and Tools ▸ Cores and ▸ Themes open their screens; Most played, Year and
@@ -6409,6 +6410,64 @@ the window (`fullScreenAsked`), and what the window reports (`visibility` FullSc
 shows both: the test's own `kwin_wayland --virtual` grants the request and Qt reports the window's visibility from the
 compositor's answer, which the passing runs of 2026-11-12 saw; the request alone would not prove the window changed, so
 the assertion on the window's state stays.
+
+**Big Picture is the program, for now** (the tester decided, 2026-11-13, R-20261113-7, narrowed by R-20261113-9). The
+program starts full screen on every machine, not only under Steam's Game Mode, and Big Picture is its only interface for
+now; there is no desktop view. The choice is made in one place, `start::FULL_SCREEN`: the start carries it as
+`Start.full_screen`, hands it to the window as `fullScreenAsked`, and `window::show` shows the window by it, with
+`QWindow::showFullScreen` (which sets the full-screen state, then shows the window, so a Wayland compositor is asked
+through `xdg_toplevel.set_fullscreen` before the first frame; Qt 6 documentation of `QWindow`, read 2026-11-13). What the
+compositor gives is read back as the window's `visibility`; under gamescope, which shows every window full screen, the
+request changes nothing. The Fullscreen hotkey still gives a window and full screen again, and every screen still lays
+out at any window size. `full_screen_gpu.rs` holds it in the test's own compositor: the window that `start::initial` and
+`window::show` make reports FullScreen, the first F11 asks for and gets a window, the second full screen again.
+
+**The window's size** (the tester decided, 2026-11-14, R-20261114-1: no resolution is written into the program; the
+program runs at the resolution the device sets, on the handheld's panel and on a television when it is docked). Each
+size has one owner. While full screen is asked (`fullScreenAsked`), the window's screen: `Main.qml` binds the window's
+width and height to `screen.width` and `screen.height` (QML's `Window.screen`, a `QQuickScreenInfo` whose size signals
+are wired to `QScreen::geometryChanged`, and which is made again on `QWindow::screenChanged`; qtdeclarative 6.11.2,
+`qquickscreen.cpp` and `qquickwindowmodule.cpp`, read 2026-11-14), so the window follows its screen. The size is the
+window's before it is shown, and that matters under gamescope: gamescope 3.16.30.1 never sends the full-screen state
+(its `wlserver.cpp` sets only `activated` on a toplevel, read 2026-11-14), and Qt 6.11.2's xdg-shell plugin, given a
+`configure` with no size and neither the maximized nor the full-screen state, gives the window the size it had
+(`QWaylandXdgSurface::Toplevel::applyConfigure`, `m_normalSize`), so the window's own size is the size the player sees.
+A compositor that names a size (KWin) is obeyed: Qt applies its `configure`. Out of full screen, the window takes
+graphics.json's `WindowWidth` and `WindowHeight`, and `WindowResizable` off holds it there by its least and greatest sizes
+(`play::Windowed`, read through the description's `applies` as every setting is; an absent file is the model's
+`model_new`). The three are read whole or not at all: where one is missing or a size is not a positive whole number,
+`Windowed::of` gives none, nothing is given to the window and nothing holds it, and the window is Qt's to size and free,
+as any window given nothing is. A failed read is not said by the program's start, which says none of its failed reads;
+`emusen-qt-play`'s start says it in the error's own words on standard error, as it says its others. The setting's size
+is given when the window is asked out of full screen and once more at the compositor's answer, never after, so a size
+the player then gives the window stays. The answer is marked by `CompositorAnswer` (qt-app's own element,
+`cpp/compositor_answer.h`): Qt 6.11.2's Wayland plugin, applying a `configure`, reports the state through
+`QWindowSystemInterface::handleWindowStateChanged` before it applies the size with
+`QWaylandWindow::resizeFromApplyConfigure` (`qwaylandxdgshell.cpp`, `Toplevel::applyConfigure`, lines 89 and 126); the
+state is a queued window-system event, the size a synchronous one (`qwaylandwindow.cpp` line 516, `QWaylandWindow::setGeometry`), and
+`QGuiApplicationPrivate::processWindowStateChangedEvent` then sends the window a spontaneous `QWindowStateChangeEvent`
+whatever the state, while `QWindow::windowStateChanged` and `visibility` change at the request and not at an answer that
+repeats them (`qwindow.cpp`, `setWindowStates`; `qguiapplication.cpp` lines 2776 to 2791; all read 2026-11-14). The
+element filters the window's events for that event and holds `fullScreen`, the state applied last; `Main.qml` gives the
+setting's size when it turns false. The answer KWin gives is the size the window had before full screen, which may be
+the setting's size already: `full_screen_gpu.rs` holds both cases, a size the test gives the window after each answer
+staying. Under gamescope, which never sends the full-screen state, `fullScreen` never turns, and the size given at the
+request stands (`m_normalSize`, above). With no platform library the size is left to Qt: `QWindow::resize` changes
+nothing on a window not yet made whose size is already the one asked (0 by 0, `qwindow.cpp` line 2108), and Qt's
+Wayland plugin then gives a toplevel with no size 500 by 500 (`QWaylandWindow::initWindow`, `defaultGeometry`). Under
+gamescope, `visibility` never reads FullScreen, so the Fullscreen hotkey asks for full screen each time and the window
+keeps its screen's size. `emusen-qt-play`'s window, shown in a window and never full screen, takes graphics.json's size
+the same way, its size untouched where nothing was read whole; `qt-play/tests/window_size.rs` holds it.
+`full_screen_gpu.rs` and `full_screen_small_gpu.rs` hold the program's at two sizes of the test's choosing: the window has
+the compositor's output size before it is shown, full screen at that size, graphics.json's size after F11, the screen's
+again after the second.
+Two rows that did nothing were taken off: Power's Exit Big Picture (its key `bigPicture` and its route, which only closed
+the card, went with it, since nothing else names them) and Settings ▸ EmuSen's Big picture row (`AppSettings
+BigScreen`, which nothing in the Qt program reads). A desktop mode would need back: the row in `home_card::power_page`
+outside Game Mode (`Facts.game_mode` is still handed in, from `start::game_mode_from`, which also gives the Guide chords'
+default), with its key and an action that leaves for the desktop; the `bigpicture` entry in `settings_screen.json`'s
+EmuSen section and a reader of `BigScreen` at the start; and the start's choice in `start::FULL_SCREEN`. The Kit's
+Desktop form, the base's `BigScreen` setting and the theme API's `Device.bigScreen` stay as they are.
 
 **The hotkeys' words.** Endymion gives the ten action words through `bindings_defaults` (HOTKEYS), whose keys they are;
 the Hotkeys page reads its rows from there (`Bindings::actions`). `qt-endymion` `hotkeys.rs` needs a map from each word to

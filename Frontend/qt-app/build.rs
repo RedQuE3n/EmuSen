@@ -18,6 +18,8 @@ fn main() {
             .depend("EmuSen.Esde"),
     )
     .files(["src/theme.rs", "src/style.rs", "src/cues.rs"])
+    .include_dir("cpp")
+    .cpp_files(["cpp/compositor_answer.h", "cpp/compositor_answer.cpp"])
     .qrc("themes.qrc")
     .qt_module("Quick")
     .qt_module("QuickControls2")

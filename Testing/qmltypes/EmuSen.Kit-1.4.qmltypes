@@ -335,6 +335,26 @@ Module {
         }
     }
     Component {
+        file: "canvas.cxxqt.h"
+        lineNumber: 15
+        name: "CanvasUnits"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/CanvasUnits 1.0"]
+        isCreatable: false
+        isSingleton: true
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "designHeight"
+            type: "double"
+            read: "getDesignHeight"
+            index: 0
+            lineNumber: 21
+            isReadonly: true
+            isPropertyConstant: true
+        }
+    }
+    Component {
         file: "table.cxxqt.h"
         lineNumber: 59
         name: "ColumnFit"
@@ -764,6 +784,25 @@ Module {
                 "Refused"
             ]
         }
+    }
+    Component {
+        file: "drawn_pixels.h"
+        lineNumber: 8
+        name: "DrawnPixels"
+        accessSemantics: "reference"
+        prototype: "QQuickItem"
+        exports: ["EmuSen.Kit/DrawnPixels 1.4"]
+        exportMetaObjectRevisions: [260]
+        Property {
+            name: "pixels"
+            type: "QSize"
+            read: "pixels"
+            notify: "pixelsChanged"
+            index: 0
+            lineNumber: 12
+            isReadonly: true
+        }
+        Signal { name: "pixelsChanged"; lineNumber: 20 }
     }
     Component {
         file: "edge_mask.h"

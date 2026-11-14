@@ -33,7 +33,10 @@
     "show_status_text": ["AppSettings ShowStatusText", true],
     "show_status_bar": ["AppSettings ShowStatusBar", true],
     "navigation_volume": "AppSettings BigPictureInterface.NavigationVolume",
-    "play_hours": "AppSettings MaxPlayTimeTracking"
+    "play_hours": "AppSettings MaxPlayTimeTracking",
+    "window_width": "GraphicsConfig WindowWidth",
+    "window_height": "GraphicsConfig WindowHeight",
+    "window_resizable": ["GraphicsConfig WindowResizable", true]
   },
   "sections": [
     {
@@ -145,7 +148,6 @@
       "rows": [
         {"id": "saves", "label": "Saves and states", "hint": "Where states go, what happens when a game starts again, and how play time is counted.", "page": "Saves and states",
          "pane": {"sentence": "States and saves live beside the games, with one resume point kept per game.", "muted": ["Resume · {AppSettings ResumeOnLaunch}"]}},
-        {"id": "bigpicture", "row": "AppSettings BigScreen"},
         {"id": "background", "row": "AppSettings PauseInBackground"},
         {"id": "about", "label": "About", "hint": "EmuSen's version.", "value": {"fact": "version"}}
       ]

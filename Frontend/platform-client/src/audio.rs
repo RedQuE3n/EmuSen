@@ -5,10 +5,11 @@
 use crate::error::Result;
 use crate::platform::Platform;
 use crate::raw;
+use serde_json::Value;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
-/// How a game's sound is played: audio.json's three, and the device's buffer.
+/// How a game's sound is played: the three the base's `AudioConfig` holds, and the device's buffer.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SoundSettings {
     pub sample_rate: i32,
@@ -17,11 +18,26 @@ pub struct SoundSettings {
     pub buffer_frames: i32,
 }
 
-impl Default for SoundSettings {
-    /// `AudioPlayer`'s own defaults, which audio.json's are.
-    fn default() -> SoundSettings {
-        SoundSettings { sample_rate: 32000, target_latency_ms: 256, max_rate_deviation: 0.005, buffer_frames: 4096 }
+/// The player's own constant for SDL's device buffer hint (frames); no owner in the base holds it (EmuSen_Audio_Sync.md §7.6).
+pub const DEVICE_BUFFER_FRAMES: i32 = 4096;
+
+impl SoundSettings {
+    /// The settings an `AudioConfig` document holds, as Galaxia binds it (`Platform::model_new` or `model_load` of
+    /// `MODEL_AUDIO_CONFIG`); a field missing or of another type is refused with its name.
+    pub fn of_audio_config(config: &Value) -> Result<SoundSettings> {
+        let field = |name: &str| config.get(name).ok_or_else(|| missing(name));
+        let whole = |name: &str| field(name)?.as_i64().and_then(|n| i32::try_from(n).ok()).ok_or_else(|| missing(name));
+        Ok(SoundSettings {
+            sample_rate: whole("SampleRate")?,
+            target_latency_ms: whole("OutputTargetLatencyMs")?,
+            max_rate_deviation: field("RateControlMaxDeviation")?.as_f64().ok_or_else(|| missing("RateControlMaxDeviation"))?,
+            buffer_frames: DEVICE_BUFFER_FRAMES,
+        })
     }
+}
+
+fn missing(name: &str) -> crate::error::Error {
+    crate::error::status(raw::EMUSEN_PLATFORM_PARSE, format!("AudioConfig has no number {name}"))
 }
 
 /// The game's sound player and the rate control it is lent at each call.
@@ -77,6 +93,11 @@ impl GameSound {
         self.get(raw::EMUSEN_ENDYMION_AUDIO_QUEUED_FRAMES)
     }
 
+    /// The rate control's frames it keeps queued and its largest deviation from the nominal ratio, as it holds them.
+    pub fn rate_target(&self) -> Result<(i32, f64)> {
+        self.rate_state().map(|state| (state.target_queued_frames, state.max_deviation))
+    }
+
     /// Whether a device is open.
     pub fn available(&self) -> Result<bool> {
         self.get(raw::EMUSEN_ENDYMION_AUDIO_AVAILABLE).map(|n| n != 0)
@@ -89,9 +110,14 @@ impl GameSound {
 
     /// The stereo frames the player has taken in, by its rate control's count.
     pub fn taken_frames(&self) -> Result<i64> {
+        self.rate_state().map(|state| state.total_input_frames)
+    }
+
+    /// The rate control's state as it holds it.
+    fn rate_state(&self) -> Result<raw::emusen_endymion_rate_state> {
         let mut state = raw::emusen_endymion_rate_state { size: std::mem::size_of::<raw::emusen_endymion_rate_state>() as u32, ..Default::default() };
         let n = unsafe { self.platform.lib.emusen_endymion_rate_read(self.rate.as_ptr(), &mut state) };
-        self.platform.status(n.into()).map(|_| state.total_input_frames)
+        self.platform.status(n.into()).map(|_| state)
     }
 
     /// The device the game plays on, by a name `Platform::audio_devices` gave; none for the system default. An open

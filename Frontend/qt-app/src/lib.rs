@@ -16,6 +16,7 @@ pub mod cues;
 pub mod start;
 pub mod style;
 pub mod theme;
+pub mod window;
 
 /// Where the program's window lives in the resource system.
 pub const MAIN_URL: &str = "qrc:/qt/qml/EmuSen/App/qml/Main.qml";

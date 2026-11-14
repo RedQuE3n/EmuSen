@@ -599,7 +599,6 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     shadow_over_band(&mut scene);
     hold(&mut scene, "HomeCardPower", &mockup::Mockup::default(), &mut excuses, &mut report);
     scene.assert_still("the Home card in place");
-    scene.pad(UiButton::Down);
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "homeCardModel", "page", "quit", 1000);
     hold(&mut scene, "HomeCardQuit", &mockup::Mockup::default(), &mut excuses, &mut report);

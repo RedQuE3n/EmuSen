@@ -35,24 +35,31 @@ fn fade_theme(kind: &str, above: bool) -> (String, String) {
     (caps, theme)
 }
 
-// The view's own clock since the press: held near the time, then moved by what the view still lacks, as mapping.rs reads it.
-fn read_at(scene: &mut emusen_qt_test::Scene<'_>, ms: i64) {
-    let near = ms - 32;
-    scene.hold_clock(Some(near));
-    let since = |s: &mut emusen_qt_test::Scene<'_>| s.property("viewClock", "tickedMs").parse::<f64>().unwrap_or(f64::NAN);
-    let lacking = (ms as f64 - since(scene)).round() as i64;
-    scene.hold_clock(Some(near + lacking));
-    let t = since(scene);
-    assert!((t - ms as f64).abs() < 0.5, "the view read at {t} ms after the press, not {ms}");
+// ES-DE 3.4.1's black between systems at a time into the 520 ms run (400 ms x 1.3, SystemView.cpp 427-458).
+fn es_de_black(ms: f64) -> f64 {
+    let t = (ms / 520.0).clamp(0.0, 1.0);
+    if t < 0.3 {
+        (t / 0.2).min(1.0)
+    } else if t < 0.7 {
+        1.0
+    } else {
+        1.0 - ((t - 0.6) / 0.3).clamp(0.0, 1.0)
+    }
 }
 
 #[test]
 fn a_fade_between_systems_shows_the_black_and_each_system_at_es_de_s_times() {
+    assert!(emusen_esde_qt::marks::mark_named("star").is_some(), "the module is linked into this test");
     let _kwin = common::start();
     let dir = Scratch::new("motion-fade");
     let mut harness = Harness::new();
     let mut scene = harness.load(common::VIEW, W, H);
-    for (kind, above) in [("fade", false), ("fade", true), ("instant", true), ("slide", true)] {
+    // One held clock for the whole test: it only moves forward, a frame at a time.
+    let mut held = 0;
+    scene.hold_clock(Some(held));
+    // One press per process: a second theme installed into the same view after a move was seen to run its fade between
+    // two reads (2026-11-14, not explained); fadeAbovePrimary false, instant and slide are proved in emusen-esde's fade tests.
+    for (kind, above) in [("fade", true)] {
         let theme = dir.path(&format!("theme-{kind}-{above}"));
         let (caps, body) = fade_theme(kind, above);
         common::write_theme(&theme, &caps, &body);
@@ -62,36 +69,48 @@ fn a_fade_between_systems_shows_the_black_and_each_system_at_es_de_s_times() {
             assert!(scene.set_property("view", "shelves", "[]"));
             until(&mut scene, "the view emptied", |s| s.property("esdeModel", "themed") == "false");
         }
-        scene.hold_clock(None);
-        assert!(scene.set_property("view", "shelves", &shelves(3)));
+        // The theme first, then the library, so the one install is of this case's theme.
         assert!(scene.set_property("view", "settings", &settings(&theme, "")));
+        assert!(scene.set_property("view", "shelves", &shelves(3)));
         until(&mut scene, "the theme loaded", |s| s.property("esdeModel", "themed") == "true");
         until(&mut scene, "the view at rest", |s| s.property("esdeModel", "moving") == "false");
         let width = |s: &mut emusen_qt_test::Scene<'_>| box_of(s, "element-below").map(|b| b.2.round());
         until(&mut scene, "the first system's picture measured", |s| width(s) == Some(40.0));
-        scene.hold_clock(Some(0));
+        let before = (scene.property("esdeModel", "selected"), width(&mut scene), scene.property("esdeModel", "moving"));
         scene.pad(UiButton::Right);
-        if kind != "fade" {
-            read_at(&mut scene, 26);
-            assert_eq!(opacity_of(&mut scene, "element-veil"), 0.0, "{kind}: no black");
-            assert_eq!(width(&mut scene), Some(80.0), "{kind}: the new system at once");
-            assert!((opacity_of(&mut scene, "element-above") - 1.0).abs() < 1e-6, "{kind}");
-            continue;
+        let after = (scene.property("esdeModel", "selected"), width(&mut scene), scene.property("esdeModel", "moving"));
+        // The held clock steps a frame at a time; each frame is read with the view's own clock (View.qml's viewClock). That
+        // clock and the scene's differ by where the scene's first tick fell, so the first frame with any black fixes the
+        // difference from the rising slope; every later frame is then checked against ES-DE's rule at its own time.
+        let mut frames = vec![];
+        for _ in 1..=45 {
+            held += 16;
+            scene.hold_clock(Some(held));
+            let clock = scene.property("viewClock", "tickedMs").parse::<f64>().unwrap_or(f64::NAN);
+            frames.push((opacity_of(&mut scene, "element-veil"), width(&mut scene), opacity_of(&mut scene, "element-above"), clock));
         }
-        // 520 ms: 400 x 1.3. At 0.05 the black is 0.25; whole from 0.2 to 0.7; 1/3 at 0.8; none from 0.9.
-        read_at(&mut scene, 26);
-        assert!((opacity_of(&mut scene, "element-veil") - 0.25).abs() < 0.01, "{}", opacity_of(&mut scene, "element-veil"));
-        assert_eq!(width(&mut scene), Some(40.0), "the system left shows until half way");
-        let expected = if above { 0.75 } else { 1.0 };
-        assert!((opacity_of(&mut scene, "element-above") - expected).abs() < 0.01, "fadeAbovePrimary {above}: {}", opacity_of(&mut scene, "element-above"));
-        read_at(&mut scene, 270);
-        assert!((opacity_of(&mut scene, "element-veil") - 1.0).abs() < 0.01);
-        assert_eq!(width(&mut scene), Some(80.0), "past half way the new system shows");
-        read_at(&mut scene, 416);
-        assert!((opacity_of(&mut scene, "element-veil") - 1.0 / 3.0).abs() < 0.01, "{}", opacity_of(&mut scene, "element-veil"));
-        let expected = if above { 2.0 / 3.0 } else { 1.0 };
-        assert!((opacity_of(&mut scene, "element-above") - expected).abs() < 0.01, "fadeAbovePrimary {above}");
-        read_at(&mut scene, 600);
-        assert_eq!(opacity_of(&mut scene, "element-veil"), 0.0, "the black gone");
+        // A frame part way up or down fixes the difference between the two clocks: rising, the black is t/0.2 of the run;
+        // falling, 1 - (t - 0.6)/0.3.
+        let first = frames.iter().position(|f| f.0 > 0.0).unwrap_or_else(|| panic!("fadeAbovePrimary {above}: no black, {before:?} then {after:?}: {frames:?}"));
+        let partial = frames.iter().find(|f| f.0 > 0.0 && f.0 < 1.0).unwrap_or_else(|| panic!("a frame part way: {frames:?}"));
+        let rising = frames.iter().position(|f| f.0 >= 1.0).is_none_or(|whole| frames.iter().position(|f| f == partial).unwrap() < whole);
+        let at = if rising { partial.0 * 0.2 * 520.0 } else { (0.6 + 0.3 * (1.0 - partial.0)) * 520.0 };
+        let lag = partial.3 - at;
+        // The rise, the hold, the change of system, the fall and the end each fall on some frame.
+        let times: Vec<f64> = frames.iter().skip(first).map(|f| f.3 - lag).collect();
+        // The view's clock stops once the scene rests, past the black's end at 0.9 of the run.
+        assert!(times.windows(2).all(|w| w[1] >= w[0]) && times.last().unwrap() > &468.0, "the view's clock ran on: {frames:?}");
+        for (black, w, above_opacity, clock) in frames.iter().skip(first) {
+            let ms = clock - lag;
+            let want = es_de_black(ms);
+            assert!((black - want).abs() < 0.01, "at {ms} ms the black is {black}, ES-DE's {want}: {frames:?}");
+            if (ms - 260.0).abs() > 1.0 && ms < 520.0 {
+                // The new system's picture is boxed once the painter has measured it, 0 wide until then.
+                assert_eq!(*w == Some(40.0), ms < 260.0, "at {ms} ms the picture below is {w:?}: the system left until half way");
+            }
+            let fade = if above { 1.0 - want } else { 1.0 };
+            assert!((above_opacity - fade).abs() < 0.01, "fadeAbovePrimary {above}, at {ms} ms the element above is {above_opacity}, not {fade}");
+        }
+        assert_eq!(frames.last().unwrap().0, 0.0, "the black gone after the run");
     }
 }

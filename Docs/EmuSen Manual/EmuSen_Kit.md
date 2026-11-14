@@ -2210,7 +2210,13 @@ theme-audit records a theme's splash at a stated time and a screen with A held (
   as a display's frames would, so a `Behavior` or a `FrameAnimation` that a step starts runs from its own time rather than
   being jumped over. `None` uninstalls it, which leaves Qt's default timer driver in place, not a threaded render loop's own:
   a caller holds the clock last. Every `QAbstractAnimation` is held, and a `FrameAnimation` is triggered on the held
-  clock's frames; a `Timer` is not. A `FrameAnimation`'s `frameTime` and `elapsedTime` are not held: Qt reads them from
+  clock's frames. A `Timer` is held too since 2026-11-14: Qt runs a QML `Timer` as a pause animation
+  (`QPauseAnimationJob`, qtdeclarative `src/qmlmeta/types/qqmltimer.cpp`), and when every running animation is a pause,
+  `QUnifiedTimer::localRestart` stops the installed driver and waits on a wall-clock `pauseTimer`, so a resting scene's
+  Timer ran on wall time through a hold (qtbase `src/corelib/animation/qabstractanimation.cpp`, read 2026-11-14). The
+  held clock therefore keeps one animation of its own running (`Keeper`: no length, never ends, changes nothing), so
+  the driver stays in charge and a Timer steps with the held time. Found when an ES-DE theme's GIF, a Timer-driven
+  resting wait, moved a held mapping case's time by 3 ms (EmuSen_Qt.md §4.5.9). A `FrameAnimation`'s `frameTime` and `elapsedTime` are not held: Qt reads them from
   a `QElapsedTimer` of its own (`qquickframeanimation.cpp`, `maybeTick`), found 2026-11-12 when the ES-DE view's clock,
   which summed them, ran on through a held clock (EmuSen_Qt.md §4.8.4); a scene whose time must be held reads it from
   an animation's value. Under a held clock

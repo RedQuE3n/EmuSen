@@ -2598,12 +2598,13 @@ still frame 0), so an Image of a GIF stays on its first frame, which is what the
 frame by its own delay and run off the scene's clock, so the scene chooses the frame and the clock stays one.
 Held by `esde/tests/scene.rs` `a_gif_steps_by_its_first_delay_over_the_speed_in_its_direction_for_its_iterations`,
 `esde/tests/frame.rs` `an_animation_takes_its_frame_from_the_host_s_timing_and_keeps_its_last_when_its_plays_are_done`,
-and on the card by `esde-qt/tests/animation_gpu.rs`, which reads a four-colour fixture through the real view against
-the scene's own ticks in every direction, at a second speed, and after its plays. A resting scene's clock is
-`View.qml`'s Timer, which runs on wall time: the harness's held clock does not step it (measured 2026-11-14, two ticks
-in 1150 held ms), so the test counts the ticks (a revision each, `nextChangeMs` apart) rather than holding the clock.
-The mapping case for `iterationCount` reads at 650 ms, where a GIF playing for ever shows frame 0 to 2 and one played
-once holds its last.
+and on the card by `esde-qt/tests/animation_gpu.rs`, which reads a four-colour fixture through the real view on the
+held clock at the middle of each pacing in every direction, at a second speed, and after its plays. A resting scene's
+clock is `View.qml`'s Timer, which the held clock steps since 2026-11-14 (EmuSen_Kit.md §7.36; before then it ran on
+wall time through a hold). The mapping case for `iterationCount` has no move, so it is read on wall time like the other
+unmoved timed cases, at 650 ms: an endless play then shows frame 0 to 2 and one play holds frame 3. An endless play shows
+frame 3 from 800 to 899 ms, the same pixels as the held last frame, and a wall-clock read at 900 ms lands there
+whenever the scene's ticks run late, so 900 does not reliably tell 0 from 1.
 
 The carousel's four are added to the scene's own slots (`primary::carousel`), which the painter binds and animates
 nothing of; a `PathView` would lay the items out a second time beside the scene's layout, so none is used.

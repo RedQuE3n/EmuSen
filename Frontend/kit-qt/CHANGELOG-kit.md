@@ -5,6 +5,18 @@ writes it, is committed under `Testing/qmltypes/` and compared on every build. U
 addition, a change or a removal, bumps the minor (R-20261111-107, R-20261111-108); each entry names what changed and the
 section of `EmuSen_Kit.md` that records it.
 
+## 1.4: pictures decoded at the pixels they cover, and the design height's one owner (2026-11-14)
+
+Additions only; no type, property, signal or invokable was removed or changed.
+
+- **`DrawnPixels`** (registry, C++): the device pixels its box covers in its window, `pixels`, through every ancestor's
+  scale and the window's pixel ratio. `HelpBar`'s theme picture, `PdfPage`'s page and `ControllerDrawing`'s drawing
+  decode at it. `EmuSen_Kit.md` §7.111 (R-20261114-5).
+- **`CanvasUnits`** (registry, singleton): `designHeight`, a constant, kit-core's `canvas::DESIGN_HEIGHT`;
+  `NormalizedCanvas.designHeight` binds to it. `EmuSen_Kit.md` §7.112 (R-20261114-7).
+- The minor is 1.4, one above WiseMan's 1.3 (R-20261111-107); the registry, qmldir and QML-file surface are
+  `Testing/qmltypes/EmuSen.Kit-1.4.*`, each 1.3 file with these added.
+
 ## 1.3, stage 5 piece P5: a page of a PDF (2026-11-12)
 
 Additions only; no type, property, signal or invokable was removed or changed.

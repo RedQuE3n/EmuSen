@@ -41,7 +41,7 @@ impl SkyState {
         }
     }
 
-    /// The stars at a time for a screen size, into the buffer: a screen's at its height over 800 and held still at their
+    /// The stars at a time for a screen size, into the buffer: a screen's at its height over the design height and held still at their
     /// twinkle for time 0, as LunaSky draws them; the splash's twinkling as LunaSplash draws them, at its height over 720.
     pub fn tick(&mut self, time: f64, size: Point, opacity: f64) {
         let (unit, scale, time) = if self.moonrise {

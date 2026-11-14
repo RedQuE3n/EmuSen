@@ -745,13 +745,14 @@ impl qobject::SessionModel {
         crate::play::device(&self.output.to_string(), self.output_default.as_deref().unwrap_or_default())
     }
 
-    /// The game's sound player on SDL lent to the library, at audio.json's defaults, on the device and at the volume
-    /// the settings give (§1.8.6).
+    /// The game's sound player on SDL lent to the library, at the base's `AudioConfig` as `model_new` gives it (the
+    /// player's own file waits on a file number for it, EmuSen_Audio_Sync.md §7.6), on the device and at the volume the settings give (§1.8.6).
     fn game_sound(mut self: Pin<&mut Self>) -> Result<GameSound, String> {
         let platform = self.as_mut().platform()?;
         let words = |e: emusen_platform_client::Error| e.to_string();
         platform.lend_sdl(&Lent::open("libSDL3.so.0").map_err(words)?).map_err(words)?;
-        let mut sound = GameSound::new(&platform, SoundSettings::default()).map_err(words)?;
+        let config = platform.model_new(emusen_platform_client::galaxia::consts::MODEL_AUDIO_CONFIG).map_err(words)?;
+        let mut sound = GameSound::new(&platform, SoundSettings::of_audio_config(&config).map_err(words)?).map_err(words)?;
         sound.set_volume(self.volume as f32).map_err(words)?;
         let device = crate::session::play_on(&mut sound, self.device())?;
         self.as_mut().heard_volume(sound.volume());

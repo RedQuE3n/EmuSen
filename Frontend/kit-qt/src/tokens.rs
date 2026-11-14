@@ -114,6 +114,11 @@ pub mod qobject {
         #[qproperty(f64, shadow_offset_x, READ, NOTIFY)]
         #[qproperty(f64, shadow_offset_y, READ, NOTIFY)]
         #[qproperty(f64, shadow_blur, READ, NOTIFY)]
+        #[qproperty(QColor, ring_gap_color, READ, NOTIFY)]
+        #[qproperty(QColor, glow_color, READ, NOTIFY)]
+        #[qproperty(f64, glow_blur, READ, NOTIFY)]
+        #[qproperty(f64, glow_spread, READ, NOTIFY)]
+        #[qproperty(f64, button_radius, READ, NOTIFY)]
         type Tokens = super::TokensRust;
     }
 
@@ -187,6 +192,11 @@ pub struct TokensRust {
     shadow_offset_x: f64,
     shadow_offset_y: f64,
     shadow_blur: f64,
+    ring_gap_color: QColor,
+    glow_color: QColor,
+    glow_blur: f64,
+    glow_spread: f64,
+    button_radius: f64,
     instant: i32,
     quick: i32,
     enter: i32,
@@ -277,6 +287,11 @@ impl Default for TokensRust {
             shadow_offset_x: 0.0,
             shadow_offset_y: 0.0,
             shadow_blur: 0.0,
+            ring_gap_color: QColor::default(),
+            glow_color: QColor::default(),
+            glow_blur: 0.0,
+            glow_spread: 0.0,
+            button_radius: 0.0,
             instant: 0,
             quick: 0,
             enter: 0,
@@ -363,6 +378,11 @@ impl TokensRust {
         self.shadow_offset_x = c.shadow.offset_x;
         self.shadow_offset_y = c.shadow.offset_y;
         self.shadow_blur = c.shadow.blur;
+        self.ring_gap_color = qcolor(c.focus.gap_colour);
+        self.glow_color = qcolor(c.focus.glow_colour);
+        self.glow_blur = c.focus.glow_blur;
+        self.glow_spread = c.focus.glow_spread;
+        self.button_radius = c.spacing.button_radius;
         self.instant = c.duration(M::Instant);
         self.quick = c.duration(M::Quick);
         self.enter = c.duration(M::Enter);
@@ -486,6 +506,11 @@ impl qobject::Tokens {
         self.as_mut().shadow_offset_x_changed();
         self.as_mut().shadow_offset_y_changed();
         self.as_mut().shadow_blur_changed();
+        self.as_mut().ring_gap_color_changed();
+        self.as_mut().glow_color_changed();
+        self.as_mut().glow_blur_changed();
+        self.as_mut().glow_spread_changed();
+        self.as_mut().button_radius_changed();
         self.as_mut().instant_changed();
         self.as_mut().quick_changed();
         self.as_mut().enter_changed();

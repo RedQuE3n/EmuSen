@@ -3850,3 +3850,61 @@ QML as `designHeight`, a constant; `NormalizedCanvas.designHeight` keeps its pla
 (decided 2026-11-14, R-20261114-7). It is a part of its own rather than a property of `Tokens` because every read-only number of
 `Tokens` takes a theme's override (§7.2, `tests/overrides.rs`), and the design height is the program's, not a theme's.
 Kit 1.4.
+
+### 7.113 FocusRing: one focus mark, its gap, ring and glow (2026-11-14)
+
+The kit drew its focus ring eleven times, each a `Rectangle` of its own (read on 2026-11-14): `ActionButton` and
+`PageFrame`'s tiles a rectangle grown by `ringOffset` with a `ringThickness` border inward, so the ring stood 4 to 1 units
+past the box under the kit's tokens; `CoverTile` one grown by the literals 7 and 14 with corners of `tileRadius + 4`, the
+ring 7 to 4 units past; the style's eight controls (Button, CheckBox, ComboBox, RadioButton, Slider, Switch, TabButton,
+TextField) their own border turned `ringThickness` wide in the accent, no gap. Eclipse's boards draw one recipe on 28 of
+them (`EclipseSettings.dc.html:94`): a dark gap of 3 px, the ring 3 to 6 px out, and a glow of 40 px blur and 8 px spread
+in rgba(240, 180, 196, 0.4); 12 other boards draw a gap of 4 px, the ring to 7 px and a glow of 10 px spread at 0.5.
+
+**The part.** `FocusRing` fills the box it marks and takes the box's corner `radius`. Its gap is `ringOffset` wide in
+`ringGapColor`, its ring `ringThickness` wide in the accent past the gap, with corners of the box's radius plus
+`ringOffset`, as `CoverTile` drew them, and under both the glow. `placement` says where the ring stands: `Gapped`, past
+the gap (`CoverTile`, whose 7, 14 and 4 were `ringOffset + ringThickness` and `ringOffset` under the kit's tokens and are
+those tokens now); `Tight`, its outer edge `ringOffset` past the box (`ActionButton`, `PageFrame`); `Edge`, the box's own
+border (the style's controls, which bind their border to `edgeWidth` and `edgeColor`, so a box keeps one rectangle and its
+pixels). Each place keeps the placement it drew; whether the reference's Tight and Edge rings move to Gapped is the
+tester's to rule on. Under Eclipse's tokens (`ringOffset` 2, `ringThickness` 2) a Tight ring stands 2 to 0 units past the
+box with no gap, an Edge ring is the box's 2-unit border, and a Gapped ring is the board's.
+
+**The tokens.** `ringGapColor` and `glowColor` are colours after `shadowColor`, transparent in the kit's column;
+`glowBlur` and `glowSpread` are numbers, 0 in it (kit-core `FocusMarks`, `FOCUS_MARKS`). No existing role is the gap's:
+on the board it is the ground, #07080F (`surface` in Eclipse), but under the kit's tokens the gap shows what is behind it,
+which no colour role holds, so a role would have moved the reference's pixels. With the kit's tokens nothing new is drawn:
+the gap is not drawn while transparent and the glow is not made.
+
+**The glow** is a `Canvas` on both backends, made by a `Loader` only while the ring shows and `glowColor` is not
+transparent, so it paints once each time the focus arrives and again only when its box, corners or colour change. Qt
+Quick's software adaptation does not render `ShaderEffect`, so `MultiEffect` and `RectangularShadow`, both shader effects,
+draw nothing there (doc.qt.io, "Qt Quick Software Adaptation", read 2026-11-14); `RaisedShadow` (§7.55) has a canvas path
+for the same reason. The canvas paints the glow's shape, the box grown by `glowSpread`, outside its own area with a
+`shadowOffsetX` that brings the shadow back, so only the shadow lands, clipped to the canvas less the box (an
+odd-even path), as CSS draws an outer shadow outside its box alone. Qt's page for `Context2D` gives no rule for `shadowBlur`; its source
+(`qquickcontext2dcommandbuffer.cpp`, `ShadowImageMaker`, Qt 6.11) blurs with three passes of a square box
+2 round(blur / 2) + 1 wide (`qt_image_boxblur`, `qquickcontext2d.cpp`), close to a Gaussian of σ = blur / 2, the CSS
+rule. Measured on 2026-11-14 at a straight edge on the software backend, the glow d past the box reads within 0.006 of
+alpha · Φ((spread − d) / σ) at four distances, for every placement.
+
+**Cost.** Measured on 2026-11-14 on the desktop (software backend, Eclipse's tokens, the time from a change of the box to
+the canvas's next paint, 40 paints, two runs): a 160 by 48 box 83 ms median, 89 ms at most; a 1280 by 800 box, larger
+than any ring, 2243 ms. The box blur is a full two-dimensional window, 729 samples a pixel at Eclipse's blur. Not
+measured on the handheld.
+
+**Held to** `tests/focus_ring.rs`: under the kit's tokens each placement draws, pixel for pixel, the ring it replaced
+(drawn beside it as the kit drew it); a focused Button, ActionButton and TextField and a lit CoverTile each show one
+`FocusRing`, its ring in the accent, its gap in `ringGapColor`, under the kit's tokens and Eclipse's; under Eclipse the
+glow paints once and not again over half a second at rest, follows the rule above and ends at its reach. Kit 1.5.
+
+### 7.114 A button's corners (2026-11-14)
+
+`buttonRadius` is a number token of `Tokens` (kit-core `Spacing`, 4 in both forms, the `rowRadius` that `ActionButton` and
+the style's Button drew with), taken by those two and by their rings. Eclipse's buttons are round at both ends: 36 px
+corners on 72 px buttons (`EclipseDialog.dc.html:39` and 40; `EclipseGame.dc.html:48`; `EclipsePower.dc.html:32`,
+84 px rows with 42 px corners), so Eclipse sets 24 units, half its `controlHeight` of 48. A number is round at both ends
+only for a button of the height it was set for; one token for every height would need a share of the height, or a radius
+larger than half and Qt's clamping of it, which Qt's page for `Rectangle` does not state. Both buttons are `controlHeight` high unless their
+words or their place make them taller (`ActionButton.qml:22`, `style/Button.qml:30`); a taller one is not round at its ends. Kit 1.5.

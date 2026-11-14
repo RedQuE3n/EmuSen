@@ -5,6 +5,22 @@ writes it, is committed under `Testing/qmltypes/` and compared on every build. U
 addition, a change or a removal, bumps the minor (R-20261111-107, R-20261111-108); each entry names what changed and the
 section of `EmuSen_Kit.md` that records it.
 
+## 1.5: one focus ring, its glow's tokens and a button's corners (2026-11-14)
+
+Additions only; no type, property, signal or invokable was removed or changed.
+
+- **`FocusRing`** (qmldir): the focus mark around the box it fills, a gap, the ring and the glow under them, sized and
+  coloured by the tokens, with the box's `radius` and a `placement` (`Gapped`, `Tight`, `Edge`); `edgeWidth` and
+  `edgeColor` for a box that draws the ring as its own border. Every ring the kit drew is one now: `ActionButton`,
+  `CoverTile`, `PageFrame`'s tiles and the style's Button, CheckBox, ComboBox, RadioButton, Slider, Switch, TabButton and
+  TextField. `EmuSen_Kit.md` §7.113 (R-20261114-16).
+- **`Tokens.ringGapColor`, `glowColor`, `glowBlur`, `glowSpread`** (registry): the gap's colour and the glow's colour,
+  blur and spread, transparent and none in the kit's own column, after every earlier property. §7.113.
+- **`Tokens.buttonRadius`** (registry): a button's corners, the kit's 4 (the `rowRadius` buttons drew with until now);
+  `ActionButton` and the style's Button take it. `EmuSen_Kit.md` §7.114.
+- The minor is 1.5, one above WiseMan's 1.4 (R-20261111-107); the registry, qmldir and QML-file surface are
+  `Testing/qmltypes/EmuSen.Kit-1.5.*`, each 1.4 file with these added.
+
 ## 1.4: pictures decoded at the pixels they cover, and the design height's one owner (2026-11-14)
 
 Additions only; no type, property, signal or invokable was removed or changed.

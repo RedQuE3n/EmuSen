@@ -1636,7 +1636,7 @@ Decided 2026-11-11 by the tester: Eclipse is EmuSen's default look, and the pres
 theme API is not widened for that. A blank setting still gives the reference: which theme a blank setting gives changes
 only once Eclipse has screens of its own.
 
-**The package.** `Frontend/themes/eclipse/` holds `theme.json` alone: name Eclipse, `api` 1.0, the dark variant, no
+**The package.** `Frontend/themes/eclipse/` holds `theme.json` alone: name Eclipse, `api` 1.1 (its focus tokens are 1.1's), the dark variant, no
 screen of its own (`"screens": []`), no cue, no preview, and the token overrides below. With no screens, every screen is
 the reference's: Home, Choose a console and the games are drawn by the reference's host, whose engine keeps the kit's
 tokens, so only the program's own screens (Settings, the cards, the game page, the Pause Card, the tools, the questions
@@ -1648,7 +1648,7 @@ today shows the reference's screens, which would not show Eclipse. The manifest 
 `themes::built_in_folder` gives each one's folder in the resources, `qrc:/emusen/themes/<id>/`, which `qt-app/themes.qrc`
 holds file for file. `BuiltInThemes` (`qt-app/src/theme.rs`) reads each built-in's `theme.json` through Qt for the Themes
 tab and gives the window the reference's folder. In the tab, Eclipse's row follows EmuSen's: "Eclipse", "By The EmuSen
-project · EmuSen.Theme 1.0 · dark", and "Checked: nothing found." (built-ins are checked by the build's tests, here
+project · EmuSen.Theme 1.1 · dark", and "Checked: nothing found." (built-ins are checked by the build's tests, here
 theme-check's `qt_3_4_7_the_built_in_eclipse_package_is_clean`). Use stores the id `eclipse`; `themes::resolve` gives
 `Resolved::BuiltIn`, whose host folder is the resources', so the chosen theme's host loads it and `ThemeStyle` puts its
 overrides on the program's engine.
@@ -1680,8 +1680,13 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 | rowHeight | a row (`MenuRow.qml:28`) | a row (`EclipseSettings:42`) | 84 px | 56 |
 | rowRadius | a row's corners (`MenuRow.qml:33`) | a row's corners (`EclipseSettings:42`) | 20 px | 13.333… |
 | tileRadius | a notice's corners (`NoticeLayer.qml:59`) | the notice's corners (`EclipseDialog:23`) | 22 px | 14.666… |
-| ringThickness | the ring's width (`ActionButton.qml:39`) | the ring, 3 to 6 px out (`EclipseSettings:94`) | 3 px | 2 |
-| ringOffset | the gap inside the ring (`ActionButton.qml:36`) | the dark gap (`EclipseSettings:94`) | 3 px | 2 |
+| ringThickness | the ring's width (`FocusRing.qml`, kit §7.113) | the ring, 3 to 6 px out (`EclipseSettings:94`) | 3 px | 2 |
+| ringOffset | the gap inside the ring (`FocusRing.qml`) | the dark gap (`EclipseSettings:94`) | 3 px | 2 |
+| ringGapColor | the gap's colour (`FocusRing.qml`) | the dark gap (`EclipseSettings:94`) | #07080F | #07080F |
+| glowColor | the glow under the ring (`FocusRing.qml`) | the glow (`EclipseSettings:94`) | rgba(240, 180, 196, 0.4) | #66F0B4C4 |
+| glowBlur | the glow's blur (`FocusRing.qml`) | the glow's blur (`EclipseSettings:94`) | 40 px | 26.666… |
+| glowSpread | the glow's spread (`FocusRing.qml`) | the glow's spread (`EclipseSettings:94`) | 8 px | 5.333… |
+| buttonRadius | a button's corners (`ActionButton.qml:27`, `style/Button.qml:31`) | the dialog's buttons, 72 px high (`EclipseDialog:39`) | 36 px | 24 |
 | hoverBorder | an unfilled button's outline (`ActionButton.qml:29`) | the unfilled button's outline (`EclipseDialog:40`) | 2 px | 1.333… |
 | controlHeight | a button (`ActionButton.qml:22`) | the button (`EclipseDialog:39`) | 72 px | 48 |
 | helpBar | the help bar (`HelpBar.qml:43`) | the help bar (`EclipsePause:57`) | 76 px | 50.666… |

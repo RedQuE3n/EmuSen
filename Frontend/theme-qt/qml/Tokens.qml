@@ -62,6 +62,11 @@ QtObject {
     readonly property real shadowOffsetX: Kit.Tokens.shadowOffsetX
     readonly property real shadowOffsetY: Kit.Tokens.shadowOffsetY
     readonly property real shadowBlur: Kit.Tokens.shadowBlur
+    readonly property color ringGapColor: Kit.Tokens.ringGapColor
+    readonly property color glowColor: Kit.Tokens.glowColor
+    readonly property real glowBlur: Kit.Tokens.glowBlur
+    readonly property real glowSpread: Kit.Tokens.glowSpread
+    readonly property real buttonRadius: Kit.Tokens.buttonRadius
     readonly property int instant: Kit.Tokens.instant
     readonly property int quick: Kit.Tokens.quick
     readonly property int enter: Kit.Tokens.enter

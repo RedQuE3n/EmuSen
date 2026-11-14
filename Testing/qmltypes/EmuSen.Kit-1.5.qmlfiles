@@ -463,3 +463,15 @@ PdfPage
     property int page
     readonly property int pages
     readonly property size pageSize
+FocusRing
+    property real radius
+    property int placement
+    readonly property real edgeWidth
+    readonly property color edgeColor
+    readonly property real inner
+    readonly property real outer
+    readonly property real glowReach
+    objectName "focusGlow"
+    objectName "focusGlowCanvas"
+    objectName "focusGap"
+    objectName "focusBand"

@@ -3,6 +3,17 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.1, an addition: the focus ring (2026-11-14)
+
+The tester's ruling of 2026-11-14 (R-20261114-16): Eclipse's shared parts are kit parts, exported to themes as an addition.
+
+- **`FocusRing`** (added, qmldir): the kit's focus mark by name, a gap, the ring and the glow under them from the tokens
+  (`EmuSen_Kit.md` §7.113). A theme places it around a focused box; the built-in themes' own rings are unchanged.
+- **`Tokens.ringGapColor`, `glowColor`, `glowBlur`, `glowSpread`, `buttonRadius`** (added, read-only): as the kit's
+  `Tokens` gained them (Kit 1.5); `Tokens` mirrors every kit token. A `theme.json` may override them.
+- The module is 1.1 and `theme-check`'s API is 1.1; a package written for 1.0 still loads. Eclipse's `api` is 1.1, as
+  its manifest sets the new tokens.
+
 ## 1.0, an addition: the raised shadow (2026-11-09)
 
 - **`Tokens.shadowColor`, `shadowOpacity`, `shadowOffsetX`, `shadowOffsetY`, `shadowBlur`** (added, read-only): the one

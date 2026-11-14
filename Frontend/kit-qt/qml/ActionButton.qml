@@ -24,20 +24,17 @@ Kit.Walkable {
     Accessible.name: root.label
     Rectangle {
         anchors.fill: parent
-        radius: Kit.Tokens.rowRadius
+        radius: Kit.Tokens.buttonRadius
         color: root.filled ? Kit.Tokens.accent : (root.hovered ? Kit.Tokens.surfaceRaised : Kit.Tokens.surface)
         border.width: root.filled ? 0 : Kit.Tokens.hoverBorder
         border.color: Kit.Tokens.border
     }
-    Rectangle {
+    Kit.FocusRing {
         objectName: "ring"
         visible: root.activeFocus
         anchors.fill: parent
-        anchors.margins: -Kit.Tokens.ringOffset
-        radius: Kit.Tokens.rowRadius + Kit.Tokens.ringOffset
-        color: "transparent"
-        border.width: Kit.Tokens.ringThickness
-        border.color: Kit.Tokens.accent
+        radius: Kit.Tokens.buttonRadius
+        placement: Kit.FocusRing.Tight
     }
     Row {
         id: words

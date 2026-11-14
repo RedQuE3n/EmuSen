@@ -28,10 +28,17 @@ T.Button {
     background: Rectangle {
         implicitWidth: Kit.Tokens.controlHeight * 2.5
         implicitHeight: Kit.Tokens.controlHeight
-        radius: Kit.Tokens.rowRadius
+        radius: Kit.Tokens.buttonRadius
         visible: !control.flat || control.down || control.checked || control.highlighted || control.hovered
         color: control.highlighted || control.checked ? Kit.Tokens.accent : (control.down ? Kit.Tokens.inputSurface : Kit.Tokens.surfaceRaised)
-        border.width: control.activeFocus ? Kit.Tokens.ringThickness : (control.hovered ? Kit.Tokens.hoverBorder : 0)
-        border.color: control.activeFocus ? Kit.Tokens.accent : Kit.Tokens.border
+        border.width: control.activeFocus ? ring.edgeWidth : (control.hovered ? Kit.Tokens.hoverBorder : 0)
+        border.color: control.activeFocus ? ring.edgeColor : Kit.Tokens.border
+        Kit.FocusRing {
+            id: ring
+            visible: control.activeFocus
+            anchors.fill: parent
+            radius: parent.radius
+            placement: Kit.FocusRing.Edge
+        }
     }
 }

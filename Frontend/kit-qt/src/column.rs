@@ -58,6 +58,7 @@ enum Slot<'a> {
     Pair(&'a mut f64, &'a mut f64),
     Whole(&'a mut i32),
     Switch(&'a mut bool),
+    Colour(&'a mut Colour),
 }
 
 impl Bases {
@@ -106,6 +107,7 @@ impl Bases {
             "tileGap" => Slot::Number(&mut sp.tile_gap),
             "rowRadius" => Slot::Number(&mut sp.row_radius),
             "tileRadius" => Slot::Number(&mut sp.tile_radius),
+            "buttonRadius" => Slot::Number(&mut sp.button_radius),
             "safeAreaX" => Slot::Pair(&mut sp.safe_area.left, &mut sp.safe_area.right),
             "safeAreaY" => Slot::Pair(&mut sp.safe_area.top, &mut sp.safe_area.bottom),
             "ringThickness" => Slot::Number(&mut f.ring_thickness),
@@ -113,6 +115,10 @@ impl Bases {
             "barWidth" => Slot::Number(&mut f.bar_width),
             "tileScale" => Slot::Number(&mut f.tile_scale),
             "hoverBorder" => Slot::Number(&mut f.hover_border),
+            FocusMarks::GAP_COLOUR_PROPERTY => Slot::Colour(&mut f.gap_colour),
+            FocusMarks::GLOW_COLOUR_PROPERTY => Slot::Colour(&mut f.glow_colour),
+            "glowBlur" => Slot::Number(&mut f.glow_blur),
+            "glowSpread" => Slot::Number(&mut f.glow_spread),
             "shadowOpacity" => Slot::Number(&mut sh.opacity),
             "shadowOffsetX" => Slot::Number(&mut sh.offset_x),
             "shadowOffsetY" => Slot::Number(&mut sh.offset_y),
@@ -159,6 +165,7 @@ impl Bases {
             }
             Some(Slot::Whole(held)) => *held = value.parse::<i32>().unwrap_or(*held),
             Some(Slot::Switch(held)) => *held = value.parse::<bool>().unwrap_or(*held),
+            Some(Slot::Colour(held)) => *held = Colour::parse(value).unwrap_or(*held),
             None => {}
         }
     }

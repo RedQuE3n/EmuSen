@@ -1,6 +1,6 @@
 use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 
-// EmuSen.Theme 1.0, what a theme sees (EmuSen_Qt.md §3.2); its .qmltypes and qmldir are the module's surface.
+// EmuSen.Theme 1.1, what a theme sees (EmuSen_Qt.md §3.2); its .qmltypes and qmldir are the module's surface.
 fn main() {
     let qml = [
         QmlFile::from("qml/ThemeScreen.qml"),
@@ -23,8 +23,9 @@ fn main() {
         QmlFile::from("qml/WheelLayout.qml"),
         QmlFile::from("qml/OrbitSlot.qml"),
         QmlFile::from("qml/EdgeFade.qml"),
+        QmlFile::from("qml/FocusRing.qml"),
     ];
-    CxxQtBuilder::new_qml_module(QmlModule::new("EmuSen.Theme").version(1, 0).qml_files(qml).depend("QtQuick").depend("EmuSen.Kit"))
+    CxxQtBuilder::new_qml_module(QmlModule::new("EmuSen.Theme").version(1, 1).qml_files(qml).depend("QtQuick").depend("EmuSen.Kit"))
         .files([
             "src/rows.rs",
             "src/library.rs",

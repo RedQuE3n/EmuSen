@@ -9,7 +9,7 @@ use serde_json::{Map, Value};
 pub const SCHEMA: u64 = 1;
 
 /// The `EmuSen.Theme` API this build carries, major and minor.
-pub const API: (u64, u64) = (1, 0);
+pub const API: (u64, u64) = (1, 1);
 
 /// The cue names a theme may give its own file (EmuSen_Qt.md §3.2, `EmuSen_Interface.md` §23).
 pub const CUES: [&str; 7] = ["scroll", "systembrowse", "select", "back", "favorite", "launch", "quicksysselect"];

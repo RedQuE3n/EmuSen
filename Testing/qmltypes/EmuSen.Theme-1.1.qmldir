@@ -1,0 +1,28 @@
+module EmuSen.Theme
+optional plugin EmuSen_Theme
+classname EmuSen_Theme_plugin
+typeinfo plugin.qmltypes
+depends QtQuick
+depends EmuSen.Kit
+prefer :/qt/qml/EmuSen/Theme/
+ThemeScreen 1.1 qml/ThemeScreen.qml
+singleton Tokens 1.1 qml/Tokens.qml
+Frame 1.1 qml/Frame.qml
+HelpBar 1.1 qml/HelpBar.qml
+Walkable 1.1 qml/Walkable.qml
+Body 1.1 qml/Body.qml
+Sky 1.1 qml/Sky.qml
+Scene 1.1 qml/Scene.qml
+Carousel 1.1 qml/Carousel.qml
+NormalizedCanvas 1.1 qml/NormalizedCanvas.qml
+Moonrise 1.1 qml/Moonrise.qml
+CoverTile 1.1 qml/CoverTile.qml
+RoundPicture 1.1 qml/RoundPicture.qml
+PadGlyph 1.1 qml/PadGlyph.qml
+PlanetLayout 1.1 qml/PlanetLayout.qml
+OrbitLayout 1.1 qml/OrbitLayout.qml
+FigureLayout 1.1 qml/FigureLayout.qml
+WheelLayout 1.1 qml/WheelLayout.qml
+OrbitSlot 1.1 qml/OrbitSlot.qml
+EdgeFade 1.1 qml/EdgeFade.qml
+FocusRing 1.1 qml/FocusRing.qml

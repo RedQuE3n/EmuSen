@@ -4,6 +4,12 @@ The ES-DE painter is the QML module `EmuSen.Esde` (EmuSen_Qt.md §4.8), held by 
 qmltyperegistrar writes it, and its QML files' surface (R-20261111-99) are committed under `Testing/qmltypes/` and
 compared on every build. Each entry names what changed and the section that records it.
 
+## 1.7: a GIF's frame (2026-11-14)
+
+- QML files, added: `Picture.frame` (a GIF's frame as the scene steps it, -1 for a still) and the read-only
+  `Picture.animated`; `PictureElement.frame`, a required property. §4.5.9.
+- Nothing removed; the registry is unchanged.
+
 ## 1.6: the dimmed help, the textlist's selector, the carousel's layout, GIF timing (2026-11-13)
 
 - Registry, added: `EsdeModel.menuOpen` (a menu or card of the program's over the view, ES-DE's dimmed background).

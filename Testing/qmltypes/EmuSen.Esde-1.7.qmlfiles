@@ -24,6 +24,8 @@ Picture
     property bool mirror
     property bool mirrorVertically
     property bool mipmap
+    property int frame
+    readonly property bool animated
     readonly property alias status
     readonly property alias ownWidth
     readonly property alias ownHeight
@@ -126,6 +128,7 @@ PictureElement
     required property bool mirror
     required property bool mirrorVertically
     required property bool mipmap
+    required property int frame
 TextElement
     required property string text
     required property url fontSource

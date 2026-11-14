@@ -102,23 +102,15 @@ fn fetch_and_install(source: &ClientSource, download: &Download, directory: &str
         // The thread's own check period, a constant of the design: a stop ends the wait within it.
         match download.wait(100) {
             State::Running => continue,
-            ended => break ended,
+            other => break other,
         }
     };
-    match (state, download.failure()) {
-        (State::Done, _) => {}
-        (State::Cancelled, _) => return Words::new("Stopped", Tone::Muted),
-        (_, Ok(Some(why))) => match why["message"].as_str() {
-            Some(message) => return error(format!("It could not be downloaded: {message}")),
-            None => return error(format!("It could not be downloaded, and why could not be read: {why}")),
-        },
-        (_, Ok(None)) => return error("It could not be downloaded, and the base gave no reason".to_owned()),
-        (_, Err(e)) => return error(format!("It could not be downloaded, and why could not be read: {e}")),
+    if let Some(words) = ended(state, download.failure()) {
+        return words;
     }
-    let zip = match download.body() {
-        Ok(Some(zip)) => zip,
-        Ok(None) => return error("It was downloaded, but the base gave no archive to install".to_owned()),
-        Err(e) => return error(format!("The downloaded archive could not be read: {e}")),
+    let zip = match archive(download.body()) {
+        Ok(zip) => zip,
+        Err(words) => return words,
     };
     match source.platform.cheats_install(&zip, directory) {
         Ok(answer) => match answer["installed"].as_u64() {
@@ -126,6 +118,31 @@ fn fetch_and_install(source: &ClientSource, download: &Download, directory: &str
             None => error(format!("It was installed, but the answer could not be read: {answer}")),
         },
         Err(e) => error(format!("It could not be installed: {e}")),
+    }
+}
+
+/// How a download that has ended is said, from its state and its failure record: none where it is done and its archive
+/// is to be read, else the words of why nothing is installed.
+pub fn ended(state: State, failure: Result<Option<Value>, impl std::fmt::Display>) -> Option<Words> {
+    let error = |words: String| Some(Words::new(words, Tone::Error));
+    match (state, failure) {
+        (State::Done, _) => None,
+        (State::Cancelled, _) => Some(Words::new("Stopped", Tone::Muted)),
+        (_, Ok(Some(why))) => match why["message"].as_str() {
+            Some(message) => error(format!("It could not be downloaded: {message}")),
+            None => error(format!("It could not be downloaded, and why could not be read: {why}")),
+        },
+        (_, Ok(None)) => error("It could not be downloaded, and no reason was given".to_owned()),
+        (_, Err(e)) => error(format!("It could not be downloaded, and why could not be read: {e}")),
+    }
+}
+
+/// A done download's archive as its body read gives it, or the words of why there is none to install.
+pub fn archive(body: Result<Option<Vec<u8>>, impl std::fmt::Display>) -> Result<Vec<u8>, Words> {
+    match body {
+        Ok(Some(zip)) => Ok(zip),
+        Ok(None) => Err(Words::new("It was downloaded, but there was no archive to install".to_owned(), Tone::Error)),
+        Err(e) => Err(Words::new(format!("The downloaded archive could not be read: {e}"), Tone::Error)),
     }
 }
 

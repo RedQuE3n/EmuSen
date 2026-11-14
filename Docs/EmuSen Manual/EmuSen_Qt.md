@@ -6611,6 +6611,12 @@ leaves no database, a second get installs it, A makes the game's list, and the g
 `qt-models/tests/tool_cheats.rs` (the same through the tool's model, the list's cheats and writes read back, and the
 words for a list with cheats left out). No test opens the Pause Card on a list made here.
 
+**Decided 2026-11-14 by the tester:** the download has no time limit; the player sees its progress and can stop it
+(R-20261114-22). A failure the base records without a reason reads `It could not be downloaded, and no reason was
+given`, and a download done with no body `It was downloaded, but there was no archive to install` (R-20261114-24); the
+words of an ended download are `tools::cheats::ended` and `archive`, held to by `tool_cheats.rs`. Settings ▸ Library ▸
+Cheats says `The cheats of the game last played, turned on or off.` (R-20261114-23), held to by `qt-models/tests/settings.rs`.
+
 ### 7.8 Stage 5, piece G: a game's page and its clip (2026-11-09)
 
 `EmuSen_Interface.md` §2.5, §4 screen 3, §5.9, §18.2; the oracle is Mistress's recordings `GamePage`, `GamePageStates`,

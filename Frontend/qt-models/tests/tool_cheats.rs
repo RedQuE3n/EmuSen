@@ -96,3 +96,13 @@ fn a_list_made_with_cheats_left_out_says_how_many() {
     let said = cheats::made_words(2).expect("words for a list with two left out");
     assert!(said.words.contains(" 2 "), "{}", said.words);
 }
+
+#[test]
+fn a_download_ended_with_no_reason_or_no_archive_says_so_plainly() {
+    use emusen_platform_client::net::State;
+    let failed = cheats::ended(State::Failed, Ok::<_, String>(None)).expect("a failure says why");
+    assert_eq!(failed.words, "It could not be downloaded, and no reason was given");
+    assert!(cheats::ended(State::Done, Ok::<_, String>(None)).is_none(), "a download done goes on to its archive");
+    let empty = cheats::archive(Ok::<_, String>(None)).expect_err("no archive is said");
+    assert_eq!(empty.words, "It was downloaded, but there was no archive to install");
+}

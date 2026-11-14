@@ -17,6 +17,8 @@ selectedItemMargins	pair	0 0	-	-	-1	1	-	-	single	-	-	-	-	-	-
 selectedItemOffset	pair	0 0	-	-	-1	1	-	-	single	-	-	-	-	-	-
 itemSize	pair	0.25 0.155	-	-	0.05	1	-	-	single	-	-	-	-	-	-
 itemScale	float	1.2	-	-	0.2	3	-	-	single	-	-	-	-	-	-
+itemLinearScale	pair	0 0	-	-	-0.5	1	-	-	single	-	-	-	-	-	-
+itemLinearSpacing	pair	0 0	-	-	-0.5	1	-	-	single	-	-	-	-	-	-
 itemRotation	float	7.5	-	-	-	-	-	-	single	-	-	-	-	-	-
 itemRotationOrigin	pair	-3 0.5	-	-	-	-	-	-	single	-	-	-	-	-	-
 itemAxisHorizontal	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
@@ -197,6 +199,7 @@ metadataElement	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
 gameselector	string	-	-	-	-	-	-	-	single	-	-	-	-	-	-
 gameselectorEntry	uint	0	-	-	0	-	-	-	single	-	-	-	system	-	-
 tile	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+scaleFactor	float	1	-	-	0.1	1	-	-	single	-	-	-	-	-	-
 tileSize	pair	-	-	-	0	1	-	ZeroAxisAuto	single	-	-	-	-	-	-
 tileHorizontalAlignment	string	left	-	-	-	-	-	-	enum	left right	-	-	-	-	-
 tileVerticalAlignment	string	bottom	-	-	-	-	-	-	enum	top bottom	-	-	-	-	-
@@ -258,6 +261,7 @@ zIndex	float	30	-	-	-	-	-	-	single	-	-	-	-	-	-
 pos	pair	-	-	-	-	-	-	-	single	-	-	-	-	-	-
 size	pair	-	-	-	0.01	1	-	ZeroAxisAuto	single	-	-	-	-	-	-
 maxSize	pair	-	-	-	0.01	1	-	-	single	-	-	-	-	-	-
+scaleFactor	float	1	-	-	0.1	1	-	-	single	-	-	-	-	-	-
 origin	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
 rotation	float	0	-	-	-	-	-	-	single	-	-	-	-	-	-
 rotationOrigin	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-

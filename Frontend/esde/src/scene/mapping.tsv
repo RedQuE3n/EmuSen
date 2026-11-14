@@ -18,6 +18,8 @@ carousel	selectedItemMargins	drawn
 carousel	selectedItemOffset	drawn
 carousel	itemSize	drawn
 carousel	itemScale	drawn
+carousel	itemLinearScale	later:carousel-layout
+carousel	itemLinearSpacing	later:carousel-layout
 carousel	itemRotation	drawn
 carousel	itemRotationOrigin	drawn
 carousel	itemAxisHorizontal	drawn
@@ -195,6 +197,7 @@ image	metadataElement	drawn
 image	gameselector	drawn
 image	gameselectorEntry	drawn
 image	tile	drawn
+image	scaleFactor	later:picture
 image	tileSize	drawn
 image	tileHorizontalAlignment	drawn
 image	tileVerticalAlignment	drawn
@@ -254,6 +257,7 @@ video	zIndex	drawn
 animation	pos	drawn
 animation	size	drawn
 animation	maxSize	drawn
+animation	scaleFactor	later:picture
 animation	origin	drawn
 animation	rotation	drawn
 animation	rotationOrigin	drawn

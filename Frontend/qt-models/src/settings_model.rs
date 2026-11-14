@@ -880,6 +880,8 @@ impl qobject::SettingsModel {
                 let (first, last) = (self.index(0, 0, &QModelIndex::default()), self.index(count - 1, 0, &QModelIndex::default()));
                 self.as_mut().data_changed(&first, &last, &QVector::<i32>::default());
             }
+        } else if !turned {
+            self.as_mut().replace_rows(rows);
         } else {
             // The rows go and the new ones come as a removal and an insertion, not a reset: a reset cancels a delegate
             // the view is still making past the new count, which Qt logs as "index out range" (EmuSen_Qt.md §7.7).
@@ -912,6 +914,37 @@ impl qobject::SettingsModel {
         }
         self.as_mut().draw();
         self.pane();
+    }
+
+    /// The same page's rows grown or shrunk under the focus (a crop's edges, a read or facts landing): only the rows
+    /// that differ go and come, every other row keeps its delegate, and the focus stays on its row (EmuSen_Qt.md §7.7.E).
+    fn replace_rows(mut self: Pin<&mut Self>, rows: Vec<settings::Row>) {
+        let root = QModelIndex::default();
+        let (old, new) = (self.rows.len(), rows.len());
+        let head = self.rows.iter().zip(&rows).take_while(|(a, b)| a.id == b.id).count();
+        let tail = self.rows.iter().rev().zip(rows.iter().rev()).take(old.min(new) - head).take_while(|(a, b)| a.id == b.id).count();
+        let focused = usize::try_from(self.focused).ok().filter(|&f| f < old);
+        let to = focused
+            .and_then(|f| rows.iter().position(|r| r.id == self.rows[f].id))
+            .or_else(|| focused.map(|f| f.min(new.saturating_sub(1))))
+            .unwrap_or(0);
+        if old - tail > head {
+            self.as_mut().begin_remove_rows(&root, head as i32, (old - tail - 1) as i32);
+            self.as_mut().rust_mut().rows.drain(head..old - tail);
+            self.as_mut().end_remove_rows();
+        }
+        if new - tail > head {
+            self.as_mut().begin_insert_rows(&root, head as i32, (new - tail - 1) as i32);
+            let came: Vec<settings::Row> = rows[head..new - tail].to_vec();
+            self.as_mut().rust_mut().rows.splice(head..head, came);
+            self.as_mut().end_insert_rows();
+        }
+        self.as_mut().rust_mut().rows = rows;
+        if new > 0 {
+            let (first, last) = (self.index(0, 0, &QModelIndex::default()), self.index(new as i32 - 1, 0, &QModelIndex::default()));
+            self.as_mut().data_changed(&first, &last, &QVector::<i32>::default());
+        }
+        self.refocus(to as i32);
     }
 
     /// The bindings page's drawing from the view.

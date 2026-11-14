@@ -5937,6 +5937,18 @@ gate's five sizes and recorded. Seeded faults, each reverted:
 - the frame's `sentenceTone` left unbound: the program's test, the firmware sentence in the text's colour;
 - the runtime's fallback to an engine's own system taken out: the client test, the core's card not listed.
 
+**A page's rows changing under the focus (2026-11-13).** Crop overscan stepped to Custom crop adds the four edge rows
+under it, and stepped away takes them out. `SettingsModel` used to answer any change of a page's row ids by taking every
+row out and putting the new ones in with the focus on the first row, so the focus jumped from Crop overscan to Engine,
+every row's item was made again, and the program's console-page test failed some of the time when the gate's walk
+stepped that row: the walk went on from items that no longer existed. Now, when the page is the same one, only the rows
+that differ are taken out and put in (the run of rows at the head and the tail whose ids match keeps its items), and the
+focus is given back to the row it was on, by id, through `refocus`; a row that went leaves the focus at its index, or
+on the last row. A page turned still opens on its first row. Measured on 2026-11-13: neither a late settings read nor a
+change of the library's facts arrived while the console page was open in the program's test, and both already kept
+the rows in place when the ids were the same. The program's console-page test steps Crop overscan both ways with the
+focus on it.
+
 #### 7.7.F Cores on the tool screen, the approval at first launch and the firmware question (stage 5, piece F; 2026-11-09)
 
 `EmuSen_Interface.md` §15.2–15.8, §18.10; C#'s `EmuSen.Tools.Cores`, `CoresWindow` and `MainWindow.CoreApproval`

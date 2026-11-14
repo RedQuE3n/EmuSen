@@ -1065,8 +1065,8 @@ author, licence, `api` 1.0, the dark and light variants, `fontSizes` 1 and 1.3, 
 synthetic library at 640 × 400), `screens/Home.qml`, `Consoles.qml` and `Games.qml`, and `parts/` (`Faces`, the
 four Barlow faces from the kit's fonts; `Glyph`, a mark of `Marks` drawn in one ink; `EngineMark`; `CoverFan`). It is
 written against `EmuSen.Theme` alone, every shown word from `Words`, `Help` or a row, and is compiled into the program's
-resources by `qt-app/themes.qrc` at `qrc:/emusen/themes/emusen/` (`emusen_qt::REFERENCE_THEME`, read in QML as
-`ReferenceTheme.folder`); the host loads it as it loads any theme. A file added to the package is added to that list.
+resources by `qt-app/themes.qrc` at `qrc:/emusen/themes/emusen/` (`emusen_qt::reference_theme()`, the first of
+`themes::BUILT_IN` at `themes::built_in_folder`, read in QML as `BuiltInThemes.reference`); the host loads it as it loads any theme. A file added to the package is added to that list.
 
 **What moved and what stayed.** The three screens and their parts left `EmuSen.App` (`Home.qml`, `Consoles.qml`,
 `GameGrid.qml`, `Cover.qml`, `CoverFan.qml`, `Glyph.qml`, `EngineMark.qml`, `GameCard.qml`, `RoundPicture.qml`); the cover
@@ -1628,6 +1628,103 @@ side by side in `~/.cache/emusen/tmp/qt-s3-ofix/compare/`:
    its view as possibly null, and `OrbitCover` its `orbit` (`?.`, `?? 0`). A run logs none; with `OrbitCover`'s guard
    seeded back, `nogame` alone logged 7 at `OrbitCover.qml:16`.
 
+#### 3.4.7 Eclipse, the second built-in **[M 2026-11-14]**
+
+Decided 2026-11-11 by the tester: Eclipse is EmuSen's default look, and the present theme stays as an option. Decided
+2026-11-14: Eclipse is compiled into the program as a built-in beside the reference, and it is dark only for now. Decided
+2026-11-13: the program's own screens take the chosen theme's colours and sizes through the kit's tokens (§3.5.1), and the
+theme API is not widened for that. A blank setting still gives the reference: which theme a blank setting gives changes
+only once Eclipse has screens of its own.
+
+**The package.** `Frontend/themes/eclipse/` holds `theme.json` alone: name Eclipse, `api` 1.0, the dark variant, no
+screen of its own (`"screens": []`), no cue, no preview, and the token overrides below. With no screens, every screen is
+the reference's: Home, Choose a console and the games are drawn by the reference's host, whose engine keeps the kit's
+tokens, so only the program's own screens (Settings, the cards, the game page, the Pause Card, the tools, the questions
+and notices) and Eclipse's own engine take Eclipse's values. It has no preview because a grab of the program in Eclipse
+today shows the reference's screens, which would not show Eclipse. The manifest allows all of this: `screens` and
+`variants` are lists, `previews` is optional, and theme-audit audits the screens a package lists, so it loads none here.
+
+**Built in.** `themes::BUILT_IN` (`qt-models/src/themes.rs`) is the one list of built-in themes, the reference first;
+`themes::built_in_folder` gives each one's folder in the resources, `qrc:/emusen/themes/<id>/`, which `qt-app/themes.qrc`
+holds file for file. `BuiltInThemes` (`qt-app/src/theme.rs`) reads each built-in's `theme.json` through Qt for the Themes
+tab and gives the window the reference's folder. In the tab, Eclipse's row follows EmuSen's: "Eclipse", "By The EmuSen
+project · EmuSen.Theme 1.0 · dark", and "Checked: nothing found." (built-ins are checked by the build's tests, here
+theme-check's `qt_3_4_7_the_built_in_eclipse_package_is_clean`). Use stores the id `eclipse`; `themes::resolve` gives
+`Resolved::BuiltIn`, whose host folder is the resources', so the chosen theme's host loads it and `ThemeStyle` puts its
+overrides on the program's engine.
+
+**From the boards to design units.** A board's pixel is converted as value × `canvas::DESIGN_HEIGHT` (kit-core, 800) / the
+board's height (`canvas.json`'s `h`, 1200 for every board used), both read from their owners by the script that wrote the
+overrides; a board's `rgba()` colour becomes `#AARRGGBB`, its alpha rounded to the nearest of 256 steps. Three worked
+values: a row's 84 px is 84 × 800 / 1200 = 56; the notice's corners, 22 px, are 14.666…; the scrim's
+`rgba(4, 5, 10, 0.62)` is `#9E04050A` (0.62 × 255 = 158.1, so 0x9E). Type sizes are bases: the kit reads one at text
+scale 1 as the nearest half unit (`scaled_text`), so `fontCaption` 15.333… reads 15.5.
+
+**The role mapping.** Each override is the kit role's value where the board draws the same thing (boards in the design
+project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
+
+| Token | What it paints in the program | Board element (file:line) | Board | Design value |
+|---|---|---|---|---|
+| surface | a screen's ground behind its frame (`kit-qt/qml/Frame.qml:37`) | the ground (`EclipseSettings:17`) | #07080F | #07080F |
+| surfaceRaised | the focused row (`MenuRow.qml:34`), a notice (`NoticeLayer.qml:60`) | the focused row (`EclipseSettings:94`), the notice (`EclipseDialog:23`) | #151826 | #151826 |
+| inputSurface | a text field (`style/TextField.qml:37`) | a text field (`EclipseGameEdit:84`) | #11131C | #11131C |
+| scrim | the Home card's scrim (`qt-app/qml/MenuCard.qml:81`) | the scrim under the Menu card (`EclipseHomeCard:22`) | rgba(4, 5, 10, 0.62) | #9E04050A |
+| rule | the help bar's top line (`HelpBar.qml:63`) | the help bar's top line (`EclipsePause:57`) | rgba(246, 231, 216, 0.35) | #59F6E7D8 |
+| text | a resting row's label (`MenuRow.qml:58`) | the rows' ink (`EclipseSettings:17`) | #F4F1EC | #F4F1EC |
+| textStrong | the focused row's label (`MenuRow.qml:58`) | the focused row's and the title's ink (`EclipseSettings:17`) | #F4F1EC | #F4F1EC |
+| muted | a door row's mark (`MenuRow.qml:114`) | a door row's mark (`EclipseSettings:59`) | #B9BED0 | #B9BED0 |
+| accent | a switch's track when on (`style/Switch.qml:22`), the ring | the track when on, the ring (`EclipseSettings:94`) | #F6E7D8 | #F6E7D8 |
+| overAccent | a switch's knob when on (`style/Switch.qml:31`) | the knob when on (`EclipseSettings:94`) | #07080F | #07080F |
+| shadowOpacity | a notice's shadow (`NoticeLayer.qml:14`) | the notice's shadow (`EclipseDialog:23`) | 0.6 | 0.6 |
+| shadowOffsetY | a notice's shadow (`NoticeLayer.qml:47`) | the notice's shadow (`EclipseDialog:23`) | 18 px | 12 |
+| rowHeight | a row (`MenuRow.qml:28`) | a row (`EclipseSettings:42`) | 84 px | 56 |
+| rowRadius | a row's corners (`MenuRow.qml:33`) | a row's corners (`EclipseSettings:42`) | 20 px | 13.333… |
+| tileRadius | a notice's corners (`NoticeLayer.qml:59`) | the notice's corners (`EclipseDialog:23`) | 22 px | 14.666… |
+| ringThickness | the ring's width (`ActionButton.qml:39`) | the ring, 3 to 6 px out (`EclipseSettings:94`) | 3 px | 2 |
+| ringOffset | the gap inside the ring (`ActionButton.qml:36`) | the dark gap (`EclipseSettings:94`) | 3 px | 2 |
+| hoverBorder | an unfilled button's outline (`ActionButton.qml:29`) | the unfilled button's outline (`EclipseDialog:40`) | 2 px | 1.333… |
+| controlHeight | a button (`ActionButton.qml:22`) | the button (`EclipseDialog:39`) | 72 px | 48 |
+| helpBar | the help bar (`HelpBar.qml:43`) | the help bar (`EclipsePause:57`) | 76 px | 50.666… |
+| fontRow | a row's label (`MenuRow.qml:20`) | a row's name (`EclipseSettings:44`) | 24 px | 16 |
+| fontBody | the help bar's words (`HelpBar.qml:16`) | the help bar's words (`EclipseSettings:79`) | 21 px | 14 |
+| fontCaption | Settings' section names (`SettingsFrame.qml:77`) | the section names (`EclipseSettings:32`) | 23 px | 15.333… |
+| fontTitle | a question's title (`Question.qml:23`) | the question's title (`EclipseDialog:36`) | 44 px | 29.333… |
+| fontDisplay | the game's name on its page (`PageFrame.qml:151`) | the game's name (`EclipseGame:44`) | 104 px | 69.333… |
+
+The colour of the notice's shadow is black on the board, the kit's own, so `shadowColor` is not overridden; `safeAreaX`
+(96 px, 64 units) is the kit's value too. Left at the reference's value, each for its reason:
+
+- `border`: the boards' outline of an unfilled button and of a switch's track (#5A6076, `EclipseDialog:40`,
+  `EclipseSettings:94`) is 2.83:1 on surfaceRaised and 2.97:1 on inputSurface, under the kit's 3:1 floor for graphics;
+  theme-check refuses it. The tester's to rule on.
+- `voidFill`: the boards draw black behind a game (`EclipsePause:17`), which is the kit's.
+- `success`, `error`, `attention`: no board draws words in a tone colour; a status is a filled chip (`EclipseSettingsConsoles:78`).
+- `captionSurface`, `overArt`, `overArtScrim`: the game page's board draws the disc over its art, not the kit's caption and
+  gradient; settled with the game page's piece.
+- `shadowBlur`: how a CSS blur radius relates to the kit's (`RaisedShadow.qml:31`, MultiEffect's `blurMax`) was not read.
+- `fontStrong`, `headerSize`: no screen of the program reads them. `fontGlyph`: the kit's glyph is sized as a share of it
+  (`PadGlyph.qml:20`), the board's is a 34 px disc; not the same measure.
+- `base`, `paneGutter`, `paneGap`, `cardWidth`, `titleRow`, `tileWidth`, `tileHeight`, `tileGap`, `barWidth`,
+  `tileScale`, `safeAreaY`, the durations, curves and breathing: no board element measured as the same thing.
+
+**Board colours with no kit role**, for later pieces, no role bent to carry them: the rose of the focus glow (#F3C9D2,
+rgba(240, 180, 196, 0.4) at `EclipseSettings:94`), the corona disc and its rim, a resting row's own surface and edge
+(#0F111A, #22263A, `EclipseSettings:94`; the kit draws a resting row on the screen's ground), a resting switch's knob
+(#B9BED0, where the kit uses textStrong), the help bar's words (#D8DBE6, where the kit uses text), a pill's corners
+(36 px, where the kit's button uses rowRadius), and the blurred colour fields.
+
+**What does not hold for a dark-only theme yet.** Settings' Appearance row (`qt-models/data/settings_screen.json:91`)
+offers Light whatever the chosen theme's variants; under Light the kit's light palette is shown, with none of Eclipse's
+values. And a theme's overrides are per variant, not per form, so the desktop form, which the program does not show for
+now, would take the big screen's sizes.
+
+**Proof.** qt-app's `qt_3_4_7_eclipse_is_listed_chosen_and_sets_every_override_on_both_engines` (`tests/eclipse.rs`):
+with the reference in use every token of the program's engine is the reference engine's; the Themes tab lists EmuSen then
+Eclipse; Use stores `eclipse` and loads it from the resources; every override read back from Eclipse's engine and from the
+program's equals `theme.json`'s, and every other token is the kit's; the reference chosen again gives the kit's tokens
+back. qt-models' `both_built_ins_come_first_and_a_blank_setting_still_gives_the_reference` holds the listing and the
+resolution, and qt-app's `qt_3_4_2_…` holds each built-in's resources to its folder.
+
 ### 3.5 Loading and the sandbox
 
 Each theme runs in a `QQmlEngine` of its own, created by Rust with: an import path list holding only Qt's modules on an
@@ -1788,7 +1885,7 @@ theme (S); a themed Games screen opens no List card until `Actions.openListCard`
   `LibraryModel.select`). `Actions.openHomeCard` is declined: Power opens the Home card, as before.
 
 **Two hosts.** `ThemeHost.qml` is one theme: its host, its slots, its feed and the program's models it is fed from. The
-window holds two: the reference (`ReferenceTheme.folder`) and the chosen theme (`--theme`, `EMUSEN_THEME`, else the
+window holds two: the reference (`BuiltInThemes.reference`) and the chosen theme (`--theme`, `EMUSEN_THEME`, else the
 settings' `EmuSenTheme` resolved as §3.8 says). The chosen theme's host is a `Loader`'s item (`chosenTheme`), made only
 while a theme other than the reference is chosen and destroyed, engine and all, when the reference is chosen again
 (§3.8, §9.3.5). The
@@ -2000,13 +2097,14 @@ the panel's rows; the focused row's detail as properties; `use(id)`, `check(id)`
 thread; a check also runs off it and comes back through `qt_thread().queue`. A check is kept on its row while the
 program runs; it is not written anywhere.
 
-**Rows.** The reference first, from its `theme.json` in the resources (`ReferenceTheme.manifest`, read through Qt as the
-host reads any package) and checked by construction, since the build's own tests hold it to `theme-check`; then every
+**Rows.** The built-ins first, the reference then Eclipse (`themes::BUILT_IN`, §3.4.7), each from its `theme.json` in the
+resources (`BuiltInThemes.manifests`, read through Qt as the host reads any package) and checked by construction, since
+the build's own tests hold it to `theme-check`; then every
 folder directly under Galaxia's themes store (`DIR_THEMES`, `home/Themes`, already in Galaxia's table, so Galaxia gained
 no store), in name order: a folder with `theme.json` is an EmuSen package, read through `emusen-theme-manifest`; one with
 `capabilities.xml` (in it or its first subfolder that has one, as `esde-check` finds a theme's root) or `theme.xml` is an
 ES-DE theme, its name and selectable variants from the ES-DE engine's `capabilities::read`. Hidden folders, `.part` and
-`.old` folders (the store's unfinished downloads) and a folder named `emusen` are left out.
+`.old` folders (the store's unfinished downloads) and a folder named as a built-in are left out.
 
 **The id, and where it is stored.** Decided 2026-11-08: the setting holds a theme's **id**, never a folder. The id is a
 folder's name directly under the store; `emusen` is the reference in the resources. `AppSettings.EmuSenTheme` was added
@@ -2014,7 +2112,7 @@ to Galaxia's model (after `EsdeMediaDirectory`; the disk corpus's eight recordin
 Mistress's `AppSettings`, so a save from Mistress keeps it (`EmuSen_Config_Reference.md` §7.3). Use writes it through
 Galaxia's model (`clients::store_app_setting`, one key changed, every other key as read). `themes::resolve` is the one
 resolution, used by the tab and by the program's start (`start::chosen_theme`): an empty id or `emusen` is the reference;
-a name with a separator or a leading dot is refused; a folder that is not there, or is not a theme, is **missing**, and
+`eclipse`, the other built-in, is its folder in the resources (`Resolved::BuiltIn`); a name with a separator or a leading dot is refused; a folder that is not there, or is not a theme, is **missing**, and
 the reference is shown with the words "The theme “…” is not in the themes folder, so EmuSen's own theme is shown.", a
 notice raised once the splash has faded. `--theme` and `EMUSEN_THEME` still name a folder and win over the setting.
 
@@ -2048,7 +2146,7 @@ theme after the library has been read: without the first the theme saw no consol
 held the focus.
 
 **New references** (house rules): `emusen-qt-models` on `emusen-theme-manifest`, `emusen-theme-check` and `emusen-esde`,
-the three Qt-free crates whose library it calls; `emusen-qt`'s `ReferenceTheme` calls `emusen-theme-host`'s
+the three Qt-free crates whose library it calls; `emusen-qt`'s `BuiltInThemes` calls `emusen-theme-host`'s
 `sandbox_read`, a dependency it already had. No reflection, no mutable static.
 
 **Proof, measured on 2026-11-08.** `qt-models/tests/themes.rs` (6 tests, no Qt) over a scratch store holding a copy of

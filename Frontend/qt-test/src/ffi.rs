@@ -48,6 +48,10 @@ pub mod ffi {
         fn harness_give_focus(window: Pin<&mut QObject>, id: u64);
         fn harness_grab(window: Pin<&mut QObject>, path: &QString) -> bool;
         fn harness_property(root: Pin<&mut QObject>, object_name: &QString, property: &QString) -> QString;
+        /// The object with this objectName under the root (or the root), for a test to reach its own surface; null for none.
+        fn harness_object(root: Pin<&mut QObject>, object_name: &QString) -> *mut QObject;
+        /// Each read-only property the object's class declares past QObject's, a line each, `name=value` as Qt writes it as text.
+        fn harness_constants(object: Pin<&mut QObject>) -> QString;
         unsafe fn harness_singleton(engine: Pin<&mut QQmlApplicationEngine>, module: &QString, name: &QString) -> *mut QObject;
         /// The singleton of the engine that made the window's focused item, as a hosted theme's engine has its own; null for none.
         fn harness_focused_singleton(window: Pin<&mut QObject>, module: &QString, name: &QString) -> *mut QObject;

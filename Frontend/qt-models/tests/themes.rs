@@ -2,12 +2,14 @@
 //! resolved, the check, when Use is offered, and the ES-DE theme in use with its choices as they are stored.
 
 use emusen_qt_models::esde_shelves::{settings_of, theme_key};
-use emusen_qt_models::themes::{self, Checked, Kind, Resolved, REFERENCE};
+use emusen_qt_models::themes::{self, Checked, Kind, Resolved, BUILT_IN, REFERENCE};
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
 const REFERENCE_MANIFEST: &str = include_str!("../../themes/emusen/theme.json");
-const REFERENCE_FOLDER: &str = "qrc:/emusen/themes/emusen/";
+const ECLIPSE_MANIFEST: &str = include_str!("../../themes/eclipse/theme.json");
+/// The reference alone as the program's built-ins, for the tests of the store's rows.
+const REFERENCE_ONLY: &[(&str, &str)] = &[(REFERENCE, REFERENCE_MANIFEST)];
 const CLEAN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../theme-check/tests/themes/clean");
 const LITERAL: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../theme-check/tests/themes/literal");
 
@@ -41,7 +43,7 @@ fn copy(from: &Path, to: &Path) {
 #[test]
 fn the_reference_comes_first_then_each_theme_of_the_store_in_name_order() {
     let root = store("rows");
-    let listing = themes::listing(&json!({}), Some(&root), REFERENCE_MANIFEST, REFERENCE_FOLDER);
+    let listing = themes::listing(&json!({}), Some(&root), REFERENCE_ONLY);
     let ids: Vec<(&str, Kind)> = listing.rows.iter().map(|r| (r.id.as_str(), r.kind)).collect();
     assert_eq!(ids, [(REFERENCE, Kind::EmuSen), ("book", Kind::Esde), ("dawn", Kind::EmuSen)], "no folder that is not a theme, hidden, or named as the reference");
     let reference = &listing.rows[0];
@@ -55,9 +57,34 @@ fn the_reference_comes_first_then_each_theme_of_the_store_in_name_order() {
 }
 
 #[test]
+fn both_built_ins_come_first_and_a_blank_setting_still_gives_the_reference() {
+    let root = store("built-ins");
+    // A store folder named as a built-in is left out, as one named as the reference is.
+    copy(Path::new(CLEAN), &root.join("eclipse"));
+    let built_ins = [(BUILT_IN[0], REFERENCE_MANIFEST), (BUILT_IN[1], ECLIPSE_MANIFEST)];
+    let listing = themes::listing(&json!({}), Some(&root), &built_ins);
+    let ids: Vec<(&str, Kind)> = listing.rows.iter().map(|r| (r.id.as_str(), r.kind)).collect();
+    assert_eq!(ids, [("emusen", Kind::EmuSen), ("eclipse", Kind::EmuSen), ("book", Kind::Esde), ("dawn", Kind::EmuSen)]);
+    let eclipse = &listing.rows[1];
+    assert_eq!((eclipse.name.as_str(), eclipse.api.as_str(), eclipse.variants.as_str(), eclipse.preview.as_str()), ("Eclipse", "1.0", "dark", ""));
+    assert!(eclipse.checked == Checked::Ok && !eclipse.current && eclipse.usable(), "a built-in is built clean and may be used");
+    assert!(listing.rows[0].current, "with nothing stored the reference is in use");
+    // A blank setting is the reference's, which the host never loads as a second theme.
+    assert_eq!(themes::chosen_of(&json!({})), REFERENCE);
+    assert_eq!(themes::resolve("", Some(&root)).host_folder(), "");
+    // Eclipse resolves to its folder in the resources, never to the store's folder of that name.
+    assert_eq!(themes::resolve("eclipse", Some(&root)), Resolved::BuiltIn("eclipse".into()));
+    assert_eq!(themes::resolve("eclipse", None).host_folder(), "qrc:/emusen/themes/eclipse/");
+    let listing = themes::listing(&json!({ "EmuSenTheme": "eclipse" }), Some(&root), &built_ins);
+    assert_eq!(listing.rows.iter().filter(|r| r.current).map(|r| r.id.as_str()).collect::<Vec<_>>(), ["eclipse"]);
+    assert!(listing.words.is_empty(), "{}", listing.words);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn use_is_offered_only_for_a_theme_checked_clean_and_not_in_use() {
     let root = store("usable");
-    let mut rows = themes::listing(&json!({}), Some(&root), REFERENCE_MANIFEST, REFERENCE_FOLDER).rows;
+    let mut rows = themes::listing(&json!({}), Some(&root), REFERENCE_ONLY).rows;
     assert!(!rows[0].usable(), "the reference is in use");
     assert!(!rows[2].usable(), "a package not yet checked");
     rows[2].checked = Checked::Findings(vec!["dawn/screens/Home.qml:3 literal".into()]);
@@ -86,11 +113,11 @@ fn a_stored_id_resolves_through_the_store_and_a_missing_one_falls_back_with_word
     }
     let book = themes::resolve("book", Some(&root));
     assert_eq!((book.host_folder().as_str(), book.words("book").is_empty()), ("", false), "an ES-DE theme is not drawn by the host");
-    let listing = themes::listing(&json!({ "EmuSenTheme": "gone" }), Some(&root), REFERENCE_MANIFEST, REFERENCE_FOLDER);
+    let listing = themes::listing(&json!({ "EmuSenTheme": "gone" }), Some(&root), REFERENCE_ONLY);
     assert_eq!(listing.chosen, "gone");
     assert!(listing.rows[0].current, "the reference stands in");
     assert!(listing.words.contains("“gone”"), "{}", listing.words);
-    let listing = themes::listing(&json!({ "EmuSenTheme": "dawn" }), Some(&root), REFERENCE_MANIFEST, REFERENCE_FOLDER);
+    let listing = themes::listing(&json!({ "EmuSenTheme": "dawn" }), Some(&root), REFERENCE_ONLY);
     assert_eq!(listing.rows.iter().filter(|r| r.current).map(|r| r.id.as_str()).collect::<Vec<_>>(), ["dawn"]);
     std::fs::remove_dir_all(root).unwrap();
 }
@@ -170,7 +197,7 @@ fn every_choice_the_capabilities_declare_is_listed_at_what_is_stored_or_where_th
         let mut settings = json!({});
         themes::choose_esde(&mut settings, &book);
         settings["BigPicture"] = json!({ theme_key(book.to_str().unwrap()): stored });
-        let mut rows = themes::listing(&json!({}), Some(&root), REFERENCE_MANIFEST, REFERENCE_FOLDER).rows;
+        let mut rows = themes::listing(&json!({}), Some(&root), REFERENCE_ONLY).rows;
         let in_use = themes::mark(&mut rows, &settings, Some(&root)).expect("book is in use");
         (rows, in_use)
     };
@@ -205,7 +232,7 @@ fn a_choice_steps_round_and_is_stored_under_the_theme_s_folder_as_the_view_reads
     let mut settings = json!({ "EmuSenTheme": "dawn", "BigPicture": "not a table" });
     themes::choose_esde(&mut settings, &book);
     assert!(settings_of(&settings).themed, "the ES-DE theme is the library's look");
-    let mut rows = themes::listing(&json!({}), Some(&root), REFERENCE_MANIFEST, REFERENCE_FOLDER).rows;
+    let mut rows = themes::listing(&json!({}), Some(&root), REFERENCE_ONLY).rows;
     let mut choices = themes::mark(&mut rows, &settings, Some(&root)).unwrap().choices;
     assert_eq!(choices[0].step(-1), "two", "Left from the first goes round to the last");
     assert_eq!(choices[0].step(1), "one");

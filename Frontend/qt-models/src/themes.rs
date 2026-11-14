@@ -11,8 +11,24 @@ use emusen_esde::loader::capabilities::{self, Capabilities, BUILT_IN_TRANSITIONS
 use emusen_theme_check::loaded;
 use serde_json::Value;
 
-/// The reference theme's id, the one compiled into the program's resources.
-pub const REFERENCE: &str = "emusen";
+/// The themes compiled into the program's resources, by id, the reference first (`qt-app/themes.qrc`, EmuSen_Qt.md §3.4.7).
+pub const BUILT_IN: [&str; 2] = ["emusen", "eclipse"];
+
+/// The reference theme's id: the first built-in, drawing every screen a chosen theme does not.
+pub const REFERENCE: &str = BUILT_IN[0];
+
+/// Where the program's resources hold the built-in themes, a folder each by its id.
+pub const BUILT_IN_ROOT: &str = "qrc:/emusen/themes/";
+
+/// A built-in theme's folder in the resources, as the theme host loads it.
+pub fn built_in_folder(id: &str) -> String {
+    format!("{BUILT_IN_ROOT}{id}/")
+}
+
+/// Whether an id names a theme compiled into the program.
+pub fn is_built_in(id: &str) -> bool {
+    BUILT_IN.contains(&id)
+}
 
 /// The setting that holds the chosen theme's id (EmuSen_Config_Reference.md §7.3).
 pub const SETTING: &str = "EmuSenTheme";
@@ -130,15 +146,20 @@ pub fn chosen_of(settings: &Value) -> String {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Resolved {
     Reference,
+    /// A built-in theme other than the reference, by its id.
+    BuiltIn(String),
     Theme { folder: PathBuf, kind: Kind },
     /// No folder of a theme by that name in the store.
     Missing,
 }
 
-/// The id resolved through the themes store (Galaxia's `DIR_THEMES`): the reference, a folder directly under the store, or missing.
+/// The id resolved: the reference, another built-in, a folder directly under the themes store (Galaxia's `DIR_THEMES`), or missing.
 pub fn resolve(id: &str, store: Option<&Path>) -> Resolved {
     if id.is_empty() || id == REFERENCE {
         return Resolved::Reference;
+    }
+    if is_built_in(id) {
+        return Resolved::BuiltIn(id.to_owned());
     }
     let Some(store) = store.filter(|_| valid_id(id)) else { return Resolved::Missing };
     let folder = store.join(id);
@@ -149,9 +170,11 @@ pub fn resolve(id: &str, store: Option<&Path>) -> Resolved {
 }
 
 impl Resolved {
-    /// The folder the theme host loads: an EmuSen package's; empty for the reference and anything it cannot draw.
+    /// The folder the theme host loads: a built-in's in the resources, or an EmuSen package's; empty for the reference and
+    /// anything it cannot draw.
     pub fn host_folder(&self) -> String {
         match self {
+            Resolved::BuiltIn(id) => built_in_folder(id),
             Resolved::Theme { folder, kind: Kind::EmuSen } => folder.to_string_lossy().into_owned(),
             _ => String::new(),
         }
@@ -189,9 +212,9 @@ pub fn package_row(id: &str, manifest: &str, folder: &str) -> Row {
     Row { id: id.to_owned(), name, kind: Kind::EmuSen, author, api, variants, preview, current: false, checked: Checked::Not }
 }
 
-/// The reference's row: its manifest from the resources, held clean by the build's own tests, so checked.
-pub fn reference_row(manifest: &str, folder: &str) -> Row {
-    Row { checked: Checked::Ok, ..package_row(REFERENCE, manifest, folder) }
+/// A built-in's row: its manifest from the resources, held clean by the build's own tests, so checked.
+pub fn built_in_row(id: &str, manifest: &str) -> Row {
+    Row { checked: Checked::Ok, ..package_row(id, manifest, &built_in_folder(id)) }
 }
 
 /// An ES-DE theme's row from its `capabilities.xml`: its name, and its selectable variants as a count.
@@ -208,7 +231,7 @@ fn esde_row(id: &str, folder: &Path) -> Row {
     Row { id: id.to_owned(), name, kind: Kind::Esde, author: String::new(), api: "ES-DE".to_owned(), variants, preview: String::new(), current: false, checked: Checked::Not }
 }
 
-/// Every theme folder directly under the store, in name order; hidden, partial and replaced folders, and one named as the reference, left out.
+/// Every theme folder directly under the store, in name order; hidden, partial and replaced folders, and one named as a built-in, left out.
 pub fn scan(store: &Path) -> Vec<Row> {
     let mut folders: Vec<PathBuf> = std::fs::read_dir(store).map(|r| r.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect()).unwrap_or_default();
     folders.sort();
@@ -216,7 +239,7 @@ pub fn scan(store: &Path) -> Vec<Row> {
         .iter()
         .filter_map(|folder| {
             let id = folder.file_name()?.to_str()?;
-            if !valid_id(id) || id == REFERENCE || id.ends_with(".part") || id.ends_with(".old") {
+            if !valid_id(id) || is_built_in(id) || id.ends_with(".part") || id.ends_with(".old") {
                 return None;
             }
             match kind_of(folder)? {
@@ -227,7 +250,7 @@ pub fn scan(store: &Path) -> Vec<Row> {
         .collect()
 }
 
-/// The tab after a read: every row, the reference first, the one in use marked; the store; the id stored; and why the
+/// The tab after a read: every row, the built-ins first, the one in use marked; the store; the id stored; and why the
 /// reference stands in for it, if it does.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Listing {
@@ -239,11 +262,11 @@ pub struct Listing {
     pub esde: Option<InUse>,
 }
 
-/// The listing from the settings, the store and the reference's manifest and folder.
-pub fn listing(settings: &Value, store: Option<&Path>, reference: &str, reference_folder: &str) -> Listing {
+/// The listing from the settings, the store and the built-ins' manifests, each by its id, as the resources hold them.
+pub fn listing(settings: &Value, store: Option<&Path>, built_ins: &[(&str, &str)]) -> Listing {
     let chosen = chosen_of(settings);
     let resolved = resolve(&chosen, store);
-    let mut rows = vec![reference_row(reference, reference_folder)];
+    let mut rows: Vec<Row> = built_ins.iter().map(|(id, manifest)| built_in_row(id, manifest)).collect();
     rows.extend(store.map(scan).unwrap_or_default());
     let esde = mark(&mut rows, settings, store);
     Listing { rows, store: store.map(Path::to_path_buf), words: resolved.words(&chosen), chosen, esde }

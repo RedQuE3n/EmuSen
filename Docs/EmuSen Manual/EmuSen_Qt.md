@@ -6432,10 +6432,12 @@ window's before it is shown, and that matters under gamescope: gamescope 3.16.30
 A compositor that names a size (KWin) is obeyed: Qt applies its `configure`. Out of full screen, the window takes
 graphics.json's `WindowWidth` and `WindowHeight`, and `WindowResizable` off holds it there by its least and greatest sizes
 (`play::Windowed`, read through the description's `applies` as every setting is; an absent file is the model's
-`model_new`). It is given once the compositor has answered the request for a window (`visibility` Windowed): Qt's
-Wayland plugin applies the answer's size first, synchronously, and delivers the state change after it through the event
-queue (`QWaylandWindow::resizeFromApplyConfigure` and `handleWindowStatesChanged`, Qt 6.11.2, read 2026-11-14), so a size
-given at the moment of the request is replaced by KWin's answer (`full_screen_gpu.rs`, run 2026-11-14 before this order).
+`model_new`). It is given when the window is asked out of full screen and once more at the compositor's answer, the
+window's next change of size (`windowedAnswerAwaited`): `QWindow` reports the Windowed visibility the moment it is asked,
+and Qt's Wayland plugin then applies the size the answer names (`QWaylandWindow::resizeFromApplyConfigure`, Qt 6.11.2,
+read 2026-11-14), so a size given only at the request was replaced by KWin's, the size the window had before full screen
+(`full_screen_gpu.rs` and `full_screen_small_gpu.rs`, run 2026-11-14: 640 by 400, the harness's). A compositor that
+answers with the size already given leaves the second giving waiting until the next change of size or the next request.
 Nothing in the program writes that size back. With no platform library the size is left to Qt, whose
 Wayland plugin then gives a toplevel 500 by 500 (`QWaylandWindow::defaultGeometry`). Under gamescope, `visibility` never
 reads FullScreen, so the Fullscreen hotkey asks for full screen each time and the window keeps its screen's size.

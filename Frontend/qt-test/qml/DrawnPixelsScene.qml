@@ -11,6 +11,7 @@ Window {
     color: "#000000"
     property url manual
     Kit.NormalizedCanvas {
+        objectName: "canvas"
         Kit.HelpBar {
             objectName: "help"
             x: 40

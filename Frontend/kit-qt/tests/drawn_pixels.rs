@@ -41,6 +41,8 @@ fn kit_7_111_a_help_picture_and_a_pdf_page_are_decoded_at_the_pixels_they_cover(
     for (width, height) in [(1280, 800), (1920, 1200)] {
         scene.resize(width, height);
         scene.wait(50);
+        let unit = scene.property("canvas", "unit").parse::<f64>().unwrap();
+        assert!((unit - f64::from(height) / emusen_kit_core::canvas::DESIGN_HEIGHT).abs() < 1e-9, "the canvas's unit at {height} high: {unit}");
         let tree = scene.tree();
         let icon = tree.find_named("icon-Menu").map(|i| tree.nodes[i as usize].clone()).expect("the theme's picture in the tree");
         let page = tree.nodes.iter().find(|n| n.cls.contains("PdfPageImage")).cloned().expect("the page's picture in the tree");
@@ -54,6 +56,8 @@ fn kit_7_111_a_help_picture_and_a_pdf_page_are_decoded_at_the_pixels_they_cover(
             );
         }
     }
+    // The canvas is laid out in kit-core's design height, the one owner (EmuSen_Kit.md §7.112).
+    assert_eq!(scene.property("canvas", "designHeight").parse::<f64>().unwrap(), emusen_kit_core::canvas::DESIGN_HEIGHT);
     scene.assert_quiet();
     std::fs::remove_dir_all(&dir).ok();
 }

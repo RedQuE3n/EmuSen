@@ -254,6 +254,15 @@ impl LibrarySource for ClientSource {
         Ok(out)
     }
 
+    fn cheats(&self, console: &str, path: &str) -> Result<usize, String> {
+        Ok(crate::cheats::List::of(&self.platform, console, path)?.map_or(0, |l| l.entries().len()))
+    }
+
+    fn played_for(&self, path: &str, seconds: f64, max_hours: i32) -> Result<Option<f64>, String> {
+        let kept = self.library.change(&json!({ "op": "played", "path": path, "seconds": seconds, "max_hours": max_hours })).map_err(words)?;
+        Ok(kept.as_f64())
+    }
+
     fn folder_links(&self) -> Result<Vec<(String, String)>, String> {
         let edits = self.library.get(&json!({ "what": "all_edits" })).map_err(words)?;
         let link = |(folder, e): (&String, &Value)| {
@@ -300,7 +309,7 @@ impl LibrarySource for ClientSource {
         let mut out = Vec::new();
         for s in systems {
             // The runtime's Setting(console, "Engine"): the stored choice, else the engine row's default.
-            let chosen = self.runtime.settings_get(0, Scope::Console, Some(&s.id), crate::consoles::ENGINE_KEY).map_err(words)?;
+            let chosen = self.runtime.settings_get(0, Scope::Console, Some(crate::consoles::settings_console(s)), crate::consoles::ENGINE_KEY).map_err(words)?;
             let Some(id) = chosen.filter(|c| !c.is_empty()).or_else(|| s.engines.first().cloned()) else { continue };
             out.push((s.id.clone(), engine_shown(&id, &cores)));
         }

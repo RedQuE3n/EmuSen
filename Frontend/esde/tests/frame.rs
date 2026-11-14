@@ -58,7 +58,7 @@ fn close(a: f64, b: f64) -> bool {
 const CAROUSEL: &str = "<carousel name=\"c\"><pos>0 0</pos><size>1 1</size><maxItemCount>3</maxItemCount><itemScale>1.5</itemScale><unfocusedItemOpacity>0.3</unfocusedItemOpacity>";
 
 #[test]
-fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_not_drawn() {
+fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_drawn_once_checked() {
     let listed: Vec<(String, String)> = mapping::pairs().map(|(k, p, _)| (k.to_owned(), p.to_owned())).collect();
     let unique: BTreeSet<_> = listed.iter().cloned().collect();
     assert_eq!(unique.len(), listed.len(), "a pair listed twice");
@@ -67,13 +67,14 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_not_
     assert_eq!(unique, catalogue);
     let dimmed: Vec<_> = mapping::pairs().filter(|(k, p, _)| *k == "helpsystem" && p.ends_with("Dimmed")).collect();
     assert_eq!(dimmed.len(), 8);
-    assert!(dimmed.iter().all(|(_, _, s)| **s == Mapped::Later("help-dimmed".into())), "R-20261111-75: not drawn until checked");
-    assert_eq!(mapping::status("sound", "path"), Some(&Mapped::Later("sound".into())));
+    assert!(dimmed.iter().all(|(_, _, s)| **s == Mapped::Drawn), "each checked by its mapping case (§4.5.9)");
     assert_eq!(mapping::status("video", "delay"), Some(&Mapped::Drawn));
-    // Heard, not seen: no picture shows it, and no state stands between drawn and not drawn (R-20261111-75).
-    assert_eq!(mapping::status("video", "audio"), Some(&Mapped::Later("video".into())));
+    // Heard, not seen: proven by the test that hears it (R-20261112-26).
+    assert!(matches!(mapping::status("sound", "path"), Some(Mapped::Heard(t)) if t.starts_with("qt-app/tests/esde.rs::")));
+    assert!(matches!(mapping::status("video", "audio"), Some(Mapped::Heard(t)) if t.starts_with("esde-qt/tests/theme_video.rs::")));
+    assert!(mapping::is_supported("sound", "path") && !mapping::is_supported("video", "scanlines"));
     assert_eq!(mapping::status("video", "scanlines"), Some(&Mapped::Later("video".into())));
-    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 432);
+    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 459);
     assert!(
         mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"),
         "the gameselector picks the system view's games; sound is played"
@@ -81,23 +82,24 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_not_
 }
 
 #[test]
-fn a_theme_setting_the_dimmed_help_or_a_sound_counts_them_unsupported_and_not_whole() {
+fn a_theme_setting_a_pair_not_drawn_counts_it_unsupported_and_not_whole_and_a_heard_sound_set() {
     let t = Synth::new();
     t.capabilities("").theme(
-        "<view name=\"system\"><helpsystem name=\"help\"><textColorDimmed>FF0000</textColorDimmed><opacityDimmed>0.5</opacityDimmed></helpsystem></view>
+        "<view name=\"system\"><textlist name=\"l\"><fadeAbovePrimary>true</fadeAbovePrimary></textlist><helpsystem name=\"help\"><textColorDimmed>FF0000</textColorDimmed><opacityDimmed>0.5</opacityDimmed></helpsystem></view>
          <view name=\"all\"><sound name=\"systembrowse\"><path>./s.wav</path></sound></view>",
     );
     let m = check::measure(&t.root, &["nes"]);
-    assert_eq!(m.properties.get("helpsystem.textColorDimmed"), Some(&"unsupported"));
-    assert_eq!(m.properties.get("sound.path"), Some(&"unsupported"));
-    assert_eq!(m.count("unsupported"), 3);
+    assert_eq!(m.properties.get("helpsystem.textColorDimmed"), Some(&"set"));
+    assert_eq!(m.properties.get("textlist.fadeAbovePrimary"), Some(&"unsupported"));
+    assert_eq!(m.properties.get("sound.path"), Some(&"set"));
+    assert_eq!(m.count("unsupported"), 1);
     assert!(m.loads() && !m.whole());
     let header: Vec<&str> = check::SUMMARY_HEADER.split('\t').collect();
     assert!(!header.contains(&"accepted"), "no state between drawn and not drawn");
     let row = check::summary_row(&m);
     let cells: Vec<&str> = row.split('\t').collect();
     assert_eq!(cells.len(), header.len());
-    assert_eq!(cells[header.iter().position(|c| *c == "unsupported").unwrap()], "3");
+    assert_eq!(cells[header.iter().position(|c| *c == "unsupported").unwrap()], "1");
     assert_eq!(cells[header.iter().position(|c| *c == "whole").unwrap()], "no");
 }
 
@@ -995,4 +997,139 @@ fn a_grid_draws_whole_rows_only_unless_fractional_rows_is_set() {
     // Rows 60 px high in a box of 200: three whole rows, 180 px, or the whole box.
     assert!(close(grid(false), 180.0), "{}", grid(false));
     assert!(close(grid(true), 200.0), "{}", grid(true));
+}
+
+// ES-DE 3.4.1's `HelpComponent::updateGrid` and `Window::render`: with a menu open over the view the help takes its
+// `*Dimmed` properties, each falling back to its own, and a help of scope menu shows only then, one of scope view only before.
+#[test]
+fn a_menu_over_the_view_dims_the_help_and_swaps_the_scoped_ones() {
+    let t = Synth::new();
+    let help = "<helpsystem name=\"h\"><pos>0.1 0.5</pos><posDimmed>0.4 0.2</posDimmed><textColor>FFFFFF</textColor><textColorDimmed>FF0000</textColorDimmed>\
+                <fontSize>0.1</fontSize><fontSizeDimmed>0.05</fontSizeDimmed><entrySpacingDimmed>0.03</entrySpacingDimmed><opacity>0.9</opacity>\
+                <opacityDimmed>0.4</opacityDimmed><entryLayout>textFirst</entryLayout><scope>shared</scope></helpsystem>\
+                <helpsystem name=\"m\"><scope>menu</scope></helpsystem><helpsystem name=\"v\"><scope>view</scope></helpsystem>";
+    let mut s = stage(&t, "", help, "gamelist", 0);
+    let shown = |s: &Stage| s.frame().elements.iter().map(|p| p.name.clone()).collect::<Vec<_>>();
+    let help_of = |f: &Frame| match &placed(f, "h").paint {
+        Paint::Help(h) => h.clone(),
+        other => panic!("{other:?}"),
+    };
+    let f = s.frame();
+    let open = help_of(&f);
+    assert!(open.text_first);
+    assert_eq!(open.label_color, Color(0xFFFF_FFFF));
+    assert!(close(open.px, 0.1 * H));
+    assert!(close(placed(&f, "h").opacity, 0.9));
+    assert!(close(placed(&f, "h").y, (0.5 * H as f32).round() as f64));
+    assert!(shown(&s).contains(&"v".to_owned()) && !shown(&s).contains(&"m".to_owned()));
+    s.current.data.menu_open = true;
+    let f = s.frame();
+    let dim = help_of(&f);
+    assert_eq!(dim.label_color, Color(0xFF00_00FF));
+    assert_eq!(dim.icon_color, open.icon_color, "iconColorDimmed falls back to iconColor");
+    assert!(close(dim.px, 0.05 * H));
+    assert!(close(dim.entry_spacing, f64::from(0.03 * W as f32)));
+    assert!(close(dim.icon_gap, open.icon_gap));
+    assert!(close(placed(&f, "h").opacity, 0.4));
+    assert!(close(placed(&f, "h").y, (0.2 * H as f32).round() as f64));
+    assert!(shown(&s).contains(&"m".to_owned()) && !shown(&s).contains(&"v".to_owned()));
+}
+
+// ES-DE 3.4.1's `TextListComponent::applyTheme` and `render`: the bar's width and shift are shares of the screen's width,
+// a picture takes its place tinted across by its colours, and a folder's selected background has its own colour.
+#[test]
+fn a_text_list_s_selector_takes_its_width_shift_picture_and_the_folder_s_background() {
+    let t = Synth::new();
+    t.asset("bar.png");
+    let list = "<textlist name=\"l\"><pos>0 0</pos><size>0.5 0.5</size><fontSize>0.1</fontSize><selectorWidth>0.25</selectorWidth>\
+        <selectorHorizontalOffset>-0.1</selectorHorizontalOffset><selectorImagePath>./bar.png</selectorImagePath><selectorImageTile>true</selectorImageTile>\
+        <selectorColor>FF0000</selectorColor><selectorColorEnd>0000FF</selectorColorEnd><selectorGradientType>vertical</selectorGradientType>\
+        <selectedBackgroundColor>00FF00</selectedBackgroundColor><selectedSecondaryBackgroundColor>FFFF00</selectedSecondaryBackgroundColor></textlist>";
+    let s = stage(&t, "", list, "gamelist", 0);
+    let Layout::TextList(l) = &s.frame().primary.unwrap().layout else { panic!() };
+    let bar = l.selector.unwrap();
+    assert!(close(bar.w, 0.25 * W) && close(bar.x, -0.1 * W));
+    assert!(l.selector_image.as_deref().is_some_and(|p| p.ends_with("bar.png")) && l.selector_tile);
+    assert_eq!(bar.tint, Tint { color: Color(0xFF00_00FF), end: Color(0x0000_FFFF), vertical: false }, "a picture is tinted across");
+    assert_eq!(l.selected_background.unwrap().0, Color(0x00FF_00FF));
+    assert_eq!(l.selected_secondary_background, Color(0xFFFF_00FF));
+    assert!(close(l.selected_background_shift, -0.1 * W));
+    let plain = "<textlist name=\"l\"><pos>0 0</pos><size>0.5 0.5</size><selectedBackgroundColor>00FF00</selectedBackgroundColor></textlist>";
+    let s = stage(&t, "", plain, "gamelist", 0);
+    let Layout::TextList(l) = &s.frame().primary.unwrap().layout else { panic!() };
+    assert!(close(l.selector.unwrap().w, 0.5 * W) && l.selector_image.is_none());
+    assert_eq!(l.selected_secondary_background, Color(0x00FF_00FF), "the folder's falls back to the primary's");
+}
+
+// ES-DE 3.4.1's `CarouselComponent::render` for the row types: the selected item's offset, each item turned about its own
+// centre, the per-item diagonal shift, and the stacking order.
+#[test]
+fn a_row_carousel_takes_its_selected_offset_axis_rotation_diagonal_and_stacking() {
+    let t = Synth::new();
+    let slots = |extra: &str| {
+        let system = format!("{CAROUSEL}<itemSize>0.2 0.3</itemSize>{extra}</carousel>");
+        let s = stage(&t, &system, "", "system", 0);
+        let Layout::Carousel(c) = s.frame().primary.unwrap().layout else { panic!() };
+        c.slots
+    };
+    let plain = slots("");
+    let chosen = |v: &[Slot]| v.iter().find(|s| s.chosen).cloned().unwrap();
+    let right = |v: &[Slot]| v.iter().filter(|s| !s.chosen).min_by(|a, b| (a.x - chosen(v).x - W / 3.0).abs().total_cmp(&(b.x - chosen(v).x - W / 3.0).abs())).cloned().unwrap();
+    let moved = slots("<selectedItemOffset>0.1 0.2</selectedItemOffset>");
+    assert!(close(chosen(&moved).x - chosen(&plain).x, 0.1 * W) && close(chosen(&moved).y - chosen(&plain).y, 0.2 * W));
+    assert!(close(right(&moved).x, right(&plain).x), "only the selected item moves");
+    let turned = slots("<itemAxisRotation>30</itemAxisRotation>");
+    for s in &turned {
+        assert!(close(s.rotation, 30.0) && close(s.rotation_origin.0, s.x + s.w / 2.0) && close(s.rotation_origin.1, s.y + s.h / 2.0));
+    }
+    let slanted = slots("<itemDiagonalOffset>0.1</itemDiagonalOffset>");
+    assert!(close(chosen(&slanted).y, chosen(&plain).y));
+    assert!(close(right(&slanted).y, right(&plain).y - 0.1 * H), "the next item one step up");
+    let xs = |v: &[Slot]| v.iter().map(|s| s.x).collect::<Vec<_>>();
+    let up = xs(&slots("<itemStacking>ascending</itemStacking>"));
+    assert!(up.windows(2).all(|w| w[0] < w[1]), "{up:?}");
+    let down = slots("<itemStacking>descendingRaised</itemStacking>");
+    assert!(down.last().unwrap().chosen);
+    let rest = xs(&down[..down.len() - 1]);
+    assert!(rest.windows(2).all(|w| w[0] > w[1]), "{rest:?}");
+    assert!(chosen(&plain) == *plain.last().unwrap(), "centered keeps the selection on top");
+}
+
+// A GIF the host read is drawn on its frame at the view's time, and with iterations done, not at all.
+#[test]
+fn an_animation_takes_its_frame_from_the_host_s_timing_and_goes_when_its_plays_are_done() {
+    let t = Synth::new();
+    t.asset("spin.gif");
+    let anim = |extra: &str| format!("<animation name=\"a\"><pos>0 0</pos><size>0.5 0.5</size><path>./spin.gif</path>{extra}</animation>");
+    let mut s = stage(&t, "", &anim("<iterationCount>1</iterationCount>"), "gamelist", 0);
+    let path = t.path_of("spin.gif");
+    s.current.data.animations.insert(path.clone(), (4, 100));
+    let frame_of = |s: &Stage| s.frame().elements.iter().find(|p| p.name == "a").map(|p| match &p.paint {
+        Paint::Picture(q) => q.frame,
+        other => panic!("{other:?}"),
+    });
+    assert_eq!(frame_of(&s), Some(Some(0)));
+    assert_eq!(s.frame().next_change_ms, Some(100));
+    s.advance(ms(250.0));
+    assert_eq!(frame_of(&s), Some(Some(1)));
+    s.advance(ms(550.0));
+    assert_eq!(frame_of(&s), None, "one play of four frames, then nothing");
+    s.current.data.animations.clear();
+    assert_eq!(frame_of(&s), Some(None), "a file the host read no timing for stands on its first frame");
+}
+
+// ES-DE 3.4.1's ViewsVideoAudio (`VideoFFmpegComponent`, outputSound): off, a theme's videos in the views play silent.
+#[test]
+fn the_player_s_switch_silences_a_theme_s_videos_in_the_views() {
+    let t = Synth::new();
+    t.asset("clip.mp4");
+    let gamelist = "<video name=\"v\"><pos>0 0</pos><size>0.5 0.5</size><path>./clip.mp4</path></video>";
+    let mut s = stage(&t, "", gamelist, "gamelist", 0);
+    let audio = |s: &Stage| match &s.frame().elements.iter().find(|p| p.name == "v").unwrap().paint {
+        Paint::Video(v) => v.audio,
+        other => panic!("{other:?}"),
+    };
+    assert!(audio(&s));
+    s.current.data.views_video_audio = false;
+    assert!(!audio(&s));
 }

@@ -47,6 +47,7 @@ fn offer(own: Option<Crop>) -> CropOffer {
         choices: vec![("Whole picture".into(), Crop::default()), ("TV overscan".into(), tv())],
         custom: "Custom crop".into(),
         own,
+        most: 0.25,
     }
 }
 
@@ -355,6 +356,19 @@ fn qt_7_8_2_edit_details_types_each_detail_and_puts_back_what_was_scraped() {
 }
 
 #[test]
+fn opened_at_cheats_the_page_shows_options_cheats_and_gives_way_to_options_without_any() {
+    use emusen_qt_models::game_page::{GamePage, Section, CHEATS};
+    let mut page = GamePage::new(Read::default(), 0);
+    page.open_at(CHEATS);
+    assert_eq!((page.shown(), page.cheating), (Section::Options, true));
+    page.reread(Read::default());
+    assert!(!page.cheating, "no cheats to show: Options");
+    let mut other = GamePage::new(Read::default(), 0);
+    other.open_at("");
+    assert_eq!((other.shown(), other.cheating), (Section::Overview, false), "no part: the page's start");
+}
+
+#[test]
 fn display_crop_steps_the_games_own_crop_through_settings_overscan_choices() {
     let mut page = GamePage::new(read(), NOW);
     page.choose_section(2);
@@ -365,17 +379,47 @@ fn display_crop_steps_the_games_own_crop_through_settings_overscan_choices() {
     assert!(rows[0].steps && !rows[0].opens);
     assert_eq!(page.help(None, 0), Screen::GamePageValue);
     assert_eq!(page.step_row(0, 1), Outcome::Changed(Change::Crop(Some(Crop::default()))), "Right: the whole picture");
-    assert_eq!(page.step_row(0, -1), Outcome::Changed(Change::Crop(Some(tv()))), "Left wraps to TV overscan");
+    page.changed(&Change::Crop(Some(Crop::default())));
+    assert_eq!(page.step_row(0, 1), Outcome::Changed(Change::Crop(Some(tv()))), "Right again: TV overscan");
     page.changed(&Change::Crop(Some(tv())));
     let Content::Rows(rows) = page.content() else { panic!("rows") };
-    assert_eq!(rows[0].value, "TV overscan", "taken into the page at once");
-    assert_eq!(page.step_row(0, 1), Outcome::Changed(Change::Crop(None)), "past the last, the console's again");
-    // A crop of the player's own, which no choice names, is said as Settings says one and steps to the ends.
+    assert_eq!(rows.iter().map(|r| format!("{} | {}", r.label, r.value)).collect::<Vec<_>>(), ["Crop overscan | TV overscan"], "taken into the page at once; no edges");
+    // Right once more: a crop of the player's own, Settings' last choice, starting from the crop shown, its four edges after it.
+    assert_eq!(page.step_row(0, 1), Outcome::Changed(Change::Crop(Some(tv()))));
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    let edge = (tv().left * 1000.0).round() / 10.0;
+    let words = rows.iter().map(|r| format!("{} | {}", r.label, r.value)).collect::<Vec<_>>();
+    assert_eq!(words, ["Crop overscan | Custom crop".to_owned(), format!("Left edge | {edge}%"), format!("Right edge | {edge}%"), format!("Top edge | {edge}%"), format!("Bottom edge | {edge}%")]);
+    assert!(rows[1..].iter().all(|r| r.steps && !r.sentence.is_empty()));
+    // Right on the left edge: the next whole percent, the other edges kept, stored as the game's own crop.
+    let stepped = Crop { left: 0.04, ..tv() };
+    assert_eq!(page.step_row(1, 1), Outcome::Changed(Change::Crop(Some(stepped))));
+    page.changed(&Change::Crop(Some(stepped)));
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    assert_eq!(rows[1].value, "4%");
+    assert_eq!(page.step_row(3, -1), Outcome::Changed(Change::Crop(Some(Crop { top: 0.03, ..stepped }))), "Left on the top edge: the whole percent below");
+    // An edge is held to the catalogue's most, and to none.
+    page.changed(&Change::Crop(Some(Crop { left: 0.25, top: 0.0, ..stepped })));
+    assert_eq!(page.step_row(1, 1), Outcome::Changed(Change::Crop(Some(Crop { left: 0.25, top: 0.0, ..stepped }))), "no more than a quarter");
+    assert_eq!(page.step_row(3, -1), Outcome::Changed(Change::Crop(Some(Crop { left: 0.25, top: 0.0, ..stepped }))), "no less than none");
+    // Every edge at none is still the player's own while it is chosen, so its rows stay under the focus.
+    page.changed(&Change::Crop(Some(Crop::default())));
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    assert_eq!((rows.len(), rows[0].value.as_str()), (5, "Custom crop"));
+    // Past the last, the console's again, and the edges gone.
+    assert_eq!(page.step_row(0, 1), Outcome::Changed(Change::Crop(None)));
+    page.changed(&Change::Crop(None));
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    assert_eq!(rows.len(), 1);
+    assert_eq!(page.step_row(0, -1), Outcome::Changed(Change::Crop(Some(Crop::default()))), "Left from the console's: a crop of the player's own");
+    // A crop of the player's own read from games.db, which no choice names, is said as Settings says one.
     let own = Crop { left: 0.1, top: 0.0, right: 0.0, bottom: 0.0 };
+    page.custom = false;
     page.changed(&Change::Crop(Some(own)));
     let Content::Rows(rows) = page.content() else { panic!("rows") };
-    assert_eq!(rows[0].value, "Custom crop");
+    assert_eq!((rows[0].value.as_str(), rows[1].value.as_str(), rows.len()), ("Custom crop", "10%", 5));
     assert_eq!(page.step_row(0, 1), Outcome::Changed(Change::Crop(None)));
+    page.custom = true;
     assert_eq!(page.step_row(0, -1), Outcome::Changed(Change::Crop(Some(tv()))));
     assert_eq!(change_failed(&Change::Crop(None), "locked"), "The game's crop could not be stored: locked");
     assert!(page.back(), "B goes back to Options");

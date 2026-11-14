@@ -21,6 +21,32 @@ pub const COLLECTIONS: &str = "collections";
 /// The Filter page's rows: every game, and Favourites.
 pub const EVERY_GAME: &str = "every";
 pub const FAVOURITES_ONLY: &str = "favourites";
+/// A collection's row on the Filter page and the grid's action by the same key: `collection:<id>`.
+const COLLECTION: &str = "collection:";
+
+/// One of the player's collections as the Filter page lists it and the grid narrows to it.
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Listed {
+    pub key: String,
+    pub name: String,
+    pub members: Vec<String>,
+}
+
+/// The player's collections as the library gives them to the grid, in games.db's order (by name).
+pub fn collections_text(all: &[crate::gamelists::Collection]) -> String {
+    let listed: Vec<Listed> = all.iter().map(|c| Listed { key: format!("{COLLECTION}{}", c.id), name: c.name.clone(), members: c.members.clone() }).collect();
+    serde_json::to_string(&listed).unwrap_or_default()
+}
+
+/// The collections read back from that text; none from text that is not.
+pub fn collections_of(text: &str) -> Vec<Listed> {
+    serde_json::from_str(text).unwrap_or_default()
+}
+
+/// Whether an action is a collection's.
+pub fn is_collection(action: &str) -> bool {
+    action.starts_with(COLLECTION)
+}
 
 /// A step of a value as the action the grid carries out: `sort+1`, `jump-1`.
 pub fn stepped(key: &str, by: i32) -> String {
@@ -105,12 +131,14 @@ fn startable(f: &Value) -> Vec<crate::home_card::Startable> {
     f.get("startable").cloned().and_then(|s| serde_json::from_value(s).ok()).unwrap_or_default()
 }
 
-/// The Filter page: every game, then Favourites except in the Favourites section; the player's collections follow
-/// once the library reads them.
+/// The Filter page: every game, then Favourites except in the Favourites section, then the player's collections.
 fn filter_page(f: &Value) -> Page {
     let mut rows = vec![Row::new(EVERY_GAME, "Every game")];
     if !f.get("favouritesSection").and_then(Value::as_bool).unwrap_or(false) {
         rows.push(Row::new(FAVOURITES_ONLY, "Favourites"));
+    }
+    for c in f.get("collections").and_then(Value::as_array).into_iter().flatten() {
+        rows.push(Row::new(words(c, "key"), words(c, "name")));
     }
     Page { title: "Filter".to_owned(), breadcrumb: "List".to_owned(), rows, footer: String::new() }
 }
@@ -150,6 +178,8 @@ impl Pages for ListCard {
         match (page, row) {
             (FILTER, filter) => Choice::Act(filter.to_owned()),
             (_, FILTER | START_CONSOLE) => Choice::Turn(row.to_owned()),
+            // Collections opens the Filter page, where the player's collections are listed after Favourites.
+            (_, COLLECTIONS) => Choice::Turn(FILTER.to_owned()),
             (START_CONSOLE, console) => Choice::Act(console.to_owned()),
             (FIRST, row) if crate::home_card::console_to_start(row).is_some() => Choice::Act(row.to_owned()),
             (_, SORT | JUMP) => Choice::Stay(stepped(row, 1)),

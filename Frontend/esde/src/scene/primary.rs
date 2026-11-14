@@ -132,7 +132,9 @@ fn fit_of(e: &Element) -> Fit {
 }
 
 /// A carousel at a position in items (fractional while it moves, not wrapped) in its box of `bw` × `bh` pixels, `cursor` its selected row.
-pub fn carousel(e: &Element, data: &Data, count: usize, cursor: usize, position: f64, bw: f64, bh: f64) -> Carousel {
+/// `falling`: the carousel moves toward lower positions, which decides the item ES-DE stacks as its centre while it moves.
+#[allow(clippy::too_many_arguments)]
+pub fn carousel(e: &Element, data: &Data, count: usize, cursor: usize, position: f64, falling: bool, bw: f64, bh: f64) -> Carousel {
     let (sw, sh) = (data.width, data.height);
     let kind = e.string("type").unwrap_or("horizontal");
     let wheel = kind.ends_with("Wheel");
@@ -155,6 +157,17 @@ pub fn carousel(e: &Element, data: &Data, count: usize, cursor: usize, position:
         (m.x as f64 * axis, m.y as f64 * axis)
     });
     let reflects = !wheel && across && e.bool("reflections") == Some(true);
+    // The row types' own placement, ES-DE 3.4.1's `CarouselComponent::applyTheme` and `render`: the selected item's offset
+    // (both axes a share of the screen's width across, its height down), each item turned about its own centre, and a
+    // per-item diagonal shift a share of the screen's height across, its width down.
+    let row_type = !wheel;
+    let chosen_offset = e.pair("selectedItemOffset").filter(|_| row_type).map_or((0.0, 0.0), |p| {
+        let axis = if across { sw } else { sh };
+        (p.x.clamp(-1.0, 1.0) as f64 * axis, p.y.clamp(-1.0, 1.0) as f64 * axis)
+    });
+    let axis_rotation = if row_type { e.float("itemAxisRotation").unwrap_or(0.0) as f64 } else { 0.0 };
+    let diagonal = if row_type { e.float("itemDiagonalOffset").unwrap_or(0.0).clamp(-0.5, 0.5) as f64 * if across { sh } else { sw } } else { 0.0 };
+    let stacking = if row_type { e.string("itemStacking").unwrap_or("centered") } else { "centered" };
     let (length, cross) = if across { (bw, bh) } else { (bh, bw) };
     let spacing = length / max_items;
     let w = if item.0 > 0.0 {
@@ -309,9 +322,25 @@ pub fn carousel(e: &Element, data: &Data, count: usize, cursor: usize, position:
                     rotation = angle;
                 }
             }
+            let mut turn_about = (wheel_centre.0 + align_shift, wheel_centre.1);
+            if row_type {
+                dx += chosen_offset.0 * focus;
+                dy += chosen_offset.1 * focus;
+                if axis_rotation != 0.0 {
+                    rotation = axis_rotation;
+                    turn_about = (b.0 + dx + b.2 / 2.0, b.1 + dy + b.3 / 2.0);
+                }
+                // The shift is the item's own position, so it turns with the item: it moves the box, not the centre.
+                if across {
+                    dy -= diagonal * d;
+                } else {
+                    dx -= diagonal * d;
+                }
+            }
             let opacity = unfocused + (1.0 - unfocused) * focus;
             slots.push((
                 (k as f64 - fraction).abs(),
+                k,
                 Slot {
                     row,
                     chosen: row == cursor && d.abs() < 1.0,
@@ -322,7 +351,7 @@ pub fn carousel(e: &Element, data: &Data, count: usize, cursor: usize, position:
                     scale: 1.0 + (item_scale - 1.0) * focus,
                     scale_origin: (g.0 + dx, g.1 + dy),
                     rotation,
-                    rotation_origin: (wheel_centre.0 + align_shift, wheel_centre.1),
+                    rotation_origin: turn_about,
                     opacity,
                     dim,
                     saturation: saturation * if selected { 1.0 } else { unfocused_sat },
@@ -337,14 +366,27 @@ pub fn carousel(e: &Element, data: &Data, count: usize, cursor: usize, position:
                 },
             ));
         }
-        slots.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        // itemStacking: the row in order, or reversed, the centre item last when raised; the centre is the item at the
+        // position's floor while it falls, its ceiling while it rises (`render`, belowCenter and mPositiveDirection).
+        let centre = if fraction > 0.0 && !falling { 1 } else { 0 };
+        match stacking {
+            "ascending" | "ascendingRaised" => slots.sort_by_key(|s| s.1),
+            "descending" | "descendingRaised" => slots.sort_by_key(|s| std::cmp::Reverse(s.1)),
+            _ => slots.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal)),
+        }
+        if stacking.ends_with("Raised") {
+            if let Some(at) = slots.iter().position(|s| s.1 == centre) {
+                let raised = slots.remove(at);
+                slots.push(raised);
+            }
+        }
     }
     let fill = tint(e, "color", "colorEnd", "gradientType");
     let background = e.color("color").filter(|_| fill.color.a() > 0 || fill.end.a() > 0).map(|_| fill);
     let image_align = (if across && !wheel { HAlign::Center } else { item_h }, if !across && !wheel { VAlign::Center } else { item_v });
     let text = item_text(e, data);
     Carousel {
-        slots: slots.into_iter().map(|(_, s)| s).collect(),
+        slots: slots.into_iter().map(|(_, _, s)| s).collect(),
         background,
         fit: fit_of(e),
         image_align,
@@ -373,14 +415,26 @@ pub fn textlist(e: &Element, data: &Data, count: usize, selected: usize, bw: f64
     let selector = Tint { color: selector_color, end: e.color("selectorColorEnd").unwrap_or(selector_color), vertical };
     let y = (selected as f64 - first_row as f64) * row_h + e.float("selectorVerticalOffset").unwrap_or(0.0) as f64 * sh;
     let back = color(e, "selectedBackgroundColor", 0);
+    let back_secondary = e.color("selectedSecondaryBackgroundColor").unwrap_or(back);
     let m = e.pair("selectedBackgroundMargins").unwrap_or_default();
+    // The bar's width and shift are shares of the screen's width (ES-DE 3.4.1 `TextListComponent::applyTheme`); a picture
+    // takes the bar's place, tinted by the bar's colours across, its width at 0 following its aspect.
+    let selector_image = existing(e.path("selectorImagePath"));
+    let shift = e.float("selectorHorizontalOffset").unwrap_or(0.0) as f64 * sw;
+    let selector_w = e.float("selectorWidth").map_or(bw, |f| f as f64 * sw);
+    let image_tint = Tint { vertical: false, ..selector };
     TextList {
         first_row,
         row_h,
         band_h: selector_h,
         content_y: first_row as f64 * row_h,
-        selector: ((selector.color.a() > 0 || selector.end.a() > 0) && selected < count).then_some(Bar { x: 0.0, y, w: bw, h: selector_h, tint: selector }),
-        selected_background: (back.a() > 0).then(|| {
+        selector: ((selector_image.is_some() || selector.color.a() > 0 || selector.end.a() > 0) && selected < count)
+            .then_some(Bar { x: shift, y, w: selector_w, h: selector_h, tint: if selector_image.is_some() { image_tint } else { selector } }),
+        selector_image,
+        selector_tile: e.bool("selectorImageTile") == Some(true),
+        selected_secondary_background: back_secondary,
+        selected_background_shift: shift,
+        selected_background: (back.a() > 0 || back_secondary.a() > 0).then(|| {
             (
                 back,
                 e.float("selectedBackgroundCornerRadius").unwrap_or(0.0) as f64 * sw,

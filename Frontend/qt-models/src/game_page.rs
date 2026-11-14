@@ -186,34 +186,50 @@ pub struct CropOffer {
     pub custom: String,
     /// The game's own crop; none for the console's.
     pub own: Option<Crop>,
+    /// The most a crop may hide at an edge, a share of the picture, by Serenity's catalogue.
+    pub most: f64,
 }
 
 /// The words for the console's overscan, where the game has no crop of its own.
 pub const CONSOLES: &str = "Console's";
 
 impl CropOffer {
+    /// Whether the crop is the player's own: chosen as such (`chosen`), or one no choice names.
+    pub fn is_custom(&self, chosen: bool) -> bool {
+        chosen || self.own.is_some_and(|own| !self.choices.iter().any(|(_, c)| c.near(&own)))
+    }
+
     /// The crop's words: the console's, a choice's, or the player's own.
-    pub fn words(&self) -> String {
+    pub fn words(&self, chosen: bool) -> String {
         match &self.own {
+            _ if self.is_custom(chosen) => self.custom.clone(),
             None => CONSOLES.into(),
             Some(own) => self.choices.iter().find(|(_, c)| c.near(own)).map_or_else(|| self.custom.clone(), |(w, _)| w.clone()),
         }
     }
 
-    /// One step on from the crop, round: the console's, then each choice; a crop of the player's own steps to the ends.
-    pub fn stepped(&self, by: i32) -> Option<Crop> {
-        let all: Vec<Option<Crop>> = std::iter::once(None).chain(self.choices.iter().map(|(_, c)| Some(*c))).collect();
+    /// One step on from the crop, round: the console's, each choice, then a crop of the player's own, which starts from
+    /// the crop shown; and whether that last is where it landed.
+    pub fn stepped(&self, by: i32, chosen: bool) -> (Option<Crop>, bool) {
+        let n = self.choices.len() as i32 + 2;
         let at = match &self.own {
-            None => Some(0),
-            Some(own) => all.iter().position(|c| c.is_some_and(|c| c.near(own))),
+            _ if self.is_custom(chosen) => n - 1,
+            None => 0,
+            Some(own) => self.choices.iter().position(|(_, c)| c.near(own)).map_or(n - 1, |i| i as i32 + 1),
         };
-        let n = all.len() as i32;
-        let next = match at {
-            Some(at) => (at as i32 + by.signum()).rem_euclid(n),
-            None if by > 0 => 0,
-            None => n - 1,
-        };
-        all[next as usize]
+        match (at + by.signum()).rem_euclid(n) {
+            0 => (None, false),
+            next if next == n - 1 => (Some(self.own.unwrap_or_default()), true),
+            next => (Some(self.choices[next as usize - 1].1), false),
+        }
+    }
+
+    /// The crop with one edge a step on, in the catalogue's bounds.
+    pub fn edge_stepped(&self, edge: crate::display::Edge, by: i32) -> Crop {
+        let mut crop = self.own.unwrap_or_default();
+        let percent = *edge.of(&mut crop) * 100.0;
+        *edge.of(&mut crop) = crate::display::edge_stepped(self.most, percent, by) / 100.0;
+        crop
     }
 }
 
@@ -430,6 +446,8 @@ pub struct GamePage {
     pub cheating: bool,
     /// Whether Options shows Display crop or Package, its deeper pages.
     pub cropping: bool,
+    /// Whether Display crop's row was stepped to a crop of the player's own, whose edges follow it.
+    pub custom: bool,
     pub packaging: bool,
     /// The package's job: its key, whether it is running, and what it has said; none before one started.
     pub job: Option<(&'static str, bool, Run)>,
@@ -504,9 +522,11 @@ impl GamePage {
         GamePage { read, now, ..GamePage::default() }
     }
 
-    /// A new read of the same game, the section and Resume's state kept where they still stand.
+    /// A new read of the same game, the section and Resume's state kept where they still stand; Cheats gives way to
+    /// Options where the game has none to show.
     pub fn reread(&mut self, read: Read) {
         self.resume_at = self.resume_at.min(read.states.len().saturating_sub(1));
+        self.cheating &= !read.cheats.is_empty();
         self.read = read;
     }
 
@@ -537,17 +557,27 @@ impl GamePage {
         SECTIONS.iter().map(|s| s.name().to_owned()).collect()
     }
 
+    /// The page opened at a part of it by a door: `cheats` is Options' Cheats; anything else the page's start.
+    pub fn open_at(&mut self, part: &str) {
+        if part == CHEATS {
+            self.section = SECTIONS.iter().position(|s| *s == Section::Options).unwrap_or(0);
+            self.cheating = true;
+        }
+    }
+
     pub fn choose_section(&mut self, index: usize) {
         self.section = index.min(SECTIONS.len() - 1);
         self.editing = false;
         self.cheating = false;
         self.cropping = false;
+        self.custom = false;
         self.packaging = false;
     }
 
     /// B on the page: Edit Details goes back to Details, and Cheats, Display crop and Package to Options, and says so;
     /// else the page is left.
     pub fn back(&mut self) -> bool {
+        self.custom = false;
         let deeper = [&mut self.editing, &mut self.cheating, &mut self.cropping, &mut self.packaging];
         deeper.into_iter().fold(false, |went, d| std::mem::replace(d, false) | went)
     }
@@ -739,10 +769,19 @@ impl GamePage {
         rows
     }
 
-    /// Display crop's row: the game's crop, stepped through Settings' overscan choices.
+    /// Display crop's rows: the game's crop, stepped through Settings' overscan choices, and a crop of the player's own's
+    /// four edges (display.rs `EDGES`).
     fn crop_rows(&self) -> Vec<Row> {
         let Some(crop) = &self.read.crop else { return Vec::new() };
-        vec![Row { key: OVERSCAN, label: crop.label.clone(), value: crop.words(), steps: true, opens: false, sentence: "" }]
+        let mut rows = vec![Row { key: OVERSCAN, label: crop.label.clone(), value: crop.words(self.custom), steps: true, opens: false, sentence: "" }];
+        if crop.is_custom(self.custom) {
+            let mut own = crop.own.unwrap_or_default();
+            for e in crate::display::EDGES {
+                let value = crate::display::edge_words(*e.of(&mut own) * 100.0);
+                rows.push(Row { key: e.key, label: e.label.into(), value, steps: true, opens: false, sentence: e.hint });
+            }
+        }
+        rows
     }
 
     /// Package's rows: what the package is, and the job that makes or checks it with how far it has gone.
@@ -882,7 +921,7 @@ impl GamePage {
     }
 
     /// Left or Right on a row: the engine, the profile or the standard stepped, wrapping, and saved.
-    pub fn step_row(&self, index: usize, by: i32) -> Outcome {
+    pub fn step_row(&mut self, index: usize, by: i32) -> Outcome {
         let Content::Rows(rows) = self.content() else { return Outcome::Nothing };
         let step = |choices: &[Choice], value: &Option<String>| {
             let at = choices.iter().position(|c| &c.value == value).unwrap_or(0) as i64;
@@ -897,8 +936,16 @@ impl GamePage {
             },
             Some(CHEAT) => self.switch(index),
             Some(OVERSCAN) => match &self.read.crop {
-                Some(c) => Outcome::Changed(Change::Crop(c.stepped(by))),
+                Some(c) => {
+                    let (next, custom) = c.stepped(by, self.custom);
+                    self.custom = custom;
+                    Outcome::Changed(Change::Crop(next))
+                }
                 None => Outcome::Nothing,
+            },
+            Some(key) if self.cropping => match (&self.read.crop, crate::display::Edge::by_key(key)) {
+                (Some(c), Some(edge)) => Outcome::Changed(Change::Crop(Some(c.edge_stepped(edge, by)))),
+                _ => Outcome::Nothing,
             },
             Some(STANDARD) => match &self.read.standards {
                 Some(s) => Outcome::Changed(Change::Standard(step(s, &self.read.standard))),

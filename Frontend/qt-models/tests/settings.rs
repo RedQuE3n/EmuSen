@@ -196,10 +196,12 @@ fn qt_7_7_emusens_panes_and_values_name_other_keys_and_the_version() {
     let pane = view.pane(0);
     assert_eq!(pane.sentence, "States and saves live beside the games, with one resume point kept per game.");
     assert_eq!(pane.muted, ["Resume · Always start again"]);
-    assert_eq!(shown(&view)[1], ("Big picture".into(), "On startup".into()));
-    assert_eq!(view.rows()[5].value, emusen_qt_models::words::version_line());
-    assert_eq!(view.rows()[5].kind, RowKind::Action);
-    assert_eq!(view.choose(5), Outcome::Nothing);
+    // Big Picture is the program on every machine (the tester decided, 2026-11-13): no Big picture row, whatever the base holds.
+    let labels: Vec<String> = shown(&view).into_iter().map(|(label, _)| label).collect();
+    assert_eq!(labels, ["Saves and states", "Pause in the background", "Logging", "Shell", "About"]);
+    assert_eq!(view.rows()[4].value, emusen_qt_models::words::version_line());
+    assert_eq!(view.rows()[4].kind, RowKind::Action);
+    assert_eq!(view.choose(4), Outcome::Nothing);
 }
 
 #[test]
@@ -271,4 +273,32 @@ fn qt_7_7_h5_every_controller_type_galaxia_offers_but_automatic_is_a_family_of_t
         assert_eq!(family.is_none(), choice == "Automatic", "{choice}");
         assert_eq!(family.map(|f| f.name()), (choice != "Automatic").then_some(choice));
     }
+}
+
+#[test]
+fn sound_volume_and_play_time_are_read_as_the_program_takes_them_and_follow_a_step() {
+    let source = fake(json!({"BigPictureInterface": {"NavigationVolume": 60}, "MaxPlayTimeTracking": 3}), json!({}));
+    let mut view = view(&source);
+    assert_eq!((view.navigation_volume(), view.play_hours()), (0.6, Some(3)));
+    section(&mut view, "Sound");
+    view.step(index(&view, "soundvolume"), -1);
+    assert_eq!(view.navigation_volume(), 0.55, "a step is the volume at once");
+    // Nothing stored: each row's initial value, Galaxia's.
+    let unset = self::view(&fake(json!({}), json!({})));
+    assert_eq!((unset.navigation_volume(), unset.play_hours()), (0.6, Some(8)));
+}
+
+#[test]
+fn the_cheats_door_is_held_until_the_game_last_played_has_cheats_and_the_discs_door_names_its_tool() {
+    let source = fake(json!({}), json!({}));
+    let mut view = view(&source);
+    section(&mut view, "Library");
+    let cheats = index(&view, "cheats");
+    assert!(view.rows()[cheats].held, "no game played");
+    view.facts = json!({"last": "/roms/a.sfc", "lastCheats": 0});
+    assert!(view.rows()[cheats].held, "a game with no cheats");
+    view.facts = json!({"last": "/roms/a.sfc", "lastCheats": 2});
+    assert!(!view.rows()[cheats].held);
+    assert_eq!(view.choose(cheats), Outcome::Door("cheats".into()));
+    assert_eq!(view.choose(index(&view, "discs")), Outcome::Door("compressed".into()), "the Compressed Discs tool's key");
 }

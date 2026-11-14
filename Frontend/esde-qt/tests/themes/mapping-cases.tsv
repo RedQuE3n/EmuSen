@@ -266,7 +266,7 @@ rating	gameselector	a	b	system	-	-	-	-	-	-	-	<gameselector name="a"><selection>l
 rating	gameselectorEntry	0	2	system	-	-	-	-	-	-	-	<gameselector name="a"><selection>lastplayed</selection><gameCount>3</gameCount></gameselector><gameselector name="b"><selection>mostplayed</selection><gameCount>3</gameCount></gameselector>
 animation	path	{G}	{G2}	-	-	-	-	-	-	-	-	-
 animation	maxSize	0.5 0.6	0.2 0.2	-	-	-	size	-	-	-	-	-
-animation	speed	1	3	-	-	-	-	-	150	-	-	-
+animation	speed	1	3	-	-	-	-	-	250	-	-	-
 animation	direction	normal	reverse	-	-	-	-	-	150	-	-	-
 animation	iterationCount	0	1	-	-	-	-	-	900	-	-	-
 animation	interpolation	nearest	linear	-	-	-	-	path={G2}	-	-	-	-
@@ -337,3 +337,30 @@ grid	letterCaseAutoCollections	none	uppercase	system	5	-	imageType	staticImage={
 grid	letterCaseCustomCollections	none	uppercase	system	7	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.05	-	-	-	-
 textlist	letterCaseAutoCollections	none	uppercase	system	5	-	-	-	-	-	-	-
 textlist	letterCaseCustomCollections	none	uppercase	system	7	-	-	-	-	-	-	-
+image	stationary	never	betweenViews	system	-	-	-	-	150	switch	-	-
+image	renderDuringTransitions	true	false	system	-	-	-	-	50	switch	-	-
+video	stationary	never	always	-	-	-	-	-	150	switch	-	-
+animation	stationary	never	betweenViews	-	-	-	-	-	150	switch	-	-
+badges	stationary	never	always	-	-	-	-	-	150	switch	-	-
+text	stationary	never	betweenViews	-	-	-	-	-	150	switch	-	-
+datetime	stationary	never	always	-	-	-	-	-	150	switch	-	-
+gamelistinfo	stationary	never	betweenViews	-	-	-	-	-	150	switch	-	-
+rating	stationary	never	always	-	-	-	-	-	150	switch	-	-
+helpsystem	posDimmed	0 0	0.3 0.5	-	-	-	-	-	-	menu	-	-
+helpsystem	originDimmed	0 0	1 1	-	-	-	-	pos=0.5 0.5;posDimmed=0.5 0.5	-	menu	-	-
+helpsystem	textColorDimmed	FFFFFF	FF0000	-	-	-	-	-	-	menu	-	-
+helpsystem	iconColorDimmed	FFFFFF	FF0000	-	-	-	-	-	-	menu	-	-
+helpsystem	fontSizeDimmed	0.1	0.05	-	-	-	-	-	-	menu	-	-
+helpsystem	entrySpacingDimmed	0.01	0.04	-	-	-	-	-	-	menu	-	-
+helpsystem	iconTextSpacingDimmed	0	0.04	-	-	-	-	-	-	menu	-	-
+helpsystem	opacityDimmed	1	0.5	-	-	-	-	-	-	menu	-	-
+helpsystem	entryLayout	iconFirst	textFirst	-	-	-	-	-	-	-	-	-
+textlist	selectorWidth	0.3	0.8	-	-	-	-	selectorColor=FF0000	-	-	-	-
+textlist	selectorHorizontalOffset	0	0.2	-	-	-	-	selectorColor=FF0000;selectorWidth=0.3	-	-	-	-
+textlist	selectorImagePath	{A}	{B}	-	-	-	-	selectorColor=FFFFFF;selectorHeight=0.2	-	-	-	-
+textlist	selectorImageTile	false	true	-	-	-	-	selectorImagePath={A};selectorColor=FFFFFF;selectorHeight=0.2	-	-	-	-
+textlist	selectedSecondaryBackgroundColor	00000000	FF0000	-	6	5	-	selectorColor=00000000	-	-	-	-
+carousel	itemStacking	ascending	descending	-	-	-	-	itemSize=0.5 0.6;unfocusedItemOpacity=0.5;imageFit=fill	-	-	-	-
+carousel	selectedItemOffset	0 0	0.1 0.1	-	-	-	-	-	-	-	-	-
+carousel	itemAxisRotation	0	30	-	-	-	-	-	-	-	-	-
+carousel	itemDiagonalOffset	0	0.1	-	-	-	-	-	-	-	-	-

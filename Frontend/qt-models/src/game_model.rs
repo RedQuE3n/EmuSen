@@ -54,6 +54,8 @@ pub mod qobject {
         #[qproperty(i32, focused)]
         /// The consoles that start with nothing in them (LibraryModel.startable), which the List card's Start Console lists.
         #[qproperty(QString, startable)]
+        /// The player's collections (LibraryModel.collections), which the List card's Filter page lists and narrows to.
+        #[qproperty(QString, collections)]
         /// The count beside the section's name: "8 games", or "1 of 8 games" where narrowed.
         #[qproperty(QString, count_line, cxx_name = "countLine", READ, NOTIFY)]
         /// The List card's facts as plain data (list_card.rs).
@@ -173,12 +175,15 @@ pub struct GameModelRust {
     search: QString,
     focused: i32,
     startable: QString,
+    collections: QString,
     count_line: QString,
     list_facts: QString,
     by_facts: bool,
     /// The sort, global as Mistress's is, and the sections narrowed to their favourites, each keeping its own.
     sort: usize,
     favourites_in: std::collections::HashSet<String>,
+    /// The sections narrowed to a collection, by the collection's key.
+    collection_in: std::collections::HashMap<String, String>,
     /// What the last read found: the section's count and each letter's first row in the shown list.
     read: Read,
 }
@@ -198,6 +203,7 @@ impl cxx_qt::Initialize for qobject::GameModel {
         self.as_mut().on_section_name_changed(|model| model.said()).release();
         self.as_mut().on_search_changed(|model| model.read()).release();
         self.as_mut().on_startable_changed(|model| model.said()).release();
+        self.as_mut().on_collections_changed(|model| model.read()).release();
         self.on_focused_changed(|model| model.said()).release();
     }
 }
@@ -308,7 +314,14 @@ impl qobject::GameModel {
     /// The listing the section is read with now.
     fn listing(&self) -> crate::listing::Listing {
         let section = self.section.to_string();
-        crate::listing::Listing { sort: self.sort, favourites_only: self.favourites_in.contains(&section), search: self.search.to_string() }
+        let collection = self.collection().map(|c| c.members.into_iter().collect());
+        crate::listing::Listing { sort: self.sort, favourites_only: self.favourites_in.contains(&section), search: self.search.to_string(), collection }
+    }
+
+    /// The collection the section is narrowed to, while it still is one of the player's.
+    fn collection(&self) -> Option<crate::list_card::Listed> {
+        let key = self.collection_in.get(&self.section.to_string())?;
+        crate::list_card::collections_of(&self.collections.to_string()).into_iter().find(|c| &c.key == key)
     }
 
     pub fn list_act(mut self: Pin<&mut Self>, action: &QString) -> i32 {
@@ -336,12 +349,20 @@ impl qobject::GameModel {
                 (nanos % self.rows.len()) as i32
             }
             (FAVOURITES_ONLY, _) => {
+                self.as_mut().rust_mut().collection_in.remove(&section);
                 self.as_mut().rust_mut().favourites_in.insert(section);
                 self.read();
                 0
             }
             (EVERY_GAME, _) => {
+                self.as_mut().rust_mut().collection_in.remove(&section);
                 self.as_mut().rust_mut().favourites_in.remove(&section);
+                self.read();
+                0
+            }
+            (key, _) if crate::list_card::is_collection(key) => {
+                self.as_mut().rust_mut().favourites_in.remove(&section);
+                self.as_mut().rust_mut().collection_in.insert(section, key.to_owned());
                 self.read();
                 0
             }
@@ -353,7 +374,7 @@ impl qobject::GameModel {
         let section = self.section.to_string();
         if !self.search.is_empty() {
             self.as_mut().set_search(QString::default());
-        } else if self.as_mut().rust_mut().favourites_in.remove(&section) {
+        } else if self.as_mut().rust_mut().favourites_in.remove(&section) | self.as_mut().rust_mut().collection_in.remove(&section).is_some() {
             self.read();
         } else {
             self.passed_back();
@@ -369,7 +390,8 @@ impl qobject::GameModel {
             "section": self.section_name.to_string(),
             "count": count,
             "sort": crate::listing::Sort::at(self.sort).words(),
-            "filter": if listing.favourites_only { "Favourites" } else { "" },
+            "filter": self.collection().map_or_else(|| if listing.favourites_only { "Favourites".to_owned() } else { String::new() }, |c| c.name),
+            "collections": crate::list_card::collections_of(&self.collections.to_string()).into_iter().map(|c| serde_json::json!({ "key": c.key, "name": c.name })).collect::<Vec<_>>(),
             "letter": letter,
             "letters": self.read.letters.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>().join(" "),
             "favouritesSection": self.section.to_string() == crate::library::FAVOURITES,

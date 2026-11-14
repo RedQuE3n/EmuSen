@@ -131,13 +131,65 @@ pub fn television(catalogue: &Value, console: &str) -> bool {
     catalogue["screens"].as_array().is_some_and(|all| all.iter().any(|s| s["console"] == console && s["kind"] == "Television"))
 }
 
-/// The most a crop may hide at one edge.
-fn most(catalogue: &Value) -> f64 {
+/// The most a crop may hide at one edge, a share of the picture.
+pub fn most(catalogue: &Value) -> f64 {
     bits(&catalogue["crop"]["most_at_an_edge"]).unwrap_or(0.0)
 }
 
 /// The `Overscan` value for a crop of the player's own edges, its `Crop*` settings.
 pub const CUSTOM: &str = "custom";
+
+/// One edge of a crop of the player's own: its `Crop*` setting, which holds a percentage of the picture, and its row's
+/// words. The one description of these rows, which Settings' console page, the Pause Card's Display and the game page's
+/// Display crop each draw.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Edge {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub hint: &'static str,
+}
+
+pub const EDGES: [Edge; 4] = [
+    Edge { key: "CropLeft", label: "Left edge", hint: "How much of the picture's width is hidden at its left edge." },
+    Edge { key: "CropRight", label: "Right edge", hint: "How much of the picture's width is hidden at its right edge." },
+    Edge { key: "CropTop", label: "Top edge", hint: "How much of the picture's height is hidden at its top edge." },
+    Edge { key: "CropBottom", label: "Bottom edge", hint: "How much of the picture's height is hidden at its bottom edge." },
+];
+
+/// One step of an edge, in percentage points: a count row's step.
+pub const EDGE_STEP: f64 = 1.0;
+
+impl Edge {
+    pub fn of(self, crop: &mut Crop) -> &mut f64 {
+        match self.key {
+            "CropLeft" => &mut crop.left,
+            "CropRight" => &mut crop.right,
+            "CropTop" => &mut crop.top,
+            _ => &mut crop.bottom,
+        }
+    }
+
+    pub fn by_key(key: &str) -> Option<Edge> {
+        EDGES.iter().copied().find(|e| e.key == key)
+    }
+}
+
+/// An edge's percentage a step on, landing on the step's whole multiples and held between none and `most`, a share.
+pub fn edge_stepped(most: f64, percent: f64, by: i32) -> f64 {
+    let at = percent / EDGE_STEP;
+    let next = if by > 0 { at.floor() + f64::from(by) } else { at.ceil() + f64::from(by) };
+    (next * EDGE_STEP).clamp(0.0, most * 100.0)
+}
+
+/// A stored edge's percentage, written with a point or a comma; none stored is none hidden.
+pub fn edge_percent(stored: &str) -> f64 {
+    number(stored).unwrap_or(0.0).max(0.0)
+}
+
+/// An edge's percentage as its row says it, to a tenth.
+pub fn edge_words(percent: f64) -> String {
+    format!("{}%", (percent * 10.0).round() / 10.0)
+}
 
 /// What an `Overscan` value hides: none, the part a television showed, or the `Crop*` settings' percentages.
 pub fn overscan(catalogue: &Value, value: &str, setting: &dyn Fn(&str) -> String) -> Crop {
@@ -149,8 +201,11 @@ pub fn overscan(catalogue: &Value, value: &str, setting: &dyn Fn(&str) -> String
             Crop { left: edge, top: edge, right: edge, bottom: edge }
         }
         CUSTOM => {
-            let edge = |key: &str| (number(&setting(key)).unwrap_or(0.0) / 100.0).clamp(0.0, most);
-            Crop { left: edge("CropLeft"), top: edge("CropTop"), right: edge("CropRight"), bottom: edge("CropBottom") }
+            let mut crop = Crop::default();
+            for e in &EDGES {
+                *e.of(&mut crop) = (number(&setting(e.key)).unwrap_or(0.0) / 100.0).clamp(0.0, most);
+            }
+            crop
         }
         _ => Crop::default(),
     }

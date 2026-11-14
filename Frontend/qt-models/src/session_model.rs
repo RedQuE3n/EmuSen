@@ -91,6 +91,8 @@ pub mod qobject {
         #[qproperty(QString, notice, READ, NOTIFY)]
         // The session's frame as its service reads it, asked when read: for a test to count frames run and gone back.
         #[qproperty(u64, frame, READ = frame_now)]
+        // Stereo frames of the game's sound its player has taken in, asked when read: for a test to see sound reach the player.
+        #[qproperty(u64, sounded, READ = sounded_now)]
         /// Whether that notice says something was not done.
         #[qproperty(bool, notice_attention, cxx_name = "noticeAttention", READ, NOTIFY)]
         /// Whether the Resume question is waiting for an answer, the game held unplayed (EmuSen_Interface.md §18.3).
@@ -178,6 +180,11 @@ pub mod qobject {
         #[cxx_name = "pictureRead"]
         fn picture_read(self: Pin<&mut SessionModel>);
 
+        /// A game that ran has stopped: its path and how long it ran, in seconds, which the library records as play time
+        /// under the player's limit (LibraryModel.played).
+        #[qsignal]
+        fn played(self: Pin<&mut SessionModel>, path: QString, seconds: f64);
+
         /// The game or console named did not open, or stopped on a failure: `problem` says why.
         #[qsignal]
         #[cxx_name = "openFailed"]
@@ -261,6 +268,9 @@ pub mod qobject {
 
         #[rust_name = "frame_now"]
         fn frameNow(self: &SessionModel) -> u64;
+
+        #[rust_name = "sounded_now"]
+        fn soundedNow(self: &SessionModel) -> u64;
 
         /// The Exit to Library hotkey over the library with a game suspended: back to the game, as Mistress's
         /// `ToggleLibrary` returns to it.
@@ -355,6 +365,8 @@ pub struct SessionModelRust {
     cheats: Option<crate::cheats::Given>,
     /// The runtime holding the game after a Frame Advance, until a resume lets it run (Mistress's `AdvanceOneFrame`).
     stepped: bool,
+    /// The game running and when it began to, for the play time recorded when it stops.
+    playing: Option<(QString, std::time::Instant)>,
 }
 
 impl Default for SessionModelRust {
@@ -415,6 +427,7 @@ impl Default for SessionModelRust {
             session: None,
             cheats: None,
             stepped: false,
+            playing: None,
         }
     }
 }
@@ -452,9 +465,20 @@ impl qobject::SessionModel {
     }
 
     fn set_running(mut self: Pin<&mut Self>, value: bool) {
-        if self.running != value {
-            self.as_mut().rust_mut().running = value;
-            self.running_changed();
+        if self.running == value {
+            return;
+        }
+        let game = self.game.clone();
+        let ran = if value {
+            self.as_mut().rust_mut().playing = Some((game, std::time::Instant::now())).filter(|(g, _)| !g.is_empty());
+            None
+        } else {
+            self.as_mut().rust_mut().playing.take()
+        };
+        self.as_mut().rust_mut().running = value;
+        self.as_mut().running_changed();
+        if let Some((path, since)) = ran {
+            self.played(path, since.elapsed().as_secs_f64());
         }
     }
 
@@ -721,13 +745,14 @@ impl qobject::SessionModel {
         crate::play::device(&self.output.to_string(), self.output_default.as_deref().unwrap_or_default())
     }
 
-    /// The game's sound player on SDL lent to the library, at audio.json's defaults, on the device and at the volume
-    /// the settings give (§1.8.6).
+    /// The game's sound player on SDL lent to the library, at the base's `AudioConfig` as `model_new` gives it (the
+    /// player's own file waits on a file number for it, EmuSen_Audio_Sync.md §7.6), on the device and at the volume the settings give (§1.8.6).
     fn game_sound(mut self: Pin<&mut Self>) -> Result<GameSound, String> {
         let platform = self.as_mut().platform()?;
         let words = |e: emusen_platform_client::Error| e.to_string();
         platform.lend_sdl(&Lent::open("libSDL3.so.0").map_err(words)?).map_err(words)?;
-        let mut sound = GameSound::new(&platform, SoundSettings::default()).map_err(words)?;
+        let config = platform.model_new(emusen_platform_client::galaxia::consts::MODEL_AUDIO_CONFIG).map_err(words)?;
+        let mut sound = GameSound::new(&platform, SoundSettings::of_audio_config(&config).map_err(words)?).map_err(words)?;
         sound.set_volume(self.volume as f32).map_err(words)?;
         let device = crate::session::play_on(&mut sound, self.device())?;
         self.as_mut().heard_volume(sound.volume());
@@ -1052,6 +1077,10 @@ impl qobject::SessionModel {
             }
             KeyUse::Nothing => false,
         }
+    }
+
+    fn sounded_now(&self) -> u64 {
+        self.session.as_ref().map_or(0, Session::sounded)
     }
 
     fn frame_now(&self) -> u64 {

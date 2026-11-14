@@ -2330,19 +2330,20 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_n
 
 | Status | Pairs | Meaning |
 |---|---|---|
-| `drawn` | 432 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, 347 measured 2026-11-08), and the families drawn since (§4.5.6 to §4.5.8) |
-| `later:help-dimmed` | 8 | the help's eight `*Dimmed` properties (`posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`): not drawn until each is checked (R-20261111-75, decided 2026-11-11; the `accepted` state of 2026-11-08 is withdrawn) |
-| `later:sound` | 1 | `sound.path`, which the host plays: not drawn until checked (R-20261111-75) |
-| `later:video` | 2 | the video's `scanlines` and `audio`; the other fourteen of the family drawn or moved to `stationary` (§4.5.6, 2026-11-12) |
+| `drawn` | 459 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, 347 measured 2026-11-08), and the families drawn since (§4.5.6 to §4.5.9) |
+| `heard:<test>` | 2 | proven by what is heard, not by a picture (R-20261112-26): `sound.path` and video `audio`, each naming the test that hears it (§4.5.9) |
+| `later:help-dimmed` | 0 | the help's eight `*Dimmed` properties, drawn since 2026-11-13 (§4.5.9) |
+| `later:sound` | 0 | `sound.path`, heard since 2026-11-13 (§4.5.9) |
+| `later:video` | 1 | the video's `scanlines` (`audio` heard since 2026-11-13, §4.5.9); the other fourteen of the family drawn or moved to `stationary` (§4.5.6, 2026-11-12) |
 | `later:gradients` | 0 | the 22 `*ColorEnd` and `*GradientType` pairs, drawn since 2026-11-13 (§4.5.7) |
 | `later:item-text` | 0 | the 19 carousel, grid and text list item text pairs, drawn since 2026-11-13 (§4.5.8) |
 | `later:picture` | 2 | `scaleFactor` of image and animation, which ES-DE 3.4.1 does not read: its property table (es-core/src/ThemeData.cpp) has no `scaleFactor`, so what a theme means by it has no source to follow. The other 14 drawn since 2026-11-13 (§4.5.7) |
-| `later:stationary` | 12 | `stationary` (the video's since 2026-11-12), `renderDuringTransitions`, `fadeAbovePrimary` |
-| `later:carousel-layout` | 6 | `itemStacking`, `selectedItemOffset`, `itemLinearScale`, `itemLinearSpacing`, `itemAxisRotation`, `itemDiagonalOffset` |
-| `later:textlist-selector` | 5 | the selector image, width and offset, the secondary selected background |
-| `later:help-layout` | 1 | `entryLayout` |
+| `later:stationary` | 3 | the three `fadeAbovePrimary`; `stationary` and `renderDuringTransitions` drawn since 2026-11-13 (§4.5.9) |
+| `later:carousel-layout` | 2 | `itemLinearScale`, `itemLinearSpacing`, which ES-DE 3.4.1 does not read; the other four drawn since 2026-11-13 (§4.5.9) |
+| `later:textlist-selector` | 0 | drawn since 2026-11-13 (§4.5.9) |
+| `later:help-layout` | 0 | `entryLayout`, drawn since 2026-11-13 (§4.5.9) |
 | `later:gameselector` | 13 | the gameselector's picks (`selection`, `gameCount`, `allowDuplicates`) and the elements that read them (`gameselector`, `gameselectorEntry` of image, video, text, datetime and rating): the scene shows no game in the system view (§4.8.5) |
-| `later:animation-timing` | 3 | a GIF's `speed`, `direction` and `iterationCount`: the scene gives the painter no frame, so a GIF stands on its first |
+| `later:animation-timing` | 3 | a GIF's `speed`, `direction` and `iterationCount`: the scene steps the frame, the painter does not show it (§4.5.9) |
 | `later:container` | 0 | `containerVerticalSnap` drawn since 2026-11-09 (§4.12.3), `containerScrollSpeed` since 2026-11-13 (§4.5.8) |
 | `later:grid-rows` | 0 | `fractionalRows`, drawn since 2026-11-13 (§4.5.8) |
 | `later:text-lines` | 0 | datetime's `lineSpacing`, drawn since 2026-11-13 (§4.5.8) |
@@ -2532,9 +2533,86 @@ and letters join). The text list's ASCII mark for a game in the edited collectio
 (named to sort after that day's two earlier measures, which it keeps) has 60 themes falling in `unsupported`, 112 pairs
 in all, against `2026-11-13b.tsv`, and no rise in any column.
 
-**Not drawn: video `audio`.** It is read and heard (`VideoElement.qml` mutes its `AudioOutput`), but the mapping test
-proves a pair by two different pictures, and sound makes none; it stays `later:video` (R-20261111-75 keeps no state
-between drawn and not drawn).
+**Video `audio`.** It is read and heard (`VideoElement.qml` mutes its `AudioOutput`); the mapping test proves a pair by
+two different pictures, and sound makes none, so it was `later:video` until the `heard` state of §4.5.9.
+
+#### 4.5.9 What stays put in a slide, the dimmed help, the selector, the carousel's layout, GIF timing, sound **[M 2026-11-13]**
+
+Pairs moved from `later:` to `drawn`, each with a case in `tests/themes/mapping-cases.tsv` that paints two different
+pictures, and each rule read in ES-DE 3.4.1's source (read, never copied).
+
+| Pairs | Rule | ES-DE 3.4.1 source |
+|---|---|---|
+| `stationary` of image, video, animation, badges, text, datetime, gamelistinfo, rating | during a slide between the system and gamelist views, `betweenViews` and `always` keep the element where it rests in either view (`draw::Transit`, `Stage::drawn`); `never` and `withinView` pan with the view | `GamelistView::render`, `SystemView::renderElements` (stationaryApplicable) |
+| image `renderDuringTransitions` | false: not drawn, in either view, while the views pan | the same (renderChildCondFunc) |
+| helpsystem `posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed` | while a menu is open over the view, each in place of its own property, which it falls back to when unset (`help::now_of`) | `HelpComponent::applyTheme`, `updateGrid`, `setOpacity`; `Window::isBackgroundDimmed` |
+| helpsystem `entryLayout` | `textFirst`: each entry's label, its gap, then its icon, the grid's width unchanged (`help::places_with`, `HelpElement.qml`) | `HelpComponent::updateGrid` |
+| textlist `selectorWidth`, `selectorHorizontalOffset` | shares of the screen's width; unset, the bar is the list's width and unshifted. The shift moves the selected background with the bar. The bar is drawn outside the rows' clip, as ES-DE draws it before pushing its clip | `TextListComponent::applyTheme`, `render` |
+| textlist `selectorImagePath`, `selectorImageTile` | a picture in the bar's place, stretched to it or repeated at its own size, tinted by `selectorColor` to `selectorColorEnd` across (an image's colour shift ignores `selectorGradientType`); a width of 0 follows the picture's aspect | the same (mSelectorImage) |
+| textlist `selectedSecondaryBackgroundColor` | the selected folder's background, falling back to `selectedBackgroundColor` | the same |
+| carousel `selectedItemOffset` | the selected item moves by the pair in proportion as it nears the centre, both axes a share of the screen's width for a horizontal carousel and of its height for a vertical one; row types only | `CarouselComponent::applyTheme`, `render` |
+| carousel `itemAxisRotation` | each item of a row type turned by the angle about its own unscaled centre, after its growth | `render` |
+| carousel `itemDiagonalOffset` | each item shifted by the share × its distance from the centre, up for a horizontal carousel (the screen's height) and left for a vertical one (its width); the shift turns with the item | `render` (comp->setPosition) |
+| carousel `itemStacking` | `ascending` draws the row in order, `descending` reversed, the `Raised` forms the centre item last; the centre is the item at the position's floor while it moves toward lower positions, and at its ceiling while it moves toward higher ones or rests | `render` (belowCenter, mPositiveDirection) |
+| `scope` of helpsystem, clock and systemstatus | `menu` shows only while a menu is open, `view` only while none is, `none` never | `Window::render`, `renderHelpPromptsEarly` |
+
+The mapping test's `switch` move presses accept in the system view or back in the gamelist with a slide transitions
+profile in the case's `capabilities.xml`, and reads the picture at the case's time on the held clock.
+`esde/tests/scene.rs` `a_stationary_element_rests_and_a_transit_hidden_one_waits_while_the_views_pan` holds the rule.
+
+**A menu over the view.** ES-DE dims the view behind any menu on its window's stack. The program's equivalent is a
+card or another screen over the theme's view (`Main.qml`'s `esdeLoader.backdrop`), which sets `View.menuOpen`
+(EmuSen.Esde 1.6), `Data::menu_open` in the scene. Not built: the help keeps the view's entries under a card, where ES-DE
+lists the open menu's own prompts. The mapping test's `menu` move sets it before the picture; the rules are
+held by `esde/tests/frame.rs` `a_menu_over_the_view_dims_the_help_and_swaps_the_scoped_ones`.
+
+**A GIF's timing, stepped but not shown.** The scene steps a GIF as ES-DE 3.4.1's `GIFAnimComponent` does
+(`motion::gif_frame`; `setAnimation`, `update`, `render`, `resetComponent`, `GamelistView::onShow`,
+`SystemView::onCursorChanged`): every frame for the first frame's delay (20 to 1000 ms, else it stands on its first)
+over `speed`, cut to whole milliseconds; the file's first frame stands one such step, then the sequence runs one frame a
+step; `normal` and `reverse` start again from their first frame, `alternate` and `alternateReverse` turn at each end
+without showing it twice; after `iterationCount` plays (0 for ever) nothing is drawn, since the frame past the last
+reads as an empty page. A gamelist's GIFs start again when the view is shown, the system view's on each new system. The
+painter reads each file's frame count and first delay with Qt's `QImageReader` (`imageCount`, `nextImageDelay` after the
+first `read`; `esde-qt/cpp/gif_timing.cpp`, `gif.rs`, since cxx-qt-lib does not bind it; QtGui is linked through Qt
+Quick) into `Data::animations` at each install. Held by `esde/tests/scene.rs`
+`a_gif_steps_by_its_first_delay_over_the_speed_in_its_direction_for_its_iterations` and `esde/tests/frame.rs`
+`an_animation_takes_its_frame_from_the_host_s_timing_and_goes_when_its_plays_are_done`.
+
+**Not drawn: `speed`, `direction`, `iterationCount`.** The painter does not show the scene's frame yet, so the three stay
+`later:animation-timing`; only the end of the plays is seen (the GIF goes). Measured 2026-11-13 with the mapping cases:
+`Image.currentFrame` set to the scene's frame leaves a GIF on its first frame (both directions read red, frame 0, at
+150 ms), and a paused `AnimatedImage` given as the picture shader's source, directly or through a
+`ShaderEffectSource`, drew nothing. What would settle it: a frame read by `QImageReader` itself handed to the painter
+(an image provider), or the reason the paused `AnimatedImage` gives no texture.
+
+The carousel's four are added to the scene's own slots (`primary::carousel`), which the painter binds and animates
+nothing of; a `PathView` would lay the items out a second time beside the scene's layout, so none is used.
+
+**Heard: `sound.path` and video `audio`** (R-20261112-26, decided 2026-11-12). `mapping.tsv` gains the state
+`heard:<crate dir/tests/file.rs::fn>`, a pair proven by what is heard; `check` counts it `set`, and the mapping test
+`every_heard_pair_names_a_test_that_hears_it` holds that the named test is there. A theme's `sound` elements are played
+by the program's navigation sound player (`qt-app/src/cues.rs`, no second player): `qt-app/tests/esde.rs`
+`an_esde_theme_stands_for_the_library_and_a_game_comes_back_to_its_gamelist` hears each sound the view asks for as the
+theme's file. A video's `audio` is heard or muted in `esde-qt/tests/theme_video.rs`
+`a_theme_s_video_shows_its_still_until_the_delay_then_plays_its_frames_in_the_box`.
+
+**The sound of a theme's videos in the views** (R-20261112-27, decided 2026-11-12). The scene and painter honour ES-DE's
+`ViewsVideoAudio`: `BigPictureInterface.ViewsVideoAudio` in the settings, read as the interface's `ViewsVideoAudio`
+(`shelves.rs`, default on), turns off the sound of every theme video in the system and gamelist views
+(`Data::views_video_audio`; `VideoFFmpegComponent`'s outputSound), held by `esde/tests/frame.rs`
+`the_player_s_switch_silences_a_theme_s_videos_in_the_views`. Not built: the Settings row. A row of
+`frontend_settings.json` needs its key to be a field of Galaxia's `BigPictureInterface` model
+(`each_key_is_its_models_and_each_default_the_models_initial_value`), and a new field re-records every recorded model of
+`galaxia/tests/disk` (`every_config_file_reads_to_its_recorded_model`), which is a change to what a test compares against.
+
+**Not drawn.** `itemLinearScale` and `itemLinearSpacing` are in the catalogue but not in ES-DE 3.4.1's property table
+(es-core/src/ThemeData.cpp) nor in its THEMES.md, so they have no rule to follow and stay `later:carousel-layout`, as
+`scaleFactor` stays `later:picture`. `withinView` belongs to a move within one view, system to system or gamelist to gamelist, and the scene
+draws both of those moves instantly (a new selection in the system view, `Painter::change_system`), so it has nothing to
+hold still; the stage has no slide or fade between two systems. The three `fadeAbovePrimary` pairs act only in a fade
+between two systems (`SystemView::render`, `renderElements`: mFadeOpacity), which the scene does not draw either; they
+stay `later:stationary`.
 
 ### 4.6 The library as an ES-DE theme sees it, and its screen **[M 2026-11-08]**
 
@@ -5174,8 +5252,9 @@ built on it too:
 **The Home card** (`home_card.rs`): Mistress's `HomeRows`, `ToolRows` and `PowerRows` in her words. The first page is
 Continue (while a game is suspended), Selected game ▸, Search, Start Console ▸, Tools ▸, Settings ▸ and Power ▸, with
 Tools and Power each starting a section. Tools lists the five tools with their summaries as values, then Themes,
-Collections, Compressed Discs and Shell. Power has Exit Big Picture, then Quit EmuSen..., whose question says "EmuSen
-closes." or "The game closes, then EmuSen."; Yes quits the program. In Steam's Game Mode Power holds Quit alone. Under
+Collections, Compressed Discs and Shell. Power has Quit EmuSen..., whose question says "EmuSen
+closes." or "The game closes, then EmuSen."; Yes quits the program. Power held Exit Big Picture above it outside Steam's
+Game Mode until 2026-11-13, when it was taken off: Big Picture is the program's only interface for now (§7.7.H7). Under
 Power's rows stands "EmuSen 0.9.1" in Muted at 26 (Mistress's `BigMenuFooter`; within a pixel of her render at 1280 ×
 800). The version's owner is still MSBuild's `Directory.Build.props`. `qt-models/build.rs` reads it from there rather
 than copying it, and the reading moves with the build host (§1.9). Start Console is offered on both cards wherever a
@@ -5216,7 +5295,7 @@ none`; and the screens beneath under their stage 1 names. The side-by-sides (Mis
 over either) are `~/.cache/emusen/tmp/qt-s2/compare/<State>-<size>-side.png`.
 
 **Differences that remain, each for the tester:**
-- Exit Big Picture closes the card and does nothing more: emusen-qt has only the big-screen form until stage 6.
+- Exit Big Picture closed the card and did nothing more; since 2026-11-13 Power no longer offers it (§7.7.H7).
 - The Tools page's rows, Settings ▸, Start Console ▸ (§18.3's page), Collections ▸ and the paused frame in Continue's
   pane are declared and do nothing yet. Each opens a screen of a later stage. (Since §7.9: Continue resumes the game,
   Start Console starts the console chosen, and Tools ▸ Cores and ▸ Themes open their screens; Most played, Year and
@@ -5670,12 +5749,24 @@ and the text sizes' lines at hers. **Differences that remain, each for the teste
   `Off`): the library's collections and the runtime's log switch are not read here yet (pieces M and the shell's).
 - Display ▸ CRT shader's caption reads "The last game · Off CRT", since the sandbox has played nothing, where Mistress's
   fixture names its game; the box follows the words.
-- Not built in this piece, each a door that goes nowhere yet: Shader levers and Shaders (piece J), Cheats, Compressed discs (pieces I and L), Logging and Shell, and the Scraping page's doors (Member account,
+- Not built in this piece, each a door that goes nowhere yet: Shader levers and Shaders (piece J), Cheats, Compressed discs (pieces I and L; built since, below), Logging and Shell, and the Scraping page's doors (Member account,
   Resume, Cancel, Status, Scraper; piece M) and the Collections page's own (piece M). Controllers holds its keys' rows
   only, its doors being piece H's. Consoles and the folder rows were built with piece E
   (§7.7.E). Light or dark's `System` reads as dark and
   Reduced motion's `System` as full motion, since the desktop's preference has no Rust reader yet (§7.1). Volume under
   Steam's Game Mode, which Mistress turns into a sentence about the device's quick menu, is a row like any other here.
+- Built 2026-11-13: Compressed discs opens the Compressed Discs tool (its door is the tool's key, `compressed`), and B
+  there comes back to Settings on the same row (`screens::tool_back`). Cheats opens the page of the game last played
+  (`LibraryModel.lastPlayed`) at Options' Cheats, through `Screens.pageGame` and `pageAt`; B goes back to Options, then
+  to Settings. The row is held, as a door whose filter is not chosen is, while the game last played has no cheats or
+  none was played: its `needs` names the settings facts' `lastCheats`, which a refresh counts from the game's own list.
+  Sound volume sets the ES-DE theme's navigation sounds' player (`EsdeCues.volume`, read back as `heldVolume`) at once
+  through the interface player's own volume call; the own look rings no navigation sound yet. Play time counted up to is
+  given to games.db's `played` when a game stops (`SessionModel.played`, `LibraryModel.played`), which keeps nothing
+  past the limit; the base owns the rule (`records::tracked`). The List card's Collections opens its Filter page, which
+  lists the player's collections after Favourites; one chosen narrows the section to its members until B or another
+  filter. Under an ES-DE theme its gamelists list no collections there, as they are shelves of their own. Held by
+  qt-app's `settings_doors` and qt-models' `cards`, `settings`, `game_page` and `clients`.
 
 **Held to** (measured on 2026-11-09). `qt-models/tests/settings.rs` (8, no Qt, over Galaxia's committed rows): every
 row the description names resolves; Sound's values and its meter, a step saved in each type, a device added to the
@@ -5846,6 +5937,18 @@ gate's five sizes and recorded. Seeded faults, each reverted:
 - the noun re-cased from `noun` rather than read from `noun_in_text`: the models' Pause Card test (`1 Card`);
 - the frame's `sentenceTone` left unbound: the program's test, the firmware sentence in the text's colour;
 - the runtime's fallback to an engine's own system taken out: the client test, the core's card not listed.
+
+**A page's rows changing under the focus (2026-11-13).** Crop overscan stepped to Custom crop adds the four edge rows
+under it, and stepped away takes them out. `SettingsModel` used to answer any change of a page's row ids by taking every
+row out and putting the new ones in with the focus on the first row, so the focus jumped from Crop overscan to Engine,
+every row's item was made again, and the program's console-page test failed some of the time when the gate's walk
+stepped that row: the walk went on from items that no longer existed. Now, when the page is the same one, only the rows
+that differ are taken out and put in (the run of rows at the head and the tail whose ids match keeps its items), and the
+focus is given back to the row it was on, by id, through `refocus`; a row that went leaves the focus at its index, or
+on the last row. A page turned still opens on its first row. Measured on 2026-11-13: neither a late settings read nor a
+change of the library's facts arrived while the console page was open in the program's test, and both already kept
+the rows in place when the ids were the same. The program's console-page test steps Crop overscan both ways with the
+focus on it.
 
 #### 7.7.F Cores on the tool screen, the approval at first launch and the firmware question (stage 5, piece F; 2026-11-09)
 
@@ -6304,6 +6407,64 @@ the window (`fullScreenAsked`), and what the window reports (`visibility` FullSc
 shows both: the test's own `kwin_wayland --virtual` grants the request and Qt reports the window's visibility from the
 compositor's answer, which the passing runs of 2026-11-12 saw; the request alone would not prove the window changed, so
 the assertion on the window's state stays.
+
+**Big Picture is the program, for now** (the tester decided, 2026-11-13, R-20261113-7, narrowed by R-20261113-9). The
+program starts full screen on every machine, not only under Steam's Game Mode, and Big Picture is its only interface for
+now; there is no desktop view. The choice is made in one place, `start::FULL_SCREEN`: the start carries it as
+`Start.full_screen`, hands it to the window as `fullScreenAsked`, and `window::show` shows the window by it, with
+`QWindow::showFullScreen` (which sets the full-screen state, then shows the window, so a Wayland compositor is asked
+through `xdg_toplevel.set_fullscreen` before the first frame; Qt 6 documentation of `QWindow`, read 2026-11-13). What the
+compositor gives is read back as the window's `visibility`; under gamescope, which shows every window full screen, the
+request changes nothing. The Fullscreen hotkey still gives a window and full screen again, and every screen still lays
+out at any window size. `full_screen_gpu.rs` holds it in the test's own compositor: the window that `start::initial` and
+`window::show` make reports FullScreen, the first F11 asks for and gets a window, the second full screen again.
+
+**The window's size** (the tester decided, 2026-11-14, R-20261114-1: no resolution is written into the program; the
+program runs at the resolution the device sets, on the handheld's panel and on a television when it is docked). Each
+size has one owner. While full screen is asked (`fullScreenAsked`), the window's screen: `Main.qml` binds the window's
+width and height to `screen.width` and `screen.height` (QML's `Window.screen`, a `QQuickScreenInfo` whose size signals
+are wired to `QScreen::geometryChanged`, and which is made again on `QWindow::screenChanged`; qtdeclarative 6.11.2,
+`qquickscreen.cpp` and `qquickwindowmodule.cpp`, read 2026-11-14), so the window follows its screen. The size is the
+window's before it is shown, and that matters under gamescope: gamescope 3.16.30.1 never sends the full-screen state
+(its `wlserver.cpp` sets only `activated` on a toplevel, read 2026-11-14), and Qt 6.11.2's xdg-shell plugin, given a
+`configure` with no size and neither the maximized nor the full-screen state, gives the window the size it had
+(`QWaylandXdgSurface::Toplevel::applyConfigure`, `m_normalSize`), so the window's own size is the size the player sees.
+A compositor that names a size (KWin) is obeyed: Qt applies its `configure`. Out of full screen, the window takes
+graphics.json's `WindowWidth` and `WindowHeight`, and `WindowResizable` off holds it there by its least and greatest sizes
+(`play::Windowed`, read through the description's `applies` as every setting is; an absent file is the model's
+`model_new`). The three are read whole or not at all: where one is missing or a size is not a positive whole number,
+`Windowed::of` gives none, nothing is given to the window and nothing holds it, and the window is Qt's to size and free,
+as any window given nothing is. A failed read is not said by the program's start, which says none of its failed reads;
+`emusen-qt-play`'s start says it in the error's own words on standard error, as it says its others. The setting's size
+is given when the window is asked out of full screen and once more at the compositor's answer, never after, so a size
+the player then gives the window stays. The answer is marked by `CompositorAnswer` (qt-app's own element,
+`cpp/compositor_answer.h`): Qt 6.11.2's Wayland plugin, applying a `configure`, reports the state through
+`QWindowSystemInterface::handleWindowStateChanged` before it applies the size with
+`QWaylandWindow::resizeFromApplyConfigure` (`qwaylandxdgshell.cpp`, `Toplevel::applyConfigure`, lines 89 and 126); the
+state is a queued window-system event, the size a synchronous one (`qwaylandwindow.cpp` line 516, `QWaylandWindow::setGeometry`), and
+`QGuiApplicationPrivate::processWindowStateChangedEvent` then sends the window a spontaneous `QWindowStateChangeEvent`
+whatever the state, while `QWindow::windowStateChanged` and `visibility` change at the request and not at an answer that
+repeats them (`qwindow.cpp`, `setWindowStates`; `qguiapplication.cpp` lines 2776 to 2791; all read 2026-11-14). The
+element filters the window's events for that event and holds `fullScreen`, the state applied last; `Main.qml` gives the
+setting's size when it turns false. The answer KWin gives is the size the window had before full screen, which may be
+the setting's size already: `full_screen_gpu.rs` holds both cases, a size the test gives the window after each answer
+staying. Under gamescope, which never sends the full-screen state, `fullScreen` never turns, and the size given at the
+request stands (`m_normalSize`, above). With no platform library the size is left to Qt: `QWindow::resize` changes
+nothing on a window not yet made whose size is already the one asked (0 by 0, `qwindow.cpp` line 2108), and Qt's
+Wayland plugin then gives a toplevel with no size 500 by 500 (`QWaylandWindow::initWindow`, `defaultGeometry`). Under
+gamescope, `visibility` never reads FullScreen, so the Fullscreen hotkey asks for full screen each time and the window
+keeps its screen's size. `emusen-qt-play`'s window, shown in a window and never full screen, takes graphics.json's size
+the same way, its size untouched where nothing was read whole; `qt-play/tests/window_size.rs` holds it.
+`full_screen_gpu.rs` and `full_screen_small_gpu.rs` hold the program's at two sizes of the test's choosing: the window has
+the compositor's output size before it is shown, full screen at that size, graphics.json's size after F11, the screen's
+again after the second.
+Two rows that did nothing were taken off: Power's Exit Big Picture (its key `bigPicture` and its route, which only closed
+the card, went with it, since nothing else names them) and Settings ▸ EmuSen's Big picture row (`AppSettings
+BigScreen`, which nothing in the Qt program reads). A desktop mode would need back: the row in `home_card::power_page`
+outside Game Mode (`Facts.game_mode` is still handed in, from `start::game_mode_from`, which also gives the Guide chords'
+default), with its key and an action that leaves for the desktop; the `bigpicture` entry in `settings_screen.json`'s
+EmuSen section and a reader of `BigScreen` at the start; and the start's choice in `start::FULL_SCREEN`. The Kit's
+Desktop form, the base's `BigScreen` setting and the theme API's `Device.bigScreen` stay as they are.
 
 **The hotkeys' words.** Endymion gives the ten action words through `bindings_defaults` (HOTKEYS), whose keys they are;
 the Hotkeys page reads its rows from there (`Bindings::actions`). `qt-endymion` `hotkeys.rs` needs a map from each word to
@@ -6826,9 +6987,18 @@ Seeded faults, each reverted:
   one stepped row, Galaxia's Overscan row (its label and choice labels, `emusen_galaxia_settings_rows`): Console's, then
   each choice that hides a fixed part as `display::overscan` sizes it from the catalogue (Whole picture, TV overscan).
   A step is stored at once in games.db for that game alone (`set_crop`, percentages at each edge; Console's is
-  `clear_crop`); a crop no choice names reads as Settings' Custom crop, whose edges no Qt row sets yet. On the next
+  `clear_crop`); after the choices comes Settings' Custom crop, which starts from the crop shown and is followed by its
+  four edge rows (below); a crop no choice names reads as Custom crop too. On the next
   start the session reads the game's crop as it opens (`clients::game_crop`) and `display::read_for_game` draws it in
   place of the console's overscan, held to the catalogue's most at an edge.
+- **A custom crop's edges** (2026-11-13): one description, `display::EDGES` (each edge's `Crop*` key, label and pane
+  sentence), drawn in three places: Settings ▸ Consoles ▸ <console> and the Pause Card's Display, where the
+  description's `cropedges` entry stands for the four rows while the console's `Overscan` is `custom`, and the game
+  page's Display crop while its row is on Custom crop. An edge steps one percentage point (`display::EDGE_STEP`; the base
+  states no step), landing on whole points, held between none and the catalogue's `crop.most_at_an_edge`; on a console
+  it is stored as the `Crop*` key's percentage text, which the Pause Card's picture follows at once (`readPicture`), on a
+  game in games.db with `set_crop`. Tests: qt-models' `pause_settings` and `game_page`, qt-app's `game_page_rows` and
+  `pause_settings_gpu`.
 - **Package** (Options, where the library tool can run the game's job) opens a deeper page: the package's state in the
   row's words, then Make Package (`pkg-make` of the game's path under the library folder, linked) for a game with none,
   else Check Package (`pkg-check` of its folder). A starts the job, A again while it runs stops it; its events are drained
@@ -7209,6 +7379,49 @@ pixel work with no logic. One `QGuiApplication` per process, so one process per 
 each crate's dependency tree against §2's table; the fit audit, pad reach, pointer reach and no chrome (§8.1) at the four
 sizes on every recorded state; `theme-check`
 on the themes in the repository; the esde corpus TSV diff (§4.4).
+
+### 8.5 Every Rust core plays a game in the program (2026-11-13)
+
+`cargo test --release -p emusen-qt --test cores_play`, a GPU job, takes its rows from the base: each core of
+`xtask/libraries.tsv` with role `core` and ABI 1, built from the commit with its sidecar, and each system the sidecar
+offers; and one more row for the libretro test core, hosted as the PlayStation's. For each row it starts a test image
+from All Games with the pad and holds the program to: the first picture; frames running and the picture drawn; sound
+taken in by the player (the session's `sounded`, the player's own count of frames taken); South held reaching the
+core; the chord's Pause Card holding the game still and Resume playing on; a state saved and loaded from the card; and
+Quit Game back to the library. It prints one line per row and fails on any row that failed.
+
+The images are the client fixture's (`play.rs`), each made by the test with no commercial or firmware image: a small
+program for the console's processor that reads the pad as the console's own games read it and fills the screen blue,
+or white while a button is held, so the picture shows the pad reaching the core. The Sega CD's is a disc whose initial
+program is that of the Genesis cartridge, booted by Nephrite's open BIOS; the PlayStation's a PS-EXE that reads the pad
+over SIO0 without calling the kernel; the Nintendo 64's is boot code that also keeps its audio interface fed with
+silence, since the console makes no samples unless a game plays some. The pad is pressed ten seconds into a game,
+after the Sega CD's disc has booted. The hosted row's game is a disc image the test core takes; the PlayStation's Engine
+setting names the test core, stored through Settings' own source under the console Settings lists, just before that row.
+
+A console's settings are stored under the console's name, which is not always its system's id (`PlayStation`, `psx`):
+Settings writes it and the runtime's `engine_for` reads it so. The game page's Engine row and the library's engine for a
+console read it under the system's id until 2026-11-13, so a console's chosen engine was shown as its first one;
+`qt-models/tests/console_engine.rs` shows both, and `consoles::settings_console` is now the one place that names the key.
+
+Measured on 2026-11-13 on the RX 6800:
+
+| Console | Core | Firmware the core declares | Test image | Result |
+|---|---|---|---|---|
+| PlayStation | Diamond | BIOS optional; its open kernel in its place | PS-EXE | passed |
+| Master System | Endou | BIOS optional; open boot in its place | 32 KiB cartridge | passed |
+| SG-1000 | Endou | none | 16 KiB cartridge | passed |
+| Game Gear | Endou | boot ROM optional | none | not offered: the sidecar marks the system in development, and the systems table has no Game Gear |
+| Nintendo 64 | MarsRT | none | 1 MiB cartridge | passed |
+| Game Boy | MercuryRT | none | 32 KiB cartridge | passed |
+| Game Boy Color | MercuryRT | none | 32 KiB cartridge, Color flag | passed |
+| NES | MoonRT | none | NROM cartridge | passed |
+| Genesis | Nephrite | TMSS optional; none in its place, not needed | 128 KiB cartridge | passed |
+| Sega CD | Nephrite | BIOS optional; Nephrite's open BIOS in its place | disc of 40 sectors | passed |
+| 32X | Nephrite | boot ROMs, no replacement | none | not offered: the sidecar marks the system in development, and no 32X game runs yet |
+| PlayStation 2 | Sapphire | BIOS; nothing runs in its place | none | not shown: Sapphire runs nothing without a PlayStation 2 BIOS, and the tree holds none |
+| SNES | VenusRT | the sound chip's start-up and seven cartridge chips, all optional | 128 KiB LoROM | passed |
+| PlayStation | the libretro test core, hosted | none | its own `TCG1` image as `.iso` | passed |
 
 ---
 

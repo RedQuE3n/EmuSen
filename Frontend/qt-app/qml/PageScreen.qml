@@ -29,7 +29,9 @@ GamePage {
         objectName: "pageModel"
         platformLibrary: pageScreen.platformLibrary
         cores: pageScreen.library.cores
-        game: pageScreen.screens.shown === Screens.Page ? pageScreen.library.gameFile(pageScreen.inHand) : ""
+        // The game a door opened the page for (Settings' Cheats: the game last played), else the game in hand.
+        game: pageScreen.screens.shown === Screens.Page ? pageScreen.library.gameFile(pageScreen.screens.pageGame || pageScreen.inHand) : ""
+        opensAt: pageScreen.screens.pageAt
         onPlayed: (path, state) => state.length > 0 ? pageScreen.playFrom(path, state) : pageScreen.play(path)
         onHidden: pageScreen.screens.back()
         onOpenFolder: (path) => pageScreen.openFolder(path)

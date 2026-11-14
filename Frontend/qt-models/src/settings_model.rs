@@ -91,6 +91,9 @@ pub mod qobject {
         #[qproperty(bool, show_fps, cxx_name = "showFps", READ, NOTIFY = play_changed)]
         #[qproperty(bool, show_status_text, cxx_name = "showStatusText", READ, NOTIFY = play_changed)]
         #[qproperty(bool, show_status_bar, cxx_name = "showStatusBar", READ, NOTIFY = play_changed)]
+        /// How loud the navigation sounds play, a share of full (Sound volume), and Play time counted up to, in hours.
+        #[qproperty(f64, navigation_volume, cxx_name = "navigationVolume", READ, NOTIFY)]
+        #[qproperty(i32, play_hours, cxx_name = "playHours", READ, NOTIFY)]
         /// Whether Guide's chords are read, by Guide chords and `gameMode`, the program's Steam Game Mode (EmuSen_Qt.md §7.7.H6).
         #[qproperty(bool, guide_chords, cxx_name = "guideChords", READ, NOTIFY)]
         #[qproperty(bool, game_mode, cxx_name = "gameMode")]
@@ -376,6 +379,8 @@ pub struct SettingsModelRust {
     show_fps: bool,
     show_status_text: bool,
     show_status_bar: bool,
+    navigation_volume: f64,
+    play_hours: i32,
     guide_chords: bool,
     game_mode: bool,
     help: i32,
@@ -461,6 +466,8 @@ impl Default for SettingsModelRust {
             show_fps: false,
             show_status_text: false,
             show_status_bar: false,
+            navigation_volume: 1.0,
+            play_hours: 0,
             guide_chords: false,
             game_mode: false,
             help: shown_screen(Screen::Settings),
@@ -831,6 +838,15 @@ impl qobject::SettingsModel {
             (model.show_fps, model.show_status_text, model.show_status_bar) = (play.show_fps, play.show_status_text, play.show_status_bar);
             self.as_mut().play_changed();
         }
+        let volume = self.view.navigation_volume();
+        if self.navigation_volume != volume {
+            self.as_mut().rust_mut().navigation_volume = volume;
+            self.as_mut().navigation_volume_changed();
+        }
+        if let Some(hours) = self.view.play_hours().filter(|h| *h != self.play_hours) {
+            self.as_mut().rust_mut().play_hours = hours;
+            self.as_mut().play_hours_changed();
+        }
         let chords = self.view.guide_chords(self.game_mode);
         if self.guide_chords != chords {
             self.as_mut().rust_mut().guide_chords = chords;
@@ -864,6 +880,8 @@ impl qobject::SettingsModel {
                 let (first, last) = (self.index(0, 0, &QModelIndex::default()), self.index(count - 1, 0, &QModelIndex::default()));
                 self.as_mut().data_changed(&first, &last, &QVector::<i32>::default());
             }
+        } else if !turned {
+            self.as_mut().replace_rows(rows);
         } else {
             // The rows go and the new ones come as a removal and an insertion, not a reset: a reset cancels a delegate
             // the view is still making past the new count, which Qt logs as "index out range" (EmuSen_Qt.md §7.7).
@@ -896,6 +914,37 @@ impl qobject::SettingsModel {
         }
         self.as_mut().draw();
         self.pane();
+    }
+
+    /// The same page's rows grown or shrunk under the focus (a crop's edges, a read or facts landing): only the rows
+    /// that differ go and come, every other row keeps its delegate, and the focus stays on its row (EmuSen_Qt.md §7.7.E).
+    fn replace_rows(mut self: Pin<&mut Self>, rows: Vec<settings::Row>) {
+        let root = QModelIndex::default();
+        let (old, new) = (self.rows.len(), rows.len());
+        let head = self.rows.iter().zip(&rows).take_while(|(a, b)| a.id == b.id).count();
+        let tail = self.rows.iter().rev().zip(rows.iter().rev()).take(old.min(new) - head).take_while(|(a, b)| a.id == b.id).count();
+        let focused = usize::try_from(self.focused).ok().filter(|&f| f < old);
+        let to = focused
+            .and_then(|f| rows.iter().position(|r| r.id == self.rows[f].id))
+            .or_else(|| focused.map(|f| f.min(new.saturating_sub(1))))
+            .unwrap_or(0);
+        if old - tail > head {
+            self.as_mut().begin_remove_rows(&root, head as i32, (old - tail - 1) as i32);
+            self.as_mut().rust_mut().rows.drain(head..old - tail);
+            self.as_mut().end_remove_rows();
+        }
+        if new - tail > head {
+            self.as_mut().begin_insert_rows(&root, head as i32, (new - tail - 1) as i32);
+            let came: Vec<settings::Row> = rows[head..new - tail].to_vec();
+            self.as_mut().rust_mut().rows.splice(head..head, came);
+            self.as_mut().end_insert_rows();
+        }
+        self.as_mut().rust_mut().rows = rows;
+        if new > 0 {
+            let (first, last) = (self.index(0, 0, &QModelIndex::default()), self.index(new as i32 - 1, 0, &QModelIndex::default()));
+            self.as_mut().data_changed(&first, &last, &QVector::<i32>::default());
+        }
+        self.refocus(to as i32);
     }
 
     /// The bindings page's drawing from the view.

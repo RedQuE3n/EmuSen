@@ -5,7 +5,7 @@ use emusen_kit_core::tokens::Variant;
 use emusen_qt_test::Harness;
 
 const SCENE: &str = concat!("file://", env!("CARGO_MANIFEST_DIR"), "/tests/qml/TokensScene.qml");
-const REGISTRY: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.3.qmltypes");
+const REGISTRY: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.4.qmltypes");
 
 /// The Tokens component's read-only properties with their registry types: the tokens a theme may override.
 fn registry_tokens() -> Vec<(String, String)> {

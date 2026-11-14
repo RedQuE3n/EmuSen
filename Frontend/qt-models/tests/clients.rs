@@ -108,3 +108,43 @@ fn qt_7_7_h_the_profile_every_console_has_is_named_by_endymion() {
     assert_eq!(bindings.default_profile, named["profile"].as_str().unwrap(), "the name bindings_choose gives a profile the console lacks");
     assert_eq!(bindings.profiles("SNES"), [bindings.default_profile.clone()]);
 }
+
+#[test]
+fn a_refresh_reads_the_collections_and_the_last_games_cheats_and_play_time_is_kept_under_the_limit() {
+    use emusen_platform_client::galaxia::consts::MODEL_CHEAT_FILE;
+    use emusen_qt_models::library::{refresh, LibrarySource};
+    let world = World::new("models-clients-doors");
+    let roms = world.dir("Roms");
+    let path = library().to_str().unwrap();
+    let platform = Platform::load(path).unwrap();
+    let mut settings = platform.model_new(MODEL_APP_SETTINGS).unwrap();
+    settings["RomDirectory"] = serde_json::json!(roms.to_str().unwrap());
+    platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
+    let mut image = b"NES\x1a\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00".to_vec();
+    image.resize(16 + 16384, 0);
+    let game = world.dir("Roms/NES").join("Synthetic.nes");
+    std::fs::write(&game, image).unwrap();
+    let game = game.to_str().unwrap();
+    let none = Config { development: false, cores: Some(Vec::new()), player_cores: Some(Vec::new()) };
+    let source = ClientSource::open(path, &none).unwrap();
+
+    let read = refresh(&source).unwrap();
+    assert_eq!((read.catalog.collections.len(), read.catalog.last_cheats), (0, 0), "nothing played, no collections");
+    let id = source.library.change(&serde_json::json!({ "op": "create_collection", "name": "Couch", "at": "2026-11-13T10:00:00Z" })).unwrap();
+    source.library.change(&serde_json::json!({ "op": "add_to_collection", "id": id, "path": game })).unwrap();
+    source.library.change(&serde_json::json!({ "op": "started", "path": game, "at": "2026-11-13T10:00:00Z" })).unwrap();
+    let console = source.runtime.systems().unwrap().into_iter().find(|s| s.id == "nes").unwrap().console;
+    let (name, category) = platform.cheat_game_list(Some(&console), game).unwrap().unwrap();
+    let cheat = serde_json::json!({ "Kind": "RamPoke", "Description": "Lives", "Enabled": false, "Writes": [] });
+    platform.model_save(MODEL_CHEAT_FILE, Some(&category), &format!("{name}.json"), &serde_json::json!({ "Cheats": [cheat] })).unwrap();
+    let read = refresh(&source).unwrap();
+    assert_eq!(read.catalog.collections.iter().map(|c| (c.name.as_str(), c.members.clone())).collect::<Vec<_>>(), [("Couch", vec![game.to_owned()])]);
+    assert_eq!(read.catalog.last_cheats, 1, "the game last played has one cheat");
+
+    // Play time: none with tracking off, none for a launch past the limit, else kept and added.
+    assert_eq!(source.played_for(game, 60.0, 0).unwrap(), None);
+    assert_eq!(source.played_for(game, 7_200.0, 1).unwrap(), None);
+    assert_eq!(source.played_for(game, 90.0, 8).unwrap(), Some(90.0));
+    assert_eq!(source.played_for(game, 30_000.0, 24).unwrap(), Some(30_000.0), "24 is no limit");
+    assert_eq!(source.library.record(game).unwrap().unwrap().play_seconds, 30_090.0);
+}

@@ -119,10 +119,7 @@ pub fn measure(folder: &Path, systems: &[&str]) -> Measure {
                 }
                 for property in e.explicit.keys() {
                     let pair = format!("{}.{property}", e.kind());
-                    let state = match mapping::status(e.kind(), property) {
-                        Some(mapping::Status::Drawn) => "set",
-                        _ => "unsupported",
-                    };
+                    let state = if mapping::is_supported(e.kind(), property) { "set" } else { "unsupported" };
                     if m.properties.get(&pair).is_none_or(|s| *s == "set") {
                         m.properties.insert(pair, state);
                     }

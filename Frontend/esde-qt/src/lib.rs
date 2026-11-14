@@ -14,6 +14,7 @@ macro_rules! publish {
 
 pub mod help;
 pub mod hinted;
+pub mod gif;
 pub mod lists;
 pub mod marks;
 pub mod model;

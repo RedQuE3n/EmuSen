@@ -36,19 +36,20 @@ impl Sort {
     }
 }
 
-/// How a section is listed: the sort by its index in `Sort::ALL`, whether the Filter page's Favourites narrows it, and the
-/// search's words.
+/// How a section is listed: the sort by its index in `Sort::ALL`, whether the Filter page's Favourites narrows it, the
+/// search's words, and the members of the collection the Filter page narrows it to.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Listing {
     pub sort: usize,
     pub favourites_only: bool,
     pub search: String,
+    pub collection: Option<std::collections::BTreeSet<String>>,
 }
 
 impl Listing {
     /// Whether the count says how many of the section are shown.
     pub fn narrowed(&self) -> bool {
-        self.favourites_only || !self.search.trim().is_empty()
+        self.favourites_only || self.collection.is_some() || !self.search.trim().is_empty()
     }
 }
 
@@ -69,7 +70,7 @@ pub fn shown(games: &[GameRow], section: &str, listing: &Listing) -> Vec<GameRow
     let words = listing.search.trim().to_lowercase();
     let favourites_only = listing.favourites_only && section != FAVOURITES;
     let mut out: Vec<GameRow> =
-        games.iter().filter(|g| (!favourites_only || g.favourite) && (words.is_empty() || g.title.to_lowercase().contains(&words))).cloned().collect();
+        games.iter().filter(|g| (!favourites_only || g.favourite) && listing.collection.as_ref().is_none_or(|c| c.contains(&g.path)) && (words.is_empty() || g.title.to_lowercase().contains(&words))).cloned().collect();
     if section == RECENT && listing.sort == 0 {
         return out;
     }

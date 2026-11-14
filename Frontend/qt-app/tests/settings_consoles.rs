@@ -86,6 +86,35 @@ fn qt_7_7_e_consoles_and_a_consoles_pages_hold_their_states_and_open_folder_give
     scene.pad(UiButton::Up);
     wait_for(&mut scene, "settingsModel", "focused", "0", 1000);
 
+    // Crop overscan stepped to Custom crop grows the page by its four edges under the focus: the focus stays on Crop
+    // overscan, the rows above keep their items, and Down reaches the first edge; stepped back, the edges go and it stays.
+    for _ in 0..6 {
+        scene.pad(UiButton::Down);
+    }
+    wait_for(&mut scene, "settingsModel", "focused", "6", 1000);
+    let before = scene.tree();
+    let label = before.nodes.iter().find(|n| n.visible && n.name == "label" && n.text.as_deref() == Some("Engine")).expect("Engine's label");
+    let engine_row = before.nodes.iter().position(|n| n.id == label.parent).map(|i| before.ids[i]).expect("Engine's row");
+    scene.pad(UiButton::Left);
+    wait_for(&mut scene, "settingsLayout", "count", "13", 1000);
+    scene.wait(100);
+    assert_eq!(scene.property("settingsModel", "focused"), "6", "the focus stays on Crop overscan as the edges come");
+    assert_eq!(scene.property("settingsLayout", "current"), "6");
+    assert!(scene.tree().ids.contains(&engine_row), "Engine's row kept its item");
+    scene.pad(UiButton::Down);
+    wait_for(&mut scene, "settingsModel", "focused", "7", 1000);
+    assert!(sentence(&mut scene).contains("left edge"), "{}", sentence(&mut scene));
+    scene.pad(UiButton::Up);
+    wait_for(&mut scene, "settingsModel", "focused", "6", 1000);
+    scene.pad(UiButton::Right);
+    wait_for(&mut scene, "settingsLayout", "count", "9", 1000);
+    scene.wait(100);
+    assert_eq!(scene.property("settingsModel", "focused"), "6", "the focus stays on Crop overscan as the edges go");
+    for _ in 0..6 {
+        scene.pad(UiButton::Up);
+    }
+    wait_for(&mut scene, "settingsModel", "focused", "0", 1000);
+
     // Engine as a page of choices, B keeping what was chosen.
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "settingsModel", "help", "21", 1000);

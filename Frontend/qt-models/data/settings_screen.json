@@ -31,7 +31,12 @@
     "pause_in_background": ["AppSettings PauseInBackground", true],
     "show_fps": ["AppSettings ShowFpsBar", true],
     "show_status_text": ["AppSettings ShowStatusText", true],
-    "show_status_bar": ["AppSettings ShowStatusBar", true]
+    "show_status_bar": ["AppSettings ShowStatusBar", true],
+    "navigation_volume": "AppSettings BigPictureInterface.NavigationVolume",
+    "play_hours": "AppSettings MaxPlayTimeTracking",
+    "window_width": "GraphicsConfig WindowWidth",
+    "window_height": "GraphicsConfig WindowHeight",
+    "window_resizable": ["GraphicsConfig WindowResizable", true]
   },
   "sections": [
     {
@@ -129,8 +134,8 @@
         {"id": "collections", "label": "Collections", "hint": "The automatic collections shown, your own, and how lists are sorted.", "page": "Collections"},
         {"id": "hidden", "row": "AppSettings ShowHiddenGames"},
         {"id": "viewer", "label": "Media viewer", "hint": "How X shows a game's videos, pictures and manual: the help's place, the media types, the video's settings.", "page": "Media viewer"},
-        {"id": "cheats", "label": "Cheats", "hint": "The cheats of the game last played, turned on or off, and the cheat database.", "door": "cheats"},
-        {"id": "discs", "label": "Compressed discs", "hint": "The library's discs converted to CHD beside them, checked and listed; the library is only read.", "door": "discs"},
+        {"id": "cheats", "label": "Cheats", "hint": "The cheats of the game last played, turned on or off, and the cheat database.", "door": "cheats", "needs": "lastCheats"},
+        {"id": "discs", "label": "Compressed discs", "hint": "The library's discs converted to CHD beside them, checked and listed; the library is only read.", "door": "compressed"},
         {"id": "media", "label": "ES-DE media folder", "hint": "An ES-DE downloaded_media folder whose art the theme shows; only ever read.", "folder": "AppSettings EsdeMediaDirectory",
          "value": {"from": "AppSettings EsdeMediaDirectory", "blank": "None"}, "pane": {"lines": ["{value}"]}},
         {"id": "themefolder", "label": "ES-DE theme folder", "hint": "A theme folder for ES-DE to read in place, which then joins the themes.", "folder": "AppSettings BigPictureTheme",
@@ -143,7 +148,6 @@
       "rows": [
         {"id": "saves", "label": "Saves and states", "hint": "Where states go, what happens when a game starts again, and how play time is counted.", "page": "Saves and states",
          "pane": {"sentence": "States and saves live beside the games, with one resume point kept per game.", "muted": ["Resume · {AppSettings ResumeOnLaunch}"]}},
-        {"id": "bigpicture", "row": "AppSettings BigScreen"},
         {"id": "background", "row": "AppSettings PauseInBackground"},
         {"id": "logging", "label": "Logging", "hint": "Whether the runtime writes its log, and where each session's log goes.", "door": "logging"},
         {"id": "shell", "label": "Shell", "hint": "DianaSh, EmuSen's own shell, for scripts and the runtime's commands.", "door": "shell"},
@@ -179,6 +183,7 @@
       {"id": "consolelevers", "pause": true, "label": "Shader levers", "hint": "The CRT's own levers for the {console}.", "screen": "Television", "door": "levers", "while": "CRT"},
       {"id": "consolecrop", "pause": true, "row": "GraphicsConfig.Consoles Overscan", "consoles": "this", "screen": "Television",
        "pane": {"sentence": "The whole picture, the part a television showed, or a crop of your own."}},
+      {"id": "cropedges", "pause": true, "edges": true, "screen": "Television"},
       {"id": "screen", "pause": true, "label": "Screen", "hint": "The {console}'s screen as it is drawn.", "screen": "other", "filters": "suiting", "off": "effect.None.nearest", "consoles": "this"},
       {"id": "consoleshape", "pause": true, "row": "GraphicsConfig.Consoles PictureShape", "consoles": "this",
        "pane": {"sentence": "The screen the console was made for, or each pixel square."}},

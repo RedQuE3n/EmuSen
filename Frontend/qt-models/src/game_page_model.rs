@@ -42,6 +42,8 @@ pub mod qobject {
         #[qproperty(QString, cores)]
         /// The game's file as LibraryModel.gameFile gives it; the page is read each time it changes.
         #[qproperty(QString, game)]
+        /// The part of the page a new game opens at (`cheats`, Screens.pageAt); empty for its Overview.
+        #[qproperty(QString, opens_at, cxx_name = "opensAt")]
         #[qproperty(bool, ready, READ, NOTIFY)]
         #[qproperty(QString, title, READ, NOTIFY)]
         #[qproperty(QString, facts, READ, NOTIFY)]
@@ -383,6 +385,7 @@ pub struct GamePageModelRust {
     platform_library: QString,
     cores: QString,
     game: QString,
+    opens_at: QString,
     ready: bool,
     title: QString,
     facts: QString,
@@ -447,6 +450,7 @@ impl Default for GamePageModelRust {
             platform_library: QString::default(),
             cores: QString::default(),
             game: QString::default(),
+            opens_at: QString::default(),
             ready: false,
             title: QString::default(),
             facts: QString::default(),
@@ -512,10 +516,16 @@ impl cxx_qt::Initialize for qobject::GamePageModel {
                 model.as_mut().rust_mut().page.run = None;
                 model.as_mut().rust_mut().page.job = None;
                 model.as_mut().rust_mut().focus = (Some(0), 0);
+                let at = model.opens_at.to_string();
+                model.as_mut().rust_mut().page.open_at(&at);
+                if model.page.cheating {
+                    model.as_mut().rust_mut().focus = (None, 0);
+                }
                 model.as_mut().view_close();
-                if model.section != 0 {
+                let section = model.page.section as i32;
+                if model.section != section {
                     model.as_mut().telling(|mut model| {
-                        model.as_mut().rust_mut().section = 0;
+                        model.as_mut().rust_mut().section = section;
                         model.section_changed();
                     });
                 }
@@ -1107,8 +1117,8 @@ impl qobject::GamePageModel {
         self.outcome(outcome);
     }
 
-    pub fn step(self: Pin<&mut Self>, index: i32, by: i32) {
-        let outcome = self.page.step_row(index.max(0) as usize, by);
+    pub fn step(mut self: Pin<&mut Self>, index: i32, by: i32) {
+        let outcome = self.as_mut().rust_mut().page.step_row(index.max(0) as usize, by);
         self.outcome(outcome);
     }
 

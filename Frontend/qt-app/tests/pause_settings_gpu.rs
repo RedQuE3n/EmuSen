@@ -1,6 +1,7 @@
 //! The Pause Card's Game Options ▸ Display and Sound in the program on Vulkan (settings_card.rs): the client fixture's
 //! console core, a PlayStation started empty and paused by Guide. Display's CRT profile stepped with the pad is stored as
-//! Settings stores it and the paused picture behind the card is drawn through the CRT at once; Sound's Volume stepped
+//! Settings stores it and the paused picture behind the card is drawn through the CRT at once; Crop overscan stepped to
+//! Custom crop shows its four edges, and an edge stepped is stored and crops the paused picture at once; Sound's Volume stepped
 //! down is stored and the session's sound player holds it. On the RX 6800 unless EMUSEN_GPU_DEVICE names another; the
 //! sound on SDL's dummy driver.
 
@@ -56,6 +57,12 @@ fn focus_row(scene: &mut Scene<'_>, words: &str) {
         scene.wait(60);
     }
     panic!("no row reads {words}; the focus reads {}", focused_words(scene));
+}
+
+/// An item's place in the window: x, y, width and height.
+fn place(scene: &mut Scene<'_>, name: &str) -> (f64, f64, f64, f64) {
+    let tree = scene.tree();
+    tree.nodes.iter().find(|n| n.name == name).map(|n| (n.x, n.y, n.w, n.h)).unwrap_or_else(|| panic!("the {name} item"))
 }
 
 /// The value the card's row `label` shows.
@@ -140,6 +147,34 @@ fn the_pause_cards_display_and_sound_store_settings_rows_and_the_paused_game_fol
     scene.pad(UiButton::Left);
     until(&mut scene, 5, "the CRT off again", |_| graphics(&platform)["Consoles"]["PlayStation"]["ScreenFilter"] != "CRT");
     until(&mut scene, 10, "the paused picture plain again", |s| apart(mean(s), plain) <= still.max(1.0));
+
+    // Crop overscan stepped to Custom crop: its four edges follow it. Right five times on the left edge stores 5, and the
+    // paused picture's shown rectangle behind the card narrows by 5% at once, the picture's left 5% past its clip. The
+    // rectangle is the session's crop and shape, which the core does not move.
+    focus_row(&mut scene, "Crop overscan");
+    scene.pad(UiButton::Right);
+    until(&mut scene, 5, "TV overscan stored", |_| graphics(&platform)["Consoles"]["PlayStation"]["Overscan"] == "tv");
+    scene.pad(UiButton::Right);
+    until(&mut scene, 5, "Custom crop stored", |_| graphics(&platform)["Consoles"]["PlayStation"]["Overscan"] == "custom");
+    until(&mut scene, 5, "the edges shown", |s| card_words(s).iter().any(|(l, _)| l == "Bottom edge"));
+    let labels: Vec<String> = card_words(&mut scene).into_iter().map(|(l, _)| l).collect();
+    assert_eq!(labels, ["CRT profile", "Shader levers", "Crop overscan", "Left edge", "Right edge", "Top edge", "Bottom edge", "Picture shape"]);
+    until(&mut scene, 5, "the whole picture shown", |s| place(s, "shown").2 > 0.0 && (place(s, "picture").2 - place(s, "shown").2).abs() < 0.5);
+    let (_, _, whole, high) = place(&mut scene, "shown");
+    focus_row(&mut scene, "Left edge");
+    for _ in 0..5 {
+        scene.pad(UiButton::Right);
+        scene.wait(80);
+    }
+    until(&mut scene, 5, "the left edge stored", |_| graphics(&platform)["Consoles"]["PlayStation"]["CropLeft"] == "5");
+    until(&mut scene, 5, "the row turned", |s| value_of(s, "Left edge") == "5%");
+    until(&mut scene, 5, "the paused picture cropped behind the card", |s| (place(s, "shown").2 - whole * 0.95).abs() < 1.5);
+    let (qx, _, qw, qh) = place(&mut scene, "shown");
+    let (px, _, pw, _) = place(&mut scene, "picture");
+    assert!((qh - high).abs() < 1.5, "the height kept: {qh} against {high}");
+    assert!((pw - whole).abs() < 1.5 && (px - (qx - 0.05 * pw)).abs() < 1.5, "the whole picture drawn, its left 5% outside the clip: {px} {pw} against {qx} {qw}");
+    assert_eq!(scene.property("session", "paused"), "true", "the game still paused");
+    assert_eq!(scene.property("shown", "clip"), "true");
 
     // B to Game Options, on Display; then Sound: Volume a step down, stored, and the session's player holds it.
     scene.pad(UiButton::Back);

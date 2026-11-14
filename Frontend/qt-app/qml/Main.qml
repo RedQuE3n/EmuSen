@@ -15,20 +15,41 @@ Window {
     objectName: "program"
     // Shown by the program once its scene graph has adopted the device, as a test harness shows it.
     visible: false
-    width: 1280
-    height: 800
+    // Out of full screen, graphics.json's WindowWidth, WindowHeight and WindowResizable, as the start read them; left at 0 where not read whole.
+    property int windowedWidth: 0
+    property int windowedHeight: 0
+    property bool windowResizable: true
     color: Kit.Tokens.voidFill
     property string platformLibrary
     // The game picture's feed, which the program's start names after adopting Serenity's device; 0 draws no game.
     property double feed: 0
     property bool splash: true
     property bool reducedMotion: false
-    // Steam's Game Mode holds the session: Power holds Quit alone.
+    // Steam's Game Mode holds the session, as the start read it: the Guide chords' default, and the Home card's fact.
     property bool gameMode: false
     // AppSettings.GuideChords as the start read it: On, or Auto away from Steam's Game Mode.
     property bool guideChords: false
-    // What the Fullscreen hotkey last asked of the window, apart from the visibility the compositor gives it.
+    // What was last asked of the window, apart from the visibility the compositor gives it: the start's (`full_screen`), then the Fullscreen hotkey's.
     property bool fullScreenAsked: false
+    // The window's size has one owner at a time (EmuSen_Qt.md §7.7.H7, The window's size): full screen, its screen, followed as
+    // the screen's geometry or the window's screen changes, and overridden by a compositor that names a size; out of it, the setting.
+    Binding { target: program; property: "width"; value: program.screen.width; when: program.fullScreenAsked; restoreMode: Binding.RestoreNone }
+    Binding { target: program; property: "height"; value: program.screen.height; when: program.fullScreenAsked; restoreMode: Binding.RestoreNone }
+    // Out of full screen, the setting's size, given when the window is asked out of it and again at the compositor's answer,
+    // which Qt's Wayland plugin applies as a size of its own; never later, so a size the player gives the window stays
+    // (EmuSen_Qt.md §7.7.H7, The window's size). Nothing is given or held where the setting was not read whole.
+    readonly property bool windowedSizeRead: program.windowedWidth > 0 && program.windowedHeight > 0
+    CompositorAnswer {
+        id: compositorAnswer
+        objectName: "compositorAnswer"
+        window: program
+        onFullScreenChanged: if (!compositorAnswer.fullScreen && !program.fullScreenAsked && program.windowedSizeRead) { program.width = program.windowedWidth; program.height = program.windowedHeight }
+    }
+    // WindowResizable off holds the window at the setting's size, Qt's way: its least and greatest sizes made equal.
+    Binding { target: program; property: "minimumWidth"; value: program.windowedWidth; when: !program.fullScreenAsked && !program.windowResizable && program.windowedSizeRead }
+    Binding { target: program; property: "maximumWidth"; value: program.windowedWidth; when: !program.fullScreenAsked && !program.windowResizable && program.windowedSizeRead }
+    Binding { target: program; property: "minimumHeight"; value: program.windowedHeight; when: !program.fullScreenAsked && !program.windowResizable && program.windowedSizeRead }
+    Binding { target: program; property: "maximumHeight"; value: program.windowedHeight; when: !program.fullScreenAsked && !program.windowResizable && program.windowedSizeRead }
     // The EmuSen theme's folder, empty for the reference, and the folders its pictures may come from (EmuSen_Qt.md §3.5).
     property string theme
     property list<string> coverStores
@@ -106,6 +127,7 @@ Window {
             id: screens
             objectName: "screens"
             gameRunning: player.session.running
+            lastPlayed: library.lastPlayed
             found: games.count > 0
             themed: program.esdeLook
             onQuit: Qt.quit()
@@ -239,6 +261,10 @@ Window {
             onFullScreenAsked: {
                 program.fullScreenAsked = program.visibility !== Window.FullScreen
                 program.visibility = program.fullScreenAsked ? Window.FullScreen : Window.Windowed
+                if (!program.fullScreenAsked && program.windowedSizeRead) {
+                    program.width = program.windowedWidth
+                    program.height = program.windowedHeight
+                }
             }
         }
         // The grid's games: the section shown, sorted, narrowed and searched as the List card and the search ask; a theme's
@@ -250,6 +276,7 @@ Window {
             section: screens.key
             sectionName: library.headingOf(screens.key)
             startable: library.startable
+            collections: library.collections
             onPassedBack: screens.back()
             // A section read anew starts at its first game, as the grid's own did.
             onCountChanged: games.focused = games.count > 0 ? 0 : -1
@@ -355,6 +382,8 @@ Window {
                 media: library.esdeMedia
                 presence: library.esdePresence
                 family: program.padFamily
+                // A card or another screen over the view is ES-DE's open menu: the help takes its dimmed look.
+                menuOpen: esdeLoader.backdrop
             }
         }
         // The view hears the pad through the router, which pumps while the view holds the focus, as a Frame's does.
@@ -385,6 +414,13 @@ Window {
             platformLibrary: program.esdeWanted ? program.platformLibrary : ""
             sounds: program.esdeView?.scene.sounds ?? ""
             on: program.navigationSounds
+        }
+        // Sound volume, once Settings has read the settings; a step of its row is heard from the next sound.
+        Binding {
+            target: cues
+            property: "volume"
+            value: settingsModel.navigationVolume
+            when: settingsModel.ready
         }
         // A sound of the theme's that did not open or play, said once the splash has gone.
         Timer {
@@ -558,6 +594,8 @@ Window {
             function onNoticeChanged() { program.said(player.session.notice, player.session.noticeAttention, true) }
             // Exit to Library's key over the library: the suspended game again, as Continue plays it.
             function onGameAsked() { screens.resume() }
+            // A game stopped: how long it ran is its play time, up to Play time counted up to.
+            function onPlayed(path, seconds) { library.played(path, seconds, settingsModel.playHours) }
         }
         // What failed, from every model that can fail, said where the player is: a game that does not open (over the game),
         // the library unread, a setting, a game's page's change, or Cores; a cleared problem raises nothing (EmuSen_Qt.md §7.9).

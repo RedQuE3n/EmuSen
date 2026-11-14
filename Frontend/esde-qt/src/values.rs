@@ -384,6 +384,10 @@ fn layout(pr: &Primary, role: &str) -> Option<V> {
                 "selectedBackgroundRadius" => V::N(sb.1),
                 "selectedBackgroundLeft" => V::N(sb.2 .0),
                 "selectedBackgroundRight" => V::N(sb.2 .1),
+                "selectedSecondaryBackground" => V::C(t.selected_secondary_background),
+                "selectedBackgroundShift" => V::N(t.selected_background_shift),
+                "selectorSource" => url(&t.selector_image),
+                "selectorTile" => V::B(t.selector_tile),
                 "primaryColor" => V::C(t.primary_color),
                 "secondaryColor" => V::C(t.secondary_color),
                 "selectedColor" => V::C(t.selected_color),
@@ -569,6 +573,8 @@ pub fn part(p: &Paint, i: usize, role: &str, swap: bool) -> V {
                 "icon" => url(&e.icon),
                 "start" => V::N(crate::help::places(x).starts[i]),
                 "labelStart" => V::N(crate::help::places(x).labels[i]),
+                "iconStart" => V::N(crate::help::places(x).icons[i]),
+                "iconWidth" => V::N(crate::help::places(x).icon),
                 _ => V::None,
             }
         }),
@@ -588,7 +594,7 @@ pub fn part(p: &Paint, i: usize, role: &str, swap: bool) -> V {
 }
 
 /// Every role name the element model answers, in role order.
-pub const ELEMENT_ROLES: [&str; 150] = [
+pub const ELEMENT_ROLES: [&str; 153] = [
     "elementId", "paint", "name", "boxX", "boxY", "boxWidth", "boxHeight", "turn", "originX", "originY", "alpha",
     "source", "fit", "cropX", "cropY", "tileWidth", "tileHeight", "tileRight", "tileBottom", "tint", "tintEnd", "gradientVertical",
     "saturation", "radius", "nearest", "frame",
@@ -606,6 +612,7 @@ pub const ELEMENT_ROLES: [&str; 150] = [
     "pageIndex", "stretch", "audio", "volume", "blur", "labelPx", "fade",
     "hasStill", "videoSource", "playing", "blackFrame", "pillarboxes", "thresholdX", "thresholdY", "iterations", "thenStill", "videoFit", "targetWidth", "targetHeight", "areaWidth", "areaHeight", "anchorX", "anchorY", "placeX", "placeY", "videoCropX", "videoCropY", "videoRadius", "videoNearest", "videoTint", "videoTintEnd", "videoGradientVertical", "videoSaturation", "brightness",
     "mirror", "mirrorVertically", "mipmap", "selectorColorEnd", "selectorVertical",
+    "selectedSecondaryBackground", "selectedBackgroundShift", "selectorTile",
 ];
 
 /// The grid's roles, numbered on past the element list's.
@@ -622,8 +629,8 @@ pub const SLOT_ROLES: [&str; 25] = [
     "saturation", "tint", "tintEnd", "gradientVertical", "reflected", "reflectionOpacity", "reflectionFalloff", "text", "image", "marker", "folder", "chosen",
 ];
 
-pub const PART_ROLES: [&str; 42] = [
-    "button", "pair", "label", "icon", "start", "labelStart", "mark", "text", "source",
+pub const PART_ROLES: [&str; 44] = [
+    "button", "pair", "label", "icon", "start", "labelStart", "iconStart", "iconWidth", "mark", "text", "source",
     "cellX", "cellY", "cellW", "cellH",
     "iconSource", "iconMark", "iconX", "iconY", "iconW", "iconH", "iconTint", "iconTintEnd", "iconVertical",
     "controller", "controllerSource", "controllerMark", "controllerX", "controllerY", "controllerW", "controllerH", "controllerTint",

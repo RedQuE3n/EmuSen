@@ -36,6 +36,27 @@ pub struct Drawn {
     pub placed: Placed,
     pub content: u64,
     pub wait: Option<Time>,
+    /// How the element behaves while the views pan between the system and gamelist views.
+    pub transit: Transit,
+}
+
+/// An element during a slide between the system and gamelist views: `stationary` and `renderDuringTransitions`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Transit {
+    /// stationary is betweenViews or always: drawn where it rests, not panned.
+    pub stays: bool,
+    /// renderDuringTransitions is false: not drawn until the pan ends.
+    pub hidden: bool,
+}
+
+impl Transit {
+    /// ES-DE 3.4.1's `GamelistView::render` and `SystemView::renderElements` (stationaryApplicable, renderChildCondFunc).
+    pub fn of(e: &Element) -> Transit {
+        Transit {
+            stays: matches!(e.string("stationary"), Some("betweenViews" | "always")),
+            hidden: e.bool("renderDuringTransitions") == Some(false),
+        }
+    }
 }
 
 fn is_primary(kind: &str) -> bool {
@@ -96,7 +117,7 @@ impl SceneView {
                 let (selected, count) = (self.index(), self.count());
                 let (layout, content, wait) = match s.kind.as_str() {
                     "carousel" => {
-                        let mut c = primary::carousel(e, data, count, selected, s.offset, rect_w, rect_h);
+                        let mut c = primary::carousel(e, data, count, selected, s.offset, self.target() < s.offset, rect_w, rect_h);
                         let room = c.slots.iter().find(|x| x.chosen).map(|x| x.w);
                         let row = primary::row(e, &self.view, data, selected);
                         let (content, wait) = item_marquee(row, &mut c.text, s.scroll, room, measures.get(&id), since);
@@ -133,7 +154,7 @@ impl SceneView {
                     }
                 };
                 primary_out = Some(Primary { id, rows: self.rows_id(), selected, layout });
-                out.push(Drawn { placed, content, wait });
+                out.push(Drawn { placed, content, wait, transit: Transit::default() });
                 continue;
             }
             let Some(draft) = paint::draft(e, s.text.clone(), s.scroll, &ctx) else { continue };
@@ -171,11 +192,24 @@ impl SceneView {
             (placed.w, placed.h) = (bw, bh);
             // The help is measured as ES-DE's grid, its trailing spacing in; its box is the strip seen (EmuSen_Qt.md §4.12.4).
             if let Paint::Help(h) = &draft.paint {
-                (placed.x, placed.y) = super::help::top_left(e.pair("pos"), origin, h.entry_spacing, (bw, bh), data.width, data.height);
+                let now = |p: &str| super::help::now_of(e, p, data.menu_open);
+                let origin = e.pair(&now("origin")).unwrap_or_default();
+                (placed.x, placed.y) = super::help::top_left(e.pair(&now("pos")), origin, h.entry_spacing, (bw, bh), data.width, data.height);
                 placed.w = (bw - h.entry_spacing).max(0.0);
             }
             let mut wait = None;
             let mut paint = draft.paint;
+            // A GIF steps through its frames from the view's restart, as the host read its frame count and delay.
+            if let (Paint::Picture(p), "animation") = (&mut paint, e.kind()) {
+                if let Some(&(frames, delay)) = data.animations.get(&p.source).filter(|(_, d)| (20..=1000).contains(d)) {
+                    let since = self.now() - self.animations_since();
+                    let speed = e.float("speed").unwrap_or(1.0) as f64;
+                    let iterations = e.uint("iterationCount").unwrap_or(0).min(10) as u32;
+                    let Some((frame, next)) = super::motion::gif_frame(since, frames, delay, speed, e.string("direction").unwrap_or("normal"), iterations) else { continue };
+                    p.frame = Some(frame);
+                    wait = next;
+                }
+            }
             if let (Paint::Text(t), Some((rule, vertical)), Some((mw, mh))) = (&mut paint, draft.scroll, measured) {
                 if vertical {
                     let travel = mh - bh;
@@ -200,7 +234,7 @@ impl SceneView {
                 }
             }
             placed.paint = paint;
-            out.push(Drawn { placed, content, wait });
+            out.push(Drawn { placed, content, wait, transit: Transit::of(e) });
         }
         (out, primary_out)
     }

@@ -82,6 +82,8 @@ pub struct SceneView {
     now: Time,
     position: Glide,
     selected_at: Time,
+    /// When the view was shown, which restarts a gamelist's animations (ES-DE's `GamelistView::onShow`).
+    shown_at: Time,
     changed: bool,
     metadata: Glide,
     repeat: Repeat,
@@ -106,6 +108,7 @@ impl SceneView {
             now,
             position: Glide::at(0.0),
             selected_at: now,
+            shown_at: now,
             changed: false,
             metadata: Glide::at(1.0),
             repeat: Repeat::default(),
@@ -354,6 +357,12 @@ impl SceneView {
         self.selected_at
     }
 
+    /// When the view's animations last restarted: a gamelist's when it was shown, the system view's on each new system
+    /// (ES-DE 3.4.1's `GamelistView::onShow`, `SystemView::onCursorChanged` and `goToSystem`).
+    pub fn animations_since(&self) -> Time {
+        if self.is_system_view() { self.selected_at } else { self.shown_at }
+    }
+
     /// ES-DE's quick-scroll overlay is up: a direction is held and its repeats have faded the metadata out.
     pub fn quick_scrolling(&self) -> bool {
         self.repeat.held() && self.metadata.to <= 0.0
@@ -397,8 +406,12 @@ impl SceneView {
         if self.view == "gamelist" && game.is_some_and(|g| g.hide_metadata) && hidden_with_metadata(e) {
             return Some("the entry hides its metadata".into());
         }
-        if let Some(scope @ ("none" | "menu")) = e.string("scope") {
-            return Some(format!("scope {scope}"));
+        // The help, clock and status by their scope against a menu over the view (ES-DE 3.4.1's `Window::render`).
+        match e.string("scope") {
+            Some("none") => return Some("scope none".into()),
+            Some("menu") if !self.data.menu_open => return Some("scope menu, and no menu is open".into()),
+            Some("view") if self.data.menu_open => return Some("scope view, and a menu is open".into()),
+            _ => {}
         }
         if e.float("opacity") == Some(0.0) {
             return Some("opacity is 0".into());
@@ -455,7 +468,8 @@ impl SceneView {
                 if skipped.is_none() && matches!(e.kind(), "text" | "datetime") && text.is_none() {
                     skipped = Some("nothing to show".into());
                 }
-                let mut opacity = e.float("opacity").unwrap_or(1.0) as f64;
+                let opacity_of = if e.kind() == "helpsystem" { super::help::now_of(e, "opacity", self.data.menu_open) } else { "opacity".into() };
+                let mut opacity = e.float(&opacity_of).unwrap_or(1.0) as f64;
                 if self.fades_in(e) {
                     opacity *= fade_in;
                 }

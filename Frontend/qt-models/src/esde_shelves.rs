@@ -386,7 +386,7 @@ pub fn read(source: &dyn LibrarySource, shelved: &[SystemRow], catalog: &Catalog
     crate::gamelists::systems_order(&mut regular, sorting, &years);
     let listed: HashSet<&str> = catalog.games.iter().map(|g| g.path.as_str()).collect();
     let links = source.folder_links()?.into_iter().filter(|(_, file)| listed.contains(file.as_str())).collect();
-    Ok(Base { regular, custom: source.collections()?, recent: catalog.recent.clone(), links, settings: collections, media })
+    Ok(Base { regular, custom: catalog.collections.clone(), recent: catalog.recent.clone(), links, settings: collections, media })
 }
 
 /// ES-DE's type for a cover, the library's `COVER`.

@@ -28,6 +28,8 @@ pub struct Settings {
     pub show_clock: bool,
     pub show_help: bool,
     pub scroll_overlay: bool,
+    /// ES-DE's ViewsVideoAudio: a theme's videos in the system and gamelist views play their sound.
+    pub views_video_audio: bool,
     pub quick_select: String,
     pub startup_view: String,
     /// The random entry's button: games, gamessystems or disabled (ES-DE's Random entry button).
@@ -46,6 +48,7 @@ impl Default for Settings {
             show_clock: false,
             show_help: true,
             scroll_overlay: false,
+            views_video_audio: true,
             quick_select: "leftrightshoulders".into(),
             startup_view: "system".into(),
             random: "games".into(),
@@ -95,6 +98,7 @@ pub fn settings(text_in: &str) -> Result<Settings, String> {
         show_clock: on("DisplayClock", d.show_clock),
         show_help: on("DisplayHelp", d.show_help),
         scroll_overlay: on("ListScrollOverlay", d.scroll_overlay),
+        views_video_audio: on("ViewsVideoAudio", d.views_video_audio),
         quick_select: text(&i, "QuickSystemSelect").unwrap_or(d.quick_select),
         startup_view: text(&i, "StartupView").unwrap_or(d.startup_view),
         random: v.get("collections").and_then(|c| text(c, "RandomEntryButton")).unwrap_or(d.random),

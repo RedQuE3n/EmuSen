@@ -6963,7 +6963,7 @@ draws it (decided 2026-11-14, R-20261114-9), in its own `Kit.Frame` over the pag
 title, the cards four across in the frame's content (`Kit.CoverTile` each, its words under it, the one in use marked
 `In use`), the focused card large in the frame's pane beside (`Kit.Card`), and the help bar `A Use this one`, `Y
 Favourite`, `B Details`, `Start Home` with the focused card's place ("2 of 8") at its end. The cards (R-20261114-10): a
-cover borrowed from another game while it is shown (`Borrowed from <game>`, in use), the cover found (`Cover`, read
+cover borrowed from another game while it is shown (`Borrowed from <game>`, in use), the cover found (`Its own`, read
 with `media`'s `choices: false`, and no card where none was found), then each kind of picture the scraper's `kinds`
 names that the game has a file of, named by the Media section's words for a kind it shows, else by the label of the
 kind's Scraping switch in Galaxia's rows (`Mix images`; `game_page_source.rs` `kind_words`). A game with none of these
@@ -6977,8 +6977,20 @@ as cover` in its help bar for a scraped picture that is not the cover already (n
 or the manual); the viewer stays open (R-20261114-11). Tests: the scraper's `cover_choice`, the library's
 `the_editors_clear_keeps_the_cover_choices_and_drops_the_details`, qt-models' `cover_source` (over the real source: no card for a cover not found, a borrowed cover read from the base's `from`, a kind's Scraping word) and `game_page` (the cards, the mark, a
 borrowed cover, the viewer's offer) and qt-app's `page_cover` (in the program: the pad chooses the title screen's card,
-the page's cover, the card's mark and the grid's tile show it, Cover brings the cover found back, kit-core's rules and
+the page's cover, the card's mark and the grid's tile show it, Its own brings the cover found back, kit-core's rules and
 the pad's reach over Cover art at each of the gate's window sizes, and X in the viewer makes the screenshot the cover).
+
+**Decided 2026-11-14 by the tester:** the words are the board's: the page's title and the Details row `Cover Art`
+(`game_page::COVER_ART`; the board draws no Details list, so its trail's `Cover Art` names the row), the cover found's
+card `Its own`, a borrowed cover's `Borrowed from <game>` (R-20261114-26). With R-20261114-10, a `None` card
+(`game_page::COVER_NONE`, no picture, so `Kit.CoverTile` draws its generated card) stands in the found cover's place
+only where no cover was found for the game and a choice is in use (one of its own pictures or a borrowed cover); A on it
+is the change `cover` with a null type, which the base takes as putting the found cover back and ending a borrowed one
+(`emusen_scrape_service.h`, `media.rs` `choose_cover`), so the choice clears and the card goes (R-20261114-28). In every
+other case there is no such card. Held to by qt-models' `game_page`
+(`qt_7_8_5_none_is_a_card_only_where_no_cover_was_found_and_a_choice_is_in_use_and_it_clears_the_choice`: the one case
+and the three where it must not appear) and `cover_source` (`qt_7_8_5_none_clears_a_chosen_cover_through_the_base_where_no_cover_was_found`).
+The pictures' labels stay plural until the back end gives a singular word per kind (R-20261114-27).
 
 ### 7.9 Repair piece DC-B: the program does what it offers and says when it fails (2026-11-11)
 

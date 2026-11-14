@@ -127,7 +127,7 @@ fn press(scene: &mut Scene<'_>, button: UiButton) {
 /// Details ▸ Cover art, its cards shown.
 fn open_cover_art(scene: &mut Scene<'_>) {
     section(scene, 4);
-    move_to(scene, UiButton::Down, "Cover art");
+    move_to(scene, UiButton::Down, "Cover Art");
     press(scene, UiButton::Accept);
     wait_for(scene, "pageModel", "coverArt", "true", 2000);
     until(scene, "Cover art's cards", 2000, |s| s.property("coverCards", "activeFocus") == "true" && s.property("coverCards", "count") != "0");
@@ -217,8 +217,8 @@ fn qt_7_8_2_cover_art_and_the_viewer_make_a_games_own_picture_its_cover_in_the_p
     let (shown, in_use) = cards(&mut scene);
     assert_eq!(shown.len(), FOLDERS.len(), "a card for the cover found and each picture: {shown:?}");
     assert!(shown.iter().any(|w| w == "Scraped screenshot") && shown.iter().any(|w| w == "Title screen"));
-    assert_eq!(in_use.as_deref(), Some("Cover"), "the cover found marked in use");
-    assert_eq!(scene.property("coverArtTitle", "text"), "Cover art");
+    assert_eq!(in_use.as_deref(), Some("Its own"), "the cover found marked in use");
+    assert_eq!(scene.property("coverArtTitle", "text"), "Cover Art");
     judged_at_every_size(&mut scene);
     move_to(&mut scene, UiButton::Right, "Title screen");
     assert_eq!(scene.property("coverInFocusWords", "text"), "Title screen", "the focused card large beside");
@@ -235,14 +235,14 @@ fn qt_7_8_2_cover_art_and_the_viewer_make_a_games_own_picture_its_cover_in_the_p
     wait_for(&mut scene, "screens", "shown", "Grid", 1000);
     grid_shows(&mut scene, 1, "the grid's tile draws the title screen");
 
-    // A on Cover puts the cover found back, in the page and the grid.
+    // A on Its own puts the cover found back, in the page and the grid.
     open_page(&mut scene);
     open_cover_art(&mut scene);
-    move_to(&mut scene, UiButton::Left, "Cover");
+    move_to(&mut scene, UiButton::Left, "Its own");
     press(&mut scene, UiButton::Accept);
     until(&mut scene, "the page's cover found again", 5000, |s| s.property("pageModel", "cover") == file_url(&at("covers")));
     assert_eq!(chosen(), serde_json::Value::Null, "the choice gone from games.db");
-    until(&mut scene, "the cover found's card marked in use", 2000, |s| cards(s).1.as_deref() == Some("Cover"));
+    until(&mut scene, "the cover found's card marked in use", 2000, |s| cards(s).1.as_deref() == Some("Its own"));
 
     press(&mut scene, UiButton::Back);
     until(&mut scene, "Details' rows again", 1000, |s| reads(s, "Open Folder"));

@@ -1,7 +1,8 @@
 //! Cover art's cards as the game page's source reads them over the platform library built from this commit, in a scratch
 //! tree (EmuSen_Qt.md §7.8.5): no card for a cover that was not found, a cover borrowed from another game read from the
 //! base's `from` as its own card in use (VenusRT installed, since the base follows a borrowed cover only to a game it
-//! routes to a console), and a kind outside the Media section named by the Scraping settings' row.
+//! routes to a console), a kind outside the Media section named by the Scraping settings' row, and, for a game with no
+//! cover found and a picture chosen, the page's None card clearing the choice through the base.
 
 use emusen_client_fixture::cores::installation_with_snes;
 use emusen_client_fixture::{library, World};
@@ -9,7 +10,7 @@ use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS};
 use emusen_platform_client::library::{GameFile, Library};
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt_models::clients::ClientSource;
-use emusen_qt_models::game_page::{CoverChoice, GamePageSource};
+use emusen_qt_models::game_page::{Change, Content, CoverChoice, GamePage, GamePageSource, Outcome};
 use serde_json::json;
 use std::path::PathBuf;
 
@@ -71,7 +72,7 @@ fn qt_7_8_5_a_cover_borrowed_from_another_game_is_read_as_its_own_card_in_use() 
     let borrowed = CoverChoice::Borrowed(other.path.clone());
     assert_eq!(
         shown,
-        [(borrowed.clone(), "Borrowed from Other".into(), cover("Other")), (CoverChoice::Found, "Cover".into(), cover("Mine"))],
+        [(borrowed.clone(), "Borrowed from Other".into(), cover("Other")), (CoverChoice::Found, "Its own".into(), cover("Mine"))],
         "the other game's cover first, by the base's from, then the cover found"
     );
     assert_eq!(in_use, borrowed, "the borrowed cover in use");
@@ -86,5 +87,26 @@ fn qt_7_8_5_a_kind_outside_the_media_section_takes_its_scraping_rows_words() {
     let label = rows.as_object().unwrap().values().flat_map(|l| l.as_array().unwrap().iter()).find(|r| r["key"] == "ScrapeMiximages").unwrap()["label"].clone();
     let (shown, _) = cards(&source, &mine);
     let words: Vec<&str> = shown.iter().map(|c| c.1.as_str()).collect();
-    assert_eq!(words, ["Cover", "Scraped screenshot", label.as_str().unwrap()], "the Media section's words, then the Scraping row's");
+    assert_eq!(words, ["Its own", "Scraped screenshot", label.as_str().unwrap()], "the Media section's words, then the Scraping row's");
+}
+
+#[test]
+fn qt_7_8_5_none_clears_a_chosen_cover_through_the_base_where_no_cover_was_found() {
+    let (_world, source, mine, _, _) = world("models-cover-none-clears", &[("titlescreens", "Mine"), ("screenshots", "Mine")], false);
+    source.change(&mine, &Change::Cover(Some("titlescreen".into()))).unwrap();
+    let words = |page: &GamePage| match page.content() {
+        Content::Tiles(tiles) => tiles.iter().map(|t| (t.label.clone(), t.marked)).collect::<Vec<_>>(),
+        _ => panic!("Cover Art's cards"),
+    };
+    let mut page = GamePage::new(source.read(&mine).unwrap(), 0);
+    page.choose_section(4);
+    page.covering = true;
+    assert_eq!(page.read.cover_in_use, CoverChoice::Own("titlescreen".into()), "the base keeps the choice");
+    let none = words(&page).iter().position(|w| w.0 == "None").expect("a None card with no cover found and a choice in use");
+    assert!(!words(&page)[none].1, "None is not marked");
+    let Outcome::Changed(change) = page.choose_tile(none) else { panic!("A on None changes the cover") };
+    source.change(&mine, &change).unwrap();
+    page.reread(source.read(&mine).unwrap());
+    assert_eq!(page.read.cover_in_use, CoverChoice::Found, "the base holds no choice");
+    assert!(words(&page).iter().all(|w| w.0 != "None" && !w.1), "the None card gone, nothing marked: {:?}", words(&page));
 }

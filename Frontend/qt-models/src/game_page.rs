@@ -363,9 +363,11 @@ pub const SCRAPE: &str = "scrape";
 pub const EDIT: &str = "edit";
 pub const COVER: &str = "cover";
 /// Cover art's row, and its page's title.
-pub const COVER_ART: &str = "Cover art";
+pub const COVER_ART: &str = "Cover Art";
 /// A card on Cover art's page, by its place.
 pub const COVER_CARD: &str = "coverCard";
+/// The card that clears the cover chosen where no cover was found for the game (R-20261114-28).
+pub const COVER_NONE: &str = "None";
 pub const FOLDER: &str = "folder";
 pub const HIDE: &str = "hide";
 pub const STANDARD: &str = "standard";
@@ -535,7 +537,7 @@ fn ask(title: &str, sentence: &str, yes: &str) -> Question {
 pub fn cover_words(choice: &CoverChoice) -> String {
     match choice {
         CoverChoice::Borrowed(from) => format!("Borrowed from {}", crate::library::title_of(from)),
-        CoverChoice::Found => "Cover".into(),
+        CoverChoice::Found => "Its own".into(),
         CoverChoice::Own(t) => t.clone(),
     }
 }
@@ -915,6 +917,18 @@ impl GamePage {
         format!("{} / {}", self.read.title, Section::Details.name())
     }
 
+    /// Cover art's cards as offered: the source's, and where no cover was found for the game and a choice is in use, a
+    /// card in the found cover's place whose A clears the choice (R-20261114-28).
+    fn cover_cards(&self) -> Vec<CoverCard> {
+        let mut cards = self.read.covers.clone();
+        let found = cards.iter().any(|c| c.choice == CoverChoice::Found);
+        if !found && self.read.cover_in_use != CoverChoice::Found {
+            let at = cards.iter().take_while(|c| matches!(c.choice, CoverChoice::Borrowed(_))).count();
+            cards.insert(at, CoverCard { choice: CoverChoice::Found, text: COVER_NONE.into(), picture: String::new() });
+        }
+        cards
+    }
+
     /// Cover art's cards, the one in use marked and its mark's words its line.
     fn cover_tiles(&self) -> Vec<Tile> {
         let tile = |(i, c): (usize, &CoverCard)| Tile {
@@ -924,12 +938,13 @@ impl GamePage {
             picture: c.picture.clone(),
             marked: c.choice == self.read.cover_in_use,
         };
-        self.read.covers.iter().enumerate().map(tile).collect()
+        self.cover_cards().iter().enumerate().map(tile).collect()
     }
 
-    /// A on Cover art's card: the cover found or one of the game's own pictures made the cover; nothing for the card in use.
+    /// A on Cover art's card: the cover found (or none, where none was found) or one of the game's own pictures made the
+    /// cover; nothing for the card in use.
     fn choose_cover(&self, index: usize) -> Outcome {
-        match self.read.covers.get(index).map(|c| &c.choice) {
+        match self.cover_cards().get(index).map(|c| &c.choice) {
             Some(c) if *c == self.read.cover_in_use => Outcome::Nothing,
             Some(CoverChoice::Found) => Outcome::Changed(Change::Cover(None)),
             Some(CoverChoice::Own(kind)) => Outcome::Changed(Change::Cover(Some(kind.clone()))),

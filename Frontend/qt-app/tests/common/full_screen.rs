@@ -38,24 +38,26 @@ fn size_of(scene: &mut Scene<'_>) -> (i32, i32) {
 }
 
 /// graphics.json's window size in the sandbox, as the player's file would hold it.
-fn write_window_size(windowed: (i32, i32)) {
+fn write_window_size(windowed: (i32, i32), resizable: bool) {
     let platform = Platform::load(library()).unwrap();
     let mut graphics = platform.model_new(MODEL_GRAPHICS_CONFIG).unwrap();
     graphics["WindowWidth"] = serde_json::json!(windowed.0);
     graphics["WindowHeight"] = serde_json::json!(windowed.1);
+    graphics["WindowResizable"] = serde_json::json!(resizable);
     let file = platform.file(FILE_GRAPHICS).unwrap();
     platform.model_save(MODEL_GRAPHICS_CONFIG, None, file.file_name().unwrap().to_str().unwrap(), &graphics).unwrap();
 }
 
-/// The start's window in a compositor of `width` by `height`, with graphics.json naming `windowed` (all test inputs).
-pub fn run(width: i32, height: i32, windowed: (i32, i32)) {
+/// The start's window in a compositor of `width` by `height`, with graphics.json naming `windowed` and `resizable` (all
+/// test inputs).
+pub fn run(width: i32, height: i32, windowed: (i32, i32), resizable: bool) {
     let kwin = Compositor::start(width, height);
     kwin.watch(300);
     std::env::set_var("QT_QUICK_BACKEND", "rhi");
     std::env::set_var("QSG_RHI_BACKEND", "vulkan");
     std::env::set_var("QSG_RENDER_LOOP", "threaded");
     let _world = sandbox("qt-app-full-screen", &[("nes", "Brass Lantern.nes")]);
-    write_window_size(windowed);
+    write_window_size(windowed, resizable);
     let mut harness = Harness::new();
     let read = start::read(library());
     assert!(read.full_screen, "the start asks for full screen");
@@ -81,6 +83,9 @@ pub fn run(width: i32, height: i32, windowed: (i32, i32)) {
     until(&mut scene, 5, "F11 asking for a window", |s| s.property("program", "fullScreenAsked") == "false");
     until(&mut scene, 5, "the compositor giving a window", |s| s.property("program", "visibility") == WINDOWED);
     until(&mut scene, 5, "the window at graphics.json's size", |s| size_of(s) == windowed);
+    let least = (scene.property("program", "minimumWidth"), scene.property("program", "maximumHeight"));
+    let held = (windowed.0.to_string(), windowed.1.to_string());
+    assert_eq!(least == held, !resizable, "WindowResizable off holds the window at its size, on leaves it free: {least:?}");
     tap(&mut scene, F11);
     until(&mut scene, 5, "F11 again asking for full screen", |s| s.property("program", "fullScreenAsked") == "true");
     until(&mut scene, 5, "the compositor giving full screen again", |s| s.property("program", "visibility") == FULL_SCREEN);

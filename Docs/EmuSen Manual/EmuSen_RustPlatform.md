@@ -4734,7 +4734,14 @@ call. Two additions and a constant, nothing existing changed:
   folders are then swapped by rename through `<directory>.old`, which is removed after. Anything that fails before the
   swap (an archive the zip reader refuses, PARSE; a folder of the database that cannot be read, a folder not made)
   leaves the database as it was; a failure of the second rename renames the old one back, and a swap stopped between
-  its renames (the database only in `.old`) is put back by the next install. The session table's `DB_UPDATE` installs
+  its renames (the database only in `.old`) is put back by the next install. The install removes or puts back only
+  what an install made: each `.part` and `.old` it makes carries the file `.emusen-cheats-install`
+  (`install::MARK`), written as the folder is made (for `.old`, at once after the database is renamed to it), and a
+  folder of either name without it (a backup the player named so) is never removed, renamed or written into; the call
+  is refused (REFUSED) in words that name the folder, and the database stays as it was. No owner for a folder staged
+  beside a target was found in the base to use instead: Galaxia's `atomic` writes a file through `<file>.tmp` (its
+  `beside` names both folders here), and the Cores tool stages in a folder of its own tree under its lock. The session
+  table's `DB_UPDATE` installs
   through the same call since 48, so there is one way to install. It answers `{"installed", "skipped"}` through
   `reply::answer`, keyed by the folder and the archive's digest, so the length query installs and the fill takes its
   answer. `EMUSEN_CHEATS_DATABASE_URL` is `emusen_cheats::install::DATABASE_URL`, which the header test holds equal.
@@ -4756,7 +4763,8 @@ and the player's stop ends it.
 
 Held to: emusen-cheats' `install` tests (a staged install keeps and replaces as it should and leaves no `.part` or
 `.old`; a refused archive, and an install failing part way on a folder of the database it cannot read, leave the
-database exactly as it was; what a stopped install left is cleared; a swap stopped between its renames is put back)
+database exactly as it was; what a stopped install left is cleared; a swap stopped between its renames is put back;
+a `.part` or `.old` the install did not make, with or without a database, is refused and left exactly as it was)
 and `registry`'s `list_of` test; crystal's `DB_UPDATE` install test; the platform's `cheats` tests (an archive
 installed by length then fill, a damaged one refused; a `.cht` read for the SNES by text and by a path with a
 byte-order mark answers the same list; an unknown system refused and the Dreamcast, with no codecs, read); the platform

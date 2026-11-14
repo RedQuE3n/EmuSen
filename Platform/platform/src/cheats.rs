@@ -151,6 +151,7 @@ pub unsafe extern "C" fn emusen_cheats_install(zip: *const u8, zip_len: usize, d
         let done = install::install_staged(zip, directory).map_err(|r| match r {
             Refusal::Unreadable(words) => fail(status::PARSE, words),
             Refusal::Io(e) => crate::fail_io(&e),
+            Refusal::NotOurs(words) => fail(status::REFUSED, words),
         })?;
         Ok(compact(&object(vec![("installed", Value::from(done.installed)), ("skipped", Value::from(done.skipped))])))
     };

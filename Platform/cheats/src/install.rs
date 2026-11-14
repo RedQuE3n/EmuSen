@@ -19,11 +19,13 @@ pub struct Installed {
     pub skipped: usize,
 }
 
-/// Why nothing was installed: the archive is no zip the reader takes, or the target was not made.
+/// Why nothing was installed: the archive is no zip the reader takes, the target was not made, or a folder beside it
+/// has the name an install uses but no install made it (its words name the folder).
 #[derive(Debug)]
 pub enum Refusal {
     Unreadable(String),
     Io(std::io::Error),
+    NotOurs(String),
 }
 
 /// One `.cht` entry written whole at `destination`, its folders made, its time the zip's where it records one.
@@ -60,14 +62,30 @@ pub fn install(bytes: &[u8], target: &str) -> Result<Installed, Refusal> {
 /// How long the base's own download of the database may take: `CheatDatabaseInstaller.FetchTimeout`, five minutes.
 pub const FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 
-/// A folder beside `target`, named `<target>.<suffix>`: `part` for an install being made, `old` for the database it
-/// replaces while the two are swapped.
-pub fn beside(target: &Path, suffix: &str) -> Option<PathBuf> {
-    let name = target.file_name()?;
-    Some(target.with_file_name(format!("{}.{suffix}", name.to_string_lossy())))
+/// The file an install writes into each folder beside the database it makes, and requires there before it removes or
+/// puts back such a folder; a constant of the design (EmuSen_RustPlatform.md §56).
+pub const MARK: &str = ".emusen-cheats-install";
+
+/// A folder beside `target`, `<target>.part` for an install being made or `<target>.old` for the database it replaces
+/// while the two are swapped, named as Galaxia names a file kept beside another.
+fn beside(target: &Path, suffix: &str) -> PathBuf {
+    emusen_galaxia::atomic::beside(target, suffix)
 }
 
-/// A folder removed with all it holds; one that is not there is no error.
+/// Whether an install made `folder`: its mark is there.
+fn ours(folder: &Path) -> bool {
+    folder.join(MARK).is_file()
+}
+
+/// The refusal for a folder an install did not make, which is left exactly as it is.
+fn not_ours(folder: &Path) -> Refusal {
+    Refusal::NotOurs(format!(
+        "{} has the name an install of the cheat database uses, but no install made it, so it is left as it is and nothing was installed; move or rename it to install",
+        folder.display()
+    ))
+}
+
+/// A folder this install made, removed with all it holds; one that is not there is no error.
 fn clear(folder: &Path) -> std::io::Result<()> {
     match std::fs::remove_dir_all(folder) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
@@ -75,10 +93,23 @@ fn clear(folder: &Path) -> std::io::Result<()> {
     }
 }
 
-/// A swap stopped between its two renames left the database only in `old`: it is put back. Otherwise `old` is what a
-/// finished swap could not remove, and goes.
-fn recover(target: &Path, old: &Path) -> std::io::Result<()> {
-    if !target.exists() && old.exists() { std::fs::rename(old, target) } else { clear(old) }
+/// What an earlier install left beside the database, put right before this one starts: a `.part` it made is removed; an
+/// `.old` it made goes back to being the database where a swap stopped between its renames, and is removed otherwise.
+/// A folder of either name with no mark is refused, untouched.
+fn recover(target: &Path, part: &Path, old: &Path) -> Result<(), Refusal> {
+    for folder in [part, old] {
+        if folder.symlink_metadata().is_ok() && !ours(folder) {
+            return Err(not_ours(folder));
+        }
+    }
+    clear(part).map_err(Refusal::Io)?;
+    if !old.exists() {
+        return Ok(());
+    }
+    if target.symlink_metadata().is_ok() {
+        return clear(old).map_err(Refusal::Io);
+    }
+    std::fs::rename(old, target).and_then(|_| std::fs::remove_file(target.join(MARK))).map_err(Refusal::Io)
 }
 
 /// Each file under `from` that `to` lacks, linked (or copied where a link cannot be made) to its place under `to`, so
@@ -97,9 +128,10 @@ fn keep(from: &Path, to: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// `part` made the database: the old one renamed to `old`, `part` renamed to `target`, `old` removed. Where the second
-/// rename fails the old one is renamed back.
+/// `part` made the database: its mark taken out, the old database renamed to `old` and marked as the install's, `part`
+/// renamed to `target`, `old` removed. Where the second rename fails the old one is renamed back and unmarked.
 fn swap(target: &Path, part: &Path, old: &Path) -> std::io::Result<()> {
+    std::fs::remove_file(part.join(MARK))?;
     if !target.exists() {
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent)?;
@@ -107,8 +139,10 @@ fn swap(target: &Path, part: &Path, old: &Path) -> std::io::Result<()> {
         return std::fs::rename(part, target);
     }
     std::fs::rename(target, old)?;
-    if let Err(e) = std::fs::rename(part, target) {
+    let moved = std::fs::write(old.join(MARK), b"").and_then(|_| std::fs::rename(part, target));
+    if let Err(e) = moved {
         let _ = std::fs::rename(old, target);
+        let _ = std::fs::remove_file(target.join(MARK));
         return Err(e);
     }
     let _ = clear(old);
@@ -116,13 +150,20 @@ fn swap(target: &Path, part: &Path, old: &Path) -> std::io::Result<()> {
 }
 
 /// [`install`] made whole before the database is touched: the archive written into `<target>.part`, every file of the
-/// database it does not replace kept beside it, and the two folders then swapped by rename. Anything that fails before
-/// the swap leaves `target` as it was; see EmuSen_RustPlatform.md §56.
+/// database it does not replace kept beside it, and the two folders then swapped by rename. Each folder beside the
+/// database the install makes carries [`MARK`], and one without it is refused and left as it is. Anything that fails
+/// before the swap leaves `target` as it was; see EmuSen_RustPlatform.md §56.
 pub fn install_staged(bytes: &[u8], target: &str) -> Result<Installed, Refusal> {
     let target = Path::new(target);
-    let unnamed = || Refusal::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, "the folder has no name"));
-    let (part, old) = (beside(target, "part").ok_or_else(unnamed)?, beside(target, "old").ok_or_else(unnamed)?);
-    recover(target, &old).and_then(|_| clear(&part)).map_err(Refusal::Io)?;
+    if target.file_name().is_none() {
+        return Err(Refusal::Io(std::io::Error::new(std::io::ErrorKind::InvalidInput, "the folder has no name")));
+    }
+    let (part, old) = (beside(target, ".part"), beside(target, ".old"));
+    recover(target, &part, &old)?;
+    if let Some(parent) = part.parent() {
+        std::fs::create_dir_all(parent).map_err(Refusal::Io)?;
+    }
+    std::fs::create_dir(&part).and_then(|_| std::fs::write(part.join(MARK), b"")).map_err(Refusal::Io)?;
     let made = install(bytes, &part.to_string_lossy()).and_then(|done| {
         if target.exists() {
             keep(target, &part).map_err(Refusal::Io)?;
@@ -196,6 +237,7 @@ mod tests {
         std::fs::create_dir_all(target.join("Sega")).unwrap();
         std::fs::write(target.join("Sega/Old.cht"), "old").unwrap();
         std::fs::create_dir_all(at.join("db.part/Stale")).unwrap();
+        std::fs::write(at.join("db.part").join(MARK), "").unwrap();
         std::fs::write(at.join("db.part/Stale/Half.cht"), "half").unwrap();
         let zip = archive(&at, &[("Sega/New.cht", "new")]);
         assert_eq!(install_staged(&zip, target.to_str().unwrap()).unwrap(), Installed { installed: 1, skipped: 0 });
@@ -231,12 +273,42 @@ mod tests {
         let at = scratch("swap-stopped");
         std::fs::create_dir_all(at.join("db.old/Sega")).unwrap();
         std::fs::write(at.join("db.old/Sega/Old.cht"), "old").unwrap();
+        std::fs::write(at.join("db.old").join(MARK), "").unwrap();
         let target = at.join("db");
         let zip = archive(&at, &[("Sega/New.cht", "new")]);
         assert_eq!(install_staged(&zip, target.to_str().unwrap()).unwrap(), Installed { installed: 1, skipped: 0 });
         assert_eq!(std::fs::read_to_string(target.join("Sega/Old.cht")).unwrap(), "old", "the database the stopped swap left in db.old is kept");
-        assert!(target.join("Sega/New.cht").exists() && !at.join("db.old").exists());
+        assert!(target.join("Sega/New.cht").exists() && !at.join("db.old").exists() && !target.join(MARK).exists());
         std::fs::remove_dir_all(&at).unwrap();
+    }
+
+    // A `.part` and an `.old` the player made, each with a file: never removed, renamed or written into, with or
+    // without a database beside them, and the refusal names the folder.
+    #[test]
+    fn folders_of_the_installs_names_that_no_install_made_are_refused_and_left_as_they_are() {
+        for (database, folder) in [(true, "db.part"), (true, "db.old"), (false, "db.part"), (false, "db.old")] {
+            let at = scratch("not-ours");
+            let target = at.join("db");
+            if database {
+                std::fs::create_dir_all(target.join("Sega")).unwrap();
+                std::fs::write(target.join("Sega/Old.cht"), "old").unwrap();
+            }
+            std::fs::create_dir_all(at.join(folder)).unwrap();
+            std::fs::write(at.join(folder).join("Backup.cht"), "the player's").unwrap();
+            let zip = archive(&at, &[("Sega/New.cht", "new")]);
+            let refused = install_staged(&zip, target.to_str().unwrap());
+            let Err(Refusal::NotOurs(words)) = refused else { panic!("{folder} with a database {database}: {refused:?}") };
+            assert!(words.contains(&at.join(folder).display().to_string()), "the words name the folder: {words}");
+            let held: Vec<_> = std::fs::read_dir(at.join(folder)).unwrap().map(|e| e.unwrap().file_name()).collect();
+            assert_eq!(held, ["Backup.cht"], "{folder} holds what it held");
+            assert_eq!(std::fs::read_to_string(at.join(folder).join("Backup.cht")).unwrap(), "the player's");
+            assert_eq!(target.exists(), database, "the database is neither made nor removed");
+            if database {
+                assert_eq!(std::fs::read_to_string(target.join("Sega/Old.cht")).unwrap(), "old");
+                assert!(!target.join("Sega/New.cht").exists());
+            }
+            std::fs::remove_dir_all(&at).unwrap();
+        }
     }
 
     #[test]

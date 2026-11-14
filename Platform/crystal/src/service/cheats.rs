@@ -257,6 +257,7 @@ fn fetch_installed(fetch: &dyn Fn(&str) -> Result<Vec<u8>, String>, directory: &
     emusen_cheats::install::install_staged(&zip, directory).map_err(|r| match r {
         emusen_cheats::install::Refusal::Unreadable(words) => refused(status::FAULT, words),
         emusen_cheats::install::Refusal::Io(e) => refused(status::FAULT, e.to_string()),
+        emusen_cheats::install::Refusal::NotOurs(words) => refused(status::FAULT, words),
     })
 }
 
@@ -579,6 +580,7 @@ mod tests {
         assert!(fetch_installed(&|_| Ok(half.clone()), &directory).is_err());
         assert!(!at.join("db/Sega/New.cht").exists() && at.join("db/Sega/Old.cht").exists() && !at.join("db.part").exists());
         std::fs::create_dir_all(at.join("db.part/Stale")).unwrap();
+        std::fs::write(at.join("db.part").join(emusen_cheats::install::MARK), "").unwrap();
         std::fs::write(at.join("db.part/Stale/Half.cht"), "half").unwrap();
         let installed = fetch_installed(&|url| if url == emusen_cheats::install::DATABASE_URL { Ok(zip.clone()) } else { Err(url.into()) }, &directory).ok().unwrap();
         assert_eq!(installed.installed, 1);

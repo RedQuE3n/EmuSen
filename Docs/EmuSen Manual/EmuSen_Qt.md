@@ -6964,15 +6964,18 @@ title, the cards four across in the frame's content (`Kit.CoverTile` each, its w
 `In use`), the focused card large in the frame's pane beside (`Kit.Card`), and the help bar `A Use this one`, `Y
 Favourite`, `B Details`, `Start Home` with the focused card's place ("2 of 8") at its end. The cards (R-20261114-10): a
 cover borrowed from another game while it is shown (`Borrowed from <game>`, in use), the cover found (`Cover`, read
-with `media`'s `choices: false`), then each kind of picture the scraper's `kinds` names that the game has a file of, by
-the Media section's words or Settings' scraping words (`game_page::cover_words`). A on another card makes it the cover
+with `media`'s `choices: false`, and no card where none was found), then each kind of picture the scraper's `kinds`
+names that the game has a file of, named by the Media section's words for a kind it shows, else by the label of the
+kind's Scraping switch in Galaxia's rows (`Mix images`; `game_page_source.rs` `kind_words`). A game with none of these
+has no Cover art row. Where the scraper could not be opened the row stays, opening nothing, and A says `Cover art could
+not be opened: the scraper could not be opened`. A on another card makes it the cover
 at once and ends a borrowed cover, whose card then goes; A on the card in use does nothing; B goes back to Details. The
 page's cover, the grid's tile and an ES-DE theme's cover then draw it, since each reads the cover through the scraper's
 `media`; the library reads again as after an edited name. The cards' size comes from the frame's content width, the
 board's four across and its card's shape; the pane beside is the kit's card width. **The media viewer** offers `X Set
 as cover` in its help bar for a scraped picture that is not the cover already (not the player's own screenshots, a clip
 or the manual); the viewer stays open (R-20261114-11). Tests: the scraper's `cover_choice`, the library's
-`the_editors_clear_keeps_the_cover_choices_and_drops_the_details`, qt-models' `game_page` (the cards, the mark, a
+`the_editors_clear_keeps_the_cover_choices_and_drops_the_details`, qt-models' `cover_source` (over the real source: no card for a cover not found, a borrowed cover read from the base's `from`, a kind's Scraping word) and `game_page` (the cards, the mark, a
 borrowed cover, the viewer's offer) and qt-app's `page_cover` (in the program: the pad chooses the title screen's card,
 the page's cover, the card's mark and the grid's tile show it, Cover brings the cover found back, kit-core's rules and
 the pad's reach over Cover art at each of the gate's window sizes, and X in the viewer makes the screenshot the cover).

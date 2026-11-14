@@ -827,6 +827,7 @@ impl qobject::GamePageModel {
                     model.as_mut().rust_mut().focus = (None, 0);
                     model.as_mut().shown(true);
                 }
+                Outcome::Said(words) => model.as_mut().said(words),
                 Outcome::CoverArt => {
                     model.as_mut().rust_mut().page.covering = true;
                     model.as_mut().rust_mut().focus = (None, 0);
@@ -1000,15 +1001,21 @@ impl qobject::GamePageModel {
         }
     }
 
+    /// Cover art closed back to Details, the focus on its row's section.
+    fn close_cover_art(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().page.back();
+        self.as_mut().rust_mut().focus = (None, 0);
+        self.as_mut().shown(true);
+        self.returned();
+    }
+
     pub fn back(mut self: Pin<&mut Self>) -> bool {
         // Cover art closes once its press has been delivered, as the viewer does, so the page under it never hears that B.
         if self.page.covering {
-            let _ = self.qt_thread().queue(|mut model| {
-                model.as_mut().rust_mut().page.back();
-                model.as_mut().rust_mut().focus = (None, 0);
-                model.as_mut().shown(true);
-                model.returned();
-            });
+            // A queue refused (cxx-qt's ThreadingQueueError) closes it at once, so the B is never lost.
+            if self.qt_thread().queue(|model| model.close_cover_art()).is_err() {
+                self.close_cover_art();
+            }
             return true;
         }
         let went = self.as_mut().rust_mut().page.back();

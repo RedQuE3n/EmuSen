@@ -472,16 +472,18 @@ fn package_shows_the_games_package_and_runs_its_job_with_its_progress() {
     assert!(words(&page).iter().all(|w| !w.starts_with("Package")));
 }
 
-fn card(choice: CoverChoice, picture: &str) -> CoverCard {
-    CoverCard { text: cover_words(&choice), choice, picture: picture.into() }
+/// A card with the words the source gives it: its kind's for one of the game's own pictures, else `cover_words`'.
+fn card(choice: CoverChoice, words: &str, picture: &str) -> CoverCard {
+    let text = if words.is_empty() { cover_words(&choice) } else { words.into() };
+    CoverCard { text, choice, picture: picture.into() }
 }
 
 fn covered() -> Read {
     let mut r = read();
     r.covers = vec![
-        card(CoverChoice::Found, "/m/cover.png"),
-        card(CoverChoice::Own("screenshot".into()), "/m/shot.png"),
-        card(CoverChoice::Own("titlescreen".into()), "/m/title.png"),
+        card(CoverChoice::Found, "", "/m/cover.png"),
+        card(CoverChoice::Own("screenshot".into()), "Scraped screenshot", "/m/shot.png"),
+        card(CoverChoice::Own("titlescreen".into()), "Title screen", "/m/title.png"),
     ];
     r.media = vec![
         Media { path: "/m/taken.png".into(), kind: MediaKind::Taken },
@@ -532,7 +534,7 @@ fn qt_7_8_cover_art_shows_the_games_covers_as_cards_marks_the_one_in_use_and_a_c
 fn qt_7_8_a_borrowed_cover_is_a_card_in_use_and_any_choice_ends_it() {
     let mut r = covered();
     let borrowed = CoverChoice::Borrowed("/roms/snes/Other Game.sfc".into());
-    r.covers.insert(0, card(borrowed.clone(), "/m/other.png"));
+    r.covers.insert(0, card(borrowed.clone(), "", "/m/other.png"));
     r.cover_in_use = borrowed;
     let mut page = GamePage::new(r, NOW);
     page.choose_section(4);
@@ -557,4 +559,16 @@ fn qt_7_8_the_viewer_sets_a_scraped_picture_as_the_cover_but_not_a_taken_one_a_c
     page.changed(&Change::Cover(Some("titlescreen".into())));
     assert_eq!(at(&page, 2), None, "the picture already the cover");
     assert_eq!(change_failed(&Change::Cover(None), "no"), "The game's cover could not be chosen: no");
+}
+
+#[test]
+fn qt_7_8_5_cover_art_whose_pictures_could_not_be_looked_for_says_why() {
+    let mut r = read();
+    r.covers_unread = Some("the scraper could not be opened".into());
+    let mut page = GamePage::new(r, NOW);
+    page.choose_section(4);
+    let Content::Rows(rows) = page.content() else { panic!("rows") };
+    let at = rows.iter().position(|r| r.label == COVER_ART).expect("the row stays");
+    assert!(!rows[at].opens, "it opens nothing");
+    assert_eq!(page.choose_row(at), Outcome::Said(format!("{COVER_UNREAD}: the scraper could not be opened")));
 }

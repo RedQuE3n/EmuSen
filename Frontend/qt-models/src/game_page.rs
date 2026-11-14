@@ -169,9 +169,11 @@ pub struct Read {
     pub scraping: bool,
     /// The details Edit Details offers, in its order.
     pub details: Vec<Detail>,
-    /// Cover art's cards: a cover borrowed from another game while it is shown, the cover found, then each of the game's
-    /// own pictures that can be its cover; empty where no pictures are looked for.
+    /// Cover art's cards: a cover borrowed from another game while it is shown, the cover found where one is, then each of
+    /// the game's own pictures that can be its cover; empty where there is none of them or no pictures are looked for.
     pub covers: Vec<CoverCard>,
+    /// Why Cover art has no cards where its pictures could not be looked for: the words of what failed.
+    pub covers_unread: Option<String>,
     /// What the game shows as its cover.
     pub cover_in_use: CoverChoice,
 }
@@ -179,7 +181,7 @@ pub struct Read {
 /// What a card of Cover art stands for (decided 2026-11-14, R-20261114-10).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum CoverChoice {
-    /// Another game's cover, by that game's file: shown while it is borrowed, and never chosen again from here.
+    /// Another game's cover, by that game's file: a card while the game shows it, on which A changes nothing.
     Borrowed(String),
     /// The cover found for the game.
     #[default]
@@ -384,6 +386,9 @@ pub fn place(index: usize, count: usize) -> String {
     format!("{} of {count}", index + 1)
 }
 
+/// What A on Cover art's row says where its pictures could not be looked for, before why.
+pub const COVER_UNREAD: &str = "Cover art could not be opened";
+
 /// Cover art's mark on the card in use, as EmuSen_Interface.md §18.2 words it.
 pub const SHOWN: &str = "In use";
 
@@ -457,6 +462,8 @@ pub enum Outcome {
     Package,
     /// Cover art opened, Details' deeper page.
     CoverArt,
+    /// Words the page says, as it says a failure.
+    Said(String),
     /// The package's job started from its request.
     Job(PackageJob),
     /// The package's job running asked to stop.
@@ -522,24 +529,14 @@ fn ask(title: &str, sentence: &str, yes: &str) -> Question {
     q
 }
 
-/// The words for a card Cover art offers: the other game a borrowed cover is from, the cover found, then for one of the
-/// game's own pictures the Media section's words for a kind it shows (`media_word`), else the Settings' scraping row's
-/// for the kind (its "Mix images" one of them); a type none names is its own word.
+/// The words for a card Cover art offers: the other game a borrowed cover is from, or the cover found; one of the game's
+/// own pictures is named by its kind's words, which the source reads (`game_page_source.rs` `kind_words`), so here by
+/// its type alone.
 pub fn cover_words(choice: &CoverChoice) -> String {
-    const SCRAPED: [MediaKind; 4] = [MediaKind::Screenshot, MediaKind::TitleScreen, MediaKind::Marquee, MediaKind::Fanart];
     match choice {
         CoverChoice::Borrowed(from) => format!("Borrowed from {}", crate::library::title_of(from)),
         CoverChoice::Found => "Cover".into(),
-        CoverChoice::Own(t) => match SCRAPED.into_iter().find(|k| kind_word(*k) == t.as_str()) {
-            Some(kind) => media_word(kind).into(),
-            None => match t.as_str() {
-                "miximage" => "Mix image".into(),
-                "backcover" => "Back cover".into(),
-                "3dbox" => "3D box".into(),
-                "physicalmedia" => "Physical media".into(),
-                other => other.into(),
-            },
-        },
+        CoverChoice::Own(t) => t.clone(),
     }
 }
 
@@ -905,6 +902,9 @@ impl GamePage {
         if !self.read.covers.is_empty() {
             let in_use = self.read.covers.iter().find(|c| c.choice == self.read.cover_in_use).map(|c| c.text.as_str()).unwrap_or_default();
             rows.push(row(COVER, COVER_ART, in_use, true));
+        } else if self.read.covers_unread.is_some() {
+            // The row stays where its pictures could not be looked for, and A says why.
+            rows.push(row(COVER, COVER_ART, "", false));
         }
         rows.extend([row(FOLDER, "Open Folder", "", false), row(HIDE, "Hide from Library", "…", false)]);
         rows
@@ -989,7 +989,10 @@ impl GamePage {
             Some(row) if row.key == SCRAPE => Outcome::Scrape,
             Some(row) if row.key == FOLDER => Outcome::OpenFolder,
             Some(row) if row.key == EDIT => Outcome::Edit,
-            Some(row) if row.key == COVER => Outcome::CoverArt,
+            Some(row) if row.key == COVER => match &self.read.covers_unread {
+                Some(why) => Outcome::Said(format!("{COVER_UNREAD}: {why}")),
+                None => Outcome::CoverArt,
+            },
             Some(row) if row.key == CHEATS => Outcome::Cheats,
             Some(row) if row.key == CHEAT => self.switch(index),
             Some(row) if row.key == CROP => Outcome::Crop,

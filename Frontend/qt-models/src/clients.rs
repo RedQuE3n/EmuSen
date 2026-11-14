@@ -58,7 +58,7 @@ impl ClientSource {
     /// ScreenScraper developer file read, and `test` as its test seam where one is given; how many games it queued
     /// (EmuSen_Backend.md §30.3).
     pub fn scrape_start(&self, request: &Value, test: Option<&Value>) -> Result<i64, String> {
-        let scraper = self.scraper.as_ref().ok_or("the scraper could not be opened")?;
+        let scraper = self.scraper.as_ref().ok_or(NO_SCRAPER)?;
         let mut config = scraper.config.clone();
         config.settings["sources_alone"] = json!(false);
         config.settings["developer_files"] = json!(true);
@@ -82,27 +82,27 @@ impl ClientSource {
 
     /// Waits at most `ms` for the run's serial to pass `serial`; the serial then.
     pub fn scrape_wait(&self, serial: u64, ms: u32) -> Result<u64, String> {
-        self.scraper().ok_or("the scraper could not be opened")?.wait(serial, ms).map_err(words)
+        self.scraper().ok_or(NO_SCRAPER)?.wait(serial, ms).map_err(words)
     }
 
     /// The run as it stands, every result of it.
     pub fn scrape_progress(&self) -> Result<Value, String> {
-        self.scraper().ok_or("the scraper could not be opened")?.progress(0).map_err(words)
+        self.scraper().ok_or(NO_SCRAPER)?.progress(0).map_err(words)
     }
 
     /// The run paused, or resumed; true when that changed it.
     pub fn scrape_pause(&self, paused: bool) -> Result<bool, String> {
-        self.scraper().ok_or("the scraper could not be opened")?.pause(paused).map_err(words)
+        self.scraper().ok_or(NO_SCRAPER)?.pause(paused).map_err(words)
     }
 
     /// The run stopped; what was fetched is kept.
     pub fn scrape_cancel(&self) -> Result<bool, String> {
-        self.scraper().ok_or("the scraper could not be opened")?.cancel().map_err(words)
+        self.scraper().ok_or(NO_SCRAPER)?.cancel().map_err(words)
     }
 
     /// The run over: the scraper opened again for its sources alone, its store let go for the Scraper tool and DianaSh.
     pub fn scrape_end(&self) -> Result<(), String> {
-        let scraper = self.scraper.as_ref().ok_or("the scraper could not be opened")?;
+        let scraper = self.scraper.as_ref().ok_or(NO_SCRAPER)?;
         self.reopen(scraper, &scraper.config)
     }
 
@@ -344,6 +344,9 @@ impl ClientSource {
         Ok(ClientSource { runtime, platform, library, _sqlite: sqlite, scraper, walked: Mutex::new(None) })
     }
 }
+
+/// What a call that needs the scraper says where it could not be opened.
+pub const NO_SCRAPER: &str = "the scraper could not be opened";
 
 /// The scraper as a handle for finding pictures alone, with the player's folders as Mistress gives them; none where the
 /// platform library could not open one, so the screens show generated cards.

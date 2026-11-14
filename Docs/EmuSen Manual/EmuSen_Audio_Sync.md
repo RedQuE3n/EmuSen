@@ -299,3 +299,16 @@ a new rate.
   driver (the two tests take turns with SDL's audio subsystem, which is the process's); `SettingsWiringTests`: the system
   default first, a saved device not connected kept and said, a step saved and the game's player following.
 
+
+### 7.6 The Qt game player's settings come from the base's AudioConfig (2026-11-14)
+
+The Qt front end's game player (`platform-client`'s `GameSound`) took its sample rate, latency target and largest rate
+deviation from a `SoundSettings::default()` that restated `AudioConfig`'s field defaults as numbers. It now reads them from
+an `AudioConfig` document as Galaxia binds it (`SoundSettings::of_audio_config`, the fields `SampleRate`,
+`OutputTargetLatencyMs` and `RateControlMaxDeviation`); a document missing one is refused, never filled in. The program
+hands it `model_new`'s document, the base's own defaults: the player's own file has no file number in the platform
+interface to load it by, which is approved for a later base piece (R-20261114-6), so a player's changed latency or
+deviation does not yet reach the game. The device buffer, SDL's sample-frames hint (`Platform/endymion/src/audio.rs`
+`open_device`), has no owner in the base: `AudioConfig.AudioBufferMaxSamples` is Crystal's engine buffer, a different
+thing. It stays the player's own constant, `DEVICE_BUFFER_FRAMES`, in one place. Test: `platform-client/tests/sound.rs`,
+a document whose latency and deviation are twice the base's reaching the rate control.

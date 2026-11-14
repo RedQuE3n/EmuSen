@@ -7,6 +7,7 @@ extern crate emusen_qt;
 mod common;
 
 use emusen_kit_core::input::UiButton;
+use emusen_qt_models::cheats::Switch;
 use emusen_qt_models::pause::{DiscFacts, Facts, SlotFact};
 
 const SCENE: &str = r#"import QtQuick
@@ -179,7 +180,13 @@ fn options_and_discs(scene: &mut emusen_qt_test::Scene<'_>) {
     scene.pad(UiButton::Accept);
     scene.wait(20);
     assert_eq!((scene.property("cardTitle", "text"), scene.property("cardBreadcrumb", "text")), ("Game Options".into(), "Cobalt Harbor (Synthetic)".into()));
-    assert_eq!(rows(scene), ["Cheats | ", "Controllers | ", "Display | ", "Sound | "], "PauseCardGameOptions' rows");
+    assert_eq!(rows(scene), ["Controllers | ", "Display | ", "Sound | "], "PauseCardGameOptions' rows: no cheats, no Cheats row");
+    // The same game with a cheat: Cheats heads the page.
+    let mut cheating = Facts::from_json(&facts());
+    cheating.cheats = vec![Switch { description: "Moon jump".into(), on: false }];
+    assert!(scene.set_property("pause", "facts", &cheating.to_json()));
+    scene.wait(20);
+    assert_eq!(rows(scene), ["Cheats | ", "Controllers | ", "Display | ", "Sound | "], "with cheats, Cheats first");
     assert_eq!(help(scene), ["Choose", "Back", "Screenshot", "Resume"], "as the recording's bar");
     scene.pad(UiButton::Back);
     scene.wait(20);

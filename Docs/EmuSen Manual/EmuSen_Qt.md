@@ -5744,11 +5744,14 @@ and the text sizes' lines at hers. **Differences that remain, each for the teste
   folder's sentence names it; Artwork, ES-DE media and ES-DE theme folders give it as a line), so nothing is hidden.
   The program's test holds the ROM folder's pane to the scratch tree's whole path, the models' test the Artwork
   folder's. Any other value cut on its row is still a finding.
-- Library ▸ Collections has no value (Mistress's `1`, her fixture's one collection) and EmuSen ▸ Logging none (her
-  `Off`): the library's collections and the runtime's log switch are not read here yet (pieces M and the shell's).
+- Library ▸ Collections has no value (Mistress's `1`, her fixture's one collection): the library's collections are not
+  read here yet (piece M).
+- EmuSen ▸ Logging and Shell are not listed until their screens are built (decided by the tester, 2026-11-13): each is
+  one line of `qt-models/data/settings_screen.json`, taken out, so EmuSen holds Saves and states, Big picture, Pause in
+  the background and About.
 - Display ▸ CRT shader's caption reads "The last game · Off CRT", since the sandbox has played nothing, where Mistress's
   fixture names its game; the box follows the words.
-- Not built in this piece, each a door that goes nowhere yet: Shader levers and Shaders (piece J), Cheats, Compressed discs (pieces I and L; built since, below), Logging and Shell, and the Scraping page's doors (Member account,
+- Not built in this piece, each a door that goes nowhere yet: Shader levers and Shaders (piece J), Cheats, Compressed discs (pieces I and L; built since, below), and the Scraping page's doors (Member account,
   Resume, Cancel, Status, Scraper; piece M) and the Collections page's own (piece M). Controllers holds its keys' rows
   only, its doors being piece H's. Consoles and the folder rows were built with piece E
   (§7.7.E). Light or dark's `System` reads as dark and
@@ -6913,7 +6916,8 @@ Seeded faults, each reverted:
   id and is switched in its file only.
 - **Pause Card ▸ Game Options ▸ Cheats** lists the game's cheats, each a stepped row reading On or Off as a settings
   switch does; A, Left or Right turns it at once (`ENABLE` or `DISABLE` by its id) and saves the list, the card staying.
-  The Cheats row is dimmed, and opens nothing, for a game with no cheats in its list.
+  A game with no cheats in its list has no Cheats row there, as its game page has none (decided by the tester,
+  2026-11-13; until then the row was drawn dimmed).
 - **Game page ▸ Options ▸ Cheats** ("1 of 3 on") is shown where the list holds cheats, and opens the same switches as
   Options' deeper page; a turn changes the file only, taken by the game's next start.
 - **Not built here:** adding, editing or removing a code, the database's download and the Cheats tool. Hosted libretro

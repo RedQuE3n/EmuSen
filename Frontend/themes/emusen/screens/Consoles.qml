@@ -529,6 +529,20 @@ ThemeScreen {
                         lineHeight: 26.4
                         lineHeightMode: Text.FixedHeight
                     }
+                    // How a library gets its games, a line under the empty words, as the other built-in themes say it.
+                    Text {
+                        objectName: "noConsolesAddFolder"
+                        visible: Library.consoles.count === 0
+                        y: 358 + 26.4 + 8
+                        width: root.width
+                        horizontalAlignment: Text.AlignHCenter
+                        text: Words.addFolder
+                        color: night.muted
+                        font.family: faces.regular
+                        font.pixelSize: 22
+                        lineHeight: 26.4
+                        lineHeightMode: Text.FixedHeight
+                    }
                     Text {
                         objectName: "consoleDetailName"
                         x: 64

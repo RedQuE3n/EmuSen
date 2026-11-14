@@ -37,6 +37,20 @@ fn size_of(scene: &mut Scene<'_>) -> (i32, i32) {
     (read("width"), read("height"))
 }
 
+/// Waits for the window to be `want`, naming the size it had when it was not.
+fn until_size(scene: &mut Scene<'_>, what: &str, want: (i32, i32)) {
+    let mut last = (0, 0);
+    let start = std::time::Instant::now();
+    while start.elapsed() < std::time::Duration::from_secs(5) {
+        last = size_of(scene);
+        if last == want {
+            return;
+        }
+        scene.wait(50);
+    }
+    panic!("{what}: {last:?} after 5 s, not {want:?}");
+}
+
 /// graphics.json's window size in the sandbox, as the player's file would hold it.
 fn write_window_size(windowed: (i32, i32), resizable: bool) {
     let platform = Platform::load(library()).unwrap();
@@ -82,14 +96,14 @@ pub fn run(width: i32, height: i32, windowed: (i32, i32), resizable: bool) {
     tap(&mut scene, F11);
     until(&mut scene, 5, "F11 asking for a window", |s| s.property("program", "fullScreenAsked") == "false");
     until(&mut scene, 5, "the compositor giving a window", |s| s.property("program", "visibility") == WINDOWED);
-    until(&mut scene, 5, "the window at graphics.json's size", |s| size_of(s) == windowed);
+    until_size(&mut scene, "the window at graphics.json's size", windowed);
     let least = (scene.property("program", "minimumWidth"), scene.property("program", "maximumHeight"));
     let held = (windowed.0.to_string(), windowed.1.to_string());
     assert_eq!(least == held, !resizable, "WindowResizable off holds the window at its size, on leaves it free: {least:?}");
     tap(&mut scene, F11);
     until(&mut scene, 5, "F11 again asking for full screen", |s| s.property("program", "fullScreenAsked") == "true");
     until(&mut scene, 5, "the compositor giving full screen again", |s| s.property("program", "visibility") == FULL_SCREEN);
-    until(&mut scene, 5, "full screen at the screen's size again", |s| size_of(s) == (width, height));
+    until_size(&mut scene, "full screen at the screen's size again", (width, height));
 
     // Hidden while its scene graph still holds its instance, as the other GPU tests leave the window.
     assert!(scene.set_property("program", "visible", "false"));

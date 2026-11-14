@@ -6432,7 +6432,11 @@ window's before it is shown, and that matters under gamescope: gamescope 3.16.30
 A compositor that names a size (KWin) is obeyed: Qt applies its `configure`. Out of full screen, the window takes
 graphics.json's `WindowWidth` and `WindowHeight`, and `WindowResizable` off holds it there by its least and greatest sizes
 (`play::Windowed`, read through the description's `applies` as every setting is; an absent file is the model's
-`model_new`). Nothing in the program writes that size back. With no platform library the size is left to Qt, whose
+`model_new`). It is given once the compositor has answered the request for a window (`visibility` Windowed): Qt's
+Wayland plugin applies the answer's size first, synchronously, and delivers the state change after it through the event
+queue (`QWaylandWindow::resizeFromApplyConfigure` and `handleWindowStatesChanged`, Qt 6.11.2, read 2026-11-14), so a size
+given at the moment of the request is replaced by KWin's answer (`full_screen_gpu.rs`, run 2026-11-14 before this order).
+Nothing in the program writes that size back. With no platform library the size is left to Qt, whose
 Wayland plugin then gives a toplevel 500 by 500 (`QWaylandWindow::defaultGeometry`). Under gamescope, `visibility` never
 reads FullScreen, so the Fullscreen hotkey asks for full screen each time and the window keeps its screen's size.
 `emusen-qt-play`'s window, shown in a window and never full screen, takes graphics.json's size the same way.

@@ -35,8 +35,9 @@ Window {
     // the screen's geometry or the window's screen changes, and overridden by a compositor that names a size; out of it, the setting.
     Binding { target: program; property: "width"; value: program.screen.width; when: program.fullScreenAsked; restoreMode: Binding.RestoreNone }
     Binding { target: program; property: "height"; value: program.screen.height; when: program.fullScreenAsked; restoreMode: Binding.RestoreNone }
-    Binding { target: program; property: "width"; value: program.windowedWidth; when: !program.fullScreenAsked && program.windowedWidth > 0; restoreMode: Binding.RestoreNone }
-    Binding { target: program; property: "height"; value: program.windowedHeight; when: !program.fullScreenAsked && program.windowedHeight > 0; restoreMode: Binding.RestoreNone }
+    // Out of full screen once the compositor has answered: Qt's Wayland plugin applies the answer's size first (EmuSen_Qt.md §7.7.H7).
+    Binding { target: program; property: "width"; value: program.windowedWidth; when: !program.fullScreenAsked && program.visibility === Window.Windowed && program.windowedWidth > 0; restoreMode: Binding.RestoreNone }
+    Binding { target: program; property: "height"; value: program.windowedHeight; when: !program.fullScreenAsked && program.visibility === Window.Windowed && program.windowedHeight > 0; restoreMode: Binding.RestoreNone }
     // WindowResizable off holds the window at the setting's size, Qt's way: its least and greatest sizes made equal.
     Binding { target: program; property: "minimumWidth"; value: program.windowedWidth; when: !program.fullScreenAsked && !program.windowResizable }
     Binding { target: program; property: "maximumWidth"; value: program.windowedWidth; when: !program.fullScreenAsked && !program.windowResizable }

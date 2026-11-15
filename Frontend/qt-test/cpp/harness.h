@@ -13,6 +13,8 @@ public:
     ~HeldClock() override;
     std::int64_t at = 0;
     qint64 elapsed() const override { return at; }
+    // A running animation that is no pause, so a Timer steps with this clock rather than Qt's pause timer (EmuSen_Kit.md §7.36).
+    std::unique_ptr<QAbstractAnimation> keeper;
 };
 
 bool harness_show(QObject& window, int width, int height);
@@ -44,6 +46,8 @@ bool harness_grab(QObject& window, const QString& path);
 QString harness_property(QObject& root, const QString& object_name, const QString& property);
 QObject* harness_singleton(QQmlApplicationEngine& engine, const QString& module, const QString& name);
 QObject* harness_focused_singleton(QObject& window, const QString& module, const QString& name);
+QObject* harness_object(QObject& root, const QString& object_name);
+QString harness_constants(QObject& object);
 int harness_roots(QQmlApplicationEngine& engine);
 bool harness_set_property(QObject& root, const QString& object_name, const QString& property, const QString& value);
 bool harness_destroy(QObject& root, const QString& object_name);

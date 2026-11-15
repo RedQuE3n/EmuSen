@@ -660,6 +660,16 @@ impl Scene<'_> {
         ffi::harness_property(self.window(), &QString::from(object_name), &QString::from(property)).to_string()
     }
 
+    /// The object with this objectName, for a test to call its own Rust surface (a theme host's engine); null for none.
+    pub fn object(&mut self, object_name: &str) -> *mut QObject {
+        ffi::harness_object(self.window(), &QString::from(object_name))
+    }
+
+    /// An object's read-only properties by name, as Qt writes each as text: what a singleton such as the kit's tokens holds.
+    pub fn constants(object: Pin<&mut QObject>) -> Vec<(String, String)> {
+        ffi::harness_constants(object).to_string().lines().filter_map(|l| l.split_once('=')).map(|(n, v)| (n.to_owned(), v.to_owned())).collect()
+    }
+
     /// A number property of a tree's item by its id (a `Node`'s `id`, read as a number), in the item's own units; NaN where it has none.
     pub fn number(&mut self, id: u64, property: &str) -> f64 {
         ffi::harness_get(self.window(), id, &QString::from(property))

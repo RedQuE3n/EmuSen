@@ -5,7 +5,7 @@
 use crate::clients::{app_settings, change_app_settings};
 use crate::help::Screen;
 use crate::help_model::shown_screen;
-use crate::themes::{self, Checked, InUse, Kind, Listing, Row, REFERENCE};
+use crate::themes::{self, Checked, InUse, Kind, Listing, Row, BUILT_IN, REFERENCE};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QStringList, QVariant, QVector};
@@ -42,9 +42,8 @@ pub mod qobject {
         #[qml_element]
         /// The platform library, through which the settings and Galaxia's themes store are read; each write reads them anew.
         #[qproperty(QString, platform_library, cxx_name = "platformLibrary")]
-        /// The reference theme's `theme.json` and its folder (`ReferenceTheme`), for its row.
-        #[qproperty(QString, reference)]
-        #[qproperty(QString, reference_folder, cxx_name = "referenceFolder")]
+        /// Each built-in theme's `theme.json` (`BuiltInThemes.manifests`), in `themes::BUILT_IN`'s order, for their rows.
+        #[qproperty(QStringList, built_ins, cxx_name = "builtIns")]
         /// Whether the tab is shown: the settings and the store are read each time it opens, and not before.
         #[qproperty(bool, open)]
         /// The kind listed, one of `kinds`: the frame's section.
@@ -140,8 +139,7 @@ pub mod qobject {
 
 pub struct ThemesModelRust {
     platform_library: QString,
-    reference: QString,
-    reference_folder: QString,
+    built_ins: QStringList,
     open: bool,
     kind: QString,
     kinds: QStringList,
@@ -167,8 +165,7 @@ impl Default for ThemesModelRust {
         let kinds: QList<QString> = themes::KINDS.iter().map(|k| QString::from(*k)).collect();
         ThemesModelRust {
             platform_library: QString::default(),
-            reference: QString::default(),
-            reference_folder: QString::default(),
+            built_ins: QStringList::default(),
             open: false,
             kind: QString::from(themes::KINDS[0]),
             kinds: QStringList::from(&kinds),
@@ -193,8 +190,7 @@ impl cxx_qt::Initialize for qobject::ThemesModel {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().on_open_changed(|model| model.read_if_open()).release();
         self.as_mut().on_platform_library_changed(|model| model.read_if_open()).release();
-        self.as_mut().on_reference_changed(|model| model.read_if_open()).release();
-        self.as_mut().on_reference_folder_changed(|model| model.read_if_open()).release();
+        self.as_mut().on_built_ins_changed(|model| model.read_if_open()).release();
         self.as_mut()
             .on_kind_changed(|mut model| {
                 model.as_mut().begin_reset_model();
@@ -238,11 +234,12 @@ fn checked_words(checked: &Checked) -> String {
 }
 
 /// The listing read through the platform library: its settings and its themes store.
-fn read(platform_library: &str, reference: &str, reference_folder: &str) -> Listing {
+fn read(platform_library: &str, manifests: &[String]) -> Listing {
     let platform = Platform::load(platform_library).ok();
     let settings = platform.as_ref().and_then(|p| app_settings(p).ok()).unwrap_or(Value::Null);
     let store = platform.as_ref().and_then(|p| p.directory(DIR_THEMES).ok().flatten());
-    themes::listing(&settings, store.as_deref(), reference, reference_folder)
+    let built_ins: Vec<(&str, &str)> = BUILT_IN.iter().copied().zip(manifests.iter().map(String::as_str)).collect();
+    themes::listing(&settings, store.as_deref(), &built_ins)
 }
 
 impl qobject::ThemesModel {
@@ -336,10 +333,11 @@ impl qobject::ThemesModel {
     pub fn refresh(mut self: Pin<&mut Self>) {
         let asked = self.asked + 1;
         self.as_mut().rust_mut().asked = asked;
-        let (library, reference, folder) = (self.platform_library.to_string(), self.reference.to_string(), self.reference_folder.to_string());
+        let library = self.platform_library.to_string();
+        let manifests: Vec<String> = self.built_ins.iter().map(|m| m.to_string()).collect();
         let qt = self.qt_thread();
         std::thread::spawn(move || {
-            let listing = read(&library, &reference, &folder);
+            let listing = read(&library, &manifests);
             let _ = qt.queue(move |model| model.take(asked, listing));
         });
     }
@@ -393,16 +391,16 @@ impl qobject::ThemesModel {
         self.rows.iter().position(|r| r.id == id)
     }
 
-    /// The folder a row's theme is in, inside the store.
+    /// The folder a row's theme is in, inside the store; none for a built-in, which is in the resources.
     fn folder_of(&self, row: &Row) -> Option<PathBuf> {
-        self.store.as_ref().map(|s| s.join(&row.id))
+        self.store.as_ref().filter(|_| !themes::is_built_in(&row.id)).map(|s| s.join(&row.id))
     }
 
     pub fn use_theme(mut self: Pin<&mut Self>, id: &QString) {
         let id = id.to_string();
         let Some(at) = self.find(&id).filter(|&at| self.rows[at].usable()) else { return };
         let kind = self.rows[at].kind;
-        let folder = if id == REFERENCE { None } else { self.folder_of(&self.rows[at]) };
+        let folder = self.folder_of(&self.rows[at]);
         let root = folder.as_deref().map(emusen_esde::check::theme_root);
         let saved = Platform::load(self.platform_library.to_string()).map_err(|e| e.to_string()).and_then(|p| {
             change_app_settings(&p, |settings| match (kind, &root) {
@@ -429,7 +427,7 @@ impl qobject::ThemesModel {
         self.as_mut().say(String::new());
         self.as_mut().detail();
         if kind == Kind::EmuSen {
-            let folder = folder.map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+            let folder = themes::resolve(&id, self.store.as_deref()).host_folder();
             self.as_mut().used(QString::from(folder.as_str()));
         }
         self.restyled(kind == Kind::Esde);
@@ -468,7 +466,7 @@ impl qobject::ThemesModel {
         let id = id.to_string();
         let Some(at) = self.find(&id) else { return };
         let row = &self.rows[at];
-        let Some(folder) = self.folder_of(row).filter(|_| row.id != REFERENCE && row.checked != Checked::Running) else { return };
+        let Some(folder) = self.folder_of(row).filter(|_| row.checked != Checked::Running) else { return };
         let kind: Kind = row.kind;
         self.as_mut().rust_mut().rows[at].checked = Checked::Running;
         self.as_mut().rows_changed();

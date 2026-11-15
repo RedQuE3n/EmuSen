@@ -74,7 +74,7 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_drawn_once_che
     assert!(matches!(mapping::status("video", "audio"), Some(Mapped::Heard(t)) if t.starts_with("esde-qt/tests/theme_video.rs::")));
     assert!(mapping::is_supported("sound", "path") && !mapping::is_supported("video", "scanlines"));
     assert_eq!(mapping::status("video", "scanlines"), Some(&Mapped::Later("video".into())));
-    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 459);
+    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 462);
     assert!(
         mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"),
         "the gameselector picks the system view's games; sound is played"
@@ -1095,9 +1095,9 @@ fn a_row_carousel_takes_its_selected_offset_axis_rotation_diagonal_and_stacking(
     assert!(chosen(&plain) == *plain.last().unwrap(), "centered keeps the selection on top");
 }
 
-// A GIF the host read is drawn on its frame at the view's time, and with iterations done, not at all.
+// A GIF the host read is drawn on its frame at the view's time, and with its iterations done, on the last frame shown.
 #[test]
-fn an_animation_takes_its_frame_from_the_host_s_timing_and_goes_when_its_plays_are_done() {
+fn an_animation_takes_its_frame_from_the_host_s_timing_and_keeps_its_last_when_its_plays_are_done() {
     let t = Synth::new();
     t.asset("spin.gif");
     let anim = |extra: &str| format!("<animation name=\"a\"><pos>0 0</pos><size>0.5 0.5</size><path>./spin.gif</path>{extra}</animation>");
@@ -1113,7 +1113,8 @@ fn an_animation_takes_its_frame_from_the_host_s_timing_and_goes_when_its_plays_a
     s.advance(ms(250.0));
     assert_eq!(frame_of(&s), Some(Some(1)));
     s.advance(ms(550.0));
-    assert_eq!(frame_of(&s), None, "one play of four frames, then nothing");
+    assert_eq!(frame_of(&s), Some(Some(3)), "one play of four frames, then the last stays");
+    assert_eq!(s.frame().next_change_ms, None, "nothing more to wait for");
     s.current.data.animations.clear();
     assert_eq!(frame_of(&s), Some(None), "a file the host read no timing for stands on its first frame");
 }

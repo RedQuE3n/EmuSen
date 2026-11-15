@@ -23,8 +23,7 @@ Themes {
         id: themesModel
         objectName: "themesModel"
         platformLibrary: screen.platformLibrary
-        reference: ReferenceTheme.manifest
-        referenceFolder: ReferenceTheme.folder
+        builtIns: BuiltInThemes.manifests
         open: screen.screens.shown === Screens.Themes
         onUsed: (folder) => screen.used(folder)
         // The window lets go of the start's choice of an ES-DE theme first; the library's read decides the rest.

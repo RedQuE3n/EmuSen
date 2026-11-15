@@ -6,10 +6,10 @@
 use core::pin::Pin;
 use cxx_qt::casting::Upcast;
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::QString;
+use cxx_qt_lib::{QList, QString, QStringList};
 use emusen_qt_models::game_model::qobject::GameModel;
 use emusen_qt_models::library_model::qobject::{LibraryModel, QAbstractListModel};
-use emusen_qt_models::{help, screens, words};
+use emusen_qt_models::{help, screens, themes, words};
 use emusen_theme_qt::actions::{Action, ActionSink};
 use emusen_theme_qt::browse::facts_of;
 use emusen_theme_qt::device::DeviceFacts;
@@ -24,6 +24,8 @@ pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
         include!("emusen-theme-host/src/host.cxxqt.h");
         type ThemeHost = emusen_theme_host::host::qobject::ThemeHost;
         include!("emusen-theme-qt/src/session.cxxqt.h");
@@ -52,11 +54,11 @@ pub mod qobject {
         #[qobject]
         #[qml_element]
         #[qml_singleton]
-        /// Where the reference theme's package lives: the program's resources.
-        #[qproperty(QString, folder, READ, CONSTANT)]
-        /// Its `theme.json`, for the Themes tab's first row.
-        #[qproperty(QString, manifest, READ, CONSTANT)]
-        type ReferenceTheme = super::ReferenceThemeRust;
+        /// Where the reference theme's package lives in the program's resources.
+        #[qproperty(QString, reference, READ, CONSTANT)]
+        /// Each built-in theme's `theme.json`, in `themes::BUILT_IN`'s order, for the Themes tab's rows.
+        #[qproperty(QStringList, manifests, READ, CONSTANT)]
+        type BuiltInThemes = super::BuiltInThemesRust;
     }
 
     unsafe extern "RustQt" {
@@ -114,19 +116,25 @@ pub mod qobject {
     impl cxx_qt::Initialize for ThemeFeed {}
 }
 
-/// The reference theme's place, `crate::REFERENCE_THEME`.
-pub struct ReferenceThemeRust {
-    folder: QString,
-    manifest: QString,
+/// The built-in themes' places in the resources (`emusen_qt_models::themes::BUILT_IN`) and their manifests.
+pub struct BuiltInThemesRust {
+    reference: QString,
+    manifests: QStringList,
 }
 
-impl Default for ReferenceThemeRust {
+impl Default for BuiltInThemesRust {
     fn default() -> Self {
-        let mut manifest = QString::default();
-        let file = QString::from(format!("{}theme.json", crate::REFERENCE_THEME).as_str());
-        // Read through Qt, as the host reads any package, since the folder is in the resources.
-        emusen_theme_host::sandbox::ffi::sandbox_read(&file, &mut manifest);
-        ReferenceThemeRust { folder: QString::from(crate::REFERENCE_THEME), manifest }
+        let manifests: QList<QString> = themes::BUILT_IN
+            .iter()
+            .map(|id| {
+                let mut manifest = QString::default();
+                let file = QString::from(format!("{}theme.json", themes::built_in_folder(id)).as_str());
+                // Read through Qt, as the host reads any package, since the folder is in the resources.
+                emusen_theme_host::sandbox::ffi::sandbox_read(&file, &mut manifest);
+                manifest
+            })
+            .collect();
+        BuiltInThemesRust { reference: QString::from(crate::reference_theme().as_str()), manifests: QStringList::from(&manifests) }
     }
 }
 

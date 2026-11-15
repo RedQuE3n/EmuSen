@@ -198,10 +198,20 @@ fn qt_7_7_emusens_panes_and_values_name_other_keys_and_the_version() {
     assert_eq!(pane.muted, ["Resume · Always start again"]);
     // Big Picture is the program on every machine (the tester decided, 2026-11-13): no Big picture row, whatever the base holds.
     let labels: Vec<String> = shown(&view).into_iter().map(|(label, _)| label).collect();
-    assert_eq!(labels, ["Saves and states", "Pause in the background", "Logging", "Shell", "About"]);
-    assert_eq!(view.rows()[4].value, emusen_qt_models::words::version_line());
-    assert_eq!(view.rows()[4].kind, RowKind::Action);
-    assert_eq!(view.choose(4), Outcome::Nothing);
+    assert_eq!(labels, ["Saves and states", "Pause in the background", "About"]);
+    assert_eq!(view.rows()[2].value, emusen_qt_models::words::version_line());
+    assert_eq!(view.rows()[2].kind, RowKind::Action);
+    assert_eq!(view.choose(2), Outcome::Nothing);
+}
+
+#[test]
+fn emusen_lists_neither_logging_nor_shell_until_their_screens_are_built() {
+    // Decided by the tester, 2026-11-13: the two doors wait for their screens.
+    let source = fake(json!({}), json!({}));
+    let mut view = view(&source);
+    section(&mut view, "EmuSen");
+    let ids: Vec<String> = view.rows().into_iter().map(|r| r.id).collect();
+    assert_eq!(ids, ["saves", "background", "about"]);
 }
 
 #[test]

@@ -305,6 +305,21 @@ ThemeScreen {
                             }
                         }
                     }
+                    // An empty library: how it gets its games, where the shelf's covers would stand, in Choose a console's empty type.
+                    Text {
+                        objectName: "shelfAddFolder"
+                        x: shelfBox.x
+                        y: shelfBox.y
+                        width: shelfBox.width
+                        visible: Library.consoles.count === 0
+                        text: Words.addFolder
+                        elide: Text.ElideRight
+                        color: night.muted
+                        font.family: faces.regular
+                        font.pixelSize: 22
+                        lineHeight: 26.4
+                        lineHeightMode: Text.FixedHeight
+                    }
                     Text {
                         objectName: "shelfTitle"
                         x: 64

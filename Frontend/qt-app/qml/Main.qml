@@ -287,7 +287,7 @@ Window {
             objectName: "reference"
             anchors.fill: parent
             visible: !program.gameShown
-            folder: ReferenceTheme.folder
+            folder: BuiltInThemes.reference
             coverStores: program.coverStores
             screens: screens
             library: library
@@ -319,7 +319,7 @@ Window {
             id: chosenTheme
             objectName: "chosenTheme"
             anchors.fill: parent
-            active: program.theme.length > 0 && program.theme !== ReferenceTheme.folder && !program.esdeLook
+            active: program.theme.length > 0 && program.theme !== BuiltInThemes.reference && !program.esdeLook
             // A Loader is a focus scope: it takes the focus while one of the theme's screens is to hold it.
             focus: program.themeHost?.takesFocus ?? false
             sourceComponent: ThemeHost {

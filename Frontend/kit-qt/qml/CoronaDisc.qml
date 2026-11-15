@@ -45,9 +45,10 @@ Item {
             // Under the rim and the disc, each glow under those before it.
             z: -1 - glow.index
             radius: root.diameter / 2
-            blur: glow.modelData.blur
-            spread: glow.modelData.spread
-            color: glow.modelData.color
+            // The list's entry can go before its delegate when a theme's engine is dropped (EmuSen_Kit.md §7.116): read as none then.
+            blur: glow.modelData?.blur ?? 0
+            spread: glow.modelData?.spread ?? 0
+            color: glow.modelData?.color ?? "transparent"
         }
     }
     Rectangle {

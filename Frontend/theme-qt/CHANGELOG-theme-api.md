@@ -31,6 +31,9 @@ or shadow. 1.3 is another piece's.
 - **`Backdrop`**, **`BackdropField`**, **`Glow`** (the kit's, by name): a screen's ground with its blurred colour fields or a
   blurred picture, and a rounded box's glow or shadow, outside the box alone, with a box-shadow's offsets (`EmuSen_Kit.md`
   §7.118, §7.119). Each keeps 1.4 in the qmldir, so a theme importing 1.0 or 1.2 finds what it found before.
+- **`Type`** (singleton): `size(base, textScale)`, the size words of a design's size are drawn at, never under the kit's
+  legibility floor (`EmuSen_Kit.md` §7.120, R-20261115-14). As a type made in Rust it is exported at 1.0 like every
+  singleton of the module, so an import of 1.0 finds it too.
 - The module is 1.4 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.4.*`.
 
 ## 1.2, an addition: the corona disc and the planet mark (2026-11-14)

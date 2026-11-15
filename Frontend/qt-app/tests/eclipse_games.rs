@@ -226,9 +226,10 @@ fn qt_3_4_10_eclipses_games_view_is_its_board_by_the_table_at_every_size() {
 }
 
 #[test]
-#[should_panic(expected = "built, with no item or no check")]
 fn qt_3_4_10_the_table_refuses_a_built_row_with_no_check() {
-    table::rows_of("a part\tEclipseLibrary:1\t1200\tthe program's\tbuilt\tpart\t\t");
+    let read = std::panic::catch_unwind(|| table::rows_of("a part\tEclipseLibrary:1\t1200\tthe program's\tbuilt\tpart\t\t").len());
+    let words = read.expect_err("a built row with no check is refused").downcast::<String>().map(|s| *s).unwrap_or_default();
+    assert!(words.contains("built, with no item or no check"), "{words}");
 }
 
 #[test]

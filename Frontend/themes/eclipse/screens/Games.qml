@@ -271,7 +271,7 @@ ThemeScreen {
                                     objectName: "gamesFilterWords." + chip.index
                                     anchors.centerIn: parent
                                     text: chip.line
-                                    color: chip.chosen ? Tokens.overAccent : own.chipWords
+                                    color: chip.chosen ? Tokens.overAccent : shared.tileFacts
                                     font.weight: chip.chosen ? Font.DemiBold : Font.Normal
                                     font.pixelSize: Type.size(21 * root.px, Tokens.textScale)
                                 }
@@ -440,31 +440,21 @@ ThemeScreen {
                                 radius: 16 * root.px
                                 pixelScale: canvas.unit
                             }
-                            Rectangle {
-                                objectName: "gamesTileFoot." + cell.index
-                                anchors.bottom: parent.bottom
-                                width: parent.width
-                                height: 84 * root.px
-                                radius: 16 * root.px
-                                gradient: Gradient {
-                                    GradientStop { position: 0; color: "transparent" }
-                                    GradientStop { position: 1; color: Tokens.overArtScrim }
-                                }
-                            }
-                            Text {
-                                objectName: "gamesTileTitle." + cell.index
-                                x: 14 * root.px
-                                width: parent.width - 28 * root.px
-                                anchors.bottom: parent.bottom
-                                anchors.bottomMargin: 12 * root.px
-                                text: cell.title
-                                wrapMode: Text.Wrap
-                                maximumLineCount: 2
-                                elide: Text.ElideRight
-                                color: Tokens.overArt
-                                font.weight: Font.DemiBold
-                                font.pixelSize: Type.size(18 * root.px, Tokens.textScale)
-                                lineHeight: 1.2
+                            // The shared foot (TileWords): the board's 84 px fade to Tokens.overArtScrim, held under the title's two lines.
+                            TileWords {
+                                unit: root.px
+                                kind: "gamesTile"
+                                place: cell.index
+                                title: cell.title
+                                facts: ""
+                                titleLines: 2
+                                titleLineHeight: 1.2
+                                radius: 16
+                                titleSize: 18
+                                inset: 14
+                                fade: 84
+                                titleInk: Tokens.overArt
+                                shadeInk: Tokens.overArtScrim
                             }
                             FocusRing {
                                 objectName: "gamesRing." + cell.index

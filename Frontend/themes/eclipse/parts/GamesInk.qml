@@ -4,10 +4,9 @@ import QtQuick
 QtObject {
     // A game's description and the empty state's line (EclipseLibrary:44, EclipseEmpty:30).
     readonly property color words: "#C9CDDB"
-    // A filter chip at rest: its line, its ground, rgba(7, 8, 15, 0.6), and its words (EclipseLibrary:59).
+    // A filter chip at rest: its line and its ground, rgba(7, 8, 15, 0.6); its words are Ink.tileFacts (EclipseLibrary:59).
     readonly property color chipLine: "#4A5068"
     readonly property color chipGround: "#9907080F"
-    readonly property color chipWords: "#E3E6F0"
     // The letter rail's track (EclipseLibrary:78).
     readonly property color railTrack: "#3A3F55"
 }

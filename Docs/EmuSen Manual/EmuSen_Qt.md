@@ -3665,6 +3665,61 @@ the last table and on nothing else; kit-core's `glyph` (7 tests, the pair's amon
 reverted: six caught as written above (the pair glyph off, the fractional advances, the glyph's side, the info gap, no
 default face, the filled axis cut at one tip), and one, the info marks square, not caught and replaced.
 
+#### 4.8.8 A theme's fade transitions and `fadeAbovePrimary` **[M 2026-11-14]**
+
+The rules, read in ES-DE 3.4.1's source (`es-app/src/views/ViewController.cpp`, `SystemView.cpp`,
+`es-core/src/Window.cpp`, `resources/shaders/glsl/core.glsl`); the durations live in `scene/motion.rs` beside the slide's,
+the curve's points in `scene/fade.rs` as named constants (`RISE`, `RISING_UNTIL`, `WHOLE_UNTIL`, `FALL_FROM`, `FALL`,
+`CAMERA_AT`), each citing its line.
+
+- **Between views** (system to gamelist, gamelist to system, gamelist to gamelist, startup to either):
+  `ViewController::playViewTransition` draws a black rectangle over the screen whose alpha rises linearly over 120 ms
+  (`FADE_DURATION`, line 971), moves the camera to the new view, holds the black for 200 ms (`FADE_WAIT`, 972) and lowers
+  it linearly over 120 ms: 440 ms in all. The view left is the one on the screen for the first 120 ms. A fade begun while
+  another is part way starts from that one's black (lines 983-991). The help is drawn under the black
+  (`renderHelpPromptsEarly`, 1378), the clock and the status over it (`Window::render`, 715-735). At startup the camera
+  starts away from the view (lines 680-693, 878-885), so the screen is black until the view fades in.
+- **Between systems** in the system view (`SystemView::onCursorChanged`, 427-476): a run of 400 ms x 1.3 for a carousel or
+  a list and 300 ms x 1.3 for a grid. Its black f rises as t/0.2 plus the black it started from, is 1 from 0.3 to 0.7 of
+  the run, and falls as 1 - (t - 0.6)/0.3, from 2/3 at 0.7 to 0 at 0.9 (451-457). The system left shows until half way
+(line 459).
+  `renderElements` dims the elements at or below the primary's zIndex by 1 - f (1720-1722); since the shader multiplies
+  colour only (`core.glsl` 171-174), that is a black box of opacity f between them and the primary, which is how the scene
+  draws it, as a `Paint::fill`. The elements above the primary keep their opacity, or with **`fadeAbovePrimary`** take
+  1 - f (1695-1699). The help, clock and status are the window's, not the view's children, and do not fade: ES-DE keeps
+them in lists of their own (`helpComponents`, `clockComponents`, `systemStatusComponents`, 758-772), `renderElements`
+draws only `children` (1665), and `Window::render` draws the clock and status after the views (715-735). In the scene
+they cannot be ranked under the black: their types declare no `zIndex` (`loader/catalog.tsv`, the `helpsystem`,
+`systemstatus` and `clock` blocks), a theme's `zIndex` on them is dropped as an unknown property (`loader/parse.rs`,
+`properties`), so their zIndex is none and `draw.rs` ranks them above the primary.
+- **A held direction** (`mMaxFade`, 189-207, 462-472): from 0.7 of a run with the direction held, the faded elements are not
+  drawn at all until the black is whole again in a later run, so a held scroll stays dark; it is set until then, so a
+  press after a long hold starts with them off.
+- **The drawing order**: the system view draws the elements at or below the primary's zIndex, then the primary, then the
+  rest (`SystemView::render`), whatever order equal zIndexes were written in.
+
+Not built: a slide between systems or between two gamelists (both still change at once, as before), and the system
+left's video paused at its frame during the first half (its still is drawn). Proof: `emusen-esde`'s `fade` tests, the
+painter's startup and quick-system-select fade, and the three `fadeAbovePrimary` cases in `mapping-cases.tsv`, read 48 ms
+after the press, on the black's rise (0.46 of the black for a carousel or list, 0.62 for a grid), so a fade that starts
+a frame late or a curve that is flat there paints both values alike. On the real view, `esde-qt`'s `fade_above_true`,
+`fade_above_false`, `fade_instant` and `fade_slide` (one Qt application each) press once on a held clock under Qt's
+basic render loop and read every 16 ms frame from the press to past the run's end: the view's own clock is at the held
+time exactly, and the black, the picture above, the picture below (the system left's to half way, then the arriving
+one's at its own width) and the drawing order are ES-DE's at that time, stated in the tests from ES-DE's source.
+
+**The held clock under a threaded render loop (2026-11-14).** The first real-view fade test ran under
+`QSG_RENDER_LOOP=threaded` (the GPU tier's `common::start`), where Qt Quick installs its own animation driver and refuses
+the held one (EmuSen_Kit.md §7.36): every frame was read on the render loop's clock, which ran on while the test read the
+tree, so a step meant for 16 ms read about 66 ms, and a second theme's fade ran its whole run between two reads. The fade
+tests now set the basic render loop, as `mapping.rs` does, and assert the view's clock at every frame. Measured on
+2026-11-14 with `fade_above_true` under the threaded loop: Qt printed "QUnifiedTimer: animation driver already
+installed...", and the view's clock read 33, 66, 100, 150, 166, 200 ms at held 16, 32, 48, 64, 80, 96 ms, the run over by
+the held 192 ms; under the basic loop it read each held time to the microsecond. How large each of the threaded loop's
+steps is was not read in its driver's source and is not known. The view's clock is a `NumberAnimation`'s interpolated
+value (240 ms reads 239.99999999999997); the painter rounds each step to a whole microsecond, so the tests compare the
+two to within half of one.
+
 ### 4.9 ES-DE's text rules: `emusen-esde-text` **[M 2026-11-09]**
 
 **Decided 2026-11-09 by the tester:** ES-DE's text layout is built as a component of its own, after the evaluation below,

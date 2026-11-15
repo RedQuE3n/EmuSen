@@ -1,9 +1,10 @@
 //! One view that moves: the selection, its glide, the held direction's repeats, the metadata fade and the grid's focus
 //! and rows, and each element's state at the time the host steps to (EmuSen_BigPicture.md §14.6, §14.7, §16).
 
-use crate::loader::{Element, View};
+use crate::loader::{Animation, Element, View};
 
 use super::data::{Data, Game, System};
+use super::fade::{Navigating, SystemFade};
 use super::grid::GridGeometry;
 use super::mapping;
 use super::motion::{Easing, Glide, Motion, Repeat, RepeatRule, TextScroll, Time};
@@ -96,6 +97,11 @@ pub struct SceneView {
     steps: Vec<Step>,
     /// Moves of the selection so far, which vary the gameselectors' random picks.
     navigations: u64,
+    /// The system view's fade between systems, when the theme's profile fades them (EmuSen_Qt.md §4.8.8).
+    fade: Option<SystemFade>,
+    navigating: Navigating,
+    /// ES-DE's mMaxFade as a press found it, before the press counts as navigating.
+    carried: Option<bool>,
 }
 
 impl SceneView {
@@ -120,6 +126,9 @@ impl SceneView {
             to_level: 0.0,
             steps: vec![],
             navigations: 0,
+            fade: None,
+            navigating: Navigating::default(),
+            carried: None,
         };
         v.position = Glide::at(v.index() as f64);
         v.scroll = Glide::at(v.grid().map(|g| g.scroll_for(v.index())).unwrap_or(0.0));
@@ -131,7 +140,27 @@ impl SceneView {
     }
 
     pub fn theme_view(&self) -> &View {
-        self.data.system().theme.view(&self.view)
+        self.shown_system().theme.view(&self.view)
+    }
+
+    /// The system whose elements are on the screen: the one left until a fade between systems is half way.
+    pub fn shown_system(&self) -> &System {
+        self.data.systems.get(self.shown_index()).unwrap_or(self.data.system())
+    }
+
+    fn shown_index(&self) -> usize {
+        match &self.fade {
+            Some(f) if self.is_system_view() && f.shows_from(self.now) => f.from,
+            _ => self.data.system_index,
+        }
+    }
+
+    /// The black of a fade between systems at the view's time, and whether a held direction keeps the elements off.
+    pub fn system_fade(&self) -> (f64, bool) {
+        match &self.fade {
+            Some(f) if self.is_system_view() => (f.black(self.now), f.hides(self.now, &self.navigating)),
+            _ => (0.0, false),
+        }
     }
 
     fn is_system_view(&self) -> bool {
@@ -184,9 +213,16 @@ impl SceneView {
         self.theme_view().primary().is_some_and(|p| p.kind() == "carousel" && p.string("itemTransitions") != Some("instant"))
     }
 
-    fn select(&mut self, target: usize) {
+    fn select(&mut self, target: usize, now: Time) {
         if self.is_system_view() {
+            let from = self.shown_index();
             self.data.system_index = target;
+            if self.data.system().theme.transitions.system_to_system == Animation::Fade {
+                let grid = self.primary_kind().as_deref() == Some("grid");
+                let held_over = self.carried.take().unwrap_or_else(|| self.fade.is_some_and(|f| f.max_fade(now, &self.navigating)));
+                let start = self.fade.map_or(0.0, |f| f.black(now));
+                self.fade = Some(SystemFade::new(now, from, grid, &self.motion, start, held_over));
+            }
         } else {
             self.data.game_index = target;
         }
@@ -218,7 +254,7 @@ impl SceneView {
             return false;
         }
         let to = self.position.to + if wraps { delta as f64 } else { (target - index) as f64 };
-        self.select(target as usize);
+        self.select(target as usize, now);
         self.position = if self.slides() {
             self.position.toward(to, now, self.motion.carousel_step, self.motion.carousel_easing)
         } else {
@@ -281,7 +317,7 @@ impl SceneView {
         let scroll = g.scroll_for(target);
         self.scroll =
             if instant_rows { Glide::at(scroll) } else { self.scroll.toward(scroll, now, self.motion.grid_step, self.motion.grid_easing) };
-        self.select(target);
+        self.select(target, now);
         self.selected_at = now;
         self.changed = true;
         self.steps.push(Step { delta, held, at: now });
@@ -302,14 +338,19 @@ impl SceneView {
 
     /// A direction held from a time on; a grid's vertical direction moves by rows.
     pub fn press(&mut self, direction: i32, now: Time, vertical: bool) {
+        self.now = now;
+        self.carried = self.fade.map(|f| f.max_fade(now, &self.navigating));
+        self.navigating = Navigating { pressed: Some(now), released: None };
         self.vertical = vertical && self.primary_kind().as_deref() == Some("grid");
         self.move_by(direction, now, false, self.vertical);
         let rule = self.repeat_rule();
         self.repeat.press(direction, now, rule);
+        self.carried = None;
     }
 
     pub fn release(&mut self, now: Time) {
         self.advance(now);
+        self.navigating.released = Some(now);
         self.repeat.release();
         self.fade_metadata_in(now);
     }
@@ -350,6 +391,7 @@ impl SceneView {
             || !self.focus.is_settled_at(now)
             || self.repeat.held()
             || !self.metadata.is_settled_at(now)
+            || self.fade.is_some_and(|f| self.is_system_view() && f.is_running(now))
             || (self.changed && now < self.selected_at + self.motion.scroll_fade_in && view.elements.iter().any(|e| self.fades_in(e)))
     }
 
@@ -429,7 +471,7 @@ impl SceneView {
     pub fn frame(&self) -> Vec<ElementState> {
         let now = self.now;
         let (w, h) = (self.data.width, self.data.height);
-        let system = self.data.system();
+        let system = self.shown_system();
         // In the system view a game comes from a gameselector's pick (selector.rs), drawn again on each move.
         let view = self.theme_view();
         let seed = self.data.selection_seed ^ self.navigations;
@@ -441,6 +483,10 @@ impl SceneView {
         };
         let metadata = self.metadata.value_at(now);
         let grid = self.grid();
+        let (black, held_dark) = self.system_fade();
+        let primary = view.primary();
+        let primary_z = primary.and_then(|p| p.z_index).unwrap_or(f32::INFINITY);
+        let fade_above = primary.and_then(|p| p.bool("fadeAbovePrimary")) == Some(true);
         view.elements
             .iter()
             .enumerate()
@@ -475,6 +521,17 @@ impl SceneView {
                 }
                 if self.is_game_metadata(e) {
                     opacity *= metadata;
+                }
+                // ES-DE 3.4.1 SystemView.cpp 191-207, 1695-1722: the elements above the primary fade with it only by
+                // fadeAbovePrimary; held at the darkest, the faded elements are not drawn.
+                if self.fade.is_some() && self.is_system_view() && !super::draw::is_primary(e.kind()) && !super::stage::overlay(e.kind()) {
+                    let above = e.z_index.unwrap_or(f32::INFINITY) > primary_z;
+                    if above && fade_above {
+                        opacity *= 1.0 - black;
+                    }
+                    if held_dark && (!above || fade_above) && skipped.is_none() {
+                        skipped = Some("a held direction keeps the fade's darkest".into());
+                    }
                 }
                 let (offset, grid_focus) = match e.kind() {
                     "carousel" | "textlist" => (self.position.value_at(now), None),

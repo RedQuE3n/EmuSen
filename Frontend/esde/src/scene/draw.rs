@@ -59,7 +59,7 @@ impl Transit {
     }
 }
 
-fn is_primary(kind: &str) -> bool {
+pub(super) fn is_primary(kind: &str) -> bool {
     matches!(kind, "carousel" | "textlist" | "grid")
 }
 
@@ -90,10 +90,13 @@ impl SceneView {
     /// The view's drawn elements in drawing order and its primary element's layout, at the view's time.
     pub fn draw(&self, measures: &Measures, leaving: bool) -> (Vec<Drawn>, Option<Primary>) {
         let data = &self.data;
-        let ctx = Ctx { view: &self.view, data, system: data.system(), game: None, w: data.width, h: data.height };
+        let ctx = Ctx { view: &self.view, data, system: self.shown_system(), game: None, w: data.width, h: data.height };
         let since = self.now() - self.selected_at();
         let elements = &self.theme_view().elements;
         let mut out = vec![];
+        // Each drawn element's pass in the system view: at or below the primary's zIndex, the primary, above it.
+        let mut passes = vec![];
+        let primary_z = self.theme_view().primary().and_then(|p| p.z_index).unwrap_or(f32::INFINITY);
         let mut primary_out = None;
         for s in self.frame().into_iter().filter(|s| s.skipped.is_none()) {
             let e = &elements[s.index];
@@ -154,6 +157,7 @@ impl SceneView {
                     }
                 };
                 primary_out = Some(Primary { id, rows: self.rows_id(), selected, layout });
+                passes.push(1);
                 out.push(Drawn { placed, content, wait, transit: Transit::default() });
                 continue;
             }
@@ -234,9 +238,27 @@ impl SceneView {
                 }
             }
             placed.paint = paint;
+            passes.push(if e.z_index.unwrap_or(f32::INFINITY) > primary_z { 2 } else { 0 });
             out.push(Drawn { placed, content, wait, transit: Transit::of(e) });
         }
+        if self.view == "system" {
+            out = self.system_passes(out, passes);
+        }
         (out, primary_out)
+    }
+
+    /// ES-DE's system view draws the elements at or below the primary's zIndex, then the primary, then the rest
+    /// (SystemView::render); a fade's black lies between the first and the primary (EmuSen_Qt.md §4.8.8).
+    fn system_passes(&self, drawn: Vec<Drawn>, passes: Vec<u8>) -> Vec<Drawn> {
+        let mut ranked: Vec<(u8, Drawn)> = passes.into_iter().zip(drawn).collect();
+        ranked.sort_by_key(|(pass, _)| *pass);
+        let (black, held_dark) = self.system_fade();
+        let at = ranked.iter().position(|(pass, _)| *pass > 0).unwrap_or(ranked.len());
+        if black > 0.0 && !held_dark {
+            let veil = super::fade::veil(&self.view, self.data.width, self.data.height, black);
+            ranked.insert(at, (0, Drawn { content: 0, placed: veil, wait: None, transit: Transit::default() }));
+        }
+        ranked.into_iter().map(|(_, d)| d).collect()
     }
 
     /// The quick-scroll letters while a held list has faded its metadata out (§29).

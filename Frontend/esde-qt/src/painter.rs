@@ -143,7 +143,7 @@ impl Painter {
         let view = if view == "gamelist" { "gamelist" } else { "system" };
         match &mut self.stage {
             Some(stage) => stage.restart(data, view, self.now),
-            None => self.stage = Some(Stage::new(data, view, self.now)),
+            None => self.stage = Some(Stage::opening(data, view, self.now)),
         }
         self.held = None;
         self.refresh();
@@ -232,7 +232,7 @@ impl Painter {
         let n = data.systems.len() as i64;
         data.system_index = (data.system_index as i64 + delta).rem_euclid(n) as usize;
         data.game_index = 0;
-        stage.restart(data, "gamelist", self.now);
+        stage.open_gamelist(data, self.now);
     }
 
     /// A press from the router; the scene repeats a held direction itself, so the router's repeats are not passed on.

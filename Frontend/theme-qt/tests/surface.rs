@@ -132,7 +132,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
             &[],
         ),
         ("Marks", &["heart", "sparkle", "crescent", "attention", "badge", "alien"], &["path"]),
-        ("Type", &[], &["size"]),
+        ("Type", &[], &["size", "sizeIn"]),
         ("Rows", &["count"], &rows),
         ("HelpEntries", &["actionLines"], &rows),
     ];

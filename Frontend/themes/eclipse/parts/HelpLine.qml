@@ -33,7 +33,7 @@ Item {
         color: "transparent"
         labelColor: root.ink
         iconColor: Tokens.muted
-        labelFont.pixelSize: Type.size(root.size * root.unit, Tokens.textScale)
+        labelFont.pixelSize: Type.sizeIn(root.size * root.unit, Tokens.textScale, Tokens.faceText, Font.Normal)
         labelFont.family: Tokens.faceText
         entrySpacing: root.spacing * root.unit
         glyphGap: root.glyphGap * root.unit

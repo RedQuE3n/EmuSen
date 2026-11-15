@@ -92,7 +92,7 @@ Item {
         y: (root.height - height) / 2
         text: Device.clock
         color: Tokens.text
-        font.pixelSize: Type.size(root.size * root.unit, Tokens.textScale)
+        font.pixelSize: Type.sizeIn(root.size * root.unit, Tokens.textScale, Tokens.faceText, Font.DemiBold)
         font.family: Tokens.faceText
         font.weight: Font.DemiBold
     }

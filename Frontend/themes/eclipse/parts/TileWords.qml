@@ -1,9 +1,8 @@
 import QtQuick
 import EmuSen.Theme
 
-// A tile's foot: its title standing on its facts line over the tile's art, and the shade under them (Main:84-86). The facts sit
-// the board's 12 px above the foot; the shade fades in over the board's 96 px and holds the board's 0.92 from the title's top to
-// the foot, so words raised to the legibility floor keep the look's 4.5:1 over any art (provisional, the tester's to judge).
+// A tile's foot as the board draws it (Main:84-86): a shade the board's 96 px tall from rgba(4, 5, 10, 0.92) at the foot to
+// clear, the console line 12 px above the tile's foot and the title on it, each inset 18 px.
 Item {
     id: root
     // A board pixel in canvas units, Board.unit.
@@ -32,14 +31,12 @@ Item {
         objectName: "tileShade." + root.place
         // The shade's dark colour, which the test reads.
         readonly property color paint: root.shadeInk
-        readonly property real solid: root.height - titleItem.y
         width: root.width
-        height: Math.max(root.fade * root.unit, shade.solid + root.fade * root.unit / 2)
+        height: root.fade * root.unit
         y: root.height - height
         radius: root.radius * root.unit
         gradient: Gradient {
             GradientStop { position: 0; color: root.shadeClear }
-            GradientStop { position: Math.max(0, 1 - shade.solid / shade.height); color: shade.paint }
             GradientStop { position: 1; color: shade.paint }
         }
     }
@@ -47,6 +44,7 @@ Item {
         id: titleItem
         objectName: "tileTitle." + root.place
         x: root.inset * root.unit
+        // On the console line: the board's 34 px foot would overlap the line raised to the legibility floor (eclipse_home.tsv).
         y: (factsItem.visible ? factsItem.y : root.height - root.foot * root.unit) - height
         width: root.width - 2 * root.inset * root.unit
         text: root.title
@@ -55,7 +53,7 @@ Item {
         lineHeight: root.titleLineHeight
         elide: Text.ElideRight
         color: root.titleInk
-        font.pixelSize: Type.size(root.titleSize * root.unit, Tokens.textScale)
+        font.pixelSize: Type.sizeIn(root.titleSize * root.unit, Tokens.textScale, Tokens.faceText, Font.DemiBold)
         font.family: Tokens.faceText
         font.weight: Font.DemiBold
     }
@@ -69,8 +67,9 @@ Item {
         text: root.facts
         elide: Text.ElideRight
         color: root.factsInk
-        font.pixelSize: Type.size(root.factsSize * root.unit, Tokens.textScale)
+        font.pixelSize: Type.sizeIn(root.factsSize * root.unit, Tokens.textScale, Tokens.faceText, Font.Normal)
         font.family: Tokens.faceText
         font.letterSpacing: 0.08 * root.factsSize * root.unit
+        font.capitalization: Font.AllUppercase
     }
 }

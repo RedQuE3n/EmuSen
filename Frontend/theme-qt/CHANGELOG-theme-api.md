@@ -16,6 +16,8 @@ or shadow. 1.3 is another piece's.
   singleton of the module, so an import of 1.0 finds it too.
 - **`consoleName`** (added to every game row): the console's name alone, the same name `facts` begins with, from the
   one owner of both (`qt-models/src/library.rs`); Eclipse's Home tile draws it under the title, as its board does.
+- **`Type.sizeIn(base, textScale, family, weight)`**: `size` for words drawn in a look's face at a weight, held to the floor
+  with that face's capitals, where `size` measures the application's (`EmuSen_Kit.md` §7.121). Eclipse's texts use it.
 - **`Words.name`**, **`Words.playedFacts(at, seconds)`**, **`Words.continueLine(console)`**: the program's name in its own
   case, "EmuSen", Eclipse's wordmark, where `title` stays "EMUSEN" for the other screens; a game's last play and its time
   played, "Last played yesterday · 3 h 20 min played"; and "Continue · Super Nintendo" (`qt-models/src/words.rs`). The host

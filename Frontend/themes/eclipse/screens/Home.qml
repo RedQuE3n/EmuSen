@@ -106,7 +106,7 @@ ThemeScreen {
                         font.capitalization: Font.AllUppercase
                         color: ink.rose
                         elide: Text.ElideRight
-                        font.pixelSize: Type.size(20 * design.unit, Tokens.textScale)
+                        font.pixelSize: Type.sizeIn(20 * design.unit, Tokens.textScale, Tokens.faceText, Font.DemiBold)
                         font.family: Tokens.faceText
                         font.weight: Font.DemiBold
                         font.letterSpacing: 0.22 * 20 * design.unit
@@ -123,7 +123,7 @@ ThemeScreen {
                         wrapMode: root.currentTile === null ? Text.WordWrap : Text.NoWrap
                         maximumLineCount: 2
                         elide: Text.ElideRight
-                        font.pixelSize: Type.size(112 * design.unit, Tokens.textScale)
+                        font.pixelSize: Type.sizeIn(112 * design.unit, Tokens.textScale, Tokens.faceText, Tokens.weightTitle)
                         font.family: Tokens.faceText
                         font.weight: Tokens.weightTitle
                         font.letterSpacing: -0.02 * 112 * design.unit
@@ -140,7 +140,7 @@ ThemeScreen {
                         text: root.resuming ? (Device.clock.length >= 0 ? Words.playedFacts(Session.pausedSince, Session.played) : "") : root.currentTile?.facts ?? ""
                         color: Tokens.muted
                         elide: Text.ElideRight
-                        font.pixelSize: Type.size(26 * design.unit, Tokens.textScale)
+                        font.pixelSize: Type.sizeIn(26 * design.unit, Tokens.textScale, Tokens.faceText, Tokens.weightSentence)
                         font.family: Tokens.faceText
                         font.weight: Tokens.weightSentence
                     }
@@ -185,7 +185,7 @@ ThemeScreen {
                         y: 790 * design.unit
                         text: Words.recentEntry
                         color: Tokens.text
-                        font.pixelSize: Type.size(28 * design.unit, Tokens.textScale)
+                        font.pixelSize: Type.sizeIn(28 * design.unit, Tokens.textScale, Tokens.faceText, Font.DemiBold)
                         font.family: Tokens.faceText
                         font.weight: Font.DemiBold
                     }
@@ -251,6 +251,8 @@ ThemeScreen {
                                 TileWords {
                                     unit: design.unit
                                     place: tile.index
+                                    // The tile's corners, which clip the shade on the board (Main:83).
+                                    radius: 18
                                     title: tile.title
                                     // The console alone, as the board's tile line draws {{t.system}} (Main:86).
                                     facts: tile.consoleName

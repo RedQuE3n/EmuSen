@@ -43,20 +43,21 @@ fn stored(platform: &Platform) -> String {
     settings["EmuSenTheme"].as_str().unwrap_or_default().to_owned()
 }
 
-/// A big-screen type token's size as the kit's `Tokens` draws it (`legible_type`, EmuSen_Kit.md §7.121).
-fn drawn_size(base: f64, text_scale: f64) -> f64 {
+/// A big-screen type token's size as the kit's `Tokens` draws it (`legible_type`, EmuSen_Kit.md §7.121), held with the capitals
+/// of `face`, the interface face the theme sets, at the rows' weight.
+fn drawn_size(base: f64, text_scale: f64, face: &str) -> f64 {
     use emusen_kit_core::tokens::{legible_type, Form, TypeScale};
     let all = TypeScale { display: base, title: base, strong: base, row: base, body: base, caption: base, glyph: base };
-    legible_type(Form::BigScreen, &all, text_scale, emusen_kit_qt::type_size::caps).row
+    legible_type(Form::BigScreen, &all, text_scale, |size| emusen_kit_qt::type_size::caps_in(face, 400, size)).row
 }
 
 /// Whether a token read as text is the value `theme.json` gives it: a colour as the same colour, a number as the same number,
 /// a type size as the kit's size of that base at the text scale in force, never under the legibility floor (EmuSen_Kit.md §7.121).
-fn holds(name: &str, read: &str, given: &str, text_scale: f64) -> bool {
+fn holds(name: &str, read: &str, given: &str, text_scale: f64, face: &str) -> bool {
     match (Colour::parse(given), given.parse::<f64>()) {
         (Some(colour), _) => Colour::parse(read) == Some(colour),
         (None, Ok(number)) => {
-            let want = if name.starts_with("font") { drawn_size(number, text_scale) } else { number };
+            let want = if name.starts_with("font") { drawn_size(number, text_scale, face) } else { number };
             read.parse::<f64>().is_ok_and(|r| (r - want).abs() < 1e-9)
         }
         _ => read == given,
@@ -126,12 +127,13 @@ fn qt_3_4_7_eclipse_is_listed_chosen_and_sets_every_override_on_both_engines() {
     let overrides = package.overrides();
     assert!(!overrides.is_empty() && overrides.iter().all(|(light, _, _)| !light), "dark overrides only");
     let text_scale = *scene.kit_tokens().expect("the program's tokens").text_scale();
+    let face = overrides.iter().find(|(_, name, _)| name == "faceInterface").map(|(_, _, family)| family.clone()).unwrap_or_default();
     let theirs = engine_tokens(&mut scene, "host.theme");
     let ours = program_tokens(&mut scene);
     for (engine, tokens) in [("the theme's engine", &theirs), ("the program's engine", &ours)] {
         for (_, name, value) in &overrides {
             let read = tokens.get(name).map(String::as_str).unwrap_or("(no such token)");
-            assert!(holds(name, read, value, text_scale), "{engine}: {name} is {read}, theme.json gives {value}");
+            assert!(holds(name, read, value, text_scale, &face), "{engine}: {name} is {read}, theme.json gives {value}");
         }
         for (name, value) in tokens.iter().filter(|(name, _)| !overrides.iter().any(|(_, n, _)| n == *name)) {
             assert_eq!(Some(value), kit.get(name), "{engine}: {name}, which Eclipse leaves, is the kit's");

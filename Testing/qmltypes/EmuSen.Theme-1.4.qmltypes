@@ -774,6 +774,16 @@ Module {
             Parameter { name: "base"; type: "double" }
             Parameter { name: "text_scale"; type: "double" }
         }
+        Method {
+            name: "sizeIn"
+            type: "double"
+            isMethodConstant: true
+            lineNumber: 26
+            Parameter { name: "base"; type: "double" }
+            Parameter { name: "text_scale"; type: "double" }
+            Parameter { name: "family"; type: "QString" }
+            Parameter { name: "weight"; type: "int" }
+        }
     }
     Component {
         file: "words.cxxqt.h"

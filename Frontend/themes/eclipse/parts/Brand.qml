@@ -50,7 +50,7 @@ Item {
         visible: root.named
         text: Words.name
         color: Tokens.text
-        font.pixelSize: Type.size(root.nameSize * root.unit, Tokens.textScale)
+        font.pixelSize: Type.sizeIn(root.nameSize * root.unit, Tokens.textScale, Tokens.faceText, Tokens.weightWordmark)
         font.family: Tokens.faceText
         font.weight: Tokens.weightWordmark
         font.letterSpacing: 0.02 * root.nameSize * root.unit

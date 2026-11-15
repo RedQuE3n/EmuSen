@@ -534,7 +534,10 @@ impl qobject::Tokens {
         let variant = kinds::token_variant(self.variant);
         let mine: Vec<(String, String)> =
             self.overrides.iter().filter(|(v, _, _)| *v == variant).map(|(_, name, value)| (name.clone(), value.clone())).collect();
-        let column = Column::themed(kinds::token_form(self.form), variant, self.text_scale, self.reduced_motion, &mine, &crate::type_size::caps);
+        // The rows' sizes are held with the capitals of the face they draw in: the look's interface face where it sets one.
+        let face = mine.iter().find(|(name, _)| name == "faceInterface").map(|(_, family)| family.clone()).unwrap_or_default();
+        let caps = |size: f64| crate::type_size::caps_in(&face, 400, size);
+        let column = Column::themed(kinds::token_form(self.form), variant, self.text_scale, self.reduced_motion, &mine, &caps);
         self.as_mut().rust_mut().apply(&column);
         self.announce();
     }

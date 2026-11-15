@@ -411,7 +411,11 @@ pub fn oracle(backend: &str) {
                 };
                 // The kit's rule for a look's size (EmuSen_Kit.md §7.121), then the whole pixel Qt draws a real size at.
                 let units = size * k;
-                let legible = emusen_kit_qt::type_size::legible(units, text_scale);
+                // In the face and weight the element draws, as Qt writes its font: "family,point size,pixel size,hint,weight,...".
+                let font = if row.part == "HelpBar" { read(&tree, &row.name, "labelFont") } else { read(&tree, &row.name, "font") };
+                let font: Vec<&str> = font.split(',').collect();
+                let (family, weight) = (font.first().copied().unwrap_or_default(), font.get(4).and_then(|w| w.parse::<i32>().ok()).expect("the font's weight"));
+                let legible = emusen_kit_qt::type_size::legible_in(units, text_scale, &family, weight);
                 let drawn = legible.round();
                 // The table says the same, so the tester reads each size where the element is listed.
                 let raised = legible > emusen_kit_core::tokens::scaled_text(units, text_scale);
@@ -419,7 +423,7 @@ pub fn oracle(backend: &str) {
                     differences.push(format!("{at}: {} the table gives {} {}, the rule {drawn} {raised}", row.name, row.drawn, row.raised));
                 }
                 if at.as_str() == "1280x800" {
-                    println!("type\t{}\t{size}\t{units:.3}\t{legible}\t{drawn}\t{}", row.name, if legible > emusen_kit_core::tokens::scaled_text(units, text_scale) { "raised" } else { "-" });
+                    println!("type\t{}\t{family} {weight}\t{size}\t{units:.3}\t{legible}\t{drawn}\t{}", row.name, if legible > emusen_kit_core::tokens::scaled_text(units, text_scale) { "raised" } else { "-" });
                 }
                 if have != drawn {
                     differences.push(format!("{at}: {} type {have} where the kit's rule gives {drawn} ({units:.3} on the board)", row.name));

@@ -4,13 +4,13 @@
 #   not-drawn (the program has nothing for it: the reason in "program"); open (waits on a ruling, named in "program").
 # checks: board pixels, converted by the test as value x canvas::DESIGN_HEIGHT / board_h. x, y, w, h: the item's box; right: the canvas's width less the
 #   box's right edge; cy: the box's vertical centre; below=item:gap: the top is that item's bottom plus gap; after=item:gap: the left is that
-#   item's right plus gap; font: the type's pixel size; ink: the words' colour;
+#   item's right plus gap; font: the type's pixel size, Type.size of the board's (R-20261115-14); ink: the words' colour;
 #   fill: the item's colour. A row with no checks is not drawn.
 element	board	board_h	program	status	item	checks	words
 the ground	EclipseLibrary:17	1200	Ink.ground (themes/eclipse/parts/Ink.qml), Home's shared ink	built	gridGround	fill=#0A1024	
-the blurred colour fields	EclipseLibrary:19	1200	Home's backdrop (Main:19)	home			
-the blurred colour fields	EclipseLibrary:20	1200	Home's backdrop (Main:20)	home			
-the corona disc at the left edge	EclipseLibrary:21	1200	Home's disc (Main:25), the kit's CoronaDisc (theme-qt/qml/CoronaDisc.qml)	home			
+the blurred colour fields	EclipseLibrary:19	1200	Home's backdrop (Main:19); the kit's Backdrop is merged (R-20261115-6), but the fields' colours are a game's art's (E10), and Home's parts as merged place none	open			
+the blurred colour fields	EclipseLibrary:20	1200	Home's backdrop (Main:20); the kit's Backdrop is merged (R-20261115-6), but the fields' colours are a game's art's (E10), and Home's parts as merged place none	open			
+the corona disc at the left edge	EclipseLibrary:21	1200	Home's disc (Main:25), the kit's CoronaDisc (theme-qt/qml/CoronaDisc.qml); Home's parts as merged carry no placing of it	open			
 the header's place	EclipseLibrary:23	1200	Home's header (Main:27); the top navigation's place (R-20261115-7)	home			
 the EmuSen mark	EclipseLibrary:25	1200	Home's Brand part (themes/eclipse/parts/Brand.qml), its name left out as the games board does	built	mark	x=96 w=34 h=34 cy=80	
 the breadcrumb's first step	EclipseLibrary:27	1200	nothing: Words holds no "Consoles" (theme-qt/src/words.rs:20-36); the breadcrumb is not drawn (R-20261115-7)	not-drawn			Consoles

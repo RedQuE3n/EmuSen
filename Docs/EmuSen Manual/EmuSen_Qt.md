@@ -1773,6 +1773,19 @@ record), listed by `listing::choices` once a read for both the Filter page and a
 the letters and the triggers; R-20261115-13, the list's kind and its empty words ("No favourites yet", "Nothing played
 yet", "No games found"). Under the reference nothing changes but the Filter page's Not played.
 
+**Shared parts and type.** The board's measure, the inks more than one screen draws, the mark, the status, the help line
+and the pills are Home's parts (§3.4.8). Every size of words is `Type.size` of the board's size at the player's text
+scale, so a size under the legibility floor is raised to the smallest that passes and a larger one keeps the board's
+(decided 2026-11-15 by the tester, R-20261115-14); the words are drawn in the application's face until the typeface
+piece lands.
+
+**Open.** A tile's title over a cover reads at 3.91:1 and 3.67:1 against theme-check's 4.5:1 at 1280x800, with the
+board's own foot (`EclipseLibrary:70`, Eclipse's `overArtScrim`) and the title's place (`EclipseLibrary:71`): the
+tester's to settle. Under theme-check's stillness check, the screen swaps one frame in two seconds once after it is
+placed, with nothing running; the grid's scroll position and the audit host's feed order were ruled out (the reference's
+grid, audited on the same tree, is still), and the cause is not known. The light variant's findings wait for the piece
+that judges a dark-only theme in light.
+
 **Not drawn**, each listed in the table: the breadcrumb (the top navigation's place, R-20261115-7), the genre and player
 chips and the facts list (the rows hold no genre, players, time played or states, and no words name them), the board's
 "Start" (the program's A is "Play"), the "VIEW" glyph (no button steps the sort), a game's place among the shown ("1 of

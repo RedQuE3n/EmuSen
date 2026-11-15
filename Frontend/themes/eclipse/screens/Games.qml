@@ -27,7 +27,7 @@ ThemeScreen {
             focus: true
             // A board pixel in canvas units, Board's.
             readonly property real px: board.unit
-            // A type size is held whole (QFont::setPixelSize takes an int), so each is the nearest whole unit.
+            // Every size of words is Type's: the board's at the player's text scale, never under the legibility floor.
             readonly property var focusedCell: cells.currentItem
             // No console has a game, so the library has none: the first-run state.
             readonly property bool noLibrary: Library.consoles.count === 0 && cells.count === 0 && !Browse.searched
@@ -131,8 +131,8 @@ ThemeScreen {
                             text: root.consoleText
                             wrapMode: Text.Wrap
                             color: shared.rose
-                            font.family: medium.font.family
-                            font.pixelSize: Math.round(18 * root.px)
+                            font.weight: Font.DemiBold
+                            font.pixelSize: Type.size(18 * root.px, Tokens.textScale)
                             font.capitalization: Font.AllUppercase
                             font.letterSpacing: 18 * 0.2 * root.px
                         }
@@ -144,8 +144,8 @@ ThemeScreen {
                             maximumLineCount: 3
                             elide: Text.ElideRight
                             color: Tokens.text
-                            font.family: medium.font.family
-                            font.pixelSize: Math.round(62 * root.px)
+                            font.weight: Font.DemiBold
+                            font.pixelSize: Type.size(62 * root.px, Tokens.textScale)
                             font.letterSpacing: -62 * 0.02 * root.px
                             lineHeight: 1.04
                         }
@@ -158,8 +158,8 @@ ThemeScreen {
                             maximumLineCount: 6
                             elide: Text.ElideRight
                             color: own.words
-                            font.family: regular.font.family
-                            font.pixelSize: Math.round(20 * root.px)
+                            font.weight: Font.Light
+                            font.pixelSize: Type.size(20 * root.px, Tokens.textScale)
                             lineHeight: 1.5
                         }
                         Row {
@@ -252,8 +252,8 @@ ThemeScreen {
                                     anchors.centerIn: parent
                                     text: chip.line
                                     color: chip.chosen ? Tokens.overAccent : own.chipWords
-                                    font.family: chip.chosen ? medium.font.family : regular.font.family
-                                    font.pixelSize: Math.round(21 * root.px)
+                                    font.weight: chip.chosen ? Font.DemiBold : Font.Normal
+                                    font.pixelSize: Type.size(21 * root.px, Tokens.textScale)
                                 }
                                 FocusRing {
                                     visible: chip.activeFocus
@@ -287,8 +287,7 @@ ThemeScreen {
                             anchors.centerIn: parent
                             text: Browse.sort
                             color: shared.help
-                            font.family: regular.font.family
-                            font.pixelSize: Math.round(21 * root.px)
+                            font.pixelSize: Type.size(21 * root.px, Tokens.textScale)
                         }
                         FocusRing {
                             visible: sortPill.activeFocus
@@ -330,8 +329,8 @@ ThemeScreen {
                                 anchors.centerIn: parent
                                 text: Browse.letter
                                 color: Tokens.overAccent
-                                font.family: medium.font.family
-                                font.pixelSize: Math.round(17 * root.px)
+                                font.weight: Font.DemiBold
+                                font.pixelSize: Type.size(17 * root.px, Tokens.textScale)
                             }
                         }
                         Rectangle {
@@ -348,8 +347,7 @@ ThemeScreen {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: root.lastLetter
                             color: shared.help
-                            font.family: regular.font.family
-                            font.pixelSize: Math.round(16 * root.px)
+                            font.pixelSize: Type.size(16 * root.px, Tokens.textScale)
                         }
                     }
                     GridView {
@@ -444,8 +442,8 @@ ThemeScreen {
                                 maximumLineCount: 2
                                 elide: Text.ElideRight
                                 color: Tokens.overArt
-                                font.family: medium.font.family
-                                font.pixelSize: Math.round(18 * root.px)
+                                font.weight: Font.DemiBold
+                                font.pixelSize: Type.size(18 * root.px, Tokens.textScale)
                                 lineHeight: 1.2
                             }
                             FocusRing {
@@ -472,8 +470,8 @@ ThemeScreen {
                             text: root.noLibrary ? Words.noGames : Browse.emptyWords
                             wrapMode: Text.Wrap
                             color: Tokens.text
-                            font.family: medium.font.family
-                            font.pixelSize: Math.round(84 * root.px)
+                            font.weight: Font.DemiBold
+                            font.pixelSize: Type.size(84 * root.px, Tokens.textScale)
                             font.letterSpacing: -84 * 0.02 * root.px
                             lineHeight: 1.04
                         }
@@ -484,8 +482,8 @@ ThemeScreen {
                             text: Words.addFolder
                             wrapMode: Text.Wrap
                             color: own.words
-                            font.family: regular.font.family
-                            font.pixelSize: Math.round(25 * root.px)
+                            font.weight: Font.Light
+                            font.pixelSize: Type.size(25 * root.px, Tokens.textScale)
                             lineHeight: 1.45
                         }
                     }
@@ -500,14 +498,6 @@ ThemeScreen {
             Board {
                 id: board
                 designHeight: canvas.designHeight
-            }
-            FontLoader {
-                id: regular
-                source: "qrc:/emusen/fonts/Barlow-Regular.ttf"
-            }
-            FontLoader {
-                id: medium
-                source: "qrc:/emusen/fonts/Barlow-Medium.ttf"
             }
         }
     }

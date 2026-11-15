@@ -54,6 +54,7 @@ fn same(a: f64, b: f64) -> bool {
 /// The differences between the rows given and the scene at the window's height `h` and width `w`, each a line; `states`
 /// names the rows held in this state (the games or the empty one).
 pub fn differences(scene: &mut Scene<'_>, rows: &[&Row], w: f64, h: f64) -> Vec<String> {
+    let text_scale = *scene.kit_tokens().expect("the program's tokens").text_scale();
     let tree = scene.tree();
     let unit = h / DESIGN_HEIGHT;
     let canvas_width = w / unit;
@@ -104,9 +105,9 @@ pub fn differences(scene: &mut Scene<'_>, rows: &[&Row], w: f64, h: f64) -> Vec<
                     };
                     (x.to_string(), ((a.x + a.w) / unit + units(gap)).to_string())
                 }
-                // A type size is the item's own pixel size in canvas units, which Qt holds whole (QFont::setPixelSize takes an
-                // int), so the board's size is the nearest whole unit.
-                "font" => (node.size.to_string(), units(value).round().to_string()),
+                // A type size is the item's own pixel size in canvas units: Type.size's of the board's, the kit's rule at the text
+                // scale in force and never under the legibility floor, as Qt holds it whole.
+                "font" => (node.size.to_string(), emusen_kit_qt::type_size::legible(units(value), text_scale).round().to_string()),
                 "ink" => {
                     let read = node.ink.clone().unwrap_or_default();
                     if Colour::parse(&read) != Colour::parse(value) {

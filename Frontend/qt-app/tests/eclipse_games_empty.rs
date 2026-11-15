@@ -52,8 +52,8 @@ fn qt_3_4_10_eclipses_games_view_with_no_game_is_the_empty_board_by_the_table() 
 
     let pictures = std::env::var_os("ECLIPSE_GAMES_PICTURES").map(std::path::PathBuf::from);
     let rows = table::built();
-    let held: Vec<&table::Row> = rows.iter().filter(|r| r.item.starts_with("empty") || r.element == "the empty ground").collect();
-    assert_eq!(held.len(), 4, "the empty board's rows");
+    let held: Vec<&table::Row> = rows.iter().filter(|r| r.empty_board() && r.state().is_none_or(|s| s == "no-library")).collect();
+    assert_eq!(held.len(), 6, "the empty board's rows");
     let mut report = Vec::new();
     for (w, h) in SIZES {
         scene.resize(w, h);

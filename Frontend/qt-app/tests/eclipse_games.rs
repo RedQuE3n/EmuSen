@@ -50,6 +50,15 @@ fn until_words(scene: &mut Scene<'_>, name: &str, words: &str) {
     assert_eq!(shown(scene, name).1, words, "{name}'s words");
 }
 
+/// The table's rows for a state, held once its words are shown, at the size the scene has.
+fn hold_state(scene: &mut Scene<'_>, state: &str) {
+    let rows = table::built();
+    let (held, item, words) = table::state_rows(&rows, state);
+    wait_for(scene, &item, "text", words, 2000);
+    let report = table::differences(scene, &held, 1280.0, 800.0);
+    assert!(report.is_empty(), "{state}: {}", report.join("\n"));
+}
+
 fn focused_name(scene: &mut Scene<'_>) -> String {
     let tree = scene.tree();
     scene.focus(&tree).map(|i| tree.nodes[i as usize].name.clone()).unwrap_or_default()
@@ -118,7 +127,7 @@ fn qt_3_4_10_eclipses_games_view_is_its_board_by_the_table_at_every_size() {
 
     let pictures = std::env::var_os("ECLIPSE_GAMES_PICTURES").map(std::path::PathBuf::from);
     let rows = table::built();
-    let held: Vec<&table::Row> = rows.iter().filter(|r| !r.item.starts_with("empty") && r.element != "the empty ground").collect();
+    let held: Vec<&table::Row> = rows.iter().filter(|r| !r.empty_board() && r.state().is_none()).collect();
     assert!(held.len() >= 6, "the games' rows: {}", held.len());
     let mut report = Vec::new();
     for (w, h) in SIZES {
@@ -186,8 +195,7 @@ fn qt_3_4_10_eclipses_games_view_is_its_board_by_the_table_at_every_size() {
     assert_eq!(focused_name(&mut scene), "gamesFilter.1");
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "gamesGrid", "count", "0", 2000);
-    wait_for(&mut scene, "emptyHeading", "text", emusen_qt_models::words::NO_GAMES_FOUND, 1000);
-    assert_eq!(scene.property("emptyHeading", "visible"), "true");
+    hold_state(&mut scene, "filter");
     assert_eq!(scene.property("emptyLine", "visible"), "false", "a library with games: no folder to add");
     assert_eq!(scene.property("emptyDisc", "visible"), "false");
     scene.pad(UiButton::Left);
@@ -200,6 +208,27 @@ fn qt_3_4_10_eclipses_games_view_is_its_board_by_the_table_at_every_size() {
     assert!(scene.focus_item(&tree, tree.find_named("gamesSort").unwrap()));
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "gamesSortWords", "text", emusen_qt_models::listing::Sort::LastPlayed.words(), 2000);
+
+    // Favourites and Recent with nothing in them, opened from Choose a console's places, each say their own words
+    // (R-20261115-13): no game here is a favourite or was played.
+    for (place, key, state) in [(1, emusen_qt_models::library::FAVOURITES, "favourites"), (2, emusen_qt_models::library::RECENT, "recent")] {
+        scene.pad(UiButton::Back);
+        wait_for(&mut scene, "screens", "shown", "Consoles", 2000);
+        let tree = scene.tree();
+        let tile = tree.find_named(&format!("tile.{place}")).expect("the place on Choose a console");
+        assert!(scene.focus_item(&tree, tile));
+        scene.pad(UiButton::Accept);
+        wait_for(&mut scene, "screens", "shown", "Grid", 2000);
+        assert_eq!(scene.property("screens", "key"), key);
+        wait_for(&mut scene, "gamesGrid", "count", "0", 2000);
+        hold_state(&mut scene, state);
+    }
+}
+
+#[test]
+#[should_panic(expected = "built, with no item or no check")]
+fn qt_3_4_10_the_table_refuses_a_built_row_with_no_check() {
+    table::rows_of("a part\tEclipseLibrary:1\t1200\tthe program's\tbuilt\tpart\t\t");
 }
 
 #[test]

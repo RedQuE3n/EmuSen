@@ -15,6 +15,8 @@ const SAME: f64 = 1e-3;
 /// One built row: the item it names, the board's height and its checks.
 pub struct Row {
     pub element: String,
+    /// The board's file and line: `EclipseLibrary:..` for the games, `EclipseEmpty:..` for the empty library.
+    pub board: String,
     pub item: String,
     pub board_h: f64,
     pub checks: Vec<(String, String)>,
@@ -25,17 +27,49 @@ impl Row {
     pub fn get(&self, key: &str) -> Option<&str> {
         self.checks.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
     }
+
+    /// The state the row is held in (`state=`), none for the screen as first shown.
+    pub fn state(&self) -> Option<&str> {
+        self.get("state")
+    }
+
+    /// Whether the row is the empty library's board's.
+    pub fn empty_board(&self) -> bool {
+        self.board.starts_with("EclipseEmpty:")
+    }
 }
 
-/// The built rows of the table whose item is given, in its order.
+/// The program's words a `says=` check names, each read from its owner.
+fn words_named(name: &str) -> &'static str {
+    use emusen_qt_models::words;
+    match name {
+        "TITLE" => words::TITLE,
+        "NO_GAMES" => words::NO_GAMES,
+        "NO_RECENT" => words::NO_RECENT,
+        "NO_FAVOURITES" => words::NO_FAVOURITES,
+        "NO_GAMES_FOUND" => words::NO_GAMES_FOUND,
+        "LETTER" => emusen_qt_models::help::LETTER.1,
+        other => panic!("says={other}: no such words of the program's"),
+    }
+}
+
+/// The built rows of the table, in its order; a row marked built with no item or no check is refused, since nothing
+/// would hold it.
 pub fn built() -> Vec<Row> {
-    TABLE
+    rows_of(TABLE)
+}
+
+/// As `built`, of any table's text.
+pub fn rows_of(table: &str) -> Vec<Row> {
+    table
         .lines()
         .filter(|l| !l.starts_with('#') && !l.is_empty() && !l.starts_with("element\t"))
         .map(|l| l.split('\t').collect::<Vec<_>>())
-        .filter(|f| f.len() > 6 && f[4] == "built" && !f[6].is_empty())
+        .filter(|f| f.len() > 4 && f[4] == "built")
+        .inspect(|f| assert!(f.len() > 6 && !f[5].is_empty() && !f[6].trim().is_empty(), "{}: built, with no item or no check to hold it", f[0]))
         .map(|f| Row {
             element: f[0].to_owned(),
+            board: f[1].to_owned(),
             item: f[5].to_owned(),
             board_h: f[2].parse().expect("a board height"),
             checks: f[6].split_whitespace().map(|c| c.split_once('=').map(|(k, v)| (k.to_owned(), v.to_owned())).expect("key=value")).collect(),
@@ -83,6 +117,25 @@ pub fn differences(scene: &mut Scene<'_>, rows: &[&Row], w: f64, h: f64) -> Vec<
         let (x, y, nw, nh) = (node.x / unit, node.y / unit, node.w / unit, node.h / unit);
         for (key, value) in &row.checks {
             let (read, want): (String, String) = match key.as_str() {
+                "state" => continue,
+                "says" => {
+                    // The item's own words, or those of a shown item inside it.
+                    let want = words_named(value);
+                    let inside = |n: &Node| {
+                        let mut at = Some(n);
+                        while let Some(a) = at {
+                            if a.id == node.id {
+                                return true;
+                            }
+                            at = tree.nodes.iter().find(|p| p.id == a.parent);
+                        }
+                        false
+                    };
+                    if !tree.nodes.iter().any(|n| n.visible && n.text.as_deref() == Some(want) && inside(n)) {
+                        out.push(format!("{}: {} does not say {want:?}", row.element, row.item));
+                    }
+                    continue;
+                }
                 "x" => (x.to_string(), units(value).to_string()),
                 "y" => (y.to_string(), units(value).to_string()),
                 "w" => (nw.to_string(), units(value).to_string()),
@@ -169,4 +222,11 @@ fn tiles(scene: &mut Scene<'_>, tree: &Tree, row: &Row, unit: f64, canvas_width:
         out.push(format!("{}: {columns} columns pass the right margin", row.element));
     }
     out
+}
+
+/// The rows held in the state named, the item their words are waited on, and those words; at least one row.
+pub fn state_rows<'r>(rows: &'r [Row], state: &str) -> (Vec<&'r Row>, String, &'static str) {
+    let held: Vec<&Row> = rows.iter().filter(|r| r.state() == Some(state)).collect();
+    let first = held.first().unwrap_or_else(|| panic!("the table's rows for the state {state}"));
+    (held.clone(), first.item.clone(), words_named(first.get("says").expect("a state's row says its words")))
 }

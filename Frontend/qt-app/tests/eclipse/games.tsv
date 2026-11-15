@@ -5,7 +5,8 @@
 # checks: board pixels, converted by the test as value x canvas::DESIGN_HEIGHT / board_h. x, y, w, h: the item's box; right: the canvas's width less the
 #   box's right edge; cy: the box's vertical centre; below=item:gap: the top is that item's bottom plus gap; after=item:gap: the left is that
 #   item's right plus gap; font: the type's pixel size, Type.size of the board's (R-20261115-14); ink: the words' colour;
-#   fill: the item's colour as drawn; colour: the item's own colour where others draw over it. A row with no checks is not drawn.
+#   fill: the item's colour as drawn; colour: the item's own colour where others draw over it. says=NAME: the item, or a shown item inside it, says the program's words of that name (table.rs reads each from its owner);
+#   state=NAME: the row is held only in the state the test of that name sets up. A built row with no check is refused by the reader.
 element	board	board_h	program	status	item	checks	words
 the ground	EclipseLibrary:17	1200	Ink.ground (themes/eclipse/parts/Ink.qml), Home's shared ink	built	gridGround	colour=#0A1024	
 the focused game's art, blurred	EclipseLibrary:19	1200	the kit's Backdrop (kit-qt/qml/Backdrop.qml:14) with the row's hero, which is its hero else its cover (theme-qt/src/view.rs:226); no art, no backdrop; the board's colour fields are sample art; blur 120 px and opacity 0.35 from the board's first field, the same on software (R-20261115-6), provisional, the tester's to judge	built	gamesBackdrop	x=0 y=0	
@@ -33,16 +34,16 @@ the filter chips	EclipseLibrary:58	1200	Browse.filters (theme-qt/src/browse.rs),
 the chosen chip	EclipseLibrary:58	1200	Tokens.accent, the chip of Browse.filter	built	gamesFilterGround.0	fill=#F6E7D8	
 the chosen chip's words	EclipseLibrary:58	1200	the choice's name, Words.between and its count, in Tokens.overAccent	built	gamesFilterWords.0	font=21 ink=#07080F	
 the next chip	EclipseLibrary:59	1200	the next choice, 14 px after the one before	built	gamesFilter.1	after=gamesFilter.0:14 y=150 h=48	Favourites · 12
-a chip's words at rest	EclipseLibrary:59	1200	GamesInk.chipWords (#E3E6F0, Home's Ink with its commit)	built	gamesFilterWords.1	font=21 ink=#E3E6F0	
+a chip's words at rest	EclipseLibrary:59	1200	Ink.tileFacts (themes/eclipse/parts/Ink.qml), the #E3E6F0 the boards give a tile's facts (Main:86) and a chip's words	built	gamesFilterWords.1	font=21 ink=#E3E6F0	
 the Not played filter	EclipseLibrary:60	1200	listing::choices' Not played (qt-models/src/listing.rs), the games with no played time (GameRow::played_at from the catalog's played record, qt-models/src/library.rs:290, :327); R-20261115-10	built	gamesFilter.2	y=150 h=48	Not played · 153
 the sort pill	EclipseLibrary:62	1200	Browse.sort, the List card's Sort in its words (qt-models/src/listing.rs:28-35); A steps it (Actions.stepSort, R-20261115-11)	built	gamesSort	right=96 y=150 h=48	Name, A to Z
-the sort's words	EclipseLibrary:62	1200	GamesInk.pillWords (#D8DBE6, Home's Ink with its commit); "A to Z" is not the program's	built	gamesSortWords	font=21 ink=#D8DBE6	
+the sort's words	EclipseLibrary:62	1200	Ink.help (themes/eclipse/parts/Ink.qml), the #D8DBE6 of the help line's words (Main:99); "A to Z" is not the program's	built	gamesSortWords	font=21 ink=#D8DBE6	
 the pill's VIEW glyph	EclipseLibrary:62	1200	nothing: no button steps the sort; A on the pill does	not-drawn			VIEW
 the games	EclipseLibrary:67	1200	Browse.games (theme-qt/src/browse.rs:39), in the order shown	built	gamesTile	x=660 y=236 w=206 h=170 gap=20 right=150 rows=4	
 a game's tile	EclipseLibrary:69	1200	the row's cover (view.rs:381), filling the tile as the board's art does; a game with no cover draws Tokens.surfaceRaised, the board's colours being invented	built	gamesTileCover.0	w=206 h=170	
-a game's foot	EclipseLibrary:70	1200	Tokens.overArtScrim, the kit's role for it (kit-core/src/tokens/palette.rs:38), which Eclipse sets to the board's rgba(4, 5, 10, 0.94) (themes/eclipse/theme.json)	built	gamesTileFoot.0	h=84	
+a game's foot	EclipseLibrary:70	1200	Home's TileWords part (themes/eclipse/parts/TileWords.qml): the board's 84 px fade to Tokens.overArtScrim (kit-core/src/tokens/palette.rs:38, Eclipse's rgba(4, 5, 10, 0.94) in themes/eclipse/theme.json), held from the title's top to the foot, so its height follows the title's lines (the board's 84 px is its least) so the title keeps 4.5:1 over any art (the tile's shared rule, provisional, the tester's to judge)	built	gamesTileShade.0	w=206	
 a game's title	EclipseLibrary:71	1200	the row's title (view.rs:380), in Tokens.overArt (#FFFFFF)	built	gamesTileTitle.0	font=18 ink=#FFFFFF	Aurora Drift
-the focus ring	EclipseLibrary:106	1200	the kit's FocusRing on the tokens (R-20261115-2, -3); the board's 4 px gap is the tokens' 3 px	built	gamesRing		
+the focus ring	EclipseLibrary:106	1200	the kit's FocusRing on the tokens (R-20261115-2, -3); the board's 4 px gap is the tokens' 3 px	built	gamesRing.0	w=206 h=170	
 a resting tile's shadow	EclipseLibrary:106	1200	the kit's shadow part a theme may use, Home's to build first (R-20261115-6); its place left	home			
 the letter rail	EclipseLibrary:76	1200	Browse.letters and Browse.letter (theme-qt/src/browse.rs; listing::letter_rows, qt-models/src/listing.rs:108); R-20261115-12	built	gamesRail	right=44 y=236 w=34 h=740	A  Z
 the focused game's letter	EclipseLibrary:76	1200	Browse.letter on Tokens.accent	built	gamesRailLetter	w=34 h=34 fill=#F6E7D8	A
@@ -50,22 +51,22 @@ the track	EclipseLibrary:76	1200	GamesInk.railTrack	built	gamesRailTrack	w=4 fil
 the last letter	EclipseLibrary:76	1200	the last of Browse.letters	built	gamesRailLast	font=16 ink=#D8DBE6	Z
 the rail's count	EclipseLibrary:76	1200	nothing: no words say a game's place among the shown	not-drawn			At A, 1 of 214
 the help bar's place	EclipseLibrary:82	1200	Home's HelpLine part, the frame's Help.entries(kind, {letters: true}) in Ink.help (qt-models/src/help.rs:127-134)	built	help	cy=1137	A Start  B Back  Y Favourite
-the letter pill	EclipseLibrary:88	1200	Help.entries(kind, {letters: true}), LT RT Letter (qt-models/src/help.rs LETTER), in Home's HelpLine	built	help		LT  RT  Letter
+the letter pill	EclipseLibrary:88	1200	Help.entries(kind, {letters: true}), LT RT Letter (qt-models/src/help.rs LETTER), in Home's HelpLine	built	help	says=LETTER	LT  RT  Letter
 the letter pill's count	EclipseLibrary:88	1200	nothing: no words say a game's place among the shown	not-drawn			· 1 of 214
 the empty ground	EclipseEmpty:17	1200	GamesInk.emptyGround (themes/eclipse/parts/GamesInk.qml), the empty state's own	built	gridGround	colour=#05060B	
 the rose field	EclipseEmpty:19	1200	the blurred backdrop is a kit part Home builds first (R-20261115-6); its rose is of no game	open			
 the waiting disc	EclipseEmpty:20	1200	the kit's CoronaDisc (theme-qt/qml/CoronaDisc.qml) on Eclipse's corona tokens; the board's three glows are not the tokens'	built	emptyDisc	right=190 y=250 w=600 h=600	
-the header	EclipseEmpty:22	1200	Home's Brand part with Words.title (qt-models/src/words.rs:5), which is "EMUSEN" where the board writes "EmuSen"	built	wordmark		EmuSen
+the header	EclipseEmpty:22	1200	Home's Brand part with Words.title (qt-models/src/words.rs:5), which is "EMUSEN" where the board writes "EmuSen"	built	wordmark	says=TITLE	EmuSen
 the empty heading	EclipseEmpty:29	1200	Words.noGames (qt-models/src/words.rs:63)	built	emptyHeading	x=96 y=250 w=880 font=84 ink=#F4F1EC	No games yet
-the empty line	EclipseEmpty:30	1200	Words.addFolder (qt-models/src/words.rs:66), the program's words for it (decided 2026-11-13); the board's sentence is not the program's; ink GamesInk.words	built	emptyLine	x=96 below=emptyHeading:14 w=880 font=25 ink=#C9CDDB	Show EmuSen the folder your games are in. ...
+the empty line	EclipseEmpty:30	1200	Words.addFolder (qt-models/src/words.rs:66), the program's words for it (R-20261113-17); the board's sentence is not the program's; ink GamesInk.words	built	emptyLine	x=96 below=emptyHeading:14 w=880 font=25 ink=#C9CDDB	Show EmuSen the folder your games are in. ...
 the steps	EclipseEmpty:35	1200	nothing: no words of the program's for the three steps	not-drawn			1 Choose your games folder  One folder, with a folder inside it for each console  2 EmuSen reads it  It finds each game's console and gets a core for it  3 Art and facts, if you like  Fetched for the games it recognises; skip it and nothing is missing
 the Choose the folder button	EclipseEmpty:46	1200	nothing: no action of Actions opens the folder chooser (theme-qt/src/actions.rs), no such words	not-drawn			A  Choose the folder
 the Look around first button	EclipseEmpty:47	1200	nothing: no such words or action	not-drawn			X  Look around first
 
 # The empty states the program can be in, and which the boards draw.
-no game in the library	EclipseEmpty:29	1200	the places' counts 0 (qt-models/src/library.rs:369) and no console row (library.rs:389); reached by Choose a console's shelves (themes/emusen/screens/Consoles.qml:509)	built	emptyHeading		
+no game in the library	EclipseEmpty:29	1200	the places' counts 0 (qt-models/src/library.rs:369) and no console row (library.rs:389); reached by Choose a console's shelves (themes/emusen/screens/Consoles.qml:509)	built	emptyHeading	state=no-library says=NO_GAMES	
 a console with no game	none	1200	never a row (qt-models/src/library.rs:389-391), so never opened	not-drawn			
-Favourites with none	EclipseEmpty:29	1200	games_of_at's filter (qt-models/src/library.rs:278); Browse.emptyWords (qt-models/src/listing.rs empty_words, R-20261115-13) in the empty heading's style	built	emptyHeading		No favourites yet
-Recent with none	EclipseEmpty:29	1200	recent_of (qt-models/src/library.rs:271-272); Browse.emptyWords (qt-models/src/listing.rs empty_words, R-20261115-13) in the empty heading's style	built	emptyHeading		Nothing played yet
-a search with none	EclipseEmpty:29	1200	listing::shown's words (qt-models/src/listing.rs:73); Browse.emptyWords (qt-models/src/listing.rs empty_words, R-20261115-13) in the empty heading's style	built	emptyHeading		No games found
-a List card filter with none	EclipseEmpty:29	1200	listing::shown's favourites and collection (qt-models/src/listing.rs:71-73); Browse.emptyWords (qt-models/src/listing.rs empty_words, R-20261115-13) in the empty heading's style	built	emptyHeading		No games found
+Favourites with none	EclipseEmpty:29	1200	games_of_at's filter (qt-models/src/library.rs:278); Browse.emptyWords (qt-models/src/listing.rs empty_words, R-20261115-13) in the empty heading's style	built	emptyHeading	state=favourites says=NO_FAVOURITES	No favourites yet
+Recent with none	EclipseEmpty:29	1200	recent_of (qt-models/src/library.rs:271-272); Browse.emptyWords (qt-models/src/listing.rs empty_words, R-20261115-13) in the empty heading's style	built	emptyHeading	state=recent says=NO_RECENT	Nothing played yet
+a search with none	EclipseEmpty:29	1200	listing::shown's words (qt-models/src/listing.rs:73); Browse.emptyWords (qt-models/src/listing.rs empty_words, R-20261115-13) in the empty heading's style	built	emptyHeading	state=search says=NO_GAMES_FOUND	No games found
+a List card filter with none	EclipseEmpty:29	1200	listing::shown's favourites and collection (qt-models/src/listing.rs:71-73); Browse.emptyWords (qt-models/src/listing.rs empty_words, R-20261115-13) in the empty heading's style	built	emptyHeading	state=filter says=NO_GAMES_FOUND	No games found

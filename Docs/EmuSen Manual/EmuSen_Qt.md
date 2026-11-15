@@ -1848,13 +1848,15 @@ scale, so a size under the legibility floor is raised to the smallest that passe
 (decided 2026-11-15 by the tester, R-20261115-14); the words are drawn in the application's face until the typeface
 piece lands.
 
-**Open.** A tile's title over a cover reads at 3.91:1 and 3.67:1 against theme-check's 4.5:1 at 1280x800, with the
-board's own foot (`EclipseLibrary:70`, Eclipse's `overArtScrim`) and the title's place (`EclipseLibrary:71`), and at
-2.20:1 and 2.08:1 once `Type.size` raises the title so that a longer one wraps to two lines into the foot's clear half:
-the tester's to settle. Under theme-check's stillness check, the screen swaps one frame in two seconds once after it is
-placed, with nothing running; the grid's scroll position and the audit host's feed order were ruled out (the reference's
-grid, audited on the same tree, is still), and the cause is not known. The light variant's findings wait for the piece
-that judges a dark-only theme in light.
+**Open.** theme-check's loaded step on Eclipse in every state it has (`--states all`, the gate's five sizes, the dark
+variant alone, as the package lists; measured 2026-11-15 offscreen on the software backend by theme-audit's
+`qt_3_7_eclipse_passes_the_loaded_step_in_every_state_it_has`) gives 34 findings, and the test is red on them. A tile's
+title passes since the tile takes Home's shared foot (`parts/TileWords.qml`), whose shade holds under its two lines. On
+the games view, the Game page button's words over the disc's rim read 3.54:1 at 1280x800 and 1920x1080 and 3.80:1 at
+1920x1200 and 3840x2160 against 4.5:1, in the default, `long`, `norecent`, `pressed` and `one-console` states (20
+lines). On Home, in `empty` and `norecent` alike: the title is cut with an ellipsis at all five sizes, the pad does not
+reach Search and a click at the frame's centre hits the frame, both at 1280x800 (14 lines). Each is the tester's to
+settle. The stillness check gave no finding in this run.
 
 **Not drawn**, each listed in the table: the board's two colour fields (sample art standing for the focused game's), the breadcrumb (the top navigation's place, R-20261115-7), the genre and player
 chips and the facts list (the rows hold no genre, players, time played or states, and no words name them), the board's
@@ -1864,9 +1866,14 @@ chips and the facts list (the rows hold no genre, players, time played or states
 
 **Proof.** qt-models' `listing_choices.rs` (Not played, the choices and the Filter page, the empty words, the kinds, the
 letters' help entry); theme-qt's `qml.rs` (every help list with its flags, the new actions) and `surface.rs`; qt-app's
-`eclipse_games.rs` (22 games, a tall, a wide and a square cover: every built row at each of the gate's sizes, the pad's moves, the triggers, the chips, the empty words of a filter, the sort) and
-`eclipse_games_empty.rs` (the empty board's rows at each size); theme-check's loaded step on Eclipse for the theme's fit,
-contrast and walk; `eclipse_games_gpu.rs`, a card job, draws both for the pictures when a folder is named.
+`eclipse_games.rs` (22 games, a tall, a wide and a square cover: every built row at each of the gate's sizes, the pad's
+moves, the triggers, the chips, the empty words of a filter, of Favourites and of Recent, the sort; a built row with no
+check is refused by the table's reader), `eclipse_games_lists.rs` (a game played, three never played and one in a
+collection: Not played and the collection pressed with their lists and counts, the filter, sort and letter set on the
+List card and read in the games view and the reverse, a search with none, and the collections read once for each change
+of them, not on a move of the focus) and `eclipse_games_empty.rs` (the empty board's rows at each size); theme-audit's
+`qt_3_7_eclipse_passes_the_loaded_step_in_every_state_it_has` for the theme's fit, contrast and walk;
+`eclipse_games_gpu.rs`, a card job, draws both for the pictures when a folder is named.
 
 ### 3.5 Loading and the sandbox
 

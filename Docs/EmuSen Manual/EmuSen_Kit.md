@@ -4144,7 +4144,10 @@ Gaussian function"; w3.org/TR/filter-effects-1, read 2026-11-15).
   blur)". It says that the multiplier "extends the blur radius, but decreases the blur quality" and is "more performant
   ... for a bigger blur radius than blurMax". It gives no formula for either. The radius is read as a box-shadow's blur
   radius, twice the deviation (CSS Backgrounds 3 §6.1.2). How close the result is to the Gaussian is printed by
-  `tests/backdrop_gpu.rs` beside the rule and is not asserted.
+  `tests/backdrop_gpu.rs` beside the rule and is not asserted. Measured 2026-11-15 on the desktop's RX 6800, a field of
+  blur 40 across its straight edge, the field's share against the rule's: 0.92/0.84 40 inside, 0.46/0.50 at the edge,
+  0.17/0.31 20 past it, 0.06/0.16 at 40, 0.006/0.023 at 80. The card's blur is narrower than the CSS filter's, about
+  half its reach. Reading MultiEffect's radius as the deviation itself, not twice it, was not measured.
 - *On the software backend*, which renders no shader effect, each field is drawn unblurred at its own opacity, and a
   picture is drawn unblurred at `sourceOpacity` (R-20261115-6: "the same colours dimmed and unblurred"). A field's opacity
   is the board's own figure for it (`Main.dc.html:19`, 0.85, and so on). The boards give none for a picture, so a screen

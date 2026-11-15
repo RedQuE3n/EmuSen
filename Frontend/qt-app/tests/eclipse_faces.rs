@@ -41,8 +41,8 @@ fn drawn(tree: &emusen_qt_test::Tree, name: &str, row: Option<&str>) -> (String,
     (node.face.clone().unwrap_or_default(), node.drawn.clone().unwrap_or_default())
 }
 
-/// Settings ▸ Library ▸ Themes from Home, the theme at `index` in the list used, then back to the Library's rows.
-fn use_theme(scene: &mut Scene<'_>, down: usize, name: &str) {
+/// Settings ▸ Library from Home, its rows shown.
+fn open_library(scene: &mut Scene<'_>) {
     for _ in 0..20 {
         let tree = scene.tree();
         if scene.focus(&tree).map(|i| tree.nodes[i as usize].name.clone()).as_deref() == Some("place.0") {
@@ -59,18 +59,21 @@ fn use_theme(scene: &mut Scene<'_>, down: usize, name: &str) {
         scene.pad(UiButton::PageDown);
     }
     wait_for(scene, "settingsModel", "section", "4", 1000);
+}
+
+/// From the Library's first row, Themes, Eclipse used, and back to the Library's rows.
+fn use_eclipse(scene: &mut Scene<'_>) {
     scene.pad(UiButton::Down);
     scene.pad(UiButton::Down);
     wait_for(scene, "settingsModel", "focused", "2", 1000);
     scene.pad(UiButton::Accept);
     wait_for(scene, "screens", "shown", "Themes", 2000);
     wait_for(scene, "themesModel", "name", "EmuSen", 5000);
-    for _ in 0..down {
-        scene.pad(UiButton::Down);
-    }
-    wait_for(scene, "themesModel", "name", name, 2000);
+    scene.pad(UiButton::Down);
+    wait_for(scene, "themesModel", "name", "Eclipse", 2000);
     scene.pad(UiButton::Accept);
     wait_for(scene, "themesModel", "findings", "In use.", 3000);
+    wait_for(scene, "host.theme", "ready", "true", 3000);
     scene.pad(UiButton::Back);
     wait_for(scene, "screens", "shown", "Settings", 2000);
 }
@@ -90,15 +93,14 @@ fn kit_7_117_eclipse_draws_sora_and_its_codes_in_jetbrains_mono_and_the_referenc
     let home = scene.tree();
     assert_eq!(drawn(&home, "wordmark", None), ("Barlow Condensed".into(), "Barlow Condensed".into()), "the reference's wordmark");
     assert_eq!(drawn(&home, "homeStatus", None), ("Barlow".into(), "Barlow".into()), "the reference's status line");
-    use_theme(&mut scene, 0, "EmuSen");
+    open_library(&mut scene);
     let rows = scene.tree();
     let (asked, label) = drawn(&rows, "label", Some("ROM folder"));
     assert_eq!(asked, platform, "the reference's row asks for the application's font, as a text naming none does");
     assert_eq!(drawn(&rows, "value", Some("ROM folder")), (platform.clone(), label.clone()), "the reference's path in the same face");
 
     // Eclipse: every role in Sora but the codes, in JetBrains Mono; the families drawn, not only those asked for.
-    use_theme(&mut scene, 1, "Eclipse");
-    wait_for(&mut scene, "host.theme", "ready", "true", 3000);
+    use_eclipse(&mut scene);
     let rows = scene.tree();
     assert_eq!(drawn(&rows, "label", Some("ROM folder")), ("Sora".into(), "Sora".into()), "Eclipse's settings row");
     assert_eq!(drawn(&rows, "value", Some("ROM folder")), ("JetBrains Mono".into(), "JetBrains Mono".into()), "Eclipse's path, a code");
@@ -121,7 +123,7 @@ fn kit_7_117_eclipse_draws_sora_and_its_codes_in_jetbrains_mono_and_the_referenc
 
     // The reference again: each role as it was.
     assert!(scene.set_property("program", "theme", ""));
-    wait_for(&mut scene, "theme", "home", "false", 5000);
+    wait_for(&mut scene, "chosenTheme", "status", "Null", 5000);
     scene.wait(200);
     let home = scene.tree();
     assert_eq!(drawn(&home, "wordmark", None), ("Barlow Condensed".into(), "Barlow Condensed".into()), "the reference's wordmark again");

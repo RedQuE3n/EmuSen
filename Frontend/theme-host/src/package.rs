@@ -8,6 +8,8 @@ use emusen_theme_manifest::{parse, Screen, TokenOverride, TokenValue, Variant};
 pub struct Package {
     pub name: String,
     pub screens: Vec<Screen>,
+    /// The variants the theme is designed for, as `theme.json` lists them.
+    pub variants: Vec<Variant>,
     /// The token overrides `theme.json` names, each for a variant, which the host's program sets on the theme's engine and,
     /// for the chosen theme, on its own (decided by the tester, 2026-11-13).
     pub tokens: Vec<TokenOverride>,
@@ -21,7 +23,7 @@ pub fn read(text: &str) -> Result<Package, String> {
     if !refusing.is_empty() {
         return Err(refusing.join("\n"));
     }
-    Ok(Package { name: manifest.name, screens: manifest.screens, tokens: manifest.tokens })
+    Ok(Package { name: manifest.name, screens: manifest.screens, variants: manifest.variants, tokens: manifest.tokens })
 }
 
 impl Package {

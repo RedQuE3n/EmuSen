@@ -13,10 +13,10 @@ QStringList bundled_families()
         QStringList found;
         QDirIterator files(QStringLiteral(":/emusen/fonts"), { QStringLiteral("*.ttf") }, QDir::Files);
         while (files.hasNext()) {
-            const int id = QFontDatabase::addApplicationFont(files.next());
-            for (const QString& family : QFontDatabase::applicationFontFamilies(id))
-                if (!found.contains(family))
-                    found.append(family);
+            // A static weight's file also carries its legacy name ("Sora Light"); the first is its typographic family, FontLoader's.
+            const QStringList families = QFontDatabase::applicationFontFamilies(QFontDatabase::addApplicationFont(files.next()));
+            if (!families.isEmpty() && !found.contains(families.first()))
+                found.append(families.first());
         }
         return found;
     }();

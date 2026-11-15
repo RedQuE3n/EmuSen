@@ -148,6 +148,8 @@ MenuRow
     property bool sectionEnd
     property real inset
     property font labelFont
+    property bool code
+    readonly property font valueFont
     property bool overRaised
     readonly property size stepMark
     readonly property size openMark

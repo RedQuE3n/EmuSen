@@ -3977,23 +3977,25 @@ or it has no blur and no spread (such a glow lies under its box alone).
   blur still has its one pixel of edge. Its `blur` is the token times `cardBlur`, the share measured below; the page
   suggests 1.2 × the CSS blur "for a closer match". No canvas is painted on the card.
 - *On the software backend*, which renders no shader effect (doc.qt.io, "Qt Quick Software Adaptation": "ShaderEffect
-  components in QtQuick 2 cannot be rendered by the Software adaptation"), it is a `Canvas`: the box grown by the spread,
-  its corners grown as §6.1.1 grows them (by the spread, times 1 + (r − 1)³ where the corner is smaller than the spread, r
-  their ratio), drawn a canvas's width away so only its `shadowBlur` shadow, offset back, lands, clipped to the canvas less
-  the box. Qt's page for `Context2D` gives no rule for `shadowBlur`; its source (`qquickcontext2dcommandbuffer.cpp`,
-  `ShadowImageMaker`, Qt 6.11) blurs with three passes of a square box 2 round(blur / 2) + 1 wide (`qt_image_boxblur`),
+  components in QtQuick 2 cannot be rendered by the Software adaptation"), it is the kit's `GlowPaint`
+  (`cpp/glow_paint.cpp`, a `QQuickPaintedItem`). It is painted in native code. The box is grown by the spread, its corners
+  grown as §6.1.1 grows them (by the spread, times 1 + (r − 1)³ where the corner is smaller than the spread, r their
+  ratio), and moved by the offsets. It is blurred by three box passes each way, 2 round(blur / 2) + 1 wide, as Qt's
+  Context2D shadow blurs (`qquickcontext2dcommandbuffer.cpp`, `ShadowImageMaker`, `qt_image_boxblur`, Qt 6.11). That is
   close to a Gaussian of σ = blur / 2, the CSS rule (§6.1.2: "a Gaussian blur with a standard deviation equal to half the
-  blur radius"). The canvas blurs once each time the glow's shape is made: its box, corners, spread, blur or offset. A change of colour
-alone recolours the kept shape and blurs nothing again (2026-11-15). The blurred shape is drawn in opaque ink and kept
-with `getImageData`. Each paint puts it back with `putImageData`, given all seven arguments, since Qt 6.11's does nothing
-with fewer (qtdeclarative v6.11.2, `qquickcontext2d.cpp`, `method_putImageData`: `if (argc < 7) RETURN_UNDEFINED()`).
-The paint then fills it with the ink through `source-in`, so each pixel is the ink at the ink's alpha times the shape's.
-Before, every colour change blurred again on the CPU (`QQuickContext2DCommandBuffer::replay` → `qt_image_boxblur`, found
-by the Consoles builder with gdb). Measured on 2026-11-15 on the desktop, on the software backend, with `cargo test
---release -p emusen-kit-qt --test glow_recolour -- --nocapture`, a glow of the disc's halo (113 blur, 30 spread) on a
-300-unit disc: 5 colour changes took 117,701 ms before (`EMUSEN_RECOLOURS=5`, the old part), and 50 took 1,795 ms after.
-`tests/glow_recolour.rs` holds one blur over fifty colours, a second blur on a new size, and the recoloured glow within one
-level of the glow painted afresh in that colour.
+  blur radius"). The sums are kept in 1/256ths and rounded, so six passes lose no level. A blur of σ 16 or wider is made at
+  1 / floor(σ / 16) of the item's size, with the box radius whose three passes have σ's variance, r (r + 1) = (σ / scale)².
+  The blurred shape is made once a shape and kept; a colour is laid over it once a colour; each paint draws the tinted
+  shape outside the box alone.
+
+**What it costs** (2026-11-15, the desktop, software backend, `cargo test --release -p emusen-kit-qt --test glow_cost --
+--nocapture`, a corona disc's halo of blur 113.33 and spread 30.67 units at a side of 1400 and 3780, the disc's 2100 board
+pixels in a 1280 × 800 and a 3840 × 2160 window). Before, Context2D's canvas blurred once a shape and recoloured through
+`getImageData` and `putImageData`: the first paint at 1400 took 136,746 ms and a recolour 30 ms. At 3780 it was stopped
+unfinished after about five minutes. With `GlowPaint`, a first paint takes 31 ms at 1400 and 99 ms at 3780, and a recolour 30 ms at both. The
+harness's own wait for a paint, a tree read a poll, is about 30 ms of each figure. `tests/glow_cost.rs` holds one
+blurred shape a first paint and none a recolour; `tests/glow_recolour.rs` holds one over fifty colours (50 colour
+changes, 1,799 ms).
 
 **The rule and the measures.** The CSS rule a glow is held to is the shape grown by the spread, blurred by a Gaussian of
 σ = blur / 2, outside the box alone, which the tests integrate over the box's own size and corners (`tests/common`). The

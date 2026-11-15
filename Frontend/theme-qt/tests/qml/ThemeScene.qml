@@ -26,6 +26,8 @@ Window {
         required property int groupIndex
         required property int groupSize
         required property int groupStart
+        required property int played
+        required property string glow
     }
     component PlaceRow: Item {
         required property string key
@@ -96,6 +98,7 @@ Window {
     readonly property string declinedHelp: declinedHelpList.count > 2 ? [(declinedHelpList.itemAt(0) as DeclinedRow).on, (declinedHelpList.itemAt(2) as DeclinedRow).on, gameHelpList.count].join("|") : ""
     readonly property string emptyWords: [Words.noGames, Words.noRecent, Words.noConsoles, Words.addFolder, Words.places, Words.continueEntry, Words.recentEntry].join("|")
     readonly property string paused: Words.pausedAgo(Session.pausedSince)
+    readonly property string playedPlace: [Words.played(1566), Words.place(2, 14)].join("|")
     property bool listEnabled: Actions.enabled("list")
     readonly property int rungs: Bells.ladder(3)
     readonly property string firstTitle: (gameList.count > 0 ? gameList.itemAt(0) as GameRow : null)?.title ?? ""

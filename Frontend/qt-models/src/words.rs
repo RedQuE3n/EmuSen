@@ -115,6 +115,11 @@ pub fn games(n: usize) -> String {
     counted(n, "game", "games")
 }
 
+/// How many of a console's games were played, in the form the facts give a count: "61 played".
+pub fn played(n: usize) -> String {
+    format!("{} played", grouped(n))
+}
+
 /// The Recently played place's line: the game played last, or none yet.
 pub fn last_played(title: Option<&str>) -> String {
     title.map_or_else(|| "Nothing played yet".to_owned(), |t| format!("Last: {t}"))

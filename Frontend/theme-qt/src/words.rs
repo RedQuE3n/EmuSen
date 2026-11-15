@@ -43,6 +43,12 @@ pub mod qobject {
         /// "1 game", "1,566 games".
         #[qinvokable]
         fn games(self: &ThemeWords, count: i32) -> QString;
+        /// How many of a console's games were played: "61 played".
+        #[qinvokable]
+        fn played(self: &ThemeWords, count: i32) -> QString;
+        /// Where an item stands among its list: "3 of 14", for the item at `index` from 0.
+        #[qinvokable]
+        fn place(self: &ThemeWords, index: i32, count: i32) -> QString;
         /// How long ago a time in seconds since 1970 was: "12 min ago".
         #[qinvokable]
         fn ago(self: &ThemeWords, at: f64) -> QString;
@@ -141,6 +147,14 @@ impl qobject::ThemeWords {
 
     pub fn games(&self, count: i32) -> QString {
         said(words::games(count.max(0) as usize))
+    }
+
+    pub fn played(&self, count: i32) -> QString {
+        said(words::played(count.max(0) as usize))
+    }
+
+    pub fn place(&self, index: i32, count: i32) -> QString {
+        said(emusen_qt_models::game_page::place(index.max(0) as usize, count.max(0) as usize))
     }
 
     pub fn ago(&self, at: f64) -> QString {

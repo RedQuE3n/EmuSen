@@ -21,7 +21,7 @@ pub enum Cell {
 pub type Row = Vec<Cell>;
 
 /// `Library.consoles`: each console with games, in the shelves' order.
-pub const CONSOLE_ROLES: [&str; 16] = [
+pub const CONSOLE_ROLES: [&str; 18] = [
     "key",
     "name",
     "displayName",
@@ -38,6 +38,8 @@ pub const CONSOLE_ROLES: [&str; 16] = [
     "groupIndex",
     "groupSize",
     "groupStart",
+    "played",
+    "glow",
 ];
 /// `Library.places`: Home's destinations in Home's order.
 pub const PLACE_ROLES: [&str; 7] = ["key", "name", "kind", "line", "attention", "count", "available"];
@@ -110,6 +112,11 @@ pub fn maker_groups(makers: &[&str]) -> Vec<(i32, i32, i32, i32)> {
     placed.into_iter().map(|(g, i)| (g, i, sizes[g as usize], starts[g as usize])).collect()
 }
 
+/// A console's own colour as `#RRGGBB`: the glow kit-core gives its body (`world::glow`), the one owner, so the Sky and a theme agree.
+pub fn glow_of(hue: f64) -> String {
+    emusen_kit_core::world::glow(hue, true).0.to_hex()
+}
+
 /// The consoles with games, each with the systems table's facts, the engine it runs now and its maker's group.
 pub fn consoles(view: &LibraryView) -> Vec<Row> {
     let shown: Vec<_> = view.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).collect();
@@ -135,6 +142,8 @@ pub fn consoles(view: &LibraryView) -> Vec<Row> {
                 Cell::Whole(index),
                 Cell::Whole(size),
                 Cell::Whole(start),
+                Cell::Whole(r.played as i32),
+                Cell::Text(glow_of(r.hue)),
             ]
         })
         .collect()

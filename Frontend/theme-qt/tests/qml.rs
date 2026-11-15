@@ -93,7 +93,7 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert_eq!(scene.property("scene", "secondPlace"), "Scraper", "the row changed in place");
     {
         let library = host::library(within(window)).unwrap();
-        for (list, roles) in [("consoles", 16), ("places", 7), ("shelves", 4), ("recent", 18), ("shelf", 18), ("favourites", 18), ("collections", 3)] {
+        for (list, roles) in [("consoles", 18), ("places", 7), ("shelves", 4), ("recent", 18), ("shelf", 18), ("favourites", 18), ("collections", 3)] {
             assert_eq!(library.list(list).map(|l| l.roles().len()), Some(roles), "{list}'s roles");
         }
     }
@@ -152,6 +152,7 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
         "No games yet|Nothing played yet|No consoles have games yet|Settings › Library adds a folder|PLACES|Continue|Recent"
     );
     assert!(scene.property("scene", "paused").starts_with("Paused "), "pausedAgo from the models' words");
+    assert_eq!(scene.property("scene", "playedPlace"), "1,566 played|3 of 14", "a console's played games and a place among a list, from the models' words");
     // Words.now holds the time the phrases are said against, as the program's held clock sets it (decided 2026-11-09).
     host::words(within(window)).unwrap().show_now(1_000_000.0);
     host::session(within(window)).unwrap().show(&SessionFacts {

@@ -22,6 +22,8 @@ struct Fake {
     /// The games hidden in games.db, and the player's settings.
     hidden: Vec<String>,
     settings: serde_json::Value,
+    /// When each played game was last played, by path.
+    played: Vec<(String, i64)>,
     fail: Mutex<Option<String>>,
 }
 
@@ -46,6 +48,9 @@ impl LibrarySource for Fake {
     }
     fn settings(&self) -> Result<serde_json::Value, String> {
         Ok(self.settings.clone())
+    }
+    fn played(&self, games: &[GameFile]) -> Result<Vec<(String, i64)>, String> {
+        Ok(self.played.iter().filter(|(p, _)| games.iter().any(|g| &g.path == p)).cloned().collect())
     }
     fn engines(&self, _: &[SystemRow]) -> Result<Vec<(String, Engine)>, String> {
         Ok(self.engines.clone())
@@ -116,6 +121,16 @@ fn the_places_come_first_then_each_console_with_games_in_the_table_s_order() {
     assert_eq!(rows[3].facts, "Maker · 1990 · 3 games · runs on Moon, an EmuSen core");
     let lines: Vec<&str> = rows[..3].iter().map(|r| r.status.as_str()).collect();
     assert_eq!(lines, ["5 games", "Hearts on every console", "Last: 2"], "the places' own words, the game played last by its file name");
+}
+
+#[test]
+fn a_console_s_row_counts_its_played_games() {
+    let mut source = fake();
+    *source.games.lock().unwrap() = games(&[("nes", 3), ("snes", 5)]);
+    source.played = vec![("/roms/snes/1".into(), 1_700_000_000), ("/roms/snes/4".into(), 1_700_000_100), ("/roms/nes/0".into(), 1_700_000_200)];
+    let rows = refresh(&source).unwrap().rows;
+    let played: Vec<(&str, usize, usize)> = rows.iter().filter(|r| r.kind == Some(Kind::Console)).map(|r| (r.key.as_str(), r.count, r.played)).collect();
+    assert_eq!(played, [("nes", 3, 1), ("snes", 5, 2)], "two of the Super Nintendo's five games were played, one of the NES's three");
 }
 
 #[test]

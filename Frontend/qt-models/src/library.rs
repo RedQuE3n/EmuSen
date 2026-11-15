@@ -143,6 +143,8 @@ pub struct LibraryRow {
     /// The grid's heading for the row: a place's short name, a console's name.
     pub heading: String,
     pub count: usize,
+    /// How many of a console's games were played: those with a last-played time in the catalogue (`Catalog::played`).
+    pub played: usize,
     pub hue: f64,
     pub body: String,
     pub maker: String,
@@ -384,8 +386,10 @@ pub fn rows(systems: &[SystemRow], catalog: &Catalog, engines: &[(String, Engine
             ..LibraryRow::default()
         })
         .collect();
+    let played: HashMap<&str, i64> = catalog.played.iter().map(|(p, at)| (p.as_str(), *at)).collect();
     for s in systems {
-        let count = catalog.games.iter().filter(|g| g.system.as_deref() == Some(s.id.as_str())).count();
+        let games = || catalog.games.iter().filter(|g| g.system.as_deref() == Some(s.id.as_str()));
+        let count = games().count();
         if count == 0 {
             continue;
         }
@@ -401,6 +405,7 @@ pub fn rows(systems: &[SystemRow], catalog: &Catalog, engines: &[(String, Engine
             status: words::games(count),
             facts: words::facts(&s.manufacturer, s.release_year, count, &runs_on),
             count,
+            played: games().filter(|g| played.get(g.path.as_str()).is_some_and(|at| *at > 0)).count(),
             hue: s.look.hue,
             body: s.look.body.clone(),
             maker: s.manufacturer.clone(),

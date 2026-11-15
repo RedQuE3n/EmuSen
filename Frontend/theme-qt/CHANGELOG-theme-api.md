@@ -3,6 +3,21 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.5, an addition: a console's played games (2026-11-15)
+
+Decided 2026-11-15 by the tester (R-20261115-8): each console's number of played games is added to what a theme may read.
+
+- **`Library.consoles`' `played`** (added role): how many of the console's games were played, a game counting as played
+  when the catalogue holds a last-played time for it (`Catalog::played`, `qt-models/src/library.rs`), the same rule as a
+  game row's `played`. Counted once, where the library's rows are built (`library::rows`), not per frame or per console list.
+- **`Library.consoles`' `glow`** (added role): the console's own colour as `#RRGGBB`, the glow kit-core gives its body
+  (`world::glow`), so a theme's corona and the Sky agree (R-20261115-9).
+- **`Words.played(n)`** ("61 played", `qt-models/src/words.rs`) and **`Words.place(index, count)`** ("3 of 14", the game
+  page's `place`, its one owner) (added).
+- The module is 1.5 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.5.*`.
+  A role is no QML type, so the qmldir's types keep their minors and `import EmuSen.Theme 1.0` finds what it found before.
+  1.3 and 1.4 are taken by the typeface and the backdrop and glow parts, which come with their own pieces.
+
 ## 1.2, an addition: the corona disc and the planet mark (2026-11-14)
 
 Decided 2026-11-14 by the tester (R-20261114-16): Eclipse's shared parts are kit parts, exported to themes as an addition.

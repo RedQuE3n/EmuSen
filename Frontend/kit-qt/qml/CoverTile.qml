@@ -103,17 +103,15 @@ Item {
                 }
             }
         }
-        Rectangle {
+        Kit.FocusRing {
             objectName: "coverRing"
             visible: root.lit
-            x: root.paintedX - 7
-            y: root.paintedY - 7
-            width: root.paintedWidth + 14
-            height: root.paintedHeight + 14
-            radius: Kit.Tokens.tileRadius + 4
-            color: "transparent"
-            border.color: Kit.Tokens.accent
-            border.width: Kit.Tokens.ringThickness
+            x: root.paintedX
+            y: root.paintedY
+            width: root.paintedWidth
+            height: root.paintedHeight
+            radius: Kit.Tokens.tileRadius
+            placement: Kit.FocusRing.Gapped
         }
     }
 }

@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use emusen_kit_core::motion::{breathes_if, movement, Curve, MotionToken, BREATH_DELAY, BREATH_LOW, BREATH_PERIOD};
-use emusen_kit_core::tokens::{self, Colour, ColourToken, FocusMarks, Form, Shadow, Spacing, TypeScale, Variant};
+use emusen_kit_core::tokens::{self, Colour, ColourToken, Corona, FocusMarks, Form, Shadow, Spacing, TypeScale, Variant};
 
 /// QEasingCurve::Type's number for a kit-core curve, so QML binds `easing.type` to a token.
 pub fn easing_type(curve: Curve) -> i32 {
@@ -27,6 +27,9 @@ pub struct Column {
     pub spacing: Spacing,
     pub focus: FocusMarks,
     pub shadow: Shadow,
+    pub corona: Corona,
+    /// The corona's rim, glow and halo colours, in `Corona::COLOUR_PROPERTIES`' order.
+    pub corona_colours: [Colour; 3],
     pub durations: [i32; 8],
     pub fades: [i32; 8],
     pub curves: [i32; 8],
@@ -43,6 +46,7 @@ struct Bases {
     spacing: Spacing,
     focus: FocusMarks,
     shadow: Shadow,
+    corona: Corona,
     durations: [i32; 8],
     fades: [i32; 8],
     curves: [i32; 8],
@@ -58,6 +62,7 @@ enum Slot<'a> {
     Pair(&'a mut f64, &'a mut f64),
     Whole(&'a mut i32),
     Switch(&'a mut bool),
+    Colour(&'a mut Colour),
 }
 
 impl Bases {
@@ -69,6 +74,7 @@ impl Bases {
             spacing: tokens::spacing(form),
             focus: tokens::focus_marks(form),
             shadow: tokens::raised_shadow(form),
+            corona: tokens::corona(form),
             durations: nominal,
             fades: nominal,
             curves: MotionToken::ALL.map(|token| easing_type(token.curve())),
@@ -82,7 +88,7 @@ impl Bases {
     /// The base a `Tokens` property is made from; the colours are the palette's (`ColourToken::named`).
     fn slot(&mut self, property: &str) -> Option<Slot<'_>> {
         use MotionToken as M;
-        let (t, sp, f, sh) = (&mut self.type_scale, &mut self.spacing, &mut self.focus, &mut self.shadow);
+        let (t, sp, f, sh, co) = (&mut self.type_scale, &mut self.spacing, &mut self.focus, &mut self.shadow, &mut self.corona);
         let i = Column::slot;
         Some(match property {
             "fontDisplay" => Slot::Number(&mut t.display),
@@ -106,6 +112,7 @@ impl Bases {
             "tileGap" => Slot::Number(&mut sp.tile_gap),
             "rowRadius" => Slot::Number(&mut sp.row_radius),
             "tileRadius" => Slot::Number(&mut sp.tile_radius),
+            "buttonRadius" => Slot::Number(&mut sp.button_radius),
             "safeAreaX" => Slot::Pair(&mut sp.safe_area.left, &mut sp.safe_area.right),
             "safeAreaY" => Slot::Pair(&mut sp.safe_area.top, &mut sp.safe_area.bottom),
             "ringThickness" => Slot::Number(&mut f.ring_thickness),
@@ -113,10 +120,20 @@ impl Bases {
             "barWidth" => Slot::Number(&mut f.bar_width),
             "tileScale" => Slot::Number(&mut f.tile_scale),
             "hoverBorder" => Slot::Number(&mut f.hover_border),
+            FocusMarks::GAP_COLOUR_PROPERTY => Slot::Colour(&mut f.gap_colour),
+            FocusMarks::GLOW_COLOUR_PROPERTY => Slot::Colour(&mut f.glow_colour),
+            "glowBlur" => Slot::Number(&mut f.glow_blur),
+            "glowSpread" => Slot::Number(&mut f.glow_spread),
+            "ringGapped" => Slot::Switch(&mut f.gapped),
             "shadowOpacity" => Slot::Number(&mut sh.opacity),
             "shadowOffsetX" => Slot::Number(&mut sh.offset_x),
             "shadowOffsetY" => Slot::Number(&mut sh.offset_y),
             "shadowBlur" => Slot::Number(&mut sh.blur),
+            "coronaRim" => Slot::Number(&mut co.rim),
+            "coronaGlowBlur" => Slot::Number(&mut co.glow_blur),
+            "coronaGlowSpread" => Slot::Number(&mut co.glow_spread),
+            "coronaHaloBlur" => Slot::Number(&mut co.halo_blur),
+            "coronaHaloSpread" => Slot::Number(&mut co.halo_spread),
             "instant" => Slot::Whole(&mut self.durations[i(M::Instant)]),
             "quick" => Slot::Whole(&mut self.durations[i(M::Quick)]),
             "enter" => Slot::Whole(&mut self.durations[i(M::Enter)]),
@@ -147,19 +164,18 @@ impl Bases {
         })
     }
 
-    /// A theme's value in place of the base, read as the token's kind; a value not of the kind is left alone.
-    fn set(&mut self, property: &str, value: &str) {
+    /// A theme's value in place of the base, read as the token's kind; false, and the base left alone, for a value not of the
+    /// kind or a property with no base here.
+    fn set(&mut self, property: &str, value: &str) -> bool {
         let number = value.parse::<f64>().ok().filter(|v| v.is_finite());
+        let read = |held: &mut f64| number.map(|v| *held = v).is_some();
         match self.slot(property) {
-            Some(Slot::Number(held)) => *held = number.unwrap_or(*held),
-            Some(Slot::Pair(a, b)) => {
-                if let Some(v) = number {
-                    (*a, *b) = (v, v);
-                }
-            }
-            Some(Slot::Whole(held)) => *held = value.parse::<i32>().unwrap_or(*held),
-            Some(Slot::Switch(held)) => *held = value.parse::<bool>().unwrap_or(*held),
-            None => {}
+            Some(Slot::Number(held)) => read(held),
+            Some(Slot::Pair(a, b)) => number.map(|v| (*a, *b) = (v, v)).is_some(),
+            Some(Slot::Whole(held)) => value.parse::<i32>().map(|v| *held = v).is_ok(),
+            Some(Slot::Switch(held)) => value.parse::<bool>().map(|v| *held = v).is_ok(),
+            Some(Slot::Colour(held)) => Colour::parse(value).map(|v| *held = v).is_some(),
+            None => false,
         }
     }
 }
@@ -184,6 +200,11 @@ impl Column {
         let colours: Vec<(ColourToken, Colour)> =
             given.iter().filter_map(|(name, value)| Some((ColourToken::named(name)?, Colour::parse(value)?))).collect();
         let shadow = given.iter().find(|(name, _)| name == Shadow::COLOUR_PROPERTY).and_then(|(_, value)| Colour::parse(value));
+        // The corona's colours where the theme gives none: the variant's accent, the theme's where it sets one.
+        let accent = colours.iter().find(|(token, _)| *token == ColourToken::Accent).map_or(tokens::colour(variant, ColourToken::Accent), |(_, c)| *c);
+        let corona_colours = Corona::COLOUR_PROPERTIES.map(|property| {
+            given.iter().find(|(name, _)| name == property).and_then(|(_, value)| Colour::parse(value)).unwrap_or(accent)
+        });
         let durations = MotionToken::ALL.map(|token| millis(movement(length(b.durations[Self::slot(token)]), reduced)));
         let fades = MotionToken::ALL.map(|token| millis(token.fade_of(length(b.fades[Self::slot(token)]), reduced)));
         Column {
@@ -193,6 +214,8 @@ impl Column {
             spacing: b.spacing,
             focus: b.focus,
             shadow: b.shadow,
+            corona: b.corona,
+            corona_colours,
             durations,
             fades,
             curves: b.curves,
@@ -202,6 +225,20 @@ impl Column {
             breathes: breathes_if(b.breathes, reduced),
         }
         .overridden(&colours, shadow)
+    }
+
+    /// The overrides `themed` cannot read, each as `name: value`: a value not of its token's kind, or a name that is no token.
+    /// The host checks only `theme.json`'s schema, so a malformed value reaches here and is said, not dropped unseen.
+    pub fn unread(form: Form, given: &[(String, String)]) -> Vec<String> {
+        let mut b = Bases::of(form);
+        let colour_named = |name: &str| {
+            ColourToken::named(name).is_some() || name == Shadow::COLOUR_PROPERTY || Corona::COLOUR_PROPERTIES.contains(&name)
+        };
+        given
+            .iter()
+            .filter(|(name, value)| if colour_named(name) { Colour::parse(value).is_none() } else { !b.set(name, value) })
+            .map(|(name, value)| format!("{name}: {value}"))
+            .collect()
     }
 
     fn slot(token: MotionToken) -> usize {

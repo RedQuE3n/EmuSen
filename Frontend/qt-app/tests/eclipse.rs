@@ -97,7 +97,8 @@ fn qt_3_4_7_eclipse_is_listed_chosen_and_sets_every_override_on_both_engines() {
     assert_eq!(scene.property("themesModel", "findings"), "In use.");
     scene.pad(UiButton::Down);
     wait_for(&mut scene, "themesModel", "name", "Eclipse", 2000);
-    assert_eq!(scene.property("themesModel", "line"), "By The EmuSen project · EmuSen.Theme 1.0 · dark");
+    let api = serde_json::from_str::<serde_json::Value>(ECLIPSE).expect("Eclipse's theme.json")["api"].as_str().unwrap_or_default().to_owned();
+    assert_eq!(scene.property("themesModel", "line"), format!("By The EmuSen project · EmuSen.Theme {api} · dark"));
     assert_eq!(scene.property("themesModel", "findings"), "Checked: nothing found.");
     assert_eq!(scene.property("themesModel", "usable"), "true");
 
@@ -127,6 +128,13 @@ fn qt_3_4_7_eclipse_is_listed_chosen_and_sets_every_override_on_both_engines() {
         for (name, value) in tokens.iter().filter(|(name, _)| !overrides.iter().any(|(_, n, _)| n == *name)) {
             assert_eq!(Some(value), kit.get(name), "{engine}: {name}, which Eclipse leaves, is the kit's");
         }
+    }
+
+    // Eclipse's line colour, decided 2026-11-14 by the tester (R-20261114-35): the boards' #5A6076 lifted to #5E647B, which
+    // keeps theme-check's 3:1 floor on surfaceRaised and inputSurface.
+    for (engine, tokens) in [("the theme's engine", &theirs), ("the program's engine", &ours)] {
+        let border = tokens.get("border").map(String::as_str).unwrap_or("(no border)");
+        assert_eq!(Colour::parse(border), Colour::parse("#5E647B"), "{engine}: Eclipse's border");
     }
 
     // The reference again: the program's tokens are the kit's once more, and the chosen theme's host is gone.

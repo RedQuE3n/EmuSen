@@ -934,9 +934,10 @@ card** (§0.7 there) and no theme colour is read into one. A card opens over the
 
 ### 3.2 What a theme sees: the `EmuSen.Theme` API **[M 2026-11-08]**
 
-`import EmuSen.Theme 1.0` gives a theme exactly these, each a QML singleton or type, each a view over `emusen-qt-models`
+`import EmuSen.Theme` gives a theme exactly these (a type added after 1.0 needs the minor that added it, as
+`Frontend/theme-qt/CHANGELOG-theme-api.md` lists), each a QML singleton or type, each a view over `emusen-qt-models`
 with the fields a theme may read and nothing more. The table is the module as built (`Frontend/theme-qt`, the crate
-`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.0.*` and held to this table by hand in
+`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.2.*` and held to this table by hand in
 `tests/surface.rs`. The amendments of 2026-11-08 are listed in `Frontend/theme-qt/CHANGELOG-theme-api.md`.
 
 | Name | Kind | What it holds |
@@ -1035,7 +1036,7 @@ left out of `Tokens.qml` (the surface test).
 
 ### 3.3 Versioning
 
-The API is the module's version, `EmuSen.Theme 1.0`. Until the first release every change, an addition, a change, a
+The API is the module's version, now `EmuSen.Theme 1.2` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
 removal or a rename, bumps the minor, and a role or action deprecated in one minor may be removed in any later one
 (decided 2026-11-11 by the tester, R-20261111-107, R-20261111-108, §5.3). After it, a minor adds singletons, roles,
 actions, cues or tokens and never removes or renames one; a role or action no longer meant is kept and marked
@@ -1639,7 +1640,7 @@ Decided 2026-11-11 by the tester: Eclipse is EmuSen's default look, and the pres
 theme API is not widened for that. A blank setting still gives the reference: which theme a blank setting gives changes
 only once Eclipse has screens of its own.
 
-**The package.** `Frontend/themes/eclipse/` holds `theme.json` alone: name Eclipse, `api` 1.0, the dark variant, no
+**The package.** `Frontend/themes/eclipse/` holds `theme.json` alone: name Eclipse, `api` 1.2 (its corona tokens are 1.2's, the newest it sets; its focus tokens are 1.1's), the dark variant, no
 screen of its own (`"screens": []`), no cue, no preview, and the token overrides below. With no screens, every screen is
 the reference's: Home, Choose a console and the games are drawn by the reference's host, whose engine keeps the kit's
 tokens, so only the program's own screens (Settings, the cards, the game page, the Pause Card, the tools, the questions
@@ -1651,7 +1652,7 @@ today shows the reference's screens, which would not show Eclipse. The manifest 
 `themes::built_in_folder` gives each one's folder in the resources, `qrc:/emusen/themes/<id>/`, which `qt-app/themes.qrc`
 holds file for file. `BuiltInThemes` (`qt-app/src/theme.rs`) reads each built-in's `theme.json` through Qt for the Themes
 tab and gives the window the reference's folder. In the tab, Eclipse's row follows EmuSen's: "Eclipse", "By The EmuSen
-project · EmuSen.Theme 1.0 · dark", and "Checked: nothing found." (built-ins are checked by the build's tests, here
+project · EmuSen.Theme 1.2 · dark" (the minor is the manifest's `api`), and "Checked: nothing found." (built-ins are checked by the build's tests, here
 theme-check's `qt_3_4_7_the_built_in_eclipse_package_is_clean`). Use stores the id `eclipse`; `themes::resolve` gives
 `Resolved::BuiltIn`, whose host folder is the resources', so the chosen theme's host loads it and `ThemeStyle` puts its
 overrides on the program's engine.
@@ -1670,6 +1671,7 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 |---|---|---|---|---|
 | surface | a screen's ground behind its frame (`kit-qt/qml/Frame.qml:37`) | the ground (`EclipseSettings:17`) | #07080F | #07080F |
 | surfaceRaised | the focused row (`MenuRow.qml:34`), a notice (`NoticeLayer.qml:60`) | the focused row (`EclipseSettings:94`), the notice (`EclipseDialog:23`) | #151826 | #151826 |
+| border | an unfilled button's outline (`ActionButton.qml:30`), a switch's track (`style/Switch.qml:24`) | the outline and the track (`EclipseDialog:40`, `EclipseSettings:94`) | #5A6076 | #5E647B |
 | inputSurface | a text field (`style/TextField.qml:37`) | a text field (`EclipseGameEdit:84`) | #11131C | #11131C |
 | scrim | the Home card's scrim (`qt-app/qml/MenuCard.qml:81`) | the scrim under the Menu card (`EclipseHomeCard:22`) | rgba(4, 5, 10, 0.62) | #9E04050A |
 | rule | the help bar's top line (`HelpBar.qml:63`) | the help bar's top line (`EclipsePause:57`) | rgba(246, 231, 216, 0.35) | #59F6E7D8 |
@@ -1683,8 +1685,14 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 | rowHeight | a row (`MenuRow.qml:28`) | a row (`EclipseSettings:42`) | 84 px | 56 |
 | rowRadius | a row's corners (`MenuRow.qml:33`) | a row's corners (`EclipseSettings:42`) | 20 px | 13.333… |
 | tileRadius | a notice's corners (`NoticeLayer.qml:59`) | the notice's corners (`EclipseDialog:23`) | 22 px | 14.666… |
-| ringThickness | the ring's width (`ActionButton.qml:39`) | the ring, 3 to 6 px out (`EclipseSettings:94`) | 3 px | 2 |
-| ringOffset | the gap inside the ring (`ActionButton.qml:36`) | the dark gap (`EclipseSettings:94`) | 3 px | 2 |
+| ringThickness | the ring's width (`FocusRing.qml`, kit §7.113) | the ring, 3 to 6 px out (`EclipseSettings:94`) | 3 px | 2 |
+| ringOffset | the gap inside the ring (`FocusRing.qml`) | the dark gap (`EclipseSettings:94`) | 3 px | 2 |
+| ringGapColor | the gap's colour (`FocusRing.qml`) | the dark gap (`EclipseSettings:94`) | #07080F | #07080F |
+| glowColor | the glow under the ring (`FocusRing.qml`) | the glow (`EclipseSettings:94`) | rgba(240, 180, 196, 0.4) | #66F0B4C4 |
+| glowBlur | the glow's blur (`FocusRing.qml`) | the glow's blur (`EclipseSettings:94`) | 40 px | 26.666… |
+| glowSpread | the glow's spread (`FocusRing.qml`) | the glow's spread (`EclipseSettings:94`) | 8 px | 5.333… |
+| ringGapped | every ring past its gap (`FocusRing.qml`, R-20261114-21) | every focus ring on the boards is past a gap (`EclipseSettings:94`) | the gapped ring | true |
+| buttonRadius | a button's corners (`ActionButton.qml:27`, `style/Button.qml:31`) | the dialog's buttons, 72 px high (`EclipseDialog:39`) | 36 px | 24 |
 | hoverBorder | an unfilled button's outline (`ActionButton.qml:29`) | the unfilled button's outline (`EclipseDialog:40`) | 2 px | 1.333… |
 | controlHeight | a button (`ActionButton.qml:22`) | the button (`EclipseDialog:39`) | 72 px | 48 |
 | helpBar | the help bar (`HelpBar.qml:43`) | the help bar (`EclipsePause:57`) | 76 px | 50.666… |
@@ -1693,13 +1701,20 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 | fontCaption | Settings' section names (`SettingsFrame.qml:77`) | the section names (`EclipseSettings:32`) | 23 px | 15.333… |
 | fontTitle | a question's title (`Question.qml:23`) | the question's title (`EclipseDialog:36`) | 44 px | 29.333… |
 | fontDisplay | the game's name on its page (`PageFrame.qml:151`) | the game's name (`EclipseGame:44`) | 104 px | 69.333… |
+| coronaColor | a corona disc's rim (`kit-qt/qml/CoronaDisc.qml`, §7.116 of EmuSen_Kit.md) | Home's disc, its rim (`Main:25`) | #F6E7D8 | #F6E7D8 |
+| coronaRim | the rim's width | the same (`Main:25`) | 2 px | 1.333… |
+| coronaGlowColor | the disc's near glow | the same, the second shadow (`Main:25`) | rgba(246, 214, 200, 0.6) | #99F6D6C8 |
+| coronaGlowBlur | the near glow's blur | the same (`Main:25`) | 44 px | 29.333… |
+| coronaGlowSpread | the near glow's spread | the same (`Main:25`) | 8 px | 5.333… |
+| coronaHaloColor | the disc's far glow | the same, the third shadow (`Main:25`) | rgba(236, 160, 186, 0.28) | #47ECA0BA |
+| coronaHaloBlur | the far glow's blur | the same (`Main:25`) | 170 px | 113.333… |
+| coronaHaloSpread | the far glow's spread | the same (`Main:25`) | 46 px | 30.666… |
 
 The colour of the notice's shadow is black on the board, the kit's own, so `shadowColor` is not overridden; `safeAreaX`
-(96 px, 64 units) is the kit's value too. Left at the reference's value, each for its reason:
+(96 px, 64 units) is the kit's value too. `border` is not the board's #5A6076, which is 2.83:1 on surfaceRaised and 2.97:1
+on inputSurface, under theme-check's 3:1 floor for graphics: decided 2026-11-14 by the tester (R-20261114-35), it is
+#5E647B, 3.01:1 and 3.16:1, and no board is edited. Left at the reference's value, each for its reason:
 
-- `border`: the boards' outline of an unfilled button and of a switch's track (#5A6076, `EclipseDialog:40`,
-  `EclipseSettings:94`) is 2.83:1 on surfaceRaised and 2.97:1 on inputSurface, under the kit's 3:1 floor for graphics;
-  theme-check refuses it. The tester's to rule on.
 - `voidFill`: the boards draw black behind a game (`EclipsePause:17`), which is the kit's.
 - `success`, `error`, `attention`: no board draws words in a tone colour; a status is a filled chip (`EclipseSettingsConsoles:78`).
 - `captionSurface`, `overArt`, `overArtScrim`: the game page's board draws the disc over its art, not the kit's caption and
@@ -1711,7 +1726,7 @@ The colour of the notice's shadow is black on the board, the kit's own, so `shad
   `tileScale`, `safeAreaY`, the durations, curves and breathing: no board element measured as the same thing.
 
 **Board colours with no kit role**, for later pieces, no role bent to carry them: the rose of the focus glow (#F3C9D2,
-rgba(240, 180, 196, 0.4) at `EclipseSettings:94`), the corona disc and its rim, a resting row's own surface and edge
+rgba(240, 180, 196, 0.4) at `EclipseSettings:94`), a resting row's own surface and edge
 (#0F111A, #22263A, `EclipseSettings:94`; the kit draws a resting row on the screen's ground), a resting switch's knob
 (#B9BED0, where the kit uses textStrong), the help bar's words (#D8DBE6, where the kit uses text), a pill's corners
 (36 px, where the kit's button uses rowRadius), and the blurred colour fields.

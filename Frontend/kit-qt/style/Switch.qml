@@ -20,8 +20,15 @@ T.Switch {
         y: control.topPadding + (control.availableHeight - height) / 2
         radius: height / 2
         color: control.checked ? Kit.Tokens.accent : Kit.Tokens.inputSurface
-        border.width: control.activeFocus ? Kit.Tokens.ringThickness : Kit.Tokens.hoverBorder
-        border.color: control.activeFocus ? Kit.Tokens.accent : Kit.Tokens.border
+        border.width: control.activeFocus && ring.onEdge ? ring.edgeWidth : Kit.Tokens.hoverBorder
+        border.color: control.activeFocus && ring.onEdge ? ring.edgeColor : Kit.Tokens.border
+        Kit.FocusRing {
+            id: ring
+            visible: control.activeFocus
+            anchors.fill: parent
+            radius: parent.radius
+            placement: Kit.FocusRing.Edge
+        }
         Rectangle {
             x: Math.max(0, Math.min(parent.width - width, control.visualPosition * parent.width - (width / 2)))
             y: (parent.height - height) / 2

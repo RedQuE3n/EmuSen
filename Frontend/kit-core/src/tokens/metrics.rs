@@ -199,6 +199,23 @@ pub fn scaled_text(base: f64, text_scale: f64) -> f64 {
     (base * clamp_text_scale(text_scale) * 2.0).round() / 2.0
 }
 
+/// A type size a look's design gives, at a text scale, never under the big screen's legibility floor: `scaled_text` of it,
+/// raised by the kit's half units to the smallest whose capitals pass the fit audit's floor (`audit::smallest_capitals`, less
+/// its slack), `caps_at(size)` being the capitals' height of the face the words are drawn in at that size (decided
+/// 2026-11-15 by the tester, R-20261115-14; EmuSen_Kit.md §7.120).
+pub fn legible_text(base: f64, text_scale: f64, caps_at: impl Fn(f64) -> f64) -> f64 {
+    let floor = crate::audit::smallest_capitals() - crate::audit::CAPS_SLACK;
+    let mut size = scaled_text(base, text_scale);
+    // A face that reports no capitals' height cannot be measured; its size stays the design's.
+    if caps_at(size) <= 0.0 {
+        return size;
+    }
+    while caps_at(size) < floor {
+        size += 0.5;
+    }
+    size
+}
+
 impl TypeScale {
     /// Every size of these bases at a text scale (`scaled_text`).
     pub fn scaled(&self, text_scale: f64) -> TypeScale {

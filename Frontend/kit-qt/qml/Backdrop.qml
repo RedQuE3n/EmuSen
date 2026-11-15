@@ -40,15 +40,16 @@ Item {
                 required property int index
                 required property Kit.BackdropField modelData
                 // The field's colour, as a reader asks it.
-                readonly property color paint: field.modelData.color
-                readonly property real radius: field.modelData.blur * root.radiusShare * root.pixelScale
+                // The list's entry can go before its delegate when a theme's engine is dropped (§7.116): read as none then.
+                readonly property color paint: field.modelData?.color ?? "transparent"
+                readonly property real radius: (field.modelData?.blur ?? 0) * root.radiusShare * root.pixelScale
                 objectName: "backdropField." + field.index
-                x: field.modelData.x
-                y: field.modelData.y
-                width: field.modelData.width
-                height: field.modelData.height
-                rotation: field.modelData.rotation
-                opacity: field.modelData.opacity
+                x: (field.modelData?.x ?? 0)
+                y: (field.modelData?.y ?? 0)
+                width: (field.modelData?.width ?? 0)
+                height: (field.modelData?.height ?? 0)
+                rotation: (field.modelData?.rotation ?? 0)
+                opacity: (field.modelData?.opacity ?? 0)
                 layer.enabled: !root.software && field.radius > 0
                 layer.effect: MultiEffect {
                     blurEnabled: true
@@ -60,11 +61,11 @@ Item {
                 Shape {
                     objectName: "backdropEllipse"
                     anchors.fill: parent
-                    visible: field.modelData.corner < 0
+                    visible: (field.modelData?.corner ?? -1) < 0
                     preferredRendererType: Shape.CurveRenderer
                     ShapePath {
                         strokeColor: "transparent"
-                        fillColor: field.modelData.color
+                        fillColor: field.paint
                         PathAngleArc {
                             centerX: field.width / 2
                             centerY: field.height / 2
@@ -77,9 +78,9 @@ Item {
                 Rectangle {
                     objectName: "backdropBox"
                     anchors.fill: parent
-                    visible: field.modelData.corner >= 0
-                    radius: Math.max(0, field.modelData.corner)
-                    color: field.modelData.color
+                    visible: (field.modelData?.corner ?? -1) >= 0
+                    radius: Math.max(0, (field.modelData?.corner ?? -1))
+                    color: field.paint
                 }
             }
         }

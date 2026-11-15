@@ -43,4 +43,5 @@ pub mod tones;
 pub mod tool;
 pub mod page;
 pub mod table;
+pub mod type_size;
 pub mod reset_gate;

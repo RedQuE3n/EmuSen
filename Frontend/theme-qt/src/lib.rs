@@ -11,6 +11,7 @@ pub mod glue;
 pub mod help;
 pub mod library;
 pub mod marks;
+pub mod type_size;
 pub mod rows;
 pub mod session;
 pub mod view;

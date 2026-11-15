@@ -2695,7 +2695,7 @@ held by `esde/tests/frame.rs` `a_menu_over_the_view_dims_the_help_and_swaps_the_
 The painter reads each file's frame count and first delay with Qt's `QImageReader` (`imageCount`, `nextImageDelay`
 after the first `read`; `esde-qt/cpp/gif_timing.cpp`, `gif.rs`) into `Data::animations` at each install, and draws the
 frame with an `AnimatedImage` that is never played, its `currentFrame` bound to the scene's frame (`Picture.qml`), as
-the picture shader's source. Qt's way chosen, and why: `Image.currentFrame` is documented to show another frame, but
+the picture shader's source (`Picture.frame` and `animated`, `PictureElement.frame`: EmuSen.Esde 1.7). Qt's way chosen, and why: `Image.currentFrame` is documented to show another frame, but
 QImageReader's GIF handler refuses `jumpToImage` (measured 2026-11-14 with Qt 6.11.2: `jumpToImage(2)` false, the read
 still frame 0), so an Image of a GIF stays on its first frame, which is what the mapping cases saw on 2026-11-13;
 `AnimatedImage` (QMovie, `jumpToFrame`) does reach every frame. Playing it on QMovie's own timer would pace each

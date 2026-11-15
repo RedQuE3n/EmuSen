@@ -7,6 +7,7 @@ extern crate emusen_qt;
 mod bindings;
 mod common;
 
+use common::console::choose_row;
 use common::{hold, sandbox, wait_for};
 use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
@@ -78,8 +79,7 @@ fn qt_7_7_h_the_pause_cards_controllers_page_seats_the_pad_and_names_the_profile
     wait_for(&mut scene, "pause", "current", "5", 1000);
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "pause", "title", "Game Options", 1000);
-    scene.pad(UiButton::Down);
-    scene.pad(UiButton::Accept);
+    choose_row(&mut scene, "Controllers");
     wait_for(&mut scene, "pause", "title", "Controllers", 1000);
     let mut waited = 0;
     while !scene.property("PaneSentence", "text").starts_with("Player 1 plays on the Simulated pad") && waited < 3000 {

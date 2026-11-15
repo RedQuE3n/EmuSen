@@ -13,6 +13,8 @@ public:
     ~HeldClock() override;
     std::int64_t at = 0;
     qint64 elapsed() const override { return at; }
+    // A running animation that is no pause, so a Timer steps with this clock rather than Qt's pause timer (EmuSen_Kit.md §7.36).
+    std::unique_ptr<QAbstractAnimation> keeper;
 };
 
 bool harness_show(QObject& window, int width, int height);

@@ -368,8 +368,8 @@ pub const NEXT: &str = "next";
 /// A card's declared action that closes it, as Start closes a card away from a game.
 pub const CLOSE: &str = "close";
 
-/// The second button an entry names: the shoulders are one entry, LB and RB, as the accepted render draws them, the
-/// triggers one, LT and RT, and the d-pad's Left and Right one entry.
+/// The second button an entry names: the shoulders are one entry, LB and RB, as the accepted render draws them, and
+/// the d-pad's Left and Right one entry; the triggers too, LT and RT.
 pub fn pair_of(button: UiButton) -> Option<UiButton> {
     match button {
         UiButton::PageUp => Some(UiButton::PageDown),

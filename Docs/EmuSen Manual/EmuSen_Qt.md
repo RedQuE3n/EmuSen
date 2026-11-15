@@ -1829,8 +1829,8 @@ At the foot's right, the maker and `Words.place` (game_page.rs's `place`, "3 of 
 The screen holds no layout logic. The kit's `GroupGridLayout` (EmuSen_Kit.md §7.120) gives each console its column and row in
 its maker's grid and its four neighbours there. Each plate and maker answers its own keys in its `Keys.onPressed`, from
 the index of the console each arrow, LT and RT leads to (a theme file declares no function, theme-check's rule), and Open
-answers Left with the plate last focused; giving the focus to a plate chooses its maker first, since a plate of another
-maker is not shown. The screen uses no `KeyNavigation`: Qt sets the reverse of each link it is given (seen
+answers Left with the plate last focused. A plate given the focus chooses its own maker, so a plate of a maker not shown
+yet takes it too (`forceActiveFocus` reaches an item that is not visible). The screen uses no `KeyNavigation`: Qt sets the reverse of each link it is given (seen
 2026-11-15: Open's Left, bound to the plate last focused, wrote Open as that plate's Right, so Right from the Game Boy
 went to Open past the Game Boy Color), and a not-shown target is skipped, so Down from a maker's last row did nothing in
 the running program. The eyebrow's letter spacing reads its own size, not the font it sets, which was a binding loop. Up and down walk the

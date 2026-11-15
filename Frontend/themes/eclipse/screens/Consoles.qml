@@ -171,14 +171,12 @@ ThemeScreen {
                                         root.chosenGroup = maker.group
                                 }
                                 // Right its first console, LT (the key Home) and RT (End) the makers' first consoles, Up and Down the
-                                // makers; a plate's maker is chosen before its focus, since another maker's plates are not shown.
+                                // makers; a plate focused chooses its own maker.
                                 Keys.onPressed: (event) => {
                                     const at = [Qt.Key_Right, Qt.Key_Home, Qt.Key_End, Qt.Key_Up, Qt.Key_Down].indexOf(event.key)
                                     const to = at >= 0 && at < 3 ? [maker.first, maker.before, maker.after][at] : -1
                                     const item = to >= 0 ? plates.itemAt(to) : (at === 3 ? makers.itemAt(maker.before) : (at === 4 ? makers.itemAt(maker.after) : null))
                                     event.accepted = item !== null
-                                    if (to >= 0)
-                                        root.chosenGroup = plates.itemAt(to).group
                                     item?.forceActiveFocus()
                                 }
                                 onActivated: plates.itemAt(maker.first).forceActiveFocus()
@@ -275,15 +273,13 @@ ThemeScreen {
                                 // Inside the grid by the layout's walk; past its left edge the maker, past its right Open.
                                 // The layout's walk, past the left edge the maker, past the right Open, Down from the last row the next
                                 // maker's first console; LT and RT the makers' first consoles (R-20261115-17); LB and RB are left to the
-                                // sections. No KeyNavigation: Qt writes back links of its own and skips a plate not shown (EmuSen_Qt.md §3.4.9).
+                                // sections. No KeyNavigation, which writes back links of its own and skips a plate not shown (EmuSen_Qt.md §3.4.9).
                                 Keys.onPressed: (event) => {
                                     const at = [Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down, Qt.Key_Home, Qt.Key_End].indexOf(event.key)
                                     const below = plate.downIndex >= 0 ? plate.downIndex : (plate.rowOf + 1 >= plate.rows ? plate.nextFirst : -1)
                                     const to = at >= 0 ? [plate.leftIndex, plate.rightIndex, plate.upIndex, below, plate.previousFirst, plate.nextFirst][at] : -1
                                     const item = to >= 0 ? plates.itemAt(to) : (at === 0 ? makers.itemAt(layout.firsts[plate.group] ?? -1) : (at === 1 ? openButton : null))
                                     event.accepted = item !== null
-                                    if (to >= 0)
-                                        root.chosenGroup = plates.itemAt(to).group
                                     item?.forceActiveFocus()
                                 }
                                 onActiveFocusChanged: {

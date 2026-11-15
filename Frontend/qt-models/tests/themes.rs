@@ -66,7 +66,10 @@ fn both_built_ins_come_first_and_a_blank_setting_still_gives_the_reference() {
     let ids: Vec<(&str, Kind)> = listing.rows.iter().map(|r| (r.id.as_str(), r.kind)).collect();
     assert_eq!(ids, [("emusen", Kind::EmuSen), ("eclipse", Kind::EmuSen), ("book", Kind::Esde), ("dawn", Kind::EmuSen)]);
     let eclipse = &listing.rows[1];
-    assert_eq!((eclipse.name.as_str(), eclipse.api.as_str(), eclipse.variants.as_str(), eclipse.preview.as_str()), ("Eclipse", "1.0", "dark", ""));
+    // The API version Eclipse's own manifest declares, its one owner.
+    let declared: serde_json::Value = serde_json::from_str(ECLIPSE_MANIFEST).expect("Eclipse's theme.json");
+    let api = declared["api"].as_str().expect("its api");
+    assert_eq!((eclipse.name.as_str(), eclipse.api.as_str(), eclipse.variants.as_str(), eclipse.preview.as_str()), ("Eclipse", api, "dark", ""));
     assert!(eclipse.checked == Checked::Ok && !eclipse.current && eclipse.usable(), "a built-in is built clean and may be used");
     assert!(listing.rows[0].current, "with nothing stored the reference is in use");
     // A blank setting is the reference's, which the host never loads as a second theme.

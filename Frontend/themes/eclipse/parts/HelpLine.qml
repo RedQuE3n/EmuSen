@@ -33,7 +33,7 @@ Item {
         color: "transparent"
         labelColor: root.ink
         iconColor: Tokens.muted
-        labelFont: Qt.font({ pixelSize: root.size * root.unit })
+        labelFont.pixelSize: Type.size(root.size * root.unit, Tokens.textScale)
         entrySpacing: root.spacing * root.unit
         glyphGap: root.glyphGap * root.unit
         glyphSize: root.glyphSide * root.unit

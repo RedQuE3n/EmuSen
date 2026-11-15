@@ -1858,9 +1858,9 @@ chips and the facts list (the rows hold no genre, players, time played or states
 
 **Proof.** qt-models' `listing_choices.rs` (Not played, the choices and the Filter page, the empty words, the kinds, the
 letters' help entry); theme-qt's `qml.rs` (every help list with its flags, the new actions) and `surface.rs`; qt-app's
-`eclipse_games.rs` (22 games, a tall, a wide and a square cover: every built row at each of the gate's sizes, the gate's
-fit, contrast and walk, the pad's moves, the triggers, the chips, the empty words of a filter, the sort) and
-`eclipse_games_empty.rs` (the empty board's rows at each size and the gate).
+`eclipse_games.rs` (22 games, a tall, a wide and a square cover: every built row at each of the gate's sizes, the pad's moves, the triggers, the chips, the empty words of a filter, the sort) and
+`eclipse_games_empty.rs` (the empty board's rows at each size); theme-check's loaded step on Eclipse for the theme's fit,
+contrast and walk; `eclipse_games_gpu.rs`, a card job, draws both for the pictures when a folder is named.
 
 ### 3.5 Loading and the sandbox
 

@@ -95,7 +95,7 @@ fn states(dir: &Path, size: &str) -> Vec<(String, String)> {
 }
 
 #[test]
-fn qt_3_4_8_eclipse_s_consoles_stands_where_its_board_stands_it() {
+fn qt_3_4_9_eclipse_s_consoles_stands_where_its_board_stands_it() {
     let dir = std::env::temp_dir().join(format!("theme-audit-eclipse-consoles-{}", std::process::id()));
     let (out, err) = audit("eleven", Some("Super Nintendo"), &dir);
     let mut differences = Vec::new();
@@ -149,7 +149,7 @@ fn qt_3_4_8_eclipse_s_consoles_stands_where_its_board_stands_it() {
 }
 
 #[test]
-fn qt_3_4_8_eclipse_s_consoles_holds_one_to_120_consoles_at_every_size() {
+fn qt_3_4_9_eclipse_s_consoles_holds_one_to_120_consoles_at_every_size() {
     for catalogue in ["one-console", "n30", "maker40", "n120"] {
         let dir = std::env::temp_dir().join(format!("theme-audit-eclipse-{catalogue}-{}", std::process::id()));
         let (out, err) = audit(catalogue, None, &dir);

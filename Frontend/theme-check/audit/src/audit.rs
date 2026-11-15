@@ -438,31 +438,21 @@ fn spoken(tree: &Tree, index: u32) -> String {
     String::new()
 }
 
-/// The focused element's item, its spoken name, and whether its centre is inside the window, where the player can see it.
-fn focused(scene: &mut Scene<'_>, size: (f64, f64)) -> Option<(u64, String, bool)> {
-    let tree = scene.tree();
-    scene.focus(&tree).map(|f| {
-        let n = &tree.nodes[f as usize];
-        let (x, y) = (n.x + n.w / 2.0, n.y + n.h / 2.0);
-        (tree.id_of(f), spoken(&tree, f), x >= 0.0 && y >= 0.0 && x < size.0 && y < size.1)
-    })
-}
-
-/// The pad's sweep of a crowded Choose a console: from the first focus, each element is pressed Up, Down, Left and Right, and
-/// each press that lands somewhere new is followed from there before the sweep comes back by the opposite press, so every
-/// element's own neighbours are followed, whatever the layout (rows, orbits, a side column beside a grid). The way back is a
-/// press, as a player's is, so a view's current item moves with its focus; only where the opposite press does not lead back
-/// is the element focused again directly. None when every console's name was heard on the focus while it was inside the
-/// window, landed on by a press; else how many were and the first few that were not.
+/// The pad's sweep of a crowded Choose a console, in two parts. First as a player looks for one console among many: Up and
+/// Left until the focus stops, then each row Right to its end and Left to its other end, with Down between. Then, only if
+/// that missed a console, each element's own neighbours are followed from where the rows ended: every element pressed Up,
+/// Down, Left and Right, each new landing followed before the sweep comes back by the opposite press, so a layout the rows do
+/// not fit (a side column beside a grid) is still swept whole. None when every console's name was heard on the focus while
+/// it was inside the window, landed on by a press; else how many were and the first few that were not.
 fn swept(scene: &mut Scene<'_>, consoles: &[String], size: (f64, f64)) -> Option<String> {
-    let Some((start, name, inside)) = focused(scene, size) else {
-        return Some(format!("the pad's sweep found no focus; heard 0 of {} consoles", consoles.len()));
-    };
-    let mut sweep = Sweep { heard: Vec::new(), found: vec![(start, name.clone())], size };
-    if inside {
-        sweep.heard.push(name.clone());
+    let mut sweep = Sweep { heard: Vec::new(), found: Vec::new(), size };
+    sweep.rows(scene, consoles.len() * 3 + 40);
+    if consoles.iter().any(|c| !sweep.heard.contains(c)) {
+        if let Some(start) = sweep.landed(scene) {
+            sweep.found.push(start.clone());
+            sweep.from(scene, start);
+        }
     }
-    sweep.from(scene, (start, name));
     let missed: Vec<&String> = consoles.iter().filter(|c| !sweep.heard.contains(c)).collect();
     (!missed.is_empty()).then(|| {
         let first: Vec<&str> = missed.iter().take(5).map(|s| s.as_str()).collect();
@@ -470,38 +460,93 @@ fn swept(scene: &mut Scene<'_>, consoles: &[String], size: (f64, f64)) -> Option
     })
 }
 
-/// The sweep's state: the names heard inside the window, the elements landed on by their tree id and the name a reader hears
-/// (a view's delegate is made again for another row at another id, or at the same address), and the window's size.
+/// An element the sweep landed on, by its objectName (its address where it has none) and the name a reader hears: a view
+/// makes a row's delegate again at another address once it scrolled away, so the address is no named element's lasting name.
+type Landed = (String, String);
+
+/// The sweep's state: the names heard inside the window, the elements landed on, and the window's size.
 struct Sweep {
     heard: Vec<String>,
-    found: Vec<(u64, String)>,
+    found: Vec<Landed>,
     size: (f64, f64),
 }
 
 impl Sweep {
-    /// One press and where it landed: the element's id, once the view brought it into sight; its name heard if inside.
-    fn press(&mut self, scene: &mut Scene<'_>, button: UiButton) -> Option<(u64, String)> {
+    /// Where the focus is, its name heard if its centre is inside the window.
+    fn landed(&mut self, scene: &mut Scene<'_>) -> Option<Landed> {
+        let tree = scene.tree();
+        let f = scene.focus(&tree)?;
+        let n = &tree.nodes[f as usize];
+        let (x, y) = (n.x + n.w / 2.0, n.y + n.h / 2.0);
+        let name = spoken(&tree, f);
+        if x >= 0.0 && y >= 0.0 && x < self.size.0 && y < self.size.1 && !self.heard.contains(&name) {
+            self.heard.push(name.clone());
+        }
+        // An element with no objectName is told from its like by its address, the one name it has.
+        let key = if n.name.is_empty() { format!("#{}", tree.id_of(f)) } else { n.name.clone() };
+        Some((key, name))
+    }
+
+    /// One press and where it landed, once the view brought it into sight.
+    fn press(&mut self, scene: &mut Scene<'_>, button: UiButton) -> Option<Landed> {
         scene.key(key_of(button), 0);
         let tree = scene.tree();
         scene.settle(&tree);
-        let (at, name, inside) = focused(scene, self.size)?;
-        if inside && !self.heard.contains(&name) {
-            self.heard.push(name.clone());
-        }
-        Some((at, name))
+        self.landed(scene)
     }
 
-    /// Stands on `at` again: the focus is already there, or it is given there directly.
-    fn stand_on(&mut self, scene: &mut Scene<'_>, at: &(u64, String)) -> bool {
-        if focused(scene, self.size).is_some_and(|(now, name, _)| now == at.0 && name == at.1) {
+    /// The rows' part of the sweep, `limit` presses at most: Up and Left to a corner, then each row along both ways with Down
+    /// between, since Down may land anywhere along the next (the orbits land nearest in x).
+    fn rows(&mut self, scene: &mut Scene<'_>, limit: usize) {
+        self.landed(scene);
+        let mut presses = 0;
+        for button in [UiButton::Up, UiButton::Left] {
+            while presses < limit && self.moved(scene, button) {
+                presses += 1;
+            }
+        }
+        loop {
+            for along in [UiButton::Right, UiButton::Left] {
+                let mut seen = Vec::new();
+                while presses < limit && self.moved(scene, along) {
+                    presses += 1;
+                    let now = self.landed(scene);
+                    if seen.contains(&now) {
+                        break;
+                    }
+                    seen.push(now);
+                }
+            }
+            presses += 1;
+            if presses >= limit || !self.moved(scene, UiButton::Down) {
+                break;
+            }
+        }
+    }
+
+    /// One press, and whether it moved the focus.
+    fn moved(&mut self, scene: &mut Scene<'_>, button: UiButton) -> bool {
+        let before = self.landed(scene);
+        let after = self.press(scene, button);
+        after.is_some() && after != before
+    }
+
+    /// Stands on `at` again: the focus is already there, or it is given there directly while its delegate exists.
+    fn stand_on(&mut self, scene: &mut Scene<'_>, at: &Landed) -> bool {
+        if self.landed(scene).is_some_and(|now| &now == at) {
             return true;
         }
         let tree = scene.tree();
-        (0..tree.nodes.len() as u32).find(|&i| tree.id_of(i) == at.0 && spoken(&tree, i) == at.1).is_some_and(|i| scene.focus_item(&tree, i))
+        (0..tree.nodes.len() as u32)
+            .find(|&i| {
+                let n = &tree.nodes[i as usize];
+                (if n.name.is_empty() { format!("#{}", tree.id_of(i)) } else { n.name.clone() }) == at.0 && spoken(&tree, i) == at.1
+            })
+            .is_some_and(|i| scene.focus_item(&tree, i))
     }
 
-    /// Each press from `at`, following every new landing before coming back.
-    fn from(&mut self, scene: &mut Scene<'_>, at: (u64, String)) {
+    /// Each press from `at`, following every new landing before coming back by the opposite press, so the focus ends on `at`.
+    fn from(&mut self, scene: &mut Scene<'_>, at: Landed) {
         for (button, back) in [(UiButton::Up, UiButton::Down), (UiButton::Down, UiButton::Up), (UiButton::Left, UiButton::Right), (UiButton::Right, UiButton::Left)] {
             if !self.stand_on(scene, &at) {
                 return;
@@ -514,7 +559,6 @@ impl Sweep {
                 self.found.push(to.clone());
                 self.from(scene, to.clone());
             }
-            // Back the way it came, so the next press from `at` starts where a player would stand.
             if self.stand_on(scene, &to) {
                 self.press(scene, back);
             }

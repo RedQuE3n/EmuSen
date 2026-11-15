@@ -1229,7 +1229,8 @@ stands alone and only this crate joins it to Endymion. Four parts, one job each:
   and one closure per tick, and none when nothing changed.
 - `pad_reader.rs`, **`PadReader`**: writable `platformLibrary` (the path, as `LibraryModel` takes it: a QML element
   cannot be handed a Rust value, §1.2.1 of `EmuSen_Qt.md`) and `onlyPads`; read-only `family` (kit-qt's `Families`),
-  `connected` and `problem`; one signal, `button(PadButton, down)`. Naming the library lends SDL (`libSDL3.so.0`, once
+  `connected`, `problem` and `answered` (true from the first delivery applied, pads or a failure to open them: the
+  program's start waits on it, `EmuSen_Qt.md` §9.3.2); one signal, `button(PadButton, down)`. Naming the library lends SDL (`libSDL3.so.0`, once
   a process) and starts the reader, whose ticks come back only through `qt_thread().queue`, where each press is emitted
   in order and the properties published. `onlyPads` is SDL's pad ids, separated by spaces, read alone, as
   `emusen_endymion_pads_show_only` is a test's: it keeps a test's virtual pads from opening a pad on the desk.
@@ -2257,6 +2258,18 @@ theme-audit records a theme's splash at a stated time and a screen with A held (
   after starting an animation read the animation at 0 at a held 16 ms before the change, and at 16 after; with no work
   queued it read 16 before too. `hold_clock` still ends in a 20 ms wait: it is no input, and each of its steps processes
   events after its `advance()`.
+  The wheel had leant on the wait as well: its event carried no timestamp, so Qt Quick's Flickable timed it by a timer of
+  its own (`qquickflickable.cpp` 1120-1127) against the click before it, stamped on QTest's emulated clock, and with no
+  time between the two found the elapsed time below zero and dropped the wheel (1743-1748, "insufficient elapsed time":
+  kit-gallery's settings walk, 2026-11-15). QTest stamps every mouse event it sends on that clock, a step past the last,
+  and expects handlers to read time from event timestamps (`qtestmouse.h` 42-62); the harness's wheel is now stamped the
+  same way. Held to by qt-test's `qt_7_36_a_wheel_turned_at_once_after_a_click_moves_the_list`, which failed with that
+  message before. Drags and hovers are QTest's own mouse events, stamped already; a touch drag goes through QTest's touch
+  sequence with 10 ms waits between its moves.
+  What an input reaches outside the GUI thread is not the harness's to wait on: a key that asks the game for one frame
+  (Frame Advance) has the runtime run it on the session's frame thread afterwards (`crystal-client/src/frame.rs` 33-36),
+  so qt-app's `controls_gpu` holds the next key only once the program's frame count has stopped, where it had leant on
+  the 20 ms the key used to wait (a run on 2026-11-15 drew the held button in that one frame).
 - **`Scene::key_hold(key, down)`**, `QTest::keyPress` or `keyRelease` alone: a press held, as a theme's pressed look reads it
   (`Keys.onPressed` without the release).
 - **`covers::draw`**, moved from the program's tests (`qt-app/tests/common`), which re-export it: covers drawn by one Qt Quick

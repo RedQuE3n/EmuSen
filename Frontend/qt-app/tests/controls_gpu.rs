@@ -171,6 +171,15 @@ fn qt_7_7_h6_the_keyboard_plays_the_game_and_each_hotkey_acts() {
     // The full stop: one frame and the game held, B held after it not drawn; P lets it run.
     tap(&mut scene, PERIOD);
     said(&mut scene, "Paused: advanced one frame");
+    // The one frame runs on the session's frame thread after the press, the game held after it (crystal-client frame.rs
+    // 33-36), so Z goes down once the frame count has stopped: two reads 100 ms apart agree, where a running game counts
+    // about six frames between them.
+    let mut last = frame(&mut scene);
+    until(&mut scene, 5, "the game held after its one frame", |s| {
+        s.wait(100);
+        let now = frame(s);
+        std::mem::replace(&mut last, now) == now
+    });
     scene.key_hold(Z, true);
     scene.wait(800);
     assert!(blue(&mut scene, &points) < rest + 20.0, "held after its one frame");

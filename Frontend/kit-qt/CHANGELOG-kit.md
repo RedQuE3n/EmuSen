@@ -5,6 +5,18 @@ writes it, is committed under `Testing/qmltypes/` and compared on every build. U
 addition, a change or a removal, bumps the minor (R-20261111-107, R-20261111-108); each entry names what changed and the
 section of `EmuSen_Kit.md` that records it.
 
+## 1.8: a blurred backdrop, and the glow moved by an offset, for themes (2026-11-15)
+
+Decided 2026-11-15 by the tester (R-20261115-6): Eclipse gets two kit parts themes may use, a blurred backdrop and the
+glow or shadow; on the card they draw as the boards do, on the software backend the backdrop shows the same colours
+unblurred, with no blur made by the CPU. 1.7 is another piece's.
+
+- **`Backdrop`**, **`BackdropField`**: a ground, and over it colour fields (an ellipse or a rounded box, each with its
+  CSS filter blur, opacity and turn) or a picture in their place, each blurred by a `MultiEffect` on the graphics card;
+  on the software backend the fields unblurred at their opacity and no picture. `EmuSen_Kit.md` §7.118.
+- **`Glow`**: `offsetX` and `offsetY` move the shape as a box-shadow's offsets move it, so a resting tile's shadow is a
+  glow; 0 by default, so every glow drawn before is unchanged. Exported to themes in EmuSen.Theme 1.4. `EmuSen_Kit.md` §7.119.
+
 ## 1.6: Eclipse's corona disc and the planet mark as kit parts, one glow, and every ring Gapped where a look asks (2026-11-14)
 
 Beside the additions below, two properties the 1.5 and 1.6 pieces had added are gone and `CoronaDisc.corona` means a

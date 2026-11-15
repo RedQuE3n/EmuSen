@@ -29,3 +29,6 @@ FocusRing 1.1 qml/FocusRing.qml
 PlanetMark 1.2 qml/PlanetMark.qml
 CoronaGlow 1.2 qml/CoronaGlow.qml
 CoronaDisc 1.2 qml/CoronaDisc.qml
+BackdropField 1.4 qml/BackdropField.qml
+Backdrop 1.4 qml/Backdrop.qml
+Glow 1.4 qml/Glow.qml

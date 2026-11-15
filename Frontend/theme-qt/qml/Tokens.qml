@@ -75,6 +75,7 @@ QtObject {
     readonly property color coronaHaloColor: Kit.Tokens.coronaHaloColor
     readonly property real coronaHaloBlur: Kit.Tokens.coronaHaloBlur
     readonly property real coronaHaloSpread: Kit.Tokens.coronaHaloSpread
+    readonly property bool ringGapped: Kit.Tokens.ringGapped
     readonly property int instant: Kit.Tokens.instant
     readonly property int quick: Kit.Tokens.quick
     readonly property int enter: Kit.Tokens.enter

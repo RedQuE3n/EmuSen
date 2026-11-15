@@ -42,6 +42,7 @@ VideoClip 1.6 qml/VideoClip.qml
 RaisedShadow 1.6 qml/RaisedShadow.qml
 ControllerDrawing 1.6 qml/ControllerDrawing.qml
 PdfPage 1.6 qml/PdfPage.qml
+Glow 1.6 qml/Glow.qml
 FocusRing 1.6 qml/FocusRing.qml
 PlanetMark 1.6 qml/PlanetMark.qml
 CoronaGlow 1.6 qml/CoronaGlow.qml

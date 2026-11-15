@@ -20,8 +20,8 @@ T.RadioButton {
         y: control.topPadding + (control.availableHeight - height) / 2
         radius: width / 2
         color: Kit.Tokens.inputSurface
-        border.width: control.activeFocus ? ring.edgeWidth : Kit.Tokens.hoverBorder
-        border.color: control.activeFocus ? ring.edgeColor : Kit.Tokens.border
+        border.width: control.activeFocus && ring.onEdge ? ring.edgeWidth : Kit.Tokens.hoverBorder
+        border.color: control.activeFocus && ring.onEdge ? ring.edgeColor : Kit.Tokens.border
         Kit.FocusRing {
             id: ring
             visible: control.activeFocus

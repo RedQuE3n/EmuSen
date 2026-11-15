@@ -1636,7 +1636,7 @@ Decided 2026-11-11 by the tester: Eclipse is EmuSen's default look, and the pres
 theme API is not widened for that. A blank setting still gives the reference: which theme a blank setting gives changes
 only once Eclipse has screens of its own.
 
-**The package.** `Frontend/themes/eclipse/` holds `theme.json` alone: name Eclipse, `api` 1.1 (its focus tokens are 1.1's), the dark variant, no
+**The package.** `Frontend/themes/eclipse/` holds `theme.json` alone: name Eclipse, `api` 1.2 (its corona tokens are 1.2's, the newest it sets; its focus tokens are 1.1's), the dark variant, no
 screen of its own (`"screens": []`), no cue, no preview, and the token overrides below. With no screens, every screen is
 the reference's: Home, Choose a console and the games are drawn by the reference's host, whose engine keeps the kit's
 tokens, so only the program's own screens (Settings, the cards, the game page, the Pause Card, the tools, the questions
@@ -1686,6 +1686,7 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 | glowColor | the glow under the ring (`FocusRing.qml`) | the glow (`EclipseSettings:94`) | rgba(240, 180, 196, 0.4) | #66F0B4C4 |
 | glowBlur | the glow's blur (`FocusRing.qml`) | the glow's blur (`EclipseSettings:94`) | 40 px | 26.666… |
 | glowSpread | the glow's spread (`FocusRing.qml`) | the glow's spread (`EclipseSettings:94`) | 8 px | 5.333… |
+| ringGapped | every ring past its gap (`FocusRing.qml`, R-20261114-21) | every focus ring on the boards is past a gap (`EclipseSettings:94`) | the gapped ring | true |
 | buttonRadius | a button's corners (`ActionButton.qml:27`, `style/Button.qml:31`) | the dialog's buttons, 72 px high (`EclipseDialog:39`) | 36 px | 24 |
 | hoverBorder | an unfilled button's outline (`ActionButton.qml:29`) | the unfilled button's outline (`EclipseDialog:40`) | 2 px | 1.333… |
 | controlHeight | a button (`ActionButton.qml:22`) | the button (`EclipseDialog:39`) | 72 px | 48 |
@@ -1706,10 +1707,10 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 
 The colour of the notice's shadow is black on the board, the kit's own, so `shadowColor` is not overridden; `safeAreaX`
 (96 px, 64 units) is the kit's value too. Left at the reference's value, each for its reason:
-
 - `border`: the boards' outline of an unfilled button and of a switch's track (#5A6076, `EclipseDialog:40`,
   `EclipseSettings:94`) is 2.83:1 on surfaceRaised and 2.97:1 on inputSurface, under the kit's 3:1 floor for graphics;
   theme-check refuses it. The tester's to rule on.
+
 - `voidFill`: the boards draw black behind a game (`EclipsePause:17`), which is the kit's.
 - `success`, `error`, `attention`: no board draws words in a tone colour; a status is a filled chip (`EclipseSettingsConsoles:78`).
 - `captionSurface`, `overArt`, `overArtScrim`: the game page's board draws the disc over its art, not the kit's caption and

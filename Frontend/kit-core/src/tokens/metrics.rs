@@ -58,10 +58,12 @@ pub struct FocusMarks {
     pub hover_border: f64,
     /// The colour between a box and its ring; transparent leaves what is behind (EmuSen_Kit.md §7.113).
     pub gap_colour: Colour,
-    /// The glow under the ring: its colour, its blur as a canvas's `shadowBlur`, and how far its shape spreads past the box.
+    /// The glow under the ring: its colour, its CSS blur radius, and how far its shape spreads past the box (EmuSen_Kit.md §7.113).
     pub glow_colour: Colour,
     pub glow_blur: f64,
     pub glow_spread: f64,
+    /// Every ring past a gap of `ring_offset`, whatever the place's own placement; false keeps each place's (R-20261114-21).
+    pub gapped: bool,
 }
 
 impl FocusMarks {
@@ -170,6 +172,7 @@ const FOCUS_MARKS: FocusMarks = FocusMarks {
     glow_colour: Colour::rgba(0, 0, 0, 0),
     glow_blur: 0.0,
     glow_spread: 0.0,
+    gapped: false,
 };
 
 const RAISED_SHADOW: Shadow = Shadow { colour: Colour::rgb(0, 0, 0), opacity: 0.5, offset_x: 0.0, offset_y: 8.0, blur: 24.0 };

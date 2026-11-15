@@ -124,6 +124,7 @@ impl Bases {
             FocusMarks::GLOW_COLOUR_PROPERTY => Slot::Colour(&mut f.glow_colour),
             "glowBlur" => Slot::Number(&mut f.glow_blur),
             "glowSpread" => Slot::Number(&mut f.glow_spread),
+            "ringGapped" => Slot::Switch(&mut f.gapped),
             "shadowOpacity" => Slot::Number(&mut sh.opacity),
             "shadowOffsetX" => Slot::Number(&mut sh.offset_x),
             "shadowOffsetY" => Slot::Number(&mut sh.offset_y),
@@ -163,20 +164,18 @@ impl Bases {
         })
     }
 
-    /// A theme's value in place of the base, read as the token's kind; a value not of the kind is left alone.
-    fn set(&mut self, property: &str, value: &str) {
+    /// A theme's value in place of the base, read as the token's kind; false, and the base left alone, for a value not of the
+    /// kind or a property with no base here.
+    fn set(&mut self, property: &str, value: &str) -> bool {
         let number = value.parse::<f64>().ok().filter(|v| v.is_finite());
+        let read = |held: &mut f64| number.map(|v| *held = v).is_some();
         match self.slot(property) {
-            Some(Slot::Number(held)) => *held = number.unwrap_or(*held),
-            Some(Slot::Pair(a, b)) => {
-                if let Some(v) = number {
-                    (*a, *b) = (v, v);
-                }
-            }
-            Some(Slot::Whole(held)) => *held = value.parse::<i32>().unwrap_or(*held),
-            Some(Slot::Switch(held)) => *held = value.parse::<bool>().unwrap_or(*held),
-            Some(Slot::Colour(held)) => *held = Colour::parse(value).unwrap_or(*held),
-            None => {}
+            Some(Slot::Number(held)) => read(held),
+            Some(Slot::Pair(a, b)) => number.map(|v| (*a, *b) = (v, v)).is_some(),
+            Some(Slot::Whole(held)) => value.parse::<i32>().map(|v| *held = v).is_ok(),
+            Some(Slot::Switch(held)) => value.parse::<bool>().map(|v| *held = v).is_ok(),
+            Some(Slot::Colour(held)) => Colour::parse(value).map(|v| *held = v).is_some(),
+            None => false,
         }
     }
 }
@@ -226,6 +225,20 @@ impl Column {
             breathes: breathes_if(b.breathes, reduced),
         }
         .overridden(&colours, shadow)
+    }
+
+    /// The overrides `themed` cannot read, each as `name: value`: a value not of its token's kind, or a name that is no token.
+    /// The host checks only `theme.json`'s schema, so a malformed value reaches here and is said, not dropped unseen.
+    pub fn unread(form: Form, given: &[(String, String)]) -> Vec<String> {
+        let mut b = Bases::of(form);
+        let colour_named = |name: &str| {
+            ColourToken::named(name).is_some() || name == Shadow::COLOUR_PROPERTY || Corona::COLOUR_PROPERTIES.contains(&name)
+        };
+        given
+            .iter()
+            .filter(|(name, value)| if colour_named(name) { Colour::parse(value).is_none() } else { !b.set(name, value) })
+            .map(|(name, value)| format!("{name}: {value}"))
+            .collect()
     }
 
     fn slot(token: MotionToken) -> usize {

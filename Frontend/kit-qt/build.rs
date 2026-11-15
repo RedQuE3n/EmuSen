@@ -4,7 +4,7 @@ use std::process::Command;
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 
 // The kit's own components (EmuSen_Qt.md §1.4); the EmuSen style travels as a resource module, style/EmuSen.qrc (§1.5), and the splash's two faces as fonts/Fonts.qrc (EmuSen_Kit.md §7.10).
-const KIT_FILES: [&str; 39] = [
+const KIT_FILES: [&str; 40] = [
     "qml/Walkable.qml",
     "qml/Body.qml",
     "qml/Sky.qml",
@@ -40,6 +40,7 @@ const KIT_FILES: [&str; 39] = [
     "qml/RaisedShadow.qml",
     "qml/ControllerDrawing.qml",
     "qml/PdfPage.qml",
+    "qml/Glow.qml",
     "qml/FocusRing.qml",
     "qml/PlanetMark.qml",
     "qml/CoronaGlow.qml",

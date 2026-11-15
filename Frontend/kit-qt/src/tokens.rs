@@ -127,6 +127,7 @@ pub mod qobject {
         #[qproperty(QColor, corona_halo_color, READ, NOTIFY)]
         #[qproperty(f64, corona_halo_blur, READ, NOTIFY)]
         #[qproperty(f64, corona_halo_spread, READ, NOTIFY)]
+        #[qproperty(bool, ring_gapped, READ, NOTIFY)]
         type Tokens = super::TokensRust;
     }
 
@@ -213,6 +214,7 @@ pub struct TokensRust {
     corona_halo_color: QColor,
     corona_halo_blur: f64,
     corona_halo_spread: f64,
+    ring_gapped: bool,
     instant: i32,
     quick: i32,
     enter: i32,
@@ -316,6 +318,7 @@ impl Default for TokensRust {
             corona_halo_color: QColor::default(),
             corona_halo_blur: 0.0,
             corona_halo_spread: 0.0,
+            ring_gapped: false,
             instant: 0,
             quick: 0,
             enter: 0,
@@ -415,6 +418,7 @@ impl TokensRust {
         self.corona_halo_color = qcolor(c.corona_colours[2]);
         self.corona_halo_blur = c.corona.halo_blur;
         self.corona_halo_spread = c.corona.halo_spread;
+        self.ring_gapped = c.focus.gapped;
         self.instant = c.duration(M::Instant);
         self.quick = c.duration(M::Quick);
         self.enter = c.duration(M::Enter);
@@ -473,6 +477,10 @@ impl qobject::Tokens {
     /// kit's. The host sets them on the theme's engine and the chosen theme's on the program's, already held to the registry
     /// and the contrast floors by theme-check (EmuSen_Kit.md §7.2, §7.55; EmuSen_Qt.md §3.5.1).
     pub fn set_overrides(mut self: Pin<&mut Self>, overrides: Vec<(core_tokens::Variant, String, String)>) {
+        let given: Vec<(String, String)> = overrides.iter().map(|(_, name, value)| (name.clone(), value.clone())).collect();
+        for unread in Column::unread(kinds::token_form(self.form), &given) {
+            eprintln!("EmuSen.Kit: a theme's token override is not read and the kit's value stands: {unread}");
+        }
         self.as_mut().rust_mut().overrides = overrides;
         self.refresh();
     }
@@ -551,6 +559,7 @@ impl qobject::Tokens {
         self.as_mut().corona_halo_color_changed();
         self.as_mut().corona_halo_blur_changed();
         self.as_mut().corona_halo_spread_changed();
+        self.as_mut().ring_gapped_changed();
         self.as_mut().instant_changed();
         self.as_mut().quick_changed();
         self.as_mut().enter_changed();

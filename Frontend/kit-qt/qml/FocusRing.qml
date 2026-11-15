@@ -10,56 +10,24 @@ Item {
     property real radius
     // Where the ring stands to the box: past a gap of ringOffset, within ringOffset of it, or on its edge (§7.113).
     property int placement: FocusRing.Gapped
+    // The placement drawn: every ring Gapped where the look says so (ringGapped, R-20261114-21), else the place's own.
+    readonly property int form: Kit.Tokens.ringGapped ? FocusRing.Gapped : root.placement
+    // True while the ring is the box's own border: a box binds its border to edgeWidth and edgeColor only then.
+    readonly property bool onEdge: root.form === FocusRing.Edge
     // The ring as the box's own border, for a box that draws it in the Edge placement.
     readonly property real edgeWidth: Kit.Tokens.ringThickness
     readonly property color edgeColor: Kit.Tokens.accent
     // How far past the box the ring's inner edge stands.
-    readonly property real inner: root.placement === FocusRing.Gapped ? Kit.Tokens.ringOffset
-        : (root.placement === FocusRing.Tight ? Kit.Tokens.ringOffset - Kit.Tokens.ringThickness : -Kit.Tokens.ringThickness)
+    readonly property real inner: root.form === FocusRing.Gapped ? Kit.Tokens.ringOffset
+        : (root.form === FocusRing.Tight ? Kit.Tokens.ringOffset - Kit.Tokens.ringThickness : -Kit.Tokens.ringThickness)
     readonly property real outer: root.inner + Kit.Tokens.ringThickness
-    // How far past the box the glow's canvas reaches: the spread and twice the blur, as RaisedShadow's (§7.55), in whole units.
-    readonly property real glowReach: Math.ceil(Kit.Tokens.glowSpread + 2 * Kit.Tokens.glowBlur)
-    Loader {
+    Kit.Glow {
         objectName: "focusGlow"
-        active: root.visible && Kit.Tokens.glowColor.a > 0
-        x: -root.glowReach
-        y: -root.glowReach
-        width: root.width + 2 * root.glowReach
-        height: root.height + 2 * root.glowReach
-        sourceComponent: Canvas {
-            id: glow
-            objectName: "focusGlowCanvas"
-            property int paints: 0
-            readonly property real reach: root.glowReach
-            readonly property real corner: root.radius
-            readonly property real spread: Kit.Tokens.glowSpread
-            readonly property real blur: Kit.Tokens.glowBlur
-            readonly property color ink: Kit.Tokens.glowColor
-            contextType: "2d"
-            onReachChanged: requestPaint()
-            onCornerChanged: requestPaint()
-            onInkChanged: requestPaint()
-            onWidthChanged: requestPaint()
-            onHeightChanged: requestPaint()
-            onPaint: {
-                const ctx = getContext(contextType)
-                const away = glow.width
-                ctx.reset()
-                ctx.fillRule = Qt.OddEvenFill
-                ctx.beginPath()
-                ctx.rect(0, 0, glow.width, glow.height)
-                ctx.roundedRect(glow.reach, glow.reach, glow.width - 2 * glow.reach, glow.height - 2 * glow.reach, glow.corner, glow.corner)
-                ctx.clip()
-                ctx.shadowColor = glow.ink
-                ctx.shadowBlur = glow.blur
-                ctx.shadowOffsetX = away
-                ctx.fillStyle = Qt.rgba(glow.ink.r, glow.ink.g, glow.ink.b, 1)
-                ctx.beginPath()
-                ctx.roundedRect(glow.reach - glow.spread - away, glow.reach - glow.spread, glow.width - 2 * (glow.reach - glow.spread), glow.height - 2 * (glow.reach - glow.spread), glow.corner + glow.spread, glow.corner + glow.spread)
-                ctx.fill()
-                glow.paints = glow.paints + 1
-            }
-        }
+        anchors.fill: parent
+        radius: root.radius
+        color: Kit.Tokens.glowColor
+        blur: Kit.Tokens.glowBlur
+        spread: Kit.Tokens.glowSpread
     }
     Rectangle {
         objectName: "focusGap"
@@ -75,7 +43,7 @@ Item {
     }
     Rectangle {
         objectName: "focusBand"
-        visible: root.placement !== FocusRing.Edge
+        visible: root.form !== FocusRing.Edge
         x: -root.outer
         y: -root.outer
         width: root.width + 2 * root.outer

@@ -30,7 +30,7 @@ T.TabButton {
         implicitHeight: Kit.Tokens.controlHeight
         radius: Kit.Tokens.rowRadius
         color: control.down || control.hovered ? Kit.Tokens.surfaceRaised : Kit.Tokens.surface
-        border.width: control.activeFocus ? ring.edgeWidth : 0
+        border.width: control.activeFocus && ring.onEdge ? ring.edgeWidth : 0
         border.color: ring.edgeColor
         Kit.FocusRing {
             id: ring

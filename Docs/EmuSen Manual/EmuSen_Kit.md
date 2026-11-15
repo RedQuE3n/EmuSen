@@ -3863,9 +3863,12 @@ The kit drew its focus ring eleven times, each a `Rectangle` of its own (read on
 `PageFrame`'s tiles a rectangle grown by `ringOffset` with a `ringThickness` border inward, so the ring stood 4 to 1 units
 past the box under the kit's tokens; `CoverTile` one grown by the literals 7 and 14 with corners of `tileRadius + 4`, the
 ring 7 to 4 units past; the style's eight controls (Button, CheckBox, ComboBox, RadioButton, Slider, Switch, TabButton,
-TextField) their own border turned `ringThickness` wide in the accent, no gap. Eclipse's boards draw one recipe on 28 of
-them (`EclipseSettings.dc.html:94`): a dark gap of 3 px, the ring 3 to 6 px out, and a glow of 40 px blur and 8 px spread
-in rgba(240, 180, 196, 0.4); 12 other boards draw a gap of 4 px, the ring to 7 px and a glow of 10 px spread at 0.5.
+TextField) their own border turned `ringThickness` wide in the accent, no gap. Eclipse's 79 boards draw nine recipes, counted on 2026-11-14 by
+every `0 0 0 Npx #07080F, 0 0 0 Mpx #F6E7D8, 0 0 Bpx Spx rgba(...)` in them, by the boards each is on: a gap of 3 px and the
+ring 3 to 6 px out on 35 boards, 28 of them with a glow of 40 px blur and 8 px spread in rgba(240, 180, 196, 0.4)
+(`EclipseSettings.dc.html:94`), the other 7 with a glow of 34 or 46 px, or at 0.35, 0.45 or 0.5; a gap of 4 px and the ring
+to 7 px on 16 boards, 13 of them with a glow of 40 px and 10 px at 0.5, the other 3 of 44 or 46 px at 0.45. Eclipse's
+tokens hold the first, the commonest; one set of tokens holds one recipe, so the other eight are not yet expressible.
 
 **The part.** `FocusRing` fills the box it marks and takes the box's corner `radius`. Its gap is `ringOffset` wide in
 `ringGapColor`, its ring `ringThickness` wide in the accent past the gap, with corners of the box's radius plus
@@ -3873,9 +3876,12 @@ in rgba(240, 180, 196, 0.4); 12 other boards draw a gap of 4 px, the ring to 7 p
 the gap (`CoverTile`, whose 7, 14 and 4 were `ringOffset + ringThickness` and `ringOffset` under the kit's tokens and are
 those tokens now); `Tight`, its outer edge `ringOffset` past the box (`ActionButton`, `PageFrame`); `Edge`, the box's own
 border (the style's controls, which bind their border to `edgeWidth` and `edgeColor`, so a box keeps one rectangle and its
-pixels). Each place keeps the placement it drew; whether the reference's Tight and Edge rings move to Gapped is the
-tester's to rule on. Under Eclipse's tokens (`ringOffset` 2, `ringThickness` 2) a Tight ring stands 2 to 0 units past the
-box with no gap, an Edge ring is the box's 2-unit border, and a Gapped ring is the board's.
+pixels). Decided 2026-11-14 by the tester (R-20261114-21): the reference keeps each place's
+placement, so the old theme's three focus looks are unchanged, and Eclipse draws every ring Gapped with the glow, as its
+boards do. One switch token carries it, `ringGapped` (kit-core `FocusMarks::gapped`, false in the kit's column, true in
+Eclipse's `theme.json`): while it is true `FocusRing`'s `form`, the placement it draws, is Gapped whatever its `placement`;
+`onEdge` is true only while the form is Edge, and a style control binds its border to `edgeWidth` and `edgeColor` only
+then, so under Eclipse a control keeps its own border and the ring stands past the gap.
 
 **The tokens.** `ringGapColor` and `glowColor` are colours after `shadowColor`, transparent in the kit's column;
 `glowBlur` and `glowSpread` are numbers, 0 in it (kit-core `FocusMarks`, `FOCUS_MARKS`). No existing role is the gap's:
@@ -3883,27 +3889,76 @@ on the board it is the ground, #07080F (`surface` in Eclipse), but under the kit
 which no colour role holds, so a role would have moved the reference's pixels. With the kit's tokens nothing new is drawn:
 the gap is not drawn while transparent and the glow is not made.
 
-**The glow** is a `Canvas` on both backends, made by a `Loader` only while the ring shows and `glowColor` is not
-transparent, so it paints once each time the focus arrives and again only when its box, corners or colour change. Qt
-Quick's software adaptation does not render `ShaderEffect`, so `MultiEffect` and `RectangularShadow`, both shader effects,
-draw nothing there (doc.qt.io, "Qt Quick Software Adaptation", read 2026-11-14); `RaisedShadow` (§7.55) has a canvas path
-for the same reason. The canvas paints the glow's shape, the box grown by `glowSpread`, outside its own area with a
-`shadowOffsetX` that brings the shadow back, so only the shadow lands, clipped to the canvas less the box (an
-odd-even path), as CSS draws an outer shadow outside its box alone. Qt's page for `Context2D` gives no rule for `shadowBlur`; its source
-(`qquickcontext2dcommandbuffer.cpp`, `ShadowImageMaker`, Qt 6.11) blurs with three passes of a square box
-2 round(blur / 2) + 1 wide (`qt_image_boxblur`, `qquickcontext2d.cpp`), close to a Gaussian of σ = blur / 2, the CSS
-rule. Measured on 2026-11-14 at a straight edge on the software backend, the glow d past the box reads within 0.006 of
-alpha · Φ((spread − d) / σ) at four distances, for every placement.
+**The glow** has one owner, `Glow` (`qml/Glow.qml`, a kit part not exported to themes): the glow of the rounded box it
+fills, from a colour, a CSS blur radius, a spread and a corner radius, drawn outside the box alone, as CSS Backgrounds 3
+§6.1.1 draws an outer box-shadow ("clipped inside the border-box of the element"; w3.org/TR/css-backgrounds-3, read
+2026-11-14), so a box with no fill or a translucent one shows nothing of it inside. `FocusRing` draws its glow with one
+(`glowColor`, `glowBlur`, `glowSpread`), `CoronaDisc` each of its glows with one (§7.116); neither keeps a glow of its own,
+and `RaisedShadow` (§7.55) is not one of its users. Nothing is made while the colour is transparent, the part is hidden,
+or it has no blur and no spread (such a glow lies under its box alone).
 
-**Cost.** Measured on 2026-11-14 on the desktop (software backend, Eclipse's tokens, the time from a change of the box to
-the canvas's next paint, 40 paints, two runs): a 160 by 48 box 83 ms median, 89 ms at most; a 1280 by 800 box, larger
-than any ring, 2243 ms. The box blur is a full two-dimensional window, 729 samples a pixel at Eclipse's blur. Not
-measured on the handheld.
+- *On the graphics card* it is Qt's `RectangularShadow` (QtQuick.Effects, "a rounded rectangle with blur applied", its
+  API "similar to CSS box-shadow"; doc.qt.io, qml-qtquick-effects-rectangularshadow, read 2026-11-14) of the box, its
+  spread and its corners, inside an item whose layer is masked by a `MultiEffect` with `maskInverted` and, as its
+  `maskSource`, a layered rectangle of the box (qml-qtquick-effects-multieffect: the mask's alpha masks the source,
+  inverted it masks what lies inside). `cached` is false: the page recommends it off where the effect's properties change,
+  and the masked layer already holds the drawn glow between changes. `antialiasing` is true, the default, so a glow of no
+  blur still has its one pixel of edge. Its `blur` is the token times `cardBlur`, the share measured below; the page
+  suggests 1.2 × the CSS blur "for a closer match". No canvas is painted on the card.
+- *On the software backend*, which renders no shader effect (doc.qt.io, "Qt Quick Software Adaptation": "ShaderEffect
+  components in QtQuick 2 cannot be rendered by the Software adaptation"), it is a `Canvas`: the box grown by the spread,
+  its corners grown as §6.1.1 grows them (by the spread, times 1 + (r − 1)³ where the corner is smaller than the spread, r
+  their ratio), drawn a canvas's width away so only its `shadowBlur` shadow, offset back, lands, clipped to the canvas less
+  the box. Qt's page for `Context2D` gives no rule for `shadowBlur`; its source (`qquickcontext2dcommandbuffer.cpp`,
+  `ShadowImageMaker`, Qt 6.11) blurs with three passes of a square box 2 round(blur / 2) + 1 wide (`qt_image_boxblur`),
+  close to a Gaussian of σ = blur / 2, the CSS rule (§6.1.2: "a Gaussian blur with a standard deviation equal to half the
+  blur radius"). The canvas paints once each time the glow is made and again only when its box, corners or colour change.
 
-**Held to** `tests/focus_ring.rs`: under the kit's tokens each placement draws, pixel for pixel, the ring it replaced
-(drawn beside it as the kit drew it); a focused Button, ActionButton and TextField and a lit CoverTile each show one
-`FocusRing`, its ring in the accent, its gap in `ringGapColor`, under the kit's tokens and Eclipse's; under Eclipse the
-glow paints once and not again over half a second at rest, follows the rule above and ends at its reach. Kit 1.5.
+**The rule and the measures.** The CSS rule a glow is held to is the shape grown by the spread, blurred by a Gaussian of
+σ = blur / 2, outside the box alone, which the tests integrate over the box's own size and corners (`tests/common`). The
+spec allows each pixel within 5 % of that value (§6.1.2). Measured on 2026-11-14 on the desktop, the glow's alpha read at
+the middle of a box's top edge, d past it, Eclipse's tokens (the ring: a 160 by 48 box, corners of 24, `glowBlur` 26.67,
+`glowSpread` 5.33, alpha 0.4; the disc's glow and halo on a 400-unit disc, the commonest board recipe):
+
+| Glow | d past the box | CSS rule | Software (Canvas) | Card (RectangularShadow, blur × 1.2) |
+|---|---|---|---|---|
+| ring | 5.5 | 0.1985 | 0.1958 | 0.1750 |
+| ring | 18.5 | 0.0650 | 0.0708 | 0.0583 |
+| ring | 32.5 | 0.0084 | 0.0083 | 0.0042 |
+| ring | 45.5 | 0.0005 | 0.0000 | 0.0000 |
+| disc's glow | 0.5 | 0.3694 | 0.3618 | 0.3374 |
+| disc's glow | 5.5 | 0.2889 | 0.2886 | 0.2602 |
+| disc's glow | 20.5 | 0.0857 | 0.0976 | 0.0813 |
+| disc's glow | 34.5 | 0.0130 | 0.0163 | 0.0081 |
+| disc's glow | 49.5 | 0.0007 | 0.0000 | 0.0000 |
+| disc's halo | 0.5 | 0.1824 | 0.1780 | 0.1822 |
+| disc's halo | 30.5 | 0.1258 | 0.1271 | 0.1271 |
+| disc's halo | 87.5 | 0.0369 | 0.0381 | 0.0381 |
+| disc's halo | 144.5 | 0.0049 | 0.0042 | 0.0042 |
+| disc's halo | 200.5 | 0.0003 | 0.0000 | 0.0000 |
+
+On the card, the blur share was measured at 1, 1.2 and 2 (logs in the piece's evidence): at 1 the glow ends near
+spread + blur, short of the rule (the ring 0 at 32.5 where the rule gives 0.0084); at 2 it reaches past it (0.0375 there);
+at 1.2, Qt's own suggestion, the largest difference is 0.032 (the disc's glow at 0.5). On the software backend the largest difference from the rule over these distances is 0.0119 (`tests/glow.rs`), 0.0058
+past every Eclipse ring in `tests/focus_ring.rs`, and 0.0192 for the disc of `tests/corona_disc.rs`, drawn at three
+times its size; each test holds its own measured bound. On the card the test holds what is exact: where the glow begins
+and ends, its hue, nothing inside the box, one glow a glowing part and none hidden or transparent; a bound on its
+closeness to the rule is the tester's to set (proposed from the table above).
+
+**Cost.** Measured on 2026-11-14 on the desktop's RX 6800 (Vulkan, `tests/glow_gpu.rs`, Eclipse's tokens, 200 focus moves
+over a Button, a Switch and an ActionButton, each from the move to the next frame swapped): with the glow 5.67 ms median,
+7.82 ms at most; with `glowColor` transparent 6.41 ms median, 6.52 ms at most. Qt's own frame times (`QSG_RENDER_TIMING`)
+show sync and render at 0 ms either way; with the glow the swap waited 12 ms at the median (16 ms at most) over 317 frames,
+without it 0 ms over 200, and after the moves the window swaps no frame at rest. The software backend's cost, measured on 2026-11-14 before this part (83 ms median from a change of a
+160 by 48 box to the canvas's next paint), is the tests' only. Not measured on the handheld.
+
+**Held to** `tests/focus_ring.rs`: every site the kit rings keeps, under the kit's tokens, the placement of a table in the
+test (the eight style controls Edge, `ActionButton` Tight, `CoverTile` Gapped), and under Eclipse's draws Gapped
+(`PageFrame`'s tiles, Tight, in kit-gallery's `tests/page_ring.rs`, where a page has tiles); under the kit's tokens each placement draws, pixel for pixel, the ring it replaced; a focused
+Button, Switch, ActionButton and TextField and a lit CoverTile each show one `FocusRing` in the look's placement, its ring
+in the accent, its gap in `ringGapColor`; under Eclipse the glow paints once and not again over half a second at rest,
+follows the rule within its measured bound and ends at its reach. `tests/glow.rs` (software) and `tests/glow_gpu.rs`
+(the card, a GPU job) hold the part itself. Kit 1.5; `Glow` and `ringGapped` Kit 1.6.
 
 ### 7.114 A button's corners (2026-11-14)
 
@@ -3933,9 +3988,11 @@ alien's colour, surfaceRaised unless set). It draws what the themes' `EngineMark
 glyph stroked in the ink, or the badge filled in the ink with the alien in `cut`. The reference theme's
 `parts/EngineMark.qml` is now a `PlanetMark` with its own white ink and 15-unit box; Horizon's, Meridian's, Constellation's
 and Orrery's copies are left as they were (their badge is drawn in #C9C9D0 with the alien in #26262B, where the
-reference's takes the ink and surfaceRaised). Test: `tests/planet_mark.rs`, three cores (Venus on the Super Nintendo's
-body, Diamond on the PlayStation's, Nephrite on the Mega Drive's, each body read from `Platform/systems/data`) and a
-hosted core. Kit 1.6.
+reference's takes the ink and surfaceRaised). Test: `tests/planet_mark.rs`: each kind of core and the mark the test states
+for it, every name of `SKY_NAMED` its own symbol, Nephrite on the Mega Drive's body shards and Diamond on the
+PlayStation's a gem (each body read from the console's data in `Platform/systems/data`, the words of
+`Platform/systems/src/lib.rs` `BODIES`), an invented name on a planet's body the planet, and a hosted core, its name
+read from `libretro-cores.tsv`, libretro's badge. Kit 1.6.
 
 ### 7.116 CoronaDisc: the eclipse's disc, its rim and its glows (2026-11-14)
 
@@ -3960,26 +4017,29 @@ the splash's), its rim's width and colour, and a list of glows are properties, a
 child, over it, so no board needs a second disc. The turning is the splash's own, not the disc's.
 
 **The part.** `CoronaDisc` draws a disc as wide as its box's shorter side at the box's centre, in `fill` (surface unless
-set); a ring `rim` wide outside it in `corona` (the look's `coronaColor` unless a game's is given); and under both, each
-of `glows`, a list of `CoronaGlow` (`blur`, `spread`, `color`), the first on top as a box-shadow lists them, by default
-two from the tokens, the glow and the halo. Everything past the disc is drawn past the box, as a box-shadow is, and
-takes no room in a layout. A glow is the disc's circle grown by its spread and blurred by its blur. On the graphics card
-it is a `MultiEffect` of the circle with `shadowScale` (scaled from the item's centre, Qt 6 documentation, read
-2026-11-14) growing it by the spread and `blurMax` the blur, as `RaisedShadow` maps a CSS blur (§7.55). The software
-backend draws no `MultiEffect` (seen on 2026-11-14: a `MultiEffect` under `QT_QUICK_BACKEND=software` drew no pixel, its
-source included); there a `Canvas` paints each glow as the shadow of its grown circle, the circle itself drawn off the
-canvas and its shadow offset back onto it, so only the glow lands (seen the same day: Qt's Context2D paints the shadow
-of a shape drawn outside the canvas). The canvas reaches past the grown circle by twice the blur. How Qt's `shadowBlur`
-and `MultiEffect`'s blur relate to a CSS blur radius was not measured; both backends take the token as the blur. Not measured
-either: the time and memory of a glow's canvas on the software backend for a disc wider than the window (Home's is
-1400 units), whose canvas is the disc and twice its reach on each side; and the glows on the graphics card, which no test
-has drawn yet.
+set); a ring `rim` wide outside it; and under both, each of `glows`, a list of `CoronaGlow` (`blur`, `spread`, `color`),
+the first on top as a box-shadow lists them, by default two from the tokens, the glow and the halo. Everything past the
+disc is drawn past the box, as a box-shadow is, and takes no room in a layout. Each glow is a `Glow` (§7.113) of the
+disc's square with corners of half its side, so a circle grown by its spread and blurred by its blur, outside the disc
+alone: a disc with no fill (the splash's) shows none of it inside. On the graphics card that is Qt's `RectangularShadow`,
+on the software backend a `Canvas`, as §7.113 says; the measures of the commonest recipe are in §7.113's table.
+
+**A game's corona.** `corona` is a game's corona colour, transparent (none given) by default; `gameCorona` is true while
+it is not transparent. The rim (`rimColor`) is the game's corona where one is given and the look's `coronaColor`
+otherwise. Decided 2026-11-14 by the tester (R-20261114-33, R-20261114-38): both glows take the game's corona too, each
+keeping its own strength, the inner glow strong and the halo faint: `glowColor` and `haloColor`, the default glows'
+colours, are the corona's red, green and blue at the alpha of `coronaGlowColor` and of `coronaHaloColor`, read from the
+tokens; with no game's corona they are those tokens' colours. A caller that passes its own `glows` keeps them. The
+boards draw every disc in the look's colours and say only, in a caption, that "the corona takes the colour of the game's
+art" (`EclipseSplashFrames.dc.html:61`).
 
 **Tokens.** `coronaColor`, `coronaGlowColor` and `coronaHaloColor` (colours, the variant's accent, or the theme's
 accent, where a theme gives none) and `coronaRim`, `coronaGlowBlur`, `coronaGlowSpread`, `coronaHaloBlur`,
 `coronaHaloSpread` (numbers, kit-core's `tokens::corona`). The kit's own corona is none, all five numbers 0, since the
 reference look draws no disc: under the reference's tokens a `CoronaDisc` is a plain disc, and nothing in the program
 places one yet. Eclipse's values are Home's disc (`Main:25`), converted as `EmuSen_Qt.md` §3.4.7 converts every board
-value. Test: `tests/corona_disc.rs`, under Eclipse's tokens read from its `theme.json`: the box, the rim's colour as
-given and as the look's, drawn, and the two glows at the tokens' sizes, drawn. The pixel ratio is one under the
-headless harness. Kit 1.6.
+value. Test: `tests/corona_disc.rs`, under Eclipse's tokens read from its `theme.json`: the box; the rim's colour as
+a game's and as the look's, drawn; the glows' colours as a game's corona at the tokens' strengths and as the tokens',
+drawn; the two glows at the tokens' sizes, each read at seven distances past the disc within 0.02 of the CSS rule (the
+largest difference measured on 2026-11-14 on the software backend, 0.0192), and black past the halo's reach. The pixel
+ratio is one under the headless harness. Kit 1.6.

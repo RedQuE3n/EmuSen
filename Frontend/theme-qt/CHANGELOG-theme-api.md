@@ -13,6 +13,10 @@ Decided 2026-11-14 by the tester (R-20261114-16): Eclipse's shared parts are kit
 - **`Tokens.coronaColor`, `coronaRim`, `coronaGlowColor`, `coronaGlowBlur`, `coronaGlowSpread`, `coronaHaloColor`,
   `coronaHaloBlur`, `coronaHaloSpread`** (added, read-only), as the kit's `Tokens` gained them; a theme may override each
   in `theme.json`.
+- `CoronaDisc`'s `corona` is a game's corona, transparent where none is given, and colours the rim and both glows
+  (decided 2026-11-14 by the tester, R-20261114-38; `EmuSen_Kit.md` §7.116). `FocusRing`'s `glowReach` is gone.
+- **`Tokens.ringGapped`** (added, read-only): every focus ring past its gap, as the kit's `Tokens` gained it (Kit 1.6,
+  R-20261114-21); a theme may set it in `theme.json`, and Eclipse sets it true.
 - The module is 1.2 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.2.*`.
   Every type of 1.0 keeps 1.0 in the qmldir and the three added are 1.2, so a theme that imports `EmuSen.Theme 1.0` finds
   what it found before; the module's minor alone, given to every file, had made `import EmuSen.Theme 1.0` find no type
@@ -26,8 +30,8 @@ The tester's ruling of 2026-11-14 (R-20261114-16): Eclipse's shared parts are ki
   (`EmuSen_Kit.md` §7.113). A theme places it around a focused box; the built-in themes' own rings are unchanged.
 - **`Tokens.ringGapColor`, `glowColor`, `glowBlur`, `glowSpread`, `buttonRadius`** (added, read-only): as the kit's
   `Tokens` gained them (Kit 1.5); `Tokens` mirrors every kit token. A `theme.json` may override them.
-- The module is 1.1 and `theme-check`'s API is 1.1; a package written for 1.0 still loads. Eclipse's `api` is 1.1, as
-  its manifest sets the new tokens.
+- The module is 1.1 and `theme-check`'s API is 1.1; a package written for 1.0 still loads. `FocusRing` keeps 1.1 in the
+  qmldir and every 1.0 type keeps 1.0, so `import EmuSen.Theme 1.0` finds what it found before and not `FocusRing`.
 
 ## 1.0, an addition: the raised shadow (2026-11-09)
 

@@ -54,6 +54,38 @@ Window {
         lifts: false
         lit: false
     }
+    // Six more sites a FocusRing marks, placed out of the measured rows: their placements are read, not their pixels.
+    Switch {
+        objectName: "switch"
+        x: 100
+        y: 250
+    }
+    CheckBox {
+        objectName: "check"
+        x: 250
+        y: 250
+    }
+    RadioButton {
+        objectName: "radio"
+        x: 400
+        y: 250
+    }
+    ComboBox {
+        objectName: "combo"
+        x: 550
+        y: 250
+        model: 2
+    }
+    Slider {
+        objectName: "slider"
+        x: 750
+        y: 250
+    }
+    TabButton {
+        objectName: "tab"
+        x: 700
+        y: 330
+    }
     // Before and after, each pair 300 pixels apart on one row: the Tight ring (ActionButton's and PageFrame's), the Gapped
     // ring (CoverTile's, its literals 7, 14 and 4), and the Edge ring (the style's controls' own border).
     Item {

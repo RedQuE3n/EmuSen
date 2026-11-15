@@ -97,7 +97,8 @@ fn qt_3_4_7_eclipse_is_listed_chosen_and_sets_every_override_on_both_engines() {
     assert_eq!(scene.property("themesModel", "findings"), "In use.");
     scene.pad(UiButton::Down);
     wait_for(&mut scene, "themesModel", "name", "Eclipse", 2000);
-    assert_eq!(scene.property("themesModel", "line"), "By The EmuSen project · EmuSen.Theme 1.1 · dark");
+    let api = serde_json::from_str::<serde_json::Value>(ECLIPSE).expect("Eclipse's theme.json")["api"].as_str().unwrap_or_default().to_owned();
+    assert_eq!(scene.property("themesModel", "line"), format!("By The EmuSen project · EmuSen.Theme {api} · dark"));
     assert_eq!(scene.property("themesModel", "findings"), "Checked: nothing found.");
     assert_eq!(scene.property("themesModel", "usable"), "true");
 

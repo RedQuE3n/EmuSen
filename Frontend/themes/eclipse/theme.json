@@ -1,6 +1,6 @@
 {
     "schema": 1,
-    "api": "1.1",
+    "api": "1.2",
     "name": "Eclipse",
     "author": "The EmuSen project",
     "licence": "GPL-3.0-or-later",
@@ -32,6 +32,7 @@
             "glowBlur": 26.666666666666668,
             "glowSpread": 5.333333333333333,
             "buttonRadius": 24.0,
+            "ringGapped": true,
             "hoverBorder": 1.3333333333333333,
             "controlHeight": 48.0,
             "helpBar": 50.666666666666664,

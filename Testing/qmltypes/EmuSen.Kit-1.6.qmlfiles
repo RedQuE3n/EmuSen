@@ -463,16 +463,29 @@ PdfPage
     property int page
     readonly property int pages
     readonly property size pageSize
+Glow
+    property real radius
+    property color color
+    property real blur
+    property real spread
+    readonly property real reach
+    readonly property real cardBlur
+    readonly property bool software
+    readonly property bool glows
+    objectName "glowCast"
+    objectName "glowShadow"
+    objectName "glowPainted"
+    objectName "glowCanvas"
 FocusRing
     property real radius
     property int placement
+    readonly property int form
+    readonly property bool onEdge
     readonly property real edgeWidth
     readonly property color edgeColor
     readonly property real inner
     readonly property real outer
-    readonly property real glowReach
     objectName "focusGlow"
-    objectName "focusGlowCanvas"
     objectName "focusGap"
     objectName "focusBand"
 PlanetMark
@@ -492,12 +505,13 @@ CoronaGlow
 CoronaDisc
     property color fill
     property color corona
+    readonly property bool gameCorona
+    readonly property color rimColor
+    readonly property color glowColor
+    readonly property color haloColor
     property real rim
     property list<Kit.CoronaGlow> glows
     readonly property real diameter
-    readonly property bool software
     objectName "coronaGlow." + glow.index
-    objectName "coronaGlowEffect." + glow.index
-    objectName "coronaGlowPainted." + glow.index
     objectName "coronaRim"
     objectName "coronaDisc"

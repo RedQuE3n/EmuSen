@@ -2,29 +2,20 @@
 // given and as the look's where none is given, and its two glows at the tokens' sizes, drawn; one test, as the harness is
 // one per process.
 
+mod common;
+
+use common::{eclipse, number, Recipe};
 use emusen_kit_core::tokens::{Colour, Variant};
 use emusen_qt_test::Harness;
 
 const SCENE: &str = concat!("file://", env!("CARGO_MANIFEST_DIR"), "/tests/qml/CoronaDiscScene.qml");
-const ECLIPSE: &str = include_str!("../../themes/eclipse/theme.json");
 // The scene's box, its scale and its window, test inputs written in CoronaDiscScene.qml.
 const BOX: (f64, f64) = (120.0, 80.0);
 const SCALE: f64 = 3.0;
 const CENTRE: f64 = 950.0;
-
-/// Eclipse's dark overrides, each a token and its value as theme.json writes it.
-fn eclipse() -> Vec<(String, String)> {
-    let dark = ECLIPSE.split("\"dark\": {").nth(1).expect("Eclipse's dark tokens");
-    let dark = &dark[..dark.find('}').expect("their end")];
-    dark.lines()
-        .filter_map(|l| l.trim().trim_end_matches(',').split_once(": "))
-        .map(|(k, v)| (k.trim_matches('"').to_owned(), v.trim_matches('"').to_owned()))
-        .collect()
-}
-
-fn number(tokens: &[(String, String)], name: &str) -> f64 {
-    tokens.iter().find(|(k, _)| k == name).and_then(|(_, v)| v.parse().ok()).unwrap_or_else(|| panic!("Eclipse's {name}"))
-}
+/// How far each painted glow may stand from the CSS rule, as an alpha: the largest difference measured on 2026-11-14 on the
+/// desktop's software backend at the distances below was 0.0192 (EmuSen_Kit.md §7.116).
+const MEASURED: f64 = 0.02;
 
 fn colour(tokens: &[(String, String)], name: &str) -> Colour {
     tokens.iter().find(|(k, _)| k == name).and_then(|(_, v)| Colour::parse(v)).unwrap_or_else(|| panic!("Eclipse's {name}"))
@@ -66,6 +57,24 @@ fn kit_7_116_a_corona_disc_holds_its_box_its_rim_s_colour_and_its_glows() {
     assert!(scene.set_property("disc", "corona", "#3080F0"));
     assert_eq!(read_colour(&scene.property("coronaRim", "color")), game);
     assert_eq!(scene.colours_at(&[at_rim])[0].map(|c| (c.r, c.g, c.b)), Some((game.r, game.g, game.b)), "the game's rim drawn");
+    // Decided 2026-11-14 by the tester (R-20261114-38): the glows take the game's corona too, each at its own token's
+    // strength; with none given they are the tokens' colours.
+    for (part, token) in [("glowColor", "coronaGlowColor"), ("haloColor", "coronaHaloColor")] {
+        let strength = colour(&tokens, token).a;
+        let seen = read_colour(&scene.property("disc", part));
+        assert_eq!((seen.r, seen.g, seen.b), (game.r, game.g, game.b), "{token}'s glow takes the game's corona");
+        assert!((i32::from(seen.a) - i32::from(strength)).abs() <= 1, "{token}'s glow keeps its token's strength {strength}: {seen:?}");
+    }
+    let near = scene.colours_at(&[(CENTRE + SCALE * (side / 2.0 + rim + 2.0), CENTRE)])[0].expect("a point past the rim");
+    assert!(near.r < near.g && near.g < near.b, "the glows drawn in the game's blue past the rim: {near:?}");
+    assert!(scene.set_property("disc", "corona", "transparent"));
+    let near = scene.colours_at(&[(CENTRE + SCALE * (side / 2.0 + rim + 2.0), CENTRE)])[0].expect("a point past the rim");
+    assert!(near.r > near.b, "the glows drawn in the look's warm colours again: {near:?}");
+    for (part, token) in [("glowColor", "coronaGlowColor"), ("haloColor", "coronaHaloColor")] {
+        let seen = read_colour(&scene.property("disc", part));
+        assert_eq!(seen, colour(&tokens, token), "with no game's corona, {token}'s own colour");
+    }
+    assert_eq!(read_colour(&scene.property("coronaRim", "color")), look, "with no game's corona, the look's rim");
 
     // The glows, reached through the tree as a Repeater's delegates are: the glow's and the halo's sizes, each painted past
     // the disc by its spread and twice its blur.
@@ -76,23 +85,16 @@ fn kit_7_116_a_corona_disc_holds_its_box_its_rim_s_colour_and_its_glows() {
         let glow = id_of(&format!("coronaGlow.{index}"));
         assert!((scene.item_number(&glow, "blur") - blur).abs() < 1e-9, "{which}'s blur");
         assert!((scene.item_number(&glow, "spread") - spread).abs() < 1e-9, "{which}'s spread");
-        let painted = id_of(&format!("coronaGlowPainted.{index}"));
-        assert_eq!(scene.item_number(&painted, "visible"), 1.0, "{which} is painted on the software backend");
-        let width = scene.item_number(&painted, "width");
-        assert!((width - (side + 2.0 * (spread + 2.0 * blur))).abs() < 1e-6, "{which} painted {width} wide");
+        let at = tree.find_named(&format!("coronaGlow.{index}")).expect("the glow");
+        let painted: Vec<u32> = tree.under(at).into_iter().filter(|&i| tree.nodes[i as usize].name == "glowCanvas").collect();
+        assert_eq!(painted.len(), 1, "{which} is painted once on the software backend");
+        let width = tree.nodes[painted[0] as usize].w;
+        let reach = (spread + 2.0 * blur).ceil();
+        assert!((width - SCALE * (side + 2.0 * reach)).abs() < 1e-6, "{which} painted {width} wide on the window");
     }
-    // Drawn: just past the rim the glow, in its hue; past the glow's reach the halo alone, in its own; past the halo's, black.
-    let (glow_reach, halo_reach) = (
-        number(&tokens, "coronaGlowSpread") + 2.0 * number(&tokens, "coronaGlowBlur"),
-        number(&tokens, "coronaHaloSpread") + 2.0 * number(&tokens, "coronaHaloBlur"),
-    );
-    let out = |d: f64| (CENTRE + SCALE * (side / 2.0 + d), CENTRE);
-    let drawn = scene.colours_at(&[out(rim + 2.0), out(glow_reach + 4.0), out(halo_reach + 4.0)]);
-    assert!(light(drawn[0]) > 60, "the glow past the rim: {:?}", drawn[0]);
-    assert!(light(drawn[1]) > 6, "the halo past the glow's reach: {:?}", drawn[1]);
-    assert_eq!(light(drawn[2]), 0, "nothing past the halo's reach: {:?}", drawn[2]);
-    // Each glow in its own colour token: the glow green and the halo blue (test inputs over Eclipse's), the halo alone
-    // past the glow's reach, the glow over it just past the rim.
+    // Drawn, each glow in a colour of its own (test inputs over Eclipse's): the glow green and the halo blue, opaque, so a
+    // pixel's green is the glow's alpha and its blue the halo's under it; each at stated distances past the disc beside the
+    // CSS rule, and black past the halo's reach.
     let mut tinted: Vec<(Variant, String, String)> = tokens
         .iter()
         .filter(|(k, _)| k != "coronaGlowColor" && k != "coronaHaloColor")
@@ -102,10 +104,34 @@ fn kit_7_116_a_corona_disc_holds_its_box_its_rim_s_colour_and_its_glows() {
     tinted.push((Variant::Dark, "coronaHaloColor".to_owned(), "#FF0000FF".to_owned()));
     scene.kit_tokens().expect("the kit's tokens").set_overrides(tinted);
     scene.wait(100);
-    let drawn = scene.colours_at(&[out(rim + 2.0), out(glow_reach + 4.0)]);
-    let near = drawn[0].expect("a point past the rim");
-    assert!(near.r == 0 && near.g > 100 && near.g > near.b, "the glow's green over the halo past the rim: {near:?}");
-    let far = drawn[1].expect("a point past the glow's reach");
-    assert!(far.r == 0 && far.g == 0 && far.b > 20, "the halo's blue alone past the glow's reach: {far:?}");
+    let recipe = |which: &str| Recipe {
+        width: side,
+        height: side,
+        radius: side / 2.0,
+        spread: number(&tokens, &format!("corona{which}Spread")),
+        blur: number(&tokens, &format!("corona{which}Blur")),
+        alpha: 1.0,
+    };
+    let (glow, halo) = (recipe("Glow"), recipe("Halo"));
+    let out = |d: f64| (CENTRE + SCALE * (side / 2.0 + d), CENTRE);
+    let at: Vec<f64> = [rim + 1.0, glow.spread, glow.spread + glow.blur / 2.0, glow.spread + glow.blur, halo.spread, halo.spread + halo.blur / 2.0, halo.spread + halo.blur]
+        .iter()
+        .map(|d| d.max(rim + 1.0))
+        .collect();
+    let drawn = scene.colours_at(&at.iter().map(|d| out(*d)).collect::<Vec<_>>());
+    let mut worst: f64 = 0.0;
+    for (d, c) in at.iter().zip(&drawn) {
+        let c = c.expect("a point past the rim");
+        assert_eq!(c.r, 0, "no red in either glow: {c:?}");
+        let a_glow = f64::from(c.g) / 255.0;
+        let a_halo = if a_glow < 1.0 { f64::from(c.b) / 255.0 / (1.0 - a_glow) } else { 0.0 };
+        let (e_glow, e_halo) = (glow.css_above(*d), halo.css_above(*d));
+        println!("corona\tsoftware\t{d:.2}\tglow {a_glow:.4} css {e_glow:.4}\thalo {a_halo:.4} css {e_halo:.4}");
+        worst = worst.max((a_glow - e_glow).abs()).max((a_halo - e_halo).abs());
+    }
+    println!("the largest difference from the CSS rule: {worst:.4}");
+    assert!(worst <= MEASURED, "the disc's glows stand {worst:.4} from the CSS rule, past the {MEASURED} measured");
+    let halo_reach = halo.spread + 2.0 * halo.blur;
+    assert_eq!(light(scene.colours_at(&[out(halo_reach + 4.0)])[0]), 0, "nothing past the halo's reach");
     scene.assert_quiet();
 }

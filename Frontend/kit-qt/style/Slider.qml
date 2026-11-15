@@ -15,8 +15,8 @@ T.Slider {
         implicitHeight: Kit.Tokens.controlHeight * 0.6
         radius: width / 2
         color: control.pressed ? Kit.Tokens.accent : Kit.Tokens.overAccent
-        border.width: control.activeFocus ? ring.edgeWidth : Kit.Tokens.hoverBorder
-        border.color: control.activeFocus ? ring.edgeColor : Kit.Tokens.border
+        border.width: control.activeFocus && ring.onEdge ? ring.edgeWidth : Kit.Tokens.hoverBorder
+        border.color: control.activeFocus && ring.onEdge ? ring.edgeColor : Kit.Tokens.border
         Kit.FocusRing {
             id: ring
             visible: control.activeFocus

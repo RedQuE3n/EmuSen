@@ -489,22 +489,25 @@ Window {
             onAccepted: folders.accepted(folderDialog.selectedFolder)
             onRejected: folders.rejected()
         }
-        // Made only while shown, so a change to the settings costs no frame behind another screen (EmuSen_Qt.md §9.3.2); the
-        // canvas inside scales to its parent, so the Loader sizes a plain item rather than the canvas.
+        // Made only while shown, so a change to the settings costs no frame behind another screen (EmuSen_Qt.md §9.3.2).
         Loader {
+            id: settingsSlot
             objectName: "settingsSlot"
             anchors.fill: parent
             active: screens.shown === Screens.Settings
             focus: active
-            sourceComponent: Item {
-                Settings {
-                    objectName: "settings"
-                    settings: settingsModel
-                    padFamily: program.padFamily
-                    inputs: !program.splashShown
-                    onBacked: screens.back()
-                    onActed: (key) => screens.act(key)
-                }
+            // Opened again on the row it was left on, which the model holds, before the frame's own row is written back.
+            onLoaded: {
+                const shown = settingsSlot.item as SettingsScreen
+                shown.layout.focusRow(settingsModel.focused)
+                shown.placed = true
+            }
+            sourceComponent: SettingsScreen {
+                settings: settingsModel
+                padFamily: program.padFamily
+                inputs: !program.splashShown
+                onBacked: screens.back()
+                onActed: (key) => screens.act(key)
             }
         }
         ThemesScreen {

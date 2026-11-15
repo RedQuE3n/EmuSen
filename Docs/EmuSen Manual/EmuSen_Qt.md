@@ -7875,8 +7875,11 @@ controller", a real pad on the desk). The earlier trunk drew the same frames, so
 `pads.connected`, and the settings read joined the start with Settings (`2a3772454`). Whether a span caught a late answer
 depended on how the threads were scheduled. Two changes follow. Settings is made only while shown, in a `Loader` whose
 `active` is `screens.shown === Screens.Settings`, so a change to the settings costs no frame behind another screen (Qt
-syncs a dirty item whatever its visibility, as above); the Loader sizes a plain item and the canvas scales to that, since
-a Loader given a size resizes its item, which would override the canvas's own design size. And the start is over when
+syncs a dirty item whatever its visibility, as above). The Loader makes `SettingsScreen.qml`, a plain item it sizes, with
+the canvas inside scaling to it, since a Loader given a size resizes its item and would override the canvas's own design
+size. Made afresh, the frame would start on its first row and write that back over the model's `focused`, so the row a
+page or tool returns to (`settings_doors.rs`) would be lost: the Loader's `loaded` handler focuses the row the model
+holds, and only then does Settings write its focused row back (`placed`). And the start is over when
 `program.reading` is false: `library.loading || !settingsModel.ready || !pads.answered`, where `PadReader.answered` turns
 true with its first delivery, pads or a failure to open them (`EmuSen_Kit.md` §7.15). `idle.rs` waits on it.
 `qt-app/tests/idle_hidden.rs` forces the order without depending on the machine: it names the platform library to the

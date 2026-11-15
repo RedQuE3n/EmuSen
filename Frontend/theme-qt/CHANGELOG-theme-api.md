@@ -15,6 +15,9 @@ Decided 2026-11-15 by the tester (R-20261115-8): each console's number of played
 - **`Words.played(n)`** ("61 played", `qt-models/src/words.rs`), **`Words.place(index, count)`** ("3 of 14", the game
   page's `place`, its one owner) and **`Words.line(parts)`** (the parts joined as the facts join theirs, " · ", the empty
   ones left out; `words::facts` now calls it) (added).
+- **`Help.entries(kind, {triggers: true})`** (added flag): with `group`, the group's entry is LT RT Maker on the triggers
+  (`help.rs`'s `MAKER`) in place of LB RB Group, as Eclipse's Choose a console steps its makers (decided 2026-11-15 by the
+  tester, R-20261115-17). The pair is drawn as one glyph, LT with RT.
 - **`GroupGridLayout`** (the kit's, by name; 1.5 in the qmldir): groups as a column and the chosen group's items as a
   grid, with the walk inside it (`EmuSen_Kit.md` §7.120), so a theme lays such a screen out without logic of its own.
 - The module is 1.5 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.5.*`.

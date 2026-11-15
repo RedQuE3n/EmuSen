@@ -296,6 +296,8 @@ pub const CHECK: &str = "check";
 /// The shoulders' entry where a screen's shoulders jump a group of its own row, and B's where a screen has none (the
 /// themes' help bars, EmuSen_Qt.md §3.2): no action, since the walk and the theme answer them.
 pub const GROUP: Entry = (UiButton::PageUp, "Group", None);
+/// The group's entry on the triggers, where a screen's triggers step its makers (Eclipse's Choose a console, R-20261115-17).
+pub const MAKER: Entry = (UiButton::First, "Maker", None);
 pub const BACK: Entry = (UiButton::Back, "Back", None);
 
 /// A game's page's shared entries: Y the heart, the shoulders the sections (the frame steps them), Start Home.
@@ -325,14 +327,19 @@ pub fn back_at(screen: Screen) -> Option<usize> {
 
 /// A screen's entries with the group's and B's added where the screen takes them, B before the group.
 pub fn entries_with(screen: Screen, group: bool, back: bool) -> Vec<Entry> {
+    entries_grouped(screen, group.then_some(GROUP), back)
+}
+
+/// As `entries_with`, the group's entry given: `GROUP` on the shoulders or `MAKER` on the triggers.
+pub fn entries_grouped(screen: Screen, group: Option<Entry>, back: bool) -> Vec<Entry> {
     let mut list = entries(screen).to_vec();
     let has_back = list.iter().any(|e| e.0 == UiButton::Back);
     let back_place = back_at(screen).filter(|_| back && !has_back);
     if let Some(at) = back_place {
         list.insert(at, BACK);
     }
-    if let Some(at) = group_at(screen).filter(|_| group) {
-        list.insert(at + usize::from(back_place.is_some_and(|b| b <= at)), GROUP);
+    if let (Some(at), Some(entry)) = (group_at(screen), group) {
+        list.insert(at + usize::from(back_place.is_some_and(|b| b <= at)), entry);
     }
     list
 }
@@ -361,11 +368,12 @@ pub const NEXT: &str = "next";
 /// A card's declared action that closes it, as Start closes a card away from a game.
 pub const CLOSE: &str = "close";
 
-/// The second button an entry names: the shoulders are one entry, LB and RB, as the accepted render draws them, and
-/// the d-pad's Left and Right one entry.
+/// The second button an entry names: the shoulders are one entry, LB and RB, as the accepted render draws them, the
+/// triggers one, LT and RT, and the d-pad's Left and Right one entry.
 pub fn pair_of(button: UiButton) -> Option<UiButton> {
     match button {
         UiButton::PageUp => Some(UiButton::PageDown),
+        UiButton::First => Some(UiButton::Last),
         UiButton::Left => Some(UiButton::Right),
         _ => None,
     }

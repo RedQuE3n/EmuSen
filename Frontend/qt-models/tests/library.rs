@@ -367,6 +367,18 @@ fn the_themes_group_and_back_entries_go_where_the_canvases_put_them() {
 }
 
 #[test]
+fn qt_3_4_9_the_makers_entry_stands_on_the_triggers_where_the_group_s_would() {
+    use emusen_kit_core::input::UiButton;
+    use emusen_qt_models::help::{entries_grouped, pair_of, GROUP, MAKER};
+    let words: Vec<&str> = entries_grouped(Screen::Consoles, Some(MAKER), false).iter().map(|e| e.1).collect();
+    assert_eq!(words, ["Open", "Back", "Maker", "Favourites", "Random game"], "R-20261115-17: LT RT Maker where LB RB Group stood");
+    assert_eq!((MAKER.0, pair_of(MAKER.0), MAKER.2), (UiButton::First, Some(UiButton::Last), None), "LT with RT, no action: the theme answers it");
+    assert!(!entries_grouped(Screen::Consoles, Some(MAKER), true).contains(&GROUP), "the shoulders' entry is not drawn beside it");
+    assert_eq!(entries_grouped(Screen::Consoles, Some(GROUP), true), emusen_qt_models::help::entries_with(Screen::Consoles, true, true));
+    assert_eq!(action_lines(Screen::Consoles), "favourites Search\nrandom Screensaver\nhome Menu\n", "the declared actions unchanged");
+}
+
+#[test]
 fn qt_3_4_2_a_console_s_cover_shape_is_its_table_s_turned_with_one_fallback() {
     use emusen_crystal_client::shapes::SystemRow;
     use emusen_qt_models::library::cover_shape;

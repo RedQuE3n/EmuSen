@@ -949,7 +949,7 @@ with the fields a theme may read and nothing more. The table is the module as bu
 | `Cues` | singleton | `scroll()`, `systembrowse()`, `select()`, `back()`, `favorite()`, `launch()`, `quicksysselect()`: the seven names of `EmuSen_Interface.md` §23, rung by the host through Endymion at the player's volume |
 | `Bells` | singleton | `ladder(count)` (the ladder's first rungs made ready), `strike(i)` (rings rung i, the bell world i rings in Moonrise), handed to the host's striker, rendered by the kit's `Bells` and rung at the Navigation volume |
 | `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`, `summary(consoles, games)`, from 1.5 `played(n)`, `place(index, count)` and `line(parts)`, the parts joined as the facts join theirs; the empty states `noGames`, `noRecent`, `noConsoles`, `addFolder`, the eyebrow `places` and `pausedAgo(pausedSince)`; `continueEntry` and `recentEntry`, Continue and the Recent shelf named as destinations: the curated face of `words.rs` |
-| `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, `SectionSearched`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; `entries(kind, {group, back, accept})` the same with LB RB Group and B Back added where the kind takes them, and A's entry not `enabled` (an `enabled` role, read as `model.enabled`) when `accept` is false; the curated face of `help.rs` |
+| `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, `SectionSearched`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; `entries(kind, {group, back, accept, triggers})` the same with LB RB Group (LT RT Maker with `triggers`, 1.5) and B Back added where the kind takes them, and A's entry not `enabled` (an `enabled` role, read as `model.enabled`) when `accept` is false; the curated face of `help.rs` |
 | `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only; `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
 | `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown) |
 | `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` (a shelf's icon, one of Home's seven places by its key, or an engine's mark) |
@@ -1826,10 +1826,21 @@ a hue: the systems table's data gives one for 14 consoles, and `SystemDef::look`
 `PlanetMark`. The facts line is `Words.facts`, `Words.played` and `Words.runsOn` said as one `Words.line`. Open is the help bar's own A entry.
 At the foot's right, the maker and `Words.place` (game_page.rs's `place`, "3 of 14") say where the focused console stands.
 
-The screen holds no logic. The kit's `GroupGridLayout` (EmuSen_Kit.md §7.120) gives each console its column and row in
-its maker's grid and its four neighbours there, and the screen binds `KeyNavigation` to those. Up and down walk the
+The screen holds no layout logic. The kit's `GroupGridLayout` (EmuSen_Kit.md §7.120) gives each console its column and row in
+its maker's grid and its four neighbours there. Each plate and maker answers its own keys in its `Keys.onPressed`, from
+the index of the console each arrow, LT and RT leads to (a theme file declares no function, theme-check's rule), and Open
+answers Left with the plate last focused; giving the focus to a plate chooses its maker first, since a plate of another
+maker is not shown. The screen uses no `KeyNavigation`: Qt sets the reverse of each link it is given (seen
+2026-11-15: Open's Left, bound to the plate last focused, wrote Open as that plate's Right, so Right from the Game Boy
+went to Open past the Game Boy Color), and a not-shown target is skipped, so Down from a maker's last row did nothing in
+the running program. The eyebrow's letter spacing reads its own size, not the font it sets, which was a binding loop. Up and down walk the
 makers. Right from a maker goes to its first plate, and Left from a plate's first column goes back to its maker. Right
-from the last plate in a row goes to Open, and the shoulders go to the previous or next maker's first console. The header
+from the last plate in a row goes to Open, and Down from a maker's last row goes on to the next maker's first console. LT
+and RT, from a plate or a maker, go to the previous or next maker's first console, and nothing past the first or the last
+(decided 2026-11-15 by the tester, R-20261115-17); the help line draws them as one entry, LT RT Maker, the `Help` list's
+`triggers` flag putting `help.rs`'s `MAKER` where its LB RB Group stands. The same ruling gives LB and RB the navigation
+sections, which are a piece of their own not built yet: until then LB and RB are bound to nothing on this screen and the
+help line draws no entry for them. This is open. The header
 is Eclipse's `Brand` and `Status`, the foot is its `HelpLine` with the place line at its right, the two colour fields are
 the kit's `Backdrop`, and Open is a filled `Pill` without its halo and glow. The fields take the focused console's
 `glow`, each at its board's blur and opacity (140 px at 0.5, 150 px at 0.35, board lines 19 and 20); the board's own two
@@ -1850,6 +1861,18 @@ on the Super Nintendo. At 1280 × 800 and 1920 × 1200 it holds every built row'
 height over 1200, as the recording writes them (two places), and each plate to the board's lattice. It also checks that the
 chosen maker is filled in the accent, that the facts carry the played count, and that the place line is drawn. A second
 test requires that theme-audit find nothing over one console, thirty, one maker of forty and 120 at any of its five sizes.
+kit-core's `group_grid.rs` holds the walk itself, with no window: on one maker of 1, of a row's worth, of 11, 30 and 40, and
+on 120 in seven interleaved groups, at one to six columns, every press from every place lands where the grid's arithmetic
+puts it, no press toward a place that lies that way does nothing, and every place is reached from its group's first.
+qt-app's `eclipse_consoles.rs` drives the running program with an SDL pad made inside the test's process over the eleven
+canvas consoles, games played on some: at each of the gate's sizes each press from every plate lands where the layout's
+walk puts it, every plate is reached, and each is drawn whole in its view and over no other plate, maker or the aside; the
+plate's words, the facts with the played count and the place line are the program's words over the model's row; the disc's
+rim and both glows are the focused console's `glow`, the two glows at different strengths, for two consoles of different
+colours; LT and RT step the makers and stop at the ends, LB and RB move nothing, and the help line draws Maker and no Group;
+A opens the console's games and B comes back to it. The program reads its library from the platform library's systems
+table, so a library of 120 consoles exists only in theme-audit's crowd (`theme-check/audit/src/crowd.rs`), and the
+120-console run is theme-audit's.
 
 ### 3.5 Loading and the sandbox
 

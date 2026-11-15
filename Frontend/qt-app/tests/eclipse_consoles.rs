@@ -1,0 +1,404 @@
+//! Eclipse's Choose a console in the running program (EmuSen_Qt.md §3.4.9), driven by an SDL pad inside this process over a
+//! library of the eleven canvas consoles, some games played: at each of the gate's sizes every press from every plate lands
+//! where the layout's walk puts it and every plate is reached, none cut or overlapping; A opens the console's games; LT and
+//! RT step the makers; the disc's rim and glows are the focused console's own colour; a plate's words and the played count
+//! are the model's. One test, as the harness is one per process.
+
+mod common;
+
+use common::{approved_console_core, wait_for, CONSOLES};
+use emusen_client_fixture::{library, World};
+use emusen_crystal_client::Config;
+use emusen_kit_core::group_grid::group_grid;
+use emusen_kit_core::input::PadControl;
+use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS};
+use emusen_platform_client::library::Library;
+use emusen_platform_client::{Lent, Platform};
+use emusen_qt::MAIN_URL;
+use emusen_qt_endymion::reading::sdl_button;
+use emusen_qt_models::clients::ClientSource;
+use emusen_qt_models::library::{refresh, LibrarySource, LibraryView};
+use emusen_qt_models::{themes, words};
+use emusen_qt_test::harness::SIZES;
+use emusen_qt_test::tree::{colour, Tree};
+use emusen_qt_test::virtual_pad::{Sdl, VirtualPad};
+use emusen_qt_test::Scene;
+use emusen_theme_qt::view::{consoles, Cell, CONSOLE_ROLES};
+use serde_json::json;
+
+/// SDL's trigger axes (SDL_GAMEPAD_AXIS_LEFT_TRIGGER and _RIGHT_TRIGGER) and a full pull.
+const LEFT_TRIGGER: i32 = 4;
+const RIGHT_TRIGGER: i32 = 5;
+const PULLED: i16 = i16::MAX;
+
+/// One console of `Library.consoles` as the model gives it.
+#[derive(Clone, Debug)]
+struct Console {
+    key: String,
+    display_name: String,
+    maker: String,
+    year: i32,
+    count: usize,
+    played: usize,
+    glow: String,
+    engine_name: String,
+    engine_kind: String,
+    group: usize,
+    group_index: usize,
+}
+
+fn cell<'a>(row: &'a [Cell], role: &str) -> &'a Cell {
+    &row[CONSOLE_ROLES.iter().position(|r| *r == role).expect("a console role")]
+}
+
+fn text(row: &[Cell], role: &str) -> String {
+    match cell(row, role) {
+        Cell::Text(t) => t.clone(),
+        other => panic!("{role} is no text: {other:?}"),
+    }
+}
+
+fn whole(row: &[Cell], role: &str) -> i32 {
+    match cell(row, role) {
+        Cell::Whole(n) => *n,
+        other => panic!("{role} is no whole number: {other:?}"),
+    }
+}
+
+/// The eleven consoles' games, in each console's ES-DE folder, which settles an extension two consoles share
+/// (`Platform/library/src/scan.rs`, `route`): one more for each console in the canvas's order up to three, the first of each
+/// played and the second of the first console too. A Game Boy Color game carries its header's colour flag (0x143).
+fn written(world: &World) -> Vec<String> {
+    let source = ClientSource::open(&library().to_string_lossy(), &Config::default()).unwrap();
+    let systems = source.systems().unwrap();
+    let mut played = Vec::new();
+    for (n, id) in CONSOLES.iter().enumerate() {
+        let system = systems.iter().find(|s| s.id == *id).expect("a canvas console in the table");
+        let ext = system.extensions.first().unwrap_or_else(|| panic!("{id} takes an extension"));
+        let mut image = vec![0u8; 4096];
+        image[0x143] = if *id == "gbc" { 0x80 } else { 0 };
+        for g in 0..=(n % 3) {
+            let path = world.dir(&format!("Roms/{}", system.esde_system)).join(format!("{id} game {g}{ext}"));
+            std::fs::write(&path, &image).unwrap();
+            if g == 0 || (n == 0 && g == 1) {
+                played.push(path.to_string_lossy().into_owned());
+            }
+        }
+    }
+    played
+}
+
+/// The library written, the fixture's PlayStation core approved in `cores` beside the build's own, and its plays recorded
+/// through the real clients; the consoles as `Library.consoles` gives them: those of the eleven a core runs.
+fn library_of(world: &World, cores: &std::path::Path) -> Vec<Console> {
+    let platform = Platform::load(library()).unwrap();
+    let mut settings = platform.model_new(MODEL_APP_SETTINGS).unwrap();
+    settings["RomDirectory"] = json!(world.root.join("Roms").to_string_lossy());
+    platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
+    let played = written(world);
+    approved_console_core(cores);
+    let source = emusen_qt_models::clients::source_for(&library().to_string_lossy(), cores.to_str().unwrap()).unwrap();
+    source.games().unwrap();
+    let sqlite = Lent::open("libsqlite3.so.0").unwrap();
+    let records = Library::open(&platform, &platform.file(FILE_GAMES).unwrap(), &sqlite).unwrap();
+    for (i, path) in played.iter().enumerate() {
+        records.change(&json!({ "op": "started", "path": path, "at": words::utc(words::now() - 3600 * (i as i64 + 1)) })).unwrap();
+    }
+    let mut view = LibraryView::empty();
+    view.apply(refresh(&source));
+    assert!(view.problem.is_empty(), "{}", view.problem);
+    consoles(&view)
+        .iter()
+        .map(|r| Console {
+            key: text(r, "key"),
+            display_name: text(r, "displayName"),
+            maker: text(r, "maker"),
+            year: whole(r, "year"),
+            count: whole(r, "count") as usize,
+            played: whole(r, "played") as usize,
+            glow: text(r, "glow"),
+            engine_name: text(r, "engineName"),
+            engine_kind: text(r, "engineKind"),
+            group: whole(r, "group") as usize,
+            group_index: whole(r, "groupIndex") as usize,
+        })
+        .collect()
+}
+
+/// The focused item's objectName.
+fn focused(scene: &mut Scene<'_>) -> String {
+    let tree = scene.tree();
+    scene.focus(&tree).map(|i| tree.nodes[i as usize].name.clone()).unwrap_or_default()
+}
+
+/// A control pressed and let go on the pad, as a hand does: down until the router holds it (or the screen it opens is
+/// shown, whose frame holds nothing yet), up until it has let it go.
+fn press(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, control: PadControl) {
+    let button = control.press().expect("a control the interface hears");
+    let shown = scene.property("screens", "shown");
+    let set = |down: bool| match sdl_button(control) {
+        Some(b) => sdl.press(pad, b, down),
+        None => sdl.axis(pad, if control == PadControl::LeftTrigger { LEFT_TRIGGER } else { RIGHT_TRIGGER }, if down { PULLED } else { 0 }),
+    };
+    for down in [true, false] {
+        set(down);
+        let heard = |s: &mut Scene<'_>| s.pad_held(button) == down || (down && s.property("screens", "shown") != shown);
+        let mut waited = 0;
+        while !heard(scene) && waited < 2000 {
+            scene.wait(8);
+            waited += 8;
+        }
+        assert!(heard(scene), "the router heard {control:?} {}; shown {}, focus {}", if down { "down" } else { "up" }, scene.property("screens", "shown"), focused(scene));
+    }
+    scene.wait(60);
+}
+
+/// Back on plate `k`: Open's Left and a maker's Right land on a plate, LT and RT step to its maker, then Down and Right along.
+fn go_to(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, grid: &emusen_kit_core::group_grid::GroupGrid, places: &[(usize, usize)], k: usize) {
+    for _ in 0..64 {
+        let now = focused(scene);
+        let Some(f) = now.strip_prefix("plate.").and_then(|n| n.parse::<usize>().ok()) else {
+            press(scene, sdl, pad, if now == "consoleOpen" { PadControl::Left } else { PadControl::Right });
+            continue;
+        };
+        let (from, to) = (grid.items[f], grid.items[k]);
+        let control = match places[f].0.cmp(&places[k].0) {
+            std::cmp::Ordering::Less => PadControl::RightTrigger,
+            std::cmp::Ordering::Greater => PadControl::LeftTrigger,
+            _ if f == k => return,
+            _ if from.row < to.row => PadControl::Down,
+            _ if from.row > to.row => PadControl::Up,
+            _ if from.column < to.column => PadControl::Right,
+            _ => PadControl::Left,
+        };
+        press(scene, sdl, pad, control);
+    }
+    panic!("plate.{k} reached again; the focus is on {}", focused(scene));
+}
+
+/// The visible items of the tree by name.
+fn shown<'a>(tree: &'a Tree, name: &str) -> Option<&'a emusen_qt_test::tree::Node> {
+    tree.nodes.iter().find(|n| n.name == name && n.visible)
+}
+
+/// A box's edges: left, top, right, bottom.
+fn edges(n: &emusen_qt_test::tree::Node) -> [f64; 4] {
+    [n.x, n.y, n.x + n.w, n.y + n.h]
+}
+
+fn overlap(a: [f64; 4], b: [f64; 4]) -> bool {
+    a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
+}
+
+/// The words a plate, the facts and the place line say for a console, from the program's words over the model's row.
+fn says(c: &Console, groups: &[usize]) -> [String; 4] {
+    let year = if c.year > 0 { c.year.to_string() } else { String::new() };
+    let runs = if c.engine_name.is_empty() { String::new() } else { words::runs_on(&c.engine_name, c.engine_kind == "libretro") };
+    [
+        c.display_name.clone(),
+        words::line(&[year.as_str(), words::games(c.count).as_str()]),
+        words::line(&[words::facts(&c.maker, c.year, c.count, "").as_str(), words::played(c.played).as_str(), runs.as_str()]),
+        words::line(&[c.maker.as_str(), emusen_qt_models::game_page::place(c.group_index, groups[c.group]).as_str()]),
+    ]
+}
+
+/// The disc's rim and both glows in the focused console's own colour, each glow at its own strength.
+fn disc_holds(tree: &Tree, c: &Console, size: &str) {
+    let glow = colour(&format!("#FF{}", c.glow.trim_start_matches('#'))).expect("a glow");
+    let paint = |name: &str| shown(tree, name).and_then(|n| n.colors.iter().filter_map(|p| colour(p)).find(|p| p.a > 0)).unwrap_or_else(|| panic!("{size}: {name} painted"));
+    let rim = paint("coronaRim");
+    assert_eq!((rim.r, rim.g, rim.b), (glow.r, glow.g, glow.b), "{size}: {}'s rim is its colour {}", c.display_name, c.glow);
+    let (inner, outer) = (paint("coronaGlow.0"), paint("coronaGlow.1"));
+    for g in [inner, outer] {
+        assert_eq!((g.r, g.g, g.b), (glow.r, glow.g, glow.b), "{size}: {}'s glows are its colour {}", c.display_name, c.glow);
+    }
+    assert_ne!(inner.a, outer.a, "{size}: each glow at its own strength");
+}
+
+#[test]
+fn qt_3_4_9_eclipse_s_consoles_walks_opens_steps_makers_and_draws_each_console_in_its_colour_in_the_program() {
+    let world = World::new("qt-app-eclipse-consoles");
+    let cores = world.dir("lib");
+    let model = library_of(&world, &cores);
+    assert!(model.iter().any(|c| c.key == "psx") && model.len() > 5, "the consoles a core runs, the PlayStation among them: {model:?}");
+    let groups: Vec<usize> = (0..=model.iter().map(|c| c.group).max().unwrap()).map(|g| model.iter().filter(|c| c.group == g).count()).collect();
+    assert!(groups.len() >= 2, "two makers or more, so LT and RT step between them: {groups:?}");
+    let colours: Vec<&str> = model.iter().map(|c| c.glow.as_str()).collect();
+
+    let sdl = Sdl::open();
+    let pad = sdl.attach("EmuSen Test Xbox Pad", 0x045e, 0x028e);
+    let mut harness = emusen_qt_test::Harness::new();
+    let mut scene = harness.load(MAIN_URL, 1280, 800);
+    assert!(scene.set_property("program", "splash", "false"));
+    assert!(scene.set_property("program", "onlyPads", &pad.id.to_string()));
+    assert!(scene.set_property("library", "cores", cores.to_str().unwrap()));
+    assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
+    wait_for(&mut scene, "library", "loading", "false", 10000);
+    wait_for(&mut scene, "pads", "connected", "1", 5000);
+    scene.run_pad_clock();
+
+    // Home's Games place by the pad (Down from the played games to the places, Left to the first), then Eclipse chosen over
+    // it: its own Choose a console is placed.
+    for _ in 0..40 {
+        if !focused(&mut scene).is_empty() {
+            break;
+        }
+        scene.wait(50);
+    }
+    for _ in 0..12 {
+        let now = focused(&mut scene);
+        if now == "place.0" {
+            break;
+        }
+        press(&mut scene, &sdl, &pad, if now.starts_with("place.") { PadControl::Left } else { PadControl::Down });
+    }
+    assert_eq!(focused(&mut scene), "place.0", "Home's Games place reached by the pad");
+    press(&mut scene, &sdl, &pad, PadControl::South);
+    wait_for(&mut scene, "screens", "shown", "Consoles", 2000);
+    assert!(scene.set_property("program", "theme", &themes::built_in_folder("eclipse")));
+    wait_for(&mut scene, "host.theme", "ready", "true", 5000);
+    wait_for(&mut scene, "theme", "consoles", "true", 2000);
+    for _ in 0..40 {
+        if focused(&mut scene).starts_with("plate.") {
+            break;
+        }
+        scene.wait(50);
+    }
+    assert_eq!(focused(&mut scene), "plate.0", "the first maker's first console has the focus");
+
+    // The screen's plates are the model's consoles, in its order.
+    let tree = scene.tree();
+    let drawn: Vec<(String, String, f64, f64)> = tree
+        .nodes
+        .iter()
+        .filter(|n| n.name.starts_with("plateName."))
+        .map(|n| (n.name.clone(), n.text.clone().unwrap_or_default(), n.x, n.y))
+        .collect();
+    for (k, c) in model.iter().enumerate() {
+        let name = drawn.iter().find(|d| d.0 == format!("plateName.{k}")).map(|d| d.1.as_str());
+        assert_eq!(name, Some(c.display_name.as_str()), "plate.{k} is the model's: {drawn:?}");
+    }
+    let places: Vec<(usize, usize)> = model.iter().map(|c| (c.group, c.group_index)).collect();
+    let firsts: Vec<usize> = (0..groups.len()).map(|g| model.iter().position(|c| c.group == g && c.group_index == 0).unwrap()).collect();
+    for (w, h) in SIZES {
+        scene.resize(w, h);
+        scene.wait(200);
+        let size = format!("{w}x{h}");
+        let columns: usize = scene.property("consoles", "columns").parse().expect("the screen's columns");
+        let grid = group_grid(&places, columns);
+        let at_plate = |name: &str| name.strip_prefix("plate.").and_then(|n| n.parse::<usize>().ok());
+        let mut reached = vec![false; model.len()];
+        let start = at_plate(&focused(&mut scene)).expect("a plate focused");
+        let mut queue = vec![start];
+        while let Some(k) = queue.pop() {
+            if reached[k] {
+                continue;
+            }
+            reached[k] = true;
+            go_to(&mut scene, &sdl, &pad, &grid, &places, k);
+            let item = grid.items[k];
+            let c = &model[k];
+            let last_row = item.row + 1 >= grid.rows[c.group];
+            // Where each press lands: the walk inside the grid; past its left edge the maker, past its right Open, down
+            // from the last row the next maker's first; up from the first row nowhere.
+            let want = [
+                (PadControl::Left, item.left.map_or(format!("maker.{}", c.group), |t| format!("plate.{t}"))),
+                (PadControl::Right, item.right.map_or("consoleOpen".to_owned(), |t| format!("plate.{t}"))),
+                (PadControl::Up, item.up.map_or(format!("plate.{k}"), |t| format!("plate.{t}"))),
+                (
+                    PadControl::Down,
+                    item.down.or(if last_row { firsts.get(c.group + 1).copied() } else { None }).map_or(format!("plate.{k}"), |t| format!("plate.{t}")),
+                ),
+            ];
+            for (control, to) in want {
+                press(&mut scene, &sdl, &pad, control);
+                let now = focused(&mut scene);
+                assert_eq!(now, to, "{size}: {control:?} from plate.{k} ({})", c.display_name);
+                if let Some(t) = at_plate(&now) {
+                    queue.push(t);
+                }
+                go_to(&mut scene, &sdl, &pad, &grid, &places, k);
+            }
+
+            // On the plate: drawn whole inside the window and the grid's view, over no other plate, maker or the aside.
+            let tree = scene.tree();
+            let plate = shown(&tree, &format!("plate.{k}")).unwrap_or_else(|| panic!("{size}: plate.{k} shown"));
+            let view = shown(&tree, "plates").expect("the plates' view");
+            let (p, v) = (edges(plate), edges(view));
+            assert!(p[0] >= v[0] && p[1] >= v[1] && p[2] <= v[2] && p[3] <= v[3], "{size}: plate.{k} {p:?} whole in its view {v:?}");
+            assert!(p[0] >= 0.0 && p[1] >= 0.0 && p[2] <= f64::from(w) && p[3] <= f64::from(h), "{size}: plate.{k} {p:?} inside the window");
+            let others = tree.nodes.iter().filter(|n| {
+                n.visible && n.name != plate.name && (n.name.starts_with("plate.") || n.name.starts_with("maker.") || n.name == "consoleAside")
+            });
+            for o in others {
+                let e = edges(o);
+                let seen = o.name.starts_with("plate.") && (e[1] >= v[3] || e[3] <= v[1]);
+                assert!(seen || !overlap(p, e), "{size}: plate.{k} {p:?} over {} {e:?}", o.name);
+            }
+            // Its words and the facts are the model's, the played count among them; the disc is in its colour.
+            let [name, line, facts, place] = says(c, &groups);
+            let said = |n: &str| shown(&tree, n).and_then(|n| n.text.clone()).unwrap_or_default();
+            assert_eq!(said(&format!("plateName.{k}")), name, "{size}: plate.{k}'s name");
+            assert_eq!(said(&format!("plateLine.{k}")), line, "{size}: plate.{k}'s line");
+            assert_eq!(said("consoleName"), name, "{size}: the focused console's name");
+            assert_eq!(said("consoleFacts"), facts, "{size}: the facts with the played count");
+            assert_eq!(said("consolePlace"), place, "{size}: the maker and the place");
+            disc_holds(&tree, c, &size);
+        }
+        let missed: Vec<&str> = model.iter().zip(&reached).filter(|(_, r)| !**r).map(|(c, _)| c.display_name.as_str()).collect();
+        assert!(missed.is_empty(), "{size}: every plate reached by the pad; not {missed:?}");
+    }
+    scene.resize(1280, 800);
+    scene.wait(200);
+
+    // Two consoles of different colours, each drawn in its own.
+    let columns: usize = scene.property("consoles", "columns").parse().expect("the screen's columns");
+    let grid = group_grid(&places, columns);
+    let other = (1..model.len()).find(|&k| colours[k] != colours[0]).expect("two consoles of different colours");
+    for k in [0, other] {
+        go_to(&mut scene, &sdl, &pad, &grid, &places, k);
+        let tree = scene.tree();
+        disc_holds(&tree, &model[k], "1280x800");
+    }
+
+    // LT and RT: the previous and next maker's first console, from any plate; nothing past the ends; LB and RB do nothing.
+    go_to(&mut scene, &sdl, &pad, &grid, &places, 0);
+    press(&mut scene, &sdl, &pad, PadControl::LeftTrigger);
+    assert_eq!(focused(&mut scene), "plate.0", "LT on the first maker stays");
+    for g in 1..groups.len() {
+        if groups[g - 1] > 1 {
+            press(&mut scene, &sdl, &pad, PadControl::Right);
+        }
+        press(&mut scene, &sdl, &pad, PadControl::RightTrigger);
+        assert_eq!(focused(&mut scene), format!("plate.{}", firsts[g]), "RT to maker {g}'s first console");
+    }
+    press(&mut scene, &sdl, &pad, PadControl::RightTrigger);
+    assert_eq!(focused(&mut scene), format!("plate.{}", firsts[groups.len() - 1]), "RT on the last maker stays");
+    press(&mut scene, &sdl, &pad, PadControl::LeftTrigger);
+    assert_eq!(focused(&mut scene), format!("plate.{}", firsts[groups.len() - 2]), "LT to the maker before");
+    for shoulder in [PadControl::LeftShoulder, PadControl::RightShoulder] {
+        press(&mut scene, &sdl, &pad, shoulder);
+        assert_eq!(focused(&mut scene), format!("plate.{}", firsts[groups.len() - 2]), "{shoulder:?} is not bound here (R-20261115-17)");
+    }
+    let tree = scene.tree();
+    let bar = edges(shown(&tree, "consolesHelp").expect("the help line"));
+    let help: Vec<String> = tree.nodes.iter().filter(|n| n.visible && n.text.is_some() && overlap(edges(n), bar)).filter_map(|n| n.text.clone()).collect();
+    assert!(help.iter().any(|t| t == "Maker") && !help.iter().any(|t| t == "Group"), "the help line draws LT RT Maker and no LB RB: {help:?}");
+
+    // A on a plate opens that console's games; B comes back to it.
+    let k = firsts[groups.len() - 2];
+    press(&mut scene, &sdl, &pad, PadControl::South);
+    wait_for(&mut scene, "screens", "shown", "Grid", 2000);
+    assert_eq!(scene.property("screens", "key"), model[k].key, "A opens {}'s games", model[k].display_name);
+    press(&mut scene, &sdl, &pad, PadControl::East);
+    wait_for(&mut scene, "screens", "shown", "Consoles", 2000);
+    for _ in 0..40 {
+        if focused(&mut scene) == format!("plate.{k}") {
+            break;
+        }
+        scene.wait(50);
+    }
+    assert_eq!(focused(&mut scene), format!("plate.{k}"), "back on the console it opened");
+    sdl.detach(pad);
+    scene.assert_quiet();
+}

@@ -48,8 +48,6 @@ ThemeScreen {
             // The plate the screen opens on: the console last opened, else the first maker's first console; and the maker focused.
             property Item firstPlate: null
             property Item focusedMaker: null
-            // How many delegates are made; a neighbour is looked up again as each is.
-            property int made: 0
             Board {
                 id: board
                 designHeight: canvas.designHeight
@@ -148,8 +146,6 @@ ThemeScreen {
                         Repeater {
                             id: makers
                             model: Library.consoles
-                            onItemAdded: root.made = root.made + 1
-                            onItemRemoved: root.made = root.made - 1
                             Walkable {
                                 id: maker
                                 required property int index
@@ -169,13 +165,21 @@ ThemeScreen {
                                 y: maker.group * root.makerPitch
                                 width: root.makerWidth
                                 height: root.makerHeight
-                                KeyNavigation.up: root.made > 0 && maker.before >= 0 ? makers.itemAt(maker.before) : null
-                                KeyNavigation.down: root.made > 0 && maker.after >= 0 ? makers.itemAt(maker.after) : null
-                                KeyNavigation.right: root.made > 0 && maker.first >= 0 ? plates.itemAt(maker.first) : null
                                 onActiveFocusChanged: {
                                     root.focusedMaker = maker.activeFocus ? maker : (root.focusedMaker === maker ? null : root.focusedMaker)
                                     if (maker.activeFocus)
                                         root.chosenGroup = maker.group
+                                }
+                                // Right its first console, LT (the key Home) and RT (End) the makers' first consoles, Up and Down the
+                                // makers; a plate's maker is chosen before its focus, since another maker's plates are not shown.
+                                Keys.onPressed: (event) => {
+                                    const at = [Qt.Key_Right, Qt.Key_Home, Qt.Key_End, Qt.Key_Up, Qt.Key_Down].indexOf(event.key)
+                                    const to = at >= 0 && at < 3 ? [maker.first, maker.before, maker.after][at] : -1
+                                    const item = to >= 0 ? plates.itemAt(to) : (at === 3 ? makers.itemAt(maker.before) : (at === 4 ? makers.itemAt(maker.after) : null))
+                                    event.accepted = item !== null
+                                    if (to >= 0)
+                                        root.chosenGroup = plates.itemAt(to).group
+                                    item?.forceActiveFocus()
                                 }
                                 onActivated: plates.itemAt(maker.first).forceActiveFocus()
                                 Rectangle {
@@ -229,11 +233,7 @@ ThemeScreen {
                         Repeater {
                             id: plates
                             model: Library.consoles
-                            onItemAdded: (index, item) => {
-                                root.made = root.made + 1
-                                root.firstPlate = item.opening ? item : root.firstPlate
-                            }
-                            onItemRemoved: root.made = root.made - 1
+                            onItemAdded: (index, item) => root.firstPlate = item.opening ? item : root.firstPlate
                             Walkable {
                                 id: plate
                                 required property int index
@@ -273,17 +273,18 @@ ThemeScreen {
                                 width: root.plateWidth
                                 height: root.plateHeight
                                 // Inside the grid by the layout's walk; past its left edge the maker, past its right Open.
-                                KeyNavigation.left: root.made > 0 ? (plate.leftIndex >= 0 ? plates.itemAt(plate.leftIndex) : makers.itemAt(layout.firsts[plate.group] ?? 0)) : null
-                                KeyNavigation.right: root.made > 0 && plate.rightIndex >= 0 ? plates.itemAt(plate.rightIndex) : openButton
-                                KeyNavigation.up: root.made > 0 && plate.upIndex >= 0 ? plates.itemAt(plate.upIndex) : null
-                                // Down from the grid's last row goes on to the next maker's first console.
-                                KeyNavigation.down: root.made > 0 ? (plate.downIndex >= 0 ? plates.itemAt(plate.downIndex) : (plate.nextFirst >= 0 && plate.rowOf + 1 >= plate.rows ? plates.itemAt(plate.nextFirst) : null)) : null
-                                // LB and RB: the previous and next maker's first console.
+                                // The layout's walk, past the left edge the maker, past the right Open, Down from the last row the next
+                                // maker's first console; LT and RT the makers' first consoles (R-20261115-17); LB and RB are left to the
+                                // sections. No KeyNavigation: Qt writes back links of its own and skips a plate not shown (EmuSen_Qt.md §3.4.9).
                                 Keys.onPressed: (event) => {
-                                    const to = event.key === Qt.Key_PageUp ? plate.previousFirst : (event.key === Qt.Key_PageDown ? plate.nextFirst : -1)
-                                    event.accepted = to >= 0
+                                    const at = [Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down, Qt.Key_Home, Qt.Key_End].indexOf(event.key)
+                                    const below = plate.downIndex >= 0 ? plate.downIndex : (plate.rowOf + 1 >= plate.rows ? plate.nextFirst : -1)
+                                    const to = at >= 0 ? [plate.leftIndex, plate.rightIndex, plate.upIndex, below, plate.previousFirst, plate.nextFirst][at] : -1
+                                    const item = to >= 0 ? plates.itemAt(to) : (at === 0 ? makers.itemAt(layout.firsts[plate.group] ?? -1) : (at === 1 ? openButton : null))
+                                    event.accepted = item !== null
                                     if (to >= 0)
-                                        plates.itemAt(to).forceActiveFocus()
+                                        root.chosenGroup = plates.itemAt(to).group
+                                    item?.forceActiveFocus()
                                 }
                                 onActiveFocusChanged: {
                                     if (!plate.activeFocus)
@@ -418,11 +419,13 @@ ThemeScreen {
                                 width: parent.width
                                 elide: Text.ElideRight
                                 text: root.shown ? Words.line([root.shown.maker, root.shown.year > 0 ? String(root.shown.year) : ""]) : ""
+                                // Its size read once, so the spacing does not read the font it sets (a binding loop).
+                                readonly property real size: Type.size(18 * root.px, Tokens.textScale)
                                 color: ink.rose
-                                font.pixelSize: Type.size(18 * root.px, Tokens.textScale)
+                                font.pixelSize: eyebrow.size
                                 font.weight: Font.DemiBold
                                 // The board's 0.2 em (line 80).
-                                font.letterSpacing: 0.2 * eyebrow.font.pixelSize
+                                font.letterSpacing: 0.2 * eyebrow.size
                                 font.capitalization: Font.AllUppercase
                             }
                             Text {
@@ -490,7 +493,7 @@ ThemeScreen {
                                 lead: 12
                                 trail: 28
                                 gap: 12
-                                KeyNavigation.left: root.lastPlate
+                                Keys.onLeftPressed: root.lastPlate?.forceActiveFocus()
                                 onActivated: Actions.openConsole(root.shown?.key ?? "")
                             }
                             // The A entry's words, read from the help bar's own list.
@@ -544,7 +547,7 @@ ThemeScreen {
                 objectName: "consolesHelp"
                 unit: root.px
                 controller: frame.controller
-                model: Help.entries(Help.Console, {group: true})
+                model: Help.entries(Help.Console, {group: true, triggers: true})
                 ink: ink.help
                 // This board's foot: its 34 px row 40 px over the bottom (board line 99).
                 middle: 1143

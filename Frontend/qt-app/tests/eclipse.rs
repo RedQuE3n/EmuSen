@@ -109,7 +109,7 @@ fn qt_3_4_7_eclipse_is_listed_chosen_and_sets_every_override_on_both_engines() {
     assert_eq!(scene.property("themesModel", "findings"), "Checked: nothing found.");
     assert_eq!(scene.property("themesModel", "usable"), "true");
 
-    // Use stores its id and loads it from the resources; Eclipse draws its own Home, and the other screens are the reference's.
+    // Use stores its id and loads it from the resources; Eclipse draws its own Home and Choose a console, and the other screens are the reference's.
     scene.pad(UiButton::Accept);
     scene.wait(200);
     assert_eq!(stored(&platform), "eclipse", "the id is stored, never a folder");
@@ -118,7 +118,7 @@ fn qt_3_4_7_eclipse_is_listed_chosen_and_sets_every_override_on_both_engines() {
     assert_eq!(scene.property("host.theme", "name"), "Eclipse");
     assert_eq!(scene.property("host.theme", "failed"), "false", "{}", scene.property("host.theme", "warnings"));
     assert_eq!((scene.property("theme", "home").as_str(), scene.property("reference", "home").as_str()), ("true", "false"));
-    assert_eq!((scene.property("theme", "consoles").as_str(), scene.property("reference", "consoles").as_str()), ("false", "true"));
+    assert_eq!((scene.property("theme", "consoles").as_str(), scene.property("reference", "consoles").as_str()), ("true", "false"));
     assert_eq!(scene.property("themesModel", "findings"), "In use.");
 
     // Every override, on the theme's engine and on the program's, is theme.json's value; every other token is the kit's.

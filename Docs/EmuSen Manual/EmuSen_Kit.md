@@ -4210,7 +4210,10 @@ edges of the grid are the screen's to join: to its group's heading, to an action
 
 **Proof.** kit-core's `tests/group_grid.rs`: two interleaved groups at four columns, with each item's place, the groups'
 firsts and rows; a walk that stays inside its group, with Down landing on a short row's last item; and one column and no
-items. theme-qt's harness scene reads the consoles through it after the list resets.
+items. A fourth holds the walk at one to six columns on one group of 1, of a row's worth, of 11, 30 and 40, and on 120 items
+in seven interleaved groups, 40 in one: every neighbour is the one the grid's arithmetic gives (along the row, the row
+above, the row below or the last item when that row is short), no press toward an item that lies that way gives none, and
+every item is reached from its group's first. theme-qt's harness scene reads the consoles through it after the list resets.
 
 ### 7.121 A look's type size and the legibility floor (2026-11-15)
 

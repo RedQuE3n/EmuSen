@@ -89,6 +89,12 @@ ThemeScreen {
                         y: 80 * design.unit - height / 2
                         below: root.firstButton ?? root.currentTile
                     }
+                    // With no game on the row the search is where the focus is, so the pad reaches it.
+                    Binding {
+                        target: status.search
+                        property: "focus"
+                        value: tiles.count === 0
+                    }
                     Text {
                         id: eyebrow
                         objectName: "eyebrow"
@@ -110,6 +116,9 @@ ThemeScreen {
                         width: 980 * design.unit
                         text: root.resuming ? Session.title : root.currentTile?.title ?? (Library.consoles.count === 0 ? Words.addFolder : Words.noRecent)
                         color: Tokens.textStrong
+                        // A game's name keeps the board's one line; the program's own words in its place (Words.addFolder, Words.noRecent) take a second.
+                        wrapMode: root.currentTile === null ? Text.WordWrap : Text.NoWrap
+                        maximumLineCount: 2
                         elide: Text.ElideRight
                         font.pixelSize: Type.size(112 * design.unit, Tokens.textScale)
                         font.weight: Font.DemiBold

@@ -757,6 +757,25 @@ Module {
         Signal { name: "hueChanged"; lineNumber: 131 }
     }
     Component {
+        file: "type_size.cxxqt.h"
+        lineNumber: 15
+        name: "ThemeType"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Theme/Type 1.0"]
+        isCreatable: false
+        isSingleton: true
+        exportMetaObjectRevisions: [256]
+        Method {
+            name: "size"
+            type: "double"
+            isMethodConstant: true
+            lineNumber: 25
+            Parameter { name: "base"; type: "double" }
+            Parameter { name: "text_scale"; type: "double" }
+        }
+    }
+    Component {
         file: "words.cxxqt.h"
         lineNumber: 23
         name: "ThemeWords"

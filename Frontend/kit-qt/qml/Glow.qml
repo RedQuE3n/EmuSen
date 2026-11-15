@@ -82,6 +82,10 @@ Item {
             id: paint
             objectName: "glowCanvas"
             property int paints: 0
+            // How often the blurred shape was made: once a geometry; a change of colour recolours it (EmuSen_Kit.md §7.113).
+            property int blurs: 0
+            // The blurred shape in opaque ink, kept between paints; null while it must be made again.
+            property var mask: null
             readonly property real reach: root.reach
             readonly property real corner: Math.min(root.radius, Math.min(root.width, root.height) / 2)
             readonly property real spread: root.spread
@@ -90,37 +94,55 @@ Item {
             readonly property real offsetX: root.offsetX
             readonly property real offsetY: root.offsetY
             contextType: "2d"
-            onReachChanged: requestPaint()
-            onCornerChanged: requestPaint()
-            onSpreadChanged: requestPaint()
-            onBlurChanged: requestPaint()
+            onReachChanged: paint.reshaped()
+            onCornerChanged: paint.reshaped()
+            onSpreadChanged: paint.reshaped()
+            onBlurChanged: paint.reshaped()
+            onOffsetXChanged: paint.reshaped()
+            onOffsetYChanged: paint.reshaped()
+            onWidthChanged: paint.reshaped()
+            onHeightChanged: paint.reshaped()
             onInkChanged: requestPaint()
-            onOffsetXChanged: requestPaint()
-            onOffsetYChanged: requestPaint()
-            onWidthChanged: requestPaint()
-            onHeightChanged: requestPaint()
+            // A change of geometry makes the blurred shape again; a change of colour only recolours it.
+            signal reshaped()
+            onReshaped: {
+                paint.mask = null
+                requestPaint()
+            }
             onPaint: {
-                // The grown shape is drawn a canvas's width away and only its shadow, offset back, lands, clipped to outside the box.
                 const ctx = getContext(contextType)
-                const away = paint.width
-                const grown = paint.spread
-                // The shape's corners grow by the spread, less where they are smaller than it: CSS Backgrounds 3 §6.1.1.
-                const share = grown > 0 && paint.corner < grown ? 1 + Math.pow(paint.corner / grown - 1, 3) : 1
-                const rounded = paint.corner + grown * share
+                if (paint.mask === null) {
+                    // The grown shape is drawn a canvas's width away and only its shadow, offset back, lands, clipped to outside the box.
+                    const away = paint.width
+                    const grown = paint.spread
+                    // The shape's corners grow by the spread, less where they are smaller than it: CSS Backgrounds 3 §6.1.1.
+                    const share = grown > 0 && paint.corner < grown ? 1 + Math.pow(paint.corner / grown - 1, 3) : 1
+                    const rounded = paint.corner + grown * share
+                    ctx.reset()
+                    ctx.fillRule = Qt.OddEvenFill
+                    ctx.beginPath()
+                    ctx.rect(0, 0, paint.width, paint.height)
+                    ctx.roundedRect(paint.reach, paint.reach, paint.width - 2 * paint.reach, paint.height - 2 * paint.reach, paint.corner, paint.corner)
+                    ctx.clip()
+                    // Opaque: the shadow's alpha is the blur's alone, and the ink's alpha is laid over it when it is coloured.
+                    ctx.shadowColor = Qt.rgba(0, 0, 0, 1)
+                    ctx.shadowBlur = paint.blur
+                    ctx.shadowOffsetX = away + paint.offsetX
+                    ctx.shadowOffsetY = paint.offsetY
+                    ctx.fillStyle = Qt.rgba(0, 0, 0, 1)
+                    ctx.beginPath()
+                    ctx.roundedRect(paint.reach - grown - away, paint.reach - grown, paint.width - 2 * (paint.reach - grown), paint.height - 2 * (paint.reach - grown), rounded, rounded)
+                    ctx.fill()
+                    paint.mask = ctx.getImageData(0, 0, paint.width, paint.height)
+                    paint.blurs = paint.blurs + 1
+                }
+                // The kept shape coloured: the ink where the shape is, at the ink's alpha times the shape's.
                 ctx.reset()
-                ctx.fillRule = Qt.OddEvenFill
-                ctx.beginPath()
-                ctx.rect(0, 0, paint.width, paint.height)
-                ctx.roundedRect(paint.reach, paint.reach, paint.width - 2 * paint.reach, paint.height - 2 * paint.reach, paint.corner, paint.corner)
-                ctx.clip()
-                ctx.shadowColor = paint.ink
-                ctx.shadowBlur = paint.blur
-                ctx.shadowOffsetX = away + paint.offsetX
-                ctx.shadowOffsetY = paint.offsetY
-                ctx.fillStyle = Qt.rgba(paint.ink.r, paint.ink.g, paint.ink.b, 1)
-                ctx.beginPath()
-                ctx.roundedRect(paint.reach - grown - away, paint.reach - grown, paint.width - 2 * (paint.reach - grown), paint.height - 2 * (paint.reach - grown), rounded, rounded)
-                ctx.fill()
+                // All seven arguments: Qt 6.11's putImageData does nothing with fewer (qquickcontext2d.cpp, method_putImageData).
+                ctx.putImageData(paint.mask, 0, 0, 0, 0, paint.width, paint.height)
+                ctx.globalCompositeOperation = "source-in"
+                ctx.fillStyle = paint.ink
+                ctx.fillRect(0, 0, paint.width, paint.height)
                 paint.paints = paint.paints + 1
             }
         }

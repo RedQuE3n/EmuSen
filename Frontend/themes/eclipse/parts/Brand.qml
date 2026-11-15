@@ -50,7 +50,7 @@ Item {
         visible: root.named
         text: Words.title
         color: Tokens.text
-        font.pixelSize: root.nameSize * root.unit
+        font.pixelSize: Type.size(root.nameSize * root.unit, Tokens.textScale)
         font.weight: Font.DemiBold
         font.letterSpacing: 0.02 * root.nameSize * root.unit
     }

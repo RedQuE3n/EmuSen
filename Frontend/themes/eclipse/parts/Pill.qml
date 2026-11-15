@@ -9,6 +9,8 @@ Walkable {
     required property int button
     required property string label
     property bool filled: false
+    // Whether a filled pill draws the boards' halo and glow (Main:61); Consoles' Open draws neither (EclipseConsoles:90).
+    property bool glows: true
     property real tall: 72
     property real glyphSide: 44
     property real labelSize: 24
@@ -41,7 +43,7 @@ Walkable {
     Glow {
         objectName: "buttonHalo." + root.place
         anchors.fill: parent
-        visible: root.filled
+        visible: root.filled && root.glows
         radius: root.radius
         color: "#2EF6E7D8"
         spread: 6 * root.unit
@@ -49,7 +51,7 @@ Walkable {
     Glow {
         objectName: "buttonGlow." + root.place
         anchors.fill: parent
-        visible: root.filled
+        visible: root.filled && root.glows
         radius: root.radius
         color: "#73F0B4C4"
         blur: 46 * root.unit
@@ -78,7 +80,7 @@ Walkable {
         y: (root.height - height) / 2
         text: root.label
         color: root.filled ? Tokens.overAccent : Tokens.text
-        font.pixelSize: root.labelSize * root.unit
+        font.pixelSize: Type.size(root.labelSize * root.unit, Tokens.textScale)
         font.weight: root.filled ? Font.DemiBold : Font.Normal
     }
 }

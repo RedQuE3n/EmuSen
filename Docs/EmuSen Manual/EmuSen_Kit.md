@@ -3970,7 +3970,17 @@ or it has no blur and no spread (such a glow lies under its box alone).
   the box. Qt's page for `Context2D` gives no rule for `shadowBlur`; its source (`qquickcontext2dcommandbuffer.cpp`,
   `ShadowImageMaker`, Qt 6.11) blurs with three passes of a square box 2 round(blur / 2) + 1 wide (`qt_image_boxblur`),
   close to a Gaussian of σ = blur / 2, the CSS rule (§6.1.2: "a Gaussian blur with a standard deviation equal to half the
-  blur radius"). The canvas paints once each time the glow is made and again only when its box, corners or colour change.
+  blur radius"). The canvas blurs once each time the glow's shape is made: its box, corners, spread, blur or offset. A change of colour
+alone recolours the kept shape and blurs nothing again (2026-11-15). The blurred shape is drawn in opaque ink and kept
+with `getImageData`. Each paint puts it back with `putImageData`, given all seven arguments, since Qt 6.11's does nothing
+with fewer (qtdeclarative v6.11.2, `qquickcontext2d.cpp`, `method_putImageData`: `if (argc < 7) RETURN_UNDEFINED()`).
+The paint then fills it with the ink through `source-in`, so each pixel is the ink at the ink's alpha times the shape's.
+Before, every colour change blurred again on the CPU (`QQuickContext2DCommandBuffer::replay` → `qt_image_boxblur`, found
+by the Consoles builder with gdb). Measured on 2026-11-15 on the desktop, on the software backend, with `cargo test
+--release -p emusen-kit-qt --test glow_recolour -- --nocapture`, a glow of the disc's halo (113 blur, 30 spread) on a
+300-unit disc: 5 colour changes took 117,701 ms before (`EMUSEN_RECOLOURS=5`, the old part), and 50 took 1,795 ms after.
+`tests/glow_recolour.rs` holds one blur over fifty colours, a second blur on a new size, and the recoloured glow within one
+level of the glow painted afresh in that colour.
 
 **The rule and the measures.** The CSS rule a glow is held to is the shape grown by the spread, blurred by a Gaussian of
 σ = blur / 2, outside the box alone, which the tests integrate over the box's own size and corners (`tests/common`). The
@@ -4178,3 +4188,18 @@ edges of the grid are the screen's to join: to its group's heading, to an action
 **Proof.** kit-core's `tests/group_grid.rs`: two interleaved groups at four columns, with each item's place, the groups'
 firsts and rows; a walk that stays inside its group, with Down landing on a short row's last item; and one column and no
 items. theme-qt's harness scene reads the consoles through it after the list resets.
+
+### 7.121 A look's type size and the legibility floor (2026-11-15)
+
+Decided 2026-11-15 by the tester (R-20261115-14): any Eclipse text under the kit's legibility floor is raised to the
+smallest size that passes; larger text keeps the boards' sizes. kit-core's `tokens::legible_text(base, textScale,
+caps_at)` is the rule. It takes `scaled_text` of the board's size in canvas units, then raises it by the kit's half units
+until the capitals' height of the face (`caps_at`) reaches the fit audit's floor, `audit::smallest_capitals()` less
+`CAPS_SLACK`. kit-qt's `type_size::legible` measures the capitals with Qt (`QFontMetricsF::capHeight`, `cpp/text_width.cpp`)
+for the application's face, the one a Text with no family takes, at the whole pixel size Qt draws: a real handed to a Text's
+`font.pixelSize` is taken to the nearest, seen 2026-11-15 (74.67 drawn at 75), and a `Qt.font({ pixelSize })` truncates it
+(16.5 drawn at 16), so a part sets `labelFont.pixelSize`, never `Qt.font`. EmuSen.Theme 1.4's `Type.size(base, textScale)`
+gives it to a theme; the text scale is an argument so a binding follows `Tokens.textScale`. Once the typeface piece adds the
+look's face, `caps_at` reads that face. Tests: kit-core's `tests/legible_text.rs` holds the rule itself. qt-app's `eclipse_home`
+holds every Eclipse text at the rule's size, and its table lists which were raised.
+

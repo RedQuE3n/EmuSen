@@ -192,7 +192,7 @@ ThemeScreen {
                                     elide: Text.ElideRight
                                     text: maker.maker
                                     color: maker.chosen ? Tokens.overAccent : ink.help
-                                    font.pixelSize: 22 * root.px
+                                    font.pixelSize: Type.size(22 * root.px, Tokens.textScale)
                                     font.weight: maker.chosen ? Font.DemiBold : Font.Normal
                                 }
                                 Text {
@@ -203,7 +203,7 @@ ThemeScreen {
                                     verticalAlignment: Text.AlignVCenter
                                     text: maker.groupSize
                                     color: maker.chosen ? Tokens.overAccent : ink.help
-                                    font.pixelSize: 18 * root.px
+                                    font.pixelSize: Type.size(18 * root.px, Tokens.textScale)
                                 }
                             }
                         }
@@ -347,7 +347,7 @@ ThemeScreen {
                                         maximumLineCount: 2
                                         elide: Text.ElideRight
                                         color: Tokens.text
-                                        font.pixelSize: 21 * root.px
+                                        font.pixelSize: Type.size(21 * root.px, Tokens.textScale)
                                         font.weight: Font.DemiBold
                                         lineHeight: 1.15
                                     }
@@ -357,7 +357,7 @@ ThemeScreen {
                                         elide: Text.ElideRight
                                         text: Words.line([plate.year > 0 ? String(plate.year) : "", Words.games(plate.count)])
                                         color: Tokens.muted
-                                        font.pixelSize: 16 * root.px
+                                        font.pixelSize: Type.size(16 * root.px, Tokens.textScale)
                                     }
                                 }
                             }
@@ -407,14 +407,16 @@ ThemeScreen {
                             width: parent.width
                             spacing: 8 * root.px
                             Text {
+                                id: eyebrow
                                 objectName: "consoleEyebrow"
                                 width: parent.width
                                 elide: Text.ElideRight
                                 text: root.shown ? Words.line([root.shown.maker, root.shown.year > 0 ? String(root.shown.year) : ""]) : ""
                                 color: ink.rose
-                                font.pixelSize: 18 * root.px
+                                font.pixelSize: Type.size(18 * root.px, Tokens.textScale)
                                 font.weight: Font.DemiBold
-                                font.letterSpacing: 3.6 * root.px
+                                // The board's 0.2 em (line 80).
+                                font.letterSpacing: 0.2 * eyebrow.font.pixelSize
                                 font.capitalization: Font.AllUppercase
                             }
                             Text {
@@ -425,7 +427,7 @@ ThemeScreen {
                                 elide: Text.ElideRight
                                 text: root.shown ? root.shown.displayName : ""
                                 color: Tokens.text
-                                font.pixelSize: 46 * root.px
+                                font.pixelSize: Type.size(46 * root.px, Tokens.textScale)
                                 font.weight: Font.DemiBold
                                 lineHeight: 1.08
                             }
@@ -458,7 +460,7 @@ ThemeScreen {
                                     // The facts with the played count after the games' count (R-20261115-8).
                                     text: root.shown ? Words.line([Words.facts(root.shown.maker, root.shown.year, root.shown.count, ""), Words.played(root.shown.played), Words.runsOn(root.shown.engineName, root.shown.engineKind)]) : ""
                                     color: Tokens.muted
-                                    font.pixelSize: 21 * root.px
+                                    font.pixelSize: Type.size(21 * root.px, Tokens.textScale)
                                 }
                             }
                             Item {
@@ -476,6 +478,8 @@ ThemeScreen {
                                 filled: true
                                 tall: 64
                                 glyphSide: 42
+                                // This board's Open has no halo and no glow (board line 90).
+                                glows: false
                                 labelSize: 23
                                 lead: 12
                                 trail: 28
@@ -517,14 +521,14 @@ ThemeScreen {
                             horizontalAlignment: Text.AlignHCenter
                             text: Words.noConsoles
                             color: Tokens.muted
-                            font.pixelSize: 22 * root.px
+                            font.pixelSize: Type.size(22 * root.px, Tokens.textScale)
                         }
                         Text {
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
                             text: Words.addFolder
                             color: Tokens.muted
-                            font.pixelSize: 22 * root.px
+                            font.pixelSize: Type.size(22 * root.px, Tokens.textScale)
                         }
                     }
                 }
@@ -543,7 +547,7 @@ ThemeScreen {
                     visible: root.shown !== null
                     text: root.shown ? Words.line([root.shown.maker, Words.place(root.shown.groupIndex, root.shown.groupSize)]) : ""
                     color: ink.help
-                    font.pixelSize: 21 * root.px
+                    font.pixelSize: Type.size(21 * root.px, Tokens.textScale)
                 }
             }
         }

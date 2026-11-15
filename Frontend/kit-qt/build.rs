@@ -102,6 +102,7 @@ fn main() {
         "src/tool.rs",
         "src/page.rs",
         "src/table.rs",
+        "src/type_size.rs",
         "src/reset_gate.rs",
         "src/controller.rs",
         "src/canvas.rs",

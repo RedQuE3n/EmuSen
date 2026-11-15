@@ -23,6 +23,9 @@ unblurred, with no blur made by the CPU. 1.7 is another piece's.
   on the software backend the fields unblurred at their opacity and no picture. `EmuSen_Kit.md` §7.118.
 - **`Glow`**: `offsetX` and `offsetY` move the shape as a box-shadow's offsets move it, so a resting tile's shadow is a
   glow; 0 by default, so every glow drawn before is unchanged. Exported to themes in EmuSen.Theme 1.4. `EmuSen_Kit.md` §7.119.
+- **`Glow`** on the software backend blurs once a shape and only recolours on a change of colour (§7.113); `CoronaDisc`
+  and `Backdrop` read an entry their list has dropped as none (§7.116).
+- **`type_size::legible`** (Rust, for EmuSen.Theme's `Type`): a look's size never under the legibility floor (§7.121).
 
 ## 1.6: Eclipse's corona disc and the planet mark as kit parts, one glow, and every ring Gapped where a look asks (2026-11-14)
 

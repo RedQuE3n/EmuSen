@@ -2,6 +2,7 @@
 # Units are design units: px x canvas::DESIGN_HEIGHT (800) / the board's height (1200). Boxes as x,y,w,h; "-" where the board leaves an edge to its contents.
 # status: built (the screen draws it from what the program holds), home (a part Home's board also draws, built on Home's piece),
 # nothing (the program holds nothing for it: not drawn), asked (waits on a decision of the tester's).
+# Every text is drawn at Type.size of the board's size, raised to the legibility floor where it is under it (R-20261115-14).
 # line	element	objectName	program source	board px	units	style	status
 17	ground	consolesBackdrop	kit Backdrop, its ground Tokens.surface	0,0,1920,1200	0,0,1280,800	#07080F	built
 19	colour field, violet	-	kit BackdropField, the board's colour as a design constant (nothing in the program names it)	1250,120,900,900	833.33,80,600,600	#5B3FD6 blur 140 opacity 0.5	built
@@ -31,7 +32,7 @@
 85	"Played" / count	-	the label: nothing; Words.played(played) in consoleFacts (R-20261115-8)	-	-	muted 21px	nothing
 86	"Core" / mark and name	-	the label: nothing; Words.runsOn in consoleFacts, kit PlanetMark consoleCoreMark	-	-	24px mark	nothing
 87	"Screen" / "CRT, television"	-	nothing	-	-	muted 21px	nothing
-90	Open, with A	consoleOpen	Home's Pill, filled, A, the word Help.entries(Help.Console)'s A entry; Pill also draws Main:61's halo and glow, which this board does not	1450,-,-,64	966.67,-,-,42.67	accent fill radius 32, overAccent 23px 600	built
+90	Open, with A	consoleOpen	Home's Pill, filled, without its halo and glow (glows false), A, the word Help.entries(Help.Console)'s A entry	1450,-,-,64	966.67,-,-,42.67	accent fill radius 32, overAccent 23px 600	built
 93	Options, with X	-	nothing: no options action for a console	-	-	2px #5A6076 radius 32	nothing
 99	help bar	consolesHelp	Home's HelpLine over Help.entries(Help.Console, {group: true})	96,1126,-,34	64,750.667,-,22.667	#D8DBE6 21px, its row centred 40 px over the foot	built
 103	"LT RT Maker"	-	the program's entries stand: A Open, B Back, Y Favourites, Random game, LB RB Group (qt-models/src/help.rs:121)	-	-	-	nothing

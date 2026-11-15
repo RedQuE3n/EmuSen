@@ -115,6 +115,14 @@ pub fn differences(scene: &mut Scene<'_>, rows: &[&Row], w: f64, h: f64) -> Vec<
                     }
                     continue;
                 }
+                "colour" => {
+                    // The item's own colour where others draw over it, as the ground under the disc.
+                    let read = scene.property(&row.item, "color");
+                    if Colour::parse(&read) != Colour::parse(value) {
+                        out.push(format!("{}: {} colour {read}, the table {value}", row.element, row.item));
+                    }
+                    continue;
+                }
                 "fill" => {
                     // Read as drawn, inside the box's left end at its middle (its centre where it is narrower than its ends'
                     // offset), clear of the words a pill or a disc carries at its centre.

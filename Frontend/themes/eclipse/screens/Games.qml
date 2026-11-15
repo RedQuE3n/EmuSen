@@ -16,6 +16,7 @@ ThemeScreen {
         required property string cover
         required property string consoleId
         required property string description
+        required property string hero
     }
     NormalizedCanvas {
         id: canvas
@@ -66,6 +67,24 @@ ThemeScreen {
                 objectName: "gridGround"
                 anchors.fill: parent
                 color: root.noLibrary ? shared.emptyGround : shared.ground
+            }
+            // The focused game's art blurred behind the disc, its hero else its cover as the row gives it; none for a game with no art.
+            Backdrop {
+                objectName: "gamesBackdrop"
+                anchors.fill: parent
+                visible: !root.noLibrary
+                source: root.focusedCell ? root.focusedCell.hero : ""
+                // The board's blur over its sample art (EclipseLibrary:19).
+                sourceBlur: 120 * root.px
+                pixelScale: canvas.unit
+            }
+            CoronaDisc {
+                objectName: "gamesDisc"
+                visible: !root.noLibrary
+                x: -1100 * root.px
+                y: -250 * root.px
+                width: 1700 * root.px
+                height: 1700 * root.px
             }
             CoronaDisc {
                 objectName: "emptyDisc"

@@ -101,6 +101,8 @@ fn qt_3_4_10_eclipses_games_view_is_its_board_by_the_table_at_every_size() {
     assert!(!shown(&mut scene, "gamesTileCover.3").0, "no cover");
     assert!(shown(&mut scene, "gamesTileGround.3").0, "the plain tile");
 
+    // The backdrop is the focused game's art; a game with none has none.
+    assert!(scene.property("gamesBackdrop", "source").ends_with("Amber%20Relay.png") || scene.property("gamesBackdrop", "source").ends_with("Amber Relay.png"), "{}", scene.property("gamesBackdrop", "source"));
     // The focused game's words are its row's.
     assert_eq!(focused_name(&mut scene), "gamesTile.0");
     assert_eq!(scene.property("gamesTitle", "text"), "Amber Relay");
@@ -147,6 +149,11 @@ fn qt_3_4_10_eclipses_games_view_is_its_board_by_the_table_at_every_size() {
     scene.wait(100);
     assert_eq!(focused_name(&mut scene), "gamesTile.21");
     assert_ne!(scene.property("gamesGrid", "contentY"), top, "the fifth row brought in");
+
+    let tree = scene.tree();
+    assert!(scene.focus_item(&tree, tree.find_named("gamesTile.3").unwrap()));
+    wait_for(&mut scene, "gamesTitle", "text", "Cinder Mile", 1000);
+    assert_eq!(scene.property("gamesBackdrop", "source"), "", "a game with no art has no backdrop");
 
     // The triggers step letters (R-20261115-12): RT to the first game under the next letter, LT back; the bar says Letter.
     let tree = scene.tree();

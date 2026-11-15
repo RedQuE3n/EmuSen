@@ -5,12 +5,12 @@
 # checks: board pixels, converted by the test as value x canvas::DESIGN_HEIGHT / board_h. x, y, w, h: the item's box; right: the canvas's width less the
 #   box's right edge; cy: the box's vertical centre; below=item:gap: the top is that item's bottom plus gap; after=item:gap: the left is that
 #   item's right plus gap; font: the type's pixel size, Type.size of the board's (R-20261115-14); ink: the words' colour;
-#   fill: the item's colour. A row with no checks is not drawn.
+#   fill: the item's colour as drawn; colour: the item's own colour where others draw over it. A row with no checks is not drawn.
 element	board	board_h	program	status	item	checks	words
-the ground	EclipseLibrary:17	1200	Ink.ground (themes/eclipse/parts/Ink.qml), Home's shared ink	built	gridGround	fill=#0A1024	
-the blurred colour fields	EclipseLibrary:19	1200	Home's backdrop (Main:19); the kit's Backdrop is merged (R-20261115-6), but the fields' colours are a game's art's (E10), and Home's parts as merged place none	open			
-the blurred colour fields	EclipseLibrary:20	1200	Home's backdrop (Main:20); the kit's Backdrop is merged (R-20261115-6), but the fields' colours are a game's art's (E10), and Home's parts as merged place none	open			
-the corona disc at the left edge	EclipseLibrary:21	1200	Home's disc (Main:25), the kit's CoronaDisc (theme-qt/qml/CoronaDisc.qml); Home's parts as merged carry no placing of it	open			
+the ground	EclipseLibrary:17	1200	Ink.ground (themes/eclipse/parts/Ink.qml), Home's shared ink	built	gridGround	colour=#0A1024	
+the focused game's art, blurred	EclipseLibrary:19	1200	the kit's Backdrop (kit-qt/qml/Backdrop.qml:14) with the row's hero, which is its hero else its cover (theme-qt/src/view.rs:226); no art, no backdrop; the board's colour fields are sample art	built	gamesBackdrop	x=0 y=0	
+the board's second colour field	EclipseLibrary:20	1200	sample art standing for the focused game's, not the program's	not-drawn			
+the corona disc at the left edge	EclipseLibrary:21	1200	the kit's CoronaDisc (theme-qt/qml/CoronaDisc.qml) on Eclipse's corona tokens, at the board's place; the board's glows at 0.55 and 0.25 are the tokens' 0.6 and 0.28 (Main:25's)	built	gamesDisc	x=-1100 y=-250 w=1700 h=1700	
 the header's place	EclipseLibrary:23	1200	Home's header (Main:27); the top navigation's place (R-20261115-7)	home			
 the EmuSen mark	EclipseLibrary:25	1200	Home's Brand part (themes/eclipse/parts/Brand.qml), its name left out as the games board does	built	mark	x=96 w=34 h=34 cy=80	
 the breadcrumb's first step	EclipseLibrary:27	1200	nothing: Words holds no "Consoles" (theme-qt/src/words.rs:20-36); the breadcrumb is not drawn (R-20261115-7)	not-drawn			Consoles
@@ -52,7 +52,7 @@ the rail's count	EclipseLibrary:76	1200	nothing: no words say a game's place amo
 the help bar's place	EclipseLibrary:82	1200	Home's HelpLine part, the frame's Help.entries(kind, {letters: true}) in Ink.help (qt-models/src/help.rs:127-134)	built	help	cy=1137	A Start  B Back  Y Favourite
 the letter pill	EclipseLibrary:88	1200	Help.entries(kind, {letters: true}), LT RT Letter (qt-models/src/help.rs LETTER), in Home's HelpLine	built	help		LT  RT  Letter
 the letter pill's count	EclipseLibrary:88	1200	nothing: no words say a game's place among the shown	not-drawn			· 1 of 214
-the empty ground	EclipseEmpty:17	1200	GamesInk.emptyGround (themes/eclipse/parts/GamesInk.qml), the empty state's own	built	gridGround	fill=#05060B	
+the empty ground	EclipseEmpty:17	1200	GamesInk.emptyGround (themes/eclipse/parts/GamesInk.qml), the empty state's own	built	gridGround	colour=#05060B	
 the rose field	EclipseEmpty:19	1200	the blurred backdrop is a kit part Home builds first (R-20261115-6); its rose is of no game	open			
 the waiting disc	EclipseEmpty:20	1200	the kit's CoronaDisc (theme-qt/qml/CoronaDisc.qml) on Eclipse's corona tokens; the board's three glows are not the tokens'	built	emptyDisc	right=190 y=250 w=600 h=600	
 the header	EclipseEmpty:22	1200	Home's Brand part with Words.title (qt-models/src/words.rs:5), which is "EMUSEN" where the board writes "EmuSen"	built	wordmark		EmuSen

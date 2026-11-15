@@ -42,6 +42,7 @@ const GAMES: [(&str, &str); 6] = [
 /// Qt's key codes for the arrows, which a theme's walk answers as the pad's.
 const UP: i32 = 0x0100_0013;
 const RIGHT: i32 = 0x0100_0014;
+const LEFT: i32 = 0x0100_0012;
 const DOWN: i32 = 0x0100_0015;
 
 /// The clock the device is fed, in the program's "hh:mm".
@@ -134,11 +135,15 @@ fn same(a: f64, b: f64) -> bool {
 }
 
 fn rom(world: &World, title: &str, ext: &str) -> String {
-    world.dir("Roms").join(format!("{title} (Synthetic).{ext}")).to_string_lossy().into_owned()
+    world.dir("Roms").join(format!("{title}.{ext}")).to_string_lossy().into_owned()
 }
 
-/// The six games written, played an hour apart with the first the latest, and read through the real clients.
-fn synthetic(world: &World) -> LibraryView {
+/// The covers' size in pixels, three by four, as theme-audit's library draws them.
+const COVER: (u32, u32) = (450, 600);
+
+/// The six games written, played an hour apart with the first the latest, each but the last with a cover in an ES-DE media
+/// folder, and read through the real clients; the media folder, which the host lets a theme show.
+fn synthetic(world: &World, harness: &mut emusen_qt_test::Harness) -> (LibraryView, std::path::PathBuf) {
     for (title, ext) in GAMES {
         std::fs::write(rom(world, title, ext), [0u8; 4096]).unwrap();
     }
@@ -157,10 +162,27 @@ fn synthetic(world: &World) -> LibraryView {
         let at = now - 3600 * (i as i64 + 1);
         records.change(&json!({ "op": "started", "path": rom(world, title, ext), "at": words::utc(at) })).unwrap();
     }
+    // Each game's cover but the last's under its console's id, which a first reading names; the last has no art.
+    let mut first = LibraryView::empty();
+    first.apply(refresh(&source));
+    let media = world.dir("Media");
+    let covers: Vec<_> = GAMES[..GAMES.len() - 1]
+        .iter()
+        .enumerate()
+        .map(|(i, (title, ext))| {
+            let system = first.game(&rom(world, title, ext)).expect("a game of the library").system;
+            (media.join(&system).join("covers").join(format!("{title}.png")), COVER, i, format!("{system} covers\n{title}"))
+        })
+        .collect();
+    emusen_qt_test::covers::draw(harness, &world.dir("Covers"), &covers, |_| {});
+    settings["EsdeMediaDirectory"] = json!(media.to_string_lossy());
+    platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
+    drop(source);
+    let source = ClientSource::open(&library().to_string_lossy(), &none).unwrap();
     let mut view = LibraryView::empty();
     view.apply(refresh(&source));
     assert!(view.problem.is_empty(), "{}", view.problem);
-    view
+    (view, media)
 }
 
 /// An object of the theme's engine by its number in the tree, its QObject's address.
@@ -197,6 +219,7 @@ fn rule(spec: &str, k: f64, got: &BTreeMap<String, Boxed>, canvas_width: f64) ->
         ["below", n, g] => Some(('y', of(n).bottom() + num(g) * k)),
         ["foot", n] => Some(('b', of(n).bottom())),
         ["up", n, g] => Some(('b', of(n).bottom() - num(g) * k)),
+        ["above", n, g] => Some(('b', of(n).y - num(g) * k)),
         ["mid", g] if g.parse::<f64>().is_ok() => Some(('m', num(g) * k)),
         ["mid", n] => Some(('m', of(n).middle())),
         [v] => Some(('=', num(v) * k)),
@@ -227,11 +250,12 @@ fn painted(tree: &Tree, name: &str) -> Option<Colour> {
 /// grabs it at the board's shape and the handheld's into that folder, each named by the size and `backend`.
 pub fn oracle(backend: &str) {
     let world = World::new("qt-app-eclipse-home");
-    let view = synthetic(&world);
     let mut harness = emusen_qt_test::Harness::new();
+    let (view, media) = synthetic(&world, &mut harness);
     let file = world.root.join("Scene.qml");
     std::fs::write(&file, SCENE).unwrap();
     let mut scene = harness.load(&format!("file://{}", file.display()), 1280, 800);
+    assert!(scene.set_property("host", "coverStores", &media.display().to_string()));
     let folder = std::fs::canonicalize(ECLIPSE).unwrap().display().to_string();
     assert!(scene.set_property("host", "folder", &folder));
     scene.wait(200);
@@ -256,15 +280,18 @@ pub fn oracle(backend: &str) {
     host::words(object(screen)).expect("Words").show_now(now as f64);
     host::library(object(screen)).expect("Library").show(&view, "[]");
     host::session(object(screen)).expect("Session").show(&session);
-    host::device(object(screen)).expect("Device").show(&DeviceFacts { controllers: 1, clock: CLOCK.into(), ..DeviceFacts::default() });
+    // One pad, of the family whose letters the board draws (A, X, Y; Main:62-68).
+    let family = emusen_kit_qt::kinds::family_of(emusen_kit_core::glyph::PadFamily::Xbox).repr;
+    host::device(object(screen)).expect("Device").show(&DeviceFacts { controllers: 1, family, clock: CLOCK.into(), ..DeviceFacts::default() });
     let package = emusen_theme_host::package::read(&std::fs::read_to_string(format!("{ECLIPSE}/theme.json")).unwrap()).unwrap();
     host::set_token_overrides(object(screen), &package.overrides());
     host::kit_tokens(object(screen)).expect("the kit's tokens").set_form(kinds::form_of(WalkForm::BigScreen));
     let tokens = tokens(screen);
     let text_scale: f64 = *host::kit_tokens(object(screen)).expect("the kit's tokens").text_scale();
     scene.wait(200);
-    // Placed and fed, the screen has logged nothing.
+    // Placed and fed, the screen has logged nothing, and comes to rest: no frame swapped for two seconds.
     scene.assert_quiet();
+    scene.assert_still("Eclipse's Home at rest");
 
     let (board_height, rows) = rows();
     // A board pixel in canvas units, by the canvas's owner of its height.
@@ -339,7 +366,12 @@ pub fn oracle(backend: &str) {
                     differences.push(format!("{at}: {} radius {have} where the board gives {}", row.name, radius * k));
                 }
             }
-            if row.colour != "-" {
+            if let Some(opacity) = row.colour.strip_prefix("opacity:") {
+                let want: f64 = opacity.parse().unwrap();
+                if !same(node.opacity, want) {
+                    differences.push(format!("{at}: {} opacity {} where the table gives {want}", row.name, node.opacity));
+                }
+            } else if row.colour != "-" {
                 let want = match row.colour.strip_prefix("Tokens.") {
                     Some(t) => tokens.get(t).and_then(|v| Colour::parse(v)),
                     None => Colour::parse(&row.colour),
@@ -347,6 +379,14 @@ pub fn oracle(backend: &str) {
                 let have = painted(&tree, &row.name);
                 if want.is_none() || have != want {
                     differences.push(format!("{at}: {} paints {have:?} where the board gives {} ({want:?})", row.name, row.colour));
+                }
+            }
+            if let Some(blur) = row.size.strip_prefix("blur:") {
+                // The backdrop's blur for its picture, in canvas units (Main:19's px through the board's measure).
+                let want = blur.parse::<f64>().unwrap() * k;
+                let have: f64 = read(&tree, "backdrop", "sourceBlur").parse().unwrap_or(f64::NAN);
+                if !same(have, want) {
+                    differences.push(format!("{at}: {} blur {have} where the table gives {want}", row.name));
                 }
             }
             if let Ok(size) = row.size.parse::<f64>() {
@@ -427,6 +467,19 @@ pub fn oracle(backend: &str) {
             let path = std::path::Path::new(&folder).join(format!("home-{width}x{height}-{backend}.png"));
             assert!(scene.grab(&path.display().to_string()), "{} is grabbed", path.display());
         }
+        // Once with the shown game one with no art: the ground alone behind the disc.
+        scene.resize(1920, 1200);
+        for _ in 1..GAMES.len() {
+            scene.key(RIGHT, 0);
+            scene.wait(50);
+        }
+        scene.wait(500);
+        let path = std::path::Path::new(&folder).join(format!("home-1920x1200-no-art-{backend}.png"));
+        assert!(scene.grab(&path.display().to_string()), "{} is grabbed", path.display());
+        for _ in 1..GAMES.len() {
+            scene.key(LEFT, 0);
+            scene.wait(50);
+        }
     }
 
     // The pad reaches everything drawn: Up from the shown tile to the buttons, Up to the search, and Down back again.
@@ -447,7 +500,11 @@ pub fn oracle(backend: &str) {
     }
     assert!(differences.is_empty(), "{} differences:\n{}", differences.len(), differences.join("\n"));
     scene.assert_quiet();
-    // The host drops the screen and its engine, as when another theme is chosen: nothing is logged on the way out.
+    // The host drops the screen and its engine and places it again, as theme-check's audit places each screen: nothing is logged.
+    assert!(scene.set_property("host", "folder", ""));
+    scene.wait(300);
+    assert!(scene.set_property("host", "folder", &folder));
+    scene.wait(300);
     assert!(scene.set_property("host", "folder", ""));
     scene.wait(300);
     scene.assert_quiet();

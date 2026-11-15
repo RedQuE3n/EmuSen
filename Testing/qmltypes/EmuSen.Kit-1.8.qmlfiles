@@ -468,6 +468,8 @@ Glow
     property color color
     property real blur
     property real spread
+    property real offsetX
+    property real offsetY
     readonly property real reach
     readonly property real cardBlur
     readonly property bool software
@@ -515,3 +517,29 @@ CoronaDisc
     objectName "coronaGlow." + glow.index
     objectName "coronaRim"
     objectName "coronaDisc"
+BackdropField
+    property real x
+    property real y
+    property real width
+    property real height
+    property color color
+    property real blur
+    property real opacity
+    property real rotation
+    property real corner
+Backdrop
+    property color ground
+    property list<Kit.BackdropField> fields
+    property url source
+    property real sourceBlur
+    property real pixelScale
+    readonly property bool software
+    readonly property bool pictured
+    readonly property real radiusShare
+    readonly property int blurMax
+    objectName "backdropGround"
+    objectName "backdropFields"
+    objectName "backdropField." + field.index
+    objectName "backdropEllipse"
+    objectName "backdropBox"
+    objectName "backdropPicture"

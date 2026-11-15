@@ -17,7 +17,17 @@ Decided 2026-11-15 by the tester (R-20261115-8): each console's number of played
   ones left out; `words::facts` now calls it) (added).
 - The module is 1.5 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.5.*`.
   A role is no QML type, so the qmldir's types keep their minors and `import EmuSen.Theme 1.0` finds what it found before.
-  1.3 and 1.4 are taken by the typeface and the backdrop and glow parts, which come with their own pieces.
+  1.3 is the typeface's, which comes with its own piece.
+
+## 1.4, an addition: the backdrop and the glow (2026-11-15)
+
+Decided 2026-11-15 by the tester (R-20261115-6): Eclipse gets two kit parts themes may use, a blurred backdrop and the glow
+or shadow. 1.3 is another piece's.
+
+- **`Backdrop`**, **`BackdropField`**, **`Glow`** (the kit's, by name): a screen's ground with its blurred colour fields or a
+  blurred picture, and a rounded box's glow or shadow, outside the box alone, with a box-shadow's offsets (`EmuSen_Kit.md`
+  §7.118, §7.119). Each keeps 1.4 in the qmldir, so a theme importing 1.0 or 1.2 finds what it found before.
+- The module is 1.4 and `theme.json`'s `api` may name it; its registry was `Testing/qmltypes/EmuSen.Theme-1.4.*` until 1.5.
 
 ## 1.2, an addition: the corona disc and the planet mark (2026-11-14)
 

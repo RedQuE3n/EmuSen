@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.5.qmltypes");
 const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.5.qmldir");
-const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.6.qmltypes");
+const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.8.qmltypes");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 
 /// The registry without its line numbers and header file names, which move with every edit and mean nothing to a QML author.
@@ -150,6 +150,8 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     assert_eq!(
         files,
         [
+            "Backdrop",
+            "BackdropField",
             "Body",
             "Carousel",
             "CoronaDisc",
@@ -159,6 +161,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
             "FigureLayout",
             "FocusRing",
             "Frame",
+            "Glow",
             "HelpBar",
             "Moonrise",
             "NormalizedCanvas",
@@ -178,6 +181,10 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
         "the kit's types by name, the screen and the tokens; never the whole kit"
     );
     assert!(COMMITTED_QMLDIR.contains("singleton Tokens 1.0"), "Tokens is a singleton");
+    // 1.4's additions keep 1.4, so a theme importing 1.0 or 1.2 finds what it found before (CHANGELOG-theme-api.md).
+    for (name, minor) in [("Backdrop", "1.4"), ("BackdropField", "1.4"), ("Glow", "1.4"), ("CoronaDisc", "1.2"), ("FocusRing", "1.1"), ("Walkable", "1.0")] {
+        assert!(COMMITTED_QMLDIR.lines().any(|l| l == format!("{name} {minor} qml/{name}.qml")), "{name} is {minor}'s");
+    }
     assert!(!COMMITTED_QMLDIR.lines().any(|l| l.starts_with("import ")), "the qmldir does not hand a theme the kit");
 }
 

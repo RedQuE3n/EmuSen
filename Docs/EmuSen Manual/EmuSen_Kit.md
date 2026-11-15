@@ -4113,3 +4113,51 @@ drawn; a disc given its own one glow, with a game's corona, draws that glow alon
 largest difference measured on 2026-11-14 on the software backend, 0.0192; the bound stands as measured, decided
 2026-11-15 by the tester, R-20261115-1, §7.113), and black past the halo's reach. The pixel
 ratio is one under the headless harness. Kit 1.6.
+### 7.118 Backdrop: a screen's blurred colour fields or picture (2026-11-15)
+
+Decided 2026-11-15 by the tester (R-20261115-6): a kit part themes may use. On the card it draws as the boards do. On the
+software backend it shows the same colours, unblurred, with no blur made by the CPU. The boards draw blurred fields behind
+Home (`Main.dc.html:19-23`), Choose a console (`EclipseConsoles.dc.html:19-20`), the games
+(`EclipseLibrary.dc.html:19-20`) and the empty library (`EclipseEmpty.dc.html:19`). Each field is a box with
+`border-radius: 50%` (an ellipse) or 40 px (a streak), a colour, a CSS `filter: blur()`, an opacity and, for a streak, a
+turn. Home's are labelled the shown game's art (`Main.dc.html:75`, "GAME ART · AURORA DRIFT").
+
+**The part.** `Backdrop` fills its box. It draws `ground`, then each of `fields` (`BackdropField`: `x`, `y`, `width`,
+`height`, `color`, `blur`, `opacity`, `rotation`, `corner`, the ellipse where `corner` is below 0), or `source`, a
+picture filling the box at `sourceBlur`, in the fields' place. A field's blur is the CSS filter's, the Gaussian's
+standard deviation (Filter Effects 1, `blur()`: "The passed parameter defines the value of the standard deviation to the
+Gaussian function"; w3.org/TR/filter-effects-1, read 2026-11-15).
+
+- *On the graphics card* each field is a layer blurred by a `MultiEffect` with `blur` 1, `blurMax` 64 and a
+  `blurMultiplier` of the radius over 64 less one. Qt's page (qml-qtquick-effects-multieffect, read 2026-11-15) says that
+  `blurMax` is "the maximum pixel radius that blur with value 1.0 will reach", meaningful "from 2 (subtle blur) to 64 (high
+  blur)". It says that the multiplier "extends the blur radius, but decreases the blur quality" and is "more performant
+  ... for a bigger blur radius than blurMax". It gives no formula for either. The radius is read as a box-shadow's blur
+  radius, twice the deviation (CSS Backgrounds 3 §6.1.2). How close the result is to the Gaussian is printed by
+  `tests/backdrop_gpu.rs` beside the rule and is not asserted.
+- *On the software backend*, which renders no shader effect, each field is drawn unblurred at its own opacity. The opacity
+  is the board's own figure for each field (`Main.dc.html:19`, 0.85, and so on). No picture is drawn there, since a sharp
+  picture is not the blurred one and the boards give no figure for it.
+
+Tests: `tests/backdrop.rs` (software) holds the ground, each field's colour at its opacity over the ground, its sharp
+edge, the streak's turn, and a picture drawing nothing. `tests/backdrop_gpu.rs` (the card, a GPU job) holds the field
+blurred past its edge, the ground where no field reaches, and the picture in the fields' place. Kit 1.8, Theme 1.4.
+
+### 7.119 Glow for themes, and its offset (2026-11-15)
+
+Decided 2026-11-15 by the tester (R-20261115-6): the glow or shadow is a kit part themes may use. The boards draw a
+resting tile's shadow, `0 10px 30px rgba(0, 0, 0, 0.45)` (`Main.dc.html:83`), and the filled button's halo and glow,
+`0 0 0 6px rgba(246, 231, 216, 0.18), 0 0 46px 6px rgba(240, 180, 196, 0.45)` (`Main.dc.html:61`,
+`EclipseEmpty.dc.html:46`). Each is an outer box-shadow, which `Glow` (§7.113) already draws on both backends, except
+that the tile's is moved by an offset. `RaisedShadow` (§7.55) is not used for it: it casts the one shadow of the tokens
+(`shadowColor`, `shadowOffsetY` and the rest), and the tile's has its own values.
+
+`Glow` gains `offsetX` and `offsetY`, 0 by default, so every glow drawn before is unchanged. The shape is moved by them
+before it is blurred, and the glow is still drawn outside the box alone (CSS Backgrounds 3 §6.1.1). The reach grows by the
+larger offset. On the card the offset is `RectangularShadow.offset` ("appended to the shadow position, relative to the
+RectangularShadow item position", qml-qtquick-effects-rectangularshadow, read 2026-11-15). On the software backend the
+offset is added to the canvas's shadow offset. EmuSen.Theme 1.4 exports `Glow` by name. Tests: `tests/shadow.rs`
+(software) and `tests/shadow_gpu.rs` (the card, a GPU job): a glow moved down draws, above and below its box, what the
+same glow unmoved draws `offset` further out and nearer in, within one level of 255 on the software backend and two on
+the card, and nothing inside the box. Kit 1.8.
+

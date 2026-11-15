@@ -28,6 +28,9 @@ fn main() {
         QmlFile::from("qml/PlanetMark.qml").version(1, 2),
         QmlFile::from("qml/CoronaGlow.qml").version(1, 2),
         QmlFile::from("qml/CoronaDisc.qml").version(1, 2),
+        QmlFile::from("qml/BackdropField.qml").version(1, 4),
+        QmlFile::from("qml/Backdrop.qml").version(1, 4),
+        QmlFile::from("qml/Glow.qml").version(1, 4),
     ];
     CxxQtBuilder::new_qml_module(QmlModule::new("EmuSen.Theme").version(1, 5).qml_files(qml).depend("QtQuick").depend("EmuSen.Kit"))
         .files([

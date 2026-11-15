@@ -4163,15 +4163,38 @@ JetBrains Mono); theme-check finds any other value, and the kit, given one, keep
 face is never a family the machine may lack, so a theme's text is never drawn in a fallback. Sora has no 500: a text
 asking Sora at `Font.Medium` is drawn in Sora Regular (fontInfo, 2026-11-15).
 
-**Weights, not settled.** The tokens name a family; every text keeps the weight it set under the reference. The boards
-draw Eclipse's roles at other weights, read 2026-11-15: titles and headings 600 (`EclipseSettings:25`, `:40`, `:74`), a
-row's label 600 (`EclipseSettings:44`) where the reference draws 400, its value 400 (`EclipseSettings:47`), body words
-400 (`EclipseSettings:73`), a pane's sentence 300 (`EclipseSettings:75`), the wordmark 600 (`Main:31`) where the
-reference draws 300, codes 400 (`EclipseSettingsLibrary:70`, `EclipseSettingsEmuSen:72`) and a cheat's code 700
-(`EclipseCheats:75`). One weight per role does not hold them: a row's label and its value share the interface role and
-differ. Weights per text kind under a theme are left for a ruling: either a weight token beside each face token with the
-roles split where the boards differ (a row's label from its value, a sentence from the words), or a weight table per
-look.
+**Weights.** Decided 2026-11-15 by main, provisional on the tester's word about API additions: a weight token beside the
+faces where the reference and Eclipse's boards draw a kind of text differently. Each kind of text the program and the
+kit draw, its weight under the reference (what trunk draws), and the boards' (`~/.cache/emusen/design-console-themes-2026-11-11/project/`, read 2026-11-15):
+
+| Kind | Reference (path:line) | Boards (file:line) | Token |
+|---|---|---|---|
+| title: a screen's, a section's, a card's, a pane's, a question's, the page's | 400: `Settings.qml:71`, `Themes.qml:45`, `MenuCard.qml:242`, `Question.qml:23`, `ToolScreen.qml:38`, `PageFrame.qml:152`, `style/Dialog.qml:22` | 600: every `h1` but one (66 boards; `EclipseSettings:25`, `EclipsePause:35`), every `h2` (40) and `h3` (22; `EclipseSettings:40`, `:74`) | `weightTitle` 400, Eclipse 600 |
+| the pane's sentence | 400: `SettingsFrame.qml` (`settingsSentence`) | 300 on all 24 Settings boards (`EclipseSettings:75`) | `weightSentence` 400, Eclipse 300 |
+| the wordmark | 300: `themes/emusen/screens/Home.qml:110`, `Moonrise.qml:289` | 600 on every board that draws it (`Main:31`, `EclipseSplash`, `EclipseConsoles:26`) | `weightWordmark` 300, Eclipse 600 |
+| a row's value, the pane's muted lines, help words | 400: `MenuRow.qml` (`value`), `HelpBar.qml:16` | 400 (`EclipseSettings:47`, `:73`, `:79`) | none: both 400 |
+| strong words | 600: `GamePage.qml:248`, `:292` | 600 | none |
+| a row's label | 400: `MenuRow.qml:20` | **disagree**: 600 on every Settings board (`EclipseSettings:44`, 27 boards); a card's rows 400 at rest and 600 focused (`EclipsePause:72`) | not carried: the tester's |
+| a code | 400: `MenuRow.qml` (`value`) | **disagree**: 400 (`EclipseSettingsLibrary:70`, `EclipseSettingsEmuSen:72`); a cheat's code 700 (`EclipseCheats:75`, `:87`) | not carried: the tester's |
+| a section tab | 400: `SettingsFrame.qml:70` | the chosen tab 600, the rest 400 (`EclipseSettings:94`) | not carried: a chosen weight, the same question as a card's focused row |
+
+`EclipseLaunch:28` draws a game's title at 700 on a launch screen the program does not draw; its launch question is a
+dialog, 600 (`EclipseDialog`). Every weight named for Eclipse is one of Sora's four files (300, 400, 600, 700); Qt
+matches weight after family and size ("the remaining attributes are matched in order of priority: fixedPitch,
+pointSize, weight, style", doc.qt.io, Qt 6, `QFont`, read 2026-11-15), so a weight Sora lacks is drawn in the nearest
+file Qt picks, as `Font.Medium` was drawn in Sora Regular. The tokens are whole numbers in `theme.json`; a text sets
+`font.weight` from its kind's token, its other weights its own.
+
+**Fit under Eclipse.** Measured 2026-11-15 on the software backend: the kit's gate (`Scene::audit`) at the five sizes of
+`harness::SIZES`, walked, over Settings' six sections and the Themes tab, under the reference and then under Eclipse,
+leaving out the palette and contrast rules (they were judged against the kit's palette, not Eclipse's). No text runs past
+its box, is cut at a foot or an edge, or overlaps under Eclipse. The ROM folder's path is cut with an ellipsis at 1280 ×
+800 and 1920 × 1200 under Eclipse and at all five sizes under the reference, as `MenuRow` cuts a long path at its start.
+187 texts are too small to read under Eclipse and none under the reference: at 1280 × 720 every row's label and value
+(16 px, Eclipse's `fontRow`) and the pane's lines (14 px, `fontBody`), 135 findings; at the four other sizes the pane's
+sentence and lines and the Themes tab's line (14 px), 13 at each. They follow Eclipse's type sizes, not its face; the
+sizes are another piece's. The findings, each with its screen, size, words and pixel size, are kept with the piece's
+evidence.
 
 **Tests.** `kit-qt/tests/faces.rs`: `BUNDLED` is the families of the folder's files and every file is in the resource;
 each bundled family is drawn as itself (the family Qt matched, `QFontInfo`: "if the requested font is not available,
@@ -4180,5 +4203,6 @@ theme's faces in its variant, an unbundled one left. `qt-app/tests/eclipse_faces
 `kit_7_117_…`: under the reference the wordmark draws Barlow Condensed, the status line Barlow and a settings row the
 application's font; under Eclipse a settings row draws Sora and the ROM folder's path JetBrains Mono, Eclipse's engine
 gives its texts Sora, and the reference's Home on an engine holding Eclipse's overrides draws its wordmark and status
-line in Sora; the reference again as before. The harness's tree reports each text's `drawn` family beside the `face` it
+line in Sora; the reference again as before. The same test reads each weight drawn (`QFontInfo::weight`): the
+reference's row label, value and sentence 400 and its wordmark 300; Eclipse's 400, 400 and 300, and its wordmark 600. The harness's tree reports each text's `drawn` family beside the `face` it
 asks for. Kit 1.7, Theme 1.3.

@@ -1713,6 +1713,9 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 | faceLabel | names, titles, the wordmark (`themes/emusen/parts/Faces.qml`) | the same (`EclipseSettings:17`) | 'Sora' | Sora |
 | faceInterface | a row's label and value (`MenuRow.qml:58`), the style's controls | the rows (`EclipseSettings:17`) | 'Sora' | Sora |
 | faceCode | a folder's path and the version in a row (`MenuRow.qml`, `code`) | the path (`EclipseSettingsLibrary:70`), the version (`EclipseSettingsEmuSen:72`), a cheat's code (`EclipseCheats:75`) | 'JetBrains Mono' | JetBrains Mono |
+| weightTitle | every title's weight (`Settings.qml:71`, `MenuCard.qml:242`) | the titles (`EclipseSettings:25`, `:40`) | 600 | 600 |
+| weightSentence | the pane's sentence (`SettingsFrame.qml`) | the sentence (`EclipseSettings:75`) | 300 | 300 |
+| weightWordmark | the wordmark (`Moonrise.qml:289`, the reference's Home) | the wordmark (`Main:31`) | 600 | 600 |
 
 The colour of the notice's shadow is black on the board, the kit's own, so `shadowColor` is not overridden; `safeAreaX`
 (96 px, 64 units) is the kit's value too. `border` is not the board's #5A6076, which is 2.83:1 on surfaceRaised and 2.97:1

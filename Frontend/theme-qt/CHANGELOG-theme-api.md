@@ -11,6 +11,9 @@ Decided 2026-11-14 by the tester (R-20261114-15): a theme names its face through
   (Kit 1.7, `EmuSen_Kit.md` §7.117): the family of the words, the labels, the kit's rows and controls, and codes. A
   `theme.json` may set each to a face the kit bundles: Barlow, Barlow Condensed, Sora or JetBrains Mono; theme-check finds
   any other.
+- **`Tokens.weightTitle`, `weightSentence`, `weightWordmark`** (added, read-only): the weights of a title, the pane's
+  sentence and the wordmark, as the kit's; a `theme.json` may set each as a whole number. Eclipse sets 600, 300 and 600,
+  its boards' (`EmuSen_Kit.md` §7.117); the reference's Home reads `weightWordmark`.
 - The reference's `parts/Faces.qml` reads `faceText` and `faceLabel` and loads no font of its own; its manifest declares
   api 1.3. Eclipse sets Sora for the first three and JetBrains Mono for codes, and declares api 1.3.
 - The module is 1.3; `PlanetMark`, `CoronaGlow` and `CoronaDisc` keep 1.2 in the qmldir, every other type its own minor.

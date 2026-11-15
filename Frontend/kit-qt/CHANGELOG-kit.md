@@ -13,6 +13,9 @@ every type with 1.7, the kit's version, as each minor since 1.3 has.
 - **`Tokens.faceText`, `faceLabel`, `faceInterface`, `faceCode`** (registry, strings after every earlier property): the
   family each role of text draws in; Barlow, Barlow Condensed, and the application's font for the last two in the kit's
   column. `EmuSen_Kit.md` §7.117.
+- **`Tokens.weightTitle`, `weightSentence`, `weightWordmark`** (registry, whole numbers after the faces): the weight of a
+  title, of the pane's sentence and of the wordmark; 400, 400 and 300 in the kit's column, as the reference drew them.
+  Decided 2026-11-15 by main, provisional on the tester's word. §7.117.
 - **`MenuRow.code`** and the read-only **`MenuRow.valueFont`**: a value drawn in `faceCode`; `SettingsFrame` reads a
   row's `code` role.
 - The style's controls, `ToneText`, and the default fonts of `MenuRow`, `ActionButton`, `HelpBar`, `Keyboard`,

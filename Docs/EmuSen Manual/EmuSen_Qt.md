@@ -1743,7 +1743,7 @@ program's equals `theme.json`'s, and every other token is the kit's; the referen
 back. qt-models' `both_built_ins_come_first_and_a_blank_setting_still_gives_the_reference` holds the listing and the
 resolution, and qt-app's `qt_3_4_2_…` holds each built-in's resources to its folder.
 
-#### 3.4.8 Eclipse's Choose a console **[M 2026-11-15]**
+#### 3.4.9 Eclipse's Choose a console **[M 2026-11-15]**
 
 `Frontend/themes/eclipse/screens/Consoles.qml`, listed in Eclipse's `theme.json`, is the board "Eclipse theme, Consoles"
 (`EclipseConsoles.dc.html`) laid out from `Library.consoles`. Every measure is the board's pixel times `canvas.designHeight

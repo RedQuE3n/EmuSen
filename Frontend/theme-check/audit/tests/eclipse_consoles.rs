@@ -1,4 +1,4 @@
-// EmuSen_Qt.md §3.4.8: Eclipse's Choose a console held to its board, the table eclipse_consoles.tsv, as theme-audit records
+// EmuSen_Qt.md §3.4.9: Eclipse's Choose a console held to its board, the table eclipse_consoles.tsv, as theme-audit records
 // it over the canvases' eleven consoles at the board's shape (1280 x 800 and 1920 x 1200), every box in design units as the
 // table gives it; and held whole, with no finding, over one console, thirty, one maker of forty and 120.
 
@@ -96,7 +96,6 @@ fn states(dir: &Path, size: &str) -> Vec<(String, String)> {
 fn qt_3_4_8_eclipse_s_consoles_stands_where_its_board_stands_it() {
     let dir = std::env::temp_dir().join(format!("theme-audit-eclipse-consoles-{}", std::process::id()));
     let (out, err) = audit("eleven", Some("Super Nintendo"), &dir);
-    assert!(out.trim().is_empty(), "no finding over the eleven consoles:\n{out}\n{err}");
     let mut differences = Vec::new();
     let mut held = 0;
     for (size, height) in [("1280x800", 800.0), ("1920x1200", 1200.0)] {
@@ -142,6 +141,7 @@ fn qt_3_4_8_eclipse_s_consoles_stands_where_its_board_stands_it() {
     let _ = std::fs::remove_dir_all(&dir);
     assert!(held > 20, "the table's rows were found on the screen ({held})");
     assert!(differences.is_empty(), "{} differences from the board:\n{}", differences.len(), differences.join("\n"));
+    assert!(out.trim().is_empty(), "no finding over the eleven consoles:\n{out}\n{err}");
 }
 
 #[test]

@@ -1483,6 +1483,168 @@ Module {
         }
     }
     Component {
+        file: "group_grid.cxxqt.h"
+        lineNumber: 59
+        name: "GroupGridLayout"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/GroupGridLayout 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "model"
+            type: "QAbstractItemModel"
+            isPointer: true
+            read: "getModel"
+            write: "setModel"
+            notify: "modelChanged"
+            index: 0
+            lineNumber: 64
+        }
+        Property {
+            name: "groupRole"
+            type: "QString"
+            read: "getGroupRole"
+            write: "setGroupRole"
+            notify: "groupRoleChanged"
+            index: 1
+            lineNumber: 65
+        }
+        Property {
+            name: "indexRole"
+            type: "QString"
+            read: "getIndexRole"
+            write: "setIndexRole"
+            notify: "indexRoleChanged"
+            index: 2
+            lineNumber: 66
+        }
+        Property {
+            name: "columns"
+            type: "int"
+            read: "getColumns"
+            write: "setColumns"
+            notify: "columnsChanged"
+            index: 3
+            lineNumber: 67
+        }
+        Property {
+            name: "count"
+            type: "int"
+            read: "getCount"
+            notify: "laidOut"
+            index: 4
+            lineNumber: 68
+            isReadonly: true
+        }
+        Property {
+            name: "groups"
+            type: "int"
+            read: "getGroups"
+            notify: "laidOut"
+            index: 5
+            lineNumber: 69
+            isReadonly: true
+        }
+        Property {
+            name: "columnOf"
+            type: "QVariant"
+            read: "getColumnOf"
+            notify: "laidOut"
+            index: 6
+            lineNumber: 70
+            isReadonly: true
+        }
+        Property {
+            name: "rowOf"
+            type: "QVariant"
+            read: "getRowOf"
+            notify: "laidOut"
+            index: 7
+            lineNumber: 71
+            isReadonly: true
+        }
+        Property {
+            name: "left"
+            type: "QVariant"
+            read: "getLeft"
+            notify: "laidOut"
+            index: 8
+            lineNumber: 72
+            isReadonly: true
+        }
+        Property {
+            name: "right"
+            type: "QVariant"
+            read: "getRight"
+            notify: "laidOut"
+            index: 9
+            lineNumber: 73
+            isReadonly: true
+        }
+        Property {
+            name: "up"
+            type: "QVariant"
+            read: "getUp"
+            notify: "laidOut"
+            index: 10
+            lineNumber: 74
+            isReadonly: true
+        }
+        Property {
+            name: "down"
+            type: "QVariant"
+            read: "getDown"
+            notify: "laidOut"
+            index: 11
+            lineNumber: 75
+            isReadonly: true
+        }
+        Property {
+            name: "firsts"
+            type: "QVariant"
+            read: "getFirsts"
+            notify: "laidOut"
+            index: 12
+            lineNumber: 76
+            isReadonly: true
+        }
+        Property {
+            name: "rows"
+            type: "QVariant"
+            read: "getRows"
+            notify: "laidOut"
+            index: 13
+            lineNumber: 77
+            isReadonly: true
+        }
+        Signal { name: "modelChanged"; lineNumber: 100 }
+        Signal { name: "groupRoleChanged"; lineNumber: 101 }
+        Signal { name: "indexRoleChanged"; lineNumber: 102 }
+        Signal { name: "columnsChanged"; lineNumber: 103 }
+        Signal { name: "laidOut"; lineNumber: 105 }
+        Method {
+            name: "setModel"
+            lineNumber: 83
+            Parameter { name: "value"; type: "QAbstractItemModel"; isPointer: true }
+        }
+        Method {
+            name: "setGroupRole"
+            lineNumber: 85
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setIndexRole"
+            lineNumber: 87
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setColumns"
+            lineNumber: 89
+            Parameter { name: "value"; type: "int" }
+        }
+        Method { name: "read"; lineNumber: 104 }
+    }
+    Component {
         file: "inside_clips.h"
         lineNumber: 7
         name: "InsideClips"

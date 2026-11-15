@@ -4161,3 +4161,20 @@ offset is added to the canvas's shadow offset. EmuSen.Theme 1.4 exports `Glow` b
 same glow unmoved draws `offset` further out and nearer in, within one level of 255 on the software backend and two on
 the card, and nothing inside the box. Kit 1.8.
 
+
+### 7.120 GroupGridLayout: groups as a column and the chosen group as a grid (2026-11-15)
+
+`kit-core/src/group_grid.rs` (`group_grid`) takes each item's group and place in its group, in a model's order, and a
+number of columns. It gives each item its column and row in its group's grid, and its left, right, up and down neighbours
+inside that grid: none past the grid's edge. Down from a row lands on the item below, or on the last item when the next
+row is shorter, and gives none from the last row. It also gives each group's first item and its number of rows. It names
+no console. `kit-qt/src/group_grid.rs`, **`GroupGridLayout`**, reads the two roles (`groupRole`, `group` by default;
+`indexRole`, `groupIndex`) from any list model when `read()` is called or the model changes. It lays out again when
+`columns` changes, and gives the lists `columnOf`, `rowOf`, `left`, `right`, `up`, `down`, `firsts` and `rows`, with -1
+for none. A screen places an item at its column and row and binds its `KeyNavigation` to the neighbours' delegates. The
+edges of the grid are the screen's to join: to its group's heading, to an action. Exported to themes in EmuSen.Theme 1.5
+(Eclipse's Choose a console, EmuSen_Qt.md §3.4.9). Kit 1.9.
+
+**Proof.** kit-core's `tests/group_grid.rs`: two interleaved groups at four columns, with each item's place, the groups'
+firsts and rows; a walk that stays inside its group, with Down landing on a short row's last item; and one column and no
+items. theme-qt's harness scene reads the consoles through it after the list resets.

@@ -295,6 +295,16 @@ Window {
             target: Library.consoles
             function onModelReset() { wheels.read() }
         }
+        GroupGridLayout {
+            id: grids
+            objectName: "grids"
+            columns: 4
+            model: Library.consoles
+        }
+        Connections {
+            target: Library.consoles
+            function onModelReset() { grids.read() }
+        }
         HelpBar {
             objectName: "helpBar"
             model: Help.entries(Help.Place)

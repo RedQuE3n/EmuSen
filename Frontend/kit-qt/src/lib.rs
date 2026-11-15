@@ -16,6 +16,7 @@ pub mod column;
 pub mod controller;
 pub mod convert;
 pub mod figures;
+pub mod group_grid;
 pub mod fonts;
 pub mod frame;
 pub mod glyph;

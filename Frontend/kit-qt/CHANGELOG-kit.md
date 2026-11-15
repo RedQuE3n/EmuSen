@@ -5,6 +5,13 @@ writes it, is committed under `Testing/qmltypes/` and compared on every build. U
 addition, a change or a removal, bumps the minor (R-20261111-107, R-20261111-108); each entry names what changed and the
 section of `EmuSen_Kit.md` that records it.
 
+## 1.9: groups as a column and the chosen group as a grid (2026-11-15)
+
+- **`GroupGridLayout`**: kit-core's `group_grid` on Qt, read from a list model's group and place roles (`group` and
+  `groupIndex` by default) at a given number of columns. Each item's column and row in its group's grid, its four
+  neighbours inside that grid, each group's first item and its rows, as lists a screen binds to by index. Exported to
+  themes in EmuSen.Theme 1.5 for Eclipse's Choose a console. `EmuSen_Kit.md` §7.120.
+
 ## 1.8: a blurred backdrop, and the glow moved by an offset, for themes (2026-11-15)
 
 Decided 2026-11-15 by the tester (R-20261115-6): Eclipse gets two kit parts themes may use, a blurred backdrop and the

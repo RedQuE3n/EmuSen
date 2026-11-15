@@ -1043,7 +1043,7 @@ actions, cues or tokens and never removes or renames one; a role or action no lo
 deprecated, in the changelog and its doc comment, for one minor, then removed at a major. A theme states the API it was
 written for in `theme.json` (`"api": "1.0"`); a theme written for a newer major than the build has is refused with words
 naming both; one written for an older minor of the same major loads, its minors being additive after the first release;
-before it a later minor may have removed what the theme uses, each removal listed in the changelog. Before 1.0 (§5.1) the same rules hold, with breaking changes allowed and listed in `CHANGELOG-theme-api.md`.
+before it a later minor may have removed what the theme uses, each removal listed in the changelog. Before 1.0 (§5.1) the same rules hold, with breaking changes allowed and listed in `CHANGELOG-theme-api.md`. The API is the newest of what the module exports and the newest minor that changelog heads a section with, and nothing the module exports is newer, so a minor whose additions are members of types exported earlier is still that minor (decided 2026-11-11 by the tester, R-20261111-107; theme-check's `registry.rs`).
 
 ### 3.4 The package
 

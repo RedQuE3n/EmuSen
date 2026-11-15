@@ -1813,7 +1813,11 @@ that it has nothing, whether it is built here, Home's (a part Home's board draws
 or open, and the checks it is held to. A board pixel becomes canvas units as value × `canvas::DESIGN_HEIGHT` / the board's
 height (1200), the conversion of §3.4.7.
 
-**What is drawn.** At the left, the focused game's console (its `Library.consoles` name, then its year where the row has
+**What is drawn.** Behind everything, the focused game's art (its row's hero, else its cover, as `view.rs` gives it)
+through the kit's `Backdrop`, at the board's first field's blur, 120 px, and opacity, 0.35 (`EclipseLibrary:19`), the
+same opacity unblurred on the software backend (R-20261115-6); provisional, the tester's to judge from the pictures. A
+game with no art has none: the plain ground. Over it the kit's `CoronaDisc` at the board's place at the left edge
+(`EclipseLibrary:21`). At the left, the focused game's console (its `Library.consoles` name, then its year where the row has
 one) and its title, and its description where the row has one. Beside them, the Filter page's choices as chips, the one in
 force filled, and the sort in force as a pill at the right; under them the games as tiles, each the cover filling the tile
 as the board's art does (cropped through `RoundPicture`) or, with no cover, the plain tile in `surfaceRaised`, its title
@@ -1839,13 +1843,14 @@ scale, so a size under the legibility floor is raised to the smallest that passe
 piece lands.
 
 **Open.** A tile's title over a cover reads at 3.91:1 and 3.67:1 against theme-check's 4.5:1 at 1280x800, with the
-board's own foot (`EclipseLibrary:70`, Eclipse's `overArtScrim`) and the title's place (`EclipseLibrary:71`): the
-tester's to settle. Under theme-check's stillness check, the screen swaps one frame in two seconds once after it is
+board's own foot (`EclipseLibrary:70`, Eclipse's `overArtScrim`) and the title's place (`EclipseLibrary:71`), and at
+2.20:1 and 2.08:1 once `Type.size` raises the title so that a longer one wraps to two lines into the foot's clear half:
+the tester's to settle. Under theme-check's stillness check, the screen swaps one frame in two seconds once after it is
 placed, with nothing running; the grid's scroll position and the audit host's feed order were ruled out (the reference's
 grid, audited on the same tree, is still), and the cause is not known. The light variant's findings wait for the piece
 that judges a dark-only theme in light.
 
-**Not drawn**, each listed in the table: the breadcrumb (the top navigation's place, R-20261115-7), the genre and player
+**Not drawn**, each listed in the table: the board's two colour fields (sample art standing for the focused game's), the breadcrumb (the top navigation's place, R-20261115-7), the genre and player
 chips and the facts list (the rows hold no genre, players, time played or states, and no words name them), the board's
 "Start" (the program's A is "Play"), the "VIEW" glyph (no button steps the sort), a game's place among the shown ("1 of
 214"), and on the empty board its steps and its two buttons. Colours no token holds are the games view's own constants in

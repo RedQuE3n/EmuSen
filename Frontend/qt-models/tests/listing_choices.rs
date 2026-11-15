@@ -92,3 +92,12 @@ fn the_triggers_step_letters_where_the_bar_asks_and_keep_their_meaning_elsewhere
     assert_eq!(help::action_lines_with(Screen::Home, true), help::action_lines(Screen::Home), "a bar with no letters' place");
     assert!(!help::action_lines(Screen::Grid).contains("First"), "the grid's own bar leaves the triggers alone");
 }
+
+#[test]
+fn a_collections_key_is_never_read_as_a_step_whatever_its_id() {
+    // games.db's collection ids are any i64: a negative one puts '-' in the key, which a step's reading split.
+    let text = list_card::collections_text(&[emusen_qt_models::gamelists::Collection { id: -3, name: "Couch".into(), members: vec![] }]);
+    let key = list_card::collections_of(&text)[0].key.clone();
+    assert_eq!(action_of(&key), (key.as_str(), 0));
+    assert_eq!(action_of(&list_card::stepped(list_card::JUMP, -1)), (list_card::JUMP, -1), "a step is still a step");
+}

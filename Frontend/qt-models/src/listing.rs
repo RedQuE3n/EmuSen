@@ -45,7 +45,8 @@ pub struct Listing {
     /// The games never played: no time in the library's played record (`GameRow::played_at`, library.rs; R-20261115-10).
     pub not_played: bool,
     pub search: String,
-    pub collection: Option<std::collections::BTreeSet<String>>,
+    /// Shared with the model that holds it, so a listing made on each read never copies the members.
+    pub collection: Option<std::sync::Arc<std::collections::BTreeSet<String>>>,
 }
 
 impl Listing {

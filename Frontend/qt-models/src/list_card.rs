@@ -60,8 +60,11 @@ pub fn stepped(key: &str, by: i32) -> String {
     format!("{key}{by:+}")
 }
 
-/// An action read back: its key and its step, 0 for none.
+/// An action read back: its key and its step, 0 for none; a collection's key is never a step, whatever its id holds.
 pub fn action_of(action: &str) -> (&str, i32) {
+    if is_collection(action) {
+        return (action, 0);
+    }
     match action.find(['+', '-']) {
         Some(at) => (&action[..at], action[at..].parse().unwrap_or(0)),
         None => (action, 0),

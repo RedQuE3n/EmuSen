@@ -62,6 +62,8 @@ pub mod qobject {
         #[qproperty(QString, list_facts, cxx_name = "listFacts", READ, NOTIFY)]
         /// Whether the sort needs the scraper's facts (Year, Rating), which the library then reads (LibraryModel.byFacts).
         #[qproperty(bool, by_facts, cxx_name = "byFacts", READ, NOTIFY)]
+        /// How many times `collections` was read into its rows: once for each change of it, never for a focus or a read.
+        #[qproperty(i32, collections_read, cxx_name = "collectionsRead", READ, NOTIFY)]
         type GameModel = super::GameModelRust;
     }
 
@@ -186,6 +188,9 @@ pub struct GameModelRust {
     not_played_in: std::collections::HashSet<String>,
     /// The sections narrowed to a collection, by the collection's key.
     collection_in: std::collections::HashMap<String, String>,
+    /// The collections as `collections` last gave them, each with its members as a set, made once per change of it.
+    listed: Vec<(crate::list_card::Listed, std::sync::Arc<std::collections::BTreeSet<String>>)>,
+    collections_read: i32,
     /// What the last read found: the section's count and each letter's first row in the shown list.
     read: Read,
 }
@@ -207,7 +212,7 @@ impl cxx_qt::Initialize for qobject::GameModel {
         self.as_mut().on_section_name_changed(|model| model.said()).release();
         self.as_mut().on_search_changed(|model| model.read()).release();
         self.as_mut().on_startable_changed(|model| model.said()).release();
-        self.as_mut().on_collections_changed(|model| model.read()).release();
+        self.as_mut().on_collections_changed(|model| model.collections_given()).release();
         self.on_focused_changed(|model| model.said()).release();
     }
 }
@@ -294,11 +299,23 @@ impl qobject::GameModel {
         self.at(row).map_or(-1.0, |g| g.hue)
     }
 
+    /// The collections text read once into the collections and their members' sets, then the games read with them.
+    fn collections_given(mut self: Pin<&mut Self>) {
+        let listed = crate::list_card::collections_of(&self.collections.to_string()).into_iter().map(|c| {
+            let members = std::sync::Arc::new(c.members.iter().cloned().collect());
+            (c, members)
+        });
+        self.as_mut().rust_mut().listed = listed.collect();
+        self.as_mut().rust_mut().collections_read += 1;
+        self.as_mut().collections_read_changed();
+        self.read();
+    }
+
     /// The games text read into rows off the GUI thread; the newest read's rows are taken, the model reset once.
     fn read(mut self: Pin<&mut Self>) {
         let (text, leave_out) = (self.games.to_string(), self.leave_out.to_string());
         let (section, listing) = (self.section.to_string(), self.listing());
-        let collections = crate::list_card::collections_of(&self.collections.to_string());
+        let collections: Vec<crate::list_card::Listed> = self.listed.iter().map(|(c, _)| c.clone()).collect();
         let asked = self.asked.wrapping_add(1);
         self.as_mut().rust_mut().asked = asked;
         let qt = self.qt_thread();
@@ -320,14 +337,14 @@ impl qobject::GameModel {
     /// The listing the section is read with now.
     fn listing(&self) -> crate::listing::Listing {
         let section = self.section.to_string();
-        let collection = self.collection().map(|c| c.members.into_iter().collect());
+        let collection = self.collection().map(|(_, members)| members.clone());
         crate::listing::Listing { sort: self.sort, favourites_only: self.favourites_in.contains(&section), not_played: self.not_played_in.contains(&section), search: self.search.to_string(), collection }
     }
 
     /// The collection the section is narrowed to, while it still is one of the player's.
-    fn collection(&self) -> Option<crate::list_card::Listed> {
+    fn collection(&self) -> Option<&(crate::list_card::Listed, std::sync::Arc<std::collections::BTreeSet<String>>)> {
         let key = self.collection_in.get(&self.section.to_string())?;
-        crate::list_card::collections_of(&self.collections.to_string()).into_iter().find(|c| &c.key == key)
+        self.listed.iter().find(|(c, _)| &c.key == key)
     }
 
     pub fn list_act(mut self: Pin<&mut Self>, action: &QString) -> i32 {
@@ -411,7 +428,7 @@ impl qobject::GameModel {
             "sort": crate::listing::Sort::at(self.sort).words(),
             "filter": self.filter_words(),
             "filters": self.read.choices,
-            "collections": crate::list_card::collections_of(&self.collections.to_string()).into_iter().map(|c| serde_json::json!({ "key": c.key, "name": c.name })).collect::<Vec<_>>(),
+            "collections": self.listed.iter().map(|(c, _)| serde_json::json!({ "key": c.key, "name": c.name })).collect::<Vec<_>>(),
             "letter": letter,
             "letters": self.read.letters.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>().join(" "),
             "favouritesSection": self.section.to_string() == crate::library::FAVOURITES,
@@ -433,7 +450,7 @@ impl qobject::GameModel {
     pub fn filter_key(&self) -> String {
         let section = self.section.to_string();
         match self.collection() {
-            Some(c) => c.key,
+            Some((c, _)) => c.key.clone(),
             None if self.favourites_in.contains(&section) => crate::list_card::FAVOURITES_ONLY.to_owned(),
             None if self.not_played_in.contains(&section) => crate::list_card::NOT_PLAYED.to_owned(),
             None => crate::list_card::EVERY_GAME.to_owned(),
@@ -446,7 +463,7 @@ impl qobject::GameModel {
             crate::list_card::EVERY_GAME => String::new(),
             crate::list_card::FAVOURITES_ONLY => crate::words::FAVOURITES_FILTER.to_owned(),
             crate::list_card::NOT_PLAYED => crate::words::NOT_PLAYED.to_owned(),
-            _ => self.collection().map(|c| c.name).unwrap_or_default(),
+            _ => self.collection().map(|(c, _)| c.name.clone()).unwrap_or_default(),
         }
     }
 

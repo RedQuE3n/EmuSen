@@ -12,8 +12,9 @@ Decided 2026-11-15 by the tester (R-20261115-8): each console's number of played
   game row's `played`. Counted once, where the library's rows are built (`library::rows`), not per frame or per console list.
 - **`Library.consoles`' `glow`** (added role): the console's own colour as `#RRGGBB`, the glow kit-core gives its body
   (`world::glow`), so a theme's corona and the Sky agree (R-20261115-9).
-- **`Words.played(n)`** ("61 played", `qt-models/src/words.rs`) and **`Words.place(index, count)`** ("3 of 14", the game
-  page's `place`, its one owner) (added).
+- **`Words.played(n)`** ("61 played", `qt-models/src/words.rs`), **`Words.place(index, count)`** ("3 of 14", the game
+  page's `place`, its one owner) and **`Words.line(parts)`** (the parts joined as the facts join theirs, " · ", the empty
+  ones left out; `words::facts` now calls it) (added).
 - The module is 1.5 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.5.*`.
   A role is no QML type, so the qmldir's types keep their minors and `import EmuSen.Theme 1.0` finds what it found before.
   1.3 and 1.4 are taken by the typeface and the backdrop and glow parts, which come with their own pieces.

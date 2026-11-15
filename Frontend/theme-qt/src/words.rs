@@ -10,6 +10,8 @@ pub mod qobject {
     unsafe extern "C++" {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
     }
 
     extern "RustQt" {
@@ -43,6 +45,9 @@ pub mod qobject {
         /// "1 game", "1,566 games".
         #[qinvokable]
         fn games(self: &ThemeWords, count: i32) -> QString;
+        /// Parts said as one line, the empty ones left out: "Nintendo · 1990".
+        #[qinvokable]
+        fn line(self: &ThemeWords, parts: &QStringList) -> QString;
         /// How many of a console's games were played: "61 played".
         #[qinvokable]
         fn played(self: &ThemeWords, count: i32) -> QString;
@@ -147,6 +152,11 @@ impl qobject::ThemeWords {
 
     pub fn games(&self, count: i32) -> QString {
         said(words::games(count.max(0) as usize))
+    }
+
+    pub fn line(&self, parts: &cxx_qt_lib::QStringList) -> QString {
+        let parts: Vec<String> = cxx_qt_lib::QList::<QString>::from(parts).iter().map(|p| p.to_string()).collect();
+        said(words::line(&parts.iter().map(String::as_str).collect::<Vec<_>>()))
     }
 
     pub fn played(&self, count: i32) -> QString {

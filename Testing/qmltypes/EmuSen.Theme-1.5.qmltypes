@@ -937,17 +937,24 @@ Module {
             Parameter { name: "count"; type: "int" }
         }
         Method {
-            name: "played"
+            name: "line"
             type: "QString"
             isMethodConstant: true
             lineNumber: 71
+            Parameter { name: "parts"; type: "QStringList" }
+        }
+        Method {
+            name: "played"
+            type: "QString"
+            isMethodConstant: true
+            lineNumber: 72
             Parameter { name: "count"; type: "int" }
         }
         Method {
             name: "place"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 72
+            lineNumber: 73
             Parameter { name: "index"; type: "int" }
             Parameter { name: "count"; type: "int" }
         }
@@ -955,14 +962,14 @@ Module {
             name: "ago"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 73
+            lineNumber: 74
             Parameter { name: "at"; type: "double" }
         }
         Method {
             name: "pausedFacts"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 74
+            lineNumber: 75
             Parameter { name: "console"; type: "QString" }
             Parameter { name: "paused_since"; type: "double" }
         }
@@ -970,7 +977,7 @@ Module {
             name: "facts"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 75
+            lineNumber: 76
             Parameter { name: "maker"; type: "QString" }
             Parameter { name: "year"; type: "int" }
             Parameter { name: "count"; type: "int" }
@@ -980,7 +987,7 @@ Module {
             name: "runsOn"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 76
+            lineNumber: 77
             Parameter { name: "engine_name"; type: "QString" }
             Parameter { name: "engine_kind"; type: "QString" }
         }
@@ -988,7 +995,7 @@ Module {
             name: "statusLine"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 77
+            lineNumber: 78
             Parameter { name: "controllers"; type: "int" }
             Parameter { name: "clock"; type: "QString" }
         }
@@ -996,14 +1003,14 @@ Module {
             name: "splashCaption"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 78
+            lineNumber: 79
             Parameter { name: "consoles"; type: "int" }
         }
         Method {
             name: "summary"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 79
+            lineNumber: 80
             Parameter { name: "consoles"; type: "int" }
             Parameter { name: "games"; type: "int" }
         }
@@ -1011,7 +1018,7 @@ Module {
             name: "pausedAgo"
             type: "QString"
             isMethodConstant: true
-            lineNumber: 80
+            lineNumber: 81
             Parameter { name: "paused_since"; type: "double" }
         }
     }

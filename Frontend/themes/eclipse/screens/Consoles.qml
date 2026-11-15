@@ -322,7 +322,7 @@ ThemeScreen {
                                         objectName: "plateLine." + plate.index
                                         width: parent.width
                                         elide: Text.ElideRight
-                                        text: (plate.year > 0 ? plate.year + " " + Words.between + " " : "") + Words.games(plate.count)
+                                        text: Words.line([plate.year > 0 ? String(plate.year) : "", Words.games(plate.count)])
                                         color: Tokens.muted
                                         font.pixelSize: 16 * root.px
                                     }
@@ -367,7 +367,7 @@ ThemeScreen {
                                 objectName: "consoleEyebrow"
                                 width: parent.width
                                 elide: Text.ElideRight
-                                text: root.shown ? [root.shown.maker, root.shown.year > 0 ? String(root.shown.year) : ""].filter(s => s.length > 0).join(" " + Words.between + " ") : ""
+                                text: root.shown ? Words.line([root.shown.maker, root.shown.year > 0 ? String(root.shown.year) : ""]) : ""
                                 color: root.eyebrowInk
                                 font.pixelSize: 18 * root.px
                                 font.weight: Font.DemiBold
@@ -412,7 +412,7 @@ ThemeScreen {
                                     width: parent.width - 34 * root.px
                                     wrapMode: Text.WordWrap
                                     // The facts with the played count after the games' count (R-20261115-8).
-                                    text: root.shown ? [Words.facts(root.shown.maker, root.shown.year, root.shown.count, ""), Words.played(root.shown.played), Words.runsOn(root.shown.engineName, root.shown.engineKind)].filter(w => w.length > 0).join(" " + Words.between + " ") : ""
+                                    text: root.shown ? Words.line([Words.facts(root.shown.maker, root.shown.year, root.shown.count, ""), Words.played(root.shown.played), Words.runsOn(root.shown.engineName, root.shown.engineKind)]) : ""
                                     color: Tokens.muted
                                     font.pixelSize: 21 * root.px
                                 }
@@ -514,7 +514,7 @@ ThemeScreen {
                 y: root.foot
                 height: 34 * root.px
                 verticalAlignment: Text.AlignVCenter
-                text: root.shown ? [root.shown.maker, Words.place(root.shown.groupIndex, root.shown.groupSize)].filter(w => w.length > 0).join(" " + Words.between + " ") : ""
+                text: root.shown ? Words.line([root.shown.maker, Words.place(root.shown.groupIndex, root.shown.groupSize)]) : ""
                 color: root.makerInk
                 font.pixelSize: 21 * root.px
             }

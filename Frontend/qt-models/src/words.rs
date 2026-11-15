@@ -138,7 +138,12 @@ pub fn runs_on(name: &str, libretro: bool) -> String {
 /// A focused console's facts: "Nintendo · 1983 · 2 games · runs on Moon, an EmuSen core", the empty parts left out.
 pub fn facts(maker: &str, year: i32, games: usize, runs_on: &str) -> String {
     let year = if year > 0 { year.to_string() } else { String::new() };
-    [maker, year.as_str(), self::games(games).as_str(), runs_on].iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join(" · ")
+    line(&[maker, year.as_str(), self::games(games).as_str(), runs_on])
+}
+
+/// Parts said as one line: "Nintendo · 1990", the empty parts left out, joined as the facts join theirs.
+pub fn line(parts: &[&str]) -> String {
+    parts.iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join(" · ")
 }
 
 /// Now, in seconds since 1970.

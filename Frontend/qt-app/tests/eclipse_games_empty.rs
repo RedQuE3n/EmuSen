@@ -1,4 +1,4 @@
-//! Eclipse's games view with no game in the library (EmuSen_Qt.md §3.4.7.2): the empty board's rows of `eclipse/games.tsv`
+//! Eclipse's games view with no game in the library (EmuSen_Qt.md §3.4.10): the empty board's rows of `eclipse/games.tsv`
 //! held to the screen at each of the gate's sizes, and the program's words; the theme's fit and contrast are theme-check's loaded step. With
 //! `ECLIPSE_GAMES_PICTURES` set, the state is saved there at 1280x800 and 1920x1200.
 
@@ -50,7 +50,7 @@ fn qt_3_4_7_2_eclipses_games_view_with_no_game_is_the_empty_board_by_the_table()
 
     let pictures = std::env::var_os("ECLIPSE_GAMES_PICTURES").map(std::path::PathBuf::from);
     let rows = table::built();
-    let held: Vec<&table::Row> = rows.iter().filter(|r| r.item.starts_with("empty") || r.item == "gridGround").collect();
+    let held: Vec<&table::Row> = rows.iter().filter(|r| r.item.starts_with("empty") || r.element == "the empty ground").collect();
     assert_eq!(held.len(), 4, "the empty board's rows");
     let mut report = Vec::new();
     for (w, h) in SIZES {

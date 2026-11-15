@@ -3,7 +3,7 @@ import QtQuick
 import EmuSen.Theme
 import "../parts"
 
-// Eclipse's games view: the focused game's words at the left, the section's games as tiles beside them, and with no game in the library the board's first-run words over the waiting disc; each element and its board line in qt-app/tests/eclipse/games.tsv (EmuSen_Qt.md §3.4.7.2).
+// Eclipse's games view: the focused game's words at the left, the section's games as tiles beside them, and with no game in the library the board's first-run words over the waiting disc; each element and its board line in qt-app/tests/eclipse/games.tsv (EmuSen_Qt.md §3.4.10).
 ThemeScreen {
     id: screen
     objectName: "gridScreen"
@@ -25,8 +25,8 @@ ThemeScreen {
             objectName: "grid"
             anchors.fill: parent
             focus: true
-            // A board pixel in canvas units: the boards are drawn 1200 high, a constant of the design.
-            readonly property real px: canvas.designHeight / 1200
+            // A board pixel in canvas units, Board's.
+            readonly property real px: board.unit
             // A type size is held whole (QFont::setPixelSize takes an int), so each is the nearest whole unit.
             readonly property var focusedCell: cells.currentItem
             // No console has a game, so the library has none: the first-run state.
@@ -42,6 +42,9 @@ ThemeScreen {
             readonly property real reach: Tokens.ringOffset + Tokens.ringThickness + Tokens.glowSpread + Tokens.glowBlur
             // The filter in force's place among the choices, for the walk up from the tiles, and the shown games' last letter.
             property int filterAt: 0
+            // The pill that plays, for the walk left from the tiles' first column.
+            property Item firstPill: null
+            property Item pagePill: null
             property string lastLetter: ""
             // The focused game's console's name, set by its row of Library.consoles.
             property string consoleText: ""
@@ -62,8 +65,7 @@ ThemeScreen {
             Rectangle {
                 objectName: "gridGround"
                 anchors.fill: parent
-                // The board's ground is Home's (Main:17), with its commit; the empty state's is its own.
-                color: root.noLibrary ? ink.emptyGround : Tokens.surface
+                color: root.noLibrary ? shared.emptyGround : shared.ground
             }
             CoronaDisc {
                 objectName: "emptyDisc"
@@ -78,7 +80,8 @@ ThemeScreen {
                 anchors.fill: parent
                 surfaceDrawn: false
                 padFamily: Device.family
-                helpShown: !Browse.typing && !root.noLibrary
+                // The help line below draws the help; the frame keeps its actions.
+                helpShown: false
                 focus: true
                 controller.navigationShown: false
                 help: Help.entries(Browse.searched ? Help.SectionSearched : Help.Section, { letters: true })
@@ -92,6 +95,29 @@ ThemeScreen {
                     y: -frame.safeY
                     width: root.width
                     height: root.height
+                    Brand {
+                        unit: root.px
+                        named: root.noLibrary
+                        x: 96 * root.px
+                        // The header's middle line: the games board's 64-pixel header and the empty board's mark (EclipseLibrary:23, EclipseEmpty:22).
+                        y: (root.noLibrary ? 48 + 17 : 48 + 32) * root.px - height / 2
+                    }
+                    Status {
+                        unit: root.px
+                        controller: frame.controller
+                        visible: !root.noLibrary
+                        searchable: false
+                        glassColor: shared.glass
+                        x: root.width - 96 * root.px - width
+                        y: (48 + 32) * root.px - height / 2
+                    }
+                    HelpLine {
+                        unit: root.px
+                        controller: frame.controller
+                        visible: !Browse.typing && !root.noLibrary
+                        model: frame.help
+                        ink: shared.help
+                    }
                     Column {
                         objectName: "gamesAside"
                         visible: !root.noLibrary && root.focusedCell !== null
@@ -104,7 +130,7 @@ ThemeScreen {
                             width: parent.width
                             text: root.consoleText
                             wrapMode: Text.Wrap
-                            color: ink.rose
+                            color: shared.rose
                             font.family: medium.font.family
                             font.pixelSize: Math.round(18 * root.px)
                             font.capitalization: Font.AllUppercase
@@ -131,10 +157,53 @@ ThemeScreen {
                             wrapMode: Text.Wrap
                             maximumLineCount: 6
                             elide: Text.ElideRight
-                            color: ink.words
+                            color: own.words
                             font.family: regular.font.family
                             font.pixelSize: Math.round(20 * root.px)
                             lineHeight: 1.5
+                        }
+                        Row {
+                            objectName: "gamesActions"
+                            // The board's six pixels over the buttons (EclipseLibrary:50).
+                            topPadding: 6 * root.px
+                            spacing: 14 * root.px
+                            // A and X as the help names them: the program's words for playing and for the game's page.
+                            Repeater {
+                                id: actionPills
+                                model: frame.help
+                                delegate: Pill {
+                                    id: pill
+                                    required property int index
+                                    readonly property bool plays: pill.button === PadGlyph.Accept
+                                    controller: frame.controller
+                                    objectName: "gamesAction." + pill.index
+                                    visible: pill.plays || pill.button === PadGlyph.Screensaver
+                                    place: pill.index
+                                    unit: root.px
+                                    filled: pill.plays
+                                    tall: 64
+                                    glyphSide: pill.plays ? 42 : 40
+                                    labelSize: 23
+                                    lead: 12
+                                    trail: pill.plays ? 28 : 26
+                                    gap: 12
+                                    onActivated: pill.plays ? Actions.play(root.focusedCell.key) : Actions.openPage(root.focusedCell.key)
+                                    Keys.onRightPressed: pill.plays && root.pagePill ? root.pagePill.forceActiveFocus() : cells.forceActiveFocus()
+                                    Keys.onLeftPressed: if (!pill.plays && root.firstPill) root.firstPill.forceActiveFocus()
+                                    Binding {
+                                        when: pill.button === PadGlyph.Screensaver
+                                        target: root
+                                        property: "pagePill"
+                                        value: pill
+                                    }
+                                    Binding {
+                                        when: pill.plays
+                                        target: root
+                                        property: "firstPill"
+                                        value: pill
+                                    }
+                                }
+                            }
                         }
                     }
                     Row {
@@ -173,16 +242,16 @@ ThemeScreen {
                                     objectName: "gamesFilterGround." + chip.index
                                     anchors.fill: parent
                                     radius: height / 2
-                                    color: chip.chosen ? Tokens.accent : ink.chipGround
+                                    color: chip.chosen ? Tokens.accent : own.chipGround
                                     border.width: chip.chosen ? 0 : 2 * root.px
-                                    border.color: ink.chipLine
+                                    border.color: own.chipLine
                                 }
                                 Text {
                                     id: chipWords
                                     objectName: "gamesFilterWords." + chip.index
                                     anchors.centerIn: parent
                                     text: chip.line
-                                    color: chip.chosen ? Tokens.overAccent : ink.chipWords
+                                    color: chip.chosen ? Tokens.overAccent : own.chipWords
                                     font.family: chip.chosen ? medium.font.family : regular.font.family
                                     font.pixelSize: Math.round(21 * root.px)
                                 }
@@ -210,14 +279,14 @@ ThemeScreen {
                         Rectangle {
                             anchors.fill: parent
                             radius: height / 2
-                            color: ink.pillGround
+                            color: shared.glass
                         }
                         Text {
                             id: sortWords
                             objectName: "gamesSortWords"
                             anchors.centerIn: parent
                             text: Browse.sort
-                            color: ink.pillWords
+                            color: shared.help
                             font.family: regular.font.family
                             font.pixelSize: Math.round(21 * root.px)
                         }
@@ -271,14 +340,14 @@ ThemeScreen {
                             width: 4 * root.px
                             height: parent.height - parent.width - lastLetter.height - 2 * parent.spacing
                             radius: width / 2
-                            color: ink.railTrack
+                            color: own.railTrack
                         }
                         Text {
                             id: lastLetter
                             objectName: "gamesRailLast"
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: root.lastLetter
-                            color: ink.pillWords
+                            color: shared.help
                             font.family: regular.font.family
                             font.pixelSize: Math.round(16 * root.px)
                         }
@@ -299,6 +368,13 @@ ThemeScreen {
                         focus: true
                         keyNavigationWraps: false
                         highlightFollowsCurrentItem: false
+                        // Left from the first column reaches the pills.
+                        Keys.onLeftPressed: (event) => {
+                            if (cells.currentIndex % root.columns === 0 && root.firstPill)
+                                root.firstPill.forceActiveFocus();
+                            else
+                                event.accepted = false;
+                        }
                         // Up from the first row reaches the filter in force.
                         Keys.onUpPressed: (event) => {
                             const chip = filterChips.itemAt(Math.max(0, root.filterAt));
@@ -407,7 +483,7 @@ ThemeScreen {
                             width: parent.width
                             text: Words.addFolder
                             wrapMode: Text.Wrap
-                            color: ink.words
+                            color: own.words
                             font.family: regular.font.family
                             font.pixelSize: Math.round(25 * root.px)
                             lineHeight: 1.45
@@ -416,7 +492,14 @@ ThemeScreen {
                 }
             }
             GamesInk {
-                id: ink
+                id: own
+            }
+            Ink {
+                id: shared
+            }
+            Board {
+                id: board
+                designHeight: canvas.designHeight
             }
             FontLoader {
                 id: regular

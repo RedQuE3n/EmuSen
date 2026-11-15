@@ -1,4 +1,4 @@
-//! Eclipse's games view (EmuSen_Qt.md §3.4.7.2) over a library of 22 games, a tall, a wide and a square cover and the rest
+//! Eclipse's games view (EmuSen_Qt.md §3.4.10) over a library of 22 games, a tall, a wide and a square cover and the rest
 //! with none: every built row of `eclipse/games.tsv` held to the screen at each of the gate's sizes, the tiles by the
 //! board's rule, and the focus moved by the pad; the theme's fit, contrast and walk are theme-check's loaded step (EmuSen_Qt.md §3.7.2). With `ECLIPSE_GAMES_PICTURES` set, the
 //! view is saved there at 1280x800 and 1920x1200.
@@ -109,7 +109,7 @@ fn qt_3_4_7_2_eclipses_games_view_is_its_board_by_the_table_at_every_size() {
 
     let pictures = std::env::var_os("ECLIPSE_GAMES_PICTURES").map(std::path::PathBuf::from);
     let rows = table::built();
-    let held: Vec<&table::Row> = rows.iter().filter(|r| !r.item.starts_with("empty") && r.item != "gridGround").collect();
+    let held: Vec<&table::Row> = rows.iter().filter(|r| !r.item.starts_with("empty") && r.element != "the empty ground").collect();
     assert!(held.len() >= 6, "the games' rows: {}", held.len());
     let mut report = Vec::new();
     for (w, h) in SIZES {

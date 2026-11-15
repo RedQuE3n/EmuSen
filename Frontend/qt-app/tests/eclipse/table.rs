@@ -1,4 +1,4 @@
-//! Eclipse's games view held to its table (`games.tsv`, EmuSen_Qt.md §3.4.7.2): every built row's checks against the
+//! Eclipse's games view held to its table (`games.tsv`, EmuSen_Qt.md §3.4.10): every built row's checks against the
 //! scene's items, a board pixel converted by kit-core's design height over the board's height.
 
 use emusen_kit_core::canvas::DESIGN_HEIGHT;

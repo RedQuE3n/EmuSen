@@ -951,7 +951,7 @@ with the fields a theme may read and nothing more. The table is the module as bu
 | `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`, `summary(consoles, games)`; the empty states `noGames`, `noRecent`, `noConsoles`, `addFolder`, the eyebrow `places` and `pausedAgo(pausedSince)`; `continueEntry` and `recentEntry`, Continue and the Recent shelf named as destinations: the curated face of `words.rs` |
 | `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, `SectionSearched`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; `entries(kind, {group, back, accept, letters})` the same with LB RB Group, B Back and (1.7) LT RT Letter added where the kind takes them, and A's entry not `enabled` (an `enabled` role, read as `model.enabled`) when `accept` is false; the curated face of `help.rs` |
 | `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only; `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
-| `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown); from 1.7 `kind` (`all`, `favourites`, `recent`, `console`), `emptyWords`, `filters` (`key`, `name`, `count`) and `filter`, `sort`, `letters` (`letter`) and `letter`: the List card's listing, one state with it (§3.4.7.2) |
+| `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown); from 1.7 `kind` (`all`, `favourites`, `recent`, `console`), `emptyWords`, `filters` (`key`, `name`, `count`) and `filter`, `sort`, `letters` (`letter`) and `letter`: the List card's listing, one state with it (§3.4.10) |
 | `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` (a shelf's icon, one of Home's seven places by its key, or an engine's mark) |
 | `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `OrbitLayout`, `FigureLayout`, `WheelLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31); `WheelLayout` turns groups as wheels over a dial (§7.32); `OrbitLayout` places groups on nested orbits (§7.30) |
 | `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()` |
@@ -1641,8 +1641,8 @@ theme API is not widened for that. A blank setting still gives the reference: wh
 only once Eclipse has screens of its own.
 
 **The package.** `Frontend/themes/eclipse/` holds `theme.json`: name Eclipse, `api` 1.7 (its games view reads 1.7's
-listing, §3.4.7.2; its corona tokens are 1.2's, its focus tokens 1.1's), the dark variant, one screen of its own, the
-games view (`"screens": ["games"]`, `screens/Games.qml` and `parts/GamesInk.qml`, §3.4.7.2), no cue, no preview, and the
+listing, §3.4.10; its corona tokens are 1.2's, its focus tokens 1.1's), the dark variant, one screen of its own, the
+games view (`"screens": ["games"]`, `screens/Games.qml` and `parts/GamesInk.qml`, §3.4.10), no cue, no preview, and the
 token overrides below. Home and Choose a console are still the reference's, drawn by the reference's host, whose engine
 keeps the kit's tokens. It has no preview until every screen of its own is built. The manifest allows all of this:
 `screens` and `variants` are lists, `previews` is optional, and theme-audit audits the screens a package lists.
@@ -1679,7 +1679,7 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 | muted | a door row's mark (`MenuRow.qml:114`) | a door row's mark (`EclipseSettings:59`) | #B9BED0 | #B9BED0 |
 | accent | a switch's track when on (`style/Switch.qml:22`), the ring | the track when on, the ring (`EclipseSettings:94`) | #F6E7D8 | #F6E7D8 |
 | overAccent | a switch's knob when on (`style/Switch.qml:31`) | the knob when on (`EclipseSettings:94`) | #07080F | #07080F |
-| overArtScrim | the foot under words over a picture (Eclipse's games view, §3.4.7.2) | a game tile's foot (`EclipseLibrary:70`) | rgba(4, 5, 10, 0.94) | #F004050A |
+| overArtScrim | the foot under words over a picture (Eclipse's games view, §3.4.10) | a game tile's foot (`EclipseLibrary:70`) | rgba(4, 5, 10, 0.94) | #F004050A |
 | shadowOpacity | a notice's shadow (`NoticeLayer.qml:14`) | the notice's shadow (`EclipseDialog:23`) | 0.6 | 0.6 |
 | shadowOffsetY | a notice's shadow (`NoticeLayer.qml:47`) | the notice's shadow (`EclipseDialog:23`) | 18 px | 12 |
 | rowHeight | a row (`MenuRow.qml:28`) | a row (`EclipseSettings:42`) | 84 px | 56 |
@@ -1744,7 +1744,7 @@ program's equals `theme.json`'s, and every other token is the kit's; the referen
 back. qt-models' `both_built_ins_come_first_and_a_blank_setting_still_gives_the_reference` holds the listing and the
 resolution, and qt-app's `qt_3_4_2_…` holds each built-in's resources to its folder.
 
-#### 3.4.7.2 Eclipse's games view **[M 2026-11-15]**
+#### 3.4.10 Eclipse's games view **[M 2026-11-15]**
 
 Decided 2026-11-14 by the tester (R-20261114-13): Eclipse is built a screen a piece. The games view is
 `Frontend/themes/eclipse/screens/Games.qml`, drawn from the boards "Eclipse theme, a console's games"

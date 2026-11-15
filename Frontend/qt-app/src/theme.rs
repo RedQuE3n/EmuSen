@@ -221,7 +221,7 @@ pub enum Carried {
     Selected(i32),
     /// A game's page: the game taken in hand, then its page opened (EmuSen_Qt.md §7.8).
     Page(String),
-    /// The List card's filter, sort or letter step, by its action's key (EmuSen_Qt.md §3.4.7.2).
+    /// The List card's filter, sort or letter step, by its action's key (EmuSen_Qt.md §3.4.10).
     Listed(String),
 }
 

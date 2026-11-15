@@ -13,6 +13,9 @@ use emusen_kit_core::tokens::{Colour, Variant};
 use emusen_qt_test::compositor::Compositor;
 use emusen_qt_test::{Harness, Scene};
 
+/// The scene the pictures are taken in.
+const PICTURES: &str = concat!("file://", env!("CARGO_MANIFEST_DIR"), "/tests/qml/PicturesScene.qml");
+
 /// The focus moves timed, each way.
 const MOVES: usize = 200;
 
@@ -80,6 +83,36 @@ fn kit_7_113_the_cast_glow_on_the_card_stands_outside_its_box_alone() {
     timed(&mut scene, "glow transparent");
     let tree = scene.tree();
     assert_eq!(anywhere(&tree, "glowShadow"), 1, "a transparent ring glow casts nothing; the disc's stays");
+    scene.assert_quiet();
+
+    // Pictures for a look, only where EMUSEN_QT_COMPARE names a folder, as the program's card tests save theirs.
+    if let Some(dir) = std::env::var_os("EMUSEN_QT_COMPARE").map(std::path::PathBuf::from) {
+        pictures(&mut harness, &dir);
+    }
+}
+
+/// Each control focused under Eclipse's tokens and under the kit's, then the disc with no game's corona and with one.
+fn pictures(harness: &mut Harness, dir: &std::path::Path) {
+    std::fs::create_dir_all(dir).expect("the pictures' folder");
+    let mut scene = harness.load(PICTURES, 1280, 800);
+    let grab = |scene: &mut Scene<'_>, name: &str| {
+        scene.wait(300);
+        assert!(scene.grab(&dir.join(format!("{name}.png")).display().to_string()), "grab {name}");
+    };
+    for (look, given) in [("eclipse", eclipse_dark()), ("reference", Vec::new())] {
+        scene.kit_tokens().expect("the kit's tokens").set_overrides(given);
+        for control in ["button", "switch", "action"] {
+            let tree = scene.tree();
+            let at = tree.find_named(control).expect("a control");
+            assert!(scene.focus_item(&tree, at));
+            grab(&mut scene, &format!("{look}-{control}-focused"));
+        }
+    }
+    scene.kit_tokens().expect("the kit's tokens").set_overrides(eclipse_dark());
+    assert!(scene.set_property("scene", "disc", "true"));
+    grab(&mut scene, "eclipse-disc");
+    assert!(scene.set_property("corona", "corona", "#3080F0"));
+    grab(&mut scene, "eclipse-disc-game-corona");
     scene.assert_quiet();
 }
 

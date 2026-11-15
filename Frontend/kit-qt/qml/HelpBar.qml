@@ -18,6 +18,9 @@ Item {
     property real glyphGap: Kit.Tokens.base * 2
     property color labelColor: Kit.Tokens.text
     property color iconColor: Kit.Tokens.text
+    // The first entry's glyph, the screen's main action, which a look may draw apart (Eclipse's filled A); the others' by default.
+    property int leadStyle: root.glyphStyle
+    property color leadColor: root.iconColor
     // Each entry's glyph, gap and label at this share of their own size.
     property real entryScale: 1
     // A glyph's side in pixels before entryScale; 0 is the glyph's own size.
@@ -71,6 +74,7 @@ Item {
             id: entries
             Button {
                 id: entry
+                required property int index
                 required property int button
                 required property string label
                 required property var model
@@ -123,8 +127,8 @@ Item {
                         width: (root.glyphSize > 0 ? root.glyphSize : implicitWidth) * root.entryScale
                         height: (root.glyphSize > 0 ? root.glyphSize : implicitHeight) * root.entryScale
                         family: root.family
-                        style: root.glyphStyle
-                        ink: root.iconColor
+                        style: entry.index === 0 ? root.leadStyle : root.glyphStyle
+                        ink: entry.index === 0 ? root.leadColor : root.iconColor
                         button: entry.button
                         pair: root.pairGlyph ? entry.pair : -1
                         swap: Kit.PadRouter.swapAcceptBack

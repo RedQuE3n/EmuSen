@@ -18,6 +18,8 @@ or shadow. 1.3 is another piece's.
   one owner of both (`qt-models/src/library.rs`); Eclipse's Home tile draws it under the title, as its board does.
 - **`Type.sizeIn(base, textScale, family, weight)`**: `size` for words drawn in a look's face at a weight, held to the floor
   with that face's capitals, where `size` measures the application's (`EmuSen_Kit.md` §7.121). Eclipse's texts use it.
+- **`PadGlyph.Style`** (`Outlined`, `Filled`), the kit's glyph styles by name, and the kit's **`HelpBar.leadStyle`** and
+  **`leadColor`**, the first entry's glyph drawn apart: Eclipse's filled A in the help line and the filled pill.
 - **`Words.name`**, **`Words.playedFacts(at, seconds)`**, **`Words.continueLine(console)`**: the program's name in its own
   case, "EmuSen", Eclipse's wordmark, where `title` stays "EMUSEN" for the other screens; a game's last play and its time
   played, "Last played yesterday · 3 h 20 min played"; and "Continue · Super Nintendo" (`qt-models/src/words.rs`). The host

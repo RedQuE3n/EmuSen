@@ -174,20 +174,15 @@ Window {
             gameMuted: Kit.PadRouter.guideHeld
             // A theme's screens hear the pad through their own engine's router (EmuSen_Qt.md §3.5.2); while a binding listens
             // for the pad's press, the interface hears none of it, and while the tester runs, only its B and the releases (EmuSen_Qt.md §7.7.H).
-            onButton: (button, down) => settingsModel.listeningPad ? undefined : settingsModel.testing ? (settingsModel.testerButton(button, down, Kit.PadRouter.swapAcceptBack) ? Kit.PadRouter.push(button, down) : undefined) : pads.route(button, down)
-            // A press goes to the router of the engine holding the focus; a release to every engine's router, so one the focus
-            // left while the button was down lets it go too, and its next press is a press (EmuSen_Qt.md §3.5.2).
-            function route(button, down) {
+            // A release also goes to every engine's router, so one the focus left while the button was down lets it go, and its
+            // next press is a press (EmuSen_Qt.md §3.5.2).
+            onButton: (button, down) => {
                 if (!down) {
                     program.themeHost?.feed.push(button, false)
                     referenceHost.feed.push(button, false)
                     Kit.PadRouter.push(button, false)
-                } else if (program.themeHost?.holdsFocus)
-                    program.themeHost.feed.push(button, true)
-                else if (referenceHost.holdsFocus)
-                    referenceHost.feed.push(button, true)
-                else
-                    Kit.PadRouter.push(button, true)
+                }
+                settingsModel.listeningPad ? undefined : settingsModel.testing ? (settingsModel.testerButton(button, down, Kit.PadRouter.swapAcceptBack) ? Kit.PadRouter.push(button, down) : undefined) : program.themeHost?.holdsFocus ? program.themeHost.feed.push(button, down) : referenceHost.holdsFocus ? referenceHost.feed.push(button, down) : Kit.PadRouter.push(button, down)
             }
             onSeatsChanged: settingsModel.seatsChanged()
             // A pad come or gone, told where Controller notices is on, over a game too (EmuSen_Input.md §8.13.5).

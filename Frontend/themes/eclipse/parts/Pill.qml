@@ -71,6 +71,8 @@ Walkable {
         height: width
         family: Device.family
         button: root.button
+        // The filled pill's glyph a filled mark in the ground's dark, its letter cut out to the pill's colour (Main:62).
+        style: root.filled ? PadGlyph.Filled : PadGlyph.Outlined
         ink: root.filled ? Tokens.overAccent : Tokens.muted
     }
     Text {

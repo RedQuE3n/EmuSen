@@ -33,6 +33,9 @@ Item {
         color: "transparent"
         labelColor: root.ink
         iconColor: Tokens.muted
+        // The main action's glyph filled in the corona, its letter cut out of it, as the board draws A (Main:101).
+        leadStyle: PadGlyph.Filled
+        leadColor: Tokens.accent
         labelFont.pixelSize: Type.sizeIn(root.size * root.unit, Tokens.textScale, Tokens.faceText, Font.Normal)
         labelFont.family: Tokens.faceText
         entrySpacing: root.spacing * root.unit

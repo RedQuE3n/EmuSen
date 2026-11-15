@@ -112,6 +112,8 @@ HelpBar
     property real glyphGap
     property color labelColor
     property color iconColor
+    property int leadStyle
+    property color leadColor
     property real entryScale
     property real glyphSize
     property bool pairGlyph

@@ -560,3 +560,15 @@ fn qt_3_7_a_theme_is_judged_in_the_variants_it_lists_and_no_other() {
         assert!(files.iter().any(|f| f.starts_with(&format!("Home-{variant}-"))), "{variant}: {files:?}");
     }
 }
+
+#[test]
+fn qt_3_7_eclipse_passes_the_loaded_step_in_every_state_it_has() {
+    // Eclipse as the program finds it, every state theme-audit has that names one of its screens, at the gate's sizes in
+    // the one variant it lists.
+    let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../themes/eclipse");
+    let ran = Ran::judged(Command::new(PROGRAM).args(["--states", "all"]).arg(&folder));
+    for screen in ["Home", "Games"] {
+        assert!(ran.held(screen).0 >= SIZES.len(), "{screen} held at the gate's sizes: {}", ran.err);
+    }
+    assert_eq!(ran.status, 0, "Eclipse's findings:\n{}", ran.out);
+}

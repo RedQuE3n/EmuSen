@@ -1868,7 +1868,7 @@ chips and the facts list (the rows hold no genre, players, time played or states
 letters' help entry); theme-qt's `qml.rs` (every help list with its flags, the new actions) and `surface.rs`; qt-app's
 `eclipse_games.rs` (22 games, a tall, a wide and a square cover: every built row at each of the gate's sizes, the pad's
 moves, the triggers, the chips, the empty words of a filter, of Favourites and of Recent, the sort; a built row with no
-check is refused by the table's reader), `eclipse_games_lists.rs` (a game played, three never played and one in a
+check is refused by the table's reader), `eclipse_games_lists.rs` (a game played, three never played and two in a
 collection: Not played and the collection pressed with their lists and counts, the filter, sort and letter set on the
 List card and read in the games view and the reverse, a search with none, and the collections read once for each change
 of them, not on a move of the focus) and `eclipse_games_empty.rs` (the empty board's rows at each size); theme-audit's

@@ -1,4 +1,4 @@
-//! Eclipse's games view narrowed (EmuSen_Qt.md §3.4.10): over a library with a game played, three never played and one
+//! Eclipse's games view narrowed (EmuSen_Qt.md §3.4.10): over a library with a game played, three never played and two
 //! in a collection, Not played and the collection pressed on the chips and their lists and counts read; the filter, the
 //! sort and the letter set on the List card and read in the games view, and the reverse; a search with no game says so.
 
@@ -17,10 +17,10 @@ use emusen_qt_models::{themes, words};
 use emusen_qt_test::Scene;
 use serde_json::json;
 
-/// The games, by name; the second is played and the third is in the collection.
+/// The games, by name; the second is played and the last two are in the collection.
 const GAMES: [&str; 4] = ["Aurora Drift", "Brass Lantern", "Cinder Mile", "Dune Signal"];
 const PLAYED: &str = "Brass Lantern";
-const IN_COLLECTION: &str = "Cinder Mile";
+const IN_COLLECTION: [&str; 2] = ["Cinder Mile", "Dune Signal"];
 const COLLECTION: &str = "Couch";
 /// Qt::Key_Z and Qt::Key_Q, typed as a search no game's name holds.
 const KEYS: [i32; 2] = [0x5A, 0x51];
@@ -70,7 +70,9 @@ fn qt_3_4_10_eclipses_chips_and_the_list_card_narrow_one_list() {
     let games = records();
     games.change(&json!({ "op": "started", "path": path(PLAYED), "at": "2026-11-13T10:00:00Z" })).unwrap();
     let id = games.change(&json!({ "op": "create_collection", "name": COLLECTION, "at": "2026-11-13T10:00:00Z" })).unwrap();
-    games.change(&json!({ "op": "add_to_collection", "id": id, "path": path(IN_COLLECTION) })).unwrap();
+    for title in IN_COLLECTION {
+        games.change(&json!({ "op": "add_to_collection", "id": id, "path": path(title) })).unwrap();
+    }
     drop(games);
 
     let mut harness = emusen_qt_test::Harness::new();
@@ -102,22 +104,22 @@ fn qt_3_4_10_eclipses_chips_and_the_list_card_narrow_one_list() {
     wait_for(&mut scene, "gamesGrid", "count", &GAMES.len().to_string(), 3000);
     scene.wait(300);
 
-    // The chips count each list: every game, no favourite, three never played, one in the collection (R-20261115-10).
+    // The chips count each list: every game, no favourite, three never played, two in the collection (R-20261115-10).
     let chips: Vec<String> = (0..4).map(|i| words_of(&mut scene, &format!("gamesFilterWords.{i}")).0).collect();
     let never = GAMES.len() - 1;
     assert_eq!(
         chips,
-        [words::choice_line(words::EVERY_GAME, GAMES.len()), words::choice_line(words::FAVOURITES_FILTER, 0), words::choice_line(words::NOT_PLAYED, never), words::choice_line(COLLECTION, 1)]
+        [words::choice_line(words::EVERY_GAME, GAMES.len()), words::choice_line(words::FAVOURITES_FILTER, 0), words::choice_line(words::NOT_PLAYED, never), words::choice_line(COLLECTION, IN_COLLECTION.len())]
     );
 
     // Not played pressed: the three never played, the played one left out.
     press_chip(&mut scene, 2);
     wait_for(&mut scene, "gamesGrid", "count", &never.to_string(), 2000);
     assert_eq!(titles(&mut scene), GAMES.iter().filter(|t| **t != PLAYED).map(|t| t.to_string()).collect::<Vec<_>>());
-    // The collection pressed: its one game, and the chip shown as the one in force.
+    // The collection pressed: its games, and the chip shown as the one in force.
     press_chip(&mut scene, 3);
-    wait_for(&mut scene, "gamesGrid", "count", "1", 2000);
-    assert_eq!(titles(&mut scene), [IN_COLLECTION]);
+    wait_for(&mut scene, "gamesGrid", "count", &IN_COLLECTION.len().to_string(), 2000);
+    assert_eq!(titles(&mut scene), IN_COLLECTION);
     let chosen_ink = words_of(&mut scene, "gamesFilterWords.3").1;
     assert_ne!(chosen_ink, words_of(&mut scene, "gamesFilterWords.0").1, "the chip in force is drawn as chosen");
     // The collections are read once for each change of them, never again as the focus moves while one narrows the list.
@@ -125,10 +127,12 @@ fn qt_3_4_10_eclipses_chips_and_the_list_card_narrow_one_list() {
     assert_ne!(read, "0", "the collections were read");
     let tree = scene.tree();
     assert!(scene.focus_item(&tree, tree.find_named("gamesTile.0").unwrap()));
-    for button in [UiButton::Up, UiButton::Down, UiButton::Up, UiButton::Down] {
+    for (button, title) in [(UiButton::Right, IN_COLLECTION[1]), (UiButton::Left, IN_COLLECTION[0]), (UiButton::Right, IN_COLLECTION[1]), (UiButton::Left, IN_COLLECTION[0])] {
         scene.pad(button);
+        wait_for(&mut scene, "gamesTitle", "text", title, 1000);
     }
     assert_eq!(focus_name(&mut scene), "gamesTile.0");
+    assert_eq!(scene.property("gridGames", "focused"), "0", "the model's focus moved and came back");
     assert_eq!(scene.property("gridGames", "collectionsRead"), read, "no read of the collections for a move of the focus");
 
     // Set in the games view, read on the List card: the collection, the sort the pill stepped to, the focused letter.
@@ -141,7 +145,7 @@ fn qt_3_4_10_eclipses_chips_and_the_list_card_narrow_one_list() {
     scene.wait(300);
     let rows = card_rows(&mut scene);
     assert_eq!(rows[1], format!("Sort | {}", Sort::LastPlayed.words()), "{rows:?}");
-    assert_eq!(rows[3], format!("Jump to | {}", emusen_qt_models::listing::letter(IN_COLLECTION)), "{rows:?}");
+    assert_eq!(rows[3], format!("Jump to | {}", emusen_qt_models::listing::letter(IN_COLLECTION[0])), "{rows:?}");
     assert_eq!(list_facts(&mut scene)["filter"], COLLECTION, "the card's Filter says the collection");
 
     // Set on the List card, read in the games view: the sort stepped, then Not played chosen on the Filter page.

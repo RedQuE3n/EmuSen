@@ -38,10 +38,8 @@ Row {
     }
     Connections {
         target: root.controller
-        function onSectionChosen(key) {
-            if (key !== Library.section)
-                Actions.openSection(key);
-        }
+        // The host takes a move to another section's screen and declines the one shown (qt-models/src/sections.rs).
+        function onSectionChosen(key) { Actions.openSection(key) }
     }
     component Entry: Item {
         id: entry
@@ -71,10 +69,7 @@ Row {
             visible: entry.current
         }
         TapHandler {
-            onTapped: {
-                if (!entry.current)
-                    Actions.openSection(entry.key);
-            }
+            onTapped: Actions.openSection(entry.key)
         }
     }
     Repeater {

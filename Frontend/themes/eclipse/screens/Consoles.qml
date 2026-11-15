@@ -67,7 +67,8 @@ ThemeScreen {
                 function onModelReset() { layout.read() }
                 function onDataChanged() { layout.read() }
             }
-            // The two colour fields behind (board lines 19 and 20): constants of the design, on the screen's ground.
+            // The two colour fields behind (board lines 19 and 20), each in the focused console's own colour at its board's blur and
+            // opacity: provisional, the tester's to judge (the board's sample colours are not typed in).
             Backdrop {
                 objectName: "consolesBackdrop"
                 // Drawn behind everything, as a sky is, not beside it.
@@ -81,7 +82,7 @@ ThemeScreen {
                         y: 120 * root.px
                         width: 900 * root.px
                         height: 900 * root.px
-                        color: "#5B3FD6"
+                        color: root.shown ? root.shown.glow : "transparent"
                         blur: 140 * root.px
                         opacity: 0.5
                     },
@@ -90,7 +91,7 @@ ThemeScreen {
                         y: 520 * root.px
                         width: 620 * root.px
                         height: 620 * root.px
-                        color: "#C0486F"
+                        color: root.shown ? root.shown.glow : "transparent"
                         blur: 150 * root.px
                         opacity: 0.35
                     }
@@ -255,6 +256,8 @@ ThemeScreen {
                                 readonly property int downIndex: layout.down[plate.index] ?? -1
                                 readonly property int previousFirst: layout.firsts[plate.group - 1] ?? -1
                                 readonly property int nextFirst: layout.firsts[plate.group + 1] ?? -1
+                                readonly property int rowOf: layout.rowOf[plate.index] ?? 0
+                                readonly property int rows: layout.rows[plate.group] ?? 0
                                 // The share of its games played, at least the board's sliver (0.04) for a console with games (board line 130).
                                 readonly property real share: plate.count > 0 ? Math.max(plate.played / plate.count, 0.04) : 0
                                 controller: frame.controller
@@ -273,7 +276,8 @@ ThemeScreen {
                                 KeyNavigation.left: root.made > 0 ? (plate.leftIndex >= 0 ? plates.itemAt(plate.leftIndex) : makers.itemAt(layout.firsts[plate.group] ?? 0)) : null
                                 KeyNavigation.right: root.made > 0 && plate.rightIndex >= 0 ? plates.itemAt(plate.rightIndex) : openButton
                                 KeyNavigation.up: root.made > 0 && plate.upIndex >= 0 ? plates.itemAt(plate.upIndex) : null
-                                KeyNavigation.down: root.made > 0 && plate.downIndex >= 0 ? plates.itemAt(plate.downIndex) : null
+                                // Down from the grid's last row goes on to the next maker's first console.
+                                KeyNavigation.down: root.made > 0 ? (plate.downIndex >= 0 ? plates.itemAt(plate.downIndex) : (plate.nextFirst >= 0 && plate.rowOf + 1 >= plate.rows ? plates.itemAt(plate.nextFirst) : null)) : null
                                 // LB and RB: the previous and next maker's first console.
                                 Keys.onPressed: (event) => {
                                     const to = event.key === Qt.Key_PageUp ? plate.previousFirst : (event.key === Qt.Key_PageDown ? plate.nextFirst : -1)
@@ -300,6 +304,7 @@ ThemeScreen {
                                 }
                                 // The share of its games played: the track, and over it the arc from the top (board lines 66 and 67).
                                 Shape {
+                                    id: shareRing
                                     objectName: "plateShare." + plate.index
                                     x: 20 * root.px
                                     y: 20 * root.px
@@ -337,7 +342,8 @@ ThemeScreen {
                                 Column {
                                     x: 20 * root.px
                                     width: parent.width - 40 * root.px
-                                    y: parent.height - 20 * root.px - height
+                                    // At the plate's foot as the board stands it, never over the ring when a long name takes two lines.
+                                    y: Math.max(shareRing.y + shareRing.height, parent.height - 20 * root.px - height)
                                     spacing: 6 * root.px
                                     Text {
                                         objectName: "plateName." + plate.index

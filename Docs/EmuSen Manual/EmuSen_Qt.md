@@ -1764,7 +1764,10 @@ its maker's grid and its four neighbours there, and the screen binds `KeyNavigat
 makers. Right from a maker goes to its first plate, and Left from a plate's first column goes back to its maker. Right
 from the last plate in a row goes to Open, and the shoulders go to the previous or next maker's first console. The header
 is Eclipse's `Brand` and `Status`, the foot is its `HelpLine` with the place line at its right, the two colour fields are
-the kit's `Backdrop`, and Open is a filled `Pill`.
+the kit's `Backdrop`, and Open is a filled `Pill` without its halo and glow. The fields take the focused console's
+`glow`, each at its board's blur and opacity (140 px at 0.5, 150 px at 0.35, board lines 19 and 20); the board's own two
+colours are sample colours and are not drawn. This is provisional, for the tester to judge from the pictures. Every word
+is drawn at `Type.size` of the board's size (R-20261115-14).
 
 Every element of the board is in `Frontend/theme-check/audit/tests/eclipse_consoles.tsv`. Each row gives the element's board
 line, what the program holds for it, its box in board pixels and in design units, and whether it is built. The top navigation is a piece of its own

@@ -5,9 +5,9 @@
 # Every text is drawn at Type.size of the board's size, raised to the legibility floor where it is under it (R-20261115-14).
 # line	element	objectName	program source	board px	units	style	status
 17	ground	consolesBackdrop	kit Backdrop, its ground Tokens.surface	0,0,1920,1200	0,0,1280,800	#07080F	built
-19	colour field, violet	-	kit BackdropField, the board's colour as a design constant (nothing in the program names it)	1250,120,900,900	833.33,80,600,600	#5B3FD6 blur 140 opacity 0.5	built
-20	colour field, rose	-	kit BackdropField, the board's colour as a design constant (nothing in the program names it)	1500,520,620,620	1000,346.67,413.33,413.33	#C0486F blur 150 opacity 0.35	built
-22	header: mark and EmuSen, battery and clock	consolesBrand	Home's Brand and Status parts (Device.battery, Device.clock)	96,63,-,34	64,42,-,22.667	the mark 34 px, centred on the header's 64 px row	built
+19	colour field, violet	-	kit BackdropField in the focused console's glow (world::glow of its hue), at the board's blur and opacity: provisional, the tester's to judge	1250,120,900,900	833.33,80,600,600	#5B3FD6 blur 140 opacity 0.5	built
+20	colour field, rose	-	kit BackdropField in the focused console's glow (world::glow of its hue), at the board's blur and opacity: provisional, the tester's to judge	1500,520,620,620	1000,346.67,413.33,413.33	#C0486F blur 150 opacity 0.35	built
+22	header: mark and EmuSen, battery and clock	consolesBrand	Home's Brand and Status parts (Device.battery, Device.clock)	96,middle=80,-,-	64,middle=53.333,-,-	the mark 34 px; the row centred on the header's 64 px row; its words at Type.size	built
 28	sections: Home, Library, Consoles, Collections, Tools	-	its place left empty: the top navigation is a piece of its own (R-20261115-7)	-	-	-	nothing
 44	chip "All · 124"	-	nothing: Library.consoles holds only consoles with games (theme-qt/src/view.rs:23), so All would equal With games	96,150,-,48	64,100,-,32	accent fill, overAccent 21px 600	nothing
 45	chip "With games · 37"	-	nothing: no console without games is in Library.consoles (view.rs:113)	-,150,-,48	-,100,-,32	2px #4A5068, #E3E6F0 21px	nothing
@@ -34,6 +34,6 @@
 87	"Screen" / "CRT, television"	-	nothing	-	-	muted 21px	nothing
 90	Open, with A	consoleOpen	Home's Pill, filled, without its halo and glow (glows false), A, the word Help.entries(Help.Console)'s A entry	1450,-,-,64	966.67,-,-,42.67	accent fill radius 32, overAccent 23px 600	built
 93	Options, with X	-	nothing: no options action for a console	-	-	2px #5A6076 radius 32	nothing
-99	help bar	consolesHelp	Home's HelpLine over Help.entries(Help.Console, {group: true})	96,1126,-,34	64,750.667,-,22.667	#D8DBE6 21px, its row centred 40 px over the foot	built
+99	help bar	consolesHelp	Home's HelpLine over Help.entries(Help.Console, {group: true})	96,middle=1143,-,-	64,middle=762,-,-	#D8DBE6 21px at Type.size; the row centred 57 px over the foot	built
 103	"LT RT Maker"	-	the program's entries stand: A Open, B Back, Y Favourites, Random game, LB RB Group (qt-models/src/help.rs:121)	-	-	-	nothing
 105	"Nintendo · 3 of 14"	consolePlace	maker, Words.between, Words.place(groupIndex, groupSize) (qt-models/src/game_page.rs:387)	right=1824,-,-,-	right=1216,-,-,-	#D8DBE6 21px	built

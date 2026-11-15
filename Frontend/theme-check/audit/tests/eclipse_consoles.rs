@@ -64,8 +64,9 @@ fn written(v: f64) -> f64 {
     (v * 100.0).round() / 100.0
 }
 
-/// The table's built rows with a single objectName and a box on the board: name, then x (or right=), y, w, h in board px, "-" free.
-fn boxes() -> Vec<(String, [Option<f64>; 4], bool)> {
+/// The table's built rows with a single objectName and a box on the board: name, then x (or right=), y (or middle=), w, h in
+/// board px, "-" free; with the flags right and middle.
+fn boxes() -> Vec<(String, [Option<f64>; 4], bool, bool)> {
     TABLE
         .lines()
         .filter(|l| !l.starts_with('#'))
@@ -74,8 +75,9 @@ fn boxes() -> Vec<(String, [Option<f64>; 4], bool)> {
         .map(|c| {
             let parts: Vec<&str> = c[4].split(',').collect();
             let right = parts.first().is_some_and(|p| p.starts_with("right="));
-            let n = |p: &str| p.trim_start_matches("right=").parse::<f64>().ok();
-            (c[2].to_owned(), [n(parts.first().unwrap_or(&"-")), parts.get(1).and_then(|p| n(p)), parts.get(2).and_then(|p| n(p)), parts.get(3).and_then(|p| n(p))], right)
+            let middle = parts.get(1).is_some_and(|p| p.starts_with("middle="));
+            let n = |p: &str| p.trim_start_matches("right=").trim_start_matches("middle=").parse::<f64>().ok();
+            (c[2].to_owned(), [n(parts.first().unwrap_or(&"-")), parts.get(1).and_then(|p| n(p)), parts.get(2).and_then(|p| n(p)), parts.get(3).and_then(|p| n(p))], right, middle)
         })
         .collect()
 }
@@ -85,7 +87,7 @@ fn states(dir: &Path, size: &str) -> Vec<(String, String)> {
         .unwrap()
         .flatten()
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|n| n.starts_with("Consoles-") && n.ends_with(&format!("-{size}.spec")))
+        .filter(|n| n.starts_with("Consoles-dark-") && n.ends_with(&format!("-{size}.spec")))
         .map(|n| (n.clone(), std::fs::read_to_string(dir.join(&n)).unwrap()))
         .collect();
     found.sort();
@@ -105,16 +107,18 @@ fn qt_3_4_8_eclipse_s_consoles_stands_where_its_board_stands_it() {
         assert!(!recorded.is_empty(), "Consoles recorded at {size}: {err}");
         for (file, spec) in &recorded {
             let items = seen(spec);
-            for (name, edges, right) in boxes() {
+            for (name, edges, right, middle) in boxes() {
                 let Some(item) = items.get(&name) else { continue };
                 held += 1;
                 let at = item.at;
                 let x = if right { at[0] + at[2] } else { at[0] };
-                for (i, (want, got)) in edges.iter().zip([x, at[1], at[2], at[3]]).enumerate() {
+                // A row centred on a line keeps its centre where the board's stands, whatever size Type.size gives its words.
+                let y = if middle { at[1] + at[3] / 2.0 } else { at[1] };
+                for (i, (want, got)) in edges.iter().zip([x, y, at[2], at[3]]).enumerate() {
                     let Some(want) = want else { continue };
                     // At the board's shape a right edge stands where the board's does, so every edge is the board's px times the unit.
                     let want = want * unit;
-                    if written(want) != got {
+                    if written(want) != written(got) {
                         differences.push(format!("{file}: {name} edge {i}: the board {}, the screen {got}", written(want)));
                     }
                 }

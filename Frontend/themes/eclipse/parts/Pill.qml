@@ -1,0 +1,86 @@
+import QtQuick
+import EmuSen.Theme
+
+// A pill button: a pad button's glyph and its label, filled in the accent or outlined in the line colour, round at both ends; every measure in board pixels (Main:61-71, EclipseLibrary:51, EclipseEmpty:46; EmuSen_Qt.md §3.4.8).
+Walkable {
+    id: root
+    // A board pixel in canvas units, Board.unit.
+    property real unit: 1
+    required property int button
+    required property string label
+    property bool filled: false
+    property real tall: 72
+    property real glyphSide: 44
+    property real labelSize: 24
+    property real lead: 14
+    property real trail: 30
+    property real gap: 14
+    // The entry's action is the host's to take, so a press is the button's own press.
+    property bool live: true
+    // The glyph's and the label's names, for a reader and the tests.
+    property string glyphName
+    property string wordsName
+    // The pill's one colour: its fill when filled, else its outline.
+    readonly property color paint: root.filled ? Tokens.accent : Tokens.border
+    // Round at both ends, as every pill on the boards is.
+    readonly property real radius: root.height / 2
+    readonly property Item glyph: glyphItem
+    readonly property Item words: wordsItem
+    width: wordsItem.x + wordsItem.implicitWidth + root.trail * root.unit
+    height: root.tall * root.unit
+    opacity: root.live ? 1 : 0.38
+    Accessible.name: root.label
+    Rectangle {
+        objectName: root.objectName + ".fill"
+        anchors.fill: parent
+        radius: root.radius
+        color: root.filled ? root.paint : "transparent"
+        border.color: root.filled ? "transparent" : root.paint
+        border.width: root.filled ? 0 : Tokens.hoverBorder
+    }
+    // The filled pill's halo and glow (Main:61, EclipseEmpty:46): rgba(246, 231, 216, 0.18) 6 px out, and 46 px of blur 6 px out
+    // in rgba(240, 180, 196, 0.45); constants of the design, as the boards draw them.
+    Glow {
+        objectName: root.objectName + ".halo"
+        anchors.fill: parent
+        visible: root.filled
+        radius: root.radius
+        color: "#2EF6E7D8"
+        spread: 6 * root.unit
+    }
+    Glow {
+        objectName: root.objectName + ".glow"
+        anchors.fill: parent
+        visible: root.filled
+        radius: root.radius
+        color: "#73F0B4C4"
+        blur: 46 * root.unit
+        spread: 6 * root.unit
+    }
+    FocusRing {
+        anchors.fill: parent
+        radius: root.radius
+        visible: root.activeFocus
+    }
+    PadGlyph {
+        id: glyphItem
+        objectName: root.glyphName
+        x: root.lead * root.unit
+        y: (root.height - height) / 2
+        width: root.glyphSide * root.unit
+        height: width
+        family: Device.family
+        button: root.button
+        ink: root.filled ? Tokens.overAccent : Tokens.muted
+    }
+    Text {
+        id: wordsItem
+        objectName: root.wordsName
+        x: glyphItem.x + glyphItem.width + root.gap * root.unit
+        y: (root.height - height) / 2
+        text: root.label
+        color: root.filled ? Tokens.overAccent : Tokens.text
+        font.pixelSize: root.labelSize * root.unit
+        font.weight: root.filled ? Font.DemiBold : Font.Normal
+    }
+}

@@ -4113,3 +4113,61 @@ drawn; a disc given its own one glow, with a game's corona, draws that glow alon
 largest difference measured on 2026-11-14 on the software backend, 0.0192; the bound stands as measured, decided
 2026-11-15 by the tester, R-20261115-1, §7.113), and black past the halo's reach. The pixel
 ratio is one under the headless harness. Kit 1.6.
+
+### 7.117 The face tokens: Sora and JetBrains Mono bundled, a face for each role (2026-11-15)
+
+Decided 2026-11-14 by the tester (R-20261114-15): "Bundle both fonts and add the face token": Eclipse's typeface is Sora,
+with JetBrains Mono for codes, both bundled, and a theme names its face through a token. Decided 2026-11-14
+(R-20261114-21): under the reference every text draws in the face it had.
+
+**The fonts.** In `kit-qt/fonts/`, each project's licence beside them; both are the SIL Open Font License 1.1, whose
+condition 2 lets the fonts "be bundled, redistributed and/or sold with any software" provided the copyright notice and the
+licence go with them (read 2026-11-15). Sora: the static Light, Regular, SemiBold and Bold (the weights 300, 400, 600 and
+700 the boards link, `Main.dc.html:11`), from `github.com/sora-xor/sora-font`, `fonts/ttf/`, at commit `7f9a9c5d0ccd`
+(2022-09-05; the project publishes no release), SHA-256 `75a3bb35…`, `517e945d…`, `b02621d4…`, `2ee62953…`;
+`Sora-OFL.txt` `ba0b9729…`. JetBrains Mono: Regular and Bold (the 400 and 700 the boards set it in), from release v2.304
+(`github.com/JetBrains/JetBrainsMono/releases`, `JetBrainsMono-2.304.zip`, SHA-256 `6f6376c6…`), `fonts/ttf/`, SHA-256
+`a0bf60ef…` and `5590990c…`; `JetBrainsMono-OFL.txt` `30f0c136…`. The six files are 908,152 bytes, the licences 8,784.
+
+**Loaded once.** `bundled_families()` (`cpp/bundled_faces.cpp`) adds every `.ttf` under `qrc:/emusen/fonts` to the
+application's font database (`QFontDatabase::addApplicationFont`) the first time a `Tokens` singleton is made, on any
+engine, and keeps the families the files declare; the database is the process's, so the theme's engine and the program's
+share them. The `FontLoader`s of the program's `Faces.qml`, the reference theme's `parts/Faces.qml`, `Moonrise` and
+`CoverTile`, which loaded the same Barlow files four times over, are gone. Qt names a static file by its typographic
+family: `BarlowCondensed-Light.ttf`, `-Regular` and `-Medium` are all "Barlow Condensed" at weights 300, 400 and 500
+(measured 2026-11-15 with `FontLoader.font`), so a family is one face and its weight stays the text's own.
+
+**The tokens.** Four `QString` properties of `Tokens`, read-only, one per role (kit-core's `FaceRole`):
+
+| Token | Role | The kit's (the reference) | Eclipse |
+|---|---|---|---|
+| `faceText` | the screens' words, strong words by weight | Barlow | Sora |
+| `faceLabel` | names, titles, counts, the wordmark | Barlow Condensed | Sora |
+| `faceInterface` | the kit's rows, controls, sentences, glyph letters | the application's font | Sora |
+| `faceCode` | codes: a version, a folder's path, a cheat's code | the application's font | JetBrains Mono |
+
+The four roles are what the program and the kit named before: 94 places set Barlow and 28 Barlow Condensed (through the
+two `Faces` items, which typed the same four loaders twice), and every text that named no face (the kit's style
+controls, its parts' default fonts, its plain texts) drew the application's font, `QGuiApplication::font()`'s family,
+which Qt resolved to Noto Sans on the desktop (2026-11-15). No text was set as a code. An empty family is not that
+font: Qt matched `font.family: ""` to Adwaita Mono (measured 2026-11-15), so the kit's value for the two roles is the
+application font's family as `QGuiApplication::font()` gives it, asked of Qt, never typed. A text asks
+`Kit.Tokens.faceX` (a theme `Tokens.faceX`); its weight, size and capitals stay its own. The style's controls, `ToneText`
+and the parts' default fonts ask `faceInterface`; a settings row whose model gives `code` true draws its value in
+`faceCode` (`MenuRow.code`; the folders' and the version's value specs say `"code": true`, and a blank's words are not
+a code).
+
+**A theme's face.** `theme.json` names a family the kit bundles (`tokens::BUNDLED`: Barlow, Barlow Condensed, Sora,
+JetBrains Mono); theme-check finds any other value, and the kit, given one, keeps its own and says so on the console. A
+face is never a family the machine may lack, so a theme's text is never drawn in a fallback. Sora has no 500: a text
+asking Sora at `Font.Medium` is drawn in Sora Regular (fontInfo, 2026-11-15).
+
+**Tests.** `kit-qt/tests/faces.rs`: `BUNDLED` is the families of the folder's files and every file is in the resource;
+each bundled family is drawn as itself (the family Qt matched, `QFontInfo`: "if the requested font is not available,
+the font matcher chooses the closest", doc.qt.io, Qt 6, `QFontInfo`, read 2026-11-15); the reference's four values; a
+theme's faces in its variant, an unbundled one left. `qt-app/tests/eclipse.rs`
+`kit_7_117_…`: under the reference the wordmark draws Barlow Condensed, the status line Barlow and a settings row the
+application's font; under Eclipse a settings row draws Sora and the ROM folder's path JetBrains Mono, Eclipse's engine
+gives its texts Sora, and the reference's Home on an engine holding Eclipse's overrides draws its wordmark and status
+line in Sora; the reference again as before. The harness's tree reports each text's `drawn` family beside the `face` it
+asks for. Kit 1.7, Theme 1.3.

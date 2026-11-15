@@ -44,6 +44,9 @@ pub struct Node {
     pub bold: bool,
     #[serde(default)]
     pub face: Option<String>,
+    /// The family the words are drawn in, Qt's match for the face asked for (QFontInfo).
+    #[serde(default)]
+    pub drawn: Option<String>,
     /// Where the words are drawn: x, y, width, height in the scene.
     #[serde(default)]
     pub glyphs: Option<[f64; 4]>,

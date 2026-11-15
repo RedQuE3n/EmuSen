@@ -5,6 +5,22 @@ writes it, is committed under `Testing/qmltypes/` and compared on every build. U
 addition, a change or a removal, bumps the minor (R-20261111-107, R-20261111-108); each entry names what changed and the
 section of `EmuSen_Kit.md` that records it.
 
+## 1.7: the face tokens, and Sora and JetBrains Mono bundled (2026-11-15)
+
+Decided 2026-11-14 by the tester (R-20261114-15): both fonts bundled and a face token added. An addition; the qmldir tags
+every type with 1.7, the kit's version, as each minor since 1.3 has.
+
+- **`Tokens.faceText`, `faceLabel`, `faceInterface`, `faceCode`** (registry, strings after every earlier property): the
+  family each role of text draws in; Barlow, Barlow Condensed, and the application's font for the last two in the kit's
+  column. `EmuSen_Kit.md` §7.117.
+- **`MenuRow.code`** and the read-only **`MenuRow.valueFont`**: a value drawn in `faceCode`; `SettingsFrame` reads a
+  row's `code` role.
+- The style's controls, `ToneText`, and the default fonts of `MenuRow`, `ActionButton`, `HelpBar`, `Keyboard`,
+  `NoticeLayer`, `Question` and `ToolScreen` ask `faceInterface`; `Moonrise` and `CoverTile` ask `faceLabel` and
+  `faceText` and load no font of their own. Under the kit's tokens each draws the face it drew.
+- `fonts/` gains Sora (Light, Regular, SemiBold, Bold) and JetBrains Mono (Regular, Bold) with their licences, all put in
+  the application's font database once (`bundled_families`).
+
 ## 1.6: Eclipse's corona disc and the planet mark as kit parts, one glow, and every ring Gapped where a look asks (2026-11-14)
 
 Beside the additions below, two properties the 1.5 and 1.6 pieces had added are gone and `CoronaDisc.corona` means a

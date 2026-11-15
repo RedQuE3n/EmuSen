@@ -10,6 +10,7 @@ T.TextField {
     implicitHeight: Math.ceil(Math.max(implicitBackgroundHeight + topInset + bottomInset, contentHeight + topPadding + bottomPadding, placeholder.implicitHeight + topPadding + bottomPadding))
     padding: Kit.Tokens.base * 2
     leftPadding: Kit.Tokens.base * 3
+    font.family: Kit.Tokens.faceInterface
     font.pixelSize: Kit.Tokens.fontBody
     color: control.enabled ? Kit.Tokens.text : Kit.Tokens.muted
     selectionColor: Kit.Tokens.accent

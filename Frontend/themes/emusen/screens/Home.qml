@@ -60,7 +60,7 @@ ThemeScreen {
                 anchors.fill: parent
                 surfaceDrawn: false
                 padFamily: Device.family
-                helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+                helpFont: Qt.font({ family: faces.words, pixelSize: 20 })
                 helpSpacing: 40
                 helpGlyphGap: 10
                 focus: true
@@ -81,7 +81,7 @@ ThemeScreen {
                         y: 40
                         text: Words.statusLine(Device.controllers, Device.clock)
                         color: night.muted
-                        font.family: faces.regular
+                        font.family: faces.words
                         font.pixelSize: 20
                         lineHeight: 24
                         lineHeightMode: Text.FixedHeight
@@ -106,7 +106,7 @@ ThemeScreen {
                         y: 37.6
                         text: Words.title
                         color: night.textStrong
-                        font.family: faces.light
+                        font.family: faces.label
                         font.weight: Font.Light
                         font.pixelSize: 24
                         font.letterSpacing: 6
@@ -204,7 +204,7 @@ ThemeScreen {
                             y: 40
                             text: Words.continuePlaying
                             color: Tokens.muted
-                            font.family: faces.regular
+                            font.family: faces.words
                             font.pixelSize: 20
                             lineHeight: 24
                             lineHeightMode: Text.FixedHeight
@@ -218,7 +218,7 @@ ThemeScreen {
                             elide: Text.ElideRight
                             // On Continue's panel while a game is suspended, else on the world beside the shelf's game.
                             color: Session.hasGame ? Tokens.textStrong : night.textStrong
-                            font.family: faces.condensed
+                            font.family: faces.label
                             font.weight: Font.Medium
                             font.pixelSize: 44
                             lineHeight: 52.8
@@ -241,7 +241,7 @@ ThemeScreen {
                             text: root.topFacts
                             elide: Text.ElideRight
                             color: Session.hasGame ? Tokens.muted : night.muted
-                            font.family: faces.regular
+                            font.family: faces.words
                             font.pixelSize: 22
                             lineHeight: 26.4
                             lineHeightMode: Text.FixedHeight
@@ -253,7 +253,7 @@ ThemeScreen {
                         y: 376
                         text: Words.recent
                         color: night.muted
-                        font.family: faces.regular
+                        font.family: faces.words
                         font.pixelSize: 20
                         lineHeight: 24
                         lineHeightMode: Text.FixedHeight
@@ -315,7 +315,7 @@ ThemeScreen {
                         text: Words.addFolder
                         elide: Text.ElideRight
                         color: night.muted
-                        font.family: faces.regular
+                        font.family: faces.words
                         font.pixelSize: 22
                         lineHeight: 26.4
                         lineHeightMode: Text.FixedHeight
@@ -330,7 +330,7 @@ ThemeScreen {
                         text: root.shelfFocused ? root.shelfCover?.title ?? "" : ""
                         elide: Text.ElideRight
                         color: night.text
-                        font.family: faces.regular
+                        font.family: faces.words
                         font.pixelSize: 22
                         lineHeight: 26.4
                         lineHeightMode: Text.FixedHeight
@@ -394,7 +394,7 @@ ThemeScreen {
                                 elide: Text.ElideRight
                                 opacity: place.available ? 1 : 0.38
                                 color: Tokens.textStrong
-                                font.family: faces.regular
+                                font.family: faces.words
                                 font.pixelSize: 20
                                 lineHeight: 24
                                 lineHeightMode: Text.FixedHeight
@@ -421,7 +421,7 @@ ThemeScreen {
                                     text: place.line
                                     elide: Text.ElideRight
                                     color: place.attention ? Tokens.attention : Tokens.muted
-                                    font.family: faces.condensedRegular
+                                    font.family: faces.label
                                     font.pixelSize: 20
                                     lineHeight: 24
                                     lineHeightMode: Text.FixedHeight

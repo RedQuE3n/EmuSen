@@ -7,5 +7,6 @@ T.Label {
     id: control
     color: control.enabled ? Kit.Tokens.text : Kit.Tokens.muted
     linkColor: Kit.Tokens.accent
+    font.family: Kit.Tokens.faceInterface
     font.pixelSize: Kit.Tokens.fontBody
 }

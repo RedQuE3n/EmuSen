@@ -13,7 +13,7 @@ Item {
     property int family: Kit.Families.Generic
     property int glyphStyle: Kit.GlyphStyles.Outlined
     // The labels' face, the gap between entries and the gap from a glyph to its label; a theme may set its own.
-    property font labelFont: Qt.font({ pixelSize: Kit.Tokens.fontBody })
+    property font labelFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontBody })
     property real entrySpacing: Kit.Tokens.paneGap
     property real glyphGap: Kit.Tokens.base * 2
     property color labelColor: Kit.Tokens.text

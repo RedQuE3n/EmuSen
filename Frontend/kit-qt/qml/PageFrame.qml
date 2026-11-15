@@ -148,6 +148,7 @@ Kit.Frame {
             width: places.title.width
             text: root.title
             color: Kit.Tokens.overArt
+            font.family: Kit.Tokens.faceInterface
             font.pixelSize: Kit.Tokens.fontDisplay
             fontSizeMode: Text.HorizontalFit
             minimumPixelSize: Kit.Tokens.fontTitle
@@ -160,6 +161,7 @@ Kit.Frame {
             text: root.facts
             color: Kit.Tokens.overArt
             opacity: 0.7
+            font.family: Kit.Tokens.faceInterface
             font.pixelSize: Kit.Tokens.fontBody
             fontSizeMode: Text.HorizontalFit
             minimumPixelSize: Kit.Tokens.fontCaption
@@ -224,6 +226,7 @@ Kit.Frame {
             height: places.content.height
             text: root.contentWords
             color: Kit.Tokens.text
+            font.family: Kit.Tokens.faceInterface
             font.pixelSize: Kit.Tokens.fontBody
             wrapMode: Text.Wrap
             elide: Text.ElideRight
@@ -319,6 +322,7 @@ Kit.Frame {
                         lineHeightMode: Text.FixedHeight
                         lineHeight: Math.round(Kit.Tokens.fontCaption * 1.2)
                         color: tile.activeFocus ? Kit.Tokens.textStrong : Kit.Tokens.text
+                        font.family: Kit.Tokens.faceInterface
                         font.pixelSize: Kit.Tokens.fontCaption
                         wrapMode: Text.Wrap
                     }
@@ -330,6 +334,7 @@ Kit.Frame {
                         lineHeightMode: Text.FixedHeight
                         lineHeight: Math.round(Kit.Tokens.fontCaption * 1.2)
                         color: Kit.Tokens.muted
+                        font.family: Kit.Tokens.faceInterface
                         font.pixelSize: Kit.Tokens.fontCaption
                         wrapMode: Text.Wrap
                     }

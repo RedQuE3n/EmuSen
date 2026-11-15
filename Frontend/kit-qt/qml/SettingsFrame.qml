@@ -7,7 +7,7 @@ import EmuSen.Kit as Kit
 // The settings frame on the kit's frame: the strip of sections or the trail of pages, rows from any model by kind with a value each, and the pane with one slot over the focused row's sentence; it knows no setting (EmuSen_Kit.md §7.40).
 Kit.Frame {
     id: root
-    // The rows: label, value, sentence, kind (Kit.RowKinds), held, marked, and a slider's minimum, maximum, step and amount.
+    // The rows: label, value, sentence, kind (Kit.RowKinds), held, marked, code (a value in the codes' face), and a slider's minimum, maximum, step and amount.
     property alias model: list.model
     property list<string> sections
     // The pages open under the section, outermost first: the strip draws them, the last chosen, and the shoulders are the host's.
@@ -197,6 +197,7 @@ Kit.Frame {
                         controller: root.controller
                         label: row.model.label
                         value: row.model.value
+                        code: row.model.code === true
                         steps: row.model.kind === Kit.RowKinds.Steps
                         opens: row.model.kind === Kit.RowKinds.Opens
                         current: row.index === layout.current

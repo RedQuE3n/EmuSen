@@ -24,13 +24,13 @@ Kit.NormalizedCanvas {
         padFamily: screen.padFamily
         // The question draws its own help bar over the screen's.
         helpShown: !screen.tool.asking && !screen.tool.searching && !screen.tool.cardOpen
-        helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         helpSpacing: 40
         helpGlyphGap: 10
-        cellFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontRow })
-        titleFont: Qt.font({ family: faces.condensedRegular, pixelSize: Kit.Tokens.fontTitle })
-        captionFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontCaption })
-        bodyFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontBody })
+        cellFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontRow })
+        titleFont: Qt.font({ family: Kit.Tokens.faceLabel, pixelSize: Kit.Tokens.fontTitle })
+        captionFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontCaption })
+        bodyFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
         controller.sections: screen.tool.sections
         controller.selectedSection: screen.tool.section
         controller.actionLines: screen.tool.actionLines
@@ -96,11 +96,11 @@ Kit.NormalizedCanvas {
             choices: screen.tool.questionChoices
             backIndex: screen.tool.questionBack
             padFamily: screen.padFamily
-            titleFont: Qt.font({ family: faces.condensedRegular, pixelSize: Kit.Tokens.fontTitle })
-            bodyFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontBody })
-            captionFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontCaption })
-            rowFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontRow })
-            helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+            titleFont: Qt.font({ family: Kit.Tokens.faceLabel, pixelSize: Kit.Tokens.fontTitle })
+            bodyFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
+            captionFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontCaption })
+            rowFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontRow })
+            helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
             help: HelpModel {
                 screen: HelpModel.Question
             }
@@ -131,7 +131,7 @@ Kit.NormalizedCanvas {
         // Its help stands while the keys hold the focus, as the grid's search's does (EmuSen_Qt.md §7.6).
         helpShown: screen.tool.searchKeys
         padFamily: screen.padFamily
-        helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         helpSpacing: 40
         helpGlyphGap: 10
         controller.navigationShown: false
@@ -160,7 +160,7 @@ Kit.NormalizedCanvas {
                 width: screen.width
                 focus: true
                 onActiveFocusChanged: if (screen.tool.searching && keyboard.activeFocus !== screen.tool.searchKeys) screen.tool.keysFocused(keyboard.activeFocus)
-                labelFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontBody })
+                labelFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
             }
         }
     }
@@ -196,8 +196,5 @@ Kit.NormalizedCanvas {
         repeat: true
         running: screen.visible && screen.tool.busy
         onTriggered: screen.tool.poll()
-    }
-    Faces {
-        id: faces
     }
 }

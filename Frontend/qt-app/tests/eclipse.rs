@@ -147,3 +147,123 @@ fn qt_3_4_7_eclipse_is_listed_chosen_and_sets_every_override_on_both_engines() {
     wait_for(&mut scene, "chosenTheme", "status", "Null", 2000);
     assert_eq!(program_tokens(&mut scene), kit, "the reference again leaves the program the kit's tokens");
 }
+
+/// A text's face as it is drawn: the family asked for and the family Qt matched (`QFontInfo`), by the item's objectName, or
+/// by a row's label words for a settings row's `label` or `value`.
+fn drawn(tree: &emusen_qt_test::Tree, name: &str, row: Option<&str>) -> (String, String) {
+    let node = match row {
+        None => tree.nodes.iter().find(|n| n.name == name && n.visible),
+        Some(label) => {
+            let at = tree.nodes.iter().find(|n| n.name == "label" && n.visible && n.text.as_deref() == Some(label)).unwrap_or_else(|| panic!("the {label} row"));
+            tree.nodes.iter().find(|n| n.name == name && n.parent == at.parent)
+        }
+    };
+    let node = node.unwrap_or_else(|| panic!("{name} ({row:?}) is drawn"));
+    (node.face.clone().unwrap_or_default(), node.drawn.clone().unwrap_or_default())
+}
+
+/// Settings ▸ Library ▸ Themes from Home, the theme at `index` in the list used, then back to the Library's rows.
+fn use_theme(scene: &mut Scene<'_>, down: usize, name: &str) {
+    for _ in 0..20 {
+        let tree = scene.tree();
+        if scene.focus(&tree).map(|i| tree.nodes[i as usize].name.clone()).as_deref() == Some("place.0") {
+            break;
+        }
+        scene.wait(50);
+    }
+    for _ in 0..5 {
+        scene.pad(UiButton::Right);
+    }
+    scene.pad(UiButton::Accept);
+    wait_for(scene, "screens", "shown", "Settings", 2000);
+    for _ in 0..4 {
+        scene.pad(UiButton::PageDown);
+    }
+    wait_for(scene, "settingsModel", "section", "4", 1000);
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Down);
+    wait_for(scene, "settingsModel", "focused", "2", 1000);
+    scene.pad(UiButton::Accept);
+    wait_for(scene, "screens", "shown", "Themes", 2000);
+    wait_for(scene, "themesModel", "name", "EmuSen", 5000);
+    for _ in 0..down {
+        scene.pad(UiButton::Down);
+    }
+    wait_for(scene, "themesModel", "name", name, 2000);
+    scene.pad(UiButton::Accept);
+    wait_for(scene, "themesModel", "findings", "In use.", 3000);
+    scene.pad(UiButton::Back);
+    wait_for(scene, "screens", "shown", "Settings", 2000);
+}
+
+#[test]
+fn kit_7_117_eclipse_draws_sora_and_its_codes_in_jetbrains_mono_and_the_reference_its_own_faces() {
+    let _world = sandbox("qt-app-eclipse-faces", &[("NES", "One.nes")]);
+    let mut harness = emusen_qt_test::Harness::new();
+    let mut scene = harness.load(MAIN_URL, 1280, 800);
+    assert!(scene.set_property("program", "splash", "false"));
+    assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
+    wait_for(&mut scene, "library", "loading", "false", 10000);
+    let platform = emusen_kit_qt::tokens::platform_family();
+    assert!(!platform.is_empty(), "the application's font names a family");
+
+    // The reference: its words in Barlow, its labels in Barlow Condensed, the kit's rows and codes in the application's font.
+    let home = scene.tree();
+    assert_eq!(drawn(&home, "wordmark", None), ("Barlow Condensed".into(), "Barlow Condensed".into()), "the reference's wordmark");
+    assert_eq!(drawn(&home, "homeStatus", None), ("Barlow".into(), "Barlow".into()), "the reference's status line");
+    use_theme(&mut scene, 0, "EmuSen");
+    let rows = scene.tree();
+    let (asked, label) = drawn(&rows, "label", Some("ROM folder"));
+    assert_eq!(asked, platform, "the reference's row asks for the application's font, as a text naming none does");
+    assert_eq!(drawn(&rows, "value", Some("ROM folder")), (platform.clone(), label.clone()), "the reference's path in the same face");
+
+    // Eclipse: every role in Sora but the codes, in JetBrains Mono; the families drawn, not only those asked for.
+    use_theme(&mut scene, 1, "Eclipse");
+    wait_for(&mut scene, "host.theme", "ready", "true", 3000);
+    let rows = scene.tree();
+    assert_eq!(drawn(&rows, "label", Some("ROM folder")), ("Sora".into(), "Sora".into()), "Eclipse's settings row");
+    assert_eq!(drawn(&rows, "value", Some("ROM folder")), ("JetBrains Mono".into(), "JetBrains Mono".into()), "Eclipse's path, a code");
+    assert_eq!(drawn(&rows, "label", Some("Themes")), ("Sora".into(), "Sora".into()), "a row whose value is no code");
+    assert_ne!(drawn(&rows, "value", Some("Themes")).1, "JetBrains Mono", "a value that is no code is not in the codes' face");
+    let faces = engine_tokens(&mut scene, "host.theme");
+    assert_eq!((faces["faceText"].as_str(), faces["faceLabel"].as_str()), ("Sora", "Sora"), "Eclipse's engine gives its own texts Sora");
+
+    // A theme's own text under Eclipse's faces: the reference's screens in a package that takes Eclipse's tokens, made from
+    // the two built-ins' files, so the reference's Home is drawn on an engine holding Eclipse's overrides.
+    let folder = eclipse_reference();
+    assert!(scene.set_property("program", "theme", folder.to_str().unwrap()));
+    wait_for(&mut scene, "theme", "home", "true", 5000);
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "screens", "shown", "Home", 2000);
+    scene.wait(200);
+    let home = scene.tree();
+    assert_eq!(drawn(&home, "wordmark", None), ("Sora".into(), "Sora".into()), "a theme's wordmark under Eclipse's faces");
+    assert_eq!(drawn(&home, "homeStatus", None), ("Sora".into(), "Sora".into()), "a theme's status line under Eclipse's faces");
+
+    // The reference again: each role as it was.
+    assert!(scene.set_property("program", "theme", ""));
+    wait_for(&mut scene, "theme", "home", "false", 5000);
+    scene.wait(200);
+    let home = scene.tree();
+    assert_eq!(drawn(&home, "wordmark", None), ("Barlow Condensed".into(), "Barlow Condensed".into()), "the reference's wordmark again");
+    assert_eq!(drawn(&home, "homeStatus", None), ("Barlow".into(), "Barlow".into()), "the reference's status line again");
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// A package of the reference's screens and parts with Eclipse's token overrides, in a folder of the test's own.
+fn eclipse_reference() -> std::path::PathBuf {
+    let themes = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../themes");
+    let folder = std::env::temp_dir().join(format!("eclipse-reference-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&folder);
+    for part in ["screens", "parts"] {
+        std::fs::create_dir_all(folder.join(part)).unwrap();
+        for file in std::fs::read_dir(themes.join("emusen").join(part)).unwrap().flatten() {
+            std::fs::copy(file.path(), folder.join(part).join(file.file_name())).unwrap();
+        }
+    }
+    let reference: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(themes.join("emusen/theme.json")).unwrap()).unwrap();
+    let mut manifest: serde_json::Value = serde_json::from_str(ECLIPSE).unwrap();
+    manifest["screens"] = reference["screens"].clone();
+    std::fs::write(folder.join("theme.json"), manifest.to_string()).unwrap();
+    folder
+}

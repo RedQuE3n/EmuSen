@@ -33,11 +33,11 @@ Kit.Frame {
     property bool applyEnabled: false
     property real meter: 0
     property string meterWords
-    property font cellFont: Qt.font({ pixelSize: Kit.Tokens.fontRow })
+    property font cellFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontRow })
     // The screen's faces for its title, its facts and meter, and its pane's and bar's words; the platform's sans serif at the tokens' sizes by default.
-    property font titleFont: Qt.font({ pixelSize: Kit.Tokens.fontTitle })
-    property font captionFont: Qt.font({ pixelSize: Kit.Tokens.fontCaption })
-    property font bodyFont: Qt.font({ pixelSize: Kit.Tokens.fontBody })
+    property font titleFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontTitle })
+    property font captionFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontCaption })
+    property font bodyFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontBody })
     readonly property alias list: list
     signal activated(int index)
     signal applied()

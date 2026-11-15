@@ -6,9 +6,9 @@ use emusen_qt_test::lint::{frontend, qmllint, rules};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.2.qmltypes");
-const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.2.qmldir");
-const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.6.qmltypes");
+const COMMITTED_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.3.qmltypes");
+const COMMITTED_QMLDIR: &str = include_str!("../../../Testing/qmltypes/EmuSen.Theme-1.3.qmldir");
+const KIT_TYPES: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.7.qmltypes");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 
 /// The registry without its line numbers and header file names, which move with every edit and mean nothing to a QML author.
@@ -61,12 +61,12 @@ fn qt_5_3_the_committed_registry_is_the_built_one() {
     assert_eq!(
         normalized(COMMITTED_TYPES),
         normalized(&built("plugin.qmltypes")),
-        "EmuSen.Theme's types changed: review it against §3.2, bump the minor for an addition, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Theme-1.2.qmltypes"
+        "EmuSen.Theme's types changed: review it against §3.2, bump the minor for an addition, then copy plugin.qmltypes to Testing/qmltypes/EmuSen.Theme-1.3.qmltypes"
     );
     assert_eq!(
         normalized(COMMITTED_QMLDIR),
         normalized(&built("qmldir")),
-        "copy the reviewed qmldir to Testing/qmltypes/EmuSen.Theme-1.2.qmldir"
+        "copy the reviewed qmldir to Testing/qmltypes/EmuSen.Theme-1.3.qmldir"
     );
 }
 

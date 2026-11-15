@@ -32,11 +32,11 @@ Kit.NormalizedCanvas {
             choices: resumeWords.choices
             backIndex: resumeWords.backIndex
             padFamily: resumeCanvas.padFamily
-            titleFont: Qt.font({ family: resumeFaces.condensedRegular, pixelSize: Kit.Tokens.fontTitle })
-            bodyFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontBody })
-            captionFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontCaption })
-            rowFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontRow })
-            helpFont: Qt.font({ family: resumeFaces.regular, pixelSize: 20 })
+            titleFont: Qt.font({ family: Kit.Tokens.faceLabel, pixelSize: Kit.Tokens.fontTitle })
+            bodyFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
+            captionFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontCaption })
+            rowFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontRow })
+            helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
             help: HelpModel {
                 screen: HelpModel.QuestionBack
             }
@@ -46,8 +46,5 @@ Kit.NormalizedCanvas {
         Binding {
             resumeQuestion.visible: resumeCanvas.session.resumeAsked
         }
-    }
-    Faces {
-        id: resumeFaces
     }
 }

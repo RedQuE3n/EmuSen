@@ -7,7 +7,7 @@ FocusScope {
     id: root
     required property Kit.KeyboardModel model
     // The keys' words' face; the reference theme sets Barlow.
-    property font labelFont: Qt.font({ pixelSize: Kit.Tokens.fontBody })
+    property font labelFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontBody })
     readonly property bool showsCurrent: root.activeFocus
     implicitHeight: root.model.bandHeight
     activeFocusOnTab: true

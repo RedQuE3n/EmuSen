@@ -9,7 +9,7 @@ use serde_json::{Map, Value};
 pub const SCHEMA: u64 = 1;
 
 /// The `EmuSen.Theme` API this build carries, major and minor.
-pub const API: (u64, u64) = (1, 2);
+pub const API: (u64, u64) = (1, 3);
 
 /// The cue names a theme may give its own file (EmuSen_Qt.md §3.2, `EmuSen_Interface.md` §23).
 pub const CUES: [&str; 7] = ["scroll", "systembrowse", "select", "back", "favorite", "launch", "quicksysselect"];
@@ -368,7 +368,7 @@ fn read_tokens(r: &mut Reader<'_>, m: &mut Manifest, tokens: &Value) {
                 Value::Number(n) => TokenValue::Number(n.as_f64().unwrap_or(f64::NAN)),
                 Value::Bool(b) => TokenValue::Switch(*b),
                 _ => {
-                    r.find(&["tokens", variant_name, name], Kind::Schema, format!("{name} is a value: a colour, a number or true/false"));
+                    r.find(&["tokens", variant_name, name], Kind::Schema, format!("{name} is a value: a colour, a face, a number or true/false"));
                     continue;
                 }
             };

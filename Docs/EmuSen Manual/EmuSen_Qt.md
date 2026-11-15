@@ -937,7 +937,7 @@ card** (§0.7 there) and no theme colour is read into one. A card opens over the
 `import EmuSen.Theme` gives a theme exactly these (a type added after 1.0 needs the minor that added it, as
 `Frontend/theme-qt/CHANGELOG-theme-api.md` lists), each a QML singleton or type, each a view over `emusen-qt-models`
 with the fields a theme may read and nothing more. The table is the module as built (`Frontend/theme-qt`, the crate
-`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.2.*` and held to this table by hand in
+`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.3.*` and held to this table by hand in
 `tests/surface.rs`. The amendments of 2026-11-08 are listed in `Frontend/theme-qt/CHANGELOG-theme-api.md`.
 
 | Name | Kind | What it holds |
@@ -950,7 +950,7 @@ with the fields a theme may read and nothing more. The table is the module as bu
 | `Bells` | singleton | `ladder(count)` (the ladder's first rungs made ready), `strike(i)` (rings rung i, the bell world i rings in Moonrise), handed to the host's striker, rendered by the kit's `Bells` and rung at the Navigation volume |
 | `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`, `summary(consoles, games)`; the empty states `noGames`, `noRecent`, `noConsoles`, `addFolder`, the eyebrow `places` and `pausedAgo(pausedSince)`; `continueEntry` and `recentEntry`, Continue and the Recent shelf named as destinations: the curated face of `words.rs` |
 | `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, `SectionSearched`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; `entries(kind, {group, back, accept})` the same with LB RB Group and B Back added where the kind takes them, and A's entry not `enabled` (an `enabled` role, read as `model.enabled`) when `accept` is false; the curated face of `help.rs` |
-| `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only; `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
+| `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only, the face tokens among them (1.3, `EmuSen_Kit.md` §7.117); `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
 | `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown) |
 | `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` (a shelf's icon, one of Home's seven places by its key, or an engine's mark) |
 | `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `OrbitLayout`, `FigureLayout`, `WheelLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31); `WheelLayout` turns groups as wheels over a dial (§7.32); `OrbitLayout` places groups on nested orbits (§7.30) |
@@ -1036,7 +1036,7 @@ left out of `Tokens.qml` (the surface test).
 
 ### 3.3 Versioning
 
-The API is the module's version, now `EmuSen.Theme 1.2` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
+The API is the module's version, now `EmuSen.Theme 1.3` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
 removal or a rename, bumps the minor, and a role or action deprecated in one minor may be removed in any later one
 (decided 2026-11-11 by the tester, R-20261111-107, R-20261111-108, §5.3). After it, a minor adds singletons, roles,
 actions, cues or tokens and never removes or renames one; a role or action no longer meant is kept and marked
@@ -1640,7 +1640,7 @@ Decided 2026-11-11 by the tester: Eclipse is EmuSen's default look, and the pres
 theme API is not widened for that. A blank setting still gives the reference: which theme a blank setting gives changes
 only once Eclipse has screens of its own.
 
-**The package.** `Frontend/themes/eclipse/` holds `theme.json` alone: name Eclipse, `api` 1.2 (its corona tokens are 1.2's, the newest it sets; its focus tokens are 1.1's), the dark variant, no
+**The package.** `Frontend/themes/eclipse/` holds `theme.json` alone: name Eclipse, `api` 1.3 (its face tokens are 1.3's, the newest it sets; its corona tokens are 1.2's, its focus tokens 1.1's), the dark variant, no
 screen of its own (`"screens": []`), no cue, no preview, and the token overrides below. With no screens, every screen is
 the reference's: Home, Choose a console and the games are drawn by the reference's host, whose engine keeps the kit's
 tokens, so only the program's own screens (Settings, the cards, the game page, the Pause Card, the tools, the questions
@@ -1652,7 +1652,7 @@ today shows the reference's screens, which would not show Eclipse. The manifest 
 `themes::built_in_folder` gives each one's folder in the resources, `qrc:/emusen/themes/<id>/`, which `qt-app/themes.qrc`
 holds file for file. `BuiltInThemes` (`qt-app/src/theme.rs`) reads each built-in's `theme.json` through Qt for the Themes
 tab and gives the window the reference's folder. In the tab, Eclipse's row follows EmuSen's: "Eclipse", "By The EmuSen
-project · EmuSen.Theme 1.2 · dark" (the minor is the manifest's `api`), and "Checked: nothing found." (built-ins are checked by the build's tests, here
+project · EmuSen.Theme 1.3 · dark" (the minor is the manifest's `api`), and "Checked: nothing found." (built-ins are checked by the build's tests, here
 theme-check's `qt_3_4_7_the_built_in_eclipse_package_is_clean`). Use stores the id `eclipse`; `themes::resolve` gives
 `Resolved::BuiltIn`, whose host folder is the resources', so the chosen theme's host loads it and `ThemeStyle` puts its
 overrides on the program's engine.
@@ -1709,6 +1709,10 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 | coronaHaloColor | the disc's far glow | the same, the third shadow (`Main:25`) | rgba(236, 160, 186, 0.28) | #47ECA0BA |
 | coronaHaloBlur | the far glow's blur | the same (`Main:25`) | 170 px | 113.333… |
 | coronaHaloSpread | the far glow's spread | the same (`Main:25`) | 46 px | 30.666… |
+| faceText | the screens' words (`Settings.qml`, the cards, the game page) | the board's face (`EclipseSettings:17`, `Main:17`) | 'Sora' | Sora |
+| faceLabel | names, titles, the wordmark (`themes/emusen/parts/Faces.qml`) | the same (`EclipseSettings:17`) | 'Sora' | Sora |
+| faceInterface | a row's label and value (`MenuRow.qml:58`), the style's controls | the rows (`EclipseSettings:17`) | 'Sora' | Sora |
+| faceCode | a folder's path and the version in a row (`MenuRow.qml`, `code`) | the path (`EclipseSettingsLibrary:70`), the version (`EclipseSettingsEmuSen:72`), a cheat's code (`EclipseCheats:75`) | 'JetBrains Mono' | JetBrains Mono |
 
 The colour of the notice's shadow is black on the board, the kit's own, so `shadowColor` is not overridden; `safeAreaX`
 (96 px, 64 units) is the kit's value too. `border` is not the board's #5A6076, which is 2.83:1 on surfaceRaised and 2.97:1

@@ -3,8 +3,8 @@
 
 use emusen_theme_manifest::{API, CUES};
 
-const TYPES: &str = include_str!("../../../../Testing/qmltypes/EmuSen.Theme-1.2.qmltypes");
-const QMLDIR: &str = include_str!("../../../../Testing/qmltypes/EmuSen.Theme-1.2.qmldir");
+const TYPES: &str = include_str!("../../../../Testing/qmltypes/EmuSen.Theme-1.3.qmltypes");
+const QMLDIR: &str = include_str!("../../../../Testing/qmltypes/EmuSen.Theme-1.3.qmldir");
 
 /// A `major.minor` as numbers.
 fn version(text: &str) -> Option<(u64, u64)> {

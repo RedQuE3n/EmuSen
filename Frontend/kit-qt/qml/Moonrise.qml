@@ -13,14 +13,6 @@ Item {
     property bool running: true
     readonly property alias finished: splash.finished
     readonly property alias starsShown: sky.starsShown
-    FontLoader {
-        id: condensed
-        source: "qrc:/emusen/fonts/BarlowCondensed-Light.ttf"
-    }
-    FontLoader {
-        id: barlow
-        source: "qrc:/emusen/fonts/Barlow-Medium.ttf"
-    }
     Kit.MoonriseModel {
         id: splash
         width: root.width
@@ -285,7 +277,7 @@ Item {
         text: splash.title
         color: splash.titleInk
         opacity: splash.wordsOpacity
-        font.family: condensed.font.family
+        font.family: Kit.Tokens.faceLabel
         font.weight: Font.Light
         font.pixelSize: splash.titleSize
         font.letterSpacing: splash.titleSpacing
@@ -300,7 +292,7 @@ Item {
         text: splash.caption
         color: splash.captionInk
         opacity: splash.wordsOpacity
-        font.family: barlow.font.family
+        font.family: Kit.Tokens.faceText
         font.weight: Font.Medium
         font.pixelSize: splash.captionSize
         font.letterSpacing: splash.captionSpacing

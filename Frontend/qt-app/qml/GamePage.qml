@@ -41,7 +41,7 @@ Kit.NormalizedCanvas {
         // The viewer and the keyboard take the keys while they are open; the page has them back when they close.
         focus: screen.inputs && !screen.page.viewing && !screen.page.typing && !screen.page.coverArt
         padFamily: screen.padFamily
-        helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         helpSpacing: 40
         helpGlyphGap: 10
         hero: screen.page.hero
@@ -119,11 +119,11 @@ Kit.NormalizedCanvas {
             choices: screen.page.questionChoices
             backIndex: screen.page.questionBack
             padFamily: screen.padFamily
-            titleFont: Qt.font({ family: faces.condensedRegular, pixelSize: Kit.Tokens.fontTitle })
-            bodyFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontBody })
-            captionFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontCaption })
-            rowFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontRow })
-            helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+            titleFont: Qt.font({ family: Kit.Tokens.faceLabel, pixelSize: Kit.Tokens.fontTitle })
+            bodyFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
+            captionFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontCaption })
+            rowFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontRow })
+            helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
             help: HelpModel {
                 screen: HelpModel.Question
             }
@@ -143,7 +143,7 @@ Kit.NormalizedCanvas {
         visible: screen.page.coverArt
         focus: screen.inputs && screen.page.coverArt
         padFamily: screen.padFamily
-        helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         helpSpacing: 40
         helpGlyphGap: 10
         controller.navigationShown: true
@@ -174,7 +174,7 @@ Kit.NormalizedCanvas {
                 width: parent.width
                 text: screen.page.coverTrail
                 color: Kit.Tokens.muted
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: Kit.Tokens.fontCaption
                 elide: Text.ElideRight
             }
@@ -183,7 +183,7 @@ Kit.NormalizedCanvas {
                 width: parent.width
                 text: screen.page.coverTitle
                 color: Kit.Tokens.textStrong
-                font.family: faces.condensedRegular
+                font.family: Kit.Tokens.faceLabel
                 font.pixelSize: Kit.Tokens.fontTitle
                 elide: Text.ElideRight
             }
@@ -244,7 +244,7 @@ Kit.NormalizedCanvas {
                         anchors.centerIn: parent
                         text: card.line
                         color: Kit.Tokens.overAccent
-                        font.family: faces.regular
+                        font.family: Kit.Tokens.faceText
                         font.weight: Font.DemiBold
                         font.pixelSize: Kit.Tokens.fontCaption
                     }
@@ -258,7 +258,7 @@ Kit.NormalizedCanvas {
                     lineHeightMode: Text.FixedHeight
                     lineHeight: Math.round(Kit.Tokens.fontCaption * 1.2)
                     color: card.activeFocus ? Kit.Tokens.textStrong : Kit.Tokens.text
-                    font.family: faces.regular
+                    font.family: Kit.Tokens.faceText
                     font.pixelSize: Kit.Tokens.fontCaption
                     wrapMode: Text.Wrap
                     maximumLineCount: 2
@@ -288,7 +288,7 @@ Kit.NormalizedCanvas {
                     width: parent.width
                     text: coverArt.focused?.label ?? ""
                     color: Kit.Tokens.textStrong
-                    font.family: faces.regular
+                    font.family: Kit.Tokens.faceText
                     font.weight: Font.DemiBold
                     font.pixelSize: Kit.Tokens.fontStrong
                     wrapMode: Text.Wrap
@@ -306,7 +306,7 @@ Kit.NormalizedCanvas {
             verticalAlignment: Text.AlignVCenter
             text: coverCards.count > 0 ? screen.page.place(coverCards.currentIndex, coverCards.count) : ""
             color: Kit.Tokens.muted
-            font.family: faces.regular
+            font.family: Kit.Tokens.faceText
             font.pixelSize: Kit.Tokens.fontCaption
         }
     }
@@ -320,7 +320,7 @@ Kit.NormalizedCanvas {
         focus: screen.inputs && screen.page.viewing
         surfaceDrawn: false
         padFamily: screen.padFamily
-        helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         helpSpacing: 40
         helpGlyphGap: 10
         controller.navigationShown: false
@@ -405,7 +405,7 @@ Kit.NormalizedCanvas {
                     anchors.verticalCenter: parent.verticalCenter
                     text: screen.page.viewCaption
                     color: Kit.Tokens.textStrong
-                    font.family: faces.regular
+                    font.family: Kit.Tokens.faceText
                     font.pixelSize: Kit.Tokens.fontBody
                 }
             }
@@ -427,7 +427,7 @@ Kit.NormalizedCanvas {
         visible: screen.page.typing
         focus: screen.inputs && screen.page.typing
         padFamily: screen.padFamily
-        helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        helpFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         helpSpacing: 40
         helpGlyphGap: 10
         controller.navigationShown: false
@@ -443,14 +443,14 @@ Kit.NormalizedCanvas {
             Text {
                 text: screen.page.typingTitle
                 color: Kit.Tokens.textStrong
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: Kit.Tokens.fontTitle
             }
             Text {
                 objectName: "pageTyped"
                 text: typist.text
                 color: Kit.Tokens.text
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: Kit.Tokens.fontRow
             }
         }
@@ -465,11 +465,8 @@ Kit.NormalizedCanvas {
                 y: 398
                 width: screen.width
                 focus: true
-                labelFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontBody })
+                labelFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
             }
         }
-    }
-    Faces {
-        id: faces
     }
 }

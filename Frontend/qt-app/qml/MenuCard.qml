@@ -72,9 +72,6 @@ FocusScope {
         easing.type: Kit.Tokens.exitCurve
         onFinished: root.gone()
     }
-    Faces {
-        id: faces
-    }
     Rectangle {
         objectName: "AdaptiveCardScrim"
         anchors.fill: parent
@@ -111,7 +108,7 @@ FocusScope {
                 visible: root.paneCaption.length > 0
                 text: root.paneCaption
                 color: Kit.Tokens.muted
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: 20
                 elide: Text.ElideRight
             }
@@ -127,7 +124,7 @@ FocusScope {
                         visible: said.modelData.length > 0
                         text: said.modelData
                         color: Kit.Tokens.textStrong
-                        font.family: faces.regular
+                        font.family: Kit.Tokens.faceText
                         font.pixelSize: 22
                         wrapMode: Text.WordWrap
                     }
@@ -136,7 +133,7 @@ FocusScope {
                         visible: text.length > 0
                         text: root.paneMuted?.[said.index] ?? ""
                         color: Kit.Tokens.muted
-                        font.family: faces.regular
+                        font.family: Kit.Tokens.faceText
                         font.pixelSize: 20
                         wrapMode: Text.WordWrap
                     }
@@ -232,7 +229,7 @@ FocusScope {
                     visible: text.length > 0
                     text: root.breadcrumb
                     color: Kit.Tokens.muted
-                    font.family: faces.regular
+                    font.family: Kit.Tokens.faceText
                     font.pixelSize: 20
                     elide: Text.ElideRight
                 }
@@ -241,7 +238,7 @@ FocusScope {
                     width: parent.width
                     text: root.title
                     color: Kit.Tokens.textStrong
-                    font.family: faces.condensedRegular
+                    font.family: Kit.Tokens.faceLabel
                     font.weight: Font.Normal
                     font.pixelSize: 32
                     fontSizeMode: Text.HorizontalFit
@@ -257,7 +254,7 @@ FocusScope {
                 visible: text.length > 0
                 text: root.footer
                 color: Kit.Tokens.muted
-                font.family: faces.regular
+                font.family: Kit.Tokens.faceText
                 font.pixelSize: 26
                 // Whole: a failure's words run on to the next line, never cut (EmuSen_Qt.md §7.9).
                 wrapMode: Text.WordWrap
@@ -294,7 +291,7 @@ FocusScope {
                         ruled: true
                         sectionEnd: row.model.sectionEnd
                         inset: 24
-                        labelFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontRow })
+                        labelFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontRow })
                         current: ListView.isCurrentItem
                         focus: ListView.isCurrentItem
                         onActivated: root.chosen(row.index)
@@ -317,7 +314,7 @@ FocusScope {
         color: Kit.Tokens.surface
         ruled: false
         leftInset: 64
-        labelFont: Qt.font({ family: faces.regular, pixelSize: 20 })
+        labelFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: 20 })
         entrySpacing: 40
         glyphGap: 10
     }

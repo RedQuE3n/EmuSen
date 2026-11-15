@@ -5,5 +5,11 @@
     <file>BarlowCondensed-Medium.ttf</file>
     <file>BarlowCondensed-Regular.ttf</file>
     <file>Barlow-Regular.ttf</file>
+    <file>Sora-Light.ttf</file>
+    <file>Sora-Regular.ttf</file>
+    <file>Sora-SemiBold.ttf</file>
+    <file>Sora-Bold.ttf</file>
+    <file>JetBrainsMono-Regular.ttf</file>
+    <file>JetBrainsMono-Bold.ttf</file>
   </qresource>
 </RCC>

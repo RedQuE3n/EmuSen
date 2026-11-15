@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use emusen_kit_core::motion::{breathes_if, movement, Curve, MotionToken, BREATH_DELAY, BREATH_LOW, BREATH_PERIOD};
-use emusen_kit_core::tokens::{self, Colour, ColourToken, Corona, FocusMarks, Form, Shadow, Spacing, TypeScale, Variant};
+use emusen_kit_core::tokens::{self, BUNDLED, Colour, ColourToken, Corona, FaceRole, FocusMarks, Form, Shadow, Spacing, TypeScale, Variant};
 
 /// QEasingCurve::Type's number for a kit-core curve, so QML binds `easing.type` to a token.
 pub fn easing_type(curve: Curve) -> i32 {
@@ -30,6 +30,8 @@ pub struct Column {
     pub corona: Corona,
     /// The corona's rim, glow and halo colours, in `Corona::COLOUR_PROPERTIES`' order.
     pub corona_colours: [Colour; 3],
+    /// Each role's family in `FaceRole::ALL`'s order: a bundled face, or none for the platform's default font.
+    pub faces: [Option<&'static str>; 4],
     pub durations: [i32; 8],
     pub fades: [i32; 8],
     pub curves: [i32; 8],
@@ -47,6 +49,7 @@ struct Bases {
     focus: FocusMarks,
     shadow: Shadow,
     corona: Corona,
+    faces: [Option<&'static str>; 4],
     durations: [i32; 8],
     fades: [i32; 8],
     curves: [i32; 8],
@@ -63,6 +66,7 @@ enum Slot<'a> {
     Whole(&'a mut i32),
     Switch(&'a mut bool),
     Colour(&'a mut Colour),
+    Face(&'a mut Option<&'static str>),
 }
 
 impl Bases {
@@ -75,6 +79,7 @@ impl Bases {
             focus: tokens::focus_marks(form),
             shadow: tokens::raised_shadow(form),
             corona: tokens::corona(form),
+            faces: FaceRole::ALL.map(FaceRole::kit),
             durations: nominal,
             fades: nominal,
             curves: MotionToken::ALL.map(|token| easing_type(token.curve())),
@@ -90,6 +95,9 @@ impl Bases {
         use MotionToken as M;
         let (t, sp, f, sh, co) = (&mut self.type_scale, &mut self.spacing, &mut self.focus, &mut self.shadow, &mut self.corona);
         let i = Column::slot;
+        if let Some(role) = FaceRole::named(property) {
+            return Some(Slot::Face(&mut self.faces[Column::face_slot(role)]));
+        }
         Some(match property {
             "fontDisplay" => Slot::Number(&mut t.display),
             "fontTitle" => Slot::Number(&mut t.title),
@@ -175,6 +183,7 @@ impl Bases {
             Some(Slot::Whole(held)) => value.parse::<i32>().map(|v| *held = v).is_ok(),
             Some(Slot::Switch(held)) => value.parse::<bool>().map(|v| *held = v).is_ok(),
             Some(Slot::Colour(held)) => Colour::parse(value).map(|v| *held = v).is_some(),
+            Some(Slot::Face(held)) => BUNDLED.iter().find(|family| **family == value).map(|family| *held = Some(*family)).is_some(),
             None => false,
         }
     }
@@ -216,6 +225,7 @@ impl Column {
             shadow: b.shadow,
             corona: b.corona,
             corona_colours,
+            faces: b.faces,
             durations,
             fades,
             curves: b.curves,
@@ -243,6 +253,15 @@ impl Column {
 
     fn slot(token: MotionToken) -> usize {
         MotionToken::ALL.iter().position(|t| *t == token).unwrap_or(0)
+    }
+
+    fn face_slot(role: FaceRole) -> usize {
+        FaceRole::ALL.iter().position(|r| *r == role).unwrap_or(0)
+    }
+
+    /// The role's family: a bundled face, or none for the platform's default font.
+    pub fn face(&self, role: FaceRole) -> Option<&'static str> {
+        self.faces[Self::face_slot(role)]
     }
 
     pub fn colour(&self, token: ColourToken) -> Colour {

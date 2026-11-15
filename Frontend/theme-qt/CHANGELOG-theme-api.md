@@ -21,7 +21,17 @@ Decided 2026-11-15 by the tester (R-20261115-10 to -13): a theme reads and drive
 - **`Browse.kind`** (`all`, `favourites`, `recent` or `console`) and **`Browse.emptyWords`**: which list is shown and what
   it says with nothing in it ("No favourites yet", "Nothing played yet", "No games found" for a search or filter, else
   "No games yet").
-- The module is 1.7 (1.3 to 1.6 being held by other pieces); every type keeps the minor it was added in.
+- The module is 1.7 (1.3, 1.5 and 1.6 being held by other pieces, 1.4 the backdrop and the glow); every type keeps the minor it was added in.
+
+## 1.4, an addition: the backdrop and the glow (2026-11-15)
+
+Decided 2026-11-15 by the tester (R-20261115-6): Eclipse gets two kit parts themes may use, a blurred backdrop and the glow
+or shadow. 1.3 is another piece's.
+
+- **`Backdrop`**, **`BackdropField`**, **`Glow`** (the kit's, by name): a screen's ground with its blurred colour fields or a
+  blurred picture, and a rounded box's glow or shadow, outside the box alone, with a box-shadow's offsets (`EmuSen_Kit.md`
+  §7.118, §7.119). Each keeps 1.4 in the qmldir, so a theme importing 1.0 or 1.2 finds what it found before.
+- The module is 1.4 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.4.*`.
 
 ## 1.2, an addition: the corona disc and the planet mark (2026-11-14)
 

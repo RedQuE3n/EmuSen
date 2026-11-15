@@ -4,7 +4,7 @@ use std::process::Command;
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 
 // The kit's own components (EmuSen_Qt.md §1.4); the EmuSen style travels as a resource module, style/EmuSen.qrc (§1.5), and the splash's two faces as fonts/Fonts.qrc (EmuSen_Kit.md §7.10).
-const KIT_FILES: [&str; 40] = [
+const KIT_FILES: [&str; 42] = [
     "qml/Walkable.qml",
     "qml/Body.qml",
     "qml/Sky.qml",
@@ -45,6 +45,8 @@ const KIT_FILES: [&str; 40] = [
     "qml/PlanetMark.qml",
     "qml/CoronaGlow.qml",
     "qml/CoronaDisc.qml",
+    "qml/BackdropField.qml",
+    "qml/Backdrop.qml",
 ];
 
 /// Qt's shader baker over EdgeFade's fragment shader, into a resource beside the module's own at qrc:/qt/qml/EmuSen/Kit/shaders/ (EmuSen_Kit.md §7.35).
@@ -67,7 +69,7 @@ fn baked_shader() -> PathBuf {
 fn main() {
     let shaders = baked_shader();
     CxxQtBuilder::new_qml_module(
-        QmlModule::new("EmuSen.Kit").version(1, 6).qml_files(KIT_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtMultimedia").depend("QtQuick.Pdf"),
+        QmlModule::new("EmuSen.Kit").version(1, 8).qml_files(KIT_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtMultimedia").depend("QtQuick.Pdf"),
     )
     .qrc("style/EmuSen.qrc")
     .qrc("fonts/Fonts.qrc")

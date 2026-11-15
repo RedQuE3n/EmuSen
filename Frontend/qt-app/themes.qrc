@@ -16,7 +16,13 @@
         <file alias="theme.json">../themes/emusen/theme.json</file>
     </qresource>
     <qresource prefix="/emusen/themes/eclipse">
+        <file alias="parts/Board.qml">../themes/eclipse/parts/Board.qml</file>
+        <file alias="parts/Brand.qml">../themes/eclipse/parts/Brand.qml</file>
         <file alias="parts/GamesInk.qml">../themes/eclipse/parts/GamesInk.qml</file>
+        <file alias="parts/HelpLine.qml">../themes/eclipse/parts/HelpLine.qml</file>
+        <file alias="parts/Ink.qml">../themes/eclipse/parts/Ink.qml</file>
+        <file alias="parts/Pill.qml">../themes/eclipse/parts/Pill.qml</file>
+        <file alias="parts/Status.qml">../themes/eclipse/parts/Status.qml</file>
         <file alias="screens/Games.qml">../themes/eclipse/screens/Games.qml</file>
         <file alias="theme.json">../themes/eclipse/theme.json</file>
     </qresource>

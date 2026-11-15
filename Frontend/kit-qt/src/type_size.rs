@@ -1,4 +1,4 @@
-//! A look's type size never under the legibility floor, for the face Qt Quick's Text draws in by default (EmuSen_Kit.md §7.120):
+//! A look's type size never under the legibility floor, for the face Qt Quick's Text draws in by default (EmuSen_Kit.md §7.121):
 //! kit-core's `legible_text` with the face's capitals measured by Qt.
 
 #[cxx_qt::bridge]

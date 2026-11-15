@@ -1,11 +1,11 @@
-// EmuSen_Kit.md §7.120: a look's type size is the kit's scaled size, raised by half units to the smallest whose capitals pass
+// EmuSen_Kit.md §7.121: a look's type size is the kit's scaled size, raised by half units to the smallest whose capitals pass
 // the fit audit's floor, and a size already above it is kept (R-20261115-14).
 
 use emusen_kit_core::audit::{smallest_capitals, CAPS_SLACK, DESKTOP_CAPS};
 use emusen_kit_core::tokens::{legible_text, scaled_text};
 
 #[test]
-fn kit_7_120_a_size_under_the_floor_is_raised_to_the_smallest_that_passes() {
+fn kit_7_121_a_size_under_the_floor_is_raised_to_the_smallest_that_passes() {
     // A face whose capitals are Inter's share of its size, the floor's own face.
     let caps = |size: f64| size * DESKTOP_CAPS;
     let floor = smallest_capitals() - CAPS_SLACK;

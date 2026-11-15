@@ -1,4 +1,4 @@
-//! `Type`, the size a theme's words are drawn at (EmuSen_Qt.md §3.2, EmuSen_Kit.md §7.120): a design's size at the player's
+//! `Type`, the size a theme's words are drawn at (EmuSen_Qt.md §3.2, EmuSen_Kit.md §7.121): a design's size at the player's
 //! text scale, never under the kit's legibility floor for the face the words are drawn in; the kit's rule, never written here.
 
 #[cxx_qt::bridge]

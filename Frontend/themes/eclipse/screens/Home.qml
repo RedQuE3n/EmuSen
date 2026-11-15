@@ -1,0 +1,291 @@
+pragma ComponentBehavior: Bound
+import QtQuick
+import EmuSen.Theme
+import "../parts"
+
+// Eclipse's Home as its board draws it (Main.dc.html): the disc, the header, the focused game's name and buttons, the Recent row and the help line, every measure the board's in canvas units (EmuSen_Qt.md §3.4.8).
+ThemeScreen {
+    id: screen
+    objectName: "homeScreen"
+    role: ThemeScreen.Home
+    // Where the focus starts, and where Start on Home takes it back: the first game of Recent, else the search.
+    focusItems: [
+        root.firstTile ?? status.search
+    ]
+    NormalizedCanvas {
+        id: canvas
+        objectName: "homeCanvas"
+        FocusScope {
+            id: root
+            objectName: "home"
+            anchors.fill: parent
+            focus: true
+            // The board's three buttons, the entries that act on the game (Main:61-71): a constant of the design.
+            readonly property int gameButtons: 3
+            // The tile whose game the top shows: the focused one, else the last focused.
+            property int current: 0
+            property Item firstTile: null
+            // The first button, read again whenever its Repeater's count moves.
+            readonly property Item firstButton: buttons.count > 0 ? buttons.itemAt(0) : null
+            readonly property Item currentTile: tiles.count > 0 ? tiles.itemAt(Math.min(root.current, tiles.count - 1)) : null
+            readonly property bool resuming: Session.hasGame && root.currentTile !== null && root.currentTile.key === Session.key
+            readonly property int helpKind: root.resuming ? Help.Continue : Help.Game
+            Board {
+                id: design
+                designHeight: canvas.designHeight
+            }
+            Ink {
+                id: ink
+            }
+            // The ground and the board's colour fields, which stand for the shown game's art (Main:17-23, 75), each its colour, CSS blur, opacity and turn.
+            Backdrop {
+                objectName: "backdrop"
+                anchors.fill: parent
+                ground: ink.ground
+                pixelScale: canvas.unit
+                fields: [
+                    BackdropField { x: 1060 * design.unit; y: -140 * design.unit; width: 900 * design.unit; height: 760 * design.unit; color: "#1FC9A8"; blur: 90 * design.unit; opacity: 0.85 },
+                    BackdropField { x: 1380 * design.unit; y: 420 * design.unit; width: 760 * design.unit; height: 760 * design.unit; color: "#6A4CF0"; blur: 110 * design.unit; opacity: 0.9 },
+                    BackdropField { x: 900 * design.unit; y: -260 * design.unit; width: 700 * design.unit; height: 520 * design.unit; color: "#1D6BF2"; blur: 100 * design.unit; opacity: 0.8 },
+                    BackdropField { x: 1240 * design.unit; y: 250 * design.unit; width: 620 * design.unit; height: 46 * design.unit; color: "#B8FFE9"; blur: 22 * design.unit; opacity: 0.55; rotation: -18; corner: 40 * design.unit },
+                    BackdropField { x: 1330 * design.unit; y: 380 * design.unit; width: 520 * design.unit; height: 30 * design.unit; color: "#D9C8FF"; blur: 18 * design.unit; opacity: 0.5; rotation: -14; corner: 40 * design.unit }
+                ]
+            }
+            CoronaDisc {
+                objectName: "disc"
+                x: -900 * design.unit
+                y: -450 * design.unit
+                width: 2100 * design.unit
+                height: width
+            }
+            Frame {
+                id: frame
+                anchors.fill: parent
+                surfaceDrawn: false
+                helpShown: false
+                padFamily: Device.family
+                focus: true
+                controller.navigationShown: false
+                Connections {
+                    target: frame.controller
+                    function onActionInvoked(key) { Actions.act(key) }
+                }
+                Item {
+                    x: -frame.safeX
+                    y: -frame.safeY
+                    width: root.width
+                    height: root.height
+                    Brand {
+                        unit: design.unit
+                        x: 96 * design.unit
+                        y: 80 * design.unit - height / 2
+                    }
+                    Status {
+                        id: status
+                        unit: design.unit
+                        controller: frame.controller
+                        glassColor: ink.glass
+                        x: parent.width - 96 * design.unit - width
+                        y: 80 * design.unit - height / 2
+                        below: root.firstButton ?? root.currentTile
+                    }
+                    Text {
+                        id: eyebrow
+                        objectName: "eyebrow"
+                        x: 96 * design.unit
+                        y: 250 * design.unit
+                        width: 980 * design.unit
+                        text: root.resuming ? Words.continuePlaying : ""
+                        color: ink.rose
+                        elide: Text.ElideRight
+                        font.pixelSize: Type.size(20 * design.unit, Tokens.textScale)
+                        font.weight: Font.DemiBold
+                        font.letterSpacing: 0.22 * 20 * design.unit
+                    }
+                    Text {
+                        id: title
+                        objectName: "title"
+                        x: 96 * design.unit
+                        y: eyebrow.y + eyebrow.height + 26 * design.unit
+                        width: 980 * design.unit
+                        text: root.resuming ? Session.title : root.currentTile?.title ?? (Library.consoles.count === 0 ? Words.addFolder : Words.noRecent)
+                        color: Tokens.textStrong
+                        elide: Text.ElideRight
+                        font.pixelSize: Type.size(112 * design.unit, Tokens.textScale)
+                        font.weight: Font.DemiBold
+                        font.letterSpacing: -0.02 * 112 * design.unit
+                        // The board's line box, 1.02 of the type (Main:55), the words centred in it as CSS centres them.
+                        height: 1.02 * 112 * design.unit
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    Text {
+                        id: facts
+                        objectName: "facts"
+                        x: 96 * design.unit
+                        y: title.y + title.height + 26 * design.unit
+                        width: 980 * design.unit
+                        // The paused game's words follow the clock, as the program's clock says them again each minute.
+                        text: root.resuming ? (Device.clock.length >= 0 ? Words.pausedFacts(Session.console, Session.pausedSince) : "") : root.currentTile?.facts ?? ""
+                        color: Tokens.muted
+                        elide: Text.ElideRight
+                        font.pixelSize: Type.size(26 * design.unit, Tokens.textScale)
+                        font.weight: Font.Light
+                    }
+                    Row {
+                        objectName: "buttons"
+                        x: 96 * design.unit
+                        // The board's column gap and the buttons' own margin above them (Main:53, 61).
+                        y: facts.y + facts.height + (26 + 18) * design.unit
+                        spacing: 18 * design.unit
+                        visible: root.currentTile !== null
+                        Repeater {
+                            id: buttons
+                            model: Help.entries(root.helpKind)
+                            Pill {
+                                id: pill
+                                required property int index
+                                required property var model
+                                unit: design.unit
+                                controller: frame.controller
+                                objectName: "button." + pill.index
+                                place: pill.index
+                                visible: pill.index < root.gameButtons
+                                live: pill.model.enabled ?? true
+                                filled: pill.index === 0
+                                glyphSide: pill.filled ? 46 : 44
+                                labelSize: pill.filled ? 26 : 24
+                                trail: pill.filled ? 34 : 30
+                                gap: pill.filled ? 16 : 14
+                                // A plays the game; the others are their buttons' presses, which the host acts on as the help line does.
+                                onActivated: pill.filled ? Actions.play(root.currentTile?.key ?? "") : frame.controller.offer(pill.button)
+                                KeyNavigation.left: pill.index > 0 ? buttons.itemAt(pill.index - 1) : null
+                                KeyNavigation.right: pill.index + 1 < Math.min(root.gameButtons, buttons.count) ? buttons.itemAt(pill.index + 1) : null
+                                KeyNavigation.up: status.search
+                                KeyNavigation.down: root.currentTile
+                            }
+                        }
+                    }
+                    Text {
+                        id: recentHeading
+                        objectName: "recentHeading"
+                        x: 96 * design.unit
+                        y: 790 * design.unit
+                        text: Words.recentEntry
+                        color: Tokens.text
+                        font.pixelSize: Type.size(28 * design.unit, Tokens.textScale)
+                        font.weight: Font.DemiBold
+                    }
+                    Item {
+                        id: row
+                        objectName: "recent"
+                        x: 96 * design.unit
+                        y: recentHeading.y + recentHeading.height + 22 * design.unit
+                        width: parent.width - x
+                        height: 196 * design.unit
+                        Repeater {
+                            id: tiles
+                            // Every game played, the suspended one first among them as the board puts it.
+                            model: Library.recent
+                            onItemAdded: (index, item) => root.firstTile = index === 0 ? item : root.firstTile
+                            Walkable {
+                                id: tile
+                                required property int index
+                                required property string key
+                                required property string title
+                                required property string hero
+                                required property string facts
+                                readonly property bool big: tile.index === root.current
+                                readonly property real radius: 18 * design.unit
+                                controller: frame.controller
+                                objectName: "tile." + tile.index
+                                focus: tile.index === 0
+                                Accessible.name: tile.title
+                                // The board's tiles, 264 by 165 and the shown one 312 by 196, 24 apart, their feet on the row's foot.
+                                x: tile.index * (264 + 24) * design.unit + (tile.index > root.current ? (312 - 264) * design.unit : 0)
+                                width: (tile.big ? 312 : 264) * design.unit
+                                height: (tile.big ? 196 : 165) * design.unit
+                                y: row.height - height
+                                visible: tile.x + tile.width <= row.width
+                                onActivated: Actions.play(tile.key)
+                                onActiveFocusChanged: {
+                                    if (!tile.activeFocus)
+                                        return
+                                    root.current = tile.index
+                                    Actions.focus(tile.key)
+                                }
+                                KeyNavigation.left: tile.index > 0 ? tiles.itemAt(tile.index - 1) : null
+                                KeyNavigation.right: tiles.count > tile.index + 1 ? tiles.itemAt(tile.index + 1) : null
+                                KeyNavigation.up: root.firstButton ?? status.search
+                                // A resting tile's shadow (Main:83): 0 10 px 30 px rgba(0, 0, 0, 0.45); the focused one has its ring instead.
+                                Glow {
+                                    objectName: "tileShadow." + tile.index
+                                    anchors.fill: parent
+                                    visible: !tile.activeFocus
+                                    radius: tile.radius
+                                    color: "#73000000"
+                                    blur: 30 * design.unit
+                                    offsetY: 10 * design.unit
+                                }
+                                RoundPicture {
+                                    objectName: "tileArt." + tile.index
+                                    anchors.fill: parent
+                                    source: tile.hero
+                                    radius: tile.radius
+                                    crop: true
+                                    pixelScale: canvas.unit
+                                }
+                                Rectangle {
+                                    id: shade
+                                    objectName: "tileShade." + tile.index
+                                    anchors.bottom: parent.bottom
+                                    width: parent.width
+                                    height: 96 * design.unit
+                                    // The shade's dark end, which the test reads.
+                                    readonly property color paint: ink.shade
+                                    gradient: Gradient {
+                                        GradientStop { position: 0; color: ink.shadeClear }
+                                        GradientStop { position: 1; color: shade.paint }
+                                    }
+                                }
+                                Text {
+                                    objectName: "tileTitle." + tile.index
+                                    x: 18 * design.unit
+                                    y: parent.height - 34 * design.unit - height
+                                    width: parent.width - 36 * design.unit
+                                    text: tile.title
+                                    elide: Text.ElideRight
+                                    color: ink.tileTitle
+                                    font.pixelSize: Type.size(21 * design.unit, Tokens.textScale)
+                                    font.weight: Font.DemiBold
+                                }
+                                Text {
+                                    objectName: "tileFacts." + tile.index
+                                    x: 18 * design.unit
+                                    y: parent.height - 12 * design.unit - height
+                                    width: parent.width - 36 * design.unit
+                                    text: tile.facts
+                                    elide: Text.ElideRight
+                                    color: ink.tileFacts
+                                    font.pixelSize: Type.size(15 * design.unit, Tokens.textScale)
+                                    font.letterSpacing: 0.08 * 15 * design.unit
+                                }
+                                FocusRing {
+                                    objectName: "tileRing"
+                                    anchors.fill: parent
+                                    radius: tile.radius
+                                    visible: tile.activeFocus
+                                }
+                            }
+                        }
+                    }
+                    HelpLine {
+                        unit: design.unit
+                        controller: frame.controller
+                        model: Help.entries(root.helpKind)
+                        ink: ink.help
+                    }
+                }
+            }
+        }
+    }
+}

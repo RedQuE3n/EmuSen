@@ -70,7 +70,8 @@ fn qt_3_5_a_theme_reaches_its_folder_and_nothing_else() {
     load(&mut scene, "newer");
     let words = scene.property("host", "warnings");
     assert_eq!((scene.property("host", "ready").as_str(), scene.property("host", "failed").as_str()), ("false", "true"));
-    assert!(words.contains("written for EmuSen.Theme 2.0; this build has 1.0"), "{words}");
+    let (major, minor) = emusen_theme_manifest::API;
+    assert!(words.contains(&format!("written for EmuSen.Theme 2.0; this build has {major}.{minor}")), "{words}");
     assert_eq!(scene.property("host", "liveEngines"), "0");
 
     // Switching twice leaves one engine alive, and none once no theme is chosen.

@@ -340,12 +340,13 @@ fn element(c: &Case, value: &str, assets: &Assets) -> String {
     assets.fill(&format!("<view name=\"{}\">{cover}<{} name=\"x\">{body}</{}>{}</view>", view_of(c), c.kind, c.kind, c.beside))
 }
 
-// A case that switches views slides between them, as a theme's transitions profile asks.
+// A case that switches views slides between them, and one that fades steps to the next system through black, as a
+// theme's transitions profile asks.
 fn capabilities(c: &Case) -> &'static str {
-    if c.moves.as_deref() == Some("switch") {
-        "<transitions name=\"slide\"><systemToGamelist>slide</systemToGamelist><gamelistToSystem>slide</gamelistToSystem></transitions>"
-    } else {
-        ""
+    match c.moves.as_deref() {
+        Some("switch") => "<transitions name=\"slide\"><systemToGamelist>slide</systemToGamelist><gamelistToSystem>slide</gamelistToSystem></transitions>",
+        Some("fade") => "<transitions name=\"fade\"><systemToSystem>fade</systemToSystem></transitions>",
+        _ => "",
     }
 }
 
@@ -401,7 +402,7 @@ fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &A
     }
     let started = std::time::Instant::now();
     match c.moves.as_deref() {
-        Some("step") => scene.pad(along(c, value)),
+        Some("step" | "fade") => scene.pad(along(c, value)),
         Some("down") => scene.pad(UiButton::Down),
         Some("hold") => scene.pad_down(along(c, value)),
         Some("switch") => scene.pad(if view_of(c) == "system" { UiButton::Accept } else { UiButton::Back }),

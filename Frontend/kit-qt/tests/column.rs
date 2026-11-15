@@ -117,3 +117,13 @@ fn qt_3_5_1_a_token_the_kit_neither_scales_nor_reduces_stays_the_theme_s() {
         assert_eq!((c.curve(MotionToken::Quick), c.breath_low, c.shadow.blur), (3, 0.5, 9.0), "{scale} {reduced}");
     }
 }
+
+#[test]
+fn qt_3_5_1_an_override_the_kit_cannot_read_is_said_and_every_readable_one_is_not() {
+    let pair = |n: &str, v: &str| (n.to_owned(), v.to_owned());
+    let good = [pair("accent", "#F6E7D8"), pair("coronaGlowColor", "#99F6D6C8"), pair("glowBlur", "26.5"), pair("ringGapped", "true"), pair("instant", "0")];
+    assert!(Column::unread(Form::BigScreen, &good).is_empty(), "every readable override is read: {:?}", Column::unread(Form::BigScreen, &good));
+    let bad = [pair("coronaGlowColor", "#GG0000"), pair("ringGapColor", "dark"), pair("glowBlur", "wide"), pair("ringGapped", "yes"), pair("noSuchToken", "1")];
+    let said = Column::unread(Form::BigScreen, &bad);
+    assert_eq!(said, bad.iter().map(|(n, v)| format!("{n}: {v}")).collect::<Vec<_>>(), "each unread override is said");
+}

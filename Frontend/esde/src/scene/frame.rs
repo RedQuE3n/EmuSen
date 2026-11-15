@@ -58,6 +58,28 @@ pub enum Paint {
     },
 }
 
+impl Paint {
+    /// A box filled with one colour: a text with no words over its background, so the painter needs no paint of its own.
+    pub fn fill(color: Color) -> Paint {
+        Paint::Text(Text {
+            text: String::new(),
+            font: Face { file: None, own: true },
+            // No words are laid out at a size of 0 (esde-qt's TextLayout::refresh).
+            px: 0.0,
+            color,
+            h_align: HAlign::Left,
+            v_align: VAlign::Center,
+            line_spacing: 0.0,
+            wrap: false,
+            ellipsis: false,
+            every_line: false,
+            snap_rows: false,
+            background: Some(Background { tint: Tint { color, end: color, vertical: false }, radius: 0.0, padding: [0.0; 4] }),
+            scroll: None,
+        })
+    }
+}
+
 /// The media viewer's video under the player's settings: stretched to the box or fitted inside it, with its sound or
 /// without at a share of full, and its horizontal blur's Gaussian sigma in pixels, 0 for none (EmuSen_Qt.md §4.14).
 #[derive(Clone, Debug, PartialEq)]

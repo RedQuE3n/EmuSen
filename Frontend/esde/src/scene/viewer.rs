@@ -273,8 +273,7 @@ impl Viewer {
             scroll: None,
         };
         let fill = |name: &str, y: f64, height: f64, color: u32| {
-            let tint = Tint { color: Color(color), end: Color(color), vertical: false };
-            placed(name, 0.0, y, w, height, 1.0, Paint::Text(words("", color, Some(Background { tint, radius: 0.0, padding: [0.0; 4] }))))
+            placed(name, 0.0, y, w, height, 1.0, Paint::fill(Color(color)))
         };
         let mut out = vec![fill("ground", 0.0, h, 0x0000_00FF)];
         let video = self.entries.iter().find(|e| e.kind == "video");

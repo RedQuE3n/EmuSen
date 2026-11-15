@@ -5,6 +5,56 @@ writes it, is committed under `Testing/qmltypes/` and compared on every build. U
 addition, a change or a removal, bumps the minor (R-20261111-107, R-20261111-108); each entry names what changed and the
 section of `EmuSen_Kit.md` that records it.
 
+## 1.6: Eclipse's corona disc and the planet mark as kit parts, one glow, and every ring Gapped where a look asks (2026-11-14)
+
+Beside the additions below, two properties the 1.5 and 1.6 pieces had added are gone and `CoronaDisc.corona` means a
+game's corona alone; the qmldir tags every type with 1.6, the kit's version, as each minor since 1.3 has.
+Decided 2026-11-14 by the tester (R-20261114-16): Eclipse's shared parts are kit parts, exported to themes as an addition;
+and (R-20261114-21) the reference keeps each focus ring's placement while Eclipse draws every ring Gapped with the glow.
+
+- **`Glow`** (qmldir, not exported to themes): a rounded box's glow from a colour, a CSS blur, a spread and a corner
+  radius, outside the box alone; Qt's `RectangularShadow` masked by a `MultiEffect` on the graphics card, a `Canvas` on
+  the software backend. `FocusRing` and `CoronaDisc` each draw their glows with it and keep none of their own.
+  `EmuSen_Kit.md` §7.113.
+- **`CoronaDisc`**: `corona` is a game's corona, transparent where none is given; `gameCorona`, `rimColor`, `glowColor`
+  and `haloColor` say what is drawn: the rim and both default glows in a game's corona, each glow at its token's alpha
+  (R-20261114-38), the look's colours otherwise. Its `software` property and its own glow items are gone, `Glow` draws
+  them. A caller's own `glows` replace the two defaults (`pragma ListPropertyAssignBehavior: ReplaceIfNotDefault`),
+  where QML had appended them. §7.116.
+- **`FocusRing`**: `glowReach`, added in 1.5, is gone; `Glow`'s `reach` holds it.
+- **`Tokens.ringGapped`** (registry, a switch after every earlier property): every ring past its gap, whatever its
+  place's placement; false in the kit's column, true in Eclipse's. `FocusRing` gains `form`, the placement drawn, and
+  `onEdge`, to which the style's controls bind their border. §7.113.
+
+- **`PlanetMark`** (qmldir): the mark beside a core's name, `mark`, `libretro`, `ink` and `cut`, drawn from
+  **`PlanetMarks`** (registry, singleton: `boxSize`, `stroke`, `badgeBox`, `badge`, `alien`, `libretro` and `path(mark)`),
+  which reads kit-core's `planet_mark`, now the one owner of which mark a core has and how it is drawn. `EmuSen_Kit.md`
+  §7.115.
+- **`CoronaDisc`** and **`CoronaGlow`** (qmldir): the dark disc in its box, its rim and its glows, with `fill`, `corona`,
+  `rim` and `glows`. `EmuSen_Kit.md` §7.116.
+- **`Tokens`**: `coronaColor`, `coronaRim`, `coronaGlowColor`, `coronaGlowBlur`, `coronaGlowSpread`, `coronaHaloColor`,
+  `coronaHaloBlur`, `coronaHaloSpread`, declared after `shadowBlur` so no existing property's index moves. The kit's own
+  corona is none (no rim, no glow); its colours are the variant's accent where a theme gives none.
+- The minor is 1.6, holding both this and the focus ring's 1.5; the registry, qmldir and QML-file surface are
+  `Testing/qmltypes/EmuSen.Kit-1.6.*`.
+
+## 1.5: one focus ring, its glow's tokens and a button's corners (2026-11-14)
+
+No type, property, signal or invokable was removed or changed in meaning; the qmldir tags every type with the kit's
+version.
+
+- **`FocusRing`** (qmldir): the focus mark around the box it fills, a gap, the ring and the glow under them, sized and
+  coloured by the tokens, with the box's `radius` and a `placement` (`Gapped`, `Tight`, `Edge`); `edgeWidth` and
+  `edgeColor` for a box that draws the ring as its own border. Every ring the kit drew is one now: `ActionButton`,
+  `CoverTile`, `PageFrame`'s tiles and the style's Button, CheckBox, ComboBox, RadioButton, Slider, Switch, TabButton and
+  TextField. `EmuSen_Kit.md` §7.113 (R-20261114-16).
+- **`Tokens.ringGapColor`, `glowColor`, `glowBlur`, `glowSpread`** (registry): the gap's colour and the glow's colour,
+  blur and spread, transparent and none in the kit's own column, after every earlier property. §7.113.
+- **`Tokens.buttonRadius`** (registry): a button's corners, the kit's 4 (the `rowRadius` buttons drew with until now);
+  `ActionButton` and the style's Button take it. `EmuSen_Kit.md` §7.114.
+- The minor is 1.5, one above WiseMan's 1.4 (R-20261111-107); the registry, qmldir and QML-file surface are
+  `Testing/qmltypes/EmuSen.Kit-1.5.*`, each 1.4 file with these added.
+
 ## 1.4: pictures decoded at the pixels they cover, and the design height's one owner (2026-11-14)
 
 Additions only; no type, property, signal or invokable was removed or changed.

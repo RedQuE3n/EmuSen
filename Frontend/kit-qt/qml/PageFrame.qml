@@ -302,17 +302,14 @@ Kit.Frame {
                             asynchronous: true
                         }
                     }
-                    Rectangle {
+                    Kit.FocusRing {
                         objectName: "ring"
                         visible: tile.activeFocus
-                        x: -Kit.Tokens.ringOffset
-                        y: root.ringRoom - Kit.Tokens.ringOffset
-                        width: places.tileWidth + 2 * Kit.Tokens.ringOffset
-                        height: places.tileHeight + 2 * Kit.Tokens.ringOffset
-                        radius: Kit.Tokens.rowRadius + Kit.Tokens.ringOffset
-                        color: "transparent"
-                        border.width: Kit.Tokens.ringThickness
-                        border.color: Kit.Tokens.accent
+                        y: root.ringRoom
+                        width: places.tileWidth
+                        height: places.tileHeight
+                        radius: Kit.Tokens.rowRadius
+                        placement: Kit.FocusRing.Tight
                     }
                     Text {
                         y: root.ringRoom + places.labelOffset

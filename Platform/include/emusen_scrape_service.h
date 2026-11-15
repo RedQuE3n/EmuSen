@@ -1,5 +1,5 @@
 /*
- * emusen_scrape_service.h - the emusen.scrape service, version 2.0: scraping's one surface. The table speaks for the
+ * emusen_scrape_service.h - the emusen.scrape service, version 2.1: scraping's one surface. The table speaks for the
  * process's one scraper, which the platform library holds: the ScreenScraper client and its quota, the queue's run on
  * the player's word alone, OpenEmu's sources as the failover, the media store and media.db, and the order in which a
  * game's pictures are found. A front end gets the table from emusen_scraping_service() and opens the scraper with
@@ -23,7 +23,13 @@
  * choice}; metadata {path, scraped_names}; openvgdb; now; delays.
  * change {"op": ...}: settings {...}; forget {path, system, folder}; forget_unfound {path}; clean_up {relatives, at};
  * sign_out; sign_in {user, password}; check; search {path, system, text}; art_added {console, stem, path}; playing
- * {running}; openvgdb_download; openvgdb_remove. A change that asks the server blocks for that one request.
+ * {running}; openvgdb_download; openvgdb_remove; cover {path, system, type, folder_path, at} (since 2.1, platform interface
+ * 49: one of the game's own pictures, by its media type, made its cover, kept in games.db's edits as "covertype"; a null
+ * type puts back the cover found; either ends a cover borrowed from another game; a type that is not a picture, or one
+ * the game has no file of, is BAD_REQUEST with words and nothing is written; no file is written or removed). A change that asks the server blocks for that one request.
+ * Since 2.1 media's answer carries "type", the media type of the file given: for a cover, the type of the game's own
+ * picture chosen as its cover; and for a cover borrowed from another game (source "other_game"), "from", that game's file. media's
+ * "choices": false (since 2.1) gives the cover found for the game, as though the player had chosen none.
  * start {"games": [{"path", "system"}], "priority", "one", "resume", "refresh", "pick", "enabled", "choices"}: the
  * games queued; a run already going is EMUSEN_SCRAPE_BUSY, and a scraper opened for its sources alone refuses every
  * run with EMUSEN_SCRAPE_BAD_REQUEST.
@@ -41,7 +47,7 @@
 
 #define EMUSEN_SCRAPE_SERVICE "emusen.scrape"
 #define EMUSEN_SCRAPE_SERVICE_MAJOR 2u
-#define EMUSEN_SCRAPE_SERVICE_MINOR 0u
+#define EMUSEN_SCRAPE_SERVICE_MINOR 1u
 
 #define EMUSEN_SCRAPE_NULL (-1)
 #define EMUSEN_SCRAPE_BAD_STRING (-5)

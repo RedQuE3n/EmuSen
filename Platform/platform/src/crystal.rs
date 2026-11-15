@@ -71,9 +71,9 @@ fn cores_of(text: &str) -> Result<Vec<String>, i32> {
     }
 }
 
-/// A URL's body through the platform's one HTTP client, within `CheatDatabaseInstaller.FetchTimeout`'s five minutes.
+/// A URL's body through the platform's one HTTP client, within the cheat database's fetch timeout.
 fn fetch(url: &str) -> Result<Vec<u8>, String> {
-    let request = emusen_net::Request::new(url, std::time::Duration::from_secs(300));
+    let request = emusen_net::Request::new(url, emusen_cheats::install::FETCH_TIMEOUT);
     emusen_net::fetch(&request, &emusen_net::Progress::default()).map_err(|f| f.to_string())
 }
 

@@ -1229,7 +1229,8 @@ stands alone and only this crate joins it to Endymion. Four parts, one job each:
   and one closure per tick, and none when nothing changed.
 - `pad_reader.rs`, **`PadReader`**: writable `platformLibrary` (the path, as `LibraryModel` takes it: a QML element
   cannot be handed a Rust value, §1.2.1 of `EmuSen_Qt.md`) and `onlyPads`; read-only `family` (kit-qt's `Families`),
-  `connected` and `problem`; one signal, `button(PadButton, down)`. Naming the library lends SDL (`libSDL3.so.0`, once
+  `connected`, `problem` and `answered` (true from the first delivery applied, pads or a failure to open them: the
+  program's start waits on it, `EmuSen_Qt.md` §9.3.2); one signal, `button(PadButton, down)`. Naming the library lends SDL (`libSDL3.so.0`, once
   a process) and starts the reader, whose ticks come back only through `qt_thread().queue`, where each press is emitted
   in order and the properties published. `onlyPads` is SDL's pad ids, separated by spaces, read alone, as
   `emusen_endymion_pads_show_only` is a test's: it keeps a test's virtual pads from opening a pad on the desk.
@@ -2238,6 +2239,37 @@ theme-audit records a theme's splash at a stated time and a screen with A held (
   `qt_3_7_a_held_clock_logs_nothing_where_the_environment_asks_for_a_threaded_render_loop`, the splash fixture's three
   timed states under `QSG_RENDER_LOOP=threaded`: their findings alone, no warning line and nothing on standard error. Seeded,
   the setting taken out failed it on both lines.
+- **An input returns once what it queued has run** (2026-11-15). A press, key, pointer move or focus change ended in a
+  fixed wait (5 or 20 ms of `QTest::qWait`), which stops processing at its deadline (qtbase
+  `src/corelib/kernel/qtestsupport_core.cpp` 166-168). An animation a press starts reaches the held clock through two
+  queued calls: `QQmlAnimationTimer::registerAnimation` queues `startAnimations` (qtdeclarative
+  `src/qml/animations/qabstractanimationjob.cpp` 160-175), which through `restartAnimationTimer` (123-131) has
+  `QUnifiedTimer::startAnimationTimer` queue `startTimers` (qtbase `src/corelib/animation/qabstractanimation.cpp` 421-433).
+  When other work the press queued kept the GUI thread past the deadline, the second call ran only after the held
+  clock's next `advance()`, and the animation missed that step: the ES-DE view's clock read 0 at a held 16 ms in a cold
+  run of `fade_above_true` (EmuSen_Qt.md §4.8.8). Each input now ends in `drain_queued` (`harness_settle`): rounds of
+  `processEvents` and `sendPostedEvents` until a round delivers no queued call. It is enough because a queued invocation is
+  posted as a `QEvent::MetaCall` (`qmetaobject.cpp` 1745 and 2922, `qobject_p.h` 337), every event delivered on the GUI thread
+  passes the application's event filters, where the harness counts them (`qcoreapplication.cpp` 1284-1290), and
+  `sendPostedEvents` delivers the events posted before it, leaving those posted meanwhile to the next round
+  (`qcoreapplication.cpp` 1857): a round that delivers none leaves no queued call of the input's behind. A guard of 1000
+  rounds fails the test rather than waiting for ever. Held to by qt-test's
+  `qt_7_36_an_animation_a_press_starts_takes_the_held_clock_s_first_step`: a pad press whose scene queues 60 ms of work
+  after starting an animation read the animation at 0 at a held 16 ms before the change, and at 16 after; with no work
+  queued it read 16 before too. `hold_clock` still ends in a 20 ms wait: it is no input, and each of its steps processes
+  events after its `advance()`.
+  The wheel had leant on the wait as well: its event carried no timestamp, so Qt Quick's Flickable timed it by a timer of
+  its own (`qquickflickable.cpp` 1120-1127) against the click before it, stamped on QTest's emulated clock, and with no
+  time between the two found the elapsed time below zero and dropped the wheel (1743-1748, "insufficient elapsed time":
+  kit-gallery's settings walk, 2026-11-15). QTest stamps every mouse event it sends on that clock, a step past the last,
+  and expects handlers to read time from event timestamps (`qtestmouse.h` 42-62); the harness's wheel is now stamped the
+  same way. Held to by qt-test's `qt_7_36_a_wheel_turned_at_once_after_a_click_moves_the_list`, which failed with that
+  message before. Drags and hovers are QTest's own mouse events, stamped already; a touch drag goes through QTest's touch
+  sequence with 10 ms waits between its moves.
+  What an input reaches outside the GUI thread is not the harness's to wait on: a key that asks the game for one frame
+  (Frame Advance) has the runtime run it on the session's frame thread afterwards (`crystal-client/src/frame.rs` 33-36),
+  so qt-app's `controls_gpu` holds the next key only once the program's frame count has stopped, where it had leant on
+  the 20 ms the key used to wait (a run on 2026-11-15 drew the held button in that one frame).
 - **`Scene::key_hold(key, down)`**, `QTest::keyPress` or `keyRelease` alone: a press held, as a theme's pressed look reads it
   (`Keys.onPressed` without the release).
 - **`covers::draw`**, moved from the program's tests (`qt-app/tests/common`), which re-export it: covers drawn by one Qt Quick
@@ -3829,6 +3861,41 @@ game page's viewer (EmuSen_Qt.md §7.8.2) and esde-qt's `ManualElement`, which d
 until 2026-11-12. The kit's module now depends on `QtQuick.Pdf`, which esde-qt already did; nothing links Qt PDF that
 did not before. Kit 1.3.
 
+Since 2026-11-14 the page is drawn by an `Image` whose source is the PDF file, decoded through Qt PDF's image plugin
+(`imageformats/libqpdf.so`, the same package), and `PdfDocument` gives only `pages` and `pageSize`. `PdfPageImage`
+crashed a process that destroyed a page while Qt's image thread decoded one (signal 11 in `QPdfIOHandler::load` or
+`QImageReader::imageCount` on the thread, `~QQuickPdfDocument` on the main thread). Read in Qt 6.11.2's source on
+2026-11-14: `PdfPageImage` ignores `asynchronous` and always hands the document's carrier file to Qt Quick's image
+thread (qtwebengine `src/pdfquick/qquickpdfpageimage.cpp:103`, `QQuickPixmap::loadImageFromDevice`, which queues a
+job, qtdeclarative `src/quick/util/qquickpixmapcache.cpp:2006-2014`); the thread checks only that the file has not
+been deleted when the job starts (`qquickpixmapcache.cpp:1039`) and then reads it unguarded, while
+`~QQuickPdfDocument` deletes that file outright (`qquickpdfdocument.cpp:43`) and the last `QPdfDocument` destroyed
+shuts PDFium down (`FPDF_DestroyLibrary`, counted by `libraryRefCount`, `src/pdf/qpdfdocument.cpp:145-150`). Qt's
+own design note on that path calls the race unresolved ("qq-pixmap-cache-special-device", contribute.qt-project.org,
+read 2026-11-14). The `Image` is asynchronous, decoded on Qt Quick's image thread as
+`PdfPageImage`'s pages were, and nothing there is shared with an item that may be destroyed: the job reads a `QFile`
+of its own (`qquickpixmapcache.cpp:1060`); the plugin makes a `QPdfDocument` of its own on that thread and deletes it
+there (`src/pdf/plugins/imageformats/pdf/qpdfiohandler.cpp:216-219`, `18-22`); and while that document lives
+`libraryRefCount` is at least one, so the main thread's last `PdfDocument` going cannot shut PDFium down under it, the
+count and every PDFium call read taking the one `pdfMutex` (`qpdfdocument.cpp:118-126`, `145-150`). An open Qt
+report, QTBUG-136710, describes a crash when a QML `Image` is destroyed while still loading; only its search summary
+was read, not the report, so it stays an open risk of Qt's. While a page loads nothing is drawn in its box: `Image`'s
+`retainWhileLoading` is false by default, so the picture shown is cleared when a load begins
+(qtdeclarative `src/quick/items/qquickimagebase.cpp:295`, `521-537`); `PdfPageImage` drew nothing either, seen in a
+grab on 2026-11-15. The handheld's Qt bundle carries the plugin (`Testing/handheld/qtbundle.sh`).
+
+Measured on 2026-11-15 on the desktop (Ryzen 7 7700X), load average 12 to 14 from other work, two rounds: one page
+decoded by a new `Image` at the size the viewer's page takes in a 1280 by 800 and a 1920 by 1200 window, the first,
+middle and last page, ten decodes each, the picture cache off. Synchronous decoding held the main thread, median and
+worst in milliseconds: game manuals of 8 pages, 1.0 MB, 18 to 92 and 102; 9 pages, 2.6 MB, 14 to 130 and 151; 10
+pages, 4.0 MB, 12 to 38 and 44; a comic of 56 full-page drawings, 12.8 MB, 12 to 141 and 225; an art book of 198
+full-page pictures, 503 MB, 82 to 317 and 492; a map of one large page, 55 MB, 187 to 259 and 286. Asynchronous
+decoding held it 0.2 ms at the median and 3.6 ms at worst, the page ready in about the synchronous time (worst 336
+ms). The handheld was not measured. Tests: `kit-qt/tests/pdf_teardown.rs`, 48 files of light pages made and all
+destroyed the moment the first is drawn, twenty rounds in a process of its own (`PdfPageImage` crashed ten runs of
+ten, each within nine rounds); `kit-qt/tests/pdf_page_turn.rs`, the turned page's picture still loading in the turn
+of the event loop that asked for it.
+
 ### 7.111 DrawnPixels: a picture decoded at the pixels it covers (2026-11-14)
 
 A picture laid out on the big screen's canvas (§7.112) is sized in design units and drawn through the canvas's
@@ -3856,3 +3923,206 @@ QML as `designHeight`, a constant; `NormalizedCanvas.designHeight` keeps its pla
 (decided 2026-11-14, R-20261114-7). It is a part of its own rather than a property of `Tokens` because every read-only number of
 `Tokens` takes a theme's override (§7.2, `tests/overrides.rs`), and the design height is the program's, not a theme's.
 Kit 1.4.
+
+### 7.113 FocusRing: one focus mark, its gap, ring and glow (2026-11-14)
+
+The kit drew its focus ring eleven times, each a `Rectangle` of its own (read on 2026-11-14): `ActionButton` and
+`PageFrame`'s tiles a rectangle grown by `ringOffset` with a `ringThickness` border inward, so the ring stood 4 to 1 units
+past the box under the kit's tokens; `CoverTile` one grown by the literals 7 and 14 with corners of `tileRadius + 4`, the
+ring 7 to 4 units past; the style's eight controls (Button, CheckBox, ComboBox, RadioButton, Slider, Switch, TabButton,
+TextField) their own border turned `ringThickness` wide in the accent, no gap. Eclipse's 79 boards draw nine recipes, counted on 2026-11-14 by
+every `0 0 0 Npx #07080F, 0 0 0 Mpx #F6E7D8, 0 0 Bpx Spx rgba(...)` in them, by the boards each is on: a gap of 3 px and the
+ring 3 to 6 px out on 35 boards, 28 of them with a glow of 40 px blur and 8 px spread in rgba(240, 180, 196, 0.4)
+(`EclipseSettings.dc.html:94`), the other 7 with a glow of 34 or 46 px, or at 0.35, 0.45 or 0.5; a gap of 4 px and the ring
+to 7 px on 16 boards, 13 of them with a glow of 40 px and 10 px at 0.5, the other 3 of 44 or 46 px at 0.45. Eclipse's
+tokens hold the first, the commonest; one set of tokens holds one recipe, so the other eight are not yet expressible.
+Decided 2026-11-15 by the tester (R-20261115-2): a dialog's focused button keeps the Gapped ring for now; the dialog
+board's own recipe (`EclipseDialog.dc.html:39`) comes with the piece that builds dialogs in Eclipse's look. Decided
+2026-11-15 by the tester (R-20261115-3): a switch keeps its own ring for now; the focused row is ringed, as the Settings
+board draws it (`EclipseSettings.dc.html:94`), when Settings is built in Eclipse's look.
+
+**The part.** `FocusRing` fills the box it marks and takes the box's corner `radius`. Its gap is `ringOffset` wide in
+`ringGapColor`, its ring `ringThickness` wide in the accent past the gap, with corners of the box's radius plus
+`ringOffset`, as `CoverTile` drew them, and under both the glow. `placement` says where the ring stands: `Gapped`, past
+the gap (`CoverTile`, whose 7, 14 and 4 were `ringOffset + ringThickness` and `ringOffset` under the kit's tokens and are
+those tokens now); `Tight`, its outer edge `ringOffset` past the box (`ActionButton`, `PageFrame`); `Edge`, the box's own
+border (the style's controls, which bind their border to `edgeWidth` and `edgeColor`, so a box keeps one rectangle and its
+pixels). Decided 2026-11-14 by the tester (R-20261114-21): the reference keeps each place's
+placement, so the old theme's three focus looks are unchanged, and Eclipse draws every ring Gapped with the glow, as its
+boards do. One switch token carries it, `ringGapped` (kit-core `FocusMarks::gapped`, false in the kit's column, true in
+Eclipse's `theme.json`): while it is true `FocusRing`'s `form`, the placement it draws, is Gapped whatever its `placement`;
+`onEdge` is true only while the form is Edge, and a style control binds its border to `edgeWidth` and `edgeColor` only
+then, so under Eclipse a control keeps its own border and the ring stands past the gap.
+
+**The tokens.** `ringGapColor` and `glowColor` are colours after `shadowColor`, transparent in the kit's column;
+`glowBlur` and `glowSpread` are numbers, 0 in it (kit-core `FocusMarks`, `FOCUS_MARKS`). No existing role is the gap's:
+on the board it is the ground, #07080F (`surface` in Eclipse), but under the kit's tokens the gap shows what is behind it,
+which no colour role holds, so a role would have moved the reference's pixels. With the kit's tokens nothing new is drawn:
+the gap is not drawn while transparent and the glow is not made.
+
+**The glow** has one owner, `Glow` (`qml/Glow.qml`, a kit part not exported to themes): the glow of the rounded box it
+fills, from a colour, a CSS blur radius, a spread and a corner radius, drawn outside the box alone, as CSS Backgrounds 3
+§6.1.1 draws an outer box-shadow ("clipped inside the border-box of the element"; w3.org/TR/css-backgrounds-3, read
+2026-11-14), so a box with no fill or a translucent one shows nothing of it inside. `FocusRing` draws its glow with one
+(`glowColor`, `glowBlur`, `glowSpread`), `CoronaDisc` each of its glows with one (§7.116); neither keeps a glow of its own,
+and `RaisedShadow` (§7.55) is not one of its users. Nothing is made while the colour is transparent, the part is hidden,
+or it has no blur and no spread (such a glow lies under its box alone).
+
+- *On the graphics card* it is Qt's `RectangularShadow` (QtQuick.Effects, "a rounded rectangle with blur applied", its
+  API "similar to CSS box-shadow"; doc.qt.io, qml-qtquick-effects-rectangularshadow, read 2026-11-14) of the box, its
+  spread and its corners, inside an item whose layer is masked by a `MultiEffect` with `maskInverted` and, as its
+  `maskSource`, a layered rectangle of the box (qml-qtquick-effects-multieffect: the mask's alpha masks the source,
+  inverted it masks what lies inside). `cached` is false: the page recommends it off where the effect's properties change,
+  and the masked layer already holds the drawn glow between changes. `antialiasing` is true, the default, so a glow of no
+  blur still has its one pixel of edge. Its `blur` is the token times `cardBlur`, the share measured below; the page
+  suggests 1.2 × the CSS blur "for a closer match". No canvas is painted on the card.
+- *On the software backend*, which renders no shader effect (doc.qt.io, "Qt Quick Software Adaptation": "ShaderEffect
+  components in QtQuick 2 cannot be rendered by the Software adaptation"), it is a `Canvas`: the box grown by the spread,
+  its corners grown as §6.1.1 grows them (by the spread, times 1 + (r − 1)³ where the corner is smaller than the spread, r
+  their ratio), drawn a canvas's width away so only its `shadowBlur` shadow, offset back, lands, clipped to the canvas less
+  the box. Qt's page for `Context2D` gives no rule for `shadowBlur`; its source (`qquickcontext2dcommandbuffer.cpp`,
+  `ShadowImageMaker`, Qt 6.11) blurs with three passes of a square box 2 round(blur / 2) + 1 wide (`qt_image_boxblur`),
+  close to a Gaussian of σ = blur / 2, the CSS rule (§6.1.2: "a Gaussian blur with a standard deviation equal to half the
+  blur radius"). The canvas paints once each time the glow is made and again only when its box, corners or colour change.
+
+**The rule and the measures.** The CSS rule a glow is held to is the shape grown by the spread, blurred by a Gaussian of
+σ = blur / 2, outside the box alone, which the tests integrate over the box's own size and corners (`tests/common`). The
+spec allows each pixel within 5 % of that value (§6.1.2). Measured on 2026-11-14 on the desktop, the glow's alpha read at
+the middle of a box's top edge, d past it, Eclipse's tokens (the ring: a 160 by 48 box, corners of 24, `glowBlur` 26.67,
+`glowSpread` 5.33, alpha 0.4; the disc's glow and halo on a 400-unit disc, the commonest board recipe):
+
+| Glow | d past the box | CSS rule | Software (Canvas) | Card (RectangularShadow, blur × 1.2) |
+|---|---|---|---|---|
+| ring | 5.5 | 0.1985 | 0.1958 | 0.1750 |
+| ring | 18.5 | 0.0650 | 0.0708 | 0.0583 |
+| ring | 32.5 | 0.0084 | 0.0083 | 0.0042 |
+| ring | 45.5 | 0.0005 | 0.0000 | 0.0000 |
+| disc's glow | 0.5 | 0.3694 | 0.3618 | 0.3374 |
+| disc's glow | 5.5 | 0.2889 | 0.2886 | 0.2602 |
+| disc's glow | 20.5 | 0.0857 | 0.0976 | 0.0813 |
+| disc's glow | 34.5 | 0.0130 | 0.0163 | 0.0081 |
+| disc's glow | 49.5 | 0.0007 | 0.0000 | 0.0000 |
+| disc's halo | 0.5 | 0.1824 | 0.1780 | 0.1822 |
+| disc's halo | 30.5 | 0.1258 | 0.1271 | 0.1271 |
+| disc's halo | 87.5 | 0.0369 | 0.0381 | 0.0381 |
+| disc's halo | 144.5 | 0.0049 | 0.0042 | 0.0042 |
+| disc's halo | 200.5 | 0.0003 | 0.0000 | 0.0000 |
+
+On the card, the blur share was measured at 1, 1.2 and 2 (logs in the piece's evidence): at 1 the glow ends near
+spread + blur, short of the rule (the ring 0 at 32.5 where the rule gives 0.0084); at 2 it reaches past it (0.0375 there);
+at 1.2, Qt's own suggestion, the largest difference is 0.032 (the disc's glow at 0.5). On the software backend the largest difference from the rule over these distances is 0.0119 (`tests/glow.rs`), 0.0058
+past every Eclipse ring in `tests/focus_ring.rs`, and 0.0192 for the disc of `tests/corona_disc.rs`, drawn at three
+times its size; each test holds its own measured bound. On the card the test holds what is exact: where the glow begins
+and ends, its hue, nothing inside the box, one glow a glowing part and none hidden or transparent; a bound on its
+closeness to the rule is not asserted. Decided 2026-11-15 by the tester (R-20261115-1): the glow's closeness to the
+boards' rule stands as measured; the software tests' bounds stand as they are, the card's closeness is not asserted,
+and no shader of the project's own is made for it.
+
+**Cost.** Measured on 2026-11-14 on the desktop's RX 6800 (Vulkan, `tests/glow_gpu.rs`, Eclipse's tokens, 200 focus moves
+over a Button, a Switch and an ActionButton, each from the move to the next frame swapped), five runs (the logs
+`card-glow-1`, `card-glow-f1.2`, `card-glow-f2`, `card-glow-final` and `card-pictures` in the piece's evidence). With the
+glow the medians were 5.67, 5.67, 5.68, 5.74 and 5.98 ms and the worst moves 8.90, 7.82, 9.31, 7.86 and 8.57 ms; with
+`glowColor` transparent the medians were 6.38, 6.41, 6.39, 6.38 and 6.49 ms and the worst 6.55, 6.52, 6.52, 7.03 and
+7.47 ms. Qt's own frame times (`QSG_RENDER_TIMING`) show sync and render at 0 ms either way. With the glow the swap
+waited a median 12 ms (11 in `card-pictures`), 16 ms at most, over 316 to 321 frames for the 200 moves; without it 0 ms
+over 200 frames in the three runs whose log holds that part (in `card-glow-final` and `card-pictures` Qt's frame lines
+stop part-way through a line after the glow's part, cause not known). Why the swap waits with the glow while the move
+itself is the quicker is not explained: neither Qt's documentation nor its source was read for it. After the moves the
+window swaps no frame at rest. The software backend's cost, measured on 2026-11-14 before this part (83 ms median from a change of a
+160 by 48 box to the canvas's next paint), is the tests' only. Not measured on the handheld.
+
+**Held to** `tests/focus_ring.rs`: every site the kit rings keeps, under the kit's tokens, the placement of a table in the
+test (the eight style controls Edge, `ActionButton` Tight, `CoverTile` Gapped), and under Eclipse's draws Gapped
+(`PageFrame`'s tiles, Tight, in kit-gallery's `tests/page_ring.rs`, where a page has tiles); under the kit's tokens each placement draws, pixel for pixel, the ring it replaced; a focused
+Button, Switch, ActionButton and TextField and a lit CoverTile each show one `FocusRing` in the look's placement, its ring
+in the accent, its gap in `ringGapColor`; under Eclipse the glow paints once and not again over half a second at rest,
+follows the rule within its measured bound and ends at its reach. `tests/glow.rs` (software) and `tests/glow_gpu.rs`
+(the card, a GPU job) hold the part itself. Kit 1.5; `Glow` and `ringGapped` Kit 1.6.
+
+### 7.114 A button's corners (2026-11-14)
+
+`buttonRadius` is a number token of `Tokens` (kit-core `Spacing`, 4 in both forms, the `rowRadius` that `ActionButton` and
+the style's Button drew with), taken by those two and by their rings. Eclipse's buttons are round at both ends: 36 px
+corners on 72 px buttons (`EclipseDialog.dc.html:39` and 40; `EclipseGame.dc.html:48`; `EclipsePower.dc.html:32`,
+84 px rows with 42 px corners), so Eclipse sets 24 units, half its `controlHeight` of 48. A number is round at both ends
+only for a button of the height it was set for; one token for every height would need a share of the height, or a radius
+larger than half and Qt's clamping of it, which Qt's page for `Rectangle` does not state. Both buttons are `controlHeight` high unless their
+words or their place make them taller (`ActionButton.qml:22`, `style/Button.qml:30`); a taller one is not round at its ends. Kit 1.5.
+### 7.115 PlanetMark: a core's mark, from its one owner (2026-11-14)
+
+Decided 2026-11-14 by the tester (R-20261114-16): Eclipse's shared parts are kit parts, exported to themes as an
+addition; decided 2026-11-11 (R-20261111-15): a planet mark stands beside every core's name. Which mark a core has and
+how each mark is drawn were in `qt-models` (`library::engine_mark`, `marks::path`, `BADGE`, `alien`), which the kit cannot
+reach (qt-models depends on the kit). They are now kit-core's `planet_mark`: `of(name, libretro, body)` gives
+`libretro` for a hosted core, a sky-named core's own name (`SKY_NAMED`: moon, mercury, venus, mars), else `shard` or `gem`
+by its console's body in the systems table, else `planet`; `path(mark)` the mark's SVG path in a 24-unit box, stroked at
+2; `BADGE` and `alien()` libretro's badge and the alien in an 11-unit box. The box sides and the stroke are constants of
+the courts canvas's drawing. `qt-models` keeps its names (`engine_mark`, `SKY_NAMED`, `marks::path`, `BADGE`, `alien`)
+as calls into it, so the program's `Marks` and the theme API's `Marks` give the same paths as before.
+
+`PlanetMarks` (`src/planet_mark.rs`, a singleton) gives them to QML: `boxSize`, `stroke`, `badgeBox`, `badge`, `alien`,
+`libretro` (the hosted mark's name) and `path(mark)`. `PlanetMark` draws one mark in its box: `mark` (a console row's
+`engineMark`), `libretro` (true when the mark is libretro's unless set), `ink` (textStrong unless set) and `cut` (the
+alien's colour, surfaceRaised unless set). It draws what the themes' `EngineMark` copies drew, from the same data: the
+glyph stroked in the ink, or the badge filled in the ink with the alien in `cut`. The reference theme's
+`parts/EngineMark.qml` is now a `PlanetMark` with its own white ink and 15-unit box; Horizon's, Meridian's, Constellation's
+and Orrery's copies are left as they were (their badge is drawn in #C9C9D0 with the alien in #26262B, where the
+reference's takes the ink and surfaceRaised). Test: `tests/planet_mark.rs`: each kind of core and the mark the test states
+for it, every name of `SKY_NAMED` its own symbol, Nephrite on the Mega Drive's body shards and Diamond on the
+PlayStation's a gem (each body read from the console's data in `Platform/systems/data`, the words of
+`Platform/systems/src/lib.rs` `BODIES`), an invented name on a planet's body the planet, and a hosted core, its name
+read from `libretro-cores.tsv`, libretro's badge. Kit 1.6.
+
+### 7.116 CoronaDisc: the eclipse's disc, its rim and its glows (2026-11-14)
+
+Decided 2026-11-14 by the tester (R-20261114-16); the corona's colour for a game is computed when the game is scraped
+and stored with it (R-20261111-19), a later piece with its own interface number: here the disc takes it as a property.
+
+**The boards' discs.** Read on 2026-11-14 from the design project (`~/.cache/emusen/design-console-themes-2026-11-11/project/`)
+by every element with `border-radius: 50%` and a `box-shadow` that begins with a rim (`0 0 0 Npx`): 59 elements on 56
+boards. Every one is a disc, a rim, and zero to three glows, each glow a CSS shadow with no offset (a blur and a spread).
+The large discs are empty, drawn over the board's blurred colour fields (`Main:22`) and under the screen's contents; the
+small discs of Shaders (60 px) and Tools (84 px) hold a stroked 24-unit icon at their centre; the splash's playing and
+orbit boards draw the rim and glows with no fill, over the moon's own disc, turning (`EclipseSplashPlay:54`). The recipes by count:
+the Settings boards' 2000 px disc of #0B0D16, a rim of rgba(246, 231, 216, 0.75) and one glow (25 boards); the 3120 px
+disc of #07080F behind a card or the Pause Card, also Home's 2100 px, the Power board's 900 px and the question's 780 px,
+with a 2 px #F6E7D8 rim and two glows, 44 px 8 px rgba(246, 214, 200, 0.6) and 170 px 46 px rgba(236, 160, 186, 0.28)
+(20 boards); the splash's 420 px disc with three glows (the splash and its playing and orbit boards); the game page's 2900 px and the library's 1700 px
+with the two glows at 0.55 and 0.25 (two boards); and single boards: Choose a console's 300 px (a violet far glow),
+the first-run 600 px and a splash frame's 150 px (three glows), another splash frame's 1000 px and Settings ›
+EmuSen's 200 px (two glows), and small discs of 26 to
+84 px on Rewind, Shaders and Tools (a rim, and one glow or none). `CoronaDisc` covers each: its fill (transparent for
+the splash's), its rim's width and colour, and a list of glows are properties, and what a disc holds is placed as its
+child, over it, so no board needs a second disc. The turning is the splash's own, not the disc's.
+
+**The part.** `CoronaDisc` draws a disc as wide as its box's shorter side at the box's centre, in `fill` (surface unless
+set); a ring `rim` wide outside it; and under both, each of `glows`, a list of `CoronaGlow` (`blur`, `spread`, `color`),
+the first on top as a box-shadow lists them, by default two from the tokens, the glow and the halo. Everything past the
+disc is drawn past the box, as a box-shadow is, and takes no room in a layout. Each glow is a `Glow` (§7.113) of the
+disc's square with corners of half its side, so a circle grown by its spread and blurred by its blur, outside the disc
+alone: a disc with no fill (the splash's) shows none of it inside. On the graphics card that is Qt's `RectangularShadow`,
+on the software backend a `Canvas`, as §7.113 says; the measures of the commonest recipe are in §7.113's table.
+
+**A game's corona.** `corona` is a game's corona colour, transparent (none given) by default; `gameCorona` is true while
+it is not transparent. The rim (`rimColor`) is the game's corona where one is given and the look's `coronaColor`
+otherwise. Decided 2026-11-14 by the tester (R-20261114-33, R-20261114-38): both glows take the game's corona too, each
+keeping its own strength, the inner glow strong and the halo faint: `glowColor` and `haloColor`, the default glows'
+colours, are the corona's red, green and blue at the alpha of `coronaGlowColor` and of `coronaHaloColor`, read from the
+tokens; with no game's corona they are those tokens' colours. A caller that passes its own `glows` keeps them, in
+place of the two defaults: QML appends a list assigned in an instance to the list its type declares unless the type's
+document says `pragma ListPropertyAssignBehavior: ReplaceIfNotDefault` ("Structure of a QML Document", doc.qt.io, Qt 6,
+read 2026-11-15), and `CoronaDisc.qml` says it; without it a disc given one glow drew three, measured on 2026-11-15. The
+boards draw every disc in the look's colours and say only, in a caption, that "the corona takes the colour of the game's
+art" (`EclipseSplashFrames.dc.html:61`).
+
+**Tokens.** `coronaColor`, `coronaGlowColor` and `coronaHaloColor` (colours, the variant's accent, or the theme's
+accent, where a theme gives none) and `coronaRim`, `coronaGlowBlur`, `coronaGlowSpread`, `coronaHaloBlur`,
+`coronaHaloSpread` (numbers, kit-core's `tokens::corona`). The kit's own corona is none, all five numbers 0, since the
+reference look draws no disc: under the reference's tokens a `CoronaDisc` is a plain disc, and nothing in the program
+places one yet. Eclipse's values are Home's disc (`Main:25`), converted as `EmuSen_Qt.md` §3.4.7 converts every board
+value. Test: `tests/corona_disc.rs`, under Eclipse's tokens read from its `theme.json`: the box; the rim's colour as
+a game's and as the look's, drawn; the glows' colours as a game's corona at the tokens' strengths and as the tokens',
+drawn; a disc given its own one glow, with a game's corona, draws that glow alone in its own colour; the two glows at the tokens' sizes, each read at seven distances past the disc within 0.02 of the CSS rule (the
+largest difference measured on 2026-11-14 on the software backend, 0.0192; the bound stands as measured, decided
+2026-11-15 by the tester, R-20261115-1, §7.113), and black past the halo's reach. The pixel
+ratio is one under the headless harness. Kit 1.6.

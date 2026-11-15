@@ -144,7 +144,7 @@ fn qt_7_8_2_the_page_views_its_media_scrapes_the_game_and_edits_its_name() {
     assert_eq!(scene.property("pageModel", "viewSource"), format!("file://{}", shot.display()));
     assert_eq!(scene.property("pageModel", "viewCaption"), "Scraped screenshot · 1 of 2");
     until(&mut scene, "the picture drawn", 2000, |s| s.property("viewerPicture", "status") == "Ready");
-    assert_eq!(scene.property("pageModel", "viewHelp"), emusen_qt_models::help_model::shown_screen(emusen_qt_models::help::Screen::GamePageViewerManual).to_string());
+    assert_eq!(scene.property("pageModel", "viewHelp"), emusen_qt_models::help_model::shown_screen(emusen_qt_models::help::Screen::GamePageViewerManualCover).to_string());
     // Right to the title screen, Right at the end stays, Left back.
     scene.pad(UiButton::Right);
     until(&mut scene, "Right steps to the title screen", 1000, |s| s.property("pageModel", "viewCaption") == "Title screen · 2 of 2");

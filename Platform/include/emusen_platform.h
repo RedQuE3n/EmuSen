@@ -7,7 +7,9 @@
  * codecs, a firmware install, the card manager and a cheat database's install are the frontend API's alone
  * (EmuSen_RustPlatform.md, section 47.24); since 39 scraping is the emusen.scrape service's table alone (47.25); since
  * 40 Endymion reads and writes the four binding files and Galaxia names its files (EmuSen_Input.md, section 5.2); since
- * 45 Galaxia serves the front end's own settings rows (EmuSen_Galaxia.md, section 3.15). The
+ * 45 Galaxia serves the front end's own settings rows (EmuSen_Galaxia.md, section 3.15); since 48 a cheat database the host
+ * downloaded is installed here too, and a .cht read answers a game's own list (EmuSen_RustPlatform.md, section 56); since
+ * 49 the emusen.scrape service 2.1 makes one of a game's own pictures its cover (EmuSen_Backend.md, section 30.6). The
  * rules are argued in EmuSen_RustPlatform.md, section 3, and are the core ABI's (emusen_core.h) one layer up:
  *
  *  - The host calls and the library returns. The library never calls the host: what the C# reports through a
@@ -43,7 +45,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 47u
+#define EMUSEN_PLATFORM_ABI_VERSION 49u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -671,9 +673,27 @@ int64_t emusen_firmware_locate(const uint8_t *request, size_t request_len, uint8
  * kind (RamPoke or RomPatch), writes}, each write {space, address, value, width, type, bit (or null), big_endian,
  * repeat, repeat_address, repeat_value}, as emusen_crystal_cheat_decode writes one.
  */
-/* A .cht text read: {"text", "codec", "space", "patch"}, each codec an emusen_crystal_cheat_codec_list id or null. Out:
- * {"cheats", "skipped"}. BAD_ARGUMENT where a codec's index fell outside its code, which the C# let escape. */
+/* A .cht text read: {"text", "codec", "space", "patch"}, each codec an emusen_crystal_cheat_codec_list id or null. Since 48
+ * "path" may name a file read as Galaxia reads a text file in place of "text", and "system", a systems table id, the
+ * system's pair of codecs and its cheat space in place of the other three, as a session of it reads one; a system the
+ * table does not hold is BAD_ARGUMENT, and one it holds with no codecs reads with none. Out: {"cheats", "skipped",
+ * "file", "left_out"}, file (since 48) the cheats as a game's own list, the CheatFile model's document
+ * (EMUSEN_GALAXIA_MODEL_CHEAT_FILE), each cheat in order, and left_out (since 48) how many cheats the list refused and
+ * left out of it. BAD_ARGUMENT where a codec's index fell outside its code, which the C# let escape. */
 int64_t emusen_cheats_parse(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
+/* Since 48. Where the libretro cheat database is downloaded from, as the session table's DB_UPDATE fetches it. */
+#define EMUSEN_CHEATS_DATABASE_URL "https://buildbot.libretro.com/assets/frontend/cheats.zip"
+/* Since 48. A cheat database's archive, downloaded by the host (emusen_net_download_*), installed under directory: each
+ * .cht entry written into <directory>.part beside it (cleared first of what a stopped install left), every file of the
+ * installed database the archive does not replace kept in it, and the two folders then swapped by rename through
+ * <directory>.old. Each of those two folders carries a mark file the install writes; a folder of either name without
+ * it was not made by an install and is never removed, renamed or written into: the call is REFUSED, with words naming
+ * the folder, and the database stays as it was. An install that fails before the swap, or is stopped before this call,
+ * leaves the installed database as it was; one stopped between the swap's two renames is put back by the next install.
+ * Out: {"installed", "skipped"}. PARSE for bytes that are no zip the reader takes; NOT_FOUND, ACCESS or IO where a
+ * folder could not be read or made or a rename failed. The length query installs and the fill with the same archive and folder takes its
+ * answer. */
+int64_t emusen_cheats_install(const uint8_t *zip, size_t zip_len, const uint8_t *directory, size_t directory_len, uint8_t *out, size_t len);
 /* Cheats written as a .cht text: {"cheats": [...]}. */
 int64_t emusen_cheats_write(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
 /* A database scanned from its folder once, and never changed after, so any thread may ask it; null for a path that is

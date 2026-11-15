@@ -139,8 +139,8 @@ int64_t emusen_library_get(emusen_library *lib, const uint8_t *request, size_t l
  *   (the seconds recorded, or null where tracking is off or the launch ran past max_hours; 24 or more is no limit);
  *   set_play_stats {path, count, seconds}; set_crop {path, left, right, top, bottom}; clear_crop {path};
  *   set_standard {path, standard: "ntsc" | "pal" | null, at} (since 1.4; another value is refused);
- *   save_edits {path, changes: {field: value | null}, at}; clear_edits {path} (the cover choice and the television
- *   standard kept); create_collection {name, at} (the id, or null for a name taken in any case);
+ *   save_edits {path, changes: {field: value | null}, at}; clear_edits {path} (the cover choices, "coverfrom" and
+ *   "covertype", and the television standard kept); create_collection {name, at} (the id, or null for a name taken in any case);
  *   rename_collection {id, name} (true or false); delete_collection {id}; add_to_collection {id, path};
  *   remove_from_collection {id, path}; store_hash {path, bytes, modified, md5}; identify {path, md5, bytes};
  *   move {from, to} (a renamed game's row, collections, edits, cover lookup and the covers others borrow from it

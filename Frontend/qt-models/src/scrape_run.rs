@@ -13,11 +13,17 @@ fn switch(settings: &Value, key: &str) -> bool {
     settings.as_object().and_then(|all| all.iter().find(|(k, _)| k.eq_ignore_ascii_case(key))).and_then(|(_, v)| v.as_bool()).unwrap_or(false)
 }
 
+/// The Scraping settings' switch for a kind of the scraper's table, by its folder: `Scrape<folder>`, in any case, as the
+/// settings name every kind.
+pub fn kind_switch(folder: &str) -> String {
+    format!("Scrape{folder}")
+}
+
 /// The kinds the Scraping settings ask for, by the media store's type: each kind of the scraper's table (`get kinds`)
-/// whose switch `Scrape<folder>` is on, as the settings name every kind by its folder.
+/// whose switch (`kind_switch`) is on.
 pub fn wanted_kinds(settings: &Value, kinds: &Value) -> Vec<String> {
     let of = |k: &Value| Some((k.get("type")?.as_str()?.to_owned(), k.get("folder")?.as_str()?.to_owned()));
-    kinds.as_array().into_iter().flatten().filter_map(of).filter(|(_, folder)| switch(settings, &format!("Scrape{folder}"))).map(|(ty, _)| ty).collect()
+    kinds.as_array().into_iter().flatten().filter_map(of).filter(|(_, folder)| switch(settings, &kind_switch(folder))).map(|(ty, _)| ty).collect()
 }
 
 /// The start request for `games` (emusen_scrape_service.h `start`): one game chosen alone, or a run over many that asks
@@ -47,7 +53,7 @@ pub fn request(games: &[GameFile], one: bool, settings: &Value, kinds: &Value) -
 /// how many games it queued.
 pub fn start(source: &ClientSource, games: &[GameFile], one: bool, test: Option<&Value>) -> Result<i64, String> {
     let settings = source.settings()?;
-    let kinds = source.scraper().ok_or("the scraper could not be opened")?.get(&json!({ "what": "kinds" })).map_err(|e| e.to_string())?;
+    let kinds = source.scraper().ok_or(crate::clients::NO_SCRAPER)?.get(&json!({ "what": "kinds" })).map_err(|e| e.to_string())?;
     source.scrape_start(&request(games, one, &settings, &kinds), test)
 }
 

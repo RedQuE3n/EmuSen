@@ -44,6 +44,8 @@ pub struct Spacing {
     pub tile_gap: f64,
     pub row_radius: f64,
     pub tile_radius: f64,
+    /// A button's corners (EmuSen_Kit.md §7.114).
+    pub button_radius: f64,
 }
 
 /// How the focus is marked, the same in both forms' units (EmuSen_Interface.md §5.4).
@@ -54,6 +56,20 @@ pub struct FocusMarks {
     pub bar_width: f64,
     pub tile_scale: f64,
     pub hover_border: f64,
+    /// The colour between a box and its ring; transparent leaves what is behind (EmuSen_Kit.md §7.113).
+    pub gap_colour: Colour,
+    /// The glow under the ring: its colour, its CSS blur radius, and how far its shape spreads past the box (EmuSen_Kit.md §7.113).
+    pub glow_colour: Colour,
+    pub glow_blur: f64,
+    pub glow_spread: f64,
+    /// Every ring past a gap of `ring_offset`, whatever the place's own placement; false keeps each place's (R-20261114-21).
+    pub gapped: bool,
+}
+
+impl FocusMarks {
+    /// The names the kit's `Tokens` singleton gives the focus marks' colours: colour tokens after the shadow's (rule Q).
+    pub const GAP_COLOUR_PROPERTY: &'static str = "ringGapColor";
+    pub const GLOW_COLOUR_PROPERTY: &'static str = "glowColor";
 }
 
 /// The one shadow a raised surface casts: its colour and opacity, its offset and its blur, the same in both forms' units
@@ -70,6 +86,24 @@ pub struct Shadow {
 impl Shadow {
     /// The name the kit's `Tokens` singleton gives the shadow's colour: a colour token after the palette's (rule Q).
     pub const COLOUR_PROPERTY: &'static str = "shadowColor";
+}
+
+/// The corona round a dark disc: the rim's width and two glows' blur and spread, the same in both forms' units; a glow is
+/// a circle grown by its spread and blurred by its blur, as a CSS `box-shadow` draws one (EmuSen_Kit.md §7.116). Its
+/// colours are the variant's: the accent where a theme gives none.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Corona {
+    pub rim: f64,
+    pub glow_blur: f64,
+    pub glow_spread: f64,
+    pub halo_blur: f64,
+    pub halo_spread: f64,
+}
+
+impl Corona {
+    /// The names the kit's `Tokens` singleton gives the corona's colours, the rim's, the glow's and the halo's: colour tokens
+    /// after the raised shadow's (rule Q).
+    pub const COLOUR_PROPERTIES: [&'static str; 3] = ["coronaColor", "coronaGlowColor", "coronaHaloColor"];
 }
 
 /// The largest text scale a player may choose.
@@ -107,6 +141,7 @@ const BIG_SCREEN_SPACING: Spacing = Spacing {
     tile_gap: 24.0,
     row_radius: 4.0,
     tile_radius: 8.0,
+    button_radius: 4.0,
 };
 
 const DESKTOP_SPACING: Spacing = Spacing {
@@ -124,11 +159,26 @@ const DESKTOP_SPACING: Spacing = Spacing {
     tile_gap: 16.0,
     row_radius: 4.0,
     tile_radius: 6.0,
+    button_radius: 4.0,
 };
 
-const FOCUS_MARKS: FocusMarks = FocusMarks { ring_thickness: 3.0, ring_offset: 4.0, bar_width: 4.0, tile_scale: 1.06, hover_border: 1.0 };
+const FOCUS_MARKS: FocusMarks = FocusMarks {
+    ring_thickness: 3.0,
+    ring_offset: 4.0,
+    bar_width: 4.0,
+    tile_scale: 1.06,
+    hover_border: 1.0,
+    gap_colour: Colour::rgba(0, 0, 0, 0),
+    glow_colour: Colour::rgba(0, 0, 0, 0),
+    glow_blur: 0.0,
+    glow_spread: 0.0,
+    gapped: false,
+};
 
 const RAISED_SHADOW: Shadow = Shadow { colour: Colour::rgb(0, 0, 0), opacity: 0.5, offset_x: 0.0, offset_y: 8.0, blur: 24.0 };
+
+/// The kit's own corona: none, no rim and no glow, since the reference look draws no corona disc (EmuSen_Kit.md §7.116).
+const CORONA: Corona = Corona { rim: 0.0, glow_blur: 0.0, glow_spread: 0.0, halo_blur: 0.0, halo_spread: 0.0 };
 
 /// A text scale as the kit keeps it: 1 to 1.3, and 1 for anything that is not a number.
 pub fn clamp_text_scale(scale: f64) -> f64 {
@@ -186,6 +236,11 @@ pub const fn focus_marks(_form: Form) -> FocusMarks {
 /// A form's raised shadow, cast by a focused tile, a card's open edge and a page's cover.
 pub const fn raised_shadow(_form: Form) -> Shadow {
     RAISED_SHADOW
+}
+
+/// A form's corona round a dark disc.
+pub const fn corona(_form: Form) -> Corona {
+    CORONA
 }
 
 /// A section heading's size at text scale 1: the menus' 28 on the big screen, the desktop's Strong.

@@ -2291,6 +2291,10 @@ file unchanged), `GalaxiaParityTests`, `SystemTableParityTests` and `LeafAssembl
 - **What stays C#.** The registry a session applies (`CheatRegistry`, B7) and so `CheatImport`, which reads a file with
   `ChtFile.Parse` and adds what it read; the download (§15.4). **The list files** (`cheats/<game>.json`) were Galaxia's
   in Rust already (`EmuSen_RustPlatform.md` §20), so nothing of theirs moved.
+- **Since interface 48** (2026-11-14) a host that downloads the database itself installs it with
+  `emusen_cheats_install`, made whole in `<folder>.part` and swapped in by rename, as `DB_UPDATE` now installs too, and
+  `emusen_cheats_parse` reads a file by its path with a system's codecs and answers its cheats as a game's own list
+  (`EmuSen_RustPlatform.md` §56).
 - **The archive.** A zip is read here only where it is plainly one of stored and deflated entries; a Zip64 or spanned
   archive, an encrypted entry, another method, a name holding a NUL or a directory that is not one is left to the C#,
   which reads every form .NET does and refuses the rest as before, nothing having been written. Inflate is `flate2`
@@ -8758,6 +8762,29 @@ chose (the library's `coverfrom` edit, followed with the cycle guard), the playe
 console and libretro name from the systems table), ScreenScraper's store, an ES-DE folder, OpenEmu's folder. The
 metadata a view shows is the scraper's `metadata`: the player's edit (the library's), else the scraped text, else the
 file's. Both need the library; §30.9's Q3 asks for the handle to be lent.
+
+**A game's own picture as its cover** (the tester decided, 2026-11-13, R-20261113-10; service 2.1, platform interface
+49). The service's change `cover {path, system, type, folder_path, at}` makes one of the game's own pictures its cover by
+its media type (`screenshot`, `titlescreen`, `marquee`, `miximage`, `backcover`, `3dbox`, `physicalmedia`, `fanart`: a
+kind whose payload is a picture, `kinds::may_be_cover`), stored as the game's `covertype` edit in `games.db` through the
+lent library's `save_edits`; a null type, or `cover`, removes it. A type that is not a picture, or one the game has no
+file of where `media` would look, is refused with words and nothing is written; either choice ends a cover borrowed
+from another game (`coverfrom`; decided 2026-11-14, R-20261114-10). No file is copied, written or removed: the cover is a
+choice among the files. `media` for a cover then gives, after a borrowed cover, the chosen type's file while the game has
+one, and the cover found otherwise, so a picture taken away leaves the choice and shows the cover found. Its answer
+carries `type`, the media type of the file given, and for a borrowed cover `from`, the other game's file; `choices:
+false` asks for the cover found as though the player had chosen none, reads no edits, and is what Cover art's card for
+it shows. An edits read that fails is an error of `media` and `present`, not an answer of no choice; a handle with no
+library lent has no choice. Where a cover is shown the choice counts: `media` and `present` (a shelf's types, a cover
+counted from any source). Where a cover is to be fetched it does not: a run's failover to OpenEmu's sources asks for
+every game with no cover found, one that borrows a cover or shows its own picture included (`run.rs` `cover_found`).
+The Qt front end reads every cover through `media` (the library's grid, its ES-DE shelves, whose cover replaces the
+folder index's, and the game page), so each shows the choice. The C# front end reads its library's and themed view's
+covers through `media` too, but its game page's Cover Art and the stamp that keys its themed pictures read `coverfrom`
+from the edits themselves (`MainWindow.CoverChoice.cs`, `GameRecords.Edits.cs`), so they know nothing of `covertype`.
+The editor's Clear keeps `covertype` beside `coverfrom`. Held to the scraper's `tests/cover_choice.rs` and its
+`run.rs` test `a_game_showing_a_chosen_cover_still_lacks_the_cover_found`, and the library's
+`the_editors_clear_keeps_the_cover_choices_and_drops_the_details`.
 
 ### 30.7 The recorded-answer harness
 

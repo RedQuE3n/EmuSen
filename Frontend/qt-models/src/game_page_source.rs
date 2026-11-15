@@ -7,7 +7,7 @@
 
 use crate::clients::{app_settings, engine_shown, ClientSource};
 use crate::display::Crop;
-use crate::game_page::{Change, Choice, CropOffer, Detail, GamePageSource, Media, MediaKind, Package, PackageJob, Read, Slot, State, CHECK, DETAILS, MAKE};
+use crate::game_page::{cover_words, media_word, Change, Choice, CoverCard, CoverChoice, CropOffer, Detail, GamePageSource, Media, MediaKind, Package, PackageJob, Read, Slot, State, CHECK, DETAILS, MAKE};
 use crate::library::{console_name, title_of, HERO};
 use emusen_crystal_client::Scope;
 use emusen_platform_client::bindings::consts::PROFILES;
@@ -35,6 +35,18 @@ const MEDIA: [(&str, MediaKind); 6] = [
     ("manual", MediaKind::Manual),
 ];
 
+/// The words for a kind of picture, by its media store type and folder: the Media section's for a kind it shows, else the
+/// label of the Scraping settings' switch for the kind in Galaxia's rows (`scrape_run::kind_switch`), else its type.
+fn kind_words(rows: &Value, (kind, folder): (&str, &str)) -> String {
+    if let Some((_, shown)) = MEDIA.iter().find(|(t, _)| *t == kind) {
+        return media_word(*shown).to_owned();
+    }
+    let switch = crate::scrape_run::kind_switch(folder);
+    let all = rows.as_object().into_iter().flat_map(|m| m.values()).flat_map(|list| list.as_array().into_iter().flatten());
+    let row = all.into_iter().find(|r| r["key"].as_str().is_some_and(|k| k.eq_ignore_ascii_case(&switch)));
+    row.and_then(|r| r["label"].as_str()).map_or_else(|| kind.to_owned(), str::to_owned)
+}
+
 /// A file's modified time in seconds since 1970; none for no file.
 fn modified(path: &Path) -> Option<i64> {
     let at = std::fs::metadata(path).ok()?.modified().ok()?;
@@ -46,6 +58,43 @@ impl ClientSource {
         let Some(scraper) = self.scraper() else { return String::new() };
         let found = scraper.get(&json!({ "what": "media", "path": game.path, "system": esde_system, "type": kind }));
         found.ok().and_then(|f| f.get("path").and_then(Value::as_str).map(str::to_owned)).unwrap_or_default()
+    }
+
+    /// Cover art's cards, the one in use, and why there are none where the scraper that finds them could not be opened: a
+    /// cover borrowed from another game while it is shown, the cover found where one is, then each kind of picture the
+    /// scraper's `kinds` names (besides the cover's own) that the game has a file of; what is in use as `media` answers
+    /// the cover. A game on no console the systems table knows has no pictures looked for, so no cards.
+    fn covers(&self, game: &GameFile, esde_system: &str) -> Result<(Vec<CoverCard>, CoverChoice, Option<String>), String> {
+        let Some(scraper) = self.scraper() else { return Ok((Vec::new(), CoverChoice::Found, Some(crate::clients::NO_SCRAPER.into()))) };
+        if esde_system.is_empty() {
+            return Ok((Vec::new(), CoverChoice::Found, None));
+        }
+        let read = |choices: bool| scraper.get(&json!({ "what": "media", "path": game.path, "system": esde_system, "type": crate::library::COVER, "choices": choices }));
+        let (shown, found) = (read(true).map_err(words)?, read(false).map_err(words)?);
+        let path = |v: &Value| v["path"].as_str().filter(|p| !p.is_empty()).map(str::to_owned);
+        let in_use = match (shown["from"].as_str(), shown["type"].as_str()) {
+            (Some(from), _) => CoverChoice::Borrowed(from.to_owned()),
+            (None, Some(t)) if t != crate::library::COVER => CoverChoice::Own(t.to_owned()),
+            _ => CoverChoice::Found,
+        };
+        let card = |choice: CoverChoice, text: String, picture: String| CoverCard { text, choice, picture };
+        let mut cards = Vec::new();
+        if let (CoverChoice::Borrowed(_), Some(picture)) = (&in_use, path(&shown)) {
+            cards.push(card(in_use.clone(), cover_words(&in_use), picture));
+        }
+        if let Some(picture) = path(&found) {
+            cards.push(card(CoverChoice::Found, cover_words(&CoverChoice::Found), picture));
+        }
+        let kinds = scraper.get(&json!({ "what": "kinds" })).map_err(words)?;
+        let rows = self.platform.settings_rows().map_err(words)?;
+        let pictures = kinds.as_array().into_iter().flatten().filter(|k| k["payload"] == "image").filter(|k| k["type"] != crate::library::COVER);
+        for kind in pictures.filter_map(|k| Some((k["type"].as_str()?, k["folder"].as_str()?))) {
+            let file = self.media_file(game, esde_system, kind.0);
+            if !file.is_empty() {
+                cards.push(card(CoverChoice::Own(kind.0.to_owned()), kind_words(&rows, kind), file));
+            }
+        }
+        Ok((cards, in_use, None))
     }
 
     /// The states, slot by slot and then the automatic one, each where its file is, the most recent first.
@@ -204,6 +253,7 @@ impl GamePageSource for ClientSource {
         read.engine = Some(value(crate::edits::ALT_EMULATOR)).filter(|e| !e.is_empty());
         (read.package, read.layers, read.package_job) = self.package(game)?;
         read.scraping = self.scraping();
+        (read.covers, read.cover_in_use, read.covers_unread) = self.covers(game, &esde)?;
         let Some(s) = system else { return Ok(read) };
         // The engines: the console's own first, then each it may run on (Mistress's IGamePageHost.Engines).
         let cores = self.runtime.cores().map_err(words)?;
@@ -283,6 +333,13 @@ impl GamePageSource for ClientSource {
             }
             Change::Crop(Some(crop)) => self.library.change(&crop.set_record(path)).map(drop).map_err(words),
             Change::Crop(None) => self.library.change(&json!({ "op": "clear_crop", "path": path })).map(drop).map_err(words),
+            Change::Cover(kind) => {
+                let scraper = self.scraper().ok_or(crate::clients::NO_SCRAPER)?;
+                let systems = self.runtime.systems().map_err(words)?;
+                let system = systems.iter().find(|s| Some(&s.id) == game.system.as_ref()).ok_or("the game's console is not known")?;
+                let at = crate::words::utc(crate::words::now());
+                scraper.change(&json!({ "op": "cover", "path": path, "system": system.esde_system, "type": kind, "at": at })).map(drop).map_err(words)
+            }
             Change::Hide => {
                 let at = crate::words::utc(crate::words::now());
                 self.library.change(&json!({ "op": "save_edits", "path": path, "changes": { crate::edits::HIDDEN: crate::edits::YES }, "at": at })).map(drop).map_err(words)

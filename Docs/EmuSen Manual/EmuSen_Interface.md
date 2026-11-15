@@ -1307,9 +1307,11 @@ Each is a page in the same frame, the breadcrumb in the section strip (`Options 
 - **Details ▸ Edit Details ▸**: the metadata as rows (`Name`, `Console ◂ ▸`, `Year`, `Developer`, `Publisher`, `Genre`,
   `Players ◂ ▸`, `Description ▸`, `Hidden ◂ Off ▸`), A opening the docked keyboard on a text row, Y resetting the row
   to what was scraped; saved at once. `MetadataEditorWindow` retires.
-- **Details ▸ Cover Art ▸**: the covers to choose from as 150 × 200 cards: `Scraped (in use)`, ScreenScraper's
-  others, `Borrow from <game>` (the cover picker's borrowing), `Generated`; A uses the focused one. `CoverPickerWindow`
-  retires.
+- **Details ▸ Cover Art ▸** (decided 2026-11-14, R-20261114-9 and R-20261114-10): the covers to choose from as cards
+  four across, as the Eclipse board `EclipseGameCover` draws them, the one in use marked `In use` and the focused one
+  large beside: a cover borrowed from another game while it is shown, the cover found (`Cover`), then each of the game's
+  own pictures it has a file of (`Scraped screenshot`, `Title screen` and the rest). A uses the focused one, and any
+  choice ends a borrowed cover; there is no card for what cannot be chosen. `CoverPickerWindow` retires.
 - **Details ▸ Scrape This Game…**: the question form with the matches as rows (`Granite Choir (1994, Super Nintendo)`
   first and focused, then the others, then `Search by another name…` and `No`), the pane-less form's sentence saying
   what will be fetched. `FindByNameWindow` retires.

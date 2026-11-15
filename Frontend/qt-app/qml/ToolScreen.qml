@@ -17,6 +17,7 @@ Cores {
     property alias cores: toolModel.cores
     property alias world: toolModel.world
     property alias scraperTest: toolModel.scraperTest
+    property alias cheatsUrl: toolModel.cheatsUrl
     // Open Folder on a firmware page, and what failed, which the window answers.
     signal openFolder(string path)
     signal said(string words)

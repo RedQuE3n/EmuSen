@@ -35,7 +35,14 @@ T.TextField {
         implicitHeight: Kit.Tokens.controlHeight
         radius: Kit.Tokens.rowRadius
         color: Kit.Tokens.inputSurface
-        border.width: control.activeFocus ? Kit.Tokens.ringThickness : Kit.Tokens.hoverBorder
-        border.color: control.activeFocus ? Kit.Tokens.accent : Kit.Tokens.border
+        border.width: control.activeFocus && ring.onEdge ? ring.edgeWidth : Kit.Tokens.hoverBorder
+        border.color: control.activeFocus && ring.onEdge ? ring.edgeColor : Kit.Tokens.border
+        Kit.FocusRing {
+            id: ring
+            visible: control.activeFocus
+            anchors.fill: parent
+            radius: parent.radius
+            placement: Kit.FocusRing.Edge
+        }
     }
 }

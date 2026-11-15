@@ -75,7 +75,7 @@ fn a_handle_for_sources_alone_makes_nothing_on_disk_and_holds_no_lock() {
     let settings = format!(r#"{{"developer_files":false,"openemu":false,"sources_alone":true,"esde_media":{:?},"test":{{"offline":true}}}}"#, esde.to_string_lossy());
     let alone = Scraper::open(sqlite.clone(), &store.to_string_lossy(), None, &[], &settings).expect("a handle for sources alone opens");
     let game = emusen_scrape::media::Game { file: "/roms/snes/Game.sfc", folder_path: String::new(), folder: false };
-    let found = alone.locate("snes", &game, "cover").map(|(_, p)| p);
+    let found = alone.locate("snes", &game, "cover").unwrap().map(|(_, p)| p);
     assert_eq!(found.as_deref(), Some(esde.join("snes").join("covers").join("Game.png").to_string_lossy().as_ref()));
     assert!(!store.exists(), "a handle for sources alone made {}", store.display());
     let full = open(&store).expect("a full handle opens beside one for sources alone");

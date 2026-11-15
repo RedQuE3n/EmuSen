@@ -57,6 +57,11 @@ pub fn by_type(esde_type: &str) -> Option<Kind> {
     ALL.iter().copied().find(|k| k.esde_type == esde_type)
 }
 
+/// Whether a game's own file of the type may be chosen as its cover: a picture of a kind other than the cover's.
+pub fn may_be_cover(esde_type: &str) -> bool {
+    by_type(esde_type).is_some_and(|k| k.payload == Payload::Image && k != COVER)
+}
+
 /// The extensions ES-DE's guide lists for a type's files ("Manually copying game media files"), in the order tried.
 pub fn extensions(esde_type: &str) -> &'static [&'static str] {
     match esde_type {

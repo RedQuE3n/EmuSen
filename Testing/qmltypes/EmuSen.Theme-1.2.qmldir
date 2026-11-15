@@ -25,3 +25,7 @@ FigureLayout 1.0 qml/FigureLayout.qml
 WheelLayout 1.0 qml/WheelLayout.qml
 OrbitSlot 1.0 qml/OrbitSlot.qml
 EdgeFade 1.0 qml/EdgeFade.qml
+FocusRing 1.1 qml/FocusRing.qml
+PlanetMark 1.2 qml/PlanetMark.qml
+CoronaGlow 1.2 qml/CoronaGlow.qml
+CoronaDisc 1.2 qml/CoronaDisc.qml

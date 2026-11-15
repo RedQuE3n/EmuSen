@@ -2,6 +2,7 @@
 //! from this commit's `Platform/`, a scratch tree with Galaxia's config and data redirected into it, and the test core's
 //! images. Nothing here names a runtime crate: the library is reached as the front end reaches it, by its path.
 
+pub mod cheats;
 pub mod cores;
 pub mod play;
 pub mod scraper;
@@ -22,6 +23,20 @@ pub const TEST_EXTENSION: &str = ".tst";
 /// The Platform workspace of this commit.
 pub fn platform_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Platform")
+}
+
+/// One of the platform's examples built in the fixture's profile, once per test process, and its program's path.
+pub fn example(name: &str) -> PathBuf {
+    let dir = platform_dir();
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    let status = Command::new(cargo)
+        .current_dir(&dir)
+        .args(["build", "--quiet", "--profile", PROFILE, "-p", "emusen-platform", "--example", name])
+        .env_remove("CARGO_TARGET_DIR")
+        .status()
+        .expect("cargo runs");
+    assert!(status.success(), "the platform's example {name} did not build: {status}");
+    dir.join("target").join(PROFILE).join("examples").join(name)
 }
 
 struct Built {

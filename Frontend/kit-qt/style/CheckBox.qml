@@ -20,8 +20,15 @@ T.CheckBox {
         y: control.topPadding + (control.availableHeight - height) / 2
         radius: Kit.Tokens.rowRadius / 2
         color: control.checkState !== Qt.Unchecked ? Kit.Tokens.accent : Kit.Tokens.inputSurface
-        border.width: control.activeFocus ? Kit.Tokens.ringThickness : Kit.Tokens.hoverBorder
-        border.color: control.activeFocus ? Kit.Tokens.accent : Kit.Tokens.border
+        border.width: control.activeFocus && ring.onEdge ? ring.edgeWidth : Kit.Tokens.hoverBorder
+        border.color: control.activeFocus && ring.onEdge ? ring.edgeColor : Kit.Tokens.border
+        Kit.FocusRing {
+            id: ring
+            visible: control.activeFocus
+            anchors.fill: parent
+            radius: parent.radius
+            placement: Kit.FocusRing.Edge
+        }
         Rectangle {
             anchors.centerIn: parent
             width: parent.width * 0.5

@@ -250,8 +250,8 @@ tracks, mapped files, migration, `config_read`, `config_write` and `config_delet
 `model_format`, `model_load_from`, `model_save_to`, the cheat lists' contents, the error log, `suggest`; the library's
 `identity` and `abi_version`; `emusen_patch_package_image`; the disc sets
 (`emusen_disc_*`); emusen-systems' libretro cores, save media formats, code, recognition, route, header,
-disassembly, board name and view; `emusen_firmware_find` and `_locate`; the cheat files' codecs
-(`emusen_cheats_parse`, `_write`); the HTTP client (`emusen_net_download_*`); the medium locks; Endymion's resampler, rate control,
+disassembly, board name and view; `emusen_firmware_find` and `_locate`; the cheat files' `emusen_cheats_write`; the
+medium locks; Endymion's resampler, rate control,
 `pad_resolve`, `pad_combine`, `pad_controls_for`, `pads_use`,
 `pads_rescan_due`, the simulated pads' texts read, holds and device calls, the game player's resampler and rate calls not named in §1.8.6,
 the interface player's `volume` (its `decode` and `decode_take` are `sounds::decode` since 2026-11-09, §4.15); and the rest of Serenity (sources, the compiler,
@@ -265,7 +265,10 @@ the device made for an adopting host, its raw handles, a built-in filter's prese
   stay `serde_json::Value`, so the tools stay the owners of their fields: `core-ls`, `core-fetch`, `core-verify`,
   `pkg-ls`, `rom-check`, `rom-dups` and the disc batch (`ls`, `convert`, `check`) are requests, not calls.
 - `cheats`: the database (`emusen_cheats_database_*`) opened, its entries, the three questions and the prune's plan;
-  the plan applied (`emusen_cheats_prune_apply`). Galaxia's saved lists by name, a name checked, and a game's own list
+  the plan applied (`emusen_cheats_prune_apply`); since interface 48 an archive installed (`emusen_cheats_install`),
+  a `.cht` file read as a game's own list (`emusen_cheats_parse`) and the database's address
+  (`EMUSEN_CHEATS_DATABASE_URL`). `net` (since 48): the HTTP client's download (`emusen_net_download_*`) started, its
+  progress, a wait, a stop, its body and its failure. Galaxia's saved lists by name, a name checked, and a game's own list
   (`emusen_galaxia_cheat_*`) are in `galaxia`.
 - `packages`: a manifest read, written and laid out as its text, so every member stays in place, those this build does
   not know included (the client's `serde_json` keeps no order); the claim index and a resolve as JSON.
@@ -931,9 +934,10 @@ card** (§0.7 there) and no theme colour is read into one. A card opens over the
 
 ### 3.2 What a theme sees: the `EmuSen.Theme` API **[M 2026-11-08]**
 
-`import EmuSen.Theme 1.0` gives a theme exactly these, each a QML singleton or type, each a view over `emusen-qt-models`
+`import EmuSen.Theme` gives a theme exactly these (a type added after 1.0 needs the minor that added it, as
+`Frontend/theme-qt/CHANGELOG-theme-api.md` lists), each a QML singleton or type, each a view over `emusen-qt-models`
 with the fields a theme may read and nothing more. The table is the module as built (`Frontend/theme-qt`, the crate
-`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.0.*` and held to this table by hand in
+`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.2.*` and held to this table by hand in
 `tests/surface.rs`. The amendments of 2026-11-08 are listed in `Frontend/theme-qt/CHANGELOG-theme-api.md`.
 
 | Name | Kind | What it holds |
@@ -1032,7 +1036,7 @@ left out of `Tokens.qml` (the surface test).
 
 ### 3.3 Versioning
 
-The API is the module's version, `EmuSen.Theme 1.0`. Until the first release every change, an addition, a change, a
+The API is the module's version, now `EmuSen.Theme 1.2` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
 removal or a rename, bumps the minor, and a role or action deprecated in one minor may be removed in any later one
 (decided 2026-11-11 by the tester, R-20261111-107, R-20261111-108, §5.3). After it, a minor adds singletons, roles,
 actions, cues or tokens and never removes or renames one; a role or action no longer meant is kept and marked
@@ -1636,7 +1640,7 @@ Decided 2026-11-11 by the tester: Eclipse is EmuSen's default look, and the pres
 theme API is not widened for that. A blank setting still gives the reference: which theme a blank setting gives changes
 only once Eclipse has screens of its own.
 
-**The package.** `Frontend/themes/eclipse/` holds `theme.json` alone: name Eclipse, `api` 1.0, the dark variant, no
+**The package.** `Frontend/themes/eclipse/` holds `theme.json` alone: name Eclipse, `api` 1.2 (its corona tokens are 1.2's, the newest it sets; its focus tokens are 1.1's), the dark variant, no
 screen of its own (`"screens": []`), no cue, no preview, and the token overrides below. With no screens, every screen is
 the reference's: Home, Choose a console and the games are drawn by the reference's host, whose engine keeps the kit's
 tokens, so only the program's own screens (Settings, the cards, the game page, the Pause Card, the tools, the questions
@@ -1648,7 +1652,7 @@ today shows the reference's screens, which would not show Eclipse. The manifest 
 `themes::built_in_folder` gives each one's folder in the resources, `qrc:/emusen/themes/<id>/`, which `qt-app/themes.qrc`
 holds file for file. `BuiltInThemes` (`qt-app/src/theme.rs`) reads each built-in's `theme.json` through Qt for the Themes
 tab and gives the window the reference's folder. In the tab, Eclipse's row follows EmuSen's: "Eclipse", "By The EmuSen
-project · EmuSen.Theme 1.0 · dark", and "Checked: nothing found." (built-ins are checked by the build's tests, here
+project · EmuSen.Theme 1.2 · dark" (the minor is the manifest's `api`), and "Checked: nothing found." (built-ins are checked by the build's tests, here
 theme-check's `qt_3_4_7_the_built_in_eclipse_package_is_clean`). Use stores the id `eclipse`; `themes::resolve` gives
 `Resolved::BuiltIn`, whose host folder is the resources', so the chosen theme's host loads it and `ThemeStyle` puts its
 overrides on the program's engine.
@@ -1667,6 +1671,7 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 |---|---|---|---|---|
 | surface | a screen's ground behind its frame (`kit-qt/qml/Frame.qml:37`) | the ground (`EclipseSettings:17`) | #07080F | #07080F |
 | surfaceRaised | the focused row (`MenuRow.qml:34`), a notice (`NoticeLayer.qml:60`) | the focused row (`EclipseSettings:94`), the notice (`EclipseDialog:23`) | #151826 | #151826 |
+| border | an unfilled button's outline (`ActionButton.qml:30`), a switch's track (`style/Switch.qml:24`) | the outline and the track (`EclipseDialog:40`, `EclipseSettings:94`) | #5A6076 | #5E647B |
 | inputSurface | a text field (`style/TextField.qml:37`) | a text field (`EclipseGameEdit:84`) | #11131C | #11131C |
 | scrim | the Home card's scrim (`qt-app/qml/MenuCard.qml:81`) | the scrim under the Menu card (`EclipseHomeCard:22`) | rgba(4, 5, 10, 0.62) | #9E04050A |
 | rule | the help bar's top line (`HelpBar.qml:63`) | the help bar's top line (`EclipsePause:57`) | rgba(246, 231, 216, 0.35) | #59F6E7D8 |
@@ -1680,8 +1685,14 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 | rowHeight | a row (`MenuRow.qml:28`) | a row (`EclipseSettings:42`) | 84 px | 56 |
 | rowRadius | a row's corners (`MenuRow.qml:33`) | a row's corners (`EclipseSettings:42`) | 20 px | 13.333… |
 | tileRadius | a notice's corners (`NoticeLayer.qml:59`) | the notice's corners (`EclipseDialog:23`) | 22 px | 14.666… |
-| ringThickness | the ring's width (`ActionButton.qml:39`) | the ring, 3 to 6 px out (`EclipseSettings:94`) | 3 px | 2 |
-| ringOffset | the gap inside the ring (`ActionButton.qml:36`) | the dark gap (`EclipseSettings:94`) | 3 px | 2 |
+| ringThickness | the ring's width (`FocusRing.qml`, kit §7.113) | the ring, 3 to 6 px out (`EclipseSettings:94`) | 3 px | 2 |
+| ringOffset | the gap inside the ring (`FocusRing.qml`) | the dark gap (`EclipseSettings:94`) | 3 px | 2 |
+| ringGapColor | the gap's colour (`FocusRing.qml`) | the dark gap (`EclipseSettings:94`) | #07080F | #07080F |
+| glowColor | the glow under the ring (`FocusRing.qml`) | the glow (`EclipseSettings:94`) | rgba(240, 180, 196, 0.4) | #66F0B4C4 |
+| glowBlur | the glow's blur (`FocusRing.qml`) | the glow's blur (`EclipseSettings:94`) | 40 px | 26.666… |
+| glowSpread | the glow's spread (`FocusRing.qml`) | the glow's spread (`EclipseSettings:94`) | 8 px | 5.333… |
+| ringGapped | every ring past its gap (`FocusRing.qml`, R-20261114-21) | every focus ring on the boards is past a gap (`EclipseSettings:94`) | the gapped ring | true |
+| buttonRadius | a button's corners (`ActionButton.qml:27`, `style/Button.qml:31`) | the dialog's buttons, 72 px high (`EclipseDialog:39`) | 36 px | 24 |
 | hoverBorder | an unfilled button's outline (`ActionButton.qml:29`) | the unfilled button's outline (`EclipseDialog:40`) | 2 px | 1.333… |
 | controlHeight | a button (`ActionButton.qml:22`) | the button (`EclipseDialog:39`) | 72 px | 48 |
 | helpBar | the help bar (`HelpBar.qml:43`) | the help bar (`EclipsePause:57`) | 76 px | 50.666… |
@@ -1690,13 +1701,20 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 | fontCaption | Settings' section names (`SettingsFrame.qml:77`) | the section names (`EclipseSettings:32`) | 23 px | 15.333… |
 | fontTitle | a question's title (`Question.qml:23`) | the question's title (`EclipseDialog:36`) | 44 px | 29.333… |
 | fontDisplay | the game's name on its page (`PageFrame.qml:151`) | the game's name (`EclipseGame:44`) | 104 px | 69.333… |
+| coronaColor | a corona disc's rim (`kit-qt/qml/CoronaDisc.qml`, §7.116 of EmuSen_Kit.md) | Home's disc, its rim (`Main:25`) | #F6E7D8 | #F6E7D8 |
+| coronaRim | the rim's width | the same (`Main:25`) | 2 px | 1.333… |
+| coronaGlowColor | the disc's near glow | the same, the second shadow (`Main:25`) | rgba(246, 214, 200, 0.6) | #99F6D6C8 |
+| coronaGlowBlur | the near glow's blur | the same (`Main:25`) | 44 px | 29.333… |
+| coronaGlowSpread | the near glow's spread | the same (`Main:25`) | 8 px | 5.333… |
+| coronaHaloColor | the disc's far glow | the same, the third shadow (`Main:25`) | rgba(236, 160, 186, 0.28) | #47ECA0BA |
+| coronaHaloBlur | the far glow's blur | the same (`Main:25`) | 170 px | 113.333… |
+| coronaHaloSpread | the far glow's spread | the same (`Main:25`) | 46 px | 30.666… |
 
 The colour of the notice's shadow is black on the board, the kit's own, so `shadowColor` is not overridden; `safeAreaX`
-(96 px, 64 units) is the kit's value too. Left at the reference's value, each for its reason:
+(96 px, 64 units) is the kit's value too. `border` is not the board's #5A6076, which is 2.83:1 on surfaceRaised and 2.97:1
+on inputSurface, under theme-check's 3:1 floor for graphics: decided 2026-11-14 by the tester (R-20261114-35), it is
+#5E647B, 3.01:1 and 3.16:1, and no board is edited. Left at the reference's value, each for its reason:
 
-- `border`: the boards' outline of an unfilled button and of a switch's track (#5A6076, `EclipseDialog:40`,
-  `EclipseSettings:94`) is 2.83:1 on surfaceRaised and 2.97:1 on inputSurface, under the kit's 3:1 floor for graphics;
-  theme-check refuses it. The tester's to rule on.
 - `voidFill`: the boards draw black behind a game (`EclipsePause:17`), which is the kit's.
 - `success`, `error`, `attention`: no board draws words in a tone colour; a status is a filled chip (`EclipseSettingsConsoles:78`).
 - `captionSurface`, `overArt`, `overArtScrim`: the game page's board draws the disc over its art, not the kit's caption and
@@ -1708,7 +1726,7 @@ The colour of the notice's shadow is black on the board, the kit's own, so `shad
   `tileScale`, `safeAreaY`, the durations, curves and breathing: no board element measured as the same thing.
 
 **Board colours with no kit role**, for later pieces, no role bent to carry them: the rose of the focus glow (#F3C9D2,
-rgba(240, 180, 196, 0.4) at `EclipseSettings:94`), the corona disc and its rim, a resting row's own surface and edge
+rgba(240, 180, 196, 0.4) at `EclipseSettings:94`), a resting row's own surface and edge
 (#0F111A, #22263A, `EclipseSettings:94`; the kit draws a resting row on the screen's ground), a resting switch's knob
 (#B9BED0, where the kit uses textStrong), the help bar's words (#D8DBE6, where the kit uses text), a pill's corners
 (36 px, where the kit's button uses rowRadius), and the blurred colour fields.
@@ -3661,6 +3679,66 @@ the last table and on nothing else; kit-core's `glyph` (7 tests, the pair's amon
 `baseline`, `GlyphLine`) committed under `Testing/qmltypes`, each addition declared last. Seven seeded faults, each
 reverted: six caught as written above (the pair glyph off, the fractional advances, the glyph's side, the info gap, no
 default face, the filled axis cut at one tip), and one, the info marks square, not caught and replaced.
+
+#### 4.8.8 A theme's fade transitions and `fadeAbovePrimary` **[M 2026-11-14]**
+
+The rules, read in ES-DE 3.4.1's source (`es-app/src/views/ViewController.cpp`, `SystemView.cpp`,
+`es-core/src/Window.cpp`, `resources/shaders/glsl/core.glsl`); the durations live in `scene/motion.rs` beside the slide's,
+the curve's points in `scene/fade.rs` as named constants (`RISE`, `RISING_UNTIL`, `WHOLE_UNTIL`, `FALL_FROM`, `FALL`,
+`CAMERA_AT`), each citing its line.
+
+- **Between views** (system to gamelist, gamelist to system, gamelist to gamelist, startup to either):
+  `ViewController::playViewTransition` draws a black rectangle over the screen whose alpha rises linearly over 120 ms
+  (`FADE_DURATION`, line 971), moves the camera to the new view, holds the black for 200 ms (`FADE_WAIT`, 972) and lowers
+  it linearly over 120 ms: 440 ms in all. The view left is the one on the screen for the first 120 ms. A fade begun while
+  another is part way starts from that one's black (lines 983-991). The help is drawn under the black
+  (`renderHelpPromptsEarly`, 1378), the clock and the status over it (`Window::render`, 715-735). At startup the camera
+  starts away from the view (lines 680-693, 878-885), so the screen is black until the view fades in.
+  A press meanwhile reaches the view the camera goes to (`ViewController::input`, 1313-1314): the painter reads the
+  primary's kind from the current view's theme, not from the drawn frame, which holds no primary while the black has not
+  yet covered the screen. Found 2026-11-14 when the oracle's Artflix gamelist (its profile names no startupToGamelist,
+  which then takes gamelistToGamelist's fade) dropped its press to the first game; held by esde-qt's painter test
+  `a_press_while_the_first_gamelist_fades_in_moves_its_selection`.
+- **Between systems** in the system view (`SystemView::onCursorChanged`, 427-476): a run of 400 ms x 1.3 for a carousel or
+  a list and 300 ms x 1.3 for a grid. Its black f rises as t/0.2 plus the black it started from, is 1 from 0.3 to 0.7 of
+  the run, and falls as 1 - (t - 0.6)/0.3, from 2/3 at 0.7 to 0 at 0.9 (451-457). The system left shows until half way
+(line 459).
+  `renderElements` dims the elements at or below the primary's zIndex by 1 - f (1720-1722); since the shader multiplies
+  colour only (`core.glsl` 171-174), that is a black box of opacity f between them and the primary, which is how the scene
+  draws it, as a `Paint::fill`. The elements above the primary keep their opacity, or with **`fadeAbovePrimary`** take
+  1 - f (1695-1699). The help, clock and status are the window's, not the view's children, and do not fade: ES-DE keeps
+them in lists of their own (`helpComponents`, `clockComponents`, `systemStatusComponents`, 758-772), `renderElements`
+draws only `children` (1665), and `Window::render` draws the clock and status after the views (715-735). In the scene
+they cannot be ranked under the black: their types declare no `zIndex` (`loader/catalog.tsv`, the `helpsystem`,
+`systemstatus` and `clock` blocks), a theme's `zIndex` on them is dropped as an unknown property (`loader/parse.rs`,
+`properties`), so their zIndex is none and `draw.rs` ranks them above the primary.
+- **A held direction** (`mMaxFade`, 189-207, 462-472): from 0.7 of a run with the direction held, the faded elements are not
+  drawn at all until the black is whole again in a later run, so a held scroll stays dark; it is set until then, so a
+  press after a long hold starts with them off.
+- **The drawing order**: the system view draws the elements at or below the primary's zIndex, then the primary, then the
+  rest (`SystemView::render`), whatever order equal zIndexes were written in.
+
+Not built: a slide between systems or between two gamelists (both still change at once, as before), and the system
+left's video paused at its frame during the first half (its still is drawn). Proof: `emusen-esde`'s `fade` tests, the
+painter's startup and quick-system-select fade, and the three `fadeAbovePrimary` cases in `mapping-cases.tsv`, read 48 ms
+after the press, on the black's rise (0.46 of the black for a carousel or list, 0.62 for a grid), so a fade that starts
+a frame late or a curve that is flat there paints both values alike. On the real view, `esde-qt`'s `fade_above_true`,
+`fade_above_false`, `fade_instant` and `fade_slide` (one Qt application each) press once on a held clock under Qt's
+basic render loop and read every 16 ms frame from the press to past the run's end: the view's own clock is at the held
+time exactly, and the black, the picture above, the picture below (the system left's to half way, then the arriving
+one's at its own width) and the drawing order are ES-DE's at that time, stated in the tests from ES-DE's source.
+
+**The held clock under a threaded render loop (2026-11-14).** The first real-view fade test ran under
+`QSG_RENDER_LOOP=threaded` (the GPU tier's `common::start`), where Qt Quick installs its own animation driver and refuses
+the held one (EmuSen_Kit.md §7.36): every frame was read on the render loop's clock, which ran on while the test read the
+tree, so a step meant for 16 ms read about 66 ms, and a second theme's fade ran its whole run between two reads. The fade
+tests now set the basic render loop, as `mapping.rs` does, and assert the view's clock at every frame. Measured on
+2026-11-14 with `fade_above_true` under the threaded loop: Qt printed "QUnifiedTimer: animation driver already
+installed...", and the view's clock read 33, 66, 100, 150, 166, 200 ms at held 16, 32, 48, 64, 80, 96 ms, the run over by
+the held 192 ms; under the basic loop it read each held time to the microsecond. How large each of the threaded loop's
+steps is was not read in its driver's source and is not known. The view's clock is a `NumberAnimation`'s interpolated
+value (240 ms reads 239.99999999999997); the painter rounds each step to a whole microsecond, so the tests compare the
+two to within half of one.
 
 ### 4.9 ES-DE's text rules: `emusen-esde-text` **[M 2026-11-09]**
 
@@ -6775,13 +6853,30 @@ for each library game whose console names cheat systems (the systems table's `ch
 newest (its time as the archive gave it). Each row is a game the database has a file for, sectioned by console; its
 value is `N of M on` for the game's own list (the one the Pause Card and the game page switch; the words are
 `cheats::count_words`, shared with the game page), or `No list yet`; the pane names the database's file, and X lists
-the game's own cheats. Getting or updating the database and making a game's list from its file are not offered: the
-base's one install, `DB_UPDATE`, fetches libretro's address with no progress and no stop, and the conversion of a
-`.cht` file's cheats to a game's list (`CheatRegistry::to_file`) has no call; both await an addition to the base.
-Held to by `qt-app/tests/cheats_tool.rs` (the pad opens Cheats from the Home card; with no database it says where one
-would be; with `.cht` files written into that folder as an install leaves them it lists the SNES game under its
-console and not a game of another console with a file of its name; a game's own list then reads `1 of 2 on` and X
-lists it).
+the game's own cheats. Since interface 48 (2026-11-14; `EmuSen_RustPlatform.md` §56) the List card offers `Get the
+database`, or `Update the database` where one is installed. It downloads the database with the base's
+`emusen_net_download_*` from `EMUSEN_CHEATS_DATABASE_URL` (a program's `cheatsUrl` names another address, as a test
+names its loopback server), with no timeout, since the base exports none. While it downloads, the bar says `Downloading:
+<size> of <size>` with its share, each size in the Cores tool's words (`tools::cores::words::size`), and the List card
+offers `Stop the download`, which ends it (`Stopped`). Once done, `emusen_cheats_install` installs it (`Installed N cheat
+file(s)`) and the tool reads the database again; a download that is stopped or fails installs nothing, and each
+failure is said where it happened: the download, its archive, the install, or an answer the tool cannot read. A
+game's row with no list of its own offers A, `Make its list`: the list is made from the game's file in the database,
+read by `emusen_cheats_parse` with `{"path", "system"}` (its console's codecs), and saved as the game's own list,
+which the game's page then counts. Where the list could not hold some of the file's cheats, the bar says how many were
+left out. Held to by `qt-app/tests/cheats_tool.rs` (the pad opens Cheats from the Home card; with no database it says
+where one would be; with `.cht` files written into that folder it lists the SNES game under its console and not a game
+of another console with a file of its name; a game's own list then reads `1 of 2 on` and X lists it),
+`qt-app/tests/cheats_get.rs` (from the test's own server, the pad gets the database with the progress part way, a stop
+leaves no database, a second get installs it, A makes the game's list, and the game's page reads `1 of 2 on`) and
+`qt-models/tests/tool_cheats.rs` (the same through the tool's model, the list's cheats and writes read back, and the
+words for a list with cheats left out). No test opens the Pause Card on a list made here.
+
+**Decided 2026-11-14 by the tester:** the download has no time limit; the player sees its progress and can stop it
+(R-20261114-22). A failure the base records without a reason reads `It could not be downloaded, and no reason was
+given`, and a download done with no body `It was downloaded, but there was no archive to install` (R-20261114-24); the
+words of an ended download are `tools::cheats::ended` and `archive`, held to by `tool_cheats.rs`. Settings ▸ Library ▸
+Cheats says `The cheats of the game last played, turned on or off.` (R-20261114-23), held to by `qt-models/tests/settings.rs`.
 
 ### 7.8 Stage 5, piece G: a game's page and its clip (2026-11-09)
 
@@ -7082,8 +7177,8 @@ Seeded faults, each reverted:
   each with the value the scraper's `metadata` resolves; A types it on the docked keyboard, Done saves it at once as a
   games.db edit (empty words put back what was scraped), Y puts back what was scraped, B goes back to Details. A name
   edited names the game in the grid too: the library reads games.db's `name` edits.
-- **Not opened yet**, so not shown: Details' Cover art (Cheats is §7.8.3's; Display crop and Package §7.8.4's). The viewer's
-  `X Set as cover` and `Y Delete…` of §18.2 are not built. The run fetches the scraper's default kinds, not the
+- **Not opened yet**, so not shown at the time: Details' Cover art and the viewer's `X Set as cover`, since built
+  (§7.8.5); Cheats is §7.8.3's, Display crop and Package §7.8.4's. The viewer's `Y Delete…` of §18.2 is not built. The run fetches the scraper's default kinds, not the
   player's Scrape kinds settings, which nothing maps to the scraper's kinds yet.
 - Tests: qt-models' `game_page` (the viewer over the media, the run's words, Edit Details' rows), qt-app's `page_doors`
   (the viewer paged by the pad, a scrape against the recorded server to done with the cover shown, a name typed, stored
@@ -7133,14 +7228,51 @@ Seeded faults, each reverted:
   off the GUI thread into the jobs tools' `Run`, and the row says its state as their rows do (`jobs::state_words`). When
   it ends the page is read again, and a package made asks the library to scan again. A package made since the scan
   claims the game while `pkg-ls` finds the game as recorded, so it reads as Linked, not Changed.
-- **Cover art** is not built: the base keeps a game's cover choice only as another game's (`coverfrom`, read by the
-  scraper's `locate`) or as a file in the player's art folder (`art_added` names one to the index); no call makes one
-  of the game's own fetched pictures its cover.
+- **Cover art** was not built here: the base kept a game's cover choice only as another game's (`coverfrom`) or as a
+  file in the player's art folder; §7.8.5 adds the call and the page.
 - Tests: qt-models' `game_page` (both pages' rows, steps and the job's words) and `display` (the game's crop on a
   television alone), qt-app's `game_page_rows` (in the program: a crop stored for one game and not the other, a package
   made and then checked to done) and `game_crop_gpu` (a GPU job: on VenusRT, a Super Nintendo image the test makes
   draws red with its left quarter forced black; the console's custom 25% crop cuts the quarter, the game's own Whole
   picture brings it back on its next start, and a second game keeps the console's crop).
+
+#### 7.8.5 Cover art and the viewer's Set as cover (2026-11-13, cards 2026-11-14)
+
+The tester decided, 2026-11-13 (R-20261113-10): one of a game's own pictures may be its cover. The base's call is the
+emusen.scrape service's change `cover` (2.1, platform interface 49; `EmuSen_Backend.md` §30.6). **Details ▸ Cover art**
+(after Edit Details, its value the words of the card in use) opens Cover art as the Eclipse board `EclipseGameCover`
+draws it (decided 2026-11-14, R-20261114-9), in its own `Kit.Frame` over the page: the game and Details above the
+title, the cards four across in the frame's content (`Kit.CoverTile` each, its words under it, the one in use marked
+`In use`), the focused card large in the frame's pane beside (`Kit.Card`), and the help bar `A Use this one`, `Y
+Favourite`, `B Details`, `Start Home` with the focused card's place ("2 of 8") at its end. The cards (R-20261114-10): a
+cover borrowed from another game while it is shown (`Borrowed from <game>`, in use), the cover found (`Its own`, read
+with `media`'s `choices: false`, and no card where none was found), then each kind of picture the scraper's `kinds`
+names that the game has a file of, named by the Media section's words for a kind it shows, else by the label of the
+kind's Scraping switch in Galaxia's rows (`Mix images`; `game_page_source.rs` `kind_words`). A game with none of these
+has no Cover art row. Where the scraper could not be opened the row stays, opening nothing, and A says `Cover art could
+not be opened: the scraper could not be opened`. A on another card makes it the cover
+at once and ends a borrowed cover, whose card then goes; A on the card in use does nothing; B goes back to Details. The
+page's cover, the grid's tile and an ES-DE theme's cover then draw it, since each reads the cover through the scraper's
+`media`; the library reads again as after an edited name. The cards' size comes from the frame's content width, the
+board's four across and its card's shape; the pane beside is the kit's card width. **The media viewer** offers `X Set
+as cover` in its help bar for a scraped picture that is not the cover already (not the player's own screenshots, a clip
+or the manual); the viewer stays open (R-20261114-11). Tests: the scraper's `cover_choice`, the library's
+`the_editors_clear_keeps_the_cover_choices_and_drops_the_details`, qt-models' `cover_source` (over the real source: no card for a cover not found, a borrowed cover read from the base's `from`, a kind's Scraping word) and `game_page` (the cards, the mark, a
+borrowed cover, the viewer's offer) and qt-app's `page_cover` (in the program: the pad chooses the title screen's card,
+the page's cover, the card's mark and the grid's tile show it, Its own brings the cover found back, kit-core's rules and
+the pad's reach over Cover art at each of the gate's window sizes, and X in the viewer makes the screenshot the cover).
+
+**Decided 2026-11-14 by the tester:** the words are the board's: the page's title and the Details row `Cover Art`
+(`game_page::COVER_ART`; the board draws no Details list, so its trail's `Cover Art` names the row), the cover found's
+card `Its own`, a borrowed cover's `Borrowed from <game>` (R-20261114-26). With R-20261114-10, a `None` card
+(`game_page::COVER_NONE`, no picture, so `Kit.CoverTile` draws its generated card) stands in the found cover's place
+only where no cover was found for the game and a choice is in use (one of its own pictures or a borrowed cover); A on it
+is the change `cover` with a null type, which the base takes as putting the found cover back and ending a borrowed one
+(`emusen_scrape_service.h`, `media.rs` `choose_cover`), so the choice clears and the card goes (R-20261114-28). In every
+other case there is no such card. Held to by qt-models' `game_page`
+(`qt_7_8_5_none_is_a_card_only_where_no_cover_was_found_and_a_choice_is_in_use_and_it_clears_the_choice`: the one case
+and the three where it must not appear) and `cover_source` (`qt_7_8_5_none_clears_a_chosen_cover_through_the_base_where_no_cover_was_found`), and in the program by qt-app's `page_cover_none` (a game with no cover found and its title screen chosen: None first, reached by the pad, nothing cut off or overlapping at the gate's sizes, and A on it clears games.db's `covertype` and the card goes). The pad's walk of Cover Art is `qt-app/tests/common/cover_art.rs`, shared by both program tests.
+The pictures' labels stay plural until the back end gives a singular word per kind (R-20261114-27).
 
 ### 7.9 Repair piece DC-B: the program does what it offers and says when it fails (2026-11-11)
 
@@ -7859,6 +7991,38 @@ On Vulkan in the test's own compositor (RX 6800, 2026-11-08) the acceptance pass
 over the suspended game across 19:09 to 19:10, in which Continue's words went from "Paused just now" to "Paused 1 minute
 ago", passed every span: the reference theme says the paused game's words again only when `Device.clock` reads a new
 minute, so that change is the clock's.
+
+**The start's late reads (measured on 2026-11-14).** `idle.rs` failed 3 runs of 8 on `c32875c1b` with the machine's load
+average about 9 to 10, each at its first check: "Home: 1 frames swapped" (`[no item]`) or "4 frames swapped", the
+latter naming Settings' rows, `valueText`, `labelText`, `SettingsCaption`, `SettingsLine`, `settingsPaneLines`,
+`settingsSentence` and Home's `homeStatus`. The test began its span once `library.loading` was false, but naming the
+platform library starts three reads, each off the GUI thread: the library's, the settings' (`SettingsModel::refresh`,
+which sets `ready`) and the pads' first (`PadReader`, its first tick carrying the count). Watched from the moment the
+library is named (each property's change signal counted every 5 ms through the harness, five runs on `c32875c1b`, three on
+`541d91564`), the library answered at 28 to 197 ms, the settings at 25 to 207 ms and the pads at 208 to 299 ms, in no
+fixed order, and each later answer drew frames: the settings filled Settings' rows (one row inserted, values set), hidden
+behind Home, and the pads changed Settings' Controllers sentence and Home's status line ("0 controllers" to "1
+controller", a real pad on the desk). The earlier trunk drew the same frames, so no piece of the last landing brought it:
+`idle.rs` has waited on the library alone since it was written (`793e51539`), when Home's status line already counted
+`pads.connected`, and the settings read joined the start with Settings (`2a3772454`). Whether a span caught a late answer
+depended on how the threads were scheduled. Two changes follow. Settings is made only while shown, in a `Loader` whose
+`active` is `screens.shown === Screens.Settings`, so a change to the settings costs no frame behind another screen (Qt
+syncs a dirty item whatever its visibility, as above). The Loader makes `SettingsScreen.qml`, a plain item it sizes, with
+the canvas inside scaling to it, since a Loader given a size resizes its item and would override the canvas's own design
+size. Made afresh, the frame would start on its first row and write that back over the model's `focused`, so the row a
+page or tool returns to (`settings_doors.rs`) would be lost: the Loader's `loaded` handler focuses the row the model
+holds, and only then does Settings write its focused row back (`placed`); opened again from Home it stands on the
+section and row it was left on, the frame's focus with the model's (`settings_reopen.rs`). The cost is paid at each
+opening: the press on Home's Settings place to the first frame swapped with Settings shown, offscreen on the software
+backend (a probe test pressing through the harness and counting `frameSwapped`, six openings a run, two runs each, on
+2026-11-15), took 8.2 to 10.5 ms with Settings kept (`c32875c1b`) and 18.0 to 40.4 ms made by the Loader (median of the
+twelve about 21 ms); not measured on the handheld. And the start is over when
+`program.reading` is false: `library.loading || !settingsModel.ready || !pads.answered`, where `PadReader.answered` turns
+true with its first delivery, pads or a failure to open them (`EmuSen_Kit.md` §7.15). `idle.rs` waits on it.
+`qt-app/tests/idle_hidden.rs` forces the order without depending on the machine: it names the platform library to the
+`LibraryModel` alone, holds Home still, then names it to the program, reading no pad of the machine's (`onlyPads`
+"none"), and counts the frames from that moment to the end of a still span. Settings kept, hidden, as before: 2 frames;
+made only while shown: none.
 
 #### 9.3.3 Play to the first picture on a hosted core **[M 2026-11-08]**
 

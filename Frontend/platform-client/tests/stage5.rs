@@ -1,5 +1,6 @@
 //! The wrappers stage 5's screens need, each against the platform library built from this commit in a scratch tree and
-//! never the network: the tools' jobs pulled and drained, the cheat database and lists, the packages, the seats,
+//! never the network: the tools' jobs pulled and drained, the cheat database, its download from a loopback server and
+//! its install, and lists, the packages, the seats,
 //! OpenVGDB's bytes and the preset readers (EmuSen_Qt.md §1.1.2, "Stage 5's wrappers").
 
 use emusen_client_fixture::{World, library};
@@ -121,6 +122,49 @@ fn the_cheat_database_is_asked_and_pruned_and_the_lists_named() {
     assert!(!p.cheat_name_valid("a/b").unwrap());
     assert_eq!(p.cheat_game_list(Some("SNES"), "/games/Mario Paint.sfc").unwrap(), Some(("Mario Paint".into(), "cheats/SNES".into())));
     assert_eq!(p.cheat_game_list(None, "").unwrap(), None);
+}
+
+// Interface 48: the database downloaded from a loopback server of the test's own, a stop part way leaving nothing
+// installed, then downloaded whole and installed, and a game's own list made from its file with the console's codecs.
+#[test]
+fn the_cheat_database_is_downloaded_installed_and_a_games_list_made_from_it() {
+    use emusen_client_fixture::cheats::served;
+    use emusen_platform_client::net::{Download, State};
+    let world = World::new("cheats-install");
+    let p = Platform::load(library()).unwrap();
+    let server = served(&world);
+    assert!(emusen_platform_client::cheats::database_url().starts_with("https://"), "the real address is the header's, never fetched here");
+
+    let held = Download::start(&p, &json!({ "url": server.held, "timeout_ms": 20000 })).unwrap();
+    let until = Instant::now() + Duration::from_secs(20);
+    while held.progress().1 == 0 {
+        assert!(Instant::now() < until && held.progress().0 == State::Running, "{:?}", held.progress());
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let (state, received, total) = held.progress();
+    assert!(state == State::Running && Some(received) < total, "part way: {received} of {total:?}");
+    held.cancel();
+    assert_eq!(held.wait(1000), State::Cancelled);
+    assert_eq!(held.body().unwrap(), None, "a stopped download has no body to install");
+    assert_eq!(held.failure().unwrap().unwrap()["kind"], "cancelled");
+
+    let whole = Download::start(&p, &json!({ "url": server.url, "timeout_ms": 20000 })).unwrap();
+    assert_eq!(whole.wait(20000), State::Done, "{:?}", whole.failure());
+    let zip = whole.body().unwrap().expect("the archive");
+    let db = world.root.join("Cheats");
+    let installed = p.cheats_install(&zip, db.to_str().unwrap()).unwrap();
+    assert_eq!(installed, json!({ "installed": 1, "skipped": 0 }));
+    assert!(!world.root.join("Cheats.part").exists() && !world.root.join("Cheats.old").exists());
+    assert!(matches!(p.cheats_install(&zip[..zip.len() / 2], db.to_str().unwrap()), Err(Error::Status { .. })), "half an archive is refused");
+
+    let database = CheatsDatabase::open(&p, db.to_str().unwrap()).unwrap();
+    let entries = database.entries().unwrap();
+    assert_eq!(entries.len(), 1, "the installed file is there, the refused install left it: {entries:?}");
+    let parsed = p.cheats_parse(&json!({ "path": entries[0].2, "system": "snes" })).unwrap();
+    assert_eq!(parsed["file"]["Cheats"][0]["Description"], "Infinite lives", "{parsed}");
+    assert_eq!(parsed["left_out"], 0, "the list holds every cheat the file read: {parsed}");
+    let write = &parsed["file"]["Cheats"][0]["Writes"][0];
+    assert_eq!((&write["Space"], &write["Address"]), (&json!("WRAM"), &json!("DBE")), "bank 7E is the work RAM's, by the SNES's Pro Action Replay codec: {parsed}");
 }
 
 #[test]

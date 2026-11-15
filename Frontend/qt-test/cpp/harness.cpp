@@ -32,6 +32,11 @@
 #include <cstdlib>
 #include <utility>
 
+// QTest's mouse delay, which qtestmouse.h declares only inside its functions (qtbase src/testlib/qtestmouse.h 69, 164).
+namespace QTest {
+extern int Q_TESTLIB_EXPORT defaultMouseDelay();
+}
+
 namespace {
 
 QQuickWindow* quick(QObject& window) { return qobject_cast<QQuickWindow*>(&window); }
@@ -518,11 +523,46 @@ void harness_wheel(QObject& window, double x, double y, int delta)
     if (QQuickWindow* w = quick(window)) {
         const QPointF point(x, y);
         QWheelEvent event(point, w->mapToGlobal(point.toPoint()), QPoint(), QPoint(0, delta), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+        // Stamped on QTest's emulated clock, after the last mouse event, as QTest stamps its own (EmuSen_Kit.md §7.36).
+        QTest::lastMouseTimestamp += std::max(1, QTest::defaultMouseDelay());
+        event.setTimestamp(static_cast<quint64>(QTest::lastMouseTimestamp));
         QCoreApplication::sendEvent(w, &event);
     }
 }
 
 void harness_wait(int ms) { QTest::qWait(ms); }
+
+// Counts the queued calls delivered on the GUI thread: a queued invocation is a posted QEvent::MetaCall (EmuSen_Kit.md §7.36).
+class QueuedCalls : public QObject {
+public:
+    int delivered = 0;
+
+protected:
+    bool eventFilter(QObject*, QEvent* event) override
+    {
+        if (event->type() == QEvent::MetaCall) {
+            ++delivered;
+        }
+        return false;
+    }
+};
+
+bool harness_settle()
+{
+    // Rounds of the posted events there are, until a round delivers no queued call: a call one queues runs in the next (EmuSen_Kit.md §7.36).
+    QueuedCalls calls;
+    QCoreApplication::instance()->installEventFilter(&calls);
+    bool settled = false;
+    // A guard against calls that queue each other for ever, not a wait: a press settles in a handful of rounds.
+    for (int round = 0; round < 1000 && !settled; ++round) {
+        calls.delivered = 0;
+        QCoreApplication::processEvents();
+        QCoreApplication::sendPostedEvents();
+        settled = calls.delivered == 0;
+    }
+    QCoreApplication::instance()->removeEventFilter(&calls);
+    return settled;
+}
 
 void harness_keep_messages() { kept().shown = qInstallMessageHandler(keep); }
 

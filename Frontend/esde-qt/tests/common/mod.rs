@@ -7,6 +7,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use emusen_qt_test::compositor::Compositor;
 use emusen_qt_test::Scene;
 
+pub mod fade;
+
 pub const VIEW: &str = concat!("file://", env!("CARGO_MANIFEST_DIR"), "/tests/qml/View.qml");
 
 /// Vulkan on the RX 6800 in a compositor of the test's own, the validation layer on (EmuSen_Qt.md §8.1, tier 2).

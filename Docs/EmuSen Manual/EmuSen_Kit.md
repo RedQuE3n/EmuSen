@@ -2238,6 +2238,25 @@ theme-audit records a theme's splash at a stated time and a screen with A held (
   `qt_3_7_a_held_clock_logs_nothing_where_the_environment_asks_for_a_threaded_render_loop`, the splash fixture's three
   timed states under `QSG_RENDER_LOOP=threaded`: their findings alone, no warning line and nothing on standard error. Seeded,
   the setting taken out failed it on both lines.
+- **An input returns once what it queued has run** (2026-11-15). A press, key, pointer move or focus change ended in a
+  fixed wait (5 or 20 ms of `QTest::qWait`), which stops processing at its deadline (qtbase
+  `src/corelib/kernel/qtestsupport_core.cpp` 166-168). An animation a press starts reaches the held clock through two
+  queued calls: `QQmlAnimationTimer::registerAnimation` queues `startAnimations` (qtdeclarative
+  `src/qml/animations/qabstractanimationjob.cpp` 160-175), which through `restartAnimationTimer` (123-131) has
+  `QUnifiedTimer::startAnimationTimer` queue `startTimers` (qtbase `src/corelib/animation/qabstractanimation.cpp` 421-433).
+  When other work the press queued kept the GUI thread past the deadline, the second call ran only after the held
+  clock's next `advance()`, and the animation missed that step: the ES-DE view's clock read 0 at a held 16 ms in a cold
+  run of `fade_above_true` (EmuSen_Qt.md §4.8.8). Each input now ends in `drain_queued` (`harness_settle`): rounds of
+  `processEvents` and `sendPostedEvents` until a round delivers no queued call. It is enough because a queued invocation is
+  posted as a `QEvent::MetaCall` (`qmetaobject.cpp` 1745 and 2922, `qobject_p.h` 337), every event delivered on the GUI thread
+  passes the application's event filters, where the harness counts them (`qcoreapplication.cpp` 1284-1290), and
+  `sendPostedEvents` delivers the events posted before it, leaving those posted meanwhile to the next round
+  (`qcoreapplication.cpp` 1857): a round that delivers none leaves no queued call of the input's behind. A guard of 1000
+  rounds fails the test rather than waiting for ever. Held to by qt-test's
+  `qt_7_36_an_animation_a_press_starts_takes_the_held_clock_s_first_step`: a pad press whose scene queues 60 ms of work
+  after starting an animation read the animation at 0 at a held 16 ms before the change, and at 16 after; with no work
+  queued it read 16 before too. `hold_clock` still ends in a 20 ms wait: it is no input, and each of its steps processes
+  events after its `advance()`.
 - **`Scene::key_hold(key, down)`**, `QTest::keyPress` or `keyRelease` alone: a press held, as a theme's pressed look reads it
   (`Keys.onPressed` without the release).
 - **`covers::draw`**, moved from the program's tests (`qt-app/tests/common`), which re-export it: covers drawn by one Qt Quick

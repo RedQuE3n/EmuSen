@@ -35,6 +35,8 @@ pub mod qobject {
         #[qproperty(Family, family, READ, NOTIFY)]
         #[qproperty(i32, connected, READ, NOTIFY)]
         #[qproperty(QString, problem, READ, NOTIFY)]
+        /// Whether the reader's first answer has come: the pads it found, or why it could not open them.
+        #[qproperty(bool, answered, READ, NOTIFY)]
         #[qproperty(u64, game_pads, READ, CONSTANT)]
         // The pads the seats hold, connected, asked when read (the menus may read fewer: Only the first controller).
         #[qproperty(i32, seated, READ = seated_now)]
@@ -65,14 +67,15 @@ pub mod qobject {
 }
 
 /// The reader's properties: the platform library's path and, for a test, SDL's pads to read alone (their ids, separated
-/// by spaces; empty reads every pad); the family of the pad last used, how many pads are read, and the last failure; the
-/// game's hand-over, as a number a `SessionModel` is named.
+/// by spaces; empty reads every pad); the family of the pad last used, how many pads are read, the last failure, and
+/// whether the first answer has come; the game's hand-over, as a number a `SessionModel` is named.
 pub struct PadReaderRust {
     platform_library: QString,
     only_pads: QString,
     family: Family,
     connected: i32,
     problem: QString,
+    answered: bool,
     game_pads: u64,
     game_muted: bool,
     game: Arc<GamePads>,
@@ -97,6 +100,7 @@ impl Default for PadReaderRust {
             family: kinds::family_of(emusen_kit_core::glyph::PadFamily::Generic),
             connected: 0,
             problem: QString::default(),
+            answered: false,
             reader: None,
         }
     }
@@ -149,8 +153,17 @@ impl qobject::PadReader {
         self.as_mut().rust_mut().reader = Some(reader);
     }
 
-    /// A tick applied on the GUI thread: each press emitted in order, then the family, the count and the problem published.
+    /// A tick applied on the GUI thread: each press emitted in order, then the family, the count and the problem published,
+    /// and the first answer said once all of it is.
     fn apply(mut self: Pin<&mut Self>, delivery: Delivery) {
+        self.as_mut().publish(delivery);
+        if !self.answered {
+            self.as_mut().rust_mut().answered = true;
+            self.answered_changed();
+        }
+    }
+
+    fn publish(mut self: Pin<&mut Self>, delivery: Delivery) {
         let tick = match delivery {
             Ok(tick) => tick,
             Err(words) => return self.publish_problem(QString::from(crate::reader::unread(&words).as_str())),

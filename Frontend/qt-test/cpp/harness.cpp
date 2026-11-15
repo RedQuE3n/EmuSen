@@ -33,6 +33,11 @@
 #include <cstdlib>
 #include <utility>
 
+// QTest's mouse delay, which qtestmouse.h declares only inside its functions (qtbase src/testlib/qtestmouse.h 69, 164).
+namespace QTest {
+extern int Q_TESTLIB_EXPORT defaultMouseDelay();
+}
+
 namespace {
 
 QQuickWindow* quick(QObject& window) { return qobject_cast<QQuickWindow*>(&window); }
@@ -521,6 +526,9 @@ void harness_wheel(QObject& window, double x, double y, int delta)
     if (QQuickWindow* w = quick(window)) {
         const QPointF point(x, y);
         QWheelEvent event(point, w->mapToGlobal(point.toPoint()), QPoint(), QPoint(0, delta), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+        // Stamped on QTest's emulated clock, after the last mouse event, as QTest stamps its own (EmuSen_Kit.md §7.36).
+        QTest::lastMouseTimestamp += std::max(1, QTest::defaultMouseDelay());
+        event.setTimestamp(static_cast<quint64>(QTest::lastMouseTimestamp));
         QCoreApplication::sendEvent(w, &event);
     }
 }

@@ -74,8 +74,9 @@ ThemeScreen {
                 anchors.fill: parent
                 visible: !root.noLibrary
                 source: root.focusedCell ? root.focusedCell.hero : ""
-                // The board's blur over its sample art (EclipseLibrary:19).
+                // The board's blur and opacity over its sample art (EclipseLibrary:19), the same on the software backend; provisional, the tester's to judge.
                 sourceBlur: 120 * root.px
+                sourceOpacity: 0.35
                 pixelScale: canvas.unit
             }
             CoronaDisc {

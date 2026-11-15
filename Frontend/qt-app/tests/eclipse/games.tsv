@@ -8,7 +8,7 @@
 #   fill: the item's colour as drawn; colour: the item's own colour where others draw over it. A row with no checks is not drawn.
 element	board	board_h	program	status	item	checks	words
 the ground	EclipseLibrary:17	1200	Ink.ground (themes/eclipse/parts/Ink.qml), Home's shared ink	built	gridGround	colour=#0A1024	
-the focused game's art, blurred	EclipseLibrary:19	1200	the kit's Backdrop (kit-qt/qml/Backdrop.qml:14) with the row's hero, which is its hero else its cover (theme-qt/src/view.rs:226); no art, no backdrop; the board's colour fields are sample art	built	gamesBackdrop	x=0 y=0	
+the focused game's art, blurred	EclipseLibrary:19	1200	the kit's Backdrop (kit-qt/qml/Backdrop.qml:14) with the row's hero, which is its hero else its cover (theme-qt/src/view.rs:226); no art, no backdrop; the board's colour fields are sample art; blur 120 px and opacity 0.35 from the board's first field, the same on software (R-20261115-6), provisional, the tester's to judge	built	gamesBackdrop	x=0 y=0	
 the board's second colour field	EclipseLibrary:20	1200	sample art standing for the focused game's, not the program's	not-drawn			
 the corona disc at the left edge	EclipseLibrary:21	1200	the kit's CoronaDisc (theme-qt/qml/CoronaDisc.qml) on Eclipse's corona tokens, at the board's place; the board's glows at 0.55 and 0.25 are the tokens' 0.6 and 0.28 (Main:25's)	built	gamesDisc	x=-1100 y=-250 w=1700 h=1700	
 the header's place	EclipseLibrary:23	1200	Home's header (Main:27); the top navigation's place (R-20261115-7)	home			

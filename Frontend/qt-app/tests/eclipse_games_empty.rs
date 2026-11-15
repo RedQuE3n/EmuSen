@@ -19,7 +19,6 @@ fn qt_3_4_10_eclipses_games_view_with_no_game_is_the_empty_board_by_the_table() 
     let mut harness = emusen_qt_test::Harness::new();
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
-    assert!(scene.set_property("program", "theme", &themes::built_in_folder("eclipse")));
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
     wait_for(&mut scene, "library", "loading", "false", 10000);
     wait_for(&mut scene, "screens", "shown", "Home", 3000);
@@ -37,6 +36,9 @@ fn qt_3_4_10_eclipses_games_view_with_no_game_is_the_empty_board_by_the_table() 
     assert!(scene.focus_item(&tree, all));
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "screens", "shown", "Grid", 2000);
+    // Eclipse chosen on the games view, reached through the reference's Choose a console: Eclipse's Home has no places
+    // until the top navigation's piece (R-20261115-7).
+    assert!(scene.set_property("program", "theme", &themes::built_in_folder("eclipse")));
     wait_for(&mut scene, "host.theme", "ready", "true", 3000);
     let warnings = scene.property("host.theme", "warnings");
     assert!(warnings.is_empty() && scene.property("host.theme", "failed") == "false", "Eclipse's screens load clean: {warnings}");

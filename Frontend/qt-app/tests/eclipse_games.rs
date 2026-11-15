@@ -70,7 +70,6 @@ fn qt_3_4_10_eclipses_games_view_is_its_board_by_the_table_at_every_size() {
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
     assert!(scene.set_property("program", "coverStores", media.to_str().unwrap()));
-    assert!(scene.set_property("program", "theme", &themes::built_in_folder("eclipse")));
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
     wait_for(&mut scene, "library", "loading", "false", 10000);
     wait_for(&mut scene, "screens", "shown", "Home", 3000);
@@ -87,6 +86,9 @@ fn qt_3_4_10_eclipses_games_view_is_its_board_by_the_table_at_every_size() {
     assert!(scene.focus_item(&tree, all));
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "screens", "shown", "Grid", 2000);
+    // Eclipse chosen on the games view, reached through the reference's Choose a console: Eclipse's Home has no places
+    // until the top navigation's piece (R-20261115-7).
+    assert!(scene.set_property("program", "theme", &themes::built_in_folder("eclipse")));
     wait_for(&mut scene, "host.theme", "ready", "true", 3000);
     let warnings = scene.property("host.theme", "warnings");
     assert!(warnings.is_empty() && scene.property("host.theme", "failed") == "false", "Eclipse's screens load clean: {warnings}");
@@ -101,7 +103,12 @@ fn qt_3_4_10_eclipses_games_view_is_its_board_by_the_table_at_every_size() {
     assert!(!shown(&mut scene, "gamesTileCover.3").0, "no cover");
     assert!(shown(&mut scene, "gamesTileGround.3").0, "the plain tile");
 
-    // The backdrop is the focused game's art; a game with none has none.
+    // The backdrop is the focused game's art at the board's first field's blur and opacity (EclipseLibrary:19, provisional);
+    // a game with none has none.
+    assert_eq!(scene.property("gamesBackdrop", "sourceOpacity"), "0.35");
+    let blur: f64 = scene.property("gamesBackdrop", "sourceBlur").parse().unwrap();
+    let board_h = table::built().iter().find(|r| r.item == "gamesBackdrop").expect("the backdrop's row").board_h;
+    assert!((blur - 120.0 * emusen_kit_core::canvas::DESIGN_HEIGHT / board_h).abs() < 1e-9, "the board's 120 px blur: {blur}");
     assert!(scene.property("gamesBackdrop", "source").ends_with("Amber%20Relay.png") || scene.property("gamesBackdrop", "source").ends_with("Amber Relay.png"), "{}", scene.property("gamesBackdrop", "source"));
     // The focused game's words are its row's.
     assert_eq!(focused_name(&mut scene), "gamesTile.0");

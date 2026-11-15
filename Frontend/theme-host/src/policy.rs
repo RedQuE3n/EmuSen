@@ -48,6 +48,11 @@ pub const NEVER_RESOLVED: [&str; 14] = [
 /// the EmuSen style's controls, and the kit's fonts.
 const RESOURCES: [&str; 4] = ["/qt/qml/EmuSen/Theme/", "/qt/qml/EmuSen/Kit/", "/emusen/fonts/", "/qt-project.org/"];
 
+/// Qt's own resources outside its module folders that an allowed module loads: MultiEffect makes its blur's passes from
+/// `qrc:/data/BlurItem.qml`, a file of the QtQuick.Effects library, after probing its folder's qmldir (seen 2026-11-15, Qt
+/// 6.11.2); both were refused until then.
+const QT_FILES: [&str; 2] = ["/data/BlurItem.qml", "/data/qmldir"];
+
 /// One theme's rules: its folder, the cover stores, and Qt's own QML folder.
 #[derive(Clone, Debug)]
 pub struct Policy {
@@ -200,7 +205,7 @@ fn judge_resource(url: &str, kind: Kind) -> String {
     }
     let style = qml.is_some_and(|rest| rest.strip_prefix("EmuSen/").is_some_and(|file| !file.contains('/')));
     let qt_own = qml.is_some_and(|rest| rest.starts_with("Qt"));
-    if style || qt_own || RESOURCES.iter().any(|r| path.starts_with(r)) {
+    if style || qt_own || RESOURCES.iter().any(|r| path.starts_with(r)) || QT_FILES.contains(&path.as_str()) {
         return String::new();
     }
     format!("{url} is a resource of the program, not of the theme's modules")

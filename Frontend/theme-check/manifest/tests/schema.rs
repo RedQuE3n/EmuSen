@@ -48,7 +48,8 @@ fn qt_3_4_a_whole_manifest_reads_with_its_lines_and_an_unknown_key_is_a_note() {
 #[test]
 fn qt_3_3_a_newer_api_or_schema_is_refused_and_an_older_minor_is_not_possible_below_1_0() {
     assert_eq!(kinds(&GOOD.replace("\"1.0\"", "\"2.0\"")), vec![(3, Kind::Api), (16, Kind::Note)]);
-    assert_eq!(kinds(&GOOD.replace("\"1.0\"", "\"1.4\"")), vec![(3, Kind::Api), (16, Kind::Note)]);
+    // A minor past the build's own, read from the build rather than typed, so the next minor's bump keeps the case.
+    assert_eq!(kinds(&GOOD.replace("\"1.0\"", &format!("\"{}.{}\"", API.0, API.1 + 1))), vec![(3, Kind::Api), (16, Kind::Note)]);
     assert_eq!(kinds(&GOOD.replace("\"1.0\"", "\"one\"")), vec![(3, Kind::Schema), (16, Kind::Note)]);
     assert_eq!(kinds(&GOOD.replace("\"schema\": 1", "\"schema\": 2")), vec![(2, Kind::Api), (16, Kind::Note)]);
     let words = parse(&GOOD.replace("\"1.0\"", "\"2.0\"")).unwrap().1[0].words.clone();

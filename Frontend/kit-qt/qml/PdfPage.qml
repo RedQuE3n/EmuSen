@@ -14,7 +14,7 @@ Item {
         id: document
         source: root.source
     }
-    // Decoded here by Qt PDF's image plugin, which opens its own document; never PdfPageImage (EmuSen_Kit.md §7.110).
+    // Decoded on Qt's image thread by Qt PDF's image plugin, with a document of its own; never PdfPageImage (EmuSen_Kit.md §7.110).
     Loader {
         anchors.fill: parent
         active: document.status === PdfDocument.Ready
@@ -23,7 +23,7 @@ Item {
             currentFrame: root.page
             sourceSize: pagePixels.pixels
             fillMode: Image.Stretch
-            asynchronous: false
+            asynchronous: true
             // Rendered at the pixels the page covers, through any canvas's scale (EmuSen_Kit.md §7.111).
             Kit.DrawnPixels {
                 id: pagePixels

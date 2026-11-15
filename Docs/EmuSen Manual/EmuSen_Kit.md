@@ -3840,13 +3840,29 @@ been deleted when the job starts (`qquickpixmapcache.cpp:1039`) and then reads i
 `~QQuickPdfDocument` deletes that file outright (`qquickpdfdocument.cpp:43`) and the last `QPdfDocument` destroyed
 shuts PDFium down (`FPDF_DestroyLibrary`, counted by `libraryRefCount`, `src/pdf/qpdfdocument.cpp:145-150`). Qt's
 own design note on that path calls the race unresolved ("qq-pixmap-cache-special-device", contribute.qt-project.org,
-read 2026-11-14). A plain `Image` of a local file with `asynchronous: false` decodes on the calling thread
-(`qquickpixmapcache.cpp:1939-1942`), and the plugin opens and owns a document of its own for each decode
-(`src/pdf/plugins/imageformats/pdf/qpdfiohandler.cpp:216-219`), so no page's decode shares a document with another
-item or another thread. The cost is the file parsed again for each page drawn; it was not measured on a real
-manual. The handheld's Qt bundle carries the plugin (`Testing/handheld/qtbundle.sh`). Test:
-`kit-qt/tests/pdf_teardown.rs`, 48 files of light pages made and all destroyed the moment the first is drawn, twenty
-rounds in a process of its own; before the change ten runs of ten crashed, each within two rounds.
+read 2026-11-14). The `Image` is asynchronous, decoded on Qt Quick's image thread as
+`PdfPageImage`'s pages were, and nothing there is shared with an item that may be destroyed: the job reads a `QFile`
+of its own (`qquickpixmapcache.cpp:1060`); the plugin makes a `QPdfDocument` of its own on that thread and deletes it
+there (`src/pdf/plugins/imageformats/pdf/qpdfiohandler.cpp:216-219`, `18-22`); and while that document lives
+`libraryRefCount` is at least one, so the main thread's last `PdfDocument` going cannot shut PDFium down under it, the
+count and every PDFium call read taking the one `pdfMutex` (`qpdfdocument.cpp:118-126`, `145-150`). An open Qt
+report, QTBUG-136710, describes a crash when a QML `Image` is destroyed while still loading; only its search summary
+was read, not the report, so it stays an open risk of Qt's. While a page loads nothing is drawn in its box: `Image`'s
+`retainWhileLoading` is false by default, so the picture shown is cleared when a load begins
+(qtdeclarative `src/quick/items/qquickimagebase.cpp:295`, `521-537`); `PdfPageImage` drew nothing either, seen in a
+grab on 2026-11-15. The handheld's Qt bundle carries the plugin (`Testing/handheld/qtbundle.sh`).
+
+Measured on 2026-11-15 on the desktop (Ryzen 7 7700X), load average 12 to 14 from other work, two rounds: one page
+decoded by a new `Image` at the size the viewer's page takes in a 1280 by 800 and a 1920 by 1200 window, the first,
+middle and last page, ten decodes each, the picture cache off. Synchronous decoding held the main thread, median and
+worst in milliseconds: game manuals of 8 pages, 1.0 MB, 18 to 92 and 102; 9 pages, 2.6 MB, 14 to 130 and 151; 10
+pages, 4.0 MB, 12 to 38 and 44; a comic of 56 full-page drawings, 12.8 MB, 12 to 141 and 225; an art book of 198
+full-page pictures, 503 MB, 82 to 317 and 492; a map of one large page, 55 MB, 187 to 259 and 286. Asynchronous
+decoding held it 0.2 ms at the median and 3.6 ms at worst, the page ready in about the synchronous time (worst 336
+ms). The handheld was not measured. Tests: `kit-qt/tests/pdf_teardown.rs`, 48 files of light pages made and all
+destroyed the moment the first is drawn, twenty rounds in a process of its own (`PdfPageImage` crashed ten runs of
+ten, each within nine rounds); `kit-qt/tests/pdf_page_turn.rs`, the turned page's picture still loading in the turn
+of the event loop that asked for it.
 
 ### 7.111 DrawnPixels: a picture decoded at the pixels it covers (2026-11-14)
 

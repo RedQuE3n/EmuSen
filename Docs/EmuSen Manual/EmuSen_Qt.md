@@ -3679,6 +3679,11 @@ the curve's points in `scene/fade.rs` as named constants (`RISE`, `RISING_UNTIL`
   another is part way starts from that one's black (lines 983-991). The help is drawn under the black
   (`renderHelpPromptsEarly`, 1378), the clock and the status over it (`Window::render`, 715-735). At startup the camera
   starts away from the view (lines 680-693, 878-885), so the screen is black until the view fades in.
+  A press meanwhile reaches the view the camera goes to (`ViewController::input`, 1313-1314): the painter reads the
+  primary's kind from the current view's theme, not from the drawn frame, which holds no primary while the black has not
+  yet covered the screen. Found 2026-11-14 when the oracle's Artflix gamelist (its profile names no startupToGamelist,
+  which then takes gamelistToGamelist's fade) dropped its press to the first game; held by esde-qt's painter test
+  `a_press_while_the_first_gamelist_fades_in_moves_its_selection`.
 - **Between systems** in the system view (`SystemView::onCursorChanged`, 427-476): a run of 400 ms x 1.3 for a carousel or
   a list and 300 ms x 1.3 for a grid. Its black f rises as t/0.2 plus the black it started from, is 1 from 0.3 to 0.7 of
   the run, and falls as 1 - (t - 0.6)/0.3, from 2/3 at 0.7 to 0 at 0.9 (451-457). The system left shows until half way

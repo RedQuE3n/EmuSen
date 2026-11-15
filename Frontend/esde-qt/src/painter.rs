@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use emusen_esde::fonts;
 use emusen_esde::loader::{self, Choices, MediaPresence, Theme, ThemeSystem};
-use emusen_esde::scene::{Data, DateTime, DeviceStatus, Frame, HelpContext, Key, Layout, PadButton, Row, Rows, Stage, System, Time};
+use emusen_esde::scene::{Data, DateTime, DeviceStatus, Frame, HelpContext, Key, PadButton, Row, Rows, Stage, System, Time};
 
 use emusen_kit_core::input::{PadControl, UiButton};
 
@@ -201,13 +201,10 @@ impl Painter {
         self.stage.as_ref().map_or("", |s| s.current.view.as_str())
     }
 
+    // The current view's primary kind, from its theme: the drawn frame holds none while a fade has not yet shown the view.
     fn primary_kind(&self) -> Option<&'static str> {
-        match self.frame.primary.as_ref().map(|p| &p.layout) {
-            Some(Layout::Carousel(_)) => Some("carousel"),
-            Some(Layout::TextList(_)) => Some("textlist"),
-            Some(Layout::Grid(_)) => Some("grid"),
-            None => None,
-        }
+        let primary = self.stage.as_ref()?.current.theme_view().primary()?;
+        ["carousel", "textlist", "grid"].into_iter().find(|k| *k == primary.kind())
     }
 
     // Whether the primary element moves along the vertical: a list, a vertical carousel or wheel; a grid moves both ways.

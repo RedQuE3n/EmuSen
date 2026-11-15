@@ -303,3 +303,22 @@ fn the_first_view_and_a_quick_system_select_fade_through_black_as_the_profile_sa
     assert_eq!(black(&p), None);
     assert_eq!(p.frame.primary.as_ref().map(|l| l.rows.system), Some(1));
 }
+
+// A press while the first view fades in moves its selection, as ES-DE's input reaches the view the camera goes to; the
+// primary's kind is the view's, not the drawn frame's, which holds no primary until the black covers the screen.
+#[test]
+fn a_press_while_the_first_gamelist_fades_in_moves_its_selection() {
+    // Artflix's profile names no startupToGamelist, which then takes gamelistToGamelist's fade (THEMES.md).
+    let theme = Theme::with("fade-press", "<transitions name=\"f\"><gamelistToGamelist>fade</gamelistToGamelist></transitions>");
+    let text = library();
+    let settings = Settings { theme: theme.0.to_string_lossy().into_owned(), startup_view: "gamelist".into(), ..Settings::default() };
+    let found = systems(&ThemeCache::default(), &settings, shelves::shelves(&text, "{}").unwrap(), &BTreeMap::new(), W as i32, H as i32);
+    let mut p = Painter::new(settings);
+    p.install(found, W, H, DateTime::new(2026, 11, 8, 12, 0, 0));
+    assert!(p.frame.moving && p.frame.primary.is_none(), "the gamelist fades in from black");
+    assert_eq!(p.pressed(Button::Down, false), Some(Action::Cue("navigate")));
+    p.released(Button::Down);
+    p.tick(500.0);
+    assert!(!p.frame.moving);
+    assert_eq!(selected(&p), 1, "the press moved the list");
+}

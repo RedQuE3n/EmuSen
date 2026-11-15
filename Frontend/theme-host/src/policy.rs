@@ -49,9 +49,10 @@ pub const NEVER_RESOLVED: [&str; 14] = [
 const RESOURCES: [&str; 4] = ["/qt/qml/EmuSen/Theme/", "/qt/qml/EmuSen/Kit/", "/emusen/fonts/", "/qt-project.org/"];
 
 /// Qt's own resources outside its module folders that an allowed module loads: MultiEffect makes its blur's passes from
-/// `qrc:/data/BlurItem.qml`, a file of the QtQuick.Effects library, after probing its folder's qmldir (seen 2026-11-15, Qt
-/// 6.11.2); both were refused until then.
-const QT_FILES: [&str; 2] = ["/data/BlurItem.qml", "/data/qmldir"];
+/// `qrc:/data/BlurItem.qml`, after probing its folder's qmldir, and draws them with `qrc:/data/shaders/bluritems.vert.qsb`
+/// and `.frag.qsb`, files of the QtQuick.Effects library (qtdeclarative v6.11.2, src/effects/qquickmultieffect.cpp:1763-1765;
+/// seen 2026-11-15, Qt 6.11.2); all four were refused until then.
+const QT_FILES: [&str; 4] = ["/data/BlurItem.qml", "/data/qmldir", "/data/shaders/bluritems.vert.qsb", "/data/shaders/bluritems.frag.qsb"];
 
 /// One theme's rules: its folder, the cover stores, and Qt's own QML folder.
 #[derive(Clone, Debug)]

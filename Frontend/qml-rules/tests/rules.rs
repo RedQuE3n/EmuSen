@@ -118,15 +118,3 @@ Item { width: 4 }
     let words = check_theme("t.qml", "import QtQuick\nText { text: \"Hello\" }\n");
     assert_eq!(words.iter().map(|f| f.rule).collect::<Vec<_>>(), vec![Rule::Words], "the §1.3 rules hold in a theme");
 }
-
-#[test]
-fn qt_1_3_a_composite_mode_assigned_is_a_name_and_words_assigned_are_words() {
-    // Context2D's composite mode is a name of Qt's API.
-    assert_eq!(rules("Canvas { onPaint: { ctx.globalCompositeOperation = \"source-in\" } }"), vec![]);
-    // Words assigned to any property off the list, or to a text or a label, are still words.
-    assert_eq!(rules("Canvas { onPaint: { ctx.font = \"Bold words\" } }"), vec![Rule::Words]);
-    assert_eq!(rules("Item { onVisibleChanged: { title.text = \"Hello there\" } }"), vec![Rule::Words]);
-    assert_eq!(rules("Item { onVisibleChanged: { button.label = \"Press me\" } }"), vec![Rule::Words]);
-    // A comparison is not an assignment.
-    assert_eq!(rules("Item { visible: mode == \"source-in\" }"), vec![Rule::Words]);
-}

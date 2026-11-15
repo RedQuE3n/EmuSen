@@ -1777,7 +1777,11 @@ tile's shadow and the filled button's halo and glow are the kit's `Glow` (§7.11
 
 **Shared parts.** `parts/` serves every Eclipse screen. `Board` and `Ink` hold the measure and the boards' own colours.
 `Brand` is the mark and the name. `Status` is the search and the clock, on the glass or not.
-`Pill` is a button. `HelpLine` is the help bar on the foot, with a place at its right. What differs between the boards
+`Pill` is a button. `HelpLine` is the help bar on the foot, with a place at its right. `TileWords` is a tile's foot: the title stands on the
+facts line, and a shade fades in over the board's 96 px, then holds the board's 0.92 from the title's top to the foot.
+With the words raised to the legibility floor, the board's 96 px gradient alone left a title at 2.4:1 over bright covers
+(theme-check, 2026-11-15). The shade's reach is provisional, the tester's to judge. The title takes the face's own line
+height, since the board's 1.02 cut its glyphs (theme-check's fit), and the facts follow it at the board's 26 px. What differs between the boards
 (the ground, the status's glass and search, the line's right side, a pill's measures) is a property of the part.
 
 **The table and its test.** `qt-app/tests/eclipse_home.tsv` lists every element of the board with its line, what the

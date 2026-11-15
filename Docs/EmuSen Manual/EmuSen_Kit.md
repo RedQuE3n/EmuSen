@@ -2265,6 +2265,10 @@ theme-audit records a theme's splash at a stated time and a screen with A held (
   same way. Held to by qt-test's `qt_7_36_a_wheel_turned_at_once_after_a_click_moves_the_list`, which failed with that
   message before. Drags and hovers are QTest's own mouse events, stamped already; a touch drag goes through QTest's touch
   sequence with 10 ms waits between its moves.
+  What an input reaches outside the GUI thread is not the harness's to wait on: a key that asks the game for one frame
+  (Frame Advance) has the runtime run it on the session's frame thread afterwards (`crystal-client/src/frame.rs` 33-36),
+  so qt-app's `controls_gpu` holds the next key only once the program's frame count has stopped, where it had leant on
+  the 20 ms the key used to wait (a run on 2026-11-15 drew the held button in that one frame).
 - **`Scene::key_hold(key, down)`**, `QTest::keyPress` or `keyRelease` alone: a press held, as a theme's pressed look reads it
   (`Keys.onPressed` without the release).
 - **`covers::draw`**, moved from the program's tests (`qt-app/tests/common`), which re-export it: covers drawn by one Qt Quick

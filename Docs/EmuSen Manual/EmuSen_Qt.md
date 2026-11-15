@@ -1759,13 +1759,16 @@ a hue: the systems table's data gives one for 14 consoles, and `SystemDef::look`
 `PlanetMark`. The facts line is `Words.facts`, `Words.played` and `Words.runsOn` said as one `Words.line`. Open is the help bar's own A entry.
 At the foot's right, the maker and `Words.place` (game_page.rs's `place`, "3 of 14") say where the focused console stands.
 
-The pad walks up and down the makers. Right or A goes to a maker's first plate, and the arrows move among the plates.
-Right from the last column goes to Open, and the shoulders step from maker to maker.
+The screen holds no logic. The kit's `GroupGridLayout` (EmuSen_Kit.md §7.120) gives each console its column and row in
+its maker's grid and its four neighbours there, and the screen binds `KeyNavigation` to those. Up and down walk the
+makers. Right from a maker goes to its first plate, and Left from a plate's first column goes back to its maker. Right
+from the last plate in a row goes to Open, and the shoulders go to the previous or next maker's first console. The header
+is Eclipse's `Brand` and `Status`, the foot is its `HelpLine` with the place line at its right, the two colour fields are
+the kit's `Backdrop`, and Open is a filled `Pill`.
 
 Every element of the board is in `Frontend/theme-check/audit/tests/eclipse_consoles.tsv`. Each row gives the element's board
-line, what the program holds for it, its box in board pixels and in design units, and whether it is built. Home's piece
-builds the ground, the colour fields, the header and the help bar's place. The top navigation is a piece of its own
-(R-20261115-7). The help bar holds the program's own entries. Not drawn, because the program holds nothing for them:
+line, what the program holds for it, its box in board pixels and in design units, and whether it is built. The top navigation is a piece of its own
+(R-20261115-7), and its place is left empty. The help bar holds the program's own entries. Not drawn, because the program holds nothing for them:
 
 - the filter chips: no console without games is listed, and no console is a favourite;
 - "Sorted by maker" and Options;
@@ -1775,8 +1778,8 @@ builds the ground, the colour fields, the header and the help bar's place. The t
 **Proof.** theme-check's `eclipse_consoles.rs` runs theme-audit on Eclipse over the canvases' eleven consoles with the focus
 on the Super Nintendo. At 1280 × 800 and 1920 × 1200 it holds every built row's box to the board's pixels times the window's
 height over 1200, as the recording writes them (two places), and each plate to the board's lattice. It also checks that the
-chosen maker is filled in the accent, that the facts carry the played count, and that the place line is drawn. Over one
-console, thirty, one maker of forty and 120, theme-audit finds nothing at any of its five sizes.
+chosen maker is filled in the accent, that the facts carry the played count, and that the place line is drawn. A second
+test requires that theme-audit find nothing over one console, thirty, one maker of forty and 120 at any of its five sizes.
 
 ### 3.5 Loading and the sandbox
 

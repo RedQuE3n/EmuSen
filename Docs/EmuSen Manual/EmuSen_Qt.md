@@ -1753,7 +1753,7 @@ Home", 1920 × 1200, in the design project) built against `EmuSen.Theme` alone. 
 rule places the screen at every size the gate uses. Elements tied to the board's left edge keep their x, and the status
 keeps its distance from the right edge. Recent shows as many tiles as fit before the window's edge.
 
-**What it draws.** Over the ground (#0A1024, `parts/Ink.qml`) is the kit's `CoronaDisc`, 2100 board pixels at (-900, -450),
+**What it draws.** Over the ground (#0A1024, `parts/Ink.qml`) and the shown game's art is the kit's `CoronaDisc`, 2100 board pixels at (-900, -450),
 with the look's corona, since the model holds no game's corona yet. Then the header: the crescent mark and `Words.title`,
 and at the right the status glass with the search (`Actions.search`) and `Device.clock`. Then the shown game: the eyebrow
 `Words.continuePlaying` while it is the suspended game, its title, and its facts (`Words.pausedFacts`, or the row's
@@ -1769,10 +1769,11 @@ played yesterday · 3 h 20 min played", "hh:mm" for "9:41 PM", and Help's labels
 **Not drawn**: the section tabs (Home, Library, Consoles, Collections, Tools) and "LB RB Sections", a piece of their
 own (R-20261115-7). Also not drawn, because the program has nothing for them: the battery, since the program feeds no
 `Device.battery` (`qt-app/src/theme.rs`, `feed_device`); "Resume point · saved"; "GAME ART". "1 of 24" waits for `Words.place`, which Choose a console's piece adds over
-`game_page.rs`'s `place`; its place on Home is left empty until then. The blurred colour fields are the kit's `Backdrop` (`EmuSen_Kit.md` §7.118, R-20261115-6).
-The board labels them the shown game's art (`Main.dc.html:75`), but it gives no blur for a picture, so Home passes no
-picture and draws the board's five fields. A resting tile's shadow and the filled button's halo and glow are the kit's
-`Glow` (§7.119). On the software backend the fields are unblurred at their own opacity.
+`game_page.rs`'s `place`; its place on Home is left empty until then. The blurred colour fields are the kit's `Backdrop` (`EmuSen_Kit.md` §7.118, R-20261115-6). The board labels them the
+shown game's art (`Main.dc.html:75`), so Home gives the backdrop the shown tile's hero, blurred 90 px at 0.85 opacity, the
+board's first field (`Main.dc.html:19`). These are provisional values, the tester's to judge from pictures. On the
+software backend the picture is unblurred at the same opacity. A game with no art leaves the ground alone. A resting
+tile's shadow and the filled button's halo and glow are the kit's `Glow` (§7.119).
 
 **Shared parts.** `parts/` serves every Eclipse screen. `Board` and `Ink` hold the measure and the boards' own colours.
 `Brand` is the mark and the name. `Status` is the search and the clock, on the glass or not.
@@ -1788,14 +1789,15 @@ the first suspended and focused, as the board shows them. At each of the gate's 
 (boxes, radius, colour, type size, part), every row not drawn, the focused tile's ring and every word. It also holds the
 pad's walk from the shown tile up to the buttons and the search and back, and the host dropping the screen with nothing
 logged. `eclipse_home_gpu.rs` runs the same oracle on the graphics card. With `EMUSEN_ECLIPSE_PICTURES` naming a folder,
-both grab Home at 1280 × 800 and 1920 × 1200.
+both grab Home at 1280 × 800 and 1920 × 1200, and once more at 1920 × 1200 with the shown game one with no art. The
+six games' first five have covers, drawn by qt-test's `covers`.
 
 **Type.** Every word is sized by `Type.size` (`EmuSen_Kit.md` §7.121): the board's size in canvas units, raised to the
 legibility floor where it is under it (R-20261115-14). The table's last three columns give each text's board size in
 units, the whole pixel size Qt draws it at, and whether it was raised; the oracle holds the table to the rule. In the face
-drawn today, the floor gives 17 for every board size under 16.5 units (the wordmark, the clock, the eyebrow, the outlined
-buttons' labels, a tile's title and facts, the help line). The title is drawn at 75 for 74.67, the facts and the filled
-button at 18 for 17.33, and the Recent heading at 19 for 18.67.
+drawn today the floor, held at every gate size, gives 19 for every board size under 18.5 units: the wordmark, the clock,
+the eyebrow, the facts, the buttons' labels, a tile's title and facts, and the help line. The Recent heading's 18.67 is
+drawn at 19 too, and the title at 75 for 74.67. Only the title keeps the board's size.
 
 **Where the board shows "Sections", the theme has none.** The section tabs and their shoulders are a piece of their own
 (R-20261115-7); Home leaves their place empty. The theme's own `Type` is exported at 1.0, as every singleton made in Rust is.

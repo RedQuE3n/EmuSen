@@ -1,6 +1,6 @@
 // EmuSen_Kit.md §7.118: the kit's backdrop on the software backend, which makes no blur: the ground, each field unblurred in its
 // colour at its opacity over the ground, an ellipse's box corners the ground's, the turned streak turned, and a picture given in
-// their place drawing nothing sharp. One test, as the harness is one per process.
+// their place drawn unblurred at its opacity. One test, as the harness is one per process.
 
 use emusen_kit_core::tokens::Colour;
 use emusen_qt_test::{Harness, Scene};
@@ -43,13 +43,15 @@ fn kit_7_118_the_backdrop_on_the_software_backend_is_its_fields_unblurred() {
     let turned = (850.0 + 130.0 * 18f64.to_radians().cos(), 520.0 - 130.0 * 18f64.to_radians().sin());
     assert!(near(at(&mut scene, turned.0, turned.1), over(lilac, 0.5, ground)), "the turned streak's end");
 
-    // A picture in their place: on the software backend no sharp picture stands in for the blur, and the fields go.
+    // A picture in their place: on the software backend the picture itself, unblurred, at its opacity, and the fields go.
     let picture = format!("file://{}/../themes/emusen/assets/previews/home.png", env!("CARGO_MANIFEST_DIR"));
     assert!(scene.set_property("scene", "picture", &picture));
-    scene.wait(300);
+    scene.wait(500);
     let tree = scene.tree();
     let shown = |name: &str| tree.nodes.iter().any(|n| n.name == name && n.visible);
-    assert!(!shown("backdropPicture") && !shown("backdropFields"), "no picture and no fields");
-    assert_eq!(at(&mut scene, 400.0, 300.0), ground, "the ground alone");
+    assert!(shown("backdropPicture") && !shown("backdropFields"), "the picture, and no fields");
+    let picture = tree.nodes.iter().find(|n| n.name == "backdropPicture").unwrap();
+    assert_eq!(picture.opacity, 0.5, "at the opacity its screen sets");
+    assert_ne!(at(&mut scene, 600.0, 400.0), ground, "the picture is drawn over the ground");
     scene.assert_quiet();
 }

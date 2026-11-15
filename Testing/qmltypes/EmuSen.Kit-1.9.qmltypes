@@ -1460,6 +1460,98 @@ Module {
         Signal { name: "liveChanged"; lineNumber: 43 }
     }
     Component {
+        file: "glow_paint.h"
+        lineNumber: 9
+        name: "GlowPaint"
+        accessSemantics: "reference"
+        prototype: "QQuickPaintedItem"
+        exports: ["EmuSen.Kit/GlowPaint 1.8"]
+        exportMetaObjectRevisions: [264]
+        Property {
+            name: "color"
+            type: "QColor"
+            read: "color"
+            write: "setColor"
+            notify: "shapeChanged"
+            index: 0
+            lineNumber: 13
+        }
+        Property {
+            name: "corner"
+            type: "qreal"
+            read: "corner"
+            write: "setCorner"
+            notify: "shapeChanged"
+            index: 1
+            lineNumber: 14
+        }
+        Property {
+            name: "blur"
+            type: "qreal"
+            read: "blur"
+            write: "setBlur"
+            notify: "shapeChanged"
+            index: 2
+            lineNumber: 15
+        }
+        Property {
+            name: "spread"
+            type: "qreal"
+            read: "spread"
+            write: "setSpread"
+            notify: "shapeChanged"
+            index: 3
+            lineNumber: 16
+        }
+        Property {
+            name: "reach"
+            type: "qreal"
+            read: "reach"
+            write: "setReach"
+            notify: "shapeChanged"
+            index: 4
+            lineNumber: 17
+        }
+        Property {
+            name: "offsetX"
+            type: "qreal"
+            read: "offsetX"
+            write: "setOffsetX"
+            notify: "shapeChanged"
+            index: 5
+            lineNumber: 18
+        }
+        Property {
+            name: "offsetY"
+            type: "qreal"
+            read: "offsetY"
+            write: "setOffsetY"
+            notify: "shapeChanged"
+            index: 6
+            lineNumber: 19
+        }
+        Property {
+            name: "blurs"
+            type: "int"
+            read: "blurs"
+            notify: "counted"
+            index: 7
+            lineNumber: 20
+            isReadonly: true
+        }
+        Property {
+            name: "paints"
+            type: "int"
+            read: "paints"
+            notify: "counted"
+            index: 8
+            lineNumber: 21
+            isReadonly: true
+        }
+        Signal { name: "shapeChanged"; lineNumber: 45 }
+        Signal { name: "counted"; lineNumber: 46 }
+    }
+    Component {
         file: "kinds.cxxqt.h"
         lineNumber: 51
         name: "GlyphStyles"

@@ -37,19 +37,17 @@ ThemeScreen {
             Ink {
                 id: ink
             }
-            // The ground and the board's colour fields, which stand for the shown game's art (Main:17-23, 75), each its colour, CSS blur, opacity and turn.
+            // The ground, and the shown game's art blurred over it: the board's colour fields stand for that art (Main:19-23, 75); its blur
+            // and opacity are the board's first field's, 90 px at 0.85 (Main:19), provisional until the tester judges them. A game
+            // with no art leaves the ground alone.
             Backdrop {
                 objectName: "backdrop"
                 anchors.fill: parent
                 ground: ink.ground
                 pixelScale: canvas.unit
-                fields: [
-                    BackdropField { x: 1060 * design.unit; y: -140 * design.unit; width: 900 * design.unit; height: 760 * design.unit; color: "#1FC9A8"; blur: 90 * design.unit; opacity: 0.85 },
-                    BackdropField { x: 1380 * design.unit; y: 420 * design.unit; width: 760 * design.unit; height: 760 * design.unit; color: "#6A4CF0"; blur: 110 * design.unit; opacity: 0.9 },
-                    BackdropField { x: 900 * design.unit; y: -260 * design.unit; width: 700 * design.unit; height: 520 * design.unit; color: "#1D6BF2"; blur: 100 * design.unit; opacity: 0.8 },
-                    BackdropField { x: 1240 * design.unit; y: 250 * design.unit; width: 620 * design.unit; height: 46 * design.unit; color: "#B8FFE9"; blur: 22 * design.unit; opacity: 0.55; rotation: -18; corner: 40 * design.unit },
-                    BackdropField { x: 1330 * design.unit; y: 380 * design.unit; width: 520 * design.unit; height: 30 * design.unit; color: "#D9C8FF"; blur: 18 * design.unit; opacity: 0.5; rotation: -14; corner: 40 * design.unit }
-                ]
+                source: root.currentTile?.hero ?? ""
+                sourceBlur: 90 * design.unit
+                sourceOpacity: 0.85
             }
             CoronaDisc {
                 objectName: "disc"
@@ -250,7 +248,8 @@ ThemeScreen {
                                 Text {
                                     objectName: "tileTitle." + tile.index
                                     x: 18 * design.unit
-                                    y: parent.height - 34 * design.unit - height
+                                    // On the facts' line, so words raised to the legibility floor do not overlap (Main:85-86 place them by the tile's foot).
+                                    y: tileFacts.y - height
                                     width: parent.width - 36 * design.unit
                                     text: tile.title
                                     elide: Text.ElideRight
@@ -259,6 +258,7 @@ ThemeScreen {
                                     font.weight: Font.DemiBold
                                 }
                                 Text {
+                                    id: tileFacts
                                     objectName: "tileFacts." + tile.index
                                     x: 18 * design.unit
                                     y: parent.height - 12 * design.unit - height

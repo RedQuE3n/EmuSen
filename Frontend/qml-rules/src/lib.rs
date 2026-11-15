@@ -64,10 +64,8 @@ pub const FORBIDDEN_IMPORTS: [&str; 1] = ["QtQuick.LocalStorage"];
 pub const THEME_IMPORTS: [&str; 6] =
     ["QtQuick", "QtQuick.Layouts", "QtQuick.Effects", "QtQuick.Shapes", "QtQuick.Controls", "EmuSen.Theme"];
 
-/// Bindings whose string is a name, a path or a colour rather than words: never findings. `globalCompositeOperation` is
-/// Context2D's composite mode, one of the names Qt's page lists ("source-in", "source-over", ...; doc.qt.io,
-/// qml-qtquick-context2d, read 2026-11-15), set by assignment in a paint handler, so the rule reads `name =` as `name:`.
-const NAMED_BINDINGS: [&str; 14] = [
+/// Bindings whose string is a name, a path or a colour rather than words: never findings.
+const NAMED_BINDINGS: [&str; 13] = [
     "objectName",
     "role",
     "font.family",
@@ -81,7 +79,6 @@ const NAMED_BINDINGS: [&str; 14] = [
     "placeholderText",
     "sequence",
     "contextType",
-    "globalCompositeOperation",
 ];
 
 /// How the check reads a file: as a view, or as a fixture (a test scene, the gallery) whose words, rows and literals stand in for models.
@@ -165,15 +162,13 @@ fn strings_in(line: &str) -> Vec<(String, Option<String>)> {
     found
 }
 
-/// The binding name before a value: `name:` with any spaces, read backwards from the value; or `name =`, an assignment, which
-/// names only a binding of `NAMED_BINDINGS` (an assignment to any other property is read as naming none).
+/// The binding name before a value: `name:` with any spaces, read backwards from the value.
 fn binding_before(before: &[char]) -> Option<String> {
     let mut k = before.len();
     while k > 0 && before[k - 1].is_whitespace() {
         k -= 1;
     }
-    let assigned = k > 0 && before[k - 1] == '=' && (k < 2 || !matches!(before[k - 2], '=' | '!' | '<' | '>'));
-    if k == 0 || (before[k - 1] != ':' && !assigned) {
+    if k == 0 || before[k - 1] != ':' {
         return None;
     }
     k -= 1;
@@ -184,9 +179,7 @@ fn binding_before(before: &[char]) -> Option<String> {
     while k > 0 && (before[k - 1].is_alphanumeric() || before[k - 1] == '.' || before[k - 1] == '_') {
         k -= 1;
     }
-    let name: String = before[k..end].iter().collect();
-    let listed = NAMED_BINDINGS.iter().any(|b| name == *b || name.ends_with(&format!(".{b}")));
-    (k < end && (!assigned || listed)).then_some(name)
+    (k < end).then(|| before[k..end].iter().collect())
 }
 
 fn is_handler_function(line: &str) -> bool {

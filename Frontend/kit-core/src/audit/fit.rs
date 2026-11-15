@@ -32,6 +32,28 @@ pub fn smallest_capitals() -> f64 {
     SMALLEST_TEXT * DESKTOP_CAPS
 }
 
+/// The sizes the gate runs at (EmuSen_Interface.md §24.7): 1280 × 800, a Steam Deck–class size kept as a fit size; the
+/// handheld's own 1920 × 1200 (a Legion Go S, decided 2026-11-08); 1920 × 1080, 1280 × 720 and 3840 × 2160.
+pub const SIZES: [(i32, i32); 5] = [(1280, 800), (1920, 1200), (1920, 1080), (1280, 720), (3840, 2160)];
+
+/// A window's pixels to one of the audit's design pixels: its height over the design height, never under one, so a window
+/// shorter than the design is held to the floor in its own pixels.
+pub fn screen_unit(height: f64) -> f64 {
+    (height / crate::canvas::DESIGN_HEIGHT).max(1.0)
+}
+
+/// The capitals' floor in canvas units, where a big screen's words are laid out: at each gate size the audit's floor in the
+/// window's pixels, less its slack, over the canvas's pixels a unit there, the largest of them (EmuSen_Kit.md §7.121).
+pub fn smallest_capitals_in_units() -> f64 {
+    SIZES
+        .iter()
+        .map(|&(_, h)| {
+            let h = f64::from(h);
+            (smallest_capitals() * screen_unit(h) - CAPS_SLACK) / (h / crate::canvas::DESIGN_HEIGHT)
+        })
+        .fold(0.0, f64::max)
+}
+
 /// The fit audit of Settings Reference §4.83.2 over one screen: `panel` is its frame, `slack` a pixel (a pixel and a half above scale 1), `smallest` the capitals' floor or 0 for a desktop window.
 pub fn fit(root: &Item, panel: Rect, slack: f64, smallest: f64) -> Vec<Fault> {
     let mut faults = Vec::new();

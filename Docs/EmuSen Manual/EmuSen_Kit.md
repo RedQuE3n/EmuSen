@@ -4131,7 +4131,8 @@ licence go with them (read 2026-11-15). Sora: the static Light, Regular, SemiBol
 
 **Loaded once.** `bundled_families()` (`cpp/bundled_faces.cpp`) adds every `.ttf` under `qrc:/emusen/fonts` to the
 application's font database (`QFontDatabase::addApplicationFont`) the first time a `Tokens` singleton is made, on any
-engine, and keeps the families the files declare; the database is the process's, so the theme's engine and the program's
+engine, and keeps each file's first family, its typographic one (a static weight's file also declares its legacy
+name, "Sora Light", which `applicationFontFamilies` lists after it; measured 2026-11-15); the database is the process's, so the theme's engine and the program's
 share them. The `FontLoader`s of the program's `Faces.qml`, the reference theme's `parts/Faces.qml`, `Moonrise` and
 `CoverTile`, which loaded the same Barlow files four times over, are gone. Qt names a static file by its typographic
 family: `BarlowCondensed-Light.ttf`, `-Regular` and `-Medium` are all "Barlow Condensed" at weights 300, 400 and 500
@@ -4162,10 +4163,20 @@ JetBrains Mono); theme-check finds any other value, and the kit, given one, keep
 face is never a family the machine may lack, so a theme's text is never drawn in a fallback. Sora has no 500: a text
 asking Sora at `Font.Medium` is drawn in Sora Regular (fontInfo, 2026-11-15).
 
+**Weights, not settled.** The tokens name a family; every text keeps the weight it set under the reference. The boards
+draw Eclipse's roles at other weights, read 2026-11-15: titles and headings 600 (`EclipseSettings:25`, `:40`, `:74`), a
+row's label 600 (`EclipseSettings:44`) where the reference draws 400, its value 400 (`EclipseSettings:47`), body words
+400 (`EclipseSettings:73`), a pane's sentence 300 (`EclipseSettings:75`), the wordmark 600 (`Main:31`) where the
+reference draws 300, codes 400 (`EclipseSettingsLibrary:70`, `EclipseSettingsEmuSen:72`) and a cheat's code 700
+(`EclipseCheats:75`). One weight per role does not hold them: a row's label and its value share the interface role and
+differ. Weights per text kind under a theme are left for a ruling: either a weight token beside each face token with the
+roles split where the boards differ (a row's label from its value, a sentence from the words), or a weight table per
+look.
+
 **Tests.** `kit-qt/tests/faces.rs`: `BUNDLED` is the families of the folder's files and every file is in the resource;
 each bundled family is drawn as itself (the family Qt matched, `QFontInfo`: "if the requested font is not available,
 the font matcher chooses the closest", doc.qt.io, Qt 6, `QFontInfo`, read 2026-11-15); the reference's four values; a
-theme's faces in its variant, an unbundled one left. `qt-app/tests/eclipse.rs`
+theme's faces in its variant, an unbundled one left. `qt-app/tests/eclipse_faces.rs`
 `kit_7_117_…`: under the reference the wordmark draws Barlow Condensed, the status line Barlow and a settings row the
 application's font; under Eclipse a settings row draws Sora and the ROM folder's path JetBrains Mono, Eclipse's engine
 gives its texts Sora, and the reference's Home on an engine holding Eclipse's overrides draws its wordmark and status

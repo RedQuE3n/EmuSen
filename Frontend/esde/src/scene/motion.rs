@@ -329,14 +329,18 @@ impl Motion {
 }
 
 /// A GIF's frame at a time since its restart, as ES-DE 3.4.1's `GIFAnimComponent` steps it (`setAnimation`, `update`,
-/// `render`): every frame for the first one's delay over the speed, whole milliseconds; `normal` and `reverse` start
-/// again from their first frame, the alternating forms turn at each end without showing it twice; after
-/// `iterations` plays (0 for ever) nothing is drawn. Returns the frame and the time until it changes, or None when done.
-pub fn gif_frame(since: Time, frames: u32, delay_ms: u32, speed: f64, direction: &str, iterations: u32) -> Option<(u32, Option<Time>)> {
-    if frames == 0 {
+/// `render`, `applyTheme`): every frame for the first one's delay over the speed, whole milliseconds; `normal` and
+/// `reverse` start again from their first frame, the alternating forms turn at each end without showing it twice and
+/// count each way as a play; after `iterations` plays (0 for ever) the last frame shown stays. Returns the frame and the
+/// time until it changes; None where ES-DE gives no pacing: no frames, or a first delay outside 20 to 1000 ms.
+pub fn gif_frame(since: Time, frames: u32, delay_ms: u32, speed: f32, direction: &str, iterations: u32) -> Option<(u32, Option<Time>)> {
+    // ES-DE's `setAnimation` takes the delay only within these bounds; outside them its pacing is 0 (EmuSen_Qt.md §4.5.9).
+    if frames == 0 || !(20..=1000).contains(&delay_ms) {
         return None;
     }
-    let pacing = ((f64::from(delay_ms) / speed.clamp(0.2, 3.0)) as i64).max(1) * 1000;
+    // `mFrameRate` and `mTargetPacing`, in ES-DE's own arithmetic, so a delay of 30 ms at speed 1 rounds as it does there.
+    let rate = 1000.0 / f64::from(delay_ms);
+    let pacing = ms((((1000.0 / rate) / f64::from(speed)) as i64) as f64);
     let wait = Some(pacing - since.max(0) % pacing);
     if frames == 1 {
         return Some((0, None));
@@ -347,24 +351,34 @@ pub fn gif_frame(since: Time, frames: u32, delay_ms: u32, speed: f64, direction:
     if paced == 0 {
         return Some((0, wait));
     }
-    let step = paced - 1;
-    let n = i64::from(frames);
-    let alternate = direction.starts_with("alternate");
-    let reverse = direction == "reverse" || direction == "alternateReverse";
-    // A play's frames: n from the start; turning, the end frame is not shown again, so n - 1 after the first.
-    let (play, frame) = if !alternate {
-        let (play, at) = (step / n, step % n);
-        (play, if reverse { n - 1 - at } else { at })
-    } else if step < n {
-        (0, if reverse { n - 1 - step } else { step })
-    } else {
-        let rest = step - n;
-        let (k, at) = (rest / (n - 1), rest % (n - 1));
-        let backwards = (k % 2 == 0) != reverse;
-        (k + 1, if backwards { n - 2 - at } else { at + 1 })
+    let (reverse, alternate) = match direction {
+        "reverse" => (true, false),
+        "alternate" => (false, true),
+        "alternateReverse" => (true, true),
+        _ => (false, false),
     };
-    if iterations > 0 && play >= i64::from(iterations) {
-        return None;
+    let n = i64::from(frames);
+    // Each play's frames: n for the first; turning, the end frame is not shown again, so n - 1 for each after it.
+    let play_at = |step: i64| -> (i64, i64) {
+        if !alternate {
+            let (play, at) = (step / n, step % n);
+            (play, if reverse { n - 1 - at } else { at })
+        } else if step < n {
+            (0, if reverse { n - 1 - step } else { step })
+        } else {
+            let rest = step - n;
+            let (k, at) = (rest / (n - 1), rest % (n - 1));
+            let backwards = (k % 2 == 0) != reverse;
+            (k + 1, if backwards { n - 2 - at } else { at + 1 })
+        }
+    };
+    // `applyTheme` doubles the count for the alternating forms, a play each way.
+    let plays = i64::from(iterations) * if alternate { 2 } else { 1 };
+    let (play, frame) = play_at(paced - 1);
+    if plays > 0 && play >= plays {
+        // The last play's end: the step before the first of the play past the count.
+        let last = if alternate { n + (plays - 1) * (n - 1) - 1 } else { plays * n - 1 };
+        return Some((play_at(last).1 as u32, None));
     }
     Some((frame as u32, wait))
 }

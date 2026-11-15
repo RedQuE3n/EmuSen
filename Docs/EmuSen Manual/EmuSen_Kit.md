@@ -2210,7 +2210,13 @@ theme-audit records a theme's splash at a stated time and a screen with A held (
   as a display's frames would, so a `Behavior` or a `FrameAnimation` that a step starts runs from its own time rather than
   being jumped over. `None` uninstalls it, which leaves Qt's default timer driver in place, not a threaded render loop's own:
   a caller holds the clock last. Every `QAbstractAnimation` is held, and a `FrameAnimation` is triggered on the held
-  clock's frames; a `Timer` is not. A `FrameAnimation`'s `frameTime` and `elapsedTime` are not held: Qt reads them from
+  clock's frames. A `Timer` is held too since 2026-11-14: Qt runs a QML `Timer` as a pause animation
+  (`QPauseAnimationJob`, qtdeclarative `src/qmlmeta/types/qqmltimer.cpp`), and when every running animation is a pause,
+  `QUnifiedTimer::localRestart` stops the installed driver and waits on a wall-clock `pauseTimer`, so a resting scene's
+  Timer ran on wall time through a hold (qtbase `src/corelib/animation/qabstractanimation.cpp`, read 2026-11-14). The
+  held clock therefore keeps one animation of its own running (`Keeper`: no length, never ends, changes nothing), so
+  the driver stays in charge and a Timer steps with the held time. Found when an ES-DE theme's GIF, a Timer-driven
+  resting wait, moved a held mapping case's time by 3 ms (EmuSen_Qt.md §4.5.9). A `FrameAnimation`'s `frameTime` and `elapsedTime` are not held: Qt reads them from
   a `QElapsedTimer` of its own (`qquickframeanimation.cpp`, `maybeTick`), found 2026-11-12 when the ES-DE view's clock,
   which summed them, ran on through a held clock (EmuSen_Qt.md §4.8.4); a scene whose time must be held reads it from
   an animation's value. Under a held clock
@@ -3362,7 +3368,8 @@ at 1280 × 800 and 1920 × 1200 by night. The acceptance test's comment points t
 
 **What that comparison covers, and what not (2026-11-11).** The program and theme-audit show one screen
 file: qt-app's `qt_3_4_2_the_program_s_reference_theme_is_the_package_theme_audit_holds_to_its_canvas` (`tests/theme.rs`)
-holds the resources' reference theme, `REFERENCE_THEME`, to `Frontend/themes/emusen` file for file, the folder
+holds the resources' reference theme, `reference_theme()`, to `Frontend/themes/emusen` file for file (and since §3.4.7 of
+`EmuSen_Qt.md` each built-in to its folder), the folder
 theme-audit's eleven-console test holds. They are not the same catalogue (the acceptance library shelves three
 consoles of one maker, theme-audit's `eleven` the canvas's eleven on three makers) or the same host (theme-audit feeds
 the screen through its own synthetic world and `emusen-theme-host`; the program through its library). So the
@@ -3821,3 +3828,31 @@ the file's `pages` and the page's `pageSize` in points, so its host fits the box
 game page's viewer (EmuSen_Qt.md §7.8.2) and esde-qt's `ManualElement`, which drew the same two Qt PDF types itself
 until 2026-11-12. The kit's module now depends on `QtQuick.Pdf`, which esde-qt already did; nothing links Qt PDF that
 did not before. Kit 1.3.
+
+### 7.111 DrawnPixels: a picture decoded at the pixels it covers (2026-11-14)
+
+A picture laid out on the big screen's canvas (§7.112) is sized in design units and drawn through the canvas's
+`Scale`, so a `sourceSize` written in its own units decodes it at the design size and the scene enlarges it: at a
+window 1.5 times the design height a help bar's picture, a PDF's page or a controller's drawing was decoded at two
+thirds of the pixels drawn (read from `HelpBar.qml`, `PdfPage.qml` and `ControllerDrawing.qml` on 2026-11-14).
+`DrawnPixels` (C++, `cpp/drawn_pixels.h`) is an item that fills its picture and gives one property, `pixels`, a
+`size`: its box mapped to the scene through every ancestor's position, scale and transform (`mapRectToScene`), times
+its window's `effectiveDevicePixelRatio`, rounded up; zero outside a window, which an `Image` reads as its natural size.
+It measures again on each change Qt tells it of: `ItemTransformHasChanged` (an ancestor's too, as `ItemObservesViewport`
+asks, the flag `InsideClips` of §7.34 uses), `ItemSceneChange`, `ItemParentHasChanged`, `ItemDevicePixelRatioHasChanged`
+and its own geometry. `HelpBar`'s theme picture, `PdfPage`'s page and `ControllerDrawing`'s drawing set `sourceSize`
+to it. A rotated ancestor gives the bounding box's size. `RoundPicture` and `CoverTile` keep the `pixelScale` their
+callers give (decided 2026-11-14, R-20261114-5). Qt's documentation offers no bindable effective scale: `Item.mapToItem` and
+`mapToGlobal` are calls, which a binding does not re-run when an ancestor's transform changes, and QML is layout only
+(EmuSen_Qt.md §1.3). Test: `kit-qt/tests/drawn_pixels.rs`, at two window heights in one run. The pixel ratio is one
+under the headless harness, so a ratio other than one is not tested. Kit 1.4.
+
+### 7.112 CanvasUnits: the design height's one owner (2026-11-14)
+
+The canvas's design height, the units every big-screen screen is laid out in, was written twice: `designHeight: 800`
+in `NormalizedCanvas.qml` and `DESIGN_HEIGHT` in kit-core's night sky, which sizes the stars and the glow. It is now
+`kit-core/src/canvas.rs`'s `DESIGN_HEIGHT`, which the sky re-exports, and the kit's singleton `CanvasUnits` gives it to
+QML as `designHeight`, a constant; `NormalizedCanvas.designHeight` keeps its place in the registry and binds to it
+(decided 2026-11-14, R-20261114-7). It is a part of its own rather than a property of `Tokens` because every read-only number of
+`Tokens` takes a theme's override (§7.2, `tests/overrides.rs`), and the design height is the program's, not a theme's.
+Kit 1.4.

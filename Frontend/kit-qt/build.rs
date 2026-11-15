@@ -62,7 +62,7 @@ fn baked_shader() -> PathBuf {
 fn main() {
     let shaders = baked_shader();
     CxxQtBuilder::new_qml_module(
-        QmlModule::new("EmuSen.Kit").version(1, 3).qml_files(KIT_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtMultimedia").depend("QtQuick.Pdf"),
+        QmlModule::new("EmuSen.Kit").version(1, 4).qml_files(KIT_FILES).depend("QtQuick").depend("QtQuick.Shapes").depend("QtMultimedia").depend("QtQuick.Pdf"),
     )
     .qrc("style/EmuSen.qrc")
     .qrc("fonts/Fonts.qrc")
@@ -96,9 +96,10 @@ fn main() {
         "src/table.rs",
         "src/reset_gate.rs",
         "src/controller.rs",
+        "src/canvas.rs",
     ])
     .include_dir("cpp")
-    .cpp_files(["cpp/kit_glue.cpp", "cpp/game_picture.h", "cpp/game_picture.cpp", "cpp/edge_mask.h", "cpp/edge_mask.cpp", "cpp/inside_clips.h", "cpp/inside_clips.cpp", "cpp/text_width.h", "cpp/text_width.cpp", "cpp/video_frames.h", "cpp/video_frames.cpp"])
+    .cpp_files(["cpp/kit_glue.cpp", "cpp/game_picture.h", "cpp/game_picture.cpp", "cpp/edge_mask.h", "cpp/edge_mask.cpp", "cpp/inside_clips.h", "cpp/inside_clips.cpp", "cpp/drawn_pixels.h", "cpp/drawn_pixels.cpp", "cpp/text_width.h", "cpp/text_width.cpp", "cpp/video_frames.h", "cpp/video_frames.cpp"])
     .qt_module("Quick")
     .qt_module("QuickControls2")
     // The clip's frames on the software backend (VideoFrames); the decoder is Qt Multimedia's, over the system's FFmpeg (EmuSen_Qt.md §1.8.9).

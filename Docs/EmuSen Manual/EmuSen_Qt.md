@@ -1065,8 +1065,8 @@ author, licence, `api` 1.0, the dark and light variants, `fontSizes` 1 and 1.3, 
 synthetic library at 640 × 400), `screens/Home.qml`, `Consoles.qml` and `Games.qml`, and `parts/` (`Faces`, the
 four Barlow faces from the kit's fonts; `Glyph`, a mark of `Marks` drawn in one ink; `EngineMark`; `CoverFan`). It is
 written against `EmuSen.Theme` alone, every shown word from `Words`, `Help` or a row, and is compiled into the program's
-resources by `qt-app/themes.qrc` at `qrc:/emusen/themes/emusen/` (`emusen_qt::REFERENCE_THEME`, read in QML as
-`ReferenceTheme.folder`); the host loads it as it loads any theme. A file added to the package is added to that list.
+resources by `qt-app/themes.qrc` at `qrc:/emusen/themes/emusen/` (`emusen_qt::reference_theme()`, the first of
+`themes::BUILT_IN` at `themes::built_in_folder`, read in QML as `BuiltInThemes.reference`); the host loads it as it loads any theme. A file added to the package is added to that list.
 
 **What moved and what stayed.** The three screens and their parts left `EmuSen.App` (`Home.qml`, `Consoles.qml`,
 `GameGrid.qml`, `Cover.qml`, `CoverFan.qml`, `Glyph.qml`, `EngineMark.qml`, `GameCard.qml`, `RoundPicture.qml`); the cover
@@ -1101,6 +1101,12 @@ drawn it as an offered one. theme-audit's `disabled` state, offscreen on the sof
 finding "a declined place drawn as if offered" is gone at every size, its words exempt as drawn apart (`EmuSen_Kit.md`
 §7.38); at 80% it came back at all five sizes (a seeded fault, reverted). The light variant kept it until its words
 turned light (below).
+
+**An empty library** (decided 2026-11-13 by the tester). With no console holding a game, the theme shows the program's
+own sentence on how a folder is added (`Words.addFolder`), as the other built-in themes show it: on Home where the
+shelf's covers would stand, and on Choose a console one line under "No consoles have games yet". With games it is not
+shown. Proof: `qt-app/tests/theme_empty_library.rs` and `theme_library_words.rs`, each a process of its own, as the
+test harness makes one application a process.
 
 **The light variant: the world stays dark** (decided 2026-11-09 by the tester). In light, the world, Home's and the grid's
 night sky, stays dark and the words drawn on it turn light; only the cards and panels go light. The words on the world
@@ -1622,6 +1628,103 @@ side by side in `~/.cache/emusen/tmp/qt-s3-ofix/compare/`:
    its view as possibly null, and `OrbitCover` its `orbit` (`?.`, `?? 0`). A run logs none; with `OrbitCover`'s guard
    seeded back, `nogame` alone logged 7 at `OrbitCover.qml:16`.
 
+#### 3.4.7 Eclipse, the second built-in **[M 2026-11-14]**
+
+Decided 2026-11-11 by the tester: Eclipse is EmuSen's default look, and the present theme stays as an option. Decided
+2026-11-14: Eclipse is compiled into the program as a built-in beside the reference, and it is dark only for now. Decided
+2026-11-13: the program's own screens take the chosen theme's colours and sizes through the kit's tokens (§3.5.1), and the
+theme API is not widened for that. A blank setting still gives the reference: which theme a blank setting gives changes
+only once Eclipse has screens of its own.
+
+**The package.** `Frontend/themes/eclipse/` holds `theme.json` alone: name Eclipse, `api` 1.0, the dark variant, no
+screen of its own (`"screens": []`), no cue, no preview, and the token overrides below. With no screens, every screen is
+the reference's: Home, Choose a console and the games are drawn by the reference's host, whose engine keeps the kit's
+tokens, so only the program's own screens (Settings, the cards, the game page, the Pause Card, the tools, the questions
+and notices) and Eclipse's own engine take Eclipse's values. It has no preview because a grab of the program in Eclipse
+today shows the reference's screens, which would not show Eclipse. The manifest allows all of this: `screens` and
+`variants` are lists, `previews` is optional, and theme-audit audits the screens a package lists, so it loads none here.
+
+**Built in.** `themes::BUILT_IN` (`qt-models/src/themes.rs`) is the one list of built-in themes, the reference first;
+`themes::built_in_folder` gives each one's folder in the resources, `qrc:/emusen/themes/<id>/`, which `qt-app/themes.qrc`
+holds file for file. `BuiltInThemes` (`qt-app/src/theme.rs`) reads each built-in's `theme.json` through Qt for the Themes
+tab and gives the window the reference's folder. In the tab, Eclipse's row follows EmuSen's: "Eclipse", "By The EmuSen
+project · EmuSen.Theme 1.0 · dark", and "Checked: nothing found." (built-ins are checked by the build's tests, here
+theme-check's `qt_3_4_7_the_built_in_eclipse_package_is_clean`). Use stores the id `eclipse`; `themes::resolve` gives
+`Resolved::BuiltIn`, whose host folder is the resources', so the chosen theme's host loads it and `ThemeStyle` puts its
+overrides on the program's engine.
+
+**From the boards to design units.** A board's pixel is converted as value × `canvas::DESIGN_HEIGHT` (kit-core, 800) / the
+board's height (`canvas.json`'s `h`, 1200 for every board used), both read from their owners by the script that wrote the
+overrides; a board's `rgba()` colour becomes `#AARRGGBB`, its alpha rounded to the nearest of 256 steps. Three worked
+values: a row's 84 px is 84 × 800 / 1200 = 56; the notice's corners, 22 px, are 14.666…; the scrim's
+`rgba(4, 5, 10, 0.62)` is `#9E04050A` (0.62 × 255 = 158.1, so 0x9E). Type sizes are bases: the kit reads one at text
+scale 1 as the nearest half unit (`scaled_text`), so `fontCaption` 15.333… reads 15.5.
+
+**The role mapping.** Each override is the kit role's value where the board draws the same thing (boards in the design
+project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
+
+| Token | What it paints in the program | Board element (file:line) | Board | Design value |
+|---|---|---|---|---|
+| surface | a screen's ground behind its frame (`kit-qt/qml/Frame.qml:37`) | the ground (`EclipseSettings:17`) | #07080F | #07080F |
+| surfaceRaised | the focused row (`MenuRow.qml:34`), a notice (`NoticeLayer.qml:60`) | the focused row (`EclipseSettings:94`), the notice (`EclipseDialog:23`) | #151826 | #151826 |
+| inputSurface | a text field (`style/TextField.qml:37`) | a text field (`EclipseGameEdit:84`) | #11131C | #11131C |
+| scrim | the Home card's scrim (`qt-app/qml/MenuCard.qml:81`) | the scrim under the Menu card (`EclipseHomeCard:22`) | rgba(4, 5, 10, 0.62) | #9E04050A |
+| rule | the help bar's top line (`HelpBar.qml:63`) | the help bar's top line (`EclipsePause:57`) | rgba(246, 231, 216, 0.35) | #59F6E7D8 |
+| text | a resting row's label (`MenuRow.qml:58`) | the rows' ink (`EclipseSettings:17`) | #F4F1EC | #F4F1EC |
+| textStrong | the focused row's label (`MenuRow.qml:58`) | the focused row's and the title's ink (`EclipseSettings:17`) | #F4F1EC | #F4F1EC |
+| muted | a door row's mark (`MenuRow.qml:114`) | a door row's mark (`EclipseSettings:59`) | #B9BED0 | #B9BED0 |
+| accent | a switch's track when on (`style/Switch.qml:22`), the ring | the track when on, the ring (`EclipseSettings:94`) | #F6E7D8 | #F6E7D8 |
+| overAccent | a switch's knob when on (`style/Switch.qml:31`) | the knob when on (`EclipseSettings:94`) | #07080F | #07080F |
+| shadowOpacity | a notice's shadow (`NoticeLayer.qml:14`) | the notice's shadow (`EclipseDialog:23`) | 0.6 | 0.6 |
+| shadowOffsetY | a notice's shadow (`NoticeLayer.qml:47`) | the notice's shadow (`EclipseDialog:23`) | 18 px | 12 |
+| rowHeight | a row (`MenuRow.qml:28`) | a row (`EclipseSettings:42`) | 84 px | 56 |
+| rowRadius | a row's corners (`MenuRow.qml:33`) | a row's corners (`EclipseSettings:42`) | 20 px | 13.333… |
+| tileRadius | a notice's corners (`NoticeLayer.qml:59`) | the notice's corners (`EclipseDialog:23`) | 22 px | 14.666… |
+| ringThickness | the ring's width (`ActionButton.qml:39`) | the ring, 3 to 6 px out (`EclipseSettings:94`) | 3 px | 2 |
+| ringOffset | the gap inside the ring (`ActionButton.qml:36`) | the dark gap (`EclipseSettings:94`) | 3 px | 2 |
+| hoverBorder | an unfilled button's outline (`ActionButton.qml:29`) | the unfilled button's outline (`EclipseDialog:40`) | 2 px | 1.333… |
+| controlHeight | a button (`ActionButton.qml:22`) | the button (`EclipseDialog:39`) | 72 px | 48 |
+| helpBar | the help bar (`HelpBar.qml:43`) | the help bar (`EclipsePause:57`) | 76 px | 50.666… |
+| fontRow | a row's label (`MenuRow.qml:20`) | a row's name (`EclipseSettings:44`) | 24 px | 16 |
+| fontBody | the help bar's words (`HelpBar.qml:16`) | the help bar's words (`EclipseSettings:79`) | 21 px | 14 |
+| fontCaption | Settings' section names (`SettingsFrame.qml:77`) | the section names (`EclipseSettings:32`) | 23 px | 15.333… |
+| fontTitle | a question's title (`Question.qml:23`) | the question's title (`EclipseDialog:36`) | 44 px | 29.333… |
+| fontDisplay | the game's name on its page (`PageFrame.qml:151`) | the game's name (`EclipseGame:44`) | 104 px | 69.333… |
+
+The colour of the notice's shadow is black on the board, the kit's own, so `shadowColor` is not overridden; `safeAreaX`
+(96 px, 64 units) is the kit's value too. Left at the reference's value, each for its reason:
+
+- `border`: the boards' outline of an unfilled button and of a switch's track (#5A6076, `EclipseDialog:40`,
+  `EclipseSettings:94`) is 2.83:1 on surfaceRaised and 2.97:1 on inputSurface, under the kit's 3:1 floor for graphics;
+  theme-check refuses it. The tester's to rule on.
+- `voidFill`: the boards draw black behind a game (`EclipsePause:17`), which is the kit's.
+- `success`, `error`, `attention`: no board draws words in a tone colour; a status is a filled chip (`EclipseSettingsConsoles:78`).
+- `captionSurface`, `overArt`, `overArtScrim`: the game page's board draws the disc over its art, not the kit's caption and
+  gradient; settled with the game page's piece.
+- `shadowBlur`: how a CSS blur radius relates to the kit's (`RaisedShadow.qml:31`, MultiEffect's `blurMax`) was not read.
+- `fontStrong`, `headerSize`: no screen of the program reads them. `fontGlyph`: the kit's glyph is sized as a share of it
+  (`PadGlyph.qml:20`), the board's is a 34 px disc; not the same measure.
+- `base`, `paneGutter`, `paneGap`, `cardWidth`, `titleRow`, `tileWidth`, `tileHeight`, `tileGap`, `barWidth`,
+  `tileScale`, `safeAreaY`, the durations, curves and breathing: no board element measured as the same thing.
+
+**Board colours with no kit role**, for later pieces, no role bent to carry them: the rose of the focus glow (#F3C9D2,
+rgba(240, 180, 196, 0.4) at `EclipseSettings:94`), the corona disc and its rim, a resting row's own surface and edge
+(#0F111A, #22263A, `EclipseSettings:94`; the kit draws a resting row on the screen's ground), a resting switch's knob
+(#B9BED0, where the kit uses textStrong), the help bar's words (#D8DBE6, where the kit uses text), a pill's corners
+(36 px, where the kit's button uses rowRadius), and the blurred colour fields.
+
+**What does not hold for a dark-only theme yet.** Settings' Appearance row (`qt-models/data/settings_screen.json:91`)
+offers Light whatever the chosen theme's variants; under Light the kit's light palette is shown, with none of Eclipse's
+values. And a theme's overrides are per variant, not per form, so the desktop form, which the program does not show for
+now, would take the big screen's sizes.
+
+**Proof.** qt-app's `qt_3_4_7_eclipse_is_listed_chosen_and_sets_every_override_on_both_engines` (`tests/eclipse.rs`):
+with the reference in use every token of the program's engine is the reference engine's; the Themes tab lists EmuSen then
+Eclipse; Use stores `eclipse` and loads it from the resources; every override read back from Eclipse's engine and from the
+program's equals `theme.json`'s, and every other token is the kit's; the reference chosen again gives the kit's tokens
+back. qt-models' `both_built_ins_come_first_and_a_blank_setting_still_gives_the_reference` holds the listing and the
+resolution, and qt-app's `qt_3_4_2_…` holds each built-in's resources to its folder.
+
 ### 3.5 Loading and the sandbox
 
 Each theme runs in a `QQmlEngine` of its own, created by Rust with: an import path list holding only Qt's modules on an
@@ -1782,7 +1885,7 @@ theme (S); a themed Games screen opens no List card until `Actions.openListCard`
   `LibraryModel.select`). `Actions.openHomeCard` is declined: Power opens the Home card, as before.
 
 **Two hosts.** `ThemeHost.qml` is one theme: its host, its slots, its feed and the program's models it is fed from. The
-window holds two: the reference (`ReferenceTheme.folder`) and the chosen theme (`--theme`, `EMUSEN_THEME`, else the
+window holds two: the reference (`BuiltInThemes.reference`) and the chosen theme (`--theme`, `EMUSEN_THEME`, else the
 settings' `EmuSenTheme` resolved as §3.8 says). The chosen theme's host is a `Loader`'s item (`chosenTheme`), made only
 while a theme other than the reference is chosen and destroyed, engine and all, when the reference is chosen again
 (§3.8, §9.3.5). The
@@ -1994,13 +2097,14 @@ the panel's rows; the focused row's detail as properties; `use(id)`, `check(id)`
 thread; a check also runs off it and comes back through `qt_thread().queue`. A check is kept on its row while the
 program runs; it is not written anywhere.
 
-**Rows.** The reference first, from its `theme.json` in the resources (`ReferenceTheme.manifest`, read through Qt as the
-host reads any package) and checked by construction, since the build's own tests hold it to `theme-check`; then every
+**Rows.** The built-ins first, the reference then Eclipse (`themes::BUILT_IN`, §3.4.7), each from its `theme.json` in the
+resources (`BuiltInThemes.manifests`, read through Qt as the host reads any package) and checked by construction, since
+the build's own tests hold it to `theme-check`; then every
 folder directly under Galaxia's themes store (`DIR_THEMES`, `home/Themes`, already in Galaxia's table, so Galaxia gained
 no store), in name order: a folder with `theme.json` is an EmuSen package, read through `emusen-theme-manifest`; one with
 `capabilities.xml` (in it or its first subfolder that has one, as `esde-check` finds a theme's root) or `theme.xml` is an
 ES-DE theme, its name and selectable variants from the ES-DE engine's `capabilities::read`. Hidden folders, `.part` and
-`.old` folders (the store's unfinished downloads) and a folder named `emusen` are left out.
+`.old` folders (the store's unfinished downloads) and a folder named as a built-in are left out.
 
 **The id, and where it is stored.** Decided 2026-11-08: the setting holds a theme's **id**, never a folder. The id is a
 folder's name directly under the store; `emusen` is the reference in the resources. `AppSettings.EmuSenTheme` was added
@@ -2008,7 +2112,7 @@ to Galaxia's model (after `EsdeMediaDirectory`; the disk corpus's eight recordin
 Mistress's `AppSettings`, so a save from Mistress keeps it (`EmuSen_Config_Reference.md` §7.3). Use writes it through
 Galaxia's model (`clients::store_app_setting`, one key changed, every other key as read). `themes::resolve` is the one
 resolution, used by the tab and by the program's start (`start::chosen_theme`): an empty id or `emusen` is the reference;
-a name with a separator or a leading dot is refused; a folder that is not there, or is not a theme, is **missing**, and
+`eclipse`, the other built-in, is its folder in the resources (`Resolved::BuiltIn`); a name with a separator or a leading dot is refused; a folder that is not there, or is not a theme, is **missing**, and
 the reference is shown with the words "The theme “…” is not in the themes folder, so EmuSen's own theme is shown.", a
 notice raised once the splash has faded. `--theme` and `EMUSEN_THEME` still name a folder and win over the setting.
 
@@ -2042,7 +2146,7 @@ theme after the library has been read: without the first the theme saw no consol
 held the focus.
 
 **New references** (house rules): `emusen-qt-models` on `emusen-theme-manifest`, `emusen-theme-check` and `emusen-esde`,
-the three Qt-free crates whose library it calls; `emusen-qt`'s `ReferenceTheme` calls `emusen-theme-host`'s
+the three Qt-free crates whose library it calls; `emusen-qt`'s `BuiltInThemes` calls `emusen-theme-host`'s
 `sandbox_read`, a dependency it already had. No reflection, no mutable static.
 
 **Proof, measured on 2026-11-08.** `qt-models/tests/themes.rs` (6 tests, no Qt) over a scratch store holding a copy of
@@ -2330,20 +2434,20 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_and_sound_as_n
 
 | Status | Pairs | Meaning |
 |---|---|---|
-| `drawn` | 459 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, 347 measured 2026-11-08), and the families drawn since (§4.5.6 to §4.5.9) |
+| `drawn` | 462 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, 347 measured 2026-11-08), and the families drawn since (§4.5.6 to §4.5.9) |
 | `heard:<test>` | 2 | proven by what is heard, not by a picture (R-20261112-26): `sound.path` and video `audio`, each naming the test that hears it (§4.5.9) |
 | `later:help-dimmed` | 0 | the help's eight `*Dimmed` properties, drawn since 2026-11-13 (§4.5.9) |
 | `later:sound` | 0 | `sound.path`, heard since 2026-11-13 (§4.5.9) |
 | `later:video` | 1 | the video's `scanlines` (`audio` heard since 2026-11-13, §4.5.9); the other fourteen of the family drawn or moved to `stationary` (§4.5.6, 2026-11-12) |
 | `later:gradients` | 0 | the 22 `*ColorEnd` and `*GradientType` pairs, drawn since 2026-11-13 (§4.5.7) |
 | `later:item-text` | 0 | the 19 carousel, grid and text list item text pairs, drawn since 2026-11-13 (§4.5.8) |
-| `later:picture` | 2 | `scaleFactor` of image and animation, which ES-DE 3.4.1 does not read: its property table (es-core/src/ThemeData.cpp) has no `scaleFactor`, so what a theme means by it has no source to follow. The other 14 drawn since 2026-11-13 (§4.5.7) |
+| `later:picture` | 2 | `scaleFactor` of image and animation, which ES-DE 3.4.1 does not read: its property table (es-core/src/ThemeData.cpp) has no `scaleFactor`. ES-DE's current `THEMES.md` documents it (master, read 2026-11-14: the scale at which an SVG image or a Lottie animation is rasterised), so a theme may set it and the catalogue keeps the row. The other 14 drawn since 2026-11-13 (§4.5.7) |
 | `later:stationary` | 3 | the three `fadeAbovePrimary`; `stationary` and `renderDuringTransitions` drawn since 2026-11-13 (§4.5.9) |
-| `later:carousel-layout` | 2 | `itemLinearScale`, `itemLinearSpacing`, which ES-DE 3.4.1 does not read; the other four drawn since 2026-11-13 (§4.5.9) |
+| `later:carousel-layout` | 2 | `itemLinearScale`, `itemLinearSpacing`, which ES-DE 3.4.1 does not read; ES-DE's current `THEMES.md` documents both and NXE Menu sets them (§4.4), so the catalogue keeps the rows: without them that theme does not load. The other four drawn since 2026-11-13 (§4.5.9) |
 | `later:textlist-selector` | 0 | drawn since 2026-11-13 (§4.5.9) |
 | `later:help-layout` | 0 | `entryLayout`, drawn since 2026-11-13 (§4.5.9) |
 | `later:gameselector` | 13 | the gameselector's picks (`selection`, `gameCount`, `allowDuplicates`) and the elements that read them (`gameselector`, `gameselectorEntry` of image, video, text, datetime and rating): the scene shows no game in the system view (§4.8.5) |
-| `later:animation-timing` | 3 | a GIF's `speed`, `direction` and `iterationCount`: the scene steps the frame, the painter does not show it (§4.5.9) |
+| `later:animation-timing` | 0 | a GIF's `speed`, `direction` and `iterationCount`, drawn since 2026-11-14 (§4.5.9) |
 | `later:container` | 0 | `containerVerticalSnap` drawn since 2026-11-09 (§4.12.3), `containerScrollSpeed` since 2026-11-13 (§4.5.8) |
 | `later:grid-rows` | 0 | `fractionalRows`, drawn since 2026-11-13 (§4.5.8) |
 | `later:text-lines` | 0 | datetime's `lineSpacing`, drawn since 2026-11-13 (§4.5.8) |
@@ -2412,8 +2516,7 @@ tests pass. Seeded faults, each applied alone and reverted:
 | the next change ignoring the scrolls | `a_text_list_keeps_the_selection_mid_window…` |
 | `maxSize` contained by the larger ratio | `a_picture_with_max_size_is_contained_once_its_own_size_is_known` |
 
-**Left for later, named:** a GIF's frame at the time (`Picture::frame` is none until the painter reports the file's
-frame delays); the system view's gameselector picks (the host's). A frame allocates its records each tick; the bridge's models change rows in place
+**Left for later, named:** the system view's gameselector picks (the host's); a GIF's frame is drawn since 2026-11-14 (§4.5.9). A frame allocates its records each tick; the bridge's models change rows in place
 (design §4), and whether the scene's own allocation shows in a frame's cost is measured with the painter, not assumed.
 
 #### 4.5.6 A theme's video element **[M 2026-11-12]**
@@ -2566,25 +2669,46 @@ card or another screen over the theme's view (`Main.qml`'s `esdeLoader.backdrop`
 lists the open menu's own prompts. The mapping test's `menu` move sets it before the picture; the rules are
 held by `esde/tests/frame.rs` `a_menu_over_the_view_dims_the_help_and_swaps_the_scoped_ones`.
 
-**A GIF's timing, stepped but not shown.** The scene steps a GIF as ES-DE 3.4.1's `GIFAnimComponent` does
-(`motion::gif_frame`; `setAnimation`, `update`, `render`, `resetComponent`, `GamelistView::onShow`,
-`SystemView::onCursorChanged`): every frame for the first frame's delay (20 to 1000 ms, else it stands on its first)
-over `speed`, cut to whole milliseconds; the file's first frame stands one such step, then the sequence runs one frame a
-step; `normal` and `reverse` start again from their first frame, `alternate` and `alternateReverse` turn at each end
-without showing it twice; after `iterationCount` plays (0 for ever) nothing is drawn, since the frame past the last
-reads as an empty page. A gamelist's GIFs start again when the view is shown, the system view's on each new system. The
-painter reads each file's frame count and first delay with Qt's `QImageReader` (`imageCount`, `nextImageDelay` after the
-first `read`; `esde-qt/cpp/gif_timing.cpp`, `gif.rs`, since cxx-qt-lib does not bind it; QtGui is linked through Qt
-Quick) into `Data::animations` at each install. Held by `esde/tests/scene.rs`
-`a_gif_steps_by_its_first_delay_over_the_speed_in_its_direction_for_its_iterations` and `esde/tests/frame.rs`
-`an_animation_takes_its_frame_from_the_host_s_timing_and_goes_when_its_plays_are_done`.
+**A GIF's timing** (drawn since 2026-11-14). The scene steps a GIF as ES-DE 3.4.1's `GIFAnimComponent` does
+(`motion::gif_frame`; es-core/src/components/GIFAnimComponent.cpp, `setAnimation`, `applyTheme`, `update`, `render`,
+`resetComponent`; `GamelistView::onShow`, `SystemView::onCursorChanged`), read in that source on 2026-11-14:
 
-**Not drawn: `speed`, `direction`, `iterationCount`.** The painter does not show the scene's frame yet, so the three stay
-`later:animation-timing`; only the end of the plays is seen (the GIF goes). Measured 2026-11-13 with the mapping cases:
-`Image.currentFrame` set to the scene's frame leaves a GIF on its first frame (both directions read red, frame 0, at
-150 ms), and a paused `AnimatedImage` given as the picture shader's source, directly or through a
-`ShaderEffectSource`, drew nothing. What would settle it: a frame read by `QImageReader` itself handed to the painter
-(an image provider), or the reason the paused `AnimatedImage` gives no texture.
+- **Pacing.** Every frame is shown for the *first* frame's delay, never its own: `setAnimation` reads the `FrameTime`
+  of page 0 only, takes it only within 20 to 1000 ms, and sets `mTargetPacing` to `(1000 / (1000 / delay)) / speed`
+  cut to whole milliseconds, which `gif_frame` computes in the same arithmetic. `speed` is clamped to 0.2 to 3 and
+  `iterationCount` to 0 to 10 by `applyTheme`; here the catalogue's ranges clamp them (`catalog.tsv`), so the scene
+  holds no second copy of either bound.
+- **Sequence.** The file's first frame stands one pacing (it is the texture `setAnimation` makes), then `render`
+  shows the frame it is at and counts on, one frame a pacing. `normal` and `reverse` start again from their first
+  frame; `alternate` and `alternateReverse` turn at each end without showing it twice; any other value is `normal`.
+- **Plays.** For the alternating forms `applyTheme` doubles `iterationCount`, so one count is a play each way. When
+  the count is reached `render` sets `mExternalPause` on the display frame after the last frame shown, with no new
+  frame locked unless `update` released one in that same frame; so the last frame shown stays, which the scene keeps
+  (`next_change_ms` none). Where the pacing is within about two display frames, `update` can release a frame in
+  that display frame and `render` then asks FreeImage for the page one past the last: what ES-DE shows then is not
+  known (FreeImage's behaviour for that page was not read).
+- **A delay outside 20 to 1000 ms.** ES-DE keeps `mFrameTime` at 0, so `mTargetPacing` is 0, and on its second
+  `update` the frame-skipping loop (`while (mTimeAccumulator - deltaTime > mTargetPacing)`) subtracts 0 and does not
+  end, as the source reads. What the player sees in ES-DE is not known (a capture would settle it); here the GIF
+  stands on its first frame (`gif_frame` gives no pacing).
+
+The painter reads each file's frame count and first delay with Qt's `QImageReader` (`imageCount`, `nextImageDelay`
+after the first `read`; `esde-qt/cpp/gif_timing.cpp`, `gif.rs`) into `Data::animations` at each install, and draws the
+frame with an `AnimatedImage` that is never played, its `currentFrame` bound to the scene's frame (`Picture.qml`), as
+the picture shader's source (`Picture.frame` and `animated`, `PictureElement.frame`: EmuSen.Esde 1.7). Qt's way chosen, and why: `Image.currentFrame` is documented to show another frame, but
+QImageReader's GIF handler refuses `jumpToImage` (measured 2026-11-14 with Qt 6.11.2: `jumpToImage(2)` false, the read
+still frame 0), so an Image of a GIF stays on its first frame, which is what the mapping cases saw on 2026-11-13;
+`AnimatedImage` (QMovie, `jumpToFrame`) does reach every frame. Playing it on QMovie's own timer would pace each
+frame by its own delay and run off the scene's clock, so the scene chooses the frame and the clock stays one.
+Held by `esde/tests/scene.rs` `a_gif_steps_by_its_first_delay_over_the_speed_in_its_direction_for_its_iterations`,
+`esde/tests/frame.rs` `an_animation_takes_its_frame_from_the_host_s_timing_and_keeps_its_last_when_its_plays_are_done`,
+and on the card by `esde-qt/tests/animation_gpu.rs`, which reads a four-colour fixture through the real view on the
+held clock at the middle of each pacing in every direction, at a second speed, and after its plays. A resting scene's
+clock is `View.qml`'s Timer, which the held clock steps since 2026-11-14 (EmuSen_Kit.md §7.36; before then it ran on
+wall time through a hold). The mapping case for `iterationCount` has no move, so it is read on wall time like the other
+unmoved timed cases, at 650 ms: an endless play then shows frame 0 to 2 and one play holds frame 3. An endless play shows
+frame 3 from 800 to 899 ms, the same pixels as the held last frame, and a wall-clock read at 900 ms lands there
+whenever the scene's ticks run late, so 900 does not reliably tell 0 from 1.
 
 The carousel's four are added to the scene's own slots (`primary::carousel`), which the painter binds and animates
 nothing of; a `PathView` would lay the items out a second time beside the scene's layout, so none is used.
@@ -5252,8 +5376,9 @@ built on it too:
 **The Home card** (`home_card.rs`): Mistress's `HomeRows`, `ToolRows` and `PowerRows` in her words. The first page is
 Continue (while a game is suspended), Selected game ▸, Search, Start Console ▸, Tools ▸, Settings ▸ and Power ▸, with
 Tools and Power each starting a section. Tools lists the five tools with their summaries as values, then Themes,
-Collections, Compressed Discs and Shell. Power has Exit Big Picture, then Quit EmuSen..., whose question says "EmuSen
-closes." or "The game closes, then EmuSen."; Yes quits the program. In Steam's Game Mode Power holds Quit alone. Under
+Collections, Compressed Discs and Shell. Power has Quit EmuSen..., whose question says "EmuSen
+closes." or "The game closes, then EmuSen."; Yes quits the program. Power held Exit Big Picture above it outside Steam's
+Game Mode until 2026-11-13, when it was taken off: Big Picture is the program's only interface for now (§7.7.H7). Under
 Power's rows stands "EmuSen 0.9.1" in Muted at 26 (Mistress's `BigMenuFooter`; within a pixel of her render at 1280 ×
 800). The version's owner is still MSBuild's `Directory.Build.props`. `qt-models/build.rs` reads it from there rather
 than copying it, and the reading moves with the build host (§1.9). Start Console is offered on both cards wherever a
@@ -5294,7 +5419,7 @@ none`; and the screens beneath under their stage 1 names. The side-by-sides (Mis
 over either) are `~/.cache/emusen/tmp/qt-s2/compare/<State>-<size>-side.png`.
 
 **Differences that remain, each for the tester:**
-- Exit Big Picture closes the card and does nothing more: emusen-qt has only the big-screen form until stage 6.
+- Exit Big Picture closed the card and did nothing more; since 2026-11-13 Power no longer offers it (§7.7.H7).
 - The Tools page's rows, Settings ▸, Start Console ▸ (§18.3's page), Collections ▸ and the paused frame in Continue's
   pane are declared and do nothing yet. Each opens a screen of a later stage. (Since §7.9: Continue resumes the game,
   Start Console starts the console chosen, and Tools ▸ Cores and ▸ Themes open their screens; Most played, Year and
@@ -5744,11 +5869,14 @@ and the text sizes' lines at hers. **Differences that remain, each for the teste
   folder's sentence names it; Artwork, ES-DE media and ES-DE theme folders give it as a line), so nothing is hidden.
   The program's test holds the ROM folder's pane to the scratch tree's whole path, the models' test the Artwork
   folder's. Any other value cut on its row is still a finding.
-- Library ▸ Collections has no value (Mistress's `1`, her fixture's one collection) and EmuSen ▸ Logging none (her
-  `Off`): the library's collections and the runtime's log switch are not read here yet (pieces M and the shell's).
+- Library ▸ Collections has no value (Mistress's `1`, her fixture's one collection): the library's collections are not
+  read here yet (piece M).
+- EmuSen ▸ Logging and Shell are not listed until their screens are built (decided by the tester, 2026-11-13): each is
+  one line of `qt-models/data/settings_screen.json`, taken out, so EmuSen holds Saves and states, Pause in the background
+  and About.
 - Display ▸ CRT shader's caption reads "The last game · Off CRT", since the sandbox has played nothing, where Mistress's
   fixture names its game; the box follows the words.
-- Not built in this piece, each a door that goes nowhere yet: Shader levers and Shaders (piece J), Cheats, Compressed discs (pieces I and L; built since, below), Logging and Shell, and the Scraping page's doors (Member account,
+- Not built in this piece, each a door that goes nowhere yet: Shader levers and Shaders (piece J), Cheats, Compressed discs (pieces I and L; built since, below), and the Scraping page's doors (Member account,
   Resume, Cancel, Status, Scraper; piece M) and the Collections page's own (piece M). Controllers holds its keys' rows
   only, its doors being piece H's. Consoles and the folder rows were built with piece E
   (§7.7.E). Light or dark's `System` reads as dark and
@@ -6407,6 +6535,64 @@ shows both: the test's own `kwin_wayland --virtual` grants the request and Qt re
 compositor's answer, which the passing runs of 2026-11-12 saw; the request alone would not prove the window changed, so
 the assertion on the window's state stays.
 
+**Big Picture is the program, for now** (the tester decided, 2026-11-13, R-20261113-7, narrowed by R-20261113-9). The
+program starts full screen on every machine, not only under Steam's Game Mode, and Big Picture is its only interface for
+now; there is no desktop view. The choice is made in one place, `start::FULL_SCREEN`: the start carries it as
+`Start.full_screen`, hands it to the window as `fullScreenAsked`, and `window::show` shows the window by it, with
+`QWindow::showFullScreen` (which sets the full-screen state, then shows the window, so a Wayland compositor is asked
+through `xdg_toplevel.set_fullscreen` before the first frame; Qt 6 documentation of `QWindow`, read 2026-11-13). What the
+compositor gives is read back as the window's `visibility`; under gamescope, which shows every window full screen, the
+request changes nothing. The Fullscreen hotkey still gives a window and full screen again, and every screen still lays
+out at any window size. `full_screen_gpu.rs` holds it in the test's own compositor: the window that `start::initial` and
+`window::show` make reports FullScreen, the first F11 asks for and gets a window, the second full screen again.
+
+**The window's size** (the tester decided, 2026-11-14, R-20261114-1: no resolution is written into the program; the
+program runs at the resolution the device sets, on the handheld's panel and on a television when it is docked). Each
+size has one owner. While full screen is asked (`fullScreenAsked`), the window's screen: `Main.qml` binds the window's
+width and height to `screen.width` and `screen.height` (QML's `Window.screen`, a `QQuickScreenInfo` whose size signals
+are wired to `QScreen::geometryChanged`, and which is made again on `QWindow::screenChanged`; qtdeclarative 6.11.2,
+`qquickscreen.cpp` and `qquickwindowmodule.cpp`, read 2026-11-14), so the window follows its screen. The size is the
+window's before it is shown, and that matters under gamescope: gamescope 3.16.30.1 never sends the full-screen state
+(its `wlserver.cpp` sets only `activated` on a toplevel, read 2026-11-14), and Qt 6.11.2's xdg-shell plugin, given a
+`configure` with no size and neither the maximized nor the full-screen state, gives the window the size it had
+(`QWaylandXdgSurface::Toplevel::applyConfigure`, `m_normalSize`), so the window's own size is the size the player sees.
+A compositor that names a size (KWin) is obeyed: Qt applies its `configure`. Out of full screen, the window takes
+graphics.json's `WindowWidth` and `WindowHeight`, and `WindowResizable` off holds it there by its least and greatest sizes
+(`play::Windowed`, read through the description's `applies` as every setting is; an absent file is the model's
+`model_new`). The three are read whole or not at all: where one is missing or a size is not a positive whole number,
+`Windowed::of` gives none, nothing is given to the window and nothing holds it, and the window is Qt's to size and free,
+as any window given nothing is. A failed read is not said by the program's start, which says none of its failed reads;
+`emusen-qt-play`'s start says it in the error's own words on standard error, as it says its others. The setting's size
+is given when the window is asked out of full screen and once more at the compositor's answer, never after, so a size
+the player then gives the window stays. The answer is marked by `CompositorAnswer` (qt-app's own element,
+`cpp/compositor_answer.h`): Qt 6.11.2's Wayland plugin, applying a `configure`, reports the state through
+`QWindowSystemInterface::handleWindowStateChanged` before it applies the size with
+`QWaylandWindow::resizeFromApplyConfigure` (`qwaylandxdgshell.cpp`, `Toplevel::applyConfigure`, lines 89 and 126); the
+state is a queued window-system event, the size a synchronous one (`qwaylandwindow.cpp` line 516, `QWaylandWindow::setGeometry`), and
+`QGuiApplicationPrivate::processWindowStateChangedEvent` then sends the window a spontaneous `QWindowStateChangeEvent`
+whatever the state, while `QWindow::windowStateChanged` and `visibility` change at the request and not at an answer that
+repeats them (`qwindow.cpp`, `setWindowStates`; `qguiapplication.cpp` lines 2776 to 2791; all read 2026-11-14). The
+element filters the window's events for that event and holds `fullScreen`, the state applied last; `Main.qml` gives the
+setting's size when it turns false. The answer KWin gives is the size the window had before full screen, which may be
+the setting's size already: `full_screen_gpu.rs` holds both cases, a size the test gives the window after each answer
+staying. Under gamescope, which never sends the full-screen state, `fullScreen` never turns, and the size given at the
+request stands (`m_normalSize`, above). With no platform library the size is left to Qt: `QWindow::resize` changes
+nothing on a window not yet made whose size is already the one asked (0 by 0, `qwindow.cpp` line 2108), and Qt's
+Wayland plugin then gives a toplevel with no size 500 by 500 (`QWaylandWindow::initWindow`, `defaultGeometry`). Under
+gamescope, `visibility` never reads FullScreen, so the Fullscreen hotkey asks for full screen each time and the window
+keeps its screen's size. `emusen-qt-play`'s window, shown in a window and never full screen, takes graphics.json's size
+the same way, its size untouched where nothing was read whole; `qt-play/tests/window_size.rs` holds it.
+`full_screen_gpu.rs` and `full_screen_small_gpu.rs` hold the program's at two sizes of the test's choosing: the window has
+the compositor's output size before it is shown, full screen at that size, graphics.json's size after F11, the screen's
+again after the second.
+Two rows that did nothing were taken off: Power's Exit Big Picture (its key `bigPicture` and its route, which only closed
+the card, went with it, since nothing else names them) and Settings ▸ EmuSen's Big picture row (`AppSettings
+BigScreen`, which nothing in the Qt program reads). A desktop mode would need back: the row in `home_card::power_page`
+outside Game Mode (`Facts.game_mode` is still handed in, from `start::game_mode_from`, which also gives the Guide chords'
+default), with its key and an action that leaves for the desktop; the `bigpicture` entry in `settings_screen.json`'s
+EmuSen section and a reader of `BigScreen` at the start; and the start's choice in `start::FULL_SCREEN`. The Kit's
+Desktop form, the base's `BigScreen` setting and the theme API's `Device.bigScreen` stay as they are.
+
 **The hotkeys' words.** Endymion gives the ten action words through `bindings_defaults` (HOTKEYS), whose keys they are;
 the Hotkeys page reads its rows from there (`Bindings::actions`). `qt-endymion` `hotkeys.rs` needs a map from each word to
 an action of the program's own; since §7.7.H8 the word is the action's own name (`Hotkey::word`), with no second list
@@ -6913,7 +7099,8 @@ Seeded faults, each reverted:
   id and is switched in its file only.
 - **Pause Card ▸ Game Options ▸ Cheats** lists the game's cheats, each a stepped row reading On or Off as a settings
   switch does; A, Left or Right turns it at once (`ENABLE` or `DISABLE` by its id) and saves the list, the card staying.
-  The Cheats row is dimmed, and opens nothing, for a game with no cheats in its list.
+  A game with no cheats in its list has no Cheats row there, as its game page has none (decided by the tester,
+  2026-11-13; until then the row was drawn dimmed).
 - **Game page ▸ Options ▸ Cheats** ("1 of 3 on") is shown where the list holds cheats, and opens the same switches as
   Options' deeper page; a turn changes the file only, taken by the game's next start.
 - **Not built here:** adding, editing or removing a code, the database's download and the Cheats tool. Hosted libretro

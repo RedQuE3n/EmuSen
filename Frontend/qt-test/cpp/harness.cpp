@@ -479,12 +479,27 @@ void harness_key_hold(QObject& window, int key, bool down)
     }
 }
 
-HeldClock::~HeldClock() { uninstall(); }
+// An animation of no length that never ends and changes nothing, kept running while a clock is held (EmuSen_Kit.md §7.36).
+class Keeper : public QAbstractAnimation {
+public:
+    int duration() const override { return -1; }
+
+protected:
+    void updateCurrentTime(int) override {}
+};
+
+HeldClock::~HeldClock()
+{
+    keeper.reset();
+    uninstall();
+}
 
 std::unique_ptr<HeldClock> harness_clock_hold()
 {
     auto clock = std::make_unique<HeldClock>();
     clock->install();
+    clock->keeper = std::make_unique<Keeper>();
+    clock->keeper->start();
     return clock;
 }
 
@@ -599,6 +614,24 @@ QObject* harness_focused_singleton(QObject& window, const QString& module, const
 }
 
 int harness_roots(QQmlApplicationEngine& engine) { return static_cast<int>(engine.rootObjects().size()); }
+
+QObject* harness_object(QObject& root, const QString& object_name)
+{
+    return root.objectName() == object_name ? &root : root.findChild<QObject*>(object_name);
+}
+
+QString harness_constants(QObject& object)
+{
+    QStringList lines;
+    const QMetaObject* meta = object.metaObject();
+    for (int i = QObject::staticMetaObject.propertyCount(); i < meta->propertyCount(); ++i) {
+        const QMetaProperty p = meta->property(i);
+        if (!p.isWritable()) {
+            lines << QStringLiteral("%1=%2").arg(QString::fromLatin1(p.name()), p.read(&object).toString());
+        }
+    }
+    return lines.join(QLatin1Char('\n'));
+}
 
 bool harness_set_property(QObject& root, const QString& object_name, const QString& property, const QString& value)
 {

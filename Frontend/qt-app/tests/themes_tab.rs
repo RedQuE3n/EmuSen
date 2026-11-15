@@ -142,6 +142,10 @@ exit 0
     let mut excuses = Excuses::none().listing("qt-app-themes-tab");
     hold(&mut scene, "ThemesTab", &mockup::Mockup::default(), &mut excuses, &mut report);
 
+    // The other built-in, Eclipse, follows the reference (its own test is eclipse.rs); then the store's packages.
+    scene.pad(UiButton::Down);
+    wait_for(&mut scene, "themesModel", "name", "Eclipse", 2000);
+
     // A package is checked before Use is offered; Use stores its id and its host is made at once.
     check_next(&mut scene, "Fixture clean");
     assert_eq!(scene.property("themesModel", "findings"), "Checked: nothing found.");
@@ -187,7 +191,7 @@ exit 0
     assert_eq!(stored(&platform), "sage");
 
     // The reference again: its id is stored and the chosen theme's host is gone with its engine.
-    for _ in 0..5 {
+    for _ in 0..6 {
         scene.pad(UiButton::Up);
     }
     wait_for(&mut scene, "themesModel", "name", "EmuSen", 2000);
@@ -208,7 +212,7 @@ exit 0
     scene.pad(UiButton::PageUp);
     wait_for(&mut scene, "themesModel", "name", "EmuSen", 2000);
     scene.pad(UiButton::Down);
-    wait_for(&mut scene, "themesModel", "name", "Fixture clean", 2000);
+    wait_for(&mut scene, "themesModel", "name", "Eclipse", 2000);
 
     // B goes back to Settings, and B there goes Home.
     scene.pad(UiButton::Back);

@@ -10,7 +10,10 @@ Every run on the handheld goes through `hh.sh test` (on the charger only), in a 
   debug sections stripped), `emusen-qt` in release built with `--features gate-pad`, the platform library and the test
   core of the `test-fast` profile, the Frontend's sources and Testing's mockups, Moonrise references and scripts the
   tests read, the published tree's program folder for the gates, and the desktop's Qt (`qtbundle.sh`) with a `qt.conf`
-  beside each program naming it. `SONAMES` names a file of the handheld's library sonames (`ldconfig -p`).
+  beside each program naming it. `SONAMES` names a file of the handheld's library file names: `ldconfig -p`'s, and every
+  `lib*.so*` under `/usr/lib` and `/usr/lib32`, since a library reached through another's RUNPATH (`/usr/lib/pulseaudio`'s
+  `libpulsecommon-17.0.so`) is not in `ldconfig`'s list, and a desktop copy of it in `LD_LIBRARY_PATH` would be loaded by the
+  handheld's own library in its place (measured 2026-11-14: `libpulse.so.0: undefined symbol: pa_in_valgrind`).
 - `qtbundle.sh <dest> <sonames> <binary>...` (desktop) — the desktop's Qt laid out to travel: SteamOS's Qt 6.11.1
   exports no private API, and cxx-qt's generated code needs `Qt_6.11_PRIVATE_API`, so the programs run on the Qt they
   were built against, as the AppImage of `EmuSen_Qt.md` §10.5 would carry it. Qt's and ICU's libraries and whatever the
@@ -39,7 +42,7 @@ bundle's libraries, KWin's virtual compositor at 1,920 × 1,200 without Xwayland
     cargo test -j6 --no-run -p emusen-qt --test acceptance -p emusen-kit-gallery --test gate
     cargo build -j6 --release -p emusen-qt --features gate-pad
     (cd Platform && cargo build -j6 --profile test-fast -p emusen-platform --lib -p emusen-crystal --example crystal_test_core)
-    hh.sh run 'ldconfig -p | awk "{print \$1}" | sort -u' | grep -v '^\[exit' > sonames.txt
+    hh.sh run '{ ldconfig -p | awk "{print \$1}"; find /usr/lib /usr/lib32 -name "lib*.so*" -printf "%f\n" 2>/dev/null; } | sort -u' | grep -v '^\[exit' > sonames.txt
     SONAMES=sonames.txt bash Testing/handheld/pack.sh qt-hh.tar.zst
     hh.sh put qt-hh.tar.zst /home/deck/.cache/emusen/qt-hh
     hh.sh run 'cd ~/.cache/emusen/qt-hh && tar --zstd -xf qt-hh.tar.zst'

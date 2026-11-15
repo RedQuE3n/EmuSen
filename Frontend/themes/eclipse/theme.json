@@ -1,0 +1,40 @@
+{
+    "schema": 1,
+    "api": "1.0",
+    "name": "Eclipse",
+    "author": "The EmuSen project",
+    "licence": "GPL-3.0-or-later",
+    "variants": [
+        "dark"
+    ],
+    "screens": [],
+    "tokens": {
+        "dark": {
+            "surface": "#07080F",
+            "surfaceRaised": "#151826",
+            "inputSurface": "#11131C",
+            "scrim": "#9E04050A",
+            "rule": "#59F6E7D8",
+            "text": "#F4F1EC",
+            "textStrong": "#F4F1EC",
+            "muted": "#B9BED0",
+            "accent": "#F6E7D8",
+            "overAccent": "#07080F",
+            "shadowOpacity": 0.6,
+            "shadowOffsetY": 12.0,
+            "rowHeight": 56.0,
+            "rowRadius": 13.333333333333334,
+            "tileRadius": 14.666666666666666,
+            "ringThickness": 2.0,
+            "ringOffset": 2.0,
+            "hoverBorder": 1.3333333333333333,
+            "controlHeight": 48.0,
+            "helpBar": 50.666666666666664,
+            "fontRow": 16.0,
+            "fontBody": 14.0,
+            "fontCaption": 15.333333333333334,
+            "fontTitle": 29.333333333333332,
+            "fontDisplay": 69.33333333333333
+        }
+    }
+}

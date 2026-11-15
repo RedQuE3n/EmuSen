@@ -6,7 +6,7 @@ use emusen_theme_manifest::{Manifest, TokenOverride, TokenValue, Variant};
 use crate::Finding;
 
 /// The kit's committed registry (rule Q): its `Tokens` singleton's read-only properties are the tokens and their types.
-const REGISTRY: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.3.qmltypes");
+const REGISTRY: &str = include_str!("../../../Testing/qmltypes/EmuSen.Kit-1.4.qmltypes");
 
 /// A token's type as the registry declares it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

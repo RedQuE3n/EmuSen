@@ -4,7 +4,7 @@
 # the test core of the test-fast profile, the Frontend's sources the tests read, Testing's mockups, Moonrise references
 # and scripts, and the published tree's program folder for the gates. See README.md.
 # Usage: SONAMES=<file> pack.sh <out.tar.zst>
-#   SONAMES    the handheld's library sonames (`ldconfig -p`), for qtbundle.sh
+#   SONAMES    the handheld's library file names (`ldconfig -p`'s and those under /usr/lib; README.md), for qtbundle.sh
 #   PUBLISHED  the published desktop tree (the main checkout's out/linux-x64/Mistress)
 set -eu
 out=$(realpath -m "$1")

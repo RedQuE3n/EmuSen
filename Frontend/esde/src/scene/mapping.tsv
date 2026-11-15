@@ -264,9 +264,9 @@ animation	rotationOrigin	drawn
 animation	stationary	drawn
 animation	metadataElement	drawn
 animation	path	drawn
-animation	speed	later:animation-timing
-animation	direction	later:animation-timing
-animation	iterationCount	later:animation-timing
+animation	speed	drawn
+animation	direction	drawn
+animation	iterationCount	drawn
 animation	interpolation	drawn
 animation	cornerRadius	drawn
 animation	color	drawn

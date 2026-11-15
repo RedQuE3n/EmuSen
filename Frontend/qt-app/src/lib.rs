@@ -16,9 +16,12 @@ pub mod cues;
 pub mod start;
 pub mod style;
 pub mod theme;
+pub mod window;
 
 /// Where the program's window lives in the resource system.
 pub const MAIN_URL: &str = "qrc:/qt/qml/EmuSen/App/qml/Main.qml";
 
-/// The reference theme "EmuSen", a package in the resources (Frontend/themes/emusen, EmuSen_Qt.md §3.4).
-pub const REFERENCE_THEME: &str = "qrc:/emusen/themes/emusen/";
+/// The reference theme "EmuSen", a package in the resources (Frontend/themes/emusen, EmuSen_Qt.md §3.4), at its built-in folder.
+pub fn reference_theme() -> String {
+    emusen_qt_models::themes::built_in_folder(emusen_qt_models::themes::REFERENCE)
+}

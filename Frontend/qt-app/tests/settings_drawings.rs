@@ -39,6 +39,15 @@ fn qt_7_7_h_every_declared_controllers_drawing_fits_and_a_controller_with_none_i
             scene.resize(w, h);
             scene.wait(150);
             assert_eq!(scene.property("controllerLayout", "fits"), "true", "{id} at {w}x{h}: every label beside the drawing");
+            // The drawing decoded at the pixels it covers through the canvas's scale (EmuSen_Kit.md §7.111): its longer fitted side.
+            let tree = scene.tree();
+            let art = tree.find_named("controllerArt").map(|i| tree.nodes[i as usize].clone()).expect("the drawing in the tree");
+            if art.visible {
+                let decoded = (scene.item_number(&art.id, "implicitWidth"), scene.item_number(&art.id, "implicitHeight"));
+                let drawn = (art.w.ceil(), art.h.ceil());
+                let fitted = (decoded.0 - drawn.0).abs() <= 1.0 || (decoded.1 - drawn.1).abs() <= 1.0;
+                assert!(fitted && decoded.0 <= drawn.0 + 1.0 && decoded.1 <= drawn.1 + 1.0, "{id} at {w}x{h}: decoded {decoded:?}, drawn over {drawn:?}");
+            }
         }
         seen.push(id);
         scene.pad(UiButton::PageDown);

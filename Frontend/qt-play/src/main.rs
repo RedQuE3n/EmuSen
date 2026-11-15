@@ -48,6 +48,7 @@ fn main() {
         let mut initial = QMap::<QMapPair_QString_QVariant>::default();
         initial.insert(QString::from("feed"), QVariant::from(&feed.address()));
         initial.insert(QString::from("platformLibrary"), QVariant::from(&QString::from(&library)));
+        emusen_qt_play::windowed_initial(&platform, &mut initial);
         if let Ok(cores) = std::env::var("EMUSEN_CORES") {
             initial.insert(QString::from("cores"), QVariant::from(&QString::from(&cores)));
         }

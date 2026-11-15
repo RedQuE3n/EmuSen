@@ -460,7 +460,7 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     hold(&mut scene, "PauseCardChangeDisc", &mockup::Mockup::default(), &mut excuses, &mut report);
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "pause", "current", "5", 1000);
-    // Game Options: Mistress's four rows and Memory Cards for a console with a drive (PauseCardGameOptions), B back to its row.
+    // Game Options: its rows, Cheats only for a game with cheats, and Memory Cards for a drive (PauseCardGameOptions); B back.
     scene.pad(UiButton::Down);
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "pause", "title", "Game Options", 1000);
@@ -599,7 +599,6 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     shadow_over_band(&mut scene);
     hold(&mut scene, "HomeCardPower", &mockup::Mockup::default(), &mut excuses, &mut report);
     scene.assert_still("the Home card in place");
-    scene.pad(UiButton::Down);
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "homeCardModel", "page", "quit", 1000);
     hold(&mut scene, "HomeCardQuit", &mockup::Mockup::default(), &mut excuses, &mut report);

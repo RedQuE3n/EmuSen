@@ -5,8 +5,8 @@ use super::shape::{Box2, Point};
 use crate::motion::{Curve, Glide, MotionToken};
 use crate::tokens::Colour;
 
-/// The design height the glow's radii and the stars' size are measured in on the night screens.
-pub const DESIGN_HEIGHT: f64 = 800.0;
+/// The design height the glow's radii and the stars' size are measured in on the night screens: the canvas's.
+pub use crate::canvas::DESIGN_HEIGHT;
 
 /// A night screen's star against the splash's.
 pub const STAR_SIZE: f64 = 0.7;
@@ -80,7 +80,7 @@ pub fn star_points(stars: &[Star], size: Point, unit: f64, scale: f64, opacity: 
     }));
 }
 
-/// The glow's radii on a night screen, in units of the height over 800.
+/// The glow's radii on a night screen, in units of the height over the design height.
 pub const GLOW_RADII: (f64, f64) = (756.0, 450.0);
 
 /// The glow's alpha at its centre.
@@ -96,7 +96,7 @@ pub fn glow_stops(hue: f64, alpha: f64) -> [(f64, Colour); 4] {
     ]
 }
 
-/// The glow's box for a centre given as shares of the width and height, its radii scaled by the height over 800.
+/// The glow's box for a centre given as shares of the width and height, its radii scaled by the height over the design height.
 pub fn glow_bounds(centre: Point, radii: (f64, f64), w: f64, h: f64) -> Box2 {
     let u = h / DESIGN_HEIGHT;
     let (rx, ry) = (radii.0 * u, radii.1 * u);

@@ -7,7 +7,9 @@
     "variants": [
         "dark"
     ],
-    "screens": [],
+    "screens": [
+        "home"
+    ],
     "tokens": {
         "dark": {
             "surface": "#07080F",

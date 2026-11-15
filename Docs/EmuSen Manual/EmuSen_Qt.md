@@ -937,7 +937,7 @@ card** (§0.7 there) and no theme colour is read into one. A card opens over the
 `import EmuSen.Theme` gives a theme exactly these (a type added after 1.0 needs the minor that added it, as
 `Frontend/theme-qt/CHANGELOG-theme-api.md` lists), each a QML singleton or type, each a view over `emusen-qt-models`
 with the fields a theme may read and nothing more. The table is the module as built (`Frontend/theme-qt`, the crate
-`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.2.*` and held to this table by hand in
+`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.4.*` and held to this table by hand in
 `tests/surface.rs`. The amendments of 2026-11-08 are listed in `Frontend/theme-qt/CHANGELOG-theme-api.md`.
 
 | Name | Kind | What it holds |
@@ -953,7 +953,7 @@ with the fields a theme may read and nothing more. The table is the module as bu
 | `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only; `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
 | `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown) |
 | `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` (a shelf's icon, one of Home's seven places by its key, or an engine's mark) |
-| `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `OrbitLayout`, `FigureLayout`, `WheelLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31); `WheelLayout` turns groups as wheels over a dial (§7.32); `OrbitLayout` places groups on nested orbits (§7.30) |
+| `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `OrbitLayout`, `FigureLayout`, `WheelLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31); `WheelLayout` turns groups as wheels over a dial (§7.32); `OrbitLayout` places groups on nested orbits (§7.30); `FocusRing`, `PlanetMark`, `CoronaDisc`, `CoronaGlow`, `Backdrop`, `BackdropField` and `Glow` are the later minors' (`CHANGELOG-theme-api.md`) |
 | `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()` |
 
 A theme provides `screens/Home.qml`, `screens/Consoles.qml` and `screens/Games.qml`, each a `ThemeScreen`, and may provide
@@ -1036,7 +1036,7 @@ left out of `Tokens.qml` (the surface test).
 
 ### 3.3 Versioning
 
-The API is the module's version, now `EmuSen.Theme 1.2` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
+The API is the module's version, now `EmuSen.Theme 1.4` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
 removal or a rename, bumps the minor, and a role or action deprecated in one minor may be removed in any later one
 (decided 2026-11-11 by the tester, R-20261111-107, R-20261111-108, §5.3). After it, a minor adds singletons, roles,
 actions, cues or tokens and never removes or renames one; a role or action no longer meant is kept and marked
@@ -1640,13 +1640,13 @@ Decided 2026-11-11 by the tester: Eclipse is EmuSen's default look, and the pres
 theme API is not widened for that. A blank setting still gives the reference: which theme a blank setting gives changes
 only once Eclipse has screens of its own.
 
-**The package.** `Frontend/themes/eclipse/` holds `theme.json` alone: name Eclipse, `api` 1.2 (its corona tokens are 1.2's, the newest it sets; its focus tokens are 1.1's), the dark variant, no
-screen of its own (`"screens": []`), no cue, no preview, and the token overrides below. With no screens, every screen is
-the reference's: Home, Choose a console and the games are drawn by the reference's host, whose engine keeps the kit's
-tokens, so only the program's own screens (Settings, the cards, the game page, the Pause Card, the tools, the questions
-and notices) and Eclipse's own engine take Eclipse's values. It has no preview because a grab of the program in Eclipse
-today shows the reference's screens, which would not show Eclipse. The manifest allows all of this: `screens` and
-`variants` are lists, `previews` is optional, and theme-audit audits the screens a package lists, so it loads none here.
+**The package.** `Frontend/themes/eclipse/` holds `theme.json`: name Eclipse, `api` 1.2 (its corona tokens are 1.2's, the newest it sets; its focus tokens are 1.1's), the dark variant, one
+screen of its own (`"screens": ["home"]`, §3.4.8), its parts (`parts/`), no cue, no preview, and the token overrides below. Choose a console and
+the games are still the reference's, drawn by the reference's host, whose engine keeps the kit's tokens; Eclipse's Home,
+the program's own screens (Settings, the cards, the game page, the Pause Card, the tools, the questions and notices) and
+Eclipse's own engine take Eclipse's values. It has no preview yet: a grab of the program in Eclipse still shows the
+reference's Choose a console and games. The manifest allows all of this: `screens` and `variants` are lists, `previews`
+is optional, and theme-audit audits the screens a package lists.
 
 **Built in.** `themes::BUILT_IN` (`qt-models/src/themes.rs`) is the one list of built-in themes, the reference first;
 `themes::built_in_folder` gives each one's folder in the resources, `qrc:/emusen/themes/<id>/`, which `qt-app/themes.qrc`
@@ -1742,6 +1742,63 @@ Eclipse; Use stores `eclipse` and loads it from the resources; every override re
 program's equals `theme.json`'s, and every other token is the kit's; the reference chosen again gives the kit's tokens
 back. qt-models' `both_built_ins_come_first_and_a_blank_setting_still_gives_the_reference` holds the listing and the
 resolution, and qt-app's `qt_3_4_2_…` holds each built-in's resources to its folder.
+
+#### 3.4.8 Eclipse's Home **[M 2026-11-15]**
+
+Decided 2026-11-13 by the tester (R-20261113-5): a theme has its own Home, Consoles, games view and splash, and the theme API is
+not widened for it. Eclipse's Home (`Frontend/themes/eclipse/screens/Home.qml`) is the board `Main.dc.html` ("Eclipse theme,
+Home", 1920 × 1200, in the design project) built against `EmuSen.Theme` alone. Every measure is the board's pixel times
+`Board.unit` (`parts/Board.qml`): the canvas's design height, read from `NormalizedCanvas.designHeight` (kit-core's
+`canvas::DESIGN_HEIGHT`), over the boards' height, 1200. The canvas is 800 units high at every window shape, so the same
+rule places the screen at every size the gate uses. Elements tied to the board's left edge keep their x, and the status
+keeps its distance from the right edge. Recent shows as many tiles as fit before the window's edge.
+
+**What it draws.** Over the ground (#0A1024, `parts/Ink.qml`) is the kit's `CoronaDisc`, 2100 board pixels at (-900, -450),
+with the look's corona, since the model holds no game's corona yet. Then the header: the crescent mark and `Words.title`,
+and at the right the status glass with the search (`Actions.search`) and `Device.clock`. Then the shown game: the eyebrow
+`Words.continuePlaying` while it is the suspended game, its title, and its facts (`Words.pausedFacts`, or the row's
+`facts`). Under them, the first three entries of `Help.entries` as pill buttons: A plays the game, and the others press
+their own button, as the help line does. Then `Words.recentEntry` and the Recent row, `Library.recent` with the suspended
+game first as the board puts it. The shown tile is 312 × 196 board pixels and the others 264 × 165, each with its hero
+cropped, the shade, its title and its row's `facts`. Last, the help line, the kit's `HelpBar` on the board's foot. The pad
+walks the tiles, Up to the buttons, then Up to the search. Every word is the program's. Where the board's differ, the
+program's are drawn: "EMUSEN" for "EmuSen", "CONTINUE PLAYING" for "CONTINUE · SUPER NINTENDO", the paused facts for "Last
+played yesterday · 3 h 20 min played", "hh:mm" for "9:41 PM", and Help's labels ("Game page", "Home") for "Options" and
+"Home card".
+
+**Not drawn**: the section tabs (Home, Library, Consoles, Collections, Tools) and "LB RB Sections", a piece of their
+own (R-20261115-7). Also not drawn, because the program has nothing for them: the battery, since the program feeds no
+`Device.battery` (`qt-app/src/theme.rs`, `feed_device`); "Resume point · saved"; "GAME ART". "1 of 24" waits for `Words.place`, which Choose a console's piece adds over
+`game_page.rs`'s `place`; its place on Home is left empty until then. The blurred colour fields are the kit's `Backdrop` (`EmuSen_Kit.md` §7.118, R-20261115-6).
+The board labels them the shown game's art (`Main.dc.html:75`), but it gives no blur for a picture, so Home passes no
+picture and draws the board's five fields. A resting tile's shadow and the filled button's halo and glow are the kit's
+`Glow` (§7.119). On the software backend the fields are unblurred at their own opacity.
+
+**Shared parts.** `parts/` serves every Eclipse screen. `Board` and `Ink` hold the measure and the boards' own colours.
+`Brand` is the mark and the name. `Status` is the search and the clock, on the glass or not.
+`Pill` is a button. `HelpLine` is the help bar on the foot, with a place at its right. What differs between the boards
+(the ground, the status's glass and search, the line's right side, a pill's measures) is a property of the part.
+
+**The table and its test.** `qt-app/tests/eclipse_home.tsv` lists every element of the board with its line, what the
+program has for it, the part that draws it, and its box, colour and type size in board pixels or as the board's layout
+rule (a flex gap after the element before it, for instance). Words in the board's typeface take the face's own line
+height, so a rule follows the drawn line rather than a guessed one. `qt-app`'s
+`qt_3_4_8_eclipse_s_home_is_its_board_at_every_size` places the screen through the theme host on six synthetic games,
+the first suspended and focused, as the board shows them. At each of the gate's five sizes it holds every built row
+(boxes, radius, colour, type size, part), every row not drawn, the focused tile's ring and every word. It also holds the
+pad's walk from the shown tile up to the buttons and the search and back, and the host dropping the screen with nothing
+logged. `eclipse_home_gpu.rs` runs the same oracle on the graphics card. With `EMUSEN_ECLIPSE_PICTURES` naming a folder,
+both grab Home at 1280 × 800 and 1920 × 1200.
+
+**Type.** Every word is sized by `Type.size` (`EmuSen_Kit.md` §7.121): the board's size in canvas units, raised to the
+legibility floor where it is under it (R-20261115-14). The table's last three columns give each text's board size in
+units, the whole pixel size Qt draws it at, and whether it was raised; the oracle holds the table to the rule. In the face
+drawn today, the floor gives 17 for every board size under 16.5 units (the wordmark, the clock, the eyebrow, the outlined
+buttons' labels, a tile's title and facts, the help line). The title is drawn at 75 for 74.67, the facts and the filled
+button at 18 for 17.33, and the Recent heading at 19 for 18.67.
+
+**Where the board shows "Sections", the theme has none.** The section tabs and their shoulders are a piece of their own
+(R-20261115-7); Home leaves their place empty. The theme's own `Type` is exported at 1.0, as every singleton made in Rust is.
 
 ### 3.5 Loading and the sandbox
 

@@ -7879,7 +7879,12 @@ syncs a dirty item whatever its visibility, as above). The Loader makes `Setting
 the canvas inside scaling to it, since a Loader given a size resizes its item and would override the canvas's own design
 size. Made afresh, the frame would start on its first row and write that back over the model's `focused`, so the row a
 page or tool returns to (`settings_doors.rs`) would be lost: the Loader's `loaded` handler focuses the row the model
-holds, and only then does Settings write its focused row back (`placed`). And the start is over when
+holds, and only then does Settings write its focused row back (`placed`); opened again from Home it stands on the
+section and row it was left on, the frame's focus with the model's (`settings_reopen.rs`). The cost is paid at each
+opening: the press on Home's Settings place to the first frame swapped with Settings shown, offscreen on the software
+backend (a probe test pressing through the harness and counting `frameSwapped`, six openings a run, two runs each, on
+2026-11-15), took 8.2 to 10.5 ms with Settings kept (`c32875c1b`) and 18.0 to 40.4 ms made by the Loader (median of the
+twelve about 21 ms); not measured on the handheld. And the start is over when
 `program.reading` is false: `library.loading || !settingsModel.ready || !pads.answered`, where `PadReader.answered` turns
 true with its first delivery, pads or a failure to open them (`EmuSen_Kit.md` §7.15). `idle.rs` waits on it.
 `qt-app/tests/idle_hidden.rs` forces the order without depending on the machine: it names the platform library to the

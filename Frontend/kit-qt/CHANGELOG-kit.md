@@ -8,9 +8,9 @@ section of `EmuSen_Kit.md` that records it.
 ## 1.6: Eclipse's corona disc and the planet mark as kit parts, one glow, and every ring Gapped where a look asks (2026-11-14)
 
 Beside the additions below, two properties the 1.5 and 1.6 pieces had added are gone and `CoronaDisc.corona` means a
-game's corona alone; the qmldir tags every type with 1.6, the kit's version, as each minor since 1.3 has. Decided
-2026-11-14 by the tester (R-20261114-16): Eclipse's shared parts are kit parts, exported to themes as an addition; and
-(R-20261114-21) the reference keeps each focus ring's placement while Eclipse draws every ring Gapped with the glow.
+game's corona alone; the qmldir tags every type with 1.6, the kit's version, as each minor since 1.3 has.
+Decided 2026-11-14 by the tester (R-20261114-16): Eclipse's shared parts are kit parts, exported to themes as an addition;
+and (R-20261114-21) the reference keeps each focus ring's placement while Eclipse draws every ring Gapped with the glow.
 
 - **`Glow`** (qmldir, not exported to themes): a rounded box's glow from a colour, a CSS blur, a spread and a corner
   radius, outside the box alone; Qt's `RectangularShadow` masked by a `MultiEffect` on the graphics card, a `Canvas` on

@@ -106,7 +106,7 @@ fn qt_3_4_10_eclipses_games_view_is_its_board_by_the_table_at_every_size() {
 
     // The covers are drawn, each filling its tile; a game with none is the plain tile.
     for (i, title) in ["Amber Relay", "Aurora Drift", "Basalt Kings"].iter().enumerate() {
-        assert_eq!(shown(&mut scene, &format!("gamesTileTitle.{i}")).1, *title, "the name sort's order");
+        assert_eq!(shown(&mut scene, &format!("tileTitle.{i}")).1, *title, "the name sort's order");
         assert!(!shown(&mut scene, &format!("gamesTileGround.{i}")).0, "cover {i} drawn, so no plain tile");
     }
     assert!(!shown(&mut scene, "gamesTileCover.3").0, "no cover");

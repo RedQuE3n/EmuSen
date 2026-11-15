@@ -42,7 +42,7 @@ fn words_of(scene: &mut Scene<'_>, name: &str) -> (String, String) {
 /// The shown games' titles, in the order shown.
 fn titles(scene: &mut Scene<'_>) -> Vec<String> {
     let count: usize = scene.property("gamesGrid", "count").parse().unwrap();
-    (0..count).map(|i| words_of(scene, &format!("gamesTileTitle.{i}")).0).collect()
+    (0..count).map(|i| words_of(scene, &format!("tileTitle.{i}")).0).collect()
 }
 
 /// Presses a chip as a hand does: the focus on it, then A.

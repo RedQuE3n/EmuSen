@@ -443,7 +443,6 @@ ThemeScreen {
                             // The shared foot (TileWords): the board's 84 px fade to Tokens.overArtScrim, held under the title's two lines.
                             TileWords {
                                 unit: root.px
-                                kind: "gamesTile"
                                 place: cell.index
                                 title: cell.title
                                 facts: ""

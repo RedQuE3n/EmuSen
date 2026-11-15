@@ -248,7 +248,8 @@ ThemeScreen {
                                 Text {
                                     objectName: "tileTitle." + tile.index
                                     x: 18 * design.unit
-                                    y: parent.height - 34 * design.unit - height
+                                    // On the facts' line, so words raised to the legibility floor do not overlap (Main:85-86 place them by the tile's foot).
+                                    y: tileFacts.y - height
                                     width: parent.width - 36 * design.unit
                                     text: tile.title
                                     elide: Text.ElideRight
@@ -257,6 +258,7 @@ ThemeScreen {
                                     font.weight: Font.DemiBold
                                 }
                                 Text {
+                                    id: tileFacts
                                     objectName: "tileFacts." + tile.index
                                     x: 18 * design.unit
                                     y: parent.height - 12 * design.unit - height

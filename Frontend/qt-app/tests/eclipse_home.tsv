@@ -4,7 +4,7 @@
 # A box value is a number, "-" (not held: the typeface's, until Eclipse's face is in), or a rule of the board's layout:
 #   after:N:g  x is N's right edge + g     in:N:g     x is N's x + g        right:g  the right edge is g short of the window's
 #   below:N:g  y is N's bottom + g         foot:N     the bottom is N's     up:N:g   the bottom is g above N's bottom
-#   mid:g      the vertical centre is g    mid:N      the vertical centre is N's
+#   mid:g      the vertical centre is g    mid:N      the vertical centre is N's    above:N:g  the bottom is g above N's top
 #   fit:N:g    the right edge is N's right edge + g    inright:N:g  the right edge is g short of N's
 # units, drawn, raised: a text's board size in canvas units, the whole pixel size Qt draws it at by the kit's rule for a look's
 # size (EmuSen_Kit.md §7.121, at text scale 1 in the face drawn today, its floor held at every gate size), and whether the legibility floor raised it (R-20261115-14).
@@ -52,7 +52,7 @@ tile.4	83	a game's tile	the fifth row	Walkable	after:tile.3:24	foot:tile.0	264	1
 tile.5	83	a game's tile	the sixth row	Walkable	after:tile.4:24	foot:tile.0	264	165	18	-	-	built	-	-	-
 tileArt.0	83	the tile's art	the row's hero (theme-qt/src/view.rs:213), the kit's RoundPicture	RoundPicture	in:tile.0:0	foot:tile.0	312	196	-	-	-	built	-	-	-
 tileShade.0	84	the shade under the words	none: the board's own colours	Rectangle	in:tile.0:0	foot:tile.0	312	96	-	#EB04050A	-	built	-	-	-
-tileTitle.0	85	the game's title	the row's title	Text	in:tile.0:18	up:tile.0:34	-	-	-	#FFFFFFFF	21	built	14	19	raised
+tileTitle.0	85	the game's title (on the facts' line: the board's 34 px from the foot overlaps the facts raised to the floor)	the row's title	Text	in:tile.0:18	above:tileFacts.0:0	-	-	-	#FFFFFFFF	21	built	14	19	raised
 tileFacts.0	86	the console, "SUPER NINTENDO"	the row's facts, console · when (qt-models/src/library.rs:310)	Text	in:tile.0:18	up:tile.0:12	-	-	-	#FFE3E6F0	15	built	10	19	raised
 tileRing	83	the focused tile's ring	the kit's FocusRing (R-20261115-3, every control the gapped ring)	FocusRing	-	-	-	-	-	-	-	built	-	-	-
 tileShadow.1	83	a resting tile's shadow, 0 10 px 30 px	the kit's Glow with its offset (R-20261115-6)	Glow	in:tile.1:0	foot:tile.1	264	165	18	#73000000	-	built	-	-	-

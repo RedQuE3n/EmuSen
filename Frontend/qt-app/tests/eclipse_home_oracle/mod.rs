@@ -219,6 +219,7 @@ fn rule(spec: &str, k: f64, got: &BTreeMap<String, Boxed>, canvas_width: f64) ->
         ["below", n, g] => Some(('y', of(n).bottom() + num(g) * k)),
         ["foot", n] => Some(('b', of(n).bottom())),
         ["up", n, g] => Some(('b', of(n).bottom() - num(g) * k)),
+        ["above", n, g] => Some(('b', of(n).y - num(g) * k)),
         ["mid", g] if g.parse::<f64>().is_ok() => Some(('m', num(g) * k)),
         ["mid", n] => Some(('m', of(n).middle())),
         [v] => Some(('=', num(v) * k)),

@@ -56,7 +56,7 @@ fn focused_name(scene: &mut Scene<'_>) -> String {
 }
 
 #[test]
-fn qt_3_4_7_2_eclipses_games_view_is_its_board_by_the_table_at_every_size() {
+fn qt_3_4_10_eclipses_games_view_is_its_board_by_the_table_at_every_size() {
     let files: Vec<String> = COVERS.iter().map(|(t, _)| *t).chain(PLAIN).map(|t| format!("{t}.sfc")).collect();
     let games: Vec<(&str, &str)> = files.iter().map(|f| ("SNES", f.as_str())).collect();
     let world = sandbox("qt-app-eclipse-games", &games);
@@ -186,4 +186,19 @@ fn qt_3_4_7_2_eclipses_games_view_is_its_board_by_the_table_at_every_size() {
     assert!(scene.focus_item(&tree, tree.find_named("gamesSort").unwrap()));
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "gamesSortWords", "text", emusen_qt_models::listing::Sort::LastPlayed.words(), 2000);
+}
+
+#[test]
+fn qt_3_4_10_the_listings_actions_are_carried_as_the_list_cards_own() {
+    // A theme's filter, sort and letter steps, and the triggers' declared actions, become the List card's actions on the grid.
+    use emusen_qt::theme::{carried, Carried};
+    use emusen_qt_models::list_card;
+    use emusen_theme_qt::actions::Action;
+    let listed = |action: Action| carried(&action, None, &[]);
+    assert_eq!(listed(Action::SetFilter(list_card::NOT_PLAYED.into())), Some(Carried::Listed(list_card::NOT_PLAYED.into())));
+    assert_eq!(listed(Action::StepSort(1)), Some(Carried::Listed(list_card::SORT_ON.into())));
+    assert_eq!(listed(Action::StepLetter(-1)), Some(Carried::Listed(list_card::JUMP_BACK.into())));
+    assert_eq!(listed(Action::StepLetter(1)), Some(Carried::Listed(list_card::JUMP_ON.into())));
+    assert_eq!(listed(Action::Act(list_card::JUMP_ON.into())), Some(Carried::Listed(list_card::JUMP_ON.into())));
+    assert_eq!(listed(Action::Act("list".into())), Some(Carried::Acted("list".into())), "another declared action is acted as before");
 }

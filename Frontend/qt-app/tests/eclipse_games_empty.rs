@@ -14,7 +14,7 @@ use emusen_qt_models::{themes, words};
 use emusen_qt_test::harness::SIZES;
 
 #[test]
-fn qt_3_4_7_2_eclipses_games_view_with_no_game_is_the_empty_board_by_the_table() {
+fn qt_3_4_10_eclipses_games_view_with_no_game_is_the_empty_board_by_the_table() {
     let _world = sandbox("qt-app-eclipse-games-empty", &[]);
     let mut harness = emusen_qt_test::Harness::new();
     let mut scene = harness.load(MAIN_URL, 1280, 800);

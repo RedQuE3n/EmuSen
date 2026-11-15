@@ -29,12 +29,9 @@ fn kit_7_113_the_cast_glow_on_the_card_stands_outside_its_box_alone() {
     let tokens = eclipse();
     let mut harness = Harness::new();
     let mut scene = harness.load(scene::URL, scene::WINDOW.0, scene::WINDOW.1);
-    if scene.property("scene", "objectName").is_empty() {
-        println!("no scene on the card: the test stands down");
-        return;
-    }
-
     let tree = scene.tree();
+    let missing: Vec<&str> = ["ring", "disc"].into_iter().filter(|n| tree.find_named(n).is_none()).collect();
+    assert!(missing.is_empty(), "{} loaded without the glow scene's {missing:?}", scene::URL);
     assert_eq!(anywhere(&tree, "glowShadow"), 0, "no glow under the kit's tokens, its colour transparent");
     scene.kit_tokens().expect("the kit's tokens").set_overrides(eclipse_dark());
     scene.wait(200);

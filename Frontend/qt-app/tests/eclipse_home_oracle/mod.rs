@@ -465,6 +465,33 @@ pub fn oracle(backend: &str) {
             }
         }
     }
+    if backend == "software" {
+        // R-20261115-6: on the software backend the shown game's art is its own colours, unblurred, dimmed to the backdrop's
+        // opacity over the ground. The first cover is a flat fill with a white rim 6 px wide inset 3 px (qt-test's covers.rs),
+        // cropped to fill the window: its right rim stands near the window's right edge, and that stripe is the art's own.
+        scene.resize(1280, 800);
+        scene.wait(300);
+        let tree = scene.tree();
+        let opacity: f64 = read(&tree, "backdrop", "sourceOpacity").parse().expect("the backdrop's opacity");
+        let ground = Colour::parse(&read(&tree, "backdrop", "ground")).expect("the backdrop's ground");
+        let over = |c: (u8, u8, u8)| {
+            let mix = |a: u8, b: u8| (f64::from(a) * opacity + f64::from(b) * (1.0 - opacity)).round() as u8;
+            Colour::rgb(mix(c.0, ground.r), mix(c.1, ground.g), mix(c.2, ground.b))
+        };
+        // The cover's crop: the window's width over the cover's, as Image.PreserveAspectCrop scales a 3:4 picture into 16:10.
+        let scale = 1280.0 / f64::from(COVER.0);
+        let rim = (f64::from(COVER.0) - 3.0 - 3.0) * scale;
+        let inside = (f64::from(COVER.0) - 9.0 - 4.0) * scale;
+        let fill = emusen_qt_test::covers::fill(0);
+        let seen = scene.colours_at(&[(rim, 400.0), (inside, 400.0), (inside, 120.0)]);
+        // One level of 255 is an 8-bit blend's rounding.
+        let near = |a: Option<Colour>, b: Colour| a.is_some_and(|a| a.r.abs_diff(b.r) <= 1 && a.g.abs_diff(b.g) <= 1 && a.b.abs_diff(b.b) <= 1);
+        for (what, at, want) in [("the right rim", seen[0], over((255, 255, 255))), ("the fill beside it", seen[1], over(fill)), ("the fill above", seen[2], over(fill))] {
+            if !near(at, want) {
+                differences.push(format!("software backdrop: {what} is {at:?} where the art dimmed to {opacity} over the ground gives {want:?}"));
+            }
+        }
+    }
     if let Some(folder) = std::env::var_os("EMUSEN_ECLIPSE_PICTURES") {
         std::fs::create_dir_all(&folder).unwrap();
         for (width, height) in [(1280, 800), (1920, 1200)] {

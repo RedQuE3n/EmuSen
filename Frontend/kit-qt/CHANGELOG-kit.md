@@ -13,7 +13,7 @@ unblurred, with no blur made by the CPU. 1.7 is another piece's.
 
 - **`Backdrop`**, **`BackdropField`**: a ground, and over it colour fields (an ellipse or a rounded box, each with its
   CSS filter blur, opacity and turn) or a picture in their place, each blurred by a `MultiEffect` on the graphics card;
-  on the software backend the fields unblurred at their opacity and no picture. `EmuSen_Kit.md` §7.118.
+  on the software backend the fields and the picture unblurred, each at its opacity. `EmuSen_Kit.md` §7.118.
 - **`Glow`**: `offsetX` and `offsetY` move the shape as a box-shadow's offsets move it, so a resting tile's shadow is a
   glow; 0 by default, so every glow drawn before is unchanged. Exported to themes in EmuSen.Theme 1.4. `EmuSen_Kit.md` §7.119.
 - **`Glow`** on the software backend blurs once a shape and only recolours on a change of colour (§7.113); `CoronaDisc`

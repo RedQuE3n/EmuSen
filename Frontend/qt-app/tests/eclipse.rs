@@ -154,4 +154,6 @@ fn qt_3_4_7_eclipse_is_listed_chosen_and_sets_every_override_on_both_engines() {
     assert_eq!(scene.property("program", "theme"), "");
     wait_for(&mut scene, "chosenTheme", "status", "Null", 2000);
     assert_eq!(program_tokens(&mut scene), kit, "the reference again leaves the program the kit's tokens");
+    // Eclipse's engine dropped with its Home's disc: nothing is logged (a glow's entry read after it went, EmuSen_Kit.md §7.116).
+    scene.assert_quiet();
 }

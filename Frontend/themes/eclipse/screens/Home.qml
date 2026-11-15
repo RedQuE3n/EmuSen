@@ -61,6 +61,8 @@ ThemeScreen {
                 anchors.fill: parent
                 surfaceDrawn: false
                 helpShown: false
+                // The help's entries are the frame's actions, which the pad's X, Y, Select and Start invoke; the help line draws them.
+                help: Help.entries(root.helpKind)
                 padFamily: Device.family
                 focus: true
                 controller.navigationShown: false
@@ -253,7 +255,7 @@ ThemeScreen {
                     HelpLine {
                         unit: design.unit
                         controller: frame.controller
-                        model: Help.entries(root.helpKind)
+                        model: frame.help
                         ink: ink.help
                     }
                 }

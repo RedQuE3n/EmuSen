@@ -10,8 +10,14 @@ Item {
     required property real unit
     required property string title
     required property string facts
-    // The tile's place in its row, which names its parts for a reader and the tests.
+    // The tile's place in its row, which names its parts for a reader and the tests, after the screen's prefix.
     property int place
+    property string kind: "tile"
+    // The title's lines and their height; a tile with no facts stands its title on the foot.
+    property int titleLines: 1
+    property real titleLineHeight: 1
+    // The shade's corners, the tile's where nothing clips it.
+    property real radius: 0
     property real titleSize: 21
     property real factsSize: 15
     property real inset: 18
@@ -24,13 +30,14 @@ Item {
     anchors.fill: parent
     Rectangle {
         id: shade
-        objectName: "tileShade." + root.place
+        objectName: root.kind + "Shade." + root.place
         // The shade's dark colour, which the test reads.
         readonly property color paint: root.shadeInk
         readonly property real solid: root.height - titleItem.y
         width: root.width
         height: Math.max(root.fade * root.unit, shade.solid + root.fade * root.unit / 2)
         y: root.height - height
+        radius: root.radius * root.unit
         gradient: Gradient {
             GradientStop { position: 0; color: root.shadeClear }
             GradientStop { position: Math.max(0, 1 - shade.solid / shade.height); color: shade.paint }
@@ -39,11 +46,14 @@ Item {
     }
     Text {
         id: titleItem
-        objectName: "tileTitle." + root.place
+        objectName: root.kind + "Title." + root.place
         x: root.inset * root.unit
-        y: factsItem.y - height
+        y: (factsItem.visible ? factsItem.y : root.height - root.foot * root.unit) - height
         width: root.width - 2 * root.inset * root.unit
         text: root.title
+        wrapMode: root.titleLines > 1 ? Text.Wrap : Text.NoWrap
+        maximumLineCount: root.titleLines
+        lineHeight: root.titleLineHeight
         elide: Text.ElideRight
         color: root.titleInk
         font.pixelSize: Type.size(root.titleSize * root.unit, Tokens.textScale)
@@ -51,9 +61,10 @@ Item {
     }
     Text {
         id: factsItem
-        objectName: "tileFacts." + root.place
+        objectName: root.kind + "Facts." + root.place
         x: root.inset * root.unit
         y: root.height - root.foot * root.unit - height
+        visible: root.facts.length > 0
         width: root.width - 2 * root.inset * root.unit
         text: root.facts
         elide: Text.ElideRight

@@ -1803,12 +1803,39 @@ logged. `eclipse_home_gpu.rs` runs the same oracle on the graphics card. With `E
 both grab Home at 1280 × 800 and 1920 × 1200, and once more at 1920 × 1200 with the shown game one with no art. The
 six games' first five have covers, drawn by qt-test's `covers`.
 
-**Type.** Every word is sized by `Type.size` (`EmuSen_Kit.md` §7.121): the board's size in canvas units, raised to the
-legibility floor where it is under it (R-20261115-14). The table's last three columns give each text's board size in
-units, the whole pixel size Qt draws it at, and whether it was raised; the oracle holds the table to the rule. In the face
-drawn today the floor, held at every gate size, gives 19 for every board size under 18.5 units: the wordmark, the clock,
-the eyebrow, the facts, the buttons' labels, a tile's title and facts, and the help line. The Recent heading's 18.67 is
-drawn at 19 too, and the title at 75 for 74.67. Only the title keeps the board's size.
+**Type.** Every word is drawn in the look's face, Sora (`Tokens.faceText`), at the board's weights (the title's, the played
+line's and the wordmark's by their weight tokens), and sized by `Type.sizeIn` (`EmuSen_Kit.md` §7.121): the board's size in
+canvas units, raised to the legibility floor where it is under it (R-20261115-14), the floor held with Sora's own capitals
+at the text's weight. The table's last three columns give each text's board size in units, the whole pixel size Qt draws
+it at, and whether it was raised; the oracle holds the table to the rule, reading each text's face and weight from the
+built screen. Under Sora the floor gives 17.5, drawn at 18, for every board size under it: the wordmark, the clock, the
+eyebrow, the buttons' labels, a tile's title and line, and the help line; the played line's 17.33 is drawn at 18 too.
+Measured 2026-11-15, the resting tile's console line "SUPER NINTENDO" at 18 is wider than the board's tile allows at all
+five gate sizes: the floor and the board meet there, and the oracle's one difference stands for the tester.
+
+**Words.** The wordmark is `Words.name`, the program's name in its own case; the eyebrow `Words.continueLine`, "Continue ·
+Super Nintendo" in the font's capitals; the line under the title `Words.playedFacts`, when the game was last played and,
+where games.db holds any, its time played (`Session.played`, which the host now feeds). Where the board's words differ
+from the program's and no word exists ("Options" for the game page, "Home card", the battery, "1 of 24", the resume
+point, the section tabs), Home draws the program's or nothing, as listed in the table.
+
+**What acts.** Home's `Frame` holds the help's entries, so the pad's X, Y, Select and Start reach their actions on Home as
+they do on the reference's; the help line draws the frame's list. A theme's `Actions.favourite`, or the help's Y on the game
+in hand, turns that game's favourite in the library. A pad's release goes to every engine's router, so a press whose action
+moved the focus to another engine (X opening the game page) leaves no engine holding the button and eating its next press.
+`qt_3_4_8_eclipse_s_home_acts_on_every_button_tile_and_the_search_from_the_pad` (`eclipse_home_pad.rs`) drives the program
+under Eclipse with an in-process SDL pad, each press let go before the next: the walk through every tile and button and to
+the search, X and the second button opening the shown game's page, Y and the third button turning its favourite, A on the
+search opening the search, and A on the first button and on a tile other than the first each starting that game, which
+games.db then records as last played. The harness feeds no game picture, so a started game is not opened, and the
+program is loaded again after each start. With no game on the row the title's words take a second line and the search
+holds the focus (theme-audit's 50 states, `qt_3_7_eclipse_passes_the_loaded_step_in_every_state_it_has`).
+
+**The art on the software backend.** R-20261115-6 rules the software backdrop the same colours, dimmed and unblurred.
+The oracle draws its covers with qt-test's `covers::draw_art`, three bands of colours each, and on the software backend
+reads the backdrop at the window's right edge in each band and two cover pixels either side of a band's edge: each is the
+art's colour at the backdrop's opacity (0.85, the board's first field's, `Main.dc.html:19`) over the ground. The light
+stripe seen there in the pictures of 2026-11-15 was the earlier fixture cover's own white rim, cropped into view.
 
 **A tile's line is the console alone.** The board's tile draws `{{t.system}}` under the title (Main.dc.html line 86), so
 the tile draws the row's `consoleName` (EmuSen.Theme 1.4), the same name the row's `facts` begin with, from the one owner

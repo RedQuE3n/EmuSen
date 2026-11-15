@@ -10,9 +10,8 @@ Item {
     required property real unit
     required property string title
     required property string facts
-    // The tile's place in its row, which names its parts for a reader and the tests, after the screen's prefix.
+    // The tile's place in its row, which names its parts for a reader and the tests.
     property int place
-    property string kind: "tile"
     // The title's lines and their height; a tile with no facts stands its title on the foot.
     property int titleLines: 1
     property real titleLineHeight: 1
@@ -30,7 +29,7 @@ Item {
     anchors.fill: parent
     Rectangle {
         id: shade
-        objectName: root.kind + "Shade." + root.place
+        objectName: "tileShade." + root.place
         // The shade's dark colour, which the test reads.
         readonly property color paint: root.shadeInk
         readonly property real solid: root.height - titleItem.y
@@ -46,7 +45,7 @@ Item {
     }
     Text {
         id: titleItem
-        objectName: root.kind + "Title." + root.place
+        objectName: "tileTitle." + root.place
         x: root.inset * root.unit
         y: (factsItem.visible ? factsItem.y : root.height - root.foot * root.unit) - height
         width: root.width - 2 * root.inset * root.unit
@@ -61,7 +60,7 @@ Item {
     }
     Text {
         id: factsItem
-        objectName: root.kind + "Facts." + root.place
+        objectName: "tileFacts." + root.place
         x: root.inset * root.unit
         y: root.height - root.foot * root.unit - height
         visible: root.facts.length > 0

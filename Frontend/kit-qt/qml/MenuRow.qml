@@ -17,7 +17,10 @@ Kit.Walkable {
     property bool sectionEnd: false
     // The words' distance from the row's edges, and their face.
     property real inset: Kit.Tokens.base * 4
-    property font labelFont: Qt.font({ pixelSize: Kit.Tokens.fontRow })
+    property font labelFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontRow })
+    // The value's face: the label's, or the codes' where the value is a code, a folder's path or a version (EmuSen_Kit.md §7.117).
+    property bool code: false
+    readonly property font valueFont: root.code ? Qt.font({ family: Kit.Tokens.faceCode, pixelSize: root.labelFont.pixelSize }) : root.labelFont
     // The row stands on a raised surface, a question's card: clear at rest, Surface when focused (EmuSen_Kit.md §7.24).
     property bool overRaised: false
     // The marks' sizes as Mistress's render draws them: a step's ◂ and ▸, and the larger ▸ of a row that opens a page.
@@ -89,7 +92,7 @@ Kit.Walkable {
         objectName: "value"
         text: root.value
         color: Kit.Tokens.muted
-        font: root.labelFont
+        font: root.valueFont
         // What the label leaves of the row, and at least half of it, a long value (a folder's path) cut at its start so its end shows (EmuSen_Kit.md §7.46, §7.50).
         width: Math.min(valueText.implicitWidth, Math.max(root.width / 2, root.width - root.inset * 2 - labelText.implicitWidth - Kit.Tokens.base * 2
             - (root.steps ? root.stepMark.width + root.markGap : 0) - (root.steps || root.opens ? root.afterMark.width + root.markGap : 0)))

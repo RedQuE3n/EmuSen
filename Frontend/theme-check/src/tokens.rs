@@ -1,6 +1,6 @@
 //! Token overrides held to the kit: a name the `Tokens` singleton has, a value of its type, and the contrast pairs' floors.
 
-use emusen_kit_core::tokens::{Colour, ColourToken, MAX_TEXT_SCALE, Variant as KitVariant, clamp_text_scale, colour, contrast_pairs};
+use emusen_kit_core::tokens::{BUNDLED, Colour, ColourToken, MAX_TEXT_SCALE, Variant as KitVariant, clamp_text_scale, colour, contrast_pairs, is_bundled};
 use emusen_theme_manifest::{Manifest, TokenOverride, TokenValue, Variant};
 
 use crate::Finding;
@@ -15,6 +15,8 @@ pub enum TokenType {
     Number,
     Whole,
     Switch,
+    /// A face's family, one the kit bundles (EmuSen_Kit.md §7.117).
+    Face,
 }
 
 /// Every token of the registry's `Tokens`, in its order: the read-only properties, with their types.
@@ -38,6 +40,7 @@ pub fn registry_tokens() -> Vec<(String, TokenType)> {
                     "double" => Some(TokenType::Number),
                     "int" => Some(TokenType::Whole),
                     "bool" => Some(TokenType::Switch),
+                    "QString" => Some(TokenType::Face),
                     _ => None,
                 };
                 if let Some(t) = typed {
@@ -80,12 +83,13 @@ fn parse_colour(text: &str) -> Option<Colour> {
     Colour::parse(text)
 }
 
-fn type_words(t: TokenType) -> &'static str {
+fn type_words(t: TokenType) -> String {
     match t {
-        TokenType::Colour => "a colour, #RRGGBB or #AARRGGBB",
-        TokenType::Number => "a number",
-        TokenType::Whole => "a whole number",
-        TokenType::Switch => "true or false",
+        TokenType::Face => format!("a face the kit bundles, one of {}", BUNDLED.join(", ")),
+        TokenType::Colour => "a colour, #RRGGBB or #AARRGGBB".to_owned(),
+        TokenType::Number => "a number".to_owned(),
+        TokenType::Whole => "a whole number".to_owned(),
+        TokenType::Switch => "true or false".to_owned(),
     }
 }
 
@@ -95,6 +99,7 @@ fn holds(t: TokenType, value: &TokenValue) -> bool {
         (TokenType::Number, TokenValue::Number(n)) => n.is_finite(),
         (TokenType::Whole, TokenValue::Number(n)) => n.is_finite() && n.fract() == 0.0 && n.abs() <= i32::MAX as f64,
         (TokenType::Switch, TokenValue::Switch(_)) => true,
+        (TokenType::Face, TokenValue::Text(s)) => is_bundled(s),
         _ => false,
     }
 }

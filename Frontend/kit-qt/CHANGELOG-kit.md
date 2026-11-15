@@ -23,6 +23,25 @@ unblurred, with no blur made by the CPU. 1.7 is another piece's.
   sizes are `double`, a type qmllint knows, where `qreal` left Glow.qml's bindings with no type.
 - **`type_size::legible`** (Rust, for EmuSen.Theme's `Type`): a look's size never under the legibility floor (§7.121).
 
+## 1.7: the face tokens, and Sora and JetBrains Mono bundled (2026-11-15)
+
+Decided 2026-11-14 by the tester (R-20261114-15): both fonts bundled and a face token added. An addition; the qmldir tags
+every type with 1.7, the kit's version, as each minor since 1.3 has.
+
+- **`Tokens.faceText`, `faceLabel`, `faceInterface`, `faceCode`** (registry, strings after every earlier property): the
+  family each role of text draws in; Barlow, Barlow Condensed, and the application's font for the last two in the kit's
+  column. `EmuSen_Kit.md` §7.117.
+- **`Tokens.weightTitle`, `weightSentence`, `weightWordmark`** (registry, whole numbers after the faces): the weight of a
+  title, of the pane's sentence and of the wordmark; 400, 400 and 300 in the kit's column, as the reference drew them.
+  Decided 2026-11-15 by main, provisional on the tester's word. §7.117.
+- **`MenuRow.code`** and the read-only **`MenuRow.valueFont`**: a value drawn in `faceCode`; `SettingsFrame` reads a
+  row's `code` role.
+- The style's controls, `ToneText`, and the default fonts of `MenuRow`, `ActionButton`, `HelpBar`, `Keyboard`,
+  `NoticeLayer`, `Question` and `ToolScreen` ask `faceInterface`; `Moonrise` and `CoverTile` ask `faceLabel` and
+  `faceText` and load no font of their own. Under the kit's tokens each draws the face it drew.
+- `fonts/` gains Sora (Light, Regular, SemiBold, Bold) and JetBrains Mono (Regular, Bold) with their licences, all put in
+  the application's font database once (`bundled_families`).
+
 ## 1.6: Eclipse's corona disc and the planet mark as kit parts, one glow, and every ring Gapped where a look asks (2026-11-14)
 
 Beside the additions below, two properties the 1.5 and 1.6 pieces had added are gone and `CoronaDisc.corona` means a

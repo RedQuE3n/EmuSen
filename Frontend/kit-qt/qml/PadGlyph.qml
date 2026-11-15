@@ -28,6 +28,7 @@ Item {
     TextMetrics {
         id: inked
         // The letter in proportion to the drawn glyph, read from the marks so no binding reads the item's own size (EmuSen_Kit.md §7.28).
+        font.family: Kit.Tokens.faceInterface
         font.pixelSize: Math.max(1, marks.size * marks.letterScale / root.sideShare)
         font.bold: marks.letterBold
         text: marks.letter
@@ -64,6 +65,7 @@ Item {
                 PathText {
                     x: (root.width - inked.tightBoundingRect.width) / 2 - inked.tightBoundingRect.x
                     y: (root.height - inked.tightBoundingRect.height) / 2
+                    font.family: inked.font.family
                     font.pixelSize: inked.font.pixelSize
                     font.bold: inked.font.bold
                     text: drawn.cutLetter
@@ -89,6 +91,7 @@ Item {
             PathText {
                 x: (root.width - inked.tightBoundingRect.width) / 2 - inked.tightBoundingRect.x
                 y: (root.height - inked.tightBoundingRect.height) / 2
+                font.family: inked.font.family
                 font.pixelSize: inked.font.pixelSize
                 font.bold: inked.font.bold
                 text: marks.letter

@@ -1,25 +1,8 @@
 import QtQuick
+import EmuSen.Theme
 
-// The screens' faces from EmuSen's fonts: Barlow Condensed Medium for names, Barlow for words, Barlow Condensed Light for the wordmark, Barlow Condensed regular for the worlds' counts and Home's places' lines (R-20261112-1; EmuSen_Qt.md §7.1, §3.4.1).
+// The screens' two faces from the theme API's face tokens: the words', and the labels' for names, the wordmark, the worlds' counts and Home's places' lines, each text's weight its own (R-20261112-1; EmuSen_Qt.md §7.1, §3.4.1; EmuSen_Kit.md §7.117).
 Item {
-    readonly property string condensed: condensedFace.font.family
-    readonly property string condensedRegular: condensedRegularFace.font.family
-    readonly property string regular: regularFace.font.family
-    readonly property string light: lightFace.font.family
-    FontLoader {
-        id: lightFace
-        source: "qrc:/emusen/fonts/BarlowCondensed-Light.ttf"
-    }
-    FontLoader {
-        id: condensedFace
-        source: "qrc:/emusen/fonts/BarlowCondensed-Medium.ttf"
-    }
-    FontLoader {
-        id: condensedRegularFace
-        source: "qrc:/emusen/fonts/BarlowCondensed-Regular.ttf"
-    }
-    FontLoader {
-        id: regularFace
-        source: "qrc:/emusen/fonts/Barlow-Regular.ttf"
-    }
+    readonly property string words: Tokens.faceText
+    readonly property string label: Tokens.faceLabel
 }

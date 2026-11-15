@@ -18,6 +18,21 @@ or shadow. 1.3 is another piece's.
   one owner of both (`qt-models/src/library.rs`); Eclipse's Home tile draws it under the title, as its board does.
 - The module is 1.4 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.4.*`.
 
+## 1.3, an addition: the face tokens (2026-11-15)
+
+Decided 2026-11-14 by the tester (R-20261114-15): a theme names its face through a token.
+
+- **`Tokens.faceText`, `faceLabel`, `faceInterface`, `faceCode`** (added, read-only), as the kit's `Tokens` gained them
+  (Kit 1.7, `EmuSen_Kit.md` §7.117): the family of the words, the labels, the kit's rows and controls, and codes. A
+  `theme.json` may set each to a face the kit bundles: Barlow, Barlow Condensed, Sora or JetBrains Mono; theme-check finds
+  any other.
+- **`Tokens.weightTitle`, `weightSentence`, `weightWordmark`** (added, read-only): the weights of a title, the pane's
+  sentence and the wordmark, as the kit's; a `theme.json` may set each as a whole number. Eclipse sets 600, 300 and 600,
+  its boards' (`EmuSen_Kit.md` §7.117); the reference's Home reads `weightWordmark`.
+- The reference's `parts/Faces.qml` reads `faceText` and `faceLabel` and loads no font of its own; its manifest declares
+  api 1.3. Eclipse sets Sora for the first three and JetBrains Mono for codes, and declares api 1.3.
+- The module is 1.3; `PlanetMark`, `CoronaGlow` and `CoronaDisc` keep 1.2 in the qmldir, every other type its own minor.
+
 ## 1.2, an addition: the corona disc and the planet mark (2026-11-14)
 
 Decided 2026-11-14 by the tester (R-20261114-16): Eclipse's shared parts are kit parts, exported to themes as an addition.

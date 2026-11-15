@@ -108,7 +108,7 @@ fn main() {
         "src/planet_mark.rs",
     ])
     .include_dir("cpp")
-    .cpp_files(["cpp/kit_glue.cpp", "cpp/game_picture.h", "cpp/game_picture.cpp", "cpp/edge_mask.h", "cpp/edge_mask.cpp", "cpp/inside_clips.h", "cpp/inside_clips.cpp", "cpp/drawn_pixels.h", "cpp/drawn_pixels.cpp", "cpp/text_width.h", "cpp/text_width.cpp", "cpp/video_frames.h", "cpp/video_frames.cpp", "cpp/glow_paint.h", "cpp/glow_paint.cpp"])
+    .cpp_files(["cpp/kit_glue.cpp", "cpp/game_picture.h", "cpp/game_picture.cpp", "cpp/edge_mask.h", "cpp/edge_mask.cpp", "cpp/inside_clips.h", "cpp/inside_clips.cpp", "cpp/drawn_pixels.h", "cpp/drawn_pixels.cpp", "cpp/text_width.h", "cpp/text_width.cpp", "cpp/bundled_faces.h", "cpp/bundled_faces.cpp", "cpp/video_frames.h", "cpp/video_frames.cpp", "cpp/glow_paint.h", "cpp/glow_paint.cpp"])
     .qt_module("Quick")
     .qt_module("QuickControls2")
     // The clip's frames on the software backend (VideoFrames); the decoder is Qt Multimedia's, over the system's FFmpeg (EmuSen_Qt.md §1.8.9).

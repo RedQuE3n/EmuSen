@@ -6,7 +6,7 @@ use cxx_qt::CxxQtType;
 
 use cxx_qt_lib::{QColor, QString};
 use emusen_kit_core::motion::MotionToken as M;
-use emusen_kit_core::tokens::{self as core_tokens, ColourToken as C};
+use emusen_kit_core::tokens::{self as core_tokens, ColourToken as C, FaceRole, WeightRole};
 
 use crate::column::Column;
 use crate::convert::qcolor;
@@ -19,6 +19,11 @@ pub mod qobject {
         type QColor = cxx_qt_lib::QColor;
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qstringlist.h");
+        type QStringList = cxx_qt_lib::QStringList;
+        include!("bundled_faces.h");
+        fn bundled_families() -> QStringList;
+        fn platform_family() -> QString;
         include!("emusen-kit-qt/src/kinds.cxxqt.h");
         #[namespace = "Forms"]
         type Form = crate::kinds::ffi::Form;
@@ -128,6 +133,13 @@ pub mod qobject {
         #[qproperty(f64, corona_halo_blur, READ, NOTIFY)]
         #[qproperty(f64, corona_halo_spread, READ, NOTIFY)]
         #[qproperty(bool, ring_gapped, READ, NOTIFY)]
+        #[qproperty(QString, face_text, READ, NOTIFY)]
+        #[qproperty(QString, face_label, READ, NOTIFY)]
+        #[qproperty(QString, face_interface, READ, NOTIFY)]
+        #[qproperty(QString, face_code, READ, NOTIFY)]
+        #[qproperty(i32, weight_title, READ, NOTIFY)]
+        #[qproperty(i32, weight_sentence, READ, NOTIFY)]
+        #[qproperty(i32, weight_wordmark, READ, NOTIFY)]
         type Tokens = super::TokensRust;
     }
 
@@ -215,6 +227,13 @@ pub struct TokensRust {
     corona_halo_blur: f64,
     corona_halo_spread: f64,
     ring_gapped: bool,
+    face_text: QString,
+    face_label: QString,
+    face_interface: QString,
+    face_code: QString,
+    weight_title: i32,
+    weight_sentence: i32,
+    weight_wordmark: i32,
     instant: i32,
     quick: i32,
     enter: i32,
@@ -319,6 +338,13 @@ impl Default for TokensRust {
             corona_halo_blur: 0.0,
             corona_halo_spread: 0.0,
             ring_gapped: false,
+            face_text: QString::default(),
+            face_label: QString::default(),
+            face_interface: QString::default(),
+            face_code: QString::default(),
+            weight_title: 0,
+            weight_sentence: 0,
+            weight_wordmark: 0,
             instant: 0,
             quick: 0,
             enter: 0,
@@ -419,6 +445,14 @@ impl TokensRust {
         self.corona_halo_blur = c.corona.halo_blur;
         self.corona_halo_spread = c.corona.halo_spread;
         self.ring_gapped = c.focus.gapped;
+        let face = |role| c.face(role).map_or_else(qobject::platform_family, QString::from);
+        self.face_text = face(FaceRole::Text);
+        self.face_label = face(FaceRole::Label);
+        self.face_interface = face(FaceRole::Interface);
+        self.face_code = face(FaceRole::Code);
+        self.weight_title = c.weight(WeightRole::Title);
+        self.weight_sentence = c.weight(WeightRole::Sentence);
+        self.weight_wordmark = c.weight(WeightRole::Wordmark);
         self.instant = c.duration(M::Instant);
         self.quick = c.duration(M::Quick);
         self.enter = c.duration(M::Enter);
@@ -448,8 +482,19 @@ impl TokensRust {
     }
 }
 
+/// The families of the faces in the kit's resources, each file put in the application's font database the first time.
+pub fn bundled_families() -> Vec<String> {
+    qobject::bundled_families().iter().map(ToString::to_string).collect()
+}
+
+/// The family the application's font asks for, the face of a text that names none: the interface's and the codes' in the kit.
+pub fn platform_family() -> String {
+    qobject::platform_family().to_string()
+}
+
 impl cxx_qt::Initialize for qobject::Tokens {
     fn initialize(mut self: Pin<&mut Self>) {
+        bundled_families();
         self.as_mut().on_form_changed(|this| this.refresh()).release();
         self.as_mut().on_variant_changed(|this| this.refresh()).release();
         self.as_mut().on_text_scale_changed(|this| this.refresh()).release();
@@ -560,6 +605,13 @@ impl qobject::Tokens {
         self.as_mut().corona_halo_blur_changed();
         self.as_mut().corona_halo_spread_changed();
         self.as_mut().ring_gapped_changed();
+        self.as_mut().face_text_changed();
+        self.as_mut().face_label_changed();
+        self.as_mut().face_interface_changed();
+        self.as_mut().face_code_changed();
+        self.as_mut().weight_title_changed();
+        self.as_mut().weight_sentence_changed();
+        self.as_mut().weight_wordmark_changed();
         self.as_mut().instant_changed();
         self.as_mut().quick_changed();
         self.as_mut().enter_changed();

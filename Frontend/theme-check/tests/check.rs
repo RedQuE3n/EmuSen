@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use emusen_kit_core::tokens::{ColourToken, FocusMarks, Shadow};
+use emusen_kit_core::tokens::{ColourToken, Corona, FocusMarks, Shadow};
 use emusen_theme_check::{run, run_with};
 use emusen_theme_check::tokens::{TokenType, property_of, registry_tokens};
 
@@ -147,7 +147,8 @@ fn rule_q_every_colour_token_names_a_read_only_colour_of_the_registry_and_back()
     let colours: Vec<&str> = registry.iter().filter(|(_, t)| *t == TokenType::Colour).map(|(n, _)| n.as_str()).collect();
     let mut named: Vec<&str> = ColourToken::ALL.iter().map(|t| property_of(*t)).collect();
     named.extend([Shadow::COLOUR_PROPERTY, FocusMarks::GAP_COLOUR_PROPERTY, FocusMarks::GLOW_COLOUR_PROPERTY]);
-    assert_eq!(colours, named, "the palette's colour tokens, the raised shadow's and the focus marks', in the registry's order");
+    named.extend(Corona::COLOUR_PROPERTIES);
+    assert_eq!(colours, named, "the palette's colour tokens, the raised shadow's, the focus marks' and the corona's, in the registry's order");
 }
 
 /// A stand-in for theme-audit: a script that answers for the package named last, and leaves a mark that it ran.

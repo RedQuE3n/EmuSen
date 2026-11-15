@@ -3,6 +3,21 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.2, an addition: the corona disc and the planet mark (2026-11-14)
+
+Decided 2026-11-14 by the tester (R-20261114-16): Eclipse's shared parts are kit parts, exported to themes as an addition.
+
+- **`PlanetMark`, `CoronaDisc`, `CoronaGlow`** (the kit's, by name): a core's mark from its one owner, and the eclipse's
+  dark disc with its rim and glows (`EmuSen_Kit.md` §7.115, §7.116). The reference theme's `EngineMark` is now a
+  `PlanetMark`.
+- **`Tokens.coronaColor`, `coronaRim`, `coronaGlowColor`, `coronaGlowBlur`, `coronaGlowSpread`, `coronaHaloColor`,
+  `coronaHaloBlur`, `coronaHaloSpread`** (added, read-only), as the kit's `Tokens` gained them; a theme may override each
+  in `theme.json`.
+- The module is 1.2 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.2.*`.
+  Every type of 1.0 keeps 1.0 in the qmldir and the three added are 1.2, so a theme that imports `EmuSen.Theme 1.0` finds
+  what it found before; the module's minor alone, given to every file, had made `import EmuSen.Theme 1.0` find no type
+  (seen 2026-11-14 in theme-audit's fixture themes: "ThemeScreen is not a type").
+
 ## 1.1, an addition: the focus ring (2026-11-14)
 
 The tester's ruling of 2026-11-14 (R-20261114-16): Eclipse's shared parts are kit parts, exported to themes as an addition.

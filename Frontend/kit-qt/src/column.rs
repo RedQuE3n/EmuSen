@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use emusen_kit_core::motion::{breathes_if, movement, Curve, MotionToken, BREATH_DELAY, BREATH_LOW, BREATH_PERIOD};
-use emusen_kit_core::tokens::{self, Colour, ColourToken, FocusMarks, Form, Shadow, Spacing, TypeScale, Variant};
+use emusen_kit_core::tokens::{self, Colour, ColourToken, Corona, FocusMarks, Form, Shadow, Spacing, TypeScale, Variant};
 
 /// QEasingCurve::Type's number for a kit-core curve, so QML binds `easing.type` to a token.
 pub fn easing_type(curve: Curve) -> i32 {
@@ -27,6 +27,9 @@ pub struct Column {
     pub spacing: Spacing,
     pub focus: FocusMarks,
     pub shadow: Shadow,
+    pub corona: Corona,
+    /// The corona's rim, glow and halo colours, in `Corona::COLOUR_PROPERTIES`' order.
+    pub corona_colours: [Colour; 3],
     pub durations: [i32; 8],
     pub fades: [i32; 8],
     pub curves: [i32; 8],
@@ -43,6 +46,7 @@ struct Bases {
     spacing: Spacing,
     focus: FocusMarks,
     shadow: Shadow,
+    corona: Corona,
     durations: [i32; 8],
     fades: [i32; 8],
     curves: [i32; 8],
@@ -70,6 +74,7 @@ impl Bases {
             spacing: tokens::spacing(form),
             focus: tokens::focus_marks(form),
             shadow: tokens::raised_shadow(form),
+            corona: tokens::corona(form),
             durations: nominal,
             fades: nominal,
             curves: MotionToken::ALL.map(|token| easing_type(token.curve())),
@@ -83,7 +88,7 @@ impl Bases {
     /// The base a `Tokens` property is made from; the colours are the palette's (`ColourToken::named`).
     fn slot(&mut self, property: &str) -> Option<Slot<'_>> {
         use MotionToken as M;
-        let (t, sp, f, sh) = (&mut self.type_scale, &mut self.spacing, &mut self.focus, &mut self.shadow);
+        let (t, sp, f, sh, co) = (&mut self.type_scale, &mut self.spacing, &mut self.focus, &mut self.shadow, &mut self.corona);
         let i = Column::slot;
         Some(match property {
             "fontDisplay" => Slot::Number(&mut t.display),
@@ -123,6 +128,11 @@ impl Bases {
             "shadowOffsetX" => Slot::Number(&mut sh.offset_x),
             "shadowOffsetY" => Slot::Number(&mut sh.offset_y),
             "shadowBlur" => Slot::Number(&mut sh.blur),
+            "coronaRim" => Slot::Number(&mut co.rim),
+            "coronaGlowBlur" => Slot::Number(&mut co.glow_blur),
+            "coronaGlowSpread" => Slot::Number(&mut co.glow_spread),
+            "coronaHaloBlur" => Slot::Number(&mut co.halo_blur),
+            "coronaHaloSpread" => Slot::Number(&mut co.halo_spread),
             "instant" => Slot::Whole(&mut self.durations[i(M::Instant)]),
             "quick" => Slot::Whole(&mut self.durations[i(M::Quick)]),
             "enter" => Slot::Whole(&mut self.durations[i(M::Enter)]),
@@ -191,6 +201,11 @@ impl Column {
         let colours: Vec<(ColourToken, Colour)> =
             given.iter().filter_map(|(name, value)| Some((ColourToken::named(name)?, Colour::parse(value)?))).collect();
         let shadow = given.iter().find(|(name, _)| name == Shadow::COLOUR_PROPERTY).and_then(|(_, value)| Colour::parse(value));
+        // The corona's colours where the theme gives none: the variant's accent, the theme's where it sets one.
+        let accent = colours.iter().find(|(token, _)| *token == ColourToken::Accent).map_or(tokens::colour(variant, ColourToken::Accent), |(_, c)| *c);
+        let corona_colours = Corona::COLOUR_PROPERTIES.map(|property| {
+            given.iter().find(|(name, _)| name == property).and_then(|(_, value)| Colour::parse(value)).unwrap_or(accent)
+        });
         let durations = MotionToken::ALL.map(|token| millis(movement(length(b.durations[Self::slot(token)]), reduced)));
         let fades = MotionToken::ALL.map(|token| millis(token.fade_of(length(b.fades[Self::slot(token)]), reduced)));
         Column {
@@ -200,6 +215,8 @@ impl Column {
             spacing: b.spacing,
             focus: b.focus,
             shadow: b.shadow,
+            corona: b.corona,
+            corona_colours,
             durations,
             fades,
             curves: b.curves,

@@ -3465,6 +3465,78 @@ Module {
         }
     }
     Component {
+        file: "planet_mark.cxxqt.h"
+        lineNumber: 15
+        name: "PlanetMarks"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/PlanetMarks 1.0"]
+        isCreatable: false
+        isSingleton: true
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "boxSize"
+            type: "double"
+            read: "getBoxSize"
+            index: 0
+            lineNumber: 21
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "stroke"
+            type: "double"
+            read: "getStroke"
+            index: 1
+            lineNumber: 22
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "badgeBox"
+            type: "double"
+            read: "getBadgeBox"
+            index: 2
+            lineNumber: 23
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "badge"
+            type: "QString"
+            read: "getBadge"
+            index: 3
+            lineNumber: 24
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "alien"
+            type: "QString"
+            read: "getAlien"
+            index: 4
+            lineNumber: 25
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "libretro"
+            type: "QString"
+            read: "getLibretro"
+            index: 5
+            lineNumber: 26
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Method {
+            name: "path"
+            type: "QString"
+            isMethodConstant: true
+            lineNumber: 37
+            Parameter { name: "mark"; type: "QString" }
+        }
+    }
+    Component {
         file: "kinds.cxxqt.h"
         lineNumber: 26
         name: "Repeat"
@@ -4316,7 +4388,7 @@ Module {
     }
     Component {
         file: "tokens.cxxqt.h"
-        lineNumber: 797
+        lineNumber: 869
         name: "Tokens"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -4331,7 +4403,7 @@ Module {
             write: "setForm"
             notify: "formChanged"
             index: 0
-            lineNumber: 803
+            lineNumber: 875
         }
         Property {
             name: "variant"
@@ -4340,7 +4412,7 @@ Module {
             write: "setVariant"
             notify: "variantChanged"
             index: 1
-            lineNumber: 804
+            lineNumber: 876
         }
         Property {
             name: "textScale"
@@ -4349,7 +4421,7 @@ Module {
             write: "setTextScale"
             notify: "textScaleChanged"
             index: 2
-            lineNumber: 805
+            lineNumber: 877
         }
         Property {
             name: "textSize"
@@ -4358,7 +4430,7 @@ Module {
             write: "setTextSize"
             notify: "textSizeChanged"
             index: 3
-            lineNumber: 806
+            lineNumber: 878
         }
         Property {
             name: "reducedMotion"
@@ -4367,7 +4439,7 @@ Module {
             write: "setReducedMotion"
             notify: "reducedMotionChanged"
             index: 4
-            lineNumber: 807
+            lineNumber: 879
         }
         Property {
             name: "surface"
@@ -4375,7 +4447,7 @@ Module {
             read: "getSurface"
             notify: "surfaceChanged"
             index: 5
-            lineNumber: 808
+            lineNumber: 880
             isReadonly: true
         }
         Property {
@@ -4384,7 +4456,7 @@ Module {
             read: "getSurfaceRaised"
             notify: "surfaceRaisedChanged"
             index: 6
-            lineNumber: 809
+            lineNumber: 881
             isReadonly: true
         }
         Property {
@@ -4393,7 +4465,7 @@ Module {
             read: "getInputSurface"
             notify: "inputSurfaceChanged"
             index: 7
-            lineNumber: 810
+            lineNumber: 882
             isReadonly: true
         }
         Property {
@@ -4402,7 +4474,7 @@ Module {
             read: "getVoidFill"
             notify: "voidFillChanged"
             index: 8
-            lineNumber: 811
+            lineNumber: 883
             isReadonly: true
         }
         Property {
@@ -4411,7 +4483,7 @@ Module {
             read: "getScrim"
             notify: "scrimChanged"
             index: 9
-            lineNumber: 812
+            lineNumber: 884
             isReadonly: true
         }
         Property {
@@ -4420,7 +4492,7 @@ Module {
             read: "getCaptionSurface"
             notify: "captionSurfaceChanged"
             index: 10
-            lineNumber: 813
+            lineNumber: 885
             isReadonly: true
         }
         Property {
@@ -4429,7 +4501,7 @@ Module {
             read: "getBorder"
             notify: "borderChanged"
             index: 11
-            lineNumber: 814
+            lineNumber: 886
             isReadonly: true
         }
         Property {
@@ -4438,7 +4510,7 @@ Module {
             read: "getRule"
             notify: "ruleChanged"
             index: 12
-            lineNumber: 815
+            lineNumber: 887
             isReadonly: true
         }
         Property {
@@ -4447,7 +4519,7 @@ Module {
             read: "getText"
             notify: "textChanged"
             index: 13
-            lineNumber: 816
+            lineNumber: 888
             isReadonly: true
         }
         Property {
@@ -4456,7 +4528,7 @@ Module {
             read: "getTextStrong"
             notify: "textStrongChanged"
             index: 14
-            lineNumber: 817
+            lineNumber: 889
             isReadonly: true
         }
         Property {
@@ -4465,7 +4537,7 @@ Module {
             read: "getMuted"
             notify: "mutedChanged"
             index: 15
-            lineNumber: 818
+            lineNumber: 890
             isReadonly: true
         }
         Property {
@@ -4474,7 +4546,7 @@ Module {
             read: "getAccent"
             notify: "accentChanged"
             index: 16
-            lineNumber: 819
+            lineNumber: 891
             isReadonly: true
         }
         Property {
@@ -4483,7 +4555,7 @@ Module {
             read: "getOverAccent"
             notify: "overAccentChanged"
             index: 17
-            lineNumber: 820
+            lineNumber: 892
             isReadonly: true
         }
         Property {
@@ -4492,7 +4564,7 @@ Module {
             read: "getSuccess"
             notify: "successChanged"
             index: 18
-            lineNumber: 821
+            lineNumber: 893
             isReadonly: true
         }
         Property {
@@ -4501,7 +4573,7 @@ Module {
             read: "getAttention"
             notify: "attentionChanged"
             index: 19
-            lineNumber: 822
+            lineNumber: 894
             isReadonly: true
         }
         Property {
@@ -4510,7 +4582,7 @@ Module {
             read: "getError"
             notify: "errorChanged"
             index: 20
-            lineNumber: 823
+            lineNumber: 895
             isReadonly: true
         }
         Property {
@@ -4519,7 +4591,7 @@ Module {
             read: "getOverArt"
             notify: "overArtChanged"
             index: 21
-            lineNumber: 824
+            lineNumber: 896
             isReadonly: true
         }
         Property {
@@ -4528,7 +4600,7 @@ Module {
             read: "getOverArtScrim"
             notify: "overArtScrimChanged"
             index: 22
-            lineNumber: 825
+            lineNumber: 897
             isReadonly: true
         }
         Property {
@@ -4537,7 +4609,7 @@ Module {
             read: "getFontDisplay"
             notify: "fontDisplayChanged"
             index: 23
-            lineNumber: 826
+            lineNumber: 898
             isReadonly: true
         }
         Property {
@@ -4546,7 +4618,7 @@ Module {
             read: "getFontTitle"
             notify: "fontTitleChanged"
             index: 24
-            lineNumber: 827
+            lineNumber: 899
             isReadonly: true
         }
         Property {
@@ -4555,7 +4627,7 @@ Module {
             read: "getFontStrong"
             notify: "fontStrongChanged"
             index: 25
-            lineNumber: 828
+            lineNumber: 900
             isReadonly: true
         }
         Property {
@@ -4564,7 +4636,7 @@ Module {
             read: "getFontRow"
             notify: "fontRowChanged"
             index: 26
-            lineNumber: 829
+            lineNumber: 901
             isReadonly: true
         }
         Property {
@@ -4573,7 +4645,7 @@ Module {
             read: "getFontBody"
             notify: "fontBodyChanged"
             index: 27
-            lineNumber: 830
+            lineNumber: 902
             isReadonly: true
         }
         Property {
@@ -4582,7 +4654,7 @@ Module {
             read: "getFontCaption"
             notify: "fontCaptionChanged"
             index: 28
-            lineNumber: 831
+            lineNumber: 903
             isReadonly: true
         }
         Property {
@@ -4591,7 +4663,7 @@ Module {
             read: "getFontGlyph"
             notify: "fontGlyphChanged"
             index: 29
-            lineNumber: 832
+            lineNumber: 904
             isReadonly: true
         }
         Property {
@@ -4600,7 +4672,7 @@ Module {
             read: "getHeaderSize"
             notify: "headerSizeChanged"
             index: 30
-            lineNumber: 833
+            lineNumber: 905
             isReadonly: true
         }
         Property {
@@ -4609,7 +4681,7 @@ Module {
             read: "getBase"
             notify: "baseChanged"
             index: 31
-            lineNumber: 834
+            lineNumber: 906
             isReadonly: true
         }
         Property {
@@ -4618,7 +4690,7 @@ Module {
             read: "getRowHeight"
             notify: "rowHeightChanged"
             index: 32
-            lineNumber: 835
+            lineNumber: 907
             isReadonly: true
         }
         Property {
@@ -4627,7 +4699,7 @@ Module {
             read: "getControlHeight"
             notify: "controlHeightChanged"
             index: 33
-            lineNumber: 836
+            lineNumber: 908
             isReadonly: true
         }
         Property {
@@ -4636,7 +4708,7 @@ Module {
             read: "getPaneGutter"
             notify: "paneGutterChanged"
             index: 34
-            lineNumber: 837
+            lineNumber: 909
             isReadonly: true
         }
         Property {
@@ -4645,7 +4717,7 @@ Module {
             read: "getPaneGap"
             notify: "paneGapChanged"
             index: 35
-            lineNumber: 838
+            lineNumber: 910
             isReadonly: true
         }
         Property {
@@ -4654,7 +4726,7 @@ Module {
             read: "getCardWidth"
             notify: "cardWidthChanged"
             index: 36
-            lineNumber: 839
+            lineNumber: 911
             isReadonly: true
         }
         Property {
@@ -4663,7 +4735,7 @@ Module {
             read: "getTitleRow"
             notify: "titleRowChanged"
             index: 37
-            lineNumber: 840
+            lineNumber: 912
             isReadonly: true
         }
         Property {
@@ -4672,7 +4744,7 @@ Module {
             read: "getHelpBar"
             notify: "helpBarChanged"
             index: 38
-            lineNumber: 841
+            lineNumber: 913
             isReadonly: true
         }
         Property {
@@ -4681,7 +4753,7 @@ Module {
             read: "getTileWidth"
             notify: "tileWidthChanged"
             index: 39
-            lineNumber: 842
+            lineNumber: 914
             isReadonly: true
         }
         Property {
@@ -4690,7 +4762,7 @@ Module {
             read: "getTileHeight"
             notify: "tileHeightChanged"
             index: 40
-            lineNumber: 843
+            lineNumber: 915
             isReadonly: true
         }
         Property {
@@ -4699,7 +4771,7 @@ Module {
             read: "getTileGap"
             notify: "tileGapChanged"
             index: 41
-            lineNumber: 844
+            lineNumber: 916
             isReadonly: true
         }
         Property {
@@ -4708,7 +4780,7 @@ Module {
             read: "getRowRadius"
             notify: "rowRadiusChanged"
             index: 42
-            lineNumber: 845
+            lineNumber: 917
             isReadonly: true
         }
         Property {
@@ -4717,7 +4789,7 @@ Module {
             read: "getTileRadius"
             notify: "tileRadiusChanged"
             index: 43
-            lineNumber: 846
+            lineNumber: 918
             isReadonly: true
         }
         Property {
@@ -4726,7 +4798,7 @@ Module {
             read: "getSafeAreaX"
             notify: "safeAreaXChanged"
             index: 44
-            lineNumber: 847
+            lineNumber: 919
             isReadonly: true
         }
         Property {
@@ -4735,7 +4807,7 @@ Module {
             read: "getSafeAreaY"
             notify: "safeAreaYChanged"
             index: 45
-            lineNumber: 848
+            lineNumber: 920
             isReadonly: true
         }
         Property {
@@ -4744,7 +4816,7 @@ Module {
             read: "getRingThickness"
             notify: "ringThicknessChanged"
             index: 46
-            lineNumber: 849
+            lineNumber: 921
             isReadonly: true
         }
         Property {
@@ -4753,7 +4825,7 @@ Module {
             read: "getRingOffset"
             notify: "ringOffsetChanged"
             index: 47
-            lineNumber: 850
+            lineNumber: 922
             isReadonly: true
         }
         Property {
@@ -4762,7 +4834,7 @@ Module {
             read: "getBarWidth"
             notify: "barWidthChanged"
             index: 48
-            lineNumber: 851
+            lineNumber: 923
             isReadonly: true
         }
         Property {
@@ -4771,7 +4843,7 @@ Module {
             read: "getTileScale"
             notify: "tileScaleChanged"
             index: 49
-            lineNumber: 852
+            lineNumber: 924
             isReadonly: true
         }
         Property {
@@ -4780,7 +4852,7 @@ Module {
             read: "getHoverBorder"
             notify: "hoverBorderChanged"
             index: 50
-            lineNumber: 853
+            lineNumber: 925
             isReadonly: true
         }
         Property {
@@ -4789,7 +4861,7 @@ Module {
             read: "getInstant"
             notify: "instantChanged"
             index: 51
-            lineNumber: 854
+            lineNumber: 926
             isReadonly: true
         }
         Property {
@@ -4798,7 +4870,7 @@ Module {
             read: "getQuick"
             notify: "quickChanged"
             index: 52
-            lineNumber: 855
+            lineNumber: 927
             isReadonly: true
         }
         Property {
@@ -4807,7 +4879,7 @@ Module {
             read: "getEnter"
             notify: "enterChanged"
             index: 53
-            lineNumber: 856
+            lineNumber: 928
             isReadonly: true
         }
         Property {
@@ -4816,7 +4888,7 @@ Module {
             read: "getExit"
             notify: "exitChanged"
             index: 54
-            lineNumber: 857
+            lineNumber: 929
             isReadonly: true
         }
         Property {
@@ -4825,7 +4897,7 @@ Module {
             read: "getPan"
             notify: "panChanged"
             index: 55
-            lineNumber: 858
+            lineNumber: 930
             isReadonly: true
         }
         Property {
@@ -4834,7 +4906,7 @@ Module {
             read: "getReel"
             notify: "reelChanged"
             index: 56
-            lineNumber: 859
+            lineNumber: 931
             isReadonly: true
         }
         Property {
@@ -4843,7 +4915,7 @@ Module {
             read: "getFade"
             notify: "fadeChanged"
             index: 57
-            lineNumber: 860
+            lineNumber: 932
             isReadonly: true
         }
         Property {
@@ -4852,7 +4924,7 @@ Module {
             read: "getPoster"
             notify: "posterChanged"
             index: 58
-            lineNumber: 861
+            lineNumber: 933
             isReadonly: true
         }
         Property {
@@ -4861,7 +4933,7 @@ Module {
             read: "getQuickFade"
             notify: "quickFadeChanged"
             index: 59
-            lineNumber: 862
+            lineNumber: 934
             isReadonly: true
         }
         Property {
@@ -4870,7 +4942,7 @@ Module {
             read: "getEnterFade"
             notify: "enterFadeChanged"
             index: 60
-            lineNumber: 863
+            lineNumber: 935
             isReadonly: true
         }
         Property {
@@ -4879,7 +4951,7 @@ Module {
             read: "getExitFade"
             notify: "exitFadeChanged"
             index: 61
-            lineNumber: 864
+            lineNumber: 936
             isReadonly: true
         }
         Property {
@@ -4888,7 +4960,7 @@ Module {
             read: "getPanFade"
             notify: "panFadeChanged"
             index: 62
-            lineNumber: 865
+            lineNumber: 937
             isReadonly: true
         }
         Property {
@@ -4897,7 +4969,7 @@ Module {
             read: "getReelFade"
             notify: "reelFadeChanged"
             index: 63
-            lineNumber: 866
+            lineNumber: 938
             isReadonly: true
         }
         Property {
@@ -4906,7 +4978,7 @@ Module {
             read: "getPosterFade"
             notify: "posterFadeChanged"
             index: 64
-            lineNumber: 867
+            lineNumber: 939
             isReadonly: true
         }
         Property {
@@ -4915,7 +4987,7 @@ Module {
             read: "getInstantCurve"
             notify: "instantCurveChanged"
             index: 65
-            lineNumber: 868
+            lineNumber: 940
             isReadonly: true
         }
         Property {
@@ -4924,7 +4996,7 @@ Module {
             read: "getQuickCurve"
             notify: "quickCurveChanged"
             index: 66
-            lineNumber: 869
+            lineNumber: 941
             isReadonly: true
         }
         Property {
@@ -4933,7 +5005,7 @@ Module {
             read: "getEnterCurve"
             notify: "enterCurveChanged"
             index: 67
-            lineNumber: 870
+            lineNumber: 942
             isReadonly: true
         }
         Property {
@@ -4942,7 +5014,7 @@ Module {
             read: "getExitCurve"
             notify: "exitCurveChanged"
             index: 68
-            lineNumber: 871
+            lineNumber: 943
             isReadonly: true
         }
         Property {
@@ -4951,7 +5023,7 @@ Module {
             read: "getPanCurve"
             notify: "panCurveChanged"
             index: 69
-            lineNumber: 872
+            lineNumber: 944
             isReadonly: true
         }
         Property {
@@ -4960,7 +5032,7 @@ Module {
             read: "getReelCurve"
             notify: "reelCurveChanged"
             index: 70
-            lineNumber: 873
+            lineNumber: 945
             isReadonly: true
         }
         Property {
@@ -4969,7 +5041,7 @@ Module {
             read: "getFadeCurve"
             notify: "fadeCurveChanged"
             index: 71
-            lineNumber: 874
+            lineNumber: 946
             isReadonly: true
         }
         Property {
@@ -4978,7 +5050,7 @@ Module {
             read: "getPosterCurve"
             notify: "posterCurveChanged"
             index: 72
-            lineNumber: 875
+            lineNumber: 947
             isReadonly: true
         }
         Property {
@@ -4987,7 +5059,7 @@ Module {
             read: "getBreathDelay"
             notify: "breathDelayChanged"
             index: 73
-            lineNumber: 876
+            lineNumber: 948
             isReadonly: true
         }
         Property {
@@ -4996,7 +5068,7 @@ Module {
             read: "getBreathPeriod"
             notify: "breathPeriodChanged"
             index: 74
-            lineNumber: 877
+            lineNumber: 949
             isReadonly: true
         }
         Property {
@@ -5005,7 +5077,7 @@ Module {
             read: "getBreathLow"
             notify: "breathLowChanged"
             index: 75
-            lineNumber: 878
+            lineNumber: 950
             isReadonly: true
         }
         Property {
@@ -5014,7 +5086,7 @@ Module {
             read: "getBreathes"
             notify: "breathesChanged"
             index: 76
-            lineNumber: 879
+            lineNumber: 951
             isReadonly: true
         }
         Property {
@@ -5023,7 +5095,7 @@ Module {
             read: "getShadowColor"
             notify: "shadowColorChanged"
             index: 77
-            lineNumber: 880
+            lineNumber: 952
             isReadonly: true
         }
         Property {
@@ -5032,7 +5104,7 @@ Module {
             read: "getShadowOpacity"
             notify: "shadowOpacityChanged"
             index: 78
-            lineNumber: 881
+            lineNumber: 953
             isReadonly: true
         }
         Property {
@@ -5041,7 +5113,7 @@ Module {
             read: "getShadowOffsetX"
             notify: "shadowOffsetXChanged"
             index: 79
-            lineNumber: 882
+            lineNumber: 954
             isReadonly: true
         }
         Property {
@@ -5050,7 +5122,7 @@ Module {
             read: "getShadowOffsetY"
             notify: "shadowOffsetYChanged"
             index: 80
-            lineNumber: 883
+            lineNumber: 955
             isReadonly: true
         }
         Property {
@@ -5059,7 +5131,7 @@ Module {
             read: "getShadowBlur"
             notify: "shadowBlurChanged"
             index: 81
-            lineNumber: 884
+            lineNumber: 956
             isReadonly: true
         }
         Property {
@@ -5068,7 +5140,7 @@ Module {
             read: "getRingGapColor"
             notify: "ringGapColorChanged"
             index: 82
-            lineNumber: 885
+            lineNumber: 957
             isReadonly: true
         }
         Property {
@@ -5077,7 +5149,7 @@ Module {
             read: "getGlowColor"
             notify: "glowColorChanged"
             index: 83
-            lineNumber: 886
+            lineNumber: 958
             isReadonly: true
         }
         Property {
@@ -5086,7 +5158,7 @@ Module {
             read: "getGlowBlur"
             notify: "glowBlurChanged"
             index: 84
-            lineNumber: 887
+            lineNumber: 959
             isReadonly: true
         }
         Property {
@@ -5095,7 +5167,7 @@ Module {
             read: "getGlowSpread"
             notify: "glowSpreadChanged"
             index: 85
-            lineNumber: 888
+            lineNumber: 960
             isReadonly: true
         }
         Property {
@@ -5104,133 +5176,213 @@ Module {
             read: "getButtonRadius"
             notify: "buttonRadiusChanged"
             index: 86
-            lineNumber: 889
+            lineNumber: 961
             isReadonly: true
         }
-        Signal { name: "formChanged"; lineNumber: 986 }
-        Signal { name: "variantChanged"; lineNumber: 987 }
-        Signal { name: "textScaleChanged"; lineNumber: 988 }
-        Signal { name: "textSizeChanged"; lineNumber: 989 }
-        Signal { name: "reducedMotionChanged"; lineNumber: 990 }
-        Signal { name: "surfaceChanged"; lineNumber: 991 }
-        Signal { name: "surfaceRaisedChanged"; lineNumber: 992 }
-        Signal { name: "inputSurfaceChanged"; lineNumber: 993 }
-        Signal { name: "voidFillChanged"; lineNumber: 994 }
-        Signal { name: "scrimChanged"; lineNumber: 995 }
-        Signal { name: "captionSurfaceChanged"; lineNumber: 996 }
-        Signal { name: "borderChanged"; lineNumber: 997 }
-        Signal { name: "ruleChanged"; lineNumber: 998 }
-        Signal { name: "textChanged"; lineNumber: 999 }
-        Signal { name: "textStrongChanged"; lineNumber: 1000 }
-        Signal { name: "mutedChanged"; lineNumber: 1001 }
-        Signal { name: "accentChanged"; lineNumber: 1002 }
-        Signal { name: "overAccentChanged"; lineNumber: 1003 }
-        Signal { name: "successChanged"; lineNumber: 1004 }
-        Signal { name: "attentionChanged"; lineNumber: 1005 }
-        Signal { name: "errorChanged"; lineNumber: 1006 }
-        Signal { name: "overArtChanged"; lineNumber: 1007 }
-        Signal { name: "overArtScrimChanged"; lineNumber: 1008 }
-        Signal { name: "fontDisplayChanged"; lineNumber: 1009 }
-        Signal { name: "fontTitleChanged"; lineNumber: 1010 }
-        Signal { name: "fontStrongChanged"; lineNumber: 1011 }
-        Signal { name: "fontRowChanged"; lineNumber: 1012 }
-        Signal { name: "fontBodyChanged"; lineNumber: 1013 }
-        Signal { name: "fontCaptionChanged"; lineNumber: 1014 }
-        Signal { name: "fontGlyphChanged"; lineNumber: 1015 }
-        Signal { name: "headerSizeChanged"; lineNumber: 1016 }
-        Signal { name: "baseChanged"; lineNumber: 1017 }
-        Signal { name: "rowHeightChanged"; lineNumber: 1018 }
-        Signal { name: "controlHeightChanged"; lineNumber: 1019 }
-        Signal { name: "paneGutterChanged"; lineNumber: 1020 }
-        Signal { name: "paneGapChanged"; lineNumber: 1021 }
-        Signal { name: "cardWidthChanged"; lineNumber: 1022 }
-        Signal { name: "titleRowChanged"; lineNumber: 1023 }
-        Signal { name: "helpBarChanged"; lineNumber: 1024 }
-        Signal { name: "tileWidthChanged"; lineNumber: 1025 }
-        Signal { name: "tileHeightChanged"; lineNumber: 1026 }
-        Signal { name: "tileGapChanged"; lineNumber: 1027 }
-        Signal { name: "rowRadiusChanged"; lineNumber: 1028 }
-        Signal { name: "tileRadiusChanged"; lineNumber: 1029 }
-        Signal { name: "safeAreaXChanged"; lineNumber: 1030 }
-        Signal { name: "safeAreaYChanged"; lineNumber: 1031 }
-        Signal { name: "ringThicknessChanged"; lineNumber: 1032 }
-        Signal { name: "ringOffsetChanged"; lineNumber: 1033 }
-        Signal { name: "barWidthChanged"; lineNumber: 1034 }
-        Signal { name: "tileScaleChanged"; lineNumber: 1035 }
-        Signal { name: "hoverBorderChanged"; lineNumber: 1036 }
-        Signal { name: "instantChanged"; lineNumber: 1037 }
-        Signal { name: "quickChanged"; lineNumber: 1038 }
-        Signal { name: "enterChanged"; lineNumber: 1039 }
-        Signal { name: "exitChanged"; lineNumber: 1040 }
-        Signal { name: "panChanged"; lineNumber: 1041 }
-        Signal { name: "reelChanged"; lineNumber: 1042 }
-        Signal { name: "fadeChanged"; lineNumber: 1043 }
-        Signal { name: "posterChanged"; lineNumber: 1044 }
-        Signal { name: "quickFadeChanged"; lineNumber: 1045 }
-        Signal { name: "enterFadeChanged"; lineNumber: 1046 }
-        Signal { name: "exitFadeChanged"; lineNumber: 1047 }
-        Signal { name: "panFadeChanged"; lineNumber: 1048 }
-        Signal { name: "reelFadeChanged"; lineNumber: 1049 }
-        Signal { name: "posterFadeChanged"; lineNumber: 1050 }
-        Signal { name: "instantCurveChanged"; lineNumber: 1051 }
-        Signal { name: "quickCurveChanged"; lineNumber: 1052 }
-        Signal { name: "enterCurveChanged"; lineNumber: 1053 }
-        Signal { name: "exitCurveChanged"; lineNumber: 1054 }
-        Signal { name: "panCurveChanged"; lineNumber: 1055 }
-        Signal { name: "reelCurveChanged"; lineNumber: 1056 }
-        Signal { name: "fadeCurveChanged"; lineNumber: 1057 }
-        Signal { name: "posterCurveChanged"; lineNumber: 1058 }
-        Signal { name: "breathDelayChanged"; lineNumber: 1059 }
-        Signal { name: "breathPeriodChanged"; lineNumber: 1060 }
-        Signal { name: "breathLowChanged"; lineNumber: 1061 }
-        Signal { name: "breathesChanged"; lineNumber: 1062 }
-        Signal { name: "shadowColorChanged"; lineNumber: 1063 }
-        Signal { name: "shadowOpacityChanged"; lineNumber: 1064 }
-        Signal { name: "shadowOffsetXChanged"; lineNumber: 1065 }
-        Signal { name: "shadowOffsetYChanged"; lineNumber: 1066 }
-        Signal { name: "shadowBlurChanged"; lineNumber: 1067 }
-        Signal { name: "ringGapColorChanged"; lineNumber: 1068 }
-        Signal { name: "glowColorChanged"; lineNumber: 1069 }
-        Signal { name: "glowBlurChanged"; lineNumber: 1070 }
-        Signal { name: "glowSpreadChanged"; lineNumber: 1071 }
-        Signal { name: "buttonRadiusChanged"; lineNumber: 1072 }
+        Property {
+            name: "coronaColor"
+            type: "QColor"
+            read: "getCoronaColor"
+            notify: "coronaColorChanged"
+            index: 87
+            lineNumber: 962
+            isReadonly: true
+        }
+        Property {
+            name: "coronaRim"
+            type: "double"
+            read: "getCoronaRim"
+            notify: "coronaRimChanged"
+            index: 88
+            lineNumber: 963
+            isReadonly: true
+        }
+        Property {
+            name: "coronaGlowColor"
+            type: "QColor"
+            read: "getCoronaGlowColor"
+            notify: "coronaGlowColorChanged"
+            index: 89
+            lineNumber: 964
+            isReadonly: true
+        }
+        Property {
+            name: "coronaGlowBlur"
+            type: "double"
+            read: "getCoronaGlowBlur"
+            notify: "coronaGlowBlurChanged"
+            index: 90
+            lineNumber: 965
+            isReadonly: true
+        }
+        Property {
+            name: "coronaGlowSpread"
+            type: "double"
+            read: "getCoronaGlowSpread"
+            notify: "coronaGlowSpreadChanged"
+            index: 91
+            lineNumber: 966
+            isReadonly: true
+        }
+        Property {
+            name: "coronaHaloColor"
+            type: "QColor"
+            read: "getCoronaHaloColor"
+            notify: "coronaHaloColorChanged"
+            index: 92
+            lineNumber: 967
+            isReadonly: true
+        }
+        Property {
+            name: "coronaHaloBlur"
+            type: "double"
+            read: "getCoronaHaloBlur"
+            notify: "coronaHaloBlurChanged"
+            index: 93
+            lineNumber: 968
+            isReadonly: true
+        }
+        Property {
+            name: "coronaHaloSpread"
+            type: "double"
+            read: "getCoronaHaloSpread"
+            notify: "coronaHaloSpreadChanged"
+            index: 94
+            lineNumber: 969
+            isReadonly: true
+        }
+        Signal { name: "formChanged"; lineNumber: 1074 }
+        Signal { name: "variantChanged"; lineNumber: 1075 }
+        Signal { name: "textScaleChanged"; lineNumber: 1076 }
+        Signal { name: "textSizeChanged"; lineNumber: 1077 }
+        Signal { name: "reducedMotionChanged"; lineNumber: 1078 }
+        Signal { name: "surfaceChanged"; lineNumber: 1079 }
+        Signal { name: "surfaceRaisedChanged"; lineNumber: 1080 }
+        Signal { name: "inputSurfaceChanged"; lineNumber: 1081 }
+        Signal { name: "voidFillChanged"; lineNumber: 1082 }
+        Signal { name: "scrimChanged"; lineNumber: 1083 }
+        Signal { name: "captionSurfaceChanged"; lineNumber: 1084 }
+        Signal { name: "borderChanged"; lineNumber: 1085 }
+        Signal { name: "ruleChanged"; lineNumber: 1086 }
+        Signal { name: "textChanged"; lineNumber: 1087 }
+        Signal { name: "textStrongChanged"; lineNumber: 1088 }
+        Signal { name: "mutedChanged"; lineNumber: 1089 }
+        Signal { name: "accentChanged"; lineNumber: 1090 }
+        Signal { name: "overAccentChanged"; lineNumber: 1091 }
+        Signal { name: "successChanged"; lineNumber: 1092 }
+        Signal { name: "attentionChanged"; lineNumber: 1093 }
+        Signal { name: "errorChanged"; lineNumber: 1094 }
+        Signal { name: "overArtChanged"; lineNumber: 1095 }
+        Signal { name: "overArtScrimChanged"; lineNumber: 1096 }
+        Signal { name: "fontDisplayChanged"; lineNumber: 1097 }
+        Signal { name: "fontTitleChanged"; lineNumber: 1098 }
+        Signal { name: "fontStrongChanged"; lineNumber: 1099 }
+        Signal { name: "fontRowChanged"; lineNumber: 1100 }
+        Signal { name: "fontBodyChanged"; lineNumber: 1101 }
+        Signal { name: "fontCaptionChanged"; lineNumber: 1102 }
+        Signal { name: "fontGlyphChanged"; lineNumber: 1103 }
+        Signal { name: "headerSizeChanged"; lineNumber: 1104 }
+        Signal { name: "baseChanged"; lineNumber: 1105 }
+        Signal { name: "rowHeightChanged"; lineNumber: 1106 }
+        Signal { name: "controlHeightChanged"; lineNumber: 1107 }
+        Signal { name: "paneGutterChanged"; lineNumber: 1108 }
+        Signal { name: "paneGapChanged"; lineNumber: 1109 }
+        Signal { name: "cardWidthChanged"; lineNumber: 1110 }
+        Signal { name: "titleRowChanged"; lineNumber: 1111 }
+        Signal { name: "helpBarChanged"; lineNumber: 1112 }
+        Signal { name: "tileWidthChanged"; lineNumber: 1113 }
+        Signal { name: "tileHeightChanged"; lineNumber: 1114 }
+        Signal { name: "tileGapChanged"; lineNumber: 1115 }
+        Signal { name: "rowRadiusChanged"; lineNumber: 1116 }
+        Signal { name: "tileRadiusChanged"; lineNumber: 1117 }
+        Signal { name: "safeAreaXChanged"; lineNumber: 1118 }
+        Signal { name: "safeAreaYChanged"; lineNumber: 1119 }
+        Signal { name: "ringThicknessChanged"; lineNumber: 1120 }
+        Signal { name: "ringOffsetChanged"; lineNumber: 1121 }
+        Signal { name: "barWidthChanged"; lineNumber: 1122 }
+        Signal { name: "tileScaleChanged"; lineNumber: 1123 }
+        Signal { name: "hoverBorderChanged"; lineNumber: 1124 }
+        Signal { name: "instantChanged"; lineNumber: 1125 }
+        Signal { name: "quickChanged"; lineNumber: 1126 }
+        Signal { name: "enterChanged"; lineNumber: 1127 }
+        Signal { name: "exitChanged"; lineNumber: 1128 }
+        Signal { name: "panChanged"; lineNumber: 1129 }
+        Signal { name: "reelChanged"; lineNumber: 1130 }
+        Signal { name: "fadeChanged"; lineNumber: 1131 }
+        Signal { name: "posterChanged"; lineNumber: 1132 }
+        Signal { name: "quickFadeChanged"; lineNumber: 1133 }
+        Signal { name: "enterFadeChanged"; lineNumber: 1134 }
+        Signal { name: "exitFadeChanged"; lineNumber: 1135 }
+        Signal { name: "panFadeChanged"; lineNumber: 1136 }
+        Signal { name: "reelFadeChanged"; lineNumber: 1137 }
+        Signal { name: "posterFadeChanged"; lineNumber: 1138 }
+        Signal { name: "instantCurveChanged"; lineNumber: 1139 }
+        Signal { name: "quickCurveChanged"; lineNumber: 1140 }
+        Signal { name: "enterCurveChanged"; lineNumber: 1141 }
+        Signal { name: "exitCurveChanged"; lineNumber: 1142 }
+        Signal { name: "panCurveChanged"; lineNumber: 1143 }
+        Signal { name: "reelCurveChanged"; lineNumber: 1144 }
+        Signal { name: "fadeCurveChanged"; lineNumber: 1145 }
+        Signal { name: "posterCurveChanged"; lineNumber: 1146 }
+        Signal { name: "breathDelayChanged"; lineNumber: 1147 }
+        Signal { name: "breathPeriodChanged"; lineNumber: 1148 }
+        Signal { name: "breathLowChanged"; lineNumber: 1149 }
+        Signal { name: "breathesChanged"; lineNumber: 1150 }
+        Signal { name: "shadowColorChanged"; lineNumber: 1151 }
+        Signal { name: "shadowOpacityChanged"; lineNumber: 1152 }
+        Signal { name: "shadowOffsetXChanged"; lineNumber: 1153 }
+        Signal { name: "shadowOffsetYChanged"; lineNumber: 1154 }
+        Signal { name: "shadowBlurChanged"; lineNumber: 1155 }
+        Signal { name: "ringGapColorChanged"; lineNumber: 1156 }
+        Signal { name: "glowColorChanged"; lineNumber: 1157 }
+        Signal { name: "glowBlurChanged"; lineNumber: 1158 }
+        Signal { name: "glowSpreadChanged"; lineNumber: 1159 }
+        Signal { name: "buttonRadiusChanged"; lineNumber: 1160 }
+        Signal { name: "coronaColorChanged"; lineNumber: 1161 }
+        Signal { name: "coronaRimChanged"; lineNumber: 1162 }
+        Signal { name: "coronaGlowColorChanged"; lineNumber: 1163 }
+        Signal { name: "coronaGlowBlurChanged"; lineNumber: 1164 }
+        Signal { name: "coronaGlowSpreadChanged"; lineNumber: 1165 }
+        Signal { name: "coronaHaloColorChanged"; lineNumber: 1166 }
+        Signal { name: "coronaHaloBlurChanged"; lineNumber: 1167 }
+        Signal { name: "coronaHaloSpreadChanged"; lineNumber: 1168 }
         Method {
             name: "setForm"
-            lineNumber: 895
+            lineNumber: 975
             Parameter { name: "value"; type: "Forms::Form" }
         }
         Method {
             name: "setVariant"
-            lineNumber: 897
+            lineNumber: 977
             Parameter { name: "value"; type: "Variants::Variant" }
         }
         Method {
             name: "setTextScale"
-            lineNumber: 899
+            lineNumber: 979
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setTextSize"
-            lineNumber: 901
+            lineNumber: 981
             Parameter { name: "value"; type: "QString" }
         }
         Method {
             name: "setReducedMotion"
-            lineNumber: 903
+            lineNumber: 983
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "safeAreaOfWidth"
             type: "double"
             isMethodConstant: true
-            lineNumber: 1073
+            lineNumber: 1169
             Parameter { name: "width"; type: "double" }
         }
         Method {
             name: "safeAreaOfHeight"
             type: "double"
             isMethodConstant: true
-            lineNumber: 1074
+            lineNumber: 1170
             Parameter { name: "height"; type: "double" }
         }
     }

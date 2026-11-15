@@ -119,6 +119,14 @@ pub mod qobject {
         #[qproperty(f64, glow_blur, READ, NOTIFY)]
         #[qproperty(f64, glow_spread, READ, NOTIFY)]
         #[qproperty(f64, button_radius, READ, NOTIFY)]
+        #[qproperty(QColor, corona_color, READ, NOTIFY)]
+        #[qproperty(f64, corona_rim, READ, NOTIFY)]
+        #[qproperty(QColor, corona_glow_color, READ, NOTIFY)]
+        #[qproperty(f64, corona_glow_blur, READ, NOTIFY)]
+        #[qproperty(f64, corona_glow_spread, READ, NOTIFY)]
+        #[qproperty(QColor, corona_halo_color, READ, NOTIFY)]
+        #[qproperty(f64, corona_halo_blur, READ, NOTIFY)]
+        #[qproperty(f64, corona_halo_spread, READ, NOTIFY)]
         type Tokens = super::TokensRust;
     }
 
@@ -197,6 +205,14 @@ pub struct TokensRust {
     glow_blur: f64,
     glow_spread: f64,
     button_radius: f64,
+    corona_color: QColor,
+    corona_rim: f64,
+    corona_glow_color: QColor,
+    corona_glow_blur: f64,
+    corona_glow_spread: f64,
+    corona_halo_color: QColor,
+    corona_halo_blur: f64,
+    corona_halo_spread: f64,
     instant: i32,
     quick: i32,
     enter: i32,
@@ -292,6 +308,14 @@ impl Default for TokensRust {
             glow_blur: 0.0,
             glow_spread: 0.0,
             button_radius: 0.0,
+            corona_color: QColor::default(),
+            corona_rim: 0.0,
+            corona_glow_color: QColor::default(),
+            corona_glow_blur: 0.0,
+            corona_glow_spread: 0.0,
+            corona_halo_color: QColor::default(),
+            corona_halo_blur: 0.0,
+            corona_halo_spread: 0.0,
             instant: 0,
             quick: 0,
             enter: 0,
@@ -383,6 +407,14 @@ impl TokensRust {
         self.glow_blur = c.focus.glow_blur;
         self.glow_spread = c.focus.glow_spread;
         self.button_radius = c.spacing.button_radius;
+        self.corona_color = qcolor(c.corona_colours[0]);
+        self.corona_rim = c.corona.rim;
+        self.corona_glow_color = qcolor(c.corona_colours[1]);
+        self.corona_glow_blur = c.corona.glow_blur;
+        self.corona_glow_spread = c.corona.glow_spread;
+        self.corona_halo_color = qcolor(c.corona_colours[2]);
+        self.corona_halo_blur = c.corona.halo_blur;
+        self.corona_halo_spread = c.corona.halo_spread;
         self.instant = c.duration(M::Instant);
         self.quick = c.duration(M::Quick);
         self.enter = c.duration(M::Enter);
@@ -511,6 +543,14 @@ impl qobject::Tokens {
         self.as_mut().glow_blur_changed();
         self.as_mut().glow_spread_changed();
         self.as_mut().button_radius_changed();
+        self.as_mut().corona_color_changed();
+        self.as_mut().corona_rim_changed();
+        self.as_mut().corona_glow_color_changed();
+        self.as_mut().corona_glow_blur_changed();
+        self.as_mut().corona_glow_spread_changed();
+        self.as_mut().corona_halo_color_changed();
+        self.as_mut().corona_halo_blur_changed();
+        self.as_mut().corona_halo_spread_changed();
         self.as_mut().instant_changed();
         self.as_mut().quick_changed();
         self.as_mut().enter_changed();

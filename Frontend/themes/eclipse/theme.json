@@ -39,7 +39,15 @@
             "fontBody": 14.0,
             "fontCaption": 15.333333333333334,
             "fontTitle": 29.333333333333332,
-            "fontDisplay": 69.33333333333333
+            "fontDisplay": 69.33333333333333,
+            "coronaColor": "#F6E7D8",
+            "coronaRim": 1.3333333333333333,
+            "coronaGlowColor": "#99F6D6C8",
+            "coronaGlowBlur": 29.333333333333332,
+            "coronaGlowSpread": 5.333333333333333,
+            "coronaHaloColor": "#47ECA0BA",
+            "coronaHaloBlur": 113.33333333333333,
+            "coronaHaloSpread": 30.666666666666668
         }
     }
 }

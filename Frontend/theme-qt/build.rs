@@ -1,31 +1,35 @@
 use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 
-// EmuSen.Theme 1.1, what a theme sees (EmuSen_Qt.md §3.2); its .qmltypes and qmldir are the module's surface.
+// EmuSen.Theme 1.2, what a theme sees (EmuSen_Qt.md §3.2); its .qmltypes and qmldir are the module's surface. Each file keeps the
+// minor it was added in, so a theme importing EmuSen.Theme 1.0 still finds every 1.0 type (rule T).
 fn main() {
     let qml = [
-        QmlFile::from("qml/ThemeScreen.qml"),
-        QmlFile::from("qml/Tokens.qml").singleton(true),
-        QmlFile::from("qml/Frame.qml"),
-        QmlFile::from("qml/HelpBar.qml"),
-        QmlFile::from("qml/Walkable.qml"),
-        QmlFile::from("qml/Body.qml"),
-        QmlFile::from("qml/Sky.qml"),
-        QmlFile::from("qml/Scene.qml"),
-        QmlFile::from("qml/Carousel.qml"),
-        QmlFile::from("qml/NormalizedCanvas.qml"),
-        QmlFile::from("qml/Moonrise.qml"),
-        QmlFile::from("qml/CoverTile.qml"),
-        QmlFile::from("qml/RoundPicture.qml"),
-        QmlFile::from("qml/PadGlyph.qml"),
-        QmlFile::from("qml/PlanetLayout.qml"),
-        QmlFile::from("qml/OrbitLayout.qml"),
-        QmlFile::from("qml/FigureLayout.qml"),
-        QmlFile::from("qml/WheelLayout.qml"),
-        QmlFile::from("qml/OrbitSlot.qml"),
-        QmlFile::from("qml/EdgeFade.qml"),
-        QmlFile::from("qml/FocusRing.qml"),
+        QmlFile::from("qml/ThemeScreen.qml").version(1, 0),
+        QmlFile::from("qml/Tokens.qml").singleton(true).version(1, 0),
+        QmlFile::from("qml/Frame.qml").version(1, 0),
+        QmlFile::from("qml/HelpBar.qml").version(1, 0),
+        QmlFile::from("qml/Walkable.qml").version(1, 0),
+        QmlFile::from("qml/Body.qml").version(1, 0),
+        QmlFile::from("qml/Sky.qml").version(1, 0),
+        QmlFile::from("qml/Scene.qml").version(1, 0),
+        QmlFile::from("qml/Carousel.qml").version(1, 0),
+        QmlFile::from("qml/NormalizedCanvas.qml").version(1, 0),
+        QmlFile::from("qml/Moonrise.qml").version(1, 0),
+        QmlFile::from("qml/CoverTile.qml").version(1, 0),
+        QmlFile::from("qml/RoundPicture.qml").version(1, 0),
+        QmlFile::from("qml/PadGlyph.qml").version(1, 0),
+        QmlFile::from("qml/PlanetLayout.qml").version(1, 0),
+        QmlFile::from("qml/OrbitLayout.qml").version(1, 0),
+        QmlFile::from("qml/FigureLayout.qml").version(1, 0),
+        QmlFile::from("qml/WheelLayout.qml").version(1, 0),
+        QmlFile::from("qml/OrbitSlot.qml").version(1, 0),
+        QmlFile::from("qml/EdgeFade.qml").version(1, 0),
+        QmlFile::from("qml/FocusRing.qml").version(1, 1),
+        QmlFile::from("qml/PlanetMark.qml"),
+        QmlFile::from("qml/CoronaGlow.qml"),
+        QmlFile::from("qml/CoronaDisc.qml"),
     ];
-    CxxQtBuilder::new_qml_module(QmlModule::new("EmuSen.Theme").version(1, 1).qml_files(qml).depend("QtQuick").depend("EmuSen.Kit"))
+    CxxQtBuilder::new_qml_module(QmlModule::new("EmuSen.Theme").version(1, 2).qml_files(qml).depend("QtQuick").depend("EmuSen.Kit"))
         .files([
             "src/rows.rs",
             "src/library.rs",

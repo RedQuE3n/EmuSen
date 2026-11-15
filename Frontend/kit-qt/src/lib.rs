@@ -10,6 +10,7 @@ pub mod base;
 pub mod bellcache;
 pub mod bells;
 pub mod canvas;
+pub mod planet_mark;
 pub mod body;
 pub mod column;
 pub mod controller;

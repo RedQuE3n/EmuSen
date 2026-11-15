@@ -1695,6 +1695,14 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 | fontCaption | Settings' section names (`SettingsFrame.qml:77`) | the section names (`EclipseSettings:32`) | 23 px | 15.333… |
 | fontTitle | a question's title (`Question.qml:23`) | the question's title (`EclipseDialog:36`) | 44 px | 29.333… |
 | fontDisplay | the game's name on its page (`PageFrame.qml:151`) | the game's name (`EclipseGame:44`) | 104 px | 69.333… |
+| coronaColor | a corona disc's rim (`kit-qt/qml/CoronaDisc.qml`, §7.116 of EmuSen_Kit.md) | Home's disc, its rim (`Main:25`) | #F6E7D8 | #F6E7D8 |
+| coronaRim | the rim's width | the same (`Main:25`) | 2 px | 1.333… |
+| coronaGlowColor | the disc's near glow | the same, the second shadow (`Main:25`) | rgba(246, 214, 200, 0.6) | #99F6D6C8 |
+| coronaGlowBlur | the near glow's blur | the same (`Main:25`) | 44 px | 29.333… |
+| coronaGlowSpread | the near glow's spread | the same (`Main:25`) | 8 px | 5.333… |
+| coronaHaloColor | the disc's far glow | the same, the third shadow (`Main:25`) | rgba(236, 160, 186, 0.28) | #47ECA0BA |
+| coronaHaloBlur | the far glow's blur | the same (`Main:25`) | 170 px | 113.333… |
+| coronaHaloSpread | the far glow's spread | the same (`Main:25`) | 46 px | 30.666… |
 
 The colour of the notice's shadow is black on the board, the kit's own, so `shadowColor` is not overridden; `safeAreaX`
 (96 px, 64 units) is the kit's value too. Left at the reference's value, each for its reason:
@@ -1713,7 +1721,7 @@ The colour of the notice's shadow is black on the board, the kit's own, so `shad
   `tileScale`, `safeAreaY`, the durations, curves and breathing: no board element measured as the same thing.
 
 **Board colours with no kit role**, for later pieces, no role bent to carry them: the rose of the focus glow (#F3C9D2,
-rgba(240, 180, 196, 0.4) at `EclipseSettings:94`), the corona disc and its rim, a resting row's own surface and edge
+rgba(240, 180, 196, 0.4) at `EclipseSettings:94`), a resting row's own surface and edge
 (#0F111A, #22263A, `EclipseSettings:94`; the kit draws a resting row on the screen's ground), a resting switch's knob
 (#B9BED0, where the kit uses textStrong), the help bar's words (#D8DBE6, where the kit uses text), a pill's corners
 (36 px, where the kit's button uses rowRadius), and the blurred colour fields.

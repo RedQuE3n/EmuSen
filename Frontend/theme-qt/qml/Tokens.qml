@@ -67,6 +67,14 @@ QtObject {
     readonly property real glowBlur: Kit.Tokens.glowBlur
     readonly property real glowSpread: Kit.Tokens.glowSpread
     readonly property real buttonRadius: Kit.Tokens.buttonRadius
+    readonly property color coronaColor: Kit.Tokens.coronaColor
+    readonly property real coronaRim: Kit.Tokens.coronaRim
+    readonly property color coronaGlowColor: Kit.Tokens.coronaGlowColor
+    readonly property real coronaGlowBlur: Kit.Tokens.coronaGlowBlur
+    readonly property real coronaGlowSpread: Kit.Tokens.coronaGlowSpread
+    readonly property color coronaHaloColor: Kit.Tokens.coronaHaloColor
+    readonly property real coronaHaloBlur: Kit.Tokens.coronaHaloBlur
+    readonly property real coronaHaloSpread: Kit.Tokens.coronaHaloSpread
     readonly property int instant: Kit.Tokens.instant
     readonly property int quick: Kit.Tokens.quick
     readonly property int enter: Kit.Tokens.enter

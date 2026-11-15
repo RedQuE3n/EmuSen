@@ -475,3 +475,29 @@ FocusRing
     objectName "focusGlowCanvas"
     objectName "focusGap"
     objectName "focusBand"
+PlanetMark
+    property string mark
+    property bool libretro
+    property color ink
+    property color cut
+    objectName "planetMarkGlyph"
+    objectName "planetMarkPath"
+    objectName "planetMarkBadge"
+    objectName "planetMarkBadgePath"
+    objectName "planetMarkAlienPath"
+CoronaGlow
+    property real blur
+    property real spread
+    property color color
+CoronaDisc
+    property color fill
+    property color corona
+    property real rim
+    property list<Kit.CoronaGlow> glows
+    readonly property real diameter
+    readonly property bool software
+    objectName "coronaGlow." + glow.index
+    objectName "coronaGlowEffect." + glow.index
+    objectName "coronaGlowPainted." + glow.index
+    objectName "coronaRim"
+    objectName "coronaDisc"

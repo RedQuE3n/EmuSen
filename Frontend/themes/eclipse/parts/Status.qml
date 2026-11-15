@@ -54,7 +54,7 @@ Item {
             width: 24 * root.unit
             height: width
             Shape {
-                // The board's magnifier in its 24-unit box (Main:42): a constant of the design.
+                // The board's magnifier in its 24-unit box, a circle of 7 at (11, 11) and a stroke to (21, 21) (Main:42): constants of the design.
                 readonly property real box: 24
                 width: 24
                 height: 24
@@ -66,7 +66,21 @@ Item {
                     strokeColor: icon.ink
                     strokeWidth: 2
                     capStyle: ShapePath.RoundCap
-                    PathSvg { path: "M18 11A7 7 0 1 1 4 11A7 7 0 1 1 18 11ZM16.5 16.5L21 21" }
+                    PathAngleArc {
+                        centerX: 11
+                        centerY: 11
+                        radiusX: 7
+                        radiusY: 7
+                        sweepAngle: 360
+                    }
+                    PathMove {
+                        x: 16.5
+                        y: 16.5
+                    }
+                    PathLine {
+                        x: 21
+                        y: 21
+                    }
                 }
             }
         }

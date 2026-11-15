@@ -17,9 +17,8 @@ Walkable {
     property real gap: 14
     // The entry's action is the host's to take, so a press is the button's own press.
     property bool live: true
-    // The glyph's and the label's names, for a reader and the tests.
-    property string glyphName
-    property string wordsName
+    // The pill's place in its row, which names its parts for a reader and the tests.
+    property int place
     // The pill's one colour: its fill when filled, else its outline.
     readonly property color paint: root.filled ? Tokens.accent : Tokens.border
     // Round at both ends, as every pill on the boards is.
@@ -31,7 +30,6 @@ Walkable {
     opacity: root.live ? 1 : 0.38
     Accessible.name: root.label
     Rectangle {
-        objectName: root.objectName + ".fill"
         anchors.fill: parent
         radius: root.radius
         color: root.filled ? root.paint : "transparent"
@@ -41,7 +39,7 @@ Walkable {
     // The filled pill's halo and glow (Main:61, EclipseEmpty:46): rgba(246, 231, 216, 0.18) 6 px out, and 46 px of blur 6 px out
     // in rgba(240, 180, 196, 0.45); constants of the design, as the boards draw them.
     Glow {
-        objectName: root.objectName + ".halo"
+        objectName: "buttonHalo." + root.place
         anchors.fill: parent
         visible: root.filled
         radius: root.radius
@@ -49,7 +47,7 @@ Walkable {
         spread: 6 * root.unit
     }
     Glow {
-        objectName: root.objectName + ".glow"
+        objectName: "buttonGlow." + root.place
         anchors.fill: parent
         visible: root.filled
         radius: root.radius
@@ -64,7 +62,7 @@ Walkable {
     }
     PadGlyph {
         id: glyphItem
-        objectName: root.glyphName
+        objectName: "buttonGlyph." + root.place
         x: root.lead * root.unit
         y: (root.height - height) / 2
         width: root.glyphSide * root.unit
@@ -75,7 +73,7 @@ Walkable {
     }
     Text {
         id: wordsItem
-        objectName: root.wordsName
+        objectName: "buttonLabel." + root.place
         x: glyphItem.x + glyphItem.width + root.gap * root.unit
         y: (root.height - height) / 2
         text: root.label

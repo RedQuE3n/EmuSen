@@ -149,6 +149,7 @@ Kit.Frame {
             text: root.title
             color: Kit.Tokens.overArt
             font.family: Kit.Tokens.faceInterface
+            font.weight: Kit.Tokens.weightTitle
             font.pixelSize: Kit.Tokens.fontDisplay
             fontSizeMode: Text.HorizontalFit
             minimumPixelSize: Kit.Tokens.fontTitle

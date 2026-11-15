@@ -42,6 +42,7 @@ Kit.NormalizedCanvas {
                 required property string modelData
                 text: kind.modelData
                 font.family: Kit.Tokens.faceLabel
+                font.weight: Kit.Tokens.weightTitle
                 font.pixelSize: Kit.Tokens.fontTitle
                 focusPolicy: Qt.NoFocus
                 checkable: false
@@ -112,6 +113,7 @@ Kit.NormalizedCanvas {
                 elide: Text.ElideRight
                 color: Kit.Tokens.textStrong
                 font.family: Kit.Tokens.faceLabel
+                font.weight: Kit.Tokens.weightTitle
                 font.pixelSize: Kit.Tokens.fontTitle
             }
             Label {

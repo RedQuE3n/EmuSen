@@ -68,6 +68,7 @@ Kit.NormalizedCanvas {
                 wrapMode: Text.Wrap
                 color: Kit.Tokens.text
                 font.family: Kit.Tokens.faceText
+                font.weight: Kit.Tokens.weightTitle
                 font.pixelSize: Kit.Tokens.fontTitle
             }
             // The game's picture, named by its caption; the frame itself is drawn from piece J on (EmuSen_Qt.md §7.7).
@@ -87,6 +88,7 @@ Kit.NormalizedCanvas {
                     text: screen.settings.caption
                     color: Kit.Tokens.overArt
                     font.family: Kit.Tokens.faceLabel
+                    font.weight: Kit.Tokens.weightTitle
                     font.pixelSize: Kit.Tokens.fontTitle
                 }
             }
@@ -343,6 +345,7 @@ Kit.NormalizedCanvas {
                 text: screen.settings.typingTitle
                 color: Kit.Tokens.textStrong
                 font.family: Kit.Tokens.faceText
+                font.weight: Kit.Tokens.weightTitle
                 font.pixelSize: Kit.Tokens.fontTitle
             }
             Text {

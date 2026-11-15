@@ -119,7 +119,7 @@ Kit.NormalizedCanvas {
             choices: screen.page.questionChoices
             backIndex: screen.page.questionBack
             padFamily: screen.padFamily
-            titleFont: Qt.font({ family: Kit.Tokens.faceLabel, pixelSize: Kit.Tokens.fontTitle })
+            titleFont: Qt.font({ family: Kit.Tokens.faceLabel, pixelSize: Kit.Tokens.fontTitle, weight: Kit.Tokens.weightTitle })
             bodyFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontBody })
             captionFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontCaption })
             rowFont: Qt.font({ family: Kit.Tokens.faceText, pixelSize: Kit.Tokens.fontRow })
@@ -184,6 +184,7 @@ Kit.NormalizedCanvas {
                 text: screen.page.coverTitle
                 color: Kit.Tokens.textStrong
                 font.family: Kit.Tokens.faceLabel
+                font.weight: Kit.Tokens.weightTitle
                 font.pixelSize: Kit.Tokens.fontTitle
                 elide: Text.ElideRight
             }
@@ -444,6 +445,7 @@ Kit.NormalizedCanvas {
                 text: screen.page.typingTitle
                 color: Kit.Tokens.textStrong
                 font.family: Kit.Tokens.faceText
+                font.weight: Kit.Tokens.weightTitle
                 font.pixelSize: Kit.Tokens.fontTitle
             }
             Text {

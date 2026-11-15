@@ -107,7 +107,7 @@ ThemeScreen {
                         text: Words.title
                         color: night.textStrong
                         font.family: faces.label
-                        font.weight: Font.Light
+                        font.weight: Tokens.weightWordmark
                         font.pixelSize: 24
                         font.letterSpacing: 6
                         lineHeight: 28.8

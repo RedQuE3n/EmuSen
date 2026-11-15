@@ -278,7 +278,7 @@ Item {
         color: splash.titleInk
         opacity: splash.wordsOpacity
         font.family: Kit.Tokens.faceLabel
-        font.weight: Font.Light
+        font.weight: Kit.Tokens.weightWordmark
         font.pixelSize: splash.titleSize
         font.letterSpacing: splash.titleSpacing
         anchors.horizontalCenter: parent.horizontalCenter

@@ -48,3 +48,39 @@ impl FaceRole {
         }
     }
 }
+
+/// A kind of text whose weight a look sets, where the reference and Eclipse's boards draw it differently (EmuSen_Kit.md §7.117).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum WeightRole {
+    /// A screen's, a card's, a pane's and a question's title.
+    Title,
+    /// The pane's sentence about the focused row.
+    Sentence,
+    /// The EmuSen wordmark.
+    Wordmark,
+}
+
+impl WeightRole {
+    pub const ALL: [WeightRole; 3] = [WeightRole::Title, WeightRole::Sentence, WeightRole::Wordmark];
+
+    /// The `Tokens` property that carries the weight, a CSS weight as `Font.weight` takes it (rule Q).
+    pub const fn property(self) -> &'static str {
+        match self {
+            WeightRole::Title => "weightTitle",
+            WeightRole::Sentence => "weightSentence",
+            WeightRole::Wordmark => "weightWordmark",
+        }
+    }
+
+    pub fn of_property(property: &str) -> Option<WeightRole> {
+        WeightRole::ALL.into_iter().find(|role| role.property() == property)
+    }
+
+    /// The kit's weight, what the reference draws: regular titles and sentences, the light wordmark (a design constant).
+    pub const fn kit(self) -> i32 {
+        match self {
+            WeightRole::Title | WeightRole::Sentence => 400,
+            WeightRole::Wordmark => 300,
+        }
+    }
+}

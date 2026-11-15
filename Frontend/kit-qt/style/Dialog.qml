@@ -19,6 +19,7 @@ T.Dialog {
         text: control.title
         visible: control.title
         elide: Label.ElideRight
+        font.weight: Kit.Tokens.weightTitle
         font.pixelSize: Kit.Tokens.fontTitle
         color: Kit.Tokens.textStrong
         padding: Kit.Tokens.paneGutter

@@ -239,7 +239,7 @@ FocusScope {
                     text: root.title
                     color: Kit.Tokens.textStrong
                     font.family: Kit.Tokens.faceLabel
-                    font.weight: Font.Normal
+                    font.weight: Kit.Tokens.weightTitle
                     font.pixelSize: 32
                     fontSizeMode: Text.HorizontalFit
                     minimumPixelSize: 22

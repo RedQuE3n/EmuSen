@@ -41,6 +41,19 @@ fn drawn(tree: &emusen_qt_test::Tree, name: &str, row: Option<&str>) -> (String,
     (node.face.clone().unwrap_or_default(), node.drawn.clone().unwrap_or_default())
 }
 
+/// The weights the row's label, its value and the pane's sentence are drawn at (QFontInfo), as CSS weights.
+fn weights(tree: &emusen_qt_test::Tree, row: &str) -> (f64, f64, f64) {
+    let at = tree.nodes.iter().find(|n| n.name == "label" && n.visible && n.text.as_deref() == Some(row)).unwrap_or_else(|| panic!("the {row} row"));
+    let value = tree.nodes.iter().find(|n| n.name == "value" && n.parent == at.parent).expect("the row's value");
+    let sentence = tree.nodes.iter().find(|n| n.name == "settingsSentence" && n.visible).expect("the pane's sentence");
+    (at.weight, value.weight, sentence.weight)
+}
+
+/// The weight a named text is drawn at.
+fn weight_of(tree: &emusen_qt_test::Tree, name: &str) -> f64 {
+    tree.nodes.iter().find(|n| n.name == name && n.visible).unwrap_or_else(|| panic!("{name} is drawn")).weight
+}
+
 /// Settings ▸ Library from Home, its rows shown.
 fn open_library(scene: &mut Scene<'_>) {
     for _ in 0..20 {
@@ -93,17 +106,22 @@ fn kit_7_117_eclipse_draws_sora_and_its_codes_in_jetbrains_mono_and_the_referenc
     let home = scene.tree();
     assert_eq!(drawn(&home, "wordmark", None), ("Barlow Condensed".into(), "Barlow Condensed".into()), "the reference's wordmark");
     assert_eq!(drawn(&home, "homeStatus", None), ("Barlow".into(), "Barlow".into()), "the reference's status line");
+    assert_eq!(weight_of(&home, "wordmark"), 300.0, "the reference's wordmark, light");
     open_library(&mut scene);
     let rows = scene.tree();
     let (asked, label) = drawn(&rows, "label", Some("ROM folder"));
     assert_eq!(asked, platform, "the reference's row asks for the application's font, as a text naming none does");
     assert_eq!(drawn(&rows, "value", Some("ROM folder")), (platform.clone(), label.clone()), "the reference's path in the same face");
+    assert_eq!(weights(&rows, "ROM folder"), (400.0, 400.0, 400.0), "the reference's label, value and sentence, regular");
 
     // Eclipse: every role in Sora but the codes, in JetBrains Mono; the families drawn, not only those asked for.
     use_eclipse(&mut scene);
     let rows = scene.tree();
     assert_eq!(drawn(&rows, "label", Some("ROM folder")), ("Sora".into(), "Sora".into()), "Eclipse's settings row");
     assert_eq!(drawn(&rows, "value", Some("ROM folder")), ("JetBrains Mono".into(), "JetBrains Mono".into()), "Eclipse's path, a code");
+    // The boards: a value 400 (EclipseSettings:47), the pane's sentence 300 (EclipseSettings:75); a row's label keeps the
+    // reference's, the boards disagreeing (EmuSen_Kit.md §7.117).
+    assert_eq!(weights(&rows, "ROM folder"), (400.0, 400.0, 300.0), "Eclipse's label, value and sentence");
     assert_eq!(drawn(&rows, "label", Some("Themes")), ("Sora".into(), "Sora".into()), "a row whose value is no code");
     assert_ne!(drawn(&rows, "value", Some("Themes")).1, "JetBrains Mono", "a value that is no code is not in the codes' face");
     let faces = engine_tokens(&mut scene, "host.theme");
@@ -120,6 +138,7 @@ fn kit_7_117_eclipse_draws_sora_and_its_codes_in_jetbrains_mono_and_the_referenc
     let home = scene.tree();
     assert_eq!(drawn(&home, "wordmark", None), ("Sora".into(), "Sora".into()), "a theme's wordmark under Eclipse's faces");
     assert_eq!(drawn(&home, "homeStatus", None), ("Sora".into(), "Sora".into()), "a theme's status line under Eclipse's faces");
+    assert_eq!(weight_of(&home, "wordmark"), 600.0, "the wordmark at the boards' 600 (Main:31)");
 
     // The reference again: each role as it was.
     assert!(scene.set_property("program", "theme", ""));
@@ -128,6 +147,7 @@ fn kit_7_117_eclipse_draws_sora_and_its_codes_in_jetbrains_mono_and_the_referenc
     let home = scene.tree();
     assert_eq!(drawn(&home, "wordmark", None), ("Barlow Condensed".into(), "Barlow Condensed".into()), "the reference's wordmark again");
     assert_eq!(drawn(&home, "homeStatus", None), ("Barlow".into(), "Barlow".into()), "the reference's status line again");
+    assert_eq!(weight_of(&home, "wordmark"), 300.0, "the reference's wordmark light again");
     let _ = std::fs::remove_dir_all(&folder);
 }
 

@@ -80,6 +80,9 @@ QtObject {
     readonly property string faceLabel: Kit.Tokens.faceLabel
     readonly property string faceInterface: Kit.Tokens.faceInterface
     readonly property string faceCode: Kit.Tokens.faceCode
+    readonly property int weightTitle: Kit.Tokens.weightTitle
+    readonly property int weightSentence: Kit.Tokens.weightSentence
+    readonly property int weightWordmark: Kit.Tokens.weightWordmark
     readonly property int instant: Kit.Tokens.instant
     readonly property int quick: Kit.Tokens.quick
     readonly property int enter: Kit.Tokens.enter

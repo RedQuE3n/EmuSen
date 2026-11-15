@@ -238,6 +238,7 @@ Kit.Frame {
                 text: root.pageShown ? root.pageSentence : layout.sentence
                 wrapMode: Text.Wrap
                 tone: root.sentenceTone
+                font.weight: Kit.Tokens.weightSentence
                 font.pixelSize: Kit.Tokens.fontBody
                 visible: text.length > 0
             }

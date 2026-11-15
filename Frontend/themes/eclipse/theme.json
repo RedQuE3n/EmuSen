@@ -53,7 +53,10 @@
             "faceText": "Sora",
             "faceLabel": "Sora",
             "faceInterface": "Sora",
-            "faceCode": "JetBrains Mono"
+            "faceCode": "JetBrains Mono",
+            "weightTitle": 600,
+            "weightSentence": 300,
+            "weightWordmark": 600
         }
     }
 }

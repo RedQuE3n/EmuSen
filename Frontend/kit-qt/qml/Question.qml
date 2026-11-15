@@ -20,7 +20,7 @@ Kit.Sheet {
     property alias helpFont: helpBar.labelFont
     property alias helpSpacing: helpBar.entrySpacing
     property alias helpGlyphGap: helpBar.glyphGap
-    property font titleFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontTitle })
+    property font titleFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontTitle, weight: Kit.Tokens.weightTitle })
     property font bodyFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontBody })
     property font captionFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontCaption })
     property font rowFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontRow })

@@ -1,7 +1,7 @@
 // EmuSen_Kit.md §7.117: the face tokens. The kit's faces are its fonts' own families and each is drawn as itself; the reference's
 // roles are Barlow, Barlow Condensed and the application's font; a theme names a bundled face for a role and nothing else.
 
-use emusen_kit_core::tokens::{BUNDLED, FaceRole, Variant};
+use emusen_kit_core::tokens::{BUNDLED, FaceRole, Variant, WeightRole};
 use emusen_kit_qt::tokens::{bundled_families, platform_family};
 use emusen_qt_test::Harness;
 
@@ -49,6 +49,10 @@ fn kit_7_117_the_faces_are_the_fonts_own_and_a_theme_names_one_per_role() {
     assert_eq!(read(&mut scene, "faceText"), "Barlow");
     assert_eq!(read(&mut scene, "faceLabel"), "Barlow Condensed");
     assert_eq!(read(&mut scene, "faceCode"), platform);
+    for role in WeightRole::ALL {
+        assert_eq!(read(&mut scene, role.property()), role.kit().to_string(), "{role:?}'s weight is the kit's");
+    }
+    assert_eq!((read(&mut scene, "weightTitle"), read(&mut scene, "weightWordmark")), ("400".into(), "300".into()), "regular titles, the light wordmark");
 
     // A theme's faces in its variant; a family the kit does not bundle, and another variant's, leave the kit's.
     let pair = |v: Variant, n: &str, f: &str| (v, n.to_owned(), f.to_owned());
@@ -58,7 +62,10 @@ fn kit_7_117_the_faces_are_the_fonts_own_and_a_theme_names_one_per_role() {
         pair(Variant::Dark, "faceCode", "JetBrains Mono"),
         pair(Variant::Dark, "faceLabel", "Comic Sans MS"),
         pair(Variant::Light, "faceLabel", "Sora"),
+        pair(Variant::Dark, "weightTitle", "600"),
+        pair(Variant::Dark, "weightSentence", "300"),
     ]);
+    assert_eq!((read(&mut scene, "weightTitle"), read(&mut scene, "weightSentence")), ("600".into(), "300".into()), "a theme's weights");
     assert_eq!(drawn(&mut scene, "faceText"), ("Sora".into(), "Sora".into()));
     assert_eq!(drawn(&mut scene, "faceInterface"), ("Sora".into(), "Sora".into()));
     assert_eq!(drawn(&mut scene, "faceCode"), ("JetBrains Mono".into(), "JetBrains Mono".into()));
@@ -69,4 +76,5 @@ fn kit_7_117_the_faces_are_the_fonts_own_and_a_theme_names_one_per_role() {
     for role in FaceRole::ALL {
         assert_eq!(read(&mut scene, role.property()), kit(role), "{role:?} is the kit's again");
     }
+    assert_eq!(read(&mut scene, "weightTitle"), "400", "the title's weight is the kit's again");
 }

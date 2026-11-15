@@ -6,7 +6,7 @@ mod metrics;
 mod palette;
 
 pub use colour::Colour;
-pub use faces::{BUNDLED, FaceRole, is_bundled};
+pub use faces::{BUNDLED, FaceRole, WeightRole, is_bundled};
 pub use metrics::{
     Corona, FocusMarks, Insets, MAX_TEXT_SCALE, SAFE_AREA_FRACTION, Shadow, Spacing, TEXT_SIZES, TypeScale, base_type, clamp_text_scale,
     corona, focus_marks, header_base, header_of, header_size, raised_shadow, safe_area_of, scaled_text, spacing, text_scale_of, type_scale,

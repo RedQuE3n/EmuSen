@@ -35,7 +35,7 @@ Kit.Frame {
     property string meterWords
     property font cellFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontRow })
     // The screen's faces for its title, its facts and meter, and its pane's and bar's words; the platform's sans serif at the tokens' sizes by default.
-    property font titleFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontTitle })
+    property font titleFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontTitle, weight: Kit.Tokens.weightTitle })
     property font captionFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontCaption })
     property font bodyFont: Qt.font({ family: Kit.Tokens.faceInterface, pixelSize: Kit.Tokens.fontBody })
     readonly property alias list: list
@@ -76,7 +76,7 @@ Kit.Frame {
             verticalAlignment: Text.AlignVCenter
             text: root.title
             color: Kit.Tokens.text
-            font: Qt.font({ family: root.titleFont.family, pixelSize: root.titleFont.pixelSize, capitalization: Font.AllUppercase })
+            font: Qt.font({ family: root.titleFont.family, pixelSize: root.titleFont.pixelSize, weight: root.titleFont.weight, capitalization: Font.AllUppercase })
             y: places.header.y
         }
         Row {

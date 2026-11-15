@@ -6,7 +6,7 @@ use cxx_qt::CxxQtType;
 
 use cxx_qt_lib::{QColor, QString};
 use emusen_kit_core::motion::MotionToken as M;
-use emusen_kit_core::tokens::{self as core_tokens, ColourToken as C, FaceRole};
+use emusen_kit_core::tokens::{self as core_tokens, ColourToken as C, FaceRole, WeightRole};
 
 use crate::column::Column;
 use crate::convert::qcolor;
@@ -137,6 +137,9 @@ pub mod qobject {
         #[qproperty(QString, face_label, READ, NOTIFY)]
         #[qproperty(QString, face_interface, READ, NOTIFY)]
         #[qproperty(QString, face_code, READ, NOTIFY)]
+        #[qproperty(i32, weight_title, READ, NOTIFY)]
+        #[qproperty(i32, weight_sentence, READ, NOTIFY)]
+        #[qproperty(i32, weight_wordmark, READ, NOTIFY)]
         type Tokens = super::TokensRust;
     }
 
@@ -228,6 +231,9 @@ pub struct TokensRust {
     face_label: QString,
     face_interface: QString,
     face_code: QString,
+    weight_title: i32,
+    weight_sentence: i32,
+    weight_wordmark: i32,
     instant: i32,
     quick: i32,
     enter: i32,
@@ -336,6 +342,9 @@ impl Default for TokensRust {
             face_label: QString::default(),
             face_interface: QString::default(),
             face_code: QString::default(),
+            weight_title: 0,
+            weight_sentence: 0,
+            weight_wordmark: 0,
             instant: 0,
             quick: 0,
             enter: 0,
@@ -441,6 +450,9 @@ impl TokensRust {
         self.face_label = face(FaceRole::Label);
         self.face_interface = face(FaceRole::Interface);
         self.face_code = face(FaceRole::Code);
+        self.weight_title = c.weight(WeightRole::Title);
+        self.weight_sentence = c.weight(WeightRole::Sentence);
+        self.weight_wordmark = c.weight(WeightRole::Wordmark);
         self.instant = c.duration(M::Instant);
         self.quick = c.duration(M::Quick);
         self.enter = c.duration(M::Enter);
@@ -597,6 +609,9 @@ impl qobject::Tokens {
         self.as_mut().face_label_changed();
         self.as_mut().face_interface_changed();
         self.as_mut().face_code_changed();
+        self.as_mut().weight_title_changed();
+        self.as_mut().weight_sentence_changed();
+        self.as_mut().weight_wordmark_changed();
         self.as_mut().instant_changed();
         self.as_mut().quick_changed();
         self.as_mut().enter_changed();

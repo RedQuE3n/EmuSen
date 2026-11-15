@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use emusen_kit_core::motion::{breathes_if, movement, Curve, MotionToken, BREATH_DELAY, BREATH_LOW, BREATH_PERIOD};
-use emusen_kit_core::tokens::{self, BUNDLED, Colour, ColourToken, Corona, FaceRole, FocusMarks, Form, Shadow, Spacing, TypeScale, Variant};
+use emusen_kit_core::tokens::{self, BUNDLED, Colour, ColourToken, Corona, FaceRole, FocusMarks, WeightRole, Form, Shadow, Spacing, TypeScale, Variant};
 
 /// QEasingCurve::Type's number for a kit-core curve, so QML binds `easing.type` to a token.
 pub fn easing_type(curve: Curve) -> i32 {
@@ -32,6 +32,8 @@ pub struct Column {
     pub corona_colours: [Colour; 3],
     /// Each role's family in `FaceRole::ALL`'s order: a bundled face, or none for the platform's default font.
     pub faces: [Option<&'static str>; 4],
+    /// Each kind's weight in `WeightRole::ALL`'s order.
+    pub weights: [i32; 3],
     pub durations: [i32; 8],
     pub fades: [i32; 8],
     pub curves: [i32; 8],
@@ -50,6 +52,7 @@ struct Bases {
     shadow: Shadow,
     corona: Corona,
     faces: [Option<&'static str>; 4],
+    weights: [i32; 3],
     durations: [i32; 8],
     fades: [i32; 8],
     curves: [i32; 8],
@@ -80,6 +83,7 @@ impl Bases {
             shadow: tokens::raised_shadow(form),
             corona: tokens::corona(form),
             faces: FaceRole::ALL.map(FaceRole::kit),
+            weights: WeightRole::ALL.map(WeightRole::kit),
             durations: nominal,
             fades: nominal,
             curves: MotionToken::ALL.map(|token| easing_type(token.curve())),
@@ -97,6 +101,9 @@ impl Bases {
         let i = Column::slot;
         if let Some(role) = FaceRole::of_property(property) {
             return Some(Slot::Face(&mut self.faces[Column::face_slot(role)]));
+        }
+        if let Some(role) = WeightRole::of_property(property) {
+            return Some(Slot::Whole(&mut self.weights[Column::weight_slot(role)]));
         }
         Some(match property {
             "fontDisplay" => Slot::Number(&mut t.display),
@@ -226,6 +233,7 @@ impl Column {
             corona: b.corona,
             corona_colours,
             faces: b.faces,
+            weights: b.weights,
             durations,
             fades,
             curves: b.curves,
@@ -257,6 +265,15 @@ impl Column {
 
     fn face_slot(role: FaceRole) -> usize {
         FaceRole::ALL.iter().position(|r| *r == role).unwrap_or(0)
+    }
+
+    fn weight_slot(role: WeightRole) -> usize {
+        WeightRole::ALL.iter().position(|r| *r == role).unwrap_or(0)
+    }
+
+    /// The kind's weight, as `Font.weight` takes it.
+    pub fn weight(&self, role: WeightRole) -> i32 {
+        self.weights[Self::weight_slot(role)]
     }
 
     /// The role's family: a bundled face, or none for the platform's default font.

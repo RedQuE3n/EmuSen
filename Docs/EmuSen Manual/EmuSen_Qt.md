@@ -1667,6 +1667,7 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 |---|---|---|---|---|
 | surface | a screen's ground behind its frame (`kit-qt/qml/Frame.qml:37`) | the ground (`EclipseSettings:17`) | #07080F | #07080F |
 | surfaceRaised | the focused row (`MenuRow.qml:34`), a notice (`NoticeLayer.qml:60`) | the focused row (`EclipseSettings:94`), the notice (`EclipseDialog:23`) | #151826 | #151826 |
+| border | an unfilled button's outline (`ActionButton.qml:30`), a switch's track (`style/Switch.qml:24`) | the outline and the track (`EclipseDialog:40`, `EclipseSettings:94`) | #5A6076 | #5E647B |
 | inputSurface | a text field (`style/TextField.qml:37`) | a text field (`EclipseGameEdit:84`) | #11131C | #11131C |
 | scrim | the Home card's scrim (`qt-app/qml/MenuCard.qml:81`) | the scrim under the Menu card (`EclipseHomeCard:22`) | rgba(4, 5, 10, 0.62) | #9E04050A |
 | rule | the help bar's top line (`HelpBar.qml:63`) | the help bar's top line (`EclipsePause:57`) | rgba(246, 231, 216, 0.35) | #59F6E7D8 |
@@ -1706,10 +1707,9 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 | coronaHaloSpread | the far glow's spread | the same (`Main:25`) | 46 px | 30.666… |
 
 The colour of the notice's shadow is black on the board, the kit's own, so `shadowColor` is not overridden; `safeAreaX`
-(96 px, 64 units) is the kit's value too. Left at the reference's value, each for its reason:
-- `border`: the boards' outline of an unfilled button and of a switch's track (#5A6076, `EclipseDialog:40`,
-  `EclipseSettings:94`) is 2.83:1 on surfaceRaised and 2.97:1 on inputSurface, under the kit's 3:1 floor for graphics;
-  theme-check refuses it. The tester's to rule on.
+(96 px, 64 units) is the kit's value too. `border` is not the board's #5A6076, which is 2.83:1 on surfaceRaised and 2.97:1
+on inputSurface, under theme-check's 3:1 floor for graphics: decided 2026-11-14 by the tester (R-20261114-35), it is
+#5E647B, 3.01:1 and 3.16:1, and no board is edited. Left at the reference's value, each for its reason:
 
 - `voidFill`: the boards draw black behind a game (`EclipsePause:17`), which is the kit's.
 - `success`, `error`, `attention`: no board draws words in a tone colour; a status is a filled chip (`EclipseSettingsConsoles:78`).

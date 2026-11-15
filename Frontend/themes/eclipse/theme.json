@@ -12,6 +12,7 @@
         "dark": {
             "surface": "#07080F",
             "surfaceRaised": "#151826",
+            "border": "#5E647B",
             "inputSurface": "#11131C",
             "scrim": "#9E04050A",
             "rule": "#59F6E7D8",

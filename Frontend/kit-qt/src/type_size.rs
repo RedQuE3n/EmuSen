@@ -8,7 +8,6 @@ pub mod ffi {
         type QFont = cxx_qt_lib::QFont;
         include!("text_width.h");
         fn cap_height(font: &QFont, size: f64) -> f64;
-        fn body_cap_height(size: f64) -> f64;
     }
 }
 
@@ -18,8 +17,7 @@ pub fn legible(base: f64, text_scale: f64) -> f64 {
     emusen_kit_core::tokens::legible_text(base, text_scale, caps)
 }
 
-/// The capitals' height at `size`, as Qt draws it, of the smaller of the two faces `Tokens` sizes are drawn in: the
-/// application's, a theme's Text with no family, and the kit's body face, the program's rows (EmuSen_Kit.md §7.121).
+/// The capitals' height of the application's face at `size`, as Qt draws it: the `caps_at` the kit's `Tokens` sizes are held with.
 pub fn caps(size: f64) -> f64 {
-    ffi::cap_height(&cxx_qt_lib::QFont::default(), size).min(ffi::body_cap_height(size))
+    ffi::cap_height(&cxx_qt_lib::QFont::default(), size)
 }

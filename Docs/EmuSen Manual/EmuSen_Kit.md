@@ -4216,11 +4216,10 @@ holds every Eclipse text at the rule's size, and its table lists which were rais
 **A theme's size tokens.** The same rule holds the `Tokens` sizes a theme sets: kit-core's `tokens::legible_type(form,
 bases, textScale, caps_at)` gives each big-screen type size as `legible_text` of its base, and `legible_header` the
 heading's at text scale 1; on the desktop they are `scaled_text` alone, since the floor is the big screen's. kit-qt's
-`Column::themed` makes the `Tokens` column with them, `caps_at` being `type_size::caps`: the smaller capitals of the two faces
-`Tokens` sizes are drawn in, the application's (a theme's Text with no family) and the kit's body face Barlow (the program's
-rows), measured by Qt. Each is held at the whole size under it, since the program's rows set their size through `Qt.font`,
-which truncates a half pixel: seen 2026-11-15, Eclipse's rows at 18 units drew capitals of 11.57 px at 1280 × 720 in
-Barlow where the floor there is 11.60, while the application's face passed at 18. Eclipse's tokens were read off its boards (`fontRow` 16, `fontBody` 14, `fontCaption` 15.33), so under Eclipse the
+`Column::themed` makes the `Tokens` column with them, `caps_at` being `type_size::caps`, the application's face measured by
+Qt. Each is held at the whole size under it, since the program's rows set their size through `Qt.font`, which truncates a
+half pixel: seen 2026-11-15, Eclipse's rows held at the size itself drew at 18, whose capitals at 1280 × 720 are 11.57 px
+where the floor there is 11.60. Eclipse's tokens were read off its boards (`fontRow` 16, `fontBody` 14, `fontCaption` 15.33), so under Eclipse the
 program's own screens drew Settings rows and pane lines under the floor; they are now raised. The kit's own big-screen
 sizes (20 and above) pass the floor, so the reference's sizes do not move. Tests: kit-core's `legible_text.rs`
 (`kit_7_121_a_theme_s_size_tokens_are_never_under_the_floor_on_the_big_screen`), kit-qt's `column.rs`, qt-app's `eclipse`,

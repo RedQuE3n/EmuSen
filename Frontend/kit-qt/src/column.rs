@@ -95,7 +95,7 @@ impl Bases {
         use MotionToken as M;
         let (t, sp, f, sh, co) = (&mut self.type_scale, &mut self.spacing, &mut self.focus, &mut self.shadow, &mut self.corona);
         let i = Column::slot;
-        if let Some(role) = FaceRole::named(property) {
+        if let Some(role) = FaceRole::of_property(property) {
             return Some(Slot::Face(&mut self.faces[Column::face_slot(role)]));
         }
         Some(match property {

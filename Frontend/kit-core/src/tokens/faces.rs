@@ -35,7 +35,7 @@ impl FaceRole {
         }
     }
 
-    pub fn named(property: &str) -> Option<FaceRole> {
+    pub fn of_property(property: &str) -> Option<FaceRole> {
         FaceRole::ALL.into_iter().find(|role| role.property() == property)
     }
 

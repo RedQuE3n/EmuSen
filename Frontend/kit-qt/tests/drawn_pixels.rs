@@ -41,11 +41,23 @@ fn kit_7_111_a_help_picture_and_a_pdf_page_are_decoded_at_the_pixels_they_cover(
     for (width, height) in [(1280, 800), (1920, 1200)] {
         scene.resize(width, height);
         scene.wait(50);
+        // The page is decoded on Qt's image thread (§7.110): read it once its picture is no longer loading (2).
+        let mut waited = 0;
+        loop {
+            let tree = scene.tree();
+            let page = tree.find_named("manualPage").and_then(|p| tree.under(p).into_iter().map(|i| tree.nodes[i as usize].id.clone()).find(|id| tree.nodes.iter().any(|n| &n.id == id && n.picture)));
+            if page.is_some_and(|id| scene.item_number(&id, "status") != 2.0) {
+                break;
+            }
+            assert!(waited < 5000, "the page decoded within 5 s at {width} x {height}");
+            scene.wait(5);
+            waited += 5;
+        }
         let unit = scene.property("canvas", "unit").parse::<f64>().unwrap();
         assert!((unit - f64::from(height) / emusen_kit_core::canvas::DESIGN_HEIGHT).abs() < 1e-9, "the canvas's unit at {height} high: {unit}");
         let tree = scene.tree();
         let icon = tree.find_named("icon-Menu").map(|i| tree.nodes[i as usize].clone()).expect("the theme's picture in the tree");
-        let page = tree.nodes.iter().find(|n| n.cls.contains("PdfPageImage")).cloned().expect("the page's picture in the tree");
+        let page = tree.find_named("manualPage").and_then(|p| tree.under(p).into_iter().map(|i| tree.nodes[i as usize].clone()).find(|n| n.picture)).expect("the page's picture in the tree");
         for (what, node) in [("the help picture", &icon), ("the page", &page)] {
             let decoded = (scene.item_number(&node.id, "implicitWidth"), scene.item_number(&node.id, "implicitHeight"));
             // The window's ratio is one device pixel a window pixel under the harness, so a scene pixel is a device pixel.

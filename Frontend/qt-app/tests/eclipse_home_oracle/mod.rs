@@ -171,10 +171,10 @@ fn synthetic(world: &World, harness: &mut emusen_qt_test::Harness) -> (LibraryVi
         .enumerate()
         .map(|(i, (title, ext))| {
             let system = first.game(&rom(world, title, ext)).expect("a game of the library").system;
-            (media.join(&system).join("covers").join(format!("{title}.png")), COVER, i, format!("{system} covers\n{title}"))
+            (media.join(&system).join("covers").join(format!("{title}.png")), COVER, i)
         })
         .collect();
-    emusen_qt_test::covers::draw(harness, &world.dir("Covers"), &covers, |_| {});
+    emusen_qt_test::covers::draw_art(harness, &world.dir("Covers"), &covers, |_| {});
     settings["EsdeMediaDirectory"] = json!(media.to_string_lossy());
     platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
     drop(source);
@@ -473,8 +473,10 @@ pub fn oracle(backend: &str) {
     }
     if backend == "software" {
         // R-20261115-6: on the software backend the shown game's art is its own colours, unblurred, dimmed to the backdrop's
-        // opacity over the ground. The first cover is a flat fill with a white rim 6 px wide inset 3 px (qt-test's covers.rs),
-        // cropped to fill the window: its right rim stands near the window's right edge, and that stripe is the art's own.
+        // opacity over the ground. The first cover is three bands of qt-test's `covers::art`, a third of its height each,
+        // cropped to fill the window; read at the window's right edge in the middle of each band and two cover pixels either side
+        // of the bands' edge, where an unblurred picture has changed and a blur of the board's reach (90 px) would still mix.
+        // Image's smooth scaling was seen on 2026-11-15 still mixing 4.4 px from the edge (green 168 for 171); its span is not known.
         scene.resize(1280, 800);
         scene.wait(300);
         let tree = scene.tree();
@@ -484,17 +486,27 @@ pub fn oracle(backend: &str) {
             let mix = |a: u8, b: u8| (f64::from(a) * opacity + f64::from(b) * (1.0 - opacity)).round() as u8;
             Colour::rgb(mix(c.0, ground.r), mix(c.1, ground.g), mix(c.2, ground.b))
         };
-        // The cover's crop: the window's width over the cover's, as Image.PreserveAspectCrop scales a 3:4 picture into 16:10.
-        let scale = 1280.0 / f64::from(COVER.0);
-        let rim = (f64::from(COVER.0) - 3.0 - 3.0) * scale;
-        let inside = (f64::from(COVER.0) - 9.0 - 4.0) * scale;
-        let fill = emusen_qt_test::covers::fill(0);
-        let seen = scene.colours_at(&[(rim, 400.0), (inside, 400.0), (inside, 120.0)]);
+        // Image.PreserveAspectCrop: the cover scaled to cover the window, its middle shown.
+        let (cw, ch) = (f64::from(COVER.0), f64::from(COVER.1));
+        let scale = (1280.0 / cw).max(800.0 / ch);
+        let top = (ch * scale - 800.0) / 2.0;
+        let edge = |k: f64| k * ch / 3.0 * scale - top;
+        let x = 1279.0 - 0.5;
+        let past = 2.0 * scale;
+        let art = emusen_qt_test::covers::art(0);
+        let points = [
+            ("the top band", (x, edge(1.0) / 2.0), art[0]),
+            ("the middle band", (x, (edge(1.0) + edge(2.0)) / 2.0), art[1]),
+            ("the bottom band", (x, (edge(2.0) + 800.0) / 2.0), art[2]),
+            ("above the first edge", (x, edge(1.0) - past), art[0]),
+            ("below the first edge", (x, edge(1.0) + past), art[1]),
+        ];
+        let seen = scene.colours_at(&points.iter().map(|p| p.1).collect::<Vec<_>>());
         // One level of 255 is an 8-bit blend's rounding.
         let near = |a: Option<Colour>, b: Colour| a.is_some_and(|a| a.r.abs_diff(b.r) <= 1 && a.g.abs_diff(b.g) <= 1 && a.b.abs_diff(b.b) <= 1);
-        for (what, at, want) in [("the right rim", seen[0], over((255, 255, 255))), ("the fill beside it", seen[1], over(fill)), ("the fill above", seen[2], over(fill))] {
-            if !near(at, want) {
-                differences.push(format!("software backdrop: {what} is {at:?} where the art dimmed to {opacity} over the ground gives {want:?}"));
+        for ((what, at, colour), got) in points.iter().zip(seen) {
+            if !near(got, over(*colour)) {
+                differences.push(format!("software backdrop: {what} at {at:?} is {got:?} where the art dimmed to {opacity} over the ground gives {:?}", over(*colour)));
             }
         }
     }

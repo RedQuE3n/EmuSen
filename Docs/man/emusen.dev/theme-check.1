@@ -98,8 +98,9 @@ THE LOADED STEP
     singletons) are set to the big screen form with reduced motion on,
     so a resting motion stops and every state is at rest when read.
     Each screen is first held to stillness at 1280 x 800: once its
-    animations stop, no frame may be swapped for 2 s. Then, in the dark
-    and the light variant, at 1280 x 800, 1920 x 1200, 1920 x 1080,
+    animations stop, no frame may be swapped for 2 s. Then, in each
+    variant the package's variants key lists and in no other (a
+    dark-only theme is never judged in light), at 1280 x 800, 1920 x 1200, 1920 x 1080,
     1280 x 720 and 3840 x 2160 (the gate's sizes, EmuSen_Interface.md
     §24.7), the harness of emusen-qt-test reads the window's item tree
     and walks it: from each operable element each of the four
@@ -285,7 +286,7 @@ THE LOADED STEP
 
     --catalogue FILE (theme-audit alone) places Choose a console once,
     over the synthetic library with FILE's consoles in place of its own,
-    and judges it in both variants at the five sizes, the pad's reach by
+    and judges it in each listed variant at the five sizes, the pad's reach by
     the crowd's sweep over those consoles; no other screen is placed. The
     states are labelled by the file's stem (Consoles-dark-n30-1280x800).
     A catalogue is plain text, one console a line, tab-separated: the
@@ -326,8 +327,8 @@ STATES
     (Library.show with the places the host declines, Browse, Session,
     Device, the kit's Tokens), never by editing the theme's files, and
     each screen it names that the package lists is placed afresh and
-    judged as the default is: the rules above at the five sizes in both
-    variants, the recording and its size. Lines and recordings carry
+    judged as the default is: the rules above at the five sizes in each
+    listed variant, the recording and its size. Lines and recordings carry
     the state's name (Home-dark-nogame-1280x800). The list's one owner
     is the audit's states.rs; theme-audit --list-states prints it, a
     line a state (name, screens, words, tab-separated), and a test holds

@@ -54,7 +54,7 @@ fn reach(scene: &mut Scene<'_>, section: i32, row: i32) {
 fn qt_7_7_settings_opens_from_home_steps_saves_and_holds_its_states() {
     let world = sandbox("qt-app-settings", &[("NES", "One.nes"), ("NES", "Two.nes")]);
     let platform = Platform::load(library()).unwrap();
-    // Two values as Mistress's own-look fixture holds them, so the recordings are compared on the same settings.
+    // Two values as Mistress's own-look fixture holds them: the base's BigScreen on, which no row of Settings shows.
     let mut held = platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
     held["BigScreen"] = serde_json::json!(true);
     held["ResumeOnLaunch"] = serde_json::json!("Restart");
@@ -93,6 +93,10 @@ fn qt_7_7_settings_opens_from_home_steps_saves_and_holds_its_states() {
     let roms = world.root.join("Roms").display().to_string();
     assert!(scene.property("settingsSentence", "text").contains(&roms), "the pane names {roms} whole");
     reach(&mut scene, 5, 0);
+    // Big Picture is the program on every machine (the tester decided, 2026-11-13): EmuSen holds no Big picture row.
+    let words: Vec<String> = scene.tree().nodes.iter().filter(|n| n.visible).filter_map(|n| n.text.clone()).collect();
+    assert!(words.iter().any(|w| w == "Pause in the background"), "EmuSen's rows drawn: {words:?}");
+    assert!(!words.iter().any(|w| w == "Big picture"), "no Big picture row: {words:?}");
     hold(&mut scene, "SettingsEmuSen", &mockup::Mockup::default(), &mut excuses, &mut report);
     // The shoulders wrap from EmuSen to Controllers, then on to Display.
     reach(&mut scene, 1, 5);

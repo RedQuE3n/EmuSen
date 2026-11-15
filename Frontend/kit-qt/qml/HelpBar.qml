@@ -106,9 +106,14 @@ Item {
                         visible: entry.picture.length > 0
                         width: glyph.width
                         height: glyph.height
-                        sourceSize: Qt.size(glyph.width, glyph.height)
+                        sourceSize: iconPixels.pixels
                         fillMode: Image.PreserveAspectFit
                         source: entry.picture
+                        // Decoded at the pixels the picture covers, through any canvas's scale (EmuSen_Kit.md §7.111).
+                        Kit.DrawnPixels {
+                            id: iconPixels
+                            anchors.fill: parent
+                        }
                     }
                     Kit.PadGlyph {
                         id: glyph

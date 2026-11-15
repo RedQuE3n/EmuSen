@@ -20,7 +20,6 @@ pub const RESUME: &str = "resume";
 pub const GAME_PAGE: &str = "gamePage";
 pub const SEARCH: &str = "search";
 pub const SETTINGS: &str = "settings";
-pub const BIG_PICTURE: &str = "bigPicture";
 pub const QUIT_EMUSEN: &str = "quitEmuSen";
 /// The tools whose screens the program has, by their rows' keys: Cores, and Themes (the Themes tab).
 pub const CORES: &str = "cores";
@@ -72,7 +71,7 @@ pub struct Facts {
     pub search: bool,
     /// The consoles that start with no disc in it, in Start Console's order: the row is offered where there is one.
     pub startable: Vec<Startable>,
-    /// Steam's Game Mode, where Power holds Quit alone (Mistress's `_bigScreenForced`).
+    /// Steam's Game Mode (Mistress's `_bigScreenForced`), kept for a desktop mode's Power page (EmuSen_Qt.md §7.7.H7).
     pub game_mode: bool,
     /// The tools' summaries by key (`scraper`, `packages`, `library`, `cores`, `cheats`): `brief`, `sentence`, `attention`.
     pub tools: Value,
@@ -243,12 +242,9 @@ pub fn start_console_page(startable: &[Startable], breadcrumb: &str) -> Page {
     Page { title: "Start Console".to_owned(), breadcrumb: breadcrumb.to_owned(), rows, footer: String::new() }
 }
 
-fn power_page(f: &Facts) -> Page {
-    let mut rows = Vec::new();
-    if !f.game_mode {
-        rows.push(Row::new(BIG_PICTURE, "Exit Big Picture"));
-    }
-    rows.push(Row::new(QUIT, "Quit EmuSen..."));
+/// Power's rows: Quit alone while Big Picture is the program's only interface (EmuSen_Qt.md §7.7.H7).
+fn power_page() -> Page {
+    let rows = vec![Row::new(QUIT, "Quit EmuSen...")];
     Page { title: "Power".to_owned(), breadcrumb: TITLE.to_owned(), rows, footer: crate::words::version_line() }
 }
 
@@ -264,7 +260,7 @@ impl Pages for HomeCard {
         let f = Facts::of(facts);
         match key {
             TOOLS => tools_page(&f),
-            POWER => power_page(&f),
+            POWER => power_page(),
             START_CONSOLE => start_console_page(&f.startable, TITLE),
             QUIT => question("Quit EmuSen?", if f.suspended.is_empty() { "EmuSen closes." } else { "The game closes, then EmuSen." }),
             _ => first_page(&f),
@@ -277,7 +273,7 @@ impl Pages for HomeCard {
             (QUIT, _) => Choice::Back,
             (_, TOOLS | POWER | QUIT | START_CONSOLE) => Choice::Turn(row.to_owned()),
             (START_CONSOLE, console) => Choice::Act(console.to_owned()),
-            (_, RESUME | GAME_PAGE | SEARCH | SETTINGS | BIG_PICTURE) => Choice::Act(row.to_owned()),
+            (_, RESUME | GAME_PAGE | SEARCH | SETTINGS) => Choice::Act(row.to_owned()),
             (TOOLS, tool) => Choice::Act(tool.to_owned()),
             _ => Choice::Owed,
         }

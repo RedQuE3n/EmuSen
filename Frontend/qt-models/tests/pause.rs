@@ -6,7 +6,7 @@ use emusen_crystal_client::shapes::{Moment, Picture, RewindReel, SessionInfo};
 use emusen_kit_core::input::{UiButton, WalkAction};
 use emusen_qt_models::help::{action_lines, entries, Screen};
 use emusen_qt_models::cheats::Switch;
-use emusen_qt_models::pause::{facts_of, Card, DiscFacts, Facts, Outcome, Page, PaneKind, SlotFact, Tile};
+use emusen_qt_models::pause::{self, facts_of, Card, DiscFacts, Facts, Outcome, Page, PaneKind, SlotFact, Tile};
 use emusen_qt_models::reel::{interval_for, marks_of, stops_of, Reel};
 
 fn card(facts: Facts) -> Card {
@@ -260,7 +260,7 @@ fn game_options_holds_mistresss_rows_and_memory_cards_where_the_drive_changes() 
     assert_eq!(c.choose(at(&c, "Game Options")), Outcome::Shown);
     assert_eq!((c.page, c.title("G"), c.breadcrumb("G"), c.help()), (Page::Options, "Game Options".into(), "G".into(), Screen::PausePage));
     let rows = |c: &Card| c.rows().into_iter().map(|r| format!("{}{}", r.label, if r.opens { " ▸" } else { "" })).collect::<Vec<_>>();
-    assert_eq!(rows(&c), ["Cheats ▸", "Controllers ▸", "Display ▸", "Sound ▸"], "PauseCardGameOptions' four rows, Cheats opening as Mistress's `Opens` marks it");
+    assert_eq!(rows(&c), ["Controllers ▸", "Display ▸", "Sound ▸"], "a game with no cheats: no Cheats row");
     assert_eq!(c.back(), Outcome::Shown);
     assert_eq!((c.page, c.current), (Page::First, 5), "B back to Game Options' row");
     let mut disc = two_discs();
@@ -273,14 +273,14 @@ fn cheats_lists_the_games_cheats_each_a_switch_that_turns_at_once() {
     let words = |c: &Card| c.rows().into_iter().map(|r| format!("{} | {}{}", r.label, r.value, if r.steps { " ◂▸" } else { "" })).collect::<Vec<_>>();
     let mut none = card(Facts::default());
     none.choose(at(&none, "Game Options"));
-    assert!(none.rows()[0].dimmed, "a game with no cheats: the row is a hint");
-    assert_eq!(none.choose(0), Outcome::Nothing, "and opens nothing");
+    assert!(none.rows().iter().all(|r| r.key != pause::CHEATS), "a game with no cheats has no Cheats row");
+    assert_eq!(none.rows()[0].key, pause::CONTROLLERS, "Controllers first");
     let cheats = vec![Switch { description: "Infinite lives".into(), on: true }, Switch { description: "Moon jump".into(), on: false }];
     let facts = Facts { cheats, ..Facts::default() };
     assert_eq!(Facts::from_json(&facts.to_json()), facts, "the cheats cross to the card whole");
     let mut c = card(facts);
     c.choose(at(&c, "Game Options"));
-    assert!(!c.rows()[0].dimmed);
+    assert_eq!((c.rows()[0].key, c.rows()[0].dimmed, c.rows()[0].opens), (pause::CHEATS, false, true), "with cheats, Cheats first, opening its page");
     assert_eq!(c.choose(0), Outcome::Shown);
     assert_eq!((c.page, c.title("G"), c.breadcrumb("G"), c.help()), (Page::Cheats, "Cheats".into(), "G".into(), Screen::PausePage));
     assert_eq!(words(&c), ["Infinite lives | On ◂▸", "Moon jump | Off ◂▸"]);

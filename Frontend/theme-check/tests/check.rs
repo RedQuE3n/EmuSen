@@ -26,6 +26,14 @@ fn qt_3_7_a_clean_package_is_ok() {
 }
 
 #[test]
+fn qt_3_4_7_the_built_in_eclipse_package_is_clean() {
+    // The Themes tab lists a built-in as checked (EmuSen_Qt.md §3.8); this holds Eclipse's manifest and overrides to it.
+    let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("../themes/eclipse");
+    let ran = run(&["theme-check".into(), "--static".into(), folder.display().to_string()], plain).unwrap();
+    assert_eq!(ran, ("ok\n".to_owned(), 0));
+}
+
+#[test]
 fn qt_3_7_a_literal_in_a_part_is_found_on_its_line() {
     let (out, status) = check("literal");
     assert_eq!(status, 1);

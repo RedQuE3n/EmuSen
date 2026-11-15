@@ -22,6 +22,7 @@ ElementBox {
     required property bool mirror
     required property bool mirrorVertically
     required property bool mipmap
+    required property int frame
     Picture {
         id: picture
         anchors.fill: parent
@@ -43,6 +44,7 @@ ElementBox {
         mirror: root.mirror
         mirrorVertically: root.mirrorVertically
         mipmap: root.mipmap
+        frame: root.frame
         onOwnHeightChanged: root.esde.measured(root.elementId, picture.ownWidth, picture.ownHeight)
         // A new picture of the same size is reported too, since the scene keys a measurement by what it shows.
         onStatusChanged: if (picture.status === Image.Ready) root.esde.measured(root.elementId, picture.ownWidth, picture.ownHeight)

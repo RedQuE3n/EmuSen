@@ -6,6 +6,7 @@ mod common;
 use common::{sandbox, wait_for};
 use emusen_client_fixture::library;
 use emusen_qt::MAIN_URL;
+use emusen_qt_models::themes;
 
 const THEMES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../theme-host/tests/themes");
 
@@ -94,28 +95,32 @@ fn files(root: &std::path::Path, dir: &std::path::Path, out: &mut Vec<String>) {
 #[test]
 fn qt_3_4_2_the_program_s_reference_theme_is_the_package_theme_audit_holds_to_its_canvas() {
     // theme-audit's test holds Frontend/themes/emusen's Choose a console to Testing/mockups/Consoles.mockup.spec over the
-    // canvas's eleven consoles (EmuSen_Kit.md §7.104); the program loads REFERENCE_THEME from the resources. Each file of
-    // the package is in the resources under its own path, from that file, and nothing else is, so both show one screen.
-    let prefix = emusen_qt::REFERENCE_THEME.trim_start_matches("qrc:").trim_end_matches('/');
+    // canvas's eleven consoles (EmuSen_Kit.md §7.104); the program loads each built-in from the resources, the reference
+    // first. Each file of a built-in's package is in the resources under its own path, from that file, and nothing else is.
     let qrc = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/themes.qrc")).unwrap();
-    let block = qrc.split("<qresource prefix=\"").find(|b| b.starts_with(&format!("{prefix}\">"))).expect("the reference's block");
-    let block = &block[..block.find("</qresource>").unwrap()];
-    let mut listed: Vec<(String, String)> = block
-        .split("<file alias=\"")
-        .skip(1)
-        .map(|f| {
-            let (alias, rest) = f.split_once("\">").unwrap();
-            (alias.to_owned(), rest[..rest.find("</file>").unwrap()].to_owned())
-        })
-        .collect();
-    let package = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../themes/emusen");
-    let mut on_disk = Vec::new();
-    files(&package, &package, &mut on_disk);
-    let mut wanted: Vec<(String, String)> = on_disk.into_iter().map(|f| (f.clone(), format!("../themes/emusen/{f}"))).collect();
-    listed.sort();
-    wanted.sort();
-    assert!(wanted.iter().any(|(alias, _)| alias == "screens/Consoles.qml"), "Choose a console is the package's");
-    assert_eq!(listed, wanted, "the resources' reference theme is Frontend/themes/emusen, file for file");
+    assert_eq!(emusen_qt::reference_theme(), themes::built_in_folder(themes::REFERENCE));
+    for id in themes::BUILT_IN {
+        let folder = themes::built_in_folder(id);
+        let prefix = folder.trim_start_matches("qrc:").trim_end_matches('/');
+        let block = qrc.split("<qresource prefix=\"").find(|b| b.starts_with(&format!("{prefix}\">"))).expect("the built-in's block");
+        let block = &block[..block.find("</qresource>").unwrap()];
+        let mut listed: Vec<(String, String)> = block
+            .split("<file alias=\"")
+            .skip(1)
+            .map(|f| {
+                let (alias, rest) = f.split_once("\">").unwrap();
+                (alias.to_owned(), rest[..rest.find("</file>").unwrap()].to_owned())
+            })
+            .collect();
+        let package = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../themes/{id}"));
+        let mut on_disk = Vec::new();
+        files(&package, &package, &mut on_disk);
+        let mut wanted: Vec<(String, String)> = on_disk.into_iter().map(|f| (f.clone(), format!("../themes/{id}/{f}"))).collect();
+        listed.sort();
+        wanted.sort();
+        assert_eq!(listed, wanted, "the resources' {id} is Frontend/themes/{id}, file for file");
+    }
+    assert!(qrc.contains("<file alias=\"screens/Consoles.qml\">../themes/emusen/screens/Consoles.qml</file>"), "Choose a console is the reference's");
 }
 
 #[test]
@@ -124,7 +129,7 @@ fn qt_3_4_5_the_program_carries_the_built_in_themes_but_constellation() {
     let qrc = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/themes.qrc")).unwrap();
     let carried: Vec<&str> =
         qrc.split("<qresource prefix=\"/emusen/themes/").skip(1).map(|b| &b[..b.find('"').unwrap()]).collect();
-    assert_eq!(carried, ["emusen", "horizon", "meridian", "orrery"]);
+    assert_eq!(carried, ["emusen", "eclipse", "horizon", "meridian", "orrery"]);
     assert!(!qrc.contains("themes/constellation/"), "no file of Constellation's in the resources");
     assert!(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../themes/constellation/theme.json").is_file(), "its package kept");
 }

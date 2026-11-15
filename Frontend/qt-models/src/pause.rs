@@ -582,13 +582,16 @@ impl Card {
                 rows
             }
             Page::Options => {
-                let mut rows = vec![
-                    // A game with no cheats in its list has nothing to switch: the row is a hint.
-                    Row { opens: true, dimmed: facts.cheats.is_empty(), ..row(CHEATS, "Cheats", String::new()) },
+                let mut rows = Vec::new();
+                // A game with no cheats has no Cheats row, as on its game page (decided by the tester, 2026-11-13).
+                if !facts.cheats.is_empty() {
+                    rows.push(Row { opens: true, ..row(CHEATS, "Cheats", String::new()) });
+                }
+                rows.extend([
                     Row { opens: true, ..row(CONTROLLERS, "Controllers", String::new()) },
                     Row { opens: true, ..row(DISPLAY, "Display", String::new()) },
                     Row { opens: true, ..row(SOUND, "Sound", String::new()) },
-                ];
+                ]);
                 if facts.discs.can_change {
                     rows.push(Row { opens: true, ..row(MEMORY_CARDS, "Memory Cards", String::new()) });
                 }

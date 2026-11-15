@@ -3,6 +3,7 @@
 //! It names no Qt type, no runtime and no console: hosts hand it roles, looks and times, and it hands back decisions and geometry.
 
 pub mod audit;
+pub mod canvas;
 pub mod controller;
 pub mod figures;
 pub mod glyph;

@@ -144,10 +144,9 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     let before = scene.frames();
     let mut facts: serde_json::Value = serde_json::from_str(&given).unwrap();
     // A suspended game paused a minute ago, which the hidden card's first page draws as its Continue row and caption,
-    // and Steam's Game Mode, which Power's rows show once it opens.
+    // and Quit's question names once it opens.
     facts["suspended"] = serde_json::json!("Echo Forge (Synthetic)");
     facts["paused"] = serde_json::json!("Super Nintendo · Paused 1 minute ago");
-    facts["gameMode"] = serde_json::json!(true);
     assert!(scene.set_property("homeCardModel", "facts", &facts.to_string()));
     scene.wait(500);
     assert_eq!(scene.frames() - before, 0, "the hidden Home card's new facts swapped a frame");
@@ -156,7 +155,11 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     }
     scene.pad(UiButton::Accept);
     settle(&mut scene);
-    assert_eq!(rows(&mut scene), ["Quit EmuSen..."], "shown, the card reads the facts it was given while hidden");
+    scene.pad(UiButton::Accept);
+    scene.wait(50);
+    assert_eq!(titled(&mut scene, "homeCardCanvas").0, "The game closes, then EmuSen.", "shown, the card reads the facts it was given while hidden");
+    scene.pad(UiButton::Back);
+    scene.wait(50);
     scene.pad(UiButton::Back);
     settle(&mut scene);
     assert!(scene.set_property("homeCardModel", "facts", &given));
@@ -164,7 +167,8 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     let games = tree.find_named("place.0").expect("Home's Games");
     assert!(scene.focus_item(&tree, games));
 
-    // Home's Power place opens the Home card at Power, with Home as the way back (HomeCardPower).
+    // Home's Power place opens the Home card at Power, with Home as the way back (HomeCardPower): Quit alone, Big Picture
+    // being the program on every machine (the tester decided, 2026-11-13).
     for _ in 0..6 {
         scene.pad(UiButton::Right);
     }
@@ -173,13 +177,12 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     settle(&mut scene);
     assert_eq!(scene.property("screens", "shown"), "HomeCard");
     assert_eq!(titled(&mut scene, "homeCardCanvas"), ("Home".into(), "Power".into()));
-    assert_eq!(rows(&mut scene), ["Exit Big Picture", "Quit EmuSen..."]);
+    assert_eq!(rows(&mut scene), ["Quit EmuSen..."]);
     assert_eq!(scene.property("homeCardModel", "current"), "0");
     scene.assert_still("the Home card in place");
     hold(&mut scene, "HomeCardPower", &mockup::Mockup::default(), &mut excuses, &mut report);
 
     // Quit EmuSen... asks first: No, then Yes, the sentence above the question (HomeCardQuit); B goes back to its row.
-    scene.pad(UiButton::Down);
     scene.pad(UiButton::Accept);
     scene.wait(50);
     assert_eq!(titled(&mut scene, "homeCardCanvas"), ("EmuSen closes.".into(), "Quit EmuSen?".into()));
@@ -187,13 +190,13 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     hold(&mut scene, "HomeCardQuit", &mockup::Mockup::default(), &mut excuses, &mut report);
     scene.pad(UiButton::Back);
     scene.wait(50);
-    assert_eq!(rows(&mut scene), ["Exit Big Picture", "Quit EmuSen..."]);
-    assert_eq!(scene.property("homeCardModel", "current"), "1", "back on Quit EmuSen...");
+    assert_eq!(rows(&mut scene), ["Quit EmuSen..."]);
+    assert_eq!(scene.property("homeCardModel", "current"), "0", "back on Quit EmuSen...");
     // No goes back too; B on Power closes the card, and Home has the focus again.
     scene.pad(UiButton::Accept);
     scene.pad(UiButton::Accept);
     scene.wait(50);
-    assert_eq!(rows(&mut scene), ["Exit Big Picture", "Quit EmuSen..."]);
+    assert_eq!(rows(&mut scene), ["Quit EmuSen..."]);
     scene.pad(UiButton::Back);
     settle(&mut scene);
     assert_eq!(scene.property("screens", "shown"), "Home");

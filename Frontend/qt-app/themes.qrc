@@ -1,4 +1,4 @@
-<!-- The reference theme "EmuSen" as a package in the resources, which the theme host loads as it loads any theme (EmuSen_Qt.md §3.4). -->
+<!-- The built-in themes as packages in the resources, the reference "EmuSen" first, which the theme host loads as it loads any theme (EmuSen_Qt.md §3.4). -->
 <RCC>
     <qresource prefix="/emusen/themes/emusen">
         <file alias="assets/previews/consoles.png">../themes/emusen/assets/previews/consoles.png</file>
@@ -14,6 +14,9 @@
         <file alias="screens/Games.qml">../themes/emusen/screens/Games.qml</file>
         <file alias="screens/Home.qml">../themes/emusen/screens/Home.qml</file>
         <file alias="theme.json">../themes/emusen/theme.json</file>
+    </qresource>
+    <qresource prefix="/emusen/themes/eclipse">
+        <file alias="theme.json">../themes/eclipse/theme.json</file>
     </qresource>
     <qresource prefix="/emusen/themes/horizon">
         <file alias="parts/Backdrop.qml">../themes/horizon/parts/Backdrop.qml</file>

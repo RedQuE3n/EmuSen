@@ -16,6 +16,7 @@ Window {
         ground: "#0A1024"
         source: scene.picture
         sourceBlur: 40
+        sourceOpacity: 0.5
         fields: [
             Kit.BackdropField {
                 x: 200

@@ -532,6 +532,7 @@ Backdrop
     property list<Kit.BackdropField> fields
     property url source
     property real sourceBlur
+    property real sourceOpacity
     property real pixelScale
     readonly property bool software
     readonly property bool pictured

@@ -4,7 +4,7 @@ import QtQuick.Effects
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 
-// A screen's backdrop as the Eclipse boards draw it: a ground, and over it blurred colour fields, or a picture blurred in their place; on the software backend the fields unblurred at their opacity and no picture (EmuSen_Kit.md §7.118).
+// A screen's backdrop as the Eclipse boards draw it: a ground, and over it blurred colour fields, or a picture blurred in their place; on the software backend each unblurred at its opacity (EmuSen_Kit.md §7.118).
 Item {
     id: root
     property color ground: "transparent"
@@ -12,8 +12,9 @@ Item {
     property list<Kit.BackdropField> fields
     // A picture blurred over the whole box in place of the fields, as a focused game's art; empty draws the fields.
     property url source
-    // The picture's CSS filter blur, the Gaussian's standard deviation.
+    // The picture's CSS filter blur, the Gaussian's standard deviation, and its opacity; a screen sets both from its board.
     property real sourceBlur
+    property real sourceOpacity: 1
     // Scene pixels to one of this item's units, so a blur in units is a blur in the pixels the card draws.
     property real pixelScale: 1
     // The software backend renders no shader effect (doc.qt.io, "Qt Quick Software Adaptation"): there no blur is made.
@@ -88,12 +89,13 @@ Item {
     Image {
         objectName: "backdropPicture"
         anchors.fill: parent
-        // On the software backend no blur is made, so no picture is drawn sharp in its place (R-20261115-6).
-        visible: root.pictured && !root.software
+        // On the software backend no blur is made: the picture is drawn unblurred at its opacity (R-20261115-6).
+        visible: root.pictured
+        opacity: root.sourceOpacity
         source: root.visible ? root.source : ""
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
-        layer.enabled: true
+        layer.enabled: !root.software
         layer.effect: MultiEffect {
             blurEnabled: true
             blur: 1

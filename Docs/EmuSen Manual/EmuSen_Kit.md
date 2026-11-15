@@ -4145,12 +4145,14 @@ Gaussian function"; w3.org/TR/filter-effects-1, read 2026-11-15).
   ... for a bigger blur radius than blurMax". It gives no formula for either. The radius is read as a box-shadow's blur
   radius, twice the deviation (CSS Backgrounds 3 §6.1.2). How close the result is to the Gaussian is printed by
   `tests/backdrop_gpu.rs` beside the rule and is not asserted.
-- *On the software backend*, which renders no shader effect, each field is drawn unblurred at its own opacity. The opacity
-  is the board's own figure for each field (`Main.dc.html:19`, 0.85, and so on). No picture is drawn there, since a sharp
-  picture is not the blurred one and the boards give no figure for it.
+- *On the software backend*, which renders no shader effect, each field is drawn unblurred at its own opacity, and a
+  picture is drawn unblurred at `sourceOpacity` (R-20261115-6: "the same colours dimmed and unblurred"). A field's opacity
+  is the board's own figure for it (`Main.dc.html:19`, 0.85, and so on). The boards give none for a picture, so a screen
+  sets `sourceBlur` and `sourceOpacity` from its board's first field: provisional values, the tester's to judge from
+  pictures (2026-11-15).
 
 Tests: `tests/backdrop.rs` (software) holds the ground, each field's colour at its opacity over the ground, its sharp
-edge, the streak's turn, and a picture drawing nothing. `tests/backdrop_gpu.rs` (the card, a GPU job) holds the field
+edge, the streak's turn, and a picture drawn at its opacity in the fields' place. `tests/backdrop_gpu.rs` (the card, a GPU job) holds the field
 blurred past its edge, the ground where no field reaches, and the picture in the fields' place. Kit 1.8, Theme 1.4.
 
 ### 7.119 Glow for themes, and its offset (2026-11-15)
@@ -4176,8 +4178,13 @@ the card, and nothing inside the box. Kit 1.8.
 Decided 2026-11-15 by the tester (R-20261115-14): any Eclipse text under the kit's legibility floor is raised to the
 smallest size that passes; larger text keeps the boards' sizes. kit-core's `tokens::legible_text(base, textScale,
 caps_at)` is the rule. It takes `scaled_text` of the board's size in canvas units, then raises it by the kit's half units
-until the capitals' height of the face (`caps_at`) reaches the fit audit's floor, `audit::smallest_capitals()` less
-`CAPS_SLACK`. kit-qt's `type_size::legible` measures the capitals with Qt (`QFontMetricsF::capHeight`, `cpp/text_width.cpp`)
+until the capitals' height of the face (`caps_at`) reaches the fit audit's floor at every size the gate runs at,
+`audit::smallest_capitals_in_units()`. The audit holds a window's capitals in its own pixels to `smallest_capitals()`
+times `audit::screen_unit(height)` (its height over the design height, never under one), less `CAPS_SLACK`. A canvas unit
+is the window's height over the design height, so a 1280 × 720 window draws 0.9 pixels a unit and needs 12.93 units of
+capitals where 1280 × 800 needs 11.60. The floor in units is the largest over the gate's `audit::SIZES`, which kit-core
+now owns and qt-test's harness re-exports (seen 2026-11-15 by the games view's audit: 147 lines "too small" at 1280 × 720
+under the first rule, which held the floor at 1280 × 800 alone). kit-qt's `type_size::legible` measures the capitals with Qt (`QFontMetricsF::capHeight`, `cpp/text_width.cpp`)
 for the application's face, the one a Text with no family takes, at the whole pixel size Qt draws: a real handed to a Text's
 `font.pixelSize` is taken to the nearest, seen 2026-11-15 (74.67 drawn at 75), and a `Qt.font({ pixelSize })` truncates it
 (16.5 drawn at 16), so a part sets `labelFont.pixelSize`, never `Qt.font`. EmuSen.Theme 1.4's `Type.size(base, textScale)`

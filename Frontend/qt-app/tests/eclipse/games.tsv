@@ -40,7 +40,7 @@ the sort's words	EclipseLibrary:62	1200	GamesInk.pillWords (#D8DBE6, Home's Ink 
 the pill's VIEW glyph	EclipseLibrary:62	1200	nothing: no button steps the sort; A on the pill does	not-drawn			VIEW
 the games	EclipseLibrary:67	1200	Browse.games (theme-qt/src/browse.rs:39), in the order shown	built	gamesTile	x=660 y=236 w=206 h=170 gap=20 right=150 rows=4	
 a game's tile	EclipseLibrary:69	1200	the row's cover (view.rs:381), filling the tile as the board's art does; a game with no cover draws Tokens.surfaceRaised, the board's colours being invented	built	gamesTileCover.0	w=206 h=170	
-a game's foot	EclipseLibrary:70	1200	Tokens.overArtScrim, the kit's role for it (kit-core/src/tokens/palette.rs:38); the board's rgba(4, 5, 10, 0.94) is not Eclipse's value	built	gamesTileFoot.0	h=84
+a game's foot	EclipseLibrary:70	1200	Tokens.overArtScrim, the kit's role for it (kit-core/src/tokens/palette.rs:38), which Eclipse sets to the board's rgba(4, 5, 10, 0.94) (themes/eclipse/theme.json)	built	gamesTileFoot.0	h=84
 a game's title	EclipseLibrary:71	1200	the row's title (view.rs:380), in Tokens.overArt (#FFFFFF)	built	gamesTileTitle.0	font=18 ink=#FFFFFF	Aurora Drift
 the focus ring	EclipseLibrary:106	1200	the kit's FocusRing on the tokens (R-20261115-2, -3); the board's 4 px gap is the tokens' 3 px	built	gamesRing
 a resting tile's shadow	EclipseLibrary:106	1200	the kit's shadow part a theme may use, Home's to build first (R-20261115-6); its place left	home			

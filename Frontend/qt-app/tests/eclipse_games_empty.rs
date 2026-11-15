@@ -1,5 +1,5 @@
 //! Eclipse's games view with no game in the library (EmuSen_Qt.md §3.4.7.2): the empty board's rows of `eclipse/games.tsv`
-//! held to the screen at each of the gate's sizes, the program's words, and the gate's fit and contrast. With
+//! held to the screen at each of the gate's sizes, and the program's words; the theme's fit and contrast are theme-check's loaded step. With
 //! `ECLIPSE_GAMES_PICTURES` set, the state is saved there at 1280x800 and 1920x1200.
 
 mod common;
@@ -11,9 +11,7 @@ use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
 use emusen_qt::MAIN_URL;
 use emusen_qt_models::{themes, words};
-use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::harness::SIZES;
-use emusen_qt_test::mockup;
 
 #[test]
 fn qt_3_4_7_2_eclipses_games_view_with_no_game_is_the_empty_board_by_the_table() {
@@ -68,7 +66,4 @@ fn qt_3_4_7_2_eclipses_games_view_with_no_game_is_the_empty_board_by_the_table()
     scene.wait(200);
     assert!(report.is_empty(), "{}", report.join("\n"));
 
-    let (mut excuses, mut found) = (Excuses::new(&[]).listing("qt-app-eclipse-games-empty"), Vec::new());
-    common::hold(&mut scene, "EclipseGamesEmpty", &mockup::Mockup::default(), &mut excuses, &mut found);
-    assert!(found.is_empty(), "{}", found.join("\n"));
 }

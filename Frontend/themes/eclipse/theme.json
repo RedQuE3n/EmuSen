@@ -21,6 +21,7 @@
             "muted": "#B9BED0",
             "accent": "#F6E7D8",
             "overAccent": "#07080F",
+            "overArtScrim": "#F004050A",
             "shadowOpacity": 0.6,
             "shadowOffsetY": 12.0,
             "rowHeight": 56.0,

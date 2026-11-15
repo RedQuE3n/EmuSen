@@ -305,7 +305,8 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     scene.pad(UiButton::Accept);
     scene.wait(50);
     assert_eq!(titled(&mut scene, "listCardCanvas").1, "Filter");
-    assert_eq!(rows(&mut scene), ["Every game", "Favourites"]);
+    // Not played, decided 2026-11-15 by the tester (R-20261115-10), the one change the reference theme's player sees.
+    assert_eq!(rows(&mut scene), ["Every game", "Favourites", "Not played"]);
     scene.pad(UiButton::Down);
     scene.pad(UiButton::Accept);
     settle(&mut scene);

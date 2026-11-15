@@ -1679,6 +1679,7 @@ project, `~/.cache/emusen/design-console-themes-2026-11-11/project/`):
 | muted | a door row's mark (`MenuRow.qml:114`) | a door row's mark (`EclipseSettings:59`) | #B9BED0 | #B9BED0 |
 | accent | a switch's track when on (`style/Switch.qml:22`), the ring | the track when on, the ring (`EclipseSettings:94`) | #F6E7D8 | #F6E7D8 |
 | overAccent | a switch's knob when on (`style/Switch.qml:31`) | the knob when on (`EclipseSettings:94`) | #07080F | #07080F |
+| overArtScrim | the foot under words over a picture (Eclipse's games view, §3.4.7.2) | a game tile's foot (`EclipseLibrary:70`) | rgba(4, 5, 10, 0.94) | #F004050A |
 | shadowOpacity | a notice's shadow (`NoticeLayer.qml:14`) | the notice's shadow (`EclipseDialog:23`) | 0.6 | 0.6 |
 | shadowOffsetY | a notice's shadow (`NoticeLayer.qml:47`) | the notice's shadow (`EclipseDialog:23`) | 18 px | 12 |
 | rowHeight | a row (`MenuRow.qml:28`) | a row (`EclipseSettings:42`) | 84 px | 56 |
@@ -1716,8 +1717,9 @@ on inputSurface, under theme-check's 3:1 floor for graphics: decided 2026-11-14 
 
 - `voidFill`: the boards draw black behind a game (`EclipsePause:17`), which is the kit's.
 - `success`, `error`, `attention`: no board draws words in a tone colour; a status is a filled chip (`EclipseSettingsConsoles:78`).
-- `captionSurface`, `overArt`, `overArtScrim`: the game page's board draws the disc over its art, not the kit's caption and
-  gradient; settled with the game page's piece.
+- `captionSurface`, `overArt`: the game page's board draws the disc over its art, not the kit's caption and gradient;
+  settled with the game page's piece. `overArtScrim` is the games board's tile foot (the table above), so a tile's title
+  reads over its cover; the game page's piece settles whether its art takes the same foot.
 - `shadowBlur`: how a CSS blur radius relates to the kit's (`RaisedShadow.qml:31`, MultiEffect's `blurMax`) was not read.
 - `fontStrong`, `headerSize`: no screen of the program reads them. `fontGlyph`: the kit's glyph is sized as a share of it
   (`PadGlyph.qml:20`), the board's is a 34 px disc; not the same measure.

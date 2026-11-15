@@ -1,6 +1,6 @@
 //! Eclipse's games view (EmuSen_Qt.md §3.4.7.2) over a library of 22 games, a tall, a wide and a square cover and the rest
 //! with none: every built row of `eclipse/games.tsv` held to the screen at each of the gate's sizes, the tiles by the
-//! board's rule, the gate's fit, contrast and walk, and the focus moved by the pad. With `ECLIPSE_GAMES_PICTURES` set, the
+//! board's rule, and the focus moved by the pad; the theme's fit, contrast and walk are theme-check's loaded step (EmuSen_Qt.md §3.7.2). With `ECLIPSE_GAMES_PICTURES` set, the
 //! view is saved there at 1280x800 and 1920x1200.
 
 mod common;
@@ -14,9 +14,8 @@ use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
 use emusen_platform_client::Platform;
 use emusen_qt::MAIN_URL;
 use emusen_qt_models::themes;
-use emusen_qt_test::excuse::Excuses;
 use emusen_qt_test::harness::SIZES;
-use emusen_qt_test::{mockup, Scene};
+use emusen_qt_test::Scene;
 
 /// The covers drawn, each a shape of its own: tall, wide and square, at sizes that are constants of this test.
 const COVERS: [(&str, (u32, u32)); 3] = [("Aurora Drift", (300, 420)), ("Amber Relay", (420, 300)), ("Basalt Kings", (360, 360))];
@@ -132,10 +131,6 @@ fn qt_3_4_7_2_eclipses_games_view_is_its_board_by_the_table_at_every_size() {
     scene.wait(200);
     assert!(report.is_empty(), "{}", report.join("\n"));
 
-    // The gate's fit, contrast and walk at every size.
-    let (mut excuses, mut found) = (Excuses::new(&[]).listing("qt-app-eclipse-games"), Vec::new());
-    common::hold(&mut scene, "EclipseGames", &mockup::Mockup::default(), &mut excuses, &mut found);
-    assert!(found.is_empty(), "{}", found.join("\n"));
 
     // The pad moves the focus and the words follow; the rows shown move a row at a time once the focus leaves them.
     let tree = scene.tree();

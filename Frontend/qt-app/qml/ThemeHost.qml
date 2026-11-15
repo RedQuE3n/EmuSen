@@ -108,6 +108,7 @@ Item {
         onOpened: (key) => themed.screens.open(key)
         onBacked: themed.backed()
         onActed: (key) => themed.screens.act(key)
+        onListed: (key) => themed.grid.focused = themed.grid.listAct(key)
         onFocused: (game) => themed.focused(game)
         onSelected: (index) => themed.library.select(index)
     }

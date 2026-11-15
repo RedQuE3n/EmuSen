@@ -64,6 +64,21 @@ pub const NO_GAMES: &str = "No games yet";
 pub const NO_RECENT: &str = "Nothing played yet";
 pub const NO_CONSOLES: &str = "No consoles have games yet";
 pub const ADD_FOLDER: &str = "Settings › Library adds a folder";
+/// A list with nothing in it, by the list (decided 2026-11-15 by the tester, R-20261115-13): Favourites with none, and a
+/// search or a filter that leaves none; Recent keeps NO_RECENT.
+pub const NO_FAVOURITES: &str = "No favourites yet";
+pub const NO_GAMES_FOUND: &str = "No games found";
+
+/// The List card's filters as the Filter page and a theme's choices name them; "Not played" decided 2026-11-15 by the
+/// tester (R-20261115-10).
+pub const EVERY_GAME: &str = "Every game";
+pub const FAVOURITES_FILTER: &str = "Favourites";
+pub const NOT_PLAYED: &str = "Not played";
+
+/// A filter's choice as a chip says it: its name and how many games it shows ("Not played · 153").
+pub fn choice_line(name: &str, count: usize) -> String {
+    format!("{name} {BETWEEN} {}", grouped(count))
+}
 
 /// The eyebrow over Home's places.
 pub const PLACES: &str = "PLACES";
@@ -77,7 +92,8 @@ pub const RECENT_ENTRY: &str = "Recent";
 pub fn is_fixed(words: &str) -> bool {
     let single = [
         TITLE, GAMES, CHOOSE_A_CONSOLE, GAMES_PATH, CONTINUE_PLAYING, RECENT, POWER_LINE, BETWEEN, SEARCH, EMUSEN_TAG, LIBRETRO_TAG,
-        FAVOURITES_LINE, NO_GAMES, NO_RECENT, NO_CONSOLES, ADD_FOLDER, PLACES, CONTINUE_ENTRY, RECENT_ENTRY,
+        FAVOURITES_LINE, NO_GAMES, NO_RECENT, NO_CONSOLES, ADD_FOLDER, PLACES, CONTINUE_ENTRY, RECENT_ENTRY, NO_FAVOURITES,
+        NO_GAMES_FOUND, EVERY_GAME, FAVOURITES_FILTER, NOT_PLAYED,
     ];
     single.contains(&words)
         || HOME_PLACES.contains(&words)

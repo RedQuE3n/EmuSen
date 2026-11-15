@@ -36,12 +36,14 @@ impl Sort {
     }
 }
 
-/// How a section is listed: the sort by its index in `Sort::ALL`, whether the Filter page's Favourites narrows it, the
-/// search's words, and the members of the collection the Filter page narrows it to.
+/// How a section is listed: the sort by its index in `Sort::ALL`, whether the Filter page's Favourites or Not played
+/// narrows it, the search's words, and the members of the collection the Filter page narrows it to.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Listing {
     pub sort: usize,
     pub favourites_only: bool,
+    /// The games never played: no time in the library's played record (`GameRow::played_at`, library.rs; R-20261115-10).
+    pub not_played: bool,
     pub search: String,
     pub collection: Option<std::collections::BTreeSet<String>>,
 }
@@ -49,7 +51,7 @@ pub struct Listing {
 impl Listing {
     /// Whether the count says how many of the section are shown.
     pub fn narrowed(&self) -> bool {
-        self.favourites_only || self.collection.is_some() || !self.search.trim().is_empty()
+        self.favourites_only || self.not_played || self.collection.is_some() || !self.search.trim().is_empty()
     }
 }
 
@@ -70,7 +72,7 @@ pub fn shown(games: &[GameRow], section: &str, listing: &Listing) -> Vec<GameRow
     let words = listing.search.trim().to_lowercase();
     let favourites_only = listing.favourites_only && section != FAVOURITES;
     let mut out: Vec<GameRow> =
-        games.iter().filter(|g| (!favourites_only || g.favourite) && listing.collection.as_ref().is_none_or(|c| c.contains(&g.path)) && (words.is_empty() || g.title.to_lowercase().contains(&words))).cloned().collect();
+        games.iter().filter(|g| (!favourites_only || g.favourite) && (!listing.not_played || g.played_at == 0) && listing.collection.as_ref().is_none_or(|c| c.contains(&g.path)) && (words.is_empty() || g.title.to_lowercase().contains(&words))).cloned().collect();
     if section == RECENT && listing.sort == 0 {
         return out;
     }
@@ -87,6 +89,42 @@ pub fn shown(games: &[GameRow], section: &str, listing: &Listing) -> Vec<GameRow
         Sort::Name => {}
     }
     out
+}
+
+/// One choice of the Filter page as it narrows the section: its action's key, its words and how many of the section's
+/// games it shows.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Choice {
+    pub key: String,
+    pub name: String,
+    pub count: usize,
+}
+
+/// The Filter page's choices for a section's games, each counted once per read: every game, Favourites (not in the
+/// Favourites section, which is them), Not played, then each collection. The one list the List card and a theme show.
+pub fn choices(games: &[GameRow], section: &str, collections: &[crate::list_card::Listed]) -> Vec<Choice> {
+    use crate::list_card::{EVERY_GAME, FAVOURITES_ONLY, NOT_PLAYED};
+    let choice = |key: &str, name: &str, count: usize| Choice { key: key.to_owned(), name: name.to_owned(), count };
+    let mut out = vec![choice(EVERY_GAME, crate::words::EVERY_GAME, games.len())];
+    if section != FAVOURITES {
+        out.push(choice(FAVOURITES_ONLY, crate::words::FAVOURITES_FILTER, games.iter().filter(|g| g.favourite).count()));
+    }
+    out.push(choice(NOT_PLAYED, crate::words::NOT_PLAYED, games.iter().filter(|g| g.played_at == 0).count()));
+    for c in collections {
+        out.push(choice(&c.key, &c.name, games.iter().filter(|g| c.members.contains(&g.path)).count()));
+    }
+    out
+}
+
+/// The words a list with nothing in it says (R-20261115-13): a search or a filter that leaves none, Recent, Favourites,
+/// and any other section.
+pub fn empty_words(section: &str, narrowed: bool) -> &'static str {
+    match section {
+        _ if narrowed => crate::words::NO_GAMES_FOUND,
+        RECENT => crate::words::NO_RECENT,
+        FAVOURITES => crate::words::NO_FAVOURITES,
+        _ => crate::words::NO_GAMES,
+    }
 }
 
 /// The count beside the section's name: its games, or how many of them are shown where narrowed ("12 of 1,284 games").

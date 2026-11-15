@@ -297,6 +297,35 @@ pub const CHECK: &str = "check";
 /// themes' help bars, EmuSen_Qt.md §3.2): no action, since the walk and the theme answer them.
 pub const GROUP: Entry = (UiButton::PageUp, "Group", None);
 pub const BACK: Entry = (UiButton::Back, "Back", None);
+/// The triggers on a games view that steps letters (R-20261115-12): LT the letter before, drawn as one entry with RT,
+/// the letter after; the List card's Jump to by the same actions.
+pub const LETTER: Entry = (UiButton::First, "Letter", Some(crate::list_card::JUMP_BACK));
+pub const LETTER_ON: Entry = (UiButton::Last, "Letter", Some(crate::list_card::JUMP_ON));
+
+/// Where the letters' entry goes in a screen's bar that takes it: after the shoulders' Console.
+pub fn letters_at(screen: Screen) -> Option<usize> {
+    match screen {
+        Screen::Grid | Screen::GridSearched => entries(screen).iter().position(|e| e.0 == UiButton::PageUp).map(|at| at + 1),
+        _ => None,
+    }
+}
+
+/// As `entries_with`, the letters' entry added where the screen takes it and `letters` asks for it.
+pub fn entries_with_letters(screen: Screen, group: bool, back: bool, letters: bool) -> Vec<Entry> {
+    let mut list = entries_with(screen, group, back);
+    if let Some(at) = letters_at(screen).filter(|_| letters) {
+        list.insert(at, LETTER);
+    }
+    list
+}
+
+/// As `action_lines`, with the triggers' two actions where the letters' entry is added.
+pub fn action_lines_with(screen: Screen, letters: bool) -> String {
+    let added = if letters && letters_at(screen).is_some() { [LETTER, LETTER_ON].as_slice() } else { &[] };
+    let mut lines = action_lines(screen);
+    lines.extend(added.iter().filter_map(|(button, _, action)| action.map(|key| format!("{key} {button:?}\n"))));
+    lines
+}
 
 /// A game's page's shared entries: Y the heart, the shoulders the sections (the frame steps them), Start Home.
 const PAGE_HEART: Entry = (UiButton::Search, "Favourite", Some(FAVOURITE));
@@ -367,6 +396,7 @@ pub fn pair_of(button: UiButton) -> Option<UiButton> {
     match button {
         UiButton::PageUp => Some(UiButton::PageDown),
         UiButton::Left => Some(UiButton::Right),
+        UiButton::First => Some(UiButton::Last),
         _ => None,
     }
 }

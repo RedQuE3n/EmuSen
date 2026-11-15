@@ -16,6 +16,8 @@
         <file alias="theme.json">../themes/emusen/theme.json</file>
     </qresource>
     <qresource prefix="/emusen/themes/eclipse">
+        <file alias="parts/GamesInk.qml">../themes/eclipse/parts/GamesInk.qml</file>
+        <file alias="screens/Games.qml">../themes/eclipse/screens/Games.qml</file>
         <file alias="theme.json">../themes/eclipse/theme.json</file>
     </qresource>
     <qresource prefix="/emusen/themes/horizon">

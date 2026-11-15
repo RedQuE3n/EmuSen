@@ -174,9 +174,10 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
         // Safety: the help's lists are its children.
         let entries = unsafe { help.entries(kind).as_ref() }.expect("a list for every kind");
         assert!(!emusen_qt_models::help::entries(entries.screen()).is_empty(), "kind {} has entries", kind.repr);
-        for (group, back, accept) in emusen_theme_qt::help::FLAGS {
-            let added = unsafe { help.list(kind, group, back, accept).as_ref() }.expect("a list for every kind and flag");
-            assert_eq!(added.list(), emusen_qt_models::help::entries_with(entries.screen(), group, back), "kind {}", kind.repr);
+        for (group, back, accept, letters) in emusen_theme_qt::help::FLAGS {
+            let added = unsafe { help.list(kind, group, back, accept, letters).as_ref() }.expect("a list for every kind and flag");
+            assert_eq!(added.list(), emusen_qt_models::help::entries_with_letters(entries.screen(), group, back, letters), "kind {}", kind.repr);
+            assert_eq!(added.action_lines().to_string(), emusen_qt_models::help::action_lines_with(entries.screen(), letters), "kind {}", kind.repr);
             assert_eq!(added.accepts(), accept, "kind {}", kind.repr);
         }
     }
@@ -193,9 +194,21 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert!(!actions.as_mut().step_section(1));
     assert!(!actions.as_mut().act(&QString::from("list")));
     assert!(!actions.as_mut().focus(&game));
+    assert!(!actions.as_mut().set_filter(&QString::from("notPlayed")));
+    assert!(!actions.as_mut().step_sort(1));
+    assert!(!actions.as_mut().step_letter(-1));
     assert_eq!(
         *asked.lock().unwrap(),
-        [Action::Play("/roms/Synthetic.nes".into()), Action::Back, Action::StepSection(1), Action::Act("list".into()), Action::Focus("/roms/Synthetic.nes".into())]
+        [
+            Action::Play("/roms/Synthetic.nes".into()),
+            Action::Back,
+            Action::StepSection(1),
+            Action::Act("list".into()),
+            Action::Focus("/roms/Synthetic.nes".into()),
+            Action::SetFilter("notPlayed".into()),
+            Action::StepSort(1),
+            Action::StepLetter(-1)
+        ]
     );
 
     let rung = Arc::new(Mutex::new(Vec::new()));

@@ -1,13 +1,13 @@
 {
     "schema": 1,
-    "api": "1.2",
+    "api": "1.7",
     "name": "Eclipse",
     "author": "The EmuSen project",
     "licence": "GPL-3.0-or-later",
     "variants": [
         "dark"
     ],
-    "screens": [],
+    "screens": ["games"],
     "tokens": {
         "dark": {
             "surface": "#07080F",

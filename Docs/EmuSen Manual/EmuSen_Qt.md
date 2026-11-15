@@ -937,7 +937,7 @@ card** (§0.7 there) and no theme colour is read into one. A card opens over the
 `import EmuSen.Theme` gives a theme exactly these (a type added after 1.0 needs the minor that added it, as
 `Frontend/theme-qt/CHANGELOG-theme-api.md` lists), each a QML singleton or type, each a view over `emusen-qt-models`
 with the fields a theme may read and nothing more. The table is the module as built (`Frontend/theme-qt`, the crate
-`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.2.*` and held to this table by hand in
+`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.7.*` and held to this table by hand in
 `tests/surface.rs`. The amendments of 2026-11-08 are listed in `Frontend/theme-qt/CHANGELOG-theme-api.md`.
 
 | Name | Kind | What it holds |
@@ -945,13 +945,13 @@ with the fields a theme may read and nothing more. The table is the module as bu
 | `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`, `libretro`, `group` = the maker's ordinal in order of first appearance, `groupIndex` = the place within it, `groupSize`, `groupStart` = the consoles of the groups before it, so `groupStart + groupIndex` is the place in maker order; an unknown maker is a group of its own); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles; `available`, false where the host would decline `openPlace`, not `enabled`, which would override `Item.enabled` in a delegate); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `shelf`, `recent` less the suspended game; `collections` (`key`, `name`, `count`); `gamesOf(key)` for a console's or a shelf's key, `firstOf(key, count)` its first games, and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords`, `facts` (cover and hero as file URLs) |
 | `Session` | singleton | `hasGame`, `title`, `consoleId`, `pausedSince`, `played` (seconds), `frame` (the item the game's picture is drawn in, for a `ShaderEffectSource`), `key` (the game's file), `console` (its console's name), `hue` (-1 for none) |
 | `Device` | singleton | `controllers`, `family` (the glyphs' family, as `Frame.padFamily` takes it), `clock`, `battery` (-1 none), `charging`, `network`, `bigScreen`, `form` |
-| `Actions` | singleton | `play(key)`, `openPage(key)`, `favourite(key)`, `random(console)`, `openConsole(key)`, `openPlace(key)`, `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`, `act(key)` (a help bar's declared action), `focus(key)` (the game or row the focus is on); each returns whether it was taken; `enabled(key)`, whether the host would take `act(key)`, asked without acting |
+| `Actions` | singleton | `play(key)`, `openPage(key)`, `favourite(key)`, `random(console)`, `openConsole(key)`, `openPlace(key)`, `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`, `act(key)` (a help bar's declared action), `focus(key)` (the game or row the focus is on), from 1.7 `setFilter(key)`, `stepSort(by)`, `stepLetter(by)`; each returns whether it was taken; `enabled(key)`, whether the host would take `act(key)`, asked without acting |
 | `Cues` | singleton | `scroll()`, `systembrowse()`, `select()`, `back()`, `favorite()`, `launch()`, `quicksysselect()`: the seven names of `EmuSen_Interface.md` §23, rung by the host through Endymion at the player's volume |
 | `Bells` | singleton | `ladder(count)` (the ladder's first rungs made ready), `strike(i)` (rings rung i, the bell world i rings in Moonrise), handed to the host's striker, rendered by the kit's `Bells` and rung at the Navigation volume |
 | `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`, `summary(consoles, games)`; the empty states `noGames`, `noRecent`, `noConsoles`, `addFolder`, the eyebrow `places` and `pausedAgo(pausedSince)`; `continueEntry` and `recentEntry`, Continue and the Recent shelf named as destinations: the curated face of `words.rs` |
-| `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, `SectionSearched`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; `entries(kind, {group, back, accept})` the same with LB RB Group and B Back added where the kind takes them, and A's entry not `enabled` (an `enabled` role, read as `model.enabled`) when `accept` is false; the curated face of `help.rs` |
+| `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, `SectionSearched`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; `entries(kind, {group, back, accept, letters})` the same with LB RB Group, B Back and (1.7) LT RT Letter added where the kind takes them, and A's entry not `enabled` (an `enabled` role, read as `model.enabled`) when `accept` is false; the curated face of `help.rs` |
 | `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only; `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
-| `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown) |
+| `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown); from 1.7 `kind` (`all`, `favourites`, `recent`, `console`), `emptyWords`, `filters` (`key`, `name`, `count`) and `filter`, `sort`, `letters` (`letter`) and `letter`: the List card's listing, one state with it (§3.4.7.2) |
 | `Marks` | singleton | the drawn marks as SVG paths: `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien`, `path(name)` (a shelf's icon, one of Home's seven places by its key, or an engine's mark) |
 | `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise`, `CoverTile`, `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`), `PlanetLayout`, `OrbitLayout`, `FigureLayout`, `WheelLayout` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable`; `FigureLayout` packs groups as figures on a chart (`EmuSen_Kit.md` §7.31); `WheelLayout` turns groups as wheels over a dial (§7.32); `OrbitLayout` places groups on nested orbits (§7.30) |
 | `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()` |
@@ -1036,7 +1036,7 @@ left out of `Tokens.qml` (the surface test).
 
 ### 3.3 Versioning
 
-The API is the module's version, now `EmuSen.Theme 1.2` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
+The API is the module's version, now `EmuSen.Theme 1.7` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
 removal or a rename, bumps the minor, and a role or action deprecated in one minor may be removed in any later one
 (decided 2026-11-11 by the tester, R-20261111-107, R-20261111-108, §5.3). After it, a minor adds singletons, roles,
 actions, cues or tokens and never removes or renames one; a role or action no longer meant is kept and marked
@@ -1640,19 +1640,18 @@ Decided 2026-11-11 by the tester: Eclipse is EmuSen's default look, and the pres
 theme API is not widened for that. A blank setting still gives the reference: which theme a blank setting gives changes
 only once Eclipse has screens of its own.
 
-**The package.** `Frontend/themes/eclipse/` holds `theme.json` alone: name Eclipse, `api` 1.2 (its corona tokens are 1.2's, the newest it sets; its focus tokens are 1.1's), the dark variant, no
-screen of its own (`"screens": []`), no cue, no preview, and the token overrides below. With no screens, every screen is
-the reference's: Home, Choose a console and the games are drawn by the reference's host, whose engine keeps the kit's
-tokens, so only the program's own screens (Settings, the cards, the game page, the Pause Card, the tools, the questions
-and notices) and Eclipse's own engine take Eclipse's values. It has no preview because a grab of the program in Eclipse
-today shows the reference's screens, which would not show Eclipse. The manifest allows all of this: `screens` and
-`variants` are lists, `previews` is optional, and theme-audit audits the screens a package lists, so it loads none here.
+**The package.** `Frontend/themes/eclipse/` holds `theme.json`: name Eclipse, `api` 1.7 (its games view reads 1.7's
+listing, §3.4.7.2; its corona tokens are 1.2's, its focus tokens 1.1's), the dark variant, one screen of its own, the
+games view (`"screens": ["games"]`, `screens/Games.qml` and `parts/GamesInk.qml`, §3.4.7.2), no cue, no preview, and the
+token overrides below. Home and Choose a console are still the reference's, drawn by the reference's host, whose engine
+keeps the kit's tokens. It has no preview until every screen of its own is built. The manifest allows all of this:
+`screens` and `variants` are lists, `previews` is optional, and theme-audit audits the screens a package lists.
 
 **Built in.** `themes::BUILT_IN` (`qt-models/src/themes.rs`) is the one list of built-in themes, the reference first;
 `themes::built_in_folder` gives each one's folder in the resources, `qrc:/emusen/themes/<id>/`, which `qt-app/themes.qrc`
 holds file for file. `BuiltInThemes` (`qt-app/src/theme.rs`) reads each built-in's `theme.json` through Qt for the Themes
 tab and gives the window the reference's folder. In the tab, Eclipse's row follows EmuSen's: "Eclipse", "By The EmuSen
-project · EmuSen.Theme 1.2 · dark" (the minor is the manifest's `api`), and "Checked: nothing found." (built-ins are checked by the build's tests, here
+project · EmuSen.Theme 1.7 · dark" (the minor is the manifest's `api`), and "Checked: nothing found." (built-ins are checked by the build's tests, here
 theme-check's `qt_3_4_7_the_built_in_eclipse_package_is_clean`). Use stores the id `eclipse`; `themes::resolve` gives
 `Resolved::BuiltIn`, whose host folder is the resources', so the chosen theme's host loads it and `ThemeStyle` puts its
 overrides on the program's engine.
@@ -1742,6 +1741,47 @@ Eclipse; Use stores `eclipse` and loads it from the resources; every override re
 program's equals `theme.json`'s, and every other token is the kit's; the reference chosen again gives the kit's tokens
 back. qt-models' `both_built_ins_come_first_and_a_blank_setting_still_gives_the_reference` holds the listing and the
 resolution, and qt-app's `qt_3_4_2_…` holds each built-in's resources to its folder.
+
+#### 3.4.7.2 Eclipse's games view **[M 2026-11-15]**
+
+Decided 2026-11-14 by the tester (R-20261114-13): Eclipse is built a screen a piece. The games view is
+`Frontend/themes/eclipse/screens/Games.qml`, drawn from the boards "Eclipse theme, a console's games"
+(`EclipseLibrary.dc.html`) and "Eclipse theme, first run with no games" (`EclipseEmpty.dc.html`). Every element of the two
+boards is a row of `Frontend/qt-app/tests/eclipse/games.tsv`: its board line, what the program has for it (path:line) or
+that it has nothing, whether it is built here, Home's (a part Home's board draws too, built by the Home piece), not drawn,
+or open, and the checks it is held to. A board pixel becomes canvas units as value × `canvas::DESIGN_HEIGHT` / the board's
+height (1200), the conversion of §3.4.7.
+
+**What is drawn.** At the left, the focused game's console (its `Library.consoles` name, then its year where the row has
+one) and its title, and its description where the row has one. Beside them, the Filter page's choices as chips, the one in
+force filled, and the sort in force as a pill at the right; under them the games as tiles, each the cover filling the tile
+as the board's art does (cropped through `RoundPicture`) or, with no cover, the plain tile in `surfaceRaised`, its title
+over the kit's `overArtScrim` foot, the kit's `FocusRing` on the focused one. The tiles stand in as many columns of the
+board's tile and gap as fit between the board's left edge of them and its right margin, five at the board's shape, and
+four rows are shown, moved a row at a time once the focus leaves them. At the right the letter rail: the focused game's
+letter, the track, the last letter. The help bar is `Help.entries(kind, {letters: true})`, so LT and RT step letters here
+and nowhere else. A list with nothing in it shows `Browse.emptyWords` in the empty board's heading; with no game in the
+library at all, the empty board: `Words.noGames`, `Words.addFolder` under it, the kit's `CoronaDisc` on the corona tokens,
+on the board's own ground.
+
+**The listing, decided 2026-11-15 by the tester.** The chips, the pill, the rail and the triggers are the List card's
+own state, read and driven through 1.7 (§3.2, `CHANGELOG-theme-api.md`): R-20261115-10, the filter's choices with their
+counts and a new filter, Not played, the games with no played time (`GameRow::played_at`, from the catalog's played
+record), listed by `listing::choices` once a read for both the Filter page and a theme; R-20261115-11, the sort; R-20261115-12,
+the letters and the triggers; R-20261115-13, the list's kind and its empty words ("No favourites yet", "Nothing played
+yet", "No games found"). Under the reference nothing changes but the Filter page's Not played.
+
+**Not drawn**, each listed in the table: the breadcrumb (the top navigation's place, R-20261115-7), the genre and player
+chips and the facts list (the rows hold no genre, players, time played or states, and no words name them), the board's
+"Start" (the program's A is "Play"), the "VIEW" glyph (no button steps the sort), a game's place among the shown ("1 of
+214"), and on the empty board its steps and its two buttons. Colours no token holds are the games view's own constants in
+`parts/GamesInk.qml`; those Home's board draws too move to Home's shared part with its commit.
+
+**Proof.** qt-models' `listing_choices.rs` (Not played, the choices and the Filter page, the empty words, the kinds, the
+letters' help entry); theme-qt's `qml.rs` (every help list with its flags, the new actions) and `surface.rs`; qt-app's
+`eclipse_games.rs` (22 games, a tall, a wide and a square cover: every built row at each of the gate's sizes, the gate's
+fit, contrast and walk, the pad's moves, the triggers, the chips, the empty words of a filter, the sort) and
+`eclipse_games_empty.rs` (the empty board's rows at each size and the gate).
 
 ### 3.5 Loading and the sandbox
 

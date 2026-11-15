@@ -3,6 +3,26 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.7, an addition: the grid's listing (2026-11-15)
+
+Decided 2026-11-15 by the tester (R-20261115-10 to -13): a theme reads and drives the listing the List card holds.
+
+- **`Browse.filters`** (rows of `key`, `name`, `count`), **`Browse.filter`** (the key in force) and
+  **`Actions.setFilter(key)`**: the Filter page's choices, each counted once a read (`listing::choices`): Every game,
+  Favourites (not in the Favourites section), Not played (new: the games with no played time), then each collection.
+  The List card's Filter page shows the same list.
+- **`Browse.sort`** (the sort in force, in the List card's words) and **`Actions.stepSort(by)`**: the List card's Sort
+  row, one state.
+- **`Browse.letters`** (rows of `letter`), **`Browse.letter`** (the focused game's) and **`Actions.stepLetter(by)`**: the
+  List card's Jump to, one state.
+- **`Help.entries(kind, {letters: true})`**: LT RT Letter added after the grid's Console entry, and the triggers declared
+  as the letter before and after (`jump-1`, `jump+1`), carried out as Jump to. A bar not asked for it keeps LT and RT as
+  the first and last entry.
+- **`Browse.kind`** (`all`, `favourites`, `recent` or `console`) and **`Browse.emptyWords`**: which list is shown and what
+  it says with nothing in it ("No favourites yet", "Nothing played yet", "No games found" for a search or filter, else
+  "No games yet").
+- The module is 1.7 (1.3 to 1.6 being held by other pieces); every type keeps the minor it was added in.
+
 ## 1.2, an addition: the corona disc and the planet mark (2026-11-14)
 
 Decided 2026-11-14 by the tester (R-20261114-16): Eclipse's shared parts are kit parts, exported to themes as an addition.

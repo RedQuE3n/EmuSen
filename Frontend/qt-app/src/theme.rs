@@ -9,7 +9,7 @@ use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QList, QString, QStringList};
 use emusen_qt_models::game_model::qobject::GameModel;
 use emusen_qt_models::library_model::qobject::{LibraryModel, QAbstractListModel};
-use emusen_qt_models::{help, screens, themes, words};
+use emusen_qt_models::{help, list_card, screens, themes, words};
 use emusen_theme_qt::actions::{Action, ActionSink};
 use emusen_theme_qt::browse::facts_of;
 use emusen_theme_qt::device::DeviceFacts;
@@ -105,6 +105,9 @@ pub mod qobject {
         /// A screen's declared action, by the help bar's key (`emusen_qt_models::help`).
         #[qsignal]
         fn acted(self: Pin<&mut ThemeFeed>, key: QString);
+        /// A step or a choice of the List card's, by its action's key (`emusen_qt_models::list_card`), for the grid to carry out.
+        #[qsignal]
+        fn listed(self: Pin<&mut ThemeFeed>, key: QString);
         /// The game the theme's focus is on, by its file.
         #[qsignal]
         fn focused(self: Pin<&mut ThemeFeed>, game: QString);
@@ -218,6 +221,8 @@ pub enum Carried {
     Selected(i32),
     /// A game's page: the game taken in hand, then its page opened (EmuSen_Qt.md §7.8).
     Page(String),
+    /// The List card's filter, sort or letter step, by its action's key (EmuSen_Qt.md §3.4.7.2).
+    Listed(String),
 }
 
 /// The signal an action becomes, `suspended` being the game a session holds and `rows` the library's rows' keys; none
@@ -240,7 +245,11 @@ pub fn carried(action: &Action, suspended: Option<&str>, rows: &[&str]) -> Optio
         Action::OpenHomeCard => return None,
         Action::OpenListCard => Carried::Acted(screens::LIST.into()),
         Action::Search => Carried::Acted(screens::SEARCH.into()),
+        Action::Act(key) if key == list_card::JUMP_BACK || key == list_card::JUMP_ON => Carried::Listed(key.clone()),
         Action::Act(key) => Carried::Acted(key.clone()),
+        Action::SetFilter(key) => Carried::Listed(key.clone()),
+        Action::StepSort(by) => Carried::Listed(format!("{}{by:+}", list_card::SORT)),
+        Action::StepLetter(by) => Carried::Listed(format!("{}{by:+}", list_card::JUMP)),
         Action::Focus(key) => match rows.iter().position(|r| r == key) {
             Some(i) => Carried::Selected(i as i32),
             None => Carried::Focused(key.clone()),
@@ -269,6 +278,7 @@ impl ActionSink for Sink {
             Carried::Acted(key) => feed.as_mut().acted(QString::from(key.as_str())),
             Carried::Focused(game) => feed.as_mut().focused(QString::from(game.as_str())),
             Carried::Selected(index) => feed.as_mut().selected(index),
+            Carried::Listed(key) => feed.as_mut().listed(QString::from(key.as_str())),
             Carried::Page(game) => {
                 feed.as_mut().focused(QString::from(game.as_str()));
                 feed.as_mut().acted(QString::from(help::GAME_PAGE));
@@ -377,11 +387,18 @@ impl qobject::ThemeFeed {
         let (Some(games), Some(library)) = (unsafe { section.games.as_ref() }, self.library()) else { return };
         let open = (section.searching, section.typing, section.list_open);
         let searched = !games.search().is_empty();
-        let facts = facts_of(library.view(), &section.key, &games.count_line().to_string(), *games.focused(), open, searched);
+        let mut facts = facts_of(library.view(), &section.key, &games.count_line().to_string(), *games.focused(), open, searched);
+        let (letters, letter) = games.letters();
+        facts.empty_words = games.empty_words().to_owned();
+        facts.filter = games.filter_key();
+        facts.sort = games.sort_words().to_owned();
+        facts.letter = letter;
         let rows = view::games(library.view(), games.rows(), self.at());
+        let (filters, letters) = (view::filters(games.choices()), view::letters(&letters));
         let Some(engine) = self.engine() else { return };
         if let Some(mut browse) = host::browse(engine) {
             browse.as_mut().show_games(rows);
+            browse.show_listing(filters, letters);
             browse.show(&facts);
         }
     }

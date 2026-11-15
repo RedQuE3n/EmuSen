@@ -38,6 +38,18 @@ pub mod qobject {
         #[qproperty(bool, list_open, cxx_name = "listOpen", READ, NOTIFY)]
         #[qproperty(*mut ThemeRows, games, READ, CONSTANT)]
         #[qproperty(bool, searched, READ, NOTIFY)]
+        /// Which list the section is: `all`, `favourites`, `recent` or `console` (1.7, R-20261115-13).
+        #[qproperty(QString, kind, READ, NOTIFY)]
+        /// What the list says with nothing in it, by the list (1.7, R-20261115-13).
+        #[qproperty(QString, empty_words, cxx_name = "emptyWords", READ, NOTIFY)]
+        /// The Filter page's choices, each `key`, `name`, `count` and `line` (name and count as a chip says them), and the key of the one in force (1.7, R-20261115-10).
+        #[qproperty(*mut ThemeRows, filters, READ, CONSTANT)]
+        #[qproperty(QString, filter, READ, NOTIFY)]
+        /// The sort in force in the List card's words (1.7, R-20261115-11).
+        #[qproperty(QString, sort, READ, NOTIFY)]
+        /// The shown games' first letters in order, each a `letter`, and the focused game's (1.7, R-20261115-12).
+        #[qproperty(*mut ThemeRows, letters, READ, CONSTANT)]
+        #[qproperty(QString, letter, READ, NOTIFY)]
         type ThemeBrowse = super::ThemeBrowseRust;
     }
 
@@ -64,6 +76,11 @@ pub struct BrowseFacts {
     pub list_open: bool,
     /// Whether the search's words narrow the section, kept after its keyboard closes.
     pub searched: bool,
+    pub kind: String,
+    pub empty_words: String,
+    pub filter: String,
+    pub sort: String,
+    pub letter: String,
 }
 
 pub struct ThemeBrowseRust {
@@ -80,6 +97,13 @@ pub struct ThemeBrowseRust {
     list_open: bool,
     games: *mut ThemeRows,
     searched: bool,
+    kind: QString,
+    empty_words: QString,
+    filters: *mut ThemeRows,
+    filter: QString,
+    sort: QString,
+    letters: *mut ThemeRows,
+    letter: QString,
 }
 
 impl Default for ThemeBrowseRust {
@@ -98,18 +122,31 @@ impl Default for ThemeBrowseRust {
             list_open: false,
             games: std::ptr::null_mut(),
             searched: false,
+            kind: QString::default(),
+            empty_words: QString::default(),
+            filters: std::ptr::null_mut(),
+            filter: QString::default(),
+            sort: QString::default(),
+            letters: std::ptr::null_mut(),
+            letter: QString::default(),
         }
     }
 }
 
 impl cxx_qt::Initialize for qobject::ThemeBrowse {
     fn initialize(mut self: Pin<&mut Self>) {
-        let list = crate::glue::ffi::new_rows(self.as_mut().upcast_pin());
-        // Safety: the list was just made, a child of this singleton.
-        if let Some(rows) = unsafe { list.as_mut() } {
-            unsafe { Pin::new_unchecked(rows) }.set_roles(&crate::view::GAME_ROLES);
-        }
-        self.as_mut().rust_mut().games = list;
+        let mut made = |roles: &'static [&'static str]| {
+            let list = crate::glue::ffi::new_rows(self.as_mut().upcast_pin());
+            // Safety: the list was just made, a child of this singleton.
+            if let Some(rows) = unsafe { list.as_mut() } {
+                unsafe { Pin::new_unchecked(rows) }.set_roles(roles);
+            }
+            list
+        };
+        let (games, filters, letters) = (made(&crate::view::GAME_ROLES), made(&crate::view::FILTER_ROLES), made(&crate::view::LETTER_ROLES));
+        self.as_mut().rust_mut().games = games;
+        self.as_mut().rust_mut().filters = filters;
+        self.as_mut().rust_mut().letters = letters;
     }
 }
 
@@ -149,6 +186,21 @@ impl qobject::ThemeBrowse {
         plain!(self, typing, typing_changed, facts.typing);
         plain!(self, list_open, list_open_changed, facts.list_open);
         plain!(self, searched, searched_changed, facts.searched);
+        text!(self, kind, kind_changed, facts.kind);
+        text!(self, empty_words, empty_words_changed, facts.empty_words);
+        text!(self, filter, filter_changed, facts.filter);
+        text!(self, sort, sort_changed, facts.sort);
+        text!(self, letter, letter_changed, facts.letter);
+    }
+
+    /// The host's feed of the Filter page's choices and the shown games' letters, each replaced whole.
+    pub fn show_listing(&self, filters: Vec<Row>, letters: Vec<Row>) {
+        for (list, rows) in [(self.filters, filters), (self.letters, letters)] {
+            // Safety: each list is the singleton's child, made at its start and alive as long as it.
+            if let Some(list) = unsafe { list.as_mut() } {
+                unsafe { Pin::new_unchecked(list) }.replace(rows);
+            }
+        }
     }
 
     /// The host's feed of the section's games as shown, replaced whole.
@@ -180,5 +232,7 @@ pub fn facts_of(view: &LibraryView, section: &str, count_line: &str, focus_row: 
         typing: open.1,
         list_open: open.2,
         searched,
+        kind: emusen_qt_models::library::section_kind(section).to_owned(),
+        ..BrowseFacts::default()
     }
 }

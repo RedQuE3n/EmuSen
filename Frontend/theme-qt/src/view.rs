@@ -64,6 +64,21 @@ pub const GAME_ROLES: [&str; 18] = [
     "lastPlayedWords",
     "facts",
 ];
+/// `Browse.filters`: the Filter page's choices (1.7).
+pub const FILTER_ROLES: [&str; 4] = ["key", "name", "count", "line"];
+/// `Browse.letters`: the shown games' first letters (1.7).
+pub const LETTER_ROLES: [&str; 1] = ["letter"];
+
+/// The Filter page's choices as `Browse.filters` holds them.
+pub fn filters(choices: &[emusen_qt_models::listing::Choice]) -> Vec<Row> {
+    choices.iter().map(|c| vec![text(&c.key), text(&c.name), Cell::Whole(c.count as i32), Cell::Text(words::choice_line(&c.name, c.count))]).collect()
+}
+
+/// The letters as `Browse.letters` holds them.
+pub fn letters(letters: &[String]) -> Vec<Row> {
+    letters.iter().map(|l| vec![text(l)]).collect()
+}
+
 /// `Library.collections`: the player's collections.
 pub const COLLECTION_ROLES: [&str; 3] = ["key", "name", "count"];
 /// `Help.entries`: the help bar's entries, as the kit's `HelpBar` reads them.

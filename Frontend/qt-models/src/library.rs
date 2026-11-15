@@ -174,6 +174,21 @@ impl Keyed for LibraryRow {
 /// The places, their keys and their names, in order (EmuSen_Interface.md §24).
 pub const PLACES: [(&str, &str); 3] = [("all", "All games"), (FAVOURITES, "Favourites"), (RECENT, "Recently played")];
 
+/// A console's games, as `section_kind` names the list.
+pub const CONSOLE_KIND: &str = "console";
+
+/// Which list a section is, as a theme is told it (R-20261115-13): every game, the favourites, the recently played, or a
+/// console's games; none for no section.
+pub fn section_kind(key: &str) -> &'static str {
+    match key {
+        "" => "",
+        ALL => ALL,
+        FAVOURITES => FAVOURITES,
+        RECENT => RECENT,
+        _ => CONSOLE_KIND,
+    }
+}
+
 /// The places' headings on the grid, as the accepted render writes them (EmuSen_Interface.md §24.2).
 pub const PLACE_HEADINGS: [&str; 3] = ["All", "Favourites", "Recent"];
 

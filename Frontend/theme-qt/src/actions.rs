@@ -59,6 +59,18 @@ pub mod qobject {
         /// The game the focus is on, by its row's `key`, so the cards and the shoulders act on it.
         #[qinvokable]
         fn focus(self: Pin<&mut ThemeActions>, game: &QString) -> bool;
+        /// Narrows the section shown to one of `Browse.filters` by its `key` (1.7, R-20261115-10).
+        #[qinvokable]
+        #[cxx_name = "setFilter"]
+        fn set_filter(self: Pin<&mut ThemeActions>, key: &QString) -> bool;
+        /// Steps the sort shown by `by`, as the List card's Sort row steps it (1.7, R-20261115-11).
+        #[qinvokable]
+        #[cxx_name = "stepSort"]
+        fn step_sort(self: Pin<&mut ThemeActions>, by: i32) -> bool;
+        /// Moves the focus to the first game of the letter `by` letters on, as the List card's Jump to (1.7, R-20261115-12).
+        #[qinvokable]
+        #[cxx_name = "stepLetter"]
+        fn step_letter(self: Pin<&mut ThemeActions>, by: i32) -> bool;
         /// Whether the host would take `act(key)` now, without acting: a declined action's item and help entry look disabled.
         #[qinvokable]
         fn enabled(self: &ThemeActions, key: &QString) -> bool;
@@ -82,6 +94,9 @@ pub enum Action {
     Search,
     Act(String),
     Focus(String),
+    SetFilter(String),
+    StepSort(i32),
+    StepLetter(i32),
 }
 
 /// The host's side: takes an action, or declines it, and says which.
@@ -162,6 +177,18 @@ impl qobject::ThemeActions {
 
     pub fn focus(self: Pin<&mut Self>, game: &QString) -> bool {
         self.take(Action::Focus(game.to_string()))
+    }
+
+    pub fn set_filter(self: Pin<&mut Self>, key: &QString) -> bool {
+        self.take(Action::SetFilter(key.to_string()))
+    }
+
+    pub fn step_sort(self: Pin<&mut Self>, by: i32) -> bool {
+        self.take(Action::StepSort(by))
+    }
+
+    pub fn step_letter(self: Pin<&mut Self>, by: i32) -> bool {
+        self.take(Action::StepLetter(by))
     }
 
     pub fn enabled(&self, key: &QString) -> bool {

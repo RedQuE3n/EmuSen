@@ -14,6 +14,10 @@ Kit.NormalizedCanvas {
     // B on a section, and the declared actions the screens answer (Start, Home).
     signal backed()
     signal acted(string key)
+    // Made each time it is shown (SettingsScreen.qml): false until the row the model holds is focused, so the frame's first
+    // row is not written back over it.
+    property bool placed: false
+    readonly property alias layout: frame.layout
     Connections {
         target: screen.settings
         function onLeft() { screen.backed() }
@@ -194,6 +198,7 @@ Kit.NormalizedCanvas {
             target: screen.settings
             property: "focused"
             value: frame.currentRow
+            when: screen.placed
         }
         Connections {
             target: frame.controller

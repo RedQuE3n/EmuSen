@@ -62,7 +62,8 @@ fn qt_3_2_each_list_has_the_api_s_roles_and_no_other() {
             "video",
             "hero",
             "lastPlayedWords",
-            "facts"
+            "facts",
+            "consoleName"
         ]
     );
     assert_eq!(view::COLLECTION_ROLES, ["key", "name", "count"]);
@@ -115,6 +116,8 @@ fn qt_3_2_the_library_s_lists_over_the_real_clients() {
         let Cell::Number(shape) = g[3] else { panic!("the cover's shape is a number: {:?}", g[3]) };
         assert!((shape - 0.6993).abs() < 1e-4, "the NES cover 0.6993 wide to 1 tall, the table's 1.43 turned: {shape}");
         assert_eq!((&g[6], text(&g[16])), (&Cell::Flag(false), ""), "never played, so no words for it");
+        assert_eq!(text(&g[18]), read.nes_name, "the console's name alone, as the facts begin");
+        assert!(text(&g[17]).starts_with(text(&g[18])), "the facts lead with the same name: {:?}", g[17]);
     }
     // A game whose console the systems table lacks is drawn 3 wide by 4 tall, as any cover with no shape; it was 0, which
     // the reference look's rows drew square and Horizon's games drew with no width.

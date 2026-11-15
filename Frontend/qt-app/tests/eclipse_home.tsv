@@ -53,7 +53,7 @@ tile.5	83	a game's tile	the sixth row	Walkable	after:tile.4:24	foot:tile.0	264	1
 tileArt.0	83	the tile's art	the row's hero (theme-qt/src/view.rs:213), the kit's RoundPicture	RoundPicture	in:tile.0:0	foot:tile.0	312	196	-	-	-	built	-	-	-
 tileShade.0	84	the shade under the words: the board's 96 px fade, then its 0.92 from the title's top to the foot (provisional, the tester's to judge: the words over art keep 4.5:1)	none: the board's own colours; the shared part TileWords	Rectangle	in:tile.0:0	foot:tile.0	312	-	-	#EB04050A	-	built	-	-	-
 tileTitle.0	85	the game's title (on the facts' line: the board's 34 px from the foot overlaps the facts raised to the floor)	the row's title	Text	in:tile.0:18	above:tileFacts.0:0	-	-	-	#FFFFFFFF	21	built	14	19	raised
-tileFacts.0	86	the console, "SUPER NINTENDO"	the row's facts, console · when (qt-models/src/library.rs:310)	Text	in:tile.0:18	up:tile.0:12	-	-	-	#FFE3E6F0	15	built	10	19	raised
+tileFacts.0	86	the console, "SUPER NINTENDO"	the row's consoleName, the console's name alone that the facts begin with (qt-models/src/library.rs:302, theme-qt/src/view.rs consoleName)	Text	in:tile.0:18	up:tile.0:12	-	-	-	#FFE3E6F0	15	built	10	19	raised
 tileRing	83	the focused tile's ring	the kit's FocusRing (R-20261115-3, every control the gapped ring)	FocusRing	-	-	-	-	-	-	-	built	-	-	-
 tileShadow.1	83	a resting tile's shadow, 0 10 px 30 px	the kit's Glow with its offset (R-20261115-6)	Glow	in:tile.1:0	foot:tile.1	264	165	18	#73000000	-	built	-	-	-
 help	99	the help bar's entries	Help.entries(Help.Continue) (qt-models/src/help.rs:102), the kit's HelpBar	HelpBar	96	mid:1137	-	-	-	#FFD8DBE6	21	built	14	19	raised

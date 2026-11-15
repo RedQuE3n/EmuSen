@@ -14,6 +14,8 @@ or shadow. 1.3 is another piece's.
 - **`Type`** (singleton): `size(base, textScale)`, the size words of a design's size are drawn at, never under the kit's
   legibility floor (`EmuSen_Kit.md` §7.121, R-20261115-14). As a type made in Rust it is exported at 1.0 like every
   singleton of the module, so an import of 1.0 finds it too.
+- **`consoleName`** (added to every game row): the console's name alone, the same name `facts` begins with, from the
+  one owner of both (`qt-models/src/library.rs`); Eclipse's Home tile draws it under the title, as its board does.
 - The module is 1.4 and `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.4.*`.
 
 ## 1.2, an addition: the corona disc and the planet mark (2026-11-14)

@@ -189,7 +189,7 @@ ThemeScreen {
                                 required property string key
                                 required property string title
                                 required property string hero
-                                required property string facts
+                                required property string consoleName
                                 readonly property bool big: tile.index === root.current
                                 readonly property real radius: 18 * design.unit
                                 controller: frame.controller
@@ -234,7 +234,8 @@ ThemeScreen {
                                     unit: design.unit
                                     place: tile.index
                                     title: tile.title
-                                    facts: tile.facts
+                                    // The console alone, as the board's tile line draws {{t.system}} (Main:86).
+                                    facts: tile.consoleName
                                     titleInk: ink.tileTitle
                                     factsInk: ink.tileFacts
                                     shadeInk: ink.shade

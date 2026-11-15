@@ -441,7 +441,7 @@ pub fn oracle(backend: &str) {
             ("facts", words::paused_facts(&game.console, now - 720, now)),
             ("clock", CLOCK.to_owned()),
             ("recentHeading", words::RECENT_ENTRY.to_owned()),
-            ("tileFacts.0", game.facts.clone()),
+            ("tileFacts.0", game.console.clone()),
         ];
         for (i, entry) in help.iter().take(3).enumerate() {
             words_of.push((["buttonLabel.0", "buttonLabel.1", "buttonLabel.2"][i], entry.1.to_owned()));
@@ -456,6 +456,12 @@ pub fn oracle(backend: &str) {
             let have = read(&tree, name, "text");
             if have != want {
                 differences.push(format!("{at}: {name} says {have:?} where the program says {want:?}"));
+            }
+        }
+        // Nothing on the row is cut: a shown tile's title and console line are drawn whole.
+        for n in tree.nodes.iter().filter(|n| n.visible && (n.name.starts_with("tileTitle.") || n.name.starts_with("tileFacts."))) {
+            if read(&tree, &n.name, "truncated") == "true" {
+                differences.push(format!("{at}: {} is cut: {:?}", n.name, read(&tree, &n.name, "text")));
             }
         }
     }

@@ -524,6 +524,38 @@ void harness_wheel(QObject& window, double x, double y, int delta)
 
 void harness_wait(int ms) { QTest::qWait(ms); }
 
+// Counts the queued calls delivered on the GUI thread: a queued invocation is a posted QEvent::MetaCall (EmuSen_Kit.md §7.36).
+class QueuedCalls : public QObject {
+public:
+    int delivered = 0;
+
+protected:
+    bool eventFilter(QObject*, QEvent* event) override
+    {
+        if (event->type() == QEvent::MetaCall) {
+            ++delivered;
+        }
+        return false;
+    }
+};
+
+bool harness_settle()
+{
+    // Rounds of the posted events there are, until a round delivers no queued call: a call one queues runs in the next (EmuSen_Kit.md §7.36).
+    QueuedCalls calls;
+    QCoreApplication::instance()->installEventFilter(&calls);
+    bool settled = false;
+    // A guard against calls that queue each other for ever, not a wait: a press settles in a handful of rounds.
+    for (int round = 0; round < 1000 && !settled; ++round) {
+        calls.delivered = 0;
+        QCoreApplication::processEvents();
+        QCoreApplication::sendPostedEvents();
+        settled = calls.delivered == 0;
+    }
+    QCoreApplication::instance()->removeEventFilter(&calls);
+    return settled;
+}
+
 void harness_keep_messages() { kept().shown = qInstallMessageHandler(keep); }
 
 QString harness_messages() { return std::exchange(kept().messages, {}).join(QChar(0x1e)); }

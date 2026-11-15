@@ -32,6 +32,7 @@ pub mod ffi {
         fn harness_clock_move(clock: Pin<&mut HeldClock>, ms: i64);
         fn harness_wheel(window: Pin<&mut QObject>, x: f64, y: f64, delta: i32);
         fn harness_wait(ms: i32);
+        fn harness_settle() -> bool;
         fn harness_keep_messages();
         fn harness_messages() -> QString;
         /// Whether the scene graph draws on the software backend.

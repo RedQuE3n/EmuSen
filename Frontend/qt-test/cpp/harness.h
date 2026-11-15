@@ -31,6 +31,7 @@ std::unique_ptr<HeldClock> harness_clock_hold();
 void harness_clock_move(HeldClock& clock, std::int64_t ms);
 void harness_wheel(QObject& window, double x, double y, int delta);
 void harness_wait(int ms);
+bool harness_settle();
 void harness_keep_messages();
 QString harness_messages();
 bool harness_software();

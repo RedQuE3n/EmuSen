@@ -27,6 +27,7 @@ fn main() {
                 "qml/DrawnPixelsScene.qml",
                 "qml/PdfTeardownScene.qml",
                 "qml/PdfTurnScene.qml",
+                "qml/QueuedStartScene.qml",
             ])
             .depend("QtQuick")
             .depend("QtQuick.Shapes")

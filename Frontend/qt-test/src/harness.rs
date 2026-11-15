@@ -340,6 +340,12 @@ impl Scene<'_> {
         ffi::harness_wait(ms);
     }
 
+    /// Returns once every queued call the last input caused has run, and those they queued in turn: an animation the input
+    /// started takes the held clock's next step, however long the GUI thread was kept meanwhile (EmuSen_Kit.md §7.36).
+    pub fn drain_queued(&mut self) {
+        assert!(ffi::harness_settle(), "queued calls still queuing each other after 1000 rounds");
+    }
+
     /// The harness's `assert_quiet`, for a test that holds a scene.
     pub fn assert_quiet(&mut self) {
         self.harness.assert_quiet();
@@ -353,47 +359,47 @@ impl Scene<'_> {
 
     pub fn click(&mut self, x: f64, y: f64) {
         ffi::harness_click(self.window(), x, y, 1);
-        self.wait(20);
+        self.drain_queued();
     }
 
     /// The pointer moved to a point and left resting there, nothing pressed.
     pub fn hover(&mut self, x: f64, y: f64) {
         ffi::harness_hover(self.window(), x, y);
-        self.wait(20);
+        self.drain_queued();
     }
 
     /// The pointer moved to a point of another window of the scene's, named `window`, and left resting there.
     pub fn hover_in(&mut self, window: &str, x: f64, y: f64) {
         assert!(ffi::harness_hover_in(&QString::from(window), x, y), "no window named {window}");
-        self.wait(20);
+        self.drain_queued();
     }
 
     /// The left button pressed at one point, moved in steps to another and let go there.
     pub fn drag(&mut self, from: (f64, f64), to: (f64, f64)) {
         ffi::harness_drag(self.window(), from.0, from.1, to.0, to.1);
-        self.wait(20);
+        self.drain_queued();
     }
 
     /// One finger pressed at one point, moved in steps to another and lifted there.
     pub fn touch_drag(&mut self, from: (f64, f64), to: (f64, f64)) {
         ffi::harness_touch_drag(self.window(), from.0, from.1, to.0, to.1);
-        self.wait(20);
+        self.drain_queued();
     }
 
     pub fn right_click(&mut self, x: f64, y: f64) {
         ffi::harness_click(self.window(), x, y, 2);
-        self.wait(20);
+        self.drain_queued();
     }
 
     pub fn key(&mut self, key: i32, modifiers: i32) {
         ffi::harness_key(self.window(), key, modifiers);
-        self.wait(20);
+        self.drain_queued();
     }
 
     /// Holds a key down (a press held, as a player holds A), or lets it up.
     pub fn key_hold(&mut self, key: i32, down: bool) {
         ffi::harness_key_hold(self.window(), key, down);
-        self.wait(20);
+        self.drain_queued();
     }
 
     /// Holds every animation's clock at `ms` since it was first held, moved there a frame at a time; `None` lets it run again
@@ -412,7 +418,7 @@ impl Scene<'_> {
 
     pub fn wheel(&mut self, x: f64, y: f64, notches: i32) {
         ffi::harness_wheel(self.window(), x, y, notches * 120);
-        self.wait(20);
+        self.drain_queued();
     }
 
     /// The walkable element holding the active focus, by its number in a tree, if any; a focus on an item made since the
@@ -464,7 +470,7 @@ impl Scene<'_> {
     pub fn focus_item(&mut self, tree: &Tree, index: u32) -> bool {
         let id = tree.id_of(index);
         let done = ffi::harness_focus_item(self.window(), id);
-        self.wait(5);
+        self.drain_queued();
         done
     }
 
@@ -728,7 +734,7 @@ impl Scene<'_> {
             router.as_mut().push(kinds::pad_button(button), false);
             router.as_mut().pump_at(up);
         }
-        self.wait(5);
+        self.drain_queued();
     }
 
     /// A pad button pressed and left held, on the harness's clock; `pad_up` lets it go. The router's repeats are its own.
@@ -749,7 +755,7 @@ impl Scene<'_> {
             router.as_mut().push(kinds::pad_button(button), down);
             router.as_mut().pump_at(at);
         }
-        self.wait(5);
+        self.drain_queued();
     }
 
     /// Whether the router gives the menu chord alone, as it does while a game owns the pad.
@@ -796,7 +802,7 @@ impl Scene<'_> {
                 if id == 0 || !ffi::harness_focus_item(self.window(), id) {
                     continue;
                 }
-                self.wait(5);
+                self.drain_queued();
                 press(self, button);
                 // A focus on no item the walk knows is found by reading the tree, which marks what it reads as read.
                 let mut to = self.landing(tree, &live, from);

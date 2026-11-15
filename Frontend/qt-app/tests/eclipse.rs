@@ -43,13 +43,20 @@ fn stored(platform: &Platform) -> String {
     settings["EmuSenTheme"].as_str().unwrap_or_default().to_owned()
 }
 
+/// A big-screen type token's size as the kit's `Tokens` draws it (`legible_type`, EmuSen_Kit.md §7.121).
+fn drawn_size(base: f64, text_scale: f64) -> f64 {
+    use emusen_kit_core::tokens::{legible_type, Form, TypeScale};
+    let all = TypeScale { display: base, title: base, strong: base, row: base, body: base, caption: base, glyph: base };
+    legible_type(Form::BigScreen, &all, text_scale, emusen_kit_qt::type_size::caps).row
+}
+
 /// Whether a token read as text is the value `theme.json` gives it: a colour as the same colour, a number as the same number,
 /// a type size as the kit's size of that base at the text scale in force, never under the legibility floor (EmuSen_Kit.md §7.121).
 fn holds(name: &str, read: &str, given: &str, text_scale: f64) -> bool {
     match (Colour::parse(given), given.parse::<f64>()) {
         (Some(colour), _) => Colour::parse(read) == Some(colour),
         (None, Ok(number)) => {
-            let want = if name.starts_with("font") { emusen_kit_qt::type_size::legible(number, text_scale) } else { number };
+            let want = if name.starts_with("font") { drawn_size(number, text_scale) } else { number };
             read.parse::<f64>().is_ok_and(|r| (r - want).abs() < 1e-9)
         }
         _ => read == given,

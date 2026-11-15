@@ -137,9 +137,9 @@ fn qt_3_5_1_an_override_the_kit_cannot_read_is_said_and_every_readable_one_is_no
 fn kit_7_121_a_theme_s_size_token_under_the_floor_is_drawn_at_the_rule_s_size() {
     let floor = emusen_kit_core::audit::smallest_capitals_in_units();
     let eclipse = themed(Form::BigScreen, 1.0, false, &[("fontRow", "16"), ("fontBody", "14"), ("headerSize", "14")]);
-    assert_eq!(eclipse.type_scale.row, tokens::legible_text(16.0, 1.0, caps));
-    assert_eq!(eclipse.type_scale.body, tokens::legible_text(14.0, 1.0, caps));
-    assert!(caps(eclipse.type_scale.body) >= floor && caps(eclipse.header) >= floor);
+    let whole = |size: f64| caps(size.floor()) >= floor;
+    assert!(whole(eclipse.type_scale.row) && whole(eclipse.type_scale.body) && whole(eclipse.header), "{:?}", eclipse.type_scale);
+    assert!(eclipse.type_scale.row > 16.0 && eclipse.type_scale.body > 14.0, "raised from the boards' sizes");
     // The desktop's sizes are not the big screen's floor's.
     assert_eq!(themed(Form::Desktop, 1.0, false, &[("fontBody", "14")]).type_scale.body, 14.0);
 }

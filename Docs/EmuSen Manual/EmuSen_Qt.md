@@ -3709,7 +3709,13 @@ one's at its own width) and the drawing order are ES-DE's at that time, stated i
 `QSG_RENDER_LOOP=threaded` (the GPU tier's `common::start`), where Qt Quick installs its own animation driver and refuses
 the held one (EmuSen_Kit.md §7.36): every frame was read on the render loop's clock, which ran on while the test read the
 tree, so a step meant for 16 ms read about 66 ms, and a second theme's fade ran its whole run between two reads. The fade
-tests now set the basic render loop, as `mapping.rs` does, and assert the view's clock at every frame.
+tests now set the basic render loop, as `mapping.rs` does, and assert the view's clock at every frame. Measured on
+2026-11-14 with `fade_above_true` under the threaded loop: Qt printed "QUnifiedTimer: animation driver already
+installed...", and the view's clock read 33, 66, 100, 150, 166, 200 ms at held 16, 32, 48, 64, 80, 96 ms, the run over by
+the held 192 ms; under the basic loop it read each held time to the microsecond. How large each of the threaded loop's
+steps is was not read in its driver's source and is not known. The view's clock is a `NumberAnimation`'s interpolated
+value (240 ms reads 239.99999999999997); the painter rounds each step to a whole microsecond, so the tests compare the
+two to within half of one.
 
 ### 4.9 ES-DE's text rules: `emusen-esde-text` **[M 2026-11-09]**
 

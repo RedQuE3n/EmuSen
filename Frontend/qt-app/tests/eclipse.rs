@@ -10,7 +10,7 @@ use cxx_qt::casting::Upcast;
 use cxx_qt::QObject;
 use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
-use emusen_kit_core::tokens::{scaled_text, Colour};
+use emusen_kit_core::tokens::Colour;
 use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
 use emusen_platform_client::Platform;
 use emusen_qt::MAIN_URL;
@@ -44,12 +44,12 @@ fn stored(platform: &Platform) -> String {
 }
 
 /// Whether a token read as text is the value `theme.json` gives it: a colour as the same colour, a number as the same number,
-/// a type size as the kit's size of that base at the text scale in force (`scaled_text`).
+/// a type size as the kit's size of that base at the text scale in force, never under the legibility floor (EmuSen_Kit.md §7.121).
 fn holds(name: &str, read: &str, given: &str, text_scale: f64) -> bool {
     match (Colour::parse(given), given.parse::<f64>()) {
         (Some(colour), _) => Colour::parse(read) == Some(colour),
         (None, Ok(number)) => {
-            let want = if name.starts_with("font") { scaled_text(number, text_scale) } else { number };
+            let want = if name.starts_with("font") { emusen_kit_qt::type_size::legible(number, text_scale) } else { number };
             read.parse::<f64>().is_ok_and(|r| (r - want).abs() < 1e-9)
         }
         _ => read == given,

@@ -127,12 +127,16 @@ pub fn run(kind: &str, fade_above: bool, frames: i64) -> Vec<Read> {
     reads
 }
 
+/// The view's clock is a NumberAnimation's value, interpolated in double (View.qml), and the painter rounds each step to a
+/// whole microsecond (painter.rs `tick`): within half of one, the painter's time is the held time exactly.
+pub const CLOCK_ROUNDING_MS: f64 = 0.0005;
+
 /// The view's clock stepped with the held one: the press at its 0, a frame each STEP_MS while the scene moved.
 pub fn assert_clock_held(reads: &[Read]) {
     let mut moved = true;
     for r in reads {
         if moved {
-            assert_eq!(r.ticked, r.ms, "the view's clock at the held {} ms: {reads:#?}", r.ms);
+            assert!((r.ticked - r.ms).abs() < CLOCK_ROUNDING_MS, "the view's clock at the held {} ms is {}: {reads:#?}", r.ms, r.ticked);
         }
         moved = r.moving;
     }

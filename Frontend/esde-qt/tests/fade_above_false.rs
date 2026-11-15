@@ -18,7 +18,9 @@ fn a_fade_without_fade_above_primary_darkens_below_the_primary_only_at_es_de_s_t
         assert_eq!(r.below_width, Some(width), "at {} ms the picture below: {reads:#?}", r.ms);
         assert_eq!(r.above, 1.0, "at {} ms the picture above is drawn whole", r.ms);
         if black > 0.0 {
-            assert_eq!(r.order, ["below", "veil", "systems", "above"], "at {} ms the black lies between the elements below and the primary", r.ms);
+            // The picture above is not in the tree's drawn items while fadeAbovePrimary has it at no opacity.
+            let drawn: Vec<&str> = ["below", "veil", "systems", "above"].into_iter().filter(|n| *n != "above" || r.above > 0.0).collect();
+            assert_eq!(r.order, drawn, "at {} ms the black lies between the elements below and the primary", r.ms);
         }
         assert_eq!(r.moving, r.ms < es_de::RUN_MS, "at {} ms the scene moves only within the run", r.ms);
     }

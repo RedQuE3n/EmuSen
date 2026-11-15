@@ -1,4 +1,4 @@
-// EmuSen_Kit.md §7.120: a look's type size is the kit's scaled size, raised by half units to the smallest whose capitals pass
+// EmuSen_Kit.md §7.121: a look's type size is the kit's scaled size, raised by half units to the smallest whose capitals pass
 // the fit audit's floor, and a size already above it is kept (R-20261115-14).
 
 use emusen_kit_core::audit::{smallest_capitals, CAPS_SLACK, DESKTOP_CAPS};

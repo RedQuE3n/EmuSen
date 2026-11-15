@@ -21,7 +21,7 @@ double text_width(const QFont& font, const QString& text)
 
 double cap_height(const QFont& font, double size)
 {
-    // At the whole pixel size Qt draws: a real handed to a Text's font.pixelSize is taken to the nearest (seen 2026-11-15, EmuSen_Kit.md §7.120).
+    // At the whole pixel size Qt draws: a real handed to a Text's font.pixelSize is taken to the nearest (seen 2026-11-15, EmuSen_Kit.md §7.121).
     QFont sized(font);
     sized.setPixelSize(qRound(size));
     return QFontMetricsF(sized).capHeight();

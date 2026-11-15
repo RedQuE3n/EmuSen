@@ -4171,7 +4171,7 @@ offset is added to the canvas's shadow offset. EmuSen.Theme 1.4 exports `Glow` b
 same glow unmoved draws `offset` further out and nearer in, within one level of 255 on the software backend and two on
 the card, and nothing inside the box. Kit 1.8.
 
-### 7.120 A look's type size and the legibility floor (2026-11-15)
+### 7.121 A look's type size and the legibility floor (2026-11-15)
 
 Decided 2026-11-15 by the tester (R-20261115-14): any Eclipse text under the kit's legibility floor is raised to the
 smallest size that passes; larger text keeps the boards' sizes. kit-core's `tokens::legible_text(base, textScale,

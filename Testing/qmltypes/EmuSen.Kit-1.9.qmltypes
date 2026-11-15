@@ -1478,7 +1478,7 @@ Module {
         }
         Property {
             name: "corner"
-            type: "qreal"
+            type: "double"
             read: "corner"
             write: "setCorner"
             notify: "shapeChanged"
@@ -1487,7 +1487,7 @@ Module {
         }
         Property {
             name: "blur"
-            type: "qreal"
+            type: "double"
             read: "blur"
             write: "setBlur"
             notify: "shapeChanged"
@@ -1496,7 +1496,7 @@ Module {
         }
         Property {
             name: "spread"
-            type: "qreal"
+            type: "double"
             read: "spread"
             write: "setSpread"
             notify: "shapeChanged"
@@ -1505,7 +1505,7 @@ Module {
         }
         Property {
             name: "reach"
-            type: "qreal"
+            type: "double"
             read: "reach"
             write: "setReach"
             notify: "shapeChanged"
@@ -1514,7 +1514,7 @@ Module {
         }
         Property {
             name: "offsetX"
-            type: "qreal"
+            type: "double"
             read: "offsetX"
             write: "setOffsetX"
             notify: "shapeChanged"
@@ -1523,7 +1523,7 @@ Module {
         }
         Property {
             name: "offsetY"
-            type: "qreal"
+            type: "double"
             read: "offsetY"
             write: "setOffsetY"
             notify: "shapeChanged"

@@ -46,7 +46,7 @@ pub const PLACE_ROLES: [&str; 7] = ["key", "name", "kind", "line", "attention", 
 /// `Library.shelves`: the library's three places, All, Favourites and Recent, which `gamesOf` also takes.
 pub const SHELF_ROLES: [&str; 4] = ["key", "name", "line", "count"];
 /// `Library.gamesOf`, `recent`, `favourites` and `search`: one game a row.
-pub const GAME_ROLES: [&str; 18] = [
+pub const GAME_ROLES: [&str; 19] = [
     "key",
     "title",
     "cover",
@@ -65,6 +65,7 @@ pub const GAME_ROLES: [&str; 18] = [
     "hero",
     "lastPlayedWords",
     "facts",
+    "consoleName",
 ];
 /// `Library.collections`: the player's collections.
 pub const COLLECTION_ROLES: [&str; 3] = ["key", "name", "count"];
@@ -220,6 +221,7 @@ fn game(g: &GameRow, shapes: &HashMap<&str, f64>, now: i64) -> Row {
         Cell::Text(cover_url(if g.hero.is_empty() { &g.cover } else { &g.hero })),
         Cell::Text(if played { words::ago(g.played_at, now) } else { String::new() }),
         text(&g.facts),
+        text(&g.console),
     ]
 }
 

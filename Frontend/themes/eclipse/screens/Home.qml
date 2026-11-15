@@ -112,9 +112,7 @@ ThemeScreen {
                         font.pixelSize: Type.size(112 * design.unit, Tokens.textScale)
                         font.weight: Font.DemiBold
                         font.letterSpacing: -0.02 * 112 * design.unit
-                        // The board's line box, 1.02 of the type (Main:55), the words centred in it as CSS centres them.
-                        height: 1.02 * 112 * design.unit
-                        verticalAlignment: Text.AlignVCenter
+                        // The face's own line height, so no glyph stands past the box; the facts follow it (Main:55-56).
                     }
                     Text {
                         id: facts
@@ -191,7 +189,7 @@ ThemeScreen {
                                 required property string key
                                 required property string title
                                 required property string hero
-                                required property string facts
+                                required property string consoleName
                                 readonly property bool big: tile.index === root.current
                                 readonly property real radius: 18 * design.unit
                                 controller: frame.controller
@@ -232,42 +230,16 @@ ThemeScreen {
                                     crop: true
                                     pixelScale: canvas.unit
                                 }
-                                Rectangle {
-                                    id: shade
-                                    objectName: "tileShade." + tile.index
-                                    anchors.bottom: parent.bottom
-                                    width: parent.width
-                                    height: 96 * design.unit
-                                    // The shade's dark end, which the test reads.
-                                    readonly property color paint: ink.shade
-                                    gradient: Gradient {
-                                        GradientStop { position: 0; color: ink.shadeClear }
-                                        GradientStop { position: 1; color: shade.paint }
-                                    }
-                                }
-                                Text {
-                                    objectName: "tileTitle." + tile.index
-                                    x: 18 * design.unit
-                                    // On the facts' line, so words raised to the legibility floor do not overlap (Main:85-86 place them by the tile's foot).
-                                    y: tileFacts.y - height
-                                    width: parent.width - 36 * design.unit
-                                    text: tile.title
-                                    elide: Text.ElideRight
-                                    color: ink.tileTitle
-                                    font.pixelSize: Type.size(21 * design.unit, Tokens.textScale)
-                                    font.weight: Font.DemiBold
-                                }
-                                Text {
-                                    id: tileFacts
-                                    objectName: "tileFacts." + tile.index
-                                    x: 18 * design.unit
-                                    y: parent.height - 12 * design.unit - height
-                                    width: parent.width - 36 * design.unit
-                                    text: tile.facts
-                                    elide: Text.ElideRight
-                                    color: ink.tileFacts
-                                    font.pixelSize: Type.size(15 * design.unit, Tokens.textScale)
-                                    font.letterSpacing: 0.08 * 15 * design.unit
+                                TileWords {
+                                    unit: design.unit
+                                    place: tile.index
+                                    title: tile.title
+                                    // The console alone, as the board's tile line draws {{t.system}} (Main:86).
+                                    facts: tile.consoleName
+                                    titleInk: ink.tileTitle
+                                    factsInk: ink.tileFacts
+                                    shadeInk: ink.shade
+                                    shadeClear: ink.shadeClear
                                 }
                                 FocusRing {
                                     objectName: "tileRing"

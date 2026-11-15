@@ -11,12 +11,12 @@ class GlowPaint : public QQuickPaintedItem {
     QML_ELEMENT
     QML_ADDED_IN_VERSION(1, 8)
     Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY shapeChanged)
-    Q_PROPERTY(qreal corner READ corner WRITE setCorner NOTIFY shapeChanged)
-    Q_PROPERTY(qreal blur READ blur WRITE setBlur NOTIFY shapeChanged)
-    Q_PROPERTY(qreal spread READ spread WRITE setSpread NOTIFY shapeChanged)
-    Q_PROPERTY(qreal reach READ reach WRITE setReach NOTIFY shapeChanged)
-    Q_PROPERTY(qreal offsetX READ offsetX WRITE setOffsetX NOTIFY shapeChanged)
-    Q_PROPERTY(qreal offsetY READ offsetY WRITE setOffsetY NOTIFY shapeChanged)
+    Q_PROPERTY(double corner READ corner WRITE setCorner NOTIFY shapeChanged)
+    Q_PROPERTY(double blur READ blur WRITE setBlur NOTIFY shapeChanged)
+    Q_PROPERTY(double spread READ spread WRITE setSpread NOTIFY shapeChanged)
+    Q_PROPERTY(double reach READ reach WRITE setReach NOTIFY shapeChanged)
+    Q_PROPERTY(double offsetX READ offsetX WRITE setOffsetX NOTIFY shapeChanged)
+    Q_PROPERTY(double offsetY READ offsetY WRITE setOffsetY NOTIFY shapeChanged)
     Q_PROPERTY(int blurs READ blurs NOTIFY counted)
     Q_PROPERTY(int paints READ paints NOTIFY counted)
 
@@ -25,21 +25,21 @@ public:
     void paint(QPainter* painter) override;
 
     QColor color() const { return m_color; }
-    qreal corner() const { return m_corner; }
-    qreal blur() const { return m_blur; }
-    qreal spread() const { return m_spread; }
-    qreal reach() const { return m_reach; }
-    qreal offsetX() const { return m_offsetX; }
-    qreal offsetY() const { return m_offsetY; }
+    double corner() const { return m_corner; }
+    double blur() const { return m_blur; }
+    double spread() const { return m_spread; }
+    double reach() const { return m_reach; }
+    double offsetX() const { return m_offsetX; }
+    double offsetY() const { return m_offsetY; }
     int blurs() const { return m_blurs; }
     int paints() const { return m_paints; }
     void setColor(const QColor& c);
-    void setCorner(qreal v);
-    void setBlur(qreal v);
-    void setSpread(qreal v);
-    void setReach(qreal v);
-    void setOffsetX(qreal v);
-    void setOffsetY(qreal v);
+    void setCorner(double v);
+    void setBlur(double v);
+    void setSpread(double v);
+    void setReach(double v);
+    void setOffsetX(double v);
+    void setOffsetY(double v);
 
 Q_SIGNALS:
     void shapeChanged();
@@ -53,7 +53,7 @@ private:
     void makeShape();
 
     QColor m_color = Qt::transparent;
-    qreal m_corner = 0, m_blur = 0, m_spread = 0, m_reach = 0, m_offsetX = 0, m_offsetY = 0;
+    double m_corner = 0, m_blur = 0, m_spread = 0, m_reach = 0, m_offsetX = 0, m_offsetY = 0;
     int m_blurs = 0, m_paints = 0;
     // The blurred shape's alpha, at 1 / m_scale of the item's size, and the same tinted in the colour last painted.
     QImage m_shape;

@@ -11,7 +11,7 @@ GlowPaint::GlowPaint(QQuickItem* parent) : QQuickPaintedItem(parent)
 }
 
 #define GLOW_SETTER(name, member)            \
-    void GlowPaint::name(qreal v)            \
+    void GlowPaint::name(double v)            \
     {                                        \
         if (member == v)                     \
             return;                          \
@@ -83,7 +83,7 @@ void GlowPaint::makeShape()
     // blurred by a Gaussian of deviation blur / 2, here three box blurs of 2 round(blur / 2) + 1 as Qt's Context2D shadow makes
     // it (EmuSen_Kit.md §7.113). A wide blur is made at a smaller scale, a box of 16 pixels or more there, whose radius is the
     // one whose three passes have the deviation's variance, r (r + 1) = (deviation / scale)².
-    const qreal deviation = m_blur / 2;
+    const double deviation = m_blur / 2;
     m_scale = std::max(1, int(std::floor(deviation / 16)));
     const int w = std::max(1, int(std::ceil(width() / m_scale))), h = std::max(1, int(std::ceil(height() / m_scale)));
     QImage drawn(w, h, QImage::Format_ARGB32_Premultiplied);
@@ -92,10 +92,10 @@ void GlowPaint::makeShape()
         QPainter p(&drawn);
         p.setRenderHint(QPainter::Antialiasing);
         p.scale(1.0 / m_scale, 1.0 / m_scale);
-        const qreal boxW = width() - 2 * m_reach, boxH = height() - 2 * m_reach;
-        const qreal corner = std::min(m_corner, std::min(boxW, boxH) / 2);
-        const qreal share = m_spread > 0 && corner < m_spread ? 1 + std::pow(corner / m_spread - 1, 3) : 1;
-        const qreal rounded = corner + m_spread * share;
+        const double boxW = width() - 2 * m_reach, boxH = height() - 2 * m_reach;
+        const double corner = std::min(m_corner, std::min(boxW, boxH) / 2);
+        const double share = m_spread > 0 && corner < m_spread ? 1 + std::pow(corner / m_spread - 1, 3) : 1;
+        const double rounded = corner + m_spread * share;
         QPainterPath grown;
         grown.addRoundedRect(QRectF(m_reach - m_spread + m_offsetX, m_reach - m_spread + m_offsetY, boxW + 2 * m_spread, boxH + 2 * m_spread), rounded, rounded);
         p.fillPath(grown, Qt::black);
@@ -106,7 +106,7 @@ void GlowPaint::makeShape()
         for (int x = 0; x < w; ++x)
             a[y * w + x] = qAlpha(line[x]) * 256;
     }
-    const qreal scaled = deviation / m_scale;
+    const double scaled = deviation / m_scale;
     const int r = m_scale == 1 ? int(std::lround(deviation)) : int(std::lround((std::sqrt(1 + 4 * scaled * scaled) - 1) / 2));
     for (int pass = 0; pass < 3; ++pass)
         boxRows(a, w, h, r);
@@ -142,8 +142,8 @@ void GlowPaint::paint(QPainter* painter)
         m_tint = m_color;
     }
     // Outside the box alone, as an outer box-shadow is drawn (CSS Backgrounds 3 §6.1.1).
-    const qreal boxW = width() - 2 * m_reach, boxH = height() - 2 * m_reach;
-    const qreal corner = std::min(m_corner, std::min(boxW, boxH) / 2);
+    const double boxW = width() - 2 * m_reach, boxH = height() - 2 * m_reach;
+    const double corner = std::min(m_corner, std::min(boxW, boxH) / 2);
     QPainterPath outside;
     outside.addRect(QRectF(0, 0, width(), height()));
     outside.addRoundedRect(QRectF(m_reach, m_reach, boxW, boxH), corner, corner);

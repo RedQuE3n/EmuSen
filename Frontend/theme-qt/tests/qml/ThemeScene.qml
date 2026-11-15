@@ -57,6 +57,7 @@ Window {
         required property string hero
         required property string lastPlayedWords
         required property string facts
+        required property string consoleName
     }
     readonly property int consoles: Library.consoles.count
     readonly property int places: Library.places.count

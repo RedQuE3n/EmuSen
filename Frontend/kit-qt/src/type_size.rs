@@ -14,6 +14,10 @@ pub mod ffi {
 /// The size words of a design's `base` are drawn at, at `text_scale`, in the application's face, the one a Text with no
 /// family set takes.
 pub fn legible(base: f64, text_scale: f64) -> f64 {
-    let face = cxx_qt_lib::QFont::default();
-    emusen_kit_core::tokens::legible_text(base, text_scale, |size| ffi::cap_height(&face, size))
+    emusen_kit_core::tokens::legible_text(base, text_scale, caps)
+}
+
+/// The capitals' height of the application's face at `size`, as Qt draws it: the `caps_at` the kit's `Tokens` sizes are held with.
+pub fn caps(size: f64) -> f64 {
+    ffi::cap_height(&cxx_qt_lib::QFont::default(), size)
 }

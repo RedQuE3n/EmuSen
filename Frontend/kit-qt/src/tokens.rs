@@ -347,7 +347,7 @@ impl Default for TokensRust {
             breathes: true,
             overrides: Vec::new(),
         };
-        tokens.apply(&Column::compute(kinds::token_form(tokens.form), kinds::token_variant(tokens.variant), 1.0, false));
+        tokens.apply(&Column::compute(kinds::token_form(tokens.form), kinds::token_variant(tokens.variant), 1.0, false, &crate::type_size::caps));
         tokens
     }
 }
@@ -489,7 +489,7 @@ impl qobject::Tokens {
         let variant = kinds::token_variant(self.variant);
         let mine: Vec<(String, String)> =
             self.overrides.iter().filter(|(v, _, _)| *v == variant).map(|(_, name, value)| (name.clone(), value.clone())).collect();
-        let column = Column::themed(kinds::token_form(self.form), variant, self.text_scale, self.reduced_motion, &mine);
+        let column = Column::themed(kinds::token_form(self.form), variant, self.text_scale, self.reduced_motion, &mine, &crate::type_size::caps);
         self.as_mut().rust_mut().apply(&column);
         self.announce();
     }

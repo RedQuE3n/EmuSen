@@ -26,7 +26,8 @@ unblurred, with no blur made by the CPU. 1.7 is another piece's.
 - **`Glow`** on the software backend blurs once a shape and only recolours on a change of colour (§7.113); `CoronaDisc`
   and `Backdrop` read an entry their list has dropped as none (§7.116).
 - **`GlowPaint`** (C++, `QQuickPaintedItem`): the software backend's glow painted in native code, its blur made once a
-  shape and tinted once a colour, in place of a Context2D canvas whose first paint of a disc's halo took minutes (§7.113).
+  shape and tinted once a colour, in place of a Context2D canvas whose first paint of a disc's halo took minutes (§7.113); its
+  sizes are `double`, a type qmllint knows, where `qreal` left Glow.qml's bindings with no type.
 - **`type_size::legible`** (Rust, for EmuSen.Theme's `Type`): a look's size never under the legibility floor (§7.121).
 
 ## 1.6: Eclipse's corona disc and the planet mark as kit parts, one glow, and every ring Gapped where a look asks (2026-11-14)

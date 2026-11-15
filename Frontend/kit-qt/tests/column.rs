@@ -4,21 +4,26 @@ use emusen_kit_core::motion::{Curve, MotionToken};
 use emusen_kit_core::tokens::{self, ColourToken, Form, Variant};
 use emusen_kit_qt::column::{easing_type, Column};
 
+/// A face whose capitals are the floor's own face's share of its size (kit-core's `audit::DESKTOP_CAPS`).
+fn caps(size: f64) -> f64 {
+    size * emusen_kit_core::audit::DESKTOP_CAPS
+}
+
 #[test]
 fn kit_7_2_every_colour_is_the_variants_token() {
     for variant in Variant::ALL {
-        let column = Column::compute(Form::BigScreen, variant, 1.0, false);
+        let column = Column::compute(Form::BigScreen, variant, 1.0, false, &caps);
         for token in ColourToken::ALL {
             assert_eq!(column.colour(token), tokens::colour(variant, token), "{variant:?} {token:?}");
         }
     }
-    assert_eq!(Column::compute(Form::Desktop, Variant::Dark, 1.0, false).colour(ColourToken::Accent).to_hex(), "#4C9AE8");
+    assert_eq!(Column::compute(Form::Desktop, Variant::Dark, 1.0, false, &caps).colour(ColourToken::Accent).to_hex(), "#4C9AE8");
 }
 
 #[test]
 fn kit_7_2_metrics_follow_the_form_and_the_text_scale() {
-    let big = Column::compute(Form::BigScreen, Variant::Dark, 1.0, false);
-    let desktop = Column::compute(Form::Desktop, Variant::Dark, 1.0, false);
+    let big = Column::compute(Form::BigScreen, Variant::Dark, 1.0, false, &caps);
+    let desktop = Column::compute(Form::Desktop, Variant::Dark, 1.0, false, &caps);
     assert_eq!(big.type_scale, tokens::type_scale(Form::BigScreen, 1.0));
     assert_eq!(big.spacing, tokens::spacing(Form::BigScreen));
     assert_eq!(big.spacing.row_height, 54.0);
@@ -28,7 +33,7 @@ fn kit_7_2_metrics_follow_the_form_and_the_text_scale() {
     assert_eq!(big.focus, tokens::focus_marks(Form::BigScreen));
     assert_eq!(big.shadow, tokens::raised_shadow(Form::BigScreen));
     assert_eq!(desktop.shadow, tokens::raised_shadow(Form::Desktop));
-    let scaled = Column::compute(Form::BigScreen, Variant::Dark, 1.3, false);
+    let scaled = Column::compute(Form::BigScreen, Variant::Dark, 1.3, false, &caps);
     assert_eq!(scaled.type_scale, tokens::type_scale(Form::BigScreen, 1.3));
     assert!(scaled.type_scale.row > big.type_scale.row);
     assert_eq!(scaled.spacing, big.spacing, "spacing does not scale with the text");
@@ -36,7 +41,7 @@ fn kit_7_2_metrics_follow_the_form_and_the_text_scale() {
 
 #[test]
 fn kit_7_2_motion_is_the_tokens_in_milliseconds_and_qt_easing_numbers() {
-    let column = Column::compute(Form::BigScreen, Variant::Dark, 1.0, false);
+    let column = Column::compute(Form::BigScreen, Variant::Dark, 1.0, false, &caps);
     assert_eq!(column.duration(MotionToken::Quick), 120);
     assert_eq!(column.duration(MotionToken::Pan), 320);
     assert_eq!(column.duration(MotionToken::Poster), 1500);
@@ -55,7 +60,7 @@ fn kit_7_2_motion_is_the_tokens_in_milliseconds_and_qt_easing_numbers() {
 
 #[test]
 fn kit_7_2_reduced_motion_zeroes_movements_and_keeps_fades_at_120() {
-    let reduced = Column::compute(Form::BigScreen, Variant::Dark, 1.0, true);
+    let reduced = Column::compute(Form::BigScreen, Variant::Dark, 1.0, true, &caps);
     for token in MotionToken::ALL {
         assert_eq!(reduced.duration(token), 0, "{token:?}");
         assert_eq!(reduced.fade(token), if token == MotionToken::Instant { 0 } else { 120 }, "{token:?}");
@@ -65,7 +70,7 @@ fn kit_7_2_reduced_motion_zeroes_movements_and_keeps_fades_at_120() {
 
 #[test]
 fn kit_7_55_a_theme_s_shadow_colour_replaces_the_registry_s_and_none_keeps_it() {
-    let kit = Column::compute(Form::Desktop, Variant::Dark, 1.0, false);
+    let kit = Column::compute(Form::Desktop, Variant::Dark, 1.0, false, &caps);
     let own = tokens::Colour::hex("#2A1B4C");
     let accent = tokens::Colour::hex("#B4442A");
     let themed = kit.clone().overridden(&[(ColourToken::Accent, accent)], Some(own));
@@ -78,7 +83,7 @@ fn kit_7_55_a_theme_s_shadow_colour_replaces_the_registry_s_and_none_keeps_it() 
 
 fn themed(form: Form, scale: f64, reduced: bool, given: &[(&str, &str)]) -> Column {
     let given: Vec<(String, String)> = given.iter().map(|(n, v)| ((*n).to_owned(), (*v).to_owned())).collect();
-    Column::themed(form, Variant::Dark, scale, reduced, &given)
+    Column::themed(form, Variant::Dark, scale, reduced, &given, &caps)
 }
 
 #[test]
@@ -92,7 +97,7 @@ fn qt_3_5_1_a_theme_s_type_size_grows_with_the_text_size_as_the_kit_s_does() {
     assert_eq!(themed(Form::Desktop, 1.3, false, &[("headerSize", "20")]).header, 26.0);
     assert_eq!(themed(Form::BigScreen, 1.3, false, &[("headerSize", "30")]).header, 30.0);
     // The kit's own sizes are the same as before.
-    assert_eq!(themed(Form::BigScreen, 1.3, false, &[]), Column::compute(Form::BigScreen, Variant::Dark, 1.3, false));
+    assert_eq!(themed(Form::BigScreen, 1.3, false, &[]), Column::compute(Form::BigScreen, Variant::Dark, 1.3, false, &caps));
 }
 
 #[test]
@@ -126,4 +131,15 @@ fn qt_3_5_1_an_override_the_kit_cannot_read_is_said_and_every_readable_one_is_no
     let bad = [pair("coronaGlowColor", "#GG0000"), pair("ringGapColor", "dark"), pair("glowBlur", "wide"), pair("ringGapped", "yes"), pair("noSuchToken", "1")];
     let said = Column::unread(Form::BigScreen, &bad);
     assert_eq!(said, bad.iter().map(|(n, v)| format!("{n}: {v}")).collect::<Vec<_>>(), "each unread override is said");
+}
+
+#[test]
+fn kit_7_121_a_theme_s_size_token_under_the_floor_is_drawn_at_the_rule_s_size() {
+    let floor = emusen_kit_core::audit::smallest_capitals_in_units();
+    let eclipse = themed(Form::BigScreen, 1.0, false, &[("fontRow", "16"), ("fontBody", "14"), ("headerSize", "14")]);
+    let whole = |size: f64| caps(size.floor()) >= floor;
+    assert!(whole(eclipse.type_scale.row) && whole(eclipse.type_scale.body) && whole(eclipse.header), "{:?}", eclipse.type_scale);
+    assert!(eclipse.type_scale.row > 16.0 && eclipse.type_scale.body > 14.0, "raised from the boards' sizes");
+    // The desktop's sizes are not the big screen's floor's.
+    assert_eq!(themed(Form::Desktop, 1.0, false, &[("fontBody", "14")]).type_scale.body, 14.0);
 }

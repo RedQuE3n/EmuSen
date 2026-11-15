@@ -185,14 +185,14 @@ fn length(ms: i32) -> Duration {
 }
 
 impl Column {
-    pub fn compute(form: Form, variant: Variant, text_scale: f64, reduced: bool) -> Column {
-        Column::themed(form, variant, text_scale, reduced, &[])
+    pub fn compute(form: Form, variant: Variant, text_scale: f64, reduced: bool, caps_at: &dyn Fn(f64) -> f64) -> Column {
+        Column::themed(form, variant, text_scale, reduced, &[], caps_at)
     }
 
     /// The column with a theme's overrides for this variant, each a `Tokens` property and its value as `theme.json` writes it.
     /// A number or switch becomes the base kit-core makes the token from, so the text scale and reduced motion act on it as on
     /// the kit's own; a colour replaces the palette's or the raised shadow's (EmuSen_Kit.md §7.2, §7.55; EmuSen_Qt.md §3.5.1).
-    pub fn themed(form: Form, variant: Variant, text_scale: f64, reduced: bool, given: &[(String, String)]) -> Column {
+    pub fn themed(form: Form, variant: Variant, text_scale: f64, reduced: bool, given: &[(String, String)], caps_at: &dyn Fn(f64) -> f64) -> Column {
         let mut b = Bases::of(form);
         for (name, value) in given {
             b.set(name, value);
@@ -209,8 +209,8 @@ impl Column {
         let fades = MotionToken::ALL.map(|token| millis(token.fade_of(length(b.fades[Self::slot(token)]), reduced)));
         Column {
             colours: ColourToken::ALL.map(|token| tokens::colour(variant, token)),
-            type_scale: b.type_scale.scaled(text_scale),
-            header: tokens::header_of(form, b.header, text_scale),
+            type_scale: tokens::legible_type(form, &b.type_scale, text_scale, caps_at),
+            header: tokens::legible_header(form, b.header, text_scale, caps_at),
             spacing: b.spacing,
             focus: b.focus,
             shadow: b.shadow,

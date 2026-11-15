@@ -135,7 +135,7 @@ fn same(a: f64, b: f64) -> bool {
 }
 
 fn rom(world: &World, title: &str, ext: &str) -> String {
-    world.dir("Roms").join(format!("{title} (Synthetic).{ext}")).to_string_lossy().into_owned()
+    world.dir("Roms").join(format!("{title}.{ext}")).to_string_lossy().into_owned()
 }
 
 /// The covers' size in pixels, three by four, as theme-audit's library draws them.
@@ -171,7 +171,7 @@ fn synthetic(world: &World, harness: &mut emusen_qt_test::Harness) -> (LibraryVi
         .enumerate()
         .map(|(i, (title, ext))| {
             let system = first.game(&rom(world, title, ext)).expect("a game of the library").system;
-            (media.join(&system).join("covers").join(format!("{title} (Synthetic).png")), COVER, i, format!("{system} covers\n{title}"))
+            (media.join(&system).join("covers").join(format!("{title}.png")), COVER, i, format!("{system} covers\n{title}"))
         })
         .collect();
     emusen_qt_test::covers::draw(harness, &world.dir("Covers"), &covers, |_| {});
@@ -280,15 +280,18 @@ pub fn oracle(backend: &str) {
     host::words(object(screen)).expect("Words").show_now(now as f64);
     host::library(object(screen)).expect("Library").show(&view, "[]");
     host::session(object(screen)).expect("Session").show(&session);
-    host::device(object(screen)).expect("Device").show(&DeviceFacts { controllers: 1, clock: CLOCK.into(), ..DeviceFacts::default() });
+    // One pad, of the family whose letters the board draws (A, X, Y; Main:62-68).
+    let family = emusen_kit_qt::kinds::family_of(emusen_kit_core::glyph::PadFamily::Xbox).repr;
+    host::device(object(screen)).expect("Device").show(&DeviceFacts { controllers: 1, family, clock: CLOCK.into(), ..DeviceFacts::default() });
     let package = emusen_theme_host::package::read(&std::fs::read_to_string(format!("{ECLIPSE}/theme.json")).unwrap()).unwrap();
     host::set_token_overrides(object(screen), &package.overrides());
     host::kit_tokens(object(screen)).expect("the kit's tokens").set_form(kinds::form_of(WalkForm::BigScreen));
     let tokens = tokens(screen);
     let text_scale: f64 = *host::kit_tokens(object(screen)).expect("the kit's tokens").text_scale();
     scene.wait(200);
-    // Placed and fed, the screen has logged nothing.
+    // Placed and fed, the screen has logged nothing, and comes to rest: no frame swapped for two seconds.
     scene.assert_quiet();
+    scene.assert_still("Eclipse's Home at rest");
 
     let (board_height, rows) = rows();
     // A board pixel in canvas units, by the canvas's owner of its height.
@@ -438,7 +441,7 @@ pub fn oracle(backend: &str) {
             ("facts", words::paused_facts(&game.console, now - 720, now)),
             ("clock", CLOCK.to_owned()),
             ("recentHeading", words::RECENT_ENTRY.to_owned()),
-            ("tileFacts.0", game.facts.clone()),
+            ("tileFacts.0", game.console.clone()),
         ];
         for (i, entry) in help.iter().take(3).enumerate() {
             words_of.push((["buttonLabel.0", "buttonLabel.1", "buttonLabel.2"][i], entry.1.to_owned()));
@@ -453,6 +456,12 @@ pub fn oracle(backend: &str) {
             let have = read(&tree, name, "text");
             if have != want {
                 differences.push(format!("{at}: {name} says {have:?} where the program says {want:?}"));
+            }
+        }
+        // Nothing on the row is cut: a shown tile's title and console line are drawn whole.
+        for n in tree.nodes.iter().filter(|n| n.visible && (n.name.starts_with("tileTitle.") || n.name.starts_with("tileFacts."))) {
+            if read(&tree, &n.name, "truncated") == "true" {
+                differences.push(format!("{at}: {} is cut: {:?}", n.name, read(&tree, &n.name, "text")));
             }
         }
     }
@@ -497,7 +506,11 @@ pub fn oracle(backend: &str) {
     }
     assert!(differences.is_empty(), "{} differences:\n{}", differences.len(), differences.join("\n"));
     scene.assert_quiet();
-    // The host drops the screen and its engine, as when another theme is chosen: nothing is logged on the way out.
+    // The host drops the screen and its engine and places it again, as theme-check's audit places each screen: nothing is logged.
+    assert!(scene.set_property("host", "folder", ""));
+    scene.wait(300);
+    assert!(scene.set_property("host", "folder", &folder));
+    scene.wait(300);
     assert!(scene.set_property("host", "folder", ""));
     scene.wait(300);
     scene.assert_quiet();

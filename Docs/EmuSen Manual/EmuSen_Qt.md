@@ -250,8 +250,8 @@ tracks, mapped files, migration, `config_read`, `config_write` and `config_delet
 `model_format`, `model_load_from`, `model_save_to`, the cheat lists' contents, the error log, `suggest`; the library's
 `identity` and `abi_version`; `emusen_patch_package_image`; the disc sets
 (`emusen_disc_*`); emusen-systems' libretro cores, save media formats, code, recognition, route, header,
-disassembly, board name and view; `emusen_firmware_find` and `_locate`; the cheat files' codecs
-(`emusen_cheats_parse`, `_write`); the HTTP client (`emusen_net_download_*`); the medium locks; Endymion's resampler, rate control,
+disassembly, board name and view; `emusen_firmware_find` and `_locate`; the cheat files' `emusen_cheats_write`; the
+medium locks; Endymion's resampler, rate control,
 `pad_resolve`, `pad_combine`, `pad_controls_for`, `pads_use`,
 `pads_rescan_due`, the simulated pads' texts read, holds and device calls, the game player's resampler and rate calls not named in §1.8.6,
 the interface player's `volume` (its `decode` and `decode_take` are `sounds::decode` since 2026-11-09, §4.15); and the rest of Serenity (sources, the compiler,
@@ -265,7 +265,10 @@ the device made for an adopting host, its raw handles, a built-in filter's prese
   stay `serde_json::Value`, so the tools stay the owners of their fields: `core-ls`, `core-fetch`, `core-verify`,
   `pkg-ls`, `rom-check`, `rom-dups` and the disc batch (`ls`, `convert`, `check`) are requests, not calls.
 - `cheats`: the database (`emusen_cheats_database_*`) opened, its entries, the three questions and the prune's plan;
-  the plan applied (`emusen_cheats_prune_apply`). Galaxia's saved lists by name, a name checked, and a game's own list
+  the plan applied (`emusen_cheats_prune_apply`); since interface 48 an archive installed (`emusen_cheats_install`),
+  a `.cht` file read as a game's own list (`emusen_cheats_parse`) and the database's address
+  (`EMUSEN_CHEATS_DATABASE_URL`). `net` (since 48): the HTTP client's download (`emusen_net_download_*`) started, its
+  progress, a wait, a stop, its body and its failure. Galaxia's saved lists by name, a name checked, and a game's own list
   (`emusen_galaxia_cheat_*`) are in `galaxia`.
 - `packages`: a manifest read, written and laid out as its text, so every member stays in place, those this build does
   not know included (the client's `serde_json` keeps no order); the claim index and a resolve as JSON.
@@ -6775,13 +6778,30 @@ for each library game whose console names cheat systems (the systems table's `ch
 newest (its time as the archive gave it). Each row is a game the database has a file for, sectioned by console; its
 value is `N of M on` for the game's own list (the one the Pause Card and the game page switch; the words are
 `cheats::count_words`, shared with the game page), or `No list yet`; the pane names the database's file, and X lists
-the game's own cheats. Getting or updating the database and making a game's list from its file are not offered: the
-base's one install, `DB_UPDATE`, fetches libretro's address with no progress and no stop, and the conversion of a
-`.cht` file's cheats to a game's list (`CheatRegistry::to_file`) has no call; both await an addition to the base.
-Held to by `qt-app/tests/cheats_tool.rs` (the pad opens Cheats from the Home card; with no database it says where one
-would be; with `.cht` files written into that folder as an install leaves them it lists the SNES game under its
-console and not a game of another console with a file of its name; a game's own list then reads `1 of 2 on` and X
-lists it).
+the game's own cheats. Since interface 48 (2026-11-14; `EmuSen_RustPlatform.md` §56) the List card offers `Get the
+database`, or `Update the database` where one is installed. It downloads the database with the base's
+`emusen_net_download_*` from `EMUSEN_CHEATS_DATABASE_URL` (a program's `cheatsUrl` names another address, as a test
+names its loopback server), with no timeout, since the base exports none. While it downloads, the bar says `Downloading:
+<size> of <size>` with its share, each size in the Cores tool's words (`tools::cores::words::size`), and the List card
+offers `Stop the download`, which ends it (`Stopped`). Once done, `emusen_cheats_install` installs it (`Installed N cheat
+file(s)`) and the tool reads the database again; a download that is stopped or fails installs nothing, and each
+failure is said where it happened: the download, its archive, the install, or an answer the tool cannot read. A
+game's row with no list of its own offers A, `Make its list`: the list is made from the game's file in the database,
+read by `emusen_cheats_parse` with `{"path", "system"}` (its console's codecs), and saved as the game's own list,
+which the game's page then counts. Where the list could not hold some of the file's cheats, the bar says how many were
+left out. Held to by `qt-app/tests/cheats_tool.rs` (the pad opens Cheats from the Home card; with no database it says
+where one would be; with `.cht` files written into that folder it lists the SNES game under its console and not a game
+of another console with a file of its name; a game's own list then reads `1 of 2 on` and X lists it),
+`qt-app/tests/cheats_get.rs` (from the test's own server, the pad gets the database with the progress part way, a stop
+leaves no database, a second get installs it, A makes the game's list, and the game's page reads `1 of 2 on`) and
+`qt-models/tests/tool_cheats.rs` (the same through the tool's model, the list's cheats and writes read back, and the
+words for a list with cheats left out). No test opens the Pause Card on a list made here.
+
+**Decided 2026-11-14 by the tester:** the download has no time limit; the player sees its progress and can stop it
+(R-20261114-22). A failure the base records without a reason reads `It could not be downloaded, and no reason was
+given`, and a download done with no body `It was downloaded, but there was no archive to install` (R-20261114-24); the
+words of an ended download are `tools::cheats::ended` and `archive`, held to by `tool_cheats.rs`. Settings ▸ Library ▸
+Cheats says `The cheats of the game last played, turned on or off.` (R-20261114-23), held to by `qt-models/tests/settings.rs`.
 
 ### 7.8 Stage 5, piece G: a game's page and its clip (2026-11-09)
 

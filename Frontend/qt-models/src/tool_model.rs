@@ -39,6 +39,8 @@ pub mod qobject {
         /// The scraper's test seam, its settings' `test` member as JSON (a loopback server and its root); empty for
         /// ScreenScraper itself.
         #[qproperty(QString, scraper_test, cxx_name = "scraperTest")]
+        /// The address Cheats downloads the cheat database from in place of the header's; empty for the header's.
+        #[qproperty(QString, cheats_url, cxx_name = "cheatsUrl")]
         #[qproperty(QString, platform_library, cxx_name = "platformLibrary")]
         /// The runtime's cores folder, as the library's; empty for the installation's own.
         #[qproperty(QString, cores)]
@@ -170,6 +172,7 @@ pub struct ToolModelRust {
     tool: Shown,
     jobs: QString,
     scraper_test: QString,
+    cheats_url: QString,
     platform_library: QString,
     cores: QString,
     world: QString,
@@ -226,6 +229,7 @@ impl Default for ToolModelRust {
             tool: Shown::NoTool,
             jobs: QString::default(),
             scraper_test: QString::default(),
+            cheats_url: QString::default(),
             platform_library: QString::default(),
             cores: QString::default(),
             world: QString::default(),
@@ -311,9 +315,10 @@ fn scraper_source(platform_library: &str, cores: &str, test: &str) -> Result<Box
     Ok(Box::new(crate::tools::scraper::Scraper::new(source, serde_json::from_str(test).ok())))
 }
 
-/// Cheats over the clients.
-fn cheats_source(platform_library: &str, cores: &str) -> Result<Box<dyn Source>, String> {
-    Ok(Box::new(crate::tools::cheats::Cheats::new(Arc::new(crate::clients::source_for(platform_library, cores)?))))
+/// Cheats over the clients, its database downloaded from `url` where one is named.
+fn cheats_source(platform_library: &str, cores: &str, url: &str) -> Result<Box<dyn Source>, String> {
+    let url = Some(url.to_owned()).filter(|u| !u.is_empty());
+    Ok(Box::new(crate::tools::cheats::Cheats::new(Arc::new(crate::clients::source_for(platform_library, cores)?), url)))
 }
 
 /// The tool of jobs of `key`, its jobs started by the platform library's tools, or from the world a file holds.
@@ -355,7 +360,7 @@ impl qobject::ToolModel {
         if self.shown.is_none() {
             let made = match self.tool {
                 Shown::Cores => cores_source(&self.platform_library.to_string(), &self.cores.to_string(), &self.world.to_string()),
-                Shown::Jobs if jobs == crate::home_card::CHEATS => cheats_source(&self.platform_library.to_string(), &self.cores.to_string()),
+                Shown::Jobs if jobs == crate::home_card::CHEATS => cheats_source(&self.platform_library.to_string(), &self.cores.to_string(), &self.cheats_url.to_string()),
                 Shown::Jobs if jobs == crate::home_card::SCRAPER => scraper_source(&self.platform_library.to_string(), &self.cores.to_string(), &self.scraper_test.to_string()),
                 Shown::Jobs => jobs_source(&self.platform_library.to_string(), &self.world.to_string(), &jobs),
                 _ => Err("no tool is named".to_owned()),

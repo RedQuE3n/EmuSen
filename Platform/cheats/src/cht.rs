@@ -116,6 +116,16 @@ fn checked<T>(result: Result<T, Error>) -> Result<Option<T>, OutOfRange> {
     }
 }
 
+/// `CheatImport.DefaultSpaceName`: the space a code's writes go into where its codec names none.
+pub const DEFAULT_SPACE: &str = "CpuBus";
+
+/// A `.cht` text read as a session of a system reads one: its pair of codecs, the detected codec's space or
+/// [`DEFAULT_SPACE`].
+pub fn parse_with(text: &str, auto: Option<&cheats::Codec>, explicit: Option<&cheats::Codec>) -> Result<Parsed, OutOfRange> {
+    let space = auto.and_then(cheats::space).unwrap_or(DEFAULT_SPACE);
+    parse(text, auto.map(|c| c.id), space, explicit.map(|c| c.id))
+}
+
 /// `ChtFile.Parse`, with each codec named by its emusen-systems id.
 pub fn parse(text: &str, codec: Option<&str>, space: &str, patch: Option<&str>) -> Result<Parsed, OutOfRange> {
     let fields = Fields::read(text);

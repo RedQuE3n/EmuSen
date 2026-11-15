@@ -307,6 +307,7 @@ mod tests {
     fn the_header_carries_the_version_and_every_status() {
         let header = include_str!("../../include/emusen_platform.h");
         assert!(header.contains(&format!("#define EMUSEN_PLATFORM_ABI_VERSION {ABI_VERSION}u")));
+        assert!(header.contains(&format!("#define EMUSEN_CHEATS_DATABASE_URL \"{}\"", emusen_cheats::install::DATABASE_URL)), "the address is the cheats crate's");
         for (name, value) in [
             ("EMUSEN_PLATFORM_NULL", status::NULL),
             ("EMUSEN_PLATFORM_BAD_STRING", status::BAD_STRING),

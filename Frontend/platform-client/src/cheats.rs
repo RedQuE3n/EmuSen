@@ -1,5 +1,6 @@
 //! The player's cheat database (emusen_platform.h, `emusen_cheats_database_*`; `man cheat`): a tree of `.cht` files
-//! scanned once, asked by system, by game and by text, and pruned to the systems a core can use. Requests and answers
+//! scanned once, asked by system, by game and by text, pruned to the systems a core can use, and installed from an
+//! archive; a `.cht` text read as a game's own list. Requests and answers
 //! are the header's JSON and cross as `serde_json::Value`.
 
 use crate::error::Result;
@@ -9,6 +10,12 @@ use crate::raw;
 use serde_json::Value;
 use std::ptr::NonNull;
 use std::sync::Arc;
+
+/// Where the libretro cheat database is downloaded from, the header's `EMUSEN_CHEATS_DATABASE_URL`.
+pub fn database_url() -> &'static str {
+    let named = raw::EMUSEN_CHEATS_DATABASE_URL;
+    std::str::from_utf8(&named[..named.len() - 1]).unwrap_or_default()
+}
 
 /// One file of the database: its system's folder, its game, its path.
 pub type Entry = (String, String, String);
@@ -68,6 +75,23 @@ impl Drop for CheatsDatabase {
 }
 
 impl Platform {
+    /// A `.cht` text read: `{"path", "system"}`, `{"text", "system"}` or `{"text", "codec", "space", "patch"}` in; `{"cheats", "skipped",
+    /// "file"}`, `file` the cheats as a game's own list, the CheatFile model's document.
+    pub fn cheats_parse(&self, request: &Value) -> Result<Value> {
+        let r = to_json(request);
+        let bytes = self.read(|o, l| unsafe { self.lib.emusen_cheats_parse(r.as_ptr(), r.len(), o, l) })?.unwrap_or_default();
+        json("cheats_parse", &bytes)
+    }
+
+    /// A downloaded database's archive installed under `directory`, made whole beside it first so a refusal leaves the
+    /// database as it was: `{"installed", "skipped"}`. The library installs once and answers the fill from that.
+    pub fn cheats_install(&self, zip: &[u8], directory: &str) -> Result<Value> {
+        let bytes = self
+            .read(|o, l| unsafe { self.lib.emusen_cheats_install(zip.as_ptr(), zip.len(), directory.as_ptr(), directory.len(), o, l) })?
+            .unwrap_or_default();
+        json("cheats_install", &bytes)
+    }
+
     /// A plan applied inside its folder, `{"directory", "removing": [{system, path}]}`: `{"removed", "failed"}`, each
     /// failure a folder's words. The library applies it once and answers the fill from that.
     pub fn cheats_prune_apply(&self, request: &Value) -> Result<Value> {

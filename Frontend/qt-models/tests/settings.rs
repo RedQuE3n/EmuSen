@@ -305,6 +305,7 @@ fn the_cheats_door_is_held_until_the_game_last_played_has_cheats_and_the_discs_d
     section(&mut view, "Library");
     let cheats = index(&view, "cheats");
     assert!(view.rows()[cheats].held, "no game played");
+    assert_eq!(view.pane(cheats).sentence, "The cheats of the game last played, turned on or off.");
     view.facts = json!({"last": "/roms/a.sfc", "lastCheats": 0});
     assert!(view.rows()[cheats].held, "a game with no cheats");
     view.facts = json!({"last": "/roms/a.sfc", "lastCheats": 2});

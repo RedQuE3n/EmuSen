@@ -2291,6 +2291,10 @@ file unchanged), `GalaxiaParityTests`, `SystemTableParityTests` and `LeafAssembl
 - **What stays C#.** The registry a session applies (`CheatRegistry`, B7) and so `CheatImport`, which reads a file with
   `ChtFile.Parse` and adds what it read; the download (§15.4). **The list files** (`cheats/<game>.json`) were Galaxia's
   in Rust already (`EmuSen_RustPlatform.md` §20), so nothing of theirs moved.
+- **Since interface 48** (2026-11-14) a host that downloads the database itself installs it with
+  `emusen_cheats_install`, made whole in `<folder>.part` and swapped in by rename, as `DB_UPDATE` now installs too, and
+  `emusen_cheats_parse` reads a file by its path with a system's codecs and answers its cheats as a game's own list
+  (`EmuSen_RustPlatform.md` §56).
 - **The archive.** A zip is read here only where it is plainly one of stored and deflated entries; a Zip64 or spanned
   archive, an encrypted entry, another method, a name holding a NUL or a directory that is not one is left to the C#,
   which reads every form .NET does and refuses the rest as before, nothing having been written. Inflate is `flate2`

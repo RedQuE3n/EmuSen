@@ -14,12 +14,12 @@ Item {
         id: document
         source: root.source
     }
-    // The page is made only for a loaded document, so its decode size never asks a file of an empty source.
+    // Decoded here by Qt PDF's image plugin, which opens its own document; never PdfPageImage (EmuSen_Kit.md §7.110).
     Loader {
         anchors.fill: parent
         active: document.status === PdfDocument.Ready
-        sourceComponent: PdfPageImage {
-            document: document
+        sourceComponent: Image {
+            source: root.source
             currentFrame: root.page
             sourceSize: pagePixels.pixels
             fillMode: Image.Stretch

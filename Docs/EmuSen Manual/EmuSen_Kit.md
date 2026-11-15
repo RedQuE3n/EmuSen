@@ -3829,6 +3829,25 @@ game page's viewer (EmuSen_Qt.md §7.8.2) and esde-qt's `ManualElement`, which d
 until 2026-11-12. The kit's module now depends on `QtQuick.Pdf`, which esde-qt already did; nothing links Qt PDF that
 did not before. Kit 1.3.
 
+Since 2026-11-14 the page is drawn by an `Image` whose source is the PDF file, decoded through Qt PDF's image plugin
+(`imageformats/libqpdf.so`, the same package), and `PdfDocument` gives only `pages` and `pageSize`. `PdfPageImage`
+crashed a process that destroyed a page while Qt's image thread decoded one (signal 11 in `QPdfIOHandler::load` or
+`QImageReader::imageCount` on the thread, `~QQuickPdfDocument` on the main thread). Read in Qt 6.11.2's source on
+2026-11-14: `PdfPageImage` ignores `asynchronous` and always hands the document's carrier file to Qt Quick's image
+thread (qtwebengine `src/pdfquick/qquickpdfpageimage.cpp:103`, `QQuickPixmap::loadImageFromDevice`, which queues a
+job, qtdeclarative `src/quick/util/qquickpixmapcache.cpp:2006-2014`); the thread checks only that the file has not
+been deleted when the job starts (`qquickpixmapcache.cpp:1039`) and then reads it unguarded, while
+`~QQuickPdfDocument` deletes that file outright (`qquickpdfdocument.cpp:43`) and the last `QPdfDocument` destroyed
+shuts PDFium down (`FPDF_DestroyLibrary`, counted by `libraryRefCount`, `src/pdf/qpdfdocument.cpp:145-150`). Qt's
+own design note on that path calls the race unresolved ("qq-pixmap-cache-special-device", contribute.qt-project.org,
+read 2026-11-14). A plain `Image` of a local file with `asynchronous: false` decodes on the calling thread
+(`qquickpixmapcache.cpp:1939-1942`), and the plugin opens and owns a document of its own for each decode
+(`src/pdf/plugins/imageformats/pdf/qpdfiohandler.cpp:216-219`), so no page's decode shares a document with another
+item or another thread. The cost is the file parsed again for each page drawn; it was not measured on a real
+manual. The handheld's Qt bundle carries the plugin (`Testing/handheld/qtbundle.sh`). Test:
+`kit-qt/tests/pdf_teardown.rs`, 48 files of light pages made and all destroyed the moment the first is drawn, twenty
+rounds in a process of its own; before the change ten runs of ten crashed, each within two rounds.
+
 ### 7.111 DrawnPixels: a picture decoded at the pixels it covers (2026-11-14)
 
 A picture laid out on the big screen's canvas (§7.112) is sized in design units and drawn through the canvas's

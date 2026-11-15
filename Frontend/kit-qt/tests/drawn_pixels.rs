@@ -45,7 +45,7 @@ fn kit_7_111_a_help_picture_and_a_pdf_page_are_decoded_at_the_pixels_they_cover(
         assert!((unit - f64::from(height) / emusen_kit_core::canvas::DESIGN_HEIGHT).abs() < 1e-9, "the canvas's unit at {height} high: {unit}");
         let tree = scene.tree();
         let icon = tree.find_named("icon-Menu").map(|i| tree.nodes[i as usize].clone()).expect("the theme's picture in the tree");
-        let page = tree.nodes.iter().find(|n| n.cls.contains("PdfPageImage")).cloned().expect("the page's picture in the tree");
+        let page = tree.find_named("manualPage").and_then(|p| tree.under(p).into_iter().map(|i| tree.nodes[i as usize].clone()).find(|n| n.picture)).expect("the page's picture in the tree");
         for (what, node) in [("the help picture", &icon), ("the page", &page)] {
             let decoded = (scene.item_number(&node.id, "implicitWidth"), scene.item_number(&node.id, "implicitHeight"));
             // The window's ratio is one device pixel a window pixel under the harness, so a scene pixel is a device pixel.

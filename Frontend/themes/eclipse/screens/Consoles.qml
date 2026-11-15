@@ -186,12 +186,15 @@ ThemeScreen {
                     Flickable {
                         id: grid
                         objectName: "plates"
-                        x: root.gridX
+                        x: root.gridX - root.plateGap / 2
                         y: root.listTop
-                        width: root.gridWidth
+                        width: root.gridWidth + root.plateGap
                         height: root.foot - root.listTop
                         clip: true
                         interactive: false
+                        // Half a gap past the grid on each side, so the clip never shaves an outer plate's edge.
+                        leftMargin: root.plateGap / 2
+                        rightMargin: root.plateGap / 2
                         readonly property int rows: root.lastPlate ? Math.ceil(root.lastPlate.groupSize / root.columns) : 0
                         readonly property real pitch: root.plateHeight + root.plateGap
                         contentHeight: Math.max(0, grid.rows * grid.pitch - root.plateGap)
@@ -331,7 +334,7 @@ ThemeScreen {
                     FocusRing {
                         objectName: "plateRing"
                         visible: root.lastPlate !== null && root.lastPlate.activeFocus
-                        x: grid.x + (root.lastPlate ? root.lastPlate.x : 0)
+                        x: grid.x + grid.leftMargin + (root.lastPlate ? root.lastPlate.x : 0)
                         y: grid.y + (root.lastPlate ? root.lastPlate.y : 0) - grid.contentY
                         width: root.plateWidth
                         height: root.plateHeight
@@ -393,12 +396,18 @@ ThemeScreen {
                                 PlanetMark {
                                     objectName: "consoleCoreMark"
                                     visible: root.shown !== null && root.shown.engineMark.length > 0
-                                    anchors.verticalCenter: parent.verticalCenter
+                                    // Centred on the facts' first line.
+                                    y: (factsLine.height - height) / 2
                                     width: 24 * root.px
                                     height: 24 * root.px
                                     mark: root.shown ? root.shown.engineMark : ""
                                 }
+                                FontMetrics {
+                                    id: factsLine
+                                    font: facts.font
+                                }
                                 Text {
+                                    id: facts
                                     objectName: "consoleFacts"
                                     width: parent.width - 34 * root.px
                                     wrapMode: Text.WordWrap
@@ -472,19 +481,6 @@ ThemeScreen {
                         }
                     }
 
-                    // The chosen maker and where the focused console stands in it, at the foot's right (board line 105).
-                    Text {
-                        objectName: "consolePlace"
-                        visible: root.shown !== null
-                        x: root.width - root.margin - width
-                        y: root.foot
-                        height: 34 * root.px
-                        verticalAlignment: Text.AlignVCenter
-                        text: root.shown ? [root.shown.maker, Words.place(root.shown.groupIndex, root.shown.groupSize)].filter(w => w.length > 0).join(" " + Words.between + " ") : ""
-                        color: root.makerInk
-                        font.pixelSize: 21 * root.px
-                    }
-
                     // No console holds a game: the program's empty words.
                     Column {
                         objectName: "noConsoles"
@@ -508,6 +504,19 @@ ThemeScreen {
                         }
                     }
                 }
+            }
+
+            // The chosen maker and where the focused console stands in it, at the foot's right (board line 105).
+            Text {
+                objectName: "consolePlace"
+                visible: root.shown !== null
+                x: root.width - root.margin - width
+                y: root.foot
+                height: 34 * root.px
+                verticalAlignment: Text.AlignVCenter
+                text: root.shown ? [root.shown.maker, Words.place(root.shown.groupIndex, root.shown.groupSize)].filter(w => w.length > 0).join(" " + Words.between + " ") : ""
+                color: root.makerInk
+                font.pixelSize: 21 * root.px
             }
         }
     }

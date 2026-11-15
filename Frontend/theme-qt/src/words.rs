@@ -36,6 +36,7 @@ pub mod qobject {
         /// The time the timed phrases are said against, in seconds since 1970; 0, the default, is the wall clock. The
         /// program sets it from its clock, which a test holds (decided 2026-11-09 by the tester); a theme only reads it.
         #[qproperty(f64, now, READ, NOTIFY)]
+        #[qproperty(QString, name, READ, CONSTANT)]
         type ThemeWords = super::ThemeWordsRust;
     }
 
@@ -72,11 +73,20 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "pausedAgo"]
         fn paused_ago(self: &ThemeWords, paused_since: f64) -> QString;
+        /// A game's last play and its time played: "Last played yesterday · 3 h 20 min played".
+        #[qinvokable]
+        #[cxx_name = "playedFacts"]
+        fn played_facts(self: &ThemeWords, at: f64, seconds: f64) -> QString;
+        /// The line over a suspended game's name: "Continue · Super Nintendo".
+        #[qinvokable]
+        #[cxx_name = "continueLine"]
+        fn continue_line(self: &ThemeWords, console: &QString) -> QString;
     }
 }
 
 pub struct ThemeWordsRust {
     title: QString,
+    name: QString,
     games_heading: QString,
     choose_a_console: QString,
     games_path: QString,
@@ -100,6 +110,7 @@ impl Default for ThemeWordsRust {
     fn default() -> Self {
         ThemeWordsRust {
             title: QString::from(words::TITLE),
+            name: QString::from(words::NAME),
             games_heading: QString::from(words::GAMES),
             choose_a_console: QString::from(words::CHOOSE_A_CONSOLE),
             games_path: QString::from(words::GAMES_PATH),
@@ -149,6 +160,14 @@ impl qobject::ThemeWords {
 
     pub fn paused_facts(&self, console: &QString, paused_since: f64) -> QString {
         said(words::paused_facts(&console.to_string(), paused_since as i64, self.at()))
+    }
+
+    pub fn played_facts(&self, at: f64, seconds: f64) -> QString {
+        said(words::played_facts(at as i64, self.at(), seconds as i64))
+    }
+
+    pub fn continue_line(&self, console: &QString) -> QString {
+        said(words::continue_line(&console.to_string()))
     }
 
     pub fn facts(&self, maker: &QString, year: i32, count: i32, runs_on: &QString) -> QString {

@@ -81,6 +81,7 @@ Walkable {
         text: root.label
         color: root.filled ? Tokens.overAccent : Tokens.text
         font.pixelSize: Type.size(root.labelSize * root.unit, Tokens.textScale)
+        font.family: Tokens.faceText
         font.weight: root.filled ? Font.DemiBold : Font.Normal
     }
 }

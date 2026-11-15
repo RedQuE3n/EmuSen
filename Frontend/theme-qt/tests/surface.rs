@@ -121,8 +121,9 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
                 "continueEntry",
                 "recentEntry",
                 "now",
+                "name",
             ],
-            &["games", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo"],
+            &["games", "ago", "pausedFacts", "facts", "runsOn", "statusLine", "summary", "splashCaption", "pausedAgo", "playedFacts", "continueLine"],
         ),
         ("Help", &[], &["entries"]),
         (

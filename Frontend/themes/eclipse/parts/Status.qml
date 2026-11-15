@@ -93,6 +93,7 @@ Item {
         text: Device.clock
         color: Tokens.text
         font.pixelSize: Type.size(root.size * root.unit, Tokens.textScale)
+        font.family: Tokens.faceText
         font.weight: Font.DemiBold
     }
 }

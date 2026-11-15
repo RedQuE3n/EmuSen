@@ -34,6 +34,7 @@ Item {
         labelColor: root.ink
         iconColor: Tokens.muted
         labelFont.pixelSize: Type.size(root.size * root.unit, Tokens.textScale)
+        labelFont.family: Tokens.faceText
         entrySpacing: root.spacing * root.unit
         glyphGap: root.glyphGap * root.unit
         glyphSize: root.glyphSide * root.unit

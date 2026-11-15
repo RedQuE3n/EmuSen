@@ -56,6 +56,7 @@ Item {
         elide: Text.ElideRight
         color: root.titleInk
         font.pixelSize: Type.size(root.titleSize * root.unit, Tokens.textScale)
+        font.family: Tokens.faceText
         font.weight: Font.DemiBold
     }
     Text {
@@ -69,6 +70,7 @@ Item {
         elide: Text.ElideRight
         color: root.factsInk
         font.pixelSize: Type.size(root.factsSize * root.unit, Tokens.textScale)
+        font.family: Tokens.faceText
         font.letterSpacing: 0.08 * root.factsSize * root.unit
     }
 }

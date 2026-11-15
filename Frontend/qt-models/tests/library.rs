@@ -398,3 +398,18 @@ fn qt_7_8_g2_a_hidden_game_leaves_every_place_until_settings_lists_hidden_games(
     let rows = refresh(&source).unwrap().rows;
     assert_eq!(rows.iter().map(|r| r.count).collect::<Vec<_>>(), [5, 1, 4, 3, 2], "listed again with the rest");
 }
+
+#[test]
+fn eclipse_s_home_says_a_game_s_last_play_its_time_played_and_continue_as_its_board_does() {
+    use emusen_qt_models::words::{continue_line, played_facts};
+    let at = 1_000_000;
+    // Main.dc.html:56, "Last played yesterday · 3 h 20 min played".
+    assert_eq!(played_facts(at, at + 86_400, 3 * 3600 + 20 * 60), "Last played yesterday · 3 h 20 min played");
+    assert_eq!(played_facts(at, at + 720, 45 * 60), "Last played 12 minutes ago · 45 min played");
+    assert_eq!(played_facts(at, at + 7200, 2 * 3600), "Last played 2 hours ago · 2 h played");
+    assert_eq!(played_facts(at, at + 3 * 86_400, 0), "Last played 3 days ago", "no time played, no second half");
+    assert_eq!(played_facts(at, at + 30, 59), "Last played just now", "under a minute played is none");
+    // Main.dc.html:53, "CONTINUE · SUPER NINTENDO", its capitals the font's.
+    assert_eq!(continue_line("Super Nintendo"), "Continue · Super Nintendo");
+    assert_eq!(continue_line(""), "Continue");
+}

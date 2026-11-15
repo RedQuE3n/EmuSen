@@ -372,7 +372,8 @@ impl qobject::ThemeFeed {
             console: found.as_ref().map(|g| g.console.clone()).unwrap_or_default(),
             hue: found.as_ref().map_or(-1.0, |g| g.hue),
             paused_since: if running { shown.paused_at as i64 } else { 0 },
-            played: 0,
+            // games.db's seconds played, as the library last read them.
+            played: library.and_then(|l| l.view().catalog.plays.iter().find(|(p, _)| *p == shown.game).map(|(_, n)| n.seconds)).unwrap_or(0),
         };
         let Some(mut engine) = self.engine() else { return };
         if let Some(library) = host::library(engine.as_mut()) {

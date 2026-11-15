@@ -101,10 +101,13 @@ ThemeScreen {
                         x: 96 * design.unit
                         y: 250 * design.unit
                         width: 980 * design.unit
-                        text: root.resuming ? Words.continuePlaying : ""
+                        // "Continue · Super Nintendo" in capitals, as the board draws it (Main:53).
+                        text: root.resuming ? Words.continueLine(Session.console) : ""
+                        font.capitalization: Font.AllUppercase
                         color: ink.rose
                         elide: Text.ElideRight
                         font.pixelSize: Type.size(20 * design.unit, Tokens.textScale)
+                        font.family: Tokens.faceText
                         font.weight: Font.DemiBold
                         font.letterSpacing: 0.22 * 20 * design.unit
                     }
@@ -121,7 +124,8 @@ ThemeScreen {
                         maximumLineCount: 2
                         elide: Text.ElideRight
                         font.pixelSize: Type.size(112 * design.unit, Tokens.textScale)
-                        font.weight: Font.DemiBold
+                        font.family: Tokens.faceText
+                        font.weight: Tokens.weightTitle
                         font.letterSpacing: -0.02 * 112 * design.unit
                         // The face's own line height, so no glyph stands past the box; the facts follow it (Main:55-56).
                     }
@@ -132,11 +136,13 @@ ThemeScreen {
                         y: title.y + title.height + 26 * design.unit
                         width: 980 * design.unit
                         // The paused game's words follow the clock, as the program's clock says them again each minute.
-                        text: root.resuming ? (Device.clock.length >= 0 ? Words.pausedFacts(Session.console, Session.pausedSince) : "") : root.currentTile?.facts ?? ""
+                        // The board's line (Main:56): when it was last played and the time played; it follows the clock, which ticks each minute.
+                        text: root.resuming ? (Device.clock.length >= 0 ? Words.playedFacts(Session.pausedSince, Session.played) : "") : root.currentTile?.facts ?? ""
                         color: Tokens.muted
                         elide: Text.ElideRight
                         font.pixelSize: Type.size(26 * design.unit, Tokens.textScale)
-                        font.weight: Font.Light
+                        font.family: Tokens.faceText
+                        font.weight: Tokens.weightSentence
                     }
                     Row {
                         objectName: "buttons"
@@ -180,6 +186,7 @@ ThemeScreen {
                         text: Words.recentEntry
                         color: Tokens.text
                         font.pixelSize: Type.size(28 * design.unit, Tokens.textScale)
+                        font.family: Tokens.faceText
                         font.weight: Font.DemiBold
                     }
                     Item {

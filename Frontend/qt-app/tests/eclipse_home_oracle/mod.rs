@@ -267,6 +267,8 @@ pub fn oracle(backend: &str) {
     let now = words::now();
     let first = rom(&world, GAMES[0].0, GAMES[0].1);
     let game = view.game(&first).expect("the suspended game is in the library");
+    // An hour and a half played, as games.db would hold it.
+    let session_played = 5400;
     let session = SessionFacts {
         has_game: true,
         key: first.clone(),
@@ -275,7 +277,7 @@ pub fn oracle(backend: &str) {
         console: game.console.clone(),
         hue: game.hue,
         paused_since: now - 720,
-        played: 5400,
+        played: session_played,
     };
     host::words(object(screen)).expect("Words").show_now(now as f64);
     host::library(object(screen)).expect("Library").show(&view, "[]");
@@ -435,10 +437,10 @@ pub fn oracle(backend: &str) {
         // Every word is the program's.
         let help = entries(Screen::Home);
         let mut words_of = vec![
-            ("wordmark", words::TITLE.to_owned()),
-            ("eyebrow", words::CONTINUE_PLAYING.to_owned()),
+            ("wordmark", words::NAME.to_owned()),
+            ("eyebrow", words::continue_line(&game.console)),
             ("title", game.title.clone()),
-            ("facts", words::paused_facts(&game.console, now - 720, now)),
+            ("facts", words::played_facts(now - 720, now, session_played)),
             ("clock", CLOCK.to_owned()),
             ("recentHeading", words::RECENT_ENTRY.to_owned()),
             ("tileFacts.0", game.console.clone()),

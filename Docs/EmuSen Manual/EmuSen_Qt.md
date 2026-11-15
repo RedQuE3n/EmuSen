@@ -937,18 +937,18 @@ card** (§0.7 there) and no theme colour is read into one. A card opens over the
 `import EmuSen.Theme` gives a theme exactly these (a type added after 1.0 needs the minor that added it, as
 `Frontend/theme-qt/CHANGELOG-theme-api.md` lists), each a QML singleton or type, each a view over `emusen-qt-models`
 with the fields a theme may read and nothing more. The table is the module as built (`Frontend/theme-qt`, the crate
-`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.2.*` and held to this table by hand in
+`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.5.*` and held to this table by hand in
 `tests/surface.rs`. The amendments of 2026-11-08 are listed in `Frontend/theme-qt/CHANGELOG-theme-api.md`.
 
 | Name | Kind | What it holds |
 |---|---|---|
-| `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`, `libretro`, `group` = the maker's ordinal in order of first appearance, `groupIndex` = the place within it, `groupSize`, `groupStart` = the consoles of the groups before it, so `groupStart + groupIndex` is the place in maker order; an unknown maker is a group of its own); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles; `available`, false where the host would decline `openPlace`, not `enabled`, which would override `Item.enabled` in a delegate); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `shelf`, `recent` less the suspended game; `collections` (`key`, `name`, `count`); `gamesOf(key)` for a console's or a shelf's key, `firstOf(key, count)` its first games, and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords`, `facts` (cover and hero as file URLs) |
+| `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`, `libretro`, `group` = the maker's ordinal in order of first appearance, `groupIndex` = the place within it, `groupSize`, `groupStart` = the consoles of the groups before it, so `groupStart + groupIndex` is the place in maker order; an unknown maker is a group of its own; `played`, from 1.5, how many of its games were played; `glow`, from 1.5, its own colour, kit-core's `world::glow` for its hue); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles; `available`, false where the host would decline `openPlace`, not `enabled`, which would override `Item.enabled` in a delegate); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `shelf`, `recent` less the suspended game; `collections` (`key`, `name`, `count`); `gamesOf(key)` for a console's or a shelf's key, `firstOf(key, count)` its first games, and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords`, `facts` (cover and hero as file URLs) |
 | `Session` | singleton | `hasGame`, `title`, `consoleId`, `pausedSince`, `played` (seconds), `frame` (the item the game's picture is drawn in, for a `ShaderEffectSource`), `key` (the game's file), `console` (its console's name), `hue` (-1 for none) |
 | `Device` | singleton | `controllers`, `family` (the glyphs' family, as `Frame.padFamily` takes it), `clock`, `battery` (-1 none), `charging`, `network`, `bigScreen`, `form` |
 | `Actions` | singleton | `play(key)`, `openPage(key)`, `favourite(key)`, `random(console)`, `openConsole(key)`, `openPlace(key)`, `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`, `act(key)` (a help bar's declared action), `focus(key)` (the game or row the focus is on); each returns whether it was taken; `enabled(key)`, whether the host would take `act(key)`, asked without acting |
 | `Cues` | singleton | `scroll()`, `systembrowse()`, `select()`, `back()`, `favorite()`, `launch()`, `quicksysselect()`: the seven names of `EmuSen_Interface.md` §23, rung by the host through Endymion at the player's volume |
 | `Bells` | singleton | `ladder(count)` (the ladder's first rungs made ready), `strike(i)` (rings rung i, the bell world i rings in Moonrise), handed to the host's striker, rendered by the kit's `Bells` and rung at the Navigation volume |
-| `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`, `summary(consoles, games)`; the empty states `noGames`, `noRecent`, `noConsoles`, `addFolder`, the eyebrow `places` and `pausedAgo(pausedSince)`; `continueEntry` and `recentEntry`, Continue and the Recent shelf named as destinations: the curated face of `words.rs` |
+| `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`, `summary(consoles, games)`, from 1.5 `played(n)` and `place(index, count)`; the empty states `noGames`, `noRecent`, `noConsoles`, `addFolder`, the eyebrow `places` and `pausedAgo(pausedSince)`; `continueEntry` and `recentEntry`, Continue and the Recent shelf named as destinations: the curated face of `words.rs` |
 | `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, `SectionSearched`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; `entries(kind, {group, back, accept})` the same with LB RB Group and B Back added where the kind takes them, and A's entry not `enabled` (an `enabled` role, read as `model.enabled`) when `accept` is false; the curated face of `help.rs` |
 | `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only; `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
 | `Browse` | singleton | the section a Games screen shows as the program holds it: `section`, `heading`, `world`, `hue`, `countLine`, `previous`, `next`, `focusRow`, `searching`, `typing`, `listOpen`, `searched`, `games` (rows in the order shown) |
@@ -1036,7 +1036,7 @@ left out of `Tokens.qml` (the surface test).
 
 ### 3.3 Versioning
 
-The API is the module's version, now `EmuSen.Theme 1.2` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
+The API is the module's version, now `EmuSen.Theme 1.5` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
 removal or a rename, bumps the minor, and a role or action deprecated in one minor may be removed in any later one
 (decided 2026-11-11 by the tester, R-20261111-107, R-20261111-108, §5.3). After it, a minor adds singletons, roles,
 actions, cues or tokens and never removes or renames one; a role or action no longer meant is kept and marked
@@ -1742,6 +1742,41 @@ Eclipse; Use stores `eclipse` and loads it from the resources; every override re
 program's equals `theme.json`'s, and every other token is the kit's; the reference chosen again gives the kit's tokens
 back. qt-models' `both_built_ins_come_first_and_a_blank_setting_still_gives_the_reference` holds the listing and the
 resolution, and qt-app's `qt_3_4_2_…` holds each built-in's resources to its folder.
+
+#### 3.4.8 Eclipse's Choose a console **[M 2026-11-15]**
+
+`Frontend/themes/eclipse/screens/Consoles.qml`, listed in Eclipse's `theme.json`, is the board "Eclipse theme, Consoles"
+(`EclipseConsoles.dc.html`) laid out from `Library.consoles`. Every measure is the board's pixel times `canvas.designHeight
+/ 1200`, the canvas's own height over the board's. The makers are a column, one row for each maker group at its group's
+place, with the group's size, and the chosen one is filled in the accent. The chosen maker's consoles are plates, in as many
+columns as fit between the makers and the aside, each placed by its `groupIndex`. A plate shows its name, its year and
+games, and the share of its games played as an arc over a track. That share is at least the board's sliver for a console
+with games, and it comes from `played` (EmuSen.Theme 1.5, decided 2026-11-15 by the tester, R-20261115-8). The focused
+console stands at the right. Its disc's rim and glows take the console's own colour, the `glow` role, which is kit-core's
+`world::glow` for its hue, the colour its body glows in (decided 2026-11-15 by the tester, R-20261115-9). Every console has
+a hue: the systems table's data gives one for 14 consoles, and `SystemDef::look` computes one from the id for any other
+(`Platform/systems/src/lib.rs:107`). Under the disc come its maker and year, its name, and its facts line with its core's
+`PlanetMark`. The facts line is `Words.facts`, then `Words.played`, then `Words.runsOn`. Open is the help bar's own A entry.
+At the foot's right, the maker and `Words.place` (game_page.rs's `place`, "3 of 14") say where the focused console stands.
+
+The pad walks up and down the makers. Right or A goes to a maker's first plate, and the arrows move among the plates.
+Right from the last column goes to Open, and the shoulders step from maker to maker.
+
+Every element of the board is in `Frontend/theme-check/audit/tests/eclipse_consoles.tsv`. Each row gives the element's board
+line, what the program holds for it, its box in board pixels and in design units, and whether it is built. Home's piece
+builds the ground, the colour fields, the header and the help bar's place. The top navigation is a piece of its own
+(R-20261115-7). The help bar holds the program's own entries. Not drawn, because the program holds nothing for them:
+
+- the filter chips: no console without games is listed, and no console is a favourite;
+- "Sorted by maker" and Options;
+- the four labels of the facts, for which the facts line stands;
+- "Screen".
+
+**Proof.** theme-check's `eclipse_consoles.rs` runs theme-audit on Eclipse over the canvases' eleven consoles with the focus
+on the Super Nintendo. At 1280 × 800 and 1920 × 1200 it holds every built row's box to the board's pixels times the window's
+height over 1200, as the recording writes them (two places), and each plate to the board's lattice. It also checks that the
+chosen maker is filled in the accent, that the facts carry the played count, and that the place line is drawn. Over one
+console, thirty, one maker of forty and 120, theme-audit finds nothing at any of its five sizes.
 
 ### 3.5 Loading and the sandbox
 

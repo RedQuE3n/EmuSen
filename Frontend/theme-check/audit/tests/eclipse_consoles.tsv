@@ -1,0 +1,37 @@
+# Eclipse's Consoles screen against its board, EclipseConsoles.dc.html (1920 x 1200 px), one element a line (EmuSen_Qt.md §3.4.8).
+# Units are design units: px x canvas::DESIGN_HEIGHT (800) / the board's height (1200). Boxes as x,y,w,h; "-" where the board leaves an edge to its contents.
+# status: built (the screen draws it from what the program holds), home (a part Home's board also draws, built on Home's piece),
+# nothing (the program holds nothing for it: not drawn), asked (waits on a decision of the tester's).
+# line	element	objectName	program source	board px	units	style	status
+17	ground	-	Tokens.surface	0,0,1920,1200	0,0,1280,800	#07080F	home
+19	colour field, violet	-	nothing named on this board	1250,120,900,900	833.33,80,600,600	#5B3FD6 blur 140 opacity 0.5	home
+20	colour field, rose	-	nothing named on this board	1500,520,620,620	1000,346.67,413.33,413.33	#C0486F blur 150 opacity 0.35	home
+22	header: mark, EmuSen, sections, battery, clock	-	Home's header part	96,48,1728,64	64,32,1152,42.67	-	home
+44	chip "All · 124"	-	nothing: Library.consoles holds only consoles with games (theme-qt/src/view.rs:23), so All would equal With games	96,150,-,48	64,100,-,32	accent fill, overAccent 21px 600	nothing
+45	chip "With games · 37"	-	nothing: no console without games is in Library.consoles (view.rs:113)	-,150,-,48	-,100,-,32	2px #4A5068, #E3E6F0 21px	nothing
+46	chip "Favourites · 6"	-	nothing: no favourite console; Library.shelves' Favourites counts games	-,150,-,48	-,100,-,32	2px #4A5068, #E3E6F0 21px	nothing
+49	"Y Sorted by maker"	-	nothing: no sort choice; Y is Favourites on this screen (qt-models/src/help.rs:124)	-,157,-,34	-,104.67,-,22.67	#D8DBE6 21px	nothing
+56	maker row	maker.0	Library.consoles maker, the first row of each group (groupIndex 0)	96,250,250,60	64,166.67,166.67,40	radius 14, gap 6, padding 18	built
+56	maker row, chosen	maker.N	the group of the focused console	96,250,250,60	64,166.67,166.67,40	accent fill, overAccent 22px 600	built
+57	maker's name	makerName.N	Library.consoles maker	-	-	22px (14.67)	built
+57	maker's count	makerCount.N	Library.consoles groupSize	-	-	18px (12) 400	built
+64	console plate	plate.N	Library.consoles, the chosen maker's group	390+256c,250+198r,236,178	260+170.67c,166.67+132r,157.33,118.67	inputSurface fill, radius 18, inset 1px #262A3A	built
+64	plate ring, focused	plateRing	kit FocusRing	-	-	board: gap 4px, ring 3px, glow 40/10 rgba(240,180,196,.5)	built
+66	plate's track	plateShare.N	a design part, no fact	20,20,52,52 in the plate	13.33,13.33,34.67,34.67	r21 stroke 5 #2C3044	built
+67	plate's played arc	plateArc.N	Library.consoles played (EmuSen.Theme 1.5, R-20261115-8) over count	as the track	as the track	accent, dash = played / count, at least 0.04	built
+70	plate's name	plateName.N	Library.consoles displayName	-	-	text 21px (14) 600 lh 1.15	built
+71	plate's line "1990 · 214 games"	plateLine.N	year, Words.between, Words.games(count)	-	-	muted 16px (10.67)	built
+71	plate's line "no games yet"	-	nothing: a console without games is not listed	-	-	#8E94AB	nothing
+78	console's disc	consoleDisc	kit CoronaDisc, its corona the console's glow role (kit-core world::glow, R-20261115-9)	1487,230,300,300	991.33,153.33,200,200	rim and glows in the console's colour at the tokens' strengths	built
+80	eyebrow "NINTENDO · 1990"	consoleEyebrow	maker, Words.between, year, in capitals	1450,-,-,-	966.67,-,-,-	#F3C9D2 18px 600 spacing .2em	built
+81	console's name	consoleName	Library.consoles displayName	1450,-,374,-	966.67,-,249.33,-	text 46px (30.67) 600 lh 1.08	built
+84	"Games" / count	-	the label: nothing; the count as Words.facts gives it, in consoleFacts	-	-	muted 21px	nothing
+83	facts line	consoleFacts	Words.facts(maker, year, count), Words.played(played), Words.runsOn(engineName, engineKind), joined by Words.between	-	-	muted 21px (14)	built
+85	"Played" / count	-	the label: nothing; Words.played(played) in consoleFacts (R-20261115-8)	-	-	muted 21px	nothing
+86	"Core" / mark and name	-	the label: nothing; Words.runsOn in consoleFacts, kit PlanetMark consoleCoreMark	-	-	24px mark	nothing
+87	"Screen" / "CRT, television"	-	nothing	-	-	muted 21px	nothing
+90	Open, with A	consoleOpen	Actions.openConsole(key); the word is Help.entries(Help.Console)'s A entry	1450,-,-,64	966.67,-,-,42.67	accent fill radius 32, overAccent 23px 600	built
+93	Options, with X	-	nothing: no options action for a console	-	-	2px #5A6076 radius 32	nothing
+99	help bar	-	Help.entries(Help.Console, {group: true}) in Home's help bar place	96,1126,1728,34	64,750.67,1152,22.67	#D8DBE6 21px	home
+103	"LT RT Maker"	-	the program's entries stand: A Open, B Back, Y Favourites, Random game, LB RB Group (qt-models/src/help.rs:121)	-	-	-	nothing
+105	"Nintendo · 3 of 14"	consolePlace	maker, Words.between, Words.place(groupIndex, groupSize) (qt-models/src/game_page.rs:387)	right=1824,1126,-,34	right=1216,750.667,-,22.667	#D8DBE6 21px	built

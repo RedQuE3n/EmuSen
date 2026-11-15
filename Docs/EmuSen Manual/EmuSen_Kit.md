@@ -3869,6 +3869,10 @@ ring 3 to 6 px out on 35 boards, 28 of them with a glow of 40 px blur and 8 px s
 (`EclipseSettings.dc.html:94`), the other 7 with a glow of 34 or 46 px, or at 0.35, 0.45 or 0.5; a gap of 4 px and the ring
 to 7 px on 16 boards, 13 of them with a glow of 40 px and 10 px at 0.5, the other 3 of 44 or 46 px at 0.45. Eclipse's
 tokens hold the first, the commonest; one set of tokens holds one recipe, so the other eight are not yet expressible.
+Decided 2026-11-15 by the tester (R-20261115-2): a dialog's focused button keeps the Gapped ring for now; the dialog
+board's own recipe (`EclipseDialog.dc.html:39`) comes with the piece that builds dialogs in Eclipse's look. Decided
+2026-11-15 by the tester (R-20261115-3): a switch keeps its own ring for now; the focused row is ringed, as the Settings
+board draws it (`EclipseSettings.dc.html:94`), when Settings is built in Eclipse's look.
 
 **The part.** `FocusRing` fills the box it marks and takes the box's corner `radius`. Its gap is `ringOffset` wide in
 `ringGapColor`, its ring `ringThickness` wide in the accent past the gap, with corners of the box's radius plus
@@ -3943,7 +3947,9 @@ at 1.2, Qt's own suggestion, the largest difference is 0.032 (the disc's glow at
 past every Eclipse ring in `tests/focus_ring.rs`, and 0.0192 for the disc of `tests/corona_disc.rs`, drawn at three
 times its size; each test holds its own measured bound. On the card the test holds what is exact: where the glow begins
 and ends, its hue, nothing inside the box, one glow a glowing part and none hidden or transparent; a bound on its
-closeness to the rule is the tester's to set (proposed from the table above).
+closeness to the rule is not asserted. Decided 2026-11-15 by the tester (R-20261115-1): the glow's closeness to the
+boards' rule stands as measured; the software tests' bounds stand as they are, the card's closeness is not asserted,
+and no shader of the project's own is made for it.
 
 **Cost.** Measured on 2026-11-14 on the desktop's RX 6800 (Vulkan, `tests/glow_gpu.rs`, Eclipse's tokens, 200 focus moves
 over a Button, a Switch and an ActionButton, each from the move to the next frame swapped), five runs (the logs
@@ -4050,5 +4056,6 @@ places one yet. Eclipse's values are Home's disc (`Main:25`), converted as `EmuS
 value. Test: `tests/corona_disc.rs`, under Eclipse's tokens read from its `theme.json`: the box; the rim's colour as
 a game's and as the look's, drawn; the glows' colours as a game's corona at the tokens' strengths and as the tokens',
 drawn; a disc given its own one glow, with a game's corona, draws that glow alone in its own colour; the two glows at the tokens' sizes, each read at seven distances past the disc within 0.02 of the CSS rule (the
-largest difference measured on 2026-11-14 on the software backend, 0.0192), and black past the halo's reach. The pixel
+largest difference measured on 2026-11-14 on the software backend, 0.0192; the bound stands as measured, decided
+2026-11-15 by the tester, R-20261115-1, §7.113), and black past the halo's reach. The pixel
 ratio is one under the headless harness. Kit 1.6.

@@ -9,18 +9,22 @@
 # units, drawn, raised: a text's board size in canvas units, the whole pixel size Qt draws it at by the kit's rule for a look's
 # size (EmuSen_Kit.md §7.121, at text scale 1 in the face drawn today, its floor held at every gate size), and whether the legibility floor raised it (R-20261115-14).
 # colour: a kit token by name, or the board's own as #AARRGGBB. status: built, or nothing (the program has nothing for it,
-# so it is not drawn), or ruled (the section tabs, another piece's by R-20261115-7: nothing drawn here).
+# so it is not drawn), or ruled (a section the program has no screen for, the tester's to rule: nothing drawn here).
 name	line	element	program	part	x	y	w	h	radius	colour	size	status	units	drawn	raised
 backdropGround	17	the ground	the kit's Backdrop, its ground: the board's own colour	Rectangle	0	0	right:0	1200	-	#FF0A1024	-	built	-	-	-
 backdropPicture	19	the blurred colour fields, the shown game's art (Main:19-23, 75)	the shown tile's hero (theme-qt/src/view.rs:213) in the kit's Backdrop, blurred 90 px at 0.85 as the board's first field (Main:19): provisional, the tester's to judge (R-20261115-6)	Image	0	0	right:0	1200	-	opacity:0.85	blur:90	built	-	-	-
 disc	25	the eclipse's disc, its rim and two glows	the kit's CoronaDisc (kit-qt/qml/CoronaDisc.qml), no game's corona (none in the model)	CoronaDisc	-900	-450	2100	2100	-	Tokens.surface	-	built	-	-	-
 mark	30	the crescent mark	Marks.crescent (theme-qt/src/marks.rs:48, qt-models/src/marks.rs:25)	Item	96	mid:80	34	34	-	Tokens.accent	-	built	-	-	-
 wordmark	31	"EmuSen"	Words.title, "EMUSEN" (qt-models/src/words.rs:5)	Text	after:mark:14	mid:80	-	-	-	Tokens.text	24	built	16	19	raised
-nav.home	33	"Home", the section shown	nothing: Home is no section the program steps to	-	-	-	-	-	-	-	-	ruled	-	-	-
-nav.library	34	"Library"	nothing: the program's Library is a tool (qt-models/src/words.rs:39), not a section	-	-	-	-	-	-	-	-	ruled	-	-	-
-nav.consoles	35	"Consoles"	nothing	-	-	-	-	-	-	-	-	ruled	-	-	-
-nav.collections	36	"Collections"	nothing (Library.collections is empty, theme-qt §3.2)	-	-	-	-	-	-	-	-	ruled	-	-	-
-nav.tools	37	"Tools"	nothing	-	-	-	-	-	-	-	-	ruled	-	-	-
+nav	33	the sections, 64 px after the brand	Library.sections, the program's sections from their one owner (qt-models/src/screens.rs SECTIONS), the eclipse part Nav	Row	after:wordmark:64	mid:80	-	-	-	-	-	built	-	-	-
+nav.home	34	"Home", the section shown	Library.sections, first row; Library.section is "home" while Home is shown (qt-models/src/sections.rs)	Item	in:nav:0	mid:80	-	-	-	-	-	built	-	-	-
+navWords.home	34	"Home", white and semi-bold	the row's name, words::HOME_SECTION	Text	in:nav.home:0	-	-	-	-	#FFFFFFFF	24	built	16	19	raised
+navUnderline.home	34	the 3 px underline under the section shown	none: the accent token	Rectangle	in:nav.home:0	foot:nav.home	fit:nav.home:0	3	-	Tokens.accent	-	built	-	-	-
+nav.consoles	36	"Consoles"	Library.sections, second row; LB RB and a tap open it (Actions.openSection)	Item	after:nav.home:44	foot:nav.home	-	-	-	-	-	built	-	-	-
+navWords.consoles	36	"Consoles", muted	the row's name, words::CONSOLES_SECTION	Text	in:nav.consoles:0	-	-	-	-	Tokens.muted	24	built	16	19	raised
+nav.library	35	"Library"	nothing: no screen the program opens as Library (the grid at "all" is reached from Consoles only; Home's Library place is the Library Manager), the tester's to rule	-	-	-	-	-	-	-	-	ruled	-	-	-
+nav.collections	37	"Collections"	nothing: no Collections screen (Library.collections is empty, theme-qt §3.2), the tester's to rule	-	-	-	-	-	-	-	-	ruled	-	-	-
+nav.tools	38	"Tools"	nothing: no Tools screen (the Home card's Tools page is a card), the tester's to rule	-	-	-	-	-	-	-	-	ruled	-	-	-
 status	40	the status glass	none: the board's own colour	Rectangle	-	mid:80	right:96	56	28	#C707080F	-	built	-	-	-
 search	41	the search button	Actions.search() (theme-qt/src/actions.rs), named by Words.search	Walkable	in:status:22	mid:80	44	44	-	-	-	built	-	-	-
 searchIcon	42	the magnifier	the theme's own drawing	Item	in:search:10	mid:80	24	24	-	Tokens.text	-	built	-	-	-
@@ -57,4 +61,5 @@ tileFacts.0	86	the console, "SUPER NINTENDO"	the row's facts, console · when (q
 tileRing	83	the focused tile's ring	the kit's FocusRing (R-20261115-3, every control the gapped ring)	FocusRing	-	-	-	-	-	-	-	built	-	-	-
 tileShadow.1	83	a resting tile's shadow, 0 10 px 30 px	the kit's Glow with its offset (R-20261115-6)	Glow	in:tile.1:0	foot:tile.1	264	165	18	#73000000	-	built	-	-	-
 help	99	the help bar's entries	Help.entries(Help.Continue) (qt-models/src/help.rs:102), the kit's HelpBar	HelpBar	96	mid:1137	-	-	-	#FFD8DBE6	21	built	14	19	raised
-helpGroup	105	"LB RB Sections"	nothing: Home steps no sections	-	-	-	-	-	-	-	-	ruled	-	-	-
+helpSections	101	the Sections entry's glass at the help line's right	none: the board's own colour, rgba(7, 8, 15, 0.78)	Rectangle	right:96	mid:1137	fit:helpSectionsBar:18	46	23	#C707080F	-	built	-	-	-
+helpSectionsBar	102	"LB RB Sections"	Help.sections, the shoulders' Sections entry (qt-models/src/help.rs SECTIONS), the kit's HelpBar	HelpBar	in:helpSections:18	mid:1137	-	-	-	#FFD8DBE6	21	built	14	19	raised

@@ -3,6 +3,22 @@
 The theme API is the QML module `EmuSen.Theme` and the `theme.json` schema (EmuSen_Qt.md §3.2–§3.4). A minor adds and
 never removes; before 1.0 (§5.1) a breaking change is allowed and listed here.
 
+## 1.6, an addition: the program's sections (2026-11-15)
+
+Decided 2026-11-15 by the tester (R-20261115-7): Eclipse's top navigation is built as its own piece, a model for the
+sections and an addition to what a theme may read. 1.5 is another piece's.
+
+- **`Library.sections`** (a list, roles `key` and `name`): the program's top sections in a nav's order, from their one
+  owner (`qt-models/src/screens.rs`, `SECTIONS`; the words from `words.rs`). Today they are Home and Consoles, the
+  sections the program opens as screens.
+- **`Library.section`**: the key of the section shown, empty where the screen shown is none.
+- **`Actions.openSection(key)`**: opens a section by its key; the host declines a key that names none, the one shown, or a
+  move from a screen that is no section.
+- **`Help.sections`**: the shoulders' "Sections" entry alone, for a nav's help. It declares no action, since the frame's
+  walk steps the sections (`controller.sections`, `EmuSen_Kit.md` §7.27) and the theme opens the one chosen.
+- No type is added, so a theme that imports `EmuSen.Theme 1.0` finds what it found before. The module is 1.6 and
+  `theme.json`'s `api` may name it; the registry and qmldir are `Testing/qmltypes/EmuSen.Theme-1.6.*`.
+
 ## 1.4, an addition: the backdrop and the glow (2026-11-15)
 
 Decided 2026-11-15 by the tester (R-20261115-6): Eclipse gets two kit parts themes may use, a blurred backdrop and the glow

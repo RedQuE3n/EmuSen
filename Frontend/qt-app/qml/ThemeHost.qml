@@ -102,10 +102,12 @@ Item {
         host: host
         clock: themed.clock.time
         now: themed.clock.now
+        shownSection: themed.screens.section
         onPlayed: (game) => themed.played(game)
         onResumed: themed.resumed()
         onPlaceChosen: (index) => themed.screens.place(index)
         onOpened: (key) => themed.screens.open(key)
+        onSectionOpened: (key) => themed.screens.openSection(key)
         onBacked: themed.backed()
         onActed: (key) => themed.screens.act(key)
         onFocused: (game) => themed.focused(game)

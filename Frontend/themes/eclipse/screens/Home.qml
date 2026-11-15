@@ -74,8 +74,16 @@ ThemeScreen {
                     width: root.width
                     height: root.height
                     Brand {
+                        id: brand
                         unit: design.unit
                         x: 96 * design.unit
+                        y: 80 * design.unit - height / 2
+                    }
+                    // The sections after the brand, the board's 64 px gap between them (Main:27).
+                    Nav {
+                        unit: design.unit
+                        controller: frame.controller
+                        x: brand.x + brand.width + 64 * design.unit
                         y: 80 * design.unit - height / 2
                     }
                     Status {
@@ -281,6 +289,12 @@ ThemeScreen {
                         controller: frame.controller
                         model: Help.entries(root.helpKind)
                         ink: ink.help
+                        SectionsHelp {
+                            unit: design.unit
+                            controller: frame.controller
+                            color: ink.glass
+                            wordsColor: ink.help
+                        }
                     }
                 }
             }

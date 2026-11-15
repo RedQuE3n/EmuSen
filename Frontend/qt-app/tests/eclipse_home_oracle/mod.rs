@@ -278,6 +278,8 @@ pub fn oracle(backend: &str) {
     };
     host::words(object(screen)).expect("Words").show_now(now as f64);
     host::library(object(screen)).expect("Library").show(&view, "[]");
+    // The shown screen's section, as the program's feed gives it from Screens.section.
+    host::library(object(screen)).expect("Library").show_section(emusen_qt_models::sections::current(emusen_qt_models::screens::Shown::Home).expect("Home is a section").key);
     host::session(object(screen)).expect("Session").show(&session);
     host::device(object(screen)).expect("Device").show(&DeviceFacts { controllers: 1, clock: CLOCK.into(), ..DeviceFacts::default() });
     let package = emusen_theme_host::package::read(&std::fs::read_to_string(format!("{ECLIPSE}/theme.json")).unwrap()).unwrap();
@@ -438,6 +440,8 @@ pub fn oracle(backend: &str) {
             ("clock", CLOCK.to_owned()),
             ("recentHeading", words::RECENT_ENTRY.to_owned()),
             ("tileFacts.0", game.facts.clone()),
+            ("navWords.home", words::HOME_SECTION.to_owned()),
+            ("navWords.consoles", words::CONSOLES_SECTION.to_owned()),
         ];
         for (i, entry) in help.iter().take(3).enumerate() {
             words_of.push((["buttonLabel.0", "buttonLabel.1", "buttonLabel.2"][i], entry.1.to_owned()));

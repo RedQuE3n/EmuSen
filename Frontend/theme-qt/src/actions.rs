@@ -38,6 +38,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "openPlace"]
         fn open_place(self: Pin<&mut ThemeActions>, id: &QString) -> bool;
+        /// Opens one of `Library.sections` by its key (1.6).
+        #[qinvokable]
+        #[cxx_name = "openSection"]
+        fn open_section(self: Pin<&mut ThemeActions>, key: &QString) -> bool;
         #[qinvokable]
         fn home(self: Pin<&mut ThemeActions>) -> bool;
         #[qinvokable]
@@ -74,6 +78,7 @@ pub enum Action {
     Random(String),
     OpenConsole(String),
     OpenPlace(String),
+    OpenSection(String),
     Home,
     Back,
     StepSection(i32),
@@ -130,6 +135,10 @@ impl qobject::ThemeActions {
 
     pub fn open_place(self: Pin<&mut Self>, id: &QString) -> bool {
         self.take(Action::OpenPlace(id.to_string()))
+    }
+
+    pub fn open_section(self: Pin<&mut Self>, key: &QString) -> bool {
+        self.take(Action::OpenSection(key.to_string()))
     }
 
     pub fn home(self: Pin<&mut Self>) -> bool {

@@ -47,6 +47,8 @@ pub mod qobject {
         #[qproperty(bool, swap)]
         /// The program's clock's time, in seconds since 1970, 0 for the wall clock: the theme's `Words.now`.
         #[qproperty(i64, now)]
+        /// The key of the program's section shown (`Screens.section`): the theme's `Library.section`.
+        #[qproperty(QString, shown_section, cxx_name = "shownSection")]
         type ThemeFeed = super::ThemeFeedRust;
     }
 
@@ -99,6 +101,10 @@ pub mod qobject {
         /// A console's or a shelf's grid, by its key.
         #[qsignal]
         fn opened(self: Pin<&mut ThemeFeed>, key: QString);
+        /// One of the program's sections, by its key.
+        #[qsignal]
+        #[cxx_name = "sectionOpened"]
+        fn section_opened(self: Pin<&mut ThemeFeed>, key: QString);
         /// B that the theme's screen did not keep.
         #[qsignal]
         fn backed(self: Pin<&mut ThemeFeed>);
@@ -169,6 +175,7 @@ pub struct ThemeFeedRust {
     reduced_motion: bool,
     swap: bool,
     now: i64,
+    shown_section: QString,
     /// The feed as the sink sees it, emptied when the feed goes, so a sink that outlives it takes nothing.
     me: Rc<Cell<*mut qobject::ThemeFeed>>,
 }
@@ -186,6 +193,7 @@ impl Default for ThemeFeedRust {
             reduced_motion: false,
             swap: false,
             now: 0,
+            shown_section: QString::default(),
             me: Rc::new(Cell::new(std::ptr::null_mut())),
         }
     }
@@ -212,6 +220,7 @@ pub enum Carried {
     Resumed,
     Place(i32),
     Opened(String),
+    Section(String),
     Backed,
     Acted(String),
     Focused(String),
@@ -234,6 +243,7 @@ pub fn carried(action: &Action, suspended: Option<&str>, rows: &[&str]) -> Optio
             Some(i) => Carried::Place(i as i32),
             None => Carried::Opened(key.clone()),
         },
+        Action::OpenSection(key) => Carried::Section(key.clone()),
         Action::Home => Carried::Acted(help::HOME.into()),
         Action::Back => Carried::Backed,
         Action::StepSection(by) => Carried::Acted(if *by < 0 { help::PREVIOUS } else { help::NEXT }.into()),
@@ -265,6 +275,7 @@ impl ActionSink for Sink {
             Carried::Resumed => feed.as_mut().resumed(),
             Carried::Place(index) => feed.as_mut().place_chosen(index),
             Carried::Opened(key) => feed.as_mut().opened(QString::from(key.as_str())),
+            Carried::Section(key) => feed.as_mut().section_opened(QString::from(key.as_str())),
             Carried::Backed => feed.as_mut().backed(),
             Carried::Acted(key) => feed.as_mut().acted(QString::from(key.as_str())),
             Carried::Focused(game) => feed.as_mut().focused(QString::from(game.as_str())),
@@ -293,6 +304,7 @@ impl cxx_qt::Initialize for qobject::ThemeFeed {
         self.as_mut().on_clock_changed(|feed| feed.feed_device()).release();
         self.as_mut().on_reduced_motion_changed(|feed| feed.feed_motion()).release();
         self.as_mut().on_swap_changed(|feed| feed.feed_swap()).release();
+        self.as_mut().on_shown_section_changed(|feed| feed.feed_section()).release();
         self.as_mut().on_now_changed(|feed| {
             feed.feed_words();
             feed.feed_browse();
@@ -386,6 +398,12 @@ impl qobject::ThemeFeed {
         }
     }
 
+    fn feed_section(&self) {
+        if let Some(library) = self.engine().and_then(host::library) {
+            library.show_section(&self.shown_section.to_string());
+        }
+    }
+
     fn feed_device(&self) {
         let facts = DeviceFacts { controllers: self.controllers, family: self.family, clock: self.clock.to_string(), ..DeviceFacts::default() };
         if let Some(device) = self.engine().and_then(host::device) {
@@ -436,6 +454,7 @@ impl qobject::ThemeFeed {
         self.feed_tokens();
         self.feed_device();
         self.feed_library();
+        self.feed_section();
         self.feed_session();
         self.feed_browse();
     }

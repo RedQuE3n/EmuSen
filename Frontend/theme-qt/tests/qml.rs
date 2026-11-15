@@ -93,10 +93,19 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert_eq!(scene.property("scene", "secondPlace"), "Scraper", "the row changed in place");
     {
         let library = host::library(within(window)).unwrap();
-        for (list, roles) in [("consoles", 16), ("places", 7), ("shelves", 4), ("recent", 18), ("shelf", 18), ("favourites", 18), ("collections", 3)] {
+        for (list, roles) in [("consoles", 16), ("places", 7), ("shelves", 4), ("recent", 18), ("shelf", 18), ("favourites", 18), ("collections", 3), ("sections", 2)] {
             assert_eq!(library.list(list).map(|l| l.roles().len()), Some(roles), "{list}'s roles");
         }
+        assert_eq!(library.list("sections").map(|l| l.rows().to_vec()), Some(emusen_theme_qt::view::sections()), "the sections from their owner");
     }
+    // The program's sections (1.6): the owner's rows before any feed, and the shown screen's key as the host feeds it.
+    assert_eq!((scene.property("scene", "sections").as_str(), scene.property("scene", "section").as_str()), ("2", ""));
+    host::library(within(window)).unwrap().show_section("consoles");
+    scene.wait(20);
+    assert_eq!(scene.property("scene", "section"), "consoles", "Library.section follows the host's feed");
+    host::library(within(window)).unwrap().show_section("");
+    scene.wait(20);
+    assert_eq!(scene.property("scene", "section"), "", "a screen that is no section");
 
     let shelved = scene.property("scene", "shelf");
     host::session(within(window)).unwrap().show(&SessionFacts {
@@ -170,6 +179,10 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert!(scene.property("scene", "gameActions").contains("previous PageUp"), "the frame declares the help's actions");
 
     let help = host::help(within(window)).unwrap();
+    // Safety: as the lists below.
+    let sections = unsafe { (*help.sections()).as_ref() }.expect("the Sections entry's list");
+    assert_eq!(sections.list(), [emusen_qt_models::help::SECTIONS], "LB RB Sections, from Help's owner");
+    assert_eq!(sections.action_lines().to_string(), "", "it declares nothing: the walk steps the sections");
     for kind in KINDS {
         // Safety: the help's lists are its children.
         let entries = unsafe { help.entries(kind).as_ref() }.expect("a list for every kind");
@@ -193,9 +206,17 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
     assert!(!actions.as_mut().step_section(1));
     assert!(!actions.as_mut().act(&QString::from("list")));
     assert!(!actions.as_mut().focus(&game));
+    assert!(!actions.as_mut().open_section(&QString::from("consoles")));
     assert_eq!(
         *asked.lock().unwrap(),
-        [Action::Play("/roms/Synthetic.nes".into()), Action::Back, Action::StepSection(1), Action::Act("list".into()), Action::Focus("/roms/Synthetic.nes".into())]
+        [
+            Action::Play("/roms/Synthetic.nes".into()),
+            Action::Back,
+            Action::StepSection(1),
+            Action::Act("list".into()),
+            Action::Focus("/roms/Synthetic.nes".into()),
+            Action::OpenSection("consoles".into())
+        ]
     );
 
     let rung = Arc::new(Mutex::new(Vec::new()));

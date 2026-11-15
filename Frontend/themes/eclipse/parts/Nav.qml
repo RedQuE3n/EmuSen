@@ -1,0 +1,85 @@
+pragma ComponentBehavior: Bound
+import QtQuick
+import EmuSen.Theme
+
+// The header's nav: the program's sections (Library.sections), the one shown marked, the shoulders stepping them through the frame's walk and a section tapped opening it (Main:33-39, EclipseConsoles:28-33; EmuSen_Qt.md §3.4.8).
+Row {
+    id: root
+    // A board pixel in canvas units, Board.unit.
+    required property real unit
+    // The frame's controller, whose walk the shoulders step the sections in.
+    required property var controller
+    // The boards' nav, in board pixels: its words' size, the gap between sections, the underline's gap and thickness (Main:33-34).
+    property real size: 24
+    property real gap: 44
+    property real underGap: 10
+    property real underline: 3
+    // The shown section's words, #FFFFFF on the boards (Main:34): a constant of the design.
+    property color currentInk: "#FFFFFF"
+    // The sections' keys, in the nav's order, as the walk steps them.
+    readonly property var keys: {
+        const out = [];
+        for (let i = 0; i < sections.count; i++)
+            out.push((sections.itemAt(i) as Entry)?.key ?? "");
+        return out;
+    }
+    objectName: "nav"
+    spacing: root.gap * root.unit
+    Accessible.role: Accessible.PageTabList
+    Binding {
+        target: root.controller
+        property: "sections"
+        value: root.keys
+    }
+    Binding {
+        target: root.controller
+        property: "selectedSection"
+        value: Library.section
+    }
+    Connections {
+        target: root.controller
+        function onSectionChosen(key) {
+            if (key !== Library.section)
+                Actions.openSection(key);
+        }
+    }
+    component Entry: Item {
+        id: entry
+        required property string key
+        required property string name
+        readonly property bool current: entry.key === Library.section
+        objectName: "nav." + entry.key
+        width: words.width
+        height: words.height + (root.underGap + root.underline) * root.unit
+        Accessible.role: Accessible.PageTab
+        Accessible.name: entry.name
+        Accessible.selected: entry.current
+        Text {
+            id: words
+            objectName: "navWords." + entry.key
+            text: entry.name
+            color: entry.current ? root.currentInk : Tokens.muted
+            font.pixelSize: Type.size(root.size * root.unit, Tokens.textScale)
+            font.weight: entry.current ? Font.DemiBold : Font.Normal
+        }
+        Rectangle {
+            objectName: "navUnderline." + entry.key
+            y: entry.height - height
+            width: entry.width
+            height: root.underline * root.unit
+            color: Tokens.accent
+            visible: entry.current
+        }
+        TapHandler {
+            onTapped: {
+                if (!entry.current)
+                    Actions.openSection(entry.key);
+            }
+        }
+    }
+    Repeater {
+        id: sections
+        model: Library.sections
+        delegate: Entry {}
+    }
+}

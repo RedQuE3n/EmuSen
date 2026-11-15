@@ -297,6 +297,9 @@ pub const CHECK: &str = "check";
 /// themes' help bars, EmuSen_Qt.md §3.2): no action, since the walk and the theme answer them.
 pub const GROUP: Entry = (UiButton::PageUp, "Group", None);
 pub const BACK: Entry = (UiButton::Back, "Back", None);
+/// The shoulders' entry where a screen draws the program's sections (crate::sections): no action, since the walk steps
+/// them and the theme opens the one chosen.
+pub const SECTIONS: Entry = (UiButton::PageUp, "Sections", None);
 
 /// A game's page's shared entries: Y the heart, the shoulders the sections (the frame steps them), Start Home.
 const PAGE_HEART: Entry = (UiButton::Search, "Favourite", Some(FAVOURITE));

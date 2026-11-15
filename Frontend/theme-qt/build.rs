@@ -1,6 +1,6 @@
 use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 
-// EmuSen.Theme 1.4, what a theme sees (EmuSen_Qt.md §3.2); its .qmltypes and qmldir are the module's surface. Each file keeps the
+// EmuSen.Theme 1.6, what a theme sees (EmuSen_Qt.md §3.2); its .qmltypes and qmldir are the module's surface. Each file keeps the
 // minor it was added in, so a theme importing EmuSen.Theme 1.0 still finds every 1.0 type (rule T).
 fn main() {
     let qml = [
@@ -32,7 +32,7 @@ fn main() {
         QmlFile::from("qml/Backdrop.qml").version(1, 4),
         QmlFile::from("qml/Glow.qml").version(1, 4),
     ];
-    CxxQtBuilder::new_qml_module(QmlModule::new("EmuSen.Theme").version(1, 4).qml_files(qml).depend("QtQuick").depend("EmuSen.Kit"))
+    CxxQtBuilder::new_qml_module(QmlModule::new("EmuSen.Theme").version(1, 6).qml_files(qml).depend("QtQuick").depend("EmuSen.Kit"))
         .files([
             "src/rows.rs",
             "src/library.rs",

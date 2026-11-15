@@ -58,6 +58,8 @@ Window {
     }
     readonly property int consoles: Library.consoles.count
     readonly property int places: Library.places.count
+    readonly property int sections: Library.sections.count
+    readonly property string section: Library.section
     readonly property int shelves: Library.shelves.count
     // The console whose games the scene lists, named by the test as a theme takes it from a row.
     property string consoleKey

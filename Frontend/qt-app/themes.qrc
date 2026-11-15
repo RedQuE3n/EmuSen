@@ -20,7 +20,9 @@
         <file alias="parts/Brand.qml">../themes/eclipse/parts/Brand.qml</file>
         <file alias="parts/HelpLine.qml">../themes/eclipse/parts/HelpLine.qml</file>
         <file alias="parts/Ink.qml">../themes/eclipse/parts/Ink.qml</file>
+        <file alias="parts/Nav.qml">../themes/eclipse/parts/Nav.qml</file>
         <file alias="parts/Pill.qml">../themes/eclipse/parts/Pill.qml</file>
+        <file alias="parts/SectionsHelp.qml">../themes/eclipse/parts/SectionsHelp.qml</file>
         <file alias="parts/Status.qml">../themes/eclipse/parts/Status.qml</file>
         <file alias="screens/Home.qml">../themes/eclipse/screens/Home.qml</file>
         <file alias="theme.json">../themes/eclipse/theme.json</file>

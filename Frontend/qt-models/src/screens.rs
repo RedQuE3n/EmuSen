@@ -68,7 +68,24 @@ pub enum Ask {
     Keys(bool),
     /// The library's look changed between the own look and an ES-DE theme: the library's screen shown is the other's.
     Restyled,
+    /// One of the program's sections chosen on a nav, by its key (crate::sections).
+    Section(String),
 }
+
+/// A top section of the program: its key, its name as a nav says it, and the screen it opens.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Section {
+    pub key: &'static str,
+    pub name: &'static str,
+    pub screen: Shown,
+}
+
+/// The program's sections in a nav's order: only the screens the program opens as sections (R-20261115-7); one is added
+/// here by its row.
+pub const SECTIONS: [Section; 2] = [
+    Section { key: HOME, name: crate::words::HOME_SECTION, screen: Shown::Home },
+    Section { key: "consoles", name: crate::words::CONSOLES_SECTION, screen: Shown::Consoles },
+];
 
 /// Home's Settings and Power places, by their index in `words::HOME_PLACES`.
 pub const SETTINGS_PLACE: usize = 5;
@@ -127,6 +144,7 @@ pub const CARD_BINDINGS: &str = crate::settings_controllers::CARD_BINDINGS;
 /// were.
 pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
     match (shown, ask) {
+        (_, Ask::Section(key)) => crate::sections::opened(shown, key).map(|s| (s, None)),
         (Shown::Home, Ask::Place(0)) => Some((Shown::Consoles, None)),
         (Shown::Home, Ask::Place(SETTINGS_PLACE)) => Some((Shown::Settings, None)),
         (Shown::Home, Ask::Place(POWER_PLACE)) => Some((Shown::HomeCard, Some(crate::home_card::POWER.to_owned()))),
@@ -313,6 +331,8 @@ pub mod qobject {
         /// at (`cheats`), empty for the page's first.
         #[qproperty(QString, page_game, cxx_name = "pageGame", READ, NOTIFY)]
         #[qproperty(QString, page_at, cxx_name = "pageAt", READ, NOTIFY)]
+        /// The key of the program's section the shown screen is (crate::sections), empty for a screen that is none.
+        #[qproperty(QString, section, READ, NOTIFY)]
         type Screens = super::ScreensRust;
     }
 
@@ -357,6 +377,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "keysFocused"]
         fn keys_focused(self: Pin<&mut Screens>, keys: bool);
+        /// One of the program's sections chosen on a nav, by its key: its screen.
+        #[qinvokable]
+        #[cxx_name = "openSection"]
+        fn open_section(self: Pin<&mut Screens>, key: &QString);
         /// Quit EmuSen answered Yes: the program ends.
         #[qsignal]
         fn quit(self: Pin<&mut Screens>);
@@ -387,6 +411,7 @@ pub struct ScreensRust {
     last_played: QString,
     page_game: QString,
     page_at: QString,
+    section: QString,
     /// The screen a game's page was opened over.
     page_origin: Shown,
     /// The screen Cores or the Themes tab was opened over.
@@ -408,6 +433,7 @@ impl Default for ScreensRust {
             last_played: QString::default(),
             page_game: QString::default(),
             page_at: QString::default(),
+            section: QString::from(SECTIONS[0].key),
             page_origin: Shown::Home,
             tool_origin: None,
             over_card: false,
@@ -539,6 +565,10 @@ impl qobject::Screens {
         self.ask(Ask::Keys(keys));
     }
 
+    pub fn open_section(self: Pin<&mut Self>, key: &QString) {
+        self.ask(Ask::Section(key.to_string()));
+    }
+
     fn ask(self: Pin<&mut Self>, ask: Ask) {
         let _ = self.qt_thread().queue(move |screens| screens.apply(ask));
     }
@@ -590,6 +620,11 @@ impl qobject::Screens {
                 self.as_mut().rust_mut().key = key;
                 self.as_mut().key_changed();
             }
+        }
+        let section = QString::from(crate::sections::current(shown).map_or("", |s| s.key));
+        if self.section != section {
+            self.as_mut().rust_mut().section = section;
+            self.as_mut().section_changed();
         }
         let screen = screen_of(shown);
         if self.shown != screen {

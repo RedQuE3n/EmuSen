@@ -53,6 +53,7 @@ pub mod rows_model;
 pub mod scrape_run;
 pub mod screens;
 pub mod screenshots;
+pub mod sections;
 pub mod session;
 pub mod session_model;
 pub mod settings;

@@ -32,6 +32,9 @@ pub mod qobject {
         #[qproperty(*mut ThemeRows, favourites, READ, CONSTANT)]
         #[qproperty(*mut ThemeRows, collections, READ, CONSTANT)]
         #[qproperty(*mut ThemeRows, shelf, READ, CONSTANT)]
+        /// The program's top sections (1.6), and the key of the one shown, empty where the screen shown is none.
+        #[qproperty(*mut ThemeRows, sections, READ, CONSTANT)]
+        #[qproperty(QString, section, READ, NOTIFY)]
         type ThemeLibrary = super::ThemeLibraryRust;
     }
 
@@ -64,6 +67,8 @@ pub struct ThemeLibraryRust {
     suspended: String,
     favourites: *mut ThemeRows,
     collections: *mut ThemeRows,
+    sections: *mut ThemeRows,
+    section: QString,
     games: HashMap<String, *mut ThemeRows>,
     firsts: HashMap<(String, usize), *mut ThemeRows>,
     found: *mut ThemeRows,
@@ -86,6 +91,8 @@ impl Default for ThemeLibraryRust {
             suspended: String::new(),
             favourites: none,
             collections: none,
+            sections: none,
+            section: QString::default(),
             games: HashMap::new(),
             firsts: HashMap::new(),
             found: none,
@@ -115,6 +122,8 @@ impl cxx_qt::Initialize for qobject::ThemeLibrary {
         let favourites = self.as_mut().made(&view::GAME_ROLES);
         let collections = self.as_mut().made(&view::COLLECTION_ROLES);
         let found = self.as_mut().made(&view::GAME_ROLES);
+        let sections = self.as_mut().made(&view::SECTION_ROLES);
+        fill(sections, view::sections());
         let mut me = self.as_mut().rust_mut();
         me.consoles = consoles;
         me.places = places;
@@ -124,6 +133,7 @@ impl cxx_qt::Initialize for qobject::ThemeLibrary {
         me.favourites = favourites;
         me.collections = collections;
         me.found = found;
+        me.sections = sections;
         drop(me);
         self.show(&LibraryView::empty(), "[]");
     }
@@ -169,6 +179,15 @@ impl qobject::ThemeLibrary {
         if self.declined != keys {
             self.as_mut().rust_mut().declined = keys.to_vec();
             fill(self.places, view::places(&self.view, &self.lines, keys));
+        }
+    }
+
+    /// The host's feed of the shown screen's section, by its key; empty for a screen that is none.
+    pub fn show_section(mut self: Pin<&mut Self>, key: &str) {
+        let key = QString::from(key);
+        if self.section != key {
+            self.as_mut().rust_mut().section = key;
+            self.as_mut().section_changed();
         }
     }
 
@@ -219,6 +238,7 @@ impl qobject::ThemeLibrary {
             "shelf" => self.shelf,
             "favourites" => self.favourites,
             "collections" => self.collections,
+            "sections" => self.sections,
             _ => return None,
         };
         // Safety: as `fill`.

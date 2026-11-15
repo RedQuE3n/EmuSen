@@ -33,7 +33,8 @@ fn kit_7_117_the_faces_are_the_fonts_own_and_a_theme_names_one_per_role() {
     let files = std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/fonts")).unwrap().filter(|e| e.as_ref().is_ok_and(|e| e.path().extension().is_some_and(|x| x == "ttf"))).count();
     let qrc = include_str!("../fonts/Fonts.qrc");
     assert_eq!(qrc.matches(".ttf</file>").count(), files, "every font file in the folder is in the resource");
-    assert!(scene.set_property("scene", "families", &BUNDLED.join(",")));
+    assert!(scene.set_property("scene", "separator", "|"));
+    assert!(scene.set_property("scene", "families", &BUNDLED.join("|")));
     for (i, family) in BUNDLED.iter().enumerate() {
         assert_eq!(drawn(&mut scene, &format!("bundled.{i}")), ((*family).to_owned(), (*family).to_owned()), "{family} is drawn as itself");
     }

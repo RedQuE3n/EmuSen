@@ -7176,7 +7176,7 @@ is the change `cover` with a null type, which the base takes as putting the foun
 (`emusen_scrape_service.h`, `media.rs` `choose_cover`), so the choice clears and the card goes (R-20261114-28). In every
 other case there is no such card. Held to by qt-models' `game_page`
 (`qt_7_8_5_none_is_a_card_only_where_no_cover_was_found_and_a_choice_is_in_use_and_it_clears_the_choice`: the one case
-and the three where it must not appear) and `cover_source` (`qt_7_8_5_none_clears_a_chosen_cover_through_the_base_where_no_cover_was_found`).
+and the three where it must not appear) and `cover_source` (`qt_7_8_5_none_clears_a_chosen_cover_through_the_base_where_no_cover_was_found`), and in the program by qt-app's `page_cover_none` (a game with no cover found and its title screen chosen: None first, reached by the pad, nothing cut off or overlapping at the gate's sizes, and A on it clears games.db's `covertype` and the card goes). The pad's walk of Cover Art is `qt-app/tests/common/cover_art.rs`, shared by both program tests.
 The pictures' labels stay plural until the back end gives a singular word per kind (R-20261114-27).
 
 ### 7.9 Repair piece DC-B: the program does what it offers and says when it fails (2026-11-11)

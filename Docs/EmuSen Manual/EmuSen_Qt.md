@@ -8064,6 +8064,38 @@ over the suspended game across 19:09 to 19:10, in which Continue's words went fr
 ago", passed every span: the reference theme says the paused game's words again only when `Device.clock` reads a new
 minute, so that change is the clock's.
 
+**The start's late reads (measured on 2026-11-14).** `idle.rs` failed 3 runs of 8 on `c32875c1b` with the machine's load
+average about 9 to 10, each at its first check: "Home: 1 frames swapped" (`[no item]`) or "4 frames swapped", the
+latter naming Settings' rows, `valueText`, `labelText`, `SettingsCaption`, `SettingsLine`, `settingsPaneLines`,
+`settingsSentence` and Home's `homeStatus`. The test began its span once `library.loading` was false, but naming the
+platform library starts three reads, each off the GUI thread: the library's, the settings' (`SettingsModel::refresh`,
+which sets `ready`) and the pads' first (`PadReader`, its first tick carrying the count). Watched from the moment the
+library is named (each property's change signal counted every 5 ms through the harness, five runs on `c32875c1b`, three on
+`541d91564`), the library answered at 28 to 197 ms, the settings at 25 to 207 ms and the pads at 208 to 299 ms, in no
+fixed order, and each later answer drew frames: the settings filled Settings' rows (one row inserted, values set), hidden
+behind Home, and the pads changed Settings' Controllers sentence and Home's status line ("0 controllers" to "1
+controller", a real pad on the desk). The earlier trunk drew the same frames, so no piece of the last landing brought it:
+`idle.rs` has waited on the library alone since it was written (`793e51539`), when Home's status line already counted
+`pads.connected`, and the settings read joined the start with Settings (`2a3772454`). Whether a span caught a late answer
+depended on how the threads were scheduled. Two changes follow. Settings is made only while shown, in a `Loader` whose
+`active` is `screens.shown === Screens.Settings`, so a change to the settings costs no frame behind another screen (Qt
+syncs a dirty item whatever its visibility, as above). The Loader makes `SettingsScreen.qml`, a plain item it sizes, with
+the canvas inside scaling to it, since a Loader given a size resizes its item and would override the canvas's own design
+size. Made afresh, the frame would start on its first row and write that back over the model's `focused`, so the row a
+page or tool returns to (`settings_doors.rs`) would be lost: the Loader's `loaded` handler focuses the row the model
+holds, and only then does Settings write its focused row back (`placed`); opened again from Home it stands on the
+section and row it was left on, the frame's focus with the model's (`settings_reopen.rs`). The cost is paid at each
+opening: the press on Home's Settings place to the first frame swapped with Settings shown, offscreen on the software
+backend (a probe test pressing through the harness and counting `frameSwapped`, six openings a run, two runs each, on
+2026-11-15), took 8.2 to 10.5 ms with Settings kept (`c32875c1b`) and 18.0 to 40.4 ms made by the Loader (median of the
+twelve about 21 ms); not measured on the handheld. And the start is over when
+`program.reading` is false: `library.loading || !settingsModel.ready || !pads.answered`, where `PadReader.answered` turns
+true with its first delivery, pads or a failure to open them (`EmuSen_Kit.md` §7.15). `idle.rs` waits on it.
+`qt-app/tests/idle_hidden.rs` forces the order without depending on the machine: it names the platform library to the
+`LibraryModel` alone, holds Home still, then names it to the program, reading no pad of the machine's (`onlyPads`
+"none"), and counts the frames from that moment to the end of a still span. Settings kept, hidden, as before: 2 frames;
+made only while shown: none.
+
 #### 9.3.3 Play to the first picture on a hosted core **[M 2026-11-08]**
 
 The gate §1.8.4 left owed: Play to the first picture on a libretro core, emusen-qt against Mistress by the same script.

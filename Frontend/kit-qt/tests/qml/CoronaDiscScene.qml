@@ -18,4 +18,19 @@ Window {
             anchors.fill: parent
         }
     }
+    // A disc given its own glows, in a corner the first disc's halo does not reach; its box, glow and colour are test inputs.
+    Kit.CoronaDisc {
+        objectName: "ownDisc"
+        x: 60
+        y: 60
+        width: 40
+        height: 40
+        glows: [
+            Kit.CoronaGlow {
+                blur: 2
+                spread: 4
+                color: "#FF00FF00"
+            }
+        ]
+    }
 }

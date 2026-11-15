@@ -67,6 +67,17 @@ fn kit_7_116_a_corona_disc_holds_its_box_its_rim_s_colour_and_its_glows() {
     }
     let near = scene.colours_at(&[(CENTRE + SCALE * (side / 2.0 + rim + 2.0), CENTRE)])[0].expect("a point past the rim");
     assert!(near.r < near.g && near.g < near.b, "the glows drawn in the game's blue past the rim: {near:?}");
+    // A caller's own glows are not overridden by a game's corona (R-20261114-38): the scene's own disc, its one glow green,
+    // drawn green two units past its rim while its rim takes the game's blue.
+    assert!(scene.set_property("ownDisc", "corona", "#3080F0"));
+    let (own_x, own_y, own_side) = (scene.property("ownDisc", "x"), scene.property("ownDisc", "y"), scene.property("ownDisc", "width"));
+    let (own_x, own_y, own_side): (f64, f64, f64) = (own_x.parse().unwrap(), own_y.parse().unwrap(), own_side.parse().unwrap());
+    let own = scene.colours_at(&[(own_x + own_side + rim + 2.0, own_y + own_side / 2.0)])[0].expect("a point past the own disc's rim");
+    assert!(own.g > 0 && own.r == 0 && own.b == 0, "a caller's own green glow drawn past the rim, not the game's corona: {own:?}");
+    let tree = scene.tree();
+    let disc = tree.find_named("ownDisc").expect("the own disc");
+    let drawn: Vec<String> = tree.under(disc).into_iter().map(|i| tree.nodes[i as usize].name.clone()).filter(|n| n.starts_with("coronaGlow.")).collect();
+    assert_eq!(drawn, ["coronaGlow.0"], "a caller's one glow in place of the two defaults, not after them");
     assert!(scene.set_property("disc", "corona", "transparent"));
     let near = scene.colours_at(&[(CENTRE + SCALE * (side / 2.0 + rim + 2.0), CENTRE)])[0].expect("a point past the rim");
     assert!(near.r > near.b, "the glows drawn in the look's warm colours again: {near:?}");

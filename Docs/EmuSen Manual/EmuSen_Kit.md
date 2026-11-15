@@ -3946,10 +3946,16 @@ and ends, its hue, nothing inside the box, one glow a glowing part and none hidd
 closeness to the rule is the tester's to set (proposed from the table above).
 
 **Cost.** Measured on 2026-11-14 on the desktop's RX 6800 (Vulkan, `tests/glow_gpu.rs`, Eclipse's tokens, 200 focus moves
-over a Button, a Switch and an ActionButton, each from the move to the next frame swapped): with the glow 5.67 ms median,
-7.82 ms at most; with `glowColor` transparent 6.41 ms median, 6.52 ms at most. Qt's own frame times (`QSG_RENDER_TIMING`)
-show sync and render at 0 ms either way; with the glow the swap waited 12 ms at the median (16 ms at most) over 317 frames,
-without it 0 ms over 200, and after the moves the window swaps no frame at rest. The software backend's cost, measured on 2026-11-14 before this part (83 ms median from a change of a
+over a Button, a Switch and an ActionButton, each from the move to the next frame swapped), five runs (the logs
+`card-glow-1`, `card-glow-f1.2`, `card-glow-f2`, `card-glow-final` and `card-pictures` in the piece's evidence). With the
+glow the medians were 5.67, 5.67, 5.68, 5.74 and 5.98 ms and the worst moves 8.90, 7.82, 9.31, 7.86 and 8.57 ms; with
+`glowColor` transparent the medians were 6.38, 6.41, 6.39, 6.38 and 6.49 ms and the worst 6.55, 6.52, 6.52, 7.03 and
+7.47 ms. Qt's own frame times (`QSG_RENDER_TIMING`) show sync and render at 0 ms either way. With the glow the swap
+waited a median 12 ms (11 in `card-pictures`), 16 ms at most, over 316 to 321 frames for the 200 moves; without it 0 ms
+over 200 frames in the three runs whose log holds that part (in `card-glow-final` and `card-pictures` Qt's frame lines
+stop part-way through a line after the glow's part, cause not known). Why the swap waits with the glow while the move
+itself is the quicker is not explained: neither Qt's documentation nor its source was read for it. After the moves the
+window swaps no frame at rest. The software backend's cost, measured on 2026-11-14 before this part (83 ms median from a change of a
 160 by 48 box to the canvas's next paint), is the tests' only. Not measured on the handheld.
 
 **Held to** `tests/focus_ring.rs`: every site the kit rings keeps, under the kit's tokens, the placement of a table in the
@@ -4029,7 +4035,10 @@ it is not transparent. The rim (`rimColor`) is the game's corona where one is gi
 otherwise. Decided 2026-11-14 by the tester (R-20261114-33, R-20261114-38): both glows take the game's corona too, each
 keeping its own strength, the inner glow strong and the halo faint: `glowColor` and `haloColor`, the default glows'
 colours, are the corona's red, green and blue at the alpha of `coronaGlowColor` and of `coronaHaloColor`, read from the
-tokens; with no game's corona they are those tokens' colours. A caller that passes its own `glows` keeps them. The
+tokens; with no game's corona they are those tokens' colours. A caller that passes its own `glows` keeps them, in
+place of the two defaults: QML appends a list assigned in an instance to the list its type declares unless the type's
+document says `pragma ListPropertyAssignBehavior: ReplaceIfNotDefault` ("Structure of a QML Document", doc.qt.io, Qt 6,
+read 2026-11-15), and `CoronaDisc.qml` says it; without it a disc given one glow drew three, measured on 2026-11-15. The
 boards draw every disc in the look's colours and say only, in a caption, that "the corona takes the colour of the game's
 art" (`EclipseSplashFrames.dc.html:61`).
 
@@ -4040,6 +4049,6 @@ reference look draws no disc: under the reference's tokens a `CoronaDisc` is a p
 places one yet. Eclipse's values are Home's disc (`Main:25`), converted as `EmuSen_Qt.md` §3.4.7 converts every board
 value. Test: `tests/corona_disc.rs`, under Eclipse's tokens read from its `theme.json`: the box; the rim's colour as
 a game's and as the look's, drawn; the glows' colours as a game's corona at the tokens' strengths and as the tokens',
-drawn; the two glows at the tokens' sizes, each read at seven distances past the disc within 0.02 of the CSS rule (the
+drawn; a disc given its own one glow, with a game's corona, draws that glow alone in its own colour; the two glows at the tokens' sizes, each read at seven distances past the disc within 0.02 of the CSS rule (the
 largest difference measured on 2026-11-14 on the software backend, 0.0192), and black past the halo's reach. The pixel
 ratio is one under the headless harness. Kit 1.6.

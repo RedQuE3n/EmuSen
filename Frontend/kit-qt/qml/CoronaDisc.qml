@@ -1,4 +1,5 @@
 pragma ComponentBehavior: Bound
+pragma ListPropertyAssignBehavior: ReplaceIfNotDefault
 import QtQuick
 import EmuSen.Kit as Kit
 

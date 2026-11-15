@@ -931,9 +931,10 @@ card** (§0.7 there) and no theme colour is read into one. A card opens over the
 
 ### 3.2 What a theme sees: the `EmuSen.Theme` API **[M 2026-11-08]**
 
-`import EmuSen.Theme 1.0` gives a theme exactly these, each a QML singleton or type, each a view over `emusen-qt-models`
+`import EmuSen.Theme` gives a theme exactly these (a type added after 1.0 needs the minor that added it, as
+`Frontend/theme-qt/CHANGELOG-theme-api.md` lists), each a QML singleton or type, each a view over `emusen-qt-models`
 with the fields a theme may read and nothing more. The table is the module as built (`Frontend/theme-qt`, the crate
-`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.0.*` and held to this table by hand in
+`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.2.*` and held to this table by hand in
 `tests/surface.rs`. The amendments of 2026-11-08 are listed in `Frontend/theme-qt/CHANGELOG-theme-api.md`.
 
 | Name | Kind | What it holds |
@@ -1032,7 +1033,7 @@ left out of `Tokens.qml` (the surface test).
 
 ### 3.3 Versioning
 
-The API is the module's version, `EmuSen.Theme 1.0`. Until the first release every change, an addition, a change, a
+The API is the module's version, now `EmuSen.Theme 1.2` (`Frontend/theme-qt/build.rs`, and the registry's file names). Until the first release every change, an addition, a change, a
 removal or a rename, bumps the minor, and a role or action deprecated in one minor may be removed in any later one
 (decided 2026-11-11 by the tester, R-20261111-107, R-20261111-108, §5.3). After it, a minor adds singletons, roles,
 actions, cues or tokens and never removes or renames one; a role or action no longer meant is kept and marked
@@ -1648,7 +1649,7 @@ today shows the reference's screens, which would not show Eclipse. The manifest 
 `themes::built_in_folder` gives each one's folder in the resources, `qrc:/emusen/themes/<id>/`, which `qt-app/themes.qrc`
 holds file for file. `BuiltInThemes` (`qt-app/src/theme.rs`) reads each built-in's `theme.json` through Qt for the Themes
 tab and gives the window the reference's folder. In the tab, Eclipse's row follows EmuSen's: "Eclipse", "By The EmuSen
-project · EmuSen.Theme 1.1 · dark", and "Checked: nothing found." (built-ins are checked by the build's tests, here
+project · EmuSen.Theme 1.2 · dark" (the minor is the manifest's `api`), and "Checked: nothing found." (built-ins are checked by the build's tests, here
 theme-check's `qt_3_4_7_the_built_in_eclipse_package_is_clean`). Use stores the id `eclipse`; `themes::resolve` gives
 `Resolved::BuiltIn`, whose host folder is the resources', so the chosen theme's host loads it and `ThemeStyle` puts its
 overrides on the program's engine.

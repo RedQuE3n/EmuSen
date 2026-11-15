@@ -19,7 +19,8 @@ and (R-20261114-21) the reference keeps each focus ring's placement while Eclips
 - **`CoronaDisc`**: `corona` is a game's corona, transparent where none is given; `gameCorona`, `rimColor`, `glowColor`
   and `haloColor` say what is drawn: the rim and both default glows in a game's corona, each glow at its token's alpha
   (R-20261114-38), the look's colours otherwise. Its `software` property and its own glow items are gone, `Glow` draws
-  them. §7.116.
+  them. A caller's own `glows` replace the two defaults (`pragma ListPropertyAssignBehavior: ReplaceIfNotDefault`),
+  where QML had appended them. §7.116.
 - **`FocusRing`**: `glowReach`, added in 1.5, is gone; `Glow`'s `reach` holds it.
 - **`Tokens.ringGapped`** (registry, a switch after every earlier property): every ring past its gap, whatever its
   place's placement; false in the kit's column, true in Eclipse's. `FocusRing` gains `form`, the placement drawn, and

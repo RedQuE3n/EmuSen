@@ -59,6 +59,8 @@ Window {
     property string coresWorld
     // The scraper's test seam, its settings' `test` member as JSON (a loopback server and its root), as a test names it.
     property string scraperTest
+    // Whether a read the start makes is still out: the library's, the settings', or the pads' first (EmuSen_Qt.md §9.3.2).
+    readonly property bool reading: library.loading || !settingsModel.ready || !pads.answered
     // The splash keeps the focus, and every press, until it has faded, so the press that skipped it is never a screen's.
     readonly property bool splashShown: program.splash && (!moonrise.done || moonrise.opacity > 0)
     // The help bar's family: Controller type's, or with Automatic the pad last used; a generic pad's glyphs drawn as the Xbox pad's lettered ones, as Mistress does.
@@ -487,14 +489,23 @@ Window {
             onAccepted: folders.accepted(folderDialog.selectedFolder)
             onRejected: folders.rejected()
         }
-        Settings {
-            objectName: "settings"
-            visible: screens.shown === Screens.Settings
-            settings: settingsModel
-            padFamily: program.padFamily
-            inputs: visible && !program.splashShown
-            onBacked: screens.back()
-            onActed: (key) => screens.act(key)
+        // Made only while shown, so a change to the settings costs no frame behind another screen (EmuSen_Qt.md §9.3.2); the
+        // canvas inside scales to its parent, so the Loader sizes a plain item rather than the canvas.
+        Loader {
+            objectName: "settingsSlot"
+            anchors.fill: parent
+            active: screens.shown === Screens.Settings
+            focus: active
+            sourceComponent: Item {
+                Settings {
+                    objectName: "settings"
+                    settings: settingsModel
+                    padFamily: program.padFamily
+                    inputs: !program.splashShown
+                    onBacked: screens.back()
+                    onActed: (key) => screens.act(key)
+                }
+            }
         }
         ThemesScreen {
             objectName: "themes"

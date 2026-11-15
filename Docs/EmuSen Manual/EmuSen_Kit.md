@@ -1229,7 +1229,8 @@ stands alone and only this crate joins it to Endymion. Four parts, one job each:
   and one closure per tick, and none when nothing changed.
 - `pad_reader.rs`, **`PadReader`**: writable `platformLibrary` (the path, as `LibraryModel` takes it: a QML element
   cannot be handed a Rust value, §1.2.1 of `EmuSen_Qt.md`) and `onlyPads`; read-only `family` (kit-qt's `Families`),
-  `connected` and `problem`; one signal, `button(PadButton, down)`. Naming the library lends SDL (`libSDL3.so.0`, once
+  `connected`, `problem` and `answered` (true from the first delivery applied, pads or a failure to open them: the
+  program's start waits on it, `EmuSen_Qt.md` §9.3.2); one signal, `button(PadButton, down)`. Naming the library lends SDL (`libSDL3.so.0`, once
   a process) and starts the reader, whose ticks come back only through `qt_thread().queue`, where each press is emitted
   in order and the properties published. `onlyPads` is SDL's pad ids, separated by spaces, read alone, as
   `emusen_endymion_pads_show_only` is a test's: it keeps a test's virtual pads from opening a pad on the desk.

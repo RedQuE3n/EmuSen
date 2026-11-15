@@ -26,7 +26,7 @@ fn the_screens_render_nothing_once_the_focus_settles() {
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
-    wait_for(&mut scene, "library", "loading", "false", 10000);
+    wait_for(&mut scene, "program", "reading", "false", 10000);
     assert_eq!(scene.property("screens", "shown"), "Home");
     assert_still_saying(&mut scene, "Home");
 

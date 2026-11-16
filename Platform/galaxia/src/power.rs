@@ -14,9 +14,15 @@ pub struct Battery {
     pub charging: bool,
 }
 
-/// The machine's battery as the kernel reports it now; none where this system has no reader or no battery of the machine's.
+/// The machine's battery as the kernel reports it now, or as the power_supply redirect's tree does; none where this
+/// system has no reader or no battery of the machine's.
 pub fn battery() -> Option<Battery> {
-    if cfg!(target_os = "linux") { battery_at(Path::new(SYSTEM_ROOT)) } else { None }
+    let tree = crate::tree::tree();
+    match &tree.power_supply_override {
+        Some(root) => battery_at(root),
+        None if cfg!(target_os = "linux") => battery_at(Path::new(SYSTEM_ROOT)),
+        None => None,
+    }
 }
 
 /// The machine's battery read from a power_supply tree at `root`: the mean of its batteries' levels, charging while none
@@ -150,5 +156,16 @@ mod tests {
         assert_eq!(battery_at(&tree("two", &[a, b, MOUSE])), Some(Battery { level: 83, charging: true }));
         let c = ("BAT1", &[("type", "Battery"), ("capacity", "75"), ("status", "Discharging")][..]);
         assert_eq!(battery_at(&tree("two-draining", &[a, c])), Some(Battery { level: 83, charging: false }));
+    }
+
+    #[test]
+    fn the_power_supply_redirect_is_read_in_place_of_the_kernel_s_tree() {
+        use crate::tree::{tree_mut, Override};
+        let bat = ("BAT0", &[("type", "Battery"), ("capacity", "82"), ("status", "Discharging")][..]);
+        tree_mut().set_override(Override::PowerSupply, Some(tree("redirected", &[MOUSE, bat])));
+        assert_eq!(battery(), Some(Battery { level: 82, charging: false }));
+        tree_mut().set_override(Override::PowerSupply, Some(tree("redirected-empty", &[])));
+        assert_eq!(battery(), None, "an empty tree is no battery, whatever the machine has");
+        tree_mut().set_override(Override::PowerSupply, None);
     }
 }

@@ -17,12 +17,12 @@ fn qt_3_5_2_the_feed_hands_a_theme_the_program_s_views_and_carries_its_actions()
     let mut harness = emusen_qt_test::Harness::new();
     let mut scene = harness.load(MAIN_URL, 1280, 800);
     assert!(scene.set_property("program", "splash", "false"));
-    // The machine's battery from a made-up power_supply tree, named before the library so the kernel's is never read.
-    let power = _world.dir("power_supply/BAT0");
+    // The machine's battery from the world's made-up power_supply tree, which the platform library reads in place of the kernel's.
+    let power = _world.power_supply().join("BAT0");
+    std::fs::create_dir_all(&power).unwrap();
     for (key, value) in [("type", "Battery"), ("scope", "System"), ("capacity", "82"), ("status", "Charging")] {
         std::fs::write(power.join(key), format!("{value}\n")).unwrap();
     }
-    assert!(scene.set_property("battery", "root", power.parent().unwrap().to_str().unwrap()));
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
     assert!(scene.set_property("program", "theme", FED));
     wait_for(&mut scene, "library", "loading", "false", 10000);

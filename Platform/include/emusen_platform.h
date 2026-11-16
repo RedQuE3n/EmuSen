@@ -113,6 +113,7 @@ int64_t emusen_platform_diagnostics(uint8_t *out, size_t len);
 #define EMUSEN_GALAXIA_OVERRIDE_CONFIG 0u /* ConfigStore.OverrideDirectory */
 #define EMUSEN_GALAXIA_OVERRIDE_DATA 1u   /* DataStore.OverrideDirectory */
 #define EMUSEN_GALAXIA_OVERRIDE_LEGACY 2u /* ConfigStore.OverrideLegacyDirectory */
+#define EMUSEN_GALAXIA_OVERRIDE_POWER_SUPPLY 3u /* the power_supply tree the battery is read from; since 50 */
 
 /*
  * Names the program's directory (AppContext.BaseDirectory, which a managed host knows and the library cannot

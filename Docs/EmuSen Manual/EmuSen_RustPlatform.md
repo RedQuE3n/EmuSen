@@ -4801,7 +4801,17 @@ int32_t emusen_galaxia_battery(const uint8_t *root, size_t root_len, uint8_t *ch
 It answers the level, 0 to 100, and writes 1 or 0 to `charging` where that is not null; `EMUSEN_PLATFORM_ABSENT` where
 the machine has no battery of its own, or where the system has no reader yet (every system but Linux, while Windows and
 macOS are paused, §31); `BAD_STRING` for a root that is not UTF-8. A null `root` reads the kernel's own tree,
-`/sys/class/power_supply`; a test names a made-up tree, so no test reads the real one.
+`/sys/class/power_supply`, unless a test has moved the fourth redirect, `EMUSEN_GALAXIA_OVERRIDE_POWER_SUPPLY` (3, a
+value of the existing `emusen_galaxia_set_override`, added with this number), in which case it reads that tree. A
+caller that cannot move a redirect, the platform's own tests, names a made-up tree as `root`.
+
+The redirect has one owner on the front end's side: `emusen-client-fixture`'s `World`, which every client and front-end
+test builds its scratch tree with, moves it to an empty `power_supply` folder of that tree as it moves config and data,
+so a test answers no battery on a desktop, a laptop and the handheld alike until it writes a supply there
+(`World::power_supply`). A test that wants "no battery" leaves the folder empty. No front-end element names a tree:
+`qt-models`' `Battery` always asks with a null root. Counted on 2026-11-16, 60 of `qt-app`'s test files (65 tests) load
+the platform library, each with its tree built by a `World`; the redirect is the process's, as config and data are, and is not
+part of a thread's scope (§3.14 of `EmuSen_Galaxia.md`), since the battery is read on a thread of its own.
 
 ### 58.1 Which supply is the machine's battery
 
@@ -4866,6 +4876,7 @@ library until they are retired.
 
 Measured by `emusen-galaxia`'s `power` tests (no supplies, a peripheral alone, one system battery at 82 discharging,
 Charging and Full, no scope and Unknown scope, absent and silent batteries, two batteries), `emusen-platform`'s
-`galaxia_power` test of the C call, `emusen-platform-client`'s
+`galaxia_power` test of the C call, `emusen-galaxia`'s
+`the_power_supply_redirect_is_read_in_place_of_the_kernel_s_tree`, `emusen-platform-client`'s
 `the_machine_s_battery_comes_from_the_tree_given_and_a_peripheral_s_is_skipped` against the library built from this
-commit, and Eclipse Home's oracle, whose battery rows are drawn as the board draws them when the host feeds 82.
+commit (the tree named, then the `World`'s redirect read with no root), and Eclipse Home's oracle, whose battery rows are drawn as the board draws them when the host feeds 82.

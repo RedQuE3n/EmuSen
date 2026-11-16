@@ -205,7 +205,7 @@ fn the_scrape_service_opens_one_scraper_reads_and_closes_it() {
 fn the_machine_s_battery_comes_from_the_tree_given_and_a_peripheral_s_is_skipped() {
     let world = World::new("battery");
     let p = Platform::load(library()).unwrap();
-    let root = world.dir("power_supply");
+    let root = world.power_supply();
     let supply = |name: &str, attributes: &[(&str, &str)]| {
         let folder = root.join(name);
         std::fs::create_dir_all(&folder).unwrap();
@@ -219,4 +219,8 @@ fn the_machine_s_battery_comes_from_the_tree_given_and_a_peripheral_s_is_skipped
     assert_eq!(p.battery(Some(named)).unwrap(), Some(Battery { level: 82, charging: false }));
     supply("BAT0", &[("status", "Charging")]);
     assert_eq!(p.battery(Some(named)).unwrap(), Some(Battery { level: 82, charging: true }));
+    // Asked of no tree, the world's is read in place of the kernel's, so a test answers the same on every machine.
+    assert_eq!(p.battery(None).unwrap(), Some(Battery { level: 82, charging: true }), "the world's power_supply redirect");
+    std::fs::remove_dir_all(root.join("BAT0")).unwrap();
+    assert_eq!(p.battery(None).unwrap(), None, "the world's tree with no battery of the machine's");
 }

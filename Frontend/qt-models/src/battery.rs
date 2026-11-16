@@ -22,8 +22,6 @@ pub mod qobject {
         #[qml_element]
         /// The platform library the battery is asked of.
         #[qproperty(QString, platform_library, cxx_name = "platformLibrary")]
-        /// A made-up power_supply tree a test names; empty, the kernel's own. A change of either asks again.
-        #[qproperty(QString, root)]
         /// The level, 0 to 100, or -1 where the machine has no battery or none was read yet.
         #[qproperty(i32, level, READ, NOTIFY)]
         #[qproperty(bool, charging, READ, NOTIFY)]
@@ -43,7 +41,6 @@ pub mod qobject {
 
 pub struct BatteryRust {
     platform_library: QString,
-    root: QString,
     level: i32,
     charging: bool,
     every: i32,
@@ -55,7 +52,7 @@ pub struct BatteryRust {
 
 impl Default for BatteryRust {
     fn default() -> Self {
-        BatteryRust { platform_library: QString::default(), root: QString::default(), level: -1, charging: false, every: EVERY_MS, platform: None, asking: false, again: false }
+        BatteryRust { platform_library: QString::default(), level: -1, charging: false, every: EVERY_MS, platform: None, asking: false, again: false }
     }
 }
 
@@ -75,11 +72,10 @@ impl qobject::Battery {
             self.as_mut().rust_mut().platform = Some(platform);
         }
         let Some(platform) = self.platform.clone() else { return };
-        let root = Some(self.root.to_string()).filter(|r| !r.is_empty());
         self.as_mut().rust_mut().asking = true;
         let queue = self.qt_thread();
         std::thread::spawn(move || {
-            let answer = shown(platform.battery(root.as_deref()).ok().flatten());
+            let answer = shown(platform.battery(None).ok().flatten());
             let _ = queue.queue(move |battery| battery.answered(answer));
         });
     }

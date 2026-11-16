@@ -25,7 +25,7 @@ Item {
     property real boxSide: 30
     property real boxRadius: 8
     property real boxPadding: 10
-    readonly property bool boxed: [PadGlyph.PageUp, PadGlyph.PageDown, PadGlyph.First, PadGlyph.Last].indexOf(root.button) >= 0
+    readonly property bool boxed: ([PadGlyph.PageUp, PadGlyph.PageDown, PadGlyph.First, PadGlyph.Last].indexOf(root.button) >= 0)
     property color ring: Tokens.muted
     property color ink: Tokens.text
     property color leadFill: Tokens.accent

@@ -442,7 +442,7 @@ ThemeScreen {
                                     const at = [Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down, Qt.Key_Home, Qt.Key_End].indexOf(event.key)
                                     const below = plate.downIndex >= 0 ? plate.downIndex : (plate.rowOf + 1 >= plate.rows ? plate.nextFirst : -1)
                                     const to = at >= 0 ? [plate.leftIndex, plate.rightIndex, plate.upIndex, below, plate.previousFirst, plate.nextFirst][at] : -1
-                                    const item = to >= 0 ? plates.itemAt(to) : [makers.itemAt(layout.firsts[plate.group] ?? -1), openButton, chipRow.itemAt(root.show), null, null, null][at] ?? null
+                                    const item = to >= 0 ? plates.itemAt(to) : ([makers.itemAt(layout.firsts[plate.group] ?? -1), openButton, chipRow.itemAt(root.show), null, null, null][at] ?? null)
                                     event.accepted = item !== null
                                     item?.forceActiveFocus()
                                 }

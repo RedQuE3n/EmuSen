@@ -33,6 +33,8 @@ QtObject {
     readonly property color track: "#2C3044"
     // The focus ring's glow round a tile or a plate (Main:113, EclipseConsoles:64).
     readonly property color ringGlow: "#80F0B4C4"
+    // The section shown's words in the header's nav (Main:34, EclipseConsoles:31).
+    readonly property color current: "#FFFFFF"
     // A tile's title and its facts (Main:85, 86).
     readonly property color tileTitle: "#FFFFFF"
     readonly property color tileFacts: "#E3E6F0"

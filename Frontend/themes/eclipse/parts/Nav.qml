@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import EmuSen.Theme
 
-// The header's nav: the program's sections (Library.sections), the one shown marked, the shoulders stepping them through the frame's walk and a section tapped opening it (Main:33-39, EclipseConsoles:28-33; EmuSen_Qt.md §3.4.8).
+// The header's nav: the program's sections (Library.sections), the one shown marked, the shoulders stepping them through the frame's walk and a section tapped opening it (Main:33-39, EclipseConsoles:28-34; EmuSen_Qt.md §3.4.8).
 Row {
     id: root
     // A board pixel in canvas units, Board.unit.
@@ -14,8 +14,6 @@ Row {
     property real gap: 44
     property real underGap: 10
     property real underline: 3
-    // The shown section's words, #FFFFFF on the boards (Main:34): a constant of the design.
-    property color currentInk: "#FFFFFF"
     // The sections' keys, in the nav's order, as the walk steps them.
     readonly property var keys: {
         const out = [];
@@ -26,6 +24,9 @@ Row {
     objectName: "nav"
     spacing: root.gap * root.unit
     Accessible.role: Accessible.PageTabList
+    Ink {
+        id: ink
+    }
     Binding {
         target: root.controller
         property: "sections"
@@ -38,7 +39,7 @@ Row {
     }
     Connections {
         target: root.controller
-        // The host takes a move to another section's screen and declines the one shown (qt-models/src/sections.rs).
+        // The host opens another section's screen and declines the one shown (qt-models/src/sections.rs).
         function onSectionChosen(key) { Actions.openSection(key) }
     }
     component Entry: Item {
@@ -52,13 +53,14 @@ Row {
         Accessible.role: Accessible.PageTab
         Accessible.name: entry.name
         Accessible.selected: entry.current
-        Text {
+        Line {
             id: words
             objectName: "navWords." + entry.key
+            unit: root.unit
             text: entry.name
-            color: entry.current ? root.currentInk : Tokens.muted
-            font.pixelSize: Type.size(root.size * root.unit, Tokens.textScale)
-            font.weight: entry.current ? Font.DemiBold : Font.Normal
+            color: entry.current ? ink.current : Tokens.muted
+            size: root.size
+            weight: entry.current ? Font.DemiBold : Font.Normal
         }
         Rectangle {
             objectName: "navUnderline." + entry.key

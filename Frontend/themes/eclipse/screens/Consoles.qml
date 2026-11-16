@@ -798,8 +798,8 @@ ThemeScreen {
                 // The board's A, B and LT RT Maker: the screen's own actions, Y and X, are drawn above, not in the bar (board lines 99 to 104).
                 model: Help.entries(Help.Console, {group: true, triggers: true, actions: false})
                 ink: ink.help
-                // This board's foot: its 34 px row 40 px over the bottom (board line 99).
-                middle: 1143
+                // This board's foot: its row 40 px over the bottom (board line 99), 38 px tall for the ringed B (34 and its 2 px ring, line 102).
+                middle: 1141
                 Line {
                     objectName: "consolePlace"
                     unit: root.px

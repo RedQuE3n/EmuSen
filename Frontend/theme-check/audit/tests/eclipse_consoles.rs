@@ -1,4 +1,4 @@
-// EmuSen_Qt.md §3.4.9: Eclipse's Choose a console held to its board, the table eclipse_consoles.tsv, as theme-audit records
+// EmuSen_Qt.md §3.4.9: Eclipse's Choose a console held to its board, the table qt-app/tests/eclipse/consoles.tsv, as theme-audit records
 // it over the canvases' eleven consoles at the board's shape (1280 x 800 and 1920 x 1200), every box in design units as the
 // table gives it; and held whole, with no finding, over one console, thirty, one maker of forty and 120.
 
@@ -13,7 +13,8 @@ extern crate emusen_theme_host;
 extern crate emusen_theme_qt;
 
 const PROGRAM: &str = env!("CARGO_BIN_EXE_theme-audit");
-const TABLE: &str = include_str!("eclipse_consoles.tsv");
+// The board's one table, which qt-app's oracle holds in the running program too.
+const TABLE: &str = include_str!("../../../qt-app/tests/eclipse/consoles.tsv");
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -64,20 +65,22 @@ fn written(v: f64) -> f64 {
     (v * 100.0).round() / 100.0
 }
 
-/// The table's built rows with a single objectName and a box on the board: name, then x (or right=), y (or middle=), w, h in
-/// board px, "-" free; with the flags right and middle.
+/// The table's built rows whose box the board gives as plain pixels: name, then x (or the right edge), y (or the middle), w, h
+/// in board px, none where the row gives a rule of its layout instead; with the flags right and middle. A right:g edge
+/// stands g short of the board's 1920, a mid:g middle at g.
 fn boxes() -> Vec<(String, [Option<f64>; 4], bool, bool)> {
     TABLE
         .lines()
-        .filter(|l| !l.starts_with('#'))
+        .filter(|l| !l.starts_with('#') && !l.starts_with("name\t"))
         .map(|l| l.split('\t').collect::<Vec<_>>())
-        .filter(|c| c.len() >= 8 && c[7] == "built" && c[2] != "-" && !c[2].ends_with(".N"))
+        .filter(|c| c.len() == 14 && c[12] == "built")
         .map(|c| {
-            let parts: Vec<&str> = c[4].split(',').collect();
-            let right = parts.first().is_some_and(|p| p.starts_with("right="));
-            let middle = parts.get(1).is_some_and(|p| p.starts_with("middle="));
-            let n = |p: &str| p.trim_start_matches("right=").trim_start_matches("middle=").parse::<f64>().ok();
-            (c[2].to_owned(), [n(parts.first().unwrap_or(&"-")), parts.get(1).and_then(|p| n(p)), parts.get(2).and_then(|p| n(p)), parts.get(3).and_then(|p| n(p))], right, middle)
+            let n = |p: &str| p.parse::<f64>().ok();
+            let right = c[7].strip_prefix("right:").and_then(n);
+            let middle = c[6].strip_prefix("mid:").and_then(n);
+            let x = right.map(|g| 1920.0 - g).or_else(|| n(c[5]));
+            let w = if right.is_some() { None } else { n(c[7]) };
+            (c[0].to_owned(), [x, middle.or_else(|| n(c[6])), w, n(c[8])], right.is_some(), middle.is_some())
         })
         .collect()
 }

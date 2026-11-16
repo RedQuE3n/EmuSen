@@ -1962,8 +1962,9 @@ CSS's line height of 1.15 of its size, a fixed line height in Qt (`Text.lineHeig
 height multiplies the face's own height (seen 2026-11-16: the plate's line stood 3 board pixels low). A ringed glyph's box
 is the board's span with the ring outside it (CSS's content-box): the order's Y is 38, Options' X 44. The battery is drawn
 where the machine has one; `Status` makes it only where a board draws it. The top navigation is a piece of its own
-(R-20261115-7), and its place is left empty. `Frontend/theme-check/audit/tests/eclipse_consoles.tsv` is theme-audit's
-older table of the same board, its boxes held over the recording.
+(R-20261115-7), and its place is left empty. theme-audit's `eclipse_consoles.rs` reads the same table and holds its rows given in plain board pixels over its own
+recording. The help line's row is 38 px tall, the ringed B's 34 and its ring (line 102), so its middle stands at 1141, 40
+px over the foot; Home's at 1137, its row the 46 px Sections pill (Main:99).
 
 **Proof.** theme-check's `eclipse_consoles.rs` runs theme-audit on Eclipse over the canvases' eleven consoles with the focus
 on the Super Nintendo. At 1280 × 800 and 1920 × 1200 it holds every built row's box to the board's pixels times the window's

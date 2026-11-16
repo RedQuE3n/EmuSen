@@ -76,5 +76,5 @@ buttonLabel.0	91	"Open"	Help.entries' A entry	Text	after:buttonGlyph.0:12	mid:co
 consoleOptions	93	Options, X	Help.entries' X entry, Eclipse's Pill	Pill	after:consoleOpen:14	foot:consoleOpen	fit:buttonLabel.1:28	64	32	#FF5A6076	-	built	-
 buttonGlyph.1	94	X, ringed	the kit's lettered glyph	Glyph	in:consoleOptions:14	mid:consoleOptions	44	44	-	-	-	built	glyph 18 400
 buttonLabel.1	94	"Options"	Help.entries' X entry	Text	after:buttonGlyph.1:12	mid:consoleOptions	-	-	-	Tokens.text	23	built	400 0 none
-help	99	the help line: A Open, B Back, LT RT Maker	Help.entries(Help.Console), Eclipse's HelpLine	HelpBar	96	mid:1143	-	-	-	#FFD8DBE6	21	built	400 0 none
+help	99	the help line: A Open, B Back, LT RT Maker	Help.entries(Help.Console), Eclipse's HelpLine	HelpBar	96	mid:1141	-	-	-	#FFD8DBE6	21	built	400 0 none
 consolePlace	105	"Nintendo · 3 of 14"	maker, Words.between, Words.place	Text	-	mid:help	right:96	-	-	#FFD8DBE6	21	built	400 0 none

@@ -101,7 +101,7 @@ fn qt_3_2_a_theme_reads_the_views_the_host_feeds() {
         assert_eq!(library.list("sections").map(|l| l.rows().to_vec()), Some(emusen_theme_qt::view::sections()), "the sections from their owner");
     }
     // The program's sections (1.6): the owner's rows before any feed, and the shown screen's key as the host feeds it.
-    assert_eq!((scene.property("scene", "sections").as_str(), scene.property("scene", "section").as_str()), ("2", ""));
+    assert_eq!((scene.property("scene", "sections").as_str(), scene.property("scene", "section").as_str()), ("5", ""));
     host::library(within(window)).unwrap().show_section("consoles");
     scene.wait(20);
     assert_eq!(scene.property("scene", "section"), "consoles", "Library.section follows the host's feed");

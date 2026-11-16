@@ -2200,6 +2200,27 @@ the software backend and on Vulkan (the RX 6800); the fixed one passes on both, 
 `fade.rs` still passes on both. Seeded faults, each reverted, each a fault in the test: `layer.enabled: root.fading` as
 before, and the `Binding` not delayed.
 
+**An edge that starts and stops fading before the queue clears** (found 2026-11-16). theme-audit over Orrery faulted in
+`QQuickItem::geometryChange` under `Scene::resize`, about once in three runs, trunk 385db3952 as well. Run with glibc's
+thread cache off and freed memory overwritten (`GLIBC_TUNABLES=glibc.malloc.tcache_count=0:glibc.malloc.perturb=165`), it
+faulted on every run, 38 s in; with a breakpoint on `QQuickItemLayer::deactivate` and the faulting item's class read in the
+live process, the item was the dial's `EdgeFade` (Choose a console, `themes/orrery/screens/Consoles.qml`, `width:
+root.width - 128`), and the layer was deleted inside the resize that widened it, under the dial's `setContentWidth`, its
+`fixup` and its `contentX`, the dial's `fadeLeft` and `fadeRight` falling. The delayed `Binding` left a hole: `layered`
+followed `fading` only once the queue was clear, so an edge that began fading and then stopped before that (here inside
+the window's one geometry event) found `layered` still false, and the layer went off at
+once, its `ShaderEffectSource` deleted while the fade's copied listener list still held it (the faulting entry: a
+`Geometry` listener of `All` changes, which is what `QQuickShaderEffectSource::setSourceItem` adds). So `layered` now goes
+true the moment an edge starts fading (an `onFadingChanged` assignment) and follows `fading` back only once the queue is
+clear, through a `Timer` of interval 0 running while the two differ; a layer that goes on is never turned off within the
+same turn of the event loop. `Binding`s with `when` and `restoreMode: Binding.RestoreNone` for the two directions were
+tried first and faulted in `fade_resize.rs` with the thread cache off. `qt-test/tests/fade_rise.rs` holds it: a fade whose
+row grows past its width (the edge starts fading) and whose width then grows past the row, with no event between, twice.
+The test runs itself again in a child process with the thread cache off and the perturb on, because `mallopt`'s
+`M_PERTURB` alone does not overwrite a block freed into glibc's thread cache: the unfixed kit passed it in process and
+faulted in the child on three runs of three (2026-11-16); `fade_resize.rs`'s binary, run with the same tunables, passes with the fix. The
+fixed audit ran over Orrery under the same tunables to its end (see `man theme-check`).
+
 ### 7.36 A held clock, a held press and drawn covers in the harness (stage 3, theme-audit's states; 2026-11-09)
 
 theme-audit records a theme's splash at a stated time and a screen with A held (`man theme-check`, STATES), so the harness

@@ -73,13 +73,15 @@ fn boxes() -> Vec<(String, [Option<f64>; 4], bool, bool)> {
         .lines()
         .filter(|l| !l.starts_with('#') && !l.starts_with("name\t"))
         .map(|l| l.split('\t').collect::<Vec<_>>())
-        .filter(|c| c.len() == 14 && c[12] == "built")
+        // A ShapePath row is a path of its Shape, which the recording holds as the Shape: qt-app's oracle holds the path.
+        .filter(|c| c.len() == 14 && c[12] == "built" && c[4] != "ShapePath")
         .map(|c| {
             let n = |p: &str| p.parse::<f64>().ok();
-            let right = c[7].strip_prefix("right:").and_then(n);
+            // A right edge in the width's column (with no width given) or in x's (with the width beside it).
+            let right = c[7].strip_prefix("right:").or_else(|| c[5].strip_prefix("right:")).and_then(n);
             let middle = c[6].strip_prefix("mid:").and_then(n);
             let x = right.map(|g| 1920.0 - g).or_else(|| n(c[5]));
-            let w = if right.is_some() { None } else { n(c[7]) };
+            let w = n(c[7]);
             (c[0].to_owned(), [x, middle.or_else(|| n(c[6])), w, n(c[8])], right.is_some(), middle.is_some())
         })
         .collect()

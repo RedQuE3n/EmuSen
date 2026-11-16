@@ -66,6 +66,51 @@ fn board_held(scene: &mut Scene<'_>, c: &Console) {
             }
         }
     }
+    // The paths of the played share (rows plateTrack.0, plateArc.0): stroke, colour, the arc's start and turn, the cap.
+    let tree = scene.tree();
+    let tokens = crate::eclipse_board::tokens(tree.nodes[tree.find_named("consolesScreen").unwrap() as usize].id.parse().unwrap());
+    let share_id: u64 = tree.nodes.iter().rev().find(|n| n.name == "plateShare.0").expect("plate.0's share").id.parse().unwrap();
+    let of = |name: &str, p: &str| emusen_qt_test::ffi::ffi::harness_property(crate::eclipse_board::object(share_id), &cxx_qt_lib::QString::from(name), &cxx_qt_lib::QString::from(p)).to_string();
+    let share = if c.count > 0 { (c.played as f64 / c.count as f64).max(0.04) } else { 0.0 };
+    for row in rows.iter().filter(|r| r.part == "ShapePath") {
+        let t: Vec<&str> = row.kind.split(' ').collect();
+        let ["path", width, start, turn, cap] = t.as_slice() else { panic!("{}: a path's type", row.name) };
+        let arc = row.name.replace("plateTrack", "plateRound").replace("plateArc", "plateSweep");
+        let num = |v: String| v.parse::<f64>().unwrap_or(f64::NAN);
+        let want_turn = if *turn == "share" { 360.0 * share } else { turn.parse().unwrap() };
+        let want_colour = match row.colour.strip_prefix("Tokens.") {
+            Some(t) => tokens.get(t).and_then(|v| Colour::parse(v)),
+            None => Colour::parse(&row.colour),
+        };
+        // SVG's round and its default butt are Qt's RoundCap and FlatCap, as Qt names them.
+        let want_cap = if *cap == "round" { "RoundCap" } else { "FlatCap" };
+        let checks = [
+            (num(of(&row.name, "strokeWidth")) - width.parse::<f64>().unwrap() * k).abs() < 1e-6,
+            Colour::parse(&of(&row.name, "strokeColor")) == want_colour,
+            (num(of(&arc, "startAngle")) - start.parse::<f64>().unwrap()).abs() < 1e-6,
+            (num(of(&arc, "sweepAngle")) - want_turn).abs() < 1e-6,
+            of(&row.name, "capStyle") == want_cap,
+        ];
+        if checks.iter().any(|ok| !ok) {
+            differences.push(format!("{}: {:?} (width, colour, start, turn, cap) where the board gives {}", row.name, checks, row.kind));
+        }
+    }
+    // A name's line height is CSS's, of its size, and a long name wraps: the plate's 1.15 of 21 at two lines at most, the console's 1.08 of 46.
+    for (name, size, height, lines) in [("plateName.0", 21.0, 1.15, Some(2)), ("consoleName", 46.0, 1.08, None)] {
+        let mode = crate::eclipse_board::read(&tree, name, "lineHeightMode");
+        let have = crate::eclipse_board::read(&tree, name, "lineHeight").parse::<f64>().unwrap_or(f64::NAN);
+        if mode != "FixedHeight" || (have - size * height).abs() > 1e-6 {
+            differences.push(format!("{name}: line height {have} (mode {mode}) where the board gives {} fixed", size * height));
+        }
+        if let Some(lines) = lines {
+            let count = crate::eclipse_board::read(&tree, name, "lineCount");
+            // The fixture's first console is the Nintendo Entertainment System, whose name takes the plate's two lines.
+            assert_eq!(c.display_name, "Nintendo Entertainment System", "the fixture's long name on plate.0");
+            if count != lines.to_string() {
+                differences.push(format!("{name}: {count} lines for {:?} where a long name wraps to {lines}", c.display_name));
+            }
+        }
+    }
     // Drawn, at the scene's pixels: just past the rim, where the glow is brightest, the window shows the console's hue.
     scene.resize(1920, 1200);
     scene.wait(500);

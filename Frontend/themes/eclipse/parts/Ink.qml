@@ -26,6 +26,9 @@ QtObject {
     readonly property color chipLine: "#4A5068"
     // A console plate's line where it holds no game (EclipseConsoles:129).
     readonly property color emptyLine: "#8E94AB"
+    // A console plate's inset edge and its played share's track (EclipseConsoles:64, 66).
+    readonly property color plateEdge: "#262A3A"
+    readonly property color track: "#2C3044"
     // The focus ring's glow round a tile or a plate (Main:113, EclipseConsoles:64).
     readonly property color ringGlow: "#80F0B4C4"
     // A tile's title and its facts (Main:85, 86).

@@ -36,9 +36,6 @@ ThemeScreen {
             readonly property real asideWidth: 374 * root.px
             readonly property real asideGap: 56 * root.px
             readonly property real gridX: 390 * root.px
-            // Board colours no token holds, drawn only here: the plate's edge (board line 64) and the track (line 66).
-            readonly property color plateEdge: "#262A3A"
-            readonly property color trackInk: "#2C3044"
             readonly property real asideX: root.width - root.margin - root.asideWidth
             readonly property real gridWidth: root.asideX - root.asideGap - root.gridX
             readonly property int columns: Math.max(1, Math.floor((root.gridWidth + root.plateGap) / (root.plateWidth + root.plateGap)))
@@ -461,7 +458,7 @@ ThemeScreen {
                                     radius: 18 * root.px
                                     color: Tokens.inputSurface
                                     border.width: plate.activeFocus ? 0 : 1 * root.px
-                                    border.color: root.plateEdge
+                                    border.color: ink.plateEdge
                                 }
                                 // The share of its games played: the track, and over it the arc from the top (board lines 66 and 67).
                                 Shape {
@@ -473,19 +470,24 @@ ThemeScreen {
                                     height: 52 * root.px
                                     preferredRendererType: Shape.CurveRenderer
                                     ShapePath {
+                                        objectName: "plateTrack." + plate.index
                                         fillColor: "transparent"
-                                        strokeColor: root.trackInk
+                                        strokeColor: ink.track
                                         strokeWidth: 5 * root.px
+                                        // SVG's default butt end (board line 66), not Qt's square default.
+                                        capStyle: ShapePath.FlatCap
                                         PathAngleArc {
                                             centerX: 26 * root.px
                                             centerY: 26 * root.px
                                             radiusX: 21 * root.px
                                             radiusY: 21 * root.px
+                                            objectName: "plateRound." + plate.index
                                             startAngle: 0
                                             sweepAngle: 360
                                         }
                                     }
                                     ShapePath {
+                                        objectName: "plateArc." + plate.index
                                         fillColor: "transparent"
                                         strokeColor: Tokens.accent
                                         strokeWidth: 5 * root.px
@@ -495,6 +497,7 @@ ThemeScreen {
                                             centerY: 26 * root.px
                                             radiusX: 21 * root.px
                                             radiusY: 21 * root.px
+                                            objectName: "plateSweep." + plate.index
                                             startAngle: -90
                                             sweepAngle: 360 * plate.share
                                         }

@@ -374,7 +374,8 @@ pub fn held(
 ) {
     let got = boxes(tree, unit);
     let named = |n: &str| tree.nodes.iter().rev().find(|m| m.name == n && m.visible).or_else(|| tree.nodes.iter().rev().find(|m| m.name == n));
-    for row in rows {
+    // A ShapePath row is a path, no item of the tree: its screen's own test holds it.
+    for row in rows.iter().filter(|r| r.part != "ShapePath") {
         if row.status != "built" {
             // Not drawn: no element of that name, or an empty place for a part still to be ruled on.
             for node in tree.nodes.iter().filter(|n| n.name == row.name || n.name.starts_with(&format!("{}.", row.name))) {
@@ -488,7 +489,7 @@ pub fn held(
     }
 
     // Each text's weight, letter spacing and case, and each glyph's letter size and weight, as the board's CSS gives them.
-    for row in rows.iter().filter(|r| r.status == "built" && r.kind != "-") {
+    for row in rows.iter().filter(|r| r.status == "built" && r.kind != "-" && r.part != "ShapePath") {
         for problem in typed(tree, row, k, unit, tokens) {
             differences.push(format!("{at}: {} {problem}", row.name));
         }

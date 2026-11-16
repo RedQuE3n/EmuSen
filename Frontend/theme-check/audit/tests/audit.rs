@@ -567,7 +567,12 @@ fn qt_3_7_eclipse_passes_the_loaded_step_in_every_state_it_has() {
     // the one variant it lists.
     let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../themes/eclipse");
     let ran = Ran::judged(Command::new(PROGRAM).args(["--states", "all"]).arg(&folder));
-    for screen in ["Home", "Games"] {
+    let screens: Vec<String> = std::fs::read_dir(folder.join("screens"))
+        .expect("Eclipse's screens")
+        .filter_map(|entry| entry.ok()?.file_name().to_str()?.strip_suffix(".qml").map(str::to_owned))
+        .collect();
+    assert!(screens.iter().any(|screen| screen == "Home"), "Eclipse's screens are read from its folder: {screens:?}");
+    for screen in &screens {
         assert!(ran.held(screen).0 >= SIZES.len(), "{screen} held at the gate's sizes: {}", ran.err);
     }
     assert_eq!(ran.status, 0, "Eclipse's findings:\n{}", ran.out);

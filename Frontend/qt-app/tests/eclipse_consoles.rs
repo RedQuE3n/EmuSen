@@ -473,18 +473,13 @@ fn qt_3_4_9_eclipse_s_consoles_walks_opens_steps_makers_and_draws_each_console_i
         scene.wait(50);
     }
     assert_eq!(focused(&mut scene), format!("plate.{k}"), "back on the console it opened");
-    // Makers chosen by the pad, the last one's and then each above it on the way Up to the chips, and Down: the first
-    // maker's first console, not the plate last focused, which choosing another maker hid.
-    for _ in 0..8 {
-        if focused(&mut scene).starts_with("maker.") {
-            break;
-        }
-        press(&mut scene, &sdl, &pad, PadControl::Left);
-    }
-    assert_eq!(focused(&mut scene), format!("maker.{}", groups.len() - 2), "Left along the row to its maker");
-    press(&mut scene, &sdl, &pad, PadControl::Down);
-    assert_eq!(focused(&mut scene), format!("maker.{}", groups.len() - 1), "Down to the last maker");
-    for _ in 0..groups.len() {
+    // The last maker's first console by RT, Left to its maker, Up through the makers (each chosen in turn) to the chips, and
+    // Down: the first maker's first console, not the plate last focused, which choosing another maker hid.
+    press(&mut scene, &sdl, &pad, PadControl::RightTrigger);
+    assert_eq!(focused(&mut scene), format!("plate.{}", firsts[groups.len() - 1]), "RT to the last maker's first console");
+    press(&mut scene, &sdl, &pad, PadControl::Left);
+    assert_eq!(focused(&mut scene), format!("maker.{}", groups.len() - 1), "Left from the first column to its maker");
+    for _ in 0..=groups.len() {
         if focused(&mut scene).starts_with("chip.") {
             break;
         }

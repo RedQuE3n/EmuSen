@@ -1,10 +1,4 @@
-//! `Help`, the help bar's entries for what a theme's focus is on (EmuSen_Qt.md §3.2): `entries(kind)` gives the same
-//! list each time, with the roles the kit's `HelpBar` reads and the actions `Frame` declares, from emusen-qt-models' help.rs;
-//! `entries(kind, {group, back, accept, triggers, actions, card})` the same with the shoulders' Group (the triggers' Maker
-//! with `triggers`) and B's Back added where the kind takes them, and A's entry marked not `enabled` when `accept` is false;
-//! with `actions` false, the entries carrying the screen's own actions are left out (`help::without_actions`); `card` names
-//! X and Start as Eclipse's Home does and leaves Select's search out of the bar (its action stays the frame's); `options`
-//! gives Y and X Eclipse's Choose a console's Sort and Options, its action lines the list's own (`help::options_named`).
+//! `Help`, the help bar's entries for what a theme's focus is on, from emusen-qt-models' help.rs (EmuSen_Qt.md §3.2, `Help`).
 
 use crate::glue::ffi;
 use crate::view::HELP_ROLES;
@@ -61,8 +55,7 @@ pub mod qobject {
     extern "RustQt" {
         #[qinvokable]
         fn entries(self: &ThemeHelp, kind: HelpKind) -> *mut ThemeHelpEntries;
-        /// The kind's list with `group` (LB RB Group, or LT RT Maker with `triggers`) and `back` (B Back where the kind has
-        /// none) added as asked, and A's entry not `enabled` when `accept` is false (the host would decline what A does).
+        /// The kind's list with the entries `group`, `back` and `accept` ask for (EmuSen_Qt.md §3.2, `Help`).
         #[qinvokable]
         #[cxx_name = "entries"]
         fn entries_with(self: &ThemeHelp, kind: HelpKind, flags: &QMap_QString_QVariant) -> *mut ThemeHelpEntries;
@@ -111,8 +104,7 @@ pub fn screen_of(kind: HelpKind) -> Screen {
     }
 }
 
-/// What a list may differ by: the group's entry added (LB RB Group, or LT RT Maker), B's added, A's entry enabled, the
-/// screen's own actions kept, and the entries named as a board names them (`Names`); a list's place in a kind's 72.
+/// What a list may differ by, a kind's 72 lists: group, back, accept, actions kept, and `Names` (EmuSen_Qt.md §3.2).
 pub const FLAGS: [(Option<Entry>, bool, bool, bool, Names); 72] = {
     const G: [Option<Entry>; 3] = [None, Some(help::GROUP), Some(help::MAKER)];
     const N: [Names; 3] = [Names::Own, Names::Card, Names::Options];
@@ -125,8 +117,7 @@ pub const FLAGS: [(Option<Entry>, bool, bool, bool, Names); 72] = {
     flags
 };
 
-/// How a list's entries are named: the screen's own words, as Eclipse's Home names them, or with Eclipse's Choose a
-/// console's Sort and Options.
+/// How a list's entries are named: the screen's own, Eclipse Home's, or Eclipse's Choose a console's Sort and Options.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Names {
     Own,

@@ -52,11 +52,9 @@ pub const BETWEEN: &str = "·";
 pub const SEARCH: &str = "Search";
 /// The labels of a console's facts, a row each, in their order: its games, those played, its core and its screen.
 pub const FACT_LABELS: [&str; 4] = ["Games", "Played", "Core", "Screen"];
-/// Which consoles Choose a console shows, as its chips name them (EclipseConsoles:43-45): every console a core runs, those
-/// holding games, those holding a favourite; `console_list::Show`'s order.
+/// Choose a console's chips (EclipseConsoles:43-45), in `console_list::Show`'s order.
 pub const CONSOLE_SHOWS: [&str; 3] = ["All", "With games", "Favourites"];
-/// The orders Choose a console steps through with Y, as its entry says the one in force (EclipseConsoles:49);
-/// `console_list::Order`'s order.
+/// Choose a console's orders as Y's entry says them (EclipseConsoles:49), in `console_list::Order`'s order.
 pub const CONSOLE_SORTS: [&str; 4] = ["Sorted by maker", "Sorted by year", "Sorted by name", "Sorted by games"];
 
 /// The program's name and version, as the Home card's Power page says it under its rows (Mistress's `BigMenuFooter`).

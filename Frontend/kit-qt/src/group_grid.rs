@@ -1,5 +1,4 @@
-//! `GroupGridLayout`: kit-core's group grid on Qt, read from any list model's group and place roles, as lists a screen's
-//! items bind to by index; -1 is none (EmuSen_Kit.md §7.120).
+//! `GroupGridLayout`: kit-core's group grid on Qt, as index lists a screen's items bind to; -1 is none (EmuSen_Kit.md §7.120).
 
 use core::pin::Pin;
 

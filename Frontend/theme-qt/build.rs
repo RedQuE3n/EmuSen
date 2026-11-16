@@ -1,7 +1,6 @@
 use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 
-// EmuSen.Theme 1.5, what a theme sees (EmuSen_Qt.md §3.2); its .qmltypes and qmldir are the module's surface. Each file keeps the
-// minor it was added in, so a theme importing EmuSen.Theme 1.0 still finds every 1.0 type (rule T).
+// EmuSen.Theme 1.5, what a theme sees, each file at the minor it was added in (EmuSen_Qt.md §3.2, rule T).
 fn main() {
     let qml = [
         QmlFile::from("qml/ThemeScreen.qml").version(1, 0),

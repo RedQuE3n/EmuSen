@@ -1,5 +1,4 @@
-//! Choose a console's chips and Y over the consoles a core runs (EmuSen_Qt.md §3.4.9): which each chip holds and counts,
-//! and each order, each maker's consoles together; and Eclipse's Y and X declared by the help (`options_named`).
+//! Choose a console's chips, orders and Eclipse's Y and X in the help (EmuSen_Qt.md §3.4.9).
 
 use emusen_qt_models::console_list::{counts, listed, plate_name, Order, Show, ORDERS, SHOWS};
 use emusen_qt_models::help::{self, options_named, Screen};

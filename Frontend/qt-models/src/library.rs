@@ -83,8 +83,7 @@ pub trait LibrarySource: Send + Sync {
     fn collections(&self) -> Result<Vec<Collection>, String> {
         Ok(Vec::new())
     }
-    /// Each console's screen kind, by its catalog console (Serenity's `screens`: "Television" or "Lcd"); a source with no
-    /// catalogue has none.
+    /// Each console's screen kind by its catalog console (Serenity's `screens`); none from a source with no catalogue.
     fn screens(&self) -> Result<Vec<(String, String)>, String> {
         Ok(Vec::new())
     }

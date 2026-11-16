@@ -56,9 +56,7 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "firstOf"]
         fn first_of(self: Pin<&mut ThemeLibrary>, id: &QString, count: i32) -> *mut ThemeRows;
-        /// The consoles a core runs that a chip shows (0 every one, 1 those with games, 2 those holding a favourite), in an
-        /// order (0 by maker, 1 by year, 2 by name, 3 by games), each maker's together; by name, the consoles keyed in
-        /// `shortened` by their short name, as their plates show them; the same list each time it is asked.
+        /// The consoles a chip shows in an order, each maker's together, by name as plates show them (EmuSen_Qt.md §3.4.9).
         #[qinvokable]
         #[cxx_name = "consolesBy"]
         fn consoles_by(self: Pin<&mut ThemeLibrary>, show: i32, order: i32, shortened: &QStringList) -> *mut ThemeRows;

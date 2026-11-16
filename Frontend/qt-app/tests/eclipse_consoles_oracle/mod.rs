@@ -1,8 +1,4 @@
-//! Eclipse's Choose a console in the running program (EmuSen_Qt.md §3.4.9), driven by an SDL pad inside this process over a
-//! library of the eleven canvas consoles, some games played: at each of the gate's sizes every press from every plate lands
-//! where the layout's walk puts it and every plate is reached, none cut or overlapping; A opens the console's games; LT and
-//! RT step the makers; the disc's rim and glows are the focused console's own colour; a plate's words and the played count
-//! are the model's. One test, as the harness is one per process.
+//! Eclipse's Choose a console in the running program, driven by an SDL pad in this process (EmuSen_Qt.md §3.4.9, Proof).
 
 
 use crate::common::{approved_console_core, wait_for, CONSOLES};
@@ -36,8 +32,7 @@ const PULLED: i16 = i16::MAX;
 /// The board's elements, one a row (eclipse/consoles.tsv), held by eclipse_board's rules.
 const BOARD: &str = include_str!("../eclipse/consoles.tsv");
 
-/// Every row of the board's table held to the screen at each of the gate's sizes, with `c` focused: its box, colour, type
-/// and part; and both fields painted in the board's saturation and lightness with `c`'s hue (R-20261115-28).
+/// Every row of the board's table held at each gate size with `c` focused, and both fields in `c`'s hue (R-20261115-28).
 fn board_held(scene: &mut Scene<'_>, c: &Console) {
     let (board_height, rows) = crate::eclipse_board::rows(BOARD);
     // The rows of a chip that holds none are held in that state alone (`empty_held`).
@@ -97,9 +92,7 @@ fn board_held(scene: &mut Scene<'_>, c: &Console) {
             differences.push(format!("{}: {:?} (width, colour, start, turn, cap) where the board gives {}", row.name, checks, row.kind));
         }
     }
-    // A name's line height is CSS's, of its size, and a long name wraps: on the plate the Nintendo Entertainment System's
-    // full name, which its two lines cannot hold, gives way to its short one on one line; beside the disc it takes three
-    // lines, none cut (R-20261116-5).
+    // CSS's line height of each size; the NES's plate gives way to its short name, its name by the disc takes three lines (R-20261116-5).
     for (name, size, height, lines) in [("plateName.0", 21.0, 1.15, 1), ("consoleName", 46.0, 1.08, 3)] {
         let mode = crate::eclipse_board::read(&tree, name, "lineHeightMode");
         let have = crate::eclipse_board::read(&tree, name, "lineHeight").parse::<f64>().unwrap_or(f64::NAN);
@@ -164,9 +157,7 @@ fn whole(row: &[Cell], role: &str) -> i32 {
     }
 }
 
-/// The eleven consoles' games, in each console's ES-DE folder, which settles an extension two consoles share
-/// (`Platform/library/src/scan.rs`, `route`): one more for each console in the canvas's order up to three, the first of each
-/// played and the second of the first console too. A Game Boy Color game carries its header's colour flag (0x143).
+/// The eleven consoles' games in their ES-DE folders, some played (EmuSen_Qt.md §3.4.9, the tests' means).
 fn written(world: &World) -> Vec<String> {
     let source = ClientSource::open(&library().to_string_lossy(), &Config::default()).unwrap();
     let systems = source.systems().unwrap();
@@ -191,8 +182,7 @@ fn written(world: &World) -> Vec<String> {
     played
 }
 
-/// The library written, the fixture's PlayStation core approved in `cores` beside the build's own, and its plays recorded
-/// through the real clients; the consoles as `Library.consoles` gives them: those of the eleven a core runs.
+/// The library written, the fixture's PlayStation core approved, its plays recorded; the consoles `Library.consoles` gives.
 fn library_of(world: &World, cores: &std::path::Path) -> (Vec<Console>, LibraryView) {
     let platform = Platform::load(library()).unwrap();
     let mut settings = platform.model_new(MODEL_APP_SETTINGS).unwrap();
@@ -240,8 +230,7 @@ fn focused(scene: &mut Scene<'_>) -> String {
     scene.focus(&tree).map(|i| tree.nodes[i as usize].name.clone()).unwrap_or_default()
 }
 
-/// A control pressed and let go on the pad, as a hand does: down until the router holds it (or the screen it opens is
-/// shown, whose frame holds nothing yet), up until it has let it go.
+/// A control pressed and let go as a hand does: down until the router holds it, up until it let go (EmuSen_Qt.md §3.4.9).
 fn press(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, control: PadControl) {
     let button = control.press().expect("a control the interface hears");
     let shown = scene.property("screens", "shown");
@@ -306,16 +295,14 @@ fn overlap(a: [f64; 4], b: [f64; 4]) -> bool {
     a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
 }
 
-/// Whether the Line `name` lays its words out whole: Qt's `Text.truncated` false (nothing cut by `maximumLineCount` or
-/// `elide`) and no line wider than its box (a word longer than the width overflows, which `truncated` does not say).
+/// Whether the Line `name` lays its words out whole: not `truncated`, and no word wider than its box (EmuSen_Qt.md §3.4.9).
 fn whole_words(tree: &Tree, name: &str) -> bool {
     let read = |p: &str| crate::eclipse_board::read(tree, name, p);
     let number = |p: &str| read(p).parse::<f64>().unwrap_or(f64::NAN);
     read("truncated") == "false" && number("contentWidth") <= number("width") + 1e-6
 }
 
-/// The name a console's plate shows: its full name where the plate's two lines hold it, else its short name, as Qt lays
-/// out the console's measure (`plateMeasure.<key>`, the plate's own Line at the plate's width).
+/// The name a console's plate shows, as Qt lays out its measure `plateMeasure.<key>` (EmuSen_Qt.md §3.4.9).
 fn plate_name(tree: &Tree, c: &Console) -> String {
     if whole_words(tree, &format!("plateMeasure.{}", c.key)) { c.display_name.clone() } else { c.name.clone() }
 }
@@ -336,8 +323,7 @@ fn names_whole(tree: &Tree, plates: usize, size: &str) {
     }
 }
 
-/// The words a plate and the place line say for a console, and its four facts' values (games, played, core, screen), from
-/// the program's words over the model's row.
+/// The words a plate and the place line say for a console, and its four facts, from the program's words over the model's row.
 fn says(c: &Console, groups: &[usize], plate: String) -> ([String; 3], [String; 4]) {
     let year = if c.year > 0 { c.year.to_string() } else { String::new() };
     (
@@ -385,8 +371,7 @@ pub fn oracle(backend: &str) {
     wait_for(&mut scene, "pads", "connected", "1", 5000);
     scene.run_pad_clock();
 
-    // Home's Games place by the pad (Down from the played games to the places, Left to the first), then Eclipse chosen over
-    // it: its own Choose a console is placed.
+    // Home's Games place by the pad, then Eclipse chosen over it, which places its own Choose a console.
     for _ in 0..40 {
         if !focused(&mut scene).is_empty() {
             break;
@@ -450,8 +435,7 @@ pub fn oracle(backend: &str) {
             let item = grid.items[k];
             let c = &model[k];
             let last_row = item.row + 1 >= grid.rows[c.group];
-            // Where each press lands: the walk inside the grid; past its left edge the maker, past its right Open, down
-            // from the last row the next maker's first; up from the first row the chip pressed, All.
+            // Where each press lands: the walk in the grid, the maker, Open, the next maker's first, or All (EmuSen_Qt.md §3.4.9).
             let want = [
                 (PadControl::Left, item.left.map_or(format!("maker.{}", c.group), |t| format!("plate.{t}"))),
                 (PadControl::Right, item.right.map_or("consoleOpen".to_owned(), |t| format!("plate.{t}"))),
@@ -561,8 +545,7 @@ pub fn oracle(backend: &str) {
         scene.wait(50);
     }
     assert_eq!(focused(&mut scene), format!("plate.{k}"), "back on the console it opened");
-    // The last maker's first console by RT, Left to its maker, Up through the makers (each chosen in turn) to the chips, and
-    // Down: the first maker's first console, not the plate last focused, which choosing another maker hid.
+    // RT, Left, Up through the makers to the chips, then Down: the first maker's first console, not a hidden plate (§3.4.9).
     press(&mut scene, &sdl, &pad, PadControl::RightTrigger);
     assert_eq!(focused(&mut scene), format!("plate.{}", firsts[groups.len() - 1]), "RT to the last maker's first console");
     press(&mut scene, &sdl, &pad, PadControl::Left);
@@ -601,9 +584,7 @@ fn whole_in(tree: &Tree, name: &str, view: &str) -> bool {
     n[0] >= v[0] - 1e-6 && n[1] >= v[1] - 1e-6 && n[2] <= v[2] + 1e-6 && n[3] <= v[3] + 1e-6
 }
 
-/// The wheel scrolls the plates and the makers, each under the pointer, and the pad's next press brings what it lands on
-/// back into sight. Over a crowd shown to the theme's Library directly, since the program shelves only the consoles a core
-/// runs: forty more consoles of the first maker and twenty makers more, so both columns are longer than the screen.
+/// The wheel scrolls the plates and the makers, and the pad's next press brings its landing back into sight (EmuSen_Qt.md §3.4.9, Proof).
 fn wheel_scrolls(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, view: &LibraryView, backend: &str) {
     scene.resize(1280, 800);
     scene.wait(200);
@@ -658,10 +639,7 @@ fn wheel_scrolls(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, view: &Libr
     empty_held(scene, view, screen);
 }
 
-/// A chip that holds none, drawn as the first-run board draws "No games yet" (EclipseEmpty.dc.html lines 29 and 30) at every
-/// gate size, the rows of the table whose status is `empty` (R-20261116-9): All over a library where no core runs a console,
-/// the headline in the program's words and Settings' words under it; then Favourites over every console of the table, none
-/// a favourite, pressed by the pointer: the headline alone.
+/// A chip that holds none, drawn as the first-run board, the table's `empty` rows at every gate size (R-20261116-9; EmuSen_Qt.md §3.4.9).
 fn empty_held(scene: &mut Scene<'_>, view: &LibraryView, screen: u64) {
     let (board_height, rows) = crate::eclipse_board::rows(BOARD);
     let rows: Vec<_> = rows.into_iter().filter(|r| r.status == "empty").map(|mut r| {
@@ -704,8 +682,7 @@ fn empty_held(scene: &mut Scene<'_>, view: &LibraryView, screen: u64) {
     assert!(differences.is_empty(), "{} differences from the board:\n{}", differences.len(), differences.join("\n"));
 }
 
-/// Every console of the systems table on a plate, each with the name its plate's two lines hold whole, the short one where
-/// the full one is cut, and none whose short name is cut too, at every gate size (R-20261116-5).
+/// Every console of the systems table on a plate, its name whole or its short one, at every gate size (R-20261116-5).
 fn every_system_whole(scene: &mut Scene<'_>, view: &LibraryView, screen: u64) {
     let mut every = view.clone();
     every.cored = emusen_qt_models::library::console_rows(&view.systems, &Default::default(), &[]);
@@ -748,8 +725,7 @@ fn middle(scene: &mut Scene<'_>, name: &str) -> (f64, f64) {
     (n.x + n.w / 2.0, n.y + n.h / 2.0)
 }
 
-/// The chips, Y and X, each pressed by the pad and by the pointer: a chip shows its consoles with their count, Y and the
-/// order's entry step the order, X and the Options pill open Settings at the console's page, and B comes back.
+/// The chips, Y and X, each by the pad and by the pointer, and B back from Settings (EmuSen_Qt.md §3.4.9).
 fn chips_sort_and_options(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, model: &[Console], world: &World, cores: &std::path::Path) {
     let _ = world;
     let tree = scene.tree();
@@ -856,8 +832,7 @@ fn chips_sort_and_options(scene: &mut Scene<'_>, sdl: &Sdl, pad: &VirtualPad, mo
         let tree = scene.tree();
         let texts: Vec<&str> = tree.nodes.iter().filter(|n| n.visible).filter_map(|n| n.text.as_deref()).collect();
         assert!(texts.contains(&model[k].name.as_str()), "{}'s page open over the consoles' section: {texts:?}", model[k].name);
-        // B closes the console's page, then leaves Settings for Choose a console.
-        // As a hand does, B once Settings holds the focus: its screen is made as it is shown (Main.qml's settingsSlot).
+        // B once Settings holds the focus closes the console's page, then leaves Settings (Main.qml's settingsSlot).
         let mut seen = Vec::new();
         for _ in 0..2 {
             for _ in 0..40 {

@@ -1,5 +1,4 @@
-//! Eclipse's Choose a console in the running program on the software backend (EmuSen_Qt.md §3.4.9): the oracle of
-//! eclipse_consoles_oracle, its walk, its table and its pictures.
+//! Eclipse's Choose a console on the software backend: eclipse_consoles_oracle's walk, table and pictures (EmuSen_Qt.md §3.4.9).
 
 mod common;
 mod eclipse_board;

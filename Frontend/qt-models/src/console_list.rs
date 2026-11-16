@@ -1,5 +1,4 @@
-//! Choose a console's listing (EmuSen_Qt.md §3.4.9): which consoles a core runs are shown, by its chips, and in what order,
-//! by its Y; read from the library's rows, nothing kept here.
+//! Choose a console's listing by its chips and Y, read from the library's rows, nothing kept here (EmuSen_Qt.md §3.4.9).
 
 use crate::library::LibraryRow;
 use std::cmp::Ordering;
@@ -15,8 +14,7 @@ pub enum Show {
     Favourites,
 }
 
-/// The order the consoles stand in, in `words::CONSOLE_SORTS`' order. The makers keep their order and each maker's consoles
-/// are ordered among themselves, so the makers' column and LT RT stay as they were.
+/// The order the consoles stand in, `words::CONSOLE_SORTS`' order, each maker's consoles kept together (EmuSen_Qt.md §3.4.9).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Order {
     /// The shelves' order.
@@ -54,14 +52,12 @@ impl Order {
     }
 }
 
-/// The name a console's plate shows: its short name where its key is among `short`, the consoles whose full name the theme
-/// measured as wider than its plate's two lines, else its shown name (EmuSen_Qt.md §3.4.9).
+/// The name a console's plate shows: its short name where its key is among `short`, else its shown name (EmuSen_Qt.md §3.4.9).
 pub fn plate_name<'a>(row: &'a LibraryRow, short: &[String]) -> &'a str {
     if short.iter().any(|k| *k == row.key) { &row.name } else { row.shown_name() }
 }
 
-/// The consoles `show` holds, each maker's together in the order its first console stands, ordered within by `order`, by
-/// name the name `plate_name` gives with `short`; an empty maker is a group of its own, as `view::maker_groups` has it.
+/// The consoles `show` holds, each maker's together, ordered within by `order`, by name as `plate_name` gives (EmuSen_Qt.md §3.4.9).
 pub fn listed<'a>(consoles: &'a [LibraryRow], show: Show, order: Order, short: &[String]) -> Vec<&'a LibraryRow> {
     let shown: Vec<&LibraryRow> = consoles.iter().filter(|r| show.holds(r)).collect();
     let mut makers: Vec<&str> = Vec::new();

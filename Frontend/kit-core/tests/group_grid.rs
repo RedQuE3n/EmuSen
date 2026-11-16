@@ -43,8 +43,7 @@ fn one_group(n: usize) -> Vec<(usize, usize)> {
     (0..n).map(|i| (0, i)).collect()
 }
 
-/// The 120-console library's shape (theme-audit's crowd): 40 under one maker, 10 under none, 70 under five more, the groups
-/// interleaved in the model's order as a catalogue lists them.
+/// The 120-console crowd's shape (theme-audit's): 40 under one maker, 10 under none, 70 under five more, interleaved.
 fn crowd() -> Vec<(usize, usize)> {
     let mut sizes = [0usize; 7];
     (0..120)
@@ -56,8 +55,7 @@ fn crowd() -> Vec<(usize, usize)> {
         .collect()
 }
 
-/// Where a player expects each press to land from place `i` of a group of `n` at `c` columns, by the grid's arithmetic:
-/// along the row, the row above, the row below, or the last place when the row below is short of this column.
+/// Where each press from place `i` of a group of `n` at `c` columns lands by the grid's arithmetic (EmuSen_Qt.md §3.4.9).
 fn expected(i: usize, n: usize, c: usize) -> [Option<usize>; 4] {
     let left = (i % c > 0).then(|| i - 1);
     let right = (i % c + 1 < c && i + 1 < n).then(|| i + 1);
@@ -66,8 +64,7 @@ fn expected(i: usize, n: usize, c: usize) -> [Option<usize>; 4] {
     [left, right, up, down]
 }
 
-/// Every place of every group: each press lands where `expected` says, a press toward a place that lies that way never
-/// does nothing, and every place is reached from the group's first by presses alone.
+/// Every place of every group: each press lands where `expected` says, none toward a place does nothing, all are reached.
 fn walk_holds(places: &[(usize, usize)], c: usize) {
     let grid = group_grid(places, c);
     let groups = places.iter().map(|p| p.0 + 1).max().unwrap_or(0);

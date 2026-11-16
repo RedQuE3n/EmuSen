@@ -338,8 +338,7 @@ pub fn card_named(list: Vec<Entry>) -> Vec<Entry> {
         .collect()
 }
 
-/// Choose a console's list as Eclipse's board gives its buttons (EclipseConsoles:46-50, 94): Y steps the order (`SORT`) and
-/// X opens the focused console's options (`CONSOLE_OPTIONS`), in place of Favourites and Random game.
+/// Choose a console's list as Eclipse's board gives it: Y steps the order and X opens options (EclipseConsoles:46-50, 94).
 pub fn options_named(list: Vec<Entry>) -> Vec<Entry> {
     list.into_iter()
         .map(|(button, label, action)| match (button, action) {
@@ -374,9 +373,7 @@ pub fn entries_grouped(screen: Screen, group: Option<Entry>, back: bool) -> Vec<
     list
 }
 
-/// A list with the entries that carry an action of the screen's own left out (Favourites, Random game): what a board
-/// draws in the bar where it gives those buttons other work; the entries the frame acts on itself (Open, Back, the
-/// group's) stay.
+/// A list without the entries carrying the screen's own actions (Favourites, Random game); the frame's own stay (EmuSen_Qt.md §3.2).
 pub fn without_actions(mut list: Vec<Entry>) -> Vec<Entry> {
     list.retain(|e| e.2.is_none());
     list
@@ -410,8 +407,7 @@ pub const NEXT: &str = "next";
 /// A card's declared action that closes it, as Start closes a card away from a game.
 pub const CLOSE: &str = "close";
 
-/// The second button an entry names: the shoulders are one entry, LB and RB, as the accepted render draws them, and
-/// the d-pad's Left and Right one entry; the triggers too, LT and RT.
+/// The second button an entry names: LB with RB, the d-pad's Left with Right, LT with RT (EmuSen_Qt.md §3.2, `Help`).
 pub fn pair_of(button: UiButton) -> Option<UiButton> {
     match button {
         UiButton::PageUp => Some(UiButton::PageDown),

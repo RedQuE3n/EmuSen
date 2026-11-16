@@ -1,6 +1,4 @@
-// EmuSen_Qt.md §3.4.9: Eclipse's Choose a console held to its board, the table qt-app/tests/eclipse/consoles.tsv, as theme-audit records
-// it over the canvases' eleven consoles at the board's shape (1280 x 800 and 1920 x 1200), every box in design units as the
-// table gives it; and held whole, with no finding, over one console, thirty, one maker of forty and 120.
+// Eclipse's Choose a console held to its board's table, and held whole over the crowds (EmuSen_Qt.md §3.4.9, Proof).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -65,9 +63,7 @@ fn written(v: f64) -> f64 {
     (v * 100.0).round() / 100.0
 }
 
-/// The table's built rows whose box the board gives as plain pixels: name, then x (or the right edge), y (or the middle), w, h
-/// in board px, none where the row gives a rule of its layout instead; with the flags right and middle. A right:g edge
-/// stands g short of the board's 1920, a mid:g middle at g.
+/// The table's built rows whose box is in plain board pixels: name, x or right edge, y or middle, w, h, and the two flags.
 fn boxes() -> Vec<(String, [Option<f64>; 4], bool, bool)> {
     TABLE
         .lines()
@@ -122,8 +118,7 @@ fn qt_3_4_9_eclipse_s_consoles_stands_where_its_board_stands_it() {
         for (file, spec) in &recorded {
             let items = seen(spec);
             for (name, edges, right, middle) in boxes() {
-                // The kit Backdrop's ground and fields: the recording writes a backdrop as one line, its parts unrecorded
-                // (qt-test/src/spec.rs `visit`), so the backdrop itself must be recorded and qt-app's oracle holds its parts.
+                // The backdrop is recorded as one line, its parts held by qt-app's oracle (EmuSen_Qt.md §3.4.9, Proof).
                 if name.starts_with("backdrop") {
                     if !items.contains_key("consolesBackdrop") {
                         differences.push(format!("{file}: the backdrop is not recorded"));
@@ -151,8 +146,7 @@ fn qt_3_4_9_eclipse_s_consoles_stands_where_its_board_stands_it() {
                     }
                 }
             }
-            // The plates of the chosen maker on the board's lattice, read from the table: plate.0's box, and the grid's gap
-            // (plate.1 stands after plate.0 by it; the board's grid has one gap both ways, line 62).
+            // The chosen maker's plates on the board's lattice: plate.0's box and the grid's one gap (board line 62).
             let px = unit;
             let (x0, y0, w, h, gap) = lattice();
             for (name, item) in items.iter().filter(|(n, _)| n.starts_with("plate.")) {

@@ -443,12 +443,7 @@ fn spoken(tree: &Tree, index: u32) -> String {
     String::new()
 }
 
-/// The pad's sweep of a crowded Choose a console, in two parts. First as a player looks for one console among many: Up and
-/// Left until the focus stops, then each row Right to its end and Left to its other end, with Down between. Then, only if
-/// that missed a console, each element's own neighbours are followed from where the rows ended: every element pressed Up,
-/// Down, Left and Right, each new landing followed before the sweep comes back by the opposite press, so a layout the rows do
-/// not fit (a side column beside a grid) is still swept whole. None when every console's name was heard on the focus while
-/// it was inside the window, landed on by a press; else how many were and the first few that were not.
+/// The pad's sweep of a crowded Choose a console, rows then neighbours; None when every console was heard (man theme-check).
 fn swept(scene: &mut Scene<'_>, consoles: &[(String, String)], size: (f64, f64)) -> Option<String> {
     let mut sweep = Sweep { heard: Vec::new(), found: Vec::new(), size, last: None };
     // A console is heard by its short name or its full one, whichever its tile says.
@@ -467,8 +462,7 @@ fn swept(scene: &mut Scene<'_>, consoles: &[(String, String)], size: (f64, f64))
     })
 }
 
-/// An element the sweep landed on, by its objectName (its address where it has none) and the name a reader hears: a view
-/// makes a row's delegate again at another address once it scrolled away, so the address is no named element's lasting name.
+/// An element the sweep landed on: its objectName (else its address) and the name a reader hears (man theme-check).
 type Landed = (String, String);
 
 /// The sweep's state: the names heard inside the window, the elements landed on, the window's size, and the focus as last read.
@@ -517,8 +511,7 @@ impl Sweep {
         if scene.settle(&tree) { self.landed(scene) } else { self.landed_in(scene, &tree) }
     }
 
-    /// The rows' part of the sweep, `limit` presses at most: Up and Left to a corner, then each row along both ways with Down
-    /// between, since Down may land anywhere along the next (the orbits land nearest in x).
+    /// The rows' part of the sweep, `limit` presses at most (man theme-check).
     fn rows(&mut self, scene: &mut Scene<'_>, limit: usize) {
         self.now(scene);
         let mut presses = 0;

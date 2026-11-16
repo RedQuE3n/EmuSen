@@ -1044,6 +1044,9 @@ deprecated, in the changelog and its doc comment, for one minor, then removed at
 written for in `theme.json` (`"api": "1.0"`); a theme written for a newer major than the build has is refused with words
 naming both; one written for an older minor of the same major loads, its minors being additive after the first release;
 before it a later minor may have removed what the theme uses, each removal listed in the changelog. Before 1.0 (§5.1) the same rules hold, with breaking changes allowed and listed in `CHANGELOG-theme-api.md`. The API is the newest of what the module exports and the newest minor that changelog heads a section with, and nothing the module exports is newer, so a minor whose additions are members of types exported earlier is still that minor (decided 2026-11-11 by the tester, R-20261111-107; theme-check's `registry.rs`).
+`theme-qt/build.rs` registers each of the module's files at the minor it was added in, so a theme importing EmuSen.Theme
+1.0 still finds every 1.0 type. The help bar draws a pair of buttons as one entry (`help::pair_of`): LB with RB, as the
+accepted render draws the shoulders, the d-pad's Left with Right, and LT with RT.
 
 ### 3.4 The package
 
@@ -2015,6 +2018,24 @@ by the pointer, over the table's consoles with no favourite; at each of the gate
 the words are the program's, and no maker or aside stands under the headline. The program reads its library from the platform library's systems
 table, so a library of 120 consoles exists only in theme-audit's crowd (`theme-check/audit/src/crowd.rs`), and the
 120-console run is theme-audit's.
+
+**The tests' means.** `eclipse_board/mod.rs` reads an element's property by its number in the tree, since a `Repeater`'s
+items are no QObject children of the screen, and a QFont from the text Qt writes for it (family, point size, pixel size,
+style hint, weight, style, underline, strike out, fixed pitch, 0, capitalization, letter spacing's type, letter spacing):
+the weight, the case (1, all capitals) and the absolute spacing. It holds two measures equal to a millionth: Qt maps an
+item to the scene through a matrix of floats, whose precision is a part in about 1.7e7 (seen 2026-11-15: 64.0000011 for 64
+at 3840 by 2160). A circle's row is drawn as the ellipse its box holds (the box's width, its radius half that, scaled to
+the box's height); a turned element is held by its own box about its middle, in canvas units, and the tree gives the box
+it turns into. qt-app's oracle writes the eleven consoles' games in each console's ES-DE folder, which settles an
+extension two consoles share (`Platform/library/src/scan.rs`, `route`): one game more for each console in the canvas's
+order up to three, the first of each played and the second of the first console too, and a Game Boy Color game carries
+its header's colour flag (0x143). A control is pressed as a hand does: held down until the router holds it (or the
+screen it opens is shown, whose frame holds nothing yet), then up until the router has let it go. Eclipse's `Glyph` draws
+a lettered button's letter in the face inside a 2 px ring or on a filled disc, Menu and View named in a 2 px capsule,
+the shoulders and triggers named in a 2 px box (EclipseConsoles:103, Main:63-69, 94-97, 100), any other the kit's mark in
+the ring; the letter and the name are the kit's for the pad's family. The crowd's makers-and-grid fixture
+(`theme-check/tests/themes/side-column`) puts the makers in a column at the left and the chosen maker's consoles in a grid
+beside it, Left from a first-column console to its maker, Up and Down from a maker to its neighbours (man theme-check).
 
 ### 3.5 Loading and the sandbox
 
